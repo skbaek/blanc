@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerRegistry
+import Blanc.CycleWriteFree
 
 /-! Pure ABI layout and bounded-offset facts for Registry enumeration. -/
 
@@ -931,7 +932,7 @@ private theorem enumFirstHeaderMemory_extCost_second
 
 /-- The public enumeration body initializes the ABI header and invokes the
 recursive loop with exactly the finite warm budget derived above. -/
-theorem getPausables_runCompiled
+theorem getPausables_body_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry)
     (G : Nat)
     (hw : RegistryWitness
@@ -993,6 +994,417 @@ theorem getPausables_runCompiled
       hzeroWord, h32Word, List.length_nil, List.foldl_nil] using
       enumLoop_runCompiled fs sevm base entries [] entries G
         (by simp) hw hwarm hfs
+
+/-- Exact cost of the emitted runtime entry and well-formed selector path from
+program counter zero to the `getPausables` body boundary. -/
+def getPausablesDispatchGas : Nat := 130
+
+def getPausablesRuntimeGas (entries : List Entry) : Nat :=
+  getPausablesDispatchGas + getPausablesGasWarm entries
+
+/-- Direct-runtime resources scale with the finite Registry witness and impose
+no additional list-length cap. -/
+structure EnumerationRuntimeResources (sevm : Sevm) (pre : Devm)
+    (entries : List Entry) : Prop where
+  stack_empty : pre.stack = []
+  memory_empty : pre.memory = Mem.empty
+  warm : ∀ key ∈ enumerationStorageKeys entries,
+    (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ pre.accessedStorageKeys
+  gas_sufficient : getPausablesRuntimeGas entries ≤ pre.gasLeft
+
+def preparedEnumerationRuntimeState (sevm : Sevm) (base : Devm)
+    (entries : List Entry) : Devm :=
+  (prepareEnumerationStorage sevm base entries).setMach
+    ⟨[], Mem.empty, getPausablesRuntimeGas entries⟩
+
+theorem enumerationRuntimeResources_prepared (sevm : Sevm) (base : Devm)
+    (entries : List Entry) :
+    EnumerationRuntimeResources sevm
+      (preparedEnumerationRuntimeState sevm base entries) entries := by
+  refine ⟨rfl, rfl, ?_, Nat.le_refl _⟩
+  intro key hkey
+  exact prepareEnumerationStorage_warm sevm base entries hkey
+
+/-- A well-formed direct `getPausables()` call through the exact parameterized
+runtime reaches the verified body, returns the complete ordered ABI image, and
+uses the concrete current target as both code and storage owner.  The code
+hypothesis and compiler equality make the emitted-code boundary explicit. -/
+theorem getPausables_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (G : Nat)
+    (hdata : sevm.data.length.toB256 = 4)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = selector "getPausables" [])
+    (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hwarm : ∀ key ∈ enumerationStorageKeys entries,
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys) :
+    Prog.RunCompiled sevm
+        (base.setMach ⟨[], Mem.empty,
+          G + getPausablesDispatchGas + getPausablesGasWarm entries⟩)
+        (runtime dp)
+        ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+          (abiAddressArray entries)) ∧
+      some sevm.code.toList = Prog.compile (runtime dp) := by
+  constructor
+  · refine Prog.runCompiled_intro
+      (mid := base.setMach ⟨[], Mem.empty,
+        G + 129 + getPausablesGasWarm entries⟩)
+      (G := G + 129 + getPausablesGasWarm entries) ?_ ?_ ?_
+    · simp only [Devm.gasLeft_setMach, getPausablesDispatchGas, gJumpdest]
+      omega
+    · rfl
+    · have hdataNonzero :
+          B256.eqCheck sevm.data.length.toB256 4 = 1 := by
+        simp [B256.eqCheck, hdata]
+      have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
+        simp [B256.eqCheck, hvalue]
+      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
+        rw [hdata]
+        decide
+      have hor : B256.or 0 sevm.value = 0 := by
+        rw [hvalue]
+        decide
+      have hselector' :
+          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
+            selector "getPausables" [] := hselector
+      have htop : B256.gtCheck (selector "pause" [.address])
+          (selector "getPausables" []) = 1 := by decide
+      have hleft : B256.gtCheck (selector "getPauser" [.address])
+          (selector "getPausables" []) = 0 := by decide
+      have hfirst : B256.eqCheck (selector "getPauser" [.address])
+          (selector "getPausables" []) = 0 := by decide
+      have hleaf : B256.eqCheck (selector "getPausables" [])
+          (selector "getPausables" []) = 1 := by decide
+      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+        linearDispatchWith firstSelector funcs
+      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
+      func_run (27) [0, 0, selector "getPausables" [], 1, 0, 0, 1]
+      have hboundary :
+          G + 129 + getPausablesGasWarm entries - 129 =
+            G + getPausablesGasWarm entries := by omega
+      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
+        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
+        List.take, List.drop, List.head?, Option.map, Option.getD,
+        linearDispatchWith] using
+        getPausables_body_runCompiled
+          (runtimeMain dp :: aux) sevm base entries G
+            hw hwarm (by rfl)
+  · rw [hcode, lidoCircuitBreakerCode_compile]
+
+/-- Sufficient runtime resources construct an exact successful public run;
+the residual gas is the supplied gas minus the finite per-list cost. -/
+theorem EnumerationRuntimeResources.getPausables_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {entries : List Entry}
+    (resources : EnumerationRuntimeResources sevm pre entries)
+    (hdata : sevm.data.length.toB256 = 4)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = selector "getPausables" [])
+    (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre sevm.currentTarget)) entries) :
+    Prog.RunCompiled sevm pre (runtime dp)
+        ((pre.setMach ⟨[], enumPrefixMemory entries entries,
+          pre.gasLeft - getPausablesRuntimeGas entries⟩).withOutput
+            (abiAddressArray entries)) ∧
+      some sevm.code.toList = Prog.compile (runtime dp) := by
+  have hgas :
+      pre.gasLeft - getPausablesRuntimeGas entries +
+          getPausablesDispatchGas + getPausablesGasWarm entries =
+        pre.gasLeft := by
+    rw [Nat.add_assoc, ← getPausablesRuntimeGas]
+    exact Nat.sub_add_cancel resources.gas_sufficient
+  have hpre : pre.setMach ⟨[], Mem.empty, pre.gasLeft⟩ = pre := by
+    rw [← resources.stack_empty, ← resources.memory_empty]
+    cases pre
+    rfl
+  simpa only [hgas, hpre] using
+    Blanc.LidoCircuitBreaker.getPausables_runCompiled dp sevm pre entries
+      (pre.gasLeft - getPausablesRuntimeGas entries)
+      hdata hvalue hselector hcode hw resources.warm
+
+theorem getPausables_post_worldEq (base : Devm) (entries : List Entry)
+    (G : Nat) :
+    Devm.WorldEq base
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+        (abiAddressArray entries)) := by
+  exact ⟨rfl, rfl⟩
+
+theorem getPausables_post_logs (base : Devm) (entries : List Entry)
+    (G : Nat) :
+    ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+      (abiAddressArray entries)).logs = base.logs := rfl
+
+/-- The landed finite component certificate excludes every owned same-frame
+SSTORE occurrence on every raw derivation below the exact public enumeration
+source cursor.  This is deliberately an occurrence theorem, not a termination
+or general effect-silence theorem. -/
+theorem getPausables_noSstore_occurrence
+    {root : Exec.Deriv} {path : Prog.SourcePath}
+    (cursor : Exec.Deriv.SourceCursor root
+      (runtime officialParams) path getPausables)
+    (compiled :
+      some root.sevm.code.toList = (runtime officialParams).compile)
+    (occurrence : Exec.NinstOccurrence root)
+    (owned : Exec.Deriv.ParentPrefix cursor.node occurrence.node) :
+    occurrence.instruction ≠ .reg .sstore :=
+  occurrence.instruction_ne_sstore_of_entrySstoreFree
+    cursor compiled enumerationComponent enumeration_entry_sstore_free owned
+
+theorem canonicalAddress_mask_zero {word : B256}
+    (h : canonicalAddress word) : addressMask &&& word = 0 := by
+  rw [← validAdr_iff]
+  rcases word with ⟨⟨wz, wh⟩, wl⟩
+  have hzNat : wz.toNat = 0 := by
+    simp only [canonicalAddress, B256.toNat_eq, B128.toNat_eq] at h
+    have hwh := UInt64.toNat_lt wh
+    have hwl := B128.toNat_lt (x := wl)
+    omega
+  have hwhLt : wh.toNat < 2 ^ 32 := by
+    simp only [canonicalAddress, B256.toNat_eq, B128.toNat_eq] at h
+    have hwz := UInt64.toNat_lt wz
+    have hwl := B128.toNat_lt (x := wl)
+    omega
+  have hz : wz = 0 := by
+    apply UInt64.toNat_inj.mp
+    simpa using hzNat
+  have hwh : wh.toUInt32.toUInt64 = wh := by
+    apply UInt64.toNat_inj.mp
+    simp only [UInt32.toNat_toUInt64, UInt64.toNat_toUInt32]
+    rw [Nat.mod_eq_of_lt hwhLt]
+  exact ⟨⟨wh.toUInt32, wl⟩, by simp [Adr.toB256, hz, hwh]⟩
+
+def registryScalarBodyGasWarm : Nat := 179
+
+private theorem registryScalarReturn_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm) (word : B256) (G : Nat) :
+    ∃ post,
+      Func.RunCompiled fs sevm
+        (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩)
+        Func.ret post ∧
+      Devm.output post = word.toBytes := by
+  let retPre := base.setMach
+    ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩
+  let d := (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32
+  let post := d.2.withOutput word.toBytes
+  refine ⟨post, ?_, rfl⟩
+  have hread :
+      (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32 =
+        ⟨word.toBytes, d.2⟩ := by
+    exact Prod.ext
+      (Devm.memRead_word_fst
+        (by simp only [retPre, Devm.memory_setMach]))
+      rfl
+  exact Func.runCompiled_ret_of (devm := retPre) (G := G) (e := 0)
+    (out := word.toBytes) (d' := d.2) rfl
+    (Devm.extCost_word_word Mem.size_write_word) rfl hread
+
+/-- Exact compiled-body result for the assignment view on a canonical ABI
+address word and the same concrete Registry owner used by enumeration. -/
+theorem getPauser_body_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (target : B256) (G : Nat)
+    (hdata : sevm.data.length.toB256 <? 36 = 0)
+    (hword : Sevm.dataWord sevm 4 = target)
+    (htarget : canonicalAddress target)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hwarm : (⟨sevm.currentTarget, assignmentSlot target⟩ : Adr × B256) ∈
+      base.accessedStorageKeys) :
+    ∃ post,
+      Func.RunCompiled fs sevm
+        (base.setMach ⟨[], Mem.empty, G + registryScalarBodyGasWarm⟩)
+        getPauser post ∧
+      Devm.output post = (assignmentAt entries target).toBytes := by
+  have hcanonical := canonicalAddress_mask_zero htarget
+  have hstorage :
+      Devm.getStorVal base sevm.currentTarget (assignmentSlot target) =
+        assignmentAt entries target := by
+    change (logicalStorageOfStor
+      (Devm.getStor base sevm.currentTarget)).read (assignmentSlot target) =
+        assignmentAt entries target
+    exact hw.assignments target htarget
+  unfold getPauser requireStaticArgs canonicalAddressArg arg cdl
+    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
+    returnMemoryRange pushList registryScalarBodyGasWarm
+  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = target := by
+    exact hword
+  have hgasFinal : G + 179 - 179 = G := by omega
+  rcases registryScalarReturn_runCompiled fs sevm base
+      (assignmentAt entries target) G with ⟨post, hreturn, houtput⟩
+  refine ⟨post, ?_, houtput⟩
+  func_run [0, ~~~(0 : B256), addressMask, 0, assignmentSlot target, 3]
+  all_goals try { rw [hword0]; exact hcanonical }
+  all_goals try { rw [hword0]; rfl }
+  all_goals try {
+    rw [show ((0 : B256) * 32).toNat = 0 by decide]
+    exact Devm.extCost_empty_word }
+  all_goals try {
+    rw [show ((0 : B256) * 32).toNat = 0 by decide,
+      Devm.getStorVal_setMach, hstorage, hgasFinal]
+    exact hreturn }
+
+/-- Exact compiled-body result for the per-pauser multiplicity view on a
+canonical ABI address word and the same concrete Registry owner. -/
+theorem getPausableCount_body_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (pauser : B256) (G : Nat)
+    (hdata : sevm.data.length.toB256 <? 36 = 0)
+    (hword : Sevm.dataWord sevm 4 = pauser)
+    (hpauser : canonicalAddress pauser)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hwarm : (⟨sevm.currentTarget, countSlot pauser⟩ : Adr × B256) ∈
+      base.accessedStorageKeys) :
+    ∃ post,
+      Func.RunCompiled fs sevm
+        (base.setMach ⟨[], Mem.empty, G + registryScalarBodyGasWarm⟩)
+        getPausableCount post ∧
+      Devm.output post =
+        (Nat.toB256 (assignmentCount entries pauser)).toBytes := by
+  have hcanonical := canonicalAddress_mask_zero hpauser
+  have hstorage :
+      Devm.getStorVal base sevm.currentTarget (countSlot pauser) =
+        Nat.toB256 (assignmentCount entries pauser) := by
+    change (logicalStorageOfStor
+      (Devm.getStor base sevm.currentTarget)).read (countSlot pauser) =
+        Nat.toB256 (assignmentCount entries pauser)
+    exact hw.counts pauser hpauser
+  unfold getPausableCount requireStaticArgs canonicalAddressArg arg cdl
+    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
+    returnMemoryRange pushList registryScalarBodyGasWarm
+  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := by
+    exact hword
+  have hgasFinal : G + 179 - 179 = G := by omega
+  rcases registryScalarReturn_runCompiled fs sevm base
+      (Nat.toB256 (assignmentCount entries pauser)) G with
+    ⟨post, hreturn, houtput⟩
+  refine ⟨post, ?_, houtput⟩
+  func_run [0, ~~~(0 : B256), addressMask, 0, countSlot pauser, 3]
+  all_goals try { rw [hword0]; exact hcanonical }
+  all_goals try { rw [hword0]; rfl }
+  all_goals try {
+    rw [show ((0 : B256) * 32).toNat = 0 by decide]
+    exact Devm.extCost_empty_word }
+  all_goals try {
+    rw [show ((0 : B256) * 32).toNat = 0 by decide,
+      Devm.getStorVal_setMach, hstorage, hgasFinal]
+    exact hreturn }
+
+theorem assignmentCount_eq_multiplicity (entries : List Entry)
+    (pauser : B256) :
+    assignmentCount entries pauser =
+      (entries.map Prod.snd).count pauser := by
+  induction entries with
+  | nil => simp [assignmentCount]
+  | cons entry rest ih =>
+      simp only [assignmentCount, List.map_cons, List.count_cons]
+      rw [ih]
+      by_cases h : entry.2 = pauser
+      · simp [h, Nat.add_comm]
+      · simp [h]
+
+/-- Model-level consequences shared by the three exact Registry view runs. -/
+structure RegistrySnapshotCoherence (entries : List Entry)
+    (target pauser : B256) : Prop where
+  assignment_iff_member :
+    assignmentAt entries target ≠ 0 ↔ target ∈ entries.map Prod.fst
+  returned_nonzero_canonical :
+    ∀ entry ∈ entries, entry.1 ≠ 0 ∧ canonicalAddress entry.1
+  returned_targets_nodup : (entries.map Prod.fst).Nodup
+  count_eq_multiplicity :
+    assignmentCount entries pauser = (entries.map Prod.snd).count pauser
+  zero_count : assignmentCount entries 0 = 0
+
+/-- The exact enumeration, assignment, and multiplicity bodies read one
+concrete Registry snapshot.  Their successful outputs therefore agree with
+ordered membership, target validity/uniqueness, and pauser multiplicity. -/
+theorem registryViews_coherent
+    (fs : List Func) (enumSevm pauserSevm countSevm : Sevm)
+    (base : Devm) (entries : List Entry) (target pauser : B256)
+    (enumG pauserG countG : Nat)
+    (hpauserOwner : pauserSevm.currentTarget = enumSevm.currentTarget)
+    (hcountOwner : countSevm.currentTarget = enumSevm.currentTarget)
+    (hpauserData : pauserSevm.data.length.toB256 <? 36 = 0)
+    (hpauserWord : Sevm.dataWord pauserSevm 4 = target)
+    (hcountData : countSevm.data.length.toB256 <? 36 = 0)
+    (hcountWord : Sevm.dataWord countSevm 4 = pauser)
+    (htarget : canonicalAddress target)
+    (hpauser : canonicalAddress pauser)
+    (hw : RegistryWitness
+      (logicalStorageOfStor
+        (Devm.getStor base enumSevm.currentTarget)) entries)
+    (henumWarm : ∀ key ∈ enumerationStorageKeys entries,
+      (⟨enumSevm.currentTarget, key⟩ : Adr × B256) ∈
+        base.accessedStorageKeys)
+    (hpauserWarm :
+      (⟨pauserSevm.currentTarget, assignmentSlot target⟩ : Adr × B256) ∈
+        base.accessedStorageKeys)
+    (hcountWarm :
+      (⟨countSevm.currentTarget, countSlot pauser⟩ : Adr × B256) ∈
+        base.accessedStorageKeys)
+    (hfs : fs[enumLoopSlot]? = some enumLoop) :
+    ∃ pauserPost countPost,
+      Func.RunCompiled fs enumSevm
+        (base.setMach ⟨[], Mem.empty,
+          enumG + getPausablesGasWarm entries⟩)
+        getPausables
+        ((base.setMach ⟨[], enumPrefixMemory entries entries, enumG⟩).withOutput
+          (abiAddressArray entries)) ∧
+      Func.RunCompiled fs pauserSevm
+        (base.setMach ⟨[], Mem.empty,
+          pauserG + registryScalarBodyGasWarm⟩)
+        getPauser pauserPost ∧
+      Devm.output pauserPost = (assignmentAt entries target).toBytes ∧
+      Func.RunCompiled fs countSevm
+        (base.setMach ⟨[], Mem.empty,
+          countG + registryScalarBodyGasWarm⟩)
+        getPausableCount countPost ∧
+      Devm.output countPost =
+        (Nat.toB256 (assignmentCount entries pauser)).toBytes ∧
+      RegistrySnapshotCoherence entries target pauser := by
+  have hwPauser : RegistryWitness
+      (logicalStorageOfStor
+        (Devm.getStor base pauserSevm.currentTarget)) entries := by
+    simpa only [hpauserOwner] using hw
+  have hwCount : RegistryWitness
+      (logicalStorageOfStor
+        (Devm.getStor base countSevm.currentTarget)) entries := by
+    simpa only [hcountOwner] using hw
+  rcases getPauser_body_runCompiled fs pauserSevm base entries target pauserG
+      hpauserData hpauserWord htarget hwPauser hpauserWarm with
+    ⟨pauserPost, hpauserRun, hpauserOutput⟩
+  rcases getPausableCount_body_runCompiled fs countSevm base entries
+      pauser countG hcountData hcountWord hpauser hwCount hcountWarm with
+    ⟨countPost, hcountRun, hcountOutput⟩
+  refine ⟨pauserPost, countPost,
+    getPausables_body_runCompiled fs enumSevm base entries enumG
+      hw henumWarm hfs,
+    hpauserRun, hpauserOutput, hcountRun, hcountOutput, ?_⟩
+  have hassignment :
+      (Devm.getStor base enumSevm.currentTarget).get (assignmentSlot target) =
+        assignmentAt entries target := by
+    simpa only [logicalStorageOfStor] using hw.assignments target htarget
+  have hmember :=
+    (membershipEquivalence_registerPauser
+      (post := base) (ca := enumSevm.currentTarget) hw htarget).1
+  rw [hassignment] at hmember
+  have hzeroCanonical : canonicalAddress (0 : B256) := by
+    unfold canonicalAddress
+    rw [B256.toNat_zero]
+    norm_num
+  have hzeroWord : Nat.toB256 (assignmentCount entries 0) = 0 := by
+    have hcount := hw.counts 0 hzeroCanonical
+    exact hcount.symm.trans hw.zeroCount
+  have hzeroCount : assignmentCount entries 0 = 0 := by
+    have hnat := congrArg B256.toNat hzeroWord
+    rw [B256.toNat_toB256_of_lt (hw.assignmentCount_lt_2pow256 0),
+      B256.toNat_zero] at hnat
+    exact hnat
+  exact ⟨hmember, hw.targetsValid, hw.targetsNodup,
+    assignmentCount_eq_multiplicity entries pauser, hzeroCount⟩
 
 set_option maxRecDepth 1000
 
