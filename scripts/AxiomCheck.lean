@@ -38,6 +38,7 @@ import Blanc.Weth10HolderFlowWriteCompleteness
 import Blanc.Weth10Attribution
 import Blanc.Weth10AllowanceDispatch
 import Blanc.Weth10Hardened
+import Blanc.LidoCircuitBreakerRegistry
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
@@ -450,3 +451,23 @@ import Blanc.LidoCircuitBreakerRegistryModel
 #print axioms Blanc.LidoCircuitBreaker.constructor_inventory_cardinalities
 #print axioms Blanc.LidoCircuitBreaker.creation_template_runtime_suffix
 #print axioms Blanc.LidoCircuitBreaker.full_create_input_length
+#print axioms Blanc.LidoCircuitBreaker.slot_toNat_of_region_payload_lt
+#print axioms Blanc.LidoCircuitBreaker.slot_injective_payload
+#print axioms Blanc.LidoCircuitBreaker.slot_ne_of_region_ne
+#print axioms Blanc.LidoCircuitBreaker.RegistryWitness.entries_length_le
+#print axioms Blanc.LidoCircuitBreaker.setPauser_sourceTrace_refines_model
+#print axioms Blanc.LidoCircuitBreaker.RegistryWitness.applySetPauserSourceTrace
+#print axioms Blanc.LidoCircuitBreaker.setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
+#print axioms Blanc.LidoCircuitBreaker.setPauser_run_extracts_sourceTrace
+#print axioms Blanc.LidoCircuitBreaker.setPauserKernel_run_of_exec
+#print axioms Blanc.LidoCircuitBreaker.setPauserKernel_exec_extracts_sourceTrace
+#print axioms Blanc.LidoCircuitBreaker.registerPauser_kernel_exec_preserves_registry
+#print axioms Blanc.LidoCircuitBreaker.registerAfterSet_runCompiledTo_preserves_registry
+#print axioms Blanc.LidoCircuitBreaker.pause_kernel_exec_reaches_pauseAfterSet
+#print axioms Blanc.LidoCircuitBreaker.registerPauser_settled_error_restores_registry
+#print axioms Blanc.LidoCircuitBreaker.pause_settled_error_restores_registry
+#print axioms Blanc.LidoCircuitBreaker.membershipEquivalence_registerPauser
+#print axioms Blanc.LidoCircuitBreaker.cleanStateAfterRemoval_registerPauser
+#print axioms Blanc.LidoCircuitBreaker.globalCountConservation_registerPauser
+#print axioms Blanc.LidoCircuitBreaker.pause_direct_postWrite_revert_settles_and_restores_registry
+#print axioms Blanc.LidoCircuitBreaker.directPause_zeroCode_postWrite_error_control

@@ -44,6 +44,8 @@ jobs:
       # and venv at the gates' pinned EELS commit, so CI cannot satisfy their
       # dependency contract without a separately reviewed provisioning change.
       - uses: leanprover/lean-action@v1
+      - name: Lido CircuitBreaker Registry RI7 assurance
+        run: scripts/check-lido-circuit-breaker-registry.sh
       - name: Lido launch/current artifact ownership ledgers (offline)
         run: scripts/check-lido-circuit-breaker-artifact-profile.sh
       - name: Lido constructor emitted-byte schema (offline)

@@ -11,6 +11,7 @@ import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.LidoCircuitBreakerRegistryModel
+import Blanc.LidoCircuitBreakerRegistry
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -2372,6 +2373,564 @@ example (args : ConstructorArgs) :
     (lidoCircuitBreakerFullCreateInput args).length =
       lidoCircuitBreakerCreationTemplate.length + constructorArgumentBytes :=
   full_create_input_length args
+
+example {region : Nat} {payload : B256}
+    (hregion : region < 16) (hpayload : payload.toNat < 2 ^ 252) :
+    (slot region payload).toNat =
+      region * 2 ^ 252 + payload.toNat :=
+  slot_toNat_of_region_payload_lt hregion hpayload
+
+example {region : Nat} {left right : B256}
+    (hregion : region < 16)
+    (hleft : left.toNat < 2 ^ 252)
+    (hright : right.toNat < 2 ^ 252)
+    (hslot : slot region left = slot region right) :
+    left = right :=
+  slot_injective_payload hregion hleft hright hslot
+
+example {leftRegion rightRegion : Nat} {left right : B256}
+    (hlr : leftRegion < 16) (hrr : rightRegion < 16)
+    (hleft : left.toNat < 2 ^ 252)
+    (hright : right.toNat < 2 ^ 252)
+    (hne : leftRegion ≠ rightRegion) :
+    slot leftRegion left ≠ slot rightRegion right :=
+  slot_ne_of_region_ne hlr hrr hleft hright hne
+
+example {storage : LogicalStorage} {entries : List Entry}
+    (h : RegistryWitness storage entries) :
+    entries.length ≤ 2 ^ 160 - 1 :=
+  h.entries_length_le
+
+example {entries : List Entry} {target newPauser : B256}
+    (htarget0 : target ≠ 0) {trace : SetPauserSourceTrace}
+    (htrace : setPauserSourceTrace entries target newPauser = some trace) :
+    setPauser entries target newPauser = some trace.postEntries ∧
+      setPauserSourceWrites entries target newPauser = some trace.writes :=
+  setPauser_sourceTrace_refines_model htarget0 htrace
+
+example {s : Stor} {entries : List Entry}
+    (hw : RegistryWitness (logicalStorageOfStor s) entries)
+    {target newPauser : B256}
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    {trace : SetPauserSourceTrace}
+    (htrace : setPauserSourceTrace entries target newPauser = some trace) :
+    RegistryWitness
+      (logicalStorageOfStor (applyRegistryWrites s trace.writes))
+      trace.postEntries :=
+  hw.applySetPauserSourceTrace htarget hnew htrace
+
+example (dp : DeployParams) {ca : Adr} {sevm : Sevm} {pre : Devm}
+    {loc : Nat} {img : Bytes} {stack : List B256}
+    {target : B256} {G : Nat}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hstack : pre.stack = stack)
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (htargetCanonical : canonicalAddress target)
+    (htargetZero : target = 0)
+    (halign : pre.memory.size % 32 = 0)
+    (hgas : pre.gasLeft = G +
+      (gVerylow +
+        (gVerylow + pre.extCost [⟨(targetWord * 32).toNat, 32⟩]) +
+        gVerylow + (gVerylow + gHigh + gJumpdest) +
+        (gVerylow + gMid + gJumpdest) +
+        revSelectorCost (pre.setMach ⟨pre.stack,
+          (pre.memory.read (targetWord * 32).toNat 32).2, 0⟩)))
+    (hroom : pre.stack.length < 1023) :
+    let fs := (runtime dp).main :: (runtime dp).aux
+    let data := customErrorData "PausableZero"
+    let post := (pre.setMach ⟨stack,
+      (pre.memory.read (targetWord * 32).toNat 32).2.write 0
+        data.toB256.toBytes, G⟩).withOutput data
+    Func.RunCompiledTo fs sevm pre setPauserKernel
+        (.error (.revert, post)) ∧
+      ∃ execution : Exec (loc + 1) sevm pre (.error (.revert, post)),
+        ∀ occurrence : Exec.NinstOccurrence
+            (⟨loc + 1, sevm, pre, .error (.revert, post), execution⟩ :
+              Exec.Deriv),
+          occurrence.instruction ≠ .reg .sstore :=
+  setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite dp howner
+    hcodeAddress hbytes htable hstack hwf hr htargetRead htargetCanonical
+    htargetZero halign hgas hroom
+
+example {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {img : Bytes} {entries : List Entry}
+    {target newPauser continuation : B256} {ca : Adr}
+    {trace : SetPauserSourceTrace}
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (howner : sevm.currentTarget = ca)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htargetCanonical : canonicalAddress target)
+    (hnewCanonical : canonicalAddress newPauser)
+    (herrorLookup : fs[pausableZeroErrorSlot]? = some pausableZeroError)
+    (happendLookup : fs[appendTargetSlot]? = some appendTarget)
+    (hafterLookup : fs[afterOldPauserSlot]? = some afterOldPauser)
+    (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
+    (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
+    (hrun : Func.Run fs sevm pre setPauserKernel final)
+    (htrace : setPauserSourceTrace entries target newPauser = some trace) :
+    ∃ postRegistry postImg,
+      Mem.Wf postRegistry.memory ∧
+      Mem.Reads postRegistry.memory postImg ∧
+      Bytes.toB256
+        (postImg.sliceD (targetWord * 32).toNat 32 0) = target ∧
+      Bytes.toB256
+        (postImg.sliceD (newPauserWord * 32).toNat 32 0) = newPauser ∧
+      Bytes.toB256
+        (postImg.sliceD (previousPauserWord * 32).toNat 32 0) =
+          assignmentAt entries target ∧
+      Bytes.toB256
+        (postImg.sliceD (continuationWord * 32).toNat 32 0) =
+          continuation ∧
+      Devm.getStor postRegistry ca =
+        applyRegistryWrites (Devm.getStor pre ca) trace.writes ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor postRegistry ca))
+        trace.postEntries ∧
+      Func.Run fs sevm postRegistry finishSetPauser final :=
+  setPauser_run_extracts_sourceTrace hwf hr htargetRead hnewRead
+    hcontinuationRead howner hw htargetCanonical hnewCanonical herrorLookup
+    happendLookup hafterLookup hremoveLookup hfinishLookup hrun htrace
+
+example (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    Func.Run ((runtime dp).main :: (runtime dp).aux)
+      sevm pre setPauserKernel final :=
+  setPauserKernel_run_of_exec dp howner hcodeAddress hbytes htable hexec
+
+example (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser : B256}
+    {continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    ∃ trace postRegistry postImg,
+      setPauserSourceTrace entries target newPauser = some trace ∧
+      Mem.Wf postRegistry.memory ∧
+      Mem.Reads postRegistry.memory postImg ∧
+      Bytes.toB256
+        (postImg.sliceD (targetWord * 32).toNat 32 0) = target ∧
+      Bytes.toB256
+        (postImg.sliceD (newPauserWord * 32).toNat 32 0) = newPauser ∧
+      Bytes.toB256
+        (postImg.sliceD (previousPauserWord * 32).toNat 32 0) =
+          assignmentAt entries target ∧
+      Bytes.toB256
+        (postImg.sliceD (continuationWord * 32).toNat 32 0) =
+          continuation ∧
+      Devm.getStor postRegistry ca =
+        applyRegistryWrites (Devm.getStor pre ca) trace.writes ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor postRegistry ca))
+        trace.postEntries ∧
+      Func.Run ((runtime dp).main :: (runtime dp).aux)
+        sevm postRegistry finishSetPauser final :=
+  setPauserKernel_exec_extracts_sourceTrace dp howner hcodeAddress hbytes
+    htable hwf hr htargetRead hnewRead hcontinuationRead hw htarget hnew
+    hexec
+
+example (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    ∃ trace,
+      setPauserSourceTrace entries target newPauser = some trace ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor final ca)) trace.postEntries :=
+  registerPauser_kernel_exec_preserves_registry dp howner hcodeAddress
+    hbytes htable hwf hr htargetRead hnewRead hcontinuationRead hw htarget
+    hnew hexec
+
+example (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hcontinuation : continuation ≠ 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htarget : canonicalAddress target)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    ∃ trace pausePre pauseImg,
+      setPauserSourceTrace entries target 0 = some trace ∧
+      Mem.Wf pausePre.memory ∧
+      Mem.Reads pausePre.memory pauseImg ∧
+      Bytes.toB256
+        (pauseImg.sliceD (targetWord * 32).toNat 32 0) = target ∧
+      Devm.getStor pausePre ca =
+        applyRegistryWrites (Devm.getStor pre ca) trace.writes ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor pausePre ca))
+        trace.postEntries ∧
+      setPauser entries target 0 = some trace.postEntries ∧
+      target ∉ trace.postEntries.map Prod.fst ∧
+      (Devm.getStor pausePre ca).get (assignmentSlot target) = 0 ∧
+      (Devm.getStor pausePre ca).get (indexSlot target) = 0 ∧
+      Func.Run ((runtime dp).main :: (runtime dp).aux)
+        sevm pausePre pauseAfterSet final :=
+  pause_kernel_exec_reaches_pauseAfterSet dp howner hcodeAddress hbytes
+    htable hwf hr htargetRead hnewRead hcontinuationRead hcontinuation hw
+    htarget hexec
+
+example (dp : DeployParams) {msg : Msg} {slot : Xlot} {post : Devm}
+    {ca : Adr} {entries : List Entry} {target newPauser : B256}
+    (htarget : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (hvalue : msg.value = 0)
+    (hdata : msg.data = registerPauserCalldata target newPauser)
+    (htargetCanonical : canonicalAddress target)
+    (hnewCanonical : canonicalAddress newPauser)
+    (hentry : RegistryWitness
+      (logicalStorageOfStor (msg.benv.state.getStor ca)) entries)
+    (hprocess : ProcessMessage msg slot (.ok post))
+    (herror : post.error.isSome) :
+    RegistryWitness
+      (logicalStorageOfStor (Devm.getStor post ca)) entries :=
+  registerPauser_settled_error_restores_registry dp htarget howner
+    hcodeAddress hcode hvalue hdata htargetCanonical hnewCanonical hentry
+    hprocess herror
+
+example (dp : DeployParams) {msg : Msg} {slot : Xlot} {post : Devm}
+    {ca : Adr} {entries : List Entry} {target : B256}
+    (htarget : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (hvalue : msg.value = 0)
+    (hdata : msg.data = pauseCalldata target)
+    (htargetCanonical : canonicalAddress target)
+    (hentry : RegistryWitness
+      (logicalStorageOfStor (msg.benv.state.getStor ca)) entries)
+    (hprocess : ProcessMessage msg slot (.ok post))
+    (herror : post.error.isSome) :
+    RegistryWitness
+      (logicalStorageOfStor (Devm.getStor post ca)) entries :=
+  pause_settled_error_restores_registry dp htarget howner hcodeAddress
+    hcode hvalue hdata htargetCanonical hentry hprocess herror
+
+example {post : Devm} {ca : Adr} {entries : List Entry}
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor post ca)) entries)
+    {target : B256} (htarget : canonicalAddress target) :
+    ((Devm.getStor post ca).get (assignmentSlot target) ≠ 0 ↔
+      target ∈ entries.map Prod.fst) ∧
+    ((Devm.getStor post ca).get (indexSlot target) ≠ 0 ↔
+      target ∈ entries.map Prod.fst) ∧
+    ∀ index pauser, findEntry entries target = some (index, pauser) →
+      (Devm.getStor post ca).get (assignmentSlot target) = pauser ∧
+      (Devm.getStor post ca).get (indexSlot target) =
+        Nat.toB256 (index + 1) ∧
+      targetAt entries index = target ∧
+      ∀ otherIndex, otherIndex < entries.length →
+        targetAt entries otherIndex = target → otherIndex = index :=
+  membershipEquivalence_registerPauser hw htarget
+
+example {s : Stor} {entries : List Entry} {target : B256}
+    (hw : RegistryWitness (logicalStorageOfStor s) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    {trace : SetPauserSourceTrace}
+    (htrace : setPauserSourceTrace entries target 0 = some trace) :
+    let post := applyRegistryWrites s trace.writes
+    (post.get (assignmentSlot target) = 0 ∧
+     post.get (indexSlot target) = 0 ∧
+     target ∉ trace.postEntries.map Prod.fst) ∧
+    (match findEntry entries target with
+     | none =>
+         post.get
+           (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0
+     | some (index, _oldPauser) =>
+         post.get (arrayEntrySlot (Nat.toB256 entries.length)) = 0 ∧
+         let moved := sourceLastTarget entries
+         (moved = target ∨
+           post.get (indexSlot moved) = Nat.toB256 (index + 1))) :=
+  cleanStateAfterRemoval_registerPauser hw htarget htrace
+
+open scoped BigOperators
+
+example {post : Devm} {ca : Adr} {entries : List Entry}
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor post ca)) entries) :
+    (∀ pauser, canonicalAddress pauser →
+      (Devm.getStor post ca).get (countSlot pauser) =
+        Nat.toB256 (assignmentCount entries pauser)) ∧
+    (Devm.getStor post ca).get (countSlot 0) = 0 ∧
+    (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+      ((Devm.getStor post ca).get (countSlot pauser)).toNat) =
+        entries.length :=
+  globalCountConservation_registerPauser hw
+
+example {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {out : Execution} {img : Bytes} {entries : List Entry}
+    {previousPauser newPauser : B256} {ca : Adr} {panicData : Bytes}
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (hpreviousRead : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) =
+        previousPauser)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (howner : sevm.currentTarget = ca)
+    (hprevious : canonicalAddress previousPauser)
+    (hnew : canonicalAddress newPauser)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (hpanicLookup : fs[arithmeticPanicSlot]? =
+      some (Func.revData panicData))
+    (hrun : Func.RunCompiledTo fs sevm pre registerAfterSet out) :
+    Execution.Rel
+      (fun _ post => RegistryWitness
+        (logicalStorageOfStor (Devm.getStor post ca)) entries)
+      pre out :=
+  registerAfterSet_runCompiledTo_preserves_registry hwf hr hpreviousRead
+    hnewRead howner hprevious hnew hw hpanicLookup hrun
+
+example (dp : DeployParams)
+    {msg : Msg} {sevm : Sevm} {pre : Devm}
+    {ca : Adr} {entries : List Entry}
+    {img : Bytes} {stack : List B256}
+    {selectorWord pauser expiry duration previousPauser countValue
+      decrementedCount target arrayLength decrementedLength removedIndex
+      lastTarget : B256}
+    {G : Nat}
+    (hmsgTarget : msg.target = some ca)
+    (hmsgOwner : msg.currentTarget = ca)
+    (hmsgCodeAddress : msg.codeAddress = some ca)
+    (hmsgCode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (hmsgValue : msg.value = 0)
+    (hmsgData : msg.data = pauseCalldata target)
+    (howner : sevm.currentTarget = ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (hframeEntry :
+      (Frame.ofCall msg).enter = .run ⟨0, sevm, pre⟩)
+    (hentry : RegistryWitness
+      (logicalStorageOfStor (msg.benv.state.getStor ca)) entries)
+    (hstack : pre.stack = stack)
+    (hvalue : sevm.value = 0)
+    (hselectorData : Sevm.dataWord sevm 0 = selectorWord)
+    (hselectorShift : selectorWord >>> 224 = selector "pause" [.address])
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (hdataLength : sevm.data.length = 36)
+    (hmask : addressMask &&& target = 0)
+    (hlock : pre.getTransVal sevm.currentTarget lockKey = 0)
+    (hdataTarget : Sevm.dataWord sevm 4 = target)
+    (hcaller : sevm.caller.toB256 = pauser)
+    (hpauserNonzero : pauser ≠ 0)
+    (hpauserCanonical : canonicalAddress pauser)
+    (hauthorizationStorage :
+      pre.getStorVal sevm.currentTarget (assignmentSlot target) = pauser)
+    (hexpiryStorage :
+      pre.getStorVal sevm.currentTarget (expirySlot pauser) = expiry)
+    (hlive : sevm.benvStat.time < expiry)
+    (hdurationStorage :
+      pre.getStorVal sevm.currentTarget pauseDurationSlot = duration)
+    (htargetNonzero : target ≠ 0)
+    (htargetCanonical : canonicalAddress target)
+    (hassignmentStorage :
+      pre.getStorVal sevm.currentTarget (assignmentSlot target) =
+        previousPauser)
+    (hpreviousNonzero : previousPauser ≠ 0)
+    (hpreviousCanonical : canonicalAddress previousPauser)
+    (hcountStorage :
+      pre.getStorVal sevm.currentTarget (countSlot previousPauser) =
+        countValue)
+    (hcountSub : countValue - 1 = decrementedCount)
+    (harrayLengthBound : arrayLength.toNat < 2 ^ 252)
+    (hindexStorage :
+      pre.getStorVal sevm.currentTarget (indexSlot target) = removedIndex)
+    (hlengthStorage :
+      pre.getStorVal sevm.currentTarget arrayLengthSlot = arrayLength)
+    (hdecrement : arrayLength - 1 = decrementedLength)
+    (hlastStorage :
+      pre.getStorVal sevm.currentTarget (arrayEntrySlot arrayLength) =
+        lastTarget)
+    (hlastCanonical : canonicalAddress lastTarget)
+    (hcodeSize : (pre.getCode target.toAdr).size = 0)
+    (haccess : target.toAdr ∈ pre.accessedAddresses ∨
+      target.toAdr ∉ pre.accessedAddresses)
+    (hwarmHole :
+      (⟨sevm.currentTarget, arrayEntrySlot removedIndex⟩ : Adr × B256) ∈
+        pre.accessedStorageKeys)
+    (hwarmMovedIndex :
+      (⟨sevm.currentTarget, indexSlot lastTarget⟩ : Adr × B256) ∈
+        pre.accessedStorageKeys)
+    (hroom : stack.length < 1017)
+    (hstatic : sevm.isStatic = false)
+    (hemptyLookup :
+      ((runtime dp).main :: (runtime dp).aux)[emptyRevertSlot]? =
+        some Func.rev)
+    (hpauseLookup :
+      ((runtime dp).main :: (runtime dp).aux)[pauseAfterSetSlot]? =
+        some pauseAfterSet)
+    (hfinishLookup :
+      ((runtime dp).main :: (runtime dp).aux)[finishSetPauserSlot]? =
+        some finishSetPauser)
+    (hremoveLookup :
+      ((runtime dp).main :: (runtime dp).aux)[removeTargetSlot]? =
+        some removeTarget)
+    (hafterLookup :
+      ((runtime dp).main :: (runtime dp).aux)[afterOldPauserSlot]? =
+        some afterOldPauser)
+    (hsetPauserLookup :
+      ((runtime dp).main :: (runtime dp).aux)[setPauserSlot]? =
+        some setPauserKernel)
+    (hgas : pre.gasLeft = G + runtimePauseCost dp pre duration target
+      previousPauser removedIndex arrayLength lastTarget) :
+    ∃ raw,
+      Prog.RunCompiledTo sevm pre (runtime dp) (.error (.revert, raw)) ∧
+      ∃ rootExec : Exec 0 sevm pre (.error (.revert, raw)),
+        raw.output = [] ∧
+        ((∃ write : Exec.SuccessfulSstoreOccurrence
+            (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv),
+          write.storageOwner = ca ∧
+          write.key = assignmentSlot target ∧
+          write.value = 0 ∧
+          ∃ zeroCode : Exec.NinstOccurrence
+              (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv),
+            zeroCode.instruction = .reg .extcodesize ∧
+            (∃ rest, zeroCode.node.devm.stack = target :: rest) ∧
+            (zeroCode.node.devm.getCode target.toAdr).size = 0 ∧
+            Exec.RawBefore
+              (root :=
+                ⟨0, sevm, pre, .error (.revert, raw), rootExec⟩)
+              write.occurrence.node zeroCode.node) ∧
+          ∀ occurrence : Exec.NinstOccurrence
+              (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv),
+            occurrence.instruction ≠ .exec .call ∧
+            occurrence.instruction ≠ .exec .statcall) ∧
+        ∃ post,
+          ProcessMessage msg
+              (.some ⟨⟨0, sevm, pre⟩, .error (.revert, raw)⟩)
+              (.ok post) ∧
+          post.error.isSome ∧
+          RegistryWitness
+            (logicalStorageOfStor (Devm.getStor post ca)) entries :=
+  pause_direct_postWrite_revert_settles_and_restores_registry dp
+    hmsgTarget hmsgOwner hmsgCodeAddress hmsgCode hmsgValue hmsgData howner
+    hbytes hframeEntry hentry hstack hvalue hselectorData hselectorShift hwf
+    hr hdataLength hmask hlock hdataTarget hcaller hpauserNonzero
+    hpauserCanonical hauthorizationStorage hexpiryStorage hlive
+    hdurationStorage htargetNonzero htargetCanonical hassignmentStorage
+    hpreviousNonzero hpreviousCanonical hcountStorage hcountSub
+    harrayLengthBound hindexStorage hlengthStorage hdecrement hlastStorage
+    hlastCanonical hcodeSize haccess hwarmHole hwarmMovedIndex hroom hstatic
+    hemptyLookup hpauseLookup hfinishLookup hremoveLookup hafterLookup
+    hsetPauserLookup hgas
+
+example :
+    ∃ (msg : Msg) (sevm : Sevm) (pre : Devm) (raw : Devm),
+      msg.target = some (Nat.toAdr 100) ∧
+      msg.currentTarget = Nat.toAdr 100 ∧
+      msg.codeAddress = some (Nat.toAdr 100) ∧
+      msg.code.toList = lidoCircuitBreakerCode officialParams ∧
+      msg.value = 0 ∧
+      msg.data = pauseCalldata (7 : B256) ∧
+      sevm = initSevm msg ∧
+      pre = initDevm msg ∧
+      (Frame.ofCall msg).enter = .run ⟨0, sevm, pre⟩ ∧
+      RegistryWitness
+        (logicalStorageOfStor (msg.benv.state.getStor (Nat.toAdr 100)))
+        [((7 : B256), (9 : B256))] ∧
+      sevm.caller.toB256 = (9 : B256) ∧
+      pre.getStorVal (Nat.toAdr 100) (assignmentSlot (7 : B256)) = 9 ∧
+      pre.getStorVal (Nat.toAdr 100) (expirySlot (9 : B256)) = 20 ∧
+      sevm.benvStat.time < (20 : B256) ∧
+      (7 : B256) ≠ 0 ∧
+      canonicalAddress (7 : B256) ∧
+      (pre.getCode (7 : B256).toAdr).size = 0 ∧
+      Prog.RunCompiledTo sevm pre (runtime officialParams)
+        (.error (.revert, raw)) ∧
+      ∃ _rootExec : Exec 0 sevm pre (.error (.revert, raw)),
+        raw.output = [] ∧
+        ∃ post,
+          ProcessMessage msg
+              (.some ⟨⟨0, sevm, pre⟩, .error (.revert, raw)⟩)
+              (.ok post) ∧
+          post.error.isSome ∧
+          RegistryWitness
+            (logicalStorageOfStor (Devm.getStor post (Nat.toAdr 100)))
+            [((7 : B256), (9 : B256))] := by
+  rcases directPause_zeroCode_postWrite_error_control with
+    ⟨msg, sevm, pre, raw, htarget, howner, hcodeAddress, hcode, hvalue,
+      hdata, hsevm, hpre, hframe, hw, hcaller, hassignment, hexpiry,
+      hlive, htarget0, hcanonical, hzeroCode, hrun, rootExec, houtput,
+      _evidence, post, hprocess, herror, hrestored⟩
+  exact ⟨msg, sevm, pre, raw, htarget, howner, hcodeAddress, hcode,
+    hvalue, hdata, hsevm, hpre, hframe, hw, hcaller, hassignment, hexpiry,
+    hlive, htarget0, hcanonical, hzeroCode, hrun, rootExec, houtput, post,
+    hprocess, herror, hrestored⟩
 
 end LidoCircuitBreaker
 

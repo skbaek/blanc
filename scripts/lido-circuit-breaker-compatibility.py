@@ -101,7 +101,9 @@ SEMANTIC_REQUIREMENTS = {
         "duplicate-free ordered array of nonzero canonical targets and nonzero canonical pausers",
         "assignment, one-based index, array entries/length, per-pauser multiplicity, and `count[0] = 0`",
         "Tagged mapping regions quantify only canonical address payloads",
-        "region/tag disjointness and length/index/count nonwrap are later, currently unproved theorem obligations",
+        "region/tag disjointness, length/index/count nonwrap, exact chronological replay",
+        "witness preservation at the post-Registry boundary",
+        "does not assume those facts as extra invariant fields",
         "No global Keccak injectivity, raw-slot equality, or storage-root equality is assumed",
     ),
     "gas-boundary": (

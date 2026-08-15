@@ -9437,6 +9437,21 @@ lemma List.sliceD_eq_map {ξ : Type} (ys : List ξ) (d : ξ) :
     show ys.getD (m + 1 + j) d = ys.getD (m + (j + 1)) d
     rw [show m + (j + 1) = m + 1 + j from by omega]
 
+/-- A write starting after a requested slice leaves that earlier slice
+unchanged. -/
+lemma Bytes.sliceD_writeAt_before
+    (bs xs : Bytes) (start len n : Nat)
+    (h : start + len ≤ n) :
+    (Bytes.writeAt bs n xs).sliceD start len 0 =
+      bs.sliceD start len 0 := by
+  rw [List.sliceD_eq_map, List.sliceD_eq_map]
+  apply List.map_congr_left
+  intro i hi
+  have hi' := List.mem_range.mp hi
+  rw [Bytes.getD_writeAt]
+  rw [if_neg]
+  omega
+
 /-- What a `CALL`, `LOG` or `MLOAD` reads out of a memory whose image is known:
 exactly the corresponding slice of the image, zero-padded past its end. -/
 lemma Mem.Reads.read {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (i n : Nat) :

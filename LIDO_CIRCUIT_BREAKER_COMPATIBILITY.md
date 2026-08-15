@@ -82,7 +82,11 @@ Admin-only inclusive bound validation, exact error/event behavior, and state upd
 <!-- LIDO-CIRCUIT-BREAKER-ENDPOINT {"signature":"registerPauser(address,address)","selector":"0x338d93fc"} -->
 ### `registerPauser(address,address)`
 
-Admin Registry mutation: register, replace, unregister, idempotence, and swap-and-pop histories.
+Admin Registry mutation: register, replace, unregister, idempotence, and
+swap-and-pop histories. The Blanc proof additionally establishes the concrete
+stable-boundary `RegistryWitness`, membership/index equivalence, exact removal
+cleanup, and global per-pauser count conservation for successful exact-code
+kernel executions in its stated canonical-address domain.
 
 <!-- LIDO-CIRCUIT-BREAKER-ENDPOINT {"signature":"heartbeat()","selector":"0x3defb962"} -->
 ### `heartbeat()`
@@ -200,10 +204,11 @@ receipt logs are distinct evidence layers.
 `RegistryWitness` relates a duplicate-free ordered array of nonzero canonical
 targets and nonzero canonical pausers to assignment, one-based index, array
 entries/length, per-pauser multiplicity, and `count[0] = 0`. Tagged mapping
-regions quantify only canonical address payloads; region/tag disjointness and
-length/index/count nonwrap are later, currently unproved theorem obligations.
-No global Keccak
-injectivity, raw-slot equality, or storage-root equality is assumed.
+regions quantify only canonical address payloads. The Registry proof derives
+region/tag disjointness, length/index/count nonwrap, exact chronological replay,
+and witness preservation at the post-Registry boundary; it does not assume
+those facts as extra invariant fields. No global Keccak injectivity, raw-slot
+equality, or storage-root equality is assumed.
 
 Comparison is over this frozen logical CircuitBreaker state, never equality of
 the two implementations' raw storage slots.
@@ -230,6 +235,8 @@ registered as a behavioral deviation, or satisfy the optimization goal's exact
 independent `.branch`-architecture evidence rule; aggregate savings cannot hide
 it.
 
-Differential agreement is only for manifest-listed worlds/channels. It is not
-universal functional correctness, deployed-bytecode verification, Registry proof,
-enumeration proof, hostile-world theorem, or deployment/history theorem.
+Differential agreement is only for manifest-listed worlds/channels. The
+separate Lean Registry family is universal over its explicit successful-kernel,
+target-zero, continuation, and frame-settlement domains; neither evidence layer
+is deployed-bytecode verification, arbitrary enumeration, a hostile-world
+callback theorem, or a deployment/history theorem.

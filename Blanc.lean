@@ -9,6 +9,7 @@ import Blanc.TransientSettlement
 import Blanc.LidoCircuitBreakerCore
 import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreaker
+import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.Weth10Core

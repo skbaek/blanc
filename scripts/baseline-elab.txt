@@ -744,3 +744,15 @@ OK	1.550	Blanc/LidoCircuitBreakerCode.lean
 OK	1.230	Blanc/LidoCircuitBreakerCore.lean
 OK	1.202	Blanc/LidoCircuitBreakerDeploy.lean
 OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean
+
+# 2026-08-15. The compiled Registry-integrity goal added exactly one proof
+# owner, Blanc/LidoCircuitBreakerRegistry.lean. Its 68.192 s row is the median
+# of three separate uncontended sequential
+# `scripts/check-elab.sh --list --no-build` runs over all 102 files on the
+# exact already-built final Lean candidate: 68.192 s / 533.0 s total,
+# 68.432 s / 529.4 s total, and 67.295 s / 527.2 s total. The reports are
+# `/private/tmp/lido-registry-elab.SLoJC5/run{1,2,3}.txt`; the measured owner
+# SHA-256 is 064a1c8213b218c5894288c0b200e2c424914b74551211c93b2e1ea3467062bc.
+# Only this new row is admitted. Every pre-existing row above remains
+# byte-for-byte unchanged, and `--rebase` and `--force` were not used.
+OK	68.192	Blanc/LidoCircuitBreakerRegistry.lean

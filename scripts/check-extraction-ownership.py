@@ -30,7 +30,10 @@ from pathlib import Path
 
 MANIFEST = "scripts/execution-settlement-lift-manifest.json"
 DECL_KINDS = {"def", "theorem", "structure", "abbrev", "opaque", "axiom", "inductive", "class"}
-IDENT = r"[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_']*)*"
+# Lean identifiers may carry a trailing `?` or `!`; retaining that suffix is
+# essential for ownership because `last` and `last?` are distinct declarations.
+IDENT_PART = r"[A-Za-z_][A-Za-z0-9_']*[!?]?"
+IDENT = rf"{IDENT_PART}(?:\.{IDENT_PART})*"
 NAMESPACE_RE = re.compile(rf"^\s*namespace\s+({IDENT})\s*$")
 SECTION_RE = re.compile(r"^\s*(?:noncomputable\s+)?section(?:\s+[A-Za-z_][A-Za-z0-9_.']*)?\s*$")
 END_RE = re.compile(r"^\s*end(?:\s+[A-Za-z_][A-Za-z0-9_.']*)?\s*$")
