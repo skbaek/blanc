@@ -83,7 +83,7 @@ savings: absent that full evidence it is a deviation or a defect.
 
 | Exclusion | Not a deviation stance | Future owner |
 |---|---|---|
-| Arbitrary-length Registry enumeration and event/monitor correspondence | Registry mutation integrity is established for the shared kernel and its stated caller/settlement boundaries; that does not prove arbitrary-length ABI enumeration or operational monitoring. | S3 successor goal. |
+| Operational event delivery, reorg/finality handling, and arbitrary-history monitoring | Arbitrary-finite exact-code Registry enumeration, coherent three-view snapshots, the local `PauserSet` state/event suffix, and top-level error log erasure are proved. They do not establish provider delivery, event-stream completeness, transaction-history induction, or finality. | S6/closure successor work. |
 | Arbitrary-descendant hostile reentry, access completeness, and actual-write classification | Not established; finite callback rows are not a theorem. | S4/S5 successor goals. |
 | Jaune deployment correctness, arbitrary deployment shapes, sequence/history preservation, and monitoring theorems | Not established; constructor differential worlds are finite executable evidence. | S6/closure successor work. |
 | Deployed Solidity bytecode verification or universal Solidity/Blanc equivalence | Not claimed by a Blanc port. | Separate verification project if desired. |

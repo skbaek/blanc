@@ -12,6 +12,7 @@ import Blanc.Weth10AnyOrder
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreakerRegistry
+import Blanc.LidoCircuitBreakerEnumeration
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -2931,6 +2932,15 @@ example :
     hvalue, hdata, hsevm, hpre, hframe, hw, hcaller, hassignment, hexpiry,
     hlive, htarget0, hcanonical, hzeroCode, hrun, rootExec, houtput, post,
     hprocess, herror, hrestored⟩
+
+/-! S3 Registry enumeration/observability public-role pins.  The dedicated
+gate additionally hashes each normalized declaration header fail-closed. -/
+#check getPausables_runCompiled
+#check getPausables_noSstore_occurrence
+#check registryViews_coherent
+#check pauserSet_local_transition
+#check pauserSet_settled_error_not_observable
+#check registryObservation_sound
 
 end LidoCircuitBreaker
 

@@ -115,6 +115,18 @@ This repo contains the following files:
   frame; they are not deployed-Solidity verification, arbitrary enumeration,
   callback noninterference, access-control completeness, or a whole-history
   theorem.
+- [LidoCircuitBreakerEnumeration.lean](Blanc/LidoCircuitBreakerEnumeration.lean):
+  the contract-local Registry read and observability family. For every finite
+  `RegistryWitness` it constructs the exact emitted `getPausables()` run with
+  no contract-chosen cap, exact ordered dynamic-`address[]` ABI bytes, finite
+  length-scaled resources, constant stack cursor height, and successful
+  state/log silence. It packages exact `getPauser` and `getPausableCount`
+  bodies over the same snapshot, lifts the enumeration cycle certificate to
+  actual same-frame SSTORE-occurrence freedom, and connects the sole
+  production `PauserSet` suffix to the stable Registry poststate and its
+  register/pre-yield-pause continuation. Raw event occurrence and top-level
+  error settlement remain distinct; the local monitor corollary is not a
+  history, finality, delivery, callback, or real-block-feasibility claim.
 - [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
   and the first place in this repository where a contract call is proved to
   **succeed**. `fmint_totalSupply_succeeds` drives `func_run` over `fmint`'s
@@ -281,9 +293,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 426 named results and
+   current source inventory pins the exact axiom set of 432 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `426/426` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `432/432` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -311,12 +323,12 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **426** top theorems. `scripts/check.sh`'s
+current source inventory contains **432** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
 exact statements of the WETH10 flagship set and the protected Lido Registry
-execution and invariant boundaries; the axiom audit itself pins dependency
+mutation, enumeration, view-coherence, and observability boundaries; the axiom audit itself pins dependency
 closures, not theorem statements. The families follow. Seven are WETH's
 headline solvency theorems:
 

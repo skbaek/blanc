@@ -39,6 +39,7 @@ import Blanc.Weth10Attribution
 import Blanc.Weth10AllowanceDispatch
 import Blanc.Weth10Hardened
 import Blanc.LidoCircuitBreakerRegistry
+import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
@@ -471,3 +472,9 @@ import Blanc.LidoCircuitBreakerRegistryModel
 #print axioms Blanc.LidoCircuitBreaker.globalCountConservation_registerPauser
 #print axioms Blanc.LidoCircuitBreaker.pause_direct_postWrite_revert_settles_and_restores_registry
 #print axioms Blanc.LidoCircuitBreaker.directPause_zeroCode_postWrite_error_control
+#print axioms Blanc.LidoCircuitBreaker.getPausables_runCompiled
+#print axioms Blanc.LidoCircuitBreaker.getPausables_noSstore_occurrence
+#print axioms Blanc.LidoCircuitBreaker.registryViews_coherent
+#print axioms Blanc.LidoCircuitBreaker.pauserSet_local_transition
+#print axioms Blanc.LidoCircuitBreaker.pauserSet_settled_error_not_observable
+#print axioms Blanc.LidoCircuitBreaker.registryObservation_sound

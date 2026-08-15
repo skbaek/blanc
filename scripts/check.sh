@@ -735,7 +735,13 @@ Blanc.LidoCircuitBreaker.membershipEquivalence_registerPauser|$STANDARD
 Blanc.LidoCircuitBreaker.cleanStateAfterRemoval_registerPauser|$STANDARD
 Blanc.LidoCircuitBreaker.globalCountConservation_registerPauser|$STANDARD
 Blanc.LidoCircuitBreaker.pause_direct_postWrite_revert_settles_and_restores_registry|$STANDARD
-Blanc.LidoCircuitBreaker.directPause_zeroCode_postWrite_error_control|$STANDARD"
+Blanc.LidoCircuitBreaker.directPause_zeroCode_postWrite_error_control|$STANDARD
+Blanc.LidoCircuitBreaker.getPausables_runCompiled|$STANDARD
+Blanc.LidoCircuitBreaker.getPausables_noSstore_occurrence|$STANDARD
+Blanc.LidoCircuitBreaker.registryViews_coherent|$STANDARD
+Blanc.LidoCircuitBreaker.pauserSet_local_transition|$STANDARD
+Blanc.LidoCircuitBreaker.pauserSet_settled_error_not_observable|$STANDARD
+Blanc.LidoCircuitBreaker.registryObservation_sound|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
