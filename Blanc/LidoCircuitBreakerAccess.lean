@@ -52,6 +52,165 @@ theorem CheckedHeartbeatExtension.strict_of_interval_pos
     B256.toNat_toB256_of_lt bound]
   omega
 
+theorem CheckedHeartbeatExtension.add_eq
+    {timestamp interval expiry : B256}
+    (extension : CheckedHeartbeatExtension timestamp interval expiry) :
+    timestamp + interval = expiry := by
+  rcases extension with ⟨bound, rfl⟩
+  have hnof : timestamp.Nof interval := bound
+  rw [← Jaune.toB256_toNat (timestamp + interval),
+    Jaune.B256.toNat_add_eq_of_nof _ _ hnof]
+
+def checkedHeartbeatExpiryGasWarm : Nat := 132
+
+set_option maxRecDepth 4096 in
+/-- The successful arm of the checked heartbeat addition is an exact compiled
+walk.  Its result remains on the stack for the caller's store-and-log tail. -/
+theorem checkedHeartbeatExpiry_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm)
+    (timestamp interval expiry : B256) (G : Nat)
+    (htime : sevm.benvStat.time = timestamp)
+    (hinterval : Devm.getStorVal base sevm.currentTarget
+      heartbeatIntervalSlot = interval)
+    (hwarm : (⟨sevm.currentTarget, heartbeatIntervalSlot⟩ : Adr × B256) ∈
+      base.accessedStorageKeys)
+    (extension : CheckedHeartbeatExtension timestamp interval expiry) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], Mem.empty, G + checkedHeartbeatExpiryGasWarm⟩)
+      (checkedHeartbeatExpiry Func.stop)
+      (base.setMach ⟨[expiry], Mem.empty, G⟩) := by
+  rcases extension with ⟨bound, hexpiry⟩
+  have hsum : timestamp + interval = expiry :=
+    CheckedHeartbeatExtension.add_eq ⟨bound, hexpiry⟩
+  have hle : timestamp ≤ expiry := by
+    rw [B256.le_iff_toNat_le_toNat, hexpiry,
+      B256.toNat_toB256_of_lt bound]
+    omega
+  unfold checkedHeartbeatExpiry checkedHeartbeatExpiryGasWarm
+  func_run [expiry, 0]
+  case h_val =>
+    simp only [Devm.getStorVal_setMach, hinterval, htime]
+    rw [B256.add_comm]
+    exact hsum
+  case h_val =>
+    rw [htime]
+    simp only [B256.ltCheck, if_neg (not_lt_of_ge hle)]
+  case h_arm =>
+    exact Func.RunCompiled.last rfl
+
+def heartbeatBodySuccessGasWarmUpdate : Nat := 4693
+
+set_option maxRecDepth 8192 in
+/-- A successful direct heartbeat-body execution in the warm, nonzero-to-
+nonzero storage-update case.  The run fixes the checked sum, the exact expiry
+write, and the single `HeartbeatUpdated` log emitted after that write. -/
+theorem heartbeat_body_runCompiled_of_checkedExtension
+    (fs : List Func) (sevm : Sevm) (base : Devm)
+    (count oldExpiry timestamp interval expiry : B256) (G : Nat)
+    (htime : sevm.benvStat.time = timestamp)
+    (hcount : Devm.getStorVal base sevm.currentTarget
+      (countSlot sevm.caller.toB256) = count)
+    (hcountNonzero : count ≠ 0)
+    (holdExpiry : Devm.getStorVal base sevm.currentTarget
+      (expirySlot sevm.caller.toB256) = oldExpiry)
+    (horigExpiry : getOrigStorVal sevm sevm.currentTarget
+      (expirySlot sevm.caller.toB256) = oldExpiry)
+    (hinterval : Devm.getStorVal base sevm.currentTarget
+      heartbeatIntervalSlot = interval)
+    (hwarmCount : (⟨sevm.currentTarget,
+      countSlot sevm.caller.toB256⟩ : Adr × B256) ∈
+      base.accessedStorageKeys)
+    (hwarmExpiry : (⟨sevm.currentTarget,
+      expirySlot sevm.caller.toB256⟩ : Adr × B256) ∈
+      base.accessedStorageKeys)
+    (hwarmInterval : (⟨sevm.currentTarget,
+      heartbeatIntervalSlot⟩ : Adr × B256) ∈
+      base.accessedStorageKeys)
+    (hstatic : sevm.isStatic = false)
+    (holdLive : timestamp < oldExpiry)
+    (holdNonzero : oldExpiry ≠ 0)
+    (hchanged : oldExpiry ≠ expiry)
+    (extension : CheckedHeartbeatExtension timestamp interval expiry) :
+    ∃ post,
+      Func.RunCompiled fs sevm
+        (base.setMach ⟨[], Mem.empty,
+          G + heartbeatBodySuccessGasWarmUpdate⟩)
+        heartbeat post ∧
+      post.gasLeft = G ∧
+      Devm.getStorVal post sevm.currentTarget
+        (expirySlot sevm.caller.toB256) = expiry ∧
+      post.logs = base.logs ++
+        [⟨sevm.currentTarget,
+          [heartbeatUpdatedEvent, sevm.caller.toB256], expiry.toBytes⟩] := by
+  have hsum := CheckedHeartbeatExtension.add_eq extension
+  rcases extension with ⟨bound, hexpiry⟩
+  have hle : timestamp ≤ expiry := by
+    rw [B256.le_iff_toNat_le_toNat, hexpiry,
+      B256.toNat_toB256_of_lt bound]
+    omega
+  unfold heartbeat checkedHeartbeatExpiry storeHeartbeatExpiryFromStack
+    tagTop mstoreAt logWith heartbeatBodySuccessGasWarmUpdate
+  apply Exists.intro
+  constructor
+  · func_run [countSlot sevm.caller.toB256, 0,
+      expirySlot sevm.caller.toB256, 1, expiry, 0,
+      3, expirySlot sevm.caller.toB256, 2900, 1381]
+    all_goals try {
+      simp only [Devm.getStorVal_setMach, hcount]
+      simp [B256.eqCheck, hcountNonzero] }
+    all_goals try {
+      simp only [Devm.getStorVal_setMach, holdExpiry, htime]
+      simp [B256.ltCheck, holdLive] }
+    all_goals try {
+      simp only [Devm.getStorVal_setMach, hinterval, htime]
+      rw [B256.add_comm]
+      exact hsum }
+    all_goals try {
+      rw [htime]
+      simp only [B256.ltCheck, if_neg (not_lt_of_ge hle)] }
+    case h_ext =>
+      change (base.setMach
+        ⟨[0, expiry, expiry], Mem.empty, G + 4693 - 388⟩).extCost
+          [⟨0, 32⟩] = 3
+      simpa [gMemory] using
+        (Devm.extCost_empty_word (devm := base) (S := [0, expiry, expiry])
+          (G := G + 4693 - 388))
+    all_goals try {
+      rw [horigExpiry, Devm.getStorVal_setMach, holdExpiry]
+      rw [sstoreValueCost, if_pos ⟨rfl, hchanged⟩,
+        if_neg holdNonzero]
+      norm_num [gasStorageUpdate, gasColdSload] }
+    case h_cost =>
+      rw [show ((0 : B256) * 32).toNat = 0 by decide,
+        show ((1 : B256) * 32).toNat = 32 by decide]
+      rw [Devm.extCost_word_word Mem.size_write_word]
+      norm_num [gLog, gLogdata, gLogtopic]
+    case a => exact Func.RunCompiled.last rfl
+  · refine ⟨?_, ?_, ?_⟩
+    · simp only [Devm.gasLeft_setMach]
+      omega
+    · rw [Devm.getStorVal_setMach]
+      have getStorVal_addLog (d : Devm) (log : Log)
+          (a : Adr) (k : B256) :
+          (d.addLog log).getStorVal a k = d.getStorVal a k := rfl
+      rw [getStorVal_addLog, Devm.getStorVal_setMach]
+      show (Devm.getStor _ sevm.currentTarget).get
+        (expirySlot sevm.caller.toB256) = expiry
+      rw [setStorVal_getStor_self, Stor.get_set_self]
+    · have logs_setMach (d : Devm) (mach : Mach) :
+          (d.setMach mach).logs = d.logs := rfl
+      have logs_addLog (d : Devm) (log : Log) :
+          (d.addLog log).logs = d.logs ++ [log] := rfl
+      have logs_setStorVal (d : Devm) (a : Adr) (k v : B256) :
+          (d.setStorVal a k v).logs = d.logs := rfl
+      have logs_withRefundCounter (d : Devm) (rc : Int) :
+          (d.withRefundCounter rc).logs = d.logs := rfl
+      rw [logs_setMach, logs_addLog, logs_setMach, logs_setStorVal,
+        logs_withRefundCounter, logs_setMach]
+      rw [show ((0 : B256) * 32).toNat = 0 by decide,
+        show ((1 : B256) * 32).toNat = 32 by decide]
+      rw [Mem.read_write_word]
+
 /-! ## Representative strict-liveness compiled cut -/
 
 private theorem temporalReturnWord_runCompiled
