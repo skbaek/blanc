@@ -62,7 +62,8 @@ Returns the projected per-pauser count.
 <!-- LIDO-CIRCUIT-BREAKER-ENDPOINT {"signature":"getPausables()","selector":"0x54720ecd"} -->
 ### `getPausables()`
 
-Returns the ordered projected Registry enumeration; arbitrary-length proof is excluded.
+Returns the ordered projected Registry enumeration; the exact compiled result is
+proved for every finite Registry witness satisfying the stated resource premises.
 
 <!-- LIDO-CIRCUIT-BREAKER-ENDPOINT {"signature":"isPauserLive(address)","selector":"0xd10ea321"} -->
 ### `isPauserLive(address)`
@@ -237,6 +238,7 @@ it.
 
 Differential agreement is only for manifest-listed worlds/channels. The
 separate Lean Registry family is universal over its explicit successful-kernel,
-target-zero, continuation, and frame-settlement domains; neither evidence layer
-is deployed-bytecode verification, arbitrary enumeration, a hostile-world
-callback theorem, or a deployment/history theorem.
+target-zero, continuation, frame-settlement, and arbitrary-finite enumeration
+domains; neither evidence layer is deployed-bytecode verification, an
+unbounded-resource execution claim, a hostile-world callback theorem, or a
+deployment/history theorem.

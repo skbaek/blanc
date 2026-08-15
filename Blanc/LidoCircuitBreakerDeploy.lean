@@ -214,6 +214,237 @@ def constructorProgramSiteCounts : Nat × Nat × Nat :=
    programSiteCount sourceTstoreSiteCount lidoCircuitBreakerConstructorProgram,
    programSiteCount sourceExternalCallSiteCount lidoCircuitBreakerConstructorProgram)
 
+private abbrev ConstructorEffectCounts := Nat × Nat × Nat
+
+private def ConstructorEffectCounts.add
+    (left right : ConstructorEffectCounts) : ConstructorEffectCounts :=
+  (left.1 + right.1,
+   left.2.1 + right.2.1,
+   left.2.2 + right.2.2)
+
+private def constructorInstructionEffectCounts :
+    Ninst → ConstructorEffectCounts
+  | .reg .sstore => (1, 0, 0)
+  | .reg .tstore => (0, 1, 0)
+  | .exec _ => (0, 0, 1)
+  | _ => (0, 0, 0)
+
+private theorem constructorInstructionEffectCounts_reg (regular : Rinst) :
+    constructorInstructionEffectCounts (.reg regular) =
+      match regular with
+      | .sstore => (1, 0, 0)
+      | .tstore => (0, 1, 0)
+      | _ => (0, 0, 0) := by
+  cases regular <;> rfl
+
+private theorem constructorInstructionEffectCounts_exec (execution : Xinst) :
+    constructorInstructionEffectCounts (.exec execution) = (0, 0, 1) := by
+  rfl
+
+private theorem constructorInstructionEffectCounts_push
+    (bytes : Bytes) (bound : bytes.length ≤ 32) :
+    constructorInstructionEffectCounts (.push bytes bound) = (0, 0, 0) := by
+  rfl
+
+private theorem constructorInstructionEffectCounts_pushDeployWord
+    (word : B256) :
+    constructorInstructionEffectCounts (pushDeployWord word) = (0, 0, 0) := by
+  exact constructorInstructionEffectCounts_push _ _
+
+private theorem constructorInstructionEffectCounts_pushB256
+    (word : B256) :
+    constructorInstructionEffectCounts (pushB256 word) = (0, 0, 0) := by
+  exact constructorInstructionEffectCounts_push _ _
+
+private theorem constructorInstructionEffectCounts_pushCompactNat
+    (value : Nat) :
+    constructorInstructionEffectCounts (pushCompactNat value) = (0, 0, 0) := by
+  exact constructorInstructionEffectCounts_pushB256 _
+
+private theorem constructorInstructionEffectCounts_pushFixedNat
+    (value : Nat) :
+    constructorInstructionEffectCounts (pushFixedNat value) = (0, 0, 0) := by
+  unfold pushFixedNat
+  split <;> exact constructorInstructionEffectCounts_push _ _
+
+private def constructorFuncEffectCounts : Func → ConstructorEffectCounts
+  | .last _ => (0, 0, 0)
+  | .next instruction rest =>
+      (constructorInstructionEffectCounts instruction).add
+        (constructorFuncEffectCounts rest)
+  | .branch left right =>
+      (constructorFuncEffectCounts left).add
+        (constructorFuncEffectCounts right)
+  | .call _ => (0, 0, 0)
+
+private def constructorEffectCountsSum :
+    List ConstructorEffectCounts → ConstructorEffectCounts
+  | [] => (0, 0, 0)
+  | counts :: rest => counts.add (constructorEffectCountsSum rest)
+
+private def constructorLineEffectCounts (line : Line) :
+    ConstructorEffectCounts :=
+  constructorEffectCountsSum
+    (line.map constructorInstructionEffectCounts)
+
+private theorem constructorEffectCountsSum_append
+    (left right : List ConstructorEffectCounts) :
+    constructorEffectCountsSum (left ++ right) =
+      (constructorEffectCountsSum left).add
+        (constructorEffectCountsSum right) := by
+  induction left with
+  | nil =>
+      simp [constructorEffectCountsSum, ConstructorEffectCounts.add]
+  | cons counts left ih =>
+      simp [constructorEffectCountsSum, ConstructorEffectCounts.add,
+        ih, Nat.add_assoc]
+
+private theorem constructorFuncEffectCounts_prepend
+    (line : Line) (rest : Func) :
+    constructorFuncEffectCounts (line +++ rest) =
+      (constructorLineEffectCounts line).add
+        (constructorFuncEffectCounts rest) := by
+  induction line with
+  | nil =>
+      simp [prepend, constructorLineEffectCounts,
+        constructorEffectCountsSum, ConstructorEffectCounts.add]
+  | cons instruction line ih =>
+      simp [prepend, constructorLineEffectCounts,
+        constructorEffectCountsSum, constructorFuncEffectCounts,
+        ConstructorEffectCounts.add, ih, Nat.add_assoc]
+
+private theorem constructorLineEffectCounts_append
+    (left right : Line) :
+    constructorLineEffectCounts (left ++ right) =
+      (constructorLineEffectCounts left).add
+        (constructorLineEffectCounts right) := by
+  unfold constructorLineEffectCounts
+  rw [List.map_append, constructorEffectCountsSum_append]
+
+private theorem constructorPatchFieldLineEffectCounts
+    (runtimeBase : Nat) (field : ImmutableParameter) :
+    constructorLineEffectCounts (patchFieldLine runtimeBase field) =
+      (0, 0, 0) := by
+  unfold patchFieldLine
+  generalize immutableWordOffsets field = offsets
+  induction offsets with
+  | nil =>
+      simp [constructorLineEffectCounts, constructorEffectCountsSum]
+  | cons offset offsets ih =>
+      simp only [List.flatMap_cons]
+      rw [constructorLineEffectCounts_append, ih]
+      simp [
+        loadArgumentIndex, storeByteOffset,
+        constructorLineEffectCounts, constructorEffectCountsSum,
+        constructorInstructionEffectCounts_reg,
+        constructorInstructionEffectCounts_pushCompactNat,
+        constructorInstructionEffectCounts_pushFixedNat,
+        ConstructorEffectCounts.add]
+
+private theorem constructorPatchRuntimeLineEffectCounts
+    (runtimeBase : Nat) :
+    constructorLineEffectCounts (patchRuntimeLine runtimeBase) =
+      (0, 0, 0) := by
+  unfold patchRuntimeLine
+  generalize immutableParameters = fields
+  induction fields with
+  | nil =>
+      simp [constructorLineEffectCounts, constructorEffectCountsSum]
+  | cons field fields ih =>
+      simp only [List.flatMap_cons]
+      rw [constructorLineEffectCounts_append,
+        constructorPatchFieldLineEffectCounts, ih]
+      rfl
+
+private theorem constructorPatchRuntimeEffectCounts
+    (runtimeBase : Nat) :
+    constructorEffectCountsSum
+        ((patchRuntimeLine runtimeBase).map
+          constructorInstructionEffectCounts) = (0, 0, 0) := by
+  simpa [constructorLineEffectCounts] using
+    constructorPatchRuntimeLineEffectCounts runtimeBase
+
+private def constructorProgramEffectCounts (program : Prog) :
+    ConstructorEffectCounts :=
+  (constructorFuncEffectCounts program.main).add
+    (constructorEffectCountsSum
+      (program.aux.map constructorFuncEffectCounts))
+
+private theorem constructorFuncEffectCounts_eq (body : Func) :
+    constructorFuncEffectCounts body =
+      (sourceSstoreSiteCount body,
+       sourceTstoreSiteCount body,
+       sourceExternalCallSiteCount body) := by
+  induction body with
+  | last outcome => rfl
+  | next instruction rest ih =>
+      cases instruction with
+      | reg regular =>
+          cases regular <;>
+            simp [constructorFuncEffectCounts,
+              constructorInstructionEffectCounts,
+              ConstructorEffectCounts.add, sourceSstoreSiteCount,
+              sourceTstoreSiteCount, sourceExternalCallSiteCount, ih]
+      | exec execution =>
+          simp [constructorFuncEffectCounts,
+            constructorInstructionEffectCounts,
+            ConstructorEffectCounts.add, sourceSstoreSiteCount,
+            sourceTstoreSiteCount, sourceExternalCallSiteCount, ih]
+      | push bytes bound =>
+          simp [constructorFuncEffectCounts,
+            constructorInstructionEffectCounts,
+            ConstructorEffectCounts.add, sourceSstoreSiteCount,
+            sourceTstoreSiteCount, sourceExternalCallSiteCount, ih]
+  | branch left right ihLeft ihRight =>
+      simp [constructorFuncEffectCounts, ConstructorEffectCounts.add,
+        sourceSstoreSiteCount, sourceTstoreSiteCount,
+        sourceExternalCallSiteCount, ihLeft, ihRight]
+  | call index => rfl
+
+private theorem constructorEffectCountsSum_eq (bodies : List Func) :
+    constructorEffectCountsSum
+        (bodies.map constructorFuncEffectCounts) =
+      ((bodies.map sourceSstoreSiteCount).sum,
+       (bodies.map sourceTstoreSiteCount).sum,
+       (bodies.map sourceExternalCallSiteCount).sum) := by
+  induction bodies with
+  | nil => rfl
+  | cons body rest ih =>
+      simp [constructorEffectCountsSum, ConstructorEffectCounts.add,
+        constructorFuncEffectCounts_eq, ih]
+
+private theorem constructorProgramEffectCounts_eq (program : Prog) :
+    constructorProgramEffectCounts program =
+      (programSiteCount sourceSstoreSiteCount program,
+       programSiteCount sourceTstoreSiteCount program,
+       programSiteCount sourceExternalCallSiteCount program) := by
+  simp [constructorProgramEffectCounts, ConstructorEffectCounts.add,
+    constructorFuncEffectCounts_eq, constructorEffectCountsSum_eq,
+    programSiteCount]
+
+set_option maxHeartbeats 3000000 in
+set_option maxRecDepth 100000 in
+theorem constructor_program_site_counts_exact :
+    constructorProgramSiteCounts = (2, 0, 0) := by
+  unfold constructorProgramSiteCounts
+  rw [← constructorProgramEffectCounts_eq]
+  simp [constructorProgramEffectCounts,
+    lidoCircuitBreakerConstructorProgram, constructorProgram,
+    constructorBody, constructorEventScratch,
+    loadArgumentIndex, storeByteOffset,
+    constructorError, constructorFuncEffectCounts,
+    constructorInstructionEffectCounts_reg,
+    constructorInstructionEffectCounts_push,
+    constructorInstructionEffectCounts_pushB256,
+    constructorInstructionEffectCounts_pushCompactNat,
+    constructorInstructionEffectCounts_pushFixedNat,
+    constructorEffectCountsSum,
+    constructorFuncEffectCounts_prepend, constructorLineEffectCounts,
+    constructorPatchRuntimeEffectCounts,
+    ConstructorEffectCounts.add,
+    Func.rev, Func.revSelector, Func.ret, checkNonAddress, logWith,
+    pushAddressMask]
+
 theorem constructor_inventory_cardinalities :
     constructorPersistentWriteInventory.length = 2 ∧
       constructorTransientWriteInventory.length = 0 ∧
