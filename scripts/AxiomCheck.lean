@@ -124,6 +124,7 @@ import Blanc.LidoCircuitBreakerRegistryModel
 #print axioms Blanc.directCall_nonzero_spawn
 #print axioms Blanc.directCall_zero_spawn
 #print axioms Blanc.directStatcall_spawn
+#print axioms Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
 #print axioms Blanc.caughtCall_childSettlement
 #print axioms Blanc.cleanCall_childSettlement
 #print axioms Blanc.preparedTransactionMessage_exists

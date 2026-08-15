@@ -26,6 +26,14 @@ namespace Blanc
 
 open Jaune
 
+example {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume}
+    (hs : Xinst.step sevm devm x = .spawn f rsm)
+    (hne : sevm.currentTarget ≠ f.inner.currentTarget)
+    (hcode : devm.getCode f.inner.currentTarget ≠ .empty) :
+    f.inner.codeAddress = some f.inner.currentTarget :=
+  Xinst.step_spawn_codeAddress_eq_currentTarget hs hne hcode
+
 namespace Weth10
 
 example (dp : DeployParams) :

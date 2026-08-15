@@ -1990,80 +1990,6 @@ theorem GenericCreate.storageSegmentEffect_none
         of_executeCode_noneCode hcodeAddress hbody
       cases hslot
 
-theorem xinst_spawn_direct
-    {sevm : Sevm} {devm : Devm} {x : Xinst}
-    {frame : Frame} {resume : Resume}
-    (hspawn : Xinst.step sevm devm x = .spawn frame resume)
-    (hforeign : sevm.currentTarget ≠ frame.inner.currentTarget)
-    (hcode : devm.getCode frame.inner.currentTarget ≠ .empty) :
-    frame.inner.codeAddress = some frame.inner.currentTarget := by
-  have horiginal := hspawn
-  cases x with
-  | create =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | have hfresh := genericCreate.step_spawn_frame hspawn
-          apply False.elim
-          apply hcode
-          calc
-            devm.getCode frame.inner.currentTarget =
-                frame.inner.benv.state.getCode frame.inner.currentTarget :=
-              (Xinst.step_spawn_getCode horiginal _).symm
-            _ = _ := hfresh.1 _
-            _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
-  | create2 =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | have hfresh := genericCreate.step_spawn_frame hspawn
-          apply False.elim
-          apply hcode
-          calc
-            devm.getCode frame.inner.currentTarget =
-                frame.inner.benv.state.getCode frame.inner.currentTarget :=
-              (Xinst.step_spawn_getCode horiginal _).symm
-            _ = _ := hfresh.1 _
-            _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
-  | call =>
-      simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | rcases genericCall_step_spawn_exact hspawn with
-            ⟨rfl, rfl⟩
-          rfl
-  | callcode =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | have htarget := (genericCall.step_spawn_frame hspawn).2.1
-          exact False.elim (hforeign htarget.symm)
-  | delcall =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | have htarget := (genericCall.step_spawn_frame hspawn).2.1
-          exact False.elim (hforeign htarget.symm)
-  | statcall =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | rcases genericCall_step_spawn_exact hspawn with
-            ⟨rfl, rfl⟩
-          rfl
-
 /-- Contract-neutral recursive transport for the concrete filled slot of any
 CALL/CREATE-family instruction.  Instruction prefixes preserve the installed
 code and holder storage separately; the exact spawned frame supplies the
@@ -6196,7 +6122,7 @@ theorem Exec.CoreStorageSound.nextSome
                   rw [hinnerTarget]
                   exact not_empty_of_compile hatp.1
                 have hcodeAddress :=
-                  xinst_spawn_direct
+                  Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
                     hs hparentNe hnonempty
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit

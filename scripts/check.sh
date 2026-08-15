@@ -388,6 +388,7 @@ Blanc.tload_run_cell|$STANDARD
 Blanc.directCall_nonzero_spawn|$STANDARD
 Blanc.directCall_zero_spawn|$STANDARD
 Blanc.directStatcall_spawn|$STANDARD
+Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget|$STANDARD
 Blanc.caughtCall_childSettlement|$STANDARD
 Blanc.cleanCall_childSettlement|$STANDARD
 Blanc.preparedTransactionMessage_exists|$STANDARD

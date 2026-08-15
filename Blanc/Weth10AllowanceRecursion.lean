@@ -948,7 +948,7 @@ theorem Exec.CoreAllowanceSound.nextSome
                   rw [hinnerTarget]
                   exact not_empty_of_compile hatp.1
                 have hcodeAddress :=
-                  xinst_spawn_direct
+                  Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
                     hs hparentNe hnonempty
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
@@ -1749,7 +1749,7 @@ theorem Exec.CoreAllowanceReadSound.nextSome
                   rw [hinnerTarget]
                   exact not_empty_of_compile hatp.1
                 have hcodeAddress :=
-                  xinst_spawn_direct
+                  Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
                     hs hparentNe hnonempty
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
@@ -1912,4 +1912,3 @@ theorem CompiledBodyAllowanceReadHandler.installedAllowanceRegionEffectSound
 end Weth10
 
 end Blanc
-

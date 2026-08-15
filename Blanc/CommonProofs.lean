@@ -3344,6 +3344,92 @@ lemma Xinst.step_spawn_getCode {sevm : Sevm} {devm : Devm} {x : Xinst}
   · rw [(genericCreate.step_spawn_frame hs).1 a, hf.getCode a]
   · rw [(genericCall.step_spawn_frame hs).1 a, hf.getCode a]
 
+/-- An actual call-type spawn aimed away from the current account and at an
+already-code-bearing account is a direct CALL/STATICCALL child. CREATE and
+CREATE2 are excluded by freshness, while CALLCODE and DELEGATECALL retain the
+parent's target. -/
+theorem Xinst.step_spawn_codeAddress_eq_currentTarget
+    {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume}
+    (hs : Xinst.step sevm devm x = .spawn f rsm)
+    (hne : sevm.currentTarget ≠ f.inner.currentTarget)
+    (hcode : devm.getCode f.inner.currentTarget ≠ .empty) :
+    f.inner.codeAddress = some f.inner.currentTarget := by
+  have horig := hs
+  cases x with
+  | create =>
+      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      repeat' split at hs
+      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+      all_goals first
+        | cases hs
+        | have hfresh := genericCreate.step_spawn_frame hs
+          apply False.elim
+          apply hcode
+          calc
+            devm.getCode f.inner.currentTarget =
+                f.inner.benv.state.getCode f.inner.currentTarget :=
+              (Xinst.step_spawn_getCode horig _).symm
+            _ = _ := hfresh.1 _
+            _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
+  | create2 =>
+      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      repeat' split at hs
+      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+      all_goals first
+        | cases hs
+        | have hfresh := genericCreate.step_spawn_frame hs
+          apply False.elim
+          apply hcode
+          calc
+            devm.getCode f.inner.currentTarget =
+                f.inner.benv.state.getCode f.inner.currentTarget :=
+              (Xinst.step_spawn_getCode horig _).symm
+            _ = _ := hfresh.1 _
+            _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
+  | call =>
+      simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hs
+      repeat' split at hs
+      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+      all_goals first
+        | cases hs
+        | simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+            Except.pure] at hs
+          repeat' split at hs
+          all_goals
+            simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+          all_goals obtain ⟨rfl, rfl⟩ := hs
+          all_goals rfl
+  | callcode =>
+      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      repeat' split at hs
+      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+      all_goals first
+        | cases hs
+        | have htgt := (genericCall.step_spawn_frame hs).2.1
+          exact False.elim (hne htgt.symm)
+  | delcall =>
+      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      repeat' split at hs
+      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+      all_goals first
+        | cases hs
+        | have htgt := (genericCall.step_spawn_frame hs).2.1
+          exact False.elim (hne htgt.symm)
+  | statcall =>
+      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      repeat' split at hs
+      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+      all_goals first
+        | cases hs
+        | simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+            Except.pure] at hs
+          repeat' split at hs
+          all_goals
+            simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+          all_goals obtain ⟨rfl, rfl⟩ := hs
+          all_goals rfl
+
 /-- Where a spawned child's code comes from.  Create frames enter fresh code at
 an address that had none; `CALLCODE`/`DELEGATECALL` keep the parent's target;
 the remaining call kinds load the callee's own code unless it delegates. -/

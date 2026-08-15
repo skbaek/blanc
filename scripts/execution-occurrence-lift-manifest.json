@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "contractModuleGlobs": [
     "Blanc/Weth10*.lean",
     "Blanc/Lido*.lean"
@@ -58,6 +58,70 @@
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowExecAccounting.lean",
       "commonModule": "Blanc/Ladder.lean"
+    },
+    {
+      "declaration": "Xinst.step_spawn_codeAddress_eq_currentTarget",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowEthExec.lean",
+      "commonModule": "Blanc/CommonProofs.lean"
+    }
+  ],
+  "retiredDeclarations": [
+    {
+      "declaration": "Blanc.Weth10.xinst_spawn_direct",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowExecAccounting.lean",
+      "replacement": "Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget"
+    }
+  ],
+  "signaturePins": [
+    {
+      "declaration": "Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget",
+      "header": "theorem Xinst.step_spawn_codeAddress_eq_currentTarget {sevm : Sevm} {devm : Devm} {x : Xinst} {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) (hne : sevm.currentTarget ≠ f.inner.currentTarget) (hcode : devm.getCode f.inner.currentTarget ≠ .empty) : f.inner.codeAddress = some f.inner.currentTarget :="
+    }
+  ],
+  "controlSignaturePins": [
+    {
+      "declaration": "Blanc.ExecutionOccurrenceControls.call_direct_codeAddress_control",
+      "header": "theorem call_direct_codeAddress_control : Xinst.step dynamicSevm directCallPre .call = .spawn callFrame callResume ∧ dynamicSevm.currentTarget ≠ callFrame.inner.currentTarget ∧ directCallPre.getCode callFrame.inner.currentTarget ≠ .empty ∧ callFrame.inner.codeAddress = some callFrame.inner.currentTarget :="
+    },
+    {
+      "declaration": "Blanc.ExecutionOccurrenceControls.callcode_same_target_control",
+      "header": "theorem callcode_same_target_control : Xinst.step dynamicSevm callcodePre .callcode = .spawn callcodeFrame callcodeResume ∧ callcodeFrame.inner.currentTarget = dynamicSevm.currentTarget ∧ callcodePre.getCode callcodeFrame.inner.currentTarget ≠ .empty ∧ callcodeFrame.inner.codeAddress = some addressB ∧ callcodeFrame.inner.codeAddress ≠ some callcodeFrame.inner.currentTarget :="
+    },
+    {
+      "declaration": "Blanc.ExecutionOccurrenceControls.create2_empty_target_control",
+      "header": "theorem create2_empty_target_control {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume} (hs : Xinst.step sevm devm .create2 = .spawn frame resume) : devm.getCode frame.inner.currentTarget = .empty ∧ frame.inner.codeAddress = none :="
+    },
+    {
+      "declaration": "Blanc.ExecutionOccurrenceControls.create_empty_target_control",
+      "header": "theorem create_empty_target_control {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume} (hs : Xinst.step sevm devm .create = .spawn frame resume) : devm.getCode frame.inner.currentTarget = .empty ∧ frame.inner.codeAddress = none :="
+    },
+    {
+      "declaration": "Blanc.ExecutionOccurrenceControls.delegatecall_same_target_control",
+      "header": "theorem delegatecall_same_target_control : Xinst.step dynamicSevm delegatecallPre .delcall = .spawn delegatecallFrame delegatecallResume ∧ delegatecallFrame.inner.currentTarget = dynamicSevm.currentTarget ∧ delegatecallPre.getCode delegatecallFrame.inner.currentTarget ≠ .empty ∧ delegatecallFrame.inner.codeAddress = some addressB ∧ delegatecallFrame.inner.codeAddress ≠ some delegatecallFrame.inner.currentTarget :="
+    },
+    {
+      "declaration": "Blanc.ExecutionOccurrenceControls.required_positive_controls",
+      "header": "theorem required_positive_controls : (Xinst.step dynamicSevm directCallPre .call = .spawn callFrame callResume ∧ dynamicSevm.currentTarget ≠ callFrame.inner.currentTarget ∧ directCallPre.getCode callFrame.inner.currentTarget ≠ .empty ∧ callFrame.inner.codeAddress = some callFrame.inner.currentTarget) ∧ (Xinst.step dynamicSevm directStatcallPre .statcall = .spawn statcallFrame statcallResume ∧ dynamicSevm.currentTarget ≠ statcallFrame.inner.currentTarget ∧ directStatcallPre.getCode statcallFrame.inner.currentTarget ≠ .empty ∧ statcallFrame.inner.codeAddress = some statcallFrame.inner.currentTarget) ∧ (∀ {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}, Xinst.step sevm devm .create = .spawn frame resume → devm.getCode frame.inner.currentTarget = .empty ∧ frame.inner.codeAddress = none) ∧ (∀ {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}, Xinst.step sevm devm .create2 = .spawn frame resume → devm.getCode frame.inner.currentTarget = .empty ∧ frame.inner.codeAddress = none) ∧ (Xinst.step dynamicSevm callcodePre .callcode = .spawn callcodeFrame callcodeResume ∧ callcodeFrame.inner.currentTarget = dynamicSevm.currentTarget ∧ callcodePre.getCode callcodeFrame.inner.currentTarget ≠ .empty ∧ callcodeFrame.inner.codeAddress = some addressB ∧ callcodeFrame.inner.codeAddress ≠ some callcodeFrame.inner.currentTarget) ∧ (Xinst.step dynamicSevm delegatecallPre .delcall = .spawn delegatecallFrame delegatecallResume ∧ delegatecallFrame.inner.currentTarget = dynamicSevm.currentTarget ∧ delegatecallPre.getCode delegatecallFrame.inner.currentTarget ≠ .empty ∧ delegatecallFrame.inner.codeAddress = some addressB ∧ delegatecallFrame.inner.codeAddress ≠ some delegatecallFrame.inner.currentTarget) :="
+    },
+    {
+      "declaration": "Blanc.ExecutionOccurrenceControls.statcall_direct_codeAddress_control",
+      "header": "theorem statcall_direct_codeAddress_control : Xinst.step dynamicSevm directStatcallPre .statcall = .spawn statcallFrame statcallResume ∧ dynamicSevm.currentTarget ≠ statcallFrame.inner.currentTarget ∧ directStatcallPre.getCode statcallFrame.inner.currentTarget ≠ .empty ∧ statcallFrame.inner.codeAddress = some statcallFrame.inner.currentTarget :="
+    }
+  ],
+  "requiredConsumers": [
+    {
+      "module": "Blanc/Weth10HolderFlowEthExec.lean",
+      "references": 1
+    },
+    {
+      "module": "Blanc/Weth10HolderFlowExecAccounting.lean",
+      "references": 1
+    },
+    {
+      "module": "Blanc/Weth10AllowanceRecursion.lean",
+      "references": 2
     }
   ]
 }

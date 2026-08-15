@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Compile concrete occurrence fixtures and require every semantic mutant to fail."""
+"""Fail-closed occurrence, direct-code, ownership, and mutant assurance."""
 
 from __future__ import annotations
 
-import pathlib
-import json
 import importlib.util
+import json
+import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -13,12 +14,53 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "scripts" / "ExecutionOccurrenceRegression.lean"
+DIRECT_CODE_FIXTURE = ROOT / "scripts" / "ExecutionOccurrenceControls.lean"
 WETH = ROOT / "Blanc" / "Weth10HolderFlowCompiled.lean"
 MOVE_MANIFEST = ROOT / "scripts" / "execution-occurrence-lift-manifest.json"
 RAW_ATTRIBUTION_OWNERSHIP = (
     ROOT / "scripts" / "check-execution-raw-attribution-ownership.py"
 )
 EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
+DIRECT_CODE_EXPECTED = ""
+
+CANONICAL_DIRECT_CODE = "Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget"
+CANONICAL_DIRECT_CODE_LOCAL = "Xinst.step_spawn_codeAddress_eq_currentTarget"
+RETIRED_DIRECT_CODE = "Blanc.Weth10.xinst_spawn_direct"
+
+DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS = {
+    "Blanc.ExecutionOccurrenceControls.call_direct_codeAddress_control",
+    "Blanc.ExecutionOccurrenceControls.statcall_direct_codeAddress_control",
+    "Blanc.ExecutionOccurrenceControls.create_empty_target_control",
+    "Blanc.ExecutionOccurrenceControls.create2_empty_target_control",
+    "Blanc.ExecutionOccurrenceControls.callcode_same_target_control",
+    "Blanc.ExecutionOccurrenceControls.delegatecall_same_target_control",
+    "Blanc.ExecutionOccurrenceControls.required_positive_controls",
+}
+
+DIRECT_CODE_MUTANTS = {
+    "-- DIRECT-CODE-HCODE-MUTANT-CONTROL": (r"""
+private theorem directCodeHcodePremiseDeletedMutant
+    {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}
+    (hs : Xinst.step sevm devm .create = .spawn frame resume)
+    (_hne : sevm.currentTarget ≠ frame.inner.currentTarget) :
+    frame.inner.codeAddress = some frame.inner.currentTarget := by
+  have boundary := create_empty_target_control hs
+  rw [boundary.2]
+  rfl
+""", ("Tactic `rfl` failed", "none = some")),
+    "-- DIRECT-CODE-HFOREIGN-MUTANT-CONTROL": (r"""
+private theorem directCodeHforeignPremiseDeletedMutant
+    : Xinst.step dynamicSevm callcodePre .callcode =
+          .spawn callcodeFrame callcodeResume ∧
+        callcodePre.getCode callcodeFrame.inner.currentTarget ≠ .empty ∧
+        callcodeFrame.inner.codeAddress =
+          some callcodeFrame.inner.currentTarget := by
+  refine ⟨callcode_spawn, callcode_same_target_control.2.2.1, ?_⟩
+  rw [callcode_same_target_control.2.2.2.1,
+    callcode_same_target_control.2.1]
+  rfl
+""", ("Tactic `rfl` failed", "some dynamicSevm.currentTarget")),
+}
 
 REQUIRED_POSITIVE_THEOREMS = {
     "Blanc.ExecutionOccurrenceRegression.terminalError_occurs",
@@ -178,16 +220,153 @@ def missing_positive_theorems(ownership, path: pathlib.Path) -> list[str]:
     )
 
 
+def missing_public_theorems(
+    ownership, path: pathlib.Path, required: set[str]
+) -> list[str]:
+    """Require plain public theorem commands, not private fixture helpers."""
+    source = ownership.strip_comments(path.read_text(encoding="utf-8"))
+    lines = source.splitlines()
+    declarations = ownership.declarations(path)
+    missing: list[str] = []
+    for name in sorted(required):
+        got = declarations.get(name)
+        if got is None or got[0] != "theorem":
+            missing.append(name)
+            continue
+        line = lines[got[1] - 1]
+        short = name.rsplit(".", 1)[-1]
+        if re.match(rf"^\s*theorem\s+{re.escape(short)}\b", line) is None:
+            missing.append(name)
+    return missing
+
+
+def control_signature_pins() -> list[dict[str, str]]:
+    """Load the exact public-control proposition pins fail-closed."""
+    manifest = json.loads(MOVE_MANIFEST.read_text(encoding="utf-8"))
+    pins = manifest.get("controlSignaturePins")
+    if not isinstance(pins, list):
+        raise ValueError("controlSignaturePins is not a list")
+    return pins
+
+
+def normalized_header(
+    ownership, path: pathlib.Path, local_declaration: str
+) -> str:
+    """Return one comment/whitespace-normalized theorem header through `:=`."""
+    source = ownership.strip_comments(path.read_text(encoding="utf-8"))
+    token = f"theorem {local_declaration}"
+    if source.count(token) != 1:
+        display = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+        raise ValueError(f"expected exactly one `{token}` in {display}")
+    start = source.index(token)
+    end = source.find(":= by", start)
+    if end < 0:
+        raise ValueError(
+            f"could not find declaration-level `:= by` for `{local_declaration}`"
+        )
+    return " ".join(source[start:end + 2].split())
+
+
+def direct_code_statement_copies(
+    ownership, paths: list[pathlib.Path]
+) -> list[tuple[pathlib.Path, str, int]]:
+    """Find parser-identified contract declarations copying the proposition."""
+    required = (
+        "Xinst.step", "= .spawn", "currentTarget ≠", ".getCode",
+        "≠ .empty", ".codeAddress = some", ".inner.currentTarget",
+    )
+    found: list[tuple[pathlib.Path, str, int]] = []
+    for path in paths:
+        source = ownership.strip_comments(path.read_text(encoding="utf-8"))
+        lines = source.splitlines(keepends=True)
+        offsets: list[int] = []
+        cursor = 0
+        for line in lines:
+            offsets.append(cursor)
+            cursor += len(line)
+        for full_name, (kind, line) in ownership.declarations(path).items():
+            if kind not in {"theorem", "lemma"} or line < 1 or line > len(lines):
+                continue
+            start = offsets[line - 1]
+            short = full_name.rsplit(".", 1)[-1]
+            match = re.search(
+                rf"\b(?:theorem|lemma)\s+{re.escape(short)}\b",
+                source[start:],
+            )
+            if match is None:
+                continue
+            declaration_start = start + match.start()
+            end = source.find(":=", start + match.end())
+            if end < 0:
+                continue
+            header = " ".join(source[declaration_start:end + 2].split())
+            if all(token in header for token in required):
+                found.append((path, full_name, line))
+    return found
+
+
+def first_party_lean_paths() -> list[pathlib.Path]:
+    paths = sorted((ROOT / "Blanc").rglob("*.lean"))
+    root_module = ROOT / "Blanc.lean"
+    if root_module.is_file():
+        paths.insert(0, root_module)
+    return paths
+
+
+def owner_locations(
+    ownership, paths: list[pathlib.Path], declaration: str
+) -> list[tuple[pathlib.Path, str, int]]:
+    found: list[tuple[pathlib.Path, str, int]] = []
+    for path in paths:
+        got = ownership.declarations(path).get(declaration)
+        if got is not None:
+            found.append((path, got[0], got[1]))
+    return found
+
+
+def direct_code_reference_count(ownership, source: str) -> int:
+    clean = ownership.strip_comments(source)
+    pattern = re.compile(
+        rf"(?<![A-Za-z0-9_']){re.escape(CANONICAL_DIRECT_CODE_LOCAL)}"
+        rf"(?![A-Za-z0-9_'])"
+    )
+    return len(pattern.findall(clean))
+
+
+def consumer_errors(
+    ownership,
+    sources: dict[pathlib.Path, str],
+    required_consumers: list[dict[str, object]],
+) -> list[str]:
+    expected = {
+        ROOT / str(row["module"]): int(row["references"])
+        for row in required_consumers
+    }
+    errors: list[str] = []
+    for path, source in sources.items():
+        got = direct_code_reference_count(ownership, source)
+        want = expected.get(path, 0)
+        if got != want:
+            rel = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+            errors.append(
+                f"canonical consumer count drifted at {rel}: found {got}, expected {want}"
+            )
+    missing_paths = sorted(set(expected) - set(sources))
+    for path in missing_paths:
+        errors.append(f"required canonical consumer is absent: {path.relative_to(ROOT)}")
+    return errors
+
+
 def contract_ownership_errors(
-    ownership, paths: list[pathlib.Path], moved_names: set[str]
+    ownership, paths: list[pathlib.Path], protected_names: set[str]
 ) -> list[str]:
     """Reject exact survivors, basename shadows, and aliases/exports."""
     errors: list[str] = []
-    forbidden_basenames = {name.rsplit(".", 1)[-1] for name in moved_names}
+    forbidden_basenames = {name.rsplit(".", 1)[-1] for name in protected_names}
     for path in paths:
         rel = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
         for name, (kind, line) in ownership.declarations(path).items():
-            if name in moved_names:
+            if name in protected_names:
                 errors.append(
                     f"contract donor declaration survives for `{name}` as {kind} "
                     f"at {rel}:{line}"
@@ -198,12 +377,124 @@ def contract_ownership_errors(
                     f"at {rel}:{line}"
                 )
         for name, line, form in ownership.donor_aliases_or_exports(
-            path, moved_names
+            path, protected_names
         ):
             errors.append(
                 f"contract {form} survives for `{name}` at {rel}:{line}"
             )
     return errors
+
+
+def check_direct_code_fixture(ownership) -> int | None:
+    if not DIRECT_CODE_FIXTURE.is_file():
+        return fail(
+            "direct-code fixture is missing: "
+            "scripts/ExecutionOccurrenceControls.lean"
+        )
+    source = DIRECT_CODE_FIXTURE.read_text(encoding="utf-8")
+    missing = missing_public_theorems(
+        ownership, DIRECT_CODE_FIXTURE, DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS
+    )
+    if missing:
+        return fail(
+            "direct-code positive proof declarations are absent, private, or "
+            "wrong-kind: " + ", ".join(missing)
+        )
+    try:
+        pins = control_signature_pins()
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        return fail(f"direct-code control signature pins are unreadable: {exc}")
+    expected_pin_names = sorted(DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS)
+    if (len(pins) != len(expected_pin_names) or
+            sorted(pin.get("declaration") for pin in pins
+                   if isinstance(pin, dict)) != expected_pin_names or
+            any(not isinstance(pin, dict) or
+                set(pin) != {"declaration", "header"} or
+                not isinstance(pin["header"], str) or not pin["header"]
+                for pin in pins)):
+        return fail("direct-code public-control signature pin inventory drifted")
+    for pin in pins:
+        short = pin["declaration"].rsplit(".", 1)[-1]
+        try:
+            actual = normalized_header(ownership, DIRECT_CODE_FIXTURE, short)
+        except (OSError, ValueError) as exc:
+            return fail(f"direct-code control header is unreadable: {exc}")
+        if actual != pin["header"]:
+            return fail(
+                "direct-code public-control normalized header drifted: "
+                f"{pin['declaration']}"
+            )
+    for marker in DIRECT_CODE_MUTANTS:
+        if source.count(marker) != 1:
+            return fail(
+                f"direct-code fixture must contain exactly one `{marker}` marker"
+            )
+
+    positive = run(["lake", "env", "lean", str(DIRECT_CODE_FIXTURE)])
+    if positive.returncode != 0:
+        return fail("direct-code positive fixture did not compile", positive)
+    if positive.stdout.strip() != DIRECT_CODE_EXPECTED or positive.stderr:
+        return fail("direct-code positive fixture output drifted", positive)
+
+    with tempfile.TemporaryDirectory(prefix="execution-direct-code-") as temp:
+        temp_root = pathlib.Path(temp)
+        for index, (marker, (mutant_source, diagnostics)) in enumerate(
+            DIRECT_CODE_MUTANTS.items()
+        ):
+            path = temp_root / f"ExecutionDirectCodeMutant{index}.lean"
+            path.write_text(
+                source.replace(marker, mutant_source), encoding="utf-8"
+            )
+            result = run(["lake", "env", "lean", str(path)])
+            evidence = result.stdout + result.stderr
+            if result.returncode == 0:
+                return fail(
+                    f"direct-code mutant `{marker}` unexpectedly compiled", result
+                )
+            if not all(diagnostic in evidence for diagnostic in diagnostics):
+                return fail(
+                    f"direct-code mutant `{marker}` failed unexpectedly", result
+                )
+
+        for index, theorem in enumerate(
+            sorted(DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS)
+        ):
+            short = theorem.rsplit(".", 1)[-1]
+            token = f"theorem {short}"
+            if source.count(token) != 1:
+                return fail(
+                    f"direct-code deletion cannot uniquely locate `{theorem}`"
+                )
+            changed = source.replace(token, f"theorem {short}_removed", 1)
+            changed += f"\n#check {theorem}\n"
+            path = temp_root / f"ExecutionDirectCodeDeleted{index}.lean"
+            path.write_text(changed, encoding="utf-8")
+            result = run(["lake", "env", "lean", str(path)])
+            evidence = result.stdout + result.stderr
+            if result.returncode == 0 or short not in evidence:
+                return fail(
+                    f"direct-code live deletion did not fail through `{theorem}`",
+                    result,
+                )
+
+        first_pin = pins[0]
+        short = first_pin["declaration"].rsplit(".", 1)[-1]
+        header_mutant = source.replace(
+            "directCallPre.getCode callFrame.inner.currentTarget ≠ .empty",
+            "True",
+            1,
+        )
+        if header_mutant == source:
+            return fail("direct-code control-header mutant could not mutate source")
+        header_mutant_path = temp_root / "DirectCodeControlHeaderMutant.lean"
+        header_mutant_path.write_text(header_mutant, encoding="utf-8")
+        try:
+            mutated = normalized_header(ownership, header_mutant_path, short)
+        except (OSError, ValueError) as exc:
+            return fail(f"direct-code control-header mutant is unreadable: {exc}")
+        if mutated == first_pin["header"]:
+            return fail("direct-code control-header mutation was accepted")
+    return None
 
 
 def main() -> int:
@@ -222,6 +513,10 @@ def main() -> int:
             "required positive proof declarations are absent or wrong-kind: "
             + ", ".join(missing_positives)
         )
+
+    direct_code_error = check_direct_code_fixture(ownership)
+    if direct_code_error is not None:
+        return direct_code_error
 
     positive = run(["lake", "env", "lean", str(FIXTURE)])
     if positive.returncode != 0:
@@ -296,22 +591,72 @@ def main() -> int:
         manifest = json.loads(MOVE_MANIFEST.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return fail(f"occurrence move manifest is unreadable: {exc}")
+    manifest_keys = {
+        "schema", "contractModuleGlobs", "mappings", "retiredDeclarations",
+        "signaturePins", "controlSignaturePins", "requiredConsumers",
+    }
     if (not isinstance(manifest, dict) or
-            set(manifest) != {"schema", "contractModuleGlobs", "mappings"} or
-            manifest["schema"] != 2):
+            set(manifest) != manifest_keys or manifest["schema"] != 3):
         return fail("occurrence move manifest schema drifted")
     contract_globs = manifest["contractModuleGlobs"]
     if contract_globs != ["Blanc/Weth10*.lean", "Blanc/Lido*.lean"]:
         return fail("occurrence move manifest contract-module globs drifted")
     mappings = manifest["mappings"]
-    if not isinstance(mappings, list) or len(mappings) != 9:
-        return fail("occurrence move manifest must contain exactly 9 rows")
+    if not isinstance(mappings, list) or len(mappings) != 10:
+        return fail("occurrence move manifest must contain exactly 10 rows")
     for index, row in enumerate(mappings, 1):
         if not isinstance(row, dict) or set(row) != {
             "declaration", "kind", "donorModule", "commonModule"
-        } or row["kind"] != "theorem":
+        } or row["kind"] != "theorem" or not all(
+            isinstance(row[key], str) and row[key]
+            for key in ("declaration", "donorModule", "commonModule")
+        ):
             return fail(f"occurrence move row {index} has invalid schema")
+    if len({row["declaration"] for row in mappings}) != len(mappings):
+        return fail("occurrence move declarations must be unique")
+    canonical_mapping = {
+        "declaration": CANONICAL_DIRECT_CODE_LOCAL,
+        "kind": "theorem",
+        "donorModule": "Blanc/Weth10HolderFlowEthExec.lean",
+        "commonModule": "Blanc/CommonProofs.lean",
+    }
+    if mappings.count(canonical_mapping) != 1:
+        return fail("canonical direct-code move row is absent or drifted")
+
+    retired = manifest["retiredDeclarations"]
+    expected_retired = [{
+        "declaration": RETIRED_DIRECT_CODE,
+        "kind": "theorem",
+        "donorModule": "Blanc/Weth10HolderFlowExecAccounting.lean",
+        "replacement": CANONICAL_DIRECT_CODE,
+    }]
+    if retired != expected_retired:
+        return fail("retired direct-code declaration row drifted")
+
+    signature_pins = manifest["signaturePins"]
+    if (not isinstance(signature_pins, list) or len(signature_pins) != 1 or
+            not isinstance(signature_pins[0], dict) or
+            set(signature_pins[0]) != {"declaration", "header"} or
+            signature_pins[0]["declaration"] != CANONICAL_DIRECT_CODE or
+            not isinstance(signature_pins[0]["header"], str) or
+            not signature_pins[0]["header"]):
+        return fail("canonical direct-code signature pin drifted")
+
+    required_consumers = manifest["requiredConsumers"]
+    expected_consumers = [
+        {"module": "Blanc/Weth10HolderFlowEthExec.lean", "references": 1},
+        {
+            "module": "Blanc/Weth10HolderFlowExecAccounting.lean",
+            "references": 1,
+        },
+        {"module": "Blanc/Weth10AllowanceRecursion.lean", "references": 2},
+    ]
+    if required_consumers != expected_consumers:
+        return fail("canonical direct-code consumer inventory drifted")
+
     moved_names = {f'Blanc.{row["declaration"]}' for row in mappings}
+    retired_names = {row["declaration"] for row in retired}
+    protected_names = moved_names | retired_names
     contract_paths: list[pathlib.Path] = []
     for pattern in contract_globs:
         matches = sorted(ROOT.glob(pattern))
@@ -320,10 +665,47 @@ def main() -> int:
         contract_paths.extend(matches)
     contract_paths = sorted(set(contract_paths))
     ownership_errors = contract_ownership_errors(
-        ownership, contract_paths, moved_names
+        ownership, contract_paths, protected_names
     )
     if ownership_errors:
         return fail(ownership_errors[0])
+    statement_copies = direct_code_statement_copies(ownership, contract_paths)
+    if statement_copies:
+        path, name, line = statement_copies[0]
+        return fail(
+            "contract-local direct-code proposition copy survives for "
+            f"`{name}` at {path.relative_to(ROOT)}:{line}"
+        )
+
+    contract_sources = {
+        path: path.read_text(encoding="utf-8") for path in contract_paths
+    }
+    consumers = consumer_errors(ownership, contract_sources, required_consumers)
+    if consumers:
+        return fail(consumers[0])
+
+    canonical_locations = owner_locations(
+        ownership, first_party_lean_paths(), CANONICAL_DIRECT_CODE
+    )
+    canonical_owner = ROOT / "Blanc/CommonProofs.lean"
+    if (len(canonical_locations) != 1 or
+            canonical_locations[0][0] != canonical_owner or
+            canonical_locations[0][1] != "theorem"):
+        rendered = ", ".join(
+            f"{path.relative_to(ROOT)}:{line}:{kind}"
+            for path, kind, line in canonical_locations
+        ) or "none"
+        return fail(f"canonical direct-code sole owner drifted: {rendered}")
+
+    try:
+        actual_header = normalized_header(
+            ownership, canonical_owner, CANONICAL_DIRECT_CODE_LOCAL
+        )
+    except (OSError, ValueError) as exc:
+        return fail(f"canonical direct-code header is unreadable: {exc}")
+    if actual_header != signature_pins[0]["header"]:
+        return fail("canonical direct-code normalized header drifted")
+
     for row in mappings:
         fqn = f'Blanc.{row["declaration"]}'
         common_path = ROOT / row["commonModule"]
@@ -491,7 +873,7 @@ def main() -> int:
             encoding="utf-8",
         )
         lido_shadow_errors = contract_ownership_errors(
-            ownership, [lido_shadow_path], moved_names
+            ownership, [lido_shadow_path], protected_names
         )
         if not any("basename shadow" in error for error in lido_shadow_errors):
             return fail("Lido basename-shadow negative control failed")
@@ -505,7 +887,7 @@ def main() -> int:
             encoding="utf-8",
         )
         lido_alias_errors = contract_ownership_errors(
-            ownership, [lido_alias_path], moved_names
+            ownership, [lido_alias_path], protected_names
         )
         if not any("contract alias" in error for error in lido_alias_errors):
             return fail("Lido alias negative control failed")
@@ -515,6 +897,151 @@ def main() -> int:
                 "Lido alias negative control is not valid Lean",
                 compiled_lido_alias,
             )
+
+        canonical_shadow_path = temp_root / "CanonicalDirectCodeShadow.lean"
+        canonical_shadow_path.write_text(
+            "namespace Blanc.LidoCircuitBreaker.Xinst\n"
+            "theorem step_spawn_codeAddress_eq_currentTarget : True := by trivial\n"
+            "end Blanc.LidoCircuitBreaker.Xinst\n",
+            encoding="utf-8",
+        )
+        canonical_shadow_errors = contract_ownership_errors(
+            ownership, [canonical_shadow_path], protected_names
+        )
+        if not any(
+            "basename shadow" in error for error in canonical_shadow_errors
+        ):
+            return fail("canonical direct-code basename-shadow control failed")
+        command_controls.append((canonical_shadow_path, "canonical basename shadow"))
+
+        retired_shadow_path = temp_root / "RetiredDirectCodeShadow.lean"
+        retired_shadow_path.write_text(
+            "namespace Blanc.LidoCircuitBreaker\n"
+            "theorem xinst_spawn_direct : True := by trivial\n"
+            "end Blanc.LidoCircuitBreaker\n",
+            encoding="utf-8",
+        )
+        retired_shadow_errors = contract_ownership_errors(
+            ownership, [retired_shadow_path], protected_names
+        )
+        if not any("basename shadow" in error for error in retired_shadow_errors):
+            return fail("retired direct-code basename-shadow control failed")
+        command_controls.append((retired_shadow_path, "retired basename shadow"))
+
+        canonical_alias_path = temp_root / "CanonicalDirectCodeAlias.lean"
+        canonical_alias_path.write_text(
+            "import Blanc.CommonProofs\n"
+            "namespace Blanc.Weth10.Xinst\n"
+            "alias step_spawn_codeAddress_eq_currentTarget :=\n"
+            f"  {CANONICAL_DIRECT_CODE}\n"
+            "end Blanc.Weth10.Xinst\n",
+            encoding="utf-8",
+        )
+        canonical_alias_errors = contract_ownership_errors(
+            ownership, [canonical_alias_path], protected_names
+        )
+        if not any("contract alias" in error for error in canonical_alias_errors):
+            return fail("canonical direct-code alias control failed")
+        command_controls.append((canonical_alias_path, "canonical direct-code alias"))
+
+        retired_alias_path = temp_root / "RetiredDirectCodeAlias.lean"
+        retired_alias_path.write_text(
+            "import Blanc.CommonProofs\n"
+            "namespace Blanc.Weth10\n"
+            f"alias xinst_spawn_direct := {CANONICAL_DIRECT_CODE}\n"
+            "end Blanc.Weth10\n",
+            encoding="utf-8",
+        )
+        retired_alias_errors = contract_ownership_errors(
+            ownership, [retired_alias_path], protected_names
+        )
+        if not any("contract alias" in error for error in retired_alias_errors):
+            return fail("retired direct-code alias control failed")
+        command_controls.append((retired_alias_path, "retired direct-code alias"))
+
+        canonical_export_path = temp_root / "CanonicalDirectCodeExport.lean"
+        canonical_export_path.write_text(
+            "import Blanc.CommonProofs\n"
+            "namespace Blanc.Weth10\n"
+            "export Blanc.Xinst (step_spawn_codeAddress_eq_currentTarget)\n"
+            "end Blanc.Weth10\n",
+            encoding="utf-8",
+        )
+        canonical_export_errors = contract_ownership_errors(
+            ownership, [canonical_export_path], protected_names
+        )
+        if not any("contract export" in error for error in canonical_export_errors):
+            return fail("canonical direct-code export control failed")
+        command_controls.append((canonical_export_path, "canonical direct-code export"))
+
+        renamed_copy_path = temp_root / "RenamedDirectCodeCopy.lean"
+        renamed_copy_path.write_text(
+            "import Blanc.CommonProofs\n"
+            "namespace Blanc.LidoCircuitBreaker\n"
+            "open Jaune Blanc\n"
+            "@[simp] theorem unrelatedSpawnInvariant\n"
+            "    {sevm : Sevm} {devm : Devm} {x : Xinst}\n"
+            "    {f : Frame} {rsm : Resume}\n"
+            "    (hs : Xinst.step sevm devm x = .spawn f rsm)\n"
+            "    (hne : sevm.currentTarget ≠ f.inner.currentTarget)\n"
+            "    (hcode : devm.getCode f.inner.currentTarget ≠ .empty) :\n"
+            "    f.inner.codeAddress = some f.inner.currentTarget :=\n"
+            f"  {CANONICAL_DIRECT_CODE} hs hne hcode\n"
+            "end Blanc.LidoCircuitBreaker\n",
+            encoding="utf-8",
+        )
+        renamed_copy = direct_code_statement_copies(
+            ownership, [renamed_copy_path]
+        )
+        if (len(renamed_copy) != 1 or
+                not renamed_copy[0][1].endswith(".unrelatedSpawnInvariant")):
+            return fail("renamed direct-code proposition-copy control failed")
+        command_controls.append((renamed_copy_path, "renamed direct-code copy"))
+
+        duplicate_owner_path = temp_root / "DuplicateDirectCodeOwner.lean"
+        duplicate_owner_path.write_text(
+            "namespace Blanc\n"
+            "theorem Xinst.step_spawn_codeAddress_eq_currentTarget : True := by trivial\n"
+            "end Blanc\n",
+            encoding="utf-8",
+        )
+        duplicate_locations = owner_locations(
+            ownership,
+            [*first_party_lean_paths(), duplicate_owner_path],
+            CANONICAL_DIRECT_CODE,
+        )
+        if len(duplicate_locations) != 2:
+            return fail("canonical direct-code duplicate-owner control failed")
+
+        missing_consumer_sources = dict(contract_sources)
+        first_consumer = ROOT / str(required_consumers[0]["module"])
+        first_consumer_source = missing_consumer_sources[first_consumer]
+        changed_consumer = first_consumer_source.replace(
+            CANONICAL_DIRECT_CODE_LOCAL,
+            "Xinst.step_spawn_codeAddress_eq_currentTarget_removed",
+            1,
+        )
+        if changed_consumer == first_consumer_source:
+            return fail("canonical consumer-removal control could not mutate source")
+        missing_consumer_sources[first_consumer] = changed_consumer
+        if not consumer_errors(
+            ownership, missing_consumer_sources, required_consumers
+        ):
+            return fail("canonical consumer-removal control failed")
+
+        extra_consumer_path = temp_root / "UnexpectedLidoConsumer.lean"
+        extra_consumer_source = (
+            "import Blanc.CommonProofs\n"
+            f"#check {CANONICAL_DIRECT_CODE}\n"
+        )
+        extra_consumer_path.write_text(extra_consumer_source, encoding="utf-8")
+        extra_consumer_sources = dict(contract_sources)
+        extra_consumer_sources[extra_consumer_path] = extra_consumer_source
+        if not consumer_errors(
+            ownership, extra_consumer_sources, required_consumers
+        ):
+            return fail("unexpected canonical consumer control failed")
+        command_controls.append((extra_consumer_path, "unexpected consumer"))
 
         for control_path, label in command_controls:
             compiled_control = run(["lake", "env", "lean", str(control_path)])
@@ -544,6 +1071,48 @@ def main() -> int:
         )[0] != "abbrev":
             return fail("ownership parser wrong-kind negative control failed")
 
+        canonical_common_source = canonical_owner.read_text(encoding="utf-8")
+        canonical_token = f'theorem {canonical_mapping["declaration"]}'
+        canonical_missing_path = temp_root / "CanonicalCommonMissing.lean"
+        canonical_missing_path.write_text(
+            canonical_common_source.replace(
+                canonical_token, "theorem direct_code_owner_removed", 1
+            ),
+            encoding="utf-8",
+        )
+        if CANONICAL_DIRECT_CODE in ownership.declarations(canonical_missing_path):
+            return fail("canonical common-owner missing control failed")
+
+        canonical_wrong_kind_path = temp_root / "CanonicalCommonWrongKind.lean"
+        canonical_wrong_kind_path.write_text(
+            canonical_common_source.replace(
+                canonical_token, f'abbrev {canonical_mapping["declaration"]}', 1
+            ),
+            encoding="utf-8",
+        )
+        if ownership.declarations(canonical_wrong_kind_path).get(
+            CANONICAL_DIRECT_CODE, (None,)
+        )[0] != "abbrev":
+            return fail("canonical common-owner wrong-kind control failed")
+
+        header_mutant_path = temp_root / "CanonicalHeaderMutant.lean"
+        header_mutant = canonical_common_source.replace(
+            "(hcode : devm.getCode f.inner.currentTarget ≠ .empty)",
+            "(hcode : True)",
+            1,
+        )
+        if header_mutant == canonical_common_source:
+            return fail("canonical normalized-header control could not mutate source")
+        header_mutant_path.write_text(header_mutant, encoding="utf-8")
+        try:
+            mutated_header = normalized_header(
+                ownership, header_mutant_path, CANONICAL_DIRECT_CODE_LOCAL
+            )
+        except (OSError, ValueError) as exc:
+            return fail(f"canonical normalized-header control failed: {exc}")
+        if mutated_header == signature_pins[0]["header"]:
+            return fail("canonical normalized-header mutation was accepted")
+
     raw_ownership = run(
         [sys.executable, str(RAW_ATTRIBUTION_OWNERSHIP), "--negative-controls"]
     )
@@ -559,10 +1128,12 @@ def main() -> int:
         return fail("CREATE settlement control verdict drifted", settlement)
 
     print(
-        "OK — execution occurrence: 16 concrete controls; 15 Lean mutants; "
-        "WETH bridge-removal mutant; 9 moved-owner + 11 ownership-parser controls; "
+        "OK — execution occurrence: 16 concrete occurrence + 6 direct-code controls; "
+        "15 occurrence + 2 direct-code Lean mutants; WETH bridge-removal mutant; "
+        "10 moved-owner + 8 exact direct-code headers + 23 ownership-parser controls; "
         "24 raw-attribution owners + exact signature + 4 controls; "
-        "17 required positive proofs + deletion control; 2 CREATE mutants"
+        "24 required positive proofs + legacy deletion + 7 live direct-code "
+        "deletions; 2 CREATE mutants"
     )
     return 0
 

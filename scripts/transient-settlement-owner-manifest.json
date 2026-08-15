@@ -75,7 +75,7 @@
     "lakefile.lean": "58b96d456fb06d0cdf06cc84640f2aa92543bf7d07423ce6533022c2f4458506",
     "lake-manifest.json": "cf992d946883cfc8c842e998d2b54f733e4c865a929a76f33c9c21d11bd94fcf"
   },
-  "wethPublicHeaderAggregate": "7c22885d0c53dd826ff2c3026d74a688bc7c07e1744f4ec2fbcdc00174959f3b",
+  "wethPublicHeaderAggregate": "2c5919e7cd58c3b72fc6bcc1f9fb87c2440edebbba0c970b8c3e693a71f170a2",
   "requiredSharedClassification": "TransientSettlement",
   "forbiddenTraceFamily": [
     "ProcessMessageTrace",
@@ -102,8 +102,9 @@
     "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",
     "scripts/execution-settlement-lift-manifest.json": "6d388528be7cfb64a324a8a3d1b9aaf9bf19d4f4525b02cd7f899f1a1bbcc9d7",
     "scripts/ExecutionOccurrenceRegression.lean": "5bbc70e047d696c1399224fe5cbb1e317635a737ef080e59a2b5f96a8b58e58b",
-    "scripts/check-execution-occurrence.py": "2bc0ef32991dab5936deae0854896e9e1433d8b1c25bbcbc54995d3e3c245aa0",
-    "scripts/execution-occurrence-lift-manifest.json": "d68e15e219101f9ce45dd69048509bc8120f8b1368f3af788a03f30ed8b35a1a",
+    "scripts/check-execution-occurrence.py": "7e573d08a69f359d4d2d9e0e75f6eab2f309d9c19155948266706059ceaee7f5",
+    "scripts/execution-occurrence-lift-manifest.json": "2c53ceb66c028db6e8e8362a31ac2d78dac42a49913c40a6b95ef4b5a4eb0737",
+    "scripts/ExecutionOccurrenceControls.lean": "e3585bfea7af26b79a6eb0c3503c767d653765e0d6c8aa93b0c9759ec1f4f793",
     "scripts/check-execution-raw-attribution-ownership.py": "448a7fb37021052002b9ec2c4e6493d2fb29c71c1e2066f6082cd9c0947a1012",
     "scripts/execution-raw-attribution-owner-manifest.json": "f23f44a59f0e68c1e6c54eadeb2d1b06d7dcf8597173cdf9b04b8d82314b75f9",
     "scripts/CycleWriteFreeRegression.lean": "972fb8c3d780e281490b80bb38c32e4aae4702b49a7f016a3c9313cd8fc5db7e",

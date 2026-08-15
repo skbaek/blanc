@@ -236,81 +236,6 @@ theorem Exec.entryEthBound_of_value_eq_zero
     (benv.state.bal ca).toNat + 0
   rw [hbal]
 
-/-- An actual call-type spawn aimed away from the current account and at an
-already-code-bearing account is a direct CALL/STATICCALL child.  CREATE is
-excluded by freshness, while CALLCODE/DELEGATECALL retain the parent's target. -/
-theorem Xinst.step_spawn_codeAddress_eq_currentTarget
-    {sevm : Sevm} {devm : Devm} {x : Xinst}
-    {f : Frame} {rsm : Resume}
-    (hs : Xinst.step sevm devm x = .spawn f rsm)
-    (hne : sevm.currentTarget ≠ f.inner.currentTarget)
-    (hcode : devm.getCode f.inner.currentTarget ≠ .empty) :
-    f.inner.codeAddress = some f.inner.currentTarget := by
-  have horig := hs
-  cases x with
-  | create =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
-      repeat' split at hs
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-      all_goals first
-        | cases hs
-        | have hfresh := genericCreate.step_spawn_frame hs
-          apply False.elim
-          apply hcode
-          calc
-            devm.getCode f.inner.currentTarget =
-                f.inner.benv.state.getCode f.inner.currentTarget :=
-              (Xinst.step_spawn_getCode horig _).symm
-            _ = _ := hfresh.1 _
-            _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
-  | create2 =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
-      repeat' split at hs
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-      all_goals first
-        | cases hs
-        | have hfresh := genericCreate.step_spawn_frame hs
-          apply False.elim
-          apply hcode
-          calc
-            devm.getCode f.inner.currentTarget =
-                f.inner.benv.state.getCode f.inner.currentTarget :=
-              (Xinst.step_spawn_getCode horig _).symm
-            _ = _ := hfresh.1 _
-            _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
-  | call =>
-      simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hs
-      repeat' split at hs
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-      all_goals first
-        | cases hs
-        | rcases genericCall_step_spawn_exact hs with ⟨rfl, rfl⟩
-          rfl
-  | callcode =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
-      repeat' split at hs
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-      all_goals first
-        | cases hs
-        | have htgt := (genericCall.step_spawn_frame hs).2.1
-          exact False.elim (hne htgt.symm)
-  | delcall =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
-      repeat' split at hs
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-      all_goals first
-        | cases hs
-        | have htgt := (genericCall.step_spawn_frame hs).2.1
-          exact False.elim (hne htgt.symm)
-  | statcall =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
-      repeat' split at hs
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-      all_goals first
-        | cases hs
-        | rcases genericCall_step_spawn_exact hs with ⟨rfl, rfl⟩
-          rfl
-
 /-- A successful no-slot zero-value call is balance-silent even when WETH10
 is both caller and callee.  Empty-code and precompile execution cannot alter
 the world beyond message entry. -/
@@ -4144,7 +4069,7 @@ theorem Exec.CoreEthSound.nextSome
                   rw [hinnerTarget]
                   exact not_empty_of_compile hatp.1
                 have hcadr :=
-                  Xinst.step_spawn_codeAddress_eq_currentTarget
+                  Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
                     hs hparentNe hnonempty
                 rcases Frame.enter_run_inv henter with
                   ⟨benv, htransfer, hinit⟩
