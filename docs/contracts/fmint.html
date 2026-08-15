@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FMINT — a Blanc étude in flash minting</title>
+<meta name="description" content="Blanc's FMINT: a 1,257-byte ERC-3156 flash-mint token built as a minimal étude — supply conservation proved under arbitrary reentrant borrower code, a settlement trichotomy with no premise about the borrower, and an 11-fixture, 188-assertion differential suite.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">études</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>FMINT.</h1>
+        <p class="lede" style="margin-top:20px">
+          An étude, not a port: an ERC-20 token with the
+          <a href="https://eips.ethereum.org/EIPS/eip-3156" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">ERC-3156</a>
+          flash-mint extension, pared down to the one hard thing flash minting adds — during a
+          loan, supply is deliberately unbacked, and the books must still balance when the dust
+          settles. Its headline: <span class="mono">totalSupply&nbsp;=&nbsp;Σ&nbsp;balances</span>
+          at every observable point, under arbitrary executions and arbitrary reentrant borrower
+          code.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          It models no deployed contract. Its behavior is referenced against OpenZeppelin’s
+          <span class="mono">ERC20FlashMint</span> at a pinned release, so every difference has
+          an address — the same registry discipline the ports carry, applied to a contract
+          composed from scratch to be the cleanest possible exhibit of one capability.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-fmint.sh --no-build
+<span class="ok">OK — fmint fixtures: 11/11 PASS, manifest cross-check clean</span>
+<span class="p">$</span> scripts/check-fmint-coverage.sh
+<span class="ok">OK — fmint coverage: 9/12 selectors reached (2 direct, 7 witnessed internal), 3 unreached (budget 3); 5 callsite falsifiers</span></div>
+        <p class="cap"><b>Fig. 1</b> — the FMINT gates, verbatim (fixtures 2026-08-12, coverage
+          2026-08-15). Note the honest budget: three selectors appear in branching borrower code
+          but lack a callsite-execution witness, so the gate credits nine, not twelve — and the
+          budget is shrink-only from here.</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>1,257 B runtime</span>
+          <span class="pill"><span class="d"></span>conservation vs any borrower</span>
+          <span class="pill"><span class="d"></span>11 fixtures / 188 assertions</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it does what it claims</p>
+    <h2 style="max-width:28ch">The étude’s burden: prove the adversarial part.</h2>
+    <p class="lede" style="margin-top:18px">
+      For a contract whose defining move is handing control to untrusted code mid-flight, the
+      evidence has to be strongest exactly where the adversary lives. The differential layer
+      runs hostile borrowers on chosen inputs; the theorem layer quantifies over
+      <em>all</em> of them.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">11 fixtures · 188 assertions · pinned EELS oracle</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-fmint.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-fmint.sh</span></a>
+          runs eleven committed fixtures through Jaune’s runner with the committed
+          <span class="mono">fmintCode</span> as the lender’s code, every expectation filled by
+          the pinned frozen EELS oracle. The scenarios lean adversarial: the full
+          <span class="mono">flashLoan</span> success path, a wrong magic word, a reverting
+          borrower, spectra over returndata shape, data length, and allowance arm, a depth-2
+          reentrant loan, a borrower that moves its minted balance away before answering, nine
+          guard-and-dispatcher probes in one case, the ERC-20 view and
+          <span class="mono">transferFrom</span> surface, and a Solidity-compiled borrower.
+        </p>
+        <p class="dim">
+          The harness hardens four ways beyond the WETH suite. A scenario manifest is
+          cross-checked against the directory, so a deleted case fails the gate instead of
+          shrinking the “all PASS” count. Every fixture’s lender account must be byte-identical
+          to the committed 1,257-byte literal. Each of the twelve <em>rejected</em> probes
+          asserts a discriminating clean-failure triple — success flag 0,
+          <span class="mono">RETURNDATASIZE + 1 = 1</span>, and an in-EVM gas floor — and a
+          committed
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/fixtures/fmint/README.md" style="text-decoration:underline;text-underline-offset:3px">falsifier table</a>
+          shows each of the three failure shapes the old bare revert produced breaks at least
+          one leg. And every case <em>declares</em> its expected log sequence at generation
+          time — generation aborts if the declaration disagrees with what the oracle executed,
+          moving the question from “do two implementations of our bytecode agree” to “does our
+          bytecode match the specification we wrote down.”
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          One deliberate diversity exercise: every borrower is a real Blanc program compiled by
+          Blanc’s own compiler, except one — a pinned, digest-verified
+          <span class="mono">solc</span>-compiled borrower whose independent ABI decoder
+          recovers, word for word, the five callback arguments the suite claims are sent. It is
+          one borrower on chosen inputs; it widens no theorem, and the suite says so.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">conservation ladder · flashLoan spec · settlement trichotomy</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          Seven theorems carry conservation up the same ladder as WETH’s solvency — frame,
+          transaction, block, chain, and the configured-chain variants — in
+          <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Conserved.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">Blanc/Conserved.lean</span></a>.
+          It is a different <em>kind</em> of claim, not a stronger solvency: an equality internal
+          to storage, holding at every observable point even while flash-minted supply is,
+          by construction, momentarily unbacked.
+        </p>
+        <div class="listing tight" style="margin:14px 0">
+          <div class="bar"><span>Blanc/FlashSpec.lean · Blanc/FmintSettles.lean</span><span class="tag">the flash surface</span></div>
+<pre>fmint_flashLoan_spec            <span class="c">-- the headline: factors a given successful</span>
+                                <span class="c">   execution through the canonical callback window</span>
+no_success_of_*                 <span class="c">-- 7 corollaries ruling executions out</span>
+rollback_of_no_success (+10)    <span class="c">-- frame-level state restoration, 11 rows</span>
+settles_with_error_of_* (+6)    <span class="c">-- error genre: reverts constructed exactly, 13 rows</span>
+fmint_flashLoan_settles (+2)    <span class="c">-- the trichotomy: success, deliberate revert, or</span>
+                                <span class="c">   machine fault — NO premise about the borrower</span></pre>
+        </div>
+        <p class="dim">
+          The scope notes are part of the claim, and the module docstrings are their authority.
+          The headline takes four premises — canonical calldata, a size bound, frame freshness,
+          and the selector. Two corollaries (<span class="mono">callback_never_magic</span>,
+          <span class="mono">callback_never_returns_word</span>) quantify over the callback
+          <em>boundaries</em> the headline could produce, not over the receiver’s code — the
+          weaker, honest form. And nothing anywhere in the repository says a
+          <span class="mono">flashLoan</span> call ever succeeds: the spec is partial
+          correctness, the trichotomy is a trichotomy, and the constructed-success rows are
+          views — <span class="mono">fmint_totalSupply_succeeds</span> at exactly 2,218 gas,
+          as a proved equation.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          The settlement family is the étude’s reason to exist:
+          <span class="mono">fmint_flashLoan_settles</span> ends a funded, non-static
+          <span class="mono">flashLoan</span> frame in success, a deliberate revert, or the
+          non-consensus fault channel — never a consensus exceptional halt — with the borrower’s
+          code <em>universally quantified</em>. That is possible because Jaune’s interpreter is
+          total: the hostile callee’s execution comes from totality, not from an assumption
+          about the callee. The compile witness <span class="mono">fmintCode_compile</span>
+          (kernel evaluation, nothing added to the trusted base) ties all of it to the exact
+          1,257 bytes.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:28ch">Twenty-six rows against a pinned reference.</h2>
+    <p class="lede" style="margin-top:18px">
+      An étude has no deployed original, so the registry pins the prevailing implementation
+      instead: OpenZeppelin’s <span class="mono">ERC20FlashMint</span> at release
+      <span class="mono">v5.7.0</span>, tag commit and reference files locked.
+      <a href="https://github.com/skbaek/blanc/blob/main/FMINT_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">FMINT_DEVIATIONS.md</a>
+      holds twenty-six rows spanning the flash surface, events, the ERC-20 surface, storage and
+      collision handling, failure encoding, value handling, metadata, and the reentrancy
+      window — each with a stance and a fixture-evidence citation, including an honest
+      “no case in this suite” where the suite does not exercise a row. Three rows are
+      representative of how the arguments run; the registry is the authority on all
+      twenty-six.
+    </p>
+
+    <div class="dev">
+      <div class="devhead"><h3>Revert data: no error machinery, anywhere</h3><span class="devtag">deviation — row 20</span></div>
+      <p>OpenZeppelin raises typed custom errors with arguments. FMINT reverts with empty
+        returndata on every failure path — every rev site in the runtime is
+        <span class="mono">PUSH0 PUSH0 REVERT</span>.</p>
+      <p><b>The argument:</b> deliberate. Blanc carries no reasons, selectors, or messages on
+        any failure path; what the discipline buys is a single, provable failure shape — the
+        clean-failure triple the fixtures discriminate — and the registry row records the whole
+        history of the normalisation that achieved it, including the three divergent failure
+        shapes it replaced.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Storage layout and collision handling</h3><span class="devtag">deviations — rows 17–18</span></div>
+      <p>Balances live at raw address words and allowances at
+        <span class="mono">keccak256(src ‖ dst)</span>, with the same fail-on-collision guard as
+        WETH: in the exceptional case where an allowance key collides with a balance key, the
+        operation refuses rather than writing through a third party’s balance.</p>
+      <p><b>The argument:</b> the layout is proof-oriented and claims no compatibility with
+        Solidity’s mapping scheme; refusal-on-collision converts an inexpressible corner into a
+        clean revert. The design is shared with the WETH port — one decision, recorded in both
+        registries, implemented once in the shared modules.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>The comparison is behavior, not implementation</h3><span class="devtag">standing scope</span></div>
+      <p>The registry compares observable behavior only — it never claims shared storage,
+        source, or bytecode with the reference, and rows cite Blanc’s side by declaration name
+        rather than line number, because names do not rot.</p>
+      <p><b>The argument:</b> the reference exists so that every difference has an address and a
+        defence. Rows the suite cannot exercise say so in their evidence column rather than
+        borrowing credibility from neighbouring rows.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:24ch">What is measured, and what has no counterpart.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">proved — committed theorems and literals</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size</td><td class="num">1,257 B</td><td class="dim">committed literal, byte-checked by every fixture</td></tr>
+            <tr><td><span class="mono">totalSupply</span> gas</td><td class="num">2,218</td><td class="dim">proved equation, with a constructed successful run</td></tr>
+            <tr><td>rev-site normalisation</td><td class="num">1,217 → 1,257 B</td><td class="dim">exactly two bytes per rev site</td></tr>
+          </tbody>
+        </table></div>
+        <p class="cap" style="margin-top:12px">Closed forms and maxima for the remaining paths
+          ship as lemmas in <span class="mono">FmintGas.lean</span>. No reference-side gas
+          comparison has been run for FMINT, and none is claimed.</p>
+      </div>
+      <div class="panel">
+        <span class="tick">what an étude forgoes</span>
+        <p class="dim" style="font-size:.94rem">
+          There is no deployed original, so there is no size or per-path gas delta to report —
+          that is the étude trade, taken knowingly: the reference pins behavior for the
+          registry, not an artifact to race.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          One boundary is load-bearing enough to restate wherever sizes are stated: FMINT
+          compiles one runtime and has no constructor, so <b>no deployment theorem exists</b> —
+          conservation is proved to hold from a genesis installation (all-zero storage is
+          conserved because both sides are zero), and nothing says an FMINT deployed by a
+          transaction starts conserved. A declared non-claim, with a runnable source check in
+          the README.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the étude taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">why compose instead of port</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          Flash minting is the hardest small thing a token can do: it hands control to an
+          adversary in the middle of its own invariant’s violation. Porting a production flash
+          minter would have buried that capability under a production surface; composing a
+          minimal one made the adversarial theorems the whole contract. The étude then paid
+          forward: the callback-crossing machinery and the settlement method built here are what
+          made WETH10’s 27-selector surface a day’s work rather than a season’s.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">the fix that reached two contracts</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The clean-failure discipline was discovered here — the old bare revert produced three
+          observably different failure shapes, one of them burning the frame’s whole gas — and
+          the fix landed in the one shared definition, normalising every rev site in both FMINT
+          and WETH at once. The sibling-module rule (no contract imports another’s modules;
+          shared things move upstream) is what made a two-contract fix a one-line diff radius.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Honesty budget, restated: three selectors lack callsite-execution witnesses and the
+      coverage gate says so; the flashLoan corollaries are not one kind of theorem and their
+      docstrings say which is which; no liveness is claimed for <span class="mono">flashLoan</span>;
+      and the solc borrower is decoder diversity, not a second proof.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— FMINT, the flash-mint étude</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, registry rows, and gate summaries.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="weth10.html">the flagship port: WETH10 →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/FMINT_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" target="_blank" rel="noopener">porting policy →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>

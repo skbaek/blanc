@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WETH10 — Blanc's flagship port</title>
+<meta name="description" content="Blanc's WETH10: a 6,313-byte port of the deployed WETH10 — all 27 selectors plus receive, flash loans, ERC-677-style callbacks, EIP-2612 permit — with a 147-row differential suite, a proved deployment through the real block pipeline, zero accepted deviations, and the future-redeemability flagship theorem.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">ports</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>WETH10.</h1>
+        <p class="lede" style="margin-top:20px">
+          The flagship port: the deployed
+          <a href="https://etherscan.io/address/0xf4BB2e28688e89fCcE3c0580D37d36A7672E8A9F#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">WETH10</a>
+          at <span class="mono">0xf4BB…8A9F</span> — all 27 selectors plus receive, flash loans,
+          ERC-677-style callbacks, EIP-2612 permit — taken from zero contract code to a closed
+          verification charter in <b>21 h 07 m</b> of wall clock, by one developer, one laptop,
+          and an agent in the loop. On top of the endpoint families sits the theorem the
+          <a href="../index.html#flagship" style="text-decoration:underline;text-underline-offset:3px">front page’s §&nbsp;4</a>
+          is about: future redeemability, at every reachable future, after arbitrary other
+          actors have done their worst.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          A port never claims byte identity —
+          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
+          governs what is claimed and what never is. What makes this port the fullest instance
+          of the method is that its behavior contract was <em>frozen first</em>, endpoint by
+          endpoint, and every layer of evidence below answers to that document.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-weth10-differential.sh
+<span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span>
+<span class="p">$</span> scripts/check-claims.sh
+<span class="ok">OK — WETH10 claim statements: 188 definitions/statements and exact
+     record constructors pinned by Lean</span></div>
+        <p class="cap"><b>Fig. 1</b> — two WETH10 gates, verbatim (2026-08-13 and 2026-08-12):
+          the differential suite beside the deployed runtime, and the statement-pinning gate
+          that makes a silently weakened theorem <em>statement</em> fail as loudly as a broken
+          proof. The differential line continues “… 7 state-mutating reentrancy rows, 26
+          STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>6,313 B runtime — vs 9,975 deployed</span>
+          <span class="pill"><span class="d"></span>28/28 entry families proved</span>
+          <span class="pill"><span class="d"></span>0 accepted deviations</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it is WETH10</p>
+    <h2 style="max-width:28ch">A frozen boundary, and evidence that answers to it.</h2>
+    <p class="lede" style="margin-top:18px">
+      “Right” was written down before it was argued:
+      <a href="https://github.com/skbaek/blanc/blob/main/WETH10_COMPATIBILITY.md" style="text-decoration:underline;text-underline-offset:3px">WETH10_COMPATIBILITY.md</a>
+      freezes the reference’s ordinary-call public boundary for all 27 selectors and receive —
+      outputs, state and ETH effects, logs, guard order, rollback, what a callback may observe
+      mid-flight — and names the evidence owning every row. The two layers below discharge that
+      contract; open what you want to audit.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">147 rows vs the deployed runtime · deployment &amp; redemption replays</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth10-differential.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-weth10-differential.sh</span></a>
+          executes 147 generated canonical-call rows against <em>both</em> the literal deployed
+          9,975-byte runtime and the exact named Blanc family members, in a pinned oracle, across
+          two identity worlds — zero mismatches. The rows are not gentle: 69 live
+          CALL/STATICCALL traces, seven state-mutating or hostile reentrancy rows, 26
+          static-context rows, and eight channel falsifiers that must keep failing. They include
+          a callback that catches a failed nested WETH10 transfer while its parent commits
+          without child flow, and a successful flash callback whose ordinary transfer commits
+          between the paired mint and settlement burn.
+        </p>
+        <p class="dim">
+          Two further gates execute what the theorems then quantify.
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth10-deployment.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-weth10-deployment.sh</span></a>
+          generates a fresh strict singleton type-2 creation block in memory, checks sixteen
+          semantic assertions — successful receipt, exact installed runtime among them — and
+          replays it through Jaune at Prague, with six falsifiers.
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth10-redemption.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-weth10-redemption.sh</span></a>
+          replays two committed Prague fixtures: a zero/nonzero/failed-redemption sequence with
+          receipt statuses <span class="mono">[true, true, false]</span>, and a valid type-4
+          authorization that changes the recipient’s code and nonce.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          The register stays modest on purpose: finite rows and fixtures on chosen inputs —
+          never semantic equivalence, never called a proof. This layer’s job is to keep the
+          theorems honest about <em>which</em> contract they are theorems about.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">28/28 entry families · proved deployment · the flagship</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          Where the corpus samples, the theorems quantify — over states, arguments, callbacks,
+          and valid chain histories, always about the exact compiled bytes.
+          <span class="mono">weth10_compiles</span> kernel-checks compiler success for
+          <em>every</em> <span class="mono">DeployParams</span>, and
+          <span class="mono">weth10Code_compile</span> exposes the exact-bytes equation each
+          comparison world instantiates.
+        </p>
+        <div class="listing tight" style="margin:14px 0">
+          <div class="bar"><span>Blanc/Weth10*.lean</span><span class="tag">the theorem stack, by family</span></div>
+<pre>public compiled-effect families      <span class="c">-- 28/28 runtime entries: reads, state</span>
+                                     <span class="c">   transitions, 3 typed callbacks, permit,</span>
+                                     <span class="c">   flash mint/repay/log order, exact</span>
+                                     <span class="c">   rollback, error genres</span>
+processCreateMessage_weth10_success  <span class="c">-- creation through Jaune's real pipeline</span>
+canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing → DeploymentRoot</span>
+holder-flow conservation             <span class="c">-- B₀ + in = Bₜ + out, exactly, in ℕ</span>
+deployment_reachable_dormant_holder… <span class="c">-- did nothing, lost nothing</span>
+deployment_reachable_future_
+  dualSelector_redeemable            <span class="c">-- the flagship: § 4 of the front page</span>
+deployment_reachable_redeem…anyOrder <span class="c">-- the bank-run corollaries</span></pre>
+        </div>
+        <p class="dim">
+          The deployment root deserves its sentence: it is <em>derived, not axiomatized</em> —
+          from one successful strict singleton type-2 creation block through Jaune’s configured
+          Prague transition, the proof reconstructs receipt success, the exact installed
+          runtime, empty storage, and the crossed request-system calls, with the creation
+          message’s 1,264,071-gas cost as a closed form. The flagship then quantifies over every
+          ordinary reachable future of that root; the front page’s §&nbsp;4 walks its guarantee
+          field by field, including the panel on what it does <em>not</em> say.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          Exact cold and warm gas for the required views — <span class="mono">flashFee</span>,
+          <span class="mono">balanceOf</span>, <span class="mono">totalSupply</span>,
+          <span class="mono">maxFlashLoan</span> — is proved uniformly over deployment
+          parameters in
+          <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Weth10Live.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">Weth10Live.lean</span></a>.
+          Every audited theorem sits in the repository-wide axiom audit, pinned to its exact
+          axiom set in CI, and <span class="mono">check-claims.sh</span> additionally pins the
+          flagship set’s exact <em>statements</em>.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:26ch">Zero accepted — and what that does and doesn’t mean.</h2>
+    <p class="lede" style="margin-top:18px">
+      <a href="https://github.com/skbaek/blanc/blob/main/WETH10_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">WETH10_DEVIATIONS.md</a>
+      currently accepts <b>no behavioral deviations</b> in its stated scope: no in-scope mismatch
+      is known from the finite differential suite, and agreement on chosen inputs is recorded as
+      evidence, not inflated into a proof that no mismatch exists. The registry’s standing rule
+      does the real work: a future mismatch in the frozen surface is a defect or a new explicit
+      conformance decision — it may not be silently moved into an “accepted” section. Silence is
+      the one prohibited move.
+    </p>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">accepted low-level freedoms — not deviations</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The registry distinguishes behavior from implementation. Blanc keeps its freedom in:
+          program structure, control flow, instruction selection, and runtime bytes; raw storage
+          slots and storage proofs; code and codehash identity; exact gas consumption and
+          access-list warming, under the adequate-gas boundary; initcode, deployment gas,
+          CREATE2 address, and the parameter-embedding mechanism; and cheaper or more
+          proof-reliable internals — so long as endpoint outcomes, returndata, logical state and
+          ETH, calls, logs, guard precedence, and reentrancy snapshots remain compatible.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">the boundary’s third register</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The README’s assurance boundary keeps “not established” beside “proved” and “tested,”
+          and the third register is load-bearing: no verification of the deployed runtime, no
+          semantic-equivalence claim, no malformed-calldata closure, no key custody or
+          inclusion, no gas, storage, or codehash parity. The normative target is locked by
+          <span class="mono">scripts/weth10-reference.json</span> — deployment input at a pinned
+          parent source revision, the installed 9,975-byte runtime as the oracle anchor — so
+          “compared against what, exactly” always has a one-line answer.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:24ch">Size, and gas — proved, not raced.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">proved — committed theorems and literals</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size</td><td class="num">6,313 B</td><td class="dim">committed template, parameterized by chain ID + cached domain separator</td></tr>
+            <tr><td>deployed WETH10 runtime</td><td class="num">9,975 B</td><td class="dim">pinned reference lock — the oracle anchor</td></tr>
+            <tr><td>constructor</td><td class="num">6,490 B</td><td class="dim">a 177-byte prefix copies and patches the template</td></tr>
+            <tr><td>init-execution gas</td><td class="num">1,471</td><td class="dim">closed form</td></tr>
+            <tr><td>code-deposit gas</td><td class="num">1,262,600</td><td class="dim">closed form</td></tr>
+            <tr><td>direct creation message</td><td class="num">1,264,071</td><td class="dim">closed form, concluded by the deployment proof</td></tr>
+            <tr><td>view gas, required views</td><td class="num">exact</td><td class="dim">cold/warm, uniform over deployment parameters</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <span class="tick">what is deliberately not measured</span>
+        <p class="dim" style="font-size:.94rem">
+          No per-path gas comparison against the deployed original has been run for WETH10, and
+          exact deployed-gas parity is a declared freedom, not a claim — the deployed contract’s
+          gas profile is simply not this port’s subject. The committed figures above are
+          Blanc/Jaune modeled costs; where the WETH page carries an informal measured
+          comparison, this page carries none rather than a hasty one.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          One floor is a fact about the bytes: both runtime and initcode contain
+          <span class="mono">PUSH0</span>, so Shanghai is the minimum execution fork, and the
+          executable evidence is specifically under the pinned Prague EELS. Neither fact implies
+          deployability on earlier forks, and the page will not imply it either.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the build taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">the goal that did not land</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The 21-hour charter closed 13 of its 14 requirement rows. The fourteenth — a
+          settlement theorem carried over from FMINT — turned out to be <em>false</em> of
+          WETH10’s design, and was struck by explicit amendment: no replacement installed,
+          nothing nearby relabeled to fill the row. The flagship of §&nbsp;4 was a successor
+          program, landed over the following days by the same method. A project that never
+          records a lost bet is not reporting, it is advertising.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">proof engineering at this scale</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The deployment execution proof is deliberately compositional — copy, chain-word
+          patches, prehash writes, hash, separator patches, and return, proved separately and
+          joined — replacing an all-at-once elaboration that ran past 1,000 seconds with
+          anomalous memory use. Historical snapshots of the split modules elaborate in tens of
+          seconds. The lesson generalises: at production surface area, the <em>shape</em> of a
+          proof is an engineering artifact with its own budget, and the repository gates
+          elaboration cost the way it gates everything else.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Boundary, restated: nothing on this page verifies the Solidity artifact deployed at
+      <span class="mono">0xf4BB…8A9F</span> — it is the reference, never the subject. The
+      flagship’s own non-claims — attribution is not consent, signatures are inputs, inclusion
+      and fee markets are out of frame — are listed beside it on the
+      <a href="../index.html#flagship" style="text-decoration:underline;text-underline-offset:3px">front page</a>
+      and in the registries, in the honest register.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— WETH10, the flagship port</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, registry rows, gate summaries, and the
+        goal ledger; where evidence ends, the page says so.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="../index.html#flagship">the flagship theorem →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/WETH10_COMPATIBILITY.md" target="_blank" rel="noopener">frozen boundary →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/WETH10_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>

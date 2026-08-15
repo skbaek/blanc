@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WETH — a Blanc port of WETH9</title>
+<meta name="description" content="Blanc's WETH: a 988-byte port of WETH9 with solvency proved at chain altitude, an 11-fixture differential suite against the pinned EELS oracle, a five-row deviation registry, and measured size and gas deltas.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">ports</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>WETH.</h1>
+        <p class="lede" style="margin-top:20px">
+          The first port: wrapped ether, after
+          <a href="https://etherscan.io/address/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">WETH9</a>,
+          the mainnet contract at <span class="mono">0xC02a…6Cc2</span>. Its headline is solvency —
+          the contract always holds enough ETH to honour every booked balance — proved not once but
+          at every altitude: a single frame, a state transition, a whole block, and every reachable
+          state of a configured chain, across scheduled fork activations.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          A port never claims byte identity with its reference — what it claims, and what it
+          deliberately never claims, is governed by
+          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>.
+          This page lays out the evidence in that standing register: how we know the behavior,
+          where it deliberately differs, what the differences cost and buy, and what the build
+          taught.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-weth.sh --no-build
+<span class="ok">OK — weth fixtures: 11/11 PASS</span>
+<span class="p">$</span> scripts/check-weth-coverage.sh
+<span class="ok">OK — weth coverage: 10/10 selectors reached (4 direct, 6 witnessed internal), 0 unreached (budget 0); fallback deposit() DIRECT; 5 callsite falsifiers</span></div>
+        <p class="cap"><b>Fig. 1</b> — the WETH gates, verbatim (fixtures 2026-08-12, coverage
+          2026-08-15): eleven oracle-filled fixtures, and the selector coverage gate with its
+          shrink-only budget at zero — every selector, plus the fallback, has an execution
+          witness.</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>988 B runtime — vs 3,124 deployed</span>
+          <span class="pill"><span class="d"></span>solvency at chain altitude</span>
+          <span class="pill"><span class="d"></span>5 registry rows · 2 now agreements</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it is WETH</p>
+    <h2 style="max-width:26ch">Two layers, neither asked to do the other’s job.</h2>
+    <p class="lede" style="margin-top:18px">
+      “Is WETH” means two checkable things here, and only those: the behavior agrees with the
+      deployed reference on differential evidence a third party can re-run, and the load-bearing
+      properties are theorems about the exact compiled bytes. The tests catch proving the wrong
+      program; the theorems quantify where tests can only sample. Both are collapsed below —
+      open what you want to audit.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">11 fixtures · pinned EELS oracle · coverage budget 0</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-weth.sh</span></a>
+          runs eleven committed fixtures through Jaune’s fixture runner, each with the committed
+          <span class="mono">wethCode</span> installed as the WETH account’s code and every
+          expectation filled by the pinned frozen EELS oracle’s <span class="mono">t8n</span> —
+          external adjudication, not self-agreement. The cases: the five happy paths (deposit,
+          withdraw, transfer, approve + transferFrom, and an adversarial reentrancy attempt
+          against <span class="mono">withdraw</span>), two view probes that make the hand-rolled
+          ABI return encoding externally observable, the balance and allowance guards refusing,
+          and the two deviation-registry claims that are testable at all.
+        </p>
+        <p class="dim">
+          Three hardenings keep the suite honest. The generator computes each case’s
+          WETH-semantic expectation from the pre-state and transaction alone and asserts it
+          against the oracle’s answer <em>before</em> writing the fixture — two implementations
+          agreeing cannot see a contract that is wrong the same way to everyone. A
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-runtime-bytes.py" style="text-decoration:underline;text-underline-offset:3px">runtime-byte gate</a>
+          requires every fixture’s installed code to be byte-identical to the committed 988-byte
+          Lean literal, so the evidence cannot drift from the contract it is about. And the
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth-coverage.sh" style="text-decoration:underline;text-underline-offset:3px">selector coverage gate</a>
+          refuses credit for a selector merely embedded in bytes: all ten selectors plus the
+          direct fallback carry execution witnesses, against a shrink-only budget that is
+          currently empty.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          What this layer is worth is stated with the same care: specification-checked
+          differential testing on chosen inputs — never semantic equivalence, never a proof.
+          The
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/fixtures/weth/README.md" style="text-decoration:underline;text-underline-offset:3px">fixtures README</a>
+          is the case-by-case account.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">solvency ladder · compile witness · liveness &amp; exact gas</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          Seven theorems carry solvency up the ladder, from one message frame to every reachable
+          configured-chain state — the statements live in
+          <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Solvent.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">Blanc/Solvent.lean</span></a>
+          and are the authority on their own premises:
+        </p>
+        <div class="listing tight" style="margin:14px 0">
+          <div class="bar"><span>Blanc/Solvent.lean</span><span class="tag">the solvency family</span></div>
+<pre>weth_preserves_solvent                 <span class="c">-- one frame</span>
+stateTransition_preserves_solvent      <span class="c">-- one transaction</span>
+addBlockToChain_preserves_solvent      <span class="c">-- one block</span>
+chain_preserves_solvent                <span class="c">-- every reachable state</span>
+stateTransitionUsing_preserves_solvent <span class="c">-- …and the same three</span>
+addBlockToChainUsing_preserves_solvent <span class="c">   again on a *configured*</span>
+chainUsing_preserves_solvent           <span class="c">   chain, across fork activations</span></pre>
+        </div>
+        <p class="dim">
+          Beneath them, <span class="mono">wethCode_compile</span> is the compile witness —
+          <span class="mono">Prog.compile weth = some wethCode</span>, proved by kernel
+          evaluation (<span class="mono">decide +kernel</span>, nothing added to the trusted
+          base). Every theorem above is conditioned on the account code being exactly what the
+          compiler returns, so without this equation they could all hold vacuously.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          Beside the safety family sit the constructed-success rows —
+          <span class="mono">weth_balanceOf_succeeds</span> and
+          <span class="mono">weth_decimals_succeeds</span> in
+          <a href="https://github.com/skbaek/blanc/blob/main/Blanc/WethLive.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">WethLive.lean</span></a> —
+          which build a successful execution instruction by instruction, with exact gas:
+          <span class="mono">balanceOf</span> at 2,260 cold and 260 warm,
+          <span class="mono">decimals</span> at 158, the 19-gas nonpayable guard visible in the
+          statements, and the <span class="mono">wethGas</span> closed forms and maxima as
+          lemmas in
+          <a href="https://github.com/skbaek/blanc/blob/main/Blanc/WethGas.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">WethGas.lean</span></a>.
+          The split is deliberate and honest: the solvency family is pure safety; these rows are
+          where liveness is actually earned. All of them sit in the repository’s 426-theorem
+          axiom audit, each pinned to its exact axiom set in CI.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:26ch">Five rows, each argued — two now agreements.</h2>
+    <p class="lede" style="margin-top:18px">
+      Deviations are governed, not forbidden: every observable difference from the reference is
+      a registry row with a stance and fixture evidence, and an observable difference with no
+      row is a defect by the project’s own rules.
+      <a href="https://github.com/skbaek/blanc/blob/main/WETH_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">WETH_DEVIATIONS.md</a>
+      is the authority; the five rows are summarised here with their arguments. Two began life
+      as genuine divergences and were later closed to agreements — the registry keeps their
+      history rather than quietly reclassifying them.
+    </p>
+
+    <div class="dev">
+      <div class="devhead"><h3>Dirty address words are refused, not masked</h3><span class="devtag">deviation</span></div>
+      <p>WETH9’s Solidity&nbsp;0.4.x decoder silently ignores nonzero upper bits in an address
+        word, so a noncanonical alias resolves to the low 160-bit address. Blanc’s mutating
+        paths reject such words outright; the two views use the full word as key material,
+        neither masking nor checking.</p>
+      <p><b>The argument:</b> no equivalence claim is made — callers are expected to use
+        canonical ABI encoding, and an alias silently resolving is exactly the kind of implicit
+        behavior a proof-oriented artifact should refuse rather than reproduce. Discharged by a
+        dedicated fixture that probes the dirty word in every position.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Balances live at raw address words</h3><span class="devtag">deviation</span></div>
+      <p>WETH9 stores balances in a Solidity mapping, at hash-derived slots. Blanc uses the raw
+        256-bit address word itself as the storage slot.</p>
+      <p><b>The argument:</b> a deliberately simple, proof-oriented representation — storage
+        proofs read off directly, with no hashing lemma in the way. No storage-layout
+        compatibility is claimed anywhere; the same account’s balance simply lives at a
+        different slot, and every fixture in the suite asserts storage at exactly these keys.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Allowances fail on hash collision instead of writing through one</h3><span class="devtag">deviation</span></div>
+      <p>Blanc stores an allowance at <span class="mono">keccak256(src ‖ dst)</span>. In the
+        exceptional case where that hash is also a valid raw-address balance key,
+        <span class="mono">approve</span> and allowance-consuming
+        <span class="mono">transferFrom</span> revert. WETH9’s domain-separated mapping layout
+        cannot express the collision, so it has no such branch.</p>
+      <p><b>The argument:</b> given the simpler layout, the choice is between refusing the
+        operation and silently writing through a third party’s balance slot — and refusing is a
+        feature. The collision branch is untestable by construction (a ~2⁹⁶ search); the
+        registry says so instead of pretending coverage.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Ether sent to nonpayable entry points</h3><span class="devtag agree">agreement since 2026-08-09</span></div>
+      <p>WETH9 rejects nonzero call value on every entry point except the payable fallback and
+        <span class="mono">deposit()</span>. Blanc originally dispatched on the selector alone:
+        a value-carrying <span class="mono">transfer</span> could succeed, the contract kept the
+        ether, and nobody was credited — a permanently unrecoverable surplus.</p>
+      <p><b>The resolution:</b> adjudicated under
+        <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>’s
+        standing wager, value-rejection was ruled a feature by prevailing norms — its modern
+        beneficiary is the buggy integrator, for whom it converts silent permanent loss into a
+        clean revert. Every entry point now carries the shared <span class="mono">nonpayable</span>
+        guard: 888 → 988 bytes, 19 gas per guarded call, every priced gas walk re-derived. A
+        fixture shows the suite would have caught the old behavior: rebuilt against the
+        pre-change artifact, 11 of its 21 expectations fail.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Revert data on a failed guard</h3><span class="devtag agree">agreement since 2026-08-05</span></div>
+      <p>The deployed WETH9 runtime contains fourteen <span class="mono">REVERT</span> sites and
+        every one is <span class="mono">REVERT(0, 0)</span> — empty return data, unused gas
+        handed back. Blanc’s early <span class="mono">Func.rev</span> instead reverted over
+        whatever two stack words a guard left live: a garbage-data revert, a stack-underflow
+        halt, or a memory-expansion out-of-gas halt — the latter two burning the frame’s entire
+        gas, which WETH9 never does.</p>
+      <p><b>The resolution:</b> <span class="mono">Func.rev</span> was normalised to
+        <span class="mono">PUSH0 PUSH0 REVERT</span> in the one shared definition, reaching both
+        WETH and FMINT at once — two bytes per rev site, twenty-one sites in the current
+        literal. Against WETH9, which encodes no reason either, the result is agreement; the
+        discriminating fixture evidence lives in the
+        <a href="fmint.html#evidence" style="text-decoration:underline;text-underline-offset:3px">FMINT suite</a>’s
+        falsifier table.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:24ch">Size, and gas by path.</h2>
+    <p class="lede" style="margin-top:18px">
+      Two registers, kept apart on purpose: <em>proved</em> figures are committed theorems about
+      Blanc’s exact bytes; the <em>measured</em> comparison against deployed WETH9 is a one-off
+      referee’d measurement, labelled with its provenance and its drift.
+    </p>
+
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">proved — committed theorems and literals</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size</td><td class="num">988 B</td><td class="dim">committed literal, byte-checked by every fixture</td></tr>
+            <tr><td>deployed WETH9 runtime</td><td class="num">3,124 B</td><td class="dim">pinned reference lock in the registry</td></tr>
+            <tr><td><span class="mono">balanceOf</span> gas</td><td class="num">2,260 / 260</td><td class="dim">cold / warm — proved equations</td></tr>
+            <tr><td><span class="mono">decimals</span> gas</td><td class="num">158</td><td class="dim">proved equation</td></tr>
+            <tr><td>nonpayable guard</td><td class="num">+19</td><td class="dim">per guarded call, visible in the statements</td></tr>
+          </tbody>
+        </table></div>
+        <p class="cap" style="margin-top:12px">Closed forms and maxima for the remaining paths
+          ship as lemmas in <span class="mono">WethGas.lean</span>, beside the code they price.</p>
+      </div>
+      <div class="panel">
+        <span class="tick">measured — one run, 2026-08-03, against deployed WETH9</span>
+        <p class="dim" style="font-size:.93rem">
+          Referee: the pinned frozen EELS oracle at Prague, harness validated against a
+          committed fixture’s exact block <span class="mono">gasUsed</span>. On the
+          money-moving paths — deposit, withdraw, transfer, transferFrom —
+          Blanc is only <b>1–8% cheaper</b> in execution gas: SSTORE and CALL dominate, and both
+          implementations pay them equally. On the constant-returning views it is
+          <b>17–22× cheaper</b> — <span class="mono">decimals</span> 139 vs 2,444,
+          <span class="mono">symbol</span> 145 vs 3,264 — because WETH9 keeps name, symbol, and
+          decimals in constructor-initialised <em>storage</em> (a cold SLOAD each) while Blanc’s
+          compiler bakes them into code as PUSH constants. The raw-address balance scheme is
+          real but small: +126 gas on <span class="mono">transfer</span>, +336 on
+          <span class="mono">transferFrom</span>. Opcode count per call runs 2–6× lower
+          (<span class="mono">transfer</span>: 73 ops vs 273).
+        </p>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          <b>Provenance and drift, stated:</b> the harness is not part of the committed gate
+          battery, and the measurement predates two runtime changes — the rev-site
+          normalisation (+22 B) and the nonpayable guard (+100 B, +19 gas per guarded call,
+          <span class="mono">decimals</span> 139 → 158). From an EOA, the 21,000-gas intrinsic
+          compresses everything: the best whole-transaction saving was 12.8%. The view
+          advantage pays off contract-to-contract. And the comparison is not equivalence-fair
+          by construction — the registry rows above are part of the gap.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the build taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">a retracted headline</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The project once remembered this port as “many times smaller and significantly
+          cheaper.” Measurement kept the first half — 3.2× smaller holds — and retracted the
+          second: blanket gas superiority does not exist, because the expensive opcodes are the
+          same for everyone. The honest residue is specific — views win through code constants,
+          storage schemes buy a little, size and opcode count are the robust wins — and the
+          site’s copy follows the measurement, not the memory.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">the registry as changelog</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          Two of the five rows are agreements that used to be divergences, each closed by a
+          change the registry forced into the open: the rev-site normalisation (found while
+          building FMINT, and reaching WETH through the one shared definition) and the
+          nonpayable guard (adjudicated under the porting wager, priced at 100 bytes and 19
+          gas). A port that keeps its deviation history is telling you how it converges — and
+          the sibling-module discipline is why one fix landed in two contracts at once.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Boundary, restated: the suite is differential testing on chosen inputs, not equivalence;
+      the solvency family is pure safety, with liveness earned separately by the
+      constructed-success rows; and nothing on this page verifies the contract deployed at
+      <span class="mono">0xC02a…6Cc2</span> — it is the reference, never the subject.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— WETH, the first port</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, registry rows, and gate summaries,
+        except where a measurement is explicitly labelled with its one-off provenance.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="weth10.html">next port: WETH10 →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/WETH_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" target="_blank" rel="noopener">porting policy →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>
