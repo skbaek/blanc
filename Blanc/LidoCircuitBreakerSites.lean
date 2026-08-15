@@ -250,6 +250,14 @@ def isExternalCallInstruction : Ninst → Bool
   | .exec _ => true
   | _ => false
 
+/-- The execution opcode carried by an external-call instruction.  Keeping
+this projection separate from `Ninst` also gives the finite executable domain
+a decidable equality test despite dependent PUSH constructors elsewhere in
+`Ninst`. -/
+def externalInstruction? : Ninst → Option Xinst
+  | .exec instruction => some instruction
+  | _ => none
+
 def nonPushInstruction? : Ninst → Option Ninst
   | .push _ _ => none
   | instruction => some instruction
@@ -858,6 +866,28 @@ theorem runtimeExternalCallSourceSites_pcs (dp : DeployParams) :
   simpa using congrArg (fun inventory => inventory.2)
     runtimeSourceEffectPcs_official
 
+set_option maxHeartbeats 1200000 in
+set_option maxRecDepth 10000 in
+theorem runtimeExternalCallInstructions_official :
+    let sites :=
+      (persistentProgramShape (runtime officialParams)).sourceSites
+    (sites.filter fun site =>
+        isExternalCallInstruction site.instruction).map
+          (fun site => externalInstruction? site.instruction) =
+      [some .call, some .statcall] := by
+  decide +kernel
+
+/-- Exact execution opcodes of the two structural runtime external-call sites,
+in source/compiler order. -/
+theorem runtimeExternalCallSourceSites_instructions (dp : DeployParams) :
+    (runtimeExternalCallSourceSites dp).map
+        (fun site => externalInstruction? site.instruction) =
+      [some .call, some .statcall] := by
+  unfold runtimeExternalCallSourceSites
+  rw [← filterExternal_nonPush, persistentProgramSourceSites_eq,
+    runtime_persistentProgramShape_eq]
+  exact runtimeExternalCallInstructions_official
+
 theorem runtimeTransientSourceSites_length (dp : DeployParams) :
     (runtimeTransientSourceSites dp).length = 3 := by
   simpa using congrArg List.length (runtimeTransientSourceSites_pcs dp)
@@ -889,6 +919,49 @@ theorem runtimeExternalCallSourceSite_instruction
   | reg regular => simp_all [isExternalCallInstruction]
   | exec execution => exact ⟨execution, rfl⟩
   | push bytes bound => simp_all [isExternalCallInstruction]
+
+/-- Every structural runtime external edge is exactly CALL or STATICCALL;
+CALLCODE and DELEGATECALL are absent. -/
+theorem runtimeExternalCallSourceSite_instruction_exact
+    {dp : DeployParams} {site : Prog.SourceSite}
+    (member : site ∈ runtimeExternalCallSourceSites dp) :
+    site.instruction = .exec .call ∨
+      site.instruction = .exec .statcall := by
+  have projected : externalInstruction? site.instruction ∈
+      (runtimeExternalCallSourceSites dp).map
+        (fun source => externalInstruction? source.instruction) := by
+    rw [List.mem_map]
+    exact ⟨site, member, rfl⟩
+  rw [runtimeExternalCallSourceSites_instructions] at projected
+  rcases runtimeExternalCallSourceSite_instruction member with
+    ⟨instruction, instructionEq⟩
+  rw [instructionEq] at projected ⊢
+  simpa [externalInstruction?] using projected
+
+/-- Any actually reached same-frame execution opcode in an exact runtime
+invocation is one of the runtime's two structural external edges.  The
+`ParentPrefix` premise is the executable-boundary evidence that excludes
+opcode-looking bytes inside PUSH payloads. -/
+theorem runtimeExec_instruction_exact
+    {dp : DeployParams} {ca : Adr} {root target : Exec.Deriv}
+    {instruction : Xinst}
+    (invocation : root.exactInvocation (runtime dp) ca ca)
+    (sameFrame : Exec.Deriv.ParentPrefix root target)
+    (instructionAt : Ninst.At target.sevm.code target.pc
+      (.exec instruction)) :
+    instruction = .call ∨ instruction = .statcall := by
+  rcases root.nonPush_sourceSite invocation sameFrame (by trivial)
+      instructionAt with ⟨site, member, sitePc, siteInstruction⟩
+  have external : site ∈ runtimeExternalCallSourceSites dp := by
+    unfold runtimeExternalCallSourceSites
+    rw [List.mem_filter]
+    exact ⟨member, by simp [siteInstruction, isExternalCallInstruction]⟩
+  rcases runtimeExternalCallSourceSite_instruction_exact external with
+    callEq | statcallEq
+  · rw [siteInstruction] at callEq
+    exact Or.inl (by simpa using callEq)
+  · rw [siteInstruction] at statcallEq
+    exact Or.inr (by simpa using statcallEq)
 
 theorem runtimePersistent_effectDomains_separate
     {dp : DeployParams} {site : Prog.SourceSite}

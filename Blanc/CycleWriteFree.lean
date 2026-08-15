@@ -284,7 +284,7 @@ private theorem Exec.Deriv.SourceCursor.noSstore_core :
         right.LocalSstoreFree at sourceFree
       change left.CallsIn (fun callee => callee ∈ members) ∧
         right.CallsIn (fun callee => callee ∈ members) at sourceClosed
-      rcases cursor.branchToward reached storeAt with
+      rcases cursor.branchToward reached (by trivial) storeAt with
         ⟨arm, compilerPrefix, armReached, decrease⟩ |
         ⟨arm, compilerPrefix, armReached, decrease⟩
       · exact ih arm.node decrease arm rfl compiled members
@@ -293,7 +293,7 @@ private theorem Exec.Deriv.SourceCursor.noSstore_core :
           sourceFree.2 sourceClosed.2 component target armReached storeAt
   | call index =>
       change index ∈ members at sourceClosed
-      rcases cursor.callToward compiled reached storeAt with
+      rcases cursor.callToward compiled reached (by trivial) storeAt with
         ⟨body, hbody, bodyCursor, compilerPrefix, bodyReached, decrease⟩
       rcases component index sourceClosed with
         ⟨certBody, hcertBody, certFree, certClosed⟩

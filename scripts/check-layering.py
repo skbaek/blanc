@@ -89,6 +89,8 @@ CONTRACTS = {
                              "LidoCircuitBreakerEnumeration",
                              "LidoCircuitBreakerSites",
                              "LidoCircuitBreakerAccess",
+                             "LidoCircuitBreakerAuthority",
+                             "LidoCircuitBreakerOwnerClosure",
                              "LidoCircuitBreakerCode",
                              "LidoCircuitBreakerDeploy"],
 }

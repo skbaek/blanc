@@ -1941,14 +1941,20 @@ theorem Exec.Deriv.ParentNonSstorePrefix.lt_of_step
     Exec.Deriv.lt tail start :=
   ⟨next, rest.le, edge.prec⟩
 
-/-- Cross an actually executed compiler PUSH only when the nominated SSTORE
-target lies later in the same-frame prefix. -/
+/-- A source instruction that cannot be compiler PUSH glue. -/
+def NinstNonPush : Ninst → Prop
+  | .push _ _ => False
+  | _ => True
+
+/-- Cross an actually executed compiler PUSH only when the nominated non-PUSH
+source target lies later in the same-frame prefix. -/
 private theorem Exec.Deriv.ParentPrefix.advance_pushToward
-    {start target : Exec.Deriv} {xs : Bytes}
+    {start target : Exec.Deriv} {xs : Bytes} {targetInstruction : Ninst}
     (reached : Exec.Deriv.ParentPrefix start target)
     (pushAt : PushAt start.sevm.code start.pc xs)
     (hne : xs ≠ [])
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
+    (targetNonPush : NinstNonPush targetInstruction)
+    (storeAt : Ninst.At target.sevm.code target.pc targetInstruction) :
     ∃ (inter : Devm)
       (next : Exec (start.pc + xs.length + 1) start.sevm inter start.exn),
       Exec.Deriv.ParentStep
@@ -1961,7 +1967,8 @@ private theorem Exec.Deriv.ParentPrefix.advance_pushToward
   cases reached with
   | refl =>
       have impossible := Ninst.at_unique storeAt pushAt
-      cases impossible
+      subst targetInstruction
+      exact targetNonPush.elim
   | step edge rest =>
       cases edge with
       | cont hstep next =>
@@ -1988,13 +1995,14 @@ private theorem Exec.Deriv.ParentPrefix.advance_pushToward
             Evm.step_next pushAt
           exact (Step.ofExecution_ne_spawn (hstatic.symm.trans hstep)).elim
 
-/-- Cross an actually executed compiler jump only when the nominated SSTORE
+/-- Cross an actually executed compiler jump only when the nominated source
 target lies later in the same-frame prefix. -/
 private theorem Exec.Deriv.ParentPrefix.advance_jumpToward
     {start target : Exec.Deriv} {instruction : Jinst}
+    {targetInstruction : Ninst}
     (reached : Exec.Deriv.ParentPrefix start target)
     (jumpAt : Jinst.At start.sevm.code start.pc instruction)
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
+    (storeAt : Ninst.At target.sevm.code target.pc targetInstruction) :
     ∃ (nextPc : Nat) (inter : Devm)
       (next : Exec nextPc start.sevm inter start.exn),
       Exec.Deriv.ParentStep
@@ -2218,16 +2226,16 @@ def Exec.Deriv.SourceCursor.node
     (cursor : Exec.Deriv.SourceCursor root program path source) : Exec.Deriv :=
   ⟨cursor.pc, root.sevm, cursor.pre, root.exn, cursor.current⟩
 
-/-- Enter the main source body only when the nominated SSTORE target proves
+/-- Enter the main source body only when the nominated source target proves
 that execution crossed the compiler's leading `JUMPDEST`.  An exact compiled
 root that fails at that glue instruction therefore yields no unconditional
 body cursor. -/
 theorem Exec.Deriv.SourceCursor.mainToward
     {root target : Exec.Deriv} {program : Prog}
-    {storageTarget codeAddress : Adr}
+    {storageTarget codeAddress : Adr} {targetInstruction : Ninst}
     (invocation : root.exactInvocation program storageTarget codeAddress)
     (reached : Exec.Deriv.ParentPrefix root target)
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
+    (storeAt : Ninst.At target.sevm.code target.pc targetInstruction) :
     ∃ cursor : Exec.Deriv.SourceCursor root program ⟨0, []⟩ program.main,
       Exec.Deriv.ParentNonSstorePrefix root cursor.node ∧
       Exec.Deriv.ParentPrefix cursor.node target := by
@@ -2354,16 +2362,18 @@ theorem Exec.Deriv.SourceCursor.nextOfParentStep
       apply sourceIncluded
       simp [Func.sourceSites, member]
 
-/-- Select the source branch arm that contains the nominated reached SSTORE.
+/-- Select the source branch arm that contains the nominated reached source
+instruction.
 Every crossed compiler instruction is justified by the target prefix, so this
 works independently of the selected frame's final outcome. -/
 theorem Exec.Deriv.SourceCursor.branchToward
     {root target : Exec.Deriv} {program : Prog} {path : Prog.SourcePath}
-    {left right : Func}
+    {left right : Func} {targetInstruction : Ninst}
     (cursor : Exec.Deriv.SourceCursor root program path
       (.branch left right))
     (reached : Exec.Deriv.ParentPrefix cursor.node target)
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
+    (targetNonPush : NinstNonPush targetInstruction)
+    (storeAt : Ninst.At target.sevm.code target.pc targetInstruction) :
     (∃ arm : Exec.Deriv.SourceCursor root program
         ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left,
       Exec.Deriv.ParentNonSstorePrefix cursor.node arm.node ∧
@@ -2378,7 +2388,8 @@ theorem Exec.Deriv.SourceCursor.branchToward
       cursor.codeBoundary with
     ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
       jumpdestAt, jumpable, rightSlice, rightBoundary⟩
-  rcases reached.advance_pushToward ⟨_, pushAt⟩ (by simp) storeAt with
+  rcases reached.advance_pushToward ⟨_, pushAt⟩ (by simp)
+      targetNonPush storeAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
   rcases afterPushReached.advance_jumpToward jumpiAt storeAt with
@@ -2466,15 +2477,17 @@ theorem Exec.Deriv.SourceCursor.branchToward
         (.step jumpdestEdge jumpdestNotStore (.refl _)))
 
 /-- Follow the internal source call whose body contains the nominated reached
-SSTORE.  The target prefix supplies the successful PUSH/JUMP/JUMPDEST edges;
-the selected frame itself may finish with any outcome. -/
+source instruction. The target prefix supplies the successful
+PUSH/JUMP/JUMPDEST edges; the selected frame itself may finish with any
+outcome. -/
 theorem Exec.Deriv.SourceCursor.callToward
     {root target : Exec.Deriv} {program : Prog} {path : Prog.SourcePath}
-    {index : Nat}
+    {index : Nat} {targetInstruction : Ninst}
     (cursor : Exec.Deriv.SourceCursor root program path (.call index))
     (compiled : some root.sevm.code.toList = program.compile)
     (reached : Exec.Deriv.ParentPrefix cursor.node target)
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
+    (targetNonPush : NinstNonPush targetInstruction)
+    (storeAt : Ninst.At target.sevm.code target.pc targetInstruction) :
     ∃ body, (program.main :: program.aux)[index]? = some body ∧
       ∃ bodyCursor : Exec.Deriv.SourceCursor root program ⟨index, []⟩ body,
         Exec.Deriv.ParentNonSstorePrefix cursor.node bodyCursor.node ∧
@@ -2487,7 +2500,8 @@ theorem Exec.Deriv.SourceCursor.callToward
     have h := @Prog.get?_table 0 index (program.main :: program.aux)
     rw [hgetTable] at h
     simpa using h.symm
-  rcases reached.advance_pushToward ⟨pushLe, pushAt⟩ (by simp) storeAt with
+  rcases reached.advance_pushToward ⟨pushLe, pushAt⟩ (by simp)
+      targetNonPush storeAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
   rcases afterPushReached.advance_jumpToward jumpAt storeAt with
@@ -2551,36 +2565,40 @@ theorem Exec.Deriv.SourceCursor.callToward
 
 /-- Target-directed source attribution follows the finite execution proof,
 not the source call graph. -/
-private theorem Exec.Deriv.SourceCursor.sstoreSite_core :
+private theorem Exec.Deriv.SourceCursor.sourceSite_core :
     ∀ current : Exec.Deriv,
       ∀ {root : Exec.Deriv} {program : Prog}
         {path : Prog.SourcePath} {source : Func}
+        {targetInstruction : Ninst}
         (cursor : Exec.Deriv.SourceCursor root program path source),
         cursor.node = current →
         some root.sevm.code.toList = program.compile →
         ∀ (target : Exec.Deriv),
           Exec.Deriv.ParentPrefix cursor.node target →
-          Ninst.At target.sevm.code target.pc (.reg .sstore) →
+          NinstNonPush targetInstruction →
+          Ninst.At target.sevm.code target.pc targetInstruction →
           ∃ site : Prog.SourceSite,
             site ∈ program.sourceSites ∧
             site.pc = target.pc ∧
-            site.instruction = .reg .sstore := by
+            site.instruction = targetInstruction := by
   let property : Exec.Deriv.Pred := fun current =>
     ∀ {root : Exec.Deriv} {program : Prog}
       {path : Prog.SourcePath} {source : Func}
+      {targetInstruction : Ninst}
       (cursor : Exec.Deriv.SourceCursor root program path source),
       cursor.node = current →
       some root.sevm.code.toList = program.compile →
       ∀ (target : Exec.Deriv),
         Exec.Deriv.ParentPrefix cursor.node target →
-        Ninst.At target.sevm.code target.pc (.reg .sstore) →
+        NinstNonPush targetInstruction →
+        Ninst.At target.sevm.code target.pc targetInstruction →
         ∃ site : Prog.SourceSite,
           site ∈ program.sourceSites ∧
           site.pc = target.pc ∧
-          site.instruction = .reg .sstore
+          site.instruction = targetInstruction
   apply Exec.Deriv.strongRec property
-  intro current ih root program path source cursor hcurrent compiled target
-    reached storeAt
+  intro current ih root program path source targetInstruction cursor hcurrent
+    compiled target reached targetNonPush storeAt
   subst current
   cases source with
   | last outcome =>
@@ -2610,18 +2628,37 @@ private theorem Exec.Deriv.SourceCursor.sstoreSite_core :
             ⟨tailCursor, tailNodeEq⟩
           rw [← tailNodeEq] at suffix
           exact ih _ occurrenceEdge.lt tailCursor tailNodeEq compiled target
-            suffix storeAt
+            suffix targetNonPush storeAt
   | branch left right =>
-      rcases cursor.branchToward reached storeAt with
+      rcases cursor.branchToward reached targetNonPush storeAt with
         ⟨arm, compilerPrefix, armReached, decrease⟩ |
         ⟨arm, compilerPrefix, armReached, decrease⟩
-      · exact ih arm.node decrease arm rfl compiled target armReached storeAt
-      · exact ih arm.node decrease arm rfl compiled target armReached storeAt
+      · exact ih arm.node decrease arm rfl compiled target armReached
+          targetNonPush storeAt
+      · exact ih arm.node decrease arm rfl compiled target armReached
+          targetNonPush storeAt
   | call index =>
-      rcases cursor.callToward compiled reached storeAt with
+      rcases cursor.callToward compiled reached targetNonPush storeAt with
         ⟨body, hbody, bodyCursor, compilerPrefix, bodyReached, decrease⟩
       exact ih bodyCursor.node decrease bodyCursor rfl compiled target
-        bodyReached storeAt
+        bodyReached targetNonPush storeAt
+
+/-- Public target-directed completeness for any reached non-PUSH source
+instruction in an arbitrary-outcome raw source cursor. -/
+theorem Exec.Deriv.SourceCursor.sourceSite
+    {root target : Exec.Deriv} {program : Prog}
+    {path : Prog.SourcePath} {source : Func} {instruction : Ninst}
+    (cursor : Exec.Deriv.SourceCursor root program path source)
+    (compiled : some root.sevm.code.toList = program.compile)
+    (reached : Exec.Deriv.ParentPrefix cursor.node target)
+    (nonPush : NinstNonPush instruction)
+    (instructionAt : Ninst.At target.sevm.code target.pc instruction) :
+    ∃ site : Prog.SourceSite,
+      site ∈ program.sourceSites ∧
+      site.pc = target.pc ∧
+      site.instruction = instruction := by
+  exact Exec.Deriv.SourceCursor.sourceSite_core cursor.node cursor rfl
+    compiled target reached nonPush instructionAt
 
 /-- Public target-directed completeness for an arbitrary-outcome raw source
 cursor. -/
@@ -2636,8 +2673,24 @@ theorem Exec.Deriv.SourceCursor.sstoreSite
       site ∈ program.sourceSites ∧
       site.pc = target.pc ∧
       site.instruction = .reg .sstore := by
-  exact Exec.Deriv.SourceCursor.sstoreSite_core cursor.node cursor rfl
-    compiled target reached storeAt
+  exact cursor.sourceSite compiled reached (by trivial) storeAt
+
+/-- Exact-invocation completeness for every actually reached same-frame
+non-PUSH source instruction. -/
+theorem Exec.Deriv.nonPush_sourceSite
+    {root target : Exec.Deriv} {program : Prog}
+    {storageTarget codeAddress : Adr} {instruction : Ninst}
+    (invocation : root.exactInvocation program storageTarget codeAddress)
+    (sameFrame : Exec.Deriv.ParentPrefix root target)
+    (nonPush : NinstNonPush instruction)
+    (instructionAt : Ninst.At target.sevm.code target.pc instruction) :
+    ∃ site : Prog.SourceSite,
+      site ∈ program.sourceSites ∧
+      site.pc = target.pc ∧
+      site.instruction = instruction := by
+  rcases Exec.Deriv.SourceCursor.mainToward invocation sameFrame instructionAt with
+    ⟨mainCursor, compilerPrefix, reached⟩
+  exact mainCursor.sourceSite invocation.2.2.2 reached nonPush instructionAt
 
 /-- Exact-invocation completeness for every actually reached same-frame
 SSTORE, with no outcome or commitment premise. -/
@@ -2651,9 +2704,7 @@ theorem Exec.Deriv.sstore_sourceSite
       site ∈ program.sourceSites ∧
       site.pc = target.pc ∧
       site.instruction = .reg .sstore := by
-  rcases Exec.Deriv.SourceCursor.mainToward invocation sameFrame storeAt with
-    ⟨mainCursor, compilerPrefix, reached⟩
-  exact mainCursor.sstoreSite invocation.2.2.2 reached storeAt
+  exact root.nonPush_sourceSite invocation sameFrame (by trivial) storeAt
 
 /-- Successful-step specialization over an arbitrary-outcome raw root.  The
 enclosing frame may still fail or later roll back. -/
