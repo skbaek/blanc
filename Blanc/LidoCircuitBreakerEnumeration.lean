@@ -193,6 +193,52 @@ theorem RegistryWitness.enumeration_next_word_roundtrips
   exact ⟨B256.toNat_toB256_of_lt hnext,
     B256.toNat_toB256_of_lt (h.enumeration_offsets_lt_2pow256 hi).2.1⟩
 
+theorem RegistryWitness.enumeration_total_toB256_toNat
+    {storage : LogicalStorage} {entries : List Entry}
+    (h : RegistryWitness storage entries) :
+    (Nat.toB256 (64 + 32 * entries.length)).toNat =
+      64 + 32 * entries.length := by
+  apply B256.toNat_toB256_of_lt
+  have hlength := h.entries_length_le
+  norm_num at hlength ⊢
+  omega
+
+theorem RegistryWitness.enumeration_total_word_arithmetic
+    {storage : LogicalStorage} {entries : List Entry}
+    (h : RegistryWitness storage entries) :
+    (64 : B256) + 32 * Nat.toB256 entries.length =
+      Nat.toB256 (64 + 32 * entries.length) := by
+  have hn : entries.length < 2 ^ 256 := by
+    have hlength := h.entries_length_le
+    norm_num at hlength ⊢
+    omega
+  have hmul : 32 * entries.length < 2 ^ 256 := by
+    have hlength := h.entries_length_le
+    norm_num at hlength ⊢
+    omega
+  have htotal : 64 + 32 * entries.length < 2 ^ 256 := by
+    have hlength := h.entries_length_le
+    norm_num at hlength ⊢
+    omega
+  have h32 : (32 : B256).toNat = 32 :=
+    B256.toNat_toB256_of_lt (by norm_num)
+  have h64 : (64 : B256).toNat = 64 :=
+    B256.toNat_toB256_of_lt (by norm_num)
+  have hmulEq : (32 : B256) * Nat.toB256 entries.length =
+      Nat.toB256 (32 * entries.length) := by
+    apply B256.toNat_inj
+    rw [B256.toNat_mul, h32, B256.toNat_toB256_of_lt hn,
+      Nat.lo_eq_of_lt hmul, B256.toNat_toB256_of_lt hmul]
+  rw [hmulEq]
+  apply B256.toNat_inj
+  have hnof : (64 : B256).Nof (Nat.toB256 (32 * entries.length)) := by
+    unfold B256.Nof
+    rw [h64, B256.toNat_toB256_of_lt hmul]
+    omega
+  rw [B256.toNat_add_eq_of_nof _ _ hnof, h64,
+    B256.toNat_toB256_of_lt hmul,
+    B256.toNat_toB256_of_lt htotal]
+
 /-- The byte image produced by the two ABI header stores. -/
 def enumHeaderImage (entries : List Entry) : Bytes :=
   Bytes.writeAt (Bytes.writeAt [] 0 (Nat.toB256 32).toBytes) 32
@@ -342,6 +388,108 @@ theorem enumPrefixMemory_append (entries done : List Entry) (entry : Entry) :
         (Nat.toB256 entries.length).toBytes) done).size = 64 + 32 * done.length by
       simpa [enumPrefixMemory] using (enumPrefixMemory_invariant entries done).2.1]
 
+theorem targetAt_append_cons_length (done rest : List Entry) (entry : Entry) :
+    targetAt (done ++ entry :: rest) done.length = entry.1 := by
+  induction done with
+  | nil => simp [targetAt]
+  | cons head done ih =>
+      simp only [List.cons_append, List.length_cons, targetAt]
+      exact ih
+
+set_option maxHeartbeats 400000
+
+theorem enumPrefixMemory_read_length_fst (entries done : List Entry) :
+    ((enumPrefixMemory entries done).read 32 32).1 =
+      (Nat.toB256 entries.length).toBytes := by
+  rw [Mem.Reads.read (enumPrefixMemory_invariant entries done).2.2,
+    enumPrefixImage_closed, enumHeaderImage_closed]
+  unfold List.sliceD
+  rw [List.append_assoc]
+  rw [List.drop_length_append'
+    (xs := (Nat.toB256 32).toBytes)
+    (ys := (Nat.toB256 entries.length).toBytes ++
+      (done.map Prod.fst).flatMap B256.toBytes)
+    (by simp [B256.length_toBytes])]
+  rw [List.takeD_eq_take _ (by simp [B256.length_toBytes])]
+  rw [List.take_length_append'
+    (xs := (Nat.toB256 entries.length).toBytes)
+    (ys := (done.map Prod.fst).flatMap B256.toBytes)
+    (by simp [B256.length_toBytes])]
+
+theorem enumPrefixMemory_read_length_snd (entries done : List Entry) :
+    ((enumPrefixMemory entries done).read 32 32).2 =
+      enumPrefixMemory entries done := by
+  apply Mem.read_snd_eq_self
+  apply memExtSize_of_le
+  · rw [(enumPrefixMemory_invariant entries done).2.1]
+    omega
+  · rw [(enumPrefixMemory_invariant entries done).2.1]
+    omega
+
+theorem enumPrefixMemory_extCost_length (base : Devm) (stack : List B256)
+    (entries done : List Entry) (G : Nat) :
+    (base.setMach ⟨stack, enumPrefixMemory entries done, G⟩).extCost
+      [⟨32, 32⟩] = 0 := by
+  apply Devm.extCost_zero_of_le
+  · rw [(enumPrefixMemory_invariant entries done).2.1]
+    omega
+  · rw [(enumPrefixMemory_invariant entries done).2.1]
+    omega
+
+theorem enumPrefixMemory_extCost_full (base : Devm) (stack : List B256)
+    (entries : List Entry) (G : Nat) :
+    (base.setMach ⟨stack, enumPrefixMemory entries entries, G⟩).extCost
+      [⟨0, 64 + 32 * entries.length⟩] = 0 := by
+  apply Devm.extCost_zero_of_le
+  · rw [(enumPrefixMemory_invariant entries entries).2.1]
+    omega
+  · rw [(enumPrefixMemory_invariant entries entries).2.1]
+    omega
+
+theorem memExtSize_enum_next (done : List Entry) :
+    memExtSize (64 + 32 * done.length) (64 + 32 * done.length) 32 =
+      64 + 32 * (done.length + 1) := by
+  unfold memExtSize ceilDiv
+  simp only [OfNat.ofNat, Nat.reduceEqDiff, ↓reduceIte]
+  rw [show (64 + 32 * done.length) % 32 = 0 by omega,
+    show (64 + 32 * done.length + 32) % 32 = 0 by omega]
+  simp only [ite_true]
+  rw [Nat.max_eq_right] <;> omega
+
+theorem enumPrefixMemory_extCost_next (base : Devm) (stack : List B256)
+    (entries done : List Entry) (G : Nat) :
+    (base.setMach ⟨stack, enumPrefixMemory entries done, G⟩).extCost
+      [⟨64 + 32 * done.length, 32⟩] =
+      calculateMemoryGasCost (64 + 32 * (done.length + 1)) -
+        calculateMemoryGasCost (64 + 32 * done.length) := by
+  apply Devm.extCost_of_size (enumPrefixMemory_invariant entries done).2.1
+  rw [memExtSize_enum_next]
+
+theorem enumPrefixDevm_memRead_full (base : Devm) (entries : List Entry)
+    (G : Nat) :
+    (base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).memRead
+      0 (64 + 32 * entries.length) =
+      ⟨abiAddressArray entries,
+        base.setMach ⟨[], enumPrefixMemory entries entries, G⟩⟩ := by
+  have hread : (enumPrefixMemory entries entries).read 0
+      (64 + 32 * entries.length) =
+      ⟨abiAddressArray entries, enumPrefixMemory entries entries⟩ := by
+    apply Prod.ext
+    · exact enumPrefixMemory_full_read entries
+    · exact Mem.read_snd_eq_self (memExtSize_of_le
+        (by rw [(enumPrefixMemory_invariant entries entries).2.1]; omega)
+        (by rw [(enumPrefixMemory_invariant entries entries).2.1]; omega))
+  unfold Devm.memRead
+  rw [show (base.setMach
+    ⟨[], enumPrefixMemory entries entries, G⟩).memory =
+      enumPrefixMemory entries entries by rfl, hread]
+  rfl
+
+attribute [simp] enumPrefixMemory_read_length_fst
+  enumPrefixMemory_read_length_snd
+
+set_option maxHeartbeats 200000
+
 /-- Ordered storage reads of `getPausables`: length first, then one target slot per entry. -/
 def enumerationEntryKeysFrom : Nat → List Entry → List B256
   | _, [] => []
@@ -486,6 +634,10 @@ def enumLoopGasWarmFrom : Nat → List Entry → Nat
         calculateMemoryGasCost (64 + 32 * i)) +
       enumLoopGasWarmFrom (i + 1) rest
 
+theorem enumLoopGasWarmFrom_ge (i : Nat) (entries : List Entry) :
+    49 ≤ enumLoopGasWarmFrom i entries := by
+  cases entries <;> simp [enumLoopGasWarmFrom]; omega
+
 def getPausablesGasWarm (entries : List Entry) : Nat :=
   131 + calculateMemoryGasCost 64 + enumLoopGasWarmFrom 0 entries
 
@@ -566,5 +718,282 @@ theorem preparedEnumerationState_getStor (sevm : Sevm) (base : Devm)
     Devm.getStor (preparedEnumerationState sevm base entries) address =
       Devm.getStor base address :=
   (preparedEnumerationState_worldEq sevm base entries).getStor address |>.symm
+
+set_option maxRecDepth 4096
+
+theorem enumLoop_pre_stack_height (base : Devm) (entries done rest : List Entry)
+    (G : Nat) :
+    ((base.setMach ⟨[Nat.toB256 done.length], enumPrefixMemory entries done,
+      G + enumLoopGasWarmFrom done.length rest⟩).stack).length = 1 := rfl
+
+theorem enumLoop_pre_memory_independent_of_cursor (base : Devm)
+    (entries done : List Entry) (cursor cursor' G : Nat) :
+    (base.setMach ⟨[Nat.toB256 cursor], enumPrefixMemory entries done, G⟩).memory =
+      (base.setMach ⟨[Nat.toB256 cursor'], enumPrefixMemory entries done, G⟩).memory :=
+  rfl
+
+private theorem enumLoop_done_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry) (G : Nat)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[Nat.toB256 entries.length],
+        enumPrefixMemory entries entries, G + 49⟩)
+      enumLoop
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+        (abiAddressArray entries)) := by
+  unfold enumLoop
+  have h32 : (32 : B256).toNat = 32 :=
+    B256.toNat_toB256_of_lt (by norm_num)
+  func_run [3, 0, 3]
+  · rw [h32, enumPrefixMemory_extCost_length]
+    rfl
+  · rw [h32, enumPrefixMemory_read_length_fst, B256.toB256_toBytes]
+    simp [B256.ltCheck]
+  · rw [h32, enumPrefixMemory_read_length_snd, enumPrefixMemory_extCost_length]
+    rfl
+  · change G + 49 - 36 = G + 49 - 41 + gLow
+    norm_num [gLow]
+    omega
+  · simp only [h32, enumPrefixMemory_read_length_snd,
+      enumPrefixMemory_read_length_fst, B256.toB256_toBytes,
+      hw.enumeration_total_word_arithmetic]
+    refine Func.runCompiled_ret_of (G := G) (e := 0) rfl ?_ ?_ ?_
+    · rw [hw.enumeration_total_toB256_toNat]
+      exact enumPrefixMemory_extCost_full base [] entries G
+    · change G + 49 - 49 = G + 0
+      omega
+    · rw [hw.enumeration_total_toB256_toNat]
+      simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+        B256.toNat_zero] using
+        (enumPrefixDevm_memRead_full base entries G)
+
+/-- Exact recursive execution from an already-written prefix.  The cursor is
+the sole stack word at every recursive call; the full ordered ABI image is the
+eventual return, for every finite witness-valid suffix. -/
+theorem enumLoop_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm) (entries done rest : List Entry)
+    (G : Nat)
+    (hsplit : entries = done ++ rest)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hwarm : ∀ key ∈ enumerationStorageKeys entries,
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys)
+    (hfs : fs[enumLoopSlot]? = some enumLoop) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[Nat.toB256 done.length],
+        enumPrefixMemory entries done,
+        G + enumLoopGasWarmFrom done.length rest⟩)
+      enumLoop
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+        (abiAddressArray entries)) := by
+  induction rest generalizing done with
+  | nil =>
+      simp only [List.append_nil] at hsplit
+      subst entries
+      exact enumLoop_done_runCompiled fs sevm base done G hw
+  | cons entry rest ih =>
+      unfold enumLoop
+      have hdone : done.length < entries.length := by
+        rw [hsplit, List.length_append, List.length_cons]
+        omega
+      have hkey :
+          (regionWord arrayRegion).or ((1 : B256) + Nat.toB256 done.length) =
+            arrayEntrySlot (Nat.toB256 (done.length + 1)) := by
+        calc
+          _ = (regionWord arrayRegion).or
+              (Nat.toB256 done.length + (1 : B256)) := by
+            rw [B256.add_comm (xs := (1 : B256))
+              (ys := Nat.toB256 done.length)]
+          _ = _ := by
+            rw [(hw.enumeration_word_arithmetic hdone).1]
+            rfl
+      have hwarmKey :
+          (⟨sevm.currentTarget,
+            (regionWord arrayRegion).or
+              ((1 : B256) + Nat.toB256 done.length)⟩ : Adr × B256) ∈
+              base.accessedStorageKeys := by
+        rw [hkey]
+        exact hwarm _
+          (arrayEntrySlot_mem_enumerationStorageKeys entries done.length hdone)
+      have hvalue : base.getStorVal sevm.currentTarget
+          ((regionWord arrayRegion).or
+            ((1 : B256) + Nat.toB256 done.length)) = entry.1 := by
+        rw [hkey]
+        change (logicalStorageOfStor
+          (Devm.getStor base sevm.currentTarget)).read
+            (arrayEntrySlot (Nat.toB256 (done.length + 1))) = entry.1
+        rw [hw.arrayWords done.length hdone, hsplit,
+          targetAt_append_cons_length]
+      have h32 : (32 : B256).toNat = 32 :=
+        B256.toNat_toB256_of_lt (by norm_num)
+      have hdone256 : done.length < 2 ^ 256 := by
+        have hlength := hw.entries_length_le
+        norm_num at hlength ⊢
+        omega
+      have hlength256 : entries.length < 2 ^ 256 := by
+        have hlength := hw.entries_length_le
+        norm_num at hlength ⊢
+        omega
+      have hltWord :
+          Nat.toB256 done.length < Nat.toB256 entries.length := by
+        apply B256.lt_of_toNat_lt_toNat
+        rw [B256.toNat_toB256_of_lt hdone256,
+          B256.toNat_toB256_of_lt hlength256]
+        exact hdone
+      have hltCheck :
+          Nat.toB256 done.length <? Nat.toB256 entries.length = 1 := by
+        simp [B256.ltCheck, hltWord]
+      have hrestGas := enumLoopGasWarmFrom_ge (done.length + 1) rest
+      func_run (16) [3, 1]
+      all_goals try {
+        simp only [Devm.gasLeft_setMach, enumLoopGasWarmFrom_cons]
+        norm_num [gVerylow, gLow, gHigh, gJumpdest, gasWarmAccess]
+        omega }
+      all_goals try { rw [h32, enumPrefixMemory_extCost_length]; rfl }
+      all_goals try {
+        rw [h32, enumPrefixMemory_read_length_fst, B256.toB256_toBytes]
+        exact hltCheck }
+      have hmulcomm : (32 : B256) * Nat.toB256 done.length =
+          Nat.toB256 done.length * 32 := by
+        apply B256.toNat_inj
+        rw [B256.toNat_mul, B256.toNat_mul,
+          Nat.mul_comm (B256.toNat 32) (Nat.toB256 done.length).toNat]
+      have hoffset : (64 : B256) + 32 * Nat.toB256 done.length =
+          Nat.toB256 (64 + 32 * done.length) := by
+        calc
+          _ = Nat.toB256 done.length * 32 + 64 := by
+            rw [B256.add_comm (xs := (64 : B256))
+              (ys := (32 : B256) * Nat.toB256 done.length), hmulcomm]
+          _ = Nat.toB256 (32 * done.length) + 64 := by
+            rw [(hw.enumeration_word_arithmetic hdone).2.1]
+          _ = _ := (hw.enumeration_word_arithmetic hdone).2.2
+      have hoffsetNat :
+          (Nat.toB256 (64 + 32 * done.length)).toNat =
+            64 + 32 * done.length :=
+        (hw.enumeration_offsets_toB256_toNat hdone).2.1
+      have hcursor : (1 : B256) + Nat.toB256 done.length =
+          Nat.toB256 (done.length + 1) := by
+        rw [B256.add_comm (xs := (1 : B256))
+          (ys := Nat.toB256 done.length),
+          (hw.enumeration_word_arithmetic hdone).1]
+      simp only [Devm.getStorVal_setMach, h32,
+        enumPrefixMemory_read_length_snd, hvalue, hoffset]
+      let delta :=
+        calculateMemoryGasCost (64 + 32 * (done.length + 1)) -
+          calculateMemoryGasCost (64 + 32 * done.length)
+      have hmstore : Ninst.RunCompiled sevm
+          (base.setMach
+            ⟨[Nat.toB256 (64 + 32 * done.length), entry.1,
+                Nat.toB256 done.length],
+              enumPrefixMemory entries done,
+              G + enumLoopGasWarmFrom done.length (entry :: rest) - 158⟩)
+          Ninst.mstore
+          (base.setMach
+            ⟨[Nat.toB256 done.length],
+              enumPrefixMemory entries (done ++ [entry]),
+              G + enumLoopGasWarmFrom (done.length + 1) rest + 18⟩) := by
+        refine Ninst.runCompiled_mstore_of (e := delta) rfl ?_ ?_ ?_
+        · rw [hoffsetNat]
+          exact enumPrefixMemory_extCost_next base
+            [Nat.toB256 (64 + 32 * done.length), entry.1,
+              Nat.toB256 done.length]
+            entries done
+            (G + enumLoopGasWarmFrom done.length (entry :: rest) - 158)
+        · simp only [Devm.gasLeft_setMach, enumLoopGasWarmFrom_cons]
+          norm_num [gVerylow, delta]
+          omega
+        · rw [Devm.memory_setMach, hoffsetNat]
+          exact (enumPrefixMemory_append entries done entry).symm
+      refine Func.RunCompiled.next hmstore ?_
+      func_run (2) [Nat.toB256 (done.length + 1)]
+      refine Func.runCompiled_call'
+        (G := G + enumLoopGasWarmFrom (done.length + 1) rest)
+        hfs (by simp only [Devm.stack_setMach, List.length_singleton]; omega)
+        ?_ ?_
+      · simp only [Devm.gasLeft_setMach]
+        norm_num [gVerylow, gMid, gJumpdest]
+        omega
+      · have hsplit' : entries = (done ++ [entry]) ++ rest := by
+          simpa [List.append_assoc] using hsplit
+        simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+          Devm.memory_setMach, List.length_append, List.length_singleton,
+          Nat.add_one] using ih (done ++ [entry]) hsplit'
+
+private theorem enumFirstHeaderMemory_extCost_second
+    (base : Devm) (stack : List B256) (G : Nat) :
+    (base.setMach
+      ⟨stack, Mem.empty.write 0 (Nat.toB256 32).toBytes, G⟩).extCost
+      [⟨32, 32⟩] = 3 := by
+  apply Devm.extCost_of_size
+  · rw [Mem.size_write_word_at, if_neg (by simp [Mem.empty])]
+  · rfl
+
+/-- The public enumeration body initializes the ABI header and invokes the
+recursive loop with exactly the finite warm budget derived above. -/
+theorem getPausables_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (G : Nat)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hwarm : ∀ key ∈ enumerationStorageKeys entries,
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys)
+    (hfs : fs[enumLoopSlot]? = some enumLoop) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], Mem.empty, G + getPausablesGasWarm entries⟩)
+      getPausables
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+        (abiAddressArray entries)) := by
+  unfold getPausables
+  have hloopGas := enumLoopGasWarmFrom_ge 0 entries
+  func_run (4) [3]
+  all_goals try {
+    simp only [Devm.gasLeft_setMach]
+    norm_num [getPausablesGasWarm, gVerylow, gBase]
+    omega }
+  all_goals try { exact Devm.extCost_empty_word }
+  refine Func.RunCompiled.next
+    (Ninst.runCompiled_sload_warm
+      (v := Nat.toB256 entries.length)
+      (G := G + getPausablesGasWarm entries - 114)
+      rfl ?_ ?_ ?_ (by simp)) ?_
+  · exact hwarm arrayLengthSlot
+      (arrayLengthSlot_mem_enumerationStorageKeys entries)
+  · rw [Devm.getStorVal_setMach]
+    change (logicalStorageOfStor
+      (Devm.getStor base sevm.currentTarget)).read arrayLengthSlot =
+        Nat.toB256 entries.length
+    exact hw.lengthWord
+  · simp only [Devm.gasLeft_setMach]
+    norm_num [gasWarmAccess, getPausablesGasWarm]
+    omega
+  func_run (3) [3]
+  all_goals try {
+    simp only [Devm.gasLeft_setMach]
+    norm_num [getPausablesGasWarm, gVerylow, gBase]
+    omega }
+  all_goals try {
+    simp only [Devm.setMach_setMach, Devm.memory_setMach]
+    exact enumFirstHeaderMemory_extCost_second _ _ _ }
+  refine Func.runCompiled_call'
+    (G := G + enumLoopGasWarmFrom 0 entries)
+    hfs ?_ ?_ ?_
+  · simp only [Devm.stack_setMach, List.length_singleton]
+    omega
+  · simp only [Devm.gasLeft_setMach]
+    norm_num [getPausablesGasWarm, calculateMemoryGasCost, ceilDiv,
+      gMemory, gVerylow, gMid, gJumpdest]
+    omega
+  · have hzeroOffset : ((0 : B256) * 32).toNat = 0 := by decide
+    have honeOffset : ((1 : B256) * 32).toNat = 32 := by decide
+    have hzeroWord : Nat.toB256 0 = (0 : B256) := by decide
+    have h32Word : Nat.toB256 32 = (32 : B256) := by decide
+    simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, enumPrefixMemory, hzeroOffset, honeOffset,
+      hzeroWord, h32Word, List.length_nil, List.foldl_nil] using
+      enumLoop_runCompiled fs sevm base entries [] entries G
+        (by simp) hw hwarm hfs
+
+set_option maxRecDepth 1000
 
 end Blanc.LidoCircuitBreaker
