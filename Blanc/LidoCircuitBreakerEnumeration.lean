@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.CycleWriteFree
+import Blanc.TransientSettlement
 
 /-! Pure ABI layout and bounded-offset facts for Registry enumeration. -/
 
@@ -1318,6 +1319,37 @@ structure RegistrySnapshotCoherence (entries : List Entry)
     assignmentCount entries pauser = (entries.map Prod.snd).count pauser
   zero_count : assignmentCount entries 0 = 0
 
+/-- Every stable concrete Registry witness induces the model-facing coherence
+facts used by the exact three-view family. -/
+theorem RegistryWitness.snapshotCoherence
+    {base : Devm} {ca : Adr} {entries : List Entry}
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base ca)) entries)
+    (target pauser : B256) (htarget : canonicalAddress target) :
+    RegistrySnapshotCoherence entries target pauser := by
+  have hassignment :
+      (Devm.getStor base ca).get (assignmentSlot target) =
+        assignmentAt entries target := by
+    simpa only [logicalStorageOfStor] using hw.assignments target htarget
+  have hmember :=
+    (membershipEquivalence_registerPauser
+      (post := base) (ca := ca) hw htarget).1
+  rw [hassignment] at hmember
+  have hzeroCanonical : canonicalAddress (0 : B256) := by
+    unfold canonicalAddress
+    rw [B256.toNat_zero]
+    norm_num
+  have hzeroWord : Nat.toB256 (assignmentCount entries 0) = 0 := by
+    have hcount := hw.counts 0 hzeroCanonical
+    exact hcount.symm.trans hw.zeroCount
+  have hzeroCount : assignmentCount entries 0 = 0 := by
+    have hnat := congrArg B256.toNat hzeroWord
+    rw [B256.toNat_toB256_of_lt (hw.assignmentCount_lt_2pow256 0),
+      B256.toNat_zero] at hnat
+    exact hnat
+  exact ⟨hmember, hw.targetsValid, hw.targetsNodup,
+    assignmentCount_eq_multiplicity entries pauser, hzeroCount⟩
+
 /-- The exact enumeration, assignment, and multiplicity bodies read one
 concrete Registry snapshot.  Their successful outputs therefore agree with
 ordered membership, target validity/uniqueness, and pauser multiplicity. -/
@@ -1405,6 +1437,335 @@ theorem registryViews_coherent
     exact hnat
   exact ⟨hmember, hw.targetsValid, hw.targetsNodup,
     assignmentCount_eq_multiplicity entries pauser, hzeroCount⟩
+
+private theorem of_logWith300_val {e : Sevm} {s s' : Devm}
+    {ev a b c : B256} {xs : Stack}
+    (hp : ev :: a :: b :: c :: xs <<+ s.stack)
+    (h : Line.Run e s (logWith 3 0 0) s') :
+    xs <<+ s'.stack ∧
+      s'.logs = s.logs ++ [⟨e.currentTarget, [ev, a, b, c], []⟩] := by
+  rcases Line.of_run_cons h with ⟨s₁, hzero₁, hrest₁⟩
+  rcases Line.of_run_cons hrest₁ with ⟨s₂, hzero₂, hrest₂⟩
+  rcases Line.of_run_cons hrest₂ with ⟨s₃, hlog, hnil⟩
+  cases hnil
+  have hz₁ := of_run_pushB256 hzero₁
+  have hz₂ := of_run_pushB256 hzero₂
+  have hzeroWord : (0 * 32 : B256) = 0 := rfl
+  rw [hzeroWord] at hz₁ hz₂
+  have hp₁ : (0 : B256) :: ev :: a :: b :: c :: xs <<+ s₁.stack := by
+    simpa using prefix_of_push hz₁ hp
+  have hp₂ : (0 : B256) :: 0 :: ev :: a :: b :: c :: xs <<+ s₂.stack := by
+    simpa using prefix_of_push hz₂ hp₁
+  rcases of_run_log_val hlog with
+    ⟨mi, sz, topics, hlen, hpop, hlogs⟩
+  have hknown : ([0, 0, ev, a, b, c] : List B256) <<+ s₂.stack := by
+    exact @pref_trans _ [0, 0, ev, a, b, c]
+      ([0, 0, ev, a, b, c] ++ xs) _ ⟨xs, rfl⟩ (by simpa using hp₂)
+  have heq : ([0, 0, ev, a, b, c] : List B256) =
+      mi :: sz :: topics :=
+    List.pref_unique (by simp [hlen]) hknown (pref_of_split hpop)
+  simp only [List.cons.injEq] at heq
+  rcases heq with ⟨rfl, rfl, rfl⟩
+  constructor
+  · exact of_append_pref hpop (by simpa using hp₂)
+  · rw [hlogs, ← hz₂.logs, ← hz₁.logs, ← hz₂.memory, ← hz₁.memory]
+    rfl
+
+private theorem enumeration_prefix_of_loadWord_image
+    {sevm : Sevm} {pre post : Devm} {xs : Stack}
+    {img : Bytes} {word value : B256}
+    (hp : xs <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (hvalue : Bytes.toB256
+      (img.sliceD (word * 32).toNat 32 0) = value)
+    (run : Line.Run sevm pre (loadWord word) post) :
+    value :: xs <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory img ∧
+      Devm.getStor pre = Devm.getStor post ∧
+      pre.logs = post.logs := by
+  unfold loadWord at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  have hb1 := of_run_pushB256 q1
+  have hp1 : (word * 32) :: xs <<+ s1.stack :=
+    prefix_of_push hb1 hp
+  have hr1 : Mem.Reads s1.memory img := by
+    rw [← hb1.memory]
+    exact hr
+  have hwf1 : Mem.Wf s1.memory := by
+    rw [← hb1.memory]
+    exact hwf
+  rcases Line.of_run_cons run with ⟨s2, q2, hnil⟩
+  cases hnil
+  rcases prefix_of_mload_val q2 hp1 hr1 with ⟨hp2, hm2, _⟩
+  rw [hvalue] at hp2
+  refine ⟨hp2, ?_, ?_, ?_, ?_⟩
+  · rw [hm2]
+    exact hwf1.extend _ _
+  · rw [hm2]
+    exact Mem.Reads.extend hr1 _ _
+  · exact Line.of_inv Devm.getStor (by line_inv)
+      (Line.Run.cons q1 (Line.Run.cons q2 Line.Run.nil))
+  · rcases of_run_reg q2 with ⟨pc, run⟩
+    simp only [Rinst.run, Rinst.runCore] at run
+    rcases Except.bind_eq_ok run with ⟨⟨si, t1⟩, h1, run1⟩
+    rcases Except.bind_eq_ok run1 with ⟨t2, h2, run2⟩
+    rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
+    have hb := Devm.burn_of_chargeGas h2
+    have hpush := Devm.push_of_push run2
+    exact hb1.logs.trans (((p1.logs.trans hb.logs).trans rfl).trans hpush.logs)
+
+/-- Every successful source execution through the sole production event site
+reaches a post-log continuation state with exactly one appended `PauserSet`
+record and unchanged Registry storage. -/
+theorem finishSetPauser_run_extracts_event
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {img : Bytes} {newPauser previousPauser target : B256}
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hpreviousRead : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) = previousPauser)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hrun : Func.Run fs sevm pre finishSetPauser final) :
+    ∃ logged,
+      logged.logs = pre.logs ++
+        [⟨sevm.currentTarget,
+          [pauserSetEvent, target, previousPauser, newPauser], []⟩] ∧
+      Devm.getStor logged = Devm.getStor pre ∧
+      Func.Run fs sevm logged
+        (loadWord continuationWord +++ Ninst.iszero :::
+          (Func.call pauseAfterSetSlot).branch
+            (Func.call registerAfterSetSlot)) final := by
+  simp only [finishSetPauser] at hrun
+  rcases of_run_prepend (loadWord newPauserWord) _ hrun with
+    ⟨sNew, hloadNew, h₁⟩
+  rcases of_run_prepend (loadWord previousPauserWord) _ h₁ with
+    ⟨sPrevious, hloadPrevious, h₂⟩
+  rcases of_run_prepend (loadWord targetWord) _ h₂ with
+    ⟨sTarget, hloadTarget, h₃⟩
+  rcases of_run_next h₃ with ⟨sEvent, hpushEvent, h₄⟩
+  rcases of_run_prepend (logWith 3 0 0) _ h₄ with
+    ⟨sLog, hlog, htail⟩
+  have hp₀ : pre.stack <<+ pre.stack := by
+    simpa only [List.append_nil] using pref_append pre.stack []
+  rcases enumeration_prefix_of_loadWord_image hp₀ hwf hr hnewRead hloadNew with
+    ⟨hpNew, hwfNew, hrNew, hstorNew, hlogsNew⟩
+  rcases enumeration_prefix_of_loadWord_image
+      hpNew hwfNew hrNew hpreviousRead hloadPrevious with
+    ⟨hpPrevious, hwfPrevious, hrPrevious, hstorPrevious, hlogsPrevious⟩
+  rcases enumeration_prefix_of_loadWord_image
+      hpPrevious hwfPrevious hrPrevious htargetRead hloadTarget with
+    ⟨hpTarget, _, _, hstorTarget, hlogsTarget⟩
+  have hpush := of_run_pushB256 hpushEvent
+  have hpEvent :
+      pauserSetEvent :: target :: previousPauser :: newPauser :: pre.stack
+        <<+ sEvent.stack :=
+    prefix_of_push hpush hpTarget
+  have hlogResult := of_logWith300_val hpEvent hlog
+  have hlogsEvent : sTarget.logs = sEvent.logs := hpush.logs
+  have hlogs : sLog.logs = pre.logs ++
+      [⟨sevm.currentTarget,
+        [pauserSetEvent, target, previousPauser, newPauser], []⟩] := by
+    rw [hlogResult.2, ← hlogsEvent, ← hlogsTarget,
+      ← hlogsPrevious, ← hlogsNew]
+  have hstorEvent : Devm.getStor sTarget = Devm.getStor sEvent :=
+    Ninst.Hinv.inv (f := Devm.getStor) hpushEvent
+  have hstorLog : Devm.getStor sEvent = Devm.getStor sLog :=
+    Line.of_inv Devm.getStor (by line_inv) hlog
+  exact ⟨sLog, hlogs,
+    (hstorNew.trans (hstorPrevious.trans
+      (hstorTarget.trans (hstorEvent.trans hstorLog)))).symm,
+    htail⟩
+
+set_option maxRecDepth 4096 in
+/-- An exact successful emitted-kernel execution exposes the stable S2
+Registry poststate before appending the sole production `PauserSet` log, then
+selects exactly the saved register or pre-yield pause continuation. -/
+theorem pauserSet_local_transition
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    ∃ trace postRegistry postImg logged,
+      setPauserSourceTrace entries target newPauser = some trace ∧
+      setPauser entries target newPauser = some trace.postEntries ∧
+      Devm.getStor postRegistry ca =
+        applyRegistryWrites (Devm.getStor pre ca) trace.writes ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor postRegistry ca))
+        trace.postEntries ∧
+      logged.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ∧
+      Devm.getStor logged = Devm.getStor postRegistry ∧
+      Func.Run ((runtime dp).main :: (runtime dp).aux) sevm logged
+        (loadWord continuationWord +++ Ninst.iszero :::
+          (Func.call pauseAfterSetSlot).branch
+            (Func.call registerAfterSetSlot)) final ∧
+      ((continuation = 0 ∧
+          ∃ registerPre,
+            postRegistry.stack <<+ registerPre.stack ∧
+            Mem.Wf registerPre.memory ∧
+            Mem.Reads registerPre.memory postImg ∧
+            Devm.getStor registerPre sevm.currentTarget =
+              Devm.getStor postRegistry ca ∧
+            Func.Run ((runtime dp).main :: (runtime dp).aux)
+              sevm registerPre registerAfterSet final) ∨
+        (continuation ≠ 0 ∧
+          ∃ pausePre,
+            postRegistry.stack <<+ pausePre.stack ∧
+            Mem.Wf pausePre.memory ∧
+            Mem.Reads pausePre.memory postImg ∧
+            Devm.getStor pausePre sevm.currentTarget =
+              Devm.getStor postRegistry ca ∧
+            Func.Run ((runtime dp).main :: (runtime dp).aux)
+              sevm pausePre pauseAfterSet final)) := by
+  rcases setPauserKernel_exec_extracts_sourceTrace dp howner hcodeAddress
+      hbytes htable hwf hr htargetRead hnewRead hcontinuationRead
+      hw htarget hnew hexec with
+    ⟨trace, postRegistry, postImg, htrace, hwfPost, hrPost,
+      htargetPost, hnewPost, hpreviousPost, hcontinuationPost,
+      hstorPost, hwPost, hfinish⟩
+  have htarget0 : target ≠ 0 := by
+    intro hzero
+    rw [hzero, setPauserSourceTrace_target_zero] at htrace
+    cases htrace
+  have hmodel := (setPauser_sourceTrace_refines_model htarget0 htrace).1
+  rcases finishSetPauser_run_extracts_event hwfPost hrPost
+      hnewPost hpreviousPost htargetPost hfinish with
+    ⟨logged, hlogs, hstorLogged, htail⟩
+  rcases runtime_caller_lookups dp with
+    ⟨hregisterLookup, hpauseLookup, panicData, hpanicLookup⟩
+  have hsplit := finishSetPauser_run_split_continuation hwfPost hrPost
+    hnewPost hpreviousPost htargetPost hcontinuationPost howner
+    hregisterLookup hpauseLookup hfinish
+  refine ⟨trace, postRegistry, postImg, logged, htrace, hmodel, hstorPost,
+    hwPost, ?_, hstorLogged, htail, ?_⟩
+  · simpa [howner] using hlogs
+  · exact hsplit
+
+/-- A target-zero entry cannot be an exact successful emitted-kernel
+execution, hence it cannot reach the production event suffix.  The matching
+forward error construction is `setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite`. -/
+theorem pauserSet_target_zero_no_success
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {newPauser continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = 0)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) : False := by
+  have hzeroCanonical : canonicalAddress (0 : B256) := by
+    unfold canonicalAddress
+    change (0 : Nat) < 2 ^ 160
+    norm_num
+  rcases setPauserKernel_exec_extracts_sourceTrace dp howner hcodeAddress
+      hbytes htable hwf hr htargetRead hnewRead hcontinuationRead
+      hw hzeroCanonical hnew hexec with
+    ⟨trace, postRegistry, postImg, htrace, rest⟩
+  rw [setPauserSourceTrace_target_zero] at htrace
+  cases htrace
+
+/-- At the top-level message boundary an exact direct register or pause call
+that settles with an error exposes no logs, so a raw frame-local `PauserSet`
+record is not observable. -/
+theorem pauserSet_settled_error_not_observable
+    (dp : DeployParams) {msg : Msg} {state : State} {out : MsgCallOutput}
+    {ca : Adr} {target newPauser : B256}
+    (_htarget : msg.target = some ca)
+    (_howner : msg.currentTarget = ca)
+    (_hcodeAddress : msg.codeAddress = some ca)
+    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (_hvalue : msg.value = 0)
+    (_hdata : msg.data = registerPauserCalldata target newPauser ∨
+      msg.data = pauseCalldata target)
+    (hrun : processMessageCall msg = .ok (state, out))
+    (herror : out.error.isSome) : out.logs = [] :=
+  processMessageCall_error_logs_eq_nil hrun herror
+
+set_option maxRecDepth 4096 in
+/-- A monitor observation derived from this exact successful local site agrees
+with the stable post-Registry snapshot: the event records the pre-assignment
+and requested pauser, while the poststate satisfies the same coherence facts
+that the three exact Registry views expose.  This is deliberately local and
+does not assert delivery, history completeness, or finality. -/
+theorem registryObservation_sound
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    ∃ (trace : SetPauserSourceTrace) (postRegistry logged : Devm),
+      setPauser entries target newPauser = some trace.postEntries ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor postRegistry ca))
+        trace.postEntries ∧
+      logged.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ∧
+      Devm.getStor logged = Devm.getStor postRegistry ∧
+      RegistrySnapshotCoherence trace.postEntries target newPauser := by
+  rcases pauserSet_local_transition dp howner hcodeAddress hbytes htable
+      hwf hr htargetRead hnewRead hcontinuationRead hw htarget hnew hexec with
+    ⟨trace, postRegistry, postImg, logged, htrace, hmodel, hstorPost,
+      hwPost, hlogs, hstorLogged, htail, hsplit⟩
+  exact ⟨trace, postRegistry, logged, hmodel, hwPost, hlogs,
+    hstorLogged, hwPost.snapshotCoherence target newPauser htarget⟩
 
 set_option maxRecDepth 1000
 
