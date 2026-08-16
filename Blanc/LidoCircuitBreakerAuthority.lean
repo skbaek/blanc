@@ -5874,6 +5874,81 @@ private theorem runtimeDispatchCut_pauseAuthority
           exact ⟨.pauseExpiry, permitted,
             .pauseExpiry endpoint assignedGuard liveGuard assigned live⟩
 
+/-- The concrete runtime entry JUMPDEST is storage-silent.  This retains that
+entry fact alongside the target-directed main cursor used by the authority
+classifier. -/
+private theorem runtimeMainTowardStorage
+    {dp : DeployParams} {ca : Adr} {root target : Exec.Deriv}
+    (invocation : root.exactInvocation (runtime dp) ca ca)
+    (reached : Exec.Deriv.ParentPrefix root target)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
+    ∃ cursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨0, []⟩ (runtimeMain dp),
+      Exec.Deriv.ParentPrefix root cursor.node ∧
+        Devm.getStor cursor.pre = Devm.getStor root.devm ∧
+          Exec.Deriv.SourceCursor.Toward
+            cursor target (.reg .sstore) cursor := by
+  rcases root with ⟨pc, sevm, pre, out, run⟩
+  rcases invocation with ⟨pcEq, targetEq, addressEq, compiled⟩
+  dsimp at pcEq targetEq addressEq compiled reached targetAt
+  subst pc
+  have mainLookup :
+      (table 0 ((runtime dp).main :: (runtime dp).aux))[0]? =
+        some (0, (runtime dp).main) := rfl
+  rcases subcode_of_get?_eq_some compiled mainLookup with
+    ⟨jumpdestAt, sourceSlice⟩
+  have sourceBoundary : noPushBefore sevm.code 1 32 = true :=
+    (Prog.jumpable_of_get?_table compiled mainLookup).2
+  cases reached with
+  | refl =>
+      exact (targetAt.false_of_jinstAt jumpdestAt).elim
+  | step edge rest =>
+      cases edge with
+      | cont step next =>
+          have static :
+              Evm.step ⟨0, sevm, pre⟩ =
+                Step.ofJump (Jinst.run ⟨0, sevm, pre⟩ .jumpdest) :=
+            Evm.step_jump jumpdestAt
+          have jumpdestRun :
+              Jinst.Run ⟨0, sevm, pre⟩ .jumpdest (.ok ⟨_, _⟩) :=
+            Step.ofJump_cont (static.symm.trans step)
+          rcases of_jumpdest_run jumpdestRun with ⟨nextPcEq, burn⟩
+          cases nextPcEq
+          let nextNode : Exec.Deriv := ⟨1, sevm, _, out, next⟩
+          let parentEdge : Exec.Deriv.ParentStep nextNode
+              ⟨0, sevm, pre, out, .cont step next⟩ :=
+            .cont step next
+          have parentPrefix : Exec.Deriv.ParentPrefix
+              ⟨0, sevm, pre, out, .cont step next⟩ nextNode :=
+            .step parentEdge (.refl _)
+          let cursor : Exec.Deriv.SourceCursor
+              ⟨0, sevm, pre, out, .cont step next⟩ (runtime dp)
+              ⟨0, []⟩ (runtimeMain dp) :=
+            ⟨1, _, next, parentPrefix, sourceSlice, sourceBoundary, by
+              intro site member
+              simp only [Prog.sourceSites, List.mem_flatMap]
+              refine ⟨0, by simp, ?_⟩
+              rw [mainLookup]
+              change site ∈ Func.sourceSites 0 [] 1 (runtimeMain dp)
+              exact member⟩
+          have storage :
+              Devm.getStor cursor.pre = Devm.getStor pre := by
+            exact (Burn.Inv.inv burn).symm
+          have route := cursor.toward compiled rest (by trivial) targetAt
+          exact ⟨cursor, parentPrefix, storage, route⟩
+      | doneOk step enter resume next =>
+          have static :
+              Evm.step ⟨0, sevm, pre⟩ =
+                Step.ofJump (Jinst.run ⟨0, sevm, pre⟩ .jumpdest) :=
+            Evm.step_jump jumpdestAt
+          exact (Step.ofJump_ne_spawn (static.symm.trans step)).elim
+      | runOk step enter child resume next =>
+          have static :
+              Evm.step ⟨0, sevm, pre⟩ =
+                Step.ofJump (Jinst.run ⟨0, sevm, pre⟩ .jumpdest) :=
+            Evm.step_jump jumpdestAt
+          exact (Step.ofJump_ne_spawn (static.symm.trans step)).elim
+
 /-- Every nominated same-frame SSTORE occurrence in an exact selected runtime
 frame has one unique typed source row.  The selected frame may be any raw
 descendant root and may have any terminal outcome. -/
@@ -5906,6 +5981,73 @@ theorem Exec.NinstOccurrence.runtimePersistentWrite_of_rawFrameRoot
     classifyRuntimePersistentWrite_complete found, pcEq, siteInstruction, ?_⟩
   intro candidate candidateFound
   exact RuntimePersistentWrite.sourceSite?_injective candidateFound found
+
+/-- Every same-frame runtime SSTORE in an exact selected raw invocation has
+one exact source row and one of that row's actual runtime authority roles.
+The enclosing invocation may have any terminal outcome. -/
+theorem Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot
+    {dp : DeployParams} {ca : Adr}
+    {globalRoot frameRoot : Exec.Deriv}
+    (occurrence : Exec.NinstOccurrence globalRoot)
+    (instructionEq : occurrence.instruction = .reg .sstore)
+    (selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)
+    (invocation : frameRoot.exactInvocation (runtime dp) ca ca)
+    (sameFrame : Exec.Deriv.ParentPrefix frameRoot occurrence.node) :
+    ∃ row : RuntimePersistentWrite, ∃ site : Prog.SourceSite,
+      row ∈ RuntimePersistentWrite.all ∧
+      row.sourceSite? dp = some site ∧
+      classifyRuntimePersistentWrite dp site.path site.pc = some row ∧
+      site.pc = occurrence.node.pc ∧
+      site.instruction = .reg .sstore ∧
+      (∀ candidate : RuntimePersistentWrite,
+        candidate.sourceSite? dp = some site → candidate = row) ∧
+      ∃ role : InvocationRole,
+        role ∈ row.permittedRoles ∧
+          RuntimeWriteAuthority dp frameRoot occurrence.node role := by
+  rcases Exec.NinstOccurrence.runtimePersistentWrite_of_rawFrameRoot
+      occurrence instructionEq selected invocation sameFrame with
+    ⟨row, site, rowMember, found, classified, sitePc,
+      siteInstruction, unique⟩
+  have targetAt : Ninst.At occurrence.node.sevm.code occurrence.node.pc
+      (.reg .sstore) := by
+    rw [← instructionEq]
+    exact occurrence.decoded
+  rcases runtimeMainTowardStorage invocation sameFrame targetAt with
+    ⟨mainCursor, frameToMain, mainStorage, mainRoute⟩
+  have cut := runtimeMain_writeEndpointCut mainCursor invocation.2.2.2
+    targetAt mainRoute
+  have authority : ∃ role : InvocationRole,
+      role ∈ row.permittedRoles ∧
+        RuntimeWriteAuthority dp frameRoot occurrence.node role := by
+    cases cut with
+    | setPauseDuration cursor route entryStorage =>
+        exact runtimeDispatchCut_configurationOrHeartbeatAuthority
+          mainCursor frameToMain mainStorage invocation.2.2.2 targetAt
+          row site found sitePc
+          (.setPauseDuration cursor route entryStorage)
+          (.setPauseDuration cursor route entryStorage)
+    | setHeartbeatInterval cursor route entryStorage =>
+        exact runtimeDispatchCut_configurationOrHeartbeatAuthority
+          mainCursor frameToMain mainStorage invocation.2.2.2 targetAt
+          row site found sitePc
+          (.setHeartbeatInterval cursor route entryStorage)
+          (.setHeartbeatInterval cursor route entryStorage)
+    | registerPauser cursor route entryStorage =>
+        exact runtimeDispatchCut_registerPauserAuthority
+          mainCursor frameToMain invocation.2.2.2 targetAt
+          row site found sitePc cursor route
+    | heartbeat cursor route entryStorage =>
+        exact runtimeDispatchCut_configurationOrHeartbeatAuthority
+          mainCursor frameToMain mainStorage invocation.2.2.2 targetAt
+          row site found sitePc
+          (.heartbeat cursor route entryStorage)
+          (.heartbeat cursor route entryStorage)
+    | pause cursor route entryStorage =>
+        exact runtimeDispatchCut_pauseAuthority
+          mainCursor frameToMain mainStorage invocation.2.2.2 targetAt
+          row site found sitePc cursor route entryStorage
+  exact ⟨row, site, rowMember, found, classified, sitePc,
+    siteInstruction, unique, authority⟩
 
 /-- Clean direct-message settlement preserves the exact committed raw world at
 the CircuitBreaker owner.  This is the settlement-altitude bridge used before
