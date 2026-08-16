@@ -5831,4 +5831,438 @@ theorem setPauserKernel_absentZero_runCompiled
       _ = base.getStorVal sevm.currentTarget
           (expirySlot pauser) := hassignmentExpiry
 
+/-- Exact production-body reserve for absent-target/zero-pauser registration. -/
+def absentZeroRegisterBodyGas (sevm : Sevm) (base : Devm)
+    (target : B256)
+    (assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
+      tailClearCost lengthRestoreCost indexClearCost : Nat) : Nat :=
+  221 + absentZeroSetPauserKernelGas sevm base target assignmentCost arrayCost
+    indexCost lengthCost holeCost movedIndexCost tailClearCost
+    lengthRestoreCost indexClearCost
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- Exact successful production body for absent-target/zero-pauser
+registration. -/
+theorem registerPauser_body_absentZero_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (target : B256)
+    (assignmentOriginal arrayOriginal indexOriginal lengthOriginal : B256)
+    (assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
+      tailClearCost lengthRestoreCost indexClearCost G : Nat)
+    (hdata : sevm.data.length.toB256 <? 68 = 0)
+    (hadmin : sevm.caller.toB256 = dp.admin)
+    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hargNew : Sevm.dataWord sevm (32 * 1 + 4) = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hfind : findEntry entries target = none)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+      (assignmentSlot target) = assignmentOriginal)
+    (hassignmentCost : sstoreValueCost assignmentOriginal 0 0 =
+      assignmentCost)
+    (harray : (freshAssignmentPost sevm base target 0).getStorVal
+      sevm.currentTarget
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
+    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
+    (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
+    (hwarmArray : (sevm.currentTarget,
+      arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
+        (freshAssignmentPost sevm base target 0).accessedStorageKeys)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hindexCost : sstoreValueCost indexOriginal 0
+      (Nat.toB256 (entries.length + 1)) = indexCost)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      (freshAssignmentPost sevm base target 0).accessedStorageKeys)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+      lengthOriginal)
+    (hlengthCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
+        lengthCost)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal
+      (Nat.toB256 (entries.length + 1))
+      (Nat.toB256 (entries.length + 1)) = movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 =
+      tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 (entries.length + 1)) (Nat.toB256 entries.length) =
+        lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal
+      (Nat.toB256 (entries.length + 1)) 0 = indexClearCost)
+    (hlengthNextWord : (1 : B256) + Nat.toB256 entries.length =
+      Nat.toB256 (entries.length + 1))
+    (hsubWord : Nat.toB256 (entries.length + 1) - 1 =
+      Nat.toB256 entries.length)
+    (hgasFinal : gCallStipend < G + 1993 + indexClearCost)
+    (hstatic : sevm.isStatic = false) :
+    ∃ trace post,
+      setPauserSourceTrace entries target 0 = some trace ∧
+      trace.postEntries = entries ∧
+      RegistryWitness
+        (logicalStorageOfStor (applyRegistryWrites
+          (Devm.getStor base sevm.currentTarget) trace.writes)) entries ∧
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        (base.setMach ⟨[], Mem.empty,
+          G + absentZeroRegisterBodyGas sevm base target assignmentCost
+            arrayCost indexCost lengthCost holeCost movedIndexCost
+            tailClearCost lengthRestoreCost indexClearCost⟩)
+        (registerPauser dp) post ∧
+      post.gasLeft = G ∧
+      post.logs = base.logs ++
+        [⟨sevm.currentTarget, [pauserSetEvent, target, 0, 0], []⟩] ∧
+      ∀ pauser, canonicalAddress pauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser) := by
+  let M := freshRegisterMemory target 0
+  let img := freshRegisterImage target 0
+  rcases freshRegisterMemory_spec target 0 with
+    ⟨hwf, hreads, hsize, htargetRead, hnewRead,
+      _hpreviousRead, hcontinuationRead⟩
+  rcases setPauserKernel_absentZero_runCompiled dp sevm base M img entries
+      target assignmentOriginal arrayOriginal indexOriginal lengthOriginal
+      assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
+      tailClearCost lengthRestoreCost indexClearCost G hw hfind hwf hreads
+      htargetRead hnewRead hcontinuationRead htargetValid hsize
+      hassignmentOrig hassignmentCost harray harrayOrig harrayCost hwarmArray
+      hindexOrig hindexCost hwarmIndex hlengthOrig hlengthCost hholeCost
+      hmovedIndexCost htailClearCost hlengthRestoreCost hindexClearCost
+      hlengthNextWord hsubWord hgasFinal hstatic with
+    ⟨trace, post, htrace, hpostEntries, hwpost, hkernel, hgas, hlogs,
+      hexpiries⟩
+  let fs := (runtime dp).main :: (runtime dp).aux
+  have hM1Size (w : B256) :
+      (Mem.empty.write (targetWord * 32).toNat w.toBytes).size = 544 := by
+    rw [Mem.size_write_word_at]
+    decide +kernel
+  have hM2Size (w₁ w₂ : B256) :
+      ((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
+        (newPauserWord * 32).toNat w₂.toBytes).size = 576 := by
+    rw [Mem.size_write_word_at, hM1Size]
+    decide +kernel
+  have hM3Size (w₁ w₂ : B256) :
+      (((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
+        (newPauserWord * 32).toNat w₂.toBytes).write
+        (previousPauserWord * 32).toNat (0 : B256).toBytes).size = 608 := by
+    rw [Mem.size_write_word_at, hM2Size]
+    decide +kernel
+  have hstage : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], Mem.empty,
+        G + absentZeroSetPauserKernelGas sevm base target assignmentCost
+          arrayCost indexCost lengthCost holeCost movedIndexCost
+          tailClearCost lengthRestoreCost indexClearCost + 112⟩)
+      (arg 0 +++ mstoreAt targetWord +++
+        arg 1 +++ mstoreAt newPauserWord +++
+        pushB256 0 ::: mstoreAt previousPauserWord +++
+        pushB256 0 ::: mstoreAt continuationWord +++
+        .call setPauserSlot) post := by
+    unfold arg cdl
+    func_run (15) [51, 3, 3, 3]
+    all_goals first
+      | exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
+      | exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
+      | exact Devm.extCost_of_size (n := 576) (hM2Size _ _) (by decide +kernel)
+      | exact Devm.extCost_of_size (n := 608) (hM3Size _ _) (by decide +kernel)
+      | skip
+    case h_body =>
+      rw [hargTarget, hargNew]
+      change Func.RunCompiled fs sevm
+        (base.setMach ⟨[], M,
+          G + absentZeroSetPauserKernelGas sevm base target assignmentCost
+            arrayCost indexCost lengthCost holeCost movedIndexCost
+            tailClearCost lengthRestoreCost indexClearCost⟩)
+        setPauserKernel post
+      simpa only [fs] using hkernel
+  refine ⟨trace, post, htrace, hpostEntries, hwpost, ?_, hgas, hlogs,
+    hexpiries⟩
+  have htargetMask := canonicalAddress_mask_zero htargetValid.2
+  have hnewMask : (0 : B256) &&& addressMask = 0 := by decide +kernel
+  unfold registerPauser requireStaticArgs canonicalAddressArg onlyAdmin arg cdl
+    checkNonAddress pushAddressMask pushDeployWord
+  func_run (24) [0, ~~~(0 : B256), addressMask, 0,
+    ~~~(0 : B256), addressMask, 0, 1]
+  all_goals try { rw [hargTarget]; exact htargetMask }
+  all_goals try { rw [hargNew]; exact hnewMask }
+  all_goals try { simp [hadmin, B256.eqCheck] }
+  all_goals first
+    | (simp only [Devm.gasLeft_setMach, absentZeroRegisterBodyGas]
+       norm_num [gBase, gVerylow, gHigh, gMid, gJumpdest]
+       omega)
+    | skip
+  case h_arm =>
+    simp only [absentZeroRegisterBodyGas]
+    have hg : G + (221 + absentZeroSetPauserKernelGas sevm base target
+          assignmentCost arrayCost indexCost lengthCost holeCost
+          movedIndexCost tailClearCost lengthRestoreCost indexClearCost) - 109 =
+        G + absentZeroSetPauserKernelGas sevm base target assignmentCost
+          arrayCost indexCost lengthCost holeCost movedIndexCost tailClearCost
+          lengthRestoreCost indexClearCost + 112 := by omega
+    rw [hg]
+    simpa only [arg, cdl, M, fs] using hstage
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- Exact generated-runtime success for absent-target/zero-pauser
+registration. -/
+theorem registerPauser_runCompiledTo_absentZero
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (target : B256)
+    (assignmentOriginal arrayOriginal indexOriginal lengthOriginal : B256)
+    (assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
+      tailClearCost lengthRestoreCost indexClearCost G : Nat)
+    (hdata : sevm.data.length.toB256 = 68)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm =
+      selector "registerPauser" [.address, .address])
+    (hcodeAddress : sevm.codeAddress = some sevm.currentTarget)
+    (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (hadmin : sevm.caller.toB256 = dp.admin)
+    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hargNew : Sevm.dataWord sevm (32 * 1 + 4) = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hfind : findEntry entries target = none)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+      (assignmentSlot target) = assignmentOriginal)
+    (hassignmentCost : sstoreValueCost assignmentOriginal 0 0 =
+      assignmentCost)
+    (harray : (freshAssignmentPost sevm base target 0).getStorVal
+      sevm.currentTarget
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
+    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
+    (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
+    (hwarmArray : (sevm.currentTarget,
+      arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
+        (freshAssignmentPost sevm base target 0).accessedStorageKeys)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hindexCost : sstoreValueCost indexOriginal 0
+      (Nat.toB256 (entries.length + 1)) = indexCost)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      (freshAssignmentPost sevm base target 0).accessedStorageKeys)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+      lengthOriginal)
+    (hlengthCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
+        lengthCost)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal
+      (Nat.toB256 (entries.length + 1))
+      (Nat.toB256 (entries.length + 1)) = movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 =
+      tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 (entries.length + 1)) (Nat.toB256 entries.length) =
+        lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal
+      (Nat.toB256 (entries.length + 1)) 0 = indexClearCost)
+    (hlengthNextWord : (1 : B256) + Nat.toB256 entries.length =
+      Nat.toB256 (entries.length + 1))
+    (hsubWord : Nat.toB256 (entries.length + 1) - 1 =
+      Nat.toB256 entries.length)
+    (hgasFinal : gCallStipend < G + 1993 + indexClearCost)
+    (hstatic : sevm.isStatic = false) :
+    ∃ trace post,
+      setPauserSourceTrace entries target 0 = some trace ∧
+      trace.postEntries = entries ∧
+      RegistryWitness
+        (logicalStorageOfStor (applyRegistryWrites
+          (Devm.getStor base sevm.currentTarget) trace.writes)) entries ∧
+      Prog.RunCompiledTo sevm
+        (base.setMach ⟨[], Mem.empty,
+          G + registerPauserDispatchGas +
+            absentZeroRegisterBodyGas sevm base target assignmentCost
+              arrayCost indexCost lengthCost holeCost movedIndexCost
+              tailClearCost lengthRestoreCost indexClearCost⟩)
+        (runtime dp) (.ok post) ∧
+      post.gasLeft = G ∧
+      post.logs = base.logs ++
+        [⟨sevm.currentTarget, [pauserSetEvent, target, 0, 0], []⟩] ∧
+      (∀ pauser, canonicalAddress pauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser)) ∧
+      some sevm.code.toList = Prog.compile (runtime dp) := by
+  have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
+    rw [hdata]
+    decide +kernel
+  rcases registerPauser_body_absentZero_runCompiled dp sevm base entries target
+      assignmentOriginal arrayOriginal indexOriginal lengthOriginal
+      assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
+      tailClearCost lengthRestoreCost indexClearCost G hbodyData hadmin
+      hargTarget hargNew hw hfind htargetValid hassignmentOrig hassignmentCost
+      harray harrayOrig harrayCost hwarmArray hindexOrig hindexCost hwarmIndex
+      hlengthOrig hlengthCost hholeCost hmovedIndexCost htailClearCost
+      hlengthRestoreCost hindexClearCost hlengthNextWord hsubWord hgasFinal
+      hstatic with
+    ⟨trace, post, htrace, hpostEntries, hwpost, hbody, hgas, hlogs,
+      hexpiries⟩
+  have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
+  rcases registerPauser_dispatch_runCompiledTo dp sevm base
+      (absentZeroRegisterBodyGas sevm base target assignmentCost arrayCost
+        indexCost lengthCost holeCost movedIndexCost tailClearCost
+        lengthRestoreCost indexClearCost)
+      G (.ok post) hdata hvalue hselector hcodeAddress hcode hbodyTo with
+    ⟨hrun, hcompile⟩
+  exact ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas, hlogs,
+    hexpiries, hcompile⟩
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- Exact clean direct-message effects for absent-target/zero-pauser
+registration, derived from the generated-runtime execution. -/
+theorem registerPauser_absentZero_success_settled_effects
+    (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
+    (entries : List Entry) (target : B256)
+    (assignmentOriginal arrayOriginal indexOriginal lengthOriginal : B256)
+    (assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
+      tailClearCost lengthRestoreCost indexClearCost G : Nat)
+    (htargetOwner : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (hvalue : msg.value = 0)
+    (hdata : msg.data = registerPauserCalldata target 0)
+    (hgasEntry : msg.gas = G + registerPauserDispatchGas +
+      absentZeroRegisterBodyGas (initSevm msg) (initDevm msg) target
+        assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
+        tailClearCost lengthRestoreCost indexClearCost)
+    (hadmin : msg.caller.toB256 = dp.admin)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor (initDevm msg) ca)) entries)
+    (hfind : findEntry entries target = none)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+      (assignmentSlot target) = assignmentOriginal)
+    (hassignmentCost : sstoreValueCost assignmentOriginal 0 0 =
+      assignmentCost)
+    (harray : (freshAssignmentPost (initSevm msg) (initDevm msg)
+      target 0).getStorVal ca
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
+    (harrayOrig : getOrigStorVal (initSevm msg) ca
+      (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
+    (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
+    (hwarmArray : (ca,
+      arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
+        (freshAssignmentPost (initSevm msg) (initDevm msg)
+          target 0).accessedStorageKeys)
+    (hindexOrig : getOrigStorVal (initSevm msg) ca
+      (indexSlot target) = indexOriginal)
+    (hindexCost : sstoreValueCost indexOriginal 0
+      (Nat.toB256 (entries.length + 1)) = indexCost)
+    (hwarmIndex : (ca, indexSlot target) ∈
+      (freshAssignmentPost (initSevm msg) (initDevm msg)
+        target 0).accessedStorageKeys)
+    (hlengthOrig : getOrigStorVal (initSevm msg) ca arrayLengthSlot =
+      lengthOriginal)
+    (hlengthCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
+        lengthCost)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal
+      (Nat.toB256 (entries.length + 1))
+      (Nat.toB256 (entries.length + 1)) = movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 =
+      tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 (entries.length + 1)) (Nat.toB256 entries.length) =
+        lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal
+      (Nat.toB256 (entries.length + 1)) 0 = indexClearCost)
+    (hlengthNextWord : (1 : B256) + Nat.toB256 entries.length =
+      Nat.toB256 (entries.length + 1))
+    (hsubWord : Nat.toB256 (entries.length + 1) - 1 =
+      Nat.toB256 entries.length)
+    (hgasFinal : gCallStipend < G + 1993 + indexClearCost)
+    (hstatic : (initSevm msg).isStatic = false)
+    (hprocess : ProcessMessage msg
+      (.some ⟨⟨0, initSevm msg, initDevm msg⟩, .ok final⟩)
+      (.ok settled))
+    (hfilled : Xlot.Filled
+      (.some ⟨⟨0, initSevm msg, initDevm msg⟩, .ok final⟩))
+    (hclean : final.error.isNone = true) :
+    ∃ trace,
+      setPauserSourceTrace entries target 0 = some trace ∧
+      trace.postEntries = entries ∧
+      RegistryWitness
+        (logicalStorageOfStor (applyRegistryWrites
+          (Devm.getStor (initDevm msg) ca) trace.writes)) entries ∧
+      settled.gasLeft = G ∧
+      settled.logs = (initDevm msg).logs ++
+        [⟨ca, [pauserSetEvent, target, 0, 0], []⟩] ∧
+      ∀ pauser, canonicalAddress pauser →
+        settled.getStorVal ca (expirySlot pauser) =
+          (initDevm msg).getStorVal ca (expirySlot pauser) := by
+  have hdataInit : (initSevm msg).data =
+      registerPauserCalldata target 0 := by
+    simpa [initSevm] using hdata
+  rcases registerPauserCalldata_spec (initSevm msg) target 0 hdataInit with
+    ⟨hdataLength, hselector, hargTarget, hargNew⟩
+  have hvalueInit : (initSevm msg).value = 0 := by
+    simpa [initSevm] using hvalue
+  have hownerInit : (initSevm msg).currentTarget = ca := by
+    simpa [initSevm] using howner
+  have hcodeAddressInit : (initSevm msg).codeAddress =
+      some (initSevm msg).currentTarget := by
+    simpa [initSevm, howner] using hcodeAddress
+  have hcodeInit : (initSevm msg).code.toList =
+      lidoCircuitBreakerCode dp := by
+    simpa [initSevm] using hcode
+  have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
+    simpa [initSevm] using hadmin
+  rcases registerPauser_runCompiledTo_absentZero dp (initSevm msg)
+      (initDevm msg) entries target assignmentOriginal arrayOriginal
+      indexOriginal lengthOriginal assignmentCost arrayCost indexCost
+      lengthCost holeCost movedIndexCost tailClearCost lengthRestoreCost
+      indexClearCost G hdataLength hvalueInit hselector hcodeAddressInit
+      hcodeInit hadminInit hargTarget hargNew
+      (by simpa [hownerInit] using hw) hfind htargetValid
+      (by simpa [hownerInit] using hassignmentOrig) hassignmentCost
+      (by simpa [hownerInit] using harray)
+      (by simpa [hownerInit] using harrayOrig) harrayCost
+      (by simpa [hownerInit] using hwarmArray)
+      (by simpa [hownerInit] using hindexOrig) hindexCost
+      (by simpa [hownerInit] using hwarmIndex)
+      (by simpa [hownerInit] using hlengthOrig) hlengthCost hholeCost
+      hmovedIndexCost htailClearCost hlengthRestoreCost hindexClearCost
+      hlengthNextWord hsubWord hgasFinal hstatic with
+    ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas, hlogs,
+      hexpiries, hcompile⟩
+  have hentryState :
+      (initDevm msg).setMach ⟨[], Mem.empty,
+        G + registerPauserDispatchGas +
+          absentZeroRegisterBodyGas (initSevm msg) (initDevm msg) target
+            assignmentCost arrayCost indexCost lengthCost holeCost
+            movedIndexCost tailClearCost lengthRestoreCost indexClearCost⟩ =
+        initDevm msg := by
+    rw [← hgasEntry]
+    rfl
+  have hrunEntry : Prog.RunCompiledTo (initSevm msg) (initDevm msg)
+      (runtime dp) (.ok post) := by
+    rw [hentryState] at hrun
+    exact hrun
+  have hexecEq : exec ⟨0, initSevm msg, initDevm msg⟩ = .ok post :=
+    Prog.exec_of_runCompiledTo hrunEntry hcompile
+  obtain ⟨hpostExec⟩ :=
+    (exec_iff_exec_eq 0 (initSevm msg) (initDevm msg) (.ok post)).mpr
+      hexecEq
+  change Nonempty (Exec 0 (initSevm msg) (initDevm msg) (.ok final)) at hfilled
+  obtain ⟨hfinalExec⟩ := hfilled
+  have hraw : (.ok final : Execution) = .ok post :=
+    Exec.result_unique hfinalExec hpostExec
+  have hfinalPost : final = post := Except.ok.inj hraw
+  have hsettledFinal := registerPauser_success_settles_cleanly dp
+    htargetOwner howner hcodeAddress hcode hvalue hdata hprocess hclean
+  have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
+  rw [hsettledPost]
+  refine ⟨trace, htrace, hpostEntries, ?_, hgas, ?_, ?_⟩
+  · simpa [hownerInit] using hwpost
+  · simpa [hownerInit] using hlogs
+  · intro pauser hpauser
+    simpa [hownerInit] using hexpiries pauser hpauser
+
 end Blanc.LidoCircuitBreaker
