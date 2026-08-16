@@ -316,6 +316,47 @@ private theorem parentPrefixTrans
   | refl => exact right
   | step head rest ih => exact .step head (ih right)
 
+/-- Rebase a target-directed route onto an earlier cursor in the same frame. -/
+private theorem Exec.Deriv.SourceCursor.Toward.rebase
+    {root target : Exec.Deriv} {program : Prog}
+    {originPath basePath path : Prog.SourcePath}
+    {originSource baseSource source : Func}
+    {targetInstruction : Ninst}
+    {origin : Exec.Deriv.SourceCursor root program originPath originSource}
+    {base : Exec.Deriv.SourceCursor root program basePath baseSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (originToBase : Exec.Deriv.ParentPrefix origin.node base.node)
+    (route : Exec.Deriv.SourceCursor.Toward
+      base target targetInstruction cursor) :
+    Exec.Deriv.SourceCursor.Toward
+      origin target targetInstruction cursor := by
+  induction route with
+  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+      exact .atTarget cursor
+        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        site siteEq sourceMember targetEq instructionEq
+  | next cursor chronology tailCursor edge rest ih =>
+      exact .next cursor
+        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        tailCursor edge ih
+  | branchLeft cursor chronology arm compilerPrefix rest ih =>
+      exact .branchLeft cursor
+        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        arm compilerPrefix ih
+  | branchRight cursor chronology arm compilerPrefix rest ih =>
+      exact .branchRight cursor
+        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        arm compilerPrefix ih
+  | call cursor chronology lookup bodyCursor compilerPrefix rest ih =>
+      exact .call cursor
+        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        lookup bodyCursor compilerPrefix ih
+
 private def RuntimeGuardOccurrence.ofCursor
     {frameRoot write : Exec.Deriv} {dp : DeployParams}
     {initialPath guardPath : Prog.SourcePath}
@@ -411,6 +452,46 @@ private theorem Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
       simp only [Ninst.StepRun, actual, Step.Run]
       exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
 
+/-- Drop one source line while retaining its exact instruction run. -/
+private theorem Exec.Deriv.SourceCursor.Toward.dropLineRun
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {line : Line} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (line +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (lineNe : ∀ instruction ∈ line,
+      instruction ≠ (.reg .sstore)) :
+    ∃ tailPath,
+      ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          tailPath tail,
+        Line.Run root.sevm cursor.pre line tailCursor.pre ∧
+          Exec.Deriv.SourceCursor.Chronology
+              initial tailCursor target ∧
+            Exec.Deriv.SourceCursor.Toward
+              initial target (.reg .sstore) tailCursor := by
+  induction line generalizing path with
+  | nil =>
+      exact ⟨path, cursor, Line.Run.nil,
+        Exec.Deriv.SourceCursor.Toward.chronology route, route⟩
+  | cons instruction rest ih =>
+      change Exec.Deriv.SourceCursor root (runtime dp) path
+        (.next instruction (rest +++ tail)) at cursor
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+          (lineNe instruction (by simp)) with
+        ⟨chronology, restCursor, edge, restRoute⟩
+      rcases ih restRoute (fun candidate member =>
+          lineNe candidate (by simp [member])) with
+        ⟨tailPath, tailCursor, lineRun, tailChronology, tailRoute⟩
+      exact ⟨tailPath, tailCursor,
+        Line.Run.cons
+          (Exec.Deriv.SourceCursor.ninstRun_of_nextEdge cursor edge)
+          lineRun,
+        tailChronology, tailRoute⟩
+
 private theorem Exec.Deriv.ParentPrefix.advance_pushTowardSstore
     {start target : Exec.Deriv} {xs : Bytes}
     (reached : Exec.Deriv.ParentPrefix start target)
@@ -503,9 +584,16 @@ private theorem Exec.Deriv.SourceCursor.branchFlagTowardSstore
     (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
     (∃ arm : Exec.Deriv.SourceCursor root program
         ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left,
-      Exec.Deriv.ParentPrefix arm.node target ∧
-        [(0 : B256)] <<+ cursor.pre.stack) ∨
-    (∃ flag : B256, flag ≠ 0 ∧ [flag] <<+ cursor.pre.stack) := by
+      Exec.Deriv.ParentPrefix cursor.node arm.node ∧
+        Exec.Deriv.ParentPrefix arm.node target ∧
+          [(0 : B256)] <<+ cursor.pre.stack ∧
+            Devm.getStor cursor.pre = Devm.getStor arm.pre) ∨
+    (∃ flag : B256, flag ≠ 0 ∧ [flag] <<+ cursor.pre.stack ∧
+      ∃ arm : Exec.Deriv.SourceCursor root program
+          ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right,
+        Exec.Deriv.ParentPrefix cursor.node arm.node ∧
+          Exec.Deriv.ParentPrefix arm.node target ∧
+            Devm.getStor cursor.pre = Devm.getStor arm.pre) := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
       cursor.codeBoundary with
     ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
@@ -534,14 +622,91 @@ private theorem Exec.Deriv.SourceCursor.branchFlagTowardSstore
     have zeroPop : Devm.PopBurn [(0 : B256)] cursor.pre armPre :=
       Devm.popBurn_of_burn_of_popBurn
         (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
-    exact Or.inl ⟨armCursor, armReached,
-      pref_of_split zeroPop.stack⟩
-  · rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+    exact Or.inl ⟨armCursor,
+      .step pushEdge (.step jumpEdge (.refl _)), armReached,
+      pref_of_split zeroPop.stack, PopBurn.Inv.inv zeroPop⟩
+  · have hloc256 : loc < 2 ^ 256 := by
+      apply Nat.lt_trans hloc
+      rw [Nat.pow_lt_pow_iff_right] <;> omega
+    have hxeq : loc = x.toNat := by
+      rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+        ⟨hx, stack, pushBurn', popBurn'⟩
+      have hlocToNat : loc.toB256.toNat = loc :=
+        B256.toNat_toB256_of_lt hloc256
+      rw [← congrArg B256.toNat hx, hlocToNat]
+    have nextPcLoc : nextPc = loc := nextPcEq.trans hxeq.symm
+    cases nextPcLoc
+    rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+        armReached jumpdestAt storeAt with
+      ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
+        jumpdestRun⟩
+    rcases of_jumpdest_run jumpdestRun with ⟨bodyPcEq, jumpdestBurn⟩
+    subst bodyPc
+    let armCursor : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right :=
+      ⟨_, _, bodyExec,
+        cursor.parentPrefix.snoc pushEdge |>.snoc jumpEdge
+          |>.snoc jumpdestEdge,
+        rightSlice, rightBoundary, by
+          intro site member
+          apply cursor.sourceIncluded
+          simp only [Func.sourceSites, List.mem_append]
+          apply Or.inr
+          have hrightPc : loc + 1 = cursor.pc + compsize left + 5 := by
+            omega
+          rw [← hrightPc]
+          exact member⟩
+    rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
       ⟨hx, stack, pushBurn', popBurn'⟩
     have flagPop : Devm.PopBurn [flag] cursor.pre armPre :=
       Devm.popBurn_of_burn_of_popBurn
         (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
-    exact Or.inr ⟨flag, nonzero, pref_of_split flagPop.stack⟩
+    exact Or.inr ⟨flag, nonzero, pref_of_split flagPop.stack,
+      armCursor,
+      .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _))),
+      bodyReached,
+      (PopBurn.Inv.inv flagPop).trans (Burn.Inv.inv jumpdestBurn)⟩
+
+/-- Select the actually executed branch arm, preserving both its rebased route
+and the storage equality across compiler glue. -/
+private theorem Exec.Deriv.SourceCursor.Toward.branchArmStorage
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource left right : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (.branch left right))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    (∃ arm : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) arm ∧
+        Devm.getStor cursor.pre = Devm.getStor arm.pre ∧
+          [(0 : B256)] <<+ cursor.pre.stack) ∨
+    (∃ flag : B256, flag ≠ 0 ∧ [flag] <<+ cursor.pre.stack ∧
+      ∃ arm : Exec.Deriv.SourceCursor root (runtime dp)
+          ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right,
+        Exec.Deriv.SourceCursor.Toward
+            initial target (.reg .sstore) arm ∧
+          Devm.getStor cursor.pre = Devm.getStor arm.pre) := by
+  let chronology := Exec.Deriv.SourceCursor.Toward.chronology route
+  rcases Exec.Deriv.SourceCursor.branchFlagTowardSstore cursor
+      chronology.cursorToTarget targetAt with
+    ⟨arm, branchToArm, armReached, zeroPrefix, storage⟩ |
+      ⟨flag, nonzero, flagPrefix, arm, branchToArm, armReached, storage⟩
+  · have localRoute := arm.toward compiled armReached (by trivial) targetAt
+    exact Or.inl ⟨arm,
+      Exec.Deriv.SourceCursor.Toward.rebase
+        (parentPrefixTrans chronology.initialToCursor branchToArm) localRoute,
+      storage, zeroPrefix⟩
+  · have localRoute := arm.toward compiled armReached (by trivial) targetAt
+    exact Or.inr ⟨flag, nonzero, flagPrefix, arm,
+      Exec.Deriv.SourceCursor.Toward.rebase
+        (parentPrefixTrans chronology.initialToCursor branchToArm) localRoute,
+      storage⟩
 
 private theorem linearDispatchWith_bodyCut
     {dp : DeployParams} {root target : Exec.Deriv}
@@ -609,6 +774,108 @@ private theorem linearDispatchWith_bodyCut
                 ⟨popChronology, bodyCursor, popEdge, restRoute⟩
               exact ⟨word, body, by simp, _, bodyCursor, restRoute⟩
 
+private theorem linearDispatchWith_bodyCutStorage
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (entries : List (B256 × Func)) {path : Prog.SourcePath}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (linearDispatchWith fallbackSlot entries))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ word body,
+      (word, body) ∈ entries ∧
+        ∃ bodyPath,
+          ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+              bodyPath body,
+            Exec.Deriv.SourceCursor.Toward
+                initial target (.reg .sstore) bodyCursor ∧
+              Devm.getStor cursor.pre = Devm.getStor bodyCursor.pre := by
+  induction entries generalizing path with
+  | nil =>
+      exact (cursor.noSstore_of_entrySstoreFree compiled
+        [fallbackSlot] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology route).cursorToTarget
+        targetAt).elim
+  | cons head tail ih =>
+      rcases head with ⟨word, body⟩
+      cases tail with
+      | nil =>
+          let entryCursor := cursor
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+              (by intro h; cases h) with
+            ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
+              (by intro h; cases h) with
+            ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
+          have pushRun :=
+            Exec.Deriv.SourceCursor.ninstRun_of_nextEdge entryCursor pushEdge
+          have eqRun :=
+            Exec.Deriv.SourceCursor.ninstRun_of_nextEdge eqCursor eqEdge
+          have prefixStorage :
+              Devm.getStor entryCursor.pre = Devm.getStor branchCursor.pre :=
+            Line.of_inv Devm.getStor (by line_inv)
+              (Line.Run.cons pushRun (Line.Run.cons eqRun Line.Run.nil))
+          rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+              branchCursor compiled targetAt branchRoute with
+            ⟨fallbackCursor, fallbackRoute, branchStorage, zeroPrefix⟩ |
+              ⟨flag, nonzero, flagPrefix, bodyCursor, bodyRoute,
+                branchStorage⟩
+          · exact (fallbackCursor.noSstore_of_entrySstoreFree compiled
+              [fallbackSlot] rfl
+              (Exec.Deriv.SourceCursor.Toward.chronology
+                fallbackRoute).cursorToTarget targetAt).elim
+          · exact ⟨word, body, by simp, _, bodyCursor, bodyRoute,
+              prefixStorage.trans branchStorage⟩
+      | cons next rest =>
+          let entryCursor := cursor
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+              (by intro h; cases h) with
+            ⟨dupChronology, pushCursor, dupEdge, pushRoute⟩
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne pushRoute
+              (by intro h; cases h) with
+            ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
+              (by intro h; cases h) with
+            ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
+          have dupRun :=
+            Exec.Deriv.SourceCursor.ninstRun_of_nextEdge entryCursor dupEdge
+          have pushRun :=
+            Exec.Deriv.SourceCursor.ninstRun_of_nextEdge pushCursor pushEdge
+          have eqRun :=
+            Exec.Deriv.SourceCursor.ninstRun_of_nextEdge eqCursor eqEdge
+          have prefixStorage :
+              Devm.getStor entryCursor.pre = Devm.getStor branchCursor.pre :=
+            Line.of_inv Devm.getStor (by line_inv)
+              (Line.Run.cons dupRun
+                (Line.Run.cons pushRun (Line.Run.cons eqRun Line.Run.nil)))
+          rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+              branchCursor compiled targetAt branchRoute with
+            ⟨tailCursor, tailRoute, branchStorage, zeroPrefix⟩ |
+              ⟨flag, nonzero, flagPrefix, selectedCursor, selectedRoute,
+                branchStorage⟩
+          · rcases ih tailCursor tailRoute with
+              ⟨selectedWord, selectedBody, member, bodyPath, bodyCursor,
+                bodyRoute, tailStorage⟩
+            exact ⟨selectedWord, selectedBody, by simp [member], bodyPath,
+              bodyCursor, bodyRoute,
+              prefixStorage.trans (branchStorage.trans tailStorage)⟩
+          · rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+                selectedRoute (by intro h; cases h) with
+              ⟨popChronology, bodyCursor, popEdge, bodyRoute⟩
+            have popRun :=
+              Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+                selectedCursor popEdge
+            have popStorage : Devm.getStor selectedCursor.pre =
+                Devm.getStor bodyCursor.pre :=
+              Line.of_inv Devm.getStor (by line_inv)
+                (Line.Run.cons popRun Line.Run.nil)
+            exact ⟨word, body, by simp, _, bodyCursor, bodyRoute,
+              prefixStorage.trans (branchStorage.trans popStorage)⟩
+
 private theorem splitDispatch_bodyCut
     {dp : DeployParams} {root target : Exec.Deriv}
     {initialPath path : Prog.SourcePath} {initialSource : Func}
@@ -644,6 +911,60 @@ private theorem splitDispatch_bodyCut
       exact Or.inr ⟨_, arm, rest⟩
   | branchRight branchCursor chronology arm compilerPrefix rest =>
       exact Or.inl ⟨_, arm, rest⟩
+
+private theorem splitDispatch_bodyCutStorage
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {pivot : B256} {left right : Func}
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (splitDispatch pivot left right))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    (∃ leftPath,
+      ∃ leftCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          leftPath left,
+        Exec.Deriv.SourceCursor.Toward
+            initial target (.reg .sstore) leftCursor ∧
+          Devm.getStor cursor.pre = Devm.getStor leftCursor.pre) ∨
+    (∃ rightPath,
+      ∃ rightCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          rightPath right,
+        Exec.Deriv.SourceCursor.Toward
+            initial target (.reg .sstore) rightCursor ∧
+          Devm.getStor cursor.pre = Devm.getStor rightCursor.pre) := by
+  let entryCursor := cursor
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+      (by intro h; cases h) with
+    ⟨dupChronology, pushCursor, dupEdge, pushRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne pushRoute
+      (by intro h; cases h) with
+    ⟨pushChronology, gtCursor, pushEdge, gtRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne gtRoute
+      (by intro h; cases h) with
+    ⟨gtChronology, branchCursor, gtEdge, branchRoute⟩
+  have dupRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge entryCursor dupEdge
+  have pushRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge pushCursor pushEdge
+  have gtRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge gtCursor gtEdge
+  have prefixStorage :
+      Devm.getStor entryCursor.pre = Devm.getStor branchCursor.pre :=
+    Line.of_inv Devm.getStor (by line_inv)
+      (Line.Run.cons dupRun
+        (Line.Run.cons pushRun (Line.Run.cons gtRun Line.Run.nil)))
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+      branchCursor compiled targetAt branchRoute with
+    ⟨rightCursor, rightRoute, branchStorage, zeroPrefix⟩ |
+      ⟨flag, nonzero, flagPrefix, leftCursor, leftRoute, branchStorage⟩
+  · exact Or.inr ⟨_, rightCursor, rightRoute,
+      prefixStorage.trans branchStorage⟩
+  · exact Or.inl ⟨_, leftCursor, leftRoute,
+      prefixStorage.trans branchStorage⟩
 
 private theorem hybridDispatchWith_bodyCut
     {dp : DeployParams} {root target : Exec.Deriv}
@@ -698,6 +1019,69 @@ private theorem hybridDispatchWith_bodyCut
       exact ⟨word, body, List.mem_of_mem_drop member,
         bodyPath, bodyCursor, bodyRoute⟩
 
+private theorem hybridDispatchWith_bodyCutStorage
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (hybridDispatchWith fallbackSlot (funcs dp)))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ word body,
+      (word, body) ∈ funcs dp ∧
+        ∃ bodyPath,
+          ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+              bodyPath body,
+            Exec.Deriv.SourceCursor.Toward
+                initial target (.reg .sstore) bodyCursor ∧
+              Devm.getStor cursor.pre = Devm.getStor bodyCursor.pre := by
+  rcases splitDispatch_bodyCutStorage compiled targetAt cursor route with
+    ⟨leftPath, leftCursor, leftRoute, rootToLeft⟩ |
+      ⟨rightPath, rightCursor, rightRoute, rootToRight⟩
+  · rcases splitDispatch_bodyCutStorage compiled targetAt
+        leftCursor leftRoute with
+      ⟨firstPath, firstCursor, firstRoute, leftToFirst⟩ |
+        ⟨secondPath, secondCursor, secondRoute, leftToSecond⟩
+    · rcases linearDispatchWith_bodyCutStorage compiled targetAt
+          ((funcs dp).take 5) firstCursor firstRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute,
+          firstToBody⟩
+      exact ⟨word, body, List.mem_of_mem_take member,
+        bodyPath, bodyCursor, bodyRoute,
+        rootToLeft.trans (leftToFirst.trans firstToBody)⟩
+    · rcases linearDispatchWith_bodyCutStorage compiled targetAt
+          ((funcs dp).drop 5 |>.take 4) secondCursor secondRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute,
+          secondToBody⟩
+      have memberDrop : (word, body) ∈ (funcs dp).drop 5 :=
+        List.mem_of_mem_take member
+      exact ⟨word, body, List.mem_of_mem_drop memberDrop,
+        bodyPath, bodyCursor, bodyRoute,
+        rootToLeft.trans (leftToSecond.trans secondToBody)⟩
+  · rcases splitDispatch_bodyCutStorage compiled targetAt
+        rightCursor rightRoute with
+      ⟨thirdPath, thirdCursor, thirdRoute, rightToThird⟩ |
+        ⟨fourthPath, fourthCursor, fourthRoute, rightToFourth⟩
+    · rcases linearDispatchWith_bodyCutStorage compiled targetAt
+          ((funcs dp).drop 9 |>.take 4) thirdCursor thirdRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute,
+          thirdToBody⟩
+      have memberDrop : (word, body) ∈ (funcs dp).drop 9 :=
+        List.mem_of_mem_take member
+      exact ⟨word, body, List.mem_of_mem_drop memberDrop,
+        bodyPath, bodyCursor, bodyRoute,
+        rootToRight.trans (rightToThird.trans thirdToBody)⟩
+    · rcases linearDispatchWith_bodyCutStorage compiled targetAt
+          ((funcs dp).drop 13) fourthCursor fourthRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute,
+          fourthToBody⟩
+      exact ⟨word, body, List.mem_of_mem_drop member,
+        bodyPath, bodyCursor, bodyRoute,
+        rootToRight.trans (rightToFourth.trans fourthToBody)⟩
+
 private def runtimeViewSstoreFreeSlots : List Nat :=
   [emptyRevertSlot, bubbleRevertSlot, enumLoopSlot]
 
@@ -710,24 +1094,29 @@ private inductive RuntimeDispatchCut
         (setPauseDuration dp))
       (route : Exec.Deriv.SourceCursor.Toward
         initial target (.reg .sstore) cursor)
+      (entryStorage : Devm.getStor cursor.pre = Devm.getStor initial.pre)
   | setHeartbeatInterval {path : Prog.SourcePath}
       (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
         (setHeartbeatInterval dp))
       (route : Exec.Deriv.SourceCursor.Toward
         initial target (.reg .sstore) cursor)
+      (entryStorage : Devm.getStor cursor.pre = Devm.getStor initial.pre)
   | registerPauser {path : Prog.SourcePath}
       (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
         (registerPauser dp))
       (route : Exec.Deriv.SourceCursor.Toward
         initial target (.reg .sstore) cursor)
+      (entryStorage : Devm.getStor cursor.pre = Devm.getStor initial.pre)
   | heartbeat {path : Prog.SourcePath}
       (cursor : Exec.Deriv.SourceCursor root (runtime dp) path heartbeat)
       (route : Exec.Deriv.SourceCursor.Toward
         initial target (.reg .sstore) cursor)
+      (entryStorage : Devm.getStor cursor.pre = Devm.getStor initial.pre)
   | pause {path : Prog.SourcePath}
       (cursor : Exec.Deriv.SourceCursor root (runtime dp) path pause)
       (route : Exec.Deriv.SourceCursor.Toward
         initial target (.reg .sstore) cursor)
+      (entryStorage : Devm.getStor cursor.pre = Devm.getStor initial.pre)
 
 private theorem runtimeMain_writeEndpointCut
     {dp : DeployParams} {root target : Exec.Deriv}
@@ -738,8 +1127,7 @@ private theorem runtimeMain_writeEndpointCut
     (route : Exec.Deriv.SourceCursor.Toward
       mainCursor target (.reg .sstore) mainCursor) :
     RuntimeDispatchCut (target := target) mainCursor := by
-  unfold runtimeMain at mainCursor
-  rcases Exec.Deriv.SourceCursor.Toward.dropLine route
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineRun route
       (line := [Ninst.callvalue, Ninst.pushB256 4,
         Ninst.calldatasize, Ninst.lt, Ninst.or])
       (by
@@ -747,87 +1135,103 @@ private theorem runtimeMain_writeEndpointCut
         simp only [List.mem_cons, List.not_mem_nil, or_false] at member
         rcases member with rfl | rfl | rfl | rfl | rfl <;>
           intro h <;> cases h) with
-    ⟨entryPath, entryCursor, entryChronology, entryRoute⟩
-  cases entryRoute with
-  | branchRight cursor chronology arm compilerPrefix rest =>
-      exact (arm.noSstore_of_entrySstoreFree compiled [] rfl
-        (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
-        targetAt).elim
-  | branchLeft cursor chronology arm compilerPrefix rest =>
-      rcases Exec.Deriv.SourceCursor.Toward.dropLine rest
+    ⟨entryPath, entryCursor, entryRun, entryChronology, entryRoute⟩
+  have mainToEntry :
+      Devm.getStor mainCursor.pre = Devm.getStor entryCursor.pre :=
+    Line.of_inv Devm.getStor (by line_inv) entryRun
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+      entryCursor compiled targetAt entryRoute with
+    ⟨dispatchEntry, dispatchEntryRoute, entryToDispatchEntry, zeroPrefix⟩ |
+      ⟨flag, nonzero, flagPrefix, errorCursor, errorRoute,
+        entryToError⟩
+  ·
+    rcases Exec.Deriv.SourceCursor.Toward.dropLineRun dispatchEntryRoute
           (line := fsig) (by
             intro instruction member
             simp only [fsig, cdl, shiftRight, List.mem_append,
               List.mem_cons, List.not_mem_nil, or_false] at member
             rcases member with (rfl | rfl) | (rfl | rfl) <;>
               intro h <;> cases h) with
-        ⟨dispatchPath, dispatchCursor, dispatchChronology, dispatchRoute⟩
-      rcases hybridDispatchWith_bodyCut compiled targetAt dispatchCursor
-          dispatchRoute with
-        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
-      simp only [funcs, List.mem_cons,
+        ⟨dispatchPath, dispatchCursor, fsigRun, dispatchChronology,
+          dispatchRoute⟩
+    have dispatchEntryToDispatch :
+          Devm.getStor dispatchEntry.pre = Devm.getStor dispatchCursor.pre :=
+        Line.of_inv Devm.getStor (by line_inv) fsigRun
+    rcases hybridDispatchWith_bodyCutStorage compiled targetAt
+          dispatchCursor dispatchRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute,
+          dispatchToBody⟩
+    have mainToBody :
+          Devm.getStor mainCursor.pre = Devm.getStor bodyCursor.pre :=
+        mainToEntry.trans
+          (entryToDispatchEntry.trans
+            (dispatchEntryToDispatch.trans dispatchToBody))
+    simp only [funcs, List.mem_cons,
         List.not_mem_nil, or_false, Prod.mk.injEq] at member
-      rcases member with
+    rcases member with
         ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
         ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
         ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
         ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
         ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
         ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
 
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact .registerPauser bodyCursor bodyRoute
-      · exact .heartbeat bodyCursor bodyRoute
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact .registerPauser bodyCursor bodyRoute mainToBody.symm
+    · exact .heartbeat bodyCursor bodyRoute mainToBody.symm
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact .setHeartbeatInterval bodyCursor bodyRoute
-      · exact .pause bodyCursor bodyRoute
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact .setHeartbeatInterval bodyCursor bodyRoute mainToBody.symm
+    · exact .pause bodyCursor bodyRoute mainToBody.symm
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
-      · exact .setPauseDuration bodyCursor bodyRoute
-      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+    · exact .setPauseDuration bodyCursor bodyRoute mainToBody.symm
+    · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
+  · exact (errorCursor.noSstore_of_entrySstoreFree compiled [] rfl
+      (Exec.Deriv.SourceCursor.Toward.chronology
+        errorRoute).cursorToTarget targetAt).elim
 
 private theorem onlyAdminGuard
     {dp : DeployParams} {root target : Exec.Deriv}
@@ -883,8 +1287,11 @@ private theorem onlyAdminGuard
     prefix_of_eq eqRun adminPrefix
   rcases Exec.Deriv.SourceCursor.branchFlagTowardSstore branchCursor
       (Exec.Deriv.SourceCursor.Toward.chronology branchRoute).cursorToTarget
-      targetAt with errorArm | ⟨flag, nonzero, flagPrefix⟩
-  · rcases errorArm with ⟨errorCursor, errorReached, zeroPrefix⟩
+      targetAt with errorArm |
+        ⟨flag, nonzero, flagPrefix, successCursor, branchToSuccess,
+          successReached, successStorage⟩
+  · rcases errorArm with
+      ⟨errorCursor, branchToError, errorReached, zeroPrefix, errorStorage⟩
     exact (errorCursor.noSstore_of_entrySstoreFree compiled
       [senderNotAdminErrorSlot] rfl errorReached targetAt).elim
   · have flagEq :
@@ -1010,6 +1417,96 @@ private theorem canonicalAddressArgToward
   | branchLeft branchCursor chronology arm compilerPrefix rest =>
       exact ⟨_, arm, rest⟩
 
+private theorem requireStaticArgsTowardStorage
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource body : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (words : Nat)
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (requireStaticArgs words body))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ bodyPath,
+      ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          bodyPath body,
+        Exec.Deriv.SourceCursor.Toward
+            initial target (.reg .sstore) bodyCursor ∧
+          Devm.getStor cursor.pre = Devm.getStor bodyCursor.pre := by
+  unfold requireStaticArgs at cursor route
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+      (by intro h; cases h) with
+    ⟨sizeChronology, calldataCursor, sizeEdge, calldataRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne calldataRoute
+      (by intro h; cases h) with
+    ⟨calldataChronology, ltCursor, calldataEdge, ltRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne ltRoute
+      (by intro h; cases h) with
+    ⟨ltChronology, branchCursor, ltEdge, branchRoute⟩
+  have sizeRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge cursor sizeEdge
+  have calldataRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge calldataCursor calldataEdge
+  have ltRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge ltCursor ltEdge
+  have prefixStorage :
+      Devm.getStor cursor.pre = Devm.getStor branchCursor.pre :=
+    Line.of_inv Devm.getStor (by line_inv)
+      (Line.Run.cons sizeRun
+        (Line.Run.cons calldataRun (Line.Run.cons ltRun Line.Run.nil)))
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+      branchCursor compiled targetAt branchRoute with
+    ⟨bodyCursor, bodyRoute, branchStorage, zeroPrefix⟩ |
+      ⟨flag, nonzero, flagPrefix, errorCursor, errorRoute,
+        branchStorage⟩
+  · exact ⟨_, bodyCursor, bodyRoute,
+      prefixStorage.trans branchStorage⟩
+  · exact (errorCursor.noSstore_of_entrySstoreFree compiled [] rfl
+      (Exec.Deriv.SourceCursor.Toward.chronology
+        errorRoute).cursorToTarget targetAt).elim
+
+private theorem canonicalAddressArgTowardStorage
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource body : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (index : B256)
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (canonicalAddressArg index body))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ bodyPath,
+      ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          bodyPath body,
+        Exec.Deriv.SourceCursor.Toward
+            initial target (.reg .sstore) bodyCursor ∧
+          Devm.getStor cursor.pre = Devm.getStor bodyCursor.pre := by
+  unfold canonicalAddressArg at cursor
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineRun route
+      (line := arg index ++ checkNonAddress)
+      (by simp [arg, checkNonAddress, cdl, pushAddressMask,
+        Ninst.pushB256]) with
+    ⟨branchPath, branchCursor, prefixRun, branchChronology,
+      branchRoute⟩
+  have prefixStorage :
+      Devm.getStor cursor.pre = Devm.getStor branchCursor.pre :=
+    Line.of_inv Devm.getStor (by line_inv) prefixRun
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+      branchCursor compiled targetAt branchRoute with
+    ⟨bodyCursor, bodyRoute, branchStorage, zeroPrefix⟩ |
+      ⟨flag, nonzero, flagPrefix, errorCursor, errorRoute,
+        branchStorage⟩
+  · exact ⟨_, bodyCursor, bodyRoute,
+      prefixStorage.trans branchStorage⟩
+  · exact (errorCursor.noSstore_of_entrySstoreFree compiled
+      [emptyRevertSlot] rfl
+      (Exec.Deriv.SourceCursor.Toward.chronology
+        errorRoute).cursorToTarget targetAt).elim
+
 /-- A target-directed route through the heartbeat-interval setter retains the
 actual `onlyAdmin` equality, its successful next edge, and the entry caller
 fact.  This is deliberately local to the concrete Lido source body. -/
@@ -1074,6 +1571,559 @@ private theorem registerPauserBodyGuard
   rcases canonicalAddressArgToward 1 secondCursor compiled targetAt secondRoute with
     ⟨adminPath, adminCursor, adminRoute⟩
   exact onlyAdminGuard adminCursor compiled targetAt adminRoute
+
+private theorem prefix_of_timestamp
+    {sevm : Sevm} {pre post : Devm} {xs : Stack}
+    (stackPrefix : xs <<+ pre.stack)
+    (run : Ninst.Run sevm pre Ninst.timestamp post) :
+    sevm.benvStat.time :: xs <<+ post.stack := by
+  change Ninst.Run sevm pre (.reg .timestamp) post at run
+  rcases of_run_reg run with ⟨pc, instructionRun⟩
+  simp only [Rinst.run, Rinst.runCore] at instructionRun
+  exact prefix_of_push (Devm.pushBurn_of_pushItem instructionRun) stackPrefix
+
+private theorem heartbeatBodyAuthority
+    {dp : DeployParams} {frameRoot write : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor frameRoot (runtime dp)
+      initialPath initialSource}
+    (bodyCursor : Exec.Deriv.SourceCursor frameRoot (runtime dp) path heartbeat)
+    (frameToInitial : Exec.Deriv.ParentPrefix frameRoot initial.node)
+    (bodyStorage :
+      Devm.getStor bodyCursor.pre = Devm.getStor frameRoot.devm)
+    (compiled : some frameRoot.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At write.sevm.code write.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial write (.reg .sstore) bodyCursor) :
+    RuntimeWriteAuthority dp frameRoot write .heartbeatExpiry := by
+  let endpoint := RuntimeEndpointOccurrence.ofCursor
+    frameToInitial bodyCursor route
+  unfold heartbeat at bodyCursor route
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+      (by intro h; cases h) with
+    ⟨callerChronology, countPushCursor, callerEdge, countPushRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne countPushRoute
+      (by intro h; cases h) with
+    ⟨countPushChronology, countOrCursor, countPushEdge, countOrRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne countOrRoute
+      (by intro h; cases h) with
+    ⟨countOrChronology, countLoadCursor, countOrEdge, countLoadRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne countLoadRoute
+      (by intro h; cases h) with
+    ⟨countLoadChronology, registeredCursor, countLoadEdge,
+      registeredRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne registeredRoute
+      (by intro h; cases h) with
+    ⟨registeredChronology, registeredBranchCursor, registeredEdge,
+      registeredBranchRoute⟩
+  have callerRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge bodyCursor callerEdge
+  have countPushRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+      countPushCursor countPushEdge
+  have countOrRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge countOrCursor countOrEdge
+  have countLoadRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+      countLoadCursor countLoadEdge
+  have registeredRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+      registeredCursor registeredEdge
+  have callerPrefix :
+      [frameRoot.sevm.caller.toB256] <<+ countPushCursor.pre.stack :=
+    prefix_of_push (of_run_caller callerRun) nil_pref
+  have countRegionPrefix :
+      [regionWord countRegion, frameRoot.sevm.caller.toB256] <<+
+        countOrCursor.pre.stack := by
+    simpa [Ninst.pushB256] using
+      prefix_of_push (of_run_pushB256 countPushRun) callerPrefix
+  have countKeyPrefix :
+      [countSlot frameRoot.sevm.caller.toB256] <<+
+        countLoadCursor.pre.stack := by
+    change [(regionWord countRegion ||| frameRoot.sevm.caller.toB256)] <<+
+      countLoadCursor.pre.stack
+    exact prefix_of_or countOrRun countRegionPrefix
+  rcases prefix_of_sload countLoadRun countKeyPrefix with
+    ⟨count, countPrefix, countEq⟩
+  have registeredPrefix :
+      [(count =? 0)] <<+ registeredBranchCursor.pre.stack :=
+    prefix_of_iszero registeredRun countPrefix
+  have countPrefixStorage :
+      Devm.getStor bodyCursor.pre = Devm.getStor countLoadCursor.pre :=
+    Line.of_inv Devm.getStor (by line_inv)
+      (Line.Run.cons callerRun
+        (Line.Run.cons countPushRun
+          (Line.Run.cons countOrRun Line.Run.nil)))
+  have countRootEq :
+      count = frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+        (countSlot frameRoot.sevm.caller.toB256) := by
+    rw [countEq]
+    show (Devm.getStor countLoadCursor.pre frameRoot.sevm.currentTarget).get
+        (countSlot frameRoot.sevm.caller.toB256) =
+      (Devm.getStor frameRoot.devm frameRoot.sevm.currentTarget).get
+        (countSlot frameRoot.sevm.caller.toB256)
+    rw [countPrefixStorage.symm.trans bodyStorage]
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+      registeredBranchCursor compiled targetAt registeredBranchRoute with
+    ⟨liveArmCursor, liveArmRoute, registeredBranchStorage, zeroPrefix⟩ |
+      ⟨registeredFlag, registeredNonzero, registeredFlagPrefix,
+        errorCursor, errorRoute, registeredBranchStorage⟩
+  · have registeredFlagEq : (count =? 0) = 0 :=
+      pref_head_unique registeredPrefix zeroPrefix
+    have countNe :
+        frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+          (countSlot frameRoot.sevm.caller.toB256) ≠ 0 := by
+      rw [← countRootEq]
+      intro countZero
+      rw [countZero] at registeredFlagEq
+      have oneZero : (1 : B256) = 0 := by
+        simpa [B256.eqCheck] using registeredFlagEq
+      exact B256.zero_ne_one oneZero.symm
+    have countFullStorage :
+        Devm.getStor bodyCursor.pre =
+          Devm.getStor registeredBranchCursor.pre :=
+      Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons callerRun
+          (Line.Run.cons countPushRun
+            (Line.Run.cons countOrRun
+              (Line.Run.cons countLoadRun
+                (Line.Run.cons registeredRun Line.Run.nil)))))
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne liveArmRoute
+        (by intro h; cases h) with
+      ⟨expiryCallerChronology, expiryPushCursor, expiryCallerEdge,
+        expiryPushRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+        expiryPushRoute (by intro h; cases h) with
+      ⟨expiryPushChronology, expiryOrCursor, expiryPushEdge,
+        expiryOrRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne expiryOrRoute
+        (by intro h; cases h) with
+      ⟨expiryOrChronology, expiryLoadCursor, expiryOrEdge,
+        expiryLoadRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+        expiryLoadRoute (by intro h; cases h) with
+      ⟨expiryLoadChronology, timestampCursor, expiryLoadEdge,
+        timestampRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne timestampRoute
+        (by intro h; cases h) with
+      ⟨timestampChronology, liveCursor, timestampEdge, liveRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne liveRoute
+        (by intro h; cases h) with
+      ⟨liveChronology, liveBranchCursor, liveEdge, liveBranchRoute⟩
+    have expiryCallerRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        liveArmCursor expiryCallerEdge
+    have expiryPushRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        expiryPushCursor expiryPushEdge
+    have expiryOrRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge expiryOrCursor expiryOrEdge
+    have expiryLoadRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        expiryLoadCursor expiryLoadEdge
+    have timestampRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        timestampCursor timestampEdge
+    have liveRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge liveCursor liveEdge
+    have expiryCallerPrefix :
+        [frameRoot.sevm.caller.toB256] <<+ expiryPushCursor.pre.stack :=
+      prefix_of_push (of_run_caller expiryCallerRun) nil_pref
+    have expiryRegionPrefix :
+        [regionWord expiryRegion, frameRoot.sevm.caller.toB256] <<+
+          expiryOrCursor.pre.stack := by
+      simpa [Ninst.pushB256] using
+        prefix_of_push (of_run_pushB256 expiryPushRun) expiryCallerPrefix
+    have expiryKeyPrefix :
+        [expirySlot frameRoot.sevm.caller.toB256] <<+
+          expiryLoadCursor.pre.stack := by
+      change [(regionWord expiryRegion ||| frameRoot.sevm.caller.toB256)] <<+
+        expiryLoadCursor.pre.stack
+      exact prefix_of_or expiryOrRun expiryRegionPrefix
+    rcases prefix_of_sload expiryLoadRun expiryKeyPrefix with
+      ⟨expiry, expiryPrefix, expiryEq⟩
+    have timestampPrefix :
+        [frameRoot.sevm.benvStat.time, expiry] <<+
+          liveCursor.pre.stack :=
+      prefix_of_timestamp expiryPrefix timestampRun
+    have livePrefix :
+        [(frameRoot.sevm.benvStat.time <? expiry)] <<+
+          liveBranchCursor.pre.stack :=
+      prefix_of_lt liveRun timestampPrefix
+    have expiryPrefixStorage :
+        Devm.getStor liveArmCursor.pre =
+          Devm.getStor expiryLoadCursor.pre :=
+      Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons expiryCallerRun
+          (Line.Run.cons expiryPushRun
+            (Line.Run.cons expiryOrRun Line.Run.nil)))
+    have expiryRootEq :
+        expiry = frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+          (expirySlot frameRoot.sevm.caller.toB256) := by
+      rw [expiryEq]
+      show (Devm.getStor expiryLoadCursor.pre frameRoot.sevm.currentTarget).get
+          (expirySlot frameRoot.sevm.caller.toB256) =
+        (Devm.getStor frameRoot.devm frameRoot.sevm.currentTarget).get
+          (expirySlot frameRoot.sevm.caller.toB256)
+      rw [expiryPrefixStorage.symm, registeredBranchStorage.symm,
+        countFullStorage.symm, bodyStorage]
+    rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+        liveBranchCursor compiled targetAt liveBranchRoute with
+      ⟨expiredCursor, expiredRoute, liveBranchStorage, zeroPrefix⟩ |
+        ⟨liveFlag, liveNonzero, liveFlagPrefix, successCursor,
+          successRoute, liveBranchStorage⟩
+    · exact (expiredCursor.noSstore_of_entrySstoreFree compiled
+        [heartbeatExpiredErrorSlot] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology
+          expiredRoute).cursorToTarget targetAt).elim
+    · have liveFlagEq :
+          (frameRoot.sevm.benvStat.time <? expiry) = liveFlag :=
+        pref_head_unique livePrefix liveFlagPrefix
+      have liveLt : frameRoot.sevm.benvStat.time <
+          frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+            (expirySlot frameRoot.sevm.caller.toB256) := by
+        rw [← expiryRootEq]
+        by_contra notLt
+        have zero : (frameRoot.sevm.benvStat.time <? expiry) = 0 := by
+          simp [B256.ltCheck, notLt]
+        exact liveNonzero (liveFlagEq ▸ zero)
+      let registeredOccurrence := RuntimeGuardOccurrence.ofCursor
+        frameToInitial registeredChronology registeredEdge registeredRun
+          targetAt (by intro h; cases h)
+      let liveOccurrence := RuntimeGuardOccurrence.ofCursor
+        frameToInitial liveChronology liveEdge liveRun targetAt
+          (by intro h; cases h)
+      exact .heartbeatExpiry endpoint registeredOccurrence liveOccurrence
+        countNe liveLt
+  · exact (errorCursor.noSstore_of_entrySstoreFree compiled
+      [senderNotPauserErrorSlot] rfl
+      (Exec.Deriv.SourceCursor.Toward.chronology
+        errorRoute).cursorToTarget targetAt).elim
+
+private inductive PauseAuthorityEvidence
+    (dp : DeployParams) (frameRoot write : Exec.Deriv) : Prop
+  | intro
+      (endpoint : RuntimeEndpointOccurrence dp frameRoot write pause)
+      (assignedGuard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
+      (liveGuard : RuntimeGuardOccurrence frameRoot write (.reg .lt))
+      (assigned : frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+        (assignmentSlot (Sevm.dataWord frameRoot.sevm 4)) =
+          frameRoot.sevm.caller.toB256)
+      (live : frameRoot.sevm.benvStat.time < frameRoot.devm.getStorVal
+        frameRoot.sevm.currentTarget
+        (expirySlot frameRoot.sevm.caller.toB256)) :
+      PauseAuthorityEvidence dp frameRoot write
+
+private theorem pauseBodyAuthorityEvidence
+    {dp : DeployParams} {frameRoot write : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor frameRoot (runtime dp)
+      initialPath initialSource}
+    (bodyCursor : Exec.Deriv.SourceCursor frameRoot (runtime dp) path pause)
+    (frameToInitial : Exec.Deriv.ParentPrefix frameRoot initial.node)
+    (bodyStorage :
+      Devm.getStor bodyCursor.pre = Devm.getStor frameRoot.devm)
+    (compiled : some frameRoot.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At write.sevm.code write.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial write (.reg .sstore) bodyCursor) :
+    PauseAuthorityEvidence dp frameRoot write := by
+  let endpoint := RuntimeEndpointOccurrence.ofCursor
+    frameToInitial bodyCursor route
+  rcases requireStaticArgsTowardStorage 1 bodyCursor compiled targetAt route with
+    ⟨canonicalPath, canonicalCursor, canonicalRoute, bodyToCanonical⟩
+  rcases canonicalAddressArgTowardStorage 0 canonicalCursor compiled targetAt
+      canonicalRoute with
+    ⟨corePath, coreCursor, coreRoute, canonicalToCore⟩
+  have coreStorage :
+      Devm.getStor coreCursor.pre = Devm.getStor frameRoot.devm :=
+    canonicalToCore.symm.trans (bodyToCanonical.symm.trans bodyStorage)
+  unfold pause at bodyCursor
+  change Exec.Deriv.SourceCursor frameRoot (runtime dp) corePath
+    (Ninst.pushB256 lockKey ::: Ninst.tload ::: Ninst.iszero :::
+      ((Ninst.pushB256 1 ::: Ninst.pushB256 lockKey ::: Ninst.tstore :::
+        arg 0 +++ tagTop assignmentRegion +++ Ninst.sload :::
+          Ninst.caller ::: Ninst.eq :::
+        ((Ninst.caller ::: tagTop expiryRegion +++ Ninst.sload :::
+          Ninst.timestamp ::: Ninst.lt :::
+          ((Ninst.pushB256 pauseDurationSlot ::: Ninst.sload :::
+            mstoreAt durationWord +++
+            arg 0 +++ mstoreAt targetWord +++
+            Ninst.pushB256 0 ::: mstoreAt newPauserWord +++
+            Ninst.pushB256 0 ::: mstoreAt previousPauserWord +++
+            Ninst.pushB256 1 ::: mstoreAt continuationWord +++
+            .call setPauserSlot) <?> (.call heartbeatExpiredErrorSlot))) <?>
+          (.call senderNotPauserErrorSlot))) <?>
+        (.call reentrantCallErrorSlot))) at coreCursor
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne coreRoute
+      (by intro h; cases h) with
+    ⟨lockPushChronology, lockLoadCursor, lockPushEdge, lockLoadRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne lockLoadRoute
+      (by intro h; cases h) with
+    ⟨lockLoadChronology, lockZeroCursor, lockLoadEdge, lockZeroRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne lockZeroRoute
+      (by intro h; cases h) with
+    ⟨lockZeroChronology, lockBranchCursor, lockZeroEdge, lockBranchRoute⟩
+  have lockPushRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge coreCursor lockPushEdge
+  have lockLoadRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge lockLoadCursor lockLoadEdge
+  have lockZeroRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge lockZeroCursor lockZeroEdge
+  have lockPrefixStorage :
+      Devm.getStor coreCursor.pre = Devm.getStor lockBranchCursor.pre :=
+    Line.of_inv Devm.getStor (by line_inv)
+      (Line.Run.cons lockPushRun
+        (Line.Run.cons lockLoadRun
+          (Line.Run.cons lockZeroRun Line.Run.nil)))
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+      lockBranchCursor compiled targetAt lockBranchRoute with
+    ⟨reentrantCursor, reentrantRoute, lockBranchStorage, zeroPrefix⟩ |
+      ⟨lockFlag, lockNonzero, lockFlagPrefix, unlockedCursor,
+        unlockedRoute, lockBranchStorage⟩
+  · exact (reentrantCursor.noSstore_of_entrySstoreFree compiled
+      [reentrantCallErrorSlot] rfl
+      (Exec.Deriv.SourceCursor.Toward.chronology
+        reentrantRoute).cursorToTarget targetAt).elim
+  · rcases Exec.Deriv.SourceCursor.Toward.dropLineRun unlockedRoute
+        (line := [Ninst.pushB256 1, Ninst.pushB256 lockKey, Ninst.tstore])
+        (by
+          intro instruction member
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+          rcases member with rfl | rfl | rfl <;> intro h <;> cases h) with
+      ⟨argPath, argCursor, setupRun, argChronology, argRoute⟩
+    have setupStorage :
+        Devm.getStor unlockedCursor.pre = Devm.getStor argCursor.pre :=
+      Line.of_inv Devm.getStor (by line_inv) setupRun
+    rcases Exec.Deriv.SourceCursor.Toward.dropLineRun argRoute
+        (line := arg 0) (by simp [arg, cdl, Ninst.pushB256]) with
+      ⟨assignmentPushPath, assignmentPushCursor, argRun,
+        assignmentPushChronology, assignmentPushRoute⟩
+    have argumentPrefix :
+        [Sevm.dataWord frameRoot.sevm 4] <<+
+          assignmentPushCursor.pre.stack := by
+      have hzero : (32 : B256) * 0 + 4 = 4 := by rfl
+      simpa [Sevm.argWord, hzero] using
+        prefix_of_arg (e := frameRoot.sevm) nil_pref argRun
+    have argStorage :
+        Devm.getStor argCursor.pre =
+          Devm.getStor assignmentPushCursor.pre :=
+      Line.of_inv Devm.getStor (by line_inv) argRun
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+        assignmentPushRoute (by intro h; cases h) with
+      ⟨assignmentPushChronology, assignmentOrCursor, assignmentPushEdge,
+        assignmentOrRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+        assignmentOrRoute (by intro h; cases h) with
+      ⟨assignmentOrChronology, assignmentLoadCursor, assignmentOrEdge,
+        assignmentLoadRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+        assignmentLoadRoute (by intro h; cases h) with
+      ⟨assignmentLoadChronology, assignmentCallerCursor,
+        assignmentLoadEdge, assignmentCallerRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+        assignmentCallerRoute (by intro h; cases h) with
+      ⟨assignmentCallerChronology, assignmentEqCursor,
+        assignmentCallerEdge, assignmentEqRoute⟩
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+        assignmentEqRoute (by intro h; cases h) with
+      ⟨assignmentEqChronology, assignmentBranchCursor, assignmentEqEdge,
+        assignmentBranchRoute⟩
+    have assignmentPushRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        assignmentPushCursor assignmentPushEdge
+    have assignmentOrRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        assignmentOrCursor assignmentOrEdge
+    have assignmentLoadRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        assignmentLoadCursor assignmentLoadEdge
+    have assignmentCallerRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        assignmentCallerCursor assignmentCallerEdge
+    have assignmentEqRun :=
+      Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        assignmentEqCursor assignmentEqEdge
+    have assignmentRegionPrefix :
+        [regionWord assignmentRegion, Sevm.dataWord frameRoot.sevm 4] <<+
+          assignmentOrCursor.pre.stack := by
+      simpa [Ninst.pushB256] using
+        prefix_of_push (of_run_pushB256 assignmentPushRun) argumentPrefix
+    have assignmentKeyPrefix :
+        [assignmentSlot (Sevm.dataWord frameRoot.sevm 4)] <<+
+          assignmentLoadCursor.pre.stack := by
+      change [(regionWord assignmentRegion |||
+        Sevm.dataWord frameRoot.sevm 4)] <<+
+          assignmentLoadCursor.pre.stack
+      exact prefix_of_or assignmentOrRun assignmentRegionPrefix
+    rcases prefix_of_sload assignmentLoadRun assignmentKeyPrefix with
+      ⟨assigned, assignedPrefix, assignedEq⟩
+    have assignmentCallerPrefix :
+        [frameRoot.sevm.caller.toB256, assigned] <<+
+          assignmentEqCursor.pre.stack :=
+      prefix_of_push (of_run_caller assignmentCallerRun) assignedPrefix
+    have assignmentEqPrefix :
+        [(frameRoot.sevm.caller.toB256 =? assigned)] <<+
+          assignmentBranchCursor.pre.stack :=
+      prefix_of_eq assignmentEqRun assignmentCallerPrefix
+    have assignmentKeyStorage :
+        Devm.getStor assignmentPushCursor.pre =
+          Devm.getStor assignmentLoadCursor.pre :=
+      Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons assignmentPushRun
+          (Line.Run.cons assignmentOrRun Line.Run.nil))
+    have assignedRootEq : assigned =
+        frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+          (assignmentSlot (Sevm.dataWord frameRoot.sevm 4)) := by
+      rw [assignedEq]
+      show (Devm.getStor assignmentLoadCursor.pre
+          frameRoot.sevm.currentTarget).get
+            (assignmentSlot (Sevm.dataWord frameRoot.sevm 4)) =
+        (Devm.getStor frameRoot.devm frameRoot.sevm.currentTarget).get
+          (assignmentSlot (Sevm.dataWord frameRoot.sevm 4))
+      rw [assignmentKeyStorage.symm, argStorage.symm, setupStorage.symm,
+        lockBranchStorage.symm, lockPrefixStorage.symm, coreStorage]
+    have assignmentGuardStorage :
+        Devm.getStor assignmentLoadCursor.pre =
+          Devm.getStor assignmentBranchCursor.pre :=
+      Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons assignmentLoadRun
+          (Line.Run.cons assignmentCallerRun
+            (Line.Run.cons assignmentEqRun Line.Run.nil)))
+    rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+        assignmentBranchCursor compiled targetAt assignmentBranchRoute with
+      ⟨senderErrorCursor, senderErrorRoute, assignmentBranchStorage,
+        zeroPrefix⟩ |
+        ⟨assignmentFlag, assignmentNonzero, assignmentFlagPrefix,
+          liveArmCursor, liveArmRoute, assignmentBranchStorage⟩
+    · exact (senderErrorCursor.noSstore_of_entrySstoreFree compiled
+        [senderNotPauserErrorSlot] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology
+          senderErrorRoute).cursorToTarget targetAt).elim
+    · have assignmentFlagEq :
+          (frameRoot.sevm.caller.toB256 =? assigned) = assignmentFlag :=
+        pref_head_unique assignmentEqPrefix assignmentFlagPrefix
+      have assignedCaller : assigned = frameRoot.sevm.caller.toB256 := by
+        by_contra different
+        have checkZero :
+            (frameRoot.sevm.caller.toB256 =? assigned) = 0 := by
+          simp [B256.eqCheck, Ne.symm different]
+        exact assignmentNonzero (assignmentFlagEq ▸ checkZero)
+      have assignedAtEntry :
+          frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+              (assignmentSlot (Sevm.dataWord frameRoot.sevm 4)) =
+            frameRoot.sevm.caller.toB256 := by
+        rw [← assignedRootEq, assignedCaller]
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+          liveArmRoute (by intro h; cases h) with
+        ⟨expiryCallerChronology, expiryPushCursor, expiryCallerEdge,
+          expiryPushRoute⟩
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+          expiryPushRoute (by intro h; cases h) with
+        ⟨expiryPushChronology, expiryOrCursor, expiryPushEdge,
+          expiryOrRoute⟩
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+          expiryOrRoute (by intro h; cases h) with
+        ⟨expiryOrChronology, expiryLoadCursor, expiryOrEdge,
+          expiryLoadRoute⟩
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+          expiryLoadRoute (by intro h; cases h) with
+        ⟨expiryLoadChronology, timestampCursor, expiryLoadEdge,
+          timestampRoute⟩
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+          timestampRoute (by intro h; cases h) with
+        ⟨timestampChronology, liveCursor, timestampEdge, liveRoute⟩
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne liveRoute
+          (by intro h; cases h) with
+        ⟨liveChronology, liveBranchCursor, liveEdge, liveBranchRoute⟩
+      have expiryCallerRun :=
+        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+          liveArmCursor expiryCallerEdge
+      have expiryPushRun :=
+        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+          expiryPushCursor expiryPushEdge
+      have expiryOrRun :=
+        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+          expiryOrCursor expiryOrEdge
+      have expiryLoadRun :=
+        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+          expiryLoadCursor expiryLoadEdge
+      have timestampRun :=
+        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+          timestampCursor timestampEdge
+      have liveRun :=
+        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge liveCursor liveEdge
+      have expiryCallerPrefix :
+          [frameRoot.sevm.caller.toB256] <<+ expiryPushCursor.pre.stack :=
+        prefix_of_push (of_run_caller expiryCallerRun) nil_pref
+      have expiryRegionPrefix :
+          [regionWord expiryRegion, frameRoot.sevm.caller.toB256] <<+
+            expiryOrCursor.pre.stack := by
+        simpa [Ninst.pushB256] using
+          prefix_of_push (of_run_pushB256 expiryPushRun) expiryCallerPrefix
+      have expiryKeyPrefix :
+          [expirySlot frameRoot.sevm.caller.toB256] <<+
+            expiryLoadCursor.pre.stack := by
+        change [(regionWord expiryRegion |||
+          frameRoot.sevm.caller.toB256)] <<+ expiryLoadCursor.pre.stack
+        exact prefix_of_or expiryOrRun expiryRegionPrefix
+      rcases prefix_of_sload expiryLoadRun expiryKeyPrefix with
+        ⟨expiry, expiryPrefix, expiryEq⟩
+      have timestampPrefix :
+          [frameRoot.sevm.benvStat.time, expiry] <<+ liveCursor.pre.stack :=
+        prefix_of_timestamp expiryPrefix timestampRun
+      have livePrefix :
+          [(frameRoot.sevm.benvStat.time <? expiry)] <<+
+            liveBranchCursor.pre.stack :=
+        prefix_of_lt liveRun timestampPrefix
+      have expiryPrefixStorage :
+          Devm.getStor liveArmCursor.pre =
+            Devm.getStor expiryLoadCursor.pre :=
+        Line.of_inv Devm.getStor (by line_inv)
+          (Line.Run.cons expiryCallerRun
+            (Line.Run.cons expiryPushRun
+              (Line.Run.cons expiryOrRun Line.Run.nil)))
+      have expiryRootEq : expiry =
+          frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+            (expirySlot frameRoot.sevm.caller.toB256) := by
+        rw [expiryEq]
+        show (Devm.getStor expiryLoadCursor.pre
+            frameRoot.sevm.currentTarget).get
+              (expirySlot frameRoot.sevm.caller.toB256) =
+          (Devm.getStor frameRoot.devm frameRoot.sevm.currentTarget).get
+            (expirySlot frameRoot.sevm.caller.toB256)
+        rw [expiryPrefixStorage.symm, assignmentBranchStorage.symm,
+          assignmentGuardStorage.symm, assignmentKeyStorage.symm,
+          argStorage.symm, setupStorage.symm, lockBranchStorage.symm,
+          lockPrefixStorage.symm, coreStorage]
+      rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+          liveBranchCursor compiled targetAt liveBranchRoute with
+        ⟨expiredCursor, expiredRoute, liveBranchStorage, zeroPrefix⟩ |
+          ⟨liveFlag, liveNonzero, liveFlagPrefix, successCursor,
+            successRoute, liveBranchStorage⟩
+      · exact (expiredCursor.noSstore_of_entrySstoreFree compiled
+          [heartbeatExpiredErrorSlot] rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            expiredRoute).cursorToTarget targetAt).elim
+      · have liveFlagEq :
+            (frameRoot.sevm.benvStat.time <? expiry) = liveFlag :=
+          pref_head_unique livePrefix liveFlagPrefix
+        have liveAtEntry : frameRoot.sevm.benvStat.time <
+            frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+              (expirySlot frameRoot.sevm.caller.toB256) := by
+          rw [← expiryRootEq]
+          by_contra notLt
+          have zero : (frameRoot.sevm.benvStat.time <? expiry) = 0 := by
+            simp [B256.ltCheck, notLt]
+          exact liveNonzero (liveFlagEq ▸ zero)
+        let assignedOccurrence := RuntimeGuardOccurrence.ofCursor
+          frameToInitial assignmentEqChronology assignmentEqEdge
+            assignmentEqRun targetAt (by intro h; cases h)
+        let liveOccurrence := RuntimeGuardOccurrence.ofCursor
+          frameToInitial liveChronology liveEdge liveRun targetAt
+            (by intro h; cases h)
+        exact .intro endpoint assignedOccurrence liveOccurrence
+          assignedAtEntry liveAtEntry
 
 /-- Every nominated same-frame SSTORE occurrence in an exact selected runtime
 frame has one unique typed source row.  The selected frame may be any raw
