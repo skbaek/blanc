@@ -141,6 +141,126 @@ private theorem Exec.Deriv.SourceCursor.Toward.chronology
     Exec.Deriv.SourceCursor.Chronology initial cursor target := by
   cases route <;> assumption
 
+/-- An exact internal-call cut retained on the target-directed source route. -/
+private inductive Exec.Deriv.SourceCursor.Toward.CallCut
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath : Prog.SourcePath} {initialSource : Func}
+    {targetInstruction : Ninst}
+    (initial : Exec.Deriv.SourceCursor root program
+      initialPath initialSource)
+    (functionIndex : Nat) : Prop
+  | intro (path : Prog.SourcePath)
+      (cursor : Exec.Deriv.SourceCursor root program path
+        (.call functionIndex))
+      (body : Func)
+      (lookup : (program.main :: program.aux)[functionIndex]? = some body)
+      (bodyCursor : Exec.Deriv.SourceCursor root program
+        ⟨functionIndex, []⟩ body)
+      (routeToCall : Exec.Deriv.SourceCursor.Toward
+        initial target targetInstruction cursor)
+      (routeFromBody : Exec.Deriv.SourceCursor.Toward
+        initial target targetInstruction bodyCursor) :
+      Exec.Deriv.SourceCursor.Toward.CallCut initial functionIndex
+
+/-- The terminal source cursor of a target-directed route, together with an
+exact call cut whenever its function differs from the current one. -/
+private theorem Exec.Deriv.SourceCursor.Toward.atTargetData
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {targetInstruction : Ninst}
+    {initial : Exec.Deriv.SourceCursor root program
+      initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor) :
+    ∃ finalPath finalTail,
+      ∃ finalCursor : Exec.Deriv.SourceCursor root program finalPath
+          (.next targetInstruction finalTail),
+        finalCursor.node = target ∧
+        ({ path := finalPath, pc := finalCursor.pc,
+            instruction := targetInstruction } : Prog.SourceSite) ∈
+          program.sourceSites ∧
+        (path.functionIndex = finalPath.functionIndex ∨
+          Exec.Deriv.SourceCursor.Toward.CallCut
+            (target := target) (targetInstruction := targetInstruction)
+            initial finalPath.functionIndex) := by
+  induction route with
+  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+      cases instructionEq
+      exact ⟨_, _, cursor, targetEq,
+        by simpa [siteEq] using sourceMember, Or.inl rfl⟩
+  | next cursor chronology tailCursor edge rest ih => exact ih
+  | branchLeft cursor chronology arm compilerPrefix rest ih => exact ih
+  | branchRight cursor chronology arm compilerPrefix rest ih => exact ih
+  | call cursor chronology lookup bodyCursor compilerPrefix rest ih =>
+      rcases ih with
+        ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
+          sameFunction | deeperCut⟩
+      · refine ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
+          Or.inr ?_⟩
+        rw [← sameFunction]
+        exact .intro _ cursor _ lookup bodyCursor
+          (.call cursor chronology lookup bodyCursor compilerPrefix rest) rest
+      · exact ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
+          Or.inr deeperCut⟩
+
+/-- Either the target lies in a different function, or the route contains the
+exact internal call to the nominated target function. -/
+private theorem Exec.Deriv.SourceCursor.Toward.callCut_of_targetFunction
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {targetInstruction : Ninst}
+    {initial : Exec.Deriv.SourceCursor root program
+      initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor)
+    (targetFunction : Nat)
+    (currentNe : path.functionIndex ≠ targetFunction) :
+    (∃ finalPath finalTail,
+      ∃ finalCursor : Exec.Deriv.SourceCursor root program finalPath
+          (.next targetInstruction finalTail),
+        finalCursor.node = target ∧
+        ({ path := finalPath, pc := finalCursor.pc,
+            instruction := targetInstruction } : Prog.SourceSite) ∈
+          program.sourceSites ∧
+        finalPath.functionIndex ≠ targetFunction) ∨
+      Exec.Deriv.SourceCursor.Toward.CallCut
+        (target := target) (targetInstruction := targetInstruction)
+        initial targetFunction := by
+  rcases Exec.Deriv.SourceCursor.Toward.atTargetData route with
+    ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
+      sameFunction | targetCut⟩
+  · exact Or.inl ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
+      fun finalEq => currentNe (sameFunction.trans finalEq)⟩
+  · by_cases finalEq : finalPath.functionIndex = targetFunction
+    · exact Or.inr (finalEq ▸ targetCut)
+    · exact Or.inl ⟨finalPath, finalTail, finalCursor, targetEq,
+        sourceMember, finalEq⟩
+
+private def RuntimePersistentWrite.sourceFunctionIndex :
+    RuntimePersistentWrite → Nat
+  | .setPauseDurationConfig | .setHeartbeatIntervalConfig
+  | .setPauserAssignment => 0
+  | .setPauserOldCount | .appendArrayEntry => 14
+  | .appendReverseIndex | .appendArrayLength | .afterOldNewCount => 15
+  | .removeArrayHole => 16
+  | .removeMovedIndex | .removeClearTail | .removeArrayLength
+  | .removeClearTargetIndex | .registerFreshExpiry => 17
+  | .registerLastOldClear | .registerLastOldNewExpiry
+  | .registerRetainedOldNewExpiry | .heartbeatExpiry => 19
+  | .pauseLastTargetExpiry | .pauseRetainedTargetExpiry => 20
+
+private theorem RuntimePersistentWrite.sourceSite?_functionIndex
+    {dp : DeployParams} {row : RuntimePersistentWrite}
+    {site : Prog.SourceSite}
+    (found : row.sourceSite? dp = some site) :
+    site.path.functionIndex = row.sourceFunctionIndex := by
+  have sitesEq := runtimePersistentSourceSites_eq_official dp
+  unfold RuntimePersistentWrite.sourceSite? at found
+  rw [sitesEq] at found
+  cases row <;> native_decide +revert
+
 private theorem Exec.Deriv.SourceCursor.Toward.dropLine
     {dp : DeployParams} {root target : Exec.Deriv}
     {initialPath path : Prog.SourcePath} {initialSource : Func}
