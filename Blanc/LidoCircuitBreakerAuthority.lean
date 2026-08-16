@@ -2721,6 +2721,111 @@ private theorem finishSetPauserCallContinuation
   cases lookup
   exact ⟨bodyCursor, bodyRoute, bodyZero⟩
 
+private theorem Exec.Deriv.SourceCursor.Toward.branchArmContinuation
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {left right : Func}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (.branch left right))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    (∃ arm : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) arm ∧
+        RegisterContinuationZero arm.pre.memory) ∨
+    (∃ arm : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) arm ∧
+        RegisterContinuationZero arm.pre.memory) := by
+  rcases subcode_compile_branch_jumpable cursor.codeSlice
+      cursor.codeBoundary with
+    ⟨loc, locEq, locBound, pushAt, jumpiAt, leftSlice, leftBoundary,
+      jumpdestAt, jumpable, rightSlice, rightBoundary⟩
+  have chronology := Exec.Deriv.SourceCursor.Toward.chronology route
+  rcases Exec.Deriv.ParentPrefix.advance_pushTowardSstore
+      chronology.cursorToTarget ⟨_, pushAt⟩ (by simp) targetAt with
+    ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
+  rw [List.toB256_pair _ locBound] at pushBurn
+  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+      afterPushReached jumpiAt targetAt with
+    ⟨nextPc, armPre, armExec, jumpEdge, armReached, jumpRun⟩
+  rcases of_jumpi_run jumpRun with
+    ⟨destination, nextPcEq, popBurn⟩ |
+      ⟨destination, flag, nextPcEq, popBurn, actualJumpable, nonzero⟩
+  · cases nextPcEq
+    let armCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left :=
+      ⟨_, _, armExec, cursor.parentPrefix.snoc pushEdge |>.snoc jumpEdge,
+        leftSlice, leftBoundary, by
+          intro site member
+          apply cursor.sourceIncluded
+          simp only [Func.sourceSites, List.mem_append]
+          exact Or.inl member⟩
+    have armZero : RegisterContinuationZero armCursor.pre.memory := by
+      change RegisterContinuationZero armPre.memory
+      rw [← popBurn.memory, ← pushBurn.memory]
+      exact zero
+    have localRoute := armCursor.toward compiled armReached
+      (by trivial) targetAt
+    have cursorToArm : Exec.Deriv.ParentPrefix cursor.node armCursor.node :=
+      .step pushEdge (.step jumpEdge (.refl _))
+    have initialToArm : Exec.Deriv.ParentPrefix initial.node armCursor.node :=
+      parentPrefixTrans chronology.initialToCursor cursorToArm
+    exact Or.inl ⟨armCursor,
+      Exec.Deriv.SourceCursor.Toward.rebase initialToArm localRoute,
+      armZero⟩
+  · have loc256 : loc < 2 ^ 256 := by
+      apply Nat.lt_trans locBound
+      rw [Nat.pow_lt_pow_iff_right] <;> omega
+    have destinationEq : loc = destination.toNat := by
+      rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+        ⟨headEq, stack, pushBurn', popBurn'⟩
+      have locToNat : loc.toB256.toNat = loc :=
+        B256.toNat_toB256_of_lt loc256
+      rw [← congrArg B256.toNat headEq, locToNat]
+    have nextPcLoc : nextPc = loc := nextPcEq.trans destinationEq.symm
+    cases nextPcLoc
+    rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+        armReached jumpdestAt targetAt with
+      ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
+        jumpdestRun⟩
+    rcases of_jumpdest_run jumpdestRun with ⟨bodyPcEq, jumpdestBurn⟩
+    subst bodyPc
+    let armCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right :=
+      ⟨_, _, bodyExec,
+        cursor.parentPrefix.snoc pushEdge |>.snoc jumpEdge
+          |>.snoc jumpdestEdge,
+        rightSlice, rightBoundary, by
+          intro site member
+          apply cursor.sourceIncluded
+          simp only [Func.sourceSites, List.mem_append]
+          apply Or.inr
+          have rightPc : loc + 1 = cursor.pc + compsize left + 5 := by
+            omega
+          rw [← rightPc]
+          exact member⟩
+    have armZero : RegisterContinuationZero armCursor.pre.memory := by
+      change RegisterContinuationZero bodyPre.memory
+      rw [← jumpdestBurn.memory, ← popBurn.memory, ← pushBurn.memory]
+      exact zero
+    have localRoute := armCursor.toward compiled bodyReached
+      (by trivial) targetAt
+    have cursorToArm : Exec.Deriv.ParentPrefix cursor.node armCursor.node :=
+      .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _)))
+    have initialToArm : Exec.Deriv.ParentPrefix initial.node armCursor.node :=
+      parentPrefixTrans chronology.initialToCursor cursorToArm
+    exact Or.inr ⟨armCursor,
+      Exec.Deriv.SourceCursor.Toward.rebase initialToArm localRoute,
+      armZero⟩
+
 private inductive RegisterKernelCut
     {dp : DeployParams} {root target : Exec.Deriv}
     (initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
@@ -2740,13 +2845,6 @@ private inductive RegisterKernelCut
         ⟨registerAfterSetSlot, []⟩ registerAfterSet)
       (route : Exec.Deriv.SourceCursor.Toward
         initial target (.reg .sstore) cursor) :
-      RegisterKernelCut initial
-  | finishSetPauserCall {path : Prog.SourcePath}
-      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
-        (.call finishSetPauserSlot))
-      (route : Exec.Deriv.SourceCursor.Toward
-        initial target (.reg .sstore) cursor)
-      (zero : RegisterContinuationZero cursor.pre.memory) :
       RegisterKernelCut initial
 
 private theorem registerKernelCut_at_sstore
@@ -2876,6 +2974,8 @@ private theorem removeTarget_registerCut
       (runtimeMain dp)}
     (cursor : Exec.Deriv.SourceCursor root (runtime dp)
       ⟨removeTargetSlot, []⟩ removeTarget)
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
     (route : Exec.Deriv.SourceCursor.Toward
       initial target (.reg .sstore) cursor)
     (zero : RegisterContinuationZero cursor.pre.memory) :
@@ -3036,7 +3136,305 @@ private theorem removeTarget_registerCut
       clearIndexStoreZero (by simp [removeTargetSlot]) with cut | ⟨finishCallCursor,
         finishCallRoute, finishCallZero⟩
   · exact cut
-  exact .finishSetPauserCall finishCallCursor finishCallRoute finishCallZero
+  rcases finishSetPauserCallContinuation finishCallCursor compiled targetAt
+      finishCallRoute finishCallZero with
+    ⟨finishCursor, finishRoute, finishZero⟩
+  exact finishSetPauser_registerCut finishCursor compiled targetAt
+    finishRoute finishZero
+
+private theorem afterOldPauser_registerCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp)
+      ⟨afterOldPauserSlot, []⟩ afterOldPauser)
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    RegisterKernelCut (target := target) initial := by
+  unfold afterOldPauser at cursor
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation route zero with
+    ⟨iszeroCursor, iszeroRoute, iszeroZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne iszeroRoute
+      (by intro h; cases h) with
+    ⟨iszeroChronology, branchCursor, iszeroEdge, branchRoute⟩
+  have branchZero : RegisterContinuationZero branchCursor.pre.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory)
+      (Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        iszeroCursor iszeroEdge)]
+    exact iszeroZero
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmContinuation
+      branchCursor compiled targetAt branchRoute branchZero with
+    ⟨incrementCursor, incrementRoute, incrementZero⟩ |
+      ⟨removeCallCursor, removeCallRoute, removeCallZero⟩
+  · rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+        incrementRoute incrementZero with
+      ⟨countKeyCursor, countKeyRoute, countKeyZero⟩
+    rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation countKeyRoute
+        (line := tagTop countRegion ++
+          [Ninst.sload, Ninst.pushB256 1, Ninst.add])
+        (by
+          intro instruction member
+          simp only [tagTop, List.mem_append, List.mem_cons,
+            List.not_mem_nil, or_false] at member
+          rcases member with (rfl | rfl) | rfl | rfl | rfl <;>
+            intro h <;> cases h)
+        (fun run => Line.of_inv Devm.memory (by line_inv) run)
+        countKeyZero with
+      ⟨countValueCursor, countValueRoute, countValueZero⟩
+    rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+        countValueRoute countValueZero with
+      ⟨countTagCursor, countTagRoute, countTagZero⟩
+    rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation countTagRoute
+        (line := tagTop countRegion)
+        (by
+          intro instruction member
+          simp only [tagTop, List.mem_cons, List.not_mem_nil,
+            or_false] at member
+          rcases member with rfl | rfl <;> intro h <;> cases h)
+        (fun run => Line.of_inv Devm.memory (by line_inv) run)
+        countTagZero with
+      ⟨countStoreCursor, countStoreRoute, countStoreZero⟩
+    rcases registerKernelCut_at_sstore countStoreCursor countStoreRoute
+        countStoreZero (by simp [afterOldPauserSlot]) with cut |
+          ⟨finishCallCursor, finishCallRoute, finishCallZero⟩
+    · exact cut
+    rcases finishSetPauserCallContinuation finishCallCursor compiled targetAt
+        finishCallRoute finishCallZero with
+      ⟨finishCursor, finishRoute, finishZero⟩
+    exact finishSetPauser_registerCut finishCursor compiled targetAt
+      finishRoute finishZero
+  · rcases Exec.Deriv.SourceCursor.Toward.callBodyContinuation
+        removeCallCursor compiled targetAt removeCallRoute removeCallZero with
+      ⟨body, lookup, removeCursor, removeRoute, removeZero⟩
+    simp [runtime, aux, removeTargetSlot] at lookup
+    cases lookup
+    exact removeTarget_registerCut removeCursor compiled targetAt
+      removeRoute removeZero
+
+private theorem appendTarget_registerCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp)
+      ⟨appendTargetSlot, []⟩ appendTarget)
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    RegisterKernelCut (target := target) initial := by
+  unfold appendTarget at cursor
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation route
+      (line := [Ninst.pushB256 arrayLengthSlot, Ninst.sload,
+        Ninst.pushB256 1, Ninst.add, Ninst.dup 0])
+      (by
+        intro instruction member
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+        rcases member with rfl | rfl | rfl | rfl | rfl <;>
+          intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) zero with
+    ⟨lengthStoreCursor, lengthStoreRoute, lengthStoreZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropMstoreAtAfterContinuation
+      lengthStoreRoute lengthStoreZero (by decide +kernel) with
+    ⟨arrayValueCursor, arrayValueRoute, arrayValueZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      arrayValueRoute arrayValueZero with
+    ⟨arrayIndexCursor, arrayIndexRoute, arrayIndexZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      arrayIndexRoute arrayIndexZero with
+    ⟨arrayTagCursor, arrayTagRoute, arrayTagZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation arrayTagRoute
+      (line := tagTop arrayRegion)
+      (by
+        intro instruction member
+        simp only [tagTop, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) arrayTagZero with
+    ⟨arrayStoreCursor, arrayStoreRoute, arrayStoreZero⟩
+  rcases registerKernelCut_at_sstore arrayStoreCursor arrayStoreRoute
+      arrayStoreZero (by simp [appendTargetSlot]) with cut |
+        ⟨reverseValueCursor, reverseValueRoute, reverseValueZero⟩
+  · exact cut
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      reverseValueRoute reverseValueZero with
+    ⟨reverseTargetCursor, reverseTargetRoute, reverseTargetZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      reverseTargetRoute reverseTargetZero with
+    ⟨reverseTagCursor, reverseTagRoute, reverseTagZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation reverseTagRoute
+      (line := tagTop indexRegion)
+      (by
+        intro instruction member
+        simp only [tagTop, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) reverseTagZero with
+    ⟨reverseStoreCursor, reverseStoreRoute, reverseStoreZero⟩
+  rcases registerKernelCut_at_sstore reverseStoreCursor reverseStoreRoute
+      reverseStoreZero (by simp [appendTargetSlot]) with cut |
+        ⟨finalLengthCursor, finalLengthRoute, finalLengthZero⟩
+  · exact cut
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      finalLengthRoute finalLengthZero with
+    ⟨lengthKeyCursor, lengthKeyRoute, lengthKeyZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation lengthKeyRoute
+      (line := [Ninst.pushB256 arrayLengthSlot])
+      (by simp [Ninst.pushB256])
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) lengthKeyZero with
+    ⟨finalStoreCursor, finalStoreRoute, finalStoreZero⟩
+  rcases registerKernelCut_at_sstore finalStoreCursor finalStoreRoute
+      finalStoreZero (by simp [appendTargetSlot]) with cut |
+        ⟨afterOldCallCursor, afterOldCallRoute, afterOldCallZero⟩
+  · exact cut
+  rcases Exec.Deriv.SourceCursor.Toward.callBodyContinuation
+      afterOldCallCursor compiled targetAt afterOldCallRoute afterOldCallZero with
+    ⟨body, lookup, afterOldCursor, afterOldRoute, afterOldZero⟩
+  simp [runtime, aux, afterOldPauserSlot] at lookup
+  cases lookup
+  exact afterOldPauser_registerCut afterOldCursor compiled targetAt
+    afterOldRoute afterOldZero
+
+private theorem setPauserKernel_registerCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp)
+      ⟨setPauserSlot, []⟩ setPauserKernel)
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    RegisterKernelCut (target := target) initial := by
+  unfold setPauserKernel at cursor
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation route zero with
+    ⟨targetZeroCursor, targetZeroRoute, targetZeroMemory⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne targetZeroRoute
+      (by intro h; cases h) with
+    ⟨targetZeroChronology, targetBranchCursor, targetZeroEdge,
+      targetBranchRoute⟩
+  have targetBranchMemory :
+      RegisterContinuationZero targetBranchCursor.pre.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory)
+      (Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        targetZeroCursor targetZeroEdge)]
+    exact targetZeroMemory
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmContinuation
+      targetBranchCursor compiled targetAt targetBranchRoute
+      targetBranchMemory with
+    ⟨assignmentCursor, assignmentRoute, assignmentMemory⟩ |
+      ⟨zeroErrorCursor, zeroErrorRoute, zeroErrorMemory⟩
+  · rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+        assignmentRoute assignmentMemory with
+      ⟨assignmentTagCursor, assignmentTagRoute, assignmentTagMemory⟩
+    rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation
+        assignmentTagRoute
+        (line := tagTop assignmentRegion ++ [Ninst.sload, Ninst.dup 0])
+        (by
+          intro instruction member
+          simp only [tagTop, List.mem_append, List.mem_cons,
+            List.not_mem_nil, or_false] at member
+          rcases member with (rfl | rfl) | rfl | rfl <;>
+            intro h <;> cases h)
+        (fun run => Line.of_inv Devm.memory (by line_inv) run)
+        assignmentTagMemory with
+      ⟨previousStoreCursor, previousStoreRoute, previousStoreMemory⟩
+    rcases Exec.Deriv.SourceCursor.Toward.dropMstoreAtBeforeContinuation
+        previousStoreRoute previousStoreMemory (by decide +kernel) with
+      ⟨newValueCursor, newValueRoute, newValueMemory⟩
+    rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+        newValueRoute newValueMemory with
+      ⟨assignmentTargetCursor, assignmentTargetRoute,
+        assignmentTargetMemory⟩
+    rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+        assignmentTargetRoute assignmentTargetMemory with
+      ⟨assignmentKeyCursor, assignmentKeyRoute, assignmentKeyMemory⟩
+    rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation
+        assignmentKeyRoute (line := tagTop assignmentRegion)
+        (by
+          intro instruction member
+          simp only [tagTop, List.mem_cons, List.not_mem_nil,
+            or_false] at member
+          rcases member with rfl | rfl <;> intro h <;> cases h)
+        (fun run => Line.of_inv Devm.memory (by line_inv) run)
+        assignmentKeyMemory with
+      ⟨assignmentStoreCursor, assignmentStoreRoute, assignmentStoreMemory⟩
+    rcases registerKernelCut_at_sstore assignmentStoreCursor
+        assignmentStoreRoute assignmentStoreMemory
+        (by simp [setPauserSlot]) with cut |
+          ⟨oldZeroCursor, oldZeroRoute, oldZeroMemory⟩
+    · exact cut
+    rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne oldZeroRoute
+        (by intro h; cases h) with
+      ⟨oldZeroChronology, oldBranchCursor, oldZeroEdge, oldBranchRoute⟩
+    have oldBranchMemory :
+        RegisterContinuationZero oldBranchCursor.pre.memory := by
+      rw [← Ninst.Hinv.inv (f := Devm.memory)
+        (Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+          oldZeroCursor oldZeroEdge)]
+      exact oldZeroMemory
+    rcases Exec.Deriv.SourceCursor.Toward.branchArmContinuation
+        oldBranchCursor compiled targetAt oldBranchRoute oldBranchMemory with
+      ⟨oldCountCursor, oldCountRoute, oldCountMemory⟩ |
+        ⟨appendCallCursor, appendCallRoute, appendCallMemory⟩
+    · rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+          oldCountRoute oldCountMemory with
+        ⟨oldCountTagCursor, oldCountTagRoute, oldCountTagMemory⟩
+      rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation
+          oldCountTagRoute
+          (line := tagTop countRegion ++ [Ninst.sload, Ninst.pushB256 1,
+            Ninst.swap 0, Ninst.sub])
+          (by
+            intro instruction member
+            simp only [tagTop, List.mem_append, List.mem_cons,
+              List.not_mem_nil, or_false] at member
+            rcases member with (rfl | rfl) | rfl | rfl | rfl | rfl <;>
+              intro h <;> cases h)
+          (fun run => Line.of_inv Devm.memory (by line_inv) run)
+          oldCountTagMemory with
+        ⟨oldCountValueCursor, oldCountValueRoute, oldCountValueMemory⟩
+      rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+          oldCountValueRoute oldCountValueMemory with
+        ⟨oldCountKeyCursor, oldCountKeyRoute, oldCountKeyMemory⟩
+      rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation
+          oldCountKeyRoute (line := tagTop countRegion)
+          (by
+            intro instruction member
+            simp only [tagTop, List.mem_cons, List.not_mem_nil,
+              or_false] at member
+            rcases member with rfl | rfl <;> intro h <;> cases h)
+          (fun run => Line.of_inv Devm.memory (by line_inv) run)
+          oldCountKeyMemory with
+        ⟨oldCountStoreCursor, oldCountStoreRoute, oldCountStoreMemory⟩
+      rcases registerKernelCut_at_sstore oldCountStoreCursor
+          oldCountStoreRoute oldCountStoreMemory
+          (by simp [setPauserSlot]) with cut |
+            ⟨afterOldCallCursor, afterOldCallRoute, afterOldCallMemory⟩
+      · exact cut
+      rcases Exec.Deriv.SourceCursor.Toward.callBodyContinuation
+          afterOldCallCursor compiled targetAt afterOldCallRoute
+          afterOldCallMemory with
+        ⟨body, lookup, afterOldCursor, afterOldRoute, afterOldMemory⟩
+      simp [runtime, aux, afterOldPauserSlot] at lookup
+      cases lookup
+      exact afterOldPauser_registerCut afterOldCursor compiled targetAt
+        afterOldRoute afterOldMemory
+    · rcases Exec.Deriv.SourceCursor.Toward.callBodyContinuation
+          appendCallCursor compiled targetAt appendCallRoute
+          appendCallMemory with
+        ⟨body, lookup, appendCursor, appendRoute, appendMemory⟩
+      simp [runtime, aux, appendTargetSlot] at lookup
+      cases lookup
+      exact appendTarget_registerCut appendCursor compiled targetAt
+        appendRoute appendMemory
+  · exact (zeroErrorCursor.noSstore_of_entrySstoreFree compiled
+      [pausableZeroErrorSlot] rfl
+      (Exec.Deriv.SourceCursor.Toward.chronology
+        zeroErrorRoute).cursorToTarget targetAt).elim
 
 private theorem prefix_of_timestamp
     {sevm : Sevm} {pre post : Devm} {xs : Stack}
