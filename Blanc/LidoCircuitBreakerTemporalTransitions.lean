@@ -7140,4 +7140,162 @@ private theorem removeTarget_foundZeroRetained_runCompiled
         lengthRestoreCost + indexClearCost := by omega
   rw [hg] at hrun
   simpa only [MIndex, MLength, MLast, eventLog] using hrun
+
+private theorem afterOldPauser_foundZeroRetained_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes)
+    (target oldLength next oldPauser remaining carry : B256)
+    (arrayOriginal indexOriginal lengthOriginal : B256)
+    (holeCost movedIndexCost tailClearCost lengthRestoreCost
+      indexClearCost G : Nat)
+    (hwf : Mem.Wf M) (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hprevious : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) = oldPauser)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (hcontinuation : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 0)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (holdValid : nonzeroCanonicalAddress oldPauser)
+    (hremaining : remaining ≠ 0)
+    (hnextNonzero : next ≠ 0)
+    (hnextBound : next.toNat < 2 ^ 252)
+    (hsize : M.size = 704) (halign : M.size % 32 = 0)
+    (harray : base.getStorVal sevm.currentTarget
+      (arrayEntrySlot next) = target)
+    (hindex : base.getStorVal sevm.currentTarget
+      (indexSlot target) = next)
+    (hlength : base.getStorVal sevm.currentTarget arrayLengthSlot = next)
+    (hcount : base.getStorVal sevm.currentTarget
+      (countSlot oldPauser) = remaining)
+    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot next) = arrayOriginal)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+      arrayLengthSlot = lengthOriginal)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal next next =
+      movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 = tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal next oldLength =
+      lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal next 0 = indexClearCost)
+    (hwarmArray : (sevm.currentTarget, arrayEntrySlot next) ∈
+      base.accessedStorageKeys)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      base.accessedStorageKeys)
+    (hwarmLength : (sevm.currentTarget, arrayLengthSlot) ∈
+      base.accessedStorageKeys)
+    (hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
+      base.accessedStorageKeys)
+    (hsub : next - 1 = oldLength)
+    (hgasFinal : gCallStipend < G + 2120 + indexClearCost)
+    (hstatic : sevm.isStatic = false) :
+    let MIndex := M.write (removedIndexWord * 32).toNat next.toBytes
+    let MLength := MIndex.write (arrayLengthWord * 32).toNat next.toBytes
+    let MLast := MLength.write (lastTargetWord * 32).toNat target.toBytes
+    let eventLog : Log :=
+      ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[carry], M,
+        G + 2586 + holeCost + movedIndexCost + tailClearCost +
+          lengthRestoreCost + indexClearCost⟩)
+      afterOldPauser
+      (((absentZeroRemovePost sevm
+          (absentZeroTailClearPost sevm base target next)
+          target oldLength).addLog eventLog).setMach
+        ⟨[carry], MLast, G⟩) := by
+  dsimp only
+  let fs := (runtime dp).main :: (runtime dp).aux
+  let MIndex := M.write (removedIndexWord * 32).toNat next.toBytes
+  let MLength := MIndex.write (arrayLengthWord * 32).toNat next.toBytes
+  let MLast := MLength.write (lastTargetWord * 32).toNat target.toBytes
+  let eventLog : Log :=
+    ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
+  have hremove := removeTarget_foundZeroRetained_runCompiled dp sevm base M
+    img target oldLength next oldPauser remaining carry arrayOriginal
+    indexOriginal lengthOriginal holeCost movedIndexCost tailClearCost
+    lengthRestoreCost indexClearCost G hwf hreads htarget hprevious hnew
+    hcontinuation htargetValid holdValid hremaining hnextNonzero hnextBound
+    hsize halign harray hindex hlength hcount harrayOrig hindexOrig
+    hlengthOrig hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
+    hindexClearCost hwarmArray hwarmIndex hwarmLength hwarmCount hsub
+    hgasFinal hstatic
+  have hlookup : fs[removeTargetSlot]? = some removeTarget := by
+    simp [fs, runtime, aux, removeTargetSlot]
+  have hcall : Func.RunCompiled fs sevm
+      (base.setMach ⟨[carry], M,
+        G + 2563 + holeCost + movedIndexCost + tailClearCost +
+          lengthRestoreCost + indexClearCost⟩)
+      (.call removeTargetSlot)
+      (((absentZeroRemovePost sevm
+          (absentZeroTailClearPost sevm base target next)
+          target oldLength).addLog eventLog).setMach
+        ⟨[carry], MLast, G⟩) := by
+    apply Func.RunCompiled.call hlookup (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      decide)
+    · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+        (Devm.burnBy_setMach_gas
+          (devm := base.setMach ⟨[carry], M,
+            G + 2563 + holeCost + movedIndexCost + tailClearCost +
+              lengthRestoreCost + indexClearCost⟩)
+          (cost := gVerylow + gMid + gJumpdest)
+          (G := G + 2551 + holeCost + movedIndexCost + tailClearCost +
+            lengthRestoreCost + indexClearCost)
+          (by simp only [Devm.gasLeft_setMach]
+              norm_num [gVerylow, gMid, gJumpdest]
+              omega))
+    · simpa only [fs, MIndex, MLength, MLast, eventLog] using hremove
+  have hbranch : Func.RunCompiled fs sevm
+      (base.setMach ⟨[1, carry], M,
+        G + 2577 + holeCost + movedIndexCost + tailClearCost +
+          lengthRestoreCost + indexClearCost⟩)
+      ((.call removeTargetSlot) <?>
+        (newCountKey +++ Ninst.sload ::: pushB256 1 ::: add :::
+          newCountKey +++ Ninst.sstore ::: .call finishSetPauserSlot))
+      (((absentZeroRemovePost sevm
+          (absentZeroTailClearPost sevm base target next)
+          target oldLength).addLog eventLog).setMach
+        ⟨[carry], MLast, G⟩) := by
+    apply Func.RunCompiled.succ (w := (1 : B256)) (by decide) (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      decide)
+    · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+        (Devm.popBurnBy_setMach
+          (devm := base.setMach ⟨[1, carry], M,
+            G + 2577 + holeCost + movedIndexCost + tailClearCost +
+              lengthRestoreCost + indexClearCost⟩)
+          (x := (1 : B256)) (s := [carry])
+          (cost := gVerylow + gHigh + gJumpdest)
+          (G := G + 2563 + holeCost + movedIndexCost + tailClearCost +
+            lengthRestoreCost + indexClearCost)
+          (h_stk := rfl) (h := by
+            simp only [Devm.gasLeft_setMach]
+            norm_num [gVerylow, gHigh, gJumpdest]
+            omega))
+    · exact hcall
+  have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
+    rw [hsize]
+    decide
+  have hnewMemory : (M.read (newPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
+  simp only [afterOldPauser]
+  func_run (3) [3]
+  case h_cost =>
+    rw [Devm.extCost_zero_of_le halign hnewCovered]
+    norm_num [gVerylow]
+  case a =>
+    rw [Mem.Reads.read hreads, hnew, hnewMemory]
+    have hg : G + 2586 + holeCost + movedIndexCost + tailClearCost +
+          lengthRestoreCost + indexClearCost - 9 =
+        G + 2577 + holeCost + movedIndexCost + tailClearCost +
+          lengthRestoreCost + indexClearCost := by omega
+    rw [hg]
+    exact hbranch
 end Blanc.LidoCircuitBreaker
