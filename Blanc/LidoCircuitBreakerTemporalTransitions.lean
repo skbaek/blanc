@@ -3980,9 +3980,7 @@ private theorem removeTarget_absentZero_runCompiled
     dsimp only [MIndex]
     rw [Mem.size_write_word_at,
       show (removedIndexWord * 32).toNat + 32 = 672 by decide, hsize]
-    split
-    · omega
-    · decide
+    split <;> omega
   have hsizeLength : MLength.size = 704 := by
     dsimp only [MLength]
     rw [Mem.size_write_word_at,
