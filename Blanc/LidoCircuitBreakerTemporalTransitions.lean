@@ -44,6 +44,46 @@ private theorem addAccessedStorageKey_setMach_setMach
     (addAccessedStorageKey (base.setMach m) target key).setMach m' =
       (addAccessedStorageKey base target key).setMach m' := rfl
 
+/-- The fresh/nonzero model branch determines the exact five-write source
+trace and its refined Registry witness.  This is the semantic target used by
+the forward emitted-kernel construction below; no trace or poststate is
+supplied by the caller. -/
+theorem freshRegistration_sourceTrace_witness
+    {s : Stor} {entries : List Entry} {target newPauser : B256}
+    (hw : RegistryWitness (logicalStorageOfStor s) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    (hnew : nonzeroCanonicalAddress newPauser)
+    (hfind : findEntry entries target = none) :
+    ∃ trace : SetPauserSourceTrace,
+      setPauserSourceTrace entries target newPauser = some trace ∧
+      trace.postEntries = entries ++ [(target, newPauser)] ∧
+      trace.writes =
+        [(assignmentSlot target, newPauser),
+          (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+          (indexSlot target, Nat.toB256 (entries.length + 1)),
+          (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+          (countSlot newPauser,
+            Nat.toB256 (assignmentCount entries newPauser + 1))] ∧
+      RegistryWitness
+        (logicalStorageOfStor (applyRegistryWrites s trace.writes))
+        trace.postEntries := by
+  let writes : List (B256 × B256) :=
+    [(assignmentSlot target, newPauser),
+      (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+      (indexSlot target, Nat.toB256 (entries.length + 1)),
+      (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+      (countSlot newPauser,
+        Nat.toB256 (assignmentCount entries newPauser + 1))]
+  let trace : SetPauserSourceTrace :=
+    { postEntries := entries ++ [(target, newPauser)]
+      writes := writes }
+  refine ⟨trace, ?_, rfl, rfl, ?_⟩
+  · simp [trace, writes, setPauserSourceTrace, setPauser,
+      htarget.1, hfind, hnew.1, setPauserSourceWrites,
+      Option.getD]
+  · dsimp only [trace, writes]
+    exact hw.applyFreshWrites htarget hnew hfind
+
 set_option maxRecDepth 8192 in
 private theorem registerAfterSet_storeLogTail_freshNonzero
     (fs : List Func) (sevm : Sevm) (base : Devm)
@@ -338,5 +378,189 @@ private theorem registerAfterSet_freshNonzero_runCompiled
   · have logsAfter : afterInterval.logs = base.logs := rfl
     rw [logsAfter] at hlogs
     exact hlogs
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 800000 in
+private theorem finishSetPauser_freshNonzero_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes) (target newPauser timestamp interval expiry : B256)
+    (G : Nat)
+    (hwf : Mem.Wf M)
+    (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hprevious : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) = 0)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuation : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 0)
+    (hnewNonzero : newPauser ≠ 0)
+    (hsize : 768 ≤ M.size)
+    (halign : M.size % 32 = 0)
+    (htime : sevm.benvStat.time = timestamp)
+    (hinterval : base.getStorVal sevm.currentTarget
+      heartbeatIntervalSlot = interval)
+    (hintervalCold :
+      (sevm.currentTarget, heartbeatIntervalSlot) ∉
+        base.accessedStorageKeys)
+    (hexpiry : base.getStorVal sevm.currentTarget
+      (expirySlot newPauser) = 0)
+    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+      (expirySlot newPauser) = 0)
+    (hwarmExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
+      base.accessedStorageKeys)
+    (hstatic : sevm.isStatic = false)
+    (hextension : CheckedHeartbeatExtension timestamp interval expiry)
+    (hexpiryNonzero : expiry ≠ 0) :
+    ∃ post,
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        (base.setMach ⟨[], M, G + 25527⟩) finishSetPauser post ∧
+      post.gasLeft = G ∧
+      post.getStorVal sevm.currentTarget (expirySlot newPauser) = expiry ∧
+      post.logs = base.logs ++
+        [⟨sevm.currentTarget,
+          [pauserSetEvent, target, 0, newPauser], []⟩,
+         ⟨sevm.currentTarget,
+          [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] := by
+  let eventLog : Log :=
+    ⟨sevm.currentTarget, [pauserSetEvent, target, 0, newPauser], []⟩
+  let eventBase := base.addLog eventLog
+  have hintervalEvent : eventBase.getStorVal sevm.currentTarget
+      heartbeatIntervalSlot = interval := by
+    change base.getStorVal sevm.currentTarget heartbeatIntervalSlot = interval
+    exact hinterval
+  have hintervalColdEvent :
+      (sevm.currentTarget, heartbeatIntervalSlot) ∉
+        eventBase.accessedStorageKeys := by
+    change (sevm.currentTarget, heartbeatIntervalSlot) ∉
+      base.accessedStorageKeys
+    exact hintervalCold
+  have hexpiryEvent : eventBase.getStorVal sevm.currentTarget
+      (expirySlot newPauser) = 0 := by
+    change base.getStorVal sevm.currentTarget (expirySlot newPauser) = 0
+    exact hexpiry
+  have hwarmExpiryEvent :
+      (sevm.currentTarget, expirySlot newPauser) ∈
+        eventBase.accessedStorageKeys := by
+    change (sevm.currentTarget, expirySlot newPauser) ∈
+      base.accessedStorageKeys
+    exact hwarmExpiry
+  rcases registerAfterSet_freshNonzero_runCompiled
+      ((runtime dp).main :: (runtime dp).aux) sevm eventBase M img
+      newPauser timestamp interval expiry G hwf hreads hprevious hnew
+      hnewNonzero hsize halign htime hintervalEvent hintervalColdEvent
+      hexpiryEvent hexpiryOrig hwarmExpiryEvent hstatic hextension
+      hexpiryNonzero with ⟨post, hregister, hgas, hstore, hlogs⟩
+  have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
+    omega
+  have hpreviousCovered :
+      (previousPauserWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (previousPauserWord * 32).toNat + 32 ≤ 768 := by decide
+    omega
+  have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (newPauserWord * 32).toNat + 32 ≤ 768 := by decide
+    omega
+  have hcontinuationCovered :
+      (continuationWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (continuationWord * 32).toNat + 32 ≤ 768 := by decide
+    omega
+  have htargetMemory :
+      (M.read (targetWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign htargetCovered)]
+  have hpreviousMemory :
+      (M.read (previousPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hpreviousCovered)]
+  have hnewMemory :
+      (M.read (newPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
+  have hcontinuationMemory :
+      (M.read (continuationWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self
+      (memExtSize_of_le halign hcontinuationCovered)]
+  have htargetValue :
+      (M.read (targetWord * 32).toNat 32).1.toB256 = target := by
+    rw [Mem.Reads.read hreads]
+    exact htarget
+  have hpreviousValue :
+      (M.read (previousPauserWord * 32).toNat 32).1.toB256 = 0 := by
+    rw [Mem.Reads.read hreads]
+    exact hprevious
+  have hnewValue :
+      (M.read (newPauserWord * 32).toNat 32).1.toB256 = newPauser := by
+    rw [Mem.Reads.read hreads]
+    exact hnew
+  have hcontinuationValue :
+      (M.read (continuationWord * 32).toNat 32).1.toB256 = 0 := by
+    rw [Mem.Reads.read hreads]
+    exact hcontinuation
+  have hreadZero : M.read 0 0 = ([], M) := by
+    simp [Mem.read, Mem.extend, memExtSize]
+    rfl
+  let fs := (runtime dp).main :: (runtime dp).aux
+  have hlookup : fs[registerAfterSetSlot]? = some registerAfterSet := by
+    simp [fs, runtime, aux, registerAfterSetSlot]
+  have hcall : Func.RunCompiled fs sevm
+      (eventBase.setMach ⟨[], M, G + 23604⟩)
+      (.call registerAfterSetSlot) post := by
+    apply Func.RunCompiled.call hlookup
+      (by simp only [Devm.stack_setMach, List.length_nil]; decide)
+    · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+        (Devm.burnBy_setMach_gas
+          (devm := eventBase.setMach ⟨[], M, G + 23604⟩)
+          (cost := gVerylow + gMid + gJumpdest) (G := G + 23592)
+          (by simp only [Devm.gasLeft_setMach];
+              norm_num [gVerylow, gMid, gJumpdest]))
+    · exact hregister
+  have hbranch : Func.RunCompiled fs sevm
+      (eventBase.setMach ⟨[1], M, G + 23618⟩)
+      ((.call registerAfterSetSlot) <?> (.call pauseAfterSetSlot)) post := by
+    apply Func.RunCompiled.succ (w := (1 : B256)) (by decide)
+      (by simp only [Devm.stack_setMach, List.length_cons,
+        List.length_nil]; decide)
+    · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+        (Devm.popBurnBy_setMach
+          (devm := eventBase.setMach ⟨[1], M, G + 23618⟩)
+          (x := (1 : B256)) (s := [])
+          (cost := gVerylow + gHigh + gJumpdest) (G := G + 23604)
+          (h_stk := rfl) (h := by
+            simp only [Devm.gasLeft_setMach]
+            norm_num [gVerylow, gHigh, gJumpdest]))
+    · exact hcall
+  have hcontinuationRun : Func.RunCompiled fs sevm
+      (eventBase.setMach ⟨[], M, G + 23627⟩)
+      (loadWord continuationWord +++ Ninst.iszero :::
+        ((.call registerAfterSetSlot) <?> (.call pauseAfterSetSlot))) post := by
+    func_run (3) [3]
+    case h_cost =>
+      rw [Devm.extCost_zero_of_le halign hcontinuationCovered]
+      norm_num [gVerylow]
+    case a =>
+      rw [hcontinuationValue, hcontinuationMemory]
+      norm_num
+      exact hbranch
+  refine ⟨post, ?_, hgas, hstore, ?_⟩
+  · simp only [finishSetPauser]
+    func_run (10) [3, 3, 3, 1875]
+    all_goals try simp_rw [hnewMemory]
+    all_goals try simp_rw [hpreviousMemory]
+    all_goals try simp_rw [htargetMemory]
+    all_goals try {
+      rw [Devm.extCost_zero_of_le halign (by omega)]
+      norm_num [gVerylow, gLog, gLogdata, gLogtopic] }
+    case h_cost =>
+      simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+      rw [Devm.extCost_zero_of_le halign (by omega)]
+      norm_num [gLog, gLogdata, gLogtopic]
+    case a =>
+      rw [hnewValue, hpreviousValue, htargetValue]
+      rw [show ((0 : B256) * 32).toNat = 0 by decide, hreadZero]
+      exact hcontinuationRun
+  · have heventLogs : eventBase.logs = base.logs ++ [eventLog] := rfl
+    rw [heventLogs] at hlogs
+    simpa [eventLog, List.append_assoc] using hlogs
 
 end Blanc.LidoCircuitBreaker
