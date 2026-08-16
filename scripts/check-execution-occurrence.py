@@ -294,16 +294,6 @@ def load_ownership_parser():
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    # Contract declarations include identifiers ending in `?`; keep the
-    # shared parser's scope/comment handling while preventing those headers
-    # from being truncated into duplicate basenames.
-    ident = r"[A-Za-z_][A-Za-z0-9_'?!]*(?:\.[A-Za-z_][A-Za-z0-9_'?!]*)*"
-    module.DECL_RE = re.compile(
-        rf"^\s*(?:@\[[^]]+\]\s*)*"
-        rf"(?:(?:private|protected|noncomputable|unsafe)\s+)*"
-        rf"(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+"
-        rf"({ident})(?=\s|$)"
-    )
     return module
 
 

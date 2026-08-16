@@ -70,17 +70,6 @@ def load_lean_parser():
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    # The shared parser's historical identifier grammar predates declarations
-    # containing `?` (for example `successfulSstore?_sound`).  Keep its
-    # comment/scope handling, but prevent those headers from being truncated
-    # into duplicate basenames while scanning the larger occurrence module.
-    ident = r"[A-Za-z_][A-Za-z0-9_'?!]*(?:\.[A-Za-z_][A-Za-z0-9_'?!]*)*"
-    module.DECL_RE = re.compile(
-        rf"^\s*(?:@\[[^]]+\]\s*)*"
-        rf"(?:(?:private|protected|noncomputable|unsafe)\s+)*"
-        rf"(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+"
-        rf"({ident})(?=\s|$)"
-    )
     return module
 
 

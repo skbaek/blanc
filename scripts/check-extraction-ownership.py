@@ -10,9 +10,9 @@ directly.  It deliberately does not try to recognize propositionally
 equivalent declarations under unrelated names; that remains an independent
 review obligation.
 
-``--negative-controls`` runs five in-memory-copy controls: the historical donor
-alias, a Lido common-owner basename shadow, a Lido alias, a missing common
-declaration, and a missing direct import.  Each must fail with its own
+``--negative-controls`` runs six controls: the historical donor alias, a Lido
+common-owner basename shadow, a Lido alias, a missing common declaration, a
+missing direct import, and distinct trailing-`?` declaration parsing. Each must fail with its own
 diagnostic tag, so a green control run proves the relevant channel is live.
 """
 
@@ -38,7 +38,7 @@ NAMESPACE_RE = re.compile(rf"^\s*namespace\s+({IDENT})\s*$")
 SECTION_RE = re.compile(r"^\s*(?:noncomputable\s+)?section(?:\s+[A-Za-z_][A-Za-z0-9_.']*)?\s*$")
 END_RE = re.compile(r"^\s*end(?:\s+[A-Za-z_][A-Za-z0-9_.']*)?\s*$")
 DECL_RE = re.compile(
-    rf"^\s*(?:@\[[^]]+\]\s*)*(?:(?:private|protected|noncomputable|unsafe)\s+)*(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+({IDENT})\b"
+    rf"^\s*(?:@\[[^]]+\]\s*)*(?:(?:private|protected|noncomputable|unsafe)\s+)*(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+({IDENT})(?=\s|$)"
 )
 IMPORT_RE = re.compile(rf"^\s*import\s+({IDENT})(?:\s|$)")
 ALIAS_COMMAND_RE = re.compile(r"\balias\b")
@@ -309,6 +309,29 @@ def negative_controls(root: Path) -> list[str]:
     ]
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="extraction-ownership-") as temp:
+        parser_probe = Path(temp) / "TrailingQuestionMark.lean"
+        parser_probe.write_text(
+            "namespace Blanc.ParserProbe\n"
+            "def sourceSite : Nat := 0\n"
+            "def sourceSite? : Nat := 1\n"
+            "end Blanc.ParserProbe\n",
+            encoding="utf-8",
+        )
+        try:
+            parsed = declarations(parser_probe)
+            expected = {
+                "Blanc.ParserProbe.sourceSite",
+                "Blanc.ParserProbe.sourceSite?",
+            }
+            if set(parsed) != expected:
+                failures.append(
+                    "CONTROL-FAILED — trailing-question-mark-parser: "
+                    f"expected {sorted(expected)}, got {sorted(parsed)}"
+                )
+        except (OSError, ValueError) as exc:
+            failures.append(
+                f"CONTROL-FAILED — trailing-question-mark-parser: {exc}"
+            )
         copied = Path(temp) / "blanc"
         shutil.copytree(root, copied, ignore=shutil.ignore_patterns(".git", ".lake", "build"))
         for name, expected, mutate in controls:
@@ -345,7 +368,7 @@ def main() -> int:
                 print(control)
             print(f"REGRESSION — extraction ownership: {len(controls)} negative control(s) failed")
             return 1
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido shadows and aliases absent; direct import present; 5/5 negative controls live")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido shadows and aliases absent; direct import present; 6/6 negative controls live")
     else:
         print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido shadows and aliases absent; direct import present")
     return 0
