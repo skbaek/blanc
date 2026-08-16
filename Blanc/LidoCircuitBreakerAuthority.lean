@@ -2375,6 +2375,554 @@ private theorem RegisterContinuationZero.prefix_of_loadWord
   rw [loadedMemory, offsetEq]
   exact RegisterContinuationZero.extend pushedZero _ _
 
+private theorem RegisterContinuationZero.of_run_loadWord
+    {sevm : Sevm} {pre post : Devm} {word : B256}
+    (zero : RegisterContinuationZero pre.memory)
+    (run : Line.Run sevm pre (loadWord word) post) :
+    RegisterContinuationZero post.memory := by
+  unfold loadWord at run
+  rcases Line.of_run_cons run with ⟨pushed, pushRun, rest⟩
+  rcases Line.of_run_cons rest with ⟨loaded, loadRun, nilRun⟩
+  cases nilRun
+  rcases of_run_mload_val loadRun with ⟨offset, stack, memory, returnData⟩
+  rw [memory, ← (of_run_pushB256 pushRun).memory]
+  exact zero.extend _ _
+
+private theorem RegisterContinuationZero.of_run_mstoreAtBefore
+    {sevm : Sevm} {pre post : Devm} {word : B256}
+    (zero : RegisterContinuationZero pre.memory)
+    (before : (word * 32).toNat + 32 ≤ continuationOffset)
+    (run : Line.Run sevm pre (mstoreAt word) post) :
+    RegisterContinuationZero post.memory := by
+  unfold mstoreAt at run
+  rcases Line.of_run_cons run with ⟨pushed, pushRun, rest⟩
+  rcases Line.of_run_cons rest with ⟨stored, storeRun, nilRun⟩
+  cases nilRun
+  have push := of_run_pushB256 pushRun
+  rcases of_run_mstore_val storeRun with ⟨offset, value, pop, memory⟩
+  have offsetEq : (word * 32) = offset :=
+    (Stack.push_cons_pop_cons push.stack pop).1
+  rw [memory, ← push.memory, ← offsetEq]
+  exact zero.writeBefore _ before _
+
+private theorem RegisterContinuationZero.of_run_mstoreAtAfter
+    {sevm : Sevm} {pre post : Devm} {word : B256}
+    (zero : RegisterContinuationZero pre.memory)
+    (after : continuationOffset + 32 ≤ (word * 32).toNat)
+    (run : Line.Run sevm pre (mstoreAt word) post) :
+    RegisterContinuationZero post.memory := by
+  unfold mstoreAt at run
+  rcases Line.of_run_cons run with ⟨pushed, pushRun, rest⟩
+  rcases Line.of_run_cons rest with ⟨stored, storeRun, nilRun⟩
+  cases nilRun
+  have push := of_run_pushB256 pushRun
+  rcases of_run_mstore_val storeRun with ⟨offset, value, pop, memory⟩
+  have offsetEq : (word * 32) = offset :=
+    (Stack.push_cons_pop_cons push.stack pop).1
+  rw [memory, ← push.memory, ← offsetEq]
+  exact zero.writeAfter _ after _
+
+private theorem RegisterContinuationZero.of_run_logWith
+    {sevm : Sevm} {pre post : Devm} {topics : Fin 4} {offset size : B256}
+    (zero : RegisterContinuationZero pre.memory)
+    (run : Line.Run sevm pre (logWith topics offset size) post) :
+    RegisterContinuationZero post.memory := by
+  unfold logWith at run
+  rcases Line.of_run_cons run with ⟨sizePushed, sizeRun, rest⟩
+  rcases Line.of_run_cons rest with ⟨offsetPushed, offsetRun, rest⟩
+  rcases Line.of_run_cons rest with ⟨logged, logRun, nilRun⟩
+  cases nilRun
+  rcases of_run_log_mem logRun with ⟨memoryOffset, memorySize, memory⟩
+  rw [memory, ← (of_run_pushB256 offsetRun).memory,
+    ← (of_run_pushB256 sizeRun).memory]
+  exact zero.extend _ _
+
+private theorem Exec.Deriv.SourceCursor.Toward.dropLineRunExact
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {line : Line} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (line +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (lineNe : ∀ instruction ∈ line, instruction ≠ (.reg .sstore)) :
+    ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex,
+          path.steps ++ List.replicate line.length .rest⟩ tail,
+      Line.Run root.sevm cursor.pre line tailCursor.pre ∧
+        Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) tailCursor := by
+  induction line generalizing path with
+  | nil =>
+      have pathEq : path =
+          ⟨path.functionIndex,
+            path.steps ++ List.replicate ([] : Line).length .rest⟩ := by
+        cases path
+        simp
+      rw [← pathEq]
+      exact ⟨cursor, .nil, route⟩
+  | cons instruction rest ih =>
+      change Exec.Deriv.SourceCursor root (runtime dp) path
+        (.next instruction (rest +++ tail)) at cursor
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+          (lineNe instruction (by simp)) with
+        ⟨chronology, restCursor, edge, restRoute⟩
+      rcases ih restRoute (fun candidate member =>
+          lineNe candidate (by simp [member])) with
+        ⟨tailCursor, lineRun, tailRoute⟩
+      have stepsEq :
+          (path.steps ++ [.rest]) ++
+              List.replicate rest.length .rest =
+            path.steps ++
+              List.replicate (instruction :: rest).length .rest := by
+        simp [List.replicate_succ, List.append_assoc]
+      rw [← stepsEq]
+      exact ⟨tailCursor,
+        Line.Run.cons
+          (Exec.Deriv.SourceCursor.ninstRun_of_nextEdge cursor edge)
+          lineRun,
+        tailRoute⟩
+
+private theorem Exec.Deriv.SourceCursor.Toward.dropLineContinuation
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {line : Line} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (line +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (lineNe : ∀ instruction ∈ line, instruction ≠ (.reg .sstore))
+    (zero : RegisterContinuationZero cursor.pre.memory)
+    (preserves : ∀ {pre post}, Line.Run root.sevm pre line post →
+      RegisterContinuationZero pre.memory →
+        RegisterContinuationZero post.memory) :
+    ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex,
+          path.steps ++ List.replicate line.length .rest⟩ tail,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) tailCursor ∧
+        RegisterContinuationZero tailCursor.pre.memory := by
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineRunExact route lineNe with
+    ⟨tailCursor, run, tailRoute⟩
+  exact ⟨tailCursor, tailRoute, preserves run zero⟩
+
+private theorem Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {word : B256} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (loadWord word +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex,
+          path.steps ++ List.replicate (loadWord word).length .rest⟩ tail,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) tailCursor ∧
+        RegisterContinuationZero tailCursor.pre.memory := by
+  apply Exec.Deriv.SourceCursor.Toward.dropLineContinuation route _ zero
+    (fun run zero => zero.of_run_loadWord run)
+  intro instruction member
+  simp only [loadWord, List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with rfl | rfl <;> intro h <;> cases h
+
+private theorem Exec.Deriv.SourceCursor.Toward.dropMstoreAtBeforeContinuation
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {word : B256} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (mstoreAt word +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory)
+    (before : (word * 32).toNat + 32 ≤ continuationOffset) :
+    ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex,
+          path.steps ++ List.replicate (mstoreAt word).length .rest⟩ tail,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) tailCursor ∧
+        RegisterContinuationZero tailCursor.pre.memory := by
+  apply Exec.Deriv.SourceCursor.Toward.dropLineContinuation route _ zero
+    (fun run zero => zero.of_run_mstoreAtBefore before run)
+  intro instruction member
+  simp only [mstoreAt, List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with rfl | rfl <;> intro h <;> cases h
+
+private theorem Exec.Deriv.SourceCursor.Toward.dropMstoreAtAfterContinuation
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {word : B256} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (mstoreAt word +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory)
+    (after : continuationOffset + 32 ≤ (word * 32).toNat) :
+    ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex,
+          path.steps ++ List.replicate (mstoreAt word).length .rest⟩ tail,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) tailCursor ∧
+        RegisterContinuationZero tailCursor.pre.memory := by
+  apply Exec.Deriv.SourceCursor.Toward.dropLineContinuation route _ zero
+    (fun run zero => zero.of_run_mstoreAtAfter after run)
+  intro instruction member
+  simp only [mstoreAt, List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with rfl | rfl <;> intro h <;> cases h
+
+private theorem Exec.Deriv.SourceCursor.Toward.dropSilentContinuation
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {line : Line} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (line +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (lineNe : ∀ instruction ∈ line, instruction ≠ (.reg .sstore))
+    (memoryInv : ∀ {sevm pre post},
+      Line.Run sevm pre line post → pre.memory = post.memory)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex,
+          path.steps ++ List.replicate line.length .rest⟩ tail,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) tailCursor ∧
+        RegisterContinuationZero tailCursor.pre.memory := by
+  apply Exec.Deriv.SourceCursor.Toward.dropLineContinuation route lineNe zero
+  intro pre post run zero
+  have memoryEq : pre.memory = post.memory := memoryInv run
+  exact memoryEq ▸ zero
+
+private inductive RegisterKernelCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    (initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)) : Prop
+  | registry {path : Prog.SourcePath} {tail : Func}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+        (.next (.reg .sstore) tail))
+      (targetEq : cursor.node = target)
+      (sourceMember :
+        ({ path := path, pc := cursor.pc,
+            instruction := (.reg .sstore) } : Prog.SourceSite) ∈
+          (runtime dp).sourceSites)
+      (functionIndex : path.functionIndex ∈ [14, 15, 16, 17]) :
+      RegisterKernelCut initial
+  | registerAfterSet
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨registerAfterSetSlot, []⟩ registerAfterSet)
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor) :
+      RegisterKernelCut initial
+  | finishSetPauserCall {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+        (.call finishSetPauserSlot))
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+      (zero : RegisterContinuationZero cursor.pre.memory) :
+      RegisterKernelCut initial
+
+private theorem registerKernelCut_at_sstore
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)}
+    {path : Prog.SourcePath} {tail : Func}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (.next (.reg .sstore) tail))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory)
+    (functionIndex : path.functionIndex ∈ [14, 15, 16, 17]) :
+    RegisterKernelCut (target := target) initial ∨
+      ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          ⟨path.functionIndex, path.steps ++ [.rest]⟩ tail,
+        Exec.Deriv.SourceCursor.Toward
+            initial target (.reg .sstore) tailCursor ∧
+          RegisterContinuationZero tailCursor.pre.memory := by
+  cases route with
+  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+      left
+      exact .registry cursor targetEq (by simpa [siteEq] using sourceMember)
+        functionIndex
+  | next cursor chronology tailCursor edge rest =>
+      have storeRun :=
+        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge cursor edge
+      have memoryEq : cursor.pre.memory = tailCursor.pre.memory :=
+        Ninst.Hinv.inv (f := Devm.memory) storeRun
+      exact Or.inr ⟨tailCursor, rest, memoryEq ▸ zero⟩
+
+private theorem finishSetPauser_registerCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp)
+      ⟨finishSetPauserSlot, []⟩ finishSetPauser)
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    RegisterKernelCut (target := target) initial := by
+  unfold finishSetPauser at cursor
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineContinuation
+      (cursor := cursor) route
+      (line := loadWord newPauserWord)
+      (by
+        intro instruction member
+        simp only [loadWord, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h) zero
+      (fun run zero => zero.of_run_loadWord run) with
+    ⟨previousCursor, previousRoute, previousZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineContinuation
+      previousRoute (line := loadWord previousPauserWord)
+      (by
+        intro instruction member
+        simp only [loadWord, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h) previousZero
+      (fun run zero => zero.of_run_loadWord run) with
+    ⟨targetCursor, targetRoute, targetZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineContinuation
+      targetRoute (line := loadWord targetWord)
+      (by
+        intro instruction member
+        simp only [loadWord, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h) targetZero
+      (fun run zero => zero.of_run_loadWord run) with
+    ⟨eventCursor, eventRoute, eventZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eventRoute
+      (by intro h; cases h) with
+    ⟨eventChronology, logCursor, eventEdge, logRoute⟩
+  have logZero : RegisterContinuationZero logCursor.pre.memory := by
+    rw [← (of_run_pushB256
+      (Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        eventCursor eventEdge)).memory]
+    exact eventZero
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineContinuation
+      logRoute (line := logWith 3 0 0)
+      (by
+        intro instruction member
+        simp only [logWith, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl | rfl <;> intro h <;> cases h) logZero
+      (fun run zero => zero.of_run_logWith run) with
+    ⟨continuationCursor, continuationRoute,
+      continuationZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineRun continuationRoute
+      (line := loadWord continuationWord) (by
+        intro instruction member
+        simp only [loadWord, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h) with
+    ⟨iszeroPath, iszeroCursor, continuationRun, continuationChronology,
+      iszeroRoute⟩
+  have continuationPrefix :
+      [(0 : B256)] <<+ iszeroCursor.pre.stack :=
+    (continuationZero.prefix_of_loadWord nil_pref continuationRun).1
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne iszeroRoute
+      (by intro h; cases h) with
+    ⟨iszeroChronology, branchCursor, iszeroEdge, branchRoute⟩
+  have onePrefix : [(1 : B256)] <<+ branchCursor.pre.stack := by
+    have checked := prefix_of_iszero
+      (Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+        iszeroCursor iszeroEdge) continuationPrefix
+    simpa [B256.eqCheck] using checked
+  rcases Exec.Deriv.SourceCursor.Toward.branchArmStorage
+      branchCursor compiled targetAt branchRoute with
+    ⟨pauseCursor, pauseRoute, branchStorage, zeroPrefix⟩ |
+      ⟨flag, nonzero, flagPrefix, registerCursor, registerRoute,
+        branchStorage⟩
+  · have oneEqZero : (1 : B256) = 0 :=
+      pref_head_unique onePrefix zeroPrefix
+    exact (B256.zero_ne_one oneEqZero.symm).elim
+  · cases registerRoute with
+    | call cursor chronology lookup bodyCursor compilerPrefix rest =>
+        simp [runtime, aux, registerAfterSetSlot] at lookup
+        cases lookup
+        exact .registerAfterSet bodyCursor rest
+
+private theorem removeTarget_registerCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp)
+      ⟨removeTargetSlot, []⟩ removeTarget)
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    RegisterKernelCut (target := target) initial := by
+  unfold removeTarget at cursor
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation route zero with
+    ⟨indexCursor, indexRoute, indexZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation indexRoute
+      (line := tagTop indexRegion ++ [Ninst.sload])
+      (by
+        intro instruction member
+        simp only [tagTop, List.mem_append, List.mem_cons,
+          List.not_mem_nil, or_false] at member
+        rcases member with (rfl | rfl) | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) indexZero with
+    ⟨removedStoreCursor, removedStoreRoute,
+      removedStoreZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropMstoreAtAfterContinuation
+      removedStoreRoute removedStoreZero
+      (by decide +kernel) with
+    ⟨lengthLoadCursor, lengthLoadRoute, lengthLoadZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation lengthLoadRoute
+      (line := [Ninst.pushB256 arrayLengthSlot, Ninst.sload])
+      (by
+        intro instruction member
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) lengthLoadZero with
+    ⟨lengthStoreCursor, lengthStoreRoute,
+      lengthStoreZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropMstoreAtAfterContinuation
+      lengthStoreRoute lengthStoreZero
+      (by decide +kernel) with
+    ⟨lastLoadCursor, lastLoadRoute, lastLoadZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      lastLoadRoute lastLoadZero with
+    ⟨lastKeyCursor, lastKeyRoute, lastKeyZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation lastKeyRoute
+      (line := tagTop arrayRegion ++ [Ninst.sload])
+      (by
+        intro instruction member
+        simp only [tagTop, List.mem_append, List.mem_cons,
+          List.not_mem_nil, or_false] at member
+        rcases member with (rfl | rfl) | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) lastKeyZero with
+    ⟨lastStoreCursor, lastStoreRoute, lastStoreZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropMstoreAtAfterContinuation
+      lastStoreRoute lastStoreZero
+      (by decide +kernel) with
+    ⟨holeValueCursor, holeValueRoute, holeValueZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      holeValueRoute holeValueZero with
+    ⟨holeIndexCursor, holeIndexRoute, holeIndexZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      holeIndexRoute holeIndexZero with
+    ⟨holeKeyCursor, holeKeyRoute, holeKeyZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation holeKeyRoute
+      (line := tagTop arrayRegion)
+      (by
+        intro instruction member
+        simp only [tagTop, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) holeKeyZero with
+    ⟨holeStoreCursor, holeStoreRoute, holeStoreZero⟩
+  rcases registerKernelCut_at_sstore holeStoreCursor holeStoreRoute
+      holeStoreZero (by simp [removeTargetSlot]) with cut | ⟨movedIndexCursor,
+        movedIndexRoute, movedIndexZero⟩
+  · exact cut
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      movedIndexRoute movedIndexZero with
+    ⟨movedValueCursor, movedValueRoute, movedValueZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      movedValueRoute movedValueZero with
+    ⟨movedKeyCursor, movedKeyRoute, movedKeyZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation movedKeyRoute
+      (line := tagTop indexRegion)
+      (by
+        intro instruction member
+        simp only [tagTop, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) movedKeyZero with
+    ⟨movedStoreCursor, movedStoreRoute, movedStoreZero⟩
+  rcases registerKernelCut_at_sstore movedStoreCursor movedStoreRoute
+      movedStoreZero (by simp [removeTargetSlot]) with cut | ⟨clearTailPushCursor,
+        clearTailPushRoute, clearTailPushZero⟩
+  · exact cut
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation
+      clearTailPushRoute
+      (line := [Ninst.pushB256 0])
+      (by simp [Ninst.pushB256])
+      (fun run => Line.of_inv Devm.memory (by line_inv) run)
+      clearTailPushZero with
+    ⟨clearTailLoadCursor, clearTailLoadRoute,
+      clearTailLoadZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      clearTailLoadRoute clearTailLoadZero with
+    ⟨clearTailKeyCursor, clearTailKeyRoute,
+      clearTailKeyZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation clearTailKeyRoute
+      (line := tagTop arrayRegion)
+      (by
+        intro instruction member
+        simp only [tagTop, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run)
+      clearTailKeyZero with
+    ⟨clearTailStoreCursor, clearTailStoreRoute,
+      clearTailStoreZero⟩
+  rcases registerKernelCut_at_sstore clearTailStoreCursor clearTailStoreRoute
+      clearTailStoreZero (by simp [removeTargetSlot]) with cut | ⟨lengthValueCursor,
+        lengthValueRoute, lengthValueZero⟩
+  · exact cut
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      lengthValueRoute lengthValueZero with
+    ⟨lengthSubCursor, lengthSubRoute, lengthSubZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation lengthSubRoute
+      (line := [Ninst.pushB256 1, Ninst.swap 0, Ninst.sub,
+        Ninst.pushB256 arrayLengthSlot])
+      (by
+        intro instruction member
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+        rcases member with rfl | rfl | rfl | rfl <;>
+          intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run) lengthSubZero with
+    ⟨lengthWriteCursor, lengthWriteRoute,
+      lengthWriteZero⟩
+  rcases registerKernelCut_at_sstore lengthWriteCursor lengthWriteRoute
+      lengthWriteZero (by simp [removeTargetSlot]) with cut | ⟨clearIndexPushCursor,
+        clearIndexPushRoute, clearIndexPushZero⟩
+  · exact cut
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation
+      clearIndexPushRoute
+      (line := [Ninst.pushB256 0])
+      (by simp [Ninst.pushB256])
+      (fun run => Line.of_inv Devm.memory (by line_inv) run)
+      clearIndexPushZero with
+    ⟨clearIndexLoadCursor, clearIndexLoadRoute,
+      clearIndexLoadZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropLoadWordContinuation
+      clearIndexLoadRoute clearIndexLoadZero with
+    ⟨clearIndexKeyCursor, clearIndexKeyRoute,
+      clearIndexKeyZero⟩
+  rcases Exec.Deriv.SourceCursor.Toward.dropSilentContinuation clearIndexKeyRoute
+      (line := tagTop indexRegion)
+      (by
+        intro instruction member
+        simp only [tagTop, List.mem_cons, List.not_mem_nil,
+          or_false] at member
+        rcases member with rfl | rfl <;> intro h <;> cases h)
+      (fun run => Line.of_inv Devm.memory (by line_inv) run)
+      clearIndexKeyZero with
+    ⟨clearIndexStoreCursor, clearIndexStoreRoute,
+      clearIndexStoreZero⟩
+  rcases registerKernelCut_at_sstore clearIndexStoreCursor clearIndexStoreRoute
+      clearIndexStoreZero (by simp [removeTargetSlot]) with cut | ⟨finishCallCursor,
+        finishCallRoute, finishCallZero⟩
+  · exact cut
+  exact .finishSetPauserCall finishCallCursor finishCallRoute finishCallZero
+
 private theorem prefix_of_timestamp
     {sevm : Sevm} {pre post : Devm} {xs : Stack}
     (stackPrefix : xs <<+ pre.stack)
