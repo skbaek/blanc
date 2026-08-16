@@ -14,6 +14,97 @@ namespace Blanc.LidoCircuitBreaker
 
 open Jaune
 
+/-- One actually executed nonterminal guard, retained at its exact place before
+the nominated write in the selected runtime frame. -/
+structure RuntimeGuardOccurrence
+    (frameRoot write : Exec.Deriv) (instruction : Ninst) where
+  guard : Exec.Deriv
+  after : Exec.Deriv
+  frameToGuard : Exec.Deriv.ParentPrefix frameRoot guard
+  guardToWrite : Exec.Deriv.ParentPrefix guard write
+  edge : Exec.Deriv.ParentStep after guard
+  decoded : Ninst.At guard.sevm.code guard.pc instruction
+  run : Ninst.Run frameRoot.sevm guard.devm instruction after.devm
+  strictBefore : Exec.Deriv.lt write guard
+
+/-- Actual selector/continuation evidence for the endpoint whose same-frame
+execution reached the nominated write.  The cursor is compiler-structural and
+the two prefixes are execution evidence, not a source-only path claim. -/
+structure RuntimeEndpointOccurrence
+    (dp : DeployParams) (frameRoot write : Exec.Deriv) (source : Func) where
+  path : Prog.SourcePath
+  cursor : Exec.Deriv.SourceCursor frameRoot (runtime dp) path source
+  frameToCursor : Exec.Deriv.ParentPrefix frameRoot cursor.node
+  cursorToWrite : Exec.Deriv.ParentPrefix cursor.node write
+
+/-- The six runtime-accepted authority roles, each carrying its actual endpoint
+and earlier guard occurrences together with the corresponding invocation-entry
+fact.  The indexed role is later checked against the exact source row's
+`permittedRoles`; this payload alone does not classify a source site. -/
+inductive RuntimeWriteAuthority
+    (dp : DeployParams) (frameRoot write : Exec.Deriv) :
+    InvocationRole → Prop
+  | setPauseDuration
+      (endpoint : RuntimeEndpointOccurrence dp frameRoot write
+        (setPauseDuration dp))
+      (guard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
+      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin) :
+      RuntimeWriteAuthority dp frameRoot write .adminConfiguration
+  | setHeartbeatInterval
+      (endpoint : RuntimeEndpointOccurrence dp frameRoot write
+        (setHeartbeatInterval dp))
+      (guard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
+      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin) :
+      RuntimeWriteAuthority dp frameRoot write .adminConfiguration
+  | adminRegistry
+      (endpoint : RuntimeEndpointOccurrence dp frameRoot write
+        (registerPauser dp))
+      (guard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
+      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin) :
+      RuntimeWriteAuthority dp frameRoot write .adminRegistry
+  | adminExpiry
+      (endpoint : RuntimeEndpointOccurrence dp frameRoot write
+        (registerPauser dp))
+      (guard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
+      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin) :
+      RuntimeWriteAuthority dp frameRoot write .adminExpiry
+  | heartbeatExpiry
+      (endpoint : RuntimeEndpointOccurrence dp frameRoot write heartbeat)
+      (registeredGuard : RuntimeGuardOccurrence frameRoot write
+        (.reg .iszero))
+      (liveGuard : RuntimeGuardOccurrence frameRoot write (.reg .lt))
+      (registered : frameRoot.devm.getStorVal
+        frameRoot.sevm.currentTarget
+        (countSlot frameRoot.sevm.caller.toB256) ≠ 0)
+      (live : frameRoot.sevm.benvStat.time < frameRoot.devm.getStorVal
+        frameRoot.sevm.currentTarget
+        (expirySlot frameRoot.sevm.caller.toB256)) :
+      RuntimeWriteAuthority dp frameRoot write .heartbeatExpiry
+  | pauseRegistry
+      (endpoint : RuntimeEndpointOccurrence dp frameRoot write pause)
+      (assignedGuard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
+      (liveGuard : RuntimeGuardOccurrence frameRoot write (.reg .lt))
+      (assigned : frameRoot.devm.getStorVal
+        frameRoot.sevm.currentTarget
+        (assignmentSlot (Sevm.dataWord frameRoot.sevm 4)) =
+          frameRoot.sevm.caller.toB256)
+      (live : frameRoot.sevm.benvStat.time < frameRoot.devm.getStorVal
+        frameRoot.sevm.currentTarget
+        (expirySlot frameRoot.sevm.caller.toB256)) :
+      RuntimeWriteAuthority dp frameRoot write .pauseRegistry
+  | pauseExpiry
+      (endpoint : RuntimeEndpointOccurrence dp frameRoot write pause)
+      (assignedGuard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
+      (liveGuard : RuntimeGuardOccurrence frameRoot write (.reg .lt))
+      (assigned : frameRoot.devm.getStorVal
+        frameRoot.sevm.currentTarget
+        (assignmentSlot (Sevm.dataWord frameRoot.sevm 4)) =
+          frameRoot.sevm.caller.toB256)
+      (live : frameRoot.sevm.benvStat.time < frameRoot.devm.getStorVal
+        frameRoot.sevm.currentTarget
+        (expirySlot frameRoot.sevm.caller.toB256)) :
+      RuntimeWriteAuthority dp frameRoot write .pauseExpiry
+
 private theorem Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
     {root target : Exec.Deriv} {program : Prog}
     {initialPath path : Prog.SourcePath} {initialSource : Func}
@@ -80,6 +171,84 @@ private theorem Exec.Deriv.SourceCursor.Toward.dropLine
         ⟨chronology, restCursor, edge, restRoute⟩
       exact ih restRoute (fun candidate member =>
         lineNe candidate (by simp [member]))
+
+private theorem Exec.Deriv.SourceCursor.instructionAt
+    {root : Exec.Deriv} {program : Prog}
+    {path : Prog.SourcePath} {instruction : Ninst} {tail : Func}
+    (cursor : Exec.Deriv.SourceCursor root program path
+      (.next instruction tail)) :
+    Ninst.At root.sevm.code cursor.pc instruction := by
+  rcases cursor with
+    ⟨cursorPc, cursorPre, current, parentPrefix, codeSlice,
+      codeBoundary, sourceIncluded⟩
+  exact Func.sourceSites_sound codeSlice codeBoundary
+    (functionIndex := path.functionIndex) (steps := path.steps)
+    (site := { path := path, pc := cursorPc, instruction := instruction })
+    (by rcases path with ⟨functionIndex, steps⟩
+        simp [Func.sourceSites])
+
+private theorem parentPrefixTrans
+    {root middle tail : Exec.Deriv}
+    (left : Exec.Deriv.ParentPrefix root middle)
+    (right : Exec.Deriv.ParentPrefix middle tail) :
+    Exec.Deriv.ParentPrefix root tail := by
+  induction left with
+  | refl => exact right
+  | step head rest ih => exact .step head (ih right)
+
+private def RuntimeGuardOccurrence.ofCursor
+    {frameRoot write : Exec.Deriv} {dp : DeployParams}
+    {initialPath guardPath : Prog.SourcePath}
+    {initialSource tail : Func} {instruction : Ninst}
+    {initial : Exec.Deriv.SourceCursor frameRoot (runtime dp)
+      initialPath initialSource}
+    {guardCursor : Exec.Deriv.SourceCursor frameRoot (runtime dp)
+      guardPath (.next instruction tail)}
+    {afterCursor : Exec.Deriv.SourceCursor frameRoot (runtime dp)
+      ⟨guardPath.functionIndex, guardPath.steps ++ [.rest]⟩ tail}
+    (frameToInitial : Exec.Deriv.ParentPrefix frameRoot initial.node)
+    (chronology : Exec.Deriv.SourceCursor.Chronology
+      initial guardCursor write)
+    (edge : Exec.Deriv.ParentStep afterCursor.node guardCursor.node)
+    (run : Ninst.Run frameRoot.sevm guardCursor.pre instruction
+      afterCursor.pre)
+    (targetAt : Ninst.At write.sevm.code write.pc (.reg .sstore))
+    (instructionNe : instruction ≠ (.reg .sstore)) :
+    RuntimeGuardOccurrence frameRoot write instruction := by
+  have decoded := Exec.Deriv.SourceCursor.instructionAt guardCursor
+  have distinct : guardCursor.node ≠ write := by
+    intro equal
+    change Ninst.At guardCursor.node.sevm.code guardCursor.node.pc
+      instruction at decoded
+    rw [equal] at decoded
+    exact instructionNe (Ninst.at_unique decoded targetAt)
+  exact
+    { guard := guardCursor.node
+      after := afterCursor.node
+      frameToGuard := parentPrefixTrans frameToInitial chronology.initialToCursor
+      guardToWrite := chronology.cursorToTarget
+      edge := edge
+      decoded := decoded
+      run := run
+      strictBefore := chronology.strictBefore distinct }
+
+private def RuntimeEndpointOccurrence.ofCursor
+    {frameRoot write : Exec.Deriv} {dp : DeployParams}
+    {initialPath endpointPath : Prog.SourcePath}
+    {initialSource source : Func}
+    {initial : Exec.Deriv.SourceCursor frameRoot (runtime dp)
+      initialPath initialSource}
+    (frameToInitial : Exec.Deriv.ParentPrefix frameRoot initial.node)
+    (endpointCursor : Exec.Deriv.SourceCursor frameRoot (runtime dp)
+      endpointPath source)
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial write (.reg .sstore) endpointCursor) :
+    RuntimeEndpointOccurrence dp frameRoot write source :=
+  let chronology := Exec.Deriv.SourceCursor.Toward.chronology route
+  { path := endpointPath
+    cursor := endpointCursor
+    frameToCursor := parentPrefixTrans frameToInitial chronology.initialToCursor
+    cursorToWrite := chronology.cursorToTarget }
 
 private theorem Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
     {root : Exec.Deriv} {program : Prog}
