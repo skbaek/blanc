@@ -241,14 +241,14 @@ private theorem Exec.Deriv.SourceCursor.Toward.callCut_of_targetFunction
 private def RuntimePersistentWrite.sourceFunctionIndex :
     RuntimePersistentWrite → Nat
   | .setPauseDurationConfig | .setHeartbeatIntervalConfig
-  | .setPauserAssignment => 0
-  | .setPauserOldCount | .appendArrayEntry => 14
-  | .appendReverseIndex | .appendArrayLength | .afterOldNewCount => 15
-  | .removeArrayHole => 16
-  | .removeMovedIndex | .removeClearTail | .removeArrayLength
-  | .removeClearTargetIndex | .registerFreshExpiry => 17
-  | .registerLastOldClear | .registerLastOldNewExpiry
-  | .registerRetainedOldNewExpiry | .heartbeatExpiry => 19
+  | .heartbeatExpiry => 0
+  | .setPauserAssignment | .setPauserOldCount => 14
+  | .appendArrayEntry | .appendReverseIndex | .appendArrayLength => 15
+  | .afterOldNewCount => 16
+  | .removeArrayHole | .removeMovedIndex | .removeClearTail
+  | .removeArrayLength | .removeClearTargetIndex => 17
+  | .registerFreshExpiry | .registerLastOldClear
+  | .registerLastOldNewExpiry | .registerRetainedOldNewExpiry => 19
   | .pauseLastTargetExpiry | .pauseRetainedTargetExpiry => 20
 
 private theorem RuntimePersistentWrite.sourceSite?_functionIndex

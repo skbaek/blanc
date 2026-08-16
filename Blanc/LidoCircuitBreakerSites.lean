@@ -28,6 +28,7 @@ deriving DecidableEq, Repr
 inductive RuntimePersistentWrite
   | setPauseDurationConfig
   | setHeartbeatIntervalConfig
+  | heartbeatExpiry
   | setPauserAssignment
   | setPauserOldCount
   | appendArrayEntry
@@ -43,7 +44,6 @@ inductive RuntimePersistentWrite
   | registerLastOldClear
   | registerLastOldNewExpiry
   | registerRetainedOldNewExpiry
-  | heartbeatExpiry
   | pauseLastTargetExpiry
   | pauseRetainedTargetExpiry
 deriving DecidableEq, Repr
@@ -51,6 +51,7 @@ deriving DecidableEq, Repr
 def RuntimePersistentWrite.all : List RuntimePersistentWrite :=
   [ .setPauseDurationConfig,
     .setHeartbeatIntervalConfig,
+    .heartbeatExpiry,
     .setPauserAssignment,
     .setPauserOldCount,
     .appendArrayEntry,
@@ -66,29 +67,28 @@ def RuntimePersistentWrite.all : List RuntimePersistentWrite :=
     .registerLastOldClear,
     .registerLastOldNewExpiry,
     .registerRetainedOldNewExpiry,
-    .heartbeatExpiry,
     .pauseLastTargetExpiry,
     .pauseRetainedTargetExpiry ]
 
 def RuntimePersistentWrite.index : RuntimePersistentWrite → Nat
   | .setPauseDurationConfig => 0
   | .setHeartbeatIntervalConfig => 1
-  | .setPauserAssignment => 2
-  | .setPauserOldCount => 3
-  | .appendArrayEntry => 4
-  | .appendReverseIndex => 5
-  | .appendArrayLength => 6
-  | .afterOldNewCount => 7
-  | .removeArrayHole => 8
-  | .removeMovedIndex => 9
-  | .removeClearTail => 10
-  | .removeArrayLength => 11
-  | .removeClearTargetIndex => 12
-  | .registerFreshExpiry => 13
-  | .registerLastOldClear => 14
-  | .registerLastOldNewExpiry => 15
-  | .registerRetainedOldNewExpiry => 16
-  | .heartbeatExpiry => 17
+  | .heartbeatExpiry => 2
+  | .setPauserAssignment => 3
+  | .setPauserOldCount => 4
+  | .appendArrayEntry => 5
+  | .appendReverseIndex => 6
+  | .appendArrayLength => 7
+  | .afterOldNewCount => 8
+  | .removeArrayHole => 9
+  | .removeMovedIndex => 10
+  | .removeClearTail => 11
+  | .removeArrayLength => 12
+  | .removeClearTargetIndex => 13
+  | .registerFreshExpiry => 14
+  | .registerLastOldClear => 15
+  | .registerLastOldNewExpiry => 16
+  | .registerRetainedOldNewExpiry => 17
   | .pauseLastTargetExpiry => 18
   | .pauseRetainedTargetExpiry => 19
 
@@ -134,6 +134,30 @@ def RuntimePersistentWrite.inventoryEntry :
       (⟨"pause.lastTargetExpiry", 18⟩, .heartbeatExpiry)
   | .pauseRetainedTargetExpiry =>
       (⟨"pause.retainedTargetExpiry", 19⟩, .heartbeatExpiry)
+
+/-- Semantic label order of the frozen literal inventory.  This is distinct
+from `all`, whose order follows the compiler's structural source traversal. -/
+def RuntimePersistentWrite.inventoryOrder : List RuntimePersistentWrite :=
+  [ .setPauseDurationConfig,
+    .setHeartbeatIntervalConfig,
+    .setPauserAssignment,
+    .setPauserOldCount,
+    .appendArrayEntry,
+    .appendReverseIndex,
+    .appendArrayLength,
+    .afterOldNewCount,
+    .removeArrayHole,
+    .removeMovedIndex,
+    .removeClearTail,
+    .removeArrayLength,
+    .removeClearTargetIndex,
+    .registerFreshExpiry,
+    .registerLastOldClear,
+    .registerLastOldNewExpiry,
+    .registerRetainedOldNewExpiry,
+    .heartbeatExpiry,
+    .pauseLastTargetExpiry,
+    .pauseRetainedTargetExpiry ]
 
 /-- Exact permitted role set for each runtime SSTORE row. -/
 def RuntimePersistentWrite.permittedRoles :
@@ -190,10 +214,11 @@ theorem RuntimePersistentWrite.all_nodup :
     RuntimePersistentWrite.all.Nodup := by
   decide
 
-/-- The typed row order is definitionally aligned with the frozen literal
-inventory; neither side is a second hand-maintained label order. -/
+/-- The semantic label order is definitionally aligned with the frozen literal
+inventory, independently of compiler structural source order. -/
 theorem RuntimePersistentWrite.inventory_exact :
-    RuntimePersistentWrite.all.map RuntimePersistentWrite.inventoryEntry =
+    RuntimePersistentWrite.inventoryOrder.map
+        RuntimePersistentWrite.inventoryEntry =
       persistentWriteInventory := by
   decide
 
