@@ -34,7 +34,7 @@ REQUIRED = (
 FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|opaque|native_decide|implemented_by)\b")
 ROLES = {
     "getPausables_runCompiled": "860917a14bb01c38221ef7a97c5da4247aa3453b877183eb60d5f5cdde83f0d3",
-    "getPausables_noSstore_occurrence": "6815a8a692e9523c0dba7fb4437dc4f29bd57974d46cc673083b64c1b7f3bd96",
+    "getPausables_noSstore_occurrence": "7729d8af3084bac2f1d5c1a145802b16d520cbca581a6d9d1fc120d072aed521",
     "registryViews_coherent": "2ccb5c749f4b2a56daca773c1430c172e20bf73fdd8e8e29c63c2559dd4b087d",
     "pauserSet_local_transition": "80d926b239cf4ac0df7414260d83a79ce2bc33702bdf3f96d566a0f1d1c7a42d",
     "pauserSet_target_zero_no_success": "5ddcaaebf789223390d7949699b0816c443500d35b49b67600743ba3831ba12d",
@@ -71,11 +71,48 @@ def no_trust_shortcut(path: Path) -> None:
     if match:
         fail(f"forbidden trust token {match.group(1)!r} in {path.relative_to(ROOT)}")
 
-def normalized_header(source: str, name: str) -> str:
-    match = re.search(rf"(?ms)^theorem\s+{re.escape(name)}\b.*?:= by", source)
-    if not match:
+_DECL_START = re.compile(
+    r"(?m)^(?:@\[[^\]]*\]\s*)?"
+    r"(?:private\s+|protected\s+|noncomputable\s+|partial\s+)*"
+    r"(?:theorem|lemma|def|abbrev|instance|structure|inductive|example|class)\b")
+
+
+def declaration_slice(source: str, name: str) -> str:
+    """Exact source text of one declaration, never crossing into the next.
+
+    The earlier `.*?:= by` form silently ran past a term-mode declaration and
+    digested a blend of two theorems, so a pin could name one result and hash
+    another.  Slicing first makes that impossible.
+    """
+    start = re.search(rf"(?m)^theorem\s+{re.escape(name)}\b", source)
+    if not start:
         fail(f"missing pinned public role {name}")
-    return " ".join(match.group(0)[:-4].split())
+    rest = source[start.end():]
+    following = _DECL_START.search(rest)
+    end = start.end() + (following.start() if following else len(rest))
+    return source[start.start():end]
+
+
+def normalized_header(source: str, name: str) -> str:
+    declaration = declaration_slice(source, name)
+    tactic = re.search(r"(?s)^.*?:(?==\s*by\b)", declaration)
+    if tactic:
+        header = tactic.group(0)
+    else:
+        depth = 0
+        cut = -1
+        for index, char in enumerate(declaration):
+            if char in "([{":
+                depth += 1
+            elif char in ")]}":
+                depth -= 1
+            elif char == ":" and depth == 0 and declaration[index:index + 2] == ":=":
+                cut = index
+        if cut < 0:
+            fail(f"pinned public role {name} has no definition marker")
+        header = declaration[:cut + 1]
+    return " ".join(header.split())
+
 
 def pin_role_headers(source: str) -> None:
     for name, expected in ROLES.items():
