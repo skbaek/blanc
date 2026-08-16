@@ -2606,6 +2606,121 @@ private theorem Exec.Deriv.SourceCursor.Toward.dropSilentContinuation
   have memoryEq : pre.memory = post.memory := memoryInv run
   exact memoryEq ▸ zero
 
+/-- The compiled form of an internal source call is exactly a PUSH of the
+callee entry, a JUMP, and that entry's JUMPDEST.  Those three instructions are
+memory-silent, so the register continuation carrier crosses the call without
+requiring a general invariant for arbitrary non-SSTORE prefixes. -/
+private theorem Exec.Deriv.SourceCursor.Toward.callBodyContinuation
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {functionIndex : Nat}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (.call functionIndex))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    ∃ body, ((runtime dp).main :: (runtime dp).aux)[functionIndex]? = some body ∧
+      ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          ⟨functionIndex, []⟩ body,
+        Exec.Deriv.SourceCursor.Toward
+            initial target (.reg .sstore) bodyCursor ∧
+          RegisterContinuationZero bodyCursor.pre.memory := by
+  rcases subcode_compile_call cursor.codeSlice with
+    ⟨loc, body, getTable, locBound, pushAt, jumpAt⟩
+  have reached :=
+    (Exec.Deriv.SourceCursor.Toward.chronology route).cursorToTarget
+  rcases Exec.Deriv.ParentPrefix.advance_pushTowardSstore reached
+      pushAt (by simp) targetAt with
+    ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
+  rw [List.toB256_pair _ locBound] at pushBurn
+  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+      afterPushReached jumpAt targetAt with
+    ⟨nextPc, beforeJumpdestPre, beforeJumpdest, jumpEdge,
+      beforeJumpdestReached, jumpRun⟩
+  rcases of_jump_run jumpRun with
+    ⟨destination, nextPcEq, popBurn, actualJumpable⟩
+  have loc256 : loc < 2 ^ 256 := by
+    apply Nat.lt_trans locBound
+    rw [Nat.pow_lt_pow_iff_right] <;> omega
+  have destinationEq : loc = destination.toNat := by
+    rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+      ⟨headEq, stack, pushBurn', popBurn'⟩
+    have locToNat : loc.toB256.toNat = loc :=
+      B256.toNat_toB256_of_lt loc256
+    rw [← congrArg B256.toNat headEq, locToNat]
+  have nextPcLoc : nextPc = loc := nextPcEq.trans destinationEq.symm
+  cases nextPcLoc
+  have getBody :
+      ((runtime dp).main :: (runtime dp).aux)[functionIndex]? = some body := by
+    have tableLookup :=
+      @Prog.get?_table 0 functionIndex ((runtime dp).main :: (runtime dp).aux)
+    rw [getTable] at tableLookup
+    simpa using tableLookup.symm
+  rcases subcode_of_get?_eq_some compiled getTable with
+    ⟨jumpdestAt, bodySlice⟩
+  have bodyBoundary := Prog.jumpable_of_get?_table compiled getTable
+  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+      beforeJumpdestReached jumpdestAt targetAt with
+    ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
+      jumpdestRun⟩
+  rcases of_jumpdest_run jumpdestRun with ⟨bodyPcEq, jumpdestBurn⟩
+  subst bodyPc
+  let bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+      ⟨functionIndex, []⟩ body :=
+    ⟨_, _, bodyExec,
+      cursor.parentPrefix.snoc pushEdge |>.snoc jumpEdge
+        |>.snoc jumpdestEdge,
+      bodySlice, bodyBoundary.2, by
+        intro site member
+        simp only [Prog.sourceSites, List.mem_flatMap]
+        refine ⟨functionIndex, ?_, ?_⟩
+        · exact List.mem_range.mpr
+            (List.getElem?_eq_some_iff.mp getBody).choose
+        · simpa only [getTable] using member⟩
+  have bodyZero : RegisterContinuationZero bodyCursor.pre.memory := by
+    change RegisterContinuationZero bodyPre.memory
+    rw [← jumpdestBurn.memory, ← popBurn.memory, ← pushBurn.memory]
+    exact zero
+  have bodyRoute := bodyCursor.toward compiled bodyReached
+    (by trivial) targetAt
+  have cursorToBody : Exec.Deriv.ParentPrefix cursor.node bodyCursor.node :=
+    .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _)))
+  have initialToBody : Exec.Deriv.ParentPrefix initial.node bodyCursor.node :=
+    parentPrefixTrans
+      (Exec.Deriv.SourceCursor.Toward.chronology route).initialToCursor
+      cursorToBody
+  exact ⟨body, getBody, bodyCursor,
+    Exec.Deriv.SourceCursor.Toward.rebase initialToBody bodyRoute,
+    bodyZero⟩
+
+private theorem finishSetPauserCallContinuation
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (.call finishSetPauserSlot))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (zero : RegisterContinuationZero cursor.pre.memory) :
+    ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨finishSetPauserSlot, []⟩ finishSetPauser,
+      Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) bodyCursor ∧
+        RegisterContinuationZero bodyCursor.pre.memory := by
+  rcases Exec.Deriv.SourceCursor.Toward.callBodyContinuation
+      cursor compiled targetAt route zero with
+    ⟨body, lookup, bodyCursor, bodyRoute, bodyZero⟩
+  simp [runtime, aux, finishSetPauserSlot] at lookup
+  cases lookup
+  exact ⟨bodyCursor, bodyRoute, bodyZero⟩
+
 private inductive RegisterKernelCut
     {dp : DeployParams} {root target : Exec.Deriv}
     (initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
