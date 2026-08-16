@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "scripts" / "execution-raw-attribution-owner-manifest.json"
-EXPECTED_OWNERS = 24
+EXPECTED_OWNERS = 28
 SHADOW_POLICIES = {"owner-only", "forbid-contract-basename"}
 SOURCE_SITE_DECLARATION = "Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot"
 SOURCE_SITE_SIGNATURE = """theorem Exec.NinstOccurrence.sourceSite_of_rawFrameRoot
@@ -29,6 +29,30 @@ SOURCE_SITE_SIGNATURE = """theorem Exec.NinstOccurrence.sourceSite_of_rawFrameRo
       site ∈ program.sourceSites ∧
       site.pc = occurrence.node.pc ∧
       site.instruction = .reg .sstore := by"""
+STRICT_BEFORE_DECLARATION = (
+    "Blanc.Exec.Deriv.SourceCursor.Chronology.strictBefore"
+)
+STRICT_BEFORE_HEADER = """theorem Exec.Deriv.SourceCursor.Chronology.strictBefore
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {initial : Exec.Deriv.SourceCursor root program initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (chronology : Exec.Deriv.SourceCursor.Chronology initial cursor target)
+    (distinct : cursor.node ≠ target) :
+    Exec.Deriv.lt target cursor.node :="""
+TOWARD_DECLARATION = "Blanc.Exec.Deriv.SourceCursor.toward"
+TOWARD_MARKER = "theorem Exec.Deriv.SourceCursor.toward\n"
+TOWARD_HEADER = """theorem Exec.Deriv.SourceCursor.toward
+    {root target : Exec.Deriv} {program : Prog}
+    {path : Prog.SourcePath} {source : Func} {instruction : Ninst}
+    (cursor : Exec.Deriv.SourceCursor root program path source)
+    (compiled : some root.sevm.code.toList = program.compile)
+    (reached : Exec.Deriv.ParentPrefix cursor.node target)
+    (nonPush : NinstNonPush instruction)
+    (instructionAt : Ninst.At target.sevm.code target.pc instruction) :
+    Exec.Deriv.SourceCursor.Toward cursor target instruction cursor :="""
+TOWARD_DELEGATION = """exact Exec.Deriv.SourceCursor.toward_core cursor.node cursor cursor rfl
+    compiled chronology nonPush instructionAt"""
 
 
 @dataclass(frozen=True)
@@ -165,6 +189,53 @@ def source_site_signature_errors(source: str, strip_comments) -> list[str]:
     return []
 
 
+def normalized_header_errors(
+    source: str, strip_comments, marker: str, expected: str, declaration: str
+) -> list[str]:
+    """Pin one comment/whitespace-normalized public header through `:=`."""
+    clean = strip_comments(source)
+    if clean.count(marker) != 1:
+        return [
+            f"SIGNATURE-MISMATCH — {declaration}: "
+            "declaration header is absent or duplicated"
+        ]
+    suffix = clean.split(marker, 1)[1]
+    if ":=" not in suffix:
+        return [
+            f"SIGNATURE-MISMATCH — {declaration}: theorem body delimiter is absent"
+        ]
+    actual = marker + suffix.split(":=", 1)[0] + ":="
+    normalize = lambda text: " ".join(text.split())
+    if normalize(actual) != normalize(expected):
+        return [
+            f"SIGNATURE-MISMATCH — {declaration}: normalized header drifted"
+        ]
+    return []
+
+
+def shared_kernel_errors(source: str, strip_comments) -> list[str]:
+    """Require one traversal kernel and projection through the public route."""
+    clean = strip_comments(source)
+    required = (
+        "private theorem Exec.Deriv.SourceCursor.toward_core :",
+        "private theorem Exec.Deriv.SourceCursor.Toward.sourceSite",
+        "exact (cursor.toward compiled reached nonPush instructionAt).sourceSite",
+    )
+    errors = [
+        f"SHARED-KERNEL — expected exactly one `{token}`"
+        for token in required if clean.count(token) != 1
+    ]
+    if "sourceSite_core" in clean:
+        errors.append("SHARED-KERNEL — parallel sourceSite_core traversal survives")
+    normalize = lambda text: " ".join(text.split())
+    if normalize(clean).count(normalize(TOWARD_DELEGATION)) != 1:
+        errors.append(
+            "SHARED-KERNEL — public toward does not delegate exactly once "
+            "to toward_core"
+        )
+    return errors
+
+
 def audit() -> list[str]:
     try:
         parser = load_lean_parser()
@@ -177,6 +248,17 @@ def audit() -> list[str]:
         errors.extend(
             source_site_signature_errors(common_source, parser.strip_comments)
         )
+        errors.extend(normalized_header_errors(
+            common_source, parser.strip_comments,
+            "theorem Exec.Deriv.SourceCursor.Chronology.strictBefore\n",
+            STRICT_BEFORE_HEADER, STRICT_BEFORE_DECLARATION,
+        ))
+        errors.extend(normalized_header_errors(
+            common_source, parser.strip_comments,
+            TOWARD_MARKER,
+            TOWARD_HEADER, TOWARD_DECLARATION,
+        ))
+        errors.extend(shared_kernel_errors(common_source, parser.strip_comments))
         files = contract_files(globs)
         if not files:
             errors.append("SETUP — no contract module matched the manifest globs")
@@ -203,7 +285,7 @@ def negative_controls() -> list[str]:
     )
 
     shadow_owner = next(
-        owner for owner in owners if owner.shadow == "forbid-contract-basename"
+        owner for owner in owners if owner.declaration == TOWARD_DECLARATION
     )
     synthetic = f"Blanc.Weth10.RawAttribution.{shadow_owner.declaration.rsplit('.', 1)[-1]}"
     shadow_live = any(
@@ -232,6 +314,55 @@ def negative_controls() -> list[str]:
         error.startswith("SIGNATURE-MISMATCH —")
         for error in source_site_signature_errors(prefix_mutant, parser.strip_comments)
     )
+    weakened_toward_header = TOWARD_HEADER.replace(
+        "(reached : Exec.Deriv.ParentPrefix cursor.node target)",
+        "(reached : True)",
+        1,
+    )
+    toward_mutant = common_source.replace(
+        TOWARD_HEADER, weakened_toward_header, 1
+    )
+    toward_live = any(
+        error.startswith("SIGNATURE-MISMATCH —")
+        for error in normalized_header_errors(
+            toward_mutant, parser.strip_comments,
+            TOWARD_MARKER,
+            TOWARD_HEADER, TOWARD_DECLARATION,
+        )
+    )
+    strict_mutant = common_source.replace(
+        "(distinct : cursor.node ≠ target)",
+        "(distinct : True)",
+        1,
+    )
+    strict_live = any(
+        error.startswith("SIGNATURE-MISMATCH —")
+        for error in normalized_header_errors(
+            strict_mutant, parser.strip_comments,
+            "theorem Exec.Deriv.SourceCursor.Chronology.strictBefore\n",
+            STRICT_BEFORE_HEADER, STRICT_BEFORE_DECLARATION,
+        )
+    )
+    kernel_mutant = common_source.replace(
+        "private theorem Exec.Deriv.SourceCursor.toward_core :",
+        "private theorem Exec.Deriv.SourceCursor.toward_core_removed",
+        1,
+    )
+    kernel_live = any(
+        error.startswith("SHARED-KERNEL —")
+        for error in shared_kernel_errors(kernel_mutant, parser.strip_comments)
+    )
+    delegation_mutant = common_source.replace(
+        TOWARD_DELEGATION,
+        TOWARD_DELEGATION.replace("toward_core", "toward_core_bypassed", 1),
+        1,
+    )
+    delegation_live = any(
+        error.startswith("SHARED-KERNEL —")
+        for error in shared_kernel_errors(
+            delegation_mutant, parser.strip_comments
+        )
+    )
     errors: list[str] = []
     if not missing_live:
         errors.append("CONTROL — common-owner removal was not detected")
@@ -241,6 +372,14 @@ def negative_controls() -> list[str]:
         errors.append("CONTROL — selected-root signature weakening was not detected")
     if not prefix_live:
         errors.append("CONTROL — ParentPrefix signature weakening was not detected")
+    if not toward_live:
+        errors.append("CONTROL — toward signature weakening was not detected")
+    if not strict_live:
+        errors.append("CONTROL — strict-before signature weakening was not detected")
+    if not kernel_live:
+        errors.append("CONTROL — shared traversal-kernel removal was not detected")
+    if not delegation_live:
+        errors.append("CONTROL — public traversal delegation removal was not detected")
     return errors
 
 
@@ -258,11 +397,11 @@ def main() -> int:
         print(error, file=sys.stderr)
     if errors:
         return 1
-    controls = "; 4/4 controls live" if args.negative_controls else ""
+    controls = "; 8/8 controls live" if args.negative_controls else ""
     print(
         f"OK — raw attribution ownership: {EXPECTED_OWNERS}/{EXPECTED_OWNERS} "
         f"common owners; no contract basename shadows; exact selected-root "
-        f"signature{controls}"
+        f"source/chronology signatures{controls}"
     )
     return 0
 

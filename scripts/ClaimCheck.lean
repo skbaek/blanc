@@ -34,6 +34,25 @@ example {sevm : Sevm} {devm : Devm} {x : Xinst}
     f.inner.codeAddress = some f.inner.currentTarget :=
   Xinst.step_spawn_codeAddress_eq_currentTarget hs hne hcode
 
+example {root target : Exec.Deriv} {program : Prog}
+    {path : Prog.SourcePath} {source : Func} {instruction : Ninst}
+    (cursor : Exec.Deriv.SourceCursor root program path source)
+    (compiled : some root.sevm.code.toList = program.compile)
+    (reached : Exec.Deriv.ParentPrefix cursor.node target)
+    (nonPush : NinstNonPush instruction)
+    (instructionAt : Ninst.At target.sevm.code target.pc instruction) :
+    Exec.Deriv.SourceCursor.Toward cursor target instruction cursor :=
+  cursor.toward compiled reached nonPush instructionAt
+
+example {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {initial : Exec.Deriv.SourceCursor root program initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (chronology : Exec.Deriv.SourceCursor.Chronology initial cursor target)
+    (distinct : cursor.node ≠ target) :
+    Exec.Deriv.lt target cursor.node :=
+  chronology.strictBefore distinct
+
 namespace Weth10
 
 example (dp : DeployParams) :

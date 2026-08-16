@@ -1130,6 +1130,434 @@ private theorem successfulSourceOutcomesAvailable_eq_true :
     successfulSourceOutcomesAvailable = true := by
   native_decide
 
+/-! Actual source chronology controls. -/
+
+namespace Chronology
+
+/-- A finite childless continuation trace whose endpoint is retained as a
+target derivation.  The constructors contain actual `Evm.step = .cont`
+equations; the evaluator below fixes the concrete PC sequence. -/
+private inductive ContTrace (sevm : Sevm) : Nat → Devm → Type
+  | refl (pc : Nat) (pre : Devm) : ContTrace sevm pc pre
+  | step {pc nextPc : Nat} {pre nextPre : Devm}
+      (hstep : Evm.step ⟨pc, sevm, pre⟩ = .cont nextPc nextPre)
+      (rest : ContTrace sevm nextPc nextPre) : ContTrace sevm pc pre
+
+private def ContTrace.endPc
+    {sevm : Sevm} {pc : Nat} {pre : Devm} :
+    ContTrace sevm pc pre → Nat
+  | .refl pc _ => pc
+  | .step _ rest => rest.endPc
+
+private def ContTrace.endPre
+    {sevm : Sevm} {pc : Nat} {pre : Devm}
+    (trace : ContTrace sevm pc pre) : Devm :=
+  match trace with
+  | .refl _ pre => pre
+  | .step _ rest => rest.endPre
+
+private def ContTrace.pcs
+    {sevm : Sevm} {pc : Nat} {pre : Devm} :
+    ContTrace sevm pc pre → List Nat
+  | .refl pc _ => [pc]
+  | .step _ rest => pc :: rest.pcs
+
+private def buildContTrace?
+    (sevm : Sevm) (pc : Nat) (pre : Devm) :
+    (depth : Nat) → Option (ContTrace sevm pc pre)
+  | 0 => some (.refl pc pre)
+  | depth + 1 =>
+      match hstep : Evm.step ⟨pc, sevm, pre⟩ with
+      | .cont nextPc nextPre =>
+          match buildContTrace? sevm nextPc nextPre depth with
+          | some rest => some (.step hstep rest)
+          | none => none
+      | _ => none
+
+private def ContTrace.out
+    {sevm : Sevm} {pc : Nat} {pre : Devm}
+    (trace : ContTrace sevm pc pre) : Execution :=
+  exec ⟨trace.endPc, sevm, trace.endPre⟩
+
+private def ContTrace.tail
+    {sevm : Sevm} {pc : Nat} {pre : Devm}
+    (trace : ContTrace sevm pc pre) :
+    Exec trace.endPc sevm trace.endPre trace.out :=
+  Classical.choice ((exec_iff_exec_eq _ _ _ _).2 rfl)
+
+private def ContTrace.run
+    {sevm : Sevm} {pc : Nat} {pre : Devm}
+    (trace : ContTrace sevm pc pre) : Exec pc sevm pre trace.out :=
+  match trace with
+  | .refl pc pre =>
+      Classical.choice ((exec_iff_exec_eq pc sevm pre
+        (exec ⟨pc, sevm, pre⟩)).2 rfl)
+  | .step hstep rest => .cont hstep rest.run
+
+private def ContTrace.root
+    {sevm : Sevm} {pc : Nat} {pre : Devm}
+    (trace : ContTrace sevm pc pre) : Exec.Deriv :=
+  ⟨pc, sevm, pre, trace.out, trace.run⟩
+
+private def ContTrace.node
+    {sevm : Sevm} {pc : Nat} {pre : Devm}
+    (trace : ContTrace sevm pc pre) : Exec.Deriv :=
+  ⟨trace.endPc, sevm, trace.endPre, trace.out, trace.tail⟩
+
+private theorem ContTrace.parentPrefix
+    {sevm : Sevm} {pc : Nat} {pre : Devm}
+    (trace : ContTrace sevm pc pre) :
+    Exec.Deriv.ParentPrefix trace.root trace.node :=
+  match trace with
+  | .refl _ _ => .refl _
+  | .step hstep rest =>
+      .step (.cont hstep rest.run) rest.parentPrefix
+
+private theorem ContTrace.getLast?_pcs
+    {sevm : Sevm} {pc : Nat} {pre : Devm}
+    (trace : ContTrace sevm pc pre) :
+    trace.pcs.getLast? = some trace.endPc := by
+  induction trace with
+  | refl => rfl
+  | step hstep rest ih =>
+      cases rest <;> simp_all [ContTrace.pcs, ContTrace.endPc]
+
+private def fixtureSevm (code : ByteArray) : Sevm :=
+  { (default : Sevm) with
+    code
+    currentTarget := sourceAddress
+    codeAddress := some sourceAddress }
+
+private structure Fixture
+    (program : Prog) (code : ByteArray) (pre : Devm) where
+  afterGlue : Devm
+  entryStep : Evm.step ⟨0, fixtureSevm code, pre⟩ = .cont 1 afterGlue
+  trace : ContTrace (fixtureSevm code) 1 afterGlue
+  compiled : some code.toList = program.compile
+
+private def Fixture.out
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : Fixture program code pre) : Execution :=
+  w.trace.out
+
+private def Fixture.run
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : Fixture program code pre) :
+    Exec 0 (fixtureSevm code) pre w.out :=
+  .cont w.entryStep w.trace.run
+
+private def Fixture.root
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : Fixture program code pre) : Exec.Deriv :=
+  ⟨0, fixtureSevm code, pre, w.out, w.run⟩
+
+private def Fixture.target
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : Fixture program code pre) : Exec.Deriv :=
+  w.trace.node
+
+private theorem Fixture.rootToTarget
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : Fixture program code pre) :
+    Exec.Deriv.ParentPrefix w.root w.target := by
+  exact .step (.cont w.entryStep w.trace.run) w.trace.parentPrefix
+
+private theorem Fixture.exact
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : Fixture program code pre) :
+    w.root.exactInvocation program sourceAddress sourceAddress :=
+  ⟨rfl, rfl, rfl, w.compiled⟩
+
+private def fixture?
+    (program : Prog) (code : ByteArray) (pre : Devm) (depth : Nat) :
+    Option (Fixture program code pre) :=
+  if compiled : some code.toList = program.compile then
+    match entryStep : Evm.step ⟨0, fixtureSevm code, pre⟩ with
+    | .cont pc afterGlue =>
+        if hpc : pc = 1 then
+          match buildContTrace? (fixtureSevm code) 1 afterGlue depth with
+          | some trace => some {
+              afterGlue
+              entryStep := by simpa [hpc] using entryStep
+              trace
+              compiled }
+          | none => none
+        else none
+    | _ => none
+  else none
+
+private def branchEqProgram : Prog :=
+  ⟨.branch
+    (.next (.reg .eq) (.next (.reg .sstore) (.last .stop)))
+    (.next (.reg .eq) (.last .rev)), []⟩
+
+private def branchEqCode : ByteArray :=
+  ByteArray.mk #[0x5b, 0x61, 0x00, 0x08, 0x57, 0x14, 0x55, 0x00,
+    0x5b, 0x14, 0xfd]
+
+private def branchEqPre : Devm :=
+  ((default : Devm).withGasLeft 100000).withStack [0, 1, 1, 0, 1]
+
+private def branchEqFixture? :
+    Option (Fixture branchEqProgram branchEqCode branchEqPre) :=
+  fixture? branchEqProgram branchEqCode branchEqPre 3
+
+private def branchEqAvailable : Bool :=
+  match branchEqFixture? with
+  | some w => w.trace.pcs == [1, 4, 5, 6] && Execution.commits w.out
+  | none => false
+
+private theorem branchEqFixture_exists :
+    ∃ w : Fixture branchEqProgram branchEqCode branchEqPre,
+      w.trace.pcs = [1, 4, 5, 6] ∧ Execution.commits w.out = true := by
+  have available : branchEqAvailable = true := by
+    native_decide
+  unfold branchEqAvailable at available
+  cases fixture : branchEqFixture? with
+  | none => simp [fixture] at available
+  | some witness =>
+      rw [fixture] at available
+      simp only [Bool.and_eq_true] at available
+      exact ⟨witness, beq_iff_eq.mp available.1, available.2⟩
+
+/-- The selected left branch retains its actual EQ cursor, both chronology
+prefixes, and strict order before the later SSTORE target.  The right branch
+also contains EQ syntax, but the target-directed route cannot select it. -/
+private theorem chronology_branch_eq_before_sstore_control :
+    ∃ w : Fixture branchEqProgram branchEqCode branchEqPre,
+      ∃ mainCursor : Exec.Deriv.SourceCursor w.root branchEqProgram
+          ⟨0, []⟩ branchEqProgram.main,
+        ∃ guardCursor : Exec.Deriv.SourceCursor w.root branchEqProgram
+            ⟨0, [.branchLeft]⟩
+            (.next (.reg .eq) (.next (.reg .sstore) (.last .stop))),
+          Exec.Deriv.SourceCursor.Toward mainCursor w.target
+              (.reg .sstore) mainCursor ∧
+            Exec.Deriv.SourceCursor.Chronology
+              mainCursor guardCursor w.target ∧
+            guardCursor.node ≠ w.target ∧
+            Exec.Deriv.lt w.target guardCursor.node := by
+  rcases branchEqFixture_exists with ⟨w, pcs, commits⟩
+  have targetPc : w.target.pc = 6 := by
+    have last := w.trace.getLast?_pcs
+    rw [pcs] at last
+    simpa [Fixture.target, ContTrace.node] using last.symm
+  have targetAt : Ninst.At w.target.sevm.code w.target.pc
+      (.reg .sstore) := by
+    rw [targetPc]
+    change Ninst.At branchEqCode 6 (.reg .sstore)
+    rfl
+  rcases Exec.Deriv.SourceCursor.mainToward w.exact w.rootToTarget
+      targetAt with
+    ⟨mainCursor, compilerPrefix, reached⟩
+  let route := mainCursor.toward (instruction := .reg .sstore)
+    w.compiled reached True.intro targetAt
+  refine ⟨w, mainCursor, ?_⟩
+  cases route with
+  | branchLeft cursor chronology arm armPrefix rest =>
+      cases rest with
+      | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+          cases instructionEq
+      | next eqCursor guardChronology tail edge rest =>
+          cases rest with
+          | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+              have strict : Exec.Deriv.lt w.target arm.node := by
+                simpa only [targetEq] using edge.lt
+              have distinct : arm.node ≠ w.target := by
+                intro equal
+                rw [equal] at strict
+                exact (Exec.Deriv.lt.well_founded.asymmetric _ _ strict) strict
+              exact ⟨arm, route, guardChronology, distinct,
+                guardChronology.strictBefore distinct⟩
+          | next cursor chronology tail edge rest => cases rest
+  | branchRight cursor chronology arm armPrefix rest =>
+      cases rest with
+      | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+          cases instructionEq
+      | next cursor chronology tail edge rest => cases rest
+
+private def callEqProgram : Prog :=
+  ⟨.call 1,
+    [.next (.reg .eq) (.next (.reg .sstore) (.last .stop))]⟩
+
+private def callEqCode : ByteArray :=
+  ByteArray.mk #[0x5b, 0x61, 0x00, 0x05, 0x56, 0x5b, 0x14, 0x55, 0x00]
+
+private def callEqPre : Devm :=
+  ((default : Devm).withGasLeft 100000).withStack [1, 1, 0, 1]
+
+private def callEqFixture? :
+    Option (Fixture callEqProgram callEqCode callEqPre) :=
+  fixture? callEqProgram callEqCode callEqPre 4
+
+private def callEqAvailable : Bool :=
+  match callEqFixture? with
+  | some w => w.trace.pcs == [1, 4, 5, 6, 7] && Execution.commits w.out
+  | none => false
+
+private theorem callEqFixture_exists :
+    ∃ w : Fixture callEqProgram callEqCode callEqPre,
+      w.trace.pcs = [1, 4, 5, 6, 7] ∧ Execution.commits w.out = true := by
+  have available : callEqAvailable = true := by
+    native_decide
+  unfold callEqAvailable at available
+  cases fixture : callEqFixture? with
+  | none => simp [fixture] at available
+  | some witness =>
+      rw [fixture] at available
+      simp only [Bool.and_eq_true] at available
+      exact ⟨witness, beq_iff_eq.mp available.1, available.2⟩
+
+/-- An internal source call retains its exact table lookup and the callee's EQ
+cursor strictly before the callee SSTORE. -/
+private theorem chronology_call_eq_before_sstore_control :
+    ∃ w : Fixture callEqProgram callEqCode callEqPre,
+      ∃ mainCursor : Exec.Deriv.SourceCursor w.root callEqProgram
+          ⟨0, []⟩ callEqProgram.main,
+        ∃ guardCursor : Exec.Deriv.SourceCursor w.root callEqProgram
+            ⟨1, []⟩
+            (.next (.reg .eq) (.next (.reg .sstore) (.last .stop))),
+          (callEqProgram.main :: callEqProgram.aux)[1]? =
+              some (.next (.reg .eq)
+                (.next (.reg .sstore) (.last .stop))) ∧
+            Exec.Deriv.SourceCursor.Toward mainCursor w.target
+              (.reg .sstore) mainCursor ∧
+            Exec.Deriv.SourceCursor.Chronology
+              mainCursor guardCursor w.target ∧
+            guardCursor.node ≠ w.target ∧
+            Exec.Deriv.lt w.target guardCursor.node := by
+  rcases callEqFixture_exists with ⟨w, pcs, commits⟩
+  have targetPc : w.target.pc = 7 := by
+    have last := w.trace.getLast?_pcs
+    rw [pcs] at last
+    simpa [Fixture.target, ContTrace.node] using last.symm
+  have targetAt : Ninst.At w.target.sevm.code w.target.pc
+      (.reg .sstore) := by
+    rw [targetPc]
+    change Ninst.At callEqCode 7 (.reg .sstore)
+    rfl
+  rcases Exec.Deriv.SourceCursor.mainToward w.exact w.rootToTarget
+      targetAt with
+    ⟨mainCursor, compilerPrefix, reached⟩
+  let route := mainCursor.toward (instruction := .reg .sstore)
+    w.compiled reached True.intro targetAt
+  refine ⟨w, mainCursor, ?_⟩
+  cases route with
+  | call cursor chronology lookup body compilerPrefix rest =>
+      cases Option.some.inj (by simpa [callEqProgram] using lookup)
+      cases rest with
+      | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+          cases instructionEq
+      | next eqCursor guardChronology tail edge rest =>
+          cases rest with
+          | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+              have strict : Exec.Deriv.lt w.target body.node := by
+                simpa only [targetEq] using edge.lt
+              have distinct : body.node ≠ w.target := by
+                intro equal
+                rw [equal] at strict
+                exact (Exec.Deriv.lt.well_founded.asymmetric _ _ strict) strict
+              exact ⟨body, lookup, route, guardChronology, distinct,
+                guardChronology.strictBefore distinct⟩
+          | next cursor chronology tail edge rest => cases rest
+
+private def errorChronologyProgram : Prog :=
+  ⟨.next (.reg .eq) (.next (.reg .sstore)
+    (.next (.reg .sload) (.last .stop))), []⟩
+
+private def errorChronologyCode : ByteArray :=
+  ByteArray.mk #[0x5b, 0x14, 0x55, 0x54, 0x00]
+
+/-- Entry JUMPDEST, EQ, and a cold successful SSTORE consume all 22104 gas;
+the following SLOAD is therefore the terminal out-of-gas suffix. -/
+private def errorChronologyPre : Devm :=
+  ((default : Devm).withGasLeft 22104).withStack [1, 0, 1, 0]
+
+private def errorChronologyFixture? :
+    Option (Fixture errorChronologyProgram errorChronologyCode
+      errorChronologyPre) :=
+  fixture? errorChronologyProgram errorChronologyCode errorChronologyPre 1
+
+private def errorChronologyAvailable : Bool :=
+  match errorChronologyFixture? with
+  | some w => w.trace.pcs == [1, 2] && !Execution.commits w.out
+  | none => false
+
+private theorem errorChronologyFixture_exists :
+    ∃ w : Fixture errorChronologyProgram errorChronologyCode
+        errorChronologyPre,
+      w.trace.pcs = [1, 2] ∧ Execution.commits w.out ≠ true := by
+  have available : errorChronologyAvailable = true := by
+    native_decide
+  unfold errorChronologyAvailable at available
+  cases fixture : errorChronologyFixture? with
+  | none => simp [fixture] at available
+  | some witness =>
+      rw [fixture] at available
+      simp only [Bool.and_eq_true] at available
+      have notCommitted : Execution.commits witness.out ≠ true := by
+        intro committed
+        simp [committed] at available
+      exact ⟨witness, beq_iff_eq.mp available.1, notCommitted⟩
+
+/-- Chronology is retained for a reached SSTORE even though a later SLOAD in
+the same raw derivation terminates out of gas. -/
+private theorem chronology_error_suffix_control :
+    ∃ w : Fixture errorChronologyProgram errorChronologyCode
+        errorChronologyPre,
+      ∃ mainCursor : Exec.Deriv.SourceCursor w.root errorChronologyProgram
+          ⟨0, []⟩ errorChronologyProgram.main,
+        Exec.Deriv.SourceCursor.Toward mainCursor w.target
+            (.reg .sstore) mainCursor ∧
+          Exec.Deriv.SourceCursor.Chronology
+            mainCursor mainCursor w.target ∧
+          mainCursor.node ≠ w.target ∧
+          Exec.Deriv.lt w.target mainCursor.node ∧
+          Execution.commits w.out ≠ true := by
+  rcases errorChronologyFixture_exists with ⟨w, pcs, notCommitted⟩
+  have targetPc : w.target.pc = 2 := by
+    have last := w.trace.getLast?_pcs
+    rw [pcs] at last
+    simpa [Fixture.target, ContTrace.node] using last.symm
+  have targetAt : Ninst.At w.target.sevm.code w.target.pc
+      (.reg .sstore) := by
+    rw [targetPc]
+    change Ninst.At errorChronologyCode 2 (.reg .sstore)
+    rfl
+  rcases Exec.Deriv.SourceCursor.mainToward w.exact w.rootToTarget
+      targetAt with
+    ⟨mainCursor, compilerPrefix, reached⟩
+  let route := mainCursor.toward (instruction := .reg .sstore)
+    w.compiled reached True.intro targetAt
+  refine ⟨w, mainCursor, route, ?_⟩
+  cases route with
+  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+      cases instructionEq
+  | next eqCursor chronology tail edge rest =>
+      cases rest with
+      | atTarget cursor tailChronology site siteEq sourceMember targetEq instructionEq =>
+          have strict : Exec.Deriv.lt w.target mainCursor.node := by
+            rw [← targetEq]
+            exact edge.lt
+          have distinct : mainCursor.node ≠ w.target := by
+            intro equal
+            rw [equal] at strict
+            exact (Exec.Deriv.lt.well_founded.asymmetric _ _ strict) strict
+          exact ⟨chronology, distinct,
+            chronology.strictBefore distinct, notCommitted⟩
+      | next cursor chronology tail edge rest =>
+          cases rest with
+          | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+              cases instructionEq
+          | next cursor chronology tail edge rest => cases rest
+
+private def chronologyAvailable : Bool :=
+  branchEqAvailable && callEqAvailable && errorChronologyAvailable
+
+private theorem chronologyAvailable_eq_true : chronologyAvailable = true := by
+  native_decide
+
+end Chronology
+
 /-! Exact invocation identity controls. -/
 
 private theorem exactInvocation_rejects_identity_drift
@@ -1979,6 +2407,9 @@ private theorem required_positive_controls : True := by
   let _rawSource := concrete_raw_attribution_controls
   let _coincidentIdentity := coincident_identity_top_level_control
   let _successfulOutcomes := concrete_successful_source_outcomes
+  let _chronologyBranch := Chronology.chronology_branch_eq_before_sstore_control
+  let _chronologyCall := Chronology.chronology_call_eq_before_sstore_control
+  let _chronologyError := Chronology.chronology_error_suffix_control
   let _callOrders := concreteCall_orders
   let _rawCallOrders := concreteRawFrameRoot_orders
   let _runErr := concreteRunErr_rawFrameRoots
@@ -2005,7 +2436,8 @@ private theorem required_positive_controls : True := by
   exactSourceSite,
   runErrAvailable,
   RawChildAttribution.caughtAttributionAvailable,
-  RawChildAttribution.rollbackAttributionAvailable]
+  RawChildAttribution.rollbackAttributionAvailable,
+  Chronology.chronologyAvailable]
 
 -- TERMINAL-ERROR-MUTANT-CONTROL
 -- RAW-ERROR-PRUNE-MUTANT-CONTROL
@@ -2022,6 +2454,12 @@ private theorem required_positive_controls : True := by
 -- RUNERR-CHILD-PRUNING-MUTANT-CONTROL
 -- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL
 -- MISSING-PARENT-PREFIX-MUTANT-CONTROL
+-- CHRONOLOGY-REJECTED-BRANCH-MUTANT-CONTROL
+-- CHRONOLOGY-ORDER-REVERSAL-MUTANT-CONTROL
+-- CHRONOLOGY-MISSING-INITIAL-PREFIX-MUTANT-CONTROL
+-- CHRONOLOGY-MISSING-TARGET-PREFIX-MUTANT-CONTROL
+-- CHRONOLOGY-SYNTAX-ONLY-MUTANT-CONTROL
+-- CHRONOLOGY-COMMIT-REQUIRED-MUTANT-CONTROL
 -- WETH-BRIDGE-MUTANT-CONTROL
 
 end

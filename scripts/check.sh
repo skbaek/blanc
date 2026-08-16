@@ -356,6 +356,8 @@ Blanc.Frame.settlementCommits_ofCall_of_raw_commits|$STANDARD
 Blanc.Exec.ninstOccurrence_iff_mem_rawNodes|$STANDARD
 Blanc.Exec.SuccessfulSstoreOccurrence.storage_update|$STANDARD
 Blanc.Exec.Deriv.ParentPrefix.linear|$STANDARD
+Blanc.Exec.Deriv.SourceCursor.Chronology.strictBefore|$STANDARD
+Blanc.Exec.Deriv.SourceCursor.toward|$STANDARD
 Blanc.Prog.sourceSiteAt_sound|$STANDARD
 Blanc.Exec.Frame.successfulSstore_sourceSite|$STANDARD
 Blanc.Exec.retainedNodes_sublist_rawNodes|$STANDARD

@@ -20,7 +20,7 @@ MOVE_MANIFEST = ROOT / "scripts" / "execution-occurrence-lift-manifest.json"
 RAW_ATTRIBUTION_OWNERSHIP = (
     ROOT / "scripts" / "check-execution-raw-attribution-ownership.py"
 )
-EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
+EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
 DIRECT_CODE_EXPECTED = ""
 
 CANONICAL_DIRECT_CODE = "Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget"
@@ -72,6 +72,9 @@ REQUIRED_POSITIVE_THEOREMS = {
     "Blanc.ExecutionOccurrenceRegression.concrete_raw_attribution_controls",
     "Blanc.ExecutionOccurrenceRegression.coincident_identity_top_level_control",
     "Blanc.ExecutionOccurrenceRegression.concrete_successful_source_outcomes",
+    "Blanc.ExecutionOccurrenceRegression.Chronology.chronology_branch_eq_before_sstore_control",
+    "Blanc.ExecutionOccurrenceRegression.Chronology.chronology_call_eq_before_sstore_control",
+    "Blanc.ExecutionOccurrenceRegression.Chronology.chronology_error_suffix_control",
     "Blanc.ExecutionOccurrenceRegression.concreteCall_orders",
     "Blanc.ExecutionOccurrenceRegression.concreteRawFrameRoot_orders",
     "Blanc.ExecutionOccurrenceRegression.concreteRunErr_rawFrameRoots",
@@ -184,6 +187,88 @@ private theorem missingParentPrefixMutant
     ⟨selected, exact, occurrence, instruction, sameFrame, pc, accepted⟩
   exact ⟨occurrence, instruction, sameFrame⟩
 """,
+    "-- CHRONOLOGY-REJECTED-BRANCH-MUTANT-CONTROL": r"""
+private theorem chronologyRejectedBranchMutant :
+    ∃ w : Chronology.Fixture Chronology.branchEqProgram
+        Chronology.branchEqCode Chronology.branchEqPre,
+      ∃ mainCursor : Exec.Deriv.SourceCursor w.root
+          Chronology.branchEqProgram ⟨0, []⟩ Chronology.branchEqProgram.main,
+        ∃ rejectedCursor : Exec.Deriv.SourceCursor w.root
+            Chronology.branchEqProgram ⟨0, [.branchRight]⟩
+            (.next (.reg .eq) (.last .rev)),
+          Exec.Deriv.SourceCursor.Chronology
+            mainCursor rejectedCursor w.target := by
+  rcases Chronology.chronology_branch_eq_before_sstore_control with
+    ⟨w, mainCursor, guardCursor, route, chronology, distinct, strict⟩
+  exact ⟨w, mainCursor, guardCursor, chronology⟩
+""",
+    "-- CHRONOLOGY-ORDER-REVERSAL-MUTANT-CONTROL": r"""
+private theorem chronologyOrderReversalMutant :
+    ∃ w : Chronology.Fixture Chronology.branchEqProgram
+        Chronology.branchEqCode Chronology.branchEqPre,
+      ∃ mainCursor : Exec.Deriv.SourceCursor w.root
+          Chronology.branchEqProgram ⟨0, []⟩ Chronology.branchEqProgram.main,
+        ∃ guardCursor : Exec.Deriv.SourceCursor w.root
+            Chronology.branchEqProgram ⟨0, [.branchLeft]⟩
+            (.next (.reg .eq) (.next (.reg .sstore) (.last .stop))),
+          Exec.Deriv.lt guardCursor.node w.target := by
+  rcases Chronology.chronology_branch_eq_before_sstore_control with
+    ⟨w, mainCursor, guardCursor, route, chronology, distinct, strict⟩
+  exact ⟨w, mainCursor, guardCursor, strict⟩
+""",
+    "-- CHRONOLOGY-MISSING-INITIAL-PREFIX-MUTANT-CONTROL": r"""
+private theorem chronologyMissingInitialPrefixMutant :
+    ∃ w : Chronology.Fixture Chronology.branchEqProgram
+        Chronology.branchEqCode Chronology.branchEqPre,
+      ∃ mainCursor : Exec.Deriv.SourceCursor w.root
+          Chronology.branchEqProgram ⟨0, []⟩ Chronology.branchEqProgram.main,
+        ∃ guardCursor : Exec.Deriv.SourceCursor w.root
+            Chronology.branchEqProgram ⟨0, [.branchLeft]⟩
+            (.next (.reg .eq) (.next (.reg .sstore) (.last .stop))),
+          Exec.Deriv.SourceCursor.Chronology
+            mainCursor guardCursor w.target := by
+  rcases Chronology.chronology_branch_eq_before_sstore_control with
+    ⟨w, mainCursor, guardCursor, route, chronology, distinct, strict⟩
+  exact ⟨w, mainCursor, guardCursor,
+    ⟨.refl guardCursor.node, chronology.cursorToTarget⟩⟩
+""",
+    "-- CHRONOLOGY-MISSING-TARGET-PREFIX-MUTANT-CONTROL": r"""
+private theorem chronologyMissingTargetPrefixMutant :
+    ∃ w : Chronology.Fixture Chronology.branchEqProgram
+        Chronology.branchEqCode Chronology.branchEqPre,
+      ∃ mainCursor : Exec.Deriv.SourceCursor w.root
+          Chronology.branchEqProgram ⟨0, []⟩ Chronology.branchEqProgram.main,
+        ∃ guardCursor : Exec.Deriv.SourceCursor w.root
+            Chronology.branchEqProgram ⟨0, [.branchLeft]⟩
+            (.next (.reg .eq) (.next (.reg .sstore) (.last .stop))),
+          Exec.Deriv.SourceCursor.Chronology
+            mainCursor guardCursor w.target := by
+  rcases Chronology.chronology_branch_eq_before_sstore_control with
+    ⟨w, mainCursor, guardCursor, route, chronology, distinct, strict⟩
+  exact ⟨w, mainCursor, guardCursor,
+    ⟨chronology.initialToCursor, .refl guardCursor.node⟩⟩
+""",
+    "-- CHRONOLOGY-SYNTAX-ONLY-MUTANT-CONTROL": r"""
+private theorem chronologySyntaxOnlyMutant
+    {root : Exec.Deriv} {program : Prog}
+    {leftPath rightPath : Prog.SourcePath} {leftSource rightSource : Func}
+    (left : Exec.Deriv.SourceCursor root program leftPath leftSource)
+    (right : Exec.Deriv.SourceCursor root program rightPath rightSource)
+    (_sourcePathOnly : leftPath.steps.isPrefixOf rightPath.steps = true)
+    (samePc : left.pc = right.pc) :
+    Exec.Deriv.ParentPrefix left.node right.node := by
+  cases samePc
+  exact .refl left.node
+""",
+    "-- CHRONOLOGY-COMMIT-REQUIRED-MUTANT-CONTROL": r"""
+private theorem chronologyCommitRequiredMutant :
+    ∃ w : Chronology.Fixture Chronology.errorChronologyProgram
+        Chronology.errorChronologyCode Chronology.errorChronologyPre,
+      Execution.commits w.out = true := by
+  rcases Chronology.chronology_error_suffix_control with
+    ⟨w, mainCursor, route, chronology, distinct, strict, notCommitted⟩
+  exact ⟨w, notCommitted⟩
+""",
 }
 
 
@@ -209,6 +294,16 @@ def load_ownership_parser():
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    # Contract declarations include identifiers ending in `?`; keep the
+    # shared parser's scope/comment handling while preventing those headers
+    # from being truncated into duplicate basenames.
+    ident = r"[A-Za-z_][A-Za-z0-9_'?!]*(?:\.[A-Za-z_][A-Za-z0-9_'?!]*)*"
+    module.DECL_RE = re.compile(
+        rf"^\s*(?:@\[[^]]+\]\s*)*"
+        rf"(?:(?:private|protected|noncomputable|unsafe)\s+)*"
+        rf"(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+"
+        rf"({ident})(?=\s|$)"
+    )
     return module
 
 
@@ -564,6 +659,18 @@ def main() -> int:
                     ("Application type mismatch", "Type mismatch"),
                 "-- MISSING-PARENT-PREFIX-MUTANT-CONTROL":
                     ("Application type mismatch", "Type mismatch"),
+                "-- CHRONOLOGY-REJECTED-BRANCH-MUTANT-CONTROL":
+                    ("Application type mismatch", "Type mismatch"),
+                "-- CHRONOLOGY-ORDER-REVERSAL-MUTANT-CONTROL":
+                    ("Application type mismatch", "Type mismatch"),
+                "-- CHRONOLOGY-MISSING-INITIAL-PREFIX-MUTANT-CONTROL":
+                    ("Application type mismatch", "Type mismatch"),
+                "-- CHRONOLOGY-MISSING-TARGET-PREFIX-MUTANT-CONTROL":
+                    ("Application type mismatch", "Type mismatch"),
+                "-- CHRONOLOGY-SYNTAX-ONLY-MUTANT-CONTROL":
+                    ("Dependent elimination failed",),
+                "-- CHRONOLOGY-COMMIT-REQUIRED-MUTANT-CONTROL":
+                    ("Application type mismatch", "Type mismatch"),
             }[marker]
             if not any(expected in evidence for expected in expected_failures):
                 return fail(f"mutant `{marker}` failed unexpectedly", mutant)
@@ -650,6 +757,10 @@ def main() -> int:
             "references": 1,
         },
         {"module": "Blanc/Weth10AllowanceRecursion.lean", "references": 2},
+        {
+            "module": "Blanc/LidoCircuitBreakerOwnerClosure.lean",
+            "references": 1,
+        },
     ]
     if required_consumers != expected_consumers:
         return fail("canonical direct-code consumer inventory drifted")
@@ -1128,11 +1239,11 @@ def main() -> int:
         return fail("CREATE settlement control verdict drifted", settlement)
 
     print(
-        "OK — execution occurrence: 16 concrete occurrence + 6 direct-code controls; "
-        "15 occurrence + 2 direct-code Lean mutants; WETH bridge-removal mutant; "
+        "OK — execution occurrence: 17 concrete occurrence + 6 direct-code controls; "
+        "21 occurrence + 2 direct-code Lean mutants; WETH bridge-removal mutant; "
         "10 moved-owner + 8 exact direct-code headers + 23 ownership-parser controls; "
-        "24 raw-attribution owners + exact signature + 4 controls; "
-        "24 required positive proofs + legacy deletion + 7 live direct-code "
+        "28 raw-attribution owners + exact source/chronology signatures + shared "
+        "kernel + 8 controls; 27 required positive proofs + legacy deletion + 7 live direct-code "
         "deletions; 2 CREATE mutants"
     )
     return 0

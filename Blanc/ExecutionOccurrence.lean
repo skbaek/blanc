@@ -1552,6 +1552,35 @@ theorem Exec.Deriv.ParentPrefix.snoc
   | refl => exact .step edge (.refl _)
   | step head rest ih => exact .step head (ih edge)
 
+/-- Compose two finite same-frame prefixes. -/
+private theorem Exec.Deriv.ParentPrefix.trans
+    {root middle tail : Exec.Deriv}
+    (left : Exec.Deriv.ParentPrefix root middle)
+    (right : Exec.Deriv.ParentPrefix middle tail) :
+    Exec.Deriv.ParentPrefix root tail := by
+  induction left with
+  | refl => exact right
+  | step head rest ih => exact .step head (ih right)
+
+/-- A same-frame prefix endpoint is a recursive descendant of its start. -/
+private theorem Exec.Deriv.ParentPrefix.le
+    {root tail : Exec.Deriv}
+    (hprefix : Exec.Deriv.ParentPrefix root tail) :
+    Exec.Deriv.le tail root := by
+  induction hprefix with
+  | refl => exact .refl _
+  | step head rest ih => exact .step ih head.prec
+
+/-- Distinct endpoints of a same-frame prefix are strictly ordered in the
+descendant-first derivation order. -/
+private theorem Exec.Deriv.ParentPrefix.lt_of_ne
+    {root tail : Exec.Deriv}
+    (hprefix : Exec.Deriv.ParentPrefix root tail)
+    (distinct : root ≠ tail) : Exec.Deriv.lt tail root := by
+  rcases Exec.Deriv.eq_or_lt_of_le hprefix.le with equal | strict
+  · exact (distinct equal.symm).elim
+  · exact strict
+
 /-- Follow one known childless machine continuation. -/
 theorem Exec.Deriv.ParentPrefix.advance_cont
     {root : Exec.Deriv} {pc nextPc : Nat} {sevm : Sevm}
@@ -1905,6 +1934,16 @@ inductive Exec.Deriv.ParentNonSstorePrefix :
       (notStore : ¬ Ninst.At root.sevm.code root.pc (.reg .sstore))
       (rest : ParentNonSstorePrefix next tail) :
       ParentNonSstorePrefix root tail
+
+/-- Forget the compiler-only non-SSTORE annotations while retaining the
+actual same-frame execution prefix. -/
+private theorem Exec.Deriv.ParentNonSstorePrefix.toParentPrefix
+    {root tail : Exec.Deriv}
+    (hprefix : Exec.Deriv.ParentNonSstorePrefix root tail) :
+    Exec.Deriv.ParentPrefix root tail := by
+  induction hprefix with
+  | refl => exact .refl _
+  | step edge notStore rest ih => exact .step edge ih
 
 /-- Remove compiler-only non-SSTORE nodes from the front of a reached SSTORE
 prefix. -/
@@ -2563,52 +2602,165 @@ theorem Exec.Deriv.SourceCursor.callToward
     (.step jumpEdge jumpNotStore
       (.step jumpdestEdge jumpdestNotStore (.refl _)))
 
-/-- Target-directed source attribution follows the finite execution proof,
-not the source call graph. -/
-private theorem Exec.Deriv.SourceCursor.sourceSite_core :
+/-- Actual same-frame chronology around one source cursor retained by a
+target-directed source traversal. -/
+structure Exec.Deriv.SourceCursor.Chronology
+    {root : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    (initial : Exec.Deriv.SourceCursor root program initialPath initialSource)
+    (cursor : Exec.Deriv.SourceCursor root program path source)
+    (target : Exec.Deriv) where
+  initialToCursor : Exec.Deriv.ParentPrefix initial.node cursor.node
+  cursorToTarget : Exec.Deriv.ParentPrefix cursor.node target
+
+/-- A retained cursor distinct from the target is strictly earlier in the
+actual same-frame derivation.  `Exec.Deriv.lt` is descendant-first, so the
+target occurs on the left of the conclusion. -/
+theorem Exec.Deriv.SourceCursor.Chronology.strictBefore
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {initial : Exec.Deriv.SourceCursor root program initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (chronology : Exec.Deriv.SourceCursor.Chronology initial cursor target)
+    (distinct : cursor.node ≠ target) :
+    Exec.Deriv.lt target cursor.node :=
+  chronology.cursorToTarget.lt_of_ne distinct
+
+/-- The actual target-directed compiler-source route to one reached non-PUSH
+instruction.  Every constructor retains the current source cursor and both
+sides of its execution chronology. Branches record the actually selected arm;
+internal calls additionally retain the exact compiler-table lookup. -/
+inductive Exec.Deriv.SourceCursor.Toward
+    {root : Exec.Deriv} {program : Prog}
+    {initialPath : Prog.SourcePath} {initialSource : Func}
+    (initial : Exec.Deriv.SourceCursor root program initialPath initialSource)
+    (target : Exec.Deriv) (targetInstruction : Ninst) :
+    {path : Prog.SourcePath} → {source : Func} →
+      Exec.Deriv.SourceCursor root program path source → Prop
+  | atTarget {path : Prog.SourcePath} {instruction : Ninst} {tail : Func}
+      (cursor : Exec.Deriv.SourceCursor root program path
+        (.next instruction tail))
+      (chronology : Exec.Deriv.SourceCursor.Chronology initial cursor target)
+      (site : Prog.SourceSite)
+      (siteEq : site =
+        { path := path, pc := cursor.pc, instruction := instruction })
+      (sourceMember : site ∈ program.sourceSites)
+      (targetEq : cursor.node = target)
+      (instructionEq : instruction = targetInstruction) :
+      Exec.Deriv.SourceCursor.Toward initial target targetInstruction cursor
+  | next {path : Prog.SourcePath} {instruction : Ninst} {tail : Func}
+      (cursor : Exec.Deriv.SourceCursor root program path
+        (.next instruction tail))
+      (chronology : Exec.Deriv.SourceCursor.Chronology initial cursor target)
+      (tailCursor : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.rest]⟩ tail)
+      (edge : Exec.Deriv.ParentStep tailCursor.node cursor.node)
+      (rest : Exec.Deriv.SourceCursor.Toward
+        initial target targetInstruction tailCursor) :
+      Exec.Deriv.SourceCursor.Toward initial target targetInstruction cursor
+  | branchLeft {path : Prog.SourcePath} {left right : Func}
+      (cursor : Exec.Deriv.SourceCursor root program path (.branch left right))
+      (chronology : Exec.Deriv.SourceCursor.Chronology initial cursor target)
+      (arm : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left)
+      (compilerPrefix :
+        Exec.Deriv.ParentNonSstorePrefix cursor.node arm.node)
+      (rest : Exec.Deriv.SourceCursor.Toward
+        initial target targetInstruction arm) :
+      Exec.Deriv.SourceCursor.Toward initial target targetInstruction cursor
+  | branchRight {path : Prog.SourcePath} {left right : Func}
+      (cursor : Exec.Deriv.SourceCursor root program path (.branch left right))
+      (chronology : Exec.Deriv.SourceCursor.Chronology initial cursor target)
+      (arm : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right)
+      (compilerPrefix :
+        Exec.Deriv.ParentNonSstorePrefix cursor.node arm.node)
+      (rest : Exec.Deriv.SourceCursor.Toward
+        initial target targetInstruction arm) :
+      Exec.Deriv.SourceCursor.Toward initial target targetInstruction cursor
+  | call {path : Prog.SourcePath} {index : Nat} {body : Func}
+      (cursor : Exec.Deriv.SourceCursor root program path (.call index))
+      (chronology : Exec.Deriv.SourceCursor.Chronology initial cursor target)
+      (lookup : (program.main :: program.aux)[index]? = some body)
+      (bodyCursor : Exec.Deriv.SourceCursor root program ⟨index, []⟩ body)
+      (compilerPrefix :
+        Exec.Deriv.ParentNonSstorePrefix cursor.node bodyCursor.node)
+      (rest : Exec.Deriv.SourceCursor.Toward
+        initial target targetInstruction bodyCursor) :
+      Exec.Deriv.SourceCursor.Toward initial target targetInstruction cursor
+
+/-- The final cursor of an actual target-directed route recovers the existing
+source-attribution result. -/
+private theorem Exec.Deriv.SourceCursor.Toward.sourceSite
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {targetInstruction : Ninst}
+    {initial : Exec.Deriv.SourceCursor root program initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor) :
+    ∃ site : Prog.SourceSite,
+      site ∈ program.sourceSites ∧
+      site.pc = target.pc ∧
+      site.instruction = targetInstruction := by
+  induction route with
+  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+      refine ⟨site, sourceMember, ?_, ?_⟩
+      · have pcEq := congrArg Exec.Deriv.pc targetEq
+        simpa [Exec.Deriv.SourceCursor.node, siteEq] using pcEq
+      · simpa [siteEq] using instructionEq
+  | next cursor chronology tailCursor edge rest ih => exact ih
+  | branchLeft cursor chronology arm compilerPrefix rest ih => exact ih
+  | branchRight cursor chronology arm compilerPrefix rest ih => exact ih
+  | call cursor chronology lookup bodyCursor compilerPrefix rest ih => exact ih
+
+/-- The sole target-directed source traversal follows the finite execution
+proof, not the source call graph, and retains every intermediate cursor. -/
+private theorem Exec.Deriv.SourceCursor.toward_core :
     ∀ current : Exec.Deriv,
       ∀ {root : Exec.Deriv} {program : Prog}
-        {path : Prog.SourcePath} {source : Func}
-        {targetInstruction : Ninst}
+        {initialPath path : Prog.SourcePath}
+        {initialSource source : Func}
+        {targetInstruction : Ninst} {target : Exec.Deriv}
+        (initial : Exec.Deriv.SourceCursor root program
+          initialPath initialSource)
         (cursor : Exec.Deriv.SourceCursor root program path source),
         cursor.node = current →
         some root.sevm.code.toList = program.compile →
-        ∀ (target : Exec.Deriv),
-          Exec.Deriv.ParentPrefix cursor.node target →
-          NinstNonPush targetInstruction →
-          Ninst.At target.sevm.code target.pc targetInstruction →
-          ∃ site : Prog.SourceSite,
-            site ∈ program.sourceSites ∧
-            site.pc = target.pc ∧
-            site.instruction = targetInstruction := by
+        Exec.Deriv.SourceCursor.Chronology initial cursor target →
+        NinstNonPush targetInstruction →
+        Ninst.At target.sevm.code target.pc targetInstruction →
+        Exec.Deriv.SourceCursor.Toward
+          initial target targetInstruction cursor := by
   let property : Exec.Deriv.Pred := fun current =>
     ∀ {root : Exec.Deriv} {program : Prog}
-      {path : Prog.SourcePath} {source : Func}
-      {targetInstruction : Ninst}
+      {initialPath path : Prog.SourcePath}
+      {initialSource source : Func}
+      {targetInstruction : Ninst} {target : Exec.Deriv}
+      (initial : Exec.Deriv.SourceCursor root program
+        initialPath initialSource)
       (cursor : Exec.Deriv.SourceCursor root program path source),
       cursor.node = current →
       some root.sevm.code.toList = program.compile →
-      ∀ (target : Exec.Deriv),
-        Exec.Deriv.ParentPrefix cursor.node target →
-        NinstNonPush targetInstruction →
-        Ninst.At target.sevm.code target.pc targetInstruction →
-        ∃ site : Prog.SourceSite,
-          site ∈ program.sourceSites ∧
-          site.pc = target.pc ∧
-          site.instruction = targetInstruction
+      Exec.Deriv.SourceCursor.Chronology initial cursor target →
+      NinstNonPush targetInstruction →
+      Ninst.At target.sevm.code target.pc targetInstruction →
+      Exec.Deriv.SourceCursor.Toward
+        initial target targetInstruction cursor
   apply Exec.Deriv.strongRec property
-  intro current ih root program path source targetInstruction cursor hcurrent
-    compiled target reached targetNonPush storeAt
+  intro current ih root program initialPath path initialSource source
+    targetInstruction target initial cursor hcurrent compiled chronology
+    targetNonPush instructionAt
   subst current
   cases source with
   | last outcome =>
       have lastAt : Linst.At root.sevm.code cursor.pc outcome :=
         Linst.at_of_slice cursor.codeSlice
-      cases reached with
-      | refl => exact (storeAt.false_of_linstAt lastAt).elim
+      cases chronology.cursorToTarget with
+      | refl => exact (instructionAt.false_of_linstAt lastAt).elim
       | step edge suffix => exact (edge.false_of_linstAt lastAt).elim
   | next instruction tail =>
-      cases reached with
+      cases chronology.cursorToTarget with
       | refl =>
           let site : Prog.SourceSite :=
             { path := path, pc := cursor.pc, instruction := instruction }
@@ -2620,28 +2772,78 @@ private theorem Exec.Deriv.SourceCursor.sourceSite_core :
           have sourceAt : Ninst.At root.sevm.code cursor.pc instruction :=
             Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
               localMember
-          have instructionEq := Ninst.at_unique sourceAt storeAt
-          cases instructionEq
-          exact ⟨site, cursor.sourceIncluded localMember, rfl, rfl⟩
+          have instructionEq := Ninst.at_unique sourceAt instructionAt
+          exact .atTarget cursor chronology site rfl
+            (cursor.sourceIncluded localMember) rfl instructionEq
       | step occurrenceEdge suffix =>
           rcases cursor.nextOfParentStep occurrenceEdge with
             ⟨tailCursor, tailNodeEq⟩
-          rw [← tailNodeEq] at suffix
-          exact ih _ occurrenceEdge.lt tailCursor tailNodeEq compiled target
-            suffix targetNonPush storeAt
+          have tailEdge : Exec.Deriv.ParentStep
+              tailCursor.node cursor.node := by
+            rw [tailNodeEq]
+            exact occurrenceEdge
+          have tailReached :
+              Exec.Deriv.ParentPrefix tailCursor.node target := by
+            rw [tailNodeEq]
+            exact suffix
+          let tailChronology :
+              Exec.Deriv.SourceCursor.Chronology
+                initial tailCursor target :=
+            ⟨chronology.initialToCursor.trans
+                (.step tailEdge (.refl _)),
+              tailReached⟩
+          have rest := ih tailCursor.node tailEdge.lt initial tailCursor rfl
+            compiled tailChronology targetNonPush instructionAt
+          exact .next cursor chronology tailCursor tailEdge rest
   | branch left right =>
-      rcases cursor.branchToward reached targetNonPush storeAt with
+      rcases cursor.branchToward chronology.cursorToTarget
+          targetNonPush instructionAt with
         ⟨arm, compilerPrefix, armReached, decrease⟩ |
         ⟨arm, compilerPrefix, armReached, decrease⟩
-      · exact ih arm.node decrease arm rfl compiled target armReached
-          targetNonPush storeAt
-      · exact ih arm.node decrease arm rfl compiled target armReached
-          targetNonPush storeAt
+      · let armChronology :
+            Exec.Deriv.SourceCursor.Chronology initial arm target :=
+          ⟨chronology.initialToCursor.trans
+              compilerPrefix.toParentPrefix,
+            armReached⟩
+        have rest := ih arm.node decrease initial arm rfl compiled
+          armChronology targetNonPush instructionAt
+        exact .branchLeft cursor chronology arm compilerPrefix rest
+      · let armChronology :
+            Exec.Deriv.SourceCursor.Chronology initial arm target :=
+          ⟨chronology.initialToCursor.trans
+              compilerPrefix.toParentPrefix,
+            armReached⟩
+        have rest := ih arm.node decrease initial arm rfl compiled
+          armChronology targetNonPush instructionAt
+        exact .branchRight cursor chronology arm compilerPrefix rest
   | call index =>
-      rcases cursor.callToward compiled reached targetNonPush storeAt with
-        ⟨body, hbody, bodyCursor, compilerPrefix, bodyReached, decrease⟩
-      exact ih bodyCursor.node decrease bodyCursor rfl compiled target
-        bodyReached targetNonPush storeAt
+      rcases cursor.callToward compiled chronology.cursorToTarget
+          targetNonPush instructionAt with
+        ⟨body, lookup, bodyCursor, compilerPrefix, bodyReached, decrease⟩
+      let bodyChronology :
+          Exec.Deriv.SourceCursor.Chronology initial bodyCursor target :=
+        ⟨chronology.initialToCursor.trans
+            compilerPrefix.toParentPrefix,
+          bodyReached⟩
+      have rest := ih bodyCursor.node decrease initial bodyCursor rfl compiled
+        bodyChronology targetNonPush instructionAt
+      exact .call cursor chronology lookup bodyCursor compilerPrefix rest
+
+/-- Public actual target-directed route for any reached non-PUSH source
+instruction in an arbitrary-outcome raw source cursor. -/
+theorem Exec.Deriv.SourceCursor.toward
+    {root target : Exec.Deriv} {program : Prog}
+    {path : Prog.SourcePath} {source : Func} {instruction : Ninst}
+    (cursor : Exec.Deriv.SourceCursor root program path source)
+    (compiled : some root.sevm.code.toList = program.compile)
+    (reached : Exec.Deriv.ParentPrefix cursor.node target)
+    (nonPush : NinstNonPush instruction)
+    (instructionAt : Ninst.At target.sevm.code target.pc instruction) :
+    Exec.Deriv.SourceCursor.Toward cursor target instruction cursor := by
+  let chronology : Exec.Deriv.SourceCursor.Chronology cursor cursor target :=
+    ⟨.refl _, reached⟩
+  exact Exec.Deriv.SourceCursor.toward_core cursor.node cursor cursor rfl
+    compiled chronology nonPush instructionAt
 
 /-- Public target-directed completeness for any reached non-PUSH source
 instruction in an arbitrary-outcome raw source cursor. -/
@@ -2657,8 +2859,7 @@ theorem Exec.Deriv.SourceCursor.sourceSite
       site ∈ program.sourceSites ∧
       site.pc = target.pc ∧
       site.instruction = instruction := by
-  exact Exec.Deriv.SourceCursor.sourceSite_core cursor.node cursor rfl
-    compiled target reached nonPush instructionAt
+  exact (cursor.toward compiled reached nonPush instructionAt).sourceSite
 
 /-- Public target-directed completeness for an arbitrary-outcome raw source
 cursor. -/

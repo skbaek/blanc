@@ -11,4 +11,4 @@ if ! (cd "$ROOT" && lake env lean scripts/ClaimCheck.lean); then
   exit 1
 fi
 
-echo "OK — common/WETH10/Lido claim statements: 235 definitions/statements and exact record constructors pinned by Lean"
+echo "OK — common/WETH10/Lido claim statements: 237 definitions/statements and exact record constructors pinned by Lean"

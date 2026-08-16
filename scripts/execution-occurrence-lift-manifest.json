@@ -122,6 +122,10 @@
     {
       "module": "Blanc/Weth10AllowanceRecursion.lean",
       "references": 2
+    },
+    {
+      "module": "Blanc/LidoCircuitBreakerOwnerClosure.lean",
+      "references": 1
     }
   ]
 }

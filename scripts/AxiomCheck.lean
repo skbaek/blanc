@@ -92,6 +92,8 @@ import Blanc.LidoCircuitBreakerRegistryModel
 #print axioms Blanc.Exec.ninstOccurrence_iff_mem_rawNodes
 #print axioms Blanc.Exec.SuccessfulSstoreOccurrence.storage_update
 #print axioms Blanc.Exec.Deriv.ParentPrefix.linear
+#print axioms Blanc.Exec.Deriv.SourceCursor.Chronology.strictBefore
+#print axioms Blanc.Exec.Deriv.SourceCursor.toward
 #print axioms Blanc.Prog.sourceSiteAt_sound
 #print axioms Blanc.Exec.Frame.successfulSstore_sourceSite
 #print axioms Blanc.Exec.retainedNodes_sublist_rawNodes
