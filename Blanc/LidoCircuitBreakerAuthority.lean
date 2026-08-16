@@ -259,7 +259,21 @@ private theorem RuntimePersistentWrite.sourceSite?_functionIndex
   have sitesEq := runtimePersistentSourceSites_eq_official dp
   unfold RuntimePersistentWrite.sourceSite? at found
   rw [sitesEq] at found
-  cases row <;> native_decide +revert
+  cases row <;> decide +kernel +revert
+
+private theorem runtimePersistentSourceSite_eq_of_pc
+    {dp : DeployParams} {left right : Prog.SourceSite}
+    (leftMem : left ∈ runtimePersistentSourceSites dp)
+    (rightMem : right ∈ runtimePersistentSourceSites dp)
+    (pcEq : left.pc = right.pc) :
+    left = right := by
+  have sitesNodup := runtimePersistentSourceSites_nodup dp
+  have pcsNodup :
+      ((runtimePersistentSourceSites dp).map fun site => site.pc).Nodup := by
+    rw [runtimePersistentSourceSites_pcs]
+    decide
+  exact (List.nodup_map_iff_inj_on sitesNodup).mp pcsNodup
+    left leftMem right rightMem pcEq
 
 private theorem Exec.Deriv.SourceCursor.Toward.dropLine
     {dp : DeployParams} {root target : Exec.Deriv}
@@ -291,6 +305,50 @@ private theorem Exec.Deriv.SourceCursor.Toward.dropLine
         ⟨chronology, restCursor, edge, restRoute⟩
       exact ih restRoute (fun candidate member =>
         lineNe candidate (by simp [member]))
+
+/-- Drop a source line while retaining the exact structural path reached after
+its sequence of `.rest` descents. -/
+private theorem Exec.Deriv.SourceCursor.Toward.dropLineExact
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {line : Line} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (line +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (lineNe : ∀ instruction ∈ line,
+      instruction ≠ (.reg .sstore)) :
+    ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+        ⟨path.functionIndex,
+          path.steps ++ List.replicate line.length .rest⟩ tail,
+      Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) tailCursor := by
+  induction line generalizing path with
+  | nil =>
+      have stepsEq : path.steps =
+          path.steps ++ List.replicate ([] : Line).length .rest := by
+        simp
+      rw [← stepsEq]
+      exact ⟨cursor, route⟩
+  | cons instruction rest ih =>
+      change Exec.Deriv.SourceCursor root (runtime dp) path
+        (.next instruction (rest +++ tail)) at cursor
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+          (lineNe instruction (by simp)) with
+        ⟨chronology, restCursor, edge, restRoute⟩
+      rcases ih restRoute (fun candidate member =>
+          lineNe candidate (by simp [member])) with
+        ⟨tailCursor, tailRoute⟩
+      have stepsEq :
+          (path.steps ++ [.rest]) ++
+              List.replicate rest.length .rest =
+            path.steps ++
+              List.replicate (instruction :: rest).length .rest := by
+        simp [List.replicate_succ, List.append_assoc]
+      rw [← stepsEq]
+      exact ⟨tailCursor, tailRoute⟩
 
 private theorem Exec.Deriv.SourceCursor.instructionAt
     {root : Exec.Deriv} {program : Prog}
@@ -1306,6 +1364,387 @@ private theorem onlyAdminGuard
     exact ⟨_, _, eqCursor, branchCursor, eqChronology, eqEdge,
       eqRun, branchRoute, callerEq⟩
 
+private theorem onlyAdminToward
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource body : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (onlyAdmin dp body))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ bodyPath,
+      ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          bodyPath body,
+        Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) bodyCursor := by
+  unfold onlyAdmin at cursor route
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+      (by intro h; cases h) with
+    ⟨callerChronology, pushCursor, callerEdge, callerRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne callerRoute
+      (by intro h; cases h) with
+    ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
+      (by intro h; cases h) with
+    ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
+  cases branchRoute with
+  | branchLeft branchCursor chronology arm compilerPrefix rest =>
+      exact (arm.noSstore_of_entrySstoreFree compiled
+        [senderNotAdminErrorSlot] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
+        targetAt).elim
+  | branchRight branchCursor chronology arm compilerPrefix rest =>
+      exact ⟨_, arm, rest⟩
+
+private theorem configurationSetterTarget
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (minimum maximum event slot : B256)
+    (belowErrorSlot aboveErrorSlot : Nat)
+    (belowFree : (runtime dp).entrySstoreFree
+      (.call belowErrorSlot) [belowErrorSlot] = true)
+    (aboveFree : (runtime dp).entrySstoreFree
+      (.call aboveErrorSlot) [aboveErrorSlot] = true)
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (pushDeployWord minimum ::: arg 0 +++ Ninst.lt :::
+        ((.call belowErrorSlot) <?>
+          (pushDeployWord maximum ::: arg 0 +++ Ninst.gt :::
+            ((.call aboveErrorSlot) <?>
+              (Ninst.pushB256 slot ::: Ninst.sload ::: mstoreAt 0 +++
+                arg 0 +++ mstoreAt 1 +++
+                Ninst.pushB256 event ::: logWith 0 0 2 +++
+                arg 0 +++ Ninst.pushB256 slot ::: Ninst.sstore ::: Func.stop))))))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ finalPath finalTail,
+      ∃ finalCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          finalPath (.next (.reg .sstore) finalTail),
+        finalCursor.node = target ∧
+          ({ path := finalPath, pc := finalCursor.pc,
+              instruction := (.reg .sstore) } : Prog.SourceSite) ∈
+            (runtime dp).sourceSites ∧
+          finalPath.functionIndex = path.functionIndex ∧
+          ∃ suffixSteps : List Prog.SourceStep,
+            finalPath.steps = path.steps ++ suffixSteps ∧
+            suffixSteps =
+              List.replicate 4 .rest ++ [.branchLeft] ++
+              List.replicate 4 .rest ++ [.branchLeft] ++
+              List.replicate 15 .rest := by
+  let minimumLine : Line :=
+    [pushDeployWord minimum] ++ arg 0 ++ [Ninst.lt]
+  let maximumLine : Line :=
+    [pushDeployWord maximum] ++ arg 0 ++ [Ninst.gt]
+  let storeLine : Line :=
+    [Ninst.pushB256 slot, Ninst.sload] ++ mstoreAt 0 ++
+      arg 0 ++ mstoreAt 1 ++ [Ninst.pushB256 event] ++
+      logWith 0 0 2 ++ arg 0 ++ [Ninst.pushB256 slot]
+  dsimp [minimumLine, maximumLine, storeLine, arg, cdl, mstoreAt,
+    logWith] at cursor route
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineExact
+      (cursor := cursor) (line := minimumLine) route (by
+        intro instruction member
+        simp [minimumLine, arg, cdl] at member
+        rcases member with rfl | rfl | rfl | rfl <;>
+          intro h <;> cases h) with
+    ⟨minimumBranch, minimumRoute⟩
+  cases minimumRoute with
+  | branchRight branchCursor chronology errorCursor compilerPrefix errorRoute =>
+      exact (errorCursor.noSstore_of_entrySstoreFree compiled
+        [belowErrorSlot] belowFree
+        (Exec.Deriv.SourceCursor.Toward.chronology
+          errorRoute).cursorToTarget targetAt).elim
+  | branchLeft branchCursor chronology maximumCursor compilerPrefix maximumRoute =>
+      rcases Exec.Deriv.SourceCursor.Toward.dropLineExact maximumRoute
+          (line := maximumLine) (by
+            intro instruction member
+            simp [maximumLine, arg, cdl] at member
+            rcases member with rfl | rfl | rfl | rfl <;>
+              intro h <;> cases h) with
+        ⟨maximumBranch, maximumBranchRoute⟩
+      cases maximumBranchRoute with
+      | branchRight branchCursor chronology errorCursor compilerPrefix errorRoute =>
+          exact (errorCursor.noSstore_of_entrySstoreFree compiled
+            [aboveErrorSlot] aboveFree
+            (Exec.Deriv.SourceCursor.Toward.chronology
+              errorRoute).cursorToTarget targetAt).elim
+      | branchLeft branchCursor chronology storeCursor compilerPrefix storeRoute =>
+          rcases Exec.Deriv.SourceCursor.Toward.dropLineExact storeRoute
+              (line := storeLine) (by
+                intro instruction member
+                simp [storeLine, mstoreAt, arg, cdl, logWith] at member
+                rcases member with
+                    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+                    rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+                  intro h <;> cases h) with
+            ⟨finalCursor, finalRoute⟩
+          cases finalRoute with
+          | atTarget finalCursor chronology site siteEq sourceMember targetEq
+              instructionEq =>
+              refine ⟨_, _, finalCursor, targetEq, ?_, rfl, ?_⟩
+              · simpa [siteEq] using sourceMember
+              · refine ⟨
+                  List.replicate 4 .rest ++ [.branchLeft] ++
+                    List.replicate 4 .rest ++ [.branchLeft] ++
+                    List.replicate 15 .rest, ?_, rfl⟩
+                simp [minimumLine, maximumLine, storeLine,
+                  arg, cdl, mstoreAt, logWith, List.append_assoc]
+          | next finalCursor chronology tailCursor edge rest =>
+              cases rest
+
+private def configurationStoreSuffix : List Prog.SourceStep :=
+  List.replicate 4 .rest ++ [.branchLeft] ++
+    List.replicate 4 .rest ++ [.branchLeft] ++
+    List.replicate 15 .rest
+
+private def RuntimePersistentWrite.hasConfigurationStoreSuffix
+    (row : RuntimePersistentWrite) : Bool :=
+  match row.sourceSite? officialParams with
+  | some site => decide (configurationStoreSuffix <:+ site.path.steps)
+  | none => false
+
+private theorem RuntimePersistentWrite.configuration_of_storeSuffix
+    {row : RuntimePersistentWrite}
+    (hasSuffix : row.hasConfigurationStoreSuffix = true) :
+    row = .setPauseDurationConfig ∨
+      row = .setHeartbeatIntervalConfig := by
+  cases row
+  case setPauseDurationConfig => exact Or.inl rfl
+  case setHeartbeatIntervalConfig => exact Or.inr rfl
+  all_goals
+    exfalso
+    revert hasSuffix
+    decide +kernel
+
+private theorem configurationRow_of_terminal
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {row : RuntimePersistentWrite} {site : Prog.SourceSite}
+    {path finalPath : Prog.SourcePath} {finalTail : Func}
+    (finalCursor : Exec.Deriv.SourceCursor root (runtime dp)
+      finalPath (.next (.reg .sstore) finalTail))
+    (found : row.sourceSite? dp = some site)
+    (sitePc : site.pc = target.pc)
+    (targetEq : finalCursor.node = target)
+    (sourceMember :
+      ({ path := finalPath, pc := finalCursor.pc,
+          instruction := (.reg .sstore) } : Prog.SourceSite) ∈
+        (runtime dp).sourceSites)
+    (finalSteps : finalPath.steps =
+      path.steps ++ configurationStoreSuffix) :
+    row = .setPauseDurationConfig ∨
+      row = .setHeartbeatIntervalConfig := by
+  let terminalSite : Prog.SourceSite :=
+    { path := finalPath, pc := finalCursor.pc,
+      instruction := (.reg .sstore) }
+  have siteSound := row.sourceSite?_sound found
+  have siteMember : site ∈ runtimePersistentSourceSites dp := by
+    apply List.mem_filter.mpr
+    refine ⟨siteSound.1, ?_⟩
+    rw [siteSound.2]
+    rfl
+  have terminalMember : terminalSite ∈ runtimePersistentSourceSites dp := by
+    exact List.mem_filter.mpr ⟨sourceMember, rfl⟩
+  have terminalPc : finalCursor.pc = target.pc := by
+    have nodePc := congrArg Exec.Deriv.pc targetEq
+    simpa [Exec.Deriv.SourceCursor.node] using nodePc
+  have siteEq : site = terminalSite :=
+    runtimePersistentSourceSite_eq_of_pc siteMember terminalMember
+      (sitePc.trans terminalPc.symm)
+  have siteSteps : site.path.steps =
+      path.steps ++ configurationStoreSuffix := by
+    rw [siteEq]
+    exact finalSteps
+  have sitesEq := runtimePersistentSourceSites_eq_official dp
+  unfold RuntimePersistentWrite.sourceSite? at found
+  rw [sitesEq] at found
+  have foundOfficial : row.sourceSite? officialParams = some site := by
+    exact found
+  have suffixFact : configurationStoreSuffix <:+ site.path.steps :=
+    ⟨path.steps, siteSteps.symm⟩
+  have hasSuffix : row.hasConfigurationStoreSuffix = true := by
+    simp [RuntimePersistentWrite.hasConfigurationStoreSuffix, foundOfficial,
+      suffixFact]
+  exact row.configuration_of_storeSuffix hasSuffix
+
+private def heartbeatStoreSuffix : List Prog.SourceStep :=
+  List.replicate 5 .rest ++ [.branchLeft] ++
+    List.replicate 6 .rest ++ [.branchRight] ++
+    List.replicate 8 .rest ++ [.branchLeft] ++
+    List.replicate 6 .rest
+
+private theorem heartbeatTarget
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path heartbeat)
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ finalPath finalTail,
+      ∃ finalCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          finalPath (.next (.reg .sstore) finalTail),
+        finalCursor.node = target ∧
+          ({ path := finalPath, pc := finalCursor.pc,
+              instruction := (.reg .sstore) } : Prog.SourceSite) ∈
+            (runtime dp).sourceSites ∧
+          finalPath.steps = path.steps ++ heartbeatStoreSuffix := by
+  unfold heartbeat at cursor
+  let registeredLine : Line :=
+    [Ninst.caller] ++ tagTop countRegion ++ [Ninst.sload, Ninst.iszero]
+  let liveLine : Line :=
+    [Ninst.caller] ++ tagTop expiryRegion ++
+      [Ninst.sload, Ninst.timestamp, Ninst.lt]
+  let checkedLine : Line :=
+    [Ninst.timestamp, Ninst.pushB256 heartbeatIntervalSlot,
+      Ninst.sload, Ninst.add, Ninst.dup 0, Ninst.timestamp,
+      Ninst.swap 0, Ninst.lt]
+  let storeLine : Line :=
+    [Ninst.dup 0] ++ mstoreAt 0 ++
+      [Ninst.caller] ++ tagTop expiryRegion
+  dsimp [registeredLine, liveLine, checkedLine, storeLine,
+    tagTop, mstoreAt] at cursor route
+  rcases Exec.Deriv.SourceCursor.Toward.dropLineExact
+      (cursor := cursor) (line := registeredLine) route (by
+        intro instruction member
+        simp [registeredLine, tagTop] at member
+        rcases member with rfl | rfl | rfl | rfl | rfl <;>
+          intro h <;> cases h) with
+    ⟨registeredBranch, registeredRoute⟩
+  cases registeredRoute with
+  | branchRight branchCursor chronology errorCursor compilerPrefix errorRoute =>
+      exact (errorCursor.noSstore_of_entrySstoreFree compiled
+        [senderNotPauserErrorSlot] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology
+          errorRoute).cursorToTarget targetAt).elim
+  | branchLeft branchCursor chronology liveCursor compilerPrefix liveRoute =>
+      rcases Exec.Deriv.SourceCursor.Toward.dropLineExact liveRoute
+          (line := liveLine) (by
+            intro instruction member
+            simp [liveLine, tagTop] at member
+            rcases member with rfl | rfl | rfl | rfl | rfl | rfl <;>
+              intro h <;> cases h) with
+        ⟨liveBranch, liveBranchRoute⟩
+      cases liveBranchRoute with
+      | branchLeft branchCursor chronology errorCursor compilerPrefix errorRoute =>
+          exact (errorCursor.noSstore_of_entrySstoreFree compiled
+            [heartbeatExpiredErrorSlot] rfl
+            (Exec.Deriv.SourceCursor.Toward.chronology
+              errorRoute).cursorToTarget targetAt).elim
+      | branchRight branchCursor chronology checkedCursor compilerPrefix checkedRoute =>
+          rcases Exec.Deriv.SourceCursor.Toward.dropLineExact checkedRoute
+              (line := checkedLine) (by
+                intro instruction member
+                simp [checkedLine] at member
+                rcases member with
+                    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+                  intro h <;> cases h) with
+            ⟨checkedBranch, checkedBranchRoute⟩
+          cases checkedBranchRoute with
+          | branchRight branchCursor chronology errorCursor compilerPrefix errorRoute =>
+              exact (errorCursor.noSstore_of_entrySstoreFree compiled
+                [arithmeticPanicSlot] (by
+                  simp [Prog.entrySstoreFree, Prog.componentSstoreFree,
+                    Prog.function?, runtime, aux, arithmeticPanicSlot,
+                    Func.revData, Func.localSstoreFree, Func.callsIn]
+                  decide +kernel)
+                (Exec.Deriv.SourceCursor.Toward.chronology
+                  errorRoute).cursorToTarget targetAt).elim
+          | branchLeft branchCursor chronology storeCursor compilerPrefix storeRoute =>
+              rcases Exec.Deriv.SourceCursor.Toward.dropLineExact storeRoute
+                  (line := storeLine) (by
+                    intro instruction member
+                    simp [storeLine, tagTop, mstoreAt] at member
+                    rcases member with rfl | rfl | rfl | rfl | rfl | rfl <;>
+                      intro h <;> cases h) with
+                ⟨finalCursor, finalRoute⟩
+              cases finalRoute with
+              | atTarget finalCursor chronology site siteEq sourceMember
+                  targetEq instructionEq =>
+                  refine ⟨_, _, finalCursor, targetEq, ?_, ?_⟩
+                  · simpa [siteEq] using sourceMember
+                  · simp [heartbeatStoreSuffix, registeredLine, liveLine,
+                      checkedLine, storeLine, tagTop, mstoreAt,
+                      List.append_assoc]
+              | next finalCursor chronology tailCursor edge rest =>
+                  exact (tailCursor.noSstore_of_entrySstoreFree compiled
+                    [] rfl
+                    (Exec.Deriv.SourceCursor.Toward.chronology
+                      rest).cursorToTarget targetAt).elim
+
+private def RuntimePersistentWrite.hasHeartbeatStoreSuffix
+    (row : RuntimePersistentWrite) : Bool :=
+  match row.sourceSite? officialParams with
+  | some site => decide (heartbeatStoreSuffix <:+ site.path.steps)
+  | none => false
+
+private theorem RuntimePersistentWrite.heartbeat_of_storeSuffix
+    {row : RuntimePersistentWrite}
+    (hasSuffix : row.hasHeartbeatStoreSuffix = true) :
+    row = .heartbeatExpiry := by
+  cases row
+  case heartbeatExpiry => rfl
+  all_goals
+    exfalso
+    revert hasSuffix
+    decide +kernel
+
+private theorem heartbeatRow_of_terminal
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {row : RuntimePersistentWrite} {site : Prog.SourceSite}
+    {path finalPath : Prog.SourcePath} {finalTail : Func}
+    (finalCursor : Exec.Deriv.SourceCursor root (runtime dp)
+      finalPath (.next (.reg .sstore) finalTail))
+    (found : row.sourceSite? dp = some site)
+    (sitePc : site.pc = target.pc)
+    (targetEq : finalCursor.node = target)
+    (sourceMember :
+      ({ path := finalPath, pc := finalCursor.pc,
+          instruction := (.reg .sstore) } : Prog.SourceSite) ∈
+        (runtime dp).sourceSites)
+    (finalSteps : finalPath.steps =
+      path.steps ++ heartbeatStoreSuffix) :
+    row = .heartbeatExpiry := by
+  let terminalSite : Prog.SourceSite :=
+    { path := finalPath, pc := finalCursor.pc,
+      instruction := (.reg .sstore) }
+  have siteSound := row.sourceSite?_sound found
+  have siteMember : site ∈ runtimePersistentSourceSites dp := by
+    apply List.mem_filter.mpr
+    refine ⟨siteSound.1, ?_⟩
+    rw [siteSound.2]
+    rfl
+  have terminalMember : terminalSite ∈ runtimePersistentSourceSites dp := by
+    exact List.mem_filter.mpr ⟨sourceMember, rfl⟩
+  have terminalPc : finalCursor.pc = target.pc := by
+    have nodePc := congrArg Exec.Deriv.pc targetEq
+    simpa [Exec.Deriv.SourceCursor.node] using nodePc
+  have siteEq : site = terminalSite :=
+    runtimePersistentSourceSite_eq_of_pc siteMember terminalMember
+      (sitePc.trans terminalPc.symm)
+  have siteSteps : site.path.steps =
+      path.steps ++ heartbeatStoreSuffix := by
+    rw [siteEq]
+    exact finalSteps
+  have sitesEq := runtimePersistentSourceSites_eq_official dp
+  unfold RuntimePersistentWrite.sourceSite? at found
+  rw [sitesEq] at found
+  have foundOfficial : row.sourceSite? officialParams = some site := by
+    exact found
+  have suffixFact : heartbeatStoreSuffix <:+ site.path.steps :=
+    ⟨path.steps, siteSteps.symm⟩
+  have hasSuffix : row.hasHeartbeatStoreSuffix = true := by
+    simp [RuntimePersistentWrite.hasHeartbeatStoreSuffix, foundOfficial,
+      suffixFact]
+  exact row.heartbeat_of_storeSuffix hasSuffix
+
 private theorem requireStaticOnlyAdminGuard
     {dp : DeployParams} {root target : Exec.Deriv}
     {initialPath path : Prog.SourcePath} {initialSource tail : Func}
@@ -1799,6 +2238,123 @@ private theorem heartbeatBodyAuthority
       [senderNotPauserErrorSlot] rfl
       (Exec.Deriv.SourceCursor.Toward.chronology
         errorRoute).cursorToTarget targetAt).elim
+
+private inductive RuntimeDispatchCut.ConfigurationOrHeartbeat
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)} : RuntimeDispatchCut initial → Prop
+  | setPauseDuration {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+        (Blanc.LidoCircuitBreaker.setPauseDuration dp))
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+      (entryStorage : Devm.getStor cursor.pre = Devm.getStor initial.pre) :
+      ConfigurationOrHeartbeat
+        (RuntimeDispatchCut.setPauseDuration cursor route entryStorage)
+  | setHeartbeatInterval {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+        (Blanc.LidoCircuitBreaker.setHeartbeatInterval dp))
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+      (entryStorage : Devm.getStor cursor.pre = Devm.getStor initial.pre) :
+      ConfigurationOrHeartbeat
+        (RuntimeDispatchCut.setHeartbeatInterval cursor route entryStorage)
+  | heartbeat {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+        Blanc.LidoCircuitBreaker.heartbeat)
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+      (entryStorage : Devm.getStor cursor.pre = Devm.getStor initial.pre) :
+      ConfigurationOrHeartbeat
+        (RuntimeDispatchCut.heartbeat cursor route entryStorage)
+
+private theorem runtimeDispatchCut_configurationOrHeartbeatAuthority
+    {dp : DeployParams} {frameRoot write : Exec.Deriv}
+    (mainCursor : Exec.Deriv.SourceCursor frameRoot (runtime dp)
+      ⟨0, []⟩ (runtimeMain dp))
+    (frameToMain : Exec.Deriv.ParentPrefix frameRoot mainCursor.node)
+    (mainStorage :
+      Devm.getStor mainCursor.pre = Devm.getStor frameRoot.devm)
+    (compiled : some frameRoot.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At write.sevm.code write.pc (.reg .sstore))
+    (row : RuntimePersistentWrite) (site : Prog.SourceSite)
+    (found : row.sourceSite? dp = some site)
+    (sitePc : site.pc = write.pc)
+    (cut : RuntimeDispatchCut (target := write) mainCursor)
+    (selected : RuntimeDispatchCut.ConfigurationOrHeartbeat cut) :
+    ∃ role : InvocationRole,
+      role ∈ row.permittedRoles ∧
+        RuntimeWriteAuthority dp frameRoot write role := by
+  cases selected with
+  | setPauseDuration cursor route entryStorage =>
+      let endpoint := RuntimeEndpointOccurrence.ofCursor
+        frameToMain cursor route
+      rcases requireStaticOnlyAdminGuard 1 cursor compiled targetAt route with
+        ⟨guardPath, guardTail, guardCursor, branchCursor,
+          guardChronology, guardEdge, guardRun, branchRoute, callerEq⟩
+      let guard := RuntimeGuardOccurrence.ofCursor frameToMain
+        guardChronology guardEdge guardRun targetAt (by intro h; cases h)
+      rcases requireStaticArgsToward 1 cursor compiled targetAt route with
+        ⟨adminPath, adminCursor, adminRoute⟩
+      rcases onlyAdminToward adminCursor compiled targetAt adminRoute with
+        ⟨tailPath, tailCursor, tailRoute⟩
+      rcases configurationSetterTarget
+          dp.minPauseDuration dp.maxPauseDuration
+          pauseDurationUpdatedEvent pauseDurationSlot
+          pauseBelowMinErrorSlot pauseAboveMaxErrorSlot rfl rfl
+          tailCursor compiled targetAt tailRoute with
+        ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
+          functionEq, suffixSteps, finalSteps, suffixEq⟩
+      have exactSteps : finalPath.steps =
+          tailPath.steps ++ configurationStoreSuffix := by
+        rw [finalSteps, suffixEq]
+        rfl
+      have rowEq := configurationRow_of_terminal finalCursor found sitePc
+        targetEq sourceMember exactSteps
+      refine ⟨.adminConfiguration, ?_,
+        .setPauseDuration endpoint guard callerEq⟩
+      rcases rowEq with rfl | rfl <;>
+        simp [RuntimePersistentWrite.permittedRoles]
+  | setHeartbeatInterval cursor route entryStorage =>
+      let endpoint := RuntimeEndpointOccurrence.ofCursor
+        frameToMain cursor route
+      rcases setHeartbeatIntervalBodyGuard rfl cursor compiled targetAt route with
+        ⟨guardPath, guardTail, guardCursor, branchCursor,
+          guardChronology, guardEdge, guardRun, branchRoute, callerEq⟩
+      let guard := RuntimeGuardOccurrence.ofCursor frameToMain
+        guardChronology guardEdge guardRun targetAt (by intro h; cases h)
+      rcases requireStaticArgsToward 1 cursor compiled targetAt route with
+        ⟨adminPath, adminCursor, adminRoute⟩
+      rcases onlyAdminToward adminCursor compiled targetAt adminRoute with
+        ⟨tailPath, tailCursor, tailRoute⟩
+      rcases configurationSetterTarget
+          dp.minHeartbeatInterval dp.maxHeartbeatInterval
+          heartbeatIntervalUpdatedEvent heartbeatIntervalSlot
+          heartbeatBelowMinErrorSlot heartbeatAboveMaxErrorSlot rfl rfl
+          tailCursor compiled targetAt tailRoute with
+        ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
+          functionEq, suffixSteps, finalSteps, suffixEq⟩
+      have exactSteps : finalPath.steps =
+          tailPath.steps ++ configurationStoreSuffix := by
+        rw [finalSteps, suffixEq]
+        rfl
+      have rowEq := configurationRow_of_terminal finalCursor found sitePc
+        targetEq sourceMember exactSteps
+      refine ⟨.adminConfiguration, ?_,
+        .setHeartbeatInterval endpoint guard callerEq⟩
+      rcases rowEq with rfl | rfl <;>
+        simp [RuntimePersistentWrite.permittedRoles]
+  | heartbeat cursor route entryStorage =>
+      rcases heartbeatTarget cursor compiled targetAt route with
+        ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
+          finalSteps⟩
+      have rowEq := heartbeatRow_of_terminal finalCursor found sitePc
+        targetEq sourceMember finalSteps
+      subst row
+      exact ⟨.heartbeatExpiry, by
+          simp [RuntimePersistentWrite.permittedRoles],
+        heartbeatBodyAuthority cursor frameToMain
+          (entryStorage.trans mainStorage) compiled targetAt route⟩
 
 private inductive PauseAuthorityEvidence
     (dp : DeployParams) (frameRoot write : Exec.Deriv) : Prop
