@@ -489,6 +489,7 @@ private theorem runtimeMain_writeEndpointCut
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
+
       · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
           runtimeViewSstoreFreeSlots rfl
           (Exec.Deriv.SourceCursor.Toward.chronology
@@ -539,6 +540,187 @@ private theorem runtimeMain_writeEndpointCut
           (Exec.Deriv.SourceCursor.Toward.chronology
             bodyRoute).cursorToTarget targetAt).elim
 
+private theorem onlyAdminGuard
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource tail : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (onlyAdmin dp tail))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ guardPath guardTail,
+      ∃ guardCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          guardPath (.next (.reg .eq) guardTail),
+        ∃ branchCursor : Exec.Deriv.SourceCursor root (runtime dp)
+            ⟨guardPath.functionIndex,
+              guardPath.steps ++ [.rest]⟩ guardTail,
+          Exec.Deriv.SourceCursor.Chronology
+              initial guardCursor target ∧
+            Exec.Deriv.ParentStep branchCursor.node guardCursor.node ∧
+            Ninst.Run root.sevm guardCursor.pre (.reg .eq)
+              branchCursor.pre ∧
+            Exec.Deriv.SourceCursor.Toward
+              initial target (.reg .sstore) branchCursor ∧
+            root.sevm.caller.toB256 = dp.admin := by
+  unfold onlyAdmin at cursor route
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+      (by intro h; cases h) with
+    ⟨callerChronology, pushCursor, callerEdge, callerRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne callerRoute
+      (by intro h; cases h) with
+    ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
+      (by intro h; cases h) with
+    ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
+  have callerRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge cursor callerEdge
+  have pushRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge pushCursor pushEdge
+  have eqRun :=
+    Exec.Deriv.SourceCursor.ninstRun_of_nextEdge eqCursor eqEdge
+  have callerPrefix :
+      [root.sevm.caller.toB256] <<+ pushCursor.pre.stack :=
+    prefix_of_push (of_run_caller callerRun) nil_pref
+  have adminPrefix :
+      [dp.admin, root.sevm.caller.toB256] <<+ eqCursor.pre.stack := by
+    simpa [pushDeployWord, B256.toB256_toBytes] using
+      prefix_of_push (of_run_push pushRun) callerPrefix
+  have eqPrefix :
+      [(dp.admin =? root.sevm.caller.toB256)] <<+
+        branchCursor.pre.stack :=
+    prefix_of_eq eqRun adminPrefix
+  rcases Exec.Deriv.SourceCursor.branchFlagTowardSstore branchCursor
+      (Exec.Deriv.SourceCursor.Toward.chronology branchRoute).cursorToTarget
+      targetAt with errorArm | ⟨flag, nonzero, flagPrefix⟩
+  · rcases errorArm with ⟨errorCursor, errorReached, zeroPrefix⟩
+    exact (errorCursor.noSstore_of_entrySstoreFree compiled
+      [senderNotAdminErrorSlot] rfl errorReached targetAt).elim
+  · have flagEq :
+        (dp.admin =? root.sevm.caller.toB256) = flag :=
+      pref_head_unique eqPrefix flagPrefix
+    have callerEq : root.sevm.caller.toB256 = dp.admin := by
+      by_contra different
+      have checkZero :
+          (dp.admin =? root.sevm.caller.toB256) = 0 := by
+        simp [B256.eqCheck, Ne.symm different]
+      exact nonzero (flagEq ▸ checkZero)
+    exact ⟨_, _, eqCursor, branchCursor, eqChronology, eqEdge,
+      eqRun, branchRoute, callerEq⟩
+
+private theorem requireStaticOnlyAdminGuard
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource tail : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (argCount : Nat)
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (requireStaticArgs argCount (onlyAdmin dp tail)))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ guardPath guardTail,
+      ∃ guardCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          guardPath (.next (.reg .eq) guardTail),
+        ∃ branchCursor : Exec.Deriv.SourceCursor root (runtime dp)
+            ⟨guardPath.functionIndex,
+              guardPath.steps ++ [.rest]⟩ guardTail,
+          Exec.Deriv.SourceCursor.Chronology
+              initial guardCursor target ∧
+            Exec.Deriv.ParentStep branchCursor.node guardCursor.node ∧
+            Ninst.Run root.sevm guardCursor.pre (.reg .eq)
+              branchCursor.pre ∧
+            Exec.Deriv.SourceCursor.Toward
+              initial target (.reg .sstore) branchCursor ∧
+            root.sevm.caller.toB256 = dp.admin := by
+  unfold requireStaticArgs at cursor route
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+      (by intro h; cases h) with
+    ⟨sizeChronology, sizeCursor, sizeEdge, sizeRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne sizeRoute
+      (by intro h; cases h) with
+    ⟨calldataChronology, calldataCursor, calldataEdge, calldataRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne calldataRoute
+      (by intro h; cases h) with
+    ⟨ltChronology, argsBranchCursor, ltEdge, argsBranchRoute⟩
+  cases argsBranchRoute with
+  | branchRight branchCursor chronology arm compilerPrefix rest =>
+      exact (arm.noSstore_of_entrySstoreFree compiled [] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
+        targetAt).elim
+  | branchLeft branchCursor chronology arm compilerPrefix rest =>
+      exact onlyAdminGuard arm compiled targetAt rest
+
+private theorem requireStaticArgsToward
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource body : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (words : Nat)
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (requireStaticArgs words body))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ bodyPath,
+      ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          bodyPath body,
+        Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) bodyCursor := by
+  unfold requireStaticArgs at cursor route
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+      (by intro h; cases h) with
+    ⟨sizeChronology, sizeCursor, sizeEdge, sizeRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne sizeRoute
+      (by intro h; cases h) with
+    ⟨calldataChronology, calldataCursor, calldataEdge, calldataRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne calldataRoute
+      (by intro h; cases h) with
+    ⟨ltChronology, branchCursor, ltEdge, branchRoute⟩
+  cases branchRoute with
+  | branchRight branchCursor chronology arm compilerPrefix rest =>
+      exact (arm.noSstore_of_entrySstoreFree compiled [] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
+        targetAt).elim
+  | branchLeft branchCursor chronology arm compilerPrefix rest =>
+      exact ⟨_, arm, rest⟩
+
+private theorem canonicalAddressArgToward
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource body : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (index : B256)
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (canonicalAddressArg index body))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ bodyPath,
+      ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          bodyPath body,
+        Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) bodyCursor := by
+  unfold canonicalAddressArg at cursor
+  rcases Exec.Deriv.SourceCursor.Toward.dropLine route
+      (line := arg index ++ checkNonAddress)
+      (by simp [arg, checkNonAddress, cdl, pushAddressMask,
+        Ninst.pushB256]) with
+    ⟨branchPath, branchCursor, branchChronology, branchRoute⟩
+  cases branchRoute with
+  | branchRight branchCursor chronology arm compilerPrefix rest =>
+      exact (arm.noSstore_of_entrySstoreFree compiled
+        [emptyRevertSlot] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
+        targetAt).elim
+  | branchLeft branchCursor chronology arm compilerPrefix rest =>
+      exact ⟨_, arm, rest⟩
+
 /-- A target-directed route through the heartbeat-interval setter retains the
 actual `onlyAdmin` equality, its successful next edge, and the entry caller
 fact.  This is deliberately local to the concrete Lido source body. -/
@@ -568,66 +750,41 @@ private theorem setHeartbeatIntervalBodyGuard
               initial target (.reg .sstore) branchCursor ∧
             root.sevm.caller.toB256 = dp.admin := by
   subst source
-  unfold setHeartbeatInterval requireStaticArgs at bodyCursor route
-  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
-      (by intro h; cases h) with
-    ⟨sizeChronology, sizeCursor, sizeEdge, sizeRoute⟩
-  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne sizeRoute
-      (by intro h; cases h) with
-    ⟨calldataChronology, calldataCursor, calldataEdge, calldataRoute⟩
-  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne calldataRoute
-      (by intro h; cases h) with
-    ⟨ltChronology, argsBranchCursor, ltEdge, argsBranchRoute⟩
-  cases argsBranchRoute with
-  | branchRight cursor chronology arm compilerPrefix rest =>
-      exact (arm.noSstore_of_entrySstoreFree compiled [] rfl
-        (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
-        targetAt).elim
-  | branchLeft cursor chronology arm compilerPrefix rest =>
-      unfold onlyAdmin at arm rest
-      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne rest
-          (by intro h; cases h) with
-        ⟨callerChronology, pushCursor, callerEdge, callerRoute⟩
-      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne callerRoute
-          (by intro h; cases h) with
-        ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
-      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
-          (by intro h; cases h) with
-        ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
-      have callerRun :=
-        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge arm callerEdge
-      have pushRun :=
-        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge pushCursor pushEdge
-      have eqRun :=
-        Exec.Deriv.SourceCursor.ninstRun_of_nextEdge eqCursor eqEdge
-      have callerPrefix :
-          [root.sevm.caller.toB256] <<+ pushCursor.pre.stack :=
-        prefix_of_push (of_run_caller callerRun) nil_pref
-      have adminPrefix :
-          [dp.admin, root.sevm.caller.toB256] <<+ eqCursor.pre.stack := by
-        simpa [pushDeployWord, B256.toB256_toBytes] using
-          prefix_of_push (of_run_push pushRun) callerPrefix
-      have eqPrefix :
-          [(dp.admin =? root.sevm.caller.toB256)] <<+
-            branchCursor.pre.stack :=
-        prefix_of_eq eqRun adminPrefix
-      rcases Exec.Deriv.SourceCursor.branchFlagTowardSstore branchCursor
-          (Exec.Deriv.SourceCursor.Toward.chronology branchRoute).cursorToTarget
-          targetAt with errorArm | ⟨flag, nonzero, flagPrefix⟩
-      · rcases errorArm with ⟨errorCursor, errorReached, zeroPrefix⟩
-        exact (errorCursor.noSstore_of_entrySstoreFree compiled
-          [senderNotAdminErrorSlot] rfl errorReached targetAt).elim
-      · have flagEq :
-            (dp.admin =? root.sevm.caller.toB256) = flag :=
-          pref_head_unique eqPrefix flagPrefix
-        have callerEq : root.sevm.caller.toB256 = dp.admin := by
-          by_contra different
-          have checkZero :
-              (dp.admin =? root.sevm.caller.toB256) = 0 := by
-            simp [B256.eqCheck, Ne.symm different]
-          exact nonzero (flagEq ▸ checkZero)
-        exact ⟨_, _, eqCursor, branchCursor, eqChronology, eqEdge,
-          eqRun, branchRoute, callerEq⟩
+  exact requireStaticOnlyAdminGuard 1 bodyCursor compiled targetAt route
+
+private theorem registerPauserBodyGuard
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (sourceEq : source = registerPauser dp)
+    (bodyCursor : Exec.Deriv.SourceCursor root (runtime dp) path source)
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) bodyCursor) :
+    ∃ guardPath guardTail,
+      ∃ guardCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          guardPath (.next (.reg .eq) guardTail),
+        ∃ branchCursor : Exec.Deriv.SourceCursor root (runtime dp)
+            ⟨guardPath.functionIndex,
+              guardPath.steps ++ [.rest]⟩ guardTail,
+          Exec.Deriv.SourceCursor.Chronology
+              initial guardCursor target ∧
+            Exec.Deriv.ParentStep branchCursor.node guardCursor.node ∧
+            Ninst.Run root.sevm guardCursor.pre (.reg .eq)
+              branchCursor.pre ∧
+            Exec.Deriv.SourceCursor.Toward
+              initial target (.reg .sstore) branchCursor ∧
+            root.sevm.caller.toB256 = dp.admin := by
+  subst source
+  rcases requireStaticArgsToward 2 bodyCursor compiled targetAt route with
+    ⟨firstPath, firstCursor, firstRoute⟩
+  rcases canonicalAddressArgToward 0 firstCursor compiled targetAt firstRoute with
+    ⟨secondPath, secondCursor, secondRoute⟩
+  rcases canonicalAddressArgToward 1 secondCursor compiled targetAt secondRoute with
+    ⟨adminPath, adminCursor, adminRoute⟩
+  exact onlyAdminGuard adminCursor compiled targetAt adminRoute
 
 /-- Every nominated same-frame SSTORE occurrence in an exact selected runtime
 frame has one unique typed source row.  The selected frame may be any raw
