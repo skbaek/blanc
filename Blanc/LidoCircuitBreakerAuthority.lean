@@ -50,6 +50,37 @@ private theorem Exec.Deriv.SourceCursor.Toward.chronology
     Exec.Deriv.SourceCursor.Chronology initial cursor target := by
   cases route <;> assumption
 
+private theorem Exec.Deriv.SourceCursor.Toward.dropLine
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {line : Line} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (line +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor)
+    (lineNe : ∀ instruction ∈ line,
+      instruction ≠ (.reg .sstore)) :
+    ∃ tailPath,
+      ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          tailPath tail,
+        Exec.Deriv.SourceCursor.Chronology
+            initial tailCursor target ∧
+          Exec.Deriv.SourceCursor.Toward
+            initial target (.reg .sstore) tailCursor := by
+  induction line generalizing path with
+  | nil => exact ⟨path, cursor,
+      Exec.Deriv.SourceCursor.Toward.chronology route, route⟩
+  | cons instruction rest ih =>
+      change Exec.Deriv.SourceCursor root (runtime dp) path
+        (.next instruction (rest +++ tail)) at cursor
+      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+          (lineNe instruction (by simp)) with
+        ⟨chronology, restCursor, edge, restRoute⟩
+      exact ih restRoute (fun candidate member =>
+        lineNe candidate (by simp [member]))
+
 private theorem Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
     {root : Exec.Deriv} {program : Prog}
     {path : Prog.SourcePath} {instruction : Ninst} {tail : Func}
@@ -183,7 +214,8 @@ private theorem Exec.Deriv.SourceCursor.branchFlagTowardSstore
     (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
     (∃ arm : Exec.Deriv.SourceCursor root program
         ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left,
-      Exec.Deriv.ParentPrefix arm.node target) ∨
+      Exec.Deriv.ParentPrefix arm.node target ∧
+        [(0 : B256)] <<+ cursor.pre.stack) ∨
     (∃ flag : B256, flag ≠ 0 ∧ [flag] <<+ cursor.pre.stack) := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
       cursor.codeBoundary with
@@ -208,13 +240,304 @@ private theorem Exec.Deriv.SourceCursor.branchFlagTowardSstore
           apply cursor.sourceIncluded
           simp only [Func.sourceSites, List.mem_append]
           exact Or.inl member⟩
-    exact Or.inl ⟨armCursor, armReached⟩
+    rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+      ⟨hx, stack, pushBurn', popBurn'⟩
+    have zeroPop : Devm.PopBurn [(0 : B256)] cursor.pre armPre :=
+      Devm.popBurn_of_burn_of_popBurn
+        (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
+    exact Or.inl ⟨armCursor, armReached,
+      pref_of_split zeroPop.stack⟩
   · rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
       ⟨hx, stack, pushBurn', popBurn'⟩
     have flagPop : Devm.PopBurn [flag] cursor.pre armPre :=
       Devm.popBurn_of_burn_of_popBurn
         (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
     exact Or.inr ⟨flag, nonzero, pref_of_split flagPop.stack⟩
+
+private theorem linearDispatchWith_bodyCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (entries : List (B256 × Func)) {path : Prog.SourcePath}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (linearDispatchWith fallbackSlot entries))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ word body,
+      (word, body) ∈ entries ∧
+        ∃ bodyPath,
+          ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+              bodyPath body,
+            Exec.Deriv.SourceCursor.Toward
+              initial target (.reg .sstore) bodyCursor := by
+  induction entries generalizing path with
+  | nil =>
+      exact (cursor.noSstore_of_entrySstoreFree compiled
+        [fallbackSlot] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology route).cursorToTarget
+        targetAt).elim
+  | cons head tail ih =>
+      rcases head with ⟨word, body⟩
+      cases tail with
+      | nil =>
+          unfold linearDispatchWith at cursor
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+              (by intro h; cases h) with
+            ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
+              (by intro h; cases h) with
+            ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
+          cases branchRoute with
+          | branchLeft branchCursor chronology arm compilerPrefix rest =>
+              exact (arm.noSstore_of_entrySstoreFree compiled
+                [fallbackSlot] rfl
+                (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
+                targetAt).elim
+          | branchRight branchCursor chronology arm compilerPrefix rest =>
+              exact ⟨word, body, by simp, _, arm, rest⟩
+      | cons next rest =>
+          unfold linearDispatchWith at cursor
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+              (by intro h; cases h) with
+            ⟨dupChronology, pushCursor, dupEdge, pushRoute⟩
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne pushRoute
+              (by intro h; cases h) with
+            ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
+          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
+              (by intro h; cases h) with
+            ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
+          cases branchRoute with
+          | branchLeft branchCursor chronology arm compilerPrefix tailRoute =>
+              rcases ih arm tailRoute with
+                ⟨selectedWord, selectedBody, member, cut⟩
+              exact ⟨selectedWord, selectedBody, by simp [member], cut⟩
+          | branchRight branchCursor chronology arm compilerPrefix bodyRoute =>
+              rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+                  bodyRoute (by intro h; cases h) with
+                ⟨popChronology, bodyCursor, popEdge, restRoute⟩
+              exact ⟨word, body, by simp, _, bodyCursor, restRoute⟩
+
+private theorem splitDispatch_bodyCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    {pivot : B256} {left right : Func}
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (splitDispatch pivot left right))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    (∃ leftPath,
+      ∃ leftCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          leftPath left,
+        Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) leftCursor) ∨
+    (∃ rightPath,
+      ∃ rightCursor : Exec.Deriv.SourceCursor root (runtime dp)
+          rightPath right,
+        Exec.Deriv.SourceCursor.Toward
+          initial target (.reg .sstore) rightCursor) := by
+  unfold splitDispatch at cursor
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
+      (by intro h; cases h) with
+    ⟨dupChronology, pushCursor, dupEdge, pushRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne pushRoute
+      (by intro h; cases h) with
+    ⟨pushChronology, gtCursor, pushEdge, gtRoute⟩
+  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne gtRoute
+      (by intro h; cases h) with
+    ⟨gtChronology, branchCursor, gtEdge, branchRoute⟩
+  cases branchRoute with
+  | branchLeft branchCursor chronology arm compilerPrefix rest =>
+      exact Or.inr ⟨_, arm, rest⟩
+  | branchRight branchCursor chronology arm compilerPrefix rest =>
+      exact Or.inl ⟨_, arm, rest⟩
+
+private theorem hybridDispatchWith_bodyCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {initial : Exec.Deriv.SourceCursor root (runtime dp)
+      initialPath initialSource}
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+      (hybridDispatchWith fallbackSlot (funcs dp)))
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target (.reg .sstore) cursor) :
+    ∃ word body,
+      (word, body) ∈ funcs dp ∧
+        ∃ bodyPath,
+          ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
+              bodyPath body,
+            Exec.Deriv.SourceCursor.Toward
+              initial target (.reg .sstore) bodyCursor := by
+  unfold hybridDispatchWith at cursor
+  rcases splitDispatch_bodyCut cursor route with
+    ⟨leftPath, leftCursor, leftRoute⟩ |
+      ⟨rightPath, rightCursor, rightRoute⟩
+  · rcases splitDispatch_bodyCut leftCursor leftRoute with
+      ⟨firstPath, firstCursor, firstRoute⟩ |
+        ⟨secondPath, secondCursor, secondRoute⟩
+    · rcases linearDispatchWith_bodyCut compiled targetAt
+          ((funcs dp).take 5) firstCursor firstRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
+      exact ⟨word, body, List.mem_of_mem_take member,
+        bodyPath, bodyCursor, bodyRoute⟩
+    · rcases linearDispatchWith_bodyCut compiled targetAt
+          ((funcs dp).drop 5 |>.take 4) secondCursor secondRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
+      have memberDrop : (word, body) ∈ (funcs dp).drop 5 :=
+        List.mem_of_mem_take member
+      exact ⟨word, body, List.mem_of_mem_drop memberDrop,
+        bodyPath, bodyCursor, bodyRoute⟩
+  · rcases splitDispatch_bodyCut rightCursor rightRoute with
+      ⟨thirdPath, thirdCursor, thirdRoute⟩ |
+        ⟨fourthPath, fourthCursor, fourthRoute⟩
+    · rcases linearDispatchWith_bodyCut compiled targetAt
+          ((funcs dp).drop 9 |>.take 4) thirdCursor thirdRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
+      have memberDrop : (word, body) ∈ (funcs dp).drop 9 :=
+        List.mem_of_mem_take member
+      exact ⟨word, body, List.mem_of_mem_drop memberDrop,
+        bodyPath, bodyCursor, bodyRoute⟩
+    · rcases linearDispatchWith_bodyCut compiled targetAt
+          ((funcs dp).drop 13) fourthCursor fourthRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
+      exact ⟨word, body, List.mem_of_mem_drop member,
+        bodyPath, bodyCursor, bodyRoute⟩
+
+private def runtimeViewSstoreFreeSlots : List Nat :=
+  [emptyRevertSlot, bubbleRevertSlot, enumLoopSlot]
+
+private inductive RuntimeDispatchCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    (initial : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp)) : Prop
+  | setPauseDuration {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+        (setPauseDuration dp))
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+  | setHeartbeatInterval {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+        (setHeartbeatInterval dp))
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+  | registerPauser {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
+        (registerPauser dp))
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+  | heartbeat {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path heartbeat)
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+  | pause {path : Prog.SourcePath}
+      (cursor : Exec.Deriv.SourceCursor root (runtime dp) path pause)
+      (route : Exec.Deriv.SourceCursor.Toward
+        initial target (.reg .sstore) cursor)
+
+private theorem runtimeMain_writeEndpointCut
+    {dp : DeployParams} {root target : Exec.Deriv}
+    (mainCursor : Exec.Deriv.SourceCursor root (runtime dp) ⟨0, []⟩
+      (runtimeMain dp))
+    (compiled : some root.sevm.code.toList = (runtime dp).compile)
+    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (route : Exec.Deriv.SourceCursor.Toward
+      mainCursor target (.reg .sstore) mainCursor) :
+    RuntimeDispatchCut (target := target) mainCursor := by
+  unfold runtimeMain at mainCursor
+  rcases Exec.Deriv.SourceCursor.Toward.dropLine route
+      (line := [Ninst.callvalue, Ninst.pushB256 4,
+        Ninst.calldatasize, Ninst.lt, Ninst.or])
+      (by
+        intro instruction member
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+        rcases member with rfl | rfl | rfl | rfl | rfl <;>
+          intro h <;> cases h) with
+    ⟨entryPath, entryCursor, entryChronology, entryRoute⟩
+  cases entryRoute with
+  | branchRight cursor chronology arm compilerPrefix rest =>
+      exact (arm.noSstore_of_entrySstoreFree compiled [] rfl
+        (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
+        targetAt).elim
+  | branchLeft cursor chronology arm compilerPrefix rest =>
+      rcases Exec.Deriv.SourceCursor.Toward.dropLine rest
+          (line := fsig) (by
+            intro instruction member
+            simp only [fsig, cdl, shiftRight, List.mem_append,
+              List.mem_cons, List.not_mem_nil, or_false] at member
+            rcases member with (rfl | rfl) | (rfl | rfl) <;>
+              intro h <;> cases h) with
+        ⟨dispatchPath, dispatchCursor, dispatchChronology, dispatchRoute⟩
+      rcases hybridDispatchWith_bodyCut compiled targetAt dispatchCursor
+          dispatchRoute with
+        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
+      simp only [funcs, List.mem_cons,
+        List.not_mem_nil, or_false, Prod.mk.injEq] at member
+      rcases member with
+        ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+        ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+        ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+        ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+        ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+        ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact .registerPauser bodyCursor bodyRoute
+      · exact .heartbeat bodyCursor bodyRoute
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact .setHeartbeatInterval bodyCursor bodyRoute
+      · exact .pause bodyCursor bodyRoute
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
+      · exact .setPauseDuration bodyCursor bodyRoute
+      · exact (bodyCursor.noSstore_of_entrySstoreFree compiled
+          runtimeViewSstoreFreeSlots rfl
+          (Exec.Deriv.SourceCursor.Toward.chronology
+            bodyRoute).cursorToTarget targetAt).elim
 
 /-- A target-directed route through the heartbeat-interval setter retains the
 actual `onlyAdmin` equality, its successful next edge, and the entry caller
@@ -291,7 +614,7 @@ private theorem setHeartbeatIntervalBodyGuard
       rcases Exec.Deriv.SourceCursor.branchFlagTowardSstore branchCursor
           (Exec.Deriv.SourceCursor.Toward.chronology branchRoute).cursorToTarget
           targetAt with errorArm | ⟨flag, nonzero, flagPrefix⟩
-      · rcases errorArm with ⟨errorCursor, errorReached⟩
+      · rcases errorArm with ⟨errorCursor, errorReached, zeroPrefix⟩
         exact (errorCursor.noSstore_of_entrySstoreFree compiled
           [senderNotAdminErrorSlot] rfl errorReached targetAt).elim
       · have flagEq :
