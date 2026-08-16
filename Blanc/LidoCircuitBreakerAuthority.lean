@@ -2085,10 +2085,8 @@ private def ScratchWord (word value : B256) (memory : Mem) : Prop :=
     scratchOffset word + 32 ≤ memory.data.size ∧
     scratchOffset word + 32 ≤ memory.size
 
-private def RegisterContinuationZero (memory : Mem) : Prop :=
-  (memory.read continuationOffset 32).1 = (0 : B256).toBytes ∧
-    continuationOffset + 32 ≤ memory.data.size ∧
-    continuationOffset + 32 ≤ memory.size
+private abbrev RegisterContinuationZero (memory : Mem) : Prop :=
+  ScratchWord continuationWord 0 memory
 
 private theorem ScratchWord.of_write
     (word value : B256) (memory : Mem) :
@@ -2192,53 +2190,7 @@ private theorem RegisterContinuationZero.of_run_seed
   rw [memoryEq]
   exact RegisterContinuationZero.of_write _
 
-private theorem RegisterContinuationZero.writeBefore
-    {memory : Mem} (zero : RegisterContinuationZero memory)
-    (offset : Nat) (before : offset + 32 ≤ continuationOffset)
-    (value : B256) :
-    RegisterContinuationZero (memory.write offset value.toBytes) := by
-  rcases zero with ⟨readZero, dataCovered, sizeCovered⟩
-  rcases bytesEq : value.toBytes with _ | ⟨byte, bytes⟩
-  · have impossible := B256.length_toBytes value
-    rw [bytesEq] at impossible
-    simp at impossible
-  · have lengthEq : (byte :: bytes).length = 32 := by
-      rw [← bytesEq]
-      exact B256.length_toBytes _
-    have writeSize :
-        offset + (byte :: bytes).length ≤ memory.size := by
-      omega
-    have writeData :
-        offset + (byte :: bytes).length ≤ memory.data.size := by
-      omega
-    have memoryEq : memory.write offset (byte :: bytes) =
-        { data := Array.writeD memory.data offset (byte :: bytes),
-          size := memory.size } := by
-      simp only [Mem.write]
-      rw [if_pos writeSize, if_pos writeData]
-    rw [memoryEq]
-    refine ⟨?_, ?_, sizeCovered⟩
-    · change Array.sliceD
-        (Array.writeD memory.data offset (byte :: bytes))
-        continuationOffset 32 0 = (0 : B256).toBytes
-      rw [Array.sliceD_eq_map]
-      rw [show (memory.read continuationOffset 32).1 =
-          (List.range 32).map
-            (fun index =>
-              memory.data.getD (continuationOffset + index) 0) by
-        simp [Mem.read, Array.sliceD_eq_map]] at readZero
-      rw [← readZero]
-      apply List.map_congr_left
-      intro index member
-      rw [Array.getD_writeD 0 (byte :: bytes) memory.data offset
-        (continuationOffset + index) writeData, if_neg]
-      have indexLt := List.mem_range.mp member
-      omega
-    · change continuationOffset + 32 ≤
-        (Array.writeD memory.data offset (byte :: bytes)).size
-      simpa [Array.size_writeD] using dataCovered
-
-private theorem RegisterContinuationZero.foldPreservesBefore
+private theorem ScratchWord.foldPreservesBefore
     {ξ : Type} (default : ξ) :
     ∀ (values : List ξ) (array : Array ξ) (offset index : Nat),
       index < offset →
@@ -2258,7 +2210,7 @@ private theorem RegisterContinuationZero.foldPreservesBefore
           if_neg (by omega)]
       · simp [Array.setIfInBounds, offsetInBounds]
 
-private theorem RegisterContinuationZero.foldReadsMember
+private theorem ScratchWord.foldReadsMember
     {ξ : Type} (default : ξ) :
     ∀ (values : List ξ) (array : Array ξ) (offset index : Nat),
       index < array.size → offset ≤ index →
@@ -2278,7 +2230,7 @@ private theorem RegisterContinuationZero.foldReadsMember
       simp only [List.foldl_cons]
       by_cases atOffset : index = offset
       · subst index
-        rw [RegisterContinuationZero.foldPreservesBefore default
+        rw [ScratchWord.foldPreservesBefore default
           _ _ _ _ (by omega)]
         rw [Array.getD_setIfInBounds _ _ _ inBounds, if_pos rfl]
         simp
@@ -2291,7 +2243,7 @@ private theorem RegisterContinuationZero.foldReadsMember
         rw [subEq]
         rfl
 
-private theorem RegisterContinuationZero.getD_copyD_of_lt
+private theorem ScratchWord.getD_copyD_of_lt
     {ξ : Type} (source target : Array ξ) (default : ξ) (index : Nat)
     (sourceBound : index < source.size)
     (targetBound : index < target.size) :
@@ -2303,113 +2255,9 @@ private theorem RegisterContinuationZero.getD_copyD_of_lt
     (target, 0) source).fst.getD index default =
       source.getD index default
   rw [← Array.foldl_toList]
-  rw [RegisterContinuationZero.foldReadsMember default source.toList
+  rw [ScratchWord.foldReadsMember default source.toList
     target 0 index targetBound (by omega) (by simpa using sourceBound)]
   simp [Array.getD, sourceBound]
-
-private theorem RegisterContinuationZero.writeAfter
-    {memory : Mem} (zero : RegisterContinuationZero memory)
-    (offset : Nat) (after : continuationOffset + 32 ≤ offset)
-    (value : B256) :
-    RegisterContinuationZero (memory.write offset value.toBytes) := by
-  rcases zero with ⟨readZero, dataCovered, sizeCovered⟩
-  have readZeroMap :
-      (List.range 32).map
-        (fun index => memory.data.getD (continuationOffset + index) 0) =
-          (0 : B256).toBytes := by
-    simpa [Mem.read, Array.sliceD_eq_map] using readZero
-  rcases bytesEq : value.toBytes with _ | ⟨byte, bytes⟩
-  · have impossible := B256.length_toBytes value
-    rw [bytesEq] at impossible
-    simp at impossible
-  · have bytesLength : (byte :: bytes).length = 32 := by
-      rw [← bytesEq]
-      exact B256.length_toBytes _
-    simp only [Mem.write]
-    split
-    case isTrue sizeEnough =>
-      split
-      case isTrue dataEnough =>
-        refine ⟨?_, ?_, sizeCovered⟩
-        · change Array.sliceD
-            (Array.writeD memory.data offset (byte :: bytes))
-            continuationOffset 32 0 = (0 : B256).toBytes
-          rw [Array.sliceD_eq_map, ← readZeroMap]
-          apply List.map_congr_left
-          intro index member
-          rw [Array.getD_writeD 0 (byte :: bytes) memory.data offset
-            (continuationOffset + index) dataEnough, if_neg]
-          have indexLt := List.mem_range.mp member
-          omega
-        · change continuationOffset + 32 ≤
-            (Array.writeD memory.data offset (byte :: bytes)).size
-          simpa [Array.size_writeD] using dataCovered
-      case isFalse dataShort =>
-        let copied := Array.copyD memory.data
-          (Array.replicate (offset + (byte :: bytes).length) 0)
-        have copiedSize : offset + (byte :: bytes).length ≤ copied.size := by
-          change offset + (byte :: bytes).length ≤
-            (Array.copyD memory.data
-              (Array.replicate (offset + (byte :: bytes).length) 0)).size
-          rw [Array.size_copyD, Array.size_replicate]
-        refine ⟨?_, ?_, sizeCovered⟩
-        · change Array.sliceD
-            (Array.writeD copied offset (byte :: bytes))
-            continuationOffset 32 0 = (0 : B256).toBytes
-          rw [Array.sliceD_eq_map, ← readZeroMap]
-          apply List.map_congr_left
-          intro index member
-          have indexLt := List.mem_range.mp member
-          rw [Array.getD_writeD 0 (byte :: bytes) copied offset
-            (continuationOffset + index) copiedSize,
-            if_neg (by omega)]
-          rw [RegisterContinuationZero.getD_copyD_of_lt
-            memory.data
-            (Array.replicate (offset + (byte :: bytes).length) 0)
-            0 (continuationOffset + index) (by omega) (by
-              rw [Array.size_replicate]
-              omega)]
-        · change continuationOffset + 32 ≤
-            (Array.writeD copied offset (byte :: bytes)).size
-          rw [Array.size_writeD]
-          exact Nat.le_trans (by omega) copiedSize
-    case isFalse sizeShort =>
-      let copied := Array.copyD memory.data
-        (Array.replicate
-          (ceil32 (offset + (byte :: bytes).length)) 0)
-      have copiedSize : offset + (byte :: bytes).length ≤ copied.size := by
-        change offset + (byte :: bytes).length ≤
-          (Array.copyD memory.data
-            (Array.replicate
-              (ceil32 (offset + (byte :: bytes).length)) 0)).size
-        rw [Array.size_copyD, Array.size_replicate]
-        exact Nat.le_ceil32 _
-      refine ⟨?_, ?_, ?_⟩
-      · change Array.sliceD
-          (Array.writeD copied offset (byte :: bytes))
-          continuationOffset 32 0 = (0 : B256).toBytes
-        rw [Array.sliceD_eq_map, ← readZeroMap]
-        apply List.map_congr_left
-        intro index member
-        have indexLt := List.mem_range.mp member
-        rw [Array.getD_writeD 0 (byte :: bytes) copied offset
-          (continuationOffset + index) copiedSize,
-          if_neg (by omega)]
-        rw [RegisterContinuationZero.getD_copyD_of_lt
-          memory.data
-          (Array.replicate
-            (ceil32 (offset + (byte :: bytes).length)) 0)
-          0 (continuationOffset + index) (by omega) (by
-            rw [Array.size_replicate]
-            apply Nat.lt_of_lt_of_le
-              (show continuationOffset + index < offset by omega)
-            exact Nat.le_trans (Nat.le_add_right _ _)
-              (Nat.le_ceil32 _))]
-      · change continuationOffset + 32 ≤
-          (Array.writeD copied offset (byte :: bytes)).size
-        rw [Array.size_writeD]
-        exact Nat.le_trans (by omega) copiedSize
-      · exact Nat.le_trans (by omega) (Nat.le_ceil32 _)
 
 private theorem ScratchWord.writeBefore
     {carrierWord expected : B256} {memory : Mem}
@@ -2516,7 +2364,7 @@ private theorem ScratchWord.writeAfter
           rw [Array.getD_writeD 0 (byte :: bytes) copied offset
             (scratchOffset carrierWord + index) copiedSize,
             if_neg (by omega)]
-          rw [RegisterContinuationZero.getD_copyD_of_lt
+          rw [ScratchWord.getD_copyD_of_lt
             memory.data
             (Array.replicate (offset + (byte :: bytes).length) 0)
             0 (scratchOffset carrierWord + index) (by omega) (by
@@ -2548,7 +2396,7 @@ private theorem ScratchWord.writeAfter
         rw [Array.getD_writeD 0 (byte :: bytes) copied offset
           (scratchOffset carrierWord + index) copiedSize,
           if_neg (by omega)]
-        rw [RegisterContinuationZero.getD_copyD_of_lt
+        rw [ScratchWord.getD_copyD_of_lt
           memory.data
           (Array.replicate
             (ceil32 (offset + (byte :: bytes).length)) 0)
@@ -2577,116 +2425,6 @@ private theorem ScratchWord.extend
   · exact Nat.le_trans sizeCovered <|
       Nat.le_trans (Nat.le_mul_ceilDiv memory.size 32 (by omega)) <|
         Nat.mul_le_mul_left 32 (Nat.le_max_left _ _)
-
-private theorem RegisterContinuationZero.extend
-    {memory : Mem} (zero : RegisterContinuationZero memory)
-    (offset size : Nat) :
-    RegisterContinuationZero (memory.extend offset size) := by
-  rcases zero with ⟨readZero, dataCovered, sizeCovered⟩
-  refine ⟨readZero, dataCovered, ?_⟩
-  simp only [Mem.extend, memExtSize]
-  split
-  · exact sizeCovered
-  · exact Nat.le_trans sizeCovered <|
-      Nat.le_trans (Nat.le_mul_ceilDiv memory.size 32 (by omega)) <|
-        Nat.mul_le_mul_left 32 (Nat.le_max_left _ _)
-
-private theorem RegisterContinuationZero.prefix_of_loadWord
-    {sevm : Sevm} {pre post : Devm} {xs : Stack}
-    (zero : RegisterContinuationZero pre.memory)
-    (stackPrefix : xs <<+ pre.stack)
-    (run : Line.Run sevm pre (loadWord continuationWord) post) :
-    (0 : B256) :: xs <<+ post.stack ∧
-      RegisterContinuationZero post.memory := by
-  unfold loadWord at run
-  rcases Line.of_run_cons run with ⟨pushed, pushRun, rest⟩
-  rcases Line.of_run_cons rest with ⟨loaded, loadRun, nilRun⟩
-  cases nilRun
-  have pushInv := of_run_pushB256 pushRun
-  have pushedPrefix :
-      (continuationWord * 32) :: xs <<+ pushed.stack :=
-    prefix_of_push pushInv stackPrefix
-  have pushedZero : RegisterContinuationZero pushed.memory := by
-    rw [← pushInv.memory]
-    exact zero
-  have reads : Mem.Reads pushed.memory pushed.memory.data.toList := by
-    intro index
-    by_cases bound : index < pushed.memory.data.size <;>
-      simp [Array.getD, bound, List.getD_eq_getElem?_getD]
-  rcases prefix_of_mload_val loadRun pushedPrefix reads with
-    ⟨loadedPrefix, loadedMemory, loadedReturnData⟩
-  have valueEq : Bytes.toB256
-      (pushed.memory.data.toList.sliceD continuationOffset 32 0) = 0 := by
-    rw [← Mem.Reads.read reads continuationOffset 32, pushedZero.1]
-    rw [B256.toB256_toBytes]
-  have offsetEq : (continuationWord * 32).toNat =
-      continuationOffset := rfl
-  rw [offsetEq, valueEq] at loadedPrefix
-  refine ⟨loadedPrefix, ?_⟩
-  rw [loadedMemory, offsetEq]
-  exact RegisterContinuationZero.extend pushedZero _ _
-
-private theorem RegisterContinuationZero.of_run_loadWord
-    {sevm : Sevm} {pre post : Devm} {word : B256}
-    (zero : RegisterContinuationZero pre.memory)
-    (run : Line.Run sevm pre (loadWord word) post) :
-    RegisterContinuationZero post.memory := by
-  unfold loadWord at run
-  rcases Line.of_run_cons run with ⟨pushed, pushRun, rest⟩
-  rcases Line.of_run_cons rest with ⟨loaded, loadRun, nilRun⟩
-  cases nilRun
-  rcases of_run_mload_val loadRun with ⟨offset, stack, memory, returnData⟩
-  rw [memory, ← (of_run_pushB256 pushRun).memory]
-  exact zero.extend _ _
-
-private theorem RegisterContinuationZero.of_run_mstoreAtBefore
-    {sevm : Sevm} {pre post : Devm} {word : B256}
-    (zero : RegisterContinuationZero pre.memory)
-    (before : (word * 32).toNat + 32 ≤ continuationOffset)
-    (run : Line.Run sevm pre (mstoreAt word) post) :
-    RegisterContinuationZero post.memory := by
-  unfold mstoreAt at run
-  rcases Line.of_run_cons run with ⟨pushed, pushRun, rest⟩
-  rcases Line.of_run_cons rest with ⟨stored, storeRun, nilRun⟩
-  cases nilRun
-  have push := of_run_pushB256 pushRun
-  rcases of_run_mstore_val storeRun with ⟨offset, value, pop, memory⟩
-  have offsetEq : (word * 32) = offset :=
-    (Stack.push_cons_pop_cons push.stack pop).1
-  rw [memory, ← push.memory, ← offsetEq]
-  exact zero.writeBefore _ before _
-
-private theorem RegisterContinuationZero.of_run_mstoreAtAfter
-    {sevm : Sevm} {pre post : Devm} {word : B256}
-    (zero : RegisterContinuationZero pre.memory)
-    (after : continuationOffset + 32 ≤ (word * 32).toNat)
-    (run : Line.Run sevm pre (mstoreAt word) post) :
-    RegisterContinuationZero post.memory := by
-  unfold mstoreAt at run
-  rcases Line.of_run_cons run with ⟨pushed, pushRun, rest⟩
-  rcases Line.of_run_cons rest with ⟨stored, storeRun, nilRun⟩
-  cases nilRun
-  have push := of_run_pushB256 pushRun
-  rcases of_run_mstore_val storeRun with ⟨offset, value, pop, memory⟩
-  have offsetEq : (word * 32) = offset :=
-    (Stack.push_cons_pop_cons push.stack pop).1
-  rw [memory, ← push.memory, ← offsetEq]
-  exact zero.writeAfter _ after _
-
-private theorem RegisterContinuationZero.of_run_logWith
-    {sevm : Sevm} {pre post : Devm} {topics : Fin 4} {offset size : B256}
-    (zero : RegisterContinuationZero pre.memory)
-    (run : Line.Run sevm pre (logWith topics offset size) post) :
-    RegisterContinuationZero post.memory := by
-  unfold logWith at run
-  rcases Line.of_run_cons run with ⟨sizePushed, sizeRun, rest⟩
-  rcases Line.of_run_cons rest with ⟨offsetPushed, offsetRun, rest⟩
-  rcases Line.of_run_cons rest with ⟨logged, logRun, nilRun⟩
-  cases nilRun
-  rcases of_run_log_mem logRun with ⟨memoryOffset, memorySize, memory⟩
-  rw [memory, ← (of_run_pushB256 offsetRun).memory,
-    ← (of_run_pushB256 sizeRun).memory]
-  exact zero.extend _ _
 
 private theorem ScratchWord.prefix_of_loadWord
     {sevm : Sevm} {pre post : Devm} {word expected : B256} {xs : Stack}
