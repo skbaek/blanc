@@ -742,7 +742,7 @@ OK	1.314	Blanc/TransientSettlement.lean
 OK	20.843	Blanc/LidoCircuitBreaker.lean
 OK	1.550	Blanc/LidoCircuitBreakerCode.lean
 OK	1.230	Blanc/LidoCircuitBreakerCore.lean
-OK	1.202	Blanc/LidoCircuitBreakerDeploy.lean
+OK	7.353	Blanc/LidoCircuitBreakerDeploy.lean
 OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean
 
 # 2026-08-15. The compiled Registry-integrity goal added exactly one proof
@@ -772,3 +772,33 @@ OK	68.192	Blanc/LidoCircuitBreakerRegistry.lean
 # byte-for-byte unchanged, and `--rebase`, `--force`, and `--full` were not
 # used.
 OK	42.170	Blanc/LidoCircuitBreakerEnumeration.lean
+
+# 2026-08-16. The user explicitly authorized admitting the expected Stage 5
+# access/authority ownership cut after the chronology prerequisite made the
+# omitted rows visible to the content-addressed gate. Four new production
+# modules receive rows, and Blanc/LidoCircuitBreakerDeploy.lean is refreshed
+# from its pre-Stage-5 1.202 s row to account for its added compiled-execution
+# theorem. Each value is the per-file median of three separate uncontended
+# sequential `scripts/check-elab.sh --list --no-build --report <absolute-path>`
+# runs over all 107 files on exact already-built Lean source commit 1ff7d5b:
+# 607.0 s, 604.2 s, and 618.4 s total. The reports are
+# `/private/tmp/chronology-elab-{1,2,3}.txt`. Values and SHA-256 digests:
+#
+#   Access:       15.239, 14.370, 12.889 -> 14.370
+#                 16b8549d16a5ee97d7bbbe0272643c9c92122e84012e24bdeb95fcaf947444cc
+#   Authority:     1.206,  1.221,  1.223 ->  1.221
+#                 2285b1d4c5b35267389f75118026cb9e04ea08f94a64d6cddff059ac0e325c0f
+#   Deploy:        7.364,  6.992,  7.353 ->  7.353
+#                 7b7033cf07df9734e92f28dcdb600b57775d533e9b77365945da766852eed7ec
+#   OwnerClosure:  2.831,  2.703,  2.883 ->  2.831
+#                 06923c1b0b2e78b04c88264db21af55c258bdbb367daa6c218fecaa5b5a36d90
+#   Sites:         16.793, 16.649, 17.197 -> 16.793
+#                 4506b5c2f5892785cb8592da3930741687c0df6b1ca7b9f2cfcfb5f50b5f41cf
+#
+# `--rebase`, `--force`, and manual cache editing were not used. Apart from
+# the one explicitly authorized Deploy refresh, every pre-existing row remains
+# byte-for-byte unchanged.
+OK	14.370	Blanc/LidoCircuitBreakerAccess.lean
+OK	1.221	Blanc/LidoCircuitBreakerAuthority.lean
+OK	2.831	Blanc/LidoCircuitBreakerOwnerClosure.lean
+OK	16.793	Blanc/LidoCircuitBreakerSites.lean

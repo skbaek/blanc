@@ -141,7 +141,7 @@ against the gate.
 | `scripts/check-fmint-coverage.sh` | selector reachability split into direct top-level entry, post-state-witnessed internal CALL, and uncredited embedding; five built-in callsite corruptions prove the evidence channel is live | 12 selectors: 2 direct + 7 witnessed internal, budget 3 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
 | `scripts/check-elab.sh --self-test` | fail-closed elaboration-selection behavior: cache-cold full selection, unchanged-tree reuse, exact leaf/upstream/import-edge propagation, global configuration invalidation, new/deleted modules, corrupt-cache fallback, failed-result non-persistence, independent-green-result retention, concurrent-source-drift rejection, stable/changed/missing Lake trace evidence, and missing/cyclic local-import rejection | 17 invalidation/cache controls | sub-second |
-| `lake build` | integration elaboration, including the audited compile witnesses, production Lido runtime/constructor artifact family, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, and committed holder-flow conservation | 1031 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
+| `lake build` | integration elaboration, including the audited compile witnesses, production Lido runtime/constructor artifact family, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, and committed holder-flow conservation | 1036 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
 | `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set; the common rows include the direct spawned-code-address and source-chronology theorems, and the Lido rows include the universal runtime compile equation, source inventories, cycle canary/mutant, Registry mutation bridges, arbitrary-finite enumeration, coherent views, and local raw/error/committed observability boundaries | 439 theorems | ~4 s |
 | `scripts/check-claims.sh` | Lean-checked exact statement pins for the common direct spawned-code-address and source-chronology theorems, WETH10 flagships, and the Lido artifact, projection, Registry mutation, arbitrary-finite enumeration, coherent-view, and local raw/settled observability boundaries | 237 definitions/statements and constructors | ~2 s |
 
@@ -149,10 +149,10 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–103 measured files; 103 represented; full baseline set by the exact per-file rows below | from a few seconds when nothing is affected to ~9 min cache-cold or `--full` |
+| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–107 measured files; 107 represented; full baseline set by the exact per-file rows below | from a few seconds when nothing is affected to ~10 min cache-cold or `--full` |
 
 No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
-sequential elaboration gate is the longest at roughly nine minutes; every gate
+sequential elaboration gate is the longest at roughly ten minutes; every gate
 still runs inline.
 
 ### The Python behind the shell
@@ -258,8 +258,14 @@ at the expected assertion count.
 ### Baselines and budgets
 
 `scripts/baseline-elab.txt` and the two coverage budgets are **evidence, not
-knobs**. A baseline, budget, or manifest count that must move for a gate to
-pass is a stop-and-report condition, not a step. `check-elab.sh --rebase` exists
+knobs**. Absent explicit authority in a ready goal, a baseline, budget, or
+manifest count that must move for a gate to pass is a stop-and-report
+condition, not a step. A ready goal may pre-authorize an expected new-module
+row or bounded row refresh when it names the owner class, rationale,
+measurement procedure, and preservation rule for unrelated rows; the lead then
+performs and reports that admission as ordinary goal work. This does not
+authorize an unexplained regression, an unmeasured value, or broad rebasing.
+`check-elab.sh --rebase` exists
 for deliberate, reported re-baselining and refuses to run against a tree that
 failed to elaborate; it is never the way to make a red gate green. `--rebase`
 implies a full measurement. Bare `check-elab.sh` is the normal checkpoint,
@@ -326,7 +332,10 @@ worker that has been opening files. A `--force` run may not be rebased.
 ## Rules
 
 1. **Never weaken a gate to make it green.** A baseline, budget, manifest,
-   allowlist, or golden that must move in order to pass is a stop condition.
+   allowlist, or golden that must move in order to pass is a stop condition
+   unless a ready goal already and specifically pre-authorized the expected
+   admission under a measured fail-closed procedure. Unexpected or unexplained
+   movement still stops for user reconciliation.
 2. **Never `--force`.** It bypasses the language-server contention check that
    makes a measurement trustworthy. A forced measurement is never written to
    the cache and cannot be rebased. The exclusive locks cannot be bypassed.
