@@ -295,28 +295,44 @@ driving it.
 its right-hand side uses its own state/accumulator argument more than once
 (for example, a storage-write state builder that mentions its base state in a
 refund computation, a current-value read, and the write itself). Nesting k
-layers of such a definition unfolds geometrically, so any tactic step that
-lets definitional unfolding walk the tower is predictably explosive:
+layers of such a definition unfolds geometrically. The hazard is therefore any
+step that leaves a **definitional-equality obligation spanning one or more
+layers the tactic did not name**:
 
-- relying on defeq across two or more layers — a bare `exact`, `assumption`,
-  `change`, `show`, or `rfl` whose stated type differs from the goal by tower
-  unfolding;
-- a `simp only`/`dsimp only` whose argument list names **several of the
-  nested definitions at once**;
+- a bare `exact`, `assumption`, `change`, `show`, or `rfl` whose stated type
+  differs from the goal by tower unfolding;
+- a **partial** `simp only`/`dsimp only` — one that unfolds some layers of the
+  tower but leaves an inner layer (often a `let`-bound intermediate state)
+  opaque, so the following `exact` has to cross it by defeq;
 - instantiating a lemma's abstract state variable with a concrete tower and
   leaving the normalization to unification.
 
-The discipline: state one-layer projection lemmas over an **abstract** base
-(they are `rfl`-provable precisely because one layer over a variable stays
-small) and apply them by `rw` after unfolding only the local `let` binding.
-Rewrite chains compose additively where defeq composes multiplicatively; a
-measured instance of this rewrite took a single five-line step from more than
-twenty minutes to five seconds. "`rfl`-provable" does not mean "cheap to use
-by defeq". The sibling trap — the kernel eagerly folding `Nat` operations at
-closed program-sized terms — is documented in the WETH10 elaboration-cost
-history and has the same flavor: keep expensive evaluation out of both the
-elaborator's and the kernel's definitional paths by routing through named
-lemmas.
+**The count of definitions in a `simp only` set is not the signal —
+completeness relative to the tower is.** This was measured directly: a site
+naming *all* seven layers and closing with `exact` compiles in ~3 s, while
+deleting a *single* intermediate name from that same set — leaving one
+unnamed layer for `exact` to bridge — took the whole module from 161 s to
+still-running past 400 s. A larger simp set is not the problem; an incomplete
+one is.
+
+Two safe routes, in order of preference:
+
+1. **One-layer projection lemmas over an abstract base**, applied by `rw`
+   after unfolding only the local `let` binding. They are `rfl`-provable
+   precisely because one layer over a variable stays small, they compose
+   additively where defeq composes multiplicatively, and they do not depend on
+   the author remembering every layer name. A measured instance took a
+   five-line step from more than twenty minutes to five seconds.
+2. **A complete unfold** naming every layer including `let`-bound
+   intermediates, so both sides normalize and the closing step has nothing
+   left to bridge. Correct but fragile: adding a layer later silently makes
+   the set partial again, which is exactly how the twenty-minute bomb arose.
+
+"`rfl`-provable" does not mean "cheap to use by defeq". The sibling trap — the
+kernel eagerly folding `Nat` operations at closed program-sized terms — is
+documented in the WETH10 elaboration-cost history and has the same flavor:
+keep expensive evaluation out of both the elaborator's and the kernel's
+definitional paths by routing through named lemmas.
 
 **Why budgets do not save you.** Inside `simp`'s defeq discharging the work is
 not heartbeat-metered, and the kernel's certificate check ignores
