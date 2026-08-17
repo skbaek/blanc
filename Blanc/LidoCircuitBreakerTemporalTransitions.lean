@@ -3910,7 +3910,15 @@ private theorem removeTarget_absentZero_runCompiled
     (htargetValid : nonzeroCanonicalAddress target)
     (hnextNonzero : next ≠ 0)
     (hnextBound : next.toNat < 2 ^ 252)
-    (hsize : M.size = 704) (halign : M.size % 32 = 0)
+    (entrySize indexExtCost lengthExtCost : Nat)
+    (hsize : M.size = entrySize) (halign : M.size % 32 = 0)
+    (hentryLow : 640 ≤ entrySize) (hentryHigh : entrySize ≤ 704)
+    (hindexExtCost : calculateMemoryGasCost
+        (memExtSize entrySize (removedIndexWord * 32).toNat 32) -
+      calculateMemoryGasCost entrySize = indexExtCost)
+    (hlengthExtCost : calculateMemoryGasCost
+        (memExtSize (max entrySize 672) (arrayLengthWord * 32).toNat 32) -
+      calculateMemoryGasCost (max entrySize 672) = lengthExtCost)
     (harray : base.getStorVal sevm.currentTarget
       (arrayEntrySlot next) = target)
     (hindex : base.getStorVal sevm.currentTarget
@@ -3960,7 +3968,8 @@ private theorem removeTarget_absentZero_runCompiled
       ⟨sevm.currentTarget, [pauserSetEvent, target, previous, 0], []⟩
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨stack, M,
-        G + finishGas + 443 + holeCost + movedIndexCost + tailClearCost +
+        G + finishGas + 443 + indexExtCost + lengthExtCost + holeCost +
+          movedIndexCost + tailClearCost +
           lengthRestoreCost + indexClearCost⟩)
       removeTarget
       (((absentZeroRemovePost sevm
@@ -3989,16 +3998,17 @@ private theorem removeTarget_absentZero_runCompiled
     Mem.Reads.write hwfIndex hreadsIndex _ _
   have hreadsLast : Mem.Reads MLast imgLast :=
     Mem.Reads.write hwfLength hreadsLength _ _
-  have hsizeIndex : MIndex.size = 704 := by
+  have hsizeIndex : MIndex.size = max entrySize 672 := by
     dsimp only [MIndex]
     rw [Mem.size_write_word_at,
-      show (removedIndexWord * 32).toNat + 32 = 672 by decide, hsize]
+      show (removedIndexWord * 32).toNat + 32 = 672 by decide, hsize,
+      show ceil32 672 = 672 by decide]
     split <;> omega
   have hsizeLength : MLength.size = 704 := by
     dsimp only [MLength]
     rw [Mem.size_write_word_at,
       show (arrayLengthWord * 32).toNat + 32 = 704 by decide,
-      hsizeIndex]
+      hsizeIndex, show ceil32 704 = 704 by decide]
     split <;> omega
   have hsizeLast : MLast.size = 736 := by
     dsimp only [MLast]
@@ -4236,8 +4246,8 @@ private theorem removeTarget_absentZero_runCompiled
   have hsaveLength : Func.RunCompiled fs sevm
       (base.setMach
         ⟨arrayLengthWord * 32 :: next :: stack, MIndex,
-          G + finishGas + 219 + holeCost + movedIndexCost + tailClearCost +
-            lengthRestoreCost + indexClearCost⟩)
+          G + finishGas + 219 + lengthExtCost + holeCost + movedIndexCost +
+            tailClearCost + lengthRestoreCost + indexClearCost⟩)
       (Ninst.mstore ::: loadWord arrayLengthWord +++ tagTop arrayRegion +++
         Ninst.sload ::: mstoreAt lastTargetWord +++
         loadWord lastTargetWord +++ loadWord removedIndexWord +++
@@ -4256,15 +4266,15 @@ private theorem removeTarget_absentZero_runCompiled
         (G := G + finishGas + 216 + holeCost + movedIndexCost + tailClearCost +
           lengthRestoreCost + indexClearCost) (M := MLength) rfl
         (Devm.extCost_of_size
-          (i := (arrayLengthWord * 32).toNat) (sz := 32) (e := 0)
-          hsizeIndex (by decide))
+          (i := (arrayLengthWord * 32).toNat) (sz := 32) (e := lengthExtCost)
+          hsizeIndex hlengthExtCost)
         (by simp only [Devm.gasLeft_setMach, gVerylow]; omega) rfl
     · exact hlastPrefix
   have hsaveLengthPrefix : Func.RunCompiled fs sevm
       (base.setMach
         ⟨next :: stack, MIndex,
-          G + finishGas + 222 + holeCost + movedIndexCost + tailClearCost +
-            lengthRestoreCost + indexClearCost⟩)
+          G + finishGas + 222 + lengthExtCost + holeCost + movedIndexCost +
+            tailClearCost + lengthRestoreCost + indexClearCost⟩)
       (mstoreAt arrayLengthWord +++ loadWord arrayLengthWord +++
         tagTop arrayRegion +++ Ninst.sload ::: mstoreAt lastTargetWord +++
         loadWord lastTargetWord +++ loadWord removedIndexWord +++
@@ -4281,17 +4291,17 @@ private theorem removeTarget_absentZero_runCompiled
     func_run (1)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
-      have hg : G + finishGas + 222 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost - 3 =
-          G + finishGas + 219 + holeCost + movedIndexCost + tailClearCost +
-            lengthRestoreCost + indexClearCost := by omega
+      have hg : G + finishGas + 222 + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost - 3 =
+          G + finishGas + 219 + lengthExtCost + holeCost + movedIndexCost +
+            tailClearCost + lengthRestoreCost + indexClearCost := by omega
       rw [hg]
       exact hsaveLength
   have hlengthLoad : Func.RunCompiled fs sevm
       (base.setMach
         ⟨arrayLengthSlot :: stack, MIndex,
-          G + finishGas + 322 + holeCost + movedIndexCost + tailClearCost +
-            lengthRestoreCost + indexClearCost⟩)
+          G + finishGas + 322 + lengthExtCost + holeCost + movedIndexCost +
+            tailClearCost + lengthRestoreCost + indexClearCost⟩)
       (Ninst.sload ::: mstoreAt arrayLengthWord +++
         loadWord arrayLengthWord +++ tagTop arrayRegion +++ Ninst.sload :::
         mstoreAt lastTargetWord +++ loadWord lastTargetWord +++
@@ -4315,8 +4325,8 @@ private theorem removeTarget_absentZero_runCompiled
   have hlengthPrefix : Func.RunCompiled fs sevm
       (base.setMach
         ⟨stack, MIndex,
-          G + finishGas + 325 + holeCost + movedIndexCost + tailClearCost +
-            lengthRestoreCost + indexClearCost⟩)
+          G + finishGas + 325 + lengthExtCost + holeCost + movedIndexCost +
+            tailClearCost + lengthRestoreCost + indexClearCost⟩)
       (pushB256 arrayLengthSlot ::: Ninst.sload :::
         mstoreAt arrayLengthWord +++ loadWord arrayLengthWord +++
         tagTop arrayRegion +++ Ninst.sload ::: mstoreAt lastTargetWord +++
@@ -4334,16 +4344,17 @@ private theorem removeTarget_absentZero_runCompiled
     func_run (1)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
-      have hg : G + finishGas + 325 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost - 3 =
-          G + finishGas + 322 + holeCost + movedIndexCost + tailClearCost +
-            lengthRestoreCost + indexClearCost := by omega
+      have hg : G + finishGas + 325 + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost - 3 =
+          G + finishGas + 322 + lengthExtCost + holeCost + movedIndexCost +
+            tailClearCost + lengthRestoreCost + indexClearCost := by omega
       rw [hg]
       exact hlengthLoad
   have hsaveIndex : Func.RunCompiled fs sevm
       (base.setMach
         ⟨removedIndexWord * 32 :: next :: stack, M,
-          G + finishGas + 328 + holeCost + movedIndexCost + tailClearCost +
+          G + finishGas + 328 + indexExtCost + lengthExtCost + holeCost +
+            movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost⟩)
       (Ninst.mstore ::: pushB256 arrayLengthSlot ::: Ninst.sload :::
         mstoreAt arrayLengthWord +++ loadWord arrayLengthWord +++
@@ -4361,17 +4372,19 @@ private theorem removeTarget_absentZero_runCompiled
         ⟨stack, MLast, G⟩) := by
     apply Func.RunCompiled.next
     · exact Ninst.runCompiled_mstore_of
-        (G := G + finishGas + 325 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost) (M := MIndex) rfl
+        (G := G + finishGas + 325 + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost)
+        (M := MIndex) rfl
         (Devm.extCost_of_size
-          (i := (removedIndexWord * 32).toNat) (sz := 32) (e := 0)
-          hsize (by decide))
+          (i := (removedIndexWord * 32).toNat) (sz := 32) (e := indexExtCost)
+          hsize hindexExtCost)
         (by simp only [Devm.gasLeft_setMach, gVerylow]; omega) rfl
     · exact hlengthPrefix
   have hsaveIndexPrefix : Func.RunCompiled fs sevm
       (base.setMach
         ⟨next :: stack, M,
-          G + finishGas + 331 + holeCost + movedIndexCost + tailClearCost +
+          G + finishGas + 331 + indexExtCost + lengthExtCost + holeCost +
+            movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost⟩)
       (mstoreAt removedIndexWord +++ pushB256 arrayLengthSlot :::
         Ninst.sload ::: mstoreAt arrayLengthWord +++
@@ -4391,16 +4404,19 @@ private theorem removeTarget_absentZero_runCompiled
     func_run (1)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
-      have hg : G + finishGas + 331 + holeCost + movedIndexCost + tailClearCost +
+      have hg : G + finishGas + 331 + indexExtCost + lengthExtCost + holeCost +
+          movedIndexCost + tailClearCost +
           lengthRestoreCost + indexClearCost - 3 =
-          G + finishGas + 328 + holeCost + movedIndexCost + tailClearCost +
+          G + finishGas + 328 + indexExtCost + lengthExtCost + holeCost +
+            movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost := by omega
       rw [hg]
       exact hsaveIndex
   have hindexLoad : Func.RunCompiled fs sevm
       (base.setMach
         ⟨indexKey :: stack, M,
-          G + finishGas + 431 + holeCost + movedIndexCost + tailClearCost +
+          G + finishGas + 431 + indexExtCost + lengthExtCost + holeCost +
+            movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost⟩)
       (Ninst.sload ::: mstoreAt removedIndexWord +++
         pushB256 arrayLengthSlot ::: Ninst.sload :::
@@ -4427,15 +4443,17 @@ private theorem removeTarget_absentZero_runCompiled
       (M.read (targetWord * 32).toNat 32).1.toB256 = target := by
     rw [Mem.Reads.read hreads]
     exact htarget
+  have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size := by
+    rw [hsize, show (targetWord * 32).toNat + 32 = 544 by decide]
+    omega
   have htargetMemory :
       (M.read (targetWord * 32).toNat 32).2 = M := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le halign (by
-      rw [hsize]
-      decide))]
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign htargetCovered)]
   have hindexPrefix : Func.RunCompiled fs sevm
       (base.setMach
         ⟨stack, M,
-          G + finishGas + 443 + holeCost + movedIndexCost + tailClearCost +
+          G + finishGas + 443 + indexExtCost + lengthExtCost + holeCost +
+            movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost⟩)
       (targetIndexKey +++ Ninst.sload ::: mstoreAt removedIndexWord +++
         pushB256 arrayLengthSlot ::: Ninst.sload :::
@@ -4459,15 +4477,15 @@ private theorem removeTarget_absentZero_runCompiled
           htargetValue }
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
-      rw [Devm.extCost_zero_of_le halign (by
-        rw [hsize]
-        decide)]
+      rw [Devm.extCost_zero_of_le halign htargetCovered]
       norm_num [gVerylow]
     case a =>
       rw [htargetMemory]
-      have hg : G + finishGas + 443 + holeCost + movedIndexCost + tailClearCost +
+      have hg : G + finishGas + 443 + indexExtCost + lengthExtCost + holeCost +
+          movedIndexCost + tailClearCost +
           lengthRestoreCost + indexClearCost - 12 =
-          G + finishGas + 431 + holeCost + movedIndexCost + tailClearCost +
+          G + finishGas + 431 + indexExtCost + lengthExtCost + holeCost +
+            movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost := by omega
       rw [hg]
       exact hindexLoad
@@ -4622,7 +4640,8 @@ private theorem afterOldPauser_absentZero_runCompiled
     lengthOriginal
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
     1981 G hwf hreads htarget htargetValid
-    hnextNonzero hnextBound hsize halign harray hindex hlength harrayOrig
+    hnextNonzero hnextBound 704 0 0 hsize halign (by decide) (by decide)
+    (by decide) (by decide) harray hindex hlength harrayOrig
     hindexOrig hlengthOrig hholeCost hmovedIndexCost htailClearCost
     hlengthRestoreCost hindexClearCost hwarmArray hwarmIndex hwarmLength
     hsub hgasFinal hstatic
@@ -4654,7 +4673,8 @@ private theorem afterOldPauser_absentZero_runCompiled
           (by simp only [Devm.gasLeft_setMach]
               norm_num [gVerylow, gMid, gJumpdest]
               omega))
-    · simpa only [fs, MIndex, MLength, MLast, eventLog] using hremove
+    · simpa only [fs, MIndex, MLength, MLast, eventLog, Nat.add_zero]
+        using hremove
   have hbranch : Func.RunCompiled fs sevm
       (base.setMach ⟨[1, carry], M,
         G + 2450 + holeCost + movedIndexCost + tailClearCost +
@@ -6996,7 +7016,15 @@ private theorem removeTarget_foundZeroRetained_runCompiled
     (hremaining : remaining ≠ 0)
     (hnextNonzero : next ≠ 0)
     (hnextBound : next.toNat < 2 ^ 252)
-    (hsize : M.size = 704) (halign : M.size % 32 = 0)
+    (entrySize indexExtCost lengthExtCost : Nat)
+    (hsize : M.size = entrySize) (halign : M.size % 32 = 0)
+    (hentryLow : 640 ≤ entrySize) (hentryHigh : entrySize ≤ 704)
+    (hindexExtCost : calculateMemoryGasCost
+        (memExtSize entrySize (removedIndexWord * 32).toNat 32) -
+      calculateMemoryGasCost entrySize = indexExtCost)
+    (hlengthExtCost : calculateMemoryGasCost
+        (memExtSize (max entrySize 672) (arrayLengthWord * 32).toNat 32) -
+      calculateMemoryGasCost (max entrySize 672) = lengthExtCost)
     (harray : base.getStorVal sevm.currentTarget
       (arrayEntrySlot next) = target)
     (hindex : base.getStorVal sevm.currentTarget
@@ -7035,8 +7063,8 @@ private theorem removeTarget_foundZeroRetained_runCompiled
       ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨stack, M,
-        G + 2551 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost⟩)
+        G + 2551 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost⟩)
       removeTarget
       (((absentZeroRemovePost sevm
           (absentZeroTailClearPost sevm base target next)
@@ -7067,16 +7095,17 @@ private theorem removeTarget_foundZeroRetained_runCompiled
     Mem.Reads.write hwfIndex hreadsIndex _ _
   have hreadsLast : Mem.Reads MLast imgLast :=
     Mem.Reads.write hwfLength hreadsLength _ _
-  have hsizeIndex : MIndex.size = 704 := by
+  have hsizeIndex : MIndex.size = max entrySize 672 := by
     dsimp only [MIndex]
     rw [Mem.size_write_word_at,
-      show (removedIndexWord * 32).toNat + 32 = 672 by decide, hsize]
+      show (removedIndexWord * 32).toNat + 32 = 672 by decide, hsize,
+      show ceil32 672 = 672 by decide]
     split <;> omega
   have hsizeLength : MLength.size = 704 := by
     dsimp only [MLength]
     rw [Mem.size_write_word_at,
       show (arrayLengthWord * 32).toNat + 32 = 704 by decide,
-      hsizeIndex]
+      hsizeIndex, show ceil32 704 = 704 by decide]
     split <;> omega
   have hsizeLast : MLast.size = 736 := by
     dsimp only [MLast]
@@ -7162,15 +7191,18 @@ private theorem removeTarget_foundZeroRetained_runCompiled
     target oldLength next oldPauser stack hstack arrayOriginal indexOriginal
     lengthOriginal holeCost movedIndexCost tailClearCost lengthRestoreCost
     indexClearCost 2108 G hwf hreads htarget htargetValid hnextNonzero
-    hnextBound hsize halign harray hindex hlength harrayOrig hindexOrig
+    hnextBound entrySize indexExtCost lengthExtCost hsize halign hentryLow
+    hentryHigh hindexExtCost hlengthExtCost
+    harray hindex hlength harrayOrig hindexOrig
     hlengthOrig hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
     hindexClearCost hwarmArray hwarmIndex hwarmLength hsub hgasFinal hstatic
     (by simpa only [MIndex, MLength, MLast, tailPost, removePost, eventLog]
       using hfinish)
-  have hg : G + 2108 + 443 + holeCost + movedIndexCost + tailClearCost +
+  have hg : G + 2108 + 443 + indexExtCost + lengthExtCost + holeCost +
+      movedIndexCost + tailClearCost +
       lengthRestoreCost + indexClearCost =
-      G + 2551 + holeCost + movedIndexCost + tailClearCost +
-        lengthRestoreCost + indexClearCost := by omega
+      G + 2551 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+        tailClearCost + lengthRestoreCost + indexClearCost := by omega
   rw [hg] at hrun
   simpa only [MIndex, MLength, MLast, eventLog] using hrun
 
@@ -7197,7 +7229,15 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
     (hremaining : remaining ≠ 0)
     (hnextNonzero : next ≠ 0)
     (hnextBound : next.toNat < 2 ^ 252)
-    (hsize : M.size = 704) (halign : M.size % 32 = 0)
+    (entrySize indexExtCost lengthExtCost : Nat)
+    (hsize : M.size = entrySize) (halign : M.size % 32 = 0)
+    (hentryLow : 640 ≤ entrySize) (hentryHigh : entrySize ≤ 704)
+    (hindexExtCost : calculateMemoryGasCost
+        (memExtSize entrySize (removedIndexWord * 32).toNat 32) -
+      calculateMemoryGasCost entrySize = indexExtCost)
+    (hlengthExtCost : calculateMemoryGasCost
+        (memExtSize (max entrySize 672) (arrayLengthWord * 32).toNat 32) -
+      calculateMemoryGasCost (max entrySize 672) = lengthExtCost)
     (harray : base.getStorVal sevm.currentTarget
       (arrayEntrySlot next) = target)
     (hindex : base.getStorVal sevm.currentTarget
@@ -7236,8 +7276,8 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
       ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨stack, M,
-        G + 2586 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost⟩)
+        G + 2586 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost⟩)
       afterOldPauser
       (((absentZeroRemovePost sevm
           (absentZeroTailClearPost sevm base target next)
@@ -7255,7 +7295,9 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
     indexOriginal lengthOriginal holeCost movedIndexCost tailClearCost
     lengthRestoreCost indexClearCost G hwf hreads htarget hprevious hnew
     hcontinuation htargetValid holdValid hremaining hnextNonzero hnextBound
-    hsize halign harray hindex hlength hcount harrayOrig hindexOrig
+    entrySize indexExtCost lengthExtCost hsize halign hentryLow hentryHigh
+    hindexExtCost hlengthExtCost
+    harray hindex hlength hcount harrayOrig hindexOrig
     hlengthOrig hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
     hindexClearCost hwarmArray hwarmIndex hwarmLength hwarmCount hsub
     hgasFinal hstatic
@@ -7263,8 +7305,8 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
     simp [fs, runtime, aux, removeTargetSlot]
   have hcall : Func.RunCompiled fs sevm
       (base.setMach ⟨stack, M,
-        G + 2563 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost⟩)
+        G + 2563 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost⟩)
       (.call removeTargetSlot)
       (((absentZeroRemovePost sevm
           (absentZeroTailClearPost sevm base target next)
@@ -7277,10 +7319,12 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
         Devm.memory_setMach] using
         (Devm.burnBy_setMach_gas
           (devm := base.setMach ⟨stack, M,
-            G + 2563 + holeCost + movedIndexCost + tailClearCost +
+            G + 2563 + indexExtCost + lengthExtCost + holeCost +
+              movedIndexCost + tailClearCost +
               lengthRestoreCost + indexClearCost⟩)
           (cost := gVerylow + gMid + gJumpdest)
-          (G := G + 2551 + holeCost + movedIndexCost + tailClearCost +
+          (G := G + 2551 + indexExtCost + lengthExtCost + holeCost +
+            movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost)
           (by simp only [Devm.gasLeft_setMach]
               norm_num [gVerylow, gMid, gJumpdest]
@@ -7288,8 +7332,8 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
     · simpa only [fs, MIndex, MLength, MLast, eventLog] using hremove
   have hbranch : Func.RunCompiled fs sevm
       (base.setMach ⟨1 :: stack, M,
-        G + 2577 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost⟩)
+        G + 2577 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost⟩)
       ((.call removeTargetSlot) <?>
         (newCountKey +++ Ninst.sload ::: pushB256 1 ::: add :::
           newCountKey +++ Ninst.sstore ::: .call finishSetPauserSlot))
@@ -7304,11 +7348,13 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
         Devm.memory_setMach] using
         (Devm.popBurnBy_setMach
           (devm := base.setMach ⟨1 :: stack, M,
-            G + 2577 + holeCost + movedIndexCost + tailClearCost +
+            G + 2577 + indexExtCost + lengthExtCost + holeCost +
+              movedIndexCost + tailClearCost +
               lengthRestoreCost + indexClearCost⟩)
           (x := (1 : B256)) (s := stack)
           (cost := gVerylow + gHigh + gJumpdest)
-          (G := G + 2563 + holeCost + movedIndexCost + tailClearCost +
+          (G := G + 2563 + indexExtCost + lengthExtCost + holeCost +
+            movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
@@ -7316,8 +7362,8 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
             omega))
     · exact hcall
   have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
-    rw [hsize]
-    decide
+    rw [hsize, show (newPauserWord * 32).toNat + 32 = 576 by decide]
+    omega
   have hnewMemory : (M.read (newPauserWord * 32).toNat 32).2 = M := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
   simp only [afterOldPauser]
@@ -7328,10 +7374,11 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
     norm_num [gVerylow]
   case a =>
     rw [Mem.Reads.read hreads, hnew, hnewMemory]
-    have hg : G + 2586 + holeCost + movedIndexCost + tailClearCost +
+    have hg : G + 2586 + indexExtCost + lengthExtCost + holeCost +
+          movedIndexCost + tailClearCost +
           lengthRestoreCost + indexClearCost - 9 =
-        G + 2577 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost := by omega
+        G + 2577 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost := by omega
     rw [hg]
     exact hbranch
 
