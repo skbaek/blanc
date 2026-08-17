@@ -8159,4 +8159,189 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
           temporalSstorePost_other _ _ (assignmentSlot target) 0 _
             (expirySlot pauser) (pairNe hexpiryRegistry.1),
           temporalSloadBase_getStorVal]
+
+/-- Exact production-body reserve for unregistering a recorded target that is
+already the array's last entry, with the old pauser retained. -/
+def foundZeroRetainedLastRegisterBodyGas (sevm : Sevm) (base : Devm)
+    (target oldPauser : B256)
+    (assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost : Nat) : Nat :=
+  221 + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
+    assignmentCost countCost holeCost movedIndexCost tailClearCost
+    lengthRestoreCost indexClearCost
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- The four scratch writes `registerPauser`'s body performs before entering
+the kernel: the two decoded arguments and the two zero words.  The staging is
+chronology-independent, so the kernel run is taken as a hypothesis. -/
+private theorem registerPauser_stageArgs_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (target newPauser : B256) (kernelGas : Nat) (post : Devm)
+    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hargNew : Sevm.dataWord sevm (32 * 1 + 4) = newPauser)
+    (hkernel : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], freshRegisterMemory target newPauser, kernelGas⟩)
+      setPauserKernel post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, kernelGas + 112⟩)
+      (arg 0 +++ mstoreAt targetWord +++
+        arg 1 +++ mstoreAt newPauserWord +++
+        pushB256 0 ::: mstoreAt previousPauserWord +++
+        pushB256 0 ::: mstoreAt continuationWord +++
+        .call setPauserSlot) post := by
+  have hM1Size (w : B256) :
+      (Mem.empty.write (targetWord * 32).toNat w.toBytes).size = 544 := by
+    rw [Mem.size_write_word_at]
+    decide +kernel
+  have hM2Size (w₁ w₂ : B256) :
+      ((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
+        (newPauserWord * 32).toNat w₂.toBytes).size = 576 := by
+    rw [Mem.size_write_word_at, hM1Size]
+    decide +kernel
+  have hM3Size (w₁ w₂ : B256) :
+      (((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
+        (newPauserWord * 32).toNat w₂.toBytes).write
+        (previousPauserWord * 32).toNat (0 : B256).toBytes).size = 608 := by
+    rw [Mem.size_write_word_at, hM2Size]
+    decide +kernel
+  unfold arg cdl
+  func_run (15) [51, 3, 3, 3]
+  all_goals first
+    | exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
+    | exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
+    | exact Devm.extCost_of_size (n := 576) (hM2Size _ _) (by decide +kernel)
+    | exact Devm.extCost_of_size (n := 608) (hM3Size _ _) (by decide +kernel)
+    | skip
+  case h_body =>
+    rw [hargTarget, hargNew]
+    change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], freshRegisterMemory target newPauser, kernelGas⟩)
+      setPauserKernel post
+    exact hkernel
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- Exact successful production body for unregistering a recorded target under
+the two restrictions the removal machinery supports: the removed target is
+already the array's last entry (`index + 1 = entries.length`), and the old
+pauser is retained (`oldCount - 1 ≠ 0`), so `registerAfterSet` stops without
+touching any expiry slot. -/
+theorem registerPauser_body_foundZeroRetainedLast_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (target : B256) (index : Nat)
+    (oldPauser oldCount : B256)
+    (assignmentOriginal countOriginal arrayOriginal indexOriginal
+      lengthOriginal : B256)
+    (assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost G : Nat)
+    (hdata : sevm.data.length.toB256 <? 68 = 0)
+    (hadmin : sevm.caller.toB256 = dp.admin)
+    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hargNew : Sevm.dataWord sevm (32 * 1 + 4) = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hlast : index + 1 = entries.length)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (holdValid : nonzeroCanonicalAddress oldPauser)
+    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+      (assignmentSlot target) = assignmentOriginal)
+    (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
+      assignmentCost)
+    (hcount : (freshAssignmentPost sevm base target 0).getStorVal
+      sevm.currentTarget (countSlot oldPauser) = oldCount)
+    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+      (countSlot oldPauser) = countOriginal)
+    (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
+      countCost)
+    (hremaining : oldCount - 1 ≠ 0)
+    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+      lengthOriginal)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 entries.length) =
+        movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 = tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 entries.length - 1) =
+        lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal
+      (Nat.toB256 entries.length) 0 = indexClearCost)
+    (hwarmArray : (sevm.currentTarget,
+      arrayEntrySlot (Nat.toB256 entries.length)) ∈ base.accessedStorageKeys)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      base.accessedStorageKeys)
+    (hwarmLength : (sevm.currentTarget, arrayLengthSlot) ∈
+      base.accessedStorageKeys)
+    (hgasFinal : gCallStipend < G + 2120 + indexClearCost)
+    (hstatic : sevm.isStatic = false) :
+    ∃ trace post,
+      setPauserSourceTrace entries target 0 = some trace ∧
+      trace.postEntries = swapPop entries index ∧
+      RegistryWitness
+        (logicalStorageOfStor (applyRegistryWrites
+          (Devm.getStor base sevm.currentTarget) trace.writes))
+        trace.postEntries ∧
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        (base.setMach ⟨[], Mem.empty,
+          G + foundZeroRetainedLastRegisterBodyGas sevm base target oldPauser
+            assignmentCost countCost holeCost movedIndexCost tailClearCost
+            lengthRestoreCost indexClearCost⟩)
+        (registerPauser dp) post ∧
+      post.gasLeft = G ∧
+      post.logs = base.logs ++
+        [⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩] ∧
+      ∀ pauser, canonicalAddress pauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser) := by
+  rcases freshRegisterMemory_spec target 0 with
+    ⟨hwf, hreads, hsize, htargetRead, hnewRead,
+      _hpreviousRead, hcontinuationRead⟩
+  rcases setPauserKernel_foundZeroRetainedLast_runCompiled dp sevm base
+      (freshRegisterMemory target 0) (freshRegisterImage target 0)
+      entries target index oldPauser oldCount assignmentOriginal countOriginal
+      arrayOriginal indexOriginal lengthOriginal assignmentCost countCost
+      holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost G
+      hw hfind hlast hwf hreads htargetRead hnewRead hcontinuationRead
+      htargetValid holdValid hsize hassignmentOrig hassignmentCost hcount
+      hcountOrig hcountCost hremaining harrayOrig hindexOrig hlengthOrig
+      hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
+      hindexClearCost hwarmArray hwarmIndex hwarmLength hgasFinal hstatic with
+    ⟨trace, post, htrace, hpostEntries, hwpost, hkernel, hgas, hlogs,
+      hexpiries⟩
+  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target 0
+    (G + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
+      assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost) post hargTarget hargNew hkernel
+  refine ⟨trace, post, htrace, hpostEntries, hwpost, ?_, hgas, hlogs,
+    hexpiries⟩
+  have htargetMask := canonicalAddress_mask_zero htargetValid.2
+  have hnewMask : (0 : B256) &&& addressMask = 0 := by decide +kernel
+  unfold registerPauser requireStaticArgs canonicalAddressArg onlyAdmin arg cdl
+    checkNonAddress pushAddressMask pushDeployWord
+  func_run (24) [0, ~~~(0 : B256), addressMask, 0,
+    ~~~(0 : B256), addressMask, 0, 1]
+  all_goals try { rw [hargTarget]; exact htargetMask }
+  all_goals try { rw [hargNew]; exact hnewMask }
+  all_goals try { simp [hadmin, B256.eqCheck] }
+  all_goals first
+    | (simp only [Devm.gasLeft_setMach, foundZeroRetainedLastRegisterBodyGas]
+       norm_num [gBase, gVerylow, gHigh, gMid, gJumpdest]
+       omega)
+    | skip
+  case h_arm =>
+    simp only [foundZeroRetainedLastRegisterBodyGas]
+    have hg : G + (221 + foundZeroRetainedLastSetPauserKernelGas sevm base
+          target oldPauser assignmentCost countCost holeCost movedIndexCost
+          tailClearCost lengthRestoreCost indexClearCost) - 109 =
+        G + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
+          assignmentCost countCost holeCost movedIndexCost tailClearCost
+          lengthRestoreCost indexClearCost + 112 := by omega
+    rw [hg]
+    simpa only [arg, cdl] using hstage
 end Blanc.LidoCircuitBreaker
