@@ -1019,61 +1019,6 @@ def foundZeroRetainedLastRegisterBodyGas (sevm : Sevm) (base : Devm)
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
-/-- The four scratch writes `registerPauser`'s body performs before entering
-the kernel: the two decoded arguments and the two zero words.  The staging is
-chronology-independent, so the kernel run is taken as a hypothesis. -/
-private theorem registerPauser_stageArgs_runCompiled
-    (dp : DeployParams) (sevm : Sevm) (base : Devm)
-    (target newPauser : B256) (kernelGas : Nat) (post : Devm)
-    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
-    (hargNew : Sevm.dataWord sevm (32 * 1 + 4) = newPauser)
-    (hkernel : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], registerMemory target newPauser, kernelGas⟩)
-      setPauserKernel post) :
-    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, kernelGas + 112⟩)
-      (arg 0 +++ mstoreAt targetWord +++
-        arg 1 +++ mstoreAt newPauserWord +++
-        pushB256 0 ::: mstoreAt previousPauserWord +++
-        pushB256 0 ::: mstoreAt continuationWord +++
-        .call setPauserSlot) post := by
-  have hM1Size (w : B256) :
-      (Mem.empty.write (targetWord * 32).toNat w.toBytes).size = 544 := by
-    rw [Mem.size_write_word_at]
-    decide +kernel
-  have hM2Size (w₁ w₂ : B256) :
-      ((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
-        (newPauserWord * 32).toNat w₂.toBytes).size = 576 := by
-    rw [Mem.size_write_word_at, hM1Size]
-    decide +kernel
-  have hM3Size (w₁ w₂ : B256) :
-      (((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
-        (newPauserWord * 32).toNat w₂.toBytes).write
-        (previousPauserWord * 32).toNat (0 : B256).toBytes).size = 608 := by
-    rw [Mem.size_write_word_at, hM2Size]
-    decide +kernel
-  unfold arg cdl
-  func_run (15) [51, 3, 3, 3]
-  -- Each extension goal takes exactly the alternative that fits it, in the
-  -- order `func_run` emits them.  A `first` combinator over all four cost
-  -- 46.4 s here (measured): a failed `exact` still unifies `N.size = n`
-  -- against the write tower, so every goal paid for the alternatives it did
-  -- not need.  Ordered `case h_ext` blocks brought the same proof to 5.1 s.
-  case h_ext => exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
-  case h_ext => exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
-  case h_ext =>
-    exact Devm.extCost_of_size (n := 576) (hM2Size _ _) (by decide +kernel)
-  case h_ext =>
-    exact Devm.extCost_of_size (n := 608) (hM3Size _ _) (by decide +kernel)
-  case h_body =>
-    rw [hargTarget, hargNew]
-    change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], registerMemory target newPauser, kernelGas⟩)
-      setPauserKernel post
-    exact hkernel
-
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact successful production body for unregistering a recorded target under
 the two restrictions the removal machinery supports: the removed target is
 already the array's last entry (`index + 1 = entries.length`), and the old
