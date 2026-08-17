@@ -159,7 +159,14 @@ def RuntimePersistentWrite.inventoryOrder : List RuntimePersistentWrite :=
     .pauseLastTargetExpiry,
     .pauseRetainedTargetExpiry ]
 
-/-- Exact permitted role set for each runtime SSTORE row. -/
+/-- Permitted invocation roles for each runtime SSTORE row.
+
+Certified in one direction only: every role actually derived by the authority
+theorems lies in its row's list, so this list is a sound upper bound.
+Tightness — that each listed role is genuinely attainable at that row, and in
+particular that a pause invocation can never reach `afterOldNewCount` — is
+discharged by the Stage 5 attainment controls, not by this definition.  Do not
+describe the set as exact before those land. -/
 def RuntimePersistentWrite.permittedRoles :
     RuntimePersistentWrite → List InvocationRole
   | .setPauseDurationConfig | .setHeartbeatIntervalConfig =>
