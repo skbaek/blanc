@@ -513,7 +513,13 @@ the plain bridge builds and transfers the deeper occurrence across them.
 The conclusion names the site by path identity and inventory membership, and
 never by a reduced pc: `occurrence.node.pc = site.pc` is `rfl`-true of the
 constructed site, and which *number* that is stays a question about
-`program.sourceSites` that a consumer settles by `decide`. -/
+`program.sourceSites` that a consumer settles by `decide`.
+
+The instruction is named the same way, and in both directions: the chain
+`occurrence.instruction = site.instruction = instruction` closes the route's
+own index against the reached occurrence, so a consumer that routed to a
+concrete `Ninst` recovers `occurrence.instruction = instruction` without
+`decide`ing against an inventory for a fact the route already fixed. -/
 
 theorem Func.exec_of_runCompiledTo_routeTo_core :
     ∀ {f₀ : Func} {fs' : List Func} {sevm : Sevm} {FS : List Func}
@@ -535,7 +541,8 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
               site.path = target ∧
               site ∈ Prog.sourceSites ⟨f₀, fs'⟩ ∧
               occurrence.node.pc = site.pc ∧
-              occurrence.instruction = site.instruction := by
+              occurrence.instruction = site.instruction ∧
+              site.instruction = instruction := by
   intro f₀ fs' sevm FS devm p ex h_run path target instruction h_route
   induction h_route with
   | @head pre post instr body out functionIndex steps
@@ -554,7 +561,7 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
         (node := ⟨pc, sevm, pre, out, exc⟩)
         (Exec.mem_rawNodes_self exc) h_at
     refine ⟨exc, occurrence, ⟨⟨functionIndex, steps⟩, pc, instr⟩, rfl,
-      included _ (by simp [Func.sourceSites]), ?_, hinstr⟩
+      included _ (by simp [Func.sourceSites]), ?_, hinstr, rfl⟩
     rw [hnode]
   | @rest pre post instr body out functionIndex steps target
       targetInstruction instructionRun tail tailRoute ih =>
@@ -565,7 +572,7 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
     rw [← of_pure_eq_some h_rw] at h_slice
     have h_at : Ninst.At sevm.code pc instr :=
       Ninst.at_of_slice (List.slice_prefix h_slice)
-    obtain ⟨excTail, occurrence, site, hpath, hmem, hpc, hinstr⟩ :=
+    obtain ⟨excTail, occurrence, site, hpath, hmem, hpc, hinstr, hsite⟩ :=
       ih h_eq hFS (pc + instr.size) sub' hb'
         (fun site member => included site
           (by simp [Func.sourceSites, member]))
@@ -574,7 +581,8 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
       Ninst.exec_of_stepRun_extend h_at h_filled (h_step pc) excTail
     exact ⟨exc, ⟨occurrence.node, occurrence.instruction, occurrence.slot,
       occurrence.stepResult, hsub _ occurrence.reached, occurrence.decoded,
-      occurrence.filled, occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr⟩
+      occurrence.filled, occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr,
+      hsite⟩
   | @branchLeft pre post leftArm rightArm out functionIndex steps
       target targetInstruction room pop tail armRoute ih =>
     intro h_eq hFS pc sub hb included
@@ -667,7 +675,8 @@ theorem Prog.exec_of_runCompiledTo_routeTo {sevm : Sevm} {pre mid : Devm}
           site.path = target ∧
           site ∈ p.sourceSites ∧
           occurrence.node.pc = site.pc ∧
-          occurrence.instruction = site.instruction := by
+          occurrence.instruction = site.instruction ∧
+          site.instruction = instruction := by
   have h_eq' : some sevm.code.toList = Prog.compile ⟨p.main, p.aux⟩ := h_eq
   have h_get : (table 0 (p.main :: p.aux))[0]? = some (0, p.main) := rfl
   rcases subcode_of_get?_eq_some h_eq' h_get with ⟨h_jd, h_sub⟩
@@ -675,7 +684,7 @@ theorem Prog.exec_of_runCompiledTo_routeTo {sevm : Sevm} {pre mid : Devm}
     (Prog.jumpable_of_get?_table h_eq' h_get).2
   have h1 : Evm.step ⟨0, sevm, pre⟩ = .cont 1 mid :=
     Evm.jumpdest_cont h_jd h_burn
-  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr⟩ :=
+  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget⟩ :=
     Func.exec_of_runCompiledTo_routeTo_core h_route h_eq' rfl 1 h_sub h_npb
       (fun site member => by
         simp only [Prog.sourceSites, List.mem_flatMap]
@@ -686,7 +695,7 @@ theorem Prog.exec_of_runCompiledTo_routeTo {sevm : Sevm} {pre mid : Devm}
       occurrence.stepResult,
       Exec.mem_rawNodes_cont h1 _ occurrence.reached,
       occurrence.decoded, occurrence.filled, occurrence.stepRun⟩,
-    site, hpath, hmem, hpc, hinstr⟩
+    site, hpath, hmem, hpc, hinstr, hinstrTarget⟩
 
 /-- The `.ok` embedding: a routed `Func.RunCompiled` walk, decorated through
 `Func.RunCompiledTo.of_runCompiled`, yields the same package with the outcome
@@ -711,7 +720,8 @@ theorem Func.exec_of_runCompiled_routeTo_core {f₀ : Func} {fs' : List Func}
             site.path = target ∧
             site ∈ Prog.sourceSites ⟨f₀, fs'⟩ ∧
             occurrence.node.pc = site.pc ∧
-            occurrence.instruction = site.instruction :=
+            occurrence.instruction = site.instruction ∧
+            site.instruction = instruction :=
   Func.exec_of_runCompiledTo_routeTo_core h_route h_eq hFS
 
 /-! ## Same-frame packaging
@@ -812,7 +822,8 @@ certificate for the derivation the bridge just built — the `ParentPrefix` and
 The certificate is an obligation *inside* the existential on purpose; see this
 section's note.  A consumer writes
 
-    obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, package⟩ := …
+    obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
+      package⟩ := …
     obtain ⟨descendants, frameRoots, sameFrame⟩ := package (by …)
 
 so that the `by …` runs with `exc` already in context. -/
@@ -830,6 +841,7 @@ theorem Prog.exec_of_runCompiledTo_routeTo_parentPrefix {sevm : Sevm}
           site ∈ p.sourceSites ∧
           occurrence.node.pc = site.pc ∧
           occurrence.instruction = site.instruction ∧
+          site.instruction = instruction ∧
           ((∀ node : Exec.Deriv,
               Exec.Deriv.ParentPrefix (⟨0, sevm, pre, ex, exc⟩ : Exec.Deriv)
                 node →
@@ -838,9 +850,9 @@ theorem Prog.exec_of_runCompiledTo_routeTo_parentPrefix {sevm : Sevm}
               Exec.rawFrameRoots exc = [⟨0, sevm, pre, ex, exc⟩] ∧
               Exec.Deriv.ParentPrefix (⟨0, sevm, pre, ex, exc⟩ : Exec.Deriv)
                 occurrence.node) := by
-  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr⟩ :=
+  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget⟩ :=
     Prog.exec_of_runCompiledTo_routeTo h_burn h_route h_eq
-  exact ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr,
+  exact ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
     occurrence.parentPrefix_of_no_sameFrame_xinstAt⟩
 
 end Blanc
