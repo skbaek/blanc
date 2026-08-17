@@ -1,0 +1,1552 @@
+import Blanc.LidoCircuitBreakerRegistrySubstrate
+
+/-!
+Found-zero unregistration chronology for the Lido CircuitBreaker.
+
+The target is already registered and the new pauser's count is zero, so
+`setPauser` removes the target and retains the old pauser, taking the
+seven-write found-zero chronology.
+-/
+
+namespace Blanc.LidoCircuitBreaker
+
+open Jaune
+open Jaune.Ninst Blanc.Ninst
+
+
+/-! ## Found-target zero-pauser registration with the old pauser retained -/
+
+/-- The found-target/zero-pauser model branch derives the exact removal
+chronology and its refined Registry witness.  The additional nonzero
+post-decrement premise selects the temporal branch which preserves the old
+pauser's heartbeat expiry. -/
+theorem foundZeroRetainedRegistration_sourceTrace_witness
+    {s : Stor} {entries : List Entry} {target oldPauser : B256}
+    {index : Nat}
+    (hw : RegistryWitness (logicalStorageOfStor s) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (_hremaining :
+      Nat.toB256 (assignmentCount entries oldPauser - 1) ≠ 0) :
+    ∃ trace : SetPauserSourceTrace,
+      setPauserSourceTrace entries target 0 = some trace ∧
+      trace.postEntries = swapPop entries index ∧
+      trace.writes =
+        [(assignmentSlot target, 0),
+         (countSlot oldPauser,
+           Nat.toB256 (assignmentCount entries oldPauser - 1)),
+         (arrayEntrySlot (Nat.toB256 (index + 1)),
+           sourceLastTarget entries),
+         (indexSlot (sourceLastTarget entries), Nat.toB256 (index + 1)),
+         (arrayEntrySlot (Nat.toB256 entries.length), 0),
+         (arrayLengthSlot, Nat.toB256 (entries.length - 1)),
+         (indexSlot target, 0)] ∧
+      RegistryWitness
+        (logicalStorageOfStor (applyRegistryWrites s trace.writes))
+        trace.postEntries := by
+  have hpost : setPauser entries target 0 =
+      some (swapPop entries index) := by
+    simp [setPauser, htarget.1, hfind]
+  have htrace : setPauserSourceTrace entries target 0 =
+      some {
+        postEntries := swapPop entries index
+        writes :=
+          [(assignmentSlot target, 0),
+           (countSlot oldPauser,
+             Nat.toB256 (assignmentCount entries oldPauser - 1)),
+           (arrayEntrySlot (Nat.toB256 (index + 1)),
+             sourceLastTarget entries),
+           (indexSlot (sourceLastTarget entries), Nat.toB256 (index + 1)),
+           (arrayEntrySlot (Nat.toB256 entries.length), 0),
+           (arrayLengthSlot, Nat.toB256 (entries.length - 1)),
+           (indexSlot target, 0)] } := by
+    simp [setPauserSourceTrace, hpost,
+      setPauserSourceWrites_found_zero entries target index oldPauser
+        htarget.1 hfind]
+  refine ⟨_, htrace, rfl, rfl, ?_⟩
+  exact hw.applyFoundZeroWrites htarget hfind
+
+private theorem previousCountKey_prepend_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {oldPauser : B256} {stack : List B256} {G : Nat}
+    {tail : Func} {post : Devm}
+    (hvalue : (M.read (previousPauserWord * 32).toNat 32).1.toB256 =
+      oldPauser)
+    (hmemory : (M.read (previousPauserWord * 32).toNat 32).2 = M)
+    (halign : M.size % 32 = 0)
+    (hcovered : (previousPauserWord * 32).toNat + 32 ≤ M.size)
+    (hroom : stack.length < 1022)
+    (htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨countSlot oldPauser :: stack, M, G⟩) tail post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨stack, M, G + 12⟩)
+      (previousCountKey +++ tail) post := by
+  func_run (4) [3, countSlot oldPauser]
+  all_goals try {
+    simpa [countSlot, slot] using
+      congrArg (fun x : B256 => (regionWord countRegion).or x) hvalue }
+  case h_cost =>
+    rw [Devm.extCost_zero_of_le halign hcovered]
+    norm_num [gVerylow]
+  case a => rw [hmemory]; exact htail
+  all_goals first | omega |
+    (simp only [Devm.stack_setMach, List.length_cons]; omega)
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 800000 in
+private theorem registerAfterSet_retainedOldZero_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes) (oldPauser remaining : B256)
+    (stack : List B256) (G : Nat)
+    (hstack : stack.length ≤ 1)
+    (hreads : Mem.Reads M img)
+    (hprevious : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) = oldPauser)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (holdNonzero : oldPauser ≠ 0)
+    (hremaining : remaining ≠ 0)
+    (hcount : base.getStorVal sevm.currentTarget
+      (countSlot oldPauser) = remaining)
+    (hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
+      base.accessedStorageKeys)
+    (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨stack, M, G + 173⟩)
+      registerAfterSet (base.setMach ⟨stack, M, G⟩) := by
+  have hpreviousCovered :
+      (previousPauserWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (previousPauserWord * 32).toNat + 32 ≤ 640 := by decide
+    omega
+  have hnewCovered :
+      (newPauserWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (newPauserWord * 32).toNat + 32 ≤ 640 := by decide
+    omega
+  have hpreviousMemory :
+      (M.read (previousPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hpreviousCovered)]
+  have hnewMemory :
+      (M.read (newPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
+  have hpreviousValue :
+      (M.read (previousPauserWord * 32).toNat 32).1.toB256 = oldPauser := by
+    rw [Mem.Reads.read hreads]
+    exact hprevious
+  have hnewValue :
+      (M.read (newPauserWord * 32).toNat 32).1.toB256 = 0 := by
+    rw [Mem.Reads.read hreads]
+    exact hnew
+  let oldBranch :=
+    previousCountKey +++ Ninst.sload ::: Ninst.iszero :::
+      ((pushB256 0 ::: loadWord previousPauserWord +++
+        tagTop expiryRegion +++ Ninst.sstore ::: pushB256 0 :::
+        mstoreAt 0 +++ loadWord previousPauserWord +++
+        pushB256 heartbeatUpdatedEvent ::: logWith 1 0 1 +++
+        loadWord newPauserWord +++ Ninst.iszero :::
+          (Func.stop <?> (checkedHeartbeatExpiry <|
+            dup 0 ::: mstoreAt 0 +++ loadWord newPauserWord +++
+            tagTop expiryRegion +++ Ninst.sstore :::
+            loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+            logWith 1 0 1 +++ Func.stop))) <?>
+       (loadWord newPauserWord +++ Ninst.iszero :::
+          (Func.stop <?> (checkedHeartbeatExpiry <|
+            dup 0 ::: mstoreAt 0 +++ loadWord newPauserWord +++
+            tagTop expiryRegion +++ Ninst.sstore :::
+            loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+            logWith 1 0 1 +++ Func.stop))))
+  have hcountTail : Func.RunCompiled fs sevm
+      (base.setMach ⟨countSlot oldPauser :: stack, M, G + 139⟩)
+      (Ninst.sload ::: Ninst.iszero :::
+        ((pushB256 0 ::: loadWord previousPauserWord +++
+          tagTop expiryRegion +++ Ninst.sstore ::: pushB256 0 :::
+          mstoreAt 0 +++ loadWord previousPauserWord +++
+          pushB256 heartbeatUpdatedEvent ::: logWith 1 0 1 +++
+          loadWord newPauserWord +++ Ninst.iszero :::
+            (Func.stop <?> (checkedHeartbeatExpiry <|
+              dup 0 ::: mstoreAt 0 +++ loadWord newPauserWord +++
+              tagTop expiryRegion +++ Ninst.sstore :::
+              loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+              logWith 1 0 1 +++ Func.stop))) <?>
+         (loadWord newPauserWord +++ Ninst.iszero :::
+            (Func.stop <?> (checkedHeartbeatExpiry <|
+              dup 0 ::: mstoreAt 0 +++ loadWord newPauserWord +++
+              tagTop expiryRegion +++ Ninst.sstore :::
+              loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+              logWith 1 0 1 +++ Func.stop)))))
+      (base.setMach ⟨stack, M, G⟩) := by
+    func_run (10) [0, 3, 1]
+    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+    all_goals try { simp [hnewValue, B256.eqCheck] }
+    all_goals try {
+      rw [Devm.extCost_zero_of_le halign hnewCovered]
+      norm_num [gVerylow] }
+    all_goals try simp_rw [hnewMemory]
+    case h_val =>
+      rw [Devm.getStorVal_setMach, hcount]
+      simp [B256.eqCheck, hremaining]
+    case h_arm => exact Func.RunCompiled.last rfl
+  have holdTail : Func.RunCompiled fs sevm
+      (base.setMach ⟨stack, M, G + 151⟩) oldBranch
+      (base.setMach ⟨stack, M, G⟩) := by
+    exact previousCountKey_prepend_runCompiled hpreviousValue
+      hpreviousMemory halign hpreviousCovered (by omega) hcountTail
+  unfold registerAfterSet
+  func_run (4) [3, 0]
+  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+  case h_cost =>
+    rw [Devm.extCost_zero_of_le halign hpreviousCovered]
+    norm_num [gVerylow]
+  case h_val => simp [hpreviousValue, B256.eqCheck, holdNonzero]
+  case h_arm =>
+    rw [hpreviousMemory]
+    have hg : G + 173 - 22 = G + 151 := by omega
+    rw [hg]
+    change Func.RunCompiled fs sevm
+      (base.setMach ⟨stack, M, G + 151⟩) oldBranch
+      (base.setMach ⟨stack, M, G⟩)
+    exact holdTail
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 800000 in
+private theorem finishSetPauser_retainedOldZero_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes)
+    (target oldPauser remaining : B256) (stack : List B256) (G : Nat)
+    (hstack : stack.length ≤ 1)
+    (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hprevious : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) = oldPauser)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (hcontinuation : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 0)
+    (holdNonzero : oldPauser ≠ 0)
+    (hremaining : remaining ≠ 0)
+    (hcount : base.getStorVal sevm.currentTarget
+      (countSlot oldPauser) = remaining)
+    (hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
+      base.accessedStorageKeys)
+    (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
+    (hstatic : sevm.isStatic = false) :
+    let eventLog : Log :=
+      ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨stack, M, G + 2108⟩) finishSetPauser
+      ((base.addLog eventLog).setMach ⟨stack, M, G⟩) := by
+  dsimp only
+  have hregister : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux)
+      sevm ((base.addLog ⟨sevm.currentTarget,
+        [pauserSetEvent, target, oldPauser, 0], []⟩).setMach
+        ⟨stack, M, G + 173⟩) registerAfterSet
+      ((base.addLog ⟨sevm.currentTarget,
+        [pauserSetEvent, target, oldPauser, 0], []⟩).setMach
+        ⟨stack, M, G⟩) := by
+    apply registerAfterSet_retainedOldZero_runCompiled _ sevm _
+      M img oldPauser remaining stack G hstack hreads hprevious hnew
+      holdNonzero hremaining
+    · exact hcount
+    · exact hwarmCount
+    · exact hsize
+    · exact halign
+  have h := finishSetPauser_registerAfterSet_runCompiled dp sevm base M img
+    target oldPauser 0 stack (G + 173)
+    ((base.addLog ⟨sevm.currentTarget,
+      [pauserSetEvent, target, oldPauser, 0], []⟩).setMach ⟨stack, M, G⟩)
+    hstack hreads htarget hprevious hnew hcontinuation hsize halign
+    hstatic hregister
+  have hg : G + 173 + 1935 = G + 2108 := by omega
+  rw [hg] at h
+  exact h
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 800000 in
+private theorem removeTarget_foundZeroRetained_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes)
+    (target oldLength next oldPauser remaining : B256)
+    (stack : List B256)
+    (hstack : stack.length ≤ 1)
+    (arrayOriginal indexOriginal lengthOriginal : B256)
+    (holeCost movedIndexCost tailClearCost lengthRestoreCost
+      indexClearCost G : Nat)
+    (hwf : Mem.Wf M) (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hprevious : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) = oldPauser)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (hcontinuation : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 0)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (holdValid : nonzeroCanonicalAddress oldPauser)
+    (hremaining : remaining ≠ 0)
+    (hnextNonzero : next ≠ 0)
+    (hnextBound : next.toNat < 2 ^ 252)
+    (entrySize indexExtCost lengthExtCost : Nat)
+    (hsize : M.size = entrySize) (halign : M.size % 32 = 0)
+    (hentryLow : 640 ≤ entrySize) (hentryHigh : entrySize ≤ 704)
+    (hindexExtCost : calculateMemoryGasCost
+        (memExtSize entrySize (removedIndexWord * 32).toNat 32) -
+      calculateMemoryGasCost entrySize = indexExtCost)
+    (hlengthExtCost : calculateMemoryGasCost
+        (memExtSize (max entrySize 672) (arrayLengthWord * 32).toNat 32) -
+      calculateMemoryGasCost (max entrySize 672) = lengthExtCost)
+    (harray : base.getStorVal sevm.currentTarget
+      (arrayEntrySlot next) = target)
+    (hindex : base.getStorVal sevm.currentTarget
+      (indexSlot target) = next)
+    (hlength : base.getStorVal sevm.currentTarget arrayLengthSlot = next)
+    (hcount : base.getStorVal sevm.currentTarget
+      (countSlot oldPauser) = remaining)
+    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot next) = arrayOriginal)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+      arrayLengthSlot = lengthOriginal)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal next next =
+      movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 = tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal next oldLength =
+      lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal next 0 = indexClearCost)
+    (hwarmArray : (sevm.currentTarget, arrayEntrySlot next) ∈
+      base.accessedStorageKeys)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      base.accessedStorageKeys)
+    (hwarmLength : (sevm.currentTarget, arrayLengthSlot) ∈
+      base.accessedStorageKeys)
+    (hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
+      base.accessedStorageKeys)
+    (hsub : next - 1 = oldLength)
+    (hgasFinal : gCallStipend < G + 2120 + indexClearCost)
+    (hstatic : sevm.isStatic = false) :
+    let MIndex := M.write (removedIndexWord * 32).toNat next.toBytes
+    let MLength := MIndex.write (arrayLengthWord * 32).toNat next.toBytes
+    let MLast := MLength.write (lastTargetWord * 32).toNat target.toBytes
+    let eventLog : Log :=
+      ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨stack, M,
+        G + 2551 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost⟩)
+      removeTarget
+      (((indexClearPost sevm
+          (entryClearPost sevm base target next)
+          target oldLength).addLog eventLog).setMach
+        ⟨stack, MLast, G⟩) := by
+  dsimp only
+  let arrayKey := arrayEntrySlot next
+  let indexKey := indexSlot target
+  let countKey := countSlot oldPauser
+  let MIndex := M.write (removedIndexWord * 32).toNat next.toBytes
+  let imgIndex := Bytes.writeAt img (removedIndexWord * 32).toNat
+    next.toBytes
+  let MLength := MIndex.write (arrayLengthWord * 32).toNat next.toBytes
+  let imgLength := Bytes.writeAt imgIndex (arrayLengthWord * 32).toNat
+    next.toBytes
+  let MLast := MLength.write (lastTargetWord * 32).toNat target.toBytes
+  let imgLast := Bytes.writeAt imgLength (lastTargetWord * 32).toNat
+    target.toBytes
+  let tailPost := entryClearPost sevm base target next
+  let removePost := indexClearPost sevm tailPost target oldLength
+  let eventLog : Log :=
+    ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
+  have hwfIndex : Mem.Wf MIndex := hwf.write _ _
+  have hreadsIndex : Mem.Reads MIndex imgIndex :=
+    Mem.Reads.write hwf hreads _ _
+  have hwfLength : Mem.Wf MLength := hwfIndex.write _ _
+  have hreadsLength : Mem.Reads MLength imgLength :=
+    Mem.Reads.write hwfIndex hreadsIndex _ _
+  have hreadsLast : Mem.Reads MLast imgLast :=
+    Mem.Reads.write hwfLength hreadsLength _ _
+  have hsizeIndex : MIndex.size = max entrySize 672 := by
+    dsimp only [MIndex]
+    rw [Mem.size_write_word_at,
+      show (removedIndexWord * 32).toNat + 32 = 672 by decide, hsize,
+      show ceil32 672 = 672 by decide]
+    split <;> omega
+  have hsizeLength : MLength.size = 704 := by
+    dsimp only [MLength]
+    rw [Mem.size_write_word_at,
+      show (arrayLengthWord * 32).toNat + 32 = 704 by decide,
+      hsizeIndex, show ceil32 704 = 704 by decide]
+    split <;> omega
+  have hsizeLast : MLast.size = 736 := by
+    dsimp only [MLast]
+    rw [Mem.size_write_word_at,
+      show (lastTargetWord * 32).toNat + 32 = 736 by decide,
+      hsizeLength]
+    split
+    · omega
+    · decide
+  have halignIndex : MIndex.size % 32 = 0 :=
+    Mem.aligned_write_word halign
+  have halignLength : MLength.size % 32 = 0 :=
+    Mem.aligned_write_word halignIndex
+  have halignLast : MLast.size % 32 = 0 :=
+    Mem.aligned_write_word halignLength
+  have earlierLast {word : B256}
+      (hindexBefore : (word * 32).toNat + 32 ≤
+        (removedIndexWord * 32).toNat)
+      (hlengthBefore : (word * 32).toNat + 32 ≤
+        (arrayLengthWord * 32).toNat)
+      (hlastBefore : (word * 32).toNat + 32 ≤
+        (lastTargetWord * 32).toNat) :
+      Bytes.toB256 (imgLast.sliceD (word * 32).toNat 32 0) =
+        Bytes.toB256 (img.sliceD (word * 32).toNat 32 0) := by
+    dsimp only [imgLast]
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hlastBefore]
+    dsimp only [imgLength]
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hlengthBefore]
+    dsimp only [imgIndex]
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hindexBefore]
+  have htargetLast : Bytes.toB256
+      (imgLast.sliceD (targetWord * 32).toNat 32 0) = target :=
+    (earlierLast (by decide) (by decide) (by decide)).trans htarget
+  have hpreviousLast : Bytes.toB256
+      (imgLast.sliceD (previousPauserWord * 32).toNat 32 0) = oldPauser :=
+    (earlierLast (by decide) (by decide) (by decide)).trans hprevious
+  have hnewLast : Bytes.toB256
+      (imgLast.sliceD (newPauserWord * 32).toNat 32 0) = 0 :=
+    (earlierLast (by decide) (by decide) (by decide)).trans hnew
+  have hcontinuationLast : Bytes.toB256
+      (imgLast.sliceD (continuationWord * 32).toNat 32 0) = 0 :=
+    (earlierLast (by decide) (by decide) (by decide)).trans hcontinuation
+  have harrayFamilies := registryAddressFamilies_ne_arrayEntrySlot
+    htargetValid.2 holdValid.2 hnextBound
+  have hpairs := registryAddressFamilies_pairwise
+    htargetValid.2 htargetValid.2 holdValid.2
+  have hlengthCount := registryAddressFamilies_ne_arrayLengthSlot
+    htargetValid.2 holdValid.2
+  have pairNe {left right : B256} (h : left ≠ right) :
+      (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
+    intro hp
+    exact h (congrArg Prod.snd hp)
+  have hcountRemove : removePost.getStorVal sevm.currentTarget countKey =
+      remaining := by
+    simp only [removePost, tailPost, indexClearPost,
+      lengthWritePost, entryClearPost,
+      indexWritePost, entryWritePost]
+    rw [temporalSstorePost_other _ _ (indexSlot target) 0 _ countKey
+        (pairNe (Ne.symm hpairs.2.2)),
+      temporalSstorePost_other _ _ arrayLengthSlot oldLength _ countKey
+        (pairNe hlengthCount.2.2),
+      temporalSstorePost_other _ _ arrayKey 0 _ countKey
+        (pairNe harrayFamilies.2.2),
+      temporalSstorePost_other _ _ indexKey next _ countKey
+        (pairNe hpairs.2.2.symm),
+      temporalSstorePost_other _ _ arrayKey target _ countKey
+        (pairNe harrayFamilies.2.2)]
+    exact hcount
+  have hwarmCountRemove : (sevm.currentTarget, countKey) ∈
+      removePost.accessedStorageKeys := by
+    simp only [removePost, tailPost, indexClearPost,
+      lengthWritePost, entryClearPost,
+      indexWritePost, entryWritePost,
+      temporalSstorePost_accessedStorageKeys]
+    exact hwarmCount
+  have hfinish := finishSetPauser_retainedOldZero_runCompiled dp sevm
+    removePost MLast imgLast target oldPauser remaining stack G hstack hreadsLast
+    htargetLast hpreviousLast hnewLast hcontinuationLast holdValid.1
+    hremaining (by simpa only [countKey] using hcountRemove)
+    (by simpa only [countKey] using hwarmCountRemove)
+    (by rw [hsizeLast]; decide) halignLast hstatic
+  have hrun := removeTarget_runCompiled dp sevm base M img
+    target oldLength next oldPauser stack hstack arrayOriginal indexOriginal
+    lengthOriginal holeCost movedIndexCost tailClearCost lengthRestoreCost
+    indexClearCost 2108 G hwf hreads htarget htargetValid hnextNonzero
+    hnextBound entrySize indexExtCost lengthExtCost hsize halign hentryLow
+    hentryHigh hindexExtCost hlengthExtCost
+    harray hindex hlength harrayOrig hindexOrig
+    hlengthOrig hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
+    hindexClearCost hwarmArray hwarmIndex hwarmLength hsub hgasFinal hstatic
+    (by simpa only [MIndex, MLength, MLast, tailPost, removePost, eventLog]
+      using hfinish)
+  have hg : G + 2108 + 443 + indexExtCost + lengthExtCost + holeCost +
+      movedIndexCost + tailClearCost +
+      lengthRestoreCost + indexClearCost =
+      G + 2551 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+        tailClearCost + lengthRestoreCost + indexClearCost := by omega
+  rw [hg] at hrun
+  simpa only [MIndex, MLength, MLast, eventLog] using hrun
+
+private theorem afterOldPauser_foundZeroRetained_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes)
+    (target oldLength next oldPauser remaining : B256)
+    (stack : List B256)
+    (hstack : stack.length ≤ 1)
+    (arrayOriginal indexOriginal lengthOriginal : B256)
+    (holeCost movedIndexCost tailClearCost lengthRestoreCost
+      indexClearCost G : Nat)
+    (hwf : Mem.Wf M) (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hprevious : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) = oldPauser)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (hcontinuation : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 0)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (holdValid : nonzeroCanonicalAddress oldPauser)
+    (hremaining : remaining ≠ 0)
+    (hnextNonzero : next ≠ 0)
+    (hnextBound : next.toNat < 2 ^ 252)
+    (entrySize indexExtCost lengthExtCost : Nat)
+    (hsize : M.size = entrySize) (halign : M.size % 32 = 0)
+    (hentryLow : 640 ≤ entrySize) (hentryHigh : entrySize ≤ 704)
+    (hindexExtCost : calculateMemoryGasCost
+        (memExtSize entrySize (removedIndexWord * 32).toNat 32) -
+      calculateMemoryGasCost entrySize = indexExtCost)
+    (hlengthExtCost : calculateMemoryGasCost
+        (memExtSize (max entrySize 672) (arrayLengthWord * 32).toNat 32) -
+      calculateMemoryGasCost (max entrySize 672) = lengthExtCost)
+    (harray : base.getStorVal sevm.currentTarget
+      (arrayEntrySlot next) = target)
+    (hindex : base.getStorVal sevm.currentTarget
+      (indexSlot target) = next)
+    (hlength : base.getStorVal sevm.currentTarget arrayLengthSlot = next)
+    (hcount : base.getStorVal sevm.currentTarget
+      (countSlot oldPauser) = remaining)
+    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot next) = arrayOriginal)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+      arrayLengthSlot = lengthOriginal)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal next next =
+      movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 = tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal next oldLength =
+      lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal next 0 = indexClearCost)
+    (hwarmArray : (sevm.currentTarget, arrayEntrySlot next) ∈
+      base.accessedStorageKeys)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      base.accessedStorageKeys)
+    (hwarmLength : (sevm.currentTarget, arrayLengthSlot) ∈
+      base.accessedStorageKeys)
+    (hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
+      base.accessedStorageKeys)
+    (hsub : next - 1 = oldLength)
+    (hgasFinal : gCallStipend < G + 2120 + indexClearCost)
+    (hstatic : sevm.isStatic = false) :
+    let MIndex := M.write (removedIndexWord * 32).toNat next.toBytes
+    let MLength := MIndex.write (arrayLengthWord * 32).toNat next.toBytes
+    let MLast := MLength.write (lastTargetWord * 32).toNat target.toBytes
+    let eventLog : Log :=
+      ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨stack, M,
+        G + 2586 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+          tailClearCost + lengthRestoreCost + indexClearCost⟩)
+      afterOldPauser
+      (((indexClearPost sevm
+          (entryClearPost sevm base target next)
+          target oldLength).addLog eventLog).setMach
+        ⟨stack, MLast, G⟩) := by
+  dsimp only
+  let fs := (runtime dp).main :: (runtime dp).aux
+  let MIndex := M.write (removedIndexWord * 32).toNat next.toBytes
+  let MLength := MIndex.write (arrayLengthWord * 32).toNat next.toBytes
+  let MLast := MLength.write (lastTargetWord * 32).toNat target.toBytes
+  let eventLog : Log :=
+    ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
+  have hremove := removeTarget_foundZeroRetained_runCompiled dp sevm base M
+    img target oldLength next oldPauser remaining stack hstack arrayOriginal
+    indexOriginal lengthOriginal holeCost movedIndexCost tailClearCost
+    lengthRestoreCost indexClearCost G hwf hreads htarget hprevious hnew
+    hcontinuation htargetValid holdValid hremaining hnextNonzero hnextBound
+    entrySize indexExtCost lengthExtCost hsize halign hentryLow hentryHigh
+    hindexExtCost hlengthExtCost
+    harray hindex hlength hcount harrayOrig hindexOrig
+    hlengthOrig hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
+    hindexClearCost hwarmArray hwarmIndex hwarmLength hwarmCount hsub
+    hgasFinal hstatic
+  have h := afterOldPauser_removeTarget_runCompiled dp sevm base M img
+    stack
+    (G + 2551 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+      tailClearCost + lengthRestoreCost + indexClearCost)
+    (((indexClearPost sevm
+        (entryClearPost sevm base target next)
+        target oldLength).addLog eventLog).setMach ⟨stack, MLast, G⟩)
+    hstack hreads hnew (by omega) halign
+    (by simpa only [fs, MIndex, MLength, MLast, eventLog] using hremove)
+  have hg : G + 2551 + indexExtCost + lengthExtCost + holeCost +
+        movedIndexCost + tailClearCost + lengthRestoreCost +
+        indexClearCost + 35 =
+      G + 2586 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
+        tailClearCost + lengthRestoreCost + indexClearCost := by omega
+  rw [hg] at h
+  exact h
+
+/-- Exact kernel prefix reserve for the found-target arm: the outer nonzero
+guard, the assignment replacement, and the old-count decrement, measured above
+whatever the `afterOldPauser` continuation itself consumes. -/
+private def foundSetPauserKernelPrefixGas (sevm : Sevm) (base : Devm)
+    (target newPauser oldPauser : B256)
+    (assignmentCost countCost : Nat) : Nat :=
+  122 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost +
+    temporalSloadCost sevm (assignmentPost sevm base target newPauser)
+      (countSlot oldPauser) + countCost
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- Generated-kernel walk for a target whose recorded pauser is nonzero: the
+assignment is overwritten with `newPauser`, the old pauser is saved to memory,
+and its assignment count is decremented before control reaches
+`afterOldPauser`.  Generic in `newPauser`, so it serves both unregistration
+(`newPauser = 0`) and replacement. -/
+private theorem setPauserKernel_found_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes) (out : Devm)
+    (target newPauser oldPauser oldCount : B256)
+    (assignmentOriginal countOriginal : B256)
+    (assignmentCost countCost afterGas G : Nat)
+    (hwf : Mem.Wf M) (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (holdValid : nonzeroCanonicalAddress oldPauser)
+    (hsize : M.size = 640)
+    (hassignment : base.getStorVal sevm.currentTarget
+      (assignmentSlot target) = oldPauser)
+    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+      (assignmentSlot target) = assignmentOriginal)
+    (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
+      newPauser = assignmentCost)
+    (hcount : (assignmentPost sevm base target newPauser).getStorVal
+      sevm.currentTarget (countSlot oldPauser) = oldCount)
+    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+      (countSlot oldPauser) = countOriginal)
+    (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
+      countCost)
+    (hgasFinal : gCallStipend < G + afterGas + 12 + countCost)
+    (hstatic : sevm.isStatic = false)
+    (hafter :
+      let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
+      let countBase := temporalSloadBase sevm
+        (assignmentPost sevm base target newPauser)
+        (countSlot oldPauser)
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        ((temporalSstorePost sevm countBase (countSlot oldPauser)
+          (oldCount - 1)).setMach ⟨[], M', G + afterGas⟩)
+        afterOldPauser out) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], M,
+        G + afterGas + foundSetPauserKernelPrefixGas sevm base target
+          newPauser oldPauser assignmentCost countCost⟩)
+      setPauserKernel out := by
+  dsimp only at hafter
+  let fs := (runtime dp).main :: (runtime dp).aux
+  let assignBase := assignmentBase sevm base target
+  let assignPost := assignmentPost sevm base target newPauser
+  let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
+  let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
+    (oldCount - 1)
+  let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
+  let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
+    oldPauser.toBytes
+  let elseGas := G + afterGas + 45 + countCost +
+    temporalSloadCost sevm assignPost (countSlot oldPauser)
+  have halign : M.size % 32 = 0 := by rw [hsize]
+  have hwf' : Mem.Wf M' := hwf.write _ _
+  have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
+  have hsizeM' : M'.size = M.size := by
+    exact Mem.size_write_of_le (by
+      simpa only [B256.length_toBytes] using (show
+        (previousPauserWord * 32).toNat + 32 ≤ M.size by
+          rw [hsize]
+          decide))
+  have hsize' : M'.size = 640 := by rw [hsizeM', hsize]
+  have halign' : M'.size % 32 = 0 := by rw [hsize']
+  have htarget' : Bytes.toB256
+      (img'.sliceD (targetWord * 32).toNat 32 0) = target := by
+    dsimp only [img']
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    exact htarget
+  have hnew' : Bytes.toB256
+      (img'.sliceD (newPauserWord * 32).toNat 32 0) = newPauser := by
+    dsimp only [img']
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    exact hnew
+  have hprevious' : Bytes.toB256
+      (img'.sliceD (previousPauserWord * 32).toNat 32 0) = oldPauser := by
+    dsimp only [img']
+    rw [show 32 = oldPauser.toBytes.length by rw [B256.length_toBytes],
+      Bytes.sliceD_writeAt, B256.toB256_toBytes]
+  have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size := by
+    rw [hsize]
+    decide
+  have htargetCovered' : (targetWord * 32).toNat + 32 ≤ M'.size := by
+    rw [hsize']
+    decide
+  have hnewCovered' : (newPauserWord * 32).toNat + 32 ≤ M'.size := by
+    rw [hsize']
+    decide
+  have hpreviousCovered' :
+      (previousPauserWord * 32).toNat + 32 ≤ M'.size := by
+    rw [hsize']
+    decide
+  have htargetMemory : (M.read (targetWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign htargetCovered)]
+  have htargetMemory' : (M'.read (targetWord * 32).toNat 32).2 = M' := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign' htargetCovered')]
+  have hnewMemory' : (M'.read (newPauserWord * 32).toNat 32).2 = M' := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign' hnewCovered')]
+  have hpreviousMemory' :
+      (M'.read (previousPauserWord * 32).toNat 32).2 = M' := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign' hpreviousCovered')]
+  have htargetValue : (M.read (targetWord * 32).toNat 32).1.toB256 =
+      target := by rw [Mem.Reads.read hreads]; exact htarget
+  have htargetValue' : (M'.read (targetWord * 32).toNat 32).1.toB256 =
+      target := by rw [Mem.Reads.read hreads']; exact htarget'
+  have hnewValue' : (M'.read (newPauserWord * 32).toNat 32).1.toB256 =
+      newPauser := by rw [Mem.Reads.read hreads']; exact hnew'
+  have hpreviousValue' :
+      (M'.read (previousPauserWord * 32).toNat 32).1.toB256 = oldPauser := by
+    rw [Mem.Reads.read hreads']; exact hprevious'
+  have hafterLookup : fs[afterOldPauserSlot]? = some afterOldPauser := by
+    simp [fs, runtime, aux, afterOldPauserSlot]
+  have hafterCall : Func.RunCompiled fs sevm
+      (countPost.setMach ⟨[], M', G + afterGas + 12⟩)
+      (.call afterOldPauserSlot) out := by
+    apply Func.RunCompiled.call hafterLookup (by
+      simp only [Devm.stack_setMach, List.length_nil]
+      decide)
+    · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+        (Devm.burnBy_setMach_gas
+          (devm := countPost.setMach ⟨[], M', G + afterGas + 12⟩)
+          (cost := gVerylow + gMid + gJumpdest) (G := G + afterGas)
+          (by simp only [Devm.gasLeft_setMach]
+              norm_num [gVerylow, gMid, gJumpdest]))
+    · exact hafter
+  have hcountBase : countBase.getStorVal sevm.currentTarget
+      (countSlot oldPauser) = oldCount := by
+    simpa only [countBase, temporalSloadBase_getStorVal] using hcount
+  have hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
+      countBase.accessedStorageKeys :=
+    temporalSloadBase_warm sevm assignPost (countSlot oldPauser)
+  have hstoreCount : Func.RunCompiled fs sevm
+      (countBase.setMach ⟨[countSlot oldPauser, oldCount - 1], M',
+        G + afterGas + 12 + countCost⟩)
+      (Ninst.sstore ::: .call afterOldPauserSlot) out :=
+    Func.RunCompiled.next
+      (temporal_sstore_runCompiled hcountBase hcountOrig hcountCost hwarmCount
+        hgasFinal hstatic) hafterCall
+  have hcountKeyStore : Func.RunCompiled fs sevm
+      (countBase.setMach ⟨[oldCount - 1], M',
+        G + afterGas + 24 + countCost⟩)
+      (previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)
+      out := by
+    have hrun := previousCountKey_prepend_runCompiled hpreviousValue'
+      hpreviousMemory' halign' hpreviousCovered' (by simp) hstoreCount
+    have hg : G + afterGas + 12 + countCost + 12 =
+        G + afterGas + 24 + countCost := by omega
+    rw [hg] at hrun
+    exact hrun
+  have harith : Func.RunCompiled fs sevm
+      (countBase.setMach ⟨[oldCount], M', G + afterGas + 33 + countCost⟩)
+      (pushB256 1 ::: swap 0 ::: sub ::: previousCountKey +++ Ninst.sstore :::
+        .call afterOldPauserSlot) out := by
+    func_run (3)
+    case a =>
+      have hg : G + afterGas + 33 + countCost - 9 =
+          G + afterGas + 24 + countCost := by omega
+      rw [hg]
+      exact hcountKeyStore
+  have hcountSload : Func.RunCompiled fs sevm
+      (assignPost.setMach ⟨[countSlot oldPauser], M',
+        G + afterGas + 33 + countCost +
+          temporalSloadCost sevm assignPost (countSlot oldPauser)⟩)
+      (Ninst.sload ::: pushB256 1 ::: swap 0 ::: sub :::
+        previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)
+      out :=
+    Func.RunCompiled.next (temporal_sload_runCompiled hcount (by decide))
+      harith
+  have helse : Func.RunCompiled fs sevm
+      (assignPost.setMach ⟨[], M', elseGas⟩)
+      (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 ::: sub :::
+        previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)
+      out := by
+    have hrun := previousCountKey_prepend_runCompiled hpreviousValue'
+      hpreviousMemory' halign' hpreviousCovered' (by simp) hcountSload
+    have hg : G + afterGas + 33 + countCost +
+          temporalSloadCost sevm assignPost (countSlot oldPauser) + 12 =
+        elseGas := by
+      dsimp only [elseGas]
+      omega
+    rw [hg] at hrun
+    exact hrun
+  have hbranch : Func.RunCompiled fs sevm
+      (assignPost.setMach ⟨[0], M', elseGas + 13⟩)
+      ((.call appendTargetSlot) <?>
+        (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 ::: sub :::
+          previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot))
+      out := by
+    apply Func.RunCompiled.zero (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      omega)
+    · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+        (Devm.popBurnBy_setMach
+          (devm := assignPost.setMach ⟨[0], M', elseGas + 13⟩)
+          (x := (0 : B256)) (s := []) (cost := gVerylow + gHigh)
+          (G := elseGas)
+          (h_stk := rfl) (h := by
+            simp only [Devm.gasLeft_setMach]
+            norm_num [gVerylow, gHigh]))
+    · exact helse
+  have hiszero : Func.RunCompiled fs sevm
+      (assignPost.setMach ⟨[oldPauser], M', elseGas + 16⟩)
+      (Ninst.iszero ::: ((.call appendTargetSlot) <?>
+        (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 ::: sub :::
+          previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)))
+      out := by
+    func_run (1) [0]
+    case h_val =>
+      change (if oldPauser = 0 then (1 : B256) else 0) = 0
+      rw [if_neg holdValid.1]
+    case a =>
+      have hg : elseGas + 16 - 3 = elseGas + 13 := by omega
+      rw [hg]
+      exact hbranch
+  have hassignmentBase : assignBase.getStorVal sevm.currentTarget
+      (assignmentSlot target) = oldPauser := by
+    simpa only [assignBase, assignmentBase,
+      temporalSloadBase_getStorVal] using hassignment
+  have hwarmAssignment : (sevm.currentTarget, assignmentSlot target) ∈
+      assignBase.accessedStorageKeys :=
+    temporalSloadBase_warm sevm base (assignmentSlot target)
+  have hstore : Func.RunCompiled fs sevm
+      (assignBase.setMach
+        ⟨[assignmentSlot target, newPauser, oldPauser], M',
+          elseGas + 16 + assignmentCost⟩)
+      (Ninst.sstore ::: Ninst.iszero :::
+        ((.call appendTargetSlot) <?>
+          (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+            sub ::: previousCountKey +++ Ninst.sstore :::
+            .call afterOldPauserSlot)))
+      out := by
+    exact Func.RunCompiled.next
+      (temporal_sstore_runCompiled hassignmentBase hassignmentOrig
+        hassignmentCost hwarmAssignment (by
+          dsimp only [elseGas]
+          omega) hstatic)
+      hiszero
+  have htargetKeySecond : Func.RunCompiled fs sevm
+      (assignBase.setMach ⟨[newPauser, oldPauser], M',
+        elseGas + 28 + assignmentCost⟩)
+      (targetKey +++ Ninst.sstore ::: Ninst.iszero :::
+        ((.call appendTargetSlot) <?>
+          (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+            sub ::: previousCountKey +++ Ninst.sstore :::
+            .call afterOldPauserSlot)))
+      out := by
+    have hrun := targetKey_prepend_runCompiled htargetValue' htargetMemory'
+      halign' htargetCovered' (by simp) hstore
+    have hg : elseGas + 16 + assignmentCost + 12 =
+        elseGas + 28 + assignmentCost := by omega
+    rw [hg] at hrun
+    exact hrun
+  have hnewTail : Func.RunCompiled fs sevm
+      (assignBase.setMach ⟨[oldPauser], M',
+        elseGas + 34 + assignmentCost⟩)
+      (loadWord newPauserWord +++ targetKey +++ Ninst.sstore :::
+        Ninst.iszero ::: ((.call appendTargetSlot) <?>
+          (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+            sub ::: previousCountKey +++ Ninst.sstore :::
+            .call afterOldPauserSlot)))
+      out := by
+    have hrun := newPauserWord_prepend_runCompiled hnewValue' hnewMemory'
+      halign' hnewCovered' (by simp) htargetKeySecond
+    have hg : elseGas + 28 + assignmentCost + 6 =
+        elseGas + 34 + assignmentCost := by omega
+    rw [hg] at hrun
+    exact hrun
+  have hsavePrevious : Func.RunCompiled fs sevm
+      (assignBase.setMach ⟨[oldPauser, oldPauser], M,
+        elseGas + 40 + assignmentCost⟩)
+      (mstoreAt previousPauserWord +++ loadWord newPauserWord +++
+        targetKey +++ Ninst.sstore ::: Ninst.iszero :::
+        ((.call appendTargetSlot) <?>
+          (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+            sub ::: previousCountKey +++ Ninst.sstore :::
+            .call afterOldPauserSlot)))
+      out := by
+    func_run (2) [0]
+    case h_ext =>
+      rw [Devm.extCost_zero_of_le halign (by rw [hsize]; decide)]
+    case a =>
+      have hg : elseGas + 40 + assignmentCost - 6 =
+          elseGas + 34 + assignmentCost := by omega
+      rw [hg]
+      change Func.RunCompiled fs sevm
+        (assignBase.setMach ⟨[oldPauser], M',
+          elseGas + 34 + assignmentCost⟩) _ out
+      exact hnewTail
+  have hdup : Func.RunCompiled fs sevm
+      (assignBase.setMach ⟨[oldPauser], M,
+        elseGas + 43 + assignmentCost⟩)
+      (dup 0 ::: mstoreAt previousPauserWord +++ loadWord newPauserWord +++
+        targetKey +++ Ninst.sstore ::: Ninst.iszero :::
+        ((.call appendTargetSlot) <?>
+          (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+            sub ::: previousCountKey +++ Ninst.sstore :::
+            .call afterOldPauserSlot)))
+      out := by
+    func_run (1)
+    case a =>
+      have hg : elseGas + 43 + assignmentCost - 3 =
+          elseGas + 40 + assignmentCost := by omega
+      rw [hg]
+      exact hsavePrevious
+  have hsload : Func.RunCompiled fs sevm
+      (base.setMach ⟨[assignmentSlot target], M,
+        elseGas + 43 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target)⟩)
+      (Ninst.sload ::: dup 0 ::: mstoreAt previousPauserWord +++
+        loadWord newPauserWord +++ targetKey +++ Ninst.sstore :::
+        Ninst.iszero ::: ((.call appendTargetSlot) <?>
+          (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+            sub ::: previousCountKey +++ Ninst.sstore :::
+            .call afterOldPauserSlot)))
+      out :=
+    Func.RunCompiled.next (temporal_sload_runCompiled hassignment (by decide))
+      hdup
+  have htargetKeyFirst : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M,
+        elseGas + 55 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target)⟩)
+      (targetKey +++ Ninst.sload ::: dup 0 :::
+        mstoreAt previousPauserWord +++ loadWord newPauserWord +++
+        targetKey +++ Ninst.sstore ::: Ninst.iszero :::
+        ((.call appendTargetSlot) <?>
+          (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+            sub ::: previousCountKey +++ Ninst.sstore :::
+            .call afterOldPauserSlot)))
+      out := by
+    have hrun := targetKey_prepend_runCompiled htargetValue htargetMemory
+      halign htargetCovered (by simp) hsload
+    have hg : elseGas + 43 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target) + 12 =
+        elseGas + 55 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target) := by omega
+    rw [hg] at hrun
+    exact hrun
+  have hguardBranch : Func.RunCompiled fs sevm
+      (base.setMach ⟨[0], M,
+        elseGas + 68 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target)⟩)
+      ((.call pausableZeroErrorSlot) <?>
+        (targetKey +++ Ninst.sload ::: dup 0 :::
+          mstoreAt previousPauserWord +++ loadWord newPauserWord +++
+          targetKey +++ Ninst.sstore ::: Ninst.iszero :::
+          ((.call appendTargetSlot) <?>
+            (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+              sub ::: previousCountKey +++ Ninst.sstore :::
+              .call afterOldPauserSlot))))
+      out := by
+    apply Func.RunCompiled.zero (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      omega)
+    · have hg : elseGas + 68 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target) =
+          elseGas + 55 + assignmentCost +
+            temporalSloadCost sevm base (assignmentSlot target) + 13 := by
+        omega
+      rw [hg]
+      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+          Devm.memory_setMach] using (Devm.popBurnBy_setMach
+          (devm := base.setMach ⟨[0], M,
+            elseGas + 55 + assignmentCost +
+              temporalSloadCost sevm base (assignmentSlot target) + 13⟩)
+          (x := (0 : B256)) (s := []) (cost := gVerylow + gHigh)
+          (G := elseGas + 55 + assignmentCost +
+            temporalSloadCost sevm base (assignmentSlot target))
+          (h_stk := rfl) (h := by
+            simp only [Devm.gasLeft_setMach]
+            norm_num [gVerylow, gHigh]))
+    · exact htargetKeyFirst
+  have hguard : Func.RunCompiled fs sevm
+      (base.setMach ⟨[target], M,
+        elseGas + 71 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target)⟩)
+      (Ninst.iszero ::: ((.call pausableZeroErrorSlot) <?>
+        (targetKey +++ Ninst.sload ::: dup 0 :::
+          mstoreAt previousPauserWord +++ loadWord newPauserWord +++
+          targetKey +++ Ninst.sstore ::: Ninst.iszero :::
+          ((.call appendTargetSlot) <?>
+            (previousCountKey +++ Ninst.sload ::: pushB256 1 ::: swap 0 :::
+              sub ::: previousCountKey +++ Ninst.sstore :::
+              .call afterOldPauserSlot)))))
+      out := by
+    func_run (1) [0]
+    case h_val =>
+      change (if target = 0 then (1 : B256) else 0) = 0
+      rw [if_neg htargetValid.1]
+    case a =>
+      have hg : elseGas + 71 + assignmentCost +
+            temporalSloadCost sevm base (assignmentSlot target) - 3 =
+          elseGas + 68 + assignmentCost +
+            temporalSloadCost sevm base (assignmentSlot target) := by omega
+      rw [hg]
+      exact hguardBranch
+  have hkernel : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M,
+        elseGas + 77 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target)⟩)
+      setPauserKernel out := by
+    have hrun := targetWord_prepend_runCompiled htargetValue htargetMemory
+      halign htargetCovered (by simp) hguard
+    have hg : elseGas + 71 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target) + 6 =
+        elseGas + 77 + assignmentCost +
+          temporalSloadCost sevm base (assignmentSlot target) := by omega
+    rw [hg] at hrun
+    simpa only [setPauserKernel] using hrun
+  have hg : G + afterGas + foundSetPauserKernelPrefixGas sevm base target
+        newPauser oldPauser assignmentCost countCost =
+      elseGas + 77 + assignmentCost +
+        temporalSloadCost sevm base (assignmentSlot target) := by
+    dsimp only [foundSetPauserKernelPrefixGas, elseGas, assignPost]
+    omega
+  rw [hg]
+  simpa only [fs] using hkernel
+
+/-- Exact reserve for the found-target/zero-pauser kernel restricted to
+removing the array's last entry while the old pauser is retained.  It includes
+the actual assignment and count SLOAD costs, the seven exact SSTORE
+value-cost partitions, and the fixed removal-walk memory growth at a 640-byte
+entry size. -/
+private def foundZeroRetainedLastSetPauserKernelGas (sevm : Sevm) (base : Devm)
+    (target oldPauser : B256)
+    (assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost : Nat) : Nat :=
+  2714 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost +
+    temporalSloadCost sevm (assignmentPost sevm base target 0)
+      (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
+    tailClearCost + lengthRestoreCost + indexClearCost
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- Exact generated-kernel success for unregistering a recorded target, under
+the two restrictions the removal machinery currently supports.  First, the
+removed target is **already the last array element** (`index + 1 =
+entries.length`), so the swap step rewrites the hole with the target itself.
+Second, the old pauser is **retained**: its decremented assignment count stays
+nonzero, so `registerAfterSet` takes the else arm and, seeing a zero new
+pauser, stops without touching any expiry slot.  The seven-write removal
+chronology derives the `swapPop` Registry trace and witness, the lone
+`PauserSet` log, and preservation of every canonical expiry slot. -/
+theorem setPauserKernel_foundZeroRetainedLast_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes) (entries : List Entry) (target : B256)
+    (index : Nat) (oldPauser oldCount : B256)
+    (assignmentOriginal countOriginal arrayOriginal indexOriginal
+      lengthOriginal : B256)
+    (assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost G : Nat)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hlast : index + 1 = entries.length)
+    (hwf : Mem.Wf M) (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (hcontinuation : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 0)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (holdValid : nonzeroCanonicalAddress oldPauser)
+    (hsize : M.size = 640)
+    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+      (assignmentSlot target) = assignmentOriginal)
+    (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
+      assignmentCost)
+    (hcount : (assignmentPost sevm base target 0).getStorVal
+      sevm.currentTarget (countSlot oldPauser) = oldCount)
+    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+      (countSlot oldPauser) = countOriginal)
+    (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
+      countCost)
+    (hremaining : oldCount - 1 ≠ 0)
+    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+      lengthOriginal)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 entries.length) =
+        movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 = tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 entries.length - 1) =
+        lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal
+      (Nat.toB256 entries.length) 0 = indexClearCost)
+    (hwarmArray : (sevm.currentTarget,
+      arrayEntrySlot (Nat.toB256 entries.length)) ∈ base.accessedStorageKeys)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      base.accessedStorageKeys)
+    (hwarmLength : (sevm.currentTarget, arrayLengthSlot) ∈
+      base.accessedStorageKeys)
+    (hgasFinal : gCallStipend < G + 2120 + indexClearCost)
+    (hstatic : sevm.isStatic = false) :
+    ∃ trace post,
+      setPauserSourceTrace entries target 0 = some trace ∧
+      trace.postEntries = swapPop entries index ∧
+      RegistryWitness
+        (logicalStorageOfStor (applyRegistryWrites
+          (Devm.getStor base sevm.currentTarget) trace.writes))
+        trace.postEntries ∧
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        (base.setMach ⟨[], M,
+          G + foundZeroRetainedLastSetPauserKernelGas sevm base target
+            oldPauser assignmentCost countCost holeCost movedIndexCost
+            tailClearCost lengthRestoreCost indexClearCost⟩)
+        setPauserKernel post ∧
+      post.gasLeft = G ∧
+      post.logs = base.logs ++
+        [⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩] ∧
+      ∀ pauser, canonicalAddress pauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser) := by
+  have hzeroCanonical : canonicalAddress (0 : B256) := by
+    unfold canonicalAddress
+    change (0 : Nat) < 2 ^ 160
+    norm_num
+  have pairNe {left right : B256} (h : left ≠ right) :
+      (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
+    intro hp
+    exact h (congrArg Prod.snd hp)
+  have hindexLt : index < entries.length := findEntry_index_lt hfind
+  let next : B256 := Nat.toB256 entries.length
+  let oldLength : B256 := next - 1
+  let assignPost := assignmentPost sevm base target 0
+  let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
+  let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
+    (oldCount - 1)
+  let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
+  let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
+    oldPauser.toBytes
+  have hlength256 := hw.entries_length_lt_2pow256
+  have hnextBound : next.toNat < 2 ^ 252 := by
+    dsimp only [next]
+    rw [B256.toNat_toB256_of_lt hlength256]
+    exact hw.entries_length_lt_2pow252
+  have hnextNonzero : next ≠ 0 := by
+    intro hz
+    have h := congrArg B256.toNat hz
+    rw [show next = Nat.toB256 entries.length from rfl,
+      B256.toNat_toB256_of_lt hlength256] at h
+    simp only [B256.toNat_zero] at h
+    omega
+  have hstorAssignment : base.getStorVal sevm.currentTarget
+      (assignmentSlot target) = oldPauser := by
+    change (Devm.getStor base sevm.currentTarget).get (assignmentSlot target) =
+      oldPauser
+    simpa [logicalStorageOfStor, findEntry_assignmentAt hfind] using
+      hw.assignments target htargetValid.2
+  have hstorArray : base.getStorVal sevm.currentTarget
+      (arrayEntrySlot next) = target := by
+    have h := hw.arrayWords index hindexLt
+    rw [findEntry_targetAt hfind, hlast] at h
+    change (Devm.getStor base sevm.currentTarget).get
+      (arrayEntrySlot next) = target
+    simpa [logicalStorageOfStor, next] using h
+  have hstorIndex : base.getStorVal sevm.currentTarget (indexSlot target) =
+      next := by
+    have h := hw.indices target htargetValid.2
+    rw [findEntry_oneBasedIndexAt hfind, hlast] at h
+    change (Devm.getStor base sevm.currentTarget).get (indexSlot target) = next
+    simpa [logicalStorageOfStor, next] using h
+  have hstorLength : base.getStorVal sevm.currentTarget arrayLengthSlot =
+      next := by
+    change (Devm.getStor base sevm.currentTarget).get arrayLengthSlot = next
+    simpa [logicalStorageOfStor, next] using hw.lengthWord
+  have hpairwise := registryAddressFamilies_pairwise htargetValid.2
+    htargetValid.2 holdValid.2
+  have hentryNe := registryAddressFamilies_ne_arrayEntrySlot
+    htargetValid.2 holdValid.2 hnextBound
+  have hlengthNe := registryAddressFamilies_ne_arrayLengthSlot
+    htargetValid.2 holdValid.2
+  have htransport : ∀ k : B256, k ≠ countSlot oldPauser →
+      k ≠ assignmentSlot target →
+      countPost.getStorVal sevm.currentTarget k =
+        base.getStorVal sevm.currentTarget k := by
+    intro k hcountNe hassignNe
+    dsimp only [countPost, countBase, assignPost, assignmentPost,
+      assignmentBase]
+    rw [temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _ k
+        (pairNe hcountNe),
+      temporalSloadBase_getStorVal,
+      temporalSstorePost_other _ _ (assignmentSlot target) 0 _ k
+        (pairNe hassignNe),
+      temporalSloadBase_getStorVal]
+  have harray : countPost.getStorVal sevm.currentTarget
+      (arrayEntrySlot next) = target := by
+    rw [htransport _ (Ne.symm hentryNe.2.2) (Ne.symm hentryNe.1)]
+    exact hstorArray
+  have hindexVal : countPost.getStorVal sevm.currentTarget
+      (indexSlot target) = next := by
+    rw [htransport _ hpairwise.2.2 (Ne.symm hpairwise.1)]
+    exact hstorIndex
+  have hlengthVal : countPost.getStorVal sevm.currentTarget arrayLengthSlot =
+      next := by
+    rw [htransport _ (Ne.symm hlengthNe.2.2) (Ne.symm hlengthNe.1)]
+    exact hstorLength
+  have hcountVal : countPost.getStorVal sevm.currentTarget
+      (countSlot oldPauser) = oldCount - 1 := by
+    dsimp only [countPost]
+    exact temporalSstorePost_self _ _ _ _
+  have hwarmTransport : ∀ k : B256,
+      (sevm.currentTarget, k) ∈ base.accessedStorageKeys →
+      (sevm.currentTarget, k) ∈ countPost.accessedStorageKeys := by
+    intro k hk
+    dsimp only [countPost, countBase, assignPost, assignmentPost,
+      assignmentBase]
+    rw [temporalSstorePost_accessedStorageKeys]
+    refine temporalSloadBase_preserves_warm _ _ _ _ ?_
+    rw [temporalSstorePost_accessedStorageKeys]
+    exact temporalSloadBase_preserves_warm _ _ _ _ hk
+  have hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
+      countPost.accessedStorageKeys := by
+    dsimp only [countPost]
+    rw [temporalSstorePost_accessedStorageKeys]
+    exact temporalSloadBase_warm _ _ _
+  have hwf' : Mem.Wf M' := hwf.write _ _
+  have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
+  have hsizeM' : M'.size = M.size := by
+    exact Mem.size_write_of_le (by
+      simpa only [B256.length_toBytes] using (show
+        (previousPauserWord * 32).toNat + 32 ≤ M.size by
+          rw [hsize]
+          decide))
+  have hsize' : M'.size = 640 := by rw [hsizeM', hsize]
+  have htarget' : Bytes.toB256
+      (img'.sliceD (targetWord * 32).toNat 32 0) = target := by
+    dsimp only [img']
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    exact htarget
+  have hnew' : Bytes.toB256
+      (img'.sliceD (newPauserWord * 32).toNat 32 0) = 0 := by
+    dsimp only [img']
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    exact hnew
+  have hprevious' : Bytes.toB256
+      (img'.sliceD (previousPauserWord * 32).toNat 32 0) = oldPauser := by
+    dsimp only [img']
+    rw [show 32 = oldPauser.toBytes.length by rw [B256.length_toBytes],
+      Bytes.sliceD_writeAt, B256.toB256_toBytes]
+  have hcontinuation' : Bytes.toB256
+      (img'.sliceD (continuationWord * 32).toNat 32 0) = 0 := by
+    dsimp only [img']
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
+      rw [B256.length_toBytes]
+      decide)]
+    exact hcontinuation
+  let MIndex := M'.write (removedIndexWord * 32).toNat next.toBytes
+  let MLength := MIndex.write (arrayLengthWord * 32).toNat next.toBytes
+  let MLast := MLength.write (lastTargetWord * 32).toNat target.toBytes
+  let eventLog : Log :=
+    ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
+  let post := ((indexClearPost sevm
+      (entryClearPost sevm countPost target next)
+      target oldLength).addLog eventLog).setMach ⟨[], MLast, G⟩
+  have hafterRun := afterOldPauser_foundZeroRetained_runCompiled dp sevm
+    countPost M' img' target oldLength next oldPauser (oldCount - 1) []
+    (by simp) arrayOriginal indexOriginal lengthOriginal holeCost
+    movedIndexCost tailClearCost lengthRestoreCost indexClearCost G
+    hwf' hreads' htarget' hprevious' hnew' hcontinuation' htargetValid
+    holdValid hremaining hnextNonzero hnextBound 640 3 3 hsize'
+    (by rw [hsize']) (by decide) (by decide) (by decide) (by decide)
+    harray hindexVal hlengthVal hcountVal harrayOrig hindexOrig hlengthOrig
+    hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
+    hindexClearCost (hwarmTransport _ hwarmArray) (hwarmTransport _ hwarmIndex)
+    (hwarmTransport _ hwarmLength) hwarmCount rfl hgasFinal hstatic
+  dsimp only at hafterRun
+  have hgAfter : G + 2586 + 3 + 3 + holeCost + movedIndexCost +
+      tailClearCost + lengthRestoreCost + indexClearCost =
+      G + (2592 + holeCost + movedIndexCost + tailClearCost +
+        lengthRestoreCost + indexClearCost) := by omega
+  rw [hgAfter] at hafterRun
+  have hkernel := setPauserKernel_found_runCompiled dp sevm base M img post
+    target 0 oldPauser oldCount assignmentOriginal countOriginal
+    assignmentCost countCost
+    (2592 + holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
+      indexClearCost) G
+    hwf hreads htarget hnew htargetValid holdValid hsize hstorAssignment
+    hassignmentOrig hassignmentCost hcount hcountOrig hcountCost
+    (by omega) hstatic
+    (by
+      simpa only [countPost, countBase, assignPost, M', MIndex, MLength,
+        MLast, eventLog, post] using hafterRun)
+  have hsetPauser : setPauser entries target 0 =
+      some (swapPop entries index) := by
+    simp [setPauser, htargetValid.1, hfind]
+  obtain ⟨trace, htrace⟩ : ∃ trace,
+      setPauserSourceTrace entries target 0 = some trace := by
+    simp [setPauserSourceTrace, hsetPauser]
+  have hrefines := setPauser_sourceTrace_refines_model htargetValid.1 htrace
+  have hpostEntries : trace.postEntries = swapPop entries index := by
+    rw [hsetPauser] at hrefines
+    exact (Option.some.inj hrefines.1).symm
+  have hwpost := hw.applySetPauserSourceTrace htargetValid.2 hzeroCanonical
+    htrace
+  refine ⟨trace, post, htrace, hpostEntries, hwpost, ?_, rfl, ?_, ?_⟩
+  · have hgTotal : G + foundZeroRetainedLastSetPauserKernelGas sevm base target
+          oldPauser assignmentCost countCost holeCost movedIndexCost
+          tailClearCost lengthRestoreCost indexClearCost =
+        G + (2592 + holeCost + movedIndexCost + tailClearCost +
+          lengthRestoreCost + indexClearCost) +
+          foundSetPauserKernelPrefixGas sevm base target 0 oldPauser
+            assignmentCost countCost := by
+      dsimp only [foundZeroRetainedLastSetPauserKernelGas,
+        foundSetPauserKernelPrefixGas]
+      omega
+    rw [hgTotal]
+    exact hkernel
+  · have logs_setMach (d : Devm) (mach : Mach) :
+        (d.setMach mach).logs = d.logs := rfl
+    have logs_addLog (d : Devm) (log : Log) :
+        (d.addLog log).logs = d.logs ++ [log] := rfl
+    dsimp only [post, countPost, countBase, assignPost,
+      assignmentPost, assignmentBase, eventLog]
+    rw [logs_setMach, logs_addLog]
+    congr 1
+    simp only [indexClearPost, lengthWritePost,
+      entryClearPost, indexWritePost, entryWritePost,
+      temporalSstorePost_logs, temporalSloadBase_logs]
+  · intro pauser hpauser
+    have hexpiryArray := expirySlot_ne_arrayFamily hpauser hnextBound
+    have hexpiryRegistry := expirySlot_ne_registryAddressFamilies
+      hpauser htargetValid.2 holdValid.2
+    calc
+      post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          (indexClearPost sevm
+            (entryClearPost sevm countPost target next)
+            target oldLength).getStorVal sevm.currentTarget
+              (expirySlot pauser) := rfl
+      _ = base.getStorVal sevm.currentTarget (expirySlot pauser) := by
+        dsimp only [countPost, countBase, assignPost, assignmentPost,
+          assignmentBase]
+        simp only [indexClearPost, lengthWritePost,
+          entryClearPost, indexWritePost,
+          entryWritePost]
+        rw [temporalSstorePost_other _ _ (indexSlot target) 0 _
+            (expirySlot pauser) (pairNe hexpiryRegistry.2.1),
+          temporalSstorePost_other _ _ arrayLengthSlot oldLength _
+            (expirySlot pauser) (pairNe hexpiryArray.1),
+          temporalSstorePost_other _ _ (arrayEntrySlot next) 0 _
+            (expirySlot pauser) (pairNe hexpiryArray.2),
+          temporalSstorePost_other _ _ (indexSlot target) next _
+            (expirySlot pauser) (pairNe hexpiryRegistry.2.1),
+          temporalSstorePost_other _ _ (arrayEntrySlot next) target _
+            (expirySlot pauser) (pairNe hexpiryArray.2),
+          temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
+            (expirySlot pauser) (pairNe hexpiryRegistry.2.2),
+          temporalSloadBase_getStorVal,
+          temporalSstorePost_other _ _ (assignmentSlot target) 0 _
+            (expirySlot pauser) (pairNe hexpiryRegistry.1),
+          temporalSloadBase_getStorVal]
+
+/-- Exact production-body reserve for unregistering a recorded target that is
+already the array's last entry, with the old pauser retained. -/
+def foundZeroRetainedLastRegisterBodyGas (sevm : Sevm) (base : Devm)
+    (target oldPauser : B256)
+    (assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost : Nat) : Nat :=
+  221 + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
+    assignmentCost countCost holeCost movedIndexCost tailClearCost
+    lengthRestoreCost indexClearCost
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- The four scratch writes `registerPauser`'s body performs before entering
+the kernel: the two decoded arguments and the two zero words.  The staging is
+chronology-independent, so the kernel run is taken as a hypothesis. -/
+private theorem registerPauser_stageArgs_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (target newPauser : B256) (kernelGas : Nat) (post : Devm)
+    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hargNew : Sevm.dataWord sevm (32 * 1 + 4) = newPauser)
+    (hkernel : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], registerMemory target newPauser, kernelGas⟩)
+      setPauserKernel post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, kernelGas + 112⟩)
+      (arg 0 +++ mstoreAt targetWord +++
+        arg 1 +++ mstoreAt newPauserWord +++
+        pushB256 0 ::: mstoreAt previousPauserWord +++
+        pushB256 0 ::: mstoreAt continuationWord +++
+        .call setPauserSlot) post := by
+  have hM1Size (w : B256) :
+      (Mem.empty.write (targetWord * 32).toNat w.toBytes).size = 544 := by
+    rw [Mem.size_write_word_at]
+    decide +kernel
+  have hM2Size (w₁ w₂ : B256) :
+      ((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
+        (newPauserWord * 32).toNat w₂.toBytes).size = 576 := by
+    rw [Mem.size_write_word_at, hM1Size]
+    decide +kernel
+  have hM3Size (w₁ w₂ : B256) :
+      (((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
+        (newPauserWord * 32).toNat w₂.toBytes).write
+        (previousPauserWord * 32).toNat (0 : B256).toBytes).size = 608 := by
+    rw [Mem.size_write_word_at, hM2Size]
+    decide +kernel
+  unfold arg cdl
+  func_run (15) [51, 3, 3, 3]
+  all_goals first
+    | exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
+    | exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
+    | exact Devm.extCost_of_size (n := 576) (hM2Size _ _) (by decide +kernel)
+    | exact Devm.extCost_of_size (n := 608) (hM3Size _ _) (by decide +kernel)
+    | skip
+  case h_body =>
+    rw [hargTarget, hargNew]
+    change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], registerMemory target newPauser, kernelGas⟩)
+      setPauserKernel post
+    exact hkernel
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 2400000 in
+/-- Exact successful production body for unregistering a recorded target under
+the two restrictions the removal machinery supports: the removed target is
+already the array's last entry (`index + 1 = entries.length`), and the old
+pauser is retained (`oldCount - 1 ≠ 0`), so `registerAfterSet` stops without
+touching any expiry slot. -/
+theorem registerPauser_body_foundZeroRetainedLast_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (target : B256) (index : Nat)
+    (oldPauser oldCount : B256)
+    (assignmentOriginal countOriginal arrayOriginal indexOriginal
+      lengthOriginal : B256)
+    (assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost G : Nat)
+    (hdata : sevm.data.length.toB256 <? 68 = 0)
+    (hadmin : sevm.caller.toB256 = dp.admin)
+    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hargNew : Sevm.dataWord sevm (32 * 1 + 4) = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hlast : index + 1 = entries.length)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (holdValid : nonzeroCanonicalAddress oldPauser)
+    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+      (assignmentSlot target) = assignmentOriginal)
+    (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
+      assignmentCost)
+    (hcount : (assignmentPost sevm base target 0).getStorVal
+      sevm.currentTarget (countSlot oldPauser) = oldCount)
+    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+      (countSlot oldPauser) = countOriginal)
+    (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
+      countCost)
+    (hremaining : oldCount - 1 ≠ 0)
+    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+      lengthOriginal)
+    (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
+    (hmovedIndexCost : sstoreValueCost indexOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 entries.length) =
+        movedIndexCost)
+    (htailClearCost : sstoreValueCost arrayOriginal target 0 = tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal
+      (Nat.toB256 entries.length) (Nat.toB256 entries.length - 1) =
+        lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal
+      (Nat.toB256 entries.length) 0 = indexClearCost)
+    (hwarmArray : (sevm.currentTarget,
+      arrayEntrySlot (Nat.toB256 entries.length)) ∈ base.accessedStorageKeys)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      base.accessedStorageKeys)
+    (hwarmLength : (sevm.currentTarget, arrayLengthSlot) ∈
+      base.accessedStorageKeys)
+    (hgasFinal : gCallStipend < G + 2120 + indexClearCost)
+    (hstatic : sevm.isStatic = false) :
+    ∃ trace post,
+      setPauserSourceTrace entries target 0 = some trace ∧
+      trace.postEntries = swapPop entries index ∧
+      RegistryWitness
+        (logicalStorageOfStor (applyRegistryWrites
+          (Devm.getStor base sevm.currentTarget) trace.writes))
+        trace.postEntries ∧
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        (base.setMach ⟨[], Mem.empty,
+          G + foundZeroRetainedLastRegisterBodyGas sevm base target oldPauser
+            assignmentCost countCost holeCost movedIndexCost tailClearCost
+            lengthRestoreCost indexClearCost⟩)
+        (registerPauser dp) post ∧
+      post.gasLeft = G ∧
+      post.logs = base.logs ++
+        [⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩] ∧
+      ∀ pauser, canonicalAddress pauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser) := by
+  rcases registerMemory_spec target 0 with
+    ⟨hwf, hreads, hsize, htargetRead, hnewRead,
+      _hpreviousRead, hcontinuationRead⟩
+  rcases setPauserKernel_foundZeroRetainedLast_runCompiled dp sevm base
+      (registerMemory target 0) (registerImage target 0)
+      entries target index oldPauser oldCount assignmentOriginal countOriginal
+      arrayOriginal indexOriginal lengthOriginal assignmentCost countCost
+      holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost G
+      hw hfind hlast hwf hreads htargetRead hnewRead hcontinuationRead
+      htargetValid holdValid hsize hassignmentOrig hassignmentCost hcount
+      hcountOrig hcountCost hremaining harrayOrig hindexOrig hlengthOrig
+      hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
+      hindexClearCost hwarmArray hwarmIndex hwarmLength hgasFinal hstatic with
+    ⟨trace, post, htrace, hpostEntries, hwpost, hkernel, hgas, hlogs,
+      hexpiries⟩
+  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target 0
+    (G + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
+      assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost) post hargTarget hargNew hkernel
+  refine ⟨trace, post, htrace, hpostEntries, hwpost, ?_, hgas, hlogs,
+    hexpiries⟩
+  have htargetMask := canonicalAddress_mask_zero htargetValid.2
+  have hnewMask : (0 : B256) &&& addressMask = 0 := by decide +kernel
+  unfold registerPauser requireStaticArgs canonicalAddressArg onlyAdmin arg cdl
+    checkNonAddress pushAddressMask pushDeployWord
+  func_run (24) [0, ~~~(0 : B256), addressMask, 0,
+    ~~~(0 : B256), addressMask, 0, 1]
+  all_goals try { rw [hargTarget]; exact htargetMask }
+  all_goals try { rw [hargNew]; exact hnewMask }
+  all_goals try { simp [hadmin, B256.eqCheck] }
+  all_goals first
+    | (simp only [Devm.gasLeft_setMach, foundZeroRetainedLastRegisterBodyGas]
+       norm_num [gBase, gVerylow, gHigh, gMid, gJumpdest]
+       omega)
+    | skip
+  case h_arm =>
+    simp only [foundZeroRetainedLastRegisterBodyGas]
+    have hg : G + (221 + foundZeroRetainedLastSetPauserKernelGas sevm base
+          target oldPauser assignmentCost countCost holeCost movedIndexCost
+          tailClearCost lengthRestoreCost indexClearCost) - 109 =
+        G + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
+          assignmentCost countCost holeCost movedIndexCost tailClearCost
+          lengthRestoreCost indexClearCost + 112 := by omega
+    rw [hg]
+    simpa only [arg, cdl] using hstage
+
+end Blanc.LidoCircuitBreaker

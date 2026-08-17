@@ -13,7 +13,10 @@ import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerSites
 import Blanc.LidoCircuitBreakerAccess
-import Blanc.LidoCircuitBreakerTemporalTransitions
+import Blanc.LidoCircuitBreakerRegistrySubstrate
+import Blanc.LidoCircuitBreakerFreshRegistration
+import Blanc.LidoCircuitBreakerAbsentRegistration
+import Blanc.LidoCircuitBreakerUnregisterRegistration
 import Blanc.LidoCircuitBreakerAuthority
 import Blanc.LidoCircuitBreakerOwnerClosure
 import Blanc.LidoCircuitBreakerRetainedAuthority

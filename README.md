@@ -350,6 +350,57 @@ to isolate the guilty step. Cost is then paid once per segment rather than
 once per probe, and a multi-thousand-line file bisects to a single tactic in a
 handful of runs.
 
+**The routine instrument.** The bisection above is for a file that has already
+stopped responding. To catch the same class *before* it becomes a hang, profile
+the module directly:
+
+```
+lake env lean -Dprofiler=true -Dprofiler.threshold=400 Blanc/<Module>.lean
+```
+
+Read the output by tactic name, not by duration alone. `exact`, `assumption`,
+`rfl`, `apply` and `change` perform no search, so a multi-second entry naming
+one of them is almost always definitional-equality work — the subcritical form
+of the trap above, quietly costing tens of seconds per site rather than
+hanging. `simp`, `omega`, `decide`, `func_run` and `congr` are expected to take
+real time, and their durations carry no such implication. A repeated identical
+cluster of timings is one defect with several call sites, not several defects,
+and is fixed once in a shared lemma.
+
+## Proof-module size and partition
+
+A derivation module grows until the edit-observe loop stops being interactive.
+Measured here: a 1,244-line model module answers a whole-file language-server
+query in about 21 seconds, while an 8,000-line derivation module never answers
+inside the client's inactivity window — and the empty diagnostics list it
+returns then is a timeout, not a clean bill of health. Split before a module
+reaches that size, because an author with no cheap feedback is writing proofs
+blind.
+
+Three rules make the split mechanical rather than a judgement call.
+
+**Compute the partition; do not guess it.** Extract each declaration's
+dependencies textually, take the public results of each independent case as
+roots, and assign a declaration to the shared substrate exactly when two or
+more roots reach it — or none do — and to a case leaf otherwise. The shape is
+then acyclic by construction, and the check that no leaf references another
+leaf is what proves it. A hand-written list of "what looks shared" will
+misplace declarations whose names have drifted from their content.
+
+**A generic declaration must not carry a case's name.** Names like
+`absentZeroRemovePost` or `freshRegisterMemory`, for a storage-write state
+builder and a memory image that no chronology owns, are not merely untidy: they
+cause exactly the misplacement above, and once a gate pins a name, renaming
+stops being free. Rename on the way into the substrate. This is the
+sibling-module discipline of `AGENTS.md` applied within a contract — a name
+claiming one case while serving all of them is evidence that the declaration
+belongs upstream.
+
+**Re-check reachability after every deduplication.** Replacing several parallel
+walks with one generic walk leaves the superseded intermediates behind, and an
+unused `private` theorem produces no warning whatsoever. A reachability pass
+over this module found 253 such lines, still being elaborated on every build.
+
 ## Verification status
 
 **What you are trusting.** Blanc's trusted base is Jaune's plus three

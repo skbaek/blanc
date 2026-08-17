@@ -30,10 +30,15 @@ OWNERS = {
     "retained": ROOT / "Blanc/LidoCircuitBreakerRetainedAuthority.lean",
     "deploy": ROOT / "Blanc/LidoCircuitBreakerDeploy.lean",
 }
-# AT7 registration transitions are still being proved.  The module is inside
-# the trust scan from the first day it exists, but none of its headers are
-# pinned yet; see AT7_ROLES below.
-TEMPORAL_TRANSITIONS = ROOT / "Blanc/LidoCircuitBreakerTemporalTransitions.lean"
+# AT7 registration transitions are still being proved.  The four modules are
+# inside the trust scan from the first day each exists, but none of their
+# headers are pinned yet; see AT7_ROLES below.
+AT7_MODULES = (
+    ROOT / "Blanc/LidoCircuitBreakerRegistrySubstrate.lean",
+    ROOT / "Blanc/LidoCircuitBreakerFreshRegistration.lean",
+    ROOT / "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
+    ROOT / "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
+)
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
 # Lean module names, used by the compiled-owner guard and the axiom probe.
@@ -239,10 +244,12 @@ ROLES = {
     },
 }
 
-# AT7 registration transitions (`Blanc/LidoCircuitBreakerTemporalTransitions.lean`)
-# are still being proved.  The module is trust-scanned above but no header is
-# pinned yet.  The lead fills this in when the registration partitions land
-# (fresh/nonzero, absent/zero, found-zero-retained) and folds it into ROLES.
+# AT7 registration transitions (`Blanc/LidoCircuitBreakerRegistrySubstrate.lean`,
+# `LidoCircuitBreakerFreshRegistration.lean`, `LidoCircuitBreakerAbsentRegistration.lean`,
+# `LidoCircuitBreakerUnregisterRegistration.lean`) are still being proved.  The
+# four modules are trust-scanned above but no header is pinned yet.  The lead
+# fills this in when the registration partitions land (fresh/nonzero,
+# absent/zero, found-zero-retained) and folds it into ROLES.
 AT7_ROLES: dict = {}
 
 EXPECTED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
@@ -585,7 +592,8 @@ def main() -> None:
             fail(f"missing sole production owner for {key}")
         no_trust_shortcut(path)
     # AT7 is unpinned but never exempt from the trust scan.
-    no_trust_shortcut(TEMPORAL_TRANSITIONS)
+    for path in AT7_MODULES:
+        no_trust_shortcut(path)
     if AT7_ROLES:
         fail("AT7 headers are pinned in AT7_ROLES but not folded into ROLES")
     sources = {key: text(path) for key, path in OWNERS.items()}
