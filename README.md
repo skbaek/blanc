@@ -284,6 +284,56 @@ contract (the same break, other direction), and on any module missing from its
 classification — so a new contract cannot escape the rule by never being
 listed. It needs no Lean toolchain and runs ahead of the build in CI.
 
+## Proof-performance conventions: defeq and wide-recursion state towers
+
+Two definitional-equality cost bombs have been measured in this repository,
+and the conventions below are the working rules for avoiding them. They apply
+to all Blanc proof work, whatever the contract and whatever agent or editor is
+driving it.
+
+**The predictor.** Call a definition a *wide-recursion state constructor* when
+its right-hand side uses its own state/accumulator argument more than once
+(for example, a storage-write state builder that mentions its base state in a
+refund computation, a current-value read, and the write itself). Nesting k
+layers of such a definition unfolds geometrically, so any tactic step that
+lets definitional unfolding walk the tower is predictably explosive:
+
+- relying on defeq across two or more layers — a bare `exact`, `assumption`,
+  `change`, `show`, or `rfl` whose stated type differs from the goal by tower
+  unfolding;
+- a `simp only`/`dsimp only` whose argument list names **several of the
+  nested definitions at once**;
+- instantiating a lemma's abstract state variable with a concrete tower and
+  leaving the normalization to unification.
+
+The discipline: state one-layer projection lemmas over an **abstract** base
+(they are `rfl`-provable precisely because one layer over a variable stays
+small) and apply them by `rw` after unfolding only the local `let` binding.
+Rewrite chains compose additively where defeq composes multiplicatively; a
+measured instance of this rewrite took a single five-line step from more than
+twenty minutes to five seconds. "`rfl`-provable" does not mean "cheap to use
+by defeq". The sibling trap — the kernel eagerly folding `Nat` operations at
+closed program-sized terms — is documented in the WETH10 elaboration-cost
+history and has the same flavor: keep expensive evaluation out of both the
+elaborator's and the kernel's definitional paths by routing through named
+lemmas.
+
+**Why budgets do not save you.** Inside `simp`'s defeq discharging the work is
+not heartbeat-metered, and the kernel's certificate check ignores
+`maxHeartbeats` entirely — a generous budget that has "never fired" is not
+evidence of health. Language-server diagnostics are equally unable to detect
+this class: on a file whose elaboration outruns the client's inactivity
+window, an empty diagnostics list with a failed completion flag is a timeout,
+not a verdict.
+
+**The measurement method that works.** Compile a file prefix once into an
+importable `.olean` (stripping `private` so probe segments can reference it),
+compile each suspect segment as its own module importing the previous probe's
+result under a wall-clock cap, and truncate inside a slow theorem with `sorry`
+to isolate the guilty step. Cost is then paid once per segment rather than
+once per probe, and a multi-thousand-line file bisects to a single tactic in a
+handful of runs.
+
 ## Verification status
 
 **What you are trusting.** Blanc's trusted base is Jaune's plus three
