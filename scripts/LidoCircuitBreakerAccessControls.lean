@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerAccess
+import Blanc.LidoCircuitBreakerRetainedAuthority
 
 /-!
 Gate-owned controls for the Stage 5 access and temporal-authority family.
@@ -7,14 +8,18 @@ Each control below *uses* a landed public result — at concrete data where the
 statement admits it, and otherwise by composing two of them into a consequence
 neither states alone.  Nothing here restates a production header.
 
-Two recorded precision limits are respected verbatim rather than papered over:
+Three recorded precision limits are respected verbatim rather than papered
+over:
 
 * the temporal views (`isPauserLive`, `heartbeatExpiry`, `heartbeatInterval`)
   each carry a warm accessed-storage-key premise, so every control that
   exercises one carries it too and claims nothing about a cold slot;
 * the settled-error restoration results bind their deployment-identity
   hypotheses as unused placeholders, so the control that exercises them is
-  worded as the contract-neutral message rollback it actually is.
+  worded as the contract-neutral message rollback it actually is;
+* the authority payload's guard occurrence is existential over its
+  instruction kind, so the guard-chronology control exhibits an actually
+  executed guard without claiming it is the authorization comparison.
 -/
 
 namespace Blanc.LidoCircuitBreaker.AccessControls
@@ -352,5 +357,521 @@ theorem heartbeat_interval_view_control
     ⟨post, hrun, houtput, hworld, hlogs, hcompile⟩
   refine ⟨post, hrun, ?_, hworld, hlogs, hcompile⟩
   rw [houtput, B256.toB256_toBytes, hinterval]
+
+/-! ## AT5 raw-authority controls
+
+The concrete world below is the production direct-`pause` control: an actual
+reverting execution of the exact deployed runtime.  Its root does not commit,
+which is precisely the region the arbitrary-outcome raw theorems exist for. -/
+
+/-- The AT5 raw-authority altitude carries no success or commitment premise,
+and that absence is load-bearing: the production direct-`pause` control is an
+actual reverting execution — `Execution.commits` is false and the committed
+frame list is empty — in which a runtime SSTORE nevertheless carries its exact
+source row and one of that row's permitted authority roles.  Giving the
+raw-occurrence theorem a commitment premise (the labelled AT5 header mutation)
+would empty this instance. -/
+theorem raw_occurrence_commitment_premise_rejected :
+    ∃ (sevm : Sevm) (pre raw : Devm)
+      (rootExec : Exec 0 sevm pre (.error (.revert, raw)))
+      (write : Exec.SuccessfulSstoreOccurrence
+        (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv))
+      (row : RuntimePersistentWrite) (site : Prog.SourceSite)
+      (role : InvocationRole),
+      Execution.commits (.error (.revert, raw)) ≠ true ∧
+      Exec.committedFrames rootExec = [] ∧
+      Exec.rawFrameRoots rootExec =
+        [(⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv)] ∧
+      row ∈ RuntimePersistentWrite.all ∧
+      row.sourceSite? officialParams = some site ∧
+      site.pc = write.occurrence.node.pc ∧
+      site.instruction = .reg .sstore ∧
+      role ∈ RuntimePersistentWrite.permittedRoles row ∧
+      RuntimeWriteAuthority officialParams
+        (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv)
+        write.occurrence.node role := by
+  obtain ⟨sevm, pre, raw, rootExec, write, row, site, role, notCommitted,
+      rawRoots, _owner, rowMem, sourceSite, sitePc, siteInstruction,
+      rolePermitted, authority⟩ :=
+    exists_runtimeWriteAuthority_of_directPauseControl
+  exact ⟨sevm, pre, raw, rootExec, write, row, site, role, notCommitted,
+    Exec.committedFrames_eq_nil_of_not_commits rootExec notCommitted,
+    rawRoots, rowMem, sourceSite, sitePc, siteInstruction, rolePermitted,
+    authority⟩
+
+/-- The sub-derivation order on execution derivations is asymmetric because it
+is well-founded. -/
+private theorem deriv_lt_asymm {left right : Exec.Deriv}
+    (forward : Exec.Deriv.lt left right) : ¬ Exec.Deriv.lt right left :=
+  Exec.Deriv.lt.well_founded.asymmetric _ _ forward
+
+/-- The guard payload's chronology is genuinely oriented: at the live
+direct-`pause` authority instance, an actually executed guard occurrence sits
+strictly before the classified write in the sub-derivation order, and the
+reversed placement — the guard occurring after the store — is refuted by
+asymmetry of that order.  Authority evidence re-anchored at the write (the
+labelled guard mutation) is therefore not satisfiable by this payload.  Per
+the recorded precision limit, the guard is existential over its instruction
+kind; nothing here claims it is the authorization comparison itself. -/
+theorem guard_after_write_rejected :
+    ∃ (frameRoot writeNode : Exec.Deriv) (instruction : Ninst)
+      (guard : RuntimeGuardOccurrence frameRoot writeNode instruction),
+      Exec.Deriv.ParentPrefix frameRoot guard.guard ∧
+      Exec.Deriv.ParentPrefix guard.guard writeNode ∧
+      Ninst.At guard.guard.sevm.code guard.guard.pc instruction ∧
+      Exec.Deriv.lt writeNode guard.guard ∧
+      ¬ Exec.Deriv.lt guard.guard writeNode := by
+  obtain ⟨sevm, pre, raw, rootExec, write, _row, _site, _role, _notCommitted,
+      _rawRoots, _owner, _rowMem, _sourceSite, _sitePc, _siteInstruction,
+      _rolePermitted, authority⟩ :=
+    exists_runtimeWriteAuthority_of_directPauseControl
+  have package : ∀ {instruction : Ninst}
+      (guard : RuntimeGuardOccurrence
+        (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv)
+        write.occurrence.node instruction),
+      ∃ (frameRoot writeNode : Exec.Deriv) (instr : Ninst)
+        (g : RuntimeGuardOccurrence frameRoot writeNode instr),
+        Exec.Deriv.ParentPrefix frameRoot g.guard ∧
+        Exec.Deriv.ParentPrefix g.guard writeNode ∧
+        Ninst.At g.guard.sevm.code g.guard.pc instr ∧
+        Exec.Deriv.lt writeNode g.guard ∧
+        ¬ Exec.Deriv.lt g.guard writeNode :=
+    fun guard => ⟨_, _, _, guard, guard.frameToGuard, guard.guardToWrite,
+      guard.decoded, guard.strictBefore, deriv_lt_asymm guard.strictBefore⟩
+  cases authority with
+  | setPauseDuration endpoint guard callerEq => exact package guard
+  | setHeartbeatInterval endpoint guard callerEq => exact package guard
+  | adminRegistry endpoint guard callerEq writeSite => exact package guard
+  | adminExpiry endpoint guard callerEq writeSite => exact package guard
+  | heartbeatExpiry endpoint registeredGuard liveGuard registered live =>
+      exact package liveGuard
+  | pauseRegistry endpoint assignedGuard liveGuard assigned live writeSite =>
+      exact package liveGuard
+  | pauseExpiry endpoint assignedGuard liveGuard assigned live writeSite =>
+      exact package liveGuard
+
+/-! ## AT6 owner-closure and settlement controls -/
+
+/-- The raw/retained separation at one concrete noncommitting execution: the
+reverting direct-`pause` run still contains an actual successful owner SSTORE
+occurrence in its raw chronology, yet it retains no owner write, has no
+committed frame, and admits no retained owner-cell authority witness at any
+key or value.  Together with the raw-authority control above, both sides of
+the separation are exercised on the same world: raw authority survives
+noncommitment, retained authority does not. -/
+theorem noncommitting_root_has_no_authority_control :
+    ∃ (sevm : Sevm) (pre raw : Devm)
+      (rootExec : Exec 0 sevm pre (.error (.revert, raw))),
+      Execution.commits (.error (.revert, raw)) ≠ true ∧
+      (∃ write : Exec.SuccessfulSstoreOccurrence
+          (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv),
+        write.storageOwner = Nat.toAdr 100) ∧
+      (¬ ∃ write : Exec.SuccessfulSstoreOccurrence
+          (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv),
+        write.Retained ∧ write.storageOwner = Nat.toAdr 100) ∧
+      ∀ key final : B256,
+        ¬ Exec.RuntimeOwnerCellAuthority officialParams (Nat.toAdr 100)
+          rootExec key final := by
+  obtain ⟨sevm, pre, raw, rootExec, write, _row, _site, _role, notCommitted,
+      _rawRoots, owner, _rowMem, _sourceSite, _sitePc, _siteInstruction,
+      _rolePermitted, _authority⟩ :=
+    exists_runtimeWriteAuthority_of_directPauseControl
+  exact ⟨sevm, pre, raw, rootExec, notCommitted, ⟨write, owner⟩,
+    Exec.no_retainedOwnerSstore_of_not_commits rootExec notCommitted,
+    fun key final =>
+      Exec.no_runtimeOwnerCellAuthority_of_not_commits rootExec notCommitted
+        key final⟩
+
+/-! ### A synthetic committed double-write world
+
+No production flow writes one storage key twice in a committed run, so the
+last-retained/first-writer distinction needs a hand-built execution: three
+instructions (`SSTORE`, `SSTORE`, `STOP`) over a preloaded stack write the
+values `1` and then `2` to the same key of the same account, and the run
+commits.  The two `Rinst.run` step equations below are closed by steering the
+accessed-storage-set decisions and the storage reads with named lemmas; the
+machine states are explicit literals, so every later fact about them is a
+small projection. -/
+
+private def twoWriteCode : ByteArray := ByteArray.mk #[0x55, 0x55, 0x00]
+
+private def twoWriteSevm : Sevm :=
+  { (default : Sevm) with code := twoWriteCode }
+
+private def twoWritePre : Devm :=
+  ((default : Devm).withGasLeft 100000).withStack [0, 1, 0, 2]
+
+private def twoWriteAcctMid : Acct :=
+  { nonce := 0, bal := 0, stor := Stor.empty.set 0 1,
+    code := ByteArray.mk #[] }
+
+private def twoWriteAcctEnd : Acct :=
+  { nonce := 0, bal := 0, stor := (Stor.empty.set 0 1).set 0 2,
+    code := ByteArray.mk #[] }
+
+private def twoWriteMid : Devm :=
+  { mach :=
+      { stack := [0, 2]
+        memory := { data := #[], size := 0 }
+        gasLeft := 77900 }
+    «meta» :=
+      { logs := []
+        refundCounter := 0
+        output := []
+        accountsToDelete := Std.HashSet.emptyWithCapacity
+        returnData := []
+        error := none
+        accessedAddresses := Std.HashSet.emptyWithCapacity
+        accessedStorageKeys := Std.HashSet.emptyWithCapacity.insert (0, 0)
+        createdAccounts := Std.HashSet.emptyWithCapacity }
+    world :=
+      { state := State.set Std.TreeMap.empty 0 twoWriteAcctMid
+        transientStorage := ∅ } }
+
+private def twoWriteEnd : Devm :=
+  { mach :=
+      { stack := []
+        memory := { data := #[], size := 0 }
+        gasLeft := 77800 }
+    «meta» :=
+      { logs := []
+        refundCounter := 0
+        output := []
+        accountsToDelete := Std.HashSet.emptyWithCapacity
+        returnData := []
+        error := none
+        accessedAddresses := Std.HashSet.emptyWithCapacity
+        accessedStorageKeys := Std.HashSet.emptyWithCapacity.insert (0, 0)
+        createdAccounts := Std.HashSet.emptyWithCapacity }
+    world :=
+      { state := State.set (State.set Std.TreeMap.empty 0 twoWriteAcctMid) 0
+          twoWriteAcctEnd
+        transientStorage := ∅ } }
+
+private theorem state_get_empty {a : Adr} :
+    State.get Std.TreeMap.empty a = Acct.nil := by
+  simp [State.get]
+
+private theorem acctNil_nonce : Acct.nil.nonce = 0 := rfl
+private theorem acctNil_bal : Acct.nil.bal = 0 := rfl
+private theorem acctNil_stor : Acct.nil.stor = Stor.empty := rfl
+private theorem acctNil_code : Acct.nil.code = ByteArray.mk #[] := rfl
+
+private theorem stor_get_empty {k : B256} : Stor.get Stor.empty k = 0 := by
+  simp [Stor.get, Stor.empty]
+
+private theorem b256_zero_eq_one_false : ((0 : B256) = 1) = False := by
+  simp only [eq_iff_iff, iff_false]
+  decide
+
+private theorem b256_one_eq_zero_false : ((1 : B256) = 0) = False := by
+  simp only [eq_iff_iff, iff_false]
+  decide
+
+private theorem b256_two_eq_zero_false : ((2 : B256) = 0) = False := by
+  simp only [eq_iff_iff, iff_false]
+  decide
+
+private theorem b256_zero_eq_two_false : ((0 : B256) = 2) = False := by
+  simp only [eq_iff_iff, iff_false]
+  decide
+
+private theorem b256_one_eq_two_false : ((1 : B256) = 2) = False := by
+  simp only [eq_iff_iff, iff_false]
+  decide
+
+/-- One normalization pass for the double-write machine: unfold the `SSTORE`
+step, steer the accessed-storage-set and storage-read decisions, and fold the
+result back into the named literal states. -/
+macro "tw_norm" : tactic => `(tactic|
+  simp +decide only [twoWriteMid, twoWriteEnd, twoWriteAcctMid,
+    twoWriteAcctEnd,
+    Rinst.run, Rinst.runCore, Devm.pop_def, chargeGas_def,
+    Bind.bind, Except.bind, Except.assert, assertDynamic,
+    getOrigStorVal, getOrigAcct, Devm.getStorVal, Devm.getAcct,
+    sstoreNewRefundCounter, safeSub,
+    twoWriteSevm, twoWritePre, twoWriteCode, default,
+    Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.setMeta,
+    Devm.setWorld, Devm.stack, Devm.gasLeft, Devm.state,
+    Devm.accessedStorageKeys, Devm.refundCounter,
+    addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Devm.withRefundCounter, Devm.setStorVal, State.setStorVal,
+    Devm.withState, Devm.mach, Devm.meta, Devm.world, Devm.error,
+    state_get_empty, acctNil_nonce, acctNil_bal, acctNil_stor, acctNil_code,
+    stor_get_empty, State.get_set_self, Stor.get_set_self,
+    b256_zero_eq_one_false, b256_one_eq_zero_false, b256_two_eq_zero_false,
+    b256_zero_eq_two_false, b256_one_eq_two_false,
+    eq_self_iff_true, and_true, true_and, and_false, false_and,
+    not_true, not_false_iff, not_false_eq_true, ne_eq,
+    Std.HashSet.not_mem_emptyWithCapacity, Std.HashSet.mem_insert,
+    ite_true, ite_false, if_true, if_false,
+    Nat.reduceAdd, Nat.reduceSub,
+    gCallStipend, gasColdSload, gasStorageSet, gasWarmAccess,
+    gasStorageUpdate, rSClear])
+
+private theorem twoWriteStep0 :
+    Rinst.run ⟨0, twoWriteSevm, twoWritePre⟩ .sstore = .ok twoWriteMid := by
+  tw_norm
+  rfl
+
+private theorem twoWriteStep1 :
+    Rinst.run ⟨1, twoWriteSevm, twoWriteMid⟩ .sstore = .ok twoWriteEnd := by
+  tw_norm
+
+private theorem twoWriteEvmStep0 :
+    Evm.step ⟨0, twoWriteSevm, twoWritePre⟩ = .cont 1 twoWriteMid := by
+  rw [Evm.step_next (show Ninst.At twoWriteSevm.code 0 (.reg .sstore) by rfl)]
+  simp only [Ninst.step, twoWriteStep0, Step.ofExecution, Ninst.size]
+
+private theorem twoWriteEvmStep1 :
+    Evm.step ⟨1, twoWriteSevm, twoWriteMid⟩ = .cont 2 twoWriteEnd := by
+  rw [Evm.step_next (show Ninst.At twoWriteSevm.code 1 (.reg .sstore) by rfl)]
+  simp only [Ninst.step, twoWriteStep1, Step.ofExecution, Ninst.size]
+
+private theorem twoWriteEvmStep2 :
+    Evm.step ⟨2, twoWriteSevm, twoWriteEnd⟩ = .halt (.ok twoWriteEnd) := by
+  rw [Evm.step_last (show Linst.At twoWriteSevm.code 2 .stop by rfl)]
+  rfl
+
+private def twoWriteRun : Exec 0 twoWriteSevm twoWritePre (.ok twoWriteEnd) :=
+  .cont twoWriteEvmStep0 (.cont twoWriteEvmStep1 (.halt twoWriteEvmStep2))
+
+private def twoWriteRoot : Exec.Deriv :=
+  ⟨0, twoWriteSevm, twoWritePre, .ok twoWriteEnd, twoWriteRun⟩
+
+private def twoWriteNodeMid : Exec.Deriv :=
+  ⟨1, twoWriteSevm, twoWriteMid, .ok twoWriteEnd,
+    .cont twoWriteEvmStep1 (.halt twoWriteEvmStep2)⟩
+
+private theorem twoWriteCommits :
+    Execution.commits (.ok twoWriteEnd) = true := rfl
+
+private theorem twoWritePre_cell :
+    (Devm.getStor twoWritePre twoWriteSevm.currentTarget).get 0 = 0 := by
+  simp only [Devm.getStor, Devm.getAcct, twoWritePre, twoWriteSevm, default,
+    Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.state,
+    state_get_empty, acctNil_stor, stor_get_empty]
+
+private theorem twoWriteEnd_cell :
+    (Devm.getStor twoWriteEnd twoWriteSevm.currentTarget).get 0 = 2 := by
+  simp only [Devm.getStor, Devm.getAcct]
+  tw_norm
+
+private theorem twoWriteGetInst0 :
+    Evm.getInst ⟨0, twoWriteSevm, twoWritePre⟩ =
+      some (.next (.reg .sstore)) := rfl
+
+private theorem twoWriteGetInst1 :
+    Evm.getInst ⟨1, twoWriteSevm, twoWriteMid⟩ =
+      some (.next (.reg .sstore)) := rfl
+
+private theorem twoWritePre_stack : twoWritePre.stack = [0, 1, 0, 2] := rfl
+
+private theorem twoWriteMid_stack : twoWriteMid.stack = [0, 2] := rfl
+
+/-- The exact retained chronology of the double-write run: two successful
+SSTORE events to the same owner and key, first value `1`, then value `2`. -/
+private theorem twoWriteWrites :
+    Exec.retainedStorageWrites twoWriteRun =
+      [{ node := twoWriteRoot, owner := twoWriteSevm.currentTarget,
+         key := 0, value := 1 },
+       { node := twoWriteNodeMid, owner := twoWriteSevm.currentTarget,
+         key := 0, value := 2 }] := by
+  simp only [Exec.retainedStorageWrites, Exec.retainedNodes, twoWriteCommits,
+    twoWriteRun, Exec.retainedNodesOfCommits, twoWriteRoot, twoWriteNodeMid,
+    List.filterMap, Exec.Deriv.successfulSstore?, twoWriteGetInst0,
+    twoWriteGetInst1, twoWritePre_stack, twoWriteMid_stack, dite_true]
+
+/-- The public last-retained selector, instantiated at the double-write run:
+the selected writer carries the second value `2`, the surviving word. -/
+private theorem twoWrite_lastRetained_exists :
+    ∃ write : Exec.SuccessfulSstoreOccurrence twoWriteRoot,
+      write.Retained ∧ write.storageOwner = twoWriteSevm.currentTarget ∧
+        write.key = 0 ∧ write.value = 2 ∧ write.IsLastRetained := by
+  have changed :
+      (Devm.getStor twoWritePre twoWriteSevm.currentTarget).get 0 ≠
+        (Devm.getStor
+          (Execution.committedPost (.ok twoWriteEnd) twoWriteCommits)
+          twoWriteSevm.currentTarget).get 0 := by
+    rw [show Execution.committedPost (.ok twoWriteEnd) twoWriteCommits =
+        twoWriteEnd from rfl, twoWritePre_cell, twoWriteEnd_cell]
+    decide
+  obtain ⟨write, retained, owner, key, value, last⟩ :=
+    Exec.exists_lastRetainedSstore_of_getStor_ne twoWriteRun twoWriteCommits
+      changed
+  refine ⟨write, retained, owner, key, ?_, last⟩
+  rw [value, show Execution.committedPost (.ok twoWriteEnd) twoWriteCommits =
+    twoWriteEnd from rfl, twoWriteEnd_cell]
+
+/-- No last-retained owner/key attribution in the double-write run can carry
+the first writer's value: the split demanded by `IsLastRetained` leaves the
+first event with a later same-cell write after it. -/
+private theorem twoWrite_lastRetained_value
+    (write : Exec.SuccessfulSstoreOccurrence twoWriteRoot)
+    (owner : write.storageOwner = twoWriteSevm.currentTarget)
+    (key : write.key = 0)
+    (last : write.IsLastRetained) : write.value = 2 := by
+  obtain ⟨before, after, split, maximal⟩ := last
+  rw [show Exec.retainedStorageWrites twoWriteRoot.exc =
+      Exec.retainedStorageWrites twoWriteRun from rfl, twoWriteWrites] at split
+  cases before with
+  | nil =>
+      rw [List.nil_append] at split
+      simp only [List.cons.injEq] at split
+      obtain ⟨-, hafter⟩ := split
+      exfalso
+      apply maximal
+        { node := twoWriteNodeMid, owner := twoWriteSevm.currentTarget,
+          key := 0, value := 2 }
+      · rw [← hafter]
+        exact List.mem_singleton_self _
+      · exact ⟨owner.symm, key.symm⟩
+  | cons b bs =>
+      cases bs with
+      | nil =>
+          simp only [List.cons_append, List.nil_append,
+            List.cons.injEq] at split
+          obtain ⟨-, hsw, -⟩ := split
+          have projected := congrArg Exec.StorageWrite.value hsw
+          simpa [Exec.SuccessfulSstoreOccurrence.storageWrite] using
+            projected.symm
+      | cons b2 bs2 =>
+          simp only [List.cons_append, List.cons.injEq] at split
+          obtain ⟨-, -, h⟩ := split
+          simp at h
+
+/-- Attribution is to the last retained writer, never the first: a synthetic
+committed run writes `1` and then `2` to one cell of one account.  The
+retained chronology records both events in order, the surviving word is the
+second value, the production last-retained selector picks a writer carrying
+`2`, and every last-retained attribution for that cell must carry `2` — a
+first-writer substitution (the labelled owner-closure mutation) would
+attribute the surviving word to the superseded store carrying `1`. -/
+theorem first_writer_substitution_rejected :
+    ∃ (sevm : Sevm) (pre : Devm) (out : Execution)
+      (run : Exec 0 sevm pre out)
+      (committed : Execution.commits out = true),
+      (Devm.getStor pre sevm.currentTarget).get 0 = 0 ∧
+      (Devm.getStor (Execution.committedPost out committed)
+          sevm.currentTarget).get 0 = 2 ∧
+      (Exec.retainedStorageWrites run).map
+          (fun event => (event.owner, event.key, event.value)) =
+        [(sevm.currentTarget, 0, 1), (sevm.currentTarget, 0, 2)] ∧
+      (∃ write : Exec.SuccessfulSstoreOccurrence
+          (⟨0, sevm, pre, out, run⟩ : Exec.Deriv),
+        write.Retained ∧ write.storageOwner = sevm.currentTarget ∧
+          write.key = 0 ∧ write.value = 2 ∧ write.IsLastRetained) ∧
+      ∀ write : Exec.SuccessfulSstoreOccurrence
+          (⟨0, sevm, pre, out, run⟩ : Exec.Deriv),
+        write.storageOwner = sevm.currentTarget → write.key = 0 →
+          write.IsLastRetained → write.value = 2 := by
+  refine ⟨twoWriteSevm, twoWritePre, .ok twoWriteEnd, twoWriteRun,
+    twoWriteCommits, twoWritePre_cell, twoWriteEnd_cell, ?_,
+    twoWrite_lastRetained_exists, twoWrite_lastRetained_value⟩
+  rw [twoWriteWrites]
+  rfl
+
+/-- The concrete direct-`pause` world re-exported as an exact-invocation
+witness: the actual reverting root execution of the production Registry
+control satisfies `exactInvocation` at the deployed owner for both the
+storage identity and the code-address identity, with the exact compiled
+runtime bytes. -/
+private theorem directPauseExactInvocation :
+    ∃ (sevm : Sevm) (pre raw : Devm)
+      (rootExec : Exec 0 sevm pre (.error (.revert, raw))),
+      (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+          Exec.Deriv).exactInvocation
+        (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100) := by
+  obtain ⟨msg, sevm, pre, raw, _htarget, hcurrent, hcodeAddress, hcodeBytes,
+      _hvalue, _hdata, sevmEq, _hpre, _hframe, _hwitness, _hcaller,
+      _hassignment, _hexpiry, _hlive, _htargetNe, _hcanonical, _hzeroCodeSize,
+      _hrun, rootExec, _houtput, _hevidence, _hpost⟩ :=
+    directPause_zeroCode_postWrite_error_control
+  refine ⟨sevm, pre, raw, rootExec, rfl, ?_, ?_, ?_⟩
+  · show sevm.currentTarget = Nat.toAdr 100
+    rw [sevmEq]
+    exact hcurrent
+  · show sevm.codeAddress = some (Nat.toAdr 100)
+    rw [sevmEq]
+    exact hcodeAddress
+  · show some sevm.code.toList = (runtime officialParams).compile
+    rw [sevmEq]
+    show some msg.code.toList = _
+    rw [hcodeBytes, lidoCircuitBreakerCode_compile]
+
+/-- Exact-instance identity requires the storage owner: the concrete
+direct-`pause` root inhabits `exactInvocation` at the deployed owner, and the
+same root — same entry PC, same code address, same compiled bytes — fails it
+for every other nominated storage owner, by nothing more than the
+storage-target projection.  This is the semantic content whose deletion the
+labelled storage-owner header mutations relabel. -/
+theorem storage_owner_identity_required_control :
+    ∃ (sevm : Sevm) (pre raw : Devm)
+      (rootExec : Exec 0 sevm pre (.error (.revert, raw))),
+      (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+          Exec.Deriv).exactInvocation
+        (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100) ∧
+      ∀ other : Adr, other ≠ Nat.toAdr 100 →
+        ¬ (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+            Exec.Deriv).exactInvocation
+          (runtime officialParams) other (Nat.toAdr 100) := by
+  obtain ⟨sevm, pre, raw, rootExec, invocation⟩ := directPauseExactInvocation
+  refine ⟨sevm, pre, raw, rootExec, invocation, ?_⟩
+  intro other hne contra
+  exact hne (contra.2.1.symm.trans invocation.2.1)
+
+/-- Exact-instance identity requires the code address independently of the
+storage owner: the same concrete root, with identical entry PC, storage
+target, and compiled bytes, fails `exactInvocation` for every other nominated
+code address, by the code-address projection alone.  Equal code bytes do not
+substitute for code-address identity. -/
+theorem code_address_identity_required_control :
+    ∃ (sevm : Sevm) (pre raw : Devm)
+      (rootExec : Exec 0 sevm pre (.error (.revert, raw))),
+      (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+          Exec.Deriv).exactInvocation
+        (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100) ∧
+      ∀ other : Adr, other ≠ Nat.toAdr 100 →
+        ¬ (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+            Exec.Deriv).exactInvocation
+          (runtime officialParams) (Nat.toAdr 100) other := by
+  obtain ⟨sevm, pre, raw, rootExec, invocation⟩ := directPauseExactInvocation
+  refine ⟨sevm, pre, raw, rootExec, invocation, ?_⟩
+  intro other hne contra
+  exact hne (Option.some.inj (contra.2.2.1.symm.trans invocation.2.2.1))
+
+/-- Owner closure is derived, never assumed: from installation-grade evidence
+alone — the installed exact runtime and the exact root invocation — the
+production bridge produces the committed exact frame of a retained owner
+write, and the same write is independently visible to the commitment-free raw
+traversal.  Under the labelled owner-closure mutation the committed-frame
+invocation would instead be a caller-supplied assumption, and this
+composition — which supplies only installation facts — could not be stated.
+Neither production result states the conjunction below alone. -/
+theorem owner_closure_assumed_premise_rejected
+    {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    (installed : Prog.At (runtime dp) ca pc sevm pre)
+    (rootExact :
+      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+        (runtime dp) ca ca)
+    (write : Exec.SuccessfulSstoreOccurrence
+      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))
+    (retained : write.Retained)
+    (owner : write.storageOwner = ca) :
+    ∃ frame ∈ Exec.committedFrames run,
+      frame.exactInvocation (runtime dp) ca ca ∧
+        Exec.Deriv.ParentPrefix frame.rootDeriv write.occurrence.node ∧
+        ∃ rawRoot ∈ Exec.rawFrameRoots run,
+          Exec.Deriv.ParentPrefix rawRoot write.occurrence.node := by
+  rcases Exec.retainedSstore_runtimeOwnerClosure run committed installed
+      rootExact write retained owner with
+    ⟨frame, member, invocation, sameFrame⟩
+  rcases (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix run
+      write.occurrence.node).mp write.occurrence.reached with
+    ⟨rawRoot, rawMember, rawPrefix⟩
+  exact ⟨frame, member, invocation, sameFrame, rawRoot, rawMember, rawPrefix⟩
 
 end Blanc.LidoCircuitBreaker.AccessControls
