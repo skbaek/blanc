@@ -1385,12 +1385,17 @@ theorem registerPauser_body_absentZero_runCompiled
         .call setPauserSlot) post := by
     unfold arg cdl
     func_run (15) [51, 3, 3, 3]
-    all_goals first
-      | exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
-      | exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
-      | exact Devm.extCost_of_size (n := 576) (hM2Size _ _) (by decide +kernel)
-      | exact Devm.extCost_of_size (n := 608) (hM3Size _ _) (by decide +kernel)
-      | skip
+    -- Each extension goal takes exactly the alternative that fits it, in the
+    -- order `func_run` emits them.  A `first` combinator over all four cost
+    -- ~40 s here: a failed `exact` still unifies `N.size = n` against the
+    -- write tower, so every goal paid for the alternatives it did not need.
+    case h_ext => exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
+    case h_ext =>
+      exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
+    case h_ext =>
+      exact Devm.extCost_of_size (n := 576) (hM2Size _ _) (by decide +kernel)
+    case h_ext =>
+      exact Devm.extCost_of_size (n := 608) (hM3Size _ _) (by decide +kernel)
     case h_body =>
       rw [hargTarget, hargNew]
       change Func.RunCompiled fs sevm

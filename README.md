@@ -352,20 +352,59 @@ handful of runs.
 
 **The routine instrument.** The bisection above is for a file that has already
 stopped responding. To catch the same class *before* it becomes a hang, profile
-the module directly:
+the module. Ask *which declaration* first:
 
 ```
-lake env lean -Dprofiler=true -Dprofiler.threshold=400 Blanc/<Module>.lean
+lake env lean -Dtrace.profiler=true -Dtrace.profiler.threshold=2000 Blanc/<Module>.lean
 ```
 
-Read the output by tactic name, not by duration alone. `exact`, `assumption`,
+Its `[Elab.async]` lines name the declaration being elaborated and its total
+time, so one run ranks every proof in the module. Prefer this to
+`-Dprofiler=true`, whose output is a flat list of tactic durations with no
+attribution — useful only once you already know where you are.
+
+Read the per-tactic view by name, not by duration alone. `exact`, `assumption`,
 `rfl`, `apply` and `change` perform no search, so a multi-second entry naming
 one of them is almost always definitional-equality work — the subcritical form
 of the trap above, quietly costing tens of seconds per site rather than
 hanging. `simp`, `omega`, `decide`, `func_run` and `congr` are expected to take
 real time, and their durations carry no such implication. A repeated identical
 cluster of timings is one defect with several call sites, not several defects,
-and is fixed once in a shared lemma.
+and is fixed once.
+
+Cost tracks neither line count nor declaration count. In this repository's
+registration family the largest module is the cheapest by a factor of six, and
+two proofs out of ninety-six held sixty percent of the elaboration time.
+
+**A failed alternative is not free.** `first | tac₁ | tac₂ | …`, `try`, and
+`all_goals` charge full elaboration for every alternative that is *attempted*,
+not merely the one that succeeds. That is harmless when the alternatives fail
+cheaply and ruinous when failing requires an expensive unification. The
+measured instance: four memory-extension goals discharged by
+
+```
+all_goals first
+  | exact Devm.extCost_of_size (n := 0)   rfl          (by decide +kernel)
+  | exact Devm.extCost_of_size (n := 544) (hM1Size _)  (by decide +kernel)
+  | …
+```
+
+Each goal that needed a later alternative first unified `N.size = n` against a
+nested `Mem.write` tower for every earlier `n` and threw the result away. One
+45-line proof cost **46.4 s**; dispatching each goal by its tag in the order
+`func_run` emits them —
+
+```
+case h_ext => exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
+case h_ext => exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
+```
+
+— brought the identical proof to **5.1 s**. Three copies of that shape were
+95 s of a 161 s module. So: when the alternatives of a `first` differ only in
+an implicit argument that must be unified against a large term, do not let the
+combinator guess. Name the goal and apply the one lemma that fits. Repeated
+`case <tag> =>` blocks consume same-tagged goals in emission order, which is
+what makes this rewrite mechanical.
 
 ## Proof-module size and partition
 

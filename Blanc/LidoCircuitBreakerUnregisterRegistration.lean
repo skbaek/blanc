@@ -1411,12 +1411,17 @@ private theorem registerPauser_stageArgs_runCompiled
     decide +kernel
   unfold arg cdl
   func_run (15) [51, 3, 3, 3]
-  all_goals first
-    | exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
-    | exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
-    | exact Devm.extCost_of_size (n := 576) (hM2Size _ _) (by decide +kernel)
-    | exact Devm.extCost_of_size (n := 608) (hM3Size _ _) (by decide +kernel)
-    | skip
+  -- Each extension goal takes exactly the alternative that fits it, in the
+  -- order `func_run` emits them.  A `first` combinator over all four cost
+  -- 46.4 s here (measured): a failed `exact` still unifies `N.size = n`
+  -- against the write tower, so every goal paid for the alternatives it did
+  -- not need.  Ordered `case h_ext` blocks brought the same proof to 5.1 s.
+  case h_ext => exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
+  case h_ext => exact Devm.extCost_of_size (n := 544) (hM1Size _) (by decide +kernel)
+  case h_ext =>
+    exact Devm.extCost_of_size (n := 576) (hM2Size _ _) (by decide +kernel)
+  case h_ext =>
+    exact Devm.extCost_of_size (n := 608) (hM3Size _ _) (by decide +kernel)
   case h_body =>
     rw [hargTarget, hargNew]
     change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
