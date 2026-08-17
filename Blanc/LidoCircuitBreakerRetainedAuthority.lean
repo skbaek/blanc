@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerAuthority
 import Blanc.LidoCircuitBreakerOwnerClosure
+import Blanc.LidoCircuitBreakerRegistry
 
 /-!
 Settlement-retained authority for the exact Lido CircuitBreaker runtime.
@@ -8,6 +9,11 @@ This leaf composes the contract-local owner-closure theorem, the generic
 retained-last-writer theorem, and arbitrary-outcome runtime authority.  Raw
 occurrence classification remains in `LidoCircuitBreakerAuthority`; this file
 only narrows a changed committed owner cell to its last surviving writer.
+
+The closing section runs the opposite way.  A noncommitting root carries no
+retained authority at all, so the retained theorems here are silent about it;
+the arbitrary-outcome raw theorem is not, and the production direct-`pause`
+control is an actual reverting execution that instantiates it.
 -/
 
 namespace Blanc.LidoCircuitBreaker
@@ -271,5 +277,91 @@ theorem Exec.no_runtimeOwnerCellAuthority_of_not_commits
       sitePc siteInstruction unique role rolePermitted roleAuthority =>
       exact Exec.no_committedFrame_of_not_commits
         run notCommitted frame frameCommitted
+
+/-! ## The arbitrary-outcome raw theorem is inhabited -/
+
+/-- The production direct-`pause` control instantiates
+`Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot` at a concrete
+execution: its assignment-clear `SSTORE` carries one exact source row and one
+of that row's permitted runtime authority roles.  The root reverts, so
+`Execution.commits` is false and none of the retained theorems above apply —
+this is exactly the region the arbitrary-outcome theorem was stated for.
+
+The raw frame traversal is a singleton because the control's certificate
+excludes `CALL` and `STATICCALL` at every reached node, and the runtime's
+structural source map has no other executable site: `CREATE`, `CREATE2`,
+`CALLCODE` and `DELEGATECALL` are absent from `runtime officialParams`.  The
+row is deliberately not identified; the point is that some row exists. -/
+theorem exists_runtimeWriteAuthority_of_directPauseControl :
+    ∃ (sevm : Sevm) (pre raw : Devm)
+      (rootExec : Exec 0 sevm pre (.error (.revert, raw)))
+      (write : Exec.SuccessfulSstoreOccurrence
+        (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv))
+      (row : RuntimePersistentWrite) (site : Prog.SourceSite)
+      (role : InvocationRole),
+      Execution.commits (.error (.revert, raw)) ≠ true ∧
+      Exec.rawFrameRoots rootExec =
+        [(⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv)] ∧
+      write.storageOwner = Nat.toAdr 100 ∧
+      row ∈ RuntimePersistentWrite.all ∧
+      row.sourceSite? officialParams = some site ∧
+      site.pc = write.occurrence.node.pc ∧
+      site.instruction = .reg .sstore ∧
+      role ∈ row.permittedRoles ∧
+      RuntimeWriteAuthority officialParams
+        (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv)
+        write.occurrence.node role := by
+  obtain ⟨msg, sevm, pre, raw, _htarget, currentTarget, codeAddress, codeBytes,
+    _hvalue, _hdata, sevmEq, _hpre, _hframe, _hwitness, _hcaller, _hassignment,
+    _hexpiry, _hlive, _htargetNe, _hcanonical, _hzeroCodeSize, _hrun, rootExec,
+    _houtput, ⟨⟨write, storageOwner, _hkey, _hwriteValue, _hzeroCode⟩,
+      noExternal⟩, _post, _hprocess, _herror, _hrestored⟩ :=
+    directPause_zeroCode_postWrite_error_control
+  let root : Exec.Deriv := ⟨0, sevm, pre, .error (.revert, raw), rootExec⟩
+  have invocation :
+      root.exactInvocation (runtime officialParams)
+        (Nat.toAdr 100) (Nat.toAdr 100) := by
+    refine ⟨rfl, ?_, ?_, ?_⟩
+    · show sevm.currentTarget = Nat.toAdr 100
+      rw [sevmEq]
+      exact currentTarget
+    · show sevm.codeAddress = some (Nat.toAdr 100)
+      rw [sevmEq]
+      exact codeAddress
+    · show some sevm.code.toList = (runtime officialParams).compile
+      rw [sevmEq]
+      show some msg.code.toList = _
+      rw [codeBytes, lidoCircuitBreakerCode_compile]
+  have reachedOfPrefix : ∀ node : Exec.Deriv,
+      Exec.Deriv.ParentPrefix root node → node ∈ Exec.rawNodes rootExec :=
+    fun node prefixed =>
+      (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix rootExec node).mpr
+        ⟨root, Exec.mem_rawFrameRoots_self rootExec, prefixed⟩
+  have childless : ∀ node : Exec.Deriv,
+      Exec.Deriv.ParentPrefix root node → ∀ x : Xinst,
+        ¬ Ninst.At node.sevm.code node.pc (.exec x) := by
+    intro node prefixed x decoded
+    rcases Exec.exists_ninstOccurrence_of_mem_rawNodes (root := root)
+        (reachedOfPrefix node prefixed) decoded with
+      ⟨occurrence, -, instructionEq⟩
+    rcases runtimeExec_instruction_exact invocation prefixed decoded with
+      rfl | rfl
+    · exact (noExternal occurrence).1 instructionEq
+    · exact (noExternal occurrence).2 instructionEq
+  have descendants : Exec.rawFrameDescendants rootExec = [] :=
+    Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt rootExec childless
+  have sameFrame : Exec.Deriv.ParentPrefix root write.occurrence.node :=
+    Exec.Deriv.parentPrefix_of_mem_rawNodes_of_rawFrameDescendants_eq_nil
+      descendants write.occurrence.reached
+  obtain ⟨row, site, rowMember, found, -, sitePc, siteInstruction, -,
+    role, rolePermitted, authority⟩ :=
+    Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot
+      write.occurrence write.instruction_eq
+      (Exec.mem_rawFrameRoots_self rootExec) invocation sameFrame
+  refine ⟨sevm, pre, raw, rootExec, write, row, site, role, ?_, ?_,
+    storageOwner, rowMember, found, sitePc, siteInstruction, rolePermitted,
+    authority⟩
+  · simp [Execution.commits]
+  · rw [Exec.rawFrameRoots, descendants]
 
 end Blanc.LidoCircuitBreaker

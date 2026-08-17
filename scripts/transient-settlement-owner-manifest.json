@@ -96,7 +96,7 @@
   ],
   "frozenAssuranceFiles": {
     "Blanc/ExecutionSettlement.lean": "e685e15b95d2e3c03378d5577d61b9b3f4b26593bac0d8e819c47c4d079b0289",
-    "Blanc/ExecutionOccurrence.lean": "16194c1b17fea5baa23f15c8c4420b414743fe13379791961b0039946ee03002",
+    "Blanc/ExecutionOccurrence.lean": "cfb5c43c75ba0197f6f0ed7f3f44e79475e454ef9b211ca6fdd95a80c144a9bf",
     "Blanc/CycleWriteFree.lean": "54408b348b2687dbf8096a486f13460217f79ac3da8ac985ae17558c78a19231",
     "scripts/ExecutionSettlementRegression.lean": "d1e4fc1aeb4e31a9188af49a9df1ce2bf23b87571544f7f31e0af1abcea74c2f",
     "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",

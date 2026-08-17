@@ -448,6 +448,87 @@ theorem Exec.ninstOccurrence_iff_mem_rawNodes
   · rintro ⟨hreached, hat⟩
     exact Exec.exists_ninstOccurrence_of_mem_rawNodes hreached hat
 
+/-! ## Frame-entry-free derivations
+
+`Exec` spawns a child frame only at `runErr` and `runOk`, and `Evm.step`
+reaches `.spawn` only through `Ninst.exec`.  Excluding every `Xinst` at every
+reached node therefore collapses the raw frame traversal to the outer root.
+The exclusion has to cover the whole `Xinst` family — `create`, `call`,
+`callcode`, `delcall`, `create2`, `statcall` — because any one of them alone
+produces a descendant. -/
+
+/-- A derivation whose reached nodes never decode an executable instruction
+enters no child frame.  Node level, so the recursion carries no occurrence
+transport. -/
+theorem Exec.rawFrameDescendants_eq_nil_of_no_xinstAt
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (childless : ∀ node ∈ Exec.rawNodes run, ∀ x : Xinst,
+      ¬ Ninst.At node.sevm.code node.pc (.exec x)) :
+    Exec.rawFrameDescendants run = [] := by
+  induction run with
+  | halt => simp [Exec.rawFrameDescendants]
+  | cont hstep next ih =>
+      simp only [Exec.rawFrameDescendants]
+      refine ih fun node reached => ?_
+      exact childless node (by simp [Exec.rawNodes, reached])
+  | doneErr => simp [Exec.rawFrameDescendants]
+  | doneOk hstep henter hresume next ih =>
+      simp only [Exec.rawFrameDescendants]
+      refine ih fun node reached => ?_
+      exact childless node (by simp [Exec.rawNodes, reached])
+  | runErr hstep henter child hresume childIh =>
+      rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+      exact absurd decoded
+        (childless _ (Exec.mem_rawNodes_self _) x)
+  | runOk hstep henter child hresume next childIh nextIh =>
+      rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+      exact absurd decoded
+        (childless _ (Exec.mem_rawNodes_self _) x)
+
+/-- Occurrence-facing form: no occurrence of the root decodes a frame-entering
+instruction, so the root enters no child frame. -/
+theorem Exec.rawFrameDescendants_eq_nil_of_no_execOccurrence
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (childless : ∀ occurrence : Exec.NinstOccurrence
+        (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
+      ∀ x : Xinst, occurrence.instruction ≠ .exec x) :
+    Exec.rawFrameDescendants run = [] := by
+  refine run.rawFrameDescendants_eq_nil_of_no_xinstAt ?_
+  intro node reached x decoded
+  rcases Exec.exists_ninstOccurrence_of_mem_rawNodes
+      (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)) reached decoded with
+    ⟨occurrence, -, instructionEq⟩
+  exact childless occurrence x instructionEq
+
+/-- The raw frame traversal of a frame-entry-free derivation is the singleton
+outer root.  This is the form that discharges a `Exec.rawFrameRoots`
+membership premise by `List.mem_singleton`. -/
+theorem Exec.rawFrameRoots_eq_singleton_of_no_execOccurrence
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (childless : ∀ occurrence : Exec.NinstOccurrence
+        (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
+      ∀ x : Xinst, occurrence.instruction ≠ .exec x) :
+    Exec.rawFrameRoots run = [⟨pc, sevm, pre, out, run⟩] := by
+  rw [Exec.rawFrameRoots,
+    Exec.rawFrameDescendants_eq_nil_of_no_execOccurrence run childless]
+
+/-- Every selected raw frame root of a frame-entry-free derivation is the
+outer root itself. -/
+theorem Exec.eq_of_mem_rawFrameRoots_of_no_execOccurrence
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {run : Exec pc sevm pre out} {frameRoot : Exec.Deriv}
+    (childless : ∀ occurrence : Exec.NinstOccurrence
+        (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
+      ∀ x : Xinst, occurrence.instruction ≠ .exec x)
+    (selected : frameRoot ∈ Exec.rawFrameRoots run) :
+    frameRoot = ⟨pc, sevm, pre, out, run⟩ := by
+  rw [Exec.rawFrameRoots_eq_singleton_of_no_execOccurrence run childless,
+    List.mem_singleton] at selected
+  exact selected
+
 /-- A successful persistent write occurrence.  There is intentionally no
 old-value/new-value inequality: a successful no-op `SSTORE` is retained. -/
 structure Exec.SuccessfulSstoreOccurrence (root : Exec.Deriv) : Type where
@@ -1778,6 +1859,51 @@ theorem Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix
   rw [Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix run node]
   simp only [Exec.rawFrameRoots, List.mem_cons]
   aesop
+
+/-- Same-frame strengthening of `Exec.rawFrameDescendants_eq_nil_of_no_xinstAt`:
+only the outer root's own continuation chain has to be free of executable
+instructions, because the first frame entered anywhere would be spawned on
+that chain.  A source-level "this program has no such instruction" fact is
+normally available only for same-frame nodes, so this is the form such a fact
+can discharge. -/
+theorem Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (childless : ∀ node : Exec.Deriv,
+      Exec.Deriv.ParentPrefix (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) node →
+        ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x)) :
+    Exec.rawFrameDescendants run = [] := by
+  induction run with
+  | halt => simp [Exec.rawFrameDescendants]
+  | cont hstep next ih =>
+      simp only [Exec.rawFrameDescendants]
+      exact ih fun node hprefix =>
+        childless node (.step (.cont hstep next) hprefix)
+  | doneErr => simp [Exec.rawFrameDescendants]
+  | doneOk hstep henter hresume next ih =>
+      simp only [Exec.rawFrameDescendants]
+      exact ih fun node hprefix =>
+        childless node (.step (.doneOk hstep henter hresume next) hprefix)
+  | runErr hstep henter child hresume childIh =>
+      rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+      exact absurd decoded (childless _ (.refl _) x)
+  | runOk hstep henter child hresume next childIh nextIh =>
+      rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+      exact absurd decoded (childless _ (.refl _) x)
+
+/-- With no entered child frame the raw chronology is exactly the outer root's
+own same-frame continuation chain.  This converts frame-entry freedom into the
+`ParentPrefix` premise that same-frame attribution theorems take. -/
+theorem Exec.Deriv.parentPrefix_of_mem_rawNodes_of_rawFrameDescendants_eq_nil
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {run : Exec pc sevm pre out} {node : Exec.Deriv}
+    (childless : Exec.rawFrameDescendants run = [])
+    (reached : node ∈ Exec.rawNodes run) :
+    Exec.Deriv.ParentPrefix (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) node := by
+  rcases (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix run node).mp
+      reached with ⟨root, member, hprefix⟩
+  rw [Exec.rawFrameRoots, childless, List.mem_singleton] at member
+  exact member ▸ hprefix
 
 /-- Under a committing root, retained-node membership is exactly membership in
 the root frame's same-frame prefix or in one of its landed descendant frames. -/
