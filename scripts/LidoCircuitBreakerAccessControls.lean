@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerAccess
 import Blanc.LidoCircuitBreakerRetainedAuthority
+import Blanc.LidoCircuitBreakerAttainment
 
 /-!
 Gate-owned controls for the Stage 5 access and temporal-authority family.
@@ -449,6 +450,73 @@ theorem guard_after_write_rejected :
       exact package liveGuard
   | pauseExpiry endpoint assignedGuard liveGuard assigned live writeSite =>
       exact package liveGuard
+
+/-! ### Permitted-role tightness at the one asymmetric row
+
+Every Registry-class row but one carries a symmetric role set, permitting both
+`adminRegistry` and `pauseRegistry`; every remaining row's set is a singleton.
+`afterOld.newCount` is the exception — Registry-class, yet register-only,
+because reaching it requires a nonzero new pauser.  It is therefore the single
+place where widening the permitted-role table has semantic content rather than
+bookkeeping content. -/
+
+/-- The role-widening mutant of the permitted-role table: `afterOld.newCount`
+made symmetric with its Registry siblings.  Unlike the structural inventory
+above, no expected string rejects this edit — `permittedRoles` is certified as
+an upper bound only, so enlarging a row's list falsifies no theorem that reads
+it. -/
+def widenedPermittedRoles :
+    RuntimePersistentWrite → List InvocationRole
+  | .afterOldNewCount => [.adminRegistry, .pauseRegistry]
+  | row => RuntimePersistentWrite.permittedRoles row
+
+/-- A permitted-role widening at `afterOld.newCount` is rejected on semantic
+grounds rather than by a pinned string.
+
+The first four conjuncts are the membership facts that flip: the mutant differs
+from the production table at exactly that row, and there exactly by adding
+`pauseRegistry`.  On their own they would pin nothing beyond the table's own
+text.  The fifth rules out a vacuous separation — among the rows permitting
+`adminRegistry` at all, `pauseRegistry` is permitted by every one *except* this
+row, so the exclusion is specific to it and not a blanket absence.  The last
+two are what give the membership facts teeth: every role the widening adds is
+provably unattainable at this row, so no exact runtime execution reaches
+`afterOld.newCount`'s frozen source site carrying a pause-registry authority
+payload.
+
+Epistemic status, stated plainly because it is the honest core of this control:
+only the negative direction is certified.  `RuntimePersistentWrite.permittedRoles`
+remains an upper bound.  That each *listed* role is genuinely reached — the
+positive direction, tightness — is not proved here or anywhere else yet, and
+nothing below may be read as claiming the role sets are exact. -/
+theorem permitted_role_widening_rejected :
+    (∀ row ∈ RuntimePersistentWrite.all, row ≠ .afterOldNewCount →
+        widenedPermittedRoles row =
+          RuntimePersistentWrite.permittedRoles row) ∧
+      InvocationRole.adminRegistry ∈
+        RuntimePersistentWrite.permittedRoles .afterOldNewCount ∧
+      InvocationRole.pauseRegistry ∉
+        RuntimePersistentWrite.permittedRoles .afterOldNewCount ∧
+      InvocationRole.pauseRegistry ∈
+        widenedPermittedRoles .afterOldNewCount ∧
+      (∀ row ∈ RuntimePersistentWrite.all,
+        InvocationRole.adminRegistry ∈
+            RuntimePersistentWrite.permittedRoles row →
+          (InvocationRole.pauseRegistry ∈
+              RuntimePersistentWrite.permittedRoles row ↔
+            row ≠ .afterOldNewCount)) ∧
+      ¬ Attainable officialParams .afterOldNewCount .pauseRegistry ∧
+      ∀ role ∈ widenedPermittedRoles .afterOldNewCount,
+        role ∉ RuntimePersistentWrite.permittedRoles .afterOldNewCount →
+          ¬ Attainable officialParams .afterOldNewCount role := by
+  refine ⟨by decide, by decide, by decide, by decide, by decide,
+    not_attainable_afterOldNewCount_pauseRegistry, ?_⟩
+  intro role member fresh
+  have roleEq : role = .pauseRegistry := by
+    revert member fresh
+    cases role <;> decide
+  subst roleEq
+  exact not_attainable_afterOldNewCount_pauseRegistry
 
 /-! ## AT6 owner-closure and settlement controls -/
 
