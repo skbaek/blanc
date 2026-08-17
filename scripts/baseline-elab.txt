@@ -802,3 +802,62 @@ OK	14.370	Blanc/LidoCircuitBreakerAccess.lean
 OK	1.221	Blanc/LidoCircuitBreakerAuthority.lean
 OK	2.831	Blanc/LidoCircuitBreakerOwnerClosure.lean
 OK	16.793	Blanc/LidoCircuitBreakerSites.lean
+#
+# The five rows below admit the Stage 5 registration family. Four are the
+# modules created when the 8,086-line Blanc/LidoCircuitBreakerTemporalTransitions
+# was partitioned into a shared substrate plus one leaf per registration
+# chronology (that module is deleted and holds no row); the fifth,
+# RetainedAuthority, is a genuine pre-existing omission - it was registered in
+# Blanc.lean without a row, which the gate counts as a regression.
+#
+# Each value is the per-file median of three separate uncontended sequential
+# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
+# all 112 files on exact already-built Lean source commit
+# 0d1b2af2f41245d41bc078993f18d32be628e6d7: 726.3 s, 730.7 s, and 720.3 s
+# total. The reports are `<session-scratchpad>/elab-run{1,2,3}.txt`. Values and
+# SHA-256 digests:
+#
+#   AbsentRegistration:      15.526, 15.113, 15.245 -> 15.245
+#                 3fe2f055b8c6241ecbd825b421b4365f64217a5d719c6c4d75c2230b54b1bf87
+#   FreshRegistration:       23.775, 23.714, 23.625 -> 23.714
+#                 61151c23bd7e13497db2d79f8141dc602270a401cd2e56eab2f71ef1d220d8ad
+#   RegistrySubstrate:       11.326, 11.647, 11.411 -> 11.411
+#                 1a3ba4a091a619a4be282ce7890f528b639d5d0789f71c93f7d5a50ddb100e28
+#   RetainedAuthority:        1.254,  1.274,  1.261 ->  1.261
+#                 16cc014986befe80becedd4d72ff11cc9f800e547ec09125c7f48ef02348c0b5
+#   UnregisterRegistration:  15.922, 16.220, 15.719 -> 15.922
+#                 bd6ff7d52b05646ec9cb52443dc9d07daf8d8e9450737de82abdc9d3dd7b3647
+#
+# `--rebase`, `--force`, `--full`, and manual cache editing were not used; the
+# runs measured all 112 files because the local cache was cold, which is the
+# documented automatic full fallback. Every pre-existing row remains
+# byte-for-byte unchanged.
+#
+# TWO KNOWN DEFECTIVE ROWS, deliberately left untouched. Both were correctly
+# admitted at commit 1ff7d5b and describe those files as they were then; each
+# recorded digest still matches that commit and no longer matches the file:
+#
+#   Access:     row 14.370 s, digest 16b8549d...,  753 lines at 1ff7d5b.
+#               Now 4,218 lines, measuring 46.880 / 47.153 / 40.044 s
+#               (median 46.880) - 3.3x its row, whose threshold is 28.740 s.
+#   Authority:  row  1.221 s, digest 2285b1d4...,   68 lines at 1ff7d5b.
+#               Now 6,071 lines, measuring 9.877 / 9.583 / 9.765 s
+#               (median 9.765) - 8.0x its row, whose threshold is 2.442 s.
+#
+# Neither file was touched by the registration split or the tactic optimization
+# that produced the rows above; both grew in earlier work, and neither row was
+# re-admitted when it did. The gate read green throughout only because these
+# modules' fingerprints stayed valid, so the cache reissued the pre-growth
+# measurements, and because `--list` compares nothing. The three full runs
+# recorded above refreshed the cache with honest values, which is what made the
+# condition visible: bare `scripts/check-elab.sh` now reports REGRESSION on
+# exactly these two files and on nothing else.
+#
+# Raising an existing row is outside this goal's admission authority, which
+# covers new production modules only, so both await an explicit decision. Do not
+# `--rebase`, and do not seed the cache to hide them.
+OK	15.245	Blanc/LidoCircuitBreakerAbsentRegistration.lean
+OK	23.714	Blanc/LidoCircuitBreakerFreshRegistration.lean
+OK	11.411	Blanc/LidoCircuitBreakerRegistrySubstrate.lean
+OK	1.261	Blanc/LidoCircuitBreakerRetainedAuthority.lean
+OK	15.922	Blanc/LidoCircuitBreakerUnregisterRegistration.lean

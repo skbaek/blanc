@@ -149,7 +149,7 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–107 measured files; 107 represented; full baseline set by the exact per-file rows below | from a few seconds when nothing is affected to ~10 min cache-cold or `--full` |
+| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–112 measured files; 112 represented; full baseline set by the exact per-file rows below | from a few seconds when nothing is affected to ~10 min cache-cold or `--full` |
 
 No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
 sequential elaboration gate is the longest at roughly ten minutes; every gate
