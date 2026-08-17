@@ -798,8 +798,8 @@ OK	42.170	Blanc/LidoCircuitBreakerEnumeration.lean
 # `--rebase`, `--force`, and manual cache editing were not used. Apart from
 # the one explicitly authorized Deploy refresh, every pre-existing row remains
 # byte-for-byte unchanged.
-OK	14.370	Blanc/LidoCircuitBreakerAccess.lean
-OK	1.221	Blanc/LidoCircuitBreakerAuthority.lean
+OK	46.880	Blanc/LidoCircuitBreakerAccess.lean
+OK	9.765	Blanc/LidoCircuitBreakerAuthority.lean
 OK	2.831	Blanc/LidoCircuitBreakerOwnerClosure.lean
 OK	16.793	Blanc/LidoCircuitBreakerSites.lean
 #
@@ -833,29 +833,54 @@ OK	16.793	Blanc/LidoCircuitBreakerSites.lean
 # documented automatic full fallback. Every pre-existing row remains
 # byte-for-byte unchanged.
 #
-# TWO KNOWN DEFECTIVE ROWS, deliberately left untouched. Both were correctly
-# admitted at commit 1ff7d5b and describe those files as they were then; each
-# recorded digest still matches that commit and no longer matches the file:
+# TWO EXPLICITLY AUTHORIZED ROW RE-SETS: the Access and Authority rows above.
+# Both were correctly admitted at commit 1ff7d5b and described those files as
+# they were then. Each row's recorded digest still matches its file at that
+# commit and no longer matches the file, so neither row had ever measured the
+# content it was guarding:
 #
-#   Access:     row 14.370 s, digest 16b8549d...,  753 lines at 1ff7d5b.
-#               Now 4,218 lines, measuring 46.880 / 47.153 / 40.044 s
-#               (median 46.880) - 3.3x its row, whose threshold is 28.740 s.
-#   Authority:  row  1.221 s, digest 2285b1d4...,   68 lines at 1ff7d5b.
-#               Now 6,071 lines, measuring 9.877 / 9.583 / 9.765 s
-#               (median 9.765) - 8.0x its row, whose threshold is 2.442 s.
+#   Access:     was 14.370 s, digest 16b8549d...,  753 lines at 1ff7d5b.
+#               Now 4,218 lines, measured 46.880 / 47.153 / 40.044 s
+#               -> 46.880 s. New threshold 94.760 s.
+#   Authority:  was  1.221 s, digest 2285b1d4...,   68 lines at 1ff7d5b.
+#               Now 6,071 lines, measured 9.877 / 9.583 / 9.765 s
+#               -> 9.765 s. New threshold 19.530 s.
 #
 # Neither file was touched by the registration split or the tactic optimization
-# that produced the rows above; both grew in earlier work, and neither row was
+# that produced the rows below; both grew in earlier work, and neither row was
 # re-admitted when it did. The gate read green throughout only because these
-# modules' fingerprints stayed valid, so the cache reissued the pre-growth
+# modules' fingerprints stayed valid, so the cache kept reissuing the pre-growth
 # measurements, and because `--list` compares nothing. The three full runs
-# recorded above refreshed the cache with honest values, which is what made the
-# condition visible: bare `scripts/check-elab.sh` now reports REGRESSION on
-# exactly these two files and on nothing else.
+# recorded below refreshed the cache with honest values, which is what made the
+# condition visible.
 #
-# Raising an existing row is outside this goal's admission authority, which
-# covers new production modules only, so both await an explicit decision. Do not
-# `--rebase`, and do not seed the cache to hide them.
+# These are size admissions, not performance concessions, and each was checked
+# for waste before being admitted rather than assumed benign:
+#
+#   Authority ran at 112% CPU - essentially serial - so 9.765 s is the honest
+#   sum of many small costs. Its most expensive declaration is a 2.07 s
+#   `private def`, and only about ten exceed 500 ms. At 1.6 s per thousand lines
+#   it is the cheapest module in the Lido family; the 68-line stub it replaced
+#   cost roughly eleven times more per line.
+#
+#   Access holds 24 `func_run` endpoint walks over the heartbeat and
+#   setHeartbeatInterval families, totalling 77.8 s of genuine instruction
+#   stepping, plus 76.1 s of `rfl` spread over 100 sites at 0.76 s each and
+#   18.8 s of `assumption` over 19. It contains no `all_goals first`, so the
+#   combinator-backtracking defect that cost the registration family 95 s is
+#   absent. At 10.5 s per thousand lines it is in family norms (FreshRegistration
+#   is 11.2, RegistrySubstrate 4.5). The diffuse `rfl` cost is the one real
+#   inefficiency and would take a hundred-site rewrite to recover; the
+#   `32 * (bytesWords heartbeatArithmeticPanicData).length` and `.zipIdx` terms
+#   near lines 3953-3998 are the likely contributors, and they sit inside
+#   statements, so reducing them is not statement-preserving.
+#
+# Measurements were taken by three separate uncontended
+# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
+# all 112 files at commit 0d1b2af (726.3 s, 730.7 s, 720.3 s). Both files are
+# byte-identical at the current candidate - Access de5b9036..., Authority
+# f21e5a09... - so those measurements describe exactly this content and were not
+# re-run. `--rebase`, `--force`, `--full` and cache seeding were not used.
 OK	15.245	Blanc/LidoCircuitBreakerAbsentRegistration.lean
 OK	23.714	Blanc/LidoCircuitBreakerFreshRegistration.lean
 OK	11.411	Blanc/LidoCircuitBreakerRegistrySubstrate.lean
