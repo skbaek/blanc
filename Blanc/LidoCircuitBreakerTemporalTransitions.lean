@@ -3395,6 +3395,46 @@ private def absentZeroTailClearPost (sevm : Sevm) (base : Devm)
     (absentZeroMovedIndexPost sevm base target next)
     (arrayEntrySlot next) 0
 
+/-! One-layer transport lemmas over an abstract base for the named removal
+states.  Definitional transport across the nested `temporalSstorePost` tower
+makes `whnf` unfold the base state at every layer and is measured to diverge;
+peeling one named layer at a time by rewrite keeps every term small.  Use
+these instead of `exact`/`change` across a tower or a `simp only` that
+unfolds several `absentZero*Post` definitions at once. -/
+
+private theorem absentZeroHolePost_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) (target next : B256) :
+    (absentZeroHolePost sevm base target next).accessedStorageKeys =
+      base.accessedStorageKeys := rfl
+
+private theorem absentZeroMovedIndexPost_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) (target next : B256) :
+    (absentZeroMovedIndexPost sevm base target next).accessedStorageKeys =
+      base.accessedStorageKeys := rfl
+
+private theorem absentZeroTailClearPost_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) (target next : B256) :
+    (absentZeroTailClearPost sevm base target next).accessedStorageKeys =
+      base.accessedStorageKeys := rfl
+
+private theorem absentZeroLengthRestorePost_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) (oldLength : B256) :
+    (absentZeroLengthRestorePost sevm base oldLength).accessedStorageKeys =
+      base.accessedStorageKeys := rfl
+
+private theorem absentZeroRemovePost_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) (target oldLength : B256) :
+    (absentZeroRemovePost sevm base target oldLength).accessedStorageKeys =
+      base.accessedStorageKeys := rfl
+
+private theorem absentZeroTailClearPost_logs
+    (sevm : Sevm) (base : Devm) (target next : B256) :
+    (absentZeroTailClearPost sevm base target next).logs = base.logs := rfl
+
+private theorem absentZeroRemovePost_logs
+    (sevm : Sevm) (base : Devm) (target oldLength : B256) :
+    (absentZeroRemovePost sevm base target oldLength).logs = base.logs := rfl
+
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 800000 in
 private theorem removeTarget_storePrefix_absentZero_runCompiled
@@ -6966,8 +7006,8 @@ private theorem removeTarget_storePrefix_foundZeroRetained_runCompiled
     exact hcountTail
   have hwarmCountRemove : (sevm.currentTarget, countKey) ∈
       removePost.accessedStorageKeys := by
-    simp only [removePost, absentZeroRemovePost,
-      absentZeroLengthRestorePost, temporalSstorePost_accessedStorageKeys]
+    simp only [removePost]
+    rw [absentZeroRemovePost_accessedStorageKeys]
     exact hwarmCountTail
   have hfinish := finishSetPauser_retainedOldZero_runCompiled dp sevm
     removePost M img target oldPauser remaining stack G hstack hreads htarget
