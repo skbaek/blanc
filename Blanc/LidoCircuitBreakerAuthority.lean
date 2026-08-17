@@ -60,13 +60,17 @@ inductive RuntimeWriteAuthority
       (endpoint : RuntimeEndpointOccurrence dp frameRoot write
         (registerPauser dp))
       (guard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
-      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin) :
+      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin)
+      (writeSite : ∃ site ∈ runtimePersistentSourceSites dp,
+        site.pc = write.pc ∧ site.path.functionIndex ∈ [14, 15, 16, 17]) :
       RuntimeWriteAuthority dp frameRoot write .adminRegistry
   | adminExpiry
       (endpoint : RuntimeEndpointOccurrence dp frameRoot write
         (registerPauser dp))
       (guard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
-      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin) :
+      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin)
+      (writeSite : ∃ site ∈ runtimePersistentSourceSites dp,
+        site.pc = write.pc ∧ site.path.functionIndex = registerAfterSetSlot) :
       RuntimeWriteAuthority dp frameRoot write .adminExpiry
   | heartbeatExpiry
       (endpoint : RuntimeEndpointOccurrence dp frameRoot write heartbeat)
@@ -90,7 +94,9 @@ inductive RuntimeWriteAuthority
           frameRoot.sevm.caller.toB256)
       (live : frameRoot.sevm.benvStat.time < frameRoot.devm.getStorVal
         frameRoot.sevm.currentTarget
-        (expirySlot frameRoot.sevm.caller.toB256)) :
+        (expirySlot frameRoot.sevm.caller.toB256))
+      (writeSite : ∃ site ∈ runtimePersistentSourceSites dp,
+        site.pc = write.pc ∧ site.path.functionIndex ∈ [14, 15, 17]) :
       RuntimeWriteAuthority dp frameRoot write .pauseRegistry
   | pauseExpiry
       (endpoint : RuntimeEndpointOccurrence dp frameRoot write pause)
@@ -102,7 +108,9 @@ inductive RuntimeWriteAuthority
           frameRoot.sevm.caller.toB256)
       (live : frameRoot.sevm.benvStat.time < frameRoot.devm.getStorVal
         frameRoot.sevm.currentTarget
-        (expirySlot frameRoot.sevm.caller.toB256)) :
+        (expirySlot frameRoot.sevm.caller.toB256))
+      (writeSite : ∃ site ∈ runtimePersistentSourceSites dp,
+        site.pc = write.pc ∧ site.path.functionIndex = pauseAfterSetSlot) :
       RuntimeWriteAuthority dp frameRoot write .pauseExpiry
 
 private theorem Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
@@ -275,6 +283,64 @@ private theorem runtimePersistentSourceSite_eq_of_pc
   exact (List.nodup_map_iff_inj_on sitesNodup).mp pcsNodup
     left leftMem right rightMem pcEq
 
+/-- Admin registry authority and admin expiry authority can never both hold at
+one runtime write.  Each role pins the write's own persistent source site to a
+disjoint set of source function indices, so a registry witness cannot be
+repacked as an expiry witness — which is exactly what makes an admin role-swap
+mutant fail rather than typecheck. -/
+theorem RuntimeWriteAuthority.adminRegistry_not_adminExpiry
+    {dp : DeployParams} {frameRoot write : Exec.Deriv} :
+    RuntimeWriteAuthority dp frameRoot write .adminRegistry →
+      ¬ RuntimeWriteAuthority dp frameRoot write .adminExpiry := by
+  intro registry expiry
+  cases registry with
+  | adminRegistry _ _ _ registrySite =>
+      cases expiry with
+      | adminExpiry _ _ _ expirySite =>
+          rcases registrySite with
+            ⟨registryWrite, registryMem, registryPc, registryIndex⟩
+          rcases expirySite with
+            ⟨expiryWrite, expiryMem, expiryPc, expiryIndex⟩
+          have siteEq : registryWrite = expiryWrite :=
+            runtimePersistentSourceSite_eq_of_pc registryMem expiryMem
+              (registryPc.trans expiryPc.symm)
+          rw [siteEq, expiryIndex] at registryIndex
+          exact absurd registryIndex (by decide)
+
+/-- Pause registry authority and pause expiry authority can never both hold at
+one runtime write.  Each role pins the write's own persistent source site to a
+disjoint set of source function indices, so a registry witness cannot be
+repacked as an expiry witness — which is exactly what makes a pause role-swap
+mutant fail rather than typecheck. -/
+theorem RuntimeWriteAuthority.pauseRegistry_not_pauseExpiry
+    {dp : DeployParams} {frameRoot write : Exec.Deriv} :
+    RuntimeWriteAuthority dp frameRoot write .pauseRegistry →
+      ¬ RuntimeWriteAuthority dp frameRoot write .pauseExpiry := by
+  intro registry expiry
+  cases registry with
+  | pauseRegistry _ _ _ _ _ registrySite =>
+      cases expiry with
+      | pauseExpiry _ _ _ _ _ expirySite =>
+          rcases registrySite with
+            ⟨registryWrite, registryMem, registryPc, registryIndex⟩
+          rcases expirySite with
+            ⟨expiryWrite, expiryMem, expiryPc, expiryIndex⟩
+          have siteEq : registryWrite = expiryWrite :=
+            runtimePersistentSourceSite_eq_of_pc registryMem expiryMem
+              (registryPc.trans expiryPc.symm)
+          rw [siteEq, expiryIndex] at registryIndex
+          exact absurd registryIndex (by decide)
+
+/-- A row's nominated source site is one of the runtime's persistent write
+sites.  This is the site-level fact the role-pinning authority fields carry. -/
+private theorem RuntimePersistentWrite.sourceSite?_mem
+    {dp : DeployParams} {row : RuntimePersistentWrite}
+    {site : Prog.SourceSite}
+    (found : row.sourceSite? dp = some site) :
+    site ∈ runtimePersistentSourceSites dp := by
+  have siteSound := row.sourceSite?_sound found
+  exact List.mem_filter.mpr ⟨siteSound.1, by rw [siteSound.2]; rfl⟩
+
 private theorem RuntimePersistentWrite.sourceFunctionIndex_of_terminal
     {dp : DeployParams} {root target : Exec.Deriv}
     {row : RuntimePersistentWrite} {site : Prog.SourceSite}
@@ -292,9 +358,8 @@ private theorem RuntimePersistentWrite.sourceFunctionIndex_of_terminal
   let terminalSite : Prog.SourceSite :=
     { path := finalPath, pc := finalCursor.pc,
       instruction := (.reg .sstore) }
-  have siteSound := row.sourceSite?_sound found
   have siteMember : site ∈ runtimePersistentSourceSites dp :=
-    List.mem_filter.mpr ⟨siteSound.1, by rw [siteSound.2]; rfl⟩
+    RuntimePersistentWrite.sourceSite?_mem found
   have terminalMember : terminalSite ∈ runtimePersistentSourceSites dp :=
     List.mem_filter.mpr ⟨sourceMember, rfl⟩
   have terminalPc : finalCursor.pc = target.pc := by
@@ -5381,7 +5446,11 @@ private theorem runtimeDispatchCut_registerPauserAuthority
           rw [exactFunction]
           exact functionIndex)
       exact ⟨.adminRegistry, permitted,
-        .adminRegistry endpoint guard callerEq⟩
+        .adminRegistry endpoint guard callerEq
+          ⟨site, RuntimePersistentWrite.sourceSite?_mem found, sitePc, by
+            rw [RuntimePersistentWrite.sourceSite?_functionIndex found,
+              exactFunction]
+            exact functionIndex⟩⟩
   | registerAfterSet afterCursor afterRoute =>
       rcases registerAfterSetTarget afterCursor compiled targetAt afterRoute with
         ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
@@ -5393,7 +5462,10 @@ private theorem runtimeDispatchCut_registerPauserAuthority
         RuntimePersistentWrite.adminExpiry_mem_of_functionIndex
           (exactFunction.trans functionIndex)
       exact ⟨.adminExpiry, permitted,
-        .adminExpiry endpoint guard callerEq⟩
+        .adminExpiry endpoint guard callerEq
+          ⟨site, RuntimePersistentWrite.sourceSite?_mem found, sitePc,
+            (RuntimePersistentWrite.sourceSite?_functionIndex found).trans
+              (exactFunction.trans functionIndex)⟩⟩
 
 private inductive PauseAuthorityEvidence
     (dp : DeployParams) (frameRoot write : Exec.Deriv) : Prop
@@ -5860,7 +5932,11 @@ private theorem runtimeDispatchCut_pauseAuthority
               rw [exactFunction]
               exact functionIndex)
           exact ⟨.pauseRegistry, permitted,
-            .pauseRegistry endpoint assignedGuard liveGuard assigned live⟩
+            .pauseRegistry endpoint assignedGuard liveGuard assigned live
+              ⟨site, RuntimePersistentWrite.sourceSite?_mem found, sitePc, by
+                rw [RuntimePersistentWrite.sourceSite?_functionIndex found,
+                  exactFunction]
+                exact functionIndex⟩⟩
       | pauseAfterSet afterCursor afterRoute =>
           rcases pauseAfterSetTarget afterCursor compiled targetAt afterRoute with
             ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
@@ -5872,7 +5948,10 @@ private theorem runtimeDispatchCut_pauseAuthority
             RuntimePersistentWrite.pauseExpiry_mem_of_functionIndex
               (exactFunction.trans functionIndex)
           exact ⟨.pauseExpiry, permitted,
-            .pauseExpiry endpoint assignedGuard liveGuard assigned live⟩
+            .pauseExpiry endpoint assignedGuard liveGuard assigned live
+              ⟨site, RuntimePersistentWrite.sourceSite?_mem found, sitePc,
+                (RuntimePersistentWrite.sourceSite?_functionIndex found).trans
+                  (exactFunction.trans functionIndex)⟩⟩
 
 /-- The concrete runtime entry JUMPDEST is storage-silent.  This retains that
 entry fact alongside the target-directed main cursor used by the authority
