@@ -38,6 +38,7 @@ AT7_MODULES = (
     ROOT / "Blanc/LidoCircuitBreakerFreshRegistration.lean",
     ROOT / "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
     ROOT / "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
+    ROOT / "Blanc/LidoCircuitBreakerReplacementRegistration.lean",
 )
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 

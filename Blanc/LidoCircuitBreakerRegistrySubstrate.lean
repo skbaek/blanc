@@ -7,8 +7,8 @@ This leaf carries what every registration chronology needs: the temporal
 SLOAD/SSTORE transition layer, the scratch-word prepend lemmas, the generalized
 swap-pop removal walk, the chronology-independent `finishSetPauser` and
 `afterOldPauser` glue, the shared `setPauserKernel` prefixes for the append and
-the found arms, the shared `registerAfterSet` old-last prefix, and the dispatch
-and settlement scaffolding.
+the found arms, the shared `registerAfterSet` old-last prefix and
+nonzero-new-pauser suffix, and the dispatch and settlement scaffolding.
 
 Nothing here is specific to one chronology.  A declaration that mentions a
 chronology in its name belongs in that chronology's leaf, not in this file.  A
@@ -41,6 +41,37 @@ theorem Bytes.sliceD_writeAt_after
   have hi' := List.mem_range.mp hi
   rw [Bytes.getD_writeAt, if_neg]
   omega
+
+/-- Writing one word at memory offset `0` — the event-payload scratch slot every
+`registerAfterSet` expiry arm uses — leaves the new-pauser scratch word intact,
+because word 17 starts far past the first 32 bytes. -/
+private theorem readNewPauser_after_writeZero
+    {M : Mem} {bs : Bytes} {w : B256}
+    (hwf : Mem.Wf M) (hreads : Mem.Reads M bs) :
+    ((M.write 0 w.toBytes).read
+      (newPauserWord * 32).toNat 32).1 =
+      (M.read (newPauserWord * 32).toNat 32).1 := by
+  rw [Mem.Reads.read (Mem.Reads.write hwf hreads 0 w.toBytes),
+    Mem.Reads.read hreads, List.sliceD_eq_map, List.sliceD_eq_map]
+  apply List.map_congr_left
+  intro i hi
+  rw [Bytes.getD_writeAt, if_neg]
+  have hi' := List.mem_range.mp hi
+  rw [B256.length_toBytes]
+  have hoff : 32 ≤ (newPauserWord * 32).toNat := by decide
+  omega
+
+/-- A one-word write at offset `0` cannot grow a memory that already covers its
+first word. -/
+private theorem size_writeZero_word_of_le
+    {M : Mem} {w : B256} (h : 32 ≤ M.size) :
+    (M.write 0 w.toBytes).size = M.size := by
+  rcases hb : w.toBytes with _ | ⟨b, bs⟩
+  · exact absurd (hb ▸ B256.length_toBytes w) (by simp)
+  · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
+    simp only [Mem.write, hlen, Nat.zero_add]
+    rw [if_pos h]
+    split <;> rfl
 
 theorem addAccessedStorageKey_setMach_setMach
     {base : Devm} {target : Adr} {key : B256} {m m' : Mach} :
@@ -925,6 +956,262 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     have hg : G + 1567 + clearCost - 22 = G + 1545 + clearCost := by omega
     rw [hg]
     exact holdTail
+
+set_option maxRecDepth 8192 in
+/-- The checked expiry `SSTORE` and the `HeartbeatUpdated(newPauser)` record that
+close every nonzero-new-pauser `registerAfterSet` arm, entered with the expiry
+key and the computed expiry on the stack and the expiry already staged as the
+event payload at memory offset `0`.
+
+The stored value's `SSTORE` cost is caller-supplied, so nothing here assumes the
+new pauser's expiry slot was previously zero. -/
+private theorem registerAfterSet_expiryStoreLogTail_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes)
+    (newPauser expiry currentExpiry expiryOriginal : B256)
+    (stack : List B256) (storeCost G : Nat)
+    (hstack : stack.length ≤ 1)
+    (hwf : Mem.Wf M)
+    (hreads : Mem.Reads M img)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hsize : 640 ≤ M.size)
+    (halign : M.size % 32 = 0)
+    (hexpiry : base.getStorVal sevm.currentTarget
+      (expirySlot newPauser) = currentExpiry)
+    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+      (expirySlot newPauser) = expiryOriginal)
+    (hwarmExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
+      base.accessedStorageKeys)
+    (hstoreCost : sstoreValueCost expiryOriginal currentExpiry expiry =
+      storeCost)
+    (hgasStipend : gCallStipend < G + 1395 + storeCost)
+    (hstatic : sevm.isStatic = false) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨expirySlot newPauser :: expiry :: stack,
+        M.write 0 expiry.toBytes, G + 1395 + storeCost⟩)
+      (Ninst.sstore :::
+        loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+        logWith 1 0 1 +++ Func.stop)
+      (((temporalSstorePost sevm base (expirySlot newPauser) expiry).addLog
+        ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
+          expiry.toBytes⟩).setMach
+        ⟨stack, M.write 0 expiry.toBytes, G⟩) := by
+  let M' := M.write 0 expiry.toBytes
+  let storePost := temporalSstorePost sevm base (expirySlot newPauser) expiry
+  have hsizeM' : M'.size = M.size := size_writeZero_word_of_le (by omega)
+  have halign' : M'.size % 32 = 0 := by rw [hsizeM']; exact halign
+  have hnewCovered' : (newPauserWord * 32).toNat + 32 ≤ M'.size := by
+    rw [hsizeM']
+    have hoff : (newPauserWord * 32).toNat + 32 ≤ 640 := by decide
+    omega
+  have hzeroCovered' : 0 + 32 ≤ M'.size := by omega
+  have hnewValue' :
+      (M'.read (newPauserWord * 32).toNat 32).1.toB256 = newPauser := by
+    rw [readNewPauser_after_writeZero hwf hreads, Mem.Reads.read hreads]
+    exact hnew
+  have hnewMemory' :
+      (M'.read (newPauserWord * 32).toNat 32).2 = M' := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign' hnewCovered')]
+  have hzeroMemory' : (M'.read 0 32).2 = M' := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign' hzeroCovered')]
+  have hexpiryBytes : expiry.toBytes ≠ [] := by
+    intro h
+    have hlen := B256.length_toBytes expiry
+    rw [h] at hlen
+    simp at hlen
+  have hzeroRead' : (M'.read 0 32).1 = expiry.toBytes := by
+    simpa only [B256.length_toBytes] using (Mem.read_write_zero M hexpiryBytes)
+  have hsstore : Ninst.RunCompiled sevm
+      (base.setMach ⟨expirySlot newPauser :: expiry :: stack, M',
+        G + 1395 + storeCost⟩) Ninst.sstore
+      (storePost.setMach ⟨stack, M', G + 1395⟩) :=
+    temporal_sstore_runCompiled hexpiry hexpiryOrig hstoreCost hwarmExpiry
+      hgasStipend hstatic
+  have htail : Func.RunCompiled fs sevm
+      (storePost.setMach ⟨stack, M', G + 1395⟩)
+      (loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+        logWith 1 0 1 +++ Func.stop)
+      ((storePost.addLog
+        ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
+          expiry.toBytes⟩).setMach ⟨stack, M', G⟩) := by
+    suffices h : ∃ out, Func.RunCompiled fs sevm
+        (storePost.setMach ⟨stack, M', G + 1395⟩)
+        (loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+          logWith 1 0 1 +++ Func.stop) out ∧
+        out = (storePost.addLog
+          ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
+            expiry.toBytes⟩).setMach ⟨stack, M', G⟩ by
+      obtain ⟨out, hrun, heq⟩ := h
+      exact heq ▸ hrun
+    apply Exists.intro
+    constructor
+    · func_run [3, 1381]
+      all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+      case h_cost =>
+        rw [Devm.extCost_zero_of_le halign' hnewCovered']
+        norm_num [gVerylow]
+      case h_cost =>
+        rw [show ((0 : B256) * 32).toNat = 0 by decide,
+          show ((1 : B256) * 32).toNat = 32 by decide]
+        rw [hnewMemory']
+        rw [Devm.extCost_zero_of_le halign' (by omega)]
+        norm_num [gLog, gLogdata, gLogtopic]
+      case a => exact Func.RunCompiled.last rfl
+    · rw [hnewValue', hnewMemory']
+      rw [show ((0 : B256) * 32).toNat = 0 by decide,
+        show ((1 : B256) * 32).toNat = 32 by decide]
+      rw [hzeroRead', hzeroMemory']
+      have hg : G + 1395 - 1395 = G := by omega
+      rw [hg]
+      rfl
+  exact Func.RunCompiled.next hsstore htail
+
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 800000 in
+/-- Generic **nonzero-new-pauser** suffix of `registerAfterSet`: the shared
+subterm all three arms reach after the previous pauser has been disposed of.  The
+new-pauser scratch word is nonzero, so the walk computes the checked heartbeat
+expiry from `block.timestamp` and the stored interval, stages it as the event
+payload at memory offset `0`, stores it at the new pauser's expiry slot and emits
+`HeartbeatUpdated(newPauser)`.
+
+Glue cost 3569 gas above the caller's reserve, plus the expiry `SSTORE` value
+cost: 22 for the new-pauser load, `iszero` and untaken branch, 2124 for
+`checkedHeartbeatExpiry` (including the **cold** interval `SLOAD`, which
+`hintervalCold` states as a premise), 14 for the untaken overflow branch, 14 for
+the duplicated sum and its `MSTORE` at offset `0`, 12 for the expiry key, and
+1395 for the store's own load-and-`LOG2` tail.
+
+Generic in everything the branch does not fix.  In particular there is **no**
+premise that the target was absent or that the previous pauser was zero — the
+enclosing arm has already consumed that word — and the new pauser's current
+expiry, its original value and the resulting `SSTORE` cost are all
+caller-supplied, so a new pauser that already holds a live expiry instantiates
+this as readily as a fresh one.  The memory bound is `640 ≤ M.size`, which the
+found arm's 640 and the append arm's 704 both satisfy. -/
+theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes)
+    (newPauser timestamp interval expiry currentExpiry expiryOriginal : B256)
+    (stack : List B256) (storeCost G : Nat)
+    (hstack : stack.length ≤ 1)
+    (hwf : Mem.Wf M)
+    (hreads : Mem.Reads M img)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hnewNonzero : newPauser ≠ 0)
+    (hsize : 640 ≤ M.size)
+    (halign : M.size % 32 = 0)
+    (htime : sevm.benvStat.time = timestamp)
+    (hinterval : base.getStorVal sevm.currentTarget
+      heartbeatIntervalSlot = interval)
+    (hintervalCold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
+      base.accessedStorageKeys)
+    (hexpiry : base.getStorVal sevm.currentTarget
+      (expirySlot newPauser) = currentExpiry)
+    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+      (expirySlot newPauser) = expiryOriginal)
+    (hwarmExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
+      base.accessedStorageKeys)
+    (hstoreCost : sstoreValueCost expiryOriginal currentExpiry expiry =
+      storeCost)
+    (hgasStipend : gCallStipend < G + 1395 + storeCost)
+    (hstatic : sevm.isStatic = false)
+    (hextension : CheckedHeartbeatExtension timestamp interval expiry) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨stack, M, G + 3569 + storeCost⟩)
+      (loadWord newPauserWord +++ Ninst.iszero :::
+        (Func.stop <?>
+          (checkedHeartbeatExpiry <|
+            dup 0 ::: mstoreAt 0 +++
+            loadWord newPauserWord +++ tagTop expiryRegion +++
+            Ninst.sstore :::
+            loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+            logWith 1 0 1 +++ Func.stop)))
+      (((temporalSstorePost sevm
+          (temporalSloadBase sevm base heartbeatIntervalSlot)
+          (expirySlot newPauser) expiry).addLog
+        ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
+          expiry.toBytes⟩).setMach
+        ⟨stack, M.write 0 expiry.toBytes, G⟩) := by
+  have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (newPauserWord * 32).toNat + 32 ≤ 640 := by decide
+    omega
+  have hnewMemory : (M.read (newPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
+  have hnewValue :
+      (M.read (newPauserWord * 32).toNat 32).1.toB256 = newPauser := by
+    rw [Mem.Reads.read hreads]
+    exact hnew
+  have hsum := CheckedHeartbeatExtension.add_eq hextension
+  have hle : timestamp ≤ expiry := by
+    rcases hextension with ⟨bound, rfl⟩
+    rw [B256.le_iff_toNat_le_toNat, B256.toNat_toB256_of_lt bound]
+    omega
+  have hsizeM' : (M.write 0 expiry.toBytes).size = M.size :=
+    size_writeZero_word_of_le (by omega)
+  have halignM' : (M.write 0 expiry.toBytes).size % 32 = 0 := by
+    rw [hsizeM']; exact halign
+  have hnewCoveredM' :
+      (newPauserWord * 32).toNat + 32 ≤ (M.write 0 expiry.toBytes).size := by
+    rw [hsizeM']; exact hnewCovered
+  have hnewValueM' :
+      ((M.write 0 expiry.toBytes).read
+        (newPauserWord * 32).toNat 32).1.toB256 = newPauser := by
+    rw [readNewPauser_after_writeZero hwf hreads]
+    exact hnewValue
+  have hnewMemoryM' :
+      ((M.write 0 expiry.toBytes).read
+        (newPauserWord * 32).toNat 32).2 = M.write 0 expiry.toBytes := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halignM' hnewCoveredM')]
+  have hafterIntervalEq :
+      temporalSloadBase sevm base heartbeatIntervalSlot =
+        addAccessedStorageKey base sevm.currentTarget
+          heartbeatIntervalSlot := by
+    simp only [temporalSloadBase, if_neg hintervalCold]
+  have htail := registerAfterSet_expiryStoreLogTail_runCompiled fs sevm
+    (temporalSloadBase sevm base heartbeatIntervalSlot) M img newPauser expiry
+    currentExpiry expiryOriginal stack storeCost G hstack hwf hreads hnew hsize
+    halign (by rw [temporalSloadBase_getStorVal]; exact hexpiry) hexpiryOrig
+    (temporalSloadBase_preserves_warm sevm base heartbeatIntervalSlot
+      (expirySlot newPauser) hwarmExpiry)
+    hstoreCost hgasStipend hstatic
+  func_run (20) [3, 0, expiry, 0, 0, 3, expirySlot newPauser]
+  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+  case h_cost =>
+    rw [Devm.extCost_zero_of_le halign hnewCovered]
+    norm_num [gVerylow]
+  case h_val =>
+    rw [hnewValue]
+    simp [B256.eqCheck, hnewNonzero]
+  case h_val =>
+    simp only [Devm.getStorVal_setMach]
+    rw [hinterval, htime, B256.add_comm, hsum]
+  case h_val =>
+    rw [htime]
+    simp [B256.ltCheck, hle]
+  case h_ext =>
+    rw [hnewMemory]
+    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+    rw [Devm.extCost_zero_of_le halign (by omega)]
+  case h_cost =>
+    rw [hnewMemory]
+    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+    rw [Devm.extCost_zero_of_le halignM' hnewCoveredM']
+    norm_num [gVerylow]
+  case h_val =>
+    rw [hnewMemory]
+    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+    rw [hnewValueM']
+    rfl
+  case a =>
+    rw [addAccessedStorageKey_setMach_setMach, hnewMemory]
+    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+    rw [hnewMemoryM', ← hafterIntervalEq]
+    have hg : G + 3569 + storeCost - 2174 = G + 1395 + storeCost := by omega
+    rw [hg]
+    exact htail
 
 /-- Exact kernel prefix reserve for the append arm: the outer nonzero guard
 and the assignment replacement for a target whose recorded pauser is zero,
