@@ -246,7 +246,10 @@ private theorem Exec.Deriv.SourceCursor.Toward.callCut_of_targetFunction
     · exact Or.inl ⟨finalPath, finalTail, finalCursor, targetEq,
         sourceMember, finalEq⟩
 
-private def RuntimePersistentWrite.sourceFunctionIndex :
+/-- Frozen source function index per row.  Public because the attainment
+consumers need it to refute a role at a row whose write sits in a different
+compiled function; see `RuntimeWriteAuthority`'s `writeSite` conjuncts. -/
+def RuntimePersistentWrite.sourceFunctionIndex :
     RuntimePersistentWrite → Nat
   | .setPauseDurationConfig | .setHeartbeatIntervalConfig
   | .heartbeatExpiry => 0
@@ -259,7 +262,8 @@ private def RuntimePersistentWrite.sourceFunctionIndex :
   | .registerLastOldNewExpiry | .registerRetainedOldNewExpiry => 19
   | .pauseLastTargetExpiry | .pauseRetainedTargetExpiry => 20
 
-private theorem RuntimePersistentWrite.sourceSite?_functionIndex
+/-- A row's nominated site sits in the row's frozen source function. -/
+theorem RuntimePersistentWrite.sourceSite?_functionIndex
     {dp : DeployParams} {row : RuntimePersistentWrite}
     {site : Prog.SourceSite}
     (found : row.sourceSite? dp = some site) :
@@ -269,7 +273,11 @@ private theorem RuntimePersistentWrite.sourceSite?_functionIndex
   rw [sitesEq] at found
   cases row <;> decide +kernel +revert
 
-private theorem runtimePersistentSourceSite_eq_of_pc
+/-- Compiled PCs identify persistent source sites: the twenty PCs are `Nodup`,
+so two listed sites sharing one PC are the same site.  This is what turns a
+role's `writeSite` index constraint into a refutation at a row in a different
+compiled function. -/
+theorem runtimePersistentSourceSite_eq_of_pc
     {dp : DeployParams} {left right : Prog.SourceSite}
     (leftMem : left ∈ runtimePersistentSourceSites dp)
     (rightMem : right ∈ runtimePersistentSourceSites dp)

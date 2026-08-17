@@ -1,7 +1,6 @@
 import Blanc.SourceAttainment
 import Blanc.LidoCircuitBreakerAuthority
 import Blanc.LidoCircuitBreakerFreshRegistration
-import Batteries.Tactic.OpenPrivate
 
 /-!
 Forward attainment for exact Lido CircuitBreaker runtime persistent writes.
@@ -22,11 +21,6 @@ frozen source site rather than existentially hidden.
 namespace Blanc.LidoCircuitBreaker
 
 open Jaune
-
-open private RuntimePersistentWrite.sourceFunctionIndex
-  RuntimePersistentWrite.sourceSite?_functionIndex
-  runtimePersistentSourceSite_eq_of_pc
-  from Blanc.LidoCircuitBreakerAuthority
 
 /-! ## The attainment predicate -/
 
