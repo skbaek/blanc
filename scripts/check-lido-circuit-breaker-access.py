@@ -253,7 +253,33 @@ ROLES = {
 # absent/zero, found-zero-retained) and folds it into ROLES.
 AT7_ROLES: dict = {}
 
-EXPECTED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+# Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
+# for its 439 audited rows: an EMPTY expectation means the theorem must depend
+# on NO axioms at all, passing on Lean's "does not depend on any axioms" report
+# and failing on any axiom whatsoever.
+#
+# A flat set cannot express that, and this gate probes every pin rather than a
+# hand-picked few, so the flat form was not merely imprecise here - it could not
+# pass. Three of the 52 pins are decision procedures depending on nothing, and
+# Lean's report for them does not match the "depends on axioms: [...]" shape at
+# all, so the gate failed with "unrecognised #print axioms output" rather than
+# with an axiom comparison. That was invisible because the missing-fixture check
+# aborts this gate long before the axiom probe runs.
+#
+# Every expectation is MEASURED, not inferred from the proof. Do not guess from
+# the tactic: `runtimeSourceEffectPcs_official` is `by decide +kernel` and still
+# reports all three, because the definitions it references carry them.
+STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+
+# Pins whose expectation is not STANDARD_AXIOMS. A pin absent from this table
+# must report exactly STANDARD_AXIOMS, so a new pin depending on nothing fails
+# until it is declared here, and a listed pin that acquires an axiom fails at
+# once.
+AXIOM_EXCEPTIONS: dict = {
+    "RuntimePersistentWrite.all_length": set(),
+    "RuntimePersistentWrite.inventory_exact": set(),
+    "constructor_inventory_cardinalities": set(),
+}
 
 def fail(message: str) -> None:
     raise SystemExit(f"REGRESSION — S5 access assurance: {message}")
@@ -569,20 +595,32 @@ def axiom_checks() -> None:
     for names in ROLES.values():
         for name in names:
             qualified = "Blanc.LidoCircuitBreaker." + name
+            expected = AXIOM_EXCEPTIONS.get(name, STANDARD_AXIOMS)
             match = re.search(
                 r"'" + re.escape(qualified) +
                 r"' depends on axioms: \[([^\]]*)\]",
                 run.stdout, re.DOTALL,
             )
-            if not match:
+            if match:
+                actual = {
+                    item.strip()
+                    for item in match.group(1).split(",") if item.strip()
+                }
+            elif re.search(
+                r"'" + re.escape(qualified) +
+                r"' does not depend on any axioms",
+                run.stdout,
+            ):
+                # Lean reports a wholly axiom-free result in a different shape.
+                # Reading it as the empty set is what lets an empty expectation
+                # mean "no axioms at all" rather than "unparseable".
+                actual = set()
+            else:
                 fail(f"{qualified}: unrecognised #print axioms output")
-            actual = {
-                item.strip() for item in match.group(1).split(",") if item.strip()
-            }
-            if actual != EXPECTED_AXIOMS:
+            if actual != expected:
                 fail(
                     f"{qualified}: axioms {sorted(actual)}, "
-                    f"expected {sorted(EXPECTED_AXIOMS)}"
+                    f"expected {sorted(expected) if expected else 'none'}"
                 )
 
 def main() -> None:
