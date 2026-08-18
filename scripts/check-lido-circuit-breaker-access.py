@@ -642,6 +642,20 @@ MUTATIONS = {
         ),
     },
     # ---- AT7: registration chronology weakenings ----
+    "fresh": {
+        # AT8, "registration revival requiring prior liveness": admin
+        # registration may revive an expired pauser, subject only to checked
+        # addition. Adding a liveness premise to the fresh-registration success
+        # theorem is exactly the forbidden reading -- it would make revival
+        # conditional on the pauser not having already expired.
+        "fresh registration made conditional on prior liveness": (
+            "    (hstatic : (initSevm msg).isStatic = false)\n"
+            "    (hextension : CheckedHeartbeatExtension timestamp interval expiry)",
+            "    (hstatic : (initSevm msg).isStatic = false)\n"
+            "    (hlive : timestamp < currentExpiry)\n"
+            "    (hextension : CheckedHeartbeatExtension timestamp interval expiry)",
+        ),
+    },
     "unregister": {
         # AT8, "lost last-pauser cleanup": when the removed target was the old
         # pauser's last, that pauser's expiry MUST be cleared.  Dropping the
