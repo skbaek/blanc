@@ -280,11 +280,14 @@ ROLES = {
     # walks every leaf composes; the leaves are siblings and cannot import one
     # another, so a walk two of them need lives there.
     #
-    # NOT yet covered: AT7 semantic mutants.  `MUTATIONS` still has no entry for
-    # any of these owners, so a *header* change is caught but a proof rewritten
-    # to a weaker-but-identically-typed statement is not.  The goal's live-mutant
-    # list still wants lost last-pauser cleanup, registration revival requiring
-    # prior liveness, retroactive interval mutation and unchecked wrap.
+    # `MUTATIONS` now carries semantic entries for `fresh`, `unregister`,
+    # `replacement` and `substrate`, so a clause silently dropped from a
+    # chronology's conclusion is rejected and not merely a renamed header.  What
+    # a header pin still cannot see is a proof rewritten to a
+    # weaker-but-identically-typed statement whose *text* is unchanged; that is
+    # what the Lean controls in `scripts/LidoCircuitBreakerAccessControls.lean`
+    # exist for, and why a control was needed for the pause guard, whose payload
+    # sits inside an inductive's constructor where no header pin reaches.
     "fresh": {
         "freshRegistration_sourceTrace_witness":
             "46aa83f709300ccb03334e27aee03b0fca8b9cbd1c5d3892d9404cb7a23f4657",
@@ -325,13 +328,13 @@ ROLES = {
         "foundNonzeroReplacement_sourceTrace_witness":
             "39984f11d713ee86af9155e04308c48289e011a3f9718ba707f4d0f6d5032094",
         "registerPauser_runCompiledTo_retainedNonzero":
-            "788c6a3d18d5ee0d77a524708c71799bebc54818fce4e93658ab26f913f37396",
+            "37df45cd0713d59a849980061e9066bd981dd0f7bb777fcdcc96b218f375bb89",
         "registerPauser_retainedNonzero_success_settled_effects":
-            "d14e1ec9f1889d5affb326f2203e2a15e8a872df143af8ddc7951127d9ea8b10",
+            "5396bd8cb9b1a8a870a6d1140d703941a3b6023dce600dc817aa03f091b35995",
         "registerPauser_runCompiledTo_oldLastNonzero":
-            "613a775418efaa14c200bc01b7262ea4a6b71241f88cea9fcb407e5a31ea1bf7",
+            "79c74357179e41621599b9410872ce4d2aff9b20892b2e20222ba1483bed0231",
         "registerPauser_oldLastNonzero_success_settled_effects":
-            "46cbd3df4784ba27a6d97f5ce5edcd50a74205e4bed63ca004b82c22d3d284ce",
+            "60a9a066c7026f82799dcbd27852be7390f400ad24ac62499b057fc9fc23b674",
     },
     "substrate": {
         "registerPauser_stageArgs_runCompiled":
@@ -372,6 +375,13 @@ ROLES = {
     "attainment": {
         "not_attainable_afterOldNewCount_pauseRegistry":
             "76df5c887a7a8a89b1b17a14dc8f355696c64b744226d1c5fa04457b84c794ef",
+        # The two refutations the later per-role site pins made provable.
+        # Each is exactly one role/row incompatibility at the source-function
+        # level; relax either role's `writeSite` and the proof dies.
+        "not_attainable_setPauserAssignment_adminConfiguration":
+            "aef338999302856bab253bea316d899c40ee484a1ad4c7bcdf1ea2cb602e5d4e",
+        "not_attainable_pauseLastTargetExpiry_heartbeatExpiry":
+            "70e694dd8e0b968fca29e0f84321a200e7e8b4c1b99a563c391f79d6a8c78a4b",
         "attainable_setPauserAssignment_adminRegistry":
             "ec8411f23b0b0af25af485aae39ebcc0169663b17b986694c8eb94183ae1f399",
         "attainable_appendArrayEntry_adminRegistry":
@@ -749,6 +759,34 @@ MUTATIONS = {
             "         \u27e8ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes\u27e9]",
             "[\u27e8ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes\u27e9,\n"
             "         \u27e8ca, [pauserSetEvent, target, oldPauser, newPauser], []\u27e9]",
+        ),
+        # AT8: the old-last arm retires the previous pauser, so its expiry cell
+        # must be pinned, not merely left unmentioned.  Dropping the clause is
+        # exactly the omission the review found.
+        "retired-pauser expiry cleanup dropped from the conclusion": (
+            "      settled.getStorVal ca (expirySlot oldPauser) =\n"
+            "        (if oldPauser = newPauser then expiry else 0) \u2227\n",
+            "",
+        ),
+        # AT8: that clause's value is `0` on the separated instantiation.  If it
+        # read back the entry expiry the clause would assert preservation of the
+        # very cell the walk clears.
+        "retired-pauser cleanup value replaced by the entry expiry": (
+            "        (if oldPauser = newPauser then expiry else 0) \u2227",
+            "        (if oldPauser = newPauser then expiry else oldExpiry) \u2227",
+        ),
+        # AT8: the old-last arm writes two expiry cells, so its noninterference
+        # quantifier excludes two pausers.  Flipping either exclusion to an
+        # equation collapses noninterference into a restatement.
+        "old-last expiry noninterference narrowed to the old pauser": (
+            "pauser \u2260 oldPauser \u2192\n        pauser \u2260 newPauser \u2192",
+            "pauser = oldPauser \u2192\n        pauser \u2260 newPauser \u2192",
+        ),
+        "retained-arm expiry noninterference narrowed to the new pauser": (
+            "(\u2200 pauser, canonicalAddress pauser \u2192 pauser \u2260 newPauser \u2192\n"
+            "        settled.getStorVal ca (expirySlot pauser) =",
+            "(\u2200 pauser, canonicalAddress pauser \u2192 pauser = newPauser \u2192\n"
+            "        settled.getStorVal ca (expirySlot pauser) =",
         ),
     },
     "substrate": {

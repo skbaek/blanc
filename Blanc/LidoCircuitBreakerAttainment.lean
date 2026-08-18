@@ -96,7 +96,15 @@ admin-registry only.  The theorem below is the semantic content of that single
 entry: a `.pauseRegistry` authority payload pins its write's own persistent
 source site into source functions 14/15/17, and `.afterOldNewCount` sits in
 function 16.  No execution is constructed, because none is needed — the two
-role payloads are already incompatible at the source-site level. -/
+role payloads are already incompatible at the source-site level.
+
+Two further refutations follow the same shape at the roles whose site pin was
+added later.  Every one of the six authority roles now constrains its write's
+source function, so the mechanism applies uniformly: a widening is refutable
+exactly when the role's pinned function set misses the row's frozen
+`sourceFunctionIndex`.  What it cannot do is separate two roles sharing one
+compiled function — `.adminConfiguration` and `.heartbeatExpiry` both live in
+the main function — so no refutation between those two appears here. -/
 
 /-- A pause-registry role can never be attained at the `afterOld.newCount`
 row.  This is the mutant that a role-widening edit to `permittedRoles` would
@@ -108,6 +116,43 @@ theorem not_attainable_afterOldNewCount_pauseRegistry :
   cases authority with
   | pauseRegistry _endpoint _assignedGuard _liveGuard _assigned _live
       writeSite =>
+      rcases writeSite with ⟨other, otherMem, otherPc, otherIndex⟩
+      have siteEq : other = site :=
+        runtimePersistentSourceSite_eq_of_pc otherMem
+          (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
+          (otherPc.trans sitePc.symm)
+      rw [siteEq, RuntimePersistentWrite.sourceSite?_functionIndex found]
+        at otherIndex
+      exact absurd otherIndex (by decide)
+
+/-- An admin-configuration role can never be attained at the
+`setPauser.assignment` row.  `setPauseDuration` and `setHeartbeatInterval` both
+write in the main function; the registry row sits in source function 14. -/
+theorem not_attainable_setPauserAssignment_adminConfiguration :
+    ¬ Attainable officialParams .setPauserAssignment .adminConfiguration := by
+  rintro ⟨ca, globalRoot, frameRoot, occurrence, site, _instructionEq,
+    _selected, _invocation, _sameFrame, found, sitePc, authority⟩
+  cases authority with
+  | setPauseDuration _endpoint _guard _callerEq writeSite
+  | setHeartbeatInterval _endpoint _guard _callerEq writeSite =>
+      rcases writeSite with ⟨other, otherMem, otherPc, otherIndex⟩
+      have siteEq : other = site :=
+        runtimePersistentSourceSite_eq_of_pc otherMem
+          (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
+          (otherPc.trans sitePc.symm)
+      rw [siteEq, RuntimePersistentWrite.sourceSite?_functionIndex found]
+        at otherIndex
+      exact absurd otherIndex (by decide)
+
+/-- A heartbeat-expiry role can never be attained at the
+`pause.lastTargetExpiry` row.  The heartbeat endpoint writes in the main
+function; the row sits in `pauseAfterSet`, source function 20. -/
+theorem not_attainable_pauseLastTargetExpiry_heartbeatExpiry :
+    ¬ Attainable officialParams .pauseLastTargetExpiry .heartbeatExpiry := by
+  rintro ⟨ca, globalRoot, frameRoot, occurrence, site, _instructionEq,
+    _selected, _invocation, _sameFrame, found, sitePc, authority⟩
+  cases authority with
+  | heartbeatExpiry _endpoint _registered _live _countNe _liveLt writeSite =>
       rcases writeSite with ⟨other, otherMem, otherPc, otherIndex⟩
       have siteEq : other = site :=
         runtimePersistentSourceSite_eq_of_pc otherMem

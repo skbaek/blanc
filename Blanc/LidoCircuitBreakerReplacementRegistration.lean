@@ -27,14 +27,32 @@ writes hit one slot, so what `registerAfterSet` reads back is `1 + (oldCount -
 reach.  A new pauser that already holds other targets is likewise just a
 different entry count, in either arm.
 
+Each arm's public settled-effects theorem states the arm's expiry footprint in
+full: the cell the arm writes, and the noninterference clause that no *other*
+canonical pauser's expiry cell moves.  The old-last arm's retired-pauser cell is
+stated as an `if` rather than a bare `0` because `oldPauser` and `newPauser` are
+unrelated binders throughout -- see that theorem's docstring.
+
 What is *not* here is the bridge to the Registry model: these theorems fix the
 three writes operationally and by cost, but do not state that the resulting
 storage is `applyRegistryWrites` of the found-nonzero source trace.  No sibling
 chronology states that equation either -- each of them carries a `RegistryWitness`
 conjunct over `applyRegistryWrites` of the *entry* storage, which is a fact about
 the model alone and would hold verbatim if the compiled program wrote nothing.
-This chronology at least does not present that model fact inside the same
-conjunction as its execution effects.
+
+Both public settled-effects theorems here carry that same model fact, so the
+chronology is characterised on the model side as its siblings are, but they
+carry it as a **hypothetical**: the entry `RegistryWitness` and the `findEntry`
+result are antecedents *inside* the final conjunct rather than premises of the
+theorem, so no execution conclusion is made conditional on a model witness, and
+a caller with no witness loses nothing.  Read that conjunct for exactly what it
+is -- `foundNonzeroReplacement_sourceTrace_witness` restated at the public
+boundary.  It is a derivation inside the Registry model: it says what
+`setPauserSourceTrace` computes and that the model's witness survives
+`applyRegistryWrites`, and it would hold verbatim if the compiled program wrote
+nothing.  It is not an execution effect, and the operational equation between
+the storage the program actually reaches and `applyRegistryWrites` of that trace
+remains unproved.
 -/
 
 namespace Blanc.LidoCircuitBreaker
@@ -848,7 +866,8 @@ remaining count for the old pauser.
 The two records the call emits are exactly `PauserSet(target, oldPauser,
 newPauser)` and `HeartbeatUpdated(newPauser)`; no `HeartbeatUpdated(oldPauser)`
 appears, which is the observable signature that separates this partition from
-the old-last one. -/
+the old-last one.  The last conjunct is the storage-side counterpart: no
+canonical pauser's expiry cell but the new pauser's moves at all. -/
 theorem registerPauser_body_retainedNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser oldCount newCount nextCount remaining
@@ -920,7 +939,10 @@ theorem registerPauser_body_retainedNonzero_runCompiled
         [⟨sevm.currentTarget,
           [pauserSetEvent, target, oldPauser, newPauser], []⟩,
          ⟨sevm.currentTarget,
-          [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] := by
+          [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] ∧
+      ∀ pauser, canonicalAddress pauser → pauser ≠ newPauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser) := by
   rcases registerMemory_spec target newPauser with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
@@ -983,7 +1005,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
         omega
       rw [hg]
       simpa only [arg, cdl] using hstage
-  refine ⟨_, hbody, rfl, ?_, ?_⟩
+  refine ⟨_, hbody, rfl, ?_, ?_, ?_⟩
   · have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :
         (d.setMach mach).getStorVal a k = d.getStorVal a k := rfl
     have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
@@ -1006,12 +1028,45 @@ theorem registerPauser_body_retainedNonzero_runCompiled
     rw [logs_setMach, logs_addLog, temporalSstorePost_logs,
       temporalSloadBase_logs, logs_addLog, hkernelLogs, List.append_assoc]
     rfl
+  · intro pauser hpauser hne
+    have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :
+        (d.setMach mach).getStorVal a k = d.getStorVal a k := rfl
+    have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
+        (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
+    have pairNe {left right : B256} (h : left ≠ right) :
+        (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
+      intro hp
+      exact h (congrArg Prod.snd hp)
+    have hexpiryNew : expirySlot pauser ≠ expirySlot newPauser := by
+      intro hslot
+      exact hne (addressSlot_injective (region := expiryRegion)
+        (by norm_num [expiryRegion]) hpauser hnewValid.2
+        (by simpa only [expirySlot] using hslot))
+    have hold := expirySlot_ne_registryAddressFamilies hpauser htargetValid.2
+      holdValid.2
+    have hnewFamilies := expirySlot_ne_registryAddressFamilies hpauser
+      htargetValid.2 hnewValid.2
+    rw [getStorVal_setMach, getStorVal_addLog,
+      temporalSstorePost_other _ _ (expirySlot newPauser) expiry _
+        (expirySlot pauser) (pairNe hexpiryNew),
+      temporalSloadBase_getStorVal, getStorVal_addLog]
+    simp only [foundNonzeroKernelPost, foundKernelPost, assignmentPost,
+      assignmentBase]
+    rw [temporalSstorePost_other _ _ (countSlot newPauser) nextCount _
+        (expirySlot pauser) (pairNe hnewFamilies.2.2),
+      temporalSloadBase_getStorVal,
+      temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
+        (expirySlot pauser) (pairNe hold.2.2),
+      temporalSloadBase_getStorVal,
+      temporalSstorePost_other _ _ (assignmentSlot target) newPauser _
+        (expirySlot pauser) (pairNe hold.1),
+      temporalSloadBase_getStorVal]
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for a **retained** replacement: the
 dispatcher's own reserve above `registerPauser_body_retainedNonzero_runCompiled`,
-with the same effects. -/
+with the same effects, the expiry noninterference clause included. -/
 theorem registerPauser_runCompiledTo_retainedNonzero
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser oldCount newCount nextCount remaining
@@ -1090,6 +1145,9 @@ theorem registerPauser_runCompiledTo_retainedNonzero
           [pauserSetEvent, target, oldPauser, newPauser], []⟩,
          ⟨sevm.currentTarget,
           [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] ∧
+      (∀ pauser, canonicalAddress pauser → pauser ≠ newPauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser)) ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
@@ -1103,14 +1161,14 @@ theorem registerPauser_runCompiledTo_retainedNonzero
       hcountCost hnewCount hnewCountOrig hnewCountNext hnewCountCost
       hremaining hremainingCount htime hinterval hintervalCold hexpiry
       hexpiryOrig hwarmNewExpiry hstoreCost hgasStipend hstatic hextension with
-    ⟨post, hbody, hgas, hstore, hlogs⟩
+    ⟨post, hbody, hgas, hstore, hlogs, hexpiries⟩
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   rcases registerPauser_dispatch_runCompiledTo dp sevm base
       (replacementRetainedRegisterBodyGas sevm base target newPauser oldPauser
         oldCount assignmentCost countCost newCountCost storeCost)
       G (.ok post) hdata hvalue hselector hcodeAddress hcode hbodyTo with
     ⟨hrun, hcompile⟩
-  exact ⟨post, hrun, hgas, hstore, hlogs, hcompile⟩
+  exact ⟨post, hrun, hgas, hstore, hlogs, hexpiries, hcompile⟩
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
@@ -1122,7 +1180,24 @@ still holds at least one other assignment afterwards.
 The settled state records exactly two events — `PauserSet(target, oldPauser,
 newPauser)` and `HeartbeatUpdated(newPauser)` — and the new pauser's heartbeat
 expiry is the checked extension.  The absence of a second `HeartbeatUpdated` is
-the observable difference from the old-last partition. -/
+the observable difference from the old-last partition.
+
+The expiry footprint is stated in full: the new pauser's cell holds the checked
+extension and *every* other canonical pauser's expiry cell is unchanged from the
+entry state.  On the distinct-pauser instantiation that includes the old
+pauser's cell, which is the storage-side counterpart of the missing second
+record; on the same-pauser instantiation the old pauser *is* the new one, and
+the quantifier excludes it for that reason alone.
+
+The final conjunct is the chronology's model-side Registry characterisation, and
+it is not an execution effect.  It is stated as a hypothetical — given any entry
+list the entry storage witnesses and in which `findEntry` locates the target at
+`oldPauser`, `setPauserSourceTrace` computes the three-write replacement trace
+and the model's witness survives `applyRegistryWrites` — which is a derivation
+inside the Registry model alone.  It would hold verbatim if the compiled program
+wrote nothing; nothing here equates the storage this execution reaches with
+`applyRegistryWrites` of that trace.  Because the witness is an antecedent
+rather than a premise, none of the execution conclusions above depend on it. -/
 theorem registerPauser_retainedNonzero_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
     (target newPauser oldPauser oldCount newCount nextCount remaining
@@ -1197,7 +1272,29 @@ theorem registerPauser_retainedNonzero_success_settled_effects
       settled.getStorVal ca (expirySlot newPauser) = expiry ∧
       settled.logs = (initDevm msg).logs ++
         [⟨ca, [pauserSetEvent, target, oldPauser, newPauser], []⟩,
-         ⟨ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] := by
+         ⟨ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] ∧
+      (∀ pauser, canonicalAddress pauser → pauser ≠ newPauser →
+        settled.getStorVal ca (expirySlot pauser) =
+          (initDevm msg).getStorVal ca (expirySlot pauser)) ∧
+      ∀ entries index,
+        RegistryWitness
+          (logicalStorageOfStor (Devm.getStor (initDevm msg) ca)) entries →
+        findEntry entries target = some (index, oldPauser) →
+        ∃ trace : SetPauserSourceTrace,
+          setPauserSourceTrace entries target newPauser = some trace ∧
+          trace.postEntries = setEntryAt index (target, newPauser) entries ∧
+          trace.writes =
+            [(assignmentSlot target, newPauser),
+             (countSlot oldPauser,
+               Nat.toB256 (assignmentCount entries oldPauser - 1)),
+             (countSlot newPauser,
+               Nat.toB256
+                 ((assignmentCount entries newPauser -
+                   (if oldPauser = newPauser then 1 else 0)) + 1))] ∧
+          RegistryWitness
+            (logicalStorageOfStor (applyRegistryWrites
+              (Devm.getStor (initDevm msg) ca) trace.writes))
+            trace.postEntries := by
   have hdataInit : (initSevm msg).data =
       registerPauserCalldata target newPauser := by
     simpa [initSevm] using hdata
@@ -1234,7 +1331,7 @@ theorem registerPauser_retainedNonzero_success_settled_effects
       (by simpa [hownerInit] using hexpiryOrig)
       (by simpa [hownerInit] using hwarmNewExpiry) hstoreCost hgasStipend
       hstatic hextension with
-    ⟨post, hrun, hgas, hstore, hlogs, hcompile⟩
+    ⟨post, hrun, hgas, hstore, hlogs, hexpiries, hcompile⟩
   have hentryState :
       (initDevm msg).setMach ⟨[], Mem.empty,
         G + registerPauserDispatchGas +
@@ -1261,9 +1358,14 @@ theorem registerPauser_retainedNonzero_success_settled_effects
     htargetOwner howner hcodeAddress hcode hvalue hdata hprocess hclean
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
-  refine ⟨hgas, ?_, ?_⟩
+  refine ⟨hgas, ?_, ?_, ?_, ?_⟩
   · simpa [hownerInit] using hstore
   · simpa [hownerInit] using hlogs
+  · intro pauser hpauser hne
+    simpa [hownerInit] using hexpiries pauser hpauser hne
+  · intro entries index hw hfind
+    exact foundNonzeroReplacement_sourceTrace_witness hw htargetValid hnewValid
+      hfind
 
 /-! ## Old-last replacement: Registry walk and public boundary -/
 
@@ -1489,7 +1591,13 @@ pauser holds no other assignment afterwards.
 
 Three records are emitted, in order: `PauserSet(target, oldPauser, newPauser)`,
 a zero-payload `HeartbeatUpdated(oldPauser)` retiring the old pauser's
-heartbeat, and `HeartbeatUpdated(newPauser)` carrying the checked extension. -/
+heartbeat, and `HeartbeatUpdated(newPauser)` carrying the checked extension.
+
+The two storage conjuncts under the log list are the retired pauser's cleared
+expiry cell and the noninterference clause for every canonical pauser other than
+these two.  The first is guarded by `if oldPauser = newPauser` because the two
+pausers are unrelated binders here: when they coincide both writes land on one
+cell and the checked store, which runs last, is what survives. -/
 theorem registerPauser_body_oldLastNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser oldCount newCount nextCount oldExpiry
@@ -1574,7 +1682,13 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
          ⟨sevm.currentTarget,
           [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩,
          ⟨sevm.currentTarget,
-          [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] := by
+          [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] ∧
+      post.getStorVal sevm.currentTarget (expirySlot oldPauser) =
+        (if oldPauser = newPauser then expiry else 0) ∧
+      ∀ pauser, canonicalAddress pauser → pauser ≠ oldPauser →
+        pauser ≠ newPauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser) := by
   rcases registerMemory_spec target newPauser with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
@@ -1644,7 +1758,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
         omega
       rw [hg]
       simpa only [arg, cdl] using hstage
-  refine ⟨_, hbody, rfl, ?_, ?_⟩
+  refine ⟨_, hbody, rfl, ?_, ?_, ?_, ?_⟩
   · have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :
         (d.setMach mach).getStorVal a k = d.getStorVal a k := rfl
     have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
@@ -1669,12 +1783,72 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
       logs_addLog, hkernelLogs]
     simp only [List.append_assoc]
     rfl
+  · have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :
+        (d.setMach mach).getStorVal a k = d.getStorVal a k := rfl
+    have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
+        (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
+    have pairNe {left right : B256} (h : left ≠ right) :
+        (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
+      intro hp
+      exact h (congrArg Prod.snd hp)
+    by_cases hsame : oldPauser = newPauser
+    · rw [if_pos hsame, getStorVal_setMach, getStorVal_addLog, hsame,
+        temporalSstorePost_self]
+    · have hexpiryNe : expirySlot oldPauser ≠ expirySlot newPauser := by
+        intro hslot
+        exact hsame (addressSlot_injective (region := expiryRegion)
+          (by norm_num [expiryRegion]) holdValid.2 hnewValid.2
+          (by simpa only [expirySlot] using hslot))
+      rw [if_neg hsame, getStorVal_setMach, getStorVal_addLog,
+        temporalSstorePost_other _ _ (expirySlot newPauser) expiry _
+          (expirySlot oldPauser) (pairNe hexpiryNe),
+        temporalSloadBase_getStorVal, getStorVal_addLog,
+        temporalSstorePost_self]
+  · intro pauser hpauser hneOld hneNew
+    have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :
+        (d.setMach mach).getStorVal a k = d.getStorVal a k := rfl
+    have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
+        (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
+    have pairNe {left right : B256} (h : left ≠ right) :
+        (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
+      intro hp
+      exact h (congrArg Prod.snd hp)
+    have expirySlotNe {left right : B256} (hleft : canonicalAddress left)
+        (hright : canonicalAddress right) (h : left ≠ right) :
+        expirySlot left ≠ expirySlot right := by
+      intro hslot
+      exact h (addressSlot_injective (region := expiryRegion)
+        (by norm_num [expiryRegion]) hleft hright
+        (by simpa only [expirySlot] using hslot))
+    have hold := expirySlot_ne_registryAddressFamilies hpauser htargetValid.2
+      holdValid.2
+    have hnewFamilies := expirySlot_ne_registryAddressFamilies hpauser
+      htargetValid.2 hnewValid.2
+    rw [getStorVal_setMach, getStorVal_addLog,
+      temporalSstorePost_other _ _ (expirySlot newPauser) expiry _
+        (expirySlot pauser) (pairNe (expirySlotNe hpauser hnewValid.2 hneNew)),
+      temporalSloadBase_getStorVal, getStorVal_addLog,
+      temporalSstorePost_other _ _ (expirySlot oldPauser) 0 _
+        (expirySlot pauser) (pairNe (expirySlotNe hpauser holdValid.2 hneOld)),
+      getStorVal_addLog]
+    simp only [foundNonzeroKernelPost, foundKernelPost, assignmentPost,
+      assignmentBase]
+    rw [temporalSstorePost_other _ _ (countSlot newPauser) nextCount _
+        (expirySlot pauser) (pairNe hnewFamilies.2.2),
+      temporalSloadBase_getStorVal,
+      temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
+        (expirySlot pauser) (pairNe hold.2.2),
+      temporalSloadBase_getStorVal,
+      temporalSstorePost_other _ _ (assignmentSlot target) newPauser _
+        (expirySlot pauser) (pairNe hold.1),
+      temporalSloadBase_getStorVal]
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for an **old-last** replacement: the
 dispatcher's own reserve above `registerPauser_body_oldLastNonzero_runCompiled`,
-with the same effects. -/
+with the same effects, the retired pauser's expiry cell and the expiry
+noninterference clause included. -/
 theorem registerPauser_runCompiledTo_oldLastNonzero
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser oldCount newCount nextCount oldExpiry
@@ -1766,6 +1940,12 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
           [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩,
          ⟨sevm.currentTarget,
           [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] ∧
+      post.getStorVal sevm.currentTarget (expirySlot oldPauser) =
+        (if oldPauser = newPauser then expiry else 0) ∧
+      (∀ pauser, canonicalAddress pauser → pauser ≠ oldPauser →
+        pauser ≠ newPauser →
+        post.getStorVal sevm.currentTarget (expirySlot pauser) =
+          base.getStorVal sevm.currentTarget (expirySlot pauser)) ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
@@ -1781,14 +1961,15 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
       hwarmOldExpiry hclearCost htime hinterval hintervalCold hexpiry
       hexpiryOrig hwarmNewExpiry hstoreCost hgasStipend hstatic
       hextension with
-    ⟨post, hbody, hgas, hstore, hlogs⟩
+    ⟨post, hbody, hgas, hstore, hlogs, holdExpiryPost, hexpiries⟩
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   rcases registerPauser_dispatch_runCompiledTo dp sevm base
       (replacementOldLastRegisterBodyGas sevm base target newPauser oldPauser
         oldCount assignmentCost countCost newCountCost clearCost storeCost)
       G (.ok post) hdata hvalue hselector hcodeAddress hcode hbodyTo with
     ⟨hrun, hcompile⟩
-  exact ⟨post, hrun, hgas, hstore, hlogs, hcompile⟩
+  exact ⟨post, hrun, hgas, hstore, hlogs, holdExpiryPost, hexpiries,
+    hcompile⟩
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
@@ -1799,7 +1980,28 @@ left holding no assignment at all.
 
 The settled state records exactly three events, and the retired pauser's
 `HeartbeatUpdated` carries a 32-byte zero payload — the observable difference
-from the retained partition. -/
+from the retained partition.
+
+The partition's *defining storage effect* is stated with it: the retired
+pauser's expiry cell is cleared.  It appears as
+`if oldPauser = newPauser then expiry else 0` rather than a bare `0` because
+`oldPauser` and `newPauser` are unrelated binders here and no premise excludes
+their coinciding.  A same-pauser instantiation sends the clear and the checked
+store to one cell, and what survives is the store, which runs last; on the
+distinct-pauser instantiation — the one the partition is about — the value is
+`0`.  Stating the guarded form keeps the theorem exactly as general as its
+premises and still pins the cleanup.  Every canonical pauser other than these
+two keeps its entry expiry.
+
+The final conjunct is the chronology's model-side Registry characterisation, and
+it is not an execution effect.  It is stated as a hypothetical — given any entry
+list the entry storage witnesses and in which `findEntry` locates the target at
+`oldPauser`, `setPauserSourceTrace` computes the three-write replacement trace
+and the model's witness survives `applyRegistryWrites` — which is a derivation
+inside the Registry model alone.  It would hold verbatim if the compiled program
+wrote nothing; nothing here equates the storage this execution reaches with
+`applyRegistryWrites` of that trace.  Because the witness is an antecedent
+rather than a premise, none of the execution conclusions above depend on it. -/
 theorem registerPauser_oldLastNonzero_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
     (target newPauser oldPauser oldCount newCount nextCount oldExpiry
@@ -1886,7 +2088,32 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
       settled.logs = (initDevm msg).logs ++
         [⟨ca, [pauserSetEvent, target, oldPauser, newPauser], []⟩,
          ⟨ca, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩,
-         ⟨ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] := by
+         ⟨ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] ∧
+      settled.getStorVal ca (expirySlot oldPauser) =
+        (if oldPauser = newPauser then expiry else 0) ∧
+      (∀ pauser, canonicalAddress pauser → pauser ≠ oldPauser →
+        pauser ≠ newPauser →
+        settled.getStorVal ca (expirySlot pauser) =
+          (initDevm msg).getStorVal ca (expirySlot pauser)) ∧
+      ∀ entries index,
+        RegistryWitness
+          (logicalStorageOfStor (Devm.getStor (initDevm msg) ca)) entries →
+        findEntry entries target = some (index, oldPauser) →
+        ∃ trace : SetPauserSourceTrace,
+          setPauserSourceTrace entries target newPauser = some trace ∧
+          trace.postEntries = setEntryAt index (target, newPauser) entries ∧
+          trace.writes =
+            [(assignmentSlot target, newPauser),
+             (countSlot oldPauser,
+               Nat.toB256 (assignmentCount entries oldPauser - 1)),
+             (countSlot newPauser,
+               Nat.toB256
+                 ((assignmentCount entries newPauser -
+                   (if oldPauser = newPauser then 1 else 0)) + 1))] ∧
+          RegistryWitness
+            (logicalStorageOfStor (applyRegistryWrites
+              (Devm.getStor (initDevm msg) ca) trace.writes))
+            trace.postEntries := by
   have hdataInit : (initSevm msg).data =
       registerPauserCalldata target newPauser := by
     simpa [initSevm] using hdata
@@ -1927,7 +2154,7 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
       (by simpa [hownerInit] using hexpiryOrig)
       (by simpa [hownerInit] using hwarmNewExpiry) hstoreCost hgasStipend
       hstatic hextension with
-    ⟨post, hrun, hgas, hstore, hlogs, hcompile⟩
+    ⟨post, hrun, hgas, hstore, hlogs, holdExpiryPost, hexpiries, hcompile⟩
   have hentryState :
       (initDevm msg).setMach ⟨[], Mem.empty,
         G + registerPauserDispatchGas +
@@ -1954,8 +2181,14 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
     htargetOwner howner hcodeAddress hcode hvalue hdata hprocess hclean
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
-  refine ⟨hgas, ?_, ?_⟩
+  refine ⟨hgas, ?_, ?_, ?_, ?_, ?_⟩
   · simpa [hownerInit] using hstore
   · simpa [hownerInit] using hlogs
+  · simpa [hownerInit] using holdExpiryPost
+  · intro pauser hpauser hneOld hneNew
+    simpa [hownerInit] using hexpiries pauser hpauser hneOld hneNew
+  · intro entries index hw hfind
+    exact foundNonzeroReplacement_sourceTrace_witness hw htargetValid hnewValid
+      hfind
 
 end Blanc.LidoCircuitBreaker
