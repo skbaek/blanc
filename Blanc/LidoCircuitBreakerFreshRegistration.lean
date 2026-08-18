@@ -6,6 +6,18 @@ Fresh-registration chronology for the Lido CircuitBreaker.
 The target is absent from the registry and the new pauser's entry count is
 nonzero, so `setPauser` appends the target and takes the five-write
 fresh-nonzero chronology.
+
+**What the settled-effects theorem pins, and what it does not.**  It pins
+`gasLeft` exactly, the new pauser's expiry cell, and the emitted record list
+exactly (`logs = base.logs ++ [...]`).  The Registry cells the flow writes are
+characterised **model-side only**, by `RegistryWitness` over
+`applyRegistryWrites (Devm.getStor base ca) trace.writes`, with **no** conjunct
+relating the settled state's storage to that model store.  That conjunct is
+discharged by the source-trace witness above, whose premises are the model's
+alone -- it would hold verbatim if the compiled program wrote nothing.  Sitting
+in the same conjunction as `settled.gasLeft` and `settled.logs` it reads like an
+execution effect and is not one.  Supplying the operational-to-model storage
+equation is an open unit.
 -/
 
 namespace Blanc.LidoCircuitBreaker

@@ -559,6 +559,33 @@ theorem pause_within_role_guard_strength_control :
     cases authority with
     | pauseExpiry _ _ _ _ live _ => exact live
 
+/-- The shape of `Attainable`, which no header pin can reach either.
+
+`Attainable` is a `def`, and the gate pins normalized *theorem* headers, so a
+conjunct quietly dropped from it would leave every `attainable_*` header
+byte-identical while making all of them cheaper to prove.  Nothing else catches
+that: `permitted_role_widening_rejected` consumes `Attainable` only negatively,
+where a weakening makes the refutation harder rather than easier.
+
+This restates the definition deliberately -- that is the whole mechanism.  The
+proof is the identity, so it elaborates exactly while `Attainable` still implies
+all seven conjuncts, and stops the moment one is removed. -/
+theorem attainable_shape_control :
+    ∀ (dp : DeployParams) (row : RuntimePersistentWrite)
+      (role : InvocationRole),
+      Attainable dp row role →
+        ∃ (ca : Adr) (globalRoot frameRoot : Exec.Deriv)
+          (occurrence : Exec.NinstOccurrence globalRoot)
+          (site : Prog.SourceSite),
+          occurrence.instruction = .reg .sstore ∧
+          frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
+          frameRoot.exactInvocation (runtime dp) ca ca ∧
+          Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
+          row.sourceSite? dp = some site ∧
+          site.pc = occurrence.node.pc ∧
+          RuntimeWriteAuthority dp frameRoot occurrence.node role :=
+  fun _ _ _ attainable => attainable
+
 /-! ## AT6 owner-closure and settlement controls -/
 
 /-- The raw/retained separation at one concrete noncommitting execution: the

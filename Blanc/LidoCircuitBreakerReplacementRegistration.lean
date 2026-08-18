@@ -28,8 +28,13 @@ reach.  A new pauser that already holds other targets is likewise just a
 different entry count, in either arm.
 
 What is *not* here is the bridge to the Registry model: these theorems fix the
-three writes operationally and by cost, but do not yet state that the resulting
-storage is `applyRegistryWrites` of the found-nonzero source trace.
+three writes operationally and by cost, but do not state that the resulting
+storage is `applyRegistryWrites` of the found-nonzero source trace.  No sibling
+chronology states that equation either -- each of them carries a `RegistryWitness`
+conjunct over `applyRegistryWrites` of the *entry* storage, which is a fact about
+the model alone and would hold verbatim if the compiled program wrote nothing.
+This chronology at least does not present that model fact inside the same
+conjunction as its execution effects.
 -/
 
 namespace Blanc.LidoCircuitBreaker

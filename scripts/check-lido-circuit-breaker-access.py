@@ -36,6 +36,14 @@ OWNERS = {
     "absent": ROOT / "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
     "unregister": ROOT / "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
     "replacement": ROOT / "Blanc/LidoCircuitBreakerReplacementRegistration.lean",
+    # AT7's pause conditional suffix, and the AT8 attainment family.  The last
+    # three are not in `Blanc.lean`'s import closure, so `check-trust-surface.sh`
+    # does not reach them; carrying them here is what puts them under a trust
+    # scan and an axiom probe at all.
+    "pauseSuffix": ROOT / "Blanc/LidoCircuitBreakerPauseSuffix.lean",
+    "sourceAttainment": ROOT / "Blanc/SourceAttainment.lean",
+    "attainment": ROOT / "Blanc/LidoCircuitBreakerAttainment.lean",
+    "registrationWorld": ROOT / "Blanc/LidoCircuitBreakerRegistrationWorld.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -52,6 +60,10 @@ MODULES = {
     "absent": "Blanc.LidoCircuitBreakerAbsentRegistration",
     "unregister": "Blanc.LidoCircuitBreakerUnregisterRegistration",
     "replacement": "Blanc.LidoCircuitBreakerReplacementRegistration",
+    "pauseSuffix": "Blanc.LidoCircuitBreakerPauseSuffix",
+    "sourceAttainment": "Blanc.SourceAttainment",
+    "attainment": "Blanc.LidoCircuitBreakerAttainment",
+    "registrationWorld": "Blanc.LidoCircuitBreakerRegistrationWorld",
 }
 
 REQUIRED = (
@@ -77,6 +89,10 @@ REQUIRED = (
     # field *and* its construction site together, so the whole library still
     # compiled and only this control failed.
     "pause_within_role_guard_strength_control",
+    # `Attainable` is a `def`, so a dropped conjunct would leave every
+    # `attainable_*` header byte-identical while making all of them cheaper to
+    # prove.  The shape control is the only thing that catches it.
+    "attainable_shape_control",
     "raw_occurrence_commitment_premise_rejected",
     "guard_after_write_rejected",
     # AT6 closure/settlement controls.
@@ -328,6 +344,35 @@ ROLES = {
         "removeTarget_swapPop_runCompiled":
             "a420afa2432b0ec56ec74b984552b813622a5ad300c8392dc949224c78bd4760",
     },
+    # ---- AT7 pause suffix and AT8 inhabitation ----
+    # `sourceAttainment` and `registrationWorld` are owners for the trust scan
+    # and the compiled-owner guard but pin no header: the first is
+    # contract-neutral route machinery whose consumers pin what matters, and the
+    # second is a concrete world, not a claim.
+    "pauseSuffix": {
+        "pauseSuccess_expiryWrite_dichotomy":
+            "6f110d5b3b181e962b2d85f9bef8a8ea700fd2cc8997db0d0c3e9d194f3fb87f",
+        "pauseSuccess_expiryWrite_of_reached":
+            "571d0deef20617a570c60a61ef1465cf0663257145dbbfbe52a53817ab2d32be",
+        "pauseSuccess_expiryWrite_stores_zero_iff":
+            "e02394008e792f65b8f60ab38bbce2e8ee365b3a3f92d5c1a1a7cf2c311cfb1d",
+    },
+    "attainment": {
+        "not_attainable_afterOldNewCount_pauseRegistry":
+            "76df5c887a7a8a89b1b17a14dc8f355696c64b744226d1c5fa04457b84c794ef",
+        "attainable_setPauserAssignment_adminRegistry":
+            "ec8411f23b0b0af25af485aae39ebcc0169663b17b986694c8eb94183ae1f399",
+        "attainable_appendArrayEntry_adminRegistry":
+            "4a240aa5825d9e2f8553a48ed74a0722e11c89f2781d857dc51a24095b6ff242",
+        "attainable_appendReverseIndex_adminRegistry":
+            "cefa921980af451e7295d2b7c17b22d54e4711b44fadbebe8a11b5fed9b76c26",
+        "attainable_appendArrayLength_adminRegistry":
+            "ad9ec293069a766f4107e25c31481fa74bb871613c172a8a2f8bcf4b2b975cc9",
+        "attainable_afterOldNewCount_adminRegistry":
+            "a5c9d06bb34ca29d012c48e8e4e4dc2b67d45093034e34ff7de7c2af11a82a87",
+        "attainable_registerRetainedOldNewExpiry_adminExpiry":
+            "2504e9425955b64ced04c55c90cab0ffc40d406aeadc305bada085bbac17b2a6",
+    },
 }
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
@@ -428,7 +473,10 @@ def normalized_header(name: str, source: str) -> str:
 
 
 def pin_role_headers(key: str, source: str) -> None:
-    for name, expected in ROLES[key].items():
+    # An owner may be carried for its trust scan, compiled-owner guard and axiom
+    # probe without pinning any header -- contract-neutral route machinery whose
+    # consumers pin what matters, and concrete worlds, which are not claims.
+    for name, expected in ROLES.get(key, {}).items():
         actual = hashlib.sha256(normalized_header(name, source).encode()).hexdigest()
         if actual != expected:
             fail(f"normalized public header changed for {name} in {key}")
@@ -712,6 +760,8 @@ MUTATIONS = {
 
 def header_mutation_controls(sources: dict) -> None:
     for key, mutations in MUTATIONS.items():
+        if key not in ROLES:
+            fail(f"{key}: mutations without pinned headers cannot be rejected")
         source = sources[key]
         for label, (old, new) in mutations.items():
             mutant = source.replace(old, new)
