@@ -183,12 +183,12 @@
         },
         {
           "class": "heartbeat-expiry",
-          "label": "pause.lastTargetExpiry",
+          "label": "pause.retainedTargetExpiry",
           "offset": 18
         },
         {
           "class": "heartbeat-expiry",
-          "label": "pause.retainedTargetExpiry",
+          "label": "pause.lastTargetExpiry",
           "offset": 19
         }
       ],

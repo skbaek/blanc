@@ -203,7 +203,7 @@ MANIFEST_TAGS = {
 }
 
 EXPECTED_MANIFEST_SHA256 = \
-    "df614c22fcd41842bc058825b161e617eed445a3fd949906fd8213a5f73b738b"
+    "c5525f6d53f96c502cecbb5bbb676ad858bf9edcfd5b29b54b6c0e5203fbd951"
 EXPECTED_BLANC_ARTIFACTS = {
     "creationTemplate": {
         "byteLength": 4898,

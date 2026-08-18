@@ -701,8 +701,8 @@ def persistentWriteInventory : List (SourceSite × PersistentWriteClass) :=
     (⟨"register.lastOldNewExpiry", 15⟩, .heartbeatExpiry),
     (⟨"register.freshExpiry", 16⟩, .heartbeatExpiry),
     (⟨"heartbeat.expiry", 17⟩, .heartbeatExpiry),
-    (⟨"pause.lastTargetExpiry", 18⟩, .heartbeatExpiry),
-    (⟨"pause.retainedTargetExpiry", 19⟩, .heartbeatExpiry) ]
+    (⟨"pause.retainedTargetExpiry", 18⟩, .heartbeatExpiry),
+    (⟨"pause.lastTargetExpiry", 19⟩, .heartbeatExpiry) ]
 
 def transientWriteInventory : List (SourceSite × TransientWriteClass) :=
   [ (⟨"pause.lock", 0⟩, .reentrancyLock),

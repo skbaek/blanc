@@ -44,8 +44,8 @@ inductive RuntimePersistentWrite
   | registerLastOldClear
   | registerLastOldNewExpiry
   | registerFreshExpiry
-  | pauseLastTargetExpiry
   | pauseRetainedTargetExpiry
+  | pauseLastTargetExpiry
 deriving DecidableEq, Repr
 
 def RuntimePersistentWrite.all : List RuntimePersistentWrite :=
@@ -67,8 +67,8 @@ def RuntimePersistentWrite.all : List RuntimePersistentWrite :=
     .registerLastOldClear,
     .registerLastOldNewExpiry,
     .registerFreshExpiry,
-    .pauseLastTargetExpiry,
-    .pauseRetainedTargetExpiry ]
+    .pauseRetainedTargetExpiry,
+    .pauseLastTargetExpiry ]
 
 def RuntimePersistentWrite.index : RuntimePersistentWrite → Nat
   | .setPauseDurationConfig => 0
@@ -89,8 +89,8 @@ def RuntimePersistentWrite.index : RuntimePersistentWrite → Nat
   | .registerLastOldClear => 15
   | .registerLastOldNewExpiry => 16
   | .registerFreshExpiry => 17
-  | .pauseLastTargetExpiry => 18
-  | .pauseRetainedTargetExpiry => 19
+  | .pauseRetainedTargetExpiry => 18
+  | .pauseLastTargetExpiry => 19
 
 def RuntimePersistentWrite.inventoryEntry :
     RuntimePersistentWrite → SourceSite × PersistentWriteClass
@@ -130,10 +130,17 @@ def RuntimePersistentWrite.inventoryEntry :
       (⟨"register.freshExpiry", 16⟩, .heartbeatExpiry)
   | .heartbeatExpiry =>
       (⟨"heartbeat.expiry", 17⟩, .heartbeatExpiry)
-  | .pauseLastTargetExpiry =>
-      (⟨"pause.lastTargetExpiry", 18⟩, .heartbeatExpiry)
+  -- `.pauseRetainedTargetExpiry` and `.pauseLastTargetExpiry` were
+  -- transposed relative to their structural sites until this exchange: index
+  -- 18 is the checked-expiry arm (`count ≠ 0`, the retained-target write) and
+  -- index 19 is the store-zero arm (`count = 0`, the last-target write).
+  -- Nothing ever depended on the names -- every row is pinned by
+  -- `sourceSite?` -- but reports and commits written before the exchange use
+  -- the old pairing.
   | .pauseRetainedTargetExpiry =>
-      (⟨"pause.retainedTargetExpiry", 19⟩, .heartbeatExpiry)
+      (⟨"pause.retainedTargetExpiry", 18⟩, .heartbeatExpiry)
+  | .pauseLastTargetExpiry =>
+      (⟨"pause.lastTargetExpiry", 19⟩, .heartbeatExpiry)
 
 /-- Semantic label order of the frozen literal inventory.  This is distinct
 from `all`, whose order follows the compiler's structural source traversal. -/
@@ -156,8 +163,8 @@ def RuntimePersistentWrite.inventoryOrder : List RuntimePersistentWrite :=
     .registerLastOldNewExpiry,
     .registerFreshExpiry,
     .heartbeatExpiry,
-    .pauseLastTargetExpiry,
-    .pauseRetainedTargetExpiry ]
+    .pauseRetainedTargetExpiry,
+    .pauseLastTargetExpiry ]
 
 /-- Permitted invocation roles for each runtime SSTORE row.
 
@@ -195,7 +202,7 @@ def RuntimePersistentWrite.permittedRoles :
   | .registerLastOldNewExpiry | .registerFreshExpiry =>
       [.adminExpiry]
   | .heartbeatExpiry => [.heartbeatExpiry]
-  | .pauseLastTargetExpiry | .pauseRetainedTargetExpiry => [.pauseExpiry]
+  | .pauseRetainedTargetExpiry | .pauseLastTargetExpiry => [.pauseExpiry]
 
 /-- Executable structural SSTORE projection of the exact parameterized
 runtime.  Unlike the old syntax count, each member retains its full source path

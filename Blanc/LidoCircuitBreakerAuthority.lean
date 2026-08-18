@@ -279,7 +279,7 @@ def RuntimePersistentWrite.sourceFunctionIndex :
   | .removeArrayLength | .removeClearTargetIndex => 17
   | .registerRetainedOldNewExpiry | .registerLastOldClear
   | .registerLastOldNewExpiry | .registerFreshExpiry => 19
-  | .pauseLastTargetExpiry | .pauseRetainedTargetExpiry => 20
+  | .pauseRetainedTargetExpiry | .pauseLastTargetExpiry => 20
 
 /-- A row's nominated site sits in the row's frozen source function. -/
 theorem RuntimePersistentWrite.sourceSite?_functionIndex
