@@ -3628,4 +3628,18 @@ theorem Exec.Frame.successfulSstore_acceptsSource
   exact ⟨site.path, Prog.acceptsSstoreSite_iff.mpr
     ⟨site, member, rfl, hpc, hinstruction⟩⟩
 
+/-- A compiled-instruction step is deterministic: the `∀ pc` quantifier is
+instantiated once and `Step.Run.unique_of_filled` pins both the slot and the
+result.  This is what lets a route continuation, handed an arbitrary
+derivation's crossing of an external call, identify its poststate with a
+concretely constructed one. -/
+theorem Ninst.RunCompiled.unique {sevm : Sevm} {devm : Devm} {n : Ninst}
+    {d₁ d₂ : Devm}
+    (h₁ : Ninst.RunCompiled sevm devm n d₁)
+    (h₂ : Ninst.RunCompiled sevm devm n d₂) : d₁ = d₂ := by
+  obtain ⟨xl₁, f₁, r₁⟩ := h₁
+  obtain ⟨xl₂, f₂, r₂⟩ := h₂
+  have h := Step.Run.unique_of_filled f₁ f₂ (r₁ 0) (r₂ 0)
+  exact Except.ok.inj h.2
+
 end Blanc
