@@ -48,6 +48,8 @@ jobs:
         run: scripts/check-lido-circuit-breaker-registry.sh
       - name: Lido CircuitBreaker enumeration and observability S3 assurance
         run: scripts/check-lido-circuit-breaker-enumeration.sh
+      - name: Lido CircuitBreaker access and temporal-authority S5 assurance
+        run: scripts/check-lido-circuit-breaker-access.sh
       - name: Lido launch/current artifact ownership ledgers (offline)
         run: scripts/check-lido-circuit-breaker-artifact-profile.sh
       - name: Lido constructor emitted-byte schema (offline)
