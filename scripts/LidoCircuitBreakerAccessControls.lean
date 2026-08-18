@@ -1308,4 +1308,149 @@ theorem owner_closure_assumed_premise_rejected
     ⟨rawRoot, rawMember, rawPrefix⟩
   exact ⟨frame, member, invocation, sameFrame, rawRoot, rawMember, rawPrefix⟩
 
+/-! ### AT8 executable controls at the three replacement-arm expiry sites
+
+Inventory rows `14`, `15` and `16` are `registerAfterSet`'s expiry writes
+behind `previousPauser ≠ 0`: the retained arm's write, the retiring pauser's
+expiry clear, and the new pauser's write after that clear.  All three are
+attained at the two concrete replacement worlds of
+`Blanc/LidoCircuitBreakerReplacementWorld.lean`.
+
+They need a site control more than the earlier rows did, for a reason that is
+about *names*.  `Func.sourceSites` visits `registerAfterSet`'s fall-through arm
+first, so the frozen inventory's constructor labels at indices 14 and 17 are
+transposed relative to the sites: `.registerFreshExpiry` sits at the
+`previousPauser ≠ 0` write and `.registerRetainedOldNewExpiry` sits at the
+fresh registration's.  A reader who takes either label for a description gets
+the wrong site.  The control below is the machine-checked answer: each attained
+row is identified by its **compiled PC and source function**, not by its label,
+so a witness pointed at the wrong site could not typecheck.
+
+Renaming a row is a user decision and the inventory is frozen; nothing here
+proposes one.  What this does is make the mismatch harmless. -/
+
+set_option maxRecDepth 20000 in
+/-- The compiled coordinates of the three replacement-arm expiry sites: PCs
+`3212`, `3302` and `3441`, all in source function `19`, with `31`, `16` and
+`46` step paths.  Being behind a `.call` is why the source function is
+`registerAfterSet`'s own and not the main function's. -/
+private theorem registerReplacementArm_site_shapes :
+    ((RuntimePersistentWrite.registerFreshExpiry).sourceSite?
+          officialParams).map
+        (fun site =>
+          (site.pc, site.path.functionIndex, site.path.steps.length)) =
+        some (3212, 19, 31) ∧
+      ((RuntimePersistentWrite.registerLastOldClear).sourceSite?
+          officialParams).map
+        (fun site =>
+          (site.pc, site.path.functionIndex, site.path.steps.length)) =
+        some (3302, 19, 16) ∧
+      ((RuntimePersistentWrite.registerLastOldNewExpiry).sourceSite?
+          officialParams).map
+        (fun site =>
+          (site.pc, site.path.functionIndex, site.path.steps.length)) =
+        some (3441, 19, 46) := by
+  decide +kernel
+
+/-- The composition, once, for a row whose coordinates are known and whose
+`.adminExpiry` attainment is in hand. -/
+private theorem attained_at_shape {row : RuntimePersistentWrite}
+    {pc steps : Nat}
+    (shape : (row.sourceSite? officialParams).map
+        (fun site =>
+          (site.pc, site.path.functionIndex, site.path.steps.length)) =
+        some (pc, 19, steps))
+    (attained : Attainable officialParams row .adminExpiry) :
+    ∃ (ca : Adr) (globalRoot frameRoot : Exec.Deriv)
+      (occurrence : Exec.NinstOccurrence globalRoot) (site : Prog.SourceSite),
+      row.sourceSite? officialParams = some site ∧
+      site ∈ runtimePersistentSourceSites officialParams ∧
+      (site.pc, site.path.functionIndex, site.path.steps.length) =
+        (pc, 19, steps) ∧
+      site.instruction = .reg .sstore ∧
+      site.pc = occurrence.node.pc ∧
+      occurrence.instruction = .reg .sstore ∧
+      frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
+      frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+      Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
+      RuntimeWriteAuthority officialParams frameRoot occurrence.node
+        .adminExpiry := by
+  obtain ⟨ca, globalRoot, frameRoot, occurrence, site, instructionEq, rawRoots,
+    invocation, sameFrame, found, sitePc, authority⟩ := attained
+  refine ⟨ca, globalRoot, frameRoot, occurrence, site, found,
+    RuntimePersistentWrite.mem_runtimePersistentSourceSites found, ?_,
+    (RuntimePersistentWrite.sourceSite?_sound found).2, sitePc,
+    instructionEq, rawRoots, invocation, sameFrame, authority⟩
+  rw [found] at shape
+  exact Option.some.inj shape
+
+/-- Each of the three replacement-arm expiry rows is reached by a real
+production execution **at its own compiled PC**, inside an exact same-frame
+invocation of the production runtime, carrying an `.adminExpiry` authority.
+
+Nothing in the landed headers says this.  `Attainable` supplies the execution
+and the authority payload but names no compiled coordinate;
+`runtimePersistentSourceSites_pcs` pins the twenty PCs but reaches no
+execution.  Composed, and quantified over the three (row, PC) pairs at once,
+they say which site each witness actually reached. -/
+theorem registerReplacementArm_admin_site_control :
+    ∀ (row : RuntimePersistentWrite) (pc steps : Nat),
+      (row, pc, steps) ∈
+          [((RuntimePersistentWrite.registerFreshExpiry), 3212, 31),
+           ((RuntimePersistentWrite.registerLastOldClear), 3302, 16),
+           ((RuntimePersistentWrite.registerLastOldNewExpiry), 3441, 46)] →
+      ∃ (ca : Adr) (globalRoot frameRoot : Exec.Deriv)
+        (occurrence : Exec.NinstOccurrence globalRoot)
+        (site : Prog.SourceSite),
+        row.sourceSite? officialParams = some site ∧
+        site ∈ runtimePersistentSourceSites officialParams ∧
+        (site.pc, site.path.functionIndex, site.path.steps.length) =
+          (pc, 19, steps) ∧
+        site.instruction = .reg .sstore ∧
+        site.pc = occurrence.node.pc ∧
+        occurrence.instruction = .reg .sstore ∧
+        frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
+        frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+        Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
+        RuntimeWriteAuthority officialParams frameRoot occurrence.node
+          .adminExpiry := by
+  intro row pc steps member
+  simp only [List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at member
+  rcases member with ⟨rfl, rfl, rfl⟩ | ⟨rfl, rfl, rfl⟩ | ⟨rfl, rfl, rfl⟩
+  · exact attained_at_shape registerReplacementArm_site_shapes.1
+      attainable_registerFreshExpiry_adminExpiry
+  · exact attained_at_shape registerReplacementArm_site_shapes.2.1
+      attainable_registerLastOldClear_adminExpiry
+  · exact attained_at_shape registerReplacementArm_site_shapes.2.2
+      attainable_registerLastOldNewExpiry_adminExpiry
+
+/-- At all three rows the permitted-role table is **exact**, not merely a sound
+upper bound: each row's single entry is attained.
+
+Read it at exactly that width, as with the row-`0` control above: it is a
+statement about these three rows, and it does not upgrade
+`RuntimePersistentWrite.permittedRoles` anywhere else. -/
+theorem registerReplacementArm_role_tightness_control :
+    ∀ row ∈ [(RuntimePersistentWrite.registerFreshExpiry),
+             (RuntimePersistentWrite.registerLastOldClear),
+             (RuntimePersistentWrite.registerLastOldNewExpiry)],
+      RuntimePersistentWrite.permittedRoles row = [.adminExpiry] ∧
+        ∀ role ∈ RuntimePersistentWrite.permittedRoles row,
+          Attainable officialParams row role := by
+  intro row member
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with rfl | rfl | rfl
+  · refine ⟨rfl, fun role roleMember => ?_⟩
+    have roleEq : role = .adminExpiry := by revert roleMember; cases role <;> decide
+    subst roleEq
+    exact attainable_registerFreshExpiry_adminExpiry
+  · refine ⟨rfl, fun role roleMember => ?_⟩
+    have roleEq : role = .adminExpiry := by revert roleMember; cases role <;> decide
+    subst roleEq
+    exact attainable_registerLastOldClear_adminExpiry
+  · refine ⟨rfl, fun role roleMember => ?_⟩
+    have roleEq : role = .adminExpiry := by revert roleMember; cases role <;> decide
+    subst roleEq
+    exact attainable_registerLastOldNewExpiry_adminExpiry
+
 end Blanc.LidoCircuitBreaker.AccessControls

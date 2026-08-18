@@ -44,6 +44,8 @@ OWNERS = {
     "sourceAttainment": ROOT / "Blanc/SourceAttainment.lean",
     "attainment": ROOT / "Blanc/LidoCircuitBreakerAttainment.lean",
     "registrationWorld": ROOT / "Blanc/LidoCircuitBreakerRegistrationWorld.lean",
+    "replacementWorld": ROOT / "Blanc/LidoCircuitBreakerReplacementWorld.lean",
+    "pauseAttainment": ROOT / "Blanc/LidoCircuitBreakerPauseAttainment.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -64,6 +66,8 @@ MODULES = {
     "sourceAttainment": "Blanc.SourceAttainment",
     "attainment": "Blanc.LidoCircuitBreakerAttainment",
     "registrationWorld": "Blanc.LidoCircuitBreakerRegistrationWorld",
+    "replacementWorld": "Blanc.LidoCircuitBreakerReplacementWorld",
+    "pauseAttainment": "Blanc.LidoCircuitBreakerPauseAttainment",
 }
 
 REQUIRED = (
@@ -441,6 +445,41 @@ ROLES = {
             "ed70bd7e5ce821810e7970f8f1395bec188158711bd12528822fd326c1d36e83",
         "heartbeatWorld_run":
             "82bd70d34750714acf01a22898d74be39df85e36e0dfb6f42c770745ea844ddf",
+        # The frame-carrying generalization every storage- or memory-valued
+        # branch word needs.  `attainable_of_entryRoute` is now a one-line
+        # corollary of it and its own digest is unchanged -- which is exactly
+        # why this one is pinned: a weakening would live here, invisible above.
+        "attainable_of_entryRoute_frame":
+            "56a2e093b20e77157aaf56e32027b3b3ec422345dc0de167a90efd3f8cfe5c94",
+        # Rows 14, 15, 16 -- the `registerAfterSet` expiry arms behind
+        # `previousPauser != 0`.  Read these names against the transposition
+        # note: row 14 is the *retained* arm despite being called Fresh.
+        "attainable_registerFreshExpiry_adminExpiry":
+            "e8685b88c683d9b49dd12caf46123234dd7006c3dbf6d61c3338c521f96252b8",
+        "attainable_registerLastOldClear_adminExpiry":
+            "e3ce8d3bc78211e4db499566a84d5761ac52781f064fab0dac9a0b7661d9578e",
+        "attainable_registerLastOldNewExpiry_adminExpiry":
+            "0b13cd926cf154ef25db16bbca27ce5e7f7b5624d902c585462cd5e9ede0e263",
+        "runtimeMain_routeTo_registerRetainedArmExpiry":
+            "b5894749eda1284b0dc905733aad08c3a6e9360ecd46ca127ed7e6bc366b0238",
+        "runtimeMain_routeTo_registerOldLastClear":
+            "c68ec4502e84f963f68a2ef5fb6fedcd196e09ff748d895936a92b290feb2086",
+        "runtimeMain_routeTo_registerOldLastNewExpiry":
+            "a42db3eb31f1cb420a323e6ad8ef74b92277773989a983b946f596c0b723a413",
+        "runtimeMain_routeTo_replacementRegisterAfterSetCall":
+            "97f9b0a18f070579d5494469feb61d084de2e59e501543dac84aac45d66aab80",
+        "registerReplacementArm_index_pins":
+            "a23fed0347e5f2a214f92f3ecaf9d650fc3a68724b0ec7dd121fc5e08634ebbf",
+        "replWorld_previousPauserPresent":
+            "9ffeec75db74df68de416abc14b58c52ec4e0baaf3dfec5ac63f870e3e8da2dd",
+        "replWorld_countDecrement":
+            "661e9f76d3a9f7287a2b38239b2501699c9ad0f4e3e95b0c46e2e7db08a8a369",
+        "replWorld_newCountWrite":
+            "6275481fc8d9d1d6a1a3d8d979e54cea37a759e2257b330badecae6a9228c982",
+        "replWorld_previousCountWord":
+            "b345d4cba0f7b2bf9750668a2a4eb73940e822685226350afd51dc51e66a0e88",
+        "replWorld_stagedEntry":
+            "c65e892128be93b5d07fd93bd274cbf3c695cb575b55f6d123b3c68a8b1a796c",
         "attainable_setPauserAssignment_adminRegistry":
             "ec8411f23b0b0af25af485aae39ebcc0169663b17b986694c8eb94183ae1f399",
         "attainable_appendArrayEntry_adminRegistry":
@@ -453,6 +492,43 @@ ROLES = {
             "a5c9d06bb34ca29d012c48e8e4e4dc2b67d45093034e34ff7de7c2af11a82a87",
         "attainable_registerRetainedOldNewExpiry_adminExpiry":
             "2504e9425955b64ced04c55c90cab0ffc40d406aeadc305bada085bbac17b2a6",
+    },
+    "replacementWorld": {
+        "replRetainedWorld_run":
+            "b28c60f646af32812fa0d2753ef8ac2171470bda9a207ddaeae754c440055219",
+        "replOldLastWorld_run":
+            "8a6d999da42519c4a5a0df8fc0228134a42827f3ef032543938c8fdd07b8f319",
+        "replRetained_bodyGasEq":
+            "6b06405c7f08a8cbb26b2a784be00b7f18f2c4e5aa13c2dd09133fa961e7a787",
+        "replOldLast_bodyGasEq":
+            "85cc5d8429b92d42b011a2f4247983aeffc1011bdd7374b966ad6912bf03ccdf",
+    },
+    # The seven `.pauseRegistry` rows.  Every one is reached in an execution
+    # that then REVERTS -- the codeless-target pause -- so these are
+    # raw-occurrence witnesses and nothing more.  That is the correct dual of
+    # AT5, which quantifies over raw writes under any outcome; it must never be
+    # read as "a pause can persist a Registry change".
+    "pauseAttainment": {
+        "attainable_setPauserAssignment_pauseRegistry":
+            "1eb2a23250677909a4e5dff76078fb84c4c2a0af7d640ffea0d53e15b02ef627",
+        "attainable_setPauserOldCount_pauseRegistry":
+            "5b24894cc5acec73433f3453a9f0f8496e0821137e637ef85513d474f85fce4f",
+        "attainable_removeArrayHole_pauseRegistry":
+            "7ac4b0d6d2fbd18558b5e0653c03871ddfaabf14f5ea0ad78f39d44c8f93f967",
+        "attainable_removeMovedIndex_pauseRegistry":
+            "abb9d107fd1a0e76c5d27518c903970de73e1cad090a39c5e4b65e5fb5a64660",
+        "attainable_removeClearTail_pauseRegistry":
+            "9c4f540f9a61fc036390b9707051722c80eaeaa1cfa9c40376ff069f8b6ee13a",
+        "attainable_removeArrayLength_pauseRegistry":
+            "6eeb108a74d6e75e9b4386fc55f123bd20bdc002d112a0ea95a2cbe6da02ecd9",
+        "attainable_removeClearTargetIndex_pauseRegistry":
+            "fab24c66d8295131031c2a465c033ba25990334517f61232c2ca27f09f7cc7fa",
+        "attainable_pauseRegistry_of_route":
+            "38c8fb1aa7bc9abc2cda5a20fe72f80a5a904a8a7b509af041ee7c7d20172cec",
+        "runtimeMain_routeTo_pauseAssignment":
+            "de0279a875cbab93b68223e54c36f0fdb4317d074a0d149d100bfe79d3f837a0",
+        "runtimeMain_routeTo_pauseKernel":
+            "dce61c19ade44c703e27d664d2ef4ffd29ff0079877e77f90653b65a28ca418e",
     },
 }
 

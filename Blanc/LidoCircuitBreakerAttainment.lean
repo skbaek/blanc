@@ -1,6 +1,7 @@
 import Blanc.SourceAttainment
 import Blanc.LidoCircuitBreakerAuthority
 import Blanc.LidoCircuitBreakerRegistrationWorld
+import Blanc.LidoCircuitBreakerReplacementWorld
 
 /-!
 Forward attainment for exact Lido CircuitBreaker runtime persistent writes.
@@ -55,6 +56,17 @@ one walk — cannot serve it, and the concrete admin configuration call of
 *The `setPauseDuration.config` row, at its own world* is built instead.  It is
 the module's cheapest route despite being its longest path: not one of its ten
 branch crossings is priced.
+
+Three rows are attained last, and they need a **third and fourth** world.
+Inventory indices `14`, `15` and `16` are `registerAfterSet`'s expiry writes
+behind `previousPauser ≠ 0`, which no fresh registration reaches, so they are
+taken at the two concrete *replacement* worlds of
+`Blanc/LidoCircuitBreakerReplacementWorld.lean` — one whose old pauser keeps
+another assignment and one whose old pauser keeps none.  They are also the
+first rows whose route has to follow a storage cell that the walk *itself*
+writes; see *The three expiry rows on `registerAfterSet`'s replacement arms*
+for what that costs, and for why the constructor names at 14 and 17 must not be
+read as descriptions.
 -/
 
 namespace Blanc.LidoCircuitBreaker
@@ -2234,10 +2246,17 @@ it.  All three rows below have a **singleton** `permittedRoles`, so the reached
 role is forced by membership and `roles` closes decidably.  A row with two
 permitted roles could not use this form. -/
 
-/-- A concrete exact invocation whose walk is routed from the program entry to
-a row's frozen source path attains that row, at whatever role its
-`permittedRoles` singleton names. -/
-theorem attainable_of_entryRoute {sevm : Sevm} {pre : Devm} {ca : Adr}
+/-- The frame-carrying form: the route is handed the two facts the entry
+`JUMPDEST` burn gives it about the state it starts from, so a route whose
+branch words are read out of *storage* or out of the message's own empty
+memory can be stated at all.
+
+`attainable_of_entryRoute` below is this with both facts discarded, which is
+all a route decided on the calldata selector needs.  The replacement routes
+need both: `setPauserKernel`'s previous-pauser test reads the target's
+assignment slot, and every later memory-valued test reads a word the staging
+line wrote into memory that has to have been empty. -/
+theorem attainable_of_entryRoute_frame {sevm : Sevm} {pre : Devm} {ca : Adr}
     {row : RuntimePersistentWrite} {expected : InvocationRole}
     {path : Prog.SourcePath}
     (owner : sevm.currentTarget = ca)
@@ -2248,15 +2267,17 @@ theorem attainable_of_entryRoute {sevm : Sevm} {pre : Devm} {ca : Adr}
     (run : ∃ post,
       Prog.RunCompiledTo sevm pre (runtime officialParams) (.ok post) ∧
         some sevm.code.toList = Prog.compile (runtime officialParams))
-    (route : ∀ (devm post : Devm)
-      (h : Func.RunCompiledTo
+    (route : ∀ (devm post : Devm),
+      Devm.getStor devm = Devm.getStor pre → devm.memory = pre.memory →
+      ∀ h : Func.RunCompiledTo
         ((runtime officialParams).main :: (runtime officialParams).aux)
-        sevm devm (runtime officialParams).main (.ok post)),
-      Func.RunCompiledTo.RouteTo ⟨0, []⟩ h path (.reg .sstore)) :
+        sevm devm (runtime officialParams).main (.ok post),
+        Func.RunCompiledTo.RouteTo ⟨0, []⟩ h path (.reg .sstore)) :
     Attainable officialParams row expected := by
   obtain ⟨post, hrun, hcompile⟩ := run
   obtain ⟨mid, hburn, hwalk⟩ := hrun
-  have hroute := route mid post hwalk
+  have hroute := route mid post (getStor_of_state hburn.state).symm
+    hburn.memory.symm hwalk
   obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
     sameFrame⟩ :=
     Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
@@ -2285,6 +2306,29 @@ theorem attainable_of_entryRoute {sevm : Sevm} {pre : Devm} {ca : Adr}
   exact ⟨ca, ⟨0, sevm, pre, .ok post, exc⟩, ⟨0, sevm, pre, .ok post, exc⟩,
     occurrence, rowSite, instructionEq, Exec.mem_rawFrameRoots_self exc,
     invocation, sameFrame, found, rowSitePc, authority⟩
+
+/-- A concrete exact invocation whose walk is routed from the program entry to
+a row's frozen source path attains that row, at whatever role its
+`permittedRoles` singleton names. -/
+theorem attainable_of_entryRoute {sevm : Sevm} {pre : Devm} {ca : Adr}
+    {row : RuntimePersistentWrite} {expected : InvocationRole}
+    {path : Prog.SourcePath}
+    (owner : sevm.currentTarget = ca)
+    (codeAddress : sevm.codeAddress = some ca)
+    (pin : ∀ {r : RuntimePersistentWrite} {site : Prog.SourceSite},
+      r.sourceSite? officialParams = some site → site.path = path → r = row)
+    (roles : ∀ r ∈ row.permittedRoles, r = expected)
+    (run : ∃ post,
+      Prog.RunCompiledTo sevm pre (runtime officialParams) (.ok post) ∧
+        some sevm.code.toList = Prog.compile (runtime officialParams))
+    (route : ∀ (devm post : Devm)
+      (h : Func.RunCompiledTo
+        ((runtime officialParams).main :: (runtime officialParams).aux)
+        sevm devm (runtime officialParams).main (.ok post)),
+      Func.RunCompiledTo.RouteTo ⟨0, []⟩ h path (.reg .sstore)) :
+    Attainable officialParams row expected := by
+  exact attainable_of_entryRoute_frame owner codeAddress pin roles run
+    (fun devm post _hstor _hmem h => route devm post h)
 
 /-! ## The `setPauseDuration.config` row, at its own world
 
@@ -3460,5 +3504,984 @@ theorem attainable_heartbeatExpiry_heartbeatExpiry :
       runtimeMain_routeTo_heartbeatExpiry h heartbeatWorld_selector)
   rw [heartbeatWorld_codeAddress, heartbeatWorld_currentTarget]
 
+
+/-! ## The three expiry rows on `registerAfterSet`'s replacement arms
+
+Inventory indices `14`, `15` and `16`, all in source function 19 and all
+behind `previousPauser ≠ 0`, so none of them is reachable at the fresh
+registration world of the sections above.  They are attained at the two
+concrete replacement worlds of
+`Blanc/LidoCircuitBreakerReplacementWorld.lean` instead: one call reassigns a
+target whose old pauser keeps another assignment (index 14, the retained arm),
+and one reassigns a target whose old pauser keeps none (indices 15 and 16, the
+old-last arm, whose two writes are two split points of one walk).
+
+**Which rows these are.**  Read the note under *The expiry row on
+`registerAfterSet`'s fresh arm* first.  `Func.sourceSites` visits
+`registerAfterSet`'s fall-through arm — the `previousPauser ≠ 0` subtree —
+before its jumped one, so the four expiry writes are ordered
+
+* index 14 — `previousPauser ≠ 0`, old count retained, constructor named
+  `.registerFreshExpiry`;
+* index 15 — the old pauser's expiry cleared, `.registerLastOldClear`;
+* index 16 — the new pauser's expiry after that clear,
+  `.registerLastOldNewExpiry`;
+* index 17 — `previousPauser = 0`, the fresh registration, constructor named
+  `.registerRetainedOldNewExpiry`.
+
+The constructor names at 14 and 17 are transposed relative to that order.
+Nothing here depends on them: every row is pinned by `sourceSite?` through its
+own index pin, and the paths below were read off `runtimePersistentSourceSites
+officialParams` rather than off the names.
+
+**What the replacement route costs above the fresh one.**  Two things, and
+both are consequences of the arm being taken because storage says so.
+
+First, the kernel's previous-pauser test can no longer keep its loaded key
+anonymous.  At the fresh world *every* assignment slot holds zero, so the test
+is settled for whatever word memory happens to supply; here the answer depends
+on the slot being the registered target's, so the route carries a fourth memory
+window — the target word — and reads the key back off it.
+
+Second, `registerAfterSet`'s own old-count test is **storage**-valued at a
+point where the walk has already written storage three times, which is a
+situation no earlier route met.  What travels is not the whole store but the
+one cell the test reads: `ReplOldCount` below is the old pauser's count slot
+and nothing else.  It is established at message entry, carried across the
+assignment write (a different region), *changed* by the kernel's own decrement,
+carried across `afterOldPauser`'s increment (a different pauser's slot), and
+finally read.  Those crossings are the reason `sstore_getStor_set` and
+`sstore_getStor_setStorVal` appear in this module at all: the decrement needs
+the written *value*, and the two writes it has to survive need only their
+*keys*. -/
+
+section Replacement
+
+/-! ### The four windows, the tracked cell, and the lines they cross -/
+
+/-- The three words `registerPauser`'s staging line lays down at a replacement
+world.  The **target** window is the one `EntryWindows` has no counterpart for:
+the fresh route never needs to name the loaded target word, and this one does.
+-/
+def ReplStagedWindows (devm : Devm) : Prop :=
+  MemWordAt devm (targetWord * 32).toNat replWorldTarget ∧
+    MemWordAt devm (newPauserWord * 32).toNat replWorldNewPauser ∧
+    MemWordAt devm (continuationWord * 32).toNat 0
+
+/-- Those three, plus the old pauser that `setPauserKernel` stages out of
+storage. -/
+def ReplKernelWindows (devm : Devm) : Prop :=
+  ReplStagedWindows devm ∧
+    MemWordAt devm (previousPauserWord * 32).toNat replWorldOldPauser
+
+/-- The one storage cell the replacement route follows: the old pauser's
+assignment count, at the deployment that owns it. -/
+def ReplOldCount (devm : Devm) (value : B256) : Prop :=
+  (Devm.getStor devm replWorldOwner).get (countSlot replWorldOldPauser) = value
+
+/-- Transport all four windows across one crossing at once.  Every window
+obligation on this route has the same shape, so the crossings below are one
+line each. -/
+theorem ReplKernelWindows.map {a b : Devm}
+    (f : ∀ (offset : Nat) (w : B256), MemWordAt a offset w →
+      MemWordAt b offset w)
+    (windows : ReplKernelWindows a) : ReplKernelWindows b :=
+  ⟨⟨f _ _ windows.1.1, f _ _ windows.1.2.1, f _ _ windows.1.2.2⟩,
+    f _ _ windows.2⟩
+
+/-- The kernel's assignment line writes at `previousPauserWord`, which is
+below the target window and above the two the staging line left at
+`newPauserWord` and `continuationWord`; none of the three overlaps it. -/
+theorem ReplStagedWindows.acrossAppendPrefix {e : Sevm} {a b : Devm}
+    (run : Line.Run e a setPauserKernelAppendPrefix b)
+    (windows : ReplStagedWindows a) : ReplStagedWindows b :=
+  ⟨windows.1.acrossAppendPrefix (by decide) run,
+    windows.2.1.acrossAppendPrefix (by decide) run,
+    windows.2.2.acrossAppendPrefix (by decide) run⟩
+
+theorem ReplStagedWindows.map {a b : Devm}
+    (f : ∀ (offset : Nat) (w : B256), MemWordAt a offset w →
+      MemWordAt b offset w)
+    (windows : ReplStagedWindows a) : ReplStagedWindows b :=
+  ⟨f _ _ windows.1, f _ _ windows.2.1, f _ _ windows.2.2⟩
+
+theorem ReplOldCount.acrossLine {e : Sevm} {a b : Devm} {l : Line}
+    {value : B256} (inv : Line.Inv Devm.getStor l) (run : Line.Run e a l b)
+    (hcount : ReplOldCount a value) : ReplOldCount b value := by
+  unfold ReplOldCount at *
+  rw [← Line.of_inv Devm.getStor inv run]
+  exact hcount
+
+theorem ReplOldCount.of_state {a b : Devm} {value : B256}
+    (h : a.state = b.state) (hcount : ReplOldCount a value) :
+    ReplOldCount b value := by
+  unfold ReplOldCount at *
+  rw [← getStor_of_state h]
+  exact hcount
+
+/-- The kernel's replacement arm, from the previous-pauser branch to the
+`.call afterOldPauserSlot`: the old pauser's count is read, decremented and
+written back. -/
+def setPauserKernelDecrementPrefix : Line :=
+  previousCountKey ++
+    [Ninst.sload, Ninst.pushB256 1, Ninst.swap 0, Ninst.sub] ++
+    previousCountKey ++ [Ninst.sstore]
+
+/-- `afterOldPauser`'s fall-through arm continued across its own `SSTORE`.
+The fresh route splits at that write because the write *is* its row; this one
+crosses it. -/
+def afterOldNewCountLine : Line := afterOldNewCountPrefix ++ [Ninst.sstore]
+
+/-- `registerAfterSet`'s replacement arm, from the previous-pauser branch to
+the old-count branch. -/
+def registerPreviousCountCheck : Line :=
+  previousCountKey ++ [Ninst.sload, Ninst.iszero]
+
+/-- `registerAfterSet`'s old-last arm, from the old-count branch to the
+retiring pauser's expiry clear. -/
+def registerOldLastClearPrefix : Line :=
+  Ninst.pushB256 0 :: (loadWord previousPauserWord ++ tagTop expiryRegion)
+
+/-- From that clear to the new pauser's own expiry test: the zero-payload
+`HeartbeatUpdated(oldPauser)` record, then the test. -/
+def registerOldLastRecordPrefix : Line :=
+  [Ninst.sstore, Ninst.pushB256 0] ++ mstoreAt 0 ++
+    loadWord previousPauserWord ++
+    [Ninst.pushB256 heartbeatUpdatedEvent] ++ logWith 1 0 1 ++
+    memoryZeroCheck newPauserWord
+
+theorem MemWordAt.acrossPreviousCountKey {e : Sevm} {a b : Devm} {offset : Nat}
+    {w : B256} (run : Line.Run e a previousCountKey b)
+    (window : MemWordAt a offset w) : MemWordAt b offset w := by
+  unfold previousCountKey at run
+  rcases of_run_append (loadWord previousPauserWord) run with ⟨_s1, r1, run⟩
+  exact (window.acrossLoadWord r1).acrossLine (by line_inv) run
+
+theorem MemWordAt.acrossDecrementPrefix {e : Sevm} {a b : Devm} {offset : Nat}
+    {w : B256} (run : Line.Run e a setPauserKernelDecrementPrefix b)
+    (window : MemWordAt a offset w) : MemWordAt b offset w := by
+  unfold setPauserKernelDecrementPrefix at run
+  rcases of_run_append previousCountKey run with ⟨_s1, r1, run⟩
+  rcases of_run_append
+    [Ninst.sload, Ninst.pushB256 1, Ninst.swap 0, Ninst.sub] run
+    with ⟨_s2, r2, run⟩
+  rcases of_run_append previousCountKey run with ⟨_s3, r3, run⟩
+  exact (((window.acrossPreviousCountKey r1).acrossLine (by line_inv)
+    r2).acrossPreviousCountKey r3).acrossLine (by line_inv) run
+
+theorem MemWordAt.acrossNewCountLine {e : Sevm} {a b : Devm} {offset : Nat}
+    {w : B256} (run : Line.Run e a afterOldNewCountLine b)
+    (window : MemWordAt a offset w) : MemWordAt b offset w := by
+  unfold afterOldNewCountLine at run
+  rcases of_run_append afterOldNewCountPrefix run with ⟨_s1, r1, run⟩
+  exact (window.acrossNewCountPrefix r1).acrossLine (by line_inv) run
+
+theorem MemWordAt.acrossPreviousCountCheck {e : Sevm} {a b : Devm}
+    {offset : Nat} {w : B256}
+    (run : Line.Run e a registerPreviousCountCheck b)
+    (window : MemWordAt a offset w) : MemWordAt b offset w := by
+  unfold registerPreviousCountCheck at run
+  rcases of_run_append previousCountKey run with ⟨_s1, r1, run⟩
+  exact (window.acrossPreviousCountKey r1).acrossLine (by line_inv) run
+
+theorem MemWordAt.acrossOldLastClearPrefix {e : Sevm} {a b : Devm}
+    {offset : Nat} {w : B256}
+    (run : Line.Run e a registerOldLastClearPrefix b)
+    (window : MemWordAt a offset w) : MemWordAt b offset w := by
+  unfold registerOldLastClearPrefix at run
+  rcases Line.of_run_cons run with ⟨_s1, q1, run⟩
+  rcases of_run_append (loadWord previousPauserWord) run with ⟨_s2, r2, run⟩
+  exact ((window.acrossNinst q1).acrossLoadWord r2).acrossLine (by line_inv) run
+
+/-- The old-last record fragment.  Its one write is `mstoreAt 0`, the scratch
+word every expiry record is built in, which misses all four windows. -/
+theorem MemWordAt.acrossOldLastRecordPrefix {e : Sevm} {a b : Devm}
+    {offset : Nat} {w : B256}
+    (miss : offset + 32 ≤ ((0 : B256) * 32).toNat ∨
+      ((0 : B256) * 32).toNat + 32 ≤ offset)
+    (run : Line.Run e a registerOldLastRecordPrefix b)
+    (window : MemWordAt a offset w) : MemWordAt b offset w := by
+  unfold registerOldLastRecordPrefix at run
+  rcases of_run_append [Ninst.sstore, Ninst.pushB256 0] run with ⟨_s1, r1, run⟩
+  rcases of_run_append (mstoreAt 0) run with ⟨_s2, r2, run⟩
+  rcases of_run_append (loadWord previousPauserWord) run with ⟨_s3, r3, run⟩
+  rcases of_run_append [Ninst.pushB256 heartbeatUpdatedEvent] run
+    with ⟨_s4, r4, run⟩
+  rcases of_run_append (logWith 1 0 1) run with ⟨_s5, r5, run⟩
+  exact (((((window.acrossLine (by line_inv) r1).acrossMstoreAt miss
+    r2).acrossLoadWord r3).acrossLine (by line_inv) r4).acrossLogWith
+    r5).acrossMemoryZeroCheck run
+
+/-! ### The staged words at a replacement world -/
+
+/-- What the staging line stages: the call's two arguments at `targetWord` and
+`newPauserWord`, and a zero continuation.  Same shape as
+`freshWorld_stagedEntry`, with the target window kept rather than dropped. -/
+theorem replWorld_stagedEntry {oldCount : B256} {gas : Nat} {stage post : Devm}
+    (hmem : stage.memory = Mem.empty)
+    (run : Line.Run (replWorldSevm oldCount gas) stage registerStagingLine
+      post) :
+    ReplStagedWindows post := by
+  unfold registerStagingLine at run
+  rcases of_run_append (arg 0) run with ⟨s1, r1, run⟩
+  have p1 : Sevm.argWord (replWorldSevm oldCount gas) 0 :: [] <<+ s1.stack :=
+    prefix_of_arg nil_pref r1
+  have i1 : MemImage s1 [] :=
+    MemImage.of_memory_eq (Line.of_inv Devm.memory (by line_inv) r1).symm
+      ⟨by rw [hmem]; exact Mem.wf_empty, by rw [hmem]; exact Mem.reads_empty⟩
+  rcases of_run_append (mstoreAt targetWord) run with ⟨_s2, r2, run⟩
+  obtain ⟨p2, hm2⟩ := of_run_mstoreAt_val r2 p1
+  have w2 : MemWordAt _s2 (targetWord * 32).toNat replWorldTarget := by
+    rw [← (replWorld_dataFacts oldCount gas).2.2.1]
+    exact MemWordAt.of_write i1 hm2
+  rcases of_run_append (arg 1) run with ⟨_s3, r3, run⟩
+  have p3 := prefix_of_arg p2 r3
+  have i3 : MemImage _s3 _ :=
+    MemImage.of_memory_eq (Line.of_inv Devm.memory (by line_inv) r3).symm
+      (i1.write hm2)
+  rcases of_run_append (mstoreAt newPauserWord) run with ⟨_s4, r4, run⟩
+  obtain ⟨p4, hm4⟩ := of_run_mstoreAt_val r4 p3
+  have w4 : MemWordAt _s4 (newPauserWord * 32).toNat replWorldNewPauser := by
+    rw [← (replWorld_dataFacts oldCount gas).2.2.2]
+    exact MemWordAt.of_write i3 hm4
+  have t4 : MemWordAt _s4 (targetWord * 32).toNat replWorldTarget :=
+    (w2.acrossLine (by line_inv) r3).acrossMstoreAt (by decide) r4
+  rcases of_run_append [Ninst.pushB256 0] run with ⟨_s5, r5, run⟩
+  have p5 : (0 : B256) :: [] <<+ _s5.stack := by
+    rcases Line.of_run_cons r5 with ⟨_u, qu, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 qu) p4
+  rcases of_run_append (mstoreAt previousPauserWord) run with ⟨_s6, r6, run⟩
+  obtain ⟨p6, _⟩ := of_run_mstoreAt_val r6 p5
+  rcases of_run_append [Ninst.pushB256 0] run with ⟨_s7, r7, run⟩
+  have p7 : (0 : B256) :: [] <<+ _s7.stack := by
+    rcases Line.of_run_cons r7 with ⟨_u, qu, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 qu) p6
+  have t7 := ((t4.acrossLine (by line_inv) r5).acrossMstoreAt (by decide)
+    r6).acrossLine (by line_inv) r7
+  have n7 := ((w4.acrossLine (by line_inv) r5).acrossMstoreAt (by decide)
+    r6).acrossLine (by line_inv) r7
+  obtain ⟨_img7, image7⟩ := n7.memImage
+  obtain ⟨_p8, hm8⟩ := of_run_mstoreAt_val run p7
+  exact ⟨t7.acrossMstoreAt (by decide) run, n7.acrossMstoreAt (by decide) run,
+    MemWordAt.of_write image7 hm8⟩
+
+/-! ### The four priced crossings
+
+Two branch words and two storage transitions.  Everything else on the route is
+either a selector comparison, a certified-reverting sibling, or a memory word
+read straight back off a window. -/
+
+/-- The kernel's second branch word at a replacement world, with the two facts
+the rest of the route reads off the same crossing: the old pauser lands in
+memory, and the old pauser's count cell is untouched by the assignment write.
+
+The target window is what makes any of this statable.  At the fresh world the
+loaded key may stay anonymous because *every* assignment slot holds zero; here
+the answer depends on the slot being the registered target's own, so the key
+has to be named first. -/
+theorem replWorld_previousPauserPresent {oldCount : B256} {gas : Nat}
+    {devm devm' : Devm}
+    (hstor : Devm.getStor devm = Devm.getStor (replWorldPre oldCount gas))
+    (window : MemWordAt devm (targetWord * 32).toNat replWorldTarget)
+    (run : Line.Run (replWorldSevm oldCount gas) devm
+      setPauserKernelAppendPrefix devm') :
+    (∀ (w : B256) (rest : Stack), devm'.stack = w :: rest → w = 0) ∧
+      MemWordAt devm' (previousPauserWord * 32).toNat replWorldOldPauser ∧
+      ReplOldCount devm' oldCount := by
+  unfold setPauserKernelAppendPrefix at run
+  rcases of_run_append setPauserKernelAssignmentPrefix run with ⟨sA, rA, run⟩
+  have hstorA : Devm.getStor sA = Devm.getStor (replWorldPre oldCount gas) :=
+    (Line.of_inv Devm.getStor
+      (by unfold setPauserKernelAssignmentPrefix; line_inv) rA).symm.trans hstor
+  unfold setPauserKernelAssignmentPrefix at rA
+  rcases Line.of_run_cons rA with ⟨s1, q1, rA⟩
+  rcases Line.of_run_cons rA with ⟨s2, q2, rA⟩
+  have p2 : replWorldTarget :: [] <<+ s2.stack :=
+    prefix_of_loadWord_window window nil_pref
+      (Line.Run.cons q1 (Line.Run.cons q2 Line.Run.nil))
+  rcases Line.of_run_cons rA with ⟨s3, q3, rA⟩
+  have p3 := prefix_of_push (of_run_pushB256 q3) p2
+  rcases Line.of_run_cons rA with ⟨s4, q4, rA⟩
+  have p4 : assignmentSlot replWorldTarget :: [] <<+ s4.stack :=
+    prefix_of_or q4 p3
+  have hstor4 : Devm.getStor s4 = Devm.getStor (replWorldPre oldCount gas) := by
+    rw [← hstor]
+    exact (Line.of_inv Devm.getStor (by line_inv)
+      (Line.Run.cons q1 (Line.Run.cons q2 (Line.Run.cons q3
+        (Line.Run.cons q4 Line.Run.nil))))).symm
+  rcases Line.of_run_cons rA with ⟨s5, q5, rA⟩
+  obtain ⟨v, p5, hv⟩ := prefix_of_sload q5 p4
+  have hold : v = replWorldOldPauser := by
+    rw [hv, replWorld_currentTarget,
+      show Devm.getStorVal s4 replWorldOwner (assignmentSlot replWorldTarget) =
+          (replWorldPre oldCount gas).getStorVal replWorldOwner
+            (assignmentSlot replWorldTarget) from
+        congrArg (fun f : Adr → Stor =>
+          (f replWorldOwner).get (assignmentSlot replWorldTarget)) hstor4,
+      replWorld_getStorVal]
+    exact replWorld_stor_assignment oldCount
+  rcases Line.of_run_cons rA with ⟨s6, q6, rA⟩
+  have p6 : v :: v :: [] <<+ s6.stack := prefix_of_dup_val q6 (by show_nth) p5
+  rcases Line.of_run_cons rA with ⟨s7, q7, rA⟩
+  have p7 := prefix_of_push (of_run_pushB256 q7) p6
+  rcases Line.of_run_cons rA with ⟨s8, q8, rA⟩
+  obtain ⟨p8, hmem8⟩ := prefix_of_mstore_val q8 p7
+  have target7 : MemWordAt s7 (targetWord * 32).toNat replWorldTarget :=
+    ((((((window.acrossNinst q1).acrossMload q2).acrossNinst q3).acrossNinst
+      q4).acrossNinst q5).acrossNinst q6).acrossNinst q7
+  obtain ⟨_img7, image7⟩ := target7.memImage
+  have staged : MemWordAt s8 (previousPauserWord * 32).toNat
+      replWorldOldPauser := by
+    rw [← hold]
+    exact MemWordAt.of_write image7 hmem8
+  have target8 : MemWordAt s8 (targetWord * 32).toNat replWorldTarget :=
+    (((((window.acrossNinst q1).acrossMload q2).acrossNinst q3).acrossNinst
+      q4).acrossNinst q5).acrossNinst q6 |>.acrossMstoreAt (by decide)
+      (Line.Run.cons q7 (Line.Run.cons q8 Line.Run.nil))
+  rcases Line.of_run_cons rA with ⟨s9, q9, rA⟩
+  have p9 := prefix_of_push (of_run_pushB256 q9) p8
+  rcases Line.of_run_cons rA with ⟨s10, q10, rA⟩
+  obtain ⟨n, p10⟩ := prefix_of_mload q10 p9
+  have target10 : MemWordAt s10 (targetWord * 32).toNat replWorldTarget :=
+    (target8.acrossNinst q9).acrossMload q10
+  rcases Line.of_run_cons rA with ⟨s11, q11, rA⟩
+  rcases Line.of_run_cons rA with ⟨s12, q12, rA⟩
+  have p12 : replWorldTarget :: n :: v :: [] <<+ s12.stack :=
+    prefix_of_loadWord_window target10 p10
+      (Line.Run.cons q11 (Line.Run.cons q12 Line.Run.nil))
+  rcases Line.of_run_cons rA with ⟨s13, q13, rA⟩
+  have p13 := prefix_of_push (of_run_pushB256 q13) p12
+  rcases Line.of_run_cons rA with ⟨s14, q14, hnilA⟩
+  cases hnilA
+  have p14 : assignmentSlot replWorldTarget :: n :: v :: [] <<+ sA.stack :=
+    prefix_of_or q14 p13
+  have staged14 : MemWordAt sA (previousPauserWord * 32).toNat
+      replWorldOldPauser :=
+    ((((staged.acrossNinst q9).acrossMload q10).acrossNinst q11).acrossMload
+      q12).acrossNinst q13 |>.acrossNinst q14
+  rcases Line.of_run_cons run with ⟨s15, q15, run⟩
+  rcases Line.of_run_cons run with ⟨s16, q16, hnil⟩
+  cases hnil
+  have p15 := prefix_of_sstore q15 p14
+  have p16 := prefix_of_iszero q16 p15
+  obtain ⟨_u, hset⟩ := sstore_getStor_setStorVal q15 p14
+  rw [replWorld_currentTarget] at hset
+  refine ⟨fun w rest hstack => ?_, (staged14.acrossNinst q15).acrossNinst q16,
+    ?_⟩
+  · rw [head_of_stack_prefix p16 hstack, hold]
+    decide
+  · show (Devm.getStor devm' replWorldOwner).get
+      (countSlot replWorldOldPauser) = oldCount
+    rw [← Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons q16 Line.Run.nil),
+      hset, Stor.get_set_ne _ replWorld_assignment_ne_oldCount, hstorA,
+      replWorld_getStor]
+    exact replWorld_stor_oldCount oldCount
+
+/-- The kernel's own decrement: the old pauser's count cell holds one less
+than it did. -/
+theorem replWorld_countDecrement {oldCount : B256} {gas : Nat}
+    {devm devm' : Devm} {value : B256}
+    (window : MemWordAt devm (previousPauserWord * 32).toNat
+      replWorldOldPauser)
+    (hcount : ReplOldCount devm value)
+    (run : Line.Run (replWorldSevm oldCount gas) devm
+      setPauserKernelDecrementPrefix devm') :
+    ReplOldCount devm' (value - 1) := by
+  unfold setPauserKernelDecrementPrefix at run
+  rcases of_run_append previousCountKey run with ⟨s1, r1, run⟩
+  have hstor1 : Devm.getStor s1 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor
+      (by unfold previousCountKey loadWord tagTop; line_inv) r1).symm
+  have p1 : countSlot replWorldOldPauser :: [] <<+ s1.stack := by
+    unfold previousCountKey at r1
+    rcases of_run_append (loadWord previousPauserWord) r1 with ⟨_u1, l1, r1⟩
+    have pu := prefix_of_loadWord_window window nil_pref l1
+    unfold tagTop at r1
+    rcases Line.of_run_cons r1 with ⟨_u2, o1, r1⟩
+    rcases Line.of_run_cons r1 with ⟨_u3, o2, hnil⟩
+    cases hnil
+    exact prefix_of_or o2 (prefix_of_push (of_run_pushB256 o1) pu)
+  have window1 := window.acrossPreviousCountKey r1
+  rcases of_run_append
+    [Ninst.sload, Ninst.pushB256 1, Ninst.swap 0, Ninst.sub] run
+    with ⟨s2, r2, run⟩
+  have hstor2 : Devm.getStor s2 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor (by line_inv) r2).symm.trans hstor1
+  have p2 : (value - 1) :: [] <<+ s2.stack := by
+    rcases Line.of_run_cons r2 with ⟨_u1, o1, r2⟩
+    obtain ⟨c, pc, hc⟩ := prefix_of_sload o1 p1
+    have hcv : c = value := by
+      rw [hc, replWorld_currentTarget]
+      show (Devm.getStor s1 replWorldOwner).get
+        (countSlot replWorldOldPauser) = value
+      rw [hstor1]
+      exact hcount
+    rcases Line.of_run_cons r2 with ⟨_u2, o2, r2⟩
+    have pd := prefix_of_push (of_run_pushB256 o2) pc
+    rcases Line.of_run_cons r2 with ⟨_u3, o3, r2⟩
+    have hswap : Stack.Swap (0 : Fin 16).val
+        ((1 : B256) :: c :: []) (c :: (1 : B256) :: []) := Stack.swapCore_zero
+    have ps := Stack.prefix_of_swap hswap (of_run_swap o3) pd
+    rcases Line.of_run_cons r2 with ⟨_u4, o4, hnil⟩
+    cases hnil
+    rw [← hcv]
+    exact prefix_of_sub o4 ps
+  have window2 := window1.acrossLine (by line_inv) r2
+  rcases of_run_append previousCountKey run with ⟨s3, r3, run⟩
+  have hstor3 : Devm.getStor s3 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor
+      (by unfold previousCountKey loadWord tagTop; line_inv) r3).symm.trans
+      hstor2
+  have p3 : countSlot replWorldOldPauser :: (value - 1) :: [] <<+ s3.stack := by
+    unfold previousCountKey at r3
+    rcases of_run_append (loadWord previousPauserWord) r3 with ⟨_u1, l1, r3⟩
+    have pu := prefix_of_loadWord_window window2 p2 l1
+    unfold tagTop at r3
+    rcases Line.of_run_cons r3 with ⟨_u2, o1, r3⟩
+    rcases Line.of_run_cons r3 with ⟨_u3, o2, hnil⟩
+    cases hnil
+    exact prefix_of_or o2 (prefix_of_push (of_run_pushB256 o1) pu)
+  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
+  cases hnil
+  have hset := sstore_getStor_set q4 p3
+  rw [replWorld_currentTarget] at hset
+  show (Devm.getStor devm' replWorldOwner).get
+    (countSlot replWorldOldPauser) = value - 1
+  rw [hset, Stor.get_set_self]
+
+/-- `afterOldPauser`'s increment lands on the *new* pauser's count slot, so the
+cell the route follows keeps its word. -/
+theorem replWorld_newCountWrite {oldCount : B256} {gas : Nat}
+    {devm devm' : Devm} {value : B256}
+    (window : MemWordAt devm (newPauserWord * 32).toNat replWorldNewPauser)
+    (hcount : ReplOldCount devm value)
+    (run : Line.Run (replWorldSevm oldCount gas) devm afterOldNewCountLine
+      devm') :
+    ReplOldCount devm' value := by
+  unfold afterOldNewCountLine afterOldNewCountPrefix at run
+  rcases of_run_append newCountKey run with ⟨s1, r1, run⟩
+  have hstor1 : Devm.getStor s1 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor
+      (by unfold newCountKey loadWord tagTop; line_inv) r1).symm
+  have p1 : countSlot replWorldNewPauser :: [] <<+ s1.stack := by
+    unfold newCountKey at r1
+    rcases of_run_append (loadWord newPauserWord) r1 with ⟨_u1, l1, r1⟩
+    have pu := prefix_of_loadWord_window window nil_pref l1
+    unfold tagTop at r1
+    rcases Line.of_run_cons r1 with ⟨_u2, o1, r1⟩
+    rcases Line.of_run_cons r1 with ⟨_u3, o2, hnil⟩
+    cases hnil
+    exact prefix_of_or o2 (prefix_of_push (of_run_pushB256 o1) pu)
+  have window1 := window.acrossNewCountKey r1
+  rcases of_run_append [Ninst.sload, Ninst.pushB256 1, Ninst.add] run
+    with ⟨s2, r2, run⟩
+  have hstor2 : Devm.getStor s2 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor (by line_inv) r2).symm.trans hstor1
+  have p2 : ∃ z : B256, z :: [] <<+ s2.stack := by
+    rcases Line.of_run_cons r2 with ⟨_u1, o1, r2⟩
+    obtain ⟨_c, pc, _hc⟩ := prefix_of_sload o1 p1
+    rcases Line.of_run_cons r2 with ⟨_u2, o2, r2⟩
+    have pd := prefix_of_push (of_run_pushB256 o2) pc
+    rcases Line.of_run_cons r2 with ⟨_u3, o3, hnil⟩
+    cases hnil
+    exact ⟨_, prefix_of_add o3 pd⟩
+  have window2 := window1.acrossLine (by line_inv) r2
+  obtain ⟨z, pz⟩ := p2
+  rcases of_run_append newCountKey run with ⟨s3, r3, run⟩
+  have hstor3 : Devm.getStor s3 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor
+      (by unfold newCountKey loadWord tagTop; line_inv) r3).symm.trans hstor2
+  have p3 : countSlot replWorldNewPauser :: z :: [] <<+ s3.stack := by
+    unfold newCountKey at r3
+    rcases of_run_append (loadWord newPauserWord) r3 with ⟨_u1, l1, r3⟩
+    have pu := prefix_of_loadWord_window window2 pz l1
+    unfold tagTop at r3
+    rcases Line.of_run_cons r3 with ⟨_u2, o1, r3⟩
+    rcases Line.of_run_cons r3 with ⟨_u3, o2, hnil⟩
+    cases hnil
+    exact prefix_of_or o2 (prefix_of_push (of_run_pushB256 o1) pu)
+  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
+  cases hnil
+  obtain ⟨_u, hset⟩ := sstore_getStor_setStorVal q4 p3
+  rw [replWorld_currentTarget] at hset
+  show (Devm.getStor devm' replWorldOwner).get
+    (countSlot replWorldOldPauser) = value
+  rw [hset, Stor.get_set_ne _ replWorld_newCount_ne_oldCount, hstor3]
+  exact hcount
+
+/-- `registerAfterSet`'s old-count branch word: `iszero` of the cell the route
+has followed since message entry. -/
+theorem replWorld_previousCountWord {oldCount : B256} {gas : Nat}
+    {devm devm' : Devm} {value : B256}
+    (window : MemWordAt devm (previousPauserWord * 32).toNat
+      replWorldOldPauser)
+    (hcount : ReplOldCount devm value)
+    (run : Line.Run (replWorldSevm oldCount gas) devm
+      registerPreviousCountCheck devm') :
+    ∀ (w : B256) (rest : Stack), devm'.stack = w :: rest →
+      w = (value =? 0) := by
+  unfold registerPreviousCountCheck at run
+  rcases of_run_append previousCountKey run with ⟨s1, r1, run⟩
+  have hstor1 : Devm.getStor s1 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor
+      (by unfold previousCountKey loadWord tagTop; line_inv) r1).symm
+  have p1 : countSlot replWorldOldPauser :: [] <<+ s1.stack := by
+    unfold previousCountKey at r1
+    rcases of_run_append (loadWord previousPauserWord) r1 with ⟨_u1, l1, r1⟩
+    have pu := prefix_of_loadWord_window window nil_pref l1
+    unfold tagTop at r1
+    rcases Line.of_run_cons r1 with ⟨_u2, o1, r1⟩
+    rcases Line.of_run_cons r1 with ⟨_u3, o2, hnil⟩
+    cases hnil
+    exact prefix_of_or o2 (prefix_of_push (of_run_pushB256 o1) pu)
+  rcases Line.of_run_cons run with ⟨_s2, q2, run⟩
+  obtain ⟨c, p2, hc⟩ := prefix_of_sload q2 p1
+  have hcv : c = value := by
+    rw [hc, replWorld_currentTarget]
+    show (Devm.getStor s1 replWorldOwner).get
+      (countSlot replWorldOldPauser) = value
+    rw [hstor1]
+    exact hcount
+  rcases Line.of_run_cons run with ⟨_s3, q3, hnil⟩
+  cases hnil
+  intro w rest hstack
+  rw [head_of_stack_prefix (prefix_of_iszero q3 p2) hstack, hcv]
+
+/-! ### The two memory-valued branch words the replacement arm reads -/
+
+/-- `registerAfterSet`'s first test: the previous pauser the kernel staged is
+nonzero, so the walk takes the replacement arm rather than the fresh one. -/
+theorem replWorld_previousPauserRegistered {e : Sevm} {devm devm' : Devm}
+    (window : MemWordAt devm (previousPauserWord * 32).toNat
+      replWorldOldPauser)
+    (run : Line.Run e devm (memoryZeroCheck previousPauserWord) devm') :
+    ∀ (w : B256) (rest : Stack), devm'.stack = w :: rest → w = 0 := by
+  intro w rest hstack
+  rw [memoryZeroCheck_word window run w rest hstack]
+  decide
+
+/-- The staged new pauser is nonzero, so every `newPauser`-valued test falls
+through to the arm that stores an expiry. -/
+theorem replWorld_newPauserNonzero {e : Sevm} {devm devm' : Devm}
+    (window : MemWordAt devm (newPauserWord * 32).toNat replWorldNewPauser)
+    (run : Line.Run e devm (memoryZeroCheck newPauserWord) devm') :
+    ∀ (w : B256) (rest : Stack), devm'.stack = w :: rest → w = 0 := by
+  intro w rest hstack
+  rw [memoryZeroCheck_word window run w rest hstack]
+  decide
+
+/-- The same test at the far end of the old-last record fragment, where the
+window has to survive an `SSTORE`, a scratch-word write, a `LOG` and two
+`MLOAD`s first. -/
+theorem replWorld_newPauserNonzero_afterRecord {e : Sevm} {devm devm' : Devm}
+    (window : MemWordAt devm (newPauserWord * 32).toNat replWorldNewPauser)
+    (run : Line.Run e devm registerOldLastRecordPrefix devm') :
+    ∀ (w : B256) (rest : Stack), devm'.stack = w :: rest → w = 0 := by
+  unfold registerOldLastRecordPrefix at run
+  rcases of_run_append [Ninst.sstore, Ninst.pushB256 0] run with ⟨_s1, r1, run⟩
+  rcases of_run_append (mstoreAt 0) run with ⟨_s2, r2, run⟩
+  rcases of_run_append (loadWord previousPauserWord) run with ⟨_s3, r3, run⟩
+  rcases of_run_append [Ninst.pushB256 heartbeatUpdatedEvent] run
+    with ⟨_s4, r4, run⟩
+  rcases of_run_append (logWith 1 0 1) run with ⟨_s5, r5, run⟩
+  have window5 := ((((window.acrossLine (by line_inv) r1).acrossMstoreAt
+    (by decide) r2).acrossLoadWord r3).acrossLine (by line_inv)
+    r4).acrossLogWith r5
+  intro w rest hstack
+  rw [memoryZeroCheck_word window5 run w rest hstack]
+  decide
+
+/-- `finishSetPauser`'s continuation test, world-independent: the staging line
+wrote a zero continuation, so the walk returns to `registerAfterSet` rather
+than to `pauseAfterSet`.  `freshWorld_continuationRegister` is this at one
+fixed world; nothing in either proof reads the world. -/
+theorem continuationRegister_of_finishPrefix {e : Sevm} {devm devm' : Devm}
+    (window : MemWordAt devm (continuationWord * 32).toNat 0)
+    (run : Line.Run e devm finishSetPauserPrefix devm') :
+    ∀ (w : B256) (rest : Stack), devm'.stack = w :: rest → w ≠ 0 := by
+  unfold finishSetPauserPrefix at run
+  rcases of_run_append (loadWord newPauserWord) run with ⟨_s1, r1, run⟩
+  rcases of_run_append (loadWord previousPauserWord) run with ⟨_s2, r2, run⟩
+  rcases of_run_append (loadWord targetWord) run with ⟨_s3, r3, run⟩
+  rcases of_run_append [Ninst.pushB256 pauserSetEvent] run with ⟨_s4, r4, run⟩
+  rcases of_run_append (logWith 3 0 0) run with ⟨_s5, r5, run⟩
+  have window5 := ((((window.acrossLoadWord r1).acrossLoadWord
+    r2).acrossLoadWord r3).acrossLine (by line_inv) r4).acrossLogWith r5
+  intro w rest hstack
+  rw [memoryZeroCheck_word window5 run w rest hstack]
+  decide
+
+/-! ### The shared leg: program entry to `registerAfterSet`'s own root
+
+Fifteen branch crossings, of which three are priced: the kernel's
+storage-valued previous-pauser test, `afterOldPauser`'s memory-valued
+new-pauser test and `finishSetPauser`'s memory-valued continuation test.  Of
+the other twelve, six are the dispatcher's selector comparisons, decided on the
+concrete calldata selector, and six have certified-reverting siblings.
+
+Both replacement worlds take this leg, so it is stated once, parametrically in
+the old pauser's entry count and in the message gas.  Each row's own route adds
+four more crossings past `registerAfterSet`'s root, of which the arm-selecting
+two — the staged previous pauser and the decremented count — are priced. -/
+
+set_option maxRecDepth 16384 in
+theorem runtimeMain_routeTo_replacementRegisterAfterSetCall
+    {oldCount : B256} {gas : Nat} {devm post : Devm}
+    {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      (replWorldSevm oldCount gas) devm (runtime officialParams).main
+      (.ok post))
+    (hstor : Devm.getStor devm = Devm.getStor (replWorldPre oldCount gas))
+    (hmem : devm.memory = Mem.empty)
+    (callRoute : ∀ (current : Prog.SourcePath) (devm' : Devm),
+      ReplKernelWindows devm' → ReplOldCount devm' (oldCount - 1) →
+      ∀ tail : Func.RunCompiledTo
+        ((runtime officialParams).main :: (runtime officialParams).aux)
+        (replWorldSevm oldCount gas) devm' (Func.call registerAfterSetSlot)
+        (.ok post),
+        Func.RunCompiledTo.RouteTo current tail targetPath targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨0, []⟩ h targetPath targetInstruction := by
+  refine routeTo_line runtimeMainEntryPrefix h (fun _entry erun tail => ?_)
+  have g0 := (Line.of_inv Devm.getStor (by line_inv) erun).symm.trans hstor
+  have n0 := (Line.of_inv Devm.memory (by line_inv) erun).symm.trans hmem
+  refine routeTo_branchLeft_of_rightRevertsOk_frame tail (fuel := 4) (by rfl)
+    (fun _body hpop arm => ?_)
+  have g1 := (getStor_of_state hpop.state).symm.trans g0
+  have n1 := hpop.memory.symm.trans n0
+  refine dispatch_routeTo_registerPauser officialParams arm
+    (replWorld_dataFacts oldCount gas).2.1
+    (fun _current _d0 dstor dmem bodyTail => ?_)
+  refine registerPauser_routeTo_setPauserCall officialParams bodyTail
+    (fun _c _stage d1 rstor rmem staging callTail => ?_)
+  have gk : Devm.getStor d1 = Devm.getStor (replWorldPre oldCount gas) :=
+    rstor.trans (dstor.trans g1)
+  have windows := replWorld_stagedEntry (rmem.trans (dmem.trans n1)) staging
+  refine routeTo_call callTail (by rfl) (fun _kStart kBurn kBody => ?_)
+  have gk0 := (getStor_of_state kBurn.state).symm.trans gk
+  have wk0 :=
+    windows.map (fun _ _ w => MemWordAt.of_memory_eq kBurn.memory.symm w)
+  refine routeTo_line setPauserKernelZeroCheck kBody (fun _z zrun tail0 => ?_)
+  have gk1 := (Line.of_inv Devm.getStor (by line_inv) zrun).symm.trans gk0
+  have wk1 := wk0.map (fun _ _ w => w.acrossZeroCheck zrun)
+  refine routeTo_branchLeft_of_rightRevertsOk_frame tail0 (fuel := 8) (by rfl)
+    (fun _s1 hpop1 arm1 => ?_)
+  have gk2 := (getStor_of_state hpop1.state).symm.trans gk1
+  have wk2 := wk1.map (fun _ _ w => MemWordAt.of_memory_eq hpop1.memory.symm w)
+  refine routeTo_line setPauserKernelAppendPrefix arm1
+    (fun _s2 run2 tail2 => ?_)
+  obtain ⟨branchWord, staged, countCell⟩ :=
+    replWorld_previousPauserPresent gk2 wk2.1 run2
+  refine routeTo_branchLeft_frame tail2 branchWord (fun _s3 hpop3 arm3 => ?_)
+  have wk3 : ReplKernelWindows _s3 :=
+    ReplKernelWindows.map (fun _ _ w => MemWordAt.of_memory_eq hpop3.memory.symm w)
+      ⟨wk2.acrossAppendPrefix run2, staged⟩
+  have c3 := countCell.of_state hpop3.state
+  refine routeTo_line setPauserKernelDecrementPrefix arm3
+    (fun _s4 run4 tail4 => ?_)
+  have c4 := replWorld_countDecrement wk3.2 c3 run4
+  have wk4 := wk3.map (fun _ _ w => w.acrossDecrementPrefix run4)
+  refine routeTo_call tail4 (by rfl) (fun _aStart aBurn aBody => ?_)
+  have c5 := c4.of_state aBurn.state
+  have wk5 := wk4.map (fun _ _ w => MemWordAt.of_memory_eq aBurn.memory.symm w)
+  refine routeTo_line (memoryZeroCheck newPauserWord) aBody
+    (fun _s6 r6 tail6 => ?_)
+  refine routeTo_branchLeft_frame tail6
+    (replWorld_newPauserNonzero wk5.1.2.1 r6) (fun _s7 hpop7 arm7 => ?_)
+  have c7 := (c5.acrossLine (by line_inv) r6).of_state hpop7.state
+  have wk7 := (wk5.map (fun _ _ w => w.acrossMemoryZeroCheck r6)).map
+    (fun _ _ w => MemWordAt.of_memory_eq hpop7.memory.symm w)
+  refine routeTo_line afterOldNewCountLine arm7 (fun _s8 r8 tail8 => ?_)
+  have c8 := replWorld_newCountWrite wk7.1.2.1 c7 r8
+  have wk8 := wk7.map (fun _ _ w => w.acrossNewCountLine r8)
+  refine routeTo_call tail8 (by rfl) (fun _fStart fBurn fBody => ?_)
+  have c9 := c8.of_state fBurn.state
+  have wk9 := wk8.map (fun _ _ w => MemWordAt.of_memory_eq fBurn.memory.symm w)
+  refine routeTo_line finishSetPauserPrefix fBody (fun _s10 r10 tail10 => ?_)
+  refine routeTo_branchRight_frame tail10
+    (continuationRegister_of_finishPrefix wk9.1.2.2 r10)
+    (fun _s11 _w11 hpop11 registerCall => ?_)
+  have c11 := (c9.acrossLine (by line_inv) r10).of_state hpop11.state
+  have wk11 := (wk9.map (fun _ _ w => w.acrossFinishPrefix r10)).map
+    (fun _ _ w => MemWordAt.of_memory_eq hpop11.memory.symm w)
+  exact callRoute _ _ wk11 c11 registerCall
+
+/-! ### The three paths, and the three routes -/
+
+/-- Structural source position of the expiry `SSTORE` on `registerAfterSet`'s
+retained arm: inventory index `14`. -/
+def registerRetainedArmExpiryPath : Prog.SourcePath :=
+  ⟨registerAfterSetSlot,
+    List.replicate 3 .rest ++ [.branchLeft] ++ List.replicate 6 .rest ++
+      [.branchLeft] ++ List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 8 .rest ++ [.branchLeft] ++ List.replicate 7 .rest⟩
+
+/-- Structural source position of the retiring pauser's expiry clear:
+inventory index `15`. -/
+def registerOldLastClearPath : Prog.SourcePath :=
+  ⟨registerAfterSetSlot,
+    List.replicate 3 .rest ++ [.branchLeft] ++ List.replicate 6 .rest ++
+      [.branchRight] ++ List.replicate 5 .rest⟩
+
+/-- Structural source position of the new pauser's expiry write on the
+old-last arm: inventory index `16`. -/
+def registerOldLastNewExpiryPath : Prog.SourcePath :=
+  ⟨registerAfterSetSlot,
+    List.replicate 3 .rest ++ [.branchLeft] ++ List.replicate 6 .rest ++
+      [.branchRight] ++ List.replicate 18 .rest ++ [.branchLeft] ++
+      List.replicate 8 .rest ++ [.branchLeft] ++ List.replicate 7 .rest⟩
+
+set_option maxRecDepth 16384 in
+/-- The complete route to the retained arm's expiry `SSTORE`.  Past
+`registerAfterSet`'s root: the previous-pauser test takes the replacement arm,
+the old-count test finds `2 - 1` and takes the retained arm, and the tail is
+the fresh arm's own — same new-pauser test, same overflow check, same write
+line. -/
+theorem runtimeMain_routeTo_registerRetainedArmExpiry {devm post : Devm}
+    (h : Func.RunCompiledTo
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      (replWorldSevm replRetainedWorldCount replRetainedWorldGas) devm
+      (runtime officialParams).main (.ok post))
+    (hstor : Devm.getStor devm =
+      Devm.getStor (replWorldPre replRetainedWorldCount replRetainedWorldGas))
+    (hmem : devm.memory = Mem.empty) :
+    Func.RunCompiledTo.RouteTo ⟨0, []⟩ h registerRetainedArmExpiryPath
+      (.reg .sstore) := by
+  refine runtimeMain_routeTo_replacementRegisterAfterSetCall h hstor hmem
+    (fun _current _d windows hcount callTail => ?_)
+  refine routeTo_call callTail (by rfl) (fun _rStart rBurn rBody => ?_)
+  have w0 :=
+    windows.map (fun _ _ w => MemWordAt.of_memory_eq rBurn.memory.symm w)
+  have c0 := hcount.of_state rBurn.state
+  refine routeTo_line (memoryZeroCheck previousPauserWord) rBody
+    (fun _s1 r1 tail1 => ?_)
+  refine routeTo_branchLeft_frame tail1
+    (replWorld_previousPauserRegistered w0.2 r1) (fun _s2 hpop2 arm2 => ?_)
+  have w2 := (w0.map (fun _ _ w => w.acrossMemoryZeroCheck r1)).map
+    (fun _ _ w => MemWordAt.of_memory_eq hpop2.memory.symm w)
+  have c2 := (c0.acrossLine (by line_inv) r1).of_state hpop2.state
+  refine routeTo_line registerPreviousCountCheck arm2 (fun _s3 r3 tail3 => ?_)
+  refine routeTo_branchLeft_frame tail3
+    (fun w rest hs => by
+      rw [replWorld_previousCountWord w2.2 c2 r3 w rest hs]
+      decide)
+    (fun _s4 hpop4 arm4 => ?_)
+  have w4 := (w2.map (fun _ _ w => w.acrossPreviousCountCheck r3)).map
+    (fun _ _ w => MemWordAt.of_memory_eq hpop4.memory.symm w)
+  refine routeTo_line (memoryZeroCheck newPauserWord) arm4
+    (fun _s5 r5 tail5 => ?_)
+  refine routeTo_branchLeft tail5 (replWorld_newPauserNonzero w4.1.2.1 r5)
+    (fun _s6 arm6 => ?_)
+  refine routeTo_line checkedExpiryPrefix arm6 (fun _s7 _r7 tail7 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail7 (fuel := 16)
+    arithmeticPanic_revertsWithin (fun _s8 arm8 => ?_)
+  refine routeTo_line registerFreshArmExpiryPrefix arm8
+    (fun _s9 _r9 write => ?_)
+  have pathEq :
+      ((((((((([] ++ List.replicate (memoryZeroCheck previousPauserWord).length
+                          Prog.SourceStep.rest) ++
+                      [Prog.SourceStep.branchLeft]) ++
+                    List.replicate registerPreviousCountCheck.length
+                      Prog.SourceStep.rest) ++
+                  [Prog.SourceStep.branchLeft]) ++
+                List.replicate (memoryZeroCheck newPauserWord).length
+                  Prog.SourceStep.rest) ++ [Prog.SourceStep.branchLeft]) ++
+            List.replicate checkedExpiryPrefix.length Prog.SourceStep.rest) ++
+          [Prog.SourceStep.branchLeft]) ++
+        List.replicate registerFreshArmExpiryPrefix.length
+          Prog.SourceStep.rest) = registerRetainedArmExpiryPath.steps := by
+    simp [registerRetainedArmExpiryPath, memoryZeroCheck, checkedExpiryPrefix,
+      registerFreshArmExpiryPrefix, registerPreviousCountCheck,
+      previousCountKey, loadWord, mstoreAt, tagTop]
+  exact pathEq ▸ routeTo_head write registerRetainedArmExpiryPath
+
+set_option maxRecDepth 16384 in
+/-- The complete route to the retiring pauser's expiry clear: the same leg,
+with the old-count test finding `1 - 1` and taking the old-last arm. -/
+theorem runtimeMain_routeTo_registerOldLastClear {devm post : Devm}
+    (h : Func.RunCompiledTo
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      (replWorldSevm replOldLastWorldCount replOldLastWorldGas) devm
+      (runtime officialParams).main (.ok post))
+    (hstor : Devm.getStor devm =
+      Devm.getStor (replWorldPre replOldLastWorldCount replOldLastWorldGas))
+    (hmem : devm.memory = Mem.empty) :
+    Func.RunCompiledTo.RouteTo ⟨0, []⟩ h registerOldLastClearPath
+      (.reg .sstore) := by
+  refine runtimeMain_routeTo_replacementRegisterAfterSetCall h hstor hmem
+    (fun _current _d windows hcount callTail => ?_)
+  refine routeTo_call callTail (by rfl) (fun _rStart rBurn rBody => ?_)
+  have w0 :=
+    windows.map (fun _ _ w => MemWordAt.of_memory_eq rBurn.memory.symm w)
+  have c0 := hcount.of_state rBurn.state
+  refine routeTo_line (memoryZeroCheck previousPauserWord) rBody
+    (fun _s1 r1 tail1 => ?_)
+  refine routeTo_branchLeft_frame tail1
+    (replWorld_previousPauserRegistered w0.2 r1) (fun _s2 hpop2 arm2 => ?_)
+  have w2 := (w0.map (fun _ _ w => w.acrossMemoryZeroCheck r1)).map
+    (fun _ _ w => MemWordAt.of_memory_eq hpop2.memory.symm w)
+  have c2 := (c0.acrossLine (by line_inv) r1).of_state hpop2.state
+  refine routeTo_line registerPreviousCountCheck arm2 (fun _s3 r3 tail3 => ?_)
+  refine routeTo_branchRight tail3
+    (fun w rest hs => by
+      rw [replWorld_previousCountWord w2.2 c2 r3 w rest hs]
+      decide)
+    (fun _s4 arm4 => ?_)
+  refine routeTo_line registerOldLastClearPrefix arm4
+    (fun _s5 _r5 write => ?_)
+  have pathEq :
+      ((((([] ++ List.replicate (memoryZeroCheck previousPauserWord).length
+                    Prog.SourceStep.rest) ++ [Prog.SourceStep.branchLeft]) ++
+              List.replicate registerPreviousCountCheck.length
+                Prog.SourceStep.rest) ++ [Prog.SourceStep.branchRight]) ++
+          List.replicate registerOldLastClearPrefix.length
+            Prog.SourceStep.rest) = registerOldLastClearPath.steps := by
+    simp [registerOldLastClearPath, memoryZeroCheck, registerPreviousCountCheck,
+      registerOldLastClearPrefix, previousCountKey, loadWord, tagTop]
+  exact pathEq ▸ routeTo_head write registerOldLastClearPath
+
+set_option maxRecDepth 16384 in
+/-- The complete route to the new pauser's expiry write on the old-last arm:
+the clear crossed, the zero-payload record emitted, and then the same
+new-pauser test, overflow check and write line the other two expiry rows
+end with. -/
+theorem runtimeMain_routeTo_registerOldLastNewExpiry {devm post : Devm}
+    (h : Func.RunCompiledTo
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      (replWorldSevm replOldLastWorldCount replOldLastWorldGas) devm
+      (runtime officialParams).main (.ok post))
+    (hstor : Devm.getStor devm =
+      Devm.getStor (replWorldPre replOldLastWorldCount replOldLastWorldGas))
+    (hmem : devm.memory = Mem.empty) :
+    Func.RunCompiledTo.RouteTo ⟨0, []⟩ h registerOldLastNewExpiryPath
+      (.reg .sstore) := by
+  refine runtimeMain_routeTo_replacementRegisterAfterSetCall h hstor hmem
+    (fun _current _d windows hcount callTail => ?_)
+  refine routeTo_call callTail (by rfl) (fun _rStart rBurn rBody => ?_)
+  have w0 :=
+    windows.map (fun _ _ w => MemWordAt.of_memory_eq rBurn.memory.symm w)
+  have c0 := hcount.of_state rBurn.state
+  refine routeTo_line (memoryZeroCheck previousPauserWord) rBody
+    (fun _s1 r1 tail1 => ?_)
+  refine routeTo_branchLeft_frame tail1
+    (replWorld_previousPauserRegistered w0.2 r1) (fun _s2 hpop2 arm2 => ?_)
+  have w2 := (w0.map (fun _ _ w => w.acrossMemoryZeroCheck r1)).map
+    (fun _ _ w => MemWordAt.of_memory_eq hpop2.memory.symm w)
+  have c2 := (c0.acrossLine (by line_inv) r1).of_state hpop2.state
+  refine routeTo_line registerPreviousCountCheck arm2 (fun _s3 r3 tail3 => ?_)
+  refine routeTo_branchRight_frame tail3
+    (fun w rest hs => by
+      rw [replWorld_previousCountWord w2.2 c2 r3 w rest hs]
+      decide)
+    (fun _s4 _w4 hpop4 arm4 => ?_)
+  have w4 := (w2.map (fun _ _ w => w.acrossPreviousCountCheck r3)).map
+    (fun _ _ w => MemWordAt.of_memory_eq hpop4.memory.symm w)
+  refine routeTo_line registerOldLastClearPrefix arm4
+    (fun _s5 r5 clearWrite => ?_)
+  refine routeTo_line registerOldLastRecordPrefix clearWrite
+    (fun _s6 r6 tail6 => ?_)
+  have w5 := w4.map (fun _ _ w => w.acrossOldLastClearPrefix r5)
+  refine routeTo_branchLeft tail6
+    (replWorld_newPauserNonzero_afterRecord w5.1.2.1 r6) (fun _s7 arm7 => ?_)
+  refine routeTo_line checkedExpiryPrefix arm7 (fun _s8 _r8 tail8 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail8 (fuel := 16)
+    arithmeticPanic_revertsWithin (fun _s9 arm9 => ?_)
+  refine routeTo_line registerFreshArmExpiryPrefix arm9
+    (fun _s10 _r10 write => ?_)
+  have pathEq :
+      (((((((((([] ++
+                          List.replicate
+                            (memoryZeroCheck previousPauserWord).length
+                            Prog.SourceStep.rest) ++
+                        [Prog.SourceStep.branchLeft]) ++
+                      List.replicate registerPreviousCountCheck.length
+                        Prog.SourceStep.rest) ++
+                    [Prog.SourceStep.branchRight]) ++
+                  List.replicate registerOldLastClearPrefix.length
+                    Prog.SourceStep.rest) ++
+                List.replicate registerOldLastRecordPrefix.length
+                  Prog.SourceStep.rest) ++ [Prog.SourceStep.branchLeft]) ++
+            List.replicate checkedExpiryPrefix.length Prog.SourceStep.rest) ++
+          [Prog.SourceStep.branchLeft]) ++
+        List.replicate registerFreshArmExpiryPrefix.length
+          Prog.SourceStep.rest) = registerOldLastNewExpiryPath.steps := by
+    simp [registerOldLastNewExpiryPath, memoryZeroCheck,
+      registerPreviousCountCheck, registerOldLastClearPrefix,
+      registerOldLastRecordPrefix, checkedExpiryPrefix,
+      registerFreshArmExpiryPrefix, previousCountKey, loadWord, mstoreAt,
+      tagTop, logWith]
+  exact pathEq ▸ routeTo_head write registerOldLastNewExpiryPath
+
+/-! ### Pinning the three rows, and the witnesses -/
+
+set_option maxRecDepth 20000 in
+/-- Inventory indices `14`, `15` and `16` are the only ones nominating the
+three replacement-arm paths.  One kernel evaluation settles all three, as for
+the `appendTarget` rows. -/
+theorem registerReplacementArm_index_pins :
+    (∀ index ∈ List.range 20,
+        ((runtimePersistentSourceSites officialParams)[index]?.map
+          (fun s => s.path) = some registerRetainedArmExpiryPath) →
+          index = 14) ∧
+      (∀ index ∈ List.range 20,
+        ((runtimePersistentSourceSites officialParams)[index]?.map
+          (fun s => s.path) = some registerOldLastClearPath) → index = 15) ∧
+      (∀ index ∈ List.range 20,
+        ((runtimePersistentSourceSites officialParams)[index]?.map
+          (fun s => s.path) = some registerOldLastNewExpiryPath) →
+          index = 16) := by
+  decide +kernel
+
+/-- The inventory row at index `14` — the expiry write on `registerAfterSet`'s
+**retained** arm, whose constructor is named `.registerFreshExpiry` — is
+attained with the `.adminExpiry` role.
+
+Read the section note before reading the constructor's name as a description
+of the site: the row is pinned by `sourceSite?`, and this one's site sits
+behind `previousPauser ≠ 0`, which no fresh registration reaches. -/
+theorem attainable_registerFreshExpiry_adminExpiry :
+    Attainable officialParams .registerFreshExpiry .adminExpiry := by
+  refine attainable_of_entryRoute_frame (ca := replWorldOwner)
+    (replWorld_currentTarget _ _) ?_
+    (fun found pathEq =>
+      RuntimePersistentWrite.eq_of_path registerReplacementArm_index_pins.1
+        found pathEq)
+    (by decide) replRetainedWorld_run
+    (fun _devm _post hstor hmem hrun =>
+      runtimeMain_routeTo_registerRetainedArmExpiry hrun hstor hmem)
+  rw [replWorld_codeAddress, replWorld_currentTarget]
+
+/-- The inventory row at index `15` — the retiring pauser's expiry clear — is
+attained with the `.adminExpiry` role. -/
+theorem attainable_registerLastOldClear_adminExpiry :
+    Attainable officialParams .registerLastOldClear .adminExpiry := by
+  refine attainable_of_entryRoute_frame (ca := replWorldOwner)
+    (replWorld_currentTarget _ _) ?_
+    (fun found pathEq =>
+      RuntimePersistentWrite.eq_of_path registerReplacementArm_index_pins.2.1
+        found pathEq)
+    (by decide) replOldLastWorld_run
+    (fun _devm _post hstor hmem hrun =>
+      runtimeMain_routeTo_registerOldLastClear hrun hstor hmem)
+  rw [replWorld_codeAddress, replWorld_currentTarget]
+
+/-- The inventory row at index `16` — the new pauser's expiry write after that
+clear — is attained with the `.adminExpiry` role, at the same walk. -/
+theorem attainable_registerLastOldNewExpiry_adminExpiry :
+    Attainable officialParams .registerLastOldNewExpiry .adminExpiry := by
+  refine attainable_of_entryRoute_frame (ca := replWorldOwner)
+    (replWorld_currentTarget _ _) ?_
+    (fun found pathEq =>
+      RuntimePersistentWrite.eq_of_path registerReplacementArm_index_pins.2.2
+        found pathEq)
+    (by decide) replOldLastWorld_run
+    (fun _devm _post hstor hmem hrun =>
+      runtimeMain_routeTo_registerOldLastNewExpiry hrun hstor hmem)
+  rw [replWorld_codeAddress, replWorld_currentTarget]
+
+end Replacement
 
 end Blanc.LidoCircuitBreaker
