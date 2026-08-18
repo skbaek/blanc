@@ -17,18 +17,19 @@ exactly the hypothesis block of
 literally what that theorem consumes, and the row is pinned by the *row's own*
 frozen source site rather than existentially hidden.
 
-The rest of this module builds the first positive witness, at the concrete
-admin registration of `Blanc/LidoCircuitBreakerRegistrationWorld.lean`:
-`(.setPauserAssignment, .adminRegistry)` is attained.  Everything it needs is
-proved here except one certificate — that the registration derivation enters
-no child frame — which is stated and discussed under *The frame-entry-freedom
-certificate*.
+The rest of this module builds the first positive witness, unconditionally, at
+the concrete admin registration of
+`Blanc/LidoCircuitBreakerRegistrationWorld.lean`:
+`(.setPauserAssignment, .adminRegistry)` is attained.
 
-Two facts made the route cheap, and both generalize to every other row behind
-this same flow.  A `REVERT`-only arm cannot produce an `.ok` outcome at all,
-so six of the twelve branch crossings need no branch word and no cleanliness
-antecedent; and the six that remain are the dispatcher's selector
-comparisons, which are decided on the concrete calldata selector alone.
+Three facts made the route cheap, and all three generalize to every other row
+behind this same flow.  A `REVERT`-only arm cannot produce an `.ok` outcome at
+all, so six of the twelve branch crossings need no branch word and no
+cleanliness antecedent; the six that remain are the dispatcher's selector
+comparisons, which are decided on the concrete calldata selector alone; and
+the same-frame premise comes back from the routed bridge already proved, so no
+frame-entry-freedom certificate is involved — see *Same-frame reachability,
+and why no certificate is needed* below.
 -/
 
 namespace Blanc.LidoCircuitBreaker
@@ -105,7 +106,7 @@ theorem not_attainable_afterOldNewCount_pauseRegistry :
 `Blanc/SourceAttainment.lean`'s contract-neutral `routeTo_*` kit, exercised on
 the exact production `Func`.  Read that module's *route-construction kit*
 section before adding a leg: it records why `RouteTo`'s constructors cannot be
-`apply`d and why `routeTo_line`'s prefix argument must be a list literal.
+`apply`d, which is the one trap in front of every consumer.
 
 This is the leg the
 `.setPauserAssignment` row's attainment witness ends with: from the callee root
@@ -115,21 +116,22 @@ counter.
 
 The three legs in this section take **branch-word** hypotheses, which is what
 the shared kit's branch lemmas ask for.  At a successful outcome none of those
-words has to be computed — see *Wrong-arm refutation at a successful outcome*
-below — so `setPauserKernel_routeTo_assignment_ok`,
+words has to be computed — the shared kit's `routeTo_*RevertsOk` pair settles
+a branch from a certified-reverting arm alone — so
+`setPauserKernel_routeTo_assignment_ok`,
 `runtimeMain_routeTo_setPauserAssignment` and
 `call_setPauserSlot_routeTo_assignment_ok` supersede them for the witness.
 These remain as the general-outcome forms. -/
 
-/-- The kernel's zero-check prefix, spelled as a list literal: the unifier has
-to see `prepend`'s argument in constructor form to expose the walk's head, so
-`loadWord targetWord ++ [iszero]` does not work in that position. -/
+/-- The kernel's zero-check prefix, spelled out: `loadWord targetWord`'s
+expansion followed by `iszero`.  The combinator form unifies here too; this
+`def` just names the line once for the three legs that cross it. -/
 def setPauserKernelZeroCheck : Line :=
   [Ninst.pushB256 (targetWord * 32), Ninst.mload, Ninst.iszero]
 
 /-- The kernel's assignment prefix, from the fall-through arm to the `SSTORE`;
 `targetKey ++ [sload, dup 0] ++ mstoreAt previousPauserWord ++
-loadWord newPauserWord ++ targetKey`, spelled literally for the same reason. -/
+loadWord newPauserWord ++ targetKey`, spelled out for the same reason. -/
 def setPauserKernelAssignmentPrefix : Line :=
   [Ninst.pushB256 (targetWord * 32), Ninst.mload,
    Ninst.pushB256 (regionWord assignmentRegion), Ninst.or,
@@ -222,174 +224,8 @@ theorem call_setPauserSlot_routeTo_assignment
       ∀ (w : B256) (rest : Stack), zeroCheck.stack = w :: rest → w = 0) :
     Func.RunCompiledTo.RouteTo current h setPauserAssignmentPath
       (.reg .sstore) :=
-  routeTo_call h lookup fun kernelStart tail =>
+  routeTo_call h lookup fun kernelStart _burn tail =>
     setPauserKernel_routeTo_assignment tail (nonzeroTarget kernelStart)
-
-/-! ## Wrong-arm refutation at a successful outcome
-
-`Blanc/SourceAttainment.lean`'s `routeTo_branchLeft_of_rightReverts` takes
-`Execution.commits out = true`, and at an `.ok post` outcome that is
-`post.error.isNone` — a *cleanliness* fact, which
-`freshRegistrationWorld_settles` carries as an explicit antecedent precisely
-because nothing landed propagates `Devm.error` across a compiled walk.
-
-No such antecedent is needed.  A `REVERT` terminal cannot produce an `.ok`
-outcome *at all* — every arm of `Linst.run`'s `.rev` case ends in `.error` —
-so a certified-reverting arm under an `.ok` walk is not merely
-non-committing, it is impossible.  The two lemmas below are the `.ok`-outcome
-strengthening of the shared kit, and they are what makes six of this file's
-twelve branch crossings free. -/
-
-/-- `REVERT` cannot produce a successful outcome, however its operand reads
-fail.  The `.ok` half of `Linst.not_commits_of_run_rev`'s case analysis. -/
-theorem Linst.not_run_rev_ok {sevm : Sevm} {devm post : Devm}
-    (run : Linst.Run sevm devm .rev (.ok post)) : False := by
-  simp only [Linst.Run, Linst.run] at run
-  rcases Except.bind_eq_ok run with ⟨_v1, _h1, h2⟩
-  rcases Except.bind_eq_ok h2 with ⟨_v2, _h3, h4⟩
-  rcases Except.bind_eq_ok h4 with ⟨_v3, _h5, h6⟩
-  contradiction
-
-/-- A certified-reverting body has no successful walk.  Same induction as
-`Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin`, with the outcome
-pinned to `.ok` and the conclusion strengthened to `False`. -/
-theorem Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin
-    {fs : List Func} {sevm : Sevm} :
-    ∀ (fuel : Nat) {devm : Devm} {body : Func} {post : Devm},
-      Func.RunCompiledTo fs sevm devm body (.ok post) →
-      Func.alwaysRevertsWithin fuel fs body = true → False := by
-  intro fuel
-  induction fuel with
-  | zero =>
-      intro _devm _body _post _run certified
-      simp [Func.alwaysRevertsWithin] at certified
-  | succ fuel ih =>
-      intro devm body post run certified
-      cases body with
-      | branch left right =>
-          simp only [Func.alwaysRevertsWithin, Bool.and_eq_true] at certified
-          cases run with
-          | zero room pop tail => exact ih tail certified.1
-          | succ nonzero room pop tail => exact ih tail certified.2
-      | last terminal =>
-          simp only [Func.alwaysRevertsWithin, beq_iff_eq] at certified
-          subst certified
-          cases run with
-          | last terminalRun => exact Linst.not_run_rev_ok terminalRun
-      | next instruction tail =>
-          simp only [Func.alwaysRevertsWithin] at certified
-          cases run with
-          | next instructionRun rest => exact ih rest certified
-      | call index =>
-          cases hlookup : fs[index]? with
-          | none => simp [Func.alwaysRevertsWithin, hlookup] at certified
-          | some called =>
-              simp only [Func.alwaysRevertsWithin, hlookup] at certified
-              cases run with
-              | call lookup room burn rest =>
-                  have bodyEq := Option.some.inj (hlookup.symm.trans lookup)
-                  subst bodyEq
-                  exact ih rest certified
-
-section OkKit
-
-variable {fs : List Func} {sevm : Sevm} {post : Devm}
-
-/-- Take the fall-through arm of a successful walk whose jumped arm can only
-revert.  No branch word, and no cleanliness antecedent. -/
-theorem routeTo_branchLeft_of_rightRevertsOk {devm : Devm} {left right : Func}
-    {functionIndex : Nat} {steps : List Prog.SourceStep}
-    {targetPath : Prog.SourcePath} {targetInstruction : Ninst} {fuel : Nat}
-    (h : Func.RunCompiledTo fs sevm devm (.branch left right) (.ok post))
-    (rightReverts : Func.alwaysRevertsWithin fuel fs right = true)
-    (armRoute : ∀ devm' : Devm,
-      ∀ tail : Func.RunCompiledTo fs sevm devm' left (.ok post),
-        Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchLeft]⟩
-          tail targetPath targetInstruction) :
-    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h targetPath
-      targetInstruction := by
-  cases h with
-  | zero room pop tail =>
-      exact .branchLeft (room := room) (pop := pop) (tail := tail)
-        (armRoute _ tail)
-  | succ nonzero room pop tail =>
-      exact (Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin fuel tail
-        rightReverts).elim
-
-/-- The mirrored form: take the jumped arm when the fall-through arm can only
-revert. -/
-theorem routeTo_branchRight_of_leftRevertsOk {devm : Devm} {left right : Func}
-    {functionIndex : Nat} {steps : List Prog.SourceStep}
-    {targetPath : Prog.SourcePath} {targetInstruction : Ninst} {fuel : Nat}
-    (h : Func.RunCompiledTo fs sevm devm (.branch left right) (.ok post))
-    (leftReverts : Func.alwaysRevertsWithin fuel fs left = true)
-    (armRoute : ∀ devm' : Devm,
-      ∀ tail : Func.RunCompiledTo fs sevm devm' right (.ok post),
-        Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchRight]⟩
-          tail targetPath targetInstruction) :
-    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h targetPath
-      targetInstruction := by
-  cases h with
-  | zero room pop tail =>
-      exact (Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin fuel tail
-        leftReverts).elim
-  | succ nonzero room pop tail =>
-      exact .branchRight (nonzero := nonzero) (room := room) (pop := pop)
-        (tail := tail) (armRoute _ tail)
-
-end OkKit
-
-/-! ## Branch crossings that keep the stack
-
-The shared kit's `routeTo_branchLeft`/`routeTo_branchRight` quantify their
-continuation over *every* `Devm`, so the walk's own `Devm.PopBurnBy` — the
-only thing relating the post-branch stack to the pre-branch one — is
-discarded at each crossing.  That is fine for a single branch and fatal for a
-dispatcher: the six selector comparisons this file crosses each need the
-selector word that the *previous* crossing popped down to.
-
-These two are the shared kit's lemmas with the pop's stack equation handed to
-the continuation.  Everything else is identical. -/
-
-section StackKit
-
-variable {fs : List Func} {sevm : Sevm} {out : Execution}
-
-theorem routeTo_branchLeft_stack {devm : Devm} {left right : Func}
-    {functionIndex : Nat} {steps : List Prog.SourceStep}
-    {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
-    (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
-    (branchWord : ∀ w : B256, ∀ rest : Stack, devm.stack = w :: rest → w = 0)
-    (armRoute : ∀ devm' : Devm, (∃ w : B256, devm.stack = w :: devm'.stack) →
-      ∀ tail : Func.RunCompiledTo fs sevm devm' left out,
-        Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchLeft]⟩
-          tail targetPath targetInstruction) :
-    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h targetPath
-      targetInstruction := by
-  cases h with
-  | zero room pop tail =>
-      exact .branchLeft (room := room) (pop := pop) (tail := tail)
-        (armRoute _ ⟨0, pop.stack⟩ tail)
-  | succ nonzero room pop tail => exact absurd (branchWord _ _ pop.stack) nonzero
-
-theorem routeTo_branchRight_stack {devm : Devm} {left right : Func}
-    {functionIndex : Nat} {steps : List Prog.SourceStep}
-    {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
-    (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
-    (branchWord : ∀ w : B256, ∀ rest : Stack, devm.stack = w :: rest → w ≠ 0)
-    (armRoute : ∀ devm' : Devm, (∃ w : B256, devm.stack = w :: devm'.stack) →
-      ∀ tail : Func.RunCompiledTo fs sevm devm' right out,
-        Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchRight]⟩
-          tail targetPath targetInstruction) :
-    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h targetPath
-      targetInstruction := by
-  cases h with
-  | zero room pop tail => exact absurd rfl (branchWord _ _ pop.stack)
-  | succ nonzero room pop tail =>
-      exact .branchRight (nonzero := nonzero) (room := room) (pop := pop)
-        (tail := tail) (armRoute _ ⟨_, pop.stack⟩ tail)
-
-end StackKit
 
 /-- Read a branch word off a known stack prefix. -/
 theorem head_of_stack_prefix {devm : Devm} {x : B256} {xs : Stack}
@@ -410,14 +246,11 @@ theorem tail_of_stack_prefix {devm devm' : Devm} {x : B256} {xs : Stack}
 
 /-! ## The dispatcher route
 
-`Blanc/SourceAttainment.lean`'s route-construction kit warns that
-`routeTo_line`'s prefix must be a list literal, and names
-`loadWord targetWord ++ [iszero]` as a shape that fails to unify.  **That note
-is stale**: both `fsig` and `arg k ++ checkNonAddress` are passed to
-`routeTo_line` below and unify without complaint, so no combinator-duplicating
-`def` was needed for them.  The `def`s that remain — `splitTest`,
-`linearTest`, and the guard-cascade lines further down — name lines that have
-no combinator form, not workarounds. -/
+`Blanc/SourceAttainment.lean`'s route-construction kit takes `routeTo_line`'s
+prefix in whatever form reads best: `fsig` and `arg k ++ checkNonAddress` are
+passed to it below as combinator applications and unify without complaint.
+The `def`s here — `splitTest`, `linearTest`, and the guard-cascade lines
+further down — name lines that have no combinator form, not workarounds. -/
 
 /-- One `splitDispatch` pivot test, spelled as a list literal. -/
 def splitTest (pivot : B256) : Line :=
@@ -605,7 +438,7 @@ theorem call_setPauserSlot_routeTo_assignment_ok (dp : DeployParams)
       (.call setPauserSlot) (.ok post)) :
     Func.RunCompiledTo.RouteTo current h setPauserAssignmentPath
       (.reg .sstore) :=
-  routeTo_call h (by rfl) fun _kernelStart tail =>
+  routeTo_call h (by rfl) fun _kernelStart _burn tail =>
     setPauserKernel_routeTo_assignment_ok dp tail
 
 set_option maxRecDepth 16384 in
@@ -672,30 +505,35 @@ theorem RuntimePersistentWrite.eq_setPauserAssignment_of_path
         omega)) mapped
   exact RuntimePersistentWrite.index_injective indexEq
 
-/-! ## The frame-entry-freedom certificate
+/-! ## Same-frame reachability, and why no certificate is needed
 
-The one obligation `Prog.exec_of_runCompiledTo_routeTo_parentPrefix` leaves
-inside its existential, named at this world.  Everything else the positive
-witness needs is proved below; this is not.
+`Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot` consumes
+`Exec.Deriv.ParentPrefix frameRoot occurrence.node`, and the routed bridge
+returns exactly that, built alongside the derivation it constructs.  Nothing
+below has to certify that the registration walk enters no child frame.
 
-It is *true* — the runtime's only two frame-entering sites are the `CALL` and
-`STATICCALL` of `pauseAfterSet`, and an admin registration reaches neither —
-but nothing landed proves it for a bridge-built derivation.  The direct-pause
-control gets the matching fact as *data*: its chronology threads a bespoke
-`Func.RunCompiledTo`-indexed path predicate
-(`Blanc/LidoCircuitBreakerRegistry.lean`'s private `DirectPausePath`) whose
-every `.next` node carries a childless side condition, and
-`directPause_zeroCode_postWrite_error_control` exports the resulting
-`∀ occurrence, instruction ≠ .exec .call ∧ instruction ≠ .exec .statcall`.
-The fresh-registration chronology carries no such predicate, and
-`runtimeExec_instruction_exact` only *narrows* a reached frame-entering
-instruction to `CALL`/`STATICCALL` — it does not exclude one.
+That is worth recording, because the certificate route looks mandatory and is
+not, and one of the two ways of stating it is not even true.  Reading the
+obligation at the *code* level — no reached node decodes an `Xinst` — cannot
+hold here at all: the frozen inherited inventory is 20 persistent, 3 transient
+and **2 external-call** runtime sites, and both call sites are in
+`pauseAfterSet`, so a claim about `node.sevm.code` is a claim about a runtime
+that demonstrably contains `CALL` and `STATICCALL`.  The honest version is
+about which nodes the walk *visits*, which is what the direct-pause control
+establishes as data: `Blanc/LidoCircuitBreakerRegistry.lean`'s private
+`DirectPausePath` carries a childless side condition at every `.next` node,
+and `directPause_zeroCode_postWrite_error_control` exports the result.
 
-So the gap is stated below in exactly the direct-pause control's shape, and
-`frameEntryFree_of_noExternalCall` shows that shape is all the bridge needs.
-Closing it needs either a registration-side path predicate or a
-contract-neutral source-level `.exec`-freedom certificate consumed against a
-sealed walk, in the style of `Func.alwaysRevertsWithin`. -/
+Even that version cannot be replaced by a decidable source-level certificate
+in the style of `Func.alwaysRevertsWithin`.  Such a certificate has to pass
+*both* arms of every `.branch` it crosses, and this runtime's dispatcher has a
+`pause` arm; more sharply, `setPauserKernel` is shared, and its own
+continuation branch in `finishSetPauser` selects `.call pauseAfterSetSlot` on
+the pause side.  So no static certificate rooted at `runtimeMain` — or even at
+`registerPauser` — can be `true`, however call-free the registration walk is.
+
+The route already crosses only same-frame steps, so the fact is free: see
+`Blanc/SourceAttainment.lean`'s *Same-frame packaging*. -/
 
 /-- The concrete registration world is an exact runtime invocation. -/
 theorem freshWorld_exactInvocation {post : Devm}
@@ -709,55 +547,18 @@ theorem freshWorld_exactInvocation {post : Devm}
   · show some freshWorldSevm.code.toList = Prog.compile (runtime officialParams)
     rw [freshWorld_codeBytes, lidoCircuitBreakerCode_compile]
 
-/-- The open gap, in the direct-pause control's own shape: no occurrence of a
-fresh-registration derivation is an external call. -/
-def FreshRegistrationNoExternalCall : Prop :=
-  ∀ (post : Devm) (exc : Exec 0 freshWorldSevm freshWorldPre (.ok post))
-    (occurrence : Exec.NinstOccurrence
-      (⟨0, freshWorldSevm, freshWorldPre, .ok post, exc⟩ : Exec.Deriv)),
-    occurrence.instruction ≠ .exec .call ∧
-      occurrence.instruction ≠ .exec .statcall
-
-/-- No same-frame reached node of a fresh-registration derivation decodes a
-frame-entering instruction. -/
-def FreshRegistrationFrameEntryFree : Prop :=
-  ∀ (post : Devm) (exc : Exec 0 freshWorldSevm freshWorldPre (.ok post))
-    (node : Exec.Deriv),
-    Exec.Deriv.ParentPrefix
-      (⟨0, freshWorldSevm, freshWorldPre, .ok post, exc⟩ : Exec.Deriv) node →
-    ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x)
-
-/-- Excluding the runtime's two external-call opcodes excludes every
-frame-entering instruction: `runtimeExec_instruction_exact` supplies the rest,
-because `CREATE`, `CREATE2`, `CALLCODE` and `DELEGATECALL` are absent from the
-runtime's structural source map. -/
-theorem frameEntryFree_of_noExternalCall
-    (noExternal : FreshRegistrationNoExternalCall) :
-    FreshRegistrationFrameEntryFree := by
-  intro post exc node prefixed x decoded
-  rcases Exec.exists_ninstOccurrence_of_mem_rawNodes
-      (root := (⟨0, freshWorldSevm, freshWorldPre, .ok post, exc⟩ :
-        Exec.Deriv))
-      (Exec.mem_rawNodes_of_parentPrefix_root prefixed) decoded with
-    ⟨occurrence, -, instructionEq⟩
-  rcases runtimeExec_instruction_exact (freshWorld_exactInvocation exc)
-      prefixed decoded with rfl | rfl
-  · exact (noExternal post exc occurrence).1 instructionEq
-  · exact (noExternal post exc occurrence).2 instructionEq
-
 /-! ## The positive witness -/
 
-/-- The first positive attainment witness, modulo frame-entry freedom: the
-concrete admin registration of `Blanc/LidoCircuitBreakerRegistrationWorld.lean`
-reaches the `.setPauserAssignment` row's own frozen source site with the
-`.adminRegistry` invocation role.
+/-- The first positive attainment witness: the concrete admin registration of
+`Blanc/LidoCircuitBreakerRegistrationWorld.lean` reaches the
+`.setPauserAssignment` row's own frozen source site with the `.adminRegistry`
+invocation role.
 
-Nothing in `Attainable` is relaxed, existentially hidden or hypothesised: the
-row is named, the role is named, and the frame premises are the ones
-`Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot` consumes.  The
-single antecedent is the certificate above. -/
-theorem attainable_setPauserAssignment_adminRegistry_of_frameEntryFree
-    (free : FreshRegistrationFrameEntryFree) :
+Unconditional, and nothing in `Attainable` is relaxed, existentially hidden or
+hypothesised: the row is named, the role is named, and the frame premises are
+the ones `Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot`
+consumes. -/
+theorem attainable_setPauserAssignment_adminRegistry :
     Attainable officialParams .setPauserAssignment .adminRegistry := by
   obtain ⟨_trace, post, _htrace, _hentries, _hwitness, hrun, _hexec, _hfilled,
     _hgas, _hexpiry, _hlogs, hcompile⟩ := freshRegistrationWorld_run
@@ -765,9 +566,8 @@ theorem attainable_setPauserAssignment_adminRegistry_of_frameEntryFree
   have hroute := runtimeMain_routeTo_setPauserAssignment officialParams hwalk
     freshWorld_dataFacts.2.1
   obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
-    package⟩ :=
-    Prog.exec_of_runCompiledTo_routeTo_parentPrefix hburn hroute hcompile
-  obtain ⟨_descendants, _frameRoots, sameFrame⟩ := package (free post exc)
+    sameFrame⟩ :=
+    Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
   have invocation := freshWorld_exactInvocation exc
   have instructionEq : occurrence.instruction = .reg .sstore :=
     hinstr.trans hinstrTarget
@@ -814,14 +614,5 @@ theorem attainable_setPauserAssignment_adminRegistry_of_frameEntryFree
     ⟨0, freshWorldSevm, freshWorldPre, .ok post, exc⟩, occurrence, rowSite,
     instructionEq, Exec.mem_rawFrameRoots_self exc, invocation, sameFrame,
     found, rowSitePc, authority⟩
-
-/-- The same witness from the direct-pause control's own certificate shape.
-This is the form a registration chronology would export, so it is the exact
-statement of what is still missing. -/
-theorem attainable_setPauserAssignment_adminRegistry_of_noExternalCall
-    (noExternal : FreshRegistrationNoExternalCall) :
-    Attainable officialParams .setPauserAssignment .adminRegistry :=
-  attainable_setPauserAssignment_adminRegistry_of_frameEntryFree
-    (frameEntryFree_of_noExternalCall noExternal)
 
 end Blanc.LidoCircuitBreaker

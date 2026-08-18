@@ -30,11 +30,10 @@
 -- designated head is whatever `Ninst` sits there.  Nothing in this module
 -- mentions a concrete program or instruction kind.
 --
--- Two ergonomic traps sit in front of every consumer, and both are documented
--- in full under *The route-construction kit* below: `RouteTo`'s constructors
--- cannot be `apply`d (proof irrelevance leaves their data arguments
--- unassigned, so use the `routeTo_*` kit), and `routeTo_line`'s prefix
--- argument must be a list literal rather than a `++` of combinators.
+-- One ergonomic trap sits in front of every consumer, documented in full under
+-- *The route-construction kit* below: `RouteTo`'s constructors cannot be
+-- `apply`d, because proof irrelevance leaves their data arguments unassigned,
+-- so every route is built through the `routeTo_*` kit.
 
 import Blanc.Reverts
 import Blanc.ExecutionOccurrence
@@ -45,12 +44,23 @@ open Jaune
 
 /-! ## Membership transfer across derivation extensions
 
-The two facts that let a constructed occurrence survive the wrapping of its
-derivation into a larger one: a `.cont` prepend keeps every raw node, and the
-instruction-step wrapper (`Ninst.exec_of_stepRun`'s construction) keeps every
-raw node of its tail.  The second lemma is `Ninst.exec_of_stepRun`
+The facts that let a constructed occurrence survive the wrapping of its
+derivation into a larger one.  Two things travel, and they are different
+claims about the same wrapping:
+
+* **raw-chronology membership** — the occurrence was reached at all; and
+* **same-frame prefix** — it was reached *without leaving the frame*.
+
+The second is the one every same-frame attribution theorem downstream
+actually consumes, and it is free here: each wrapping step this module
+performs is a `.cont`, a `.doneOk` or the parent continuation of a `.runOk`,
+and those are exactly `Exec.Deriv.ParentStep`'s three constructors.  A
+frame-entering instruction crossed *along the way* costs nothing, because its
+child derivation is not a parent edge — only its resumed continuation is.
+
+The instruction-step wrapper below is `Ninst.exec_of_stepRun`
 (`Blanc/Compiled.lean`) with the construction's shape exposed just enough to
-name the membership transfer; its intended final home is beside the original. -/
+name both transfers; its intended final home is beside the original. -/
 
 /-- Prepending a `.cont` step preserves raw-chronology membership. -/
 lemma Exec.mem_rawNodes_cont {pc pc' : Nat} {sevm : Sevm}
@@ -62,9 +72,27 @@ lemma Exec.mem_rawNodes_cont {pc pc' : Nat} {sevm : Sevm}
   simp only [Exec.rawNodes, List.mem_cons]
   exact Or.inr hn
 
+/-- Prepending a `.cont` step preserves same-frame prefixes: a machine
+continuation *is* a same-frame edge. -/
+lemma Exec.Deriv.parentPrefix_cont {pc pc' : Nat} {sevm : Sevm}
+    {devm devm' : Devm} {exn : Execution} {node : Exec.Deriv}
+    (hstep : Evm.step ⟨pc, sevm, devm⟩ = .cont pc' devm')
+    (next : Exec pc' sevm devm' exn)
+    (hn : Exec.Deriv.ParentPrefix ⟨pc', sevm, devm', exn, next⟩ node) :
+    Exec.Deriv.ParentPrefix ⟨pc, sevm, devm, exn, Exec.cont hstep next⟩
+      node :=
+  .step (.cont hstep next) hn
+
 /-- `Ninst.exec_of_stepRun`, with the produced derivation's raw chronology
-containing the tail's.  The case analysis is the original's; only the
-conclusion is richer. -/
+containing the tail's and its same-frame prefixes containing the tail's.  The
+case analysis is the original's; only the conclusion is richer.
+
+The `.exec` case is where the second clause earns its keep.  A spawning
+instruction wraps the tail in `.runOk`, whose *parent continuation* is the
+tail — a same-frame edge — while the entered child sits beside it and is not
+an edge at all.  So the transfer holds at a frame-entering instruction just as
+it does at a `PUSH`, and nothing here needs the derivation to be
+frame-entry-free. -/
 lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
     {devm devmMid : Devm} {n : Ninst} {xl : Xlot} {exn : Execution}
     (h_at : Ninst.At sevm.code pc n)
@@ -72,8 +100,13 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
     (h_step : Ninst.StepRun pc sevm devm n xl (.ok devmMid))
     (tail : Exec (pc + n.size) sevm devmMid exn) :
     ∃ exc : Exec pc sevm devm exn,
-      ∀ node : Exec.Deriv, node ∈ Exec.rawNodes tail →
-        node ∈ Exec.rawNodes exc := by
+      (∀ node : Exec.Deriv, node ∈ Exec.rawNodes tail →
+        node ∈ Exec.rawNodes exc) ∧
+      (∀ node : Exec.Deriv,
+        Exec.Deriv.ParentPrefix
+          (⟨pc + n.size, sevm, devmMid, exn, tail⟩ : Exec.Deriv) node →
+        Exec.Deriv.ParentPrefix (⟨pc, sevm, devm, exn, exc⟩ : Exec.Deriv)
+          node) := by
   have hstep : Evm.step ⟨pc, sevm, devm⟩ = Ninst.step ⟨pc, sevm, devm⟩ n :=
     Evm.step_next h_at
   cases n with
@@ -83,18 +116,18 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
         .cont (pc + Ninst.size (.reg r)) devmMid := by
       rw [hstep, Ninst.step_reg, ← h_step.2]
       rfl
-    refine ⟨.cont hcont tail, fun node hn => ?_⟩
-    simp only [Exec.rawNodes, List.mem_cons]
-    exact Or.inr hn
+    exact ⟨.cont hcont tail, fun node hn => by
+        simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+      fun node hn => .step (.cont hcont tail) hn⟩
   | push xs le =>
     rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_step
     have hcont : Evm.step ⟨pc, sevm, devm⟩ =
         .cont (pc + Ninst.size (.push xs le)) devmMid := by
       rw [hstep, Ninst.step_push, ← h_step.2]
       rfl
-    refine ⟨.cont hcont tail, fun node hn => ?_⟩
-    simp only [Exec.rawNodes, List.mem_cons]
-    exact Or.inr hn
+    exact ⟨.cont hcont tail, fun node hn => by
+        simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+      fun node hn => .step (.cont hcont tail) hn⟩
   | exec x =>
     rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at h_step
     cases hx : Xinst.step sevm devm x with
@@ -105,9 +138,9 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
           .cont (pc + Ninst.size (.exec x)) devmMid := by
         rw [hstep, Ninst.step_exec, hx, ← h_step.2]
         rfl
-      refine ⟨.cont hcont tail, fun node hn => ?_⟩
-      simp only [Exec.rawNodes, List.mem_cons]
-      exact Or.inr hn
+      exact ⟨.cont hcont tail, fun node hn => by
+          simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+        fun node hn => .step (.cont hcont tail) hn⟩
     | spawn fr rsm =>
       rw [hx] at h_step
       rcases h_step with ⟨r, hframe, hex⟩
@@ -117,10 +150,11 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
       unfold RunFrame at hframe
       rcases henter : fr.enter with r' | cevm <;>
         simp only [henter] at hframe
-      · refine ⟨.doneOk hstep' henter (hframe.2 ▸ hex.symm) tail,
-          fun node hn => ?_⟩
-        simp only [Exec.rawNodes, List.mem_cons]
-        exact Or.inr hn
+      · exact ⟨.doneOk hstep' henter (hframe.2 ▸ hex.symm) tail,
+          fun node hn => by
+            simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+          fun node hn =>
+            .step (.doneOk hstep' henter (hframe.2 ▸ hex.symm) tail) hn⟩
       · rcases hframe with ⟨raw, hxl, hr⟩
         subst hxl
         obtain ⟨excChild⟩ : Nonempty (Exec cevm.pc cevm.sta cevm.dyna raw) :=
@@ -128,10 +162,12 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
         have hresume : rsm.run (fr.settle raw) = .ok devmMid := by
           rw [← hr]
           exact hex.symm
-        refine ⟨.runOk hstep' henter excChild hresume tail,
-          fun node hn => ?_⟩
-        simp only [Exec.rawNodes, List.mem_cons, List.mem_append]
-        exact Or.inr (Or.inr hn)
+        exact ⟨.runOk hstep' henter excChild hresume tail,
+          fun node hn => by
+            simp only [Exec.rawNodes, List.mem_cons, List.mem_append]
+            exact Or.inr (Or.inr hn),
+          fun node hn =>
+            .step (.runOk hstep' henter excChild hresume tail) hn⟩
 
 /-! ## The route decoration
 
@@ -230,15 +266,14 @@ caller supplies the branch word.  That is why `routeTo_line` also hands back
 the crossed `Line.Run` — without it the caller cannot compute the stack, and
 hence the branch word, at the next branch.
 
-**Second trap: `prepend`'s argument must be a list literal.**  `routeTo_line`
-unifies the walked body against `line +++ body`, and the unifier has to see
-`line` in constructor form to expose the walk's head.  So
-
-    routeTo_line (loadWord targetWord ++ [iszero]) h    -- fails to unify
-    routeTo_line [pushB256 (targetWord * 32), mload, iszero] h    -- succeeds
-
-Spell the crossed prefix out as a literal (a `def` whose body is a literal is
-fine), even where a combinator would read better. -/
+**`routeTo_line`'s prefix need not be a list literal.**  An earlier note here
+claimed it did — that the unifier has to see `line` in constructor form to
+expose the walk's head, and that `loadWord targetWord ++ [iszero]` therefore
+fails where the spelled-out literal succeeds.  That was checked and is false:
+the first consumer passes combinator applications (`fsig`,
+`arg k ++ checkNonAddress`) straight into this argument and they unify.  Pass
+whichever form reads better; a `def` naming a line that has no combinator form
+is a convenience, not a workaround. -/
 
 section RouteKit
 
@@ -274,7 +309,8 @@ theorem routeTo_next {devm : Devm} {instruction : Ninst} {body : Func}
 the `Line.Run` it needs to compute the stack at the next branch.  One
 induction here replaces one `cases` per instruction at every use site.
 
-`line` must be supplied as a list literal; see this section's note. -/
+`line` may be a list literal or a combinator application; see this section's
+note. -/
 theorem routeTo_line {body : Func} {functionIndex : Nat}
     {target : Prog.SourcePath} {targetInstruction : Ninst} :
     ∀ (line : Line) {devm : Devm} {steps : List Prog.SourceStep}
@@ -310,6 +346,7 @@ theorem routeTo_call {devm : Devm} {index : Nat} {body : Func}
     (h : Func.RunCompiledTo fs sevm devm (.call index) out)
     (lookup : fs[index]? = some body)
     (bodyRoute : ∀ devm' : Devm,
+      Devm.BurnBy (gVerylow + gMid + gJumpdest) devm devm' →
       ∀ tail : Func.RunCompiledTo fs sevm devm' body out,
         Func.RunCompiledTo.RouteTo ⟨index, []⟩ tail target targetInstruction) :
     Func.RunCompiledTo.RouteTo current h target targetInstruction := by
@@ -318,7 +355,7 @@ theorem routeTo_call {devm : Devm} {index : Nat} {body : Func}
       have bodyEq : body = _ := Option.some.inj (lookup.symm.trans lookup')
       subst bodyEq
       exact .call (lookup := lookup') (room := room) (burn := burn)
-        (tail := tail) (bodyRoute _ tail)
+        (tail := tail) (bodyRoute _ burn tail)
 
 /-- Take a `.branch`'s fall-through arm.  The sealed derivation does not say
 which arm ran, so the caller supplies the branch word. -/
@@ -358,6 +395,55 @@ theorem routeTo_branchRight {devm : Devm} {left right : Func}
       exact .branchRight (nonzero := nonzero) (room := room) (pop := pop)
         (tail := tail) (armRoute _ tail)
 
+/-! ### Branch crossings that keep the pop
+
+`routeTo_branchLeft` and `routeTo_branchRight` quantify their continuation
+over *every* `Devm`, so the `Devm.PopBurnBy` that `cases` binds — the only
+thing relating the post-branch stack to the pre-branch one — is discarded at
+each crossing.  That is fine for a single branch and fatal for a dispatcher,
+where one selector word has to survive every selector comparison in turn.
+
+These two are the lemmas above with the pop's stack equation handed to the
+continuation.  Everything else is identical, so prefer them wherever the
+crossed branch is not the last. -/
+
+/-- `routeTo_branchLeft`, keeping the branch's own pop. -/
+theorem routeTo_branchLeft_stack {devm : Devm} {left right : Func}
+    {functionIndex : Nat} {steps : List Prog.SourceStep}
+    {target : Prog.SourcePath} {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
+    (branchWord : ∀ w : B256, ∀ rest : Stack, devm.stack = w :: rest → w = 0)
+    (armRoute : ∀ devm' : Devm, (∃ w : B256, devm.stack = w :: devm'.stack) →
+      ∀ tail : Func.RunCompiledTo fs sevm devm' left out,
+        Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchLeft]⟩
+          tail target targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h target
+      targetInstruction := by
+  cases h with
+  | zero room pop tail =>
+      exact .branchLeft (room := room) (pop := pop) (tail := tail)
+        (armRoute _ ⟨0, pop.stack⟩ tail)
+  | succ nonzero room pop tail =>
+      exact absurd (branchWord _ _ pop.stack) nonzero
+
+/-- `routeTo_branchRight`, keeping the branch's own pop. -/
+theorem routeTo_branchRight_stack {devm : Devm} {left right : Func}
+    {functionIndex : Nat} {steps : List Prog.SourceStep}
+    {target : Prog.SourcePath} {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
+    (branchWord : ∀ w : B256, ∀ rest : Stack, devm.stack = w :: rest → w ≠ 0)
+    (armRoute : ∀ devm' : Devm, (∃ w : B256, devm.stack = w :: devm'.stack) →
+      ∀ tail : Func.RunCompiledTo fs sevm devm' right out,
+        Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchRight]⟩
+          tail target targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h target
+      targetInstruction := by
+  cases h with
+  | zero room pop tail => exact absurd rfl (branchWord _ _ pop.stack)
+  | succ nonzero room pop tail =>
+      exact .branchRight (nonzero := nonzero) (room := room) (pop := pop)
+        (tail := tail) (armRoute _ ⟨_, pop.stack⟩ tail)
+
 end RouteKit
 
 /-! ## Wrong-arm refutation
@@ -368,13 +454,28 @@ propagating a stack prefix down to the branch.  On a long dispatcher that is
 the dominant cost of a route.
 
 Often it is avoidable.  If the arm *not* taken can only ever revert, then a
-walk whose outcome commits cannot have gone that way, and the arm is settled
-without computing anything about the stack.  `Func.alwaysRevertsWithin` is the
-executable certificate for "can only revert", and the two route lemmas below
-consume it in place of a branch word.
+walk that ends `.ok` cannot have gone that way, and the arm is settled without
+computing anything about the stack.  `Func.alwaysRevertsWithin` is the
+executable certificate for "can only revert", and the two route lemmas at the
+foot of this section consume it in place of a branch word.
 
 The refutation is post-hoc, which is the point: it works on a *sealed*
-derivation, since it reads only the derivation's outcome index. -/
+derivation, since it reads only the derivation's outcome index.
+
+**The route lemmas take the outcome as `.ok post`, not
+`Execution.commits out = true`.**  The committing form looks more general and
+is not: `Execution.commits` is true only at `.ok`, and at `.ok post` it
+unfolds to `post.error.isNone` — a cleanliness fact that nothing in this
+repository propagates across a compiled walk, so every consumer would carry it
+as a dead antecedent.  A `REVERT` terminal cannot produce `.ok` at all, which
+is the contradiction `Linst.not_commits_of_run_rev` derives in its `.ok` case
+and then discards in order to return `= false`; keeping it instead is
+`Linst.not_run_rev_ok` and costs the consumer nothing.
+
+The committing pair is still available one level down, as
+`Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin`, for a consumer that
+wants the certificate's soundness at an arbitrary outcome rather than a route
+crossing. -/
 
 /-- Executable finite certificate that a source body, and every table body it
 can reach within `fuel`, can only end in `REVERT`.  A zero fuel is
@@ -450,20 +551,70 @@ theorem Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin
                   subst bodyEq
                   exact ih rest certified
 
-section WrongArm
+/-- `REVERT` cannot produce a successful outcome, however its operand reads
+fail.  The `.ok` half of `Linst.not_commits_of_run_rev`'s case analysis. -/
+theorem Linst.not_run_rev_ok {sevm : Sevm} {devm post : Devm}
+    (run : Linst.Run sevm devm .rev (.ok post)) : False := by
+  simp only [Linst.Run, Linst.run] at run
+  rcases Except.bind_eq_ok run with ⟨_v1, _h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨_v2, _h3, h4⟩
+  rcases Except.bind_eq_ok h4 with ⟨_v3, _h5, h6⟩
+  contradiction
 
-variable {fs : List Func} {sevm : Sevm} {out : Execution}
+/-- A certified-reverting body has no successful walk.  Same induction as
+`Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin`, with the outcome
+pinned to `.ok` and the conclusion strengthened to `False`. -/
+theorem Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin
+    {fs : List Func} {sevm : Sevm} :
+    ∀ (fuel : Nat) {devm : Devm} {body : Func} {post : Devm},
+      Func.RunCompiledTo fs sevm devm body (.ok post) →
+      Func.alwaysRevertsWithin fuel fs body = true → False := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro _devm _body _post _run certified
+      simp [Func.alwaysRevertsWithin] at certified
+  | succ fuel ih =>
+      intro devm body post run certified
+      cases body with
+      | branch left right =>
+          simp only [Func.alwaysRevertsWithin, Bool.and_eq_true] at certified
+          cases run with
+          | zero room pop tail => exact ih tail certified.1
+          | succ nonzero room pop tail => exact ih tail certified.2
+      | last terminal =>
+          simp only [Func.alwaysRevertsWithin, beq_iff_eq] at certified
+          subst certified
+          cases run with
+          | last terminalRun => exact Linst.not_run_rev_ok terminalRun
+      | next instruction tail =>
+          simp only [Func.alwaysRevertsWithin] at certified
+          cases run with
+          | next instructionRun rest => exact ih rest certified
+      | call index =>
+          cases hlookup : fs[index]? with
+          | none => simp [Func.alwaysRevertsWithin, hlookup] at certified
+          | some called =>
+              simp only [Func.alwaysRevertsWithin, hlookup] at certified
+              cases run with
+              | call lookup room burn rest =>
+                  have bodyEq := Option.some.inj (hlookup.symm.trans lookup)
+                  subst bodyEq
+                  exact ih rest certified
 
-/-- Take a `.branch`'s fall-through arm without computing the branch word: the
-jumped arm can only revert, and this walk's outcome commits. -/
-theorem routeTo_branchLeft_of_rightReverts {devm : Devm} {left right : Func}
+section OkWrongArm
+
+variable {fs : List Func} {sevm : Sevm} {post : Devm}
+
+/-- Take the fall-through arm of a successful walk whose jumped arm can only
+revert.  No branch word, and no cleanliness antecedent. -/
+theorem routeTo_branchLeft_of_rightRevertsOk {devm : Devm} {left right : Func}
     {functionIndex : Nat} {steps : List Prog.SourceStep}
     {target : Prog.SourcePath} {targetInstruction : Ninst} {fuel : Nat}
-    (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) (.ok post))
     (rightReverts : Func.alwaysRevertsWithin fuel fs right = true)
-    (committed : Execution.commits out = true)
     (armRoute : ∀ devm' : Devm,
-      ∀ tail : Func.RunCompiledTo fs sevm devm' left out,
+      ∀ tail : Func.RunCompiledTo fs sevm devm' left (.ok post),
         Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchLeft]⟩
           tail target targetInstruction) :
     Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h target
@@ -473,33 +624,31 @@ theorem routeTo_branchLeft_of_rightReverts {devm : Devm} {left right : Func}
       exact .branchLeft (room := room) (pop := pop) (tail := tail)
         (armRoute _ tail)
   | succ nonzero room pop tail =>
-      rw [Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin fuel tail
-        rightReverts] at committed
-      exact absurd committed (by simp)
+      exact (Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin fuel tail
+        rightReverts).elim
 
-/-- Take a `.branch`'s jumped arm under the mirrored certificate. -/
-theorem routeTo_branchRight_of_leftReverts {devm : Devm} {left right : Func}
+/-- The mirrored form: take the jumped arm when the fall-through arm can only
+revert. -/
+theorem routeTo_branchRight_of_leftRevertsOk {devm : Devm} {left right : Func}
     {functionIndex : Nat} {steps : List Prog.SourceStep}
     {target : Prog.SourcePath} {targetInstruction : Ninst} {fuel : Nat}
-    (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) (.ok post))
     (leftReverts : Func.alwaysRevertsWithin fuel fs left = true)
-    (committed : Execution.commits out = true)
     (armRoute : ∀ devm' : Devm,
-      ∀ tail : Func.RunCompiledTo fs sevm devm' right out,
+      ∀ tail : Func.RunCompiledTo fs sevm devm' right (.ok post),
         Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchRight]⟩
           tail target targetInstruction) :
     Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h target
       targetInstruction := by
   cases h with
   | zero room pop tail =>
-      rw [Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin fuel tail
-        leftReverts] at committed
-      exact absurd committed (by simp)
+      exact (Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin fuel tail
+        leftReverts).elim
   | succ nonzero room pop tail =>
       exact .branchRight (nonzero := nonzero) (room := room) (pop := pop)
         (tail := tail) (armRoute _ tail)
 
-end WrongArm
+end OkWrongArm
 
 /-! ## The strengthened bridge
 
@@ -542,7 +691,9 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
               site ∈ Prog.sourceSites ⟨f₀, fs'⟩ ∧
               occurrence.node.pc = site.pc ∧
               occurrence.instruction = site.instruction ∧
-              site.instruction = instruction := by
+              site.instruction = instruction ∧
+              Exec.Deriv.ParentPrefix (⟨pc, sevm, devm, ex, exc⟩ :
+                Exec.Deriv) occurrence.node := by
   intro f₀ fs' sevm FS devm p ex h_run path target instruction h_route
   induction h_route with
   | @head pre post instr body out functionIndex steps
@@ -561,8 +712,10 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
         (node := ⟨pc, sevm, pre, out, exc⟩)
         (Exec.mem_rawNodes_self exc) h_at
     refine ⟨exc, occurrence, ⟨⟨functionIndex, steps⟩, pc, instr⟩, rfl,
-      included _ (by simp [Func.sourceSites]), ?_, hinstr, rfl⟩
-    rw [hnode]
+      included _ (by simp [Func.sourceSites]), ?_, hinstr, rfl, ?_⟩
+    · rw [hnode]
+    · rw [hnode]
+      exact .refl _
   | @rest pre post instr body out functionIndex steps target
       targetInstruction instructionRun tail tailRoute ih =>
     intro h_eq hFS pc sub hb included
@@ -572,17 +725,18 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
     rw [← of_pure_eq_some h_rw] at h_slice
     have h_at : Ninst.At sevm.code pc instr :=
       Ninst.at_of_slice (List.slice_prefix h_slice)
-    obtain ⟨excTail, occurrence, site, hpath, hmem, hpc, hinstr, hsite⟩ :=
+    obtain ⟨excTail, occurrence, site, hpath, hmem, hpc, hinstr, hsite,
+      hprefix⟩ :=
       ih h_eq hFS (pc + instr.size) sub' hb'
         (fun site member => included site
           (by simp [Func.sourceSites, member]))
     rcases instructionRun with ⟨xl, h_filled, h_step⟩
-    obtain ⟨exc, hsub⟩ :=
+    obtain ⟨exc, hsub, hpre⟩ :=
       Ninst.exec_of_stepRun_extend h_at h_filled (h_step pc) excTail
     exact ⟨exc, ⟨occurrence.node, occurrence.instruction, occurrence.slot,
       occurrence.stepResult, hsub _ occurrence.reached, occurrence.decoded,
       occurrence.filled, occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr,
-      hsite⟩
+      hsite, hpre _ hprefix⟩
   | @branchLeft pre post leftArm rightArm out functionIndex steps
       target targetInstruction room pop tail armRoute ih =>
     intro h_eq hFS pc sub hb included
@@ -590,17 +744,21 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
       ⟨loc, h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp, h_jd, h_jp,
         h_subq, h_bq⟩
     rcases Evm.branch_zero_steps h_push h_jumpi h_loc room pop with ⟨h1, h2⟩
-    obtain ⟨excf, occurrence, site, hpath, hmem, hpc, hinstr⟩ :=
+    obtain ⟨excf, occurrence, site, hpath, hmem, hpc, hinstr, hsite,
+      hprefix⟩ :=
       ih h_eq hFS (pc + 4) h_subp h_bp
         (fun site member => included site (by
           simp only [Func.sourceSites, List.mem_append]
           exact Or.inl member))
-    refine ⟨.cont h1 (.cont h2 excf),
+    exact ⟨.cont h1 (.cont h2 excf),
       ⟨occurrence.node, occurrence.instruction, occurrence.slot,
-        occurrence.stepResult, ?_, occurrence.decoded, occurrence.filled,
-        occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr⟩
-    exact Exec.mem_rawNodes_cont h1 _
-      (Exec.mem_rawNodes_cont h2 _ occurrence.reached)
+        occurrence.stepResult,
+        Exec.mem_rawNodes_cont h1 _
+          (Exec.mem_rawNodes_cont h2 _ occurrence.reached),
+        occurrence.decoded, occurrence.filled,
+        occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr, hsite,
+      Exec.Deriv.parentPrefix_cont h1 _
+        (Exec.Deriv.parentPrefix_cont h2 _ hprefix)⟩
   | @branchRight pre post leftArm rightArm out functionIndex steps
       target targetInstruction word nonzero room pop tail armRoute ih =>
     intro h_eq hFS pc sub hb included
@@ -609,7 +767,8 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
         h_subq, h_bq⟩
     rcases Evm.branch_succ_steps h_push h_jumpi h_jd h_jp h_loc nonzero
       room pop with ⟨h1, h2, h3⟩
-    obtain ⟨excg, occurrence, site, hpath, hmem, hpc, hinstr⟩ :=
+    obtain ⟨excg, occurrence, site, hpath, hmem, hpc, hinstr, hsite,
+      hprefix⟩ :=
       ih h_eq hFS (loc + 1) h_subq h_bq
         (fun site member => included site (by
           simp only [Func.sourceSites, List.mem_append]
@@ -617,12 +776,15 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
           have hpcEq : loc + 1 = pc + compsize leftArm + 5 := by omega
           rw [← hpcEq]
           exact member))
-    refine ⟨.cont h1 (.cont h2 (.cont h3 excg)),
+    exact ⟨.cont h1 (.cont h2 (.cont h3 excg)),
       ⟨occurrence.node, occurrence.instruction, occurrence.slot,
-        occurrence.stepResult, ?_, occurrence.decoded, occurrence.filled,
-        occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr⟩
-    exact Exec.mem_rawNodes_cont h1 _ (Exec.mem_rawNodes_cont h2 _
-      (Exec.mem_rawNodes_cont h3 _ occurrence.reached))
+        occurrence.stepResult,
+        Exec.mem_rawNodes_cont h1 _ (Exec.mem_rawNodes_cont h2 _
+          (Exec.mem_rawNodes_cont h3 _ occurrence.reached)),
+        occurrence.decoded, occurrence.filled,
+        occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr, hsite,
+      Exec.Deriv.parentPrefix_cont h1 _ (Exec.Deriv.parentPrefix_cont h2 _
+        (Exec.Deriv.parentPrefix_cont h3 _ hprefix))⟩
   | @call pre post index body out current target targetInstruction
       lookup room burn tail bodyRoute ih =>
     intro h_eq hFS pc sub hb included
@@ -639,7 +801,8 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
     rcases h_pushAt with ⟨le, h_push⟩
     rcases Evm.call_steps (le := le) h_push h_jump h_jd h_jpb.1 h_loc
       room burn with ⟨h1, h2, h3⟩
-    obtain ⟨excf, occurrence, site, hpath, hmem, hpc, hinstr⟩ :=
+    obtain ⟨excf, occurrence, site, hpath, hmem, hpc, hinstr, hsite,
+      hprefix⟩ :=
       ih h_eq rfl (loc + 1) h_subf h_jpb.2
         (fun site member => by
           simp only [Prog.sourceSites, List.mem_flatMap]
@@ -647,12 +810,15 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
           · exact List.mem_range.mpr
               (List.getElem?_eq_some_iff.mp lookup).choose
           · simpa only [h_get_tab] using member)
-    refine ⟨.cont h1 (.cont h2 (.cont h3 excf)),
+    exact ⟨.cont h1 (.cont h2 (.cont h3 excf)),
       ⟨occurrence.node, occurrence.instruction, occurrence.slot,
-        occurrence.stepResult, ?_, occurrence.decoded, occurrence.filled,
-        occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr⟩
-    exact Exec.mem_rawNodes_cont h1 _ (Exec.mem_rawNodes_cont h2 _
-      (Exec.mem_rawNodes_cont h3 _ occurrence.reached))
+        occurrence.stepResult,
+        Exec.mem_rawNodes_cont h1 _ (Exec.mem_rawNodes_cont h2 _
+          (Exec.mem_rawNodes_cont h3 _ occurrence.reached)),
+        occurrence.decoded, occurrence.filled,
+        occurrence.stepRun⟩, site, hpath, hmem, hpc, hinstr, hsite,
+      Exec.Deriv.parentPrefix_cont h1 _ (Exec.Deriv.parentPrefix_cont h2 _
+        (Exec.Deriv.parentPrefix_cont h3 _ hprefix))⟩
 
 /-! ## Entry wrappers
 
@@ -676,7 +842,9 @@ theorem Prog.exec_of_runCompiledTo_routeTo {sevm : Sevm} {pre mid : Devm}
           site ∈ p.sourceSites ∧
           occurrence.node.pc = site.pc ∧
           occurrence.instruction = site.instruction ∧
-          site.instruction = instruction := by
+          site.instruction = instruction ∧
+          Exec.Deriv.ParentPrefix (⟨0, sevm, pre, ex, exc⟩ : Exec.Deriv)
+            occurrence.node := by
   have h_eq' : some sevm.code.toList = Prog.compile ⟨p.main, p.aux⟩ := h_eq
   have h_get : (table 0 (p.main :: p.aux))[0]? = some (0, p.main) := rfl
   rcases subcode_of_get?_eq_some h_eq' h_get with ⟨h_jd, h_sub⟩
@@ -684,7 +852,8 @@ theorem Prog.exec_of_runCompiledTo_routeTo {sevm : Sevm} {pre mid : Devm}
     (Prog.jumpable_of_get?_table h_eq' h_get).2
   have h1 : Evm.step ⟨0, sevm, pre⟩ = .cont 1 mid :=
     Evm.jumpdest_cont h_jd h_burn
-  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget⟩ :=
+  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
+    hprefix⟩ :=
     Func.exec_of_runCompiledTo_routeTo_core h_route h_eq' rfl 1 h_sub h_npb
       (fun site member => by
         simp only [Prog.sourceSites, List.mem_flatMap]
@@ -695,7 +864,8 @@ theorem Prog.exec_of_runCompiledTo_routeTo {sevm : Sevm} {pre mid : Devm}
       occurrence.stepResult,
       Exec.mem_rawNodes_cont h1 _ occurrence.reached,
       occurrence.decoded, occurrence.filled, occurrence.stepRun⟩,
-    site, hpath, hmem, hpc, hinstr, hinstrTarget⟩
+    site, hpath, hmem, hpc, hinstr, hinstrTarget,
+    Exec.Deriv.parentPrefix_cont h1 _ hprefix⟩
 
 /-- The `.ok` embedding: a routed `Func.RunCompiled` walk, decorated through
 `Func.RunCompiledTo.of_runCompiled`, yields the same package with the outcome
@@ -721,35 +891,44 @@ theorem Func.exec_of_runCompiled_routeTo_core {f₀ : Func} {fs' : List Func}
             site ∈ Prog.sourceSites ⟨f₀, fs'⟩ ∧
             occurrence.node.pc = site.pc ∧
             occurrence.instruction = site.instruction ∧
-            site.instruction = instruction :=
+            site.instruction = instruction ∧
+            Exec.Deriv.ParentPrefix
+              (⟨pc, sevm, devm, .ok devm', exc⟩ : Exec.Deriv)
+              occurrence.node :=
   Func.exec_of_runCompiledTo_routeTo_core h_route h_eq hFS
 
 /-! ## Same-frame packaging
 
-`Prog.exec_of_runCompiledTo_routeTo` hands back an occurrence whose only tie
-to the root is `reached` — raw-chronology membership.  Every same-frame
-attribution theorem downstream instead takes
-`Exec.Deriv.ParentPrefix frameRoot occurrence.node`, so a consumer that stops
-at `reached` has to re-derive the same glue.  The wrappers below do it once.
+The routed bridge above already returns
+`Exec.Deriv.ParentPrefix root occurrence.node` — the exact `sameFrame` premise
+of `Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot` and its
+relatives.  **No frame-entry-freedom certificate is involved**, and this
+section records why, because the obvious route needs one and the natural way
+of stating that one is not merely harder — it is false.
 
-The bridge is frame-entry freedom: a derivation that never decodes an `Xinst`
-spawns no child frame, so its raw frame traversal is the singleton outer root
-and its raw chronology *is* that root's same-frame prefix.  The exclusion
-covers the whole `Xinst` family — `create`, `call`, `callcode`, `delcall`,
-`create2`, `statcall` — because any one alone produces a descendant;
-narrowing it to the constructors a given program happens to avoid would make
-the certificate unsound.
+The obvious route is the reached-node one: show that the walk never decodes an
+`Xinst`, conclude `Exec.rawFrameDescendants = []`, and read the same-frame
+fact off that.  It fails twice over.  First, the obligation
+`¬ Ninst.At node.sevm.code node.pc (.exec x)` is a claim about the *runtime
+code at a reached pc*, and a runtime that contains any external-call site at
+all — most do — makes no such whole-program claim true; the content would have
+to be that those pcs are not *reached*, which is a statement about the walk.
+Second, even as a statement about the walk it is not statically certifiable
+from the source: a `Bool` certificate over `Func` has to pass *both* arms of
+every `.branch`, so a dispatcher whose other selectors call out defeats it,
+however call-free the walked arm is.
 
-**The certificate is supplied last, not first.**  The routed bridge builds its
-derivation, so no consumer can name that derivation before the bridge runs.
-Rather than force the certificate to be proved for *every* derivation of the
-walk's type — a real strengthening, since a frame-entry-freedom fact is
-normally established about one derivation in hand — the routed wrapper hands
-the certificate obligation back *inside* the existential.  A consumer
-destructs first, so the concrete derivation is in context, and only then
-discharges it.  The transport itself is factored out below so that a consumer
-that built its own derivation (rather than routing to one) can use it
-directly. -/
+Neither difficulty has to be faced, because the same-frame fact is not a
+consequence of frame-entry freedom — it is a property of the *route*.  Every
+node the bridge crosses is a `.cont`, a `.doneOk` or the parent continuation
+of a `.runOk`, and those are precisely `Exec.Deriv.ParentStep`'s three
+constructors, so the prefix is built alongside the derivation at no cost.  A
+crossed frame-entering instruction is not an obstacle: its child derivation
+hangs off a sibling premise that is not a parent edge.
+
+The two transports below remain for a consumer holding its own derivation and
+a frame-entry-freedom fact about it, and for the `rawFrameDescendants` and
+`rawFrameRoots` facts, which the routed package does not claim. -/
 
 /-- A same-frame prefix node of a derivation is one of its raw nodes.  The
 converse direction of frame-entry freedom, and the glue that lets a
@@ -813,46 +992,5 @@ theorem Exec.NinstOccurrence.parentPrefix_of_no_execOccurrence
           (Exec.mem_rawNodes_of_parentPrefix_root prefixed) decoded with
         ⟨other, -, instructionEq⟩
       exact childless other x instructionEq
-
-/-- `Prog.exec_of_runCompiledTo_routeTo` with the same-frame package attached:
-the site identity exactly as before, plus — under a frame-entry-freedom
-certificate for the derivation the bridge just built — the `ParentPrefix` and
-`rawFrameRoots` facts that same-frame attribution theorems consume.
-
-The certificate is an obligation *inside* the existential on purpose; see this
-section's note.  A consumer writes
-
-    obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
-      package⟩ := …
-    obtain ⟨descendants, frameRoots, sameFrame⟩ := package (by …)
-
-so that the `by …` runs with `exc` already in context. -/
-theorem Prog.exec_of_runCompiledTo_routeTo_parentPrefix {sevm : Sevm}
-    {pre mid : Devm} {p : Prog} {ex : Execution}
-    {h_run : Func.RunCompiledTo (p.main :: p.aux) sevm mid p.main ex}
-    {target : Prog.SourcePath} {instruction : Ninst}
-    (h_burn : Devm.BurnBy gJumpdest pre mid)
-    (h_route : Func.RunCompiledTo.RouteTo ⟨0, []⟩ h_run target instruction)
-    (h_eq : some sevm.code.toList = p.compile) :
-    ∃ exc : Exec 0 sevm pre ex,
-      ∃ occurrence : Exec.NinstOccurrence ⟨0, sevm, pre, ex, exc⟩,
-        ∃ site : Prog.SourceSite,
-          site.path = target ∧
-          site ∈ p.sourceSites ∧
-          occurrence.node.pc = site.pc ∧
-          occurrence.instruction = site.instruction ∧
-          site.instruction = instruction ∧
-          ((∀ node : Exec.Deriv,
-              Exec.Deriv.ParentPrefix (⟨0, sevm, pre, ex, exc⟩ : Exec.Deriv)
-                node →
-                ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x)) →
-            Exec.rawFrameDescendants exc = [] ∧
-              Exec.rawFrameRoots exc = [⟨0, sevm, pre, ex, exc⟩] ∧
-              Exec.Deriv.ParentPrefix (⟨0, sevm, pre, ex, exc⟩ : Exec.Deriv)
-                occurrence.node) := by
-  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget⟩ :=
-    Prog.exec_of_runCompiledTo_routeTo h_burn h_route h_eq
-  exact ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
-    occurrence.parentPrefix_of_no_sameFrame_xinstAt⟩
 
 end Blanc
