@@ -95,6 +95,7 @@ CONTRACTS = {
                              "LidoCircuitBreakerAbsentRegistration",
                              "LidoCircuitBreakerUnregisterRegistration",
                              "LidoCircuitBreakerReplacementRegistration",
+                             "LidoCircuitBreakerPauseWalk",
                              "LidoCircuitBreakerAuthority",
                              "LidoCircuitBreakerOwnerClosure",
                              "LidoCircuitBreakerRetainedAuthority",

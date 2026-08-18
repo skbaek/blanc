@@ -18,6 +18,7 @@ import Blanc.LidoCircuitBreakerFreshRegistration
 import Blanc.LidoCircuitBreakerAbsentRegistration
 import Blanc.LidoCircuitBreakerUnregisterRegistration
 import Blanc.LidoCircuitBreakerReplacementRegistration
+import Blanc.LidoCircuitBreakerPauseWalk
 import Blanc.LidoCircuitBreakerAuthority
 import Blanc.LidoCircuitBreakerOwnerClosure
 import Blanc.LidoCircuitBreakerRetainedAuthority
