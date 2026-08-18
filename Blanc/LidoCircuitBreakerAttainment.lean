@@ -26,8 +26,8 @@ certificate*.
 
 Two facts made the route cheap, and both generalize to every other row behind
 this same flow.  A `REVERT`-only arm cannot produce an `.ok` outcome at all,
-so eight of the twelve branch crossings need no branch word and no
-cleanliness antecedent; and the six that remain are the dispatcher's selector
+so six of the twelve branch crossings need no branch word and no cleanliness
+antecedent; and the six that remain are the dispatcher's selector
 comparisons, which are decided on the concrete calldata selector alone.
 -/
 
@@ -237,7 +237,7 @@ No such antecedent is needed.  A `REVERT` terminal cannot produce an `.ok`
 outcome *at all* — every arm of `Linst.run`'s `.rev` case ends in `.error` —
 so a certified-reverting arm under an `.ok` walk is not merely
 non-committing, it is impossible.  The two lemmas below are the `.ok`-outcome
-strengthening of the shared kit, and they are what makes eight of this file's
+strengthening of the shared kit, and they are what makes six of this file's
 twelve branch crossings free. -/
 
 /-- `REVERT` cannot produce a successful outcome, however its operand reads
@@ -410,12 +410,14 @@ theorem tail_of_stack_prefix {devm devm' : Devm} {x : B256} {xs : Stack}
 
 /-! ## The dispatcher route
 
-Every crossed line is spelled as a list literal, for the reason
-`Blanc/SourceAttainment.lean`'s route-construction kit records. -/
-
-/-- `fsig`, spelled as a list literal. -/
-def selectorPrefix : Line :=
-  [Ninst.pushB256 0, Ninst.calldataload, Ninst.pushB256 224, Ninst.shr]
+`Blanc/SourceAttainment.lean`'s route-construction kit warns that
+`routeTo_line`'s prefix must be a list literal, and names
+`loadWord targetWord ++ [iszero]` as a shape that fails to unify.  **That note
+is stale**: both `fsig` and `arg k ++ checkNonAddress` are passed to
+`routeTo_line` below and unify without complaint, so no combinator-duplicating
+`def` was needed for them.  The `def`s that remain — `splitTest`,
+`linearTest`, and the guard-cascade lines further down — name lines that have
+no combinator form, not workarounds. -/
 
 /-- One `splitDispatch` pivot test, spelled as a list literal. -/
 def splitTest (pivot : B256) : Line :=
@@ -470,7 +472,7 @@ theorem dispatch_routeTo_registerPauser (dp : DeployParams)
         Func.RunCompiledTo.RouteTo current tail targetPath targetInstruction) :
     Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h targetPath
       targetInstruction := by
-  refine routeTo_line selectorPrefix h (fun s0 run0 tail0 => ?_)
+  refine routeTo_line fsig h (fun s0 run0 tail0 => ?_)
   have p0 : Sevm.selector sevm :: [] <<+ s0.stack := prefix_of_fsig nil_pref run0
   rw [selectorEq] at p0
   refine routeTo_line (splitTest (selector "pause" [.address])) tail0
@@ -528,12 +530,6 @@ alone settles all four. -/
 def registerStaticArgsTest : Line :=
   [Ninst.pushB256 (Nat.toB256 (4 + 32 * 2)), Ninst.calldatasize, Ninst.lt]
 
-/-- `arg k ++ checkNonAddress`, spelled literally. -/
-def canonicalArgTest (k : B256) : Line :=
-  [Ninst.pushB256 ((32 * k) + 4), Ninst.calldataload,
-   Ninst.pushB256 0, Ninst.not, Ninst.pushB256 (Nat.toB256 160), Ninst.shl,
-   Ninst.and]
-
 /-- `onlyAdmin`'s guard line, spelled literally. -/
 def adminTest (dp : DeployParams) : Line :=
   [Ninst.caller, pushDeployWord dp.admin, Ninst.eq]
@@ -566,10 +562,10 @@ theorem registerPauser_routeTo_setPauserCall (dp : DeployParams)
   refine routeTo_line registerStaticArgsTest h (fun _s0 _r0 tail0 => ?_)
   refine routeTo_branchLeft_of_rightRevertsOk tail0 (fuel := 4) (by rfl)
     (fun _s1 tail1 => ?_)
-  refine routeTo_line (canonicalArgTest 0) tail1 (fun _s2 _r2 tail2 => ?_)
+  refine routeTo_line (arg 0 ++ checkNonAddress) tail1 (fun _s2 _r2 tail2 => ?_)
   refine routeTo_branchLeft_of_rightRevertsOk tail2 (fuel := 4) (by rfl)
     (fun _s3 tail3 => ?_)
-  refine routeTo_line (canonicalArgTest 1) tail3 (fun _s4 _r4 tail4 => ?_)
+  refine routeTo_line (arg 1 ++ checkNonAddress) tail3 (fun _s4 _r4 tail4 => ?_)
   refine routeTo_branchLeft_of_rightRevertsOk tail4 (fuel := 4) (by rfl)
     (fun _s5 tail5 => ?_)
   refine routeTo_line (adminTest dp) tail5 (fun _s6 _r6 tail6 => ?_)
