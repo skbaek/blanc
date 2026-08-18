@@ -303,7 +303,7 @@ private theorem afterOldPauser_absentZero_runCompiled
     lengthOriginal
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
     1981 G hwf hreads htarget htargetValid
-    hnextNonzero hnextBound 704 0 0 hsize halign (by decide) (by decide)
+    hnextNonzero hnextBound 704 0 0 4 hsize halign (by decide) (by decide)
     (by decide) (by decide) harray hindex hlength harrayOrig
     hindexOrig hlengthOrig hholeCost hmovedIndexCost htailClearCost
     hlengthRestoreCost hindexClearCost hwarmArray hwarmIndex hwarmLength

@@ -582,14 +582,15 @@ private theorem removeTarget_foundZeroRetained_runCompiled
     target oldLength next oldPauser stack hstack arrayOriginal indexOriginal
     lengthOriginal holeCost movedIndexCost tailClearCost lengthRestoreCost
     indexClearCost 2108 G hwf hreads htarget htargetValid hnextNonzero
-    hnextBound entrySize indexExtCost lengthExtCost hsize halign hentryLow
-    hentryHigh hindexExtCost hlengthExtCost
+    hnextBound entrySize indexExtCost lengthExtCost 4 hsize halign hentryLow
+    hindexExtCost hlengthExtCost
+    (by rw [Nat.max_eq_right hentryHigh]; decide)
     harray hindex hlength harrayOrig hindexOrig
     hlengthOrig hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
     hindexClearCost hwarmArray hwarmIndex hwarmLength hsub hgasFinal hstatic
     (by simpa only [MIndex, MLength, MLast, tailPost, removePost, eventLog]
       using hfinish)
-  have hg : G + 2108 + 443 + indexExtCost + lengthExtCost + holeCost +
+  have hg : G + 2108 + 439 + 4 + indexExtCost + lengthExtCost + holeCost +
       movedIndexCost + tailClearCost +
       lengthRestoreCost + indexClearCost =
       G + 2551 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
@@ -1680,15 +1681,17 @@ private theorem removeTarget_foundZeroRetainedSwapPop_runCompiled
     lengthOriginal indexOriginal holeCost movedIndexCost tailClearCost
     lengthRestoreCost indexClearCost 2108 G hwf hreads htarget htargetValid
     hlastValid hlastNe hidxNonzero hidxBound hlenNonzero hlenBound hidxNeLen
-    entrySize indexExtCost lengthExtCost hsize halign hentryLow hentryHigh
-    hindexExtCost hlengthExtCost hhole hmoved htail hindex hlength
+    entrySize indexExtCost lengthExtCost 4 hsize halign hentryLow
+    hindexExtCost hlengthExtCost
+    (by rw [Nat.max_eq_right hentryHigh]; decide)
+    hhole hmoved htail hindex hlength
     hholeOrig hmovedOrig htailOrig hindexOrig hlengthOrig hholeCost
     hmovedIndexCost htailClearCost hlengthRestoreCost hindexClearCost
     hwarmHole hwarmMoved hwarmTail hwarmIndex hwarmLength hsub hgasFinal
     hstatic
     (by simpa only [MIndex, MLength, MLast, tailPost, removePost, eventLog]
       using hfinish)
-  have hg : G + 2108 + 443 + indexExtCost + lengthExtCost + holeCost +
+  have hg : G + 2108 + 439 + 4 + indexExtCost + lengthExtCost + holeCost +
       movedIndexCost + tailClearCost +
       lengthRestoreCost + indexClearCost =
       G + 2551 + indexExtCost + lengthExtCost + holeCost + movedIndexCost +
@@ -3003,8 +3006,9 @@ private theorem removeTarget_foundZeroOldLast_runCompiled
     target oldLength next stack hstack arrayOriginal indexOriginal
     lengthOriginal holeCost movedIndexCost tailClearCost lengthRestoreCost
     indexClearCost (3525 + clearCost) G hwf hreads htarget htargetValid
-    hnextNonzero hnextBound entrySize indexExtCost lengthExtCost hsize halign
-    hentryLow hentryHigh hindexExtCost hlengthExtCost harray hindex hlength
+    hnextNonzero hnextBound entrySize indexExtCost lengthExtCost 4 hsize halign
+    hentryLow hindexExtCost hlengthExtCost
+    (by rw [Nat.max_eq_right hentryHigh]; decide) harray hindex hlength
     harrayOrig hindexOrig hlengthOrig hholeCost hmovedIndexCost htailClearCost
     hlengthRestoreCost hindexClearCost hwarmArray hwarmIndex hwarmLength hsub
     (by omega) hstatic
@@ -3017,7 +3021,7 @@ private theorem removeTarget_foundZeroOldLast_runCompiled
       rw [hg]
       simpa only [MIndex, MLength, MLast, tailPost, removePost, eventLog,
         heartbeatLog] using hfinish)
-  have hg : G + (3525 + clearCost) + 443 + indexExtCost + lengthExtCost +
+  have hg : G + (3525 + clearCost) + 439 + 4 + indexExtCost + lengthExtCost +
       holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
       indexClearCost =
       G + 3968 + clearCost + indexExtCost + lengthExtCost + holeCost +
@@ -4254,8 +4258,9 @@ private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
     (3525 + clearCost) G hwf hreads htarget htargetValid hlastValid hlastNe
     hidxNonzero hidxBound hlenNonzero hlenBound hidxNeLen entrySize
-    indexExtCost lengthExtCost hsize halign hentryLow hentryHigh hindexExtCost
-    hlengthExtCost hhole hmoved htail hindex hlength hholeOrig hmovedOrig
+    indexExtCost lengthExtCost 4 hsize halign hentryLow hindexExtCost
+    hlengthExtCost (by rw [Nat.max_eq_right hentryHigh]; decide)
+    hhole hmoved htail hindex hlength hholeOrig hmovedOrig
     htailOrig hindexOrig hlengthOrig hholeCost hmovedIndexCost htailClearCost
     hlengthRestoreCost hindexClearCost hwarmHole hwarmMoved hwarmTail
     hwarmIndex hwarmLength hsub (by omega) hstatic
@@ -4268,7 +4273,7 @@ private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
       rw [hg]
       simpa only [MIndex, MLength, MLast, tailPost, removePost, eventLog,
         heartbeatLog] using hfinish)
-  have hg : G + (3525 + clearCost) + 443 + indexExtCost + lengthExtCost +
+  have hg : G + (3525 + clearCost) + 439 + 4 + indexExtCost + lengthExtCost +
       holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
       indexClearCost =
       G + 3968 + clearCost + indexExtCost + lengthExtCost + holeCost +
