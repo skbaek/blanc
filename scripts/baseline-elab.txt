@@ -885,7 +885,7 @@ OK	15.245	Blanc/LidoCircuitBreakerAbsentRegistration.lean
 OK	23.714	Blanc/LidoCircuitBreakerFreshRegistration.lean
 OK	17.513	Blanc/LidoCircuitBreakerRegistrySubstrate.lean
 OK	1.261	Blanc/LidoCircuitBreakerRetainedAuthority.lean
-OK	15.922	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
+OK	38.482	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 #
 # One new row and one explicitly authorized raise, both from the same three
 # separate uncontended sequential
@@ -919,4 +919,92 @@ OK	15.922	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 # unchanged. A fourth run was refused by the gate under language-server
 # contention (an editor's Lean server holding 1,228 MB against a 250 MB limit)
 # and was discarded rather than forced; the three runs above are the clean ones.
-OK	1.280	Blanc/LidoCircuitBreakerReplacementRegistration.lean
+OK	30.894	Blanc/LidoCircuitBreakerReplacementRegistration.lean
+#
+# ---- Access and temporal authority: ten new modules, two raises ----
+#
+# Admitted under the goal's elaboration-baseline procedure: three separate,
+# sequential, UNCONTENDED `scripts/check-elab.sh --list --no-build --report
+# <abs-path>` runs with distinct report paths, the MEDIAN of the three as the
+# row. All three values are recorded per row below. `--rebase`, `--force`,
+# `--full`-for-reassurance and cache seeding were not used, and every
+# pre-existing row other than the two named raises is byte-for-byte unchanged.
+#
+# Candidate: 8345cabd57824e69180e0e436999c074dffb26ae
+# Runs: 123 files each; 817.4 s, 850.9 s and 854.6 s of measured elaboration.
+# No language server was alive and no build or edit touched the tree between
+# the first run's start and the third run's end.
+#
+# New production modules. A file with no row here is a REGRESSION -- a new
+# module must state its cost -- so these rows are an extension to admit new
+# content, not a relaxation to admit a failure. `Blanc/SourceAttainment.lean`
+# is the one REUSABLE SHARED owner among them, and its row follows from the
+# user's approval of the shared attribution package rather than from the
+# new-module pre-authorization that covers the other nine.
+#
+#   Blanc/SourceAttainment.lean
+#     runs 1.596 / 1.658 / 1.660  ->  median 1.658
+#     sha256 6ae94497bab3c3c170db77817848b294c15a313ac40acdf5ed53cc99576590b6
+#   Blanc/LidoCircuitBreakerAttainment.lean
+#     runs 37.865 / 40.258 / 40.409  ->  median 40.258
+#     sha256 2283b66466f84d0b9ea32143e101a4ad1c1a1de455d1925df0a5ad2c71188e6d
+#   Blanc/LidoCircuitBreakerRegistrationWorld.lean
+#     runs 2.517 / 2.590 / 2.601  ->  median 2.590
+#     sha256 a80a8472abf0a096474b30a6f3de68d98ea0e809e65b7491e64c88d45dcc40a7
+#   Blanc/LidoCircuitBreakerReplacementWorld.lean
+#     runs 2.306 / 2.548 / 2.414  ->  median 2.414
+#     sha256 3bd9f5d4316773f86cc06b172d797294fc078eb6f7710d9fce14ab5e3828d354
+#   Blanc/LidoCircuitBreakerUnregisterWorld.lean
+#     runs 2.996 / 3.159 / 3.173  ->  median 3.159
+#     sha256 6c84e5daed29a8d1d5137900f972c7d94e6332fd009db148a6cefc5412c52e6e
+#   Blanc/LidoCircuitBreakerPauseSuffix.lean
+#     runs 1.270 / 1.307 / 1.308  ->  median 1.307
+#     sha256 4fe42e7f1d617b5788de38a65b016c50e670667cd8dc0ef427b5545e304f31ef
+#   Blanc/LidoCircuitBreakerPauseRoute.lean
+#     runs 2.107 / 2.185 / 2.210  ->  median 2.185
+#     sha256 2bc7080006211f15142e673d141c0e27f0004d0785bb8e9dad084e9c211fa8ba
+#   Blanc/LidoCircuitBreakerPauseGuards.lean
+#     runs 1.516 / 1.564 / 1.573  ->  median 1.564
+#     sha256 75b1ff5458ed003be3bfa6c61461fdabd592c92a4b20660a0e761697b9fb57d3
+#   Blanc/LidoCircuitBreakerPauseAttainment.lean
+#     runs 2.212 / 2.298 / 2.301  ->  median 2.298
+#     sha256 44767e8a749120f603b96256ce2016e3a984c3aeee37e7729730c28cebb43288
+#   Blanc/LidoCircuitBreakerUnregisterAttainment.lean
+#     runs 1.244 / 1.278 / 1.277  ->  median 1.277
+#     sha256 e771a23470e70289065963b2ad970b05020418c4d1fa4e608990dcc9b74164a1
+#
+# Two RAISES to existing rows. An increase is reserved to the user by the
+# goal; both were put to the user and taken as SIZE admissions, on the
+# density analysis recorded in the state brief -- each module got cheaper or
+# stayed in family per line while taking on several times its original
+# content. They are not performance concessions.
+#
+#   Blanc/LidoCircuitBreakerReplacementRegistration.lean
+#     row 1.280 -> median 30.894  (runs 30.290 / 31.782 / 30.894)
+#     sha256 5eeee3b9b0da452ceae913f25c1c64ece4479fd205592f6a827127b8258ef4da
+#   Blanc/LidoCircuitBreakerUnregisterRegistration.lean
+#     row 15.922 -> median 38.482  (runs 37.737 / 38.482 / 38.485)
+#     sha256 00b618cf53b693e677a30b024f474af47dc067276c10c33114aa782aa0ce8580
+#
+# `ReplacementRegistration`'s old row was never a measurement of this module:
+# it was admitted at 262 lines, where essentially all of the 1.280 s was
+# import cost and each of its four declarations profiled under the 400 ms
+# trace threshold. It now carries both arms of chronology 4 in 1,956 lines.
+# `UnregisterRegistration`'s row was admitted when the module carried one of
+# chronology 3's four cells; it now carries all four, at 1,410 -> 5,364 lines,
+# and is CHEAPER per line than when the row was set.
+#
+# A measured ~13% saving in `func_run` is available and deliberately NOT
+# taken here: `Blanc/Forward.lean` is outside this goal's module family, so
+# landing it is the user's call. If it is ever landed, it must go in BEFORE a
+# baseline measurement -- it lowers many of these rows -- and never after.
+OK	1.658	Blanc/SourceAttainment.lean
+OK	40.258	Blanc/LidoCircuitBreakerAttainment.lean
+OK	2.590	Blanc/LidoCircuitBreakerRegistrationWorld.lean
+OK	2.414	Blanc/LidoCircuitBreakerReplacementWorld.lean
+OK	3.159	Blanc/LidoCircuitBreakerUnregisterWorld.lean
+OK	1.307	Blanc/LidoCircuitBreakerPauseSuffix.lean
+OK	2.185	Blanc/LidoCircuitBreakerPauseRoute.lean
+OK	1.564	Blanc/LidoCircuitBreakerPauseGuards.lean
+OK	2.298	Blanc/LidoCircuitBreakerPauseAttainment.lean
+OK	1.277	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
