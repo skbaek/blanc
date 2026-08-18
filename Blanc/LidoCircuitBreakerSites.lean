@@ -163,10 +163,13 @@ def RuntimePersistentWrite.inventoryOrder : List RuntimePersistentWrite :=
 
 Certified in one direction only: every role actually derived by the authority
 theorems lies in its row's list, so this list is a sound upper bound.
-Tightness — that each listed role is genuinely attainable at that row, and in
-particular that a pause invocation can never reach `afterOldNewCount` — is
-discharged by the Stage 5 attainment controls, not by this definition.  Do not
-describe the set as exact before those land. -/
+Tightness — that each listed role is genuinely attainable at that row — is a
+separate obligation of the Stage 5 attainment controls, not of this definition,
+and it is **partially discharged**: six of the thirty (row, role) pairs carry a
+positive witness, and the one negative direction that matters here (a pause
+invocation can never reach `afterOldNewCount`) is proved.  The remaining
+twenty-four pairs are unproved in both directions, so this list stays a sound
+upper bound.  Do not describe the set as exact. -/
 def RuntimePersistentWrite.permittedRoles :
     RuntimePersistentWrite → List InvocationRole
   | .setPauseDurationConfig | .setHeartbeatIntervalConfig =>

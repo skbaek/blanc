@@ -586,6 +586,46 @@ theorem attainable_shape_control :
           RuntimeWriteAuthority dp frameRoot occurrence.node role :=
   fun _ _ _ attainable => attainable
 
+/-- The same within-role extraction for the admin and heartbeat roles.
+
+AT8 asks for *each* admin/heartbeat/pause guard weakening to be rejected.  The
+pause control above covers one of the three; this covers the other two.  Both
+`.adminConfiguration` arms and both admin Registry/expiry arms must yield the
+exact-admin equality, and the heartbeat arm must yield **both** its entry facts —
+a nonzero entry count and strict entry liveness — so dropping either, or
+relaxing `<` to `≤`, stops this elaborating. -/
+theorem admin_heartbeat_within_role_guard_strength_control :
+    (∀ (dp : DeployParams) (frameRoot write : Exec.Deriv),
+      RuntimeWriteAuthority dp frameRoot write .adminConfiguration →
+        frameRoot.sevm.caller.toB256 = dp.admin) ∧
+    (∀ (dp : DeployParams) (frameRoot write : Exec.Deriv),
+      RuntimeWriteAuthority dp frameRoot write .adminRegistry →
+        frameRoot.sevm.caller.toB256 = dp.admin) ∧
+    (∀ (dp : DeployParams) (frameRoot write : Exec.Deriv),
+      RuntimeWriteAuthority dp frameRoot write .adminExpiry →
+        frameRoot.sevm.caller.toB256 = dp.admin) ∧
+    (∀ (dp : DeployParams) (frameRoot write : Exec.Deriv),
+      RuntimeWriteAuthority dp frameRoot write .heartbeatExpiry →
+        frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+            (countSlot frameRoot.sevm.caller.toB256) ≠ 0 ∧
+          frameRoot.sevm.benvStat.time <
+            frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+              (expirySlot frameRoot.sevm.caller.toB256)) := by
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro _dp _frameRoot _write authority
+    cases authority with
+    | setPauseDuration _ _ callerEq => exact callerEq
+    | setHeartbeatInterval _ _ callerEq => exact callerEq
+  · intro _dp _frameRoot _write authority
+    cases authority with
+    | adminRegistry _ _ callerEq _ => exact callerEq
+  · intro _dp _frameRoot _write authority
+    cases authority with
+    | adminExpiry _ _ callerEq _ => exact callerEq
+  · intro _dp _frameRoot _write authority
+    cases authority with
+    | heartbeatExpiry _ _ _ registered live => exact ⟨registered, live⟩
+
 /-! ## AT6 owner-closure and settlement controls -/
 
 /-- The raw/retained separation at one concrete noncommitting execution: the

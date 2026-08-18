@@ -3,9 +3,9 @@ import Blanc.LidoCircuitBreakerRegistrySubstrate
 /-!
 Absent-zero registration chronology for the Lido CircuitBreaker.
 
-The target is absent and the new pauser's count is zero, so `setPauser`
-appends the target and then removes it again, taking the nine-write
-absent-zero chronology.
+The target is absent and the new pauser *address* is zero, so `setPauser`
+appends the target and then removes it again, taking the nine-write absent-zero
+chronology.  This is the `0 → 0` partition; no entry count is constrained.
 
 **What the settled-effects theorem pins, and what it does not.**  It pins
 `gasLeft` exactly, the new pauser's expiry cell, and the emitted record list

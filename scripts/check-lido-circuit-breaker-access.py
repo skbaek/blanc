@@ -93,6 +93,9 @@ REQUIRED = (
     # `attainable_*` header byte-identical while making all of them cheaper to
     # prove.  The shape control is the only thing that catches it.
     "attainable_shape_control",
+    # AT8 asks for *each* admin/heartbeat/pause guard weakening to be rejected;
+    # the pause control covers one of the three, this covers the other two.
+    "admin_heartbeat_within_role_guard_strength_control",
     "raw_occurrence_commitment_premise_rejected",
     "guard_after_write_rejected",
     # AT6 closure/settlement controls.
