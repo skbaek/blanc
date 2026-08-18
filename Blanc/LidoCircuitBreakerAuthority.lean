@@ -277,8 +277,8 @@ def RuntimePersistentWrite.sourceFunctionIndex :
   | .afterOldNewCount => 16
   | .removeArrayHole | .removeMovedIndex | .removeClearTail
   | .removeArrayLength | .removeClearTargetIndex => 17
-  | .registerFreshExpiry | .registerLastOldClear
-  | .registerLastOldNewExpiry | .registerRetainedOldNewExpiry => 19
+  | .registerRetainedOldNewExpiry | .registerLastOldClear
+  | .registerLastOldNewExpiry | .registerFreshExpiry => 19
   | .pauseLastTargetExpiry | .pauseRetainedTargetExpiry => 20
 
 /-- A row's nominated site sits in the row's frozen source function. -/

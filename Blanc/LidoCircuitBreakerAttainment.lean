@@ -1626,7 +1626,7 @@ while the caller is the nonzero admin.
 
 The tail is stated for an arbitrary expected role, because the rows below it
 do not all carry the same one — `afterOld.newCount` permits `.adminRegistry`
-alone and `register.freshExpiry` permits `.adminExpiry` alone.  A row whose
+alone and `register.retainedOldNewExpiry` permits `.adminExpiry` alone.  A row whose
 `permittedRoles` is a singleton pays nothing for the refutation: its `roles`
 premise closes the `.pauseRegistry` disjunct vacuously. -/
 
@@ -1929,13 +1929,15 @@ inventory positions are
 * index 17 — 24 steps, `previousPauser = 0`: the **fresh** registration.
 
 The fresh registration world takes the jumped arm at the first test, so the row
-it reaches is index 17, whose constructor is named
-`.registerRetainedOldNewExpiry`.  The constructor names at 14 and 17 are
-transposed relative to this order; that is `Blanc/LidoCircuitBreakerSites.lean`'s
-`RuntimePersistentWrite.all` to answer for, and nothing here depends on the
-names.  `.registerFreshExpiry` — index 14 — is *not* attainable at this world
+it reaches is index 17, `.registerFreshExpiry`.
+`.registerRetainedOldNewExpiry` — index 14 — is *not* attainable at this world
 at all: its site sits behind `previousPauser ≠ 0`, which this registration is
-not. -/
+not.
+
+These two names were **transposed** until they were exchanged: index 14 carried
+`.registerFreshExpiry` while its site is the retained arm, and index 17 the
+reverse.  Nothing ever depended on them — every row is pinned by `sourceSite?`
+— but reports and commits written before the exchange use the old pairing. -/
 
 set_option maxRecDepth 100000 in
 /-- `arithmeticPanic` is `Func.revData` of a `Panic(0x11)` payload, so
@@ -2030,7 +2032,7 @@ def registerFreshArmExpiryPath : Prog.SourcePath :=
       List.replicate 7 .rest⟩
 
 set_option maxRecDepth 16384 in
-/-- The complete route from program entry to the `register.freshExpiry`
+/-- The complete route from program entry to the `register.retainedOldNewExpiry`
 `SSTORE`: seventeen branches, of which exactly four are paid for — the
 dispatcher's six selector comparisons are decided on the calldata selector,
 seven more have certified-reverting siblings, and the remaining four read the
@@ -2101,15 +2103,14 @@ theorem registerFreshArmExpiry_index_pin :
           (fun s => s.path) = some registerFreshArmExpiryPath) → index = 17 := by
   decide +kernel
 
-/-- The inventory row at index `17` — the expiry write on `registerAfterSet`'s
-fresh arm, whose constructor is named `.registerRetainedOldNewExpiry` — is
-attained with the `.adminExpiry` role.
+/-- The inventory row at index `17`, `.registerFreshExpiry` — the expiry write
+on `registerAfterSet`'s fresh arm — is attained with the `.adminExpiry` role.
 
-Read the section note before reading the constructor's name as a description of
-the site: the row is pinned by `sourceSite?`, and this one's site is the
-`previousPauser = 0` write. -/
-theorem attainable_registerRetainedOldNewExpiry_adminExpiry :
-    Attainable officialParams .registerRetainedOldNewExpiry .adminExpiry :=
+The row is pinned by `sourceSite?`, not by its name; the name and the site
+agree since the 14/17 exchange, and this one's site is the `previousPauser = 0`
+write. -/
+theorem attainable_registerFreshExpiry_adminExpiry :
+    Attainable officialParams .registerFreshExpiry .adminExpiry :=
   attainable_of_route
     (fun found pathEq =>
       RuntimePersistentWrite.eq_of_path registerFreshArmExpiry_index_pin found
@@ -3522,17 +3523,17 @@ old-last arm, whose two writes are two split points of one walk).
 before its jumped one, so the four expiry writes are ordered
 
 * index 14 — `previousPauser ≠ 0`, old count retained, constructor named
-  `.registerFreshExpiry`;
+  `.registerRetainedOldNewExpiry`;
 * index 15 — the old pauser's expiry cleared, `.registerLastOldClear`;
 * index 16 — the new pauser's expiry after that clear,
   `.registerLastOldNewExpiry`;
 * index 17 — `previousPauser = 0`, the fresh registration, constructor named
-  `.registerRetainedOldNewExpiry`.
+  `.registerFreshExpiry`.
 
-The constructor names at 14 and 17 are transposed relative to that order.
-Nothing here depends on them: every row is pinned by `sourceSite?` through its
-own index pin, and the paths below were read off `runtimePersistentSourceSites
-officialParams` rather than off the names.
+Nothing here depends on the names: every row is pinned by `sourceSite?` through
+its own index pin, and the paths below were read off
+`runtimePersistentSourceSites officialParams` rather than off the names.  That
+independence is why the 14/17 name exchange changed no proof.
 
 **What the replacement route costs above the fresh one.**  Two things, and
 both are consequences of the arm being taken because storage says so.
@@ -4435,15 +4436,14 @@ theorem registerReplacementArm_index_pins :
           index = 16) := by
   decide +kernel
 
-/-- The inventory row at index `14` — the expiry write on `registerAfterSet`'s
-**retained** arm, whose constructor is named `.registerFreshExpiry` — is
-attained with the `.adminExpiry` role.
+/-- The inventory row at index `14`, `.registerRetainedOldNewExpiry` — the
+expiry write on `registerAfterSet`'s **retained** arm — is attained with the
+`.adminExpiry` role.
 
-Read the section note before reading the constructor's name as a description
-of the site: the row is pinned by `sourceSite?`, and this one's site sits
+The row is pinned by `sourceSite?`, not by its name; this one's site sits
 behind `previousPauser ≠ 0`, which no fresh registration reaches. -/
-theorem attainable_registerFreshExpiry_adminExpiry :
-    Attainable officialParams .registerFreshExpiry .adminExpiry := by
+theorem attainable_registerRetainedOldNewExpiry_adminExpiry :
+    Attainable officialParams .registerRetainedOldNewExpiry .adminExpiry := by
   refine attainable_of_entryRoute_frame (ca := replWorldOwner)
     (replWorld_currentTarget _ _) ?_
     (fun found pathEq =>

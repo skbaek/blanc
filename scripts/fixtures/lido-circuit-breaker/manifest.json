@@ -158,7 +158,7 @@
         },
         {
           "class": "heartbeat-expiry",
-          "label": "register.freshExpiry",
+          "label": "register.retainedOldNewExpiry",
           "offset": 13
         },
         {
@@ -173,7 +173,7 @@
         },
         {
           "class": "heartbeat-expiry",
-          "label": "register.retainedOldNewExpiry",
+          "label": "register.freshExpiry",
           "offset": 16
         },
         {

@@ -458,10 +458,11 @@ ROLES = {
         "attainable_of_entryRoute_frame":
             "56a2e093b20e77157aaf56e32027b3b3ec422345dc0de167a90efd3f8cfe5c94",
         # Rows 14, 15, 16 -- the `registerAfterSet` expiry arms behind
-        # `previousPauser != 0`.  Read these names against the transposition
-        # note: row 14 is the *retained* arm despite being called Fresh.
-        "attainable_registerFreshExpiry_adminExpiry":
-            "e8685b88c683d9b49dd12caf46123234dd7006c3dbf6d61c3338c521f96252b8",
+        # `previousPauser != 0`.  Row 14 is the retained arm and is named for
+        # it; before the 14/17 name exchange it was called Fresh, so reports
+        # and commits older than that exchange use the opposite pairing.
+        "attainable_registerRetainedOldNewExpiry_adminExpiry":
+            "2504e9425955b64ced04c55c90cab0ffc40d406aeadc305bada085bbac17b2a6",
         "attainable_registerLastOldClear_adminExpiry":
             "e3ce8d3bc78211e4db499566a84d5761ac52781f064fab0dac9a0b7661d9578e",
         "attainable_registerLastOldNewExpiry_adminExpiry":
@@ -496,8 +497,8 @@ ROLES = {
             "ad9ec293069a766f4107e25c31481fa74bb871613c172a8a2f8bcf4b2b975cc9",
         "attainable_afterOldNewCount_adminRegistry":
             "a5c9d06bb34ca29d012c48e8e4e4dc2b67d45093034e34ff7de7c2af11a82a87",
-        "attainable_registerRetainedOldNewExpiry_adminExpiry":
-            "2504e9425955b64ced04c55c90cab0ffc40d406aeadc305bada085bbac17b2a6",
+        "attainable_registerFreshExpiry_adminExpiry":
+            "e8685b88c683d9b49dd12caf46123234dd7006c3dbf6d61c3338c521f96252b8",
     },
     # The admin unregistration world: one concrete `Msg`-rooted, gas-exact
     # execution whose run ends `.ok`, unlike the pause world's, and the only

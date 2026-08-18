@@ -494,7 +494,7 @@ was written and is **no longer true in general**.  `Blanc/LidoCircuitBreakerAtta
 now carries attainment witnesses, and at a row whose `permittedRoles` is a
 singleton a witness makes the set exact rather than merely sound.  Five rows are
 exact today on that argument: `.afterOldNewCount` at `[.adminRegistry]`,
-`.registerRetainedOldNewExpiry` at `[.adminExpiry]`, `.setPauseDurationConfig`
+`.registerFreshExpiry` at `[.adminExpiry]`, `.setPauseDurationConfig`
 and `.setHeartbeatIntervalConfig` at `[.adminConfiguration]`, and
 `.heartbeatExpiry` at `[.heartbeatExpiry]` — the last three of which state the
 exactness themselves, as the `*_role_tightness_control` family below.
@@ -1319,8 +1319,8 @@ attained at the two concrete replacement worlds of
 They need a site control more than the earlier rows did, for a reason that is
 about *names*.  `Func.sourceSites` visits `registerAfterSet`'s fall-through arm
 first, so the frozen inventory's constructor labels at indices 14 and 17 are
-transposed relative to the sites: `.registerFreshExpiry` sits at the
-`previousPauser ≠ 0` write and `.registerRetainedOldNewExpiry` sits at the
+transposed relative to the sites: `.registerRetainedOldNewExpiry` sits at the
+`previousPauser ≠ 0` write and `.registerFreshExpiry` sits at the
 fresh registration's.  A reader who takes either label for a description gets
 the wrong site.  The control below is the machine-checked answer: each attained
 row is identified by its **compiled PC and source function**, not by its label,
@@ -1335,7 +1335,7 @@ set_option maxRecDepth 20000 in
 `46` step paths.  Being behind a `.call` is why the source function is
 `registerAfterSet`'s own and not the main function's. -/
 private theorem registerReplacementArm_site_shapes :
-    ((RuntimePersistentWrite.registerFreshExpiry).sourceSite?
+    ((RuntimePersistentWrite.registerRetainedOldNewExpiry).sourceSite?
           officialParams).map
         (fun site =>
           (site.pc, site.path.functionIndex, site.path.steps.length)) =
@@ -1396,7 +1396,7 @@ they say which site each witness actually reached. -/
 theorem registerReplacementArm_admin_site_control :
     ∀ (row : RuntimePersistentWrite) (pc steps : Nat),
       (row, pc, steps) ∈
-          [((RuntimePersistentWrite.registerFreshExpiry), 3212, 31),
+          [((RuntimePersistentWrite.registerRetainedOldNewExpiry), 3212, 31),
            ((RuntimePersistentWrite.registerLastOldClear), 3302, 16),
            ((RuntimePersistentWrite.registerLastOldNewExpiry), 3441, 46)] →
       ∃ (ca : Adr) (globalRoot frameRoot : Exec.Deriv)
@@ -1418,7 +1418,7 @@ theorem registerReplacementArm_admin_site_control :
   simp only [List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at member
   rcases member with ⟨rfl, rfl, rfl⟩ | ⟨rfl, rfl, rfl⟩ | ⟨rfl, rfl, rfl⟩
   · exact attained_at_shape registerReplacementArm_site_shapes.1
-      attainable_registerFreshExpiry_adminExpiry
+      attainable_registerRetainedOldNewExpiry_adminExpiry
   · exact attained_at_shape registerReplacementArm_site_shapes.2.1
       attainable_registerLastOldClear_adminExpiry
   · exact attained_at_shape registerReplacementArm_site_shapes.2.2
@@ -1431,7 +1431,7 @@ Read it at exactly that width, as with the row-`0` control above: it is a
 statement about these three rows, and it does not upgrade
 `RuntimePersistentWrite.permittedRoles` anywhere else. -/
 theorem registerReplacementArm_role_tightness_control :
-    ∀ row ∈ [(RuntimePersistentWrite.registerFreshExpiry),
+    ∀ row ∈ [(RuntimePersistentWrite.registerRetainedOldNewExpiry),
              (RuntimePersistentWrite.registerLastOldClear),
              (RuntimePersistentWrite.registerLastOldNewExpiry)],
       RuntimePersistentWrite.permittedRoles row = [.adminExpiry] ∧
@@ -1443,7 +1443,7 @@ theorem registerReplacementArm_role_tightness_control :
   · refine ⟨rfl, fun role roleMember => ?_⟩
     have roleEq : role = .adminExpiry := by revert roleMember; cases role <;> decide
     subst roleEq
-    exact attainable_registerFreshExpiry_adminExpiry
+    exact attainable_registerRetainedOldNewExpiry_adminExpiry
   · refine ⟨rfl, fun role roleMember => ?_⟩
     have roleEq : role = .adminExpiry := by revert roleMember; cases role <;> decide
     subst roleEq

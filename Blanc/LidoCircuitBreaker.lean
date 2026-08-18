@@ -696,10 +696,10 @@ def persistentWriteInventory : List (SourceSite × PersistentWriteClass) :=
     (⟨"remove.clearTail", 10⟩, .registryArray),
     (⟨"remove.arrayLength", 11⟩, .registryArray),
     (⟨"remove.clearTargetIndex", 12⟩, .registryIndex),
-    (⟨"register.freshExpiry", 13⟩, .heartbeatExpiry),
+    (⟨"register.retainedOldNewExpiry", 13⟩, .heartbeatExpiry),
     (⟨"register.lastOldClear", 14⟩, .heartbeatExpiry),
     (⟨"register.lastOldNewExpiry", 15⟩, .heartbeatExpiry),
-    (⟨"register.retainedOldNewExpiry", 16⟩, .heartbeatExpiry),
+    (⟨"register.freshExpiry", 16⟩, .heartbeatExpiry),
     (⟨"heartbeat.expiry", 17⟩, .heartbeatExpiry),
     (⟨"pause.lastTargetExpiry", 18⟩, .heartbeatExpiry),
     (⟨"pause.retainedTargetExpiry", 19⟩, .heartbeatExpiry) ]

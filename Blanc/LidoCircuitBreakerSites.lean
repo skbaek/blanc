@@ -40,10 +40,10 @@ inductive RuntimePersistentWrite
   | removeClearTail
   | removeArrayLength
   | removeClearTargetIndex
-  | registerFreshExpiry
+  | registerRetainedOldNewExpiry
   | registerLastOldClear
   | registerLastOldNewExpiry
-  | registerRetainedOldNewExpiry
+  | registerFreshExpiry
   | pauseLastTargetExpiry
   | pauseRetainedTargetExpiry
 deriving DecidableEq, Repr
@@ -63,10 +63,10 @@ def RuntimePersistentWrite.all : List RuntimePersistentWrite :=
     .removeClearTail,
     .removeArrayLength,
     .removeClearTargetIndex,
-    .registerFreshExpiry,
+    .registerRetainedOldNewExpiry,
     .registerLastOldClear,
     .registerLastOldNewExpiry,
-    .registerRetainedOldNewExpiry,
+    .registerFreshExpiry,
     .pauseLastTargetExpiry,
     .pauseRetainedTargetExpiry ]
 
@@ -85,10 +85,10 @@ def RuntimePersistentWrite.index : RuntimePersistentWrite → Nat
   | .removeClearTail => 11
   | .removeArrayLength => 12
   | .removeClearTargetIndex => 13
-  | .registerFreshExpiry => 14
+  | .registerRetainedOldNewExpiry => 14
   | .registerLastOldClear => 15
   | .registerLastOldNewExpiry => 16
-  | .registerRetainedOldNewExpiry => 17
+  | .registerFreshExpiry => 17
   | .pauseLastTargetExpiry => 18
   | .pauseRetainedTargetExpiry => 19
 
@@ -120,14 +120,14 @@ def RuntimePersistentWrite.inventoryEntry :
       (⟨"remove.arrayLength", 11⟩, .registryArray)
   | .removeClearTargetIndex =>
       (⟨"remove.clearTargetIndex", 12⟩, .registryIndex)
-  | .registerFreshExpiry =>
-      (⟨"register.freshExpiry", 13⟩, .heartbeatExpiry)
+  | .registerRetainedOldNewExpiry =>
+      (⟨"register.retainedOldNewExpiry", 13⟩, .heartbeatExpiry)
   | .registerLastOldClear =>
       (⟨"register.lastOldClear", 14⟩, .heartbeatExpiry)
   | .registerLastOldNewExpiry =>
       (⟨"register.lastOldNewExpiry", 15⟩, .heartbeatExpiry)
-  | .registerRetainedOldNewExpiry =>
-      (⟨"register.retainedOldNewExpiry", 16⟩, .heartbeatExpiry)
+  | .registerFreshExpiry =>
+      (⟨"register.freshExpiry", 16⟩, .heartbeatExpiry)
   | .heartbeatExpiry =>
       (⟨"heartbeat.expiry", 17⟩, .heartbeatExpiry)
   | .pauseLastTargetExpiry =>
@@ -151,10 +151,10 @@ def RuntimePersistentWrite.inventoryOrder : List RuntimePersistentWrite :=
     .removeClearTail,
     .removeArrayLength,
     .removeClearTargetIndex,
-    .registerFreshExpiry,
+    .registerRetainedOldNewExpiry,
     .registerLastOldClear,
     .registerLastOldNewExpiry,
-    .registerRetainedOldNewExpiry,
+    .registerFreshExpiry,
     .heartbeatExpiry,
     .pauseLastTargetExpiry,
     .pauseRetainedTargetExpiry ]
@@ -175,7 +175,7 @@ exact**, though, and the argument is worth stating because it does not
 generalise: at a row whose list here is a *singleton*, one attainment witness
 closes the gap, because the single listed role is then both permitted and
 attained.  Those rows are `setPauseDurationConfig`, `setHeartbeatIntervalConfig`,
-`afterOldNewCount`, `registerRetainedOldNewExpiry` and `heartbeatExpiry`.
+`afterOldNewCount`, `registerFreshExpiry` and `heartbeatExpiry`.
 
 No two-role row can become exact this way however many witnesses land, since a
 witness settles one side and says nothing about the other — which is why the ten
@@ -191,8 +191,8 @@ def RuntimePersistentWrite.permittedRoles :
   | .removeArrayLength | .removeClearTargetIndex =>
       [.adminRegistry, .pauseRegistry]
   | .afterOldNewCount => [.adminRegistry]
-  | .registerFreshExpiry | .registerLastOldClear
-  | .registerLastOldNewExpiry | .registerRetainedOldNewExpiry =>
+  | .registerRetainedOldNewExpiry | .registerLastOldClear
+  | .registerLastOldNewExpiry | .registerFreshExpiry =>
       [.adminExpiry]
   | .heartbeatExpiry => [.heartbeatExpiry]
   | .pauseLastTargetExpiry | .pauseRetainedTargetExpiry => [.pauseExpiry]
