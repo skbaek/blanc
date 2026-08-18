@@ -93,6 +93,10 @@ REQUIRED = (
     # `attainable_*` header byte-identical while making all of them cheaper to
     # prove.  The shape control is the only thing that catches it.
     "attainable_shape_control",
+    # AT8: row 0's executable controls -- the site reached by a real
+    # invocation, and its permitted-role set shown exact rather than sound.
+    "setPauseDurationConfig_admin_site_control",
+    "setPauseDurationConfig_role_tightness_control",
     # AT8 asks for *each* admin/heartbeat/pause guard weakening to be rejected;
     # the pause control covers one of the three, this covers the other two.
     "admin_heartbeat_within_role_guard_strength_control",
@@ -382,6 +386,23 @@ ROLES = {
             "aef338999302856bab253bea316d899c40ee484a1ad4c7bcdf1ea2cb602e5d4e",
         "not_attainable_pauseLastTargetExpiry_heartbeatExpiry":
             "70e694dd8e0b968fca29e0f84321a200e7e8b4c1b99a563c391f79d6a8c78a4b",
+        # Row 0, the one site with no control reaching it until now.  The
+        # whole supporting chain is pinned, not just the witness: this row is
+        # the only one whose route is a *main-function* route, so its concrete
+        # world, dispatcher walk, body walk, index pin and route are each a
+        # place a weakening could hide without touching the witness header.
+        "attainable_setPauseDurationConfig_adminConfiguration":
+            "6714f8bb2410d6ce7df5e0690b738ae13a3689c084628207585ea8bed6b78553",
+        "runtimeMain_routeTo_setPauseDurationConfig":
+            "b2ffa9bb5f5ac0a8c49cb4600bb43ee9884c36d9214042af07f8158042753349",
+        "setPauseDurationConfig_index_pin":
+            "74891c0ed2080ea8f89c3c895de54c1cb0138ba3d0dab02e29af3875250d3d53",
+        "configWorld_run":
+            "b5844c465656c0994589bc4b1c98c01ea6db763dbd2da5cff89f5d2a81f013ef",
+        "setPauseDuration_body_runCompiledTo":
+            "133ef1542d557a2778e459fa4d346174436df6cbbd4926dd31d8bd4e92360463",
+        "setPauseDuration_dispatch_runCompiledTo":
+            "b899ab2a93dc3b88ab00d37530c546d88545f688cb10241b2590ef60350cd96d",
         "attainable_setPauserAssignment_adminRegistry":
             "ec8411f23b0b0af25af485aae39ebcc0169663b17b986694c8eb94183ae1f399",
         "attainable_appendArrayEntry_adminRegistry":

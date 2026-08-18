@@ -46,6 +46,15 @@ continuation test and `registerAfterSet`'s previous-pauser test — and none of
 them can be made key-anonymous the way the storage one is, so a memory image
 travels from `registerPauser`'s staging line as three 32-byte windows.  See
 *Carrying one memory word across a route* below.
+
+A **seventh** row is attained at the end, and it needs a **second world**.
+Inventory index `0`, `setPauseDuration`'s configuration write, sits in the main
+function and is reached only by calldata selecting `setPauseDuration`, which
+this walk's calldata does not; so `attainable_of_route` — tied as it is to that
+one walk — cannot serve it, and the concrete admin configuration call of
+*The `setPauseDuration.config` row, at its own world* is built instead.  It is
+the module's cheapest route despite being its longest path: not one of its ten
+branch crossings is priced.
 -/
 
 namespace Blanc.LidoCircuitBreaker
@@ -2074,5 +2083,523 @@ theorem attainable_registerRetainedOldNewExpiry_adminExpiry :
     (by decide)
     (fun _devm _post h hstor hmem =>
       runtimeMain_routeTo_registerFreshArmExpiry h hstor hmem)
+
+/-! ## The `setPauseDuration.config` row, at its own world
+
+Inventory index `0` is the one row this module cannot reach from the fresh
+registration walk: it is `setPauseDuration`'s configuration `SSTORE`, and that
+walk's calldata selects `registerPauser`.  So the row gets a second concrete
+world — an admin `setPauseDuration(1814400)` call on an otherwise untouched
+deployment — and everything above it is rebuilt for that world.
+
+Three things make this leg cheaper than the registration one, and all three are
+structural rather than lucky.
+
+The write sits in the **main function**, so no `.call` restarts the source
+position: the route has to carry its accumulated steps the whole way and finish
+against the frozen 64-step path, where `runtimeMain_routeTo_setPauserAssignment`
+could hand its arithmetic off to `setPauserSlot`'s root.  That is the one thing
+this route pays more for.
+
+Against it, **not one branch word is priced**.  Five of the ten crossings are
+dispatcher selector comparisons decided on the calldata selector alone, and the
+other five — the entry guard, `requireStaticArgs 1`, `onlyAdmin`, and the two
+configured-bound guards — each have a sibling arm that is `Func.rev` or a
+`.call` to one, so `routeTo_branch*_of_*RevertsOk` settles them from the
+successful outcome.  Nothing storage-valued or memory-valued survives a
+crossing here, so no `Devm.getStor` chain and no memory image travel with the
+route.
+
+And the walk itself is one `func_run`: `setPauseDuration` is
+`setHeartbeatInterval`'s exact structural twin, so the body reuses that
+family's measured charges (two `MSTORE` expansions at `3`, a `LOG1` at `1262`,
+a warm zero-to-nonzero `SSTORE` at `20000`) without restating any of its
+effects.  Effects are not restated because attainment does not need them: an
+`Attainable` witness consumes `.ok` and the route, and says nothing about what
+the write left behind. -/
+
+/-! ### The world -/
+
+/-- The CircuitBreaker deployment this leg configures. -/
+def configWorldOwner : Adr := Nat.toAdr 100
+
+/-- The admin caller.  `officialParams.admin` as an address. -/
+def configWorldAdmin : Adr :=
+  Nat.toAdr 0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c
+
+/-- The configured pause duration: `officialParams`' own initial value, which
+sits strictly inside the immutable `[432000, 5184000]` bounds. -/
+def configWorldDuration : B256 := 1814400
+
+/-- Canonical direct-call calldata for `setPauseDuration(uint256)`. -/
+def setPauseDurationCalldata (duration : B256) : Bytes :=
+  abiSelectorBytes (selector "setPauseDuration" [.uint256]) ++ duration.toBytes
+
+/-- The installed generated runtime bytes. -/
+def configWorldCode : ByteArray :=
+  ByteArray.mk (lidoCircuitBreakerCode officialParams).toArray
+
+/-- World state: the CircuitBreaker account alone, with empty storage.  The
+configuration cell therefore reads zero, which is what makes the store a
+zero-to-nonzero set. -/
+def configWorldState : State :=
+  State.set (.empty : State) configWorldOwner
+    { Acct.nil with code := configWorldCode }
+
+/-- The one warm accessed key at message entry: the configuration slot the
+body both reads and writes.  Warm at entry is a choice, not a fact about the
+contract — it just keeps the walk's `SLOAD` and `SSTORE` on the same base
+`Devm`, and membership is settled by the `insert` rather than by deciding a
+`HashSet`. -/
+def configWorldKeys : Std.HashSet (Adr × B256) :=
+  Std.HashSet.emptyWithCapacity.insert (configWorldOwner, pauseDurationSlot)
+
+/-- The concrete admin `setPauseDuration(1814400)` call.  The gas is the exact
+inclusive charge: `setPauseDurationDispatchGas` plus the body's `21498`. -/
+def configWorldMsg : Msg :=
+  { (default : Msg) with
+    benv :=
+      { (default : Benv) with
+        state := configWorldState
+        stat :=
+          { (default : BenvStat) with origState := configWorldState } }
+    tenv := default
+    caller := configWorldAdmin
+    target := some configWorldOwner
+    currentTarget := configWorldOwner
+    gas := 21649
+    value := 0
+    data := setPauseDurationCalldata configWorldDuration
+    codeAddress := some configWorldOwner
+    code := configWorldCode
+    depth := 0
+    shouldTransferValue := false
+    isStatic := false
+    accessedAddresses := .emptyWithCapacity
+    accessedStorageKeys := configWorldKeys
+    disablePrecompiles := false }
+
+def configWorldSevm : Sevm := initSevm configWorldMsg
+
+def configWorldPre : Devm := initDevm configWorldMsg
+
+/-! ### Frame, calldata and storage facts -/
+
+theorem configWorld_currentTarget :
+    configWorldSevm.currentTarget = configWorldOwner := rfl
+
+theorem configWorld_value : configWorldSevm.value = 0 := rfl
+
+theorem configWorld_static : configWorldSevm.isStatic = false := rfl
+
+theorem configWorld_codeAddress :
+    configWorldSevm.codeAddress = some configWorldSevm.currentTarget := rfl
+
+theorem configWorld_admin :
+    configWorldSevm.caller.toB256 = officialParams.admin := rfl
+
+theorem configWorld_data :
+    configWorldSevm.data = setPauseDurationCalldata configWorldDuration := rfl
+
+private theorem configWorld_byteArray_ofList_toList (bs : Bytes) :
+    (ByteArray.mk bs.toArray).toList = bs := by
+  rw [ByteArray.toList_eq_toList_data]
+
+theorem configWorld_codeBytes :
+    configWorldSevm.code.toList = lidoCircuitBreakerCode officialParams := by
+  simpa only [configWorldSevm, configWorldMsg, initSevm, configWorldCode] using
+    configWorld_byteArray_ofList_toList (lidoCircuitBreakerCode officialParams)
+
+theorem configWorld_dataLength :
+    configWorldSevm.data.length.toB256 = 36 := by
+  rw [configWorld_data]
+  simp only [setPauseDurationCalldata, List.length_append,
+    abiSelectorBytes_length, B256.length_toBytes]
+  decide +kernel
+
+/-- The selector really is `setPauseDuration(uint256)`'s.  At a fully concrete
+message this is one kernel evaluation — both the `keccak` of the signature and
+the 36 calldata bytes are closed — so the hand-rolled bit reasoning
+`registerPauserCalldata_spec` needs for a *generic* argument word is not
+required here. -/
+theorem configWorld_selector :
+    Sevm.selector configWorldSevm = selector "setPauseDuration" [.uint256] := by
+  decide +kernel
+
+theorem configWorld_arg :
+    Sevm.dataWord configWorldSevm (32 * 0 + 4) = configWorldDuration := by
+  apply dataWord_of_append
+    (pre := abiSelectorBytes (selector "setPauseDuration" [.uint256]))
+    (w := configWorldDuration) (post := [])
+  · rw [abiSelectorBytes_length]
+    rfl
+  · simpa [setPauseDurationCalldata] using configWorld_data
+
+theorem configWorld_warm :
+    (⟨configWorldSevm.currentTarget, pauseDurationSlot⟩ : Adr × B256) ∈
+      configWorldPre.accessedStorageKeys :=
+  Std.HashSet.mem_insert_self
+
+theorem configWorld_old :
+    configWorldPre.getStorVal configWorldSevm.currentTarget
+      pauseDurationSlot = 0 := by
+  change (configWorldState.get configWorldOwner).stor.get pauseDurationSlot = 0
+  rw [configWorldState, State.get_set_self]
+  rfl
+
+theorem configWorld_orig :
+    getOrigStorVal configWorldSevm configWorldSevm.currentTarget
+      pauseDurationSlot = 0 := by
+  change (configWorldState.get configWorldOwner).stor.get pauseDurationSlot = 0
+  rw [configWorldState, State.get_set_self]
+  rfl
+
+/-- The configured duration clears both immutable bounds inclusively and is
+nonzero, so the two guard branches fall through and the store is priced as a
+set rather than an update. -/
+theorem configWorld_bounds :
+    officialParams.minPauseDuration ≤ configWorldDuration ∧
+      configWorldDuration ≤ officialParams.maxPauseDuration ∧
+      configWorldDuration ≠ 0 :=
+  ⟨by decide, by decide, by decide⟩
+
+/-! ### The walk
+
+One `func_run` for the whole body, and one for the dispatcher.  Neither states
+an effect: the storage word, the emitted `PauseDurationUpdated` record and the
+poststate gas are all reachable from these derivations and none of them is
+what `Attainable` consumes, so restating them would be surface without a
+consumer. -/
+
+private theorem configWorld_getStorVal_addLog {d : Devm} {l : Log} {a : Adr}
+    {k : B256} : (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
+
+set_option maxRecDepth 16384 in
+/-- Exact successful `setPauseDuration` body: the static-argument guard, the
+admin guard and both configured-bound guards fall the right way, the
+configuration cell is read for the event and then set, and the whole body costs
+`21498` — `setHeartbeatInterval`'s measured warm zero-to-nonzero charge, which
+is the same number because the two functions are structurally identical. -/
+theorem setPauseDuration_body_runCompiledTo
+    (fs : List Func) (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (duration : B256) (G : Nat)
+    (hdata : sevm.data.length.toB256 <? 36 = 0)
+    (hadmin : sevm.caller.toB256 = dp.admin)
+    (harg : Sevm.dataWord sevm (32 * 0 + 4) = duration)
+    (hmin : dp.minPauseDuration ≤ duration)
+    (hmax : duration ≤ dp.maxPauseDuration)
+    (hnonzero : duration ≠ 0)
+    (hold : base.getStorVal sevm.currentTarget pauseDurationSlot = 0)
+    (horig : getOrigStorVal sevm sevm.currentTarget pauseDurationSlot = 0)
+    (hwarm : (⟨sevm.currentTarget, pauseDurationSlot⟩ : Adr × B256) ∈
+      base.accessedStorageKeys)
+    (hstatic : sevm.isStatic = false) :
+    ∃ post,
+      Func.RunCompiledTo fs sevm
+        (base.setMach ⟨[], Mem.empty, G + 21498⟩)
+        (setPauseDuration dp) (.ok post) := by
+  have hsstoreCost : sstoreValueCost 0 0 duration = 20000 := by
+    rw [sstoreValueCost, if_pos ⟨rfl, hnonzero.symm⟩, if_pos rfl]
+    norm_num [gasStorageSet]
+  apply Exists.intro
+  unfold setPauseDuration requireStaticArgs onlyAdmin arg cdl pushDeployWord
+    mstoreAt logWith
+  func_run [0, 1, 0, 0, 3, 3, 1262, 20000]
+  case h_val => simp [B256.eqCheck, hadmin]
+  case h_val => rw [harg]; simp [B256.ltCheck, B256.not_lt.mpr hmin]
+  case h_val => rw [harg]; simp [B256.gtCheck, B256.not_lt.mpr hmax]
+  case h_ext =>
+    rw [show ((0 : B256) * 32).toNat = 0 by decide]
+    exact Devm.extCost_empty_word
+  case h_ext =>
+    rw [show ((1 : B256) * 32).toNat = 32 by decide,
+      show ((0 : B256) * 32).toNat = 0 by decide]
+    exact Devm.extCost_of_size Mem.size_write_word (by decide)
+  case h_cost =>
+    rw [show ((2 : B256) * 32).toNat = 64 by decide,
+      show ((0 : B256) * 32).toNat = 0 by decide,
+      show ((1 : B256) * 32).toNat = 32 by decide]
+    rw [Devm.extCost_of_size (by
+      rw [Mem.size_write_word_at, Mem.size_write_word]) rfl]
+    decide
+  case h_cost =>
+    simpa only [Devm.getStorVal_setMach, configWorld_getStorVal_addLog, horig,
+      hold, harg] using hsstoreCost
+  case a => exact Func.RunCompiledTo.last rfl
+
+/-- Dispatcher charge from the runtime's entry `JUMPDEST` to
+`setPauseDuration`'s first body instruction: two pivots taken to the right
+subtree, two selector misses, the match, and the chain's `POP`. -/
+def setPauseDurationDispatchGas : Nat := 151
+
+set_option maxRecDepth 16384 in
+/-- Exact dispatcher bridge for any terminal outcome of the selected
+pause-duration setter body. -/
+theorem setPauseDuration_dispatch_runCompiledTo
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (bodyGas G : Nat) (out : Execution)
+    (hdata : sevm.data.length.toB256 = 36)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = selector "setPauseDuration" [.uint256])
+    (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (hbody : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
+      (base.setMach ⟨[], Mem.empty, G + bodyGas⟩)
+      (setPauseDuration dp) out) :
+    Prog.RunCompiledTo sevm
+      (base.setMach ⟨[], Mem.empty,
+        G + setPauseDurationDispatchGas + bodyGas⟩)
+      (runtime dp) out ∧
+      some sevm.code.toList = Prog.compile (runtime dp) := by
+  refine ⟨?_, ?_⟩
+  · refine Prog.runCompiledTo_intro
+      (mid := base.setMach ⟨[], Mem.empty, G + 150 + bodyGas⟩)
+      (G := G + 150 + bodyGas) ?_ ?_ ?_
+    · simp only [Devm.gasLeft_setMach, setPauseDurationDispatchGas, gJumpdest]
+      omega
+    · rfl
+    · have hlt : sevm.data.length.toB256 <? 4 = 0 := by
+        rw [hdata]
+        decide
+      have hor : B256.or 0 sevm.value = 0 := by
+        rw [hvalue]
+        decide
+      have hselector' :
+          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
+            selector "setPauseDuration" [.uint256] := hselector
+      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+        linearDispatchWith firstSelector funcs
+      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
+      func_run (31) [0, 0,
+        selector "setPauseDuration" [.uint256],
+        0, 0, 0, 0, 1]
+      have hboundary : G + 150 + bodyGas - 150 = G + bodyGas := by
+        omega
+      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
+        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
+        List.take, List.drop, List.head?, Option.map, Option.getD,
+        linearDispatchWith] using hbody
+  · rw [hcode, lidoCircuitBreakerCode_compile]
+
+/-- The concrete configuration call runs, gas-exactly, on the production
+runtime. -/
+theorem configWorld_run :
+    ∃ post,
+      Prog.RunCompiledTo configWorldSevm configWorldPre
+        (runtime officialParams) (.ok post) ∧
+      some configWorldSevm.code.toList =
+        Prog.compile (runtime officialParams) := by
+  obtain ⟨post, hbody⟩ :=
+    setPauseDuration_body_runCompiledTo (runtimeMain officialParams :: aux)
+      officialParams configWorldSevm configWorldPre configWorldDuration 0
+      (by rw [configWorld_dataLength]; decide) configWorld_admin configWorld_arg
+      configWorld_bounds.1 configWorld_bounds.2.1 configWorld_bounds.2.2
+      configWorld_old configWorld_orig configWorld_warm configWorld_static
+  obtain ⟨hrun, hcompile⟩ :=
+    setPauseDuration_dispatch_runCompiledTo officialParams configWorldSevm
+      configWorldPre 21498 0 (.ok post) configWorld_dataLength configWorld_value
+      configWorld_selector configWorld_codeBytes hbody
+  have hentry :
+      configWorldPre.setMach ⟨[], Mem.empty,
+        0 + setPauseDurationDispatchGas + 21498⟩ = configWorldPre := rfl
+  rw [hentry] at hrun
+  exact ⟨post, hrun, hcompile⟩
+
+/-- The configuration world is an exact runtime invocation. -/
+theorem configWorld_exactInvocation {post : Devm}
+    (exc : Exec 0 configWorldSevm configWorldPre (.ok post)) :
+    (⟨0, configWorldSevm, configWorldPre, .ok post, exc⟩ :
+      Exec.Deriv).exactInvocation (runtime officialParams) configWorldOwner
+      configWorldOwner := by
+  refine ⟨rfl, configWorld_currentTarget, ?_, ?_⟩
+  · show configWorldSevm.codeAddress = some configWorldOwner
+    rw [configWorld_codeAddress, configWorld_currentTarget]
+  · show some configWorldSevm.code.toList =
+      Prog.compile (runtime officialParams)
+    rw [configWorld_codeBytes, lidoCircuitBreakerCode_compile]
+
+/-! ### The route
+
+Ten crossings, none of them priced.  The five dispatcher crossings read the
+calldata selector off the stack exactly as `dispatch_routeTo_registerPauser`
+does — `routeTo_branch*_frame`, because the selector word has to survive each
+comparison — and the five guards are settled by their certified-reverting
+siblings, which need no frame at all. -/
+
+/-- `setPauseDuration`'s dispatched entry: the selector chain's `POP` followed
+by `requireStaticArgs 1`'s guard line. -/
+def setPauseDurationEntryTest : Line :=
+  [Ninst.pop, Ninst.pushB256 (Nat.toB256 (4 + 32 * 1)), Ninst.calldatasize,
+   Ninst.lt]
+
+/-- The configured-minimum guard line. -/
+def pauseDurationMinTest (dp : DeployParams) : Line :=
+  [pushDeployWord dp.minPauseDuration] ++ arg 0 ++ [Ninst.lt]
+
+/-- The configured-maximum guard line. -/
+def pauseDurationMaxTest (dp : DeployParams) : Line :=
+  [pushDeployWord dp.maxPauseDuration] ++ arg 0 ++ [Ninst.gt]
+
+/-- From the last guard to the configuration `SSTORE`: the old-value read, the
+two staged event words, the `LOG1` and the new value. -/
+def setPauseDurationConfigPrefix : Line :=
+  [Ninst.pushB256 pauseDurationSlot, Ninst.sload] ++ mstoreAt 0 ++ arg 0 ++
+    mstoreAt 1 ++ [Ninst.pushB256 pauseDurationUpdatedEvent] ++
+    logWith 0 0 2 ++ arg 0 ++ [Ninst.pushB256 pauseDurationSlot]
+
+/-- Structural source position of the `setPauseDuration.config` `SSTORE`:
+inventory index `0`, source function `0`, sixty-four steps.  Unlike every other
+path in this module it is not rooted at an auxiliary table slot, because no
+`.call` intervenes between the program entry and this write. -/
+def setPauseDurationConfigPath : Prog.SourcePath :=
+  ⟨0,
+    List.replicate 5 .rest ++ [.branchLeft] ++
+      List.replicate 7 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchRight] ++
+      List.replicate 4 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchRight] ++
+      List.replicate 4 .rest ++ [.branchLeft] ++
+      List.replicate 4 .rest ++ [.branchLeft] ++
+      List.replicate 15 .rest⟩
+
+set_option maxRecDepth 16384 in
+/-- The complete route from program entry to the `setPauseDuration.config`
+`SSTORE`, across all ten branches.  Only the calldata selector is an execution
+premise: five crossings are decided on it and the other five have
+certified-reverting siblings, so no branch word, no storage chain and no memory
+image appear anywhere in the route.
+
+The accumulated steps are closed data, so they reduce definitionally to
+`setPauseDurationConfigPath.steps` and the head designation needs no rewriting
+step of its own. -/
+theorem runtimeMain_routeTo_setPauseDurationConfig (dp : DeployParams)
+    {sevm : Sevm} {devm post : Devm}
+    (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
+      (runtime dp).main (.ok post))
+    (selectorEq :
+      Sevm.selector sevm = selector "setPauseDuration" [.uint256]) :
+    Func.RunCompiledTo.RouteTo ⟨0, []⟩ h setPauseDurationConfigPath
+      (.reg .sstore) := by
+  refine routeTo_line runtimeMainEntryPrefix h (fun _entry _run tail => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail (fuel := 4) (by rfl)
+    (fun _body arm => ?_)
+  refine routeTo_line fsig arm (fun s0 run0 tail0 => ?_)
+  have p0 : Sevm.selector sevm :: [] <<+ s0.stack :=
+    prefix_of_fsig nil_pref run0
+  rw [selectorEq] at p0
+  refine routeTo_line (splitTest (selector "pause" [.address])) tail0
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_splitTest p0 run1
+  refine routeTo_branchLeft_frame tail1
+    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _s2 hpop2 tail2 => ?_)
+  have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
+  refine routeTo_line (splitTest (selector "MIN_HEARTBEAT_INTERVAL" [])) tail2
+    (fun _s3 run3 tail3 => ?_)
+  have p3 := prefix_of_splitTest p2 run3
+  refine routeTo_branchLeft_frame tail3
+    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _s4 hpop4 tail4 => ?_)
+  have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
+  refine routeTo_line (linearTest (selector "MIN_HEARTBEAT_INTERVAL" [])) tail4
+    (fun _s5 run5 tail5 => ?_)
+  have p5 := prefix_of_linearTest p4 run5
+  refine routeTo_branchLeft_frame tail5
+    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
+    (fun _s6 hpop6 tail6 => ?_)
+  have p6 := tail_of_stack_prefix p5 ⟨_, hpop6.stack⟩
+  refine routeTo_line (linearTest (selector "heartbeatExpiry" [.address]))
+    tail6 (fun _s7 run7 tail7 => ?_)
+  have p7 := prefix_of_linearTest p6 run7
+  refine routeTo_branchLeft_frame tail7
+    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; decide)
+    (fun _s8 hpop8 tail8 => ?_)
+  have p8 := tail_of_stack_prefix p7 ⟨_, hpop8.stack⟩
+  refine routeTo_line (linearTest (selector "setPauseDuration" [.uint256]))
+    tail8 (fun _s9 run9 tail9 => ?_)
+  have p9 := prefix_of_linearTest p8 run9
+  refine routeTo_branchRight_frame tail9
+    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; decide)
+    (fun _s10 _w10 _hpop10 tail10 => ?_)
+  refine routeTo_line setPauseDurationEntryTest tail10
+    (fun _s11 _run11 tail11 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail11 (fuel := 4) (by rfl)
+    (fun _s12 arm12 => ?_)
+  refine routeTo_line (adminTest dp) arm12 (fun _s13 _run13 tail13 => ?_)
+  refine routeTo_branchRight_of_leftRevertsOk tail13 (fuel := 8) (by rfl)
+    (fun _s14 arm14 => ?_)
+  refine routeTo_line (pauseDurationMinTest dp) arm14
+    (fun _s15 _run15 tail15 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail15 (fuel := 8) (by rfl)
+    (fun _s16 arm16 => ?_)
+  refine routeTo_line (pauseDurationMaxTest dp) arm16
+    (fun _s17 _run17 tail17 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail17 (fuel := 8) (by rfl)
+    (fun _s18 arm18 => ?_)
+  refine routeTo_line setPauseDurationConfigPrefix arm18
+    (fun _s19 _run19 write => ?_)
+  exact routeTo_head write setPauseDurationConfigPath
+
+/-! ### Pinning the row, and the witness -/
+
+set_option maxRecDepth 20000 in
+/-- Only inventory index `0` — `.setPauseDurationConfig` — nominates a site
+whose source path is `setPauseDurationConfigPath`. -/
+theorem setPauseDurationConfig_index_pin :
+    ∀ index ∈ List.range 20,
+      ((runtimePersistentSourceSites officialParams)[index]?.map
+          (fun s => s.path) = some setPauseDurationConfigPath) →
+        index = 0 := by
+  decide +kernel
+
+/-- The `setPauseDuration.config` row is attained with the
+`.adminConfiguration` role.
+
+Unconditional, and at a *different* world from the six above:
+`attainable_of_route` is tied to the fresh registration walk, whose calldata
+selects `registerPauser`, so this row cannot borrow it and the tail is redone
+here against `configWorld_run`.  The redone tail is also shorter — this row's
+`permittedRoles` is the singleton `[.adminConfiguration]`, so the reached role
+is forced by membership alone and no `.pauseRegistry` refutation is needed. -/
+theorem attainable_setPauseDurationConfig_adminConfiguration :
+    Attainable officialParams .setPauseDurationConfig .adminConfiguration := by
+  obtain ⟨post, hrun, hcompile⟩ := configWorld_run
+  obtain ⟨mid, hburn, hwalk⟩ := hrun
+  have hroute := runtimeMain_routeTo_setPauseDurationConfig officialParams
+    hwalk configWorld_selector
+  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
+    sameFrame⟩ :=
+    Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
+  have invocation := configWorld_exactInvocation exc
+  have instructionEq : occurrence.instruction = .reg .sstore :=
+    hinstr.trans hinstrTarget
+  obtain ⟨reached, rowSite, _rowMem, found, _classified, rowSitePc, _rowInstr,
+    _unique, role, rolePermitted, authority⟩ :=
+    Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot occurrence
+      instructionEq (Exec.mem_rawFrameRoots_self exc) invocation sameFrame
+  have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
+    unfold runtimePersistentSourceSites
+    rw [List.mem_filter]
+    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
+  have siteEq : rowSite = site :=
+    runtimePersistentSourceSite_eq_of_pc
+      (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
+      routedMember (rowSitePc.trans hpc)
+  have rowEq : reached = .setPauseDurationConfig :=
+    RuntimePersistentWrite.eq_of_path setPauseDurationConfig_index_pin found
+      (siteEq ▸ hpath)
+  subst rowEq
+  have roleEq : role = .adminConfiguration := by
+    simpa [RuntimePersistentWrite.permittedRoles] using rolePermitted
+  subst roleEq
+  exact ⟨configWorldOwner,
+    ⟨0, configWorldSevm, configWorldPre, .ok post, exc⟩,
+    ⟨0, configWorldSevm, configWorldPre, .ok post, exc⟩, occurrence, rowSite,
+    instructionEq, Exec.mem_rawFrameRoots_self exc, invocation, sameFrame,
+    found, rowSitePc, authority⟩
+
 
 end Blanc.LidoCircuitBreaker

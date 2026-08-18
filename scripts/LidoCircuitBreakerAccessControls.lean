@@ -485,10 +485,22 @@ provably unattainable at this row, so no exact runtime execution reaches
 payload.
 
 Epistemic status, stated plainly because it is the honest core of this control:
-only the negative direction is certified.  `RuntimePersistentWrite.permittedRoles`
-remains an upper bound.  That each *listed* role is genuinely reached — the
-positive direction, tightness — is not proved here or anywhere else yet, and
-nothing below may be read as claiming the role sets are exact. -/
+what this control certifies is only the negative direction.
+`RuntimePersistentWrite.permittedRoles` is an upper bound, and nothing *below*
+may be read as claiming the role sets are exact.
+
+That the positive direction — tightness — is unproved was true when this control
+was written and is **no longer true in general**.  `Blanc/LidoCircuitBreakerAttainment.lean`
+now carries attainment witnesses, and at a row whose `permittedRoles` is a
+singleton a witness makes the set exact rather than merely sound.  Three rows are
+exact today on that argument: `.afterOldNewCount` at `[.adminRegistry]`,
+`.registerRetainedOldNewExpiry` at `[.adminExpiry]`, and
+`.setPauseDurationConfig` at `[.adminConfiguration]` — the last of which states
+the exactness itself, as `setPauseDurationConfig_role_tightness_control`.
+
+Every other row remains an upper bound only.  For a two-role row a single
+witness settles one side and says nothing about the other, so the ten registry
+rows are not exact no matter how many `.adminRegistry` witnesses land. -/
 theorem permitted_role_widening_rejected :
     (∀ row ∈ RuntimePersistentWrite.all, row ≠ .afterOldNewCount →
         widenedPermittedRoles row =
@@ -625,6 +637,100 @@ theorem admin_heartbeat_within_role_guard_strength_control :
   · intro _dp _frameRoot _write authority
     cases authority with
     | heartbeatExpiry _ _ _ registered live _ => exact ⟨registered, live⟩
+
+/-! ### AT8 executable controls at the `setPauseDuration.config` site
+
+Review finding R9.  Inventory row `0` was classified by AT4 and role-pinned by
+AT5 exactly like the other nineteen, yet no control and no witness reached it,
+so AT3's demand for "exact admin/site/guard access classification **and
+executable controls**" was open at precisely one site.  The two controls below
+close it.
+
+Both are compositions rather than restatements.  The first joins the reaching
+execution, the frozen site's compiled coordinates and the within-role caller
+equality into a single statement no header makes; the second turns the row's
+`permittedRoles` entry from an upper bound into an exact one, which is the one
+direction `permitted_role_widening_rejected` above deliberately does not
+certify.  That exactness is claimed **for this row only**; nothing here says
+anything about the Registry-class rows whose sets are not singletons. -/
+
+set_option maxRecDepth 20000 in
+/-- The compiled coordinates of inventory row `0`'s own frozen source site:
+`PC 413`, source function `0`, and a sixty-four-step path.  The source function
+is the AT4 fact that makes the site main-function-resident, which is why no
+`.call` restarts its source position; the instruction kind is not repeated
+here because `sourceSite?_sound` already supplies it. -/
+private theorem setPauseDurationConfig_site_shape :
+    ((RuntimePersistentWrite.setPauseDurationConfig).sourceSite?
+        officialParams).map
+      (fun site =>
+        (site.pc, site.path.functionIndex, site.path.steps.length)) =
+      some (413, 0, 64) := by
+  decide +kernel
+
+/-- One concrete production execution reaches inventory row `0`'s own frozen
+source site, and the authority it carries there really did compare the caller
+against the immutable admin.
+
+Nothing in the landed headers says this.  `Attainable` supplies the reaching
+execution and the raw authority payload but names no compiled coordinate;
+`runtimePersistentSourceSites_pcs` pins the twenty PCs but reaches no
+execution; and `admin_heartbeat_within_role_guard_strength_control` extracts
+the caller equality from an *arbitrary* `.adminConfiguration` authority without
+exhibiting one.  Composed, they say that an actual admin `setPauseDuration`
+call reaches PC `413` in source function `0` inside an exact same-frame
+invocation of the production runtime, carrying an authority whose guard is the
+admin comparison. -/
+theorem setPauseDurationConfig_admin_site_control :
+    ∃ (ca : Adr) (globalRoot frameRoot : Exec.Deriv)
+      (occurrence : Exec.NinstOccurrence globalRoot) (site : Prog.SourceSite),
+      (RuntimePersistentWrite.setPauseDurationConfig).sourceSite?
+          officialParams = some site ∧
+      site ∈ runtimePersistentSourceSites officialParams ∧
+      (site.pc, site.path.functionIndex, site.path.steps.length) =
+          (413, 0, 64) ∧
+      site.instruction = .reg .sstore ∧
+      site.pc = occurrence.node.pc ∧
+      occurrence.instruction = .reg .sstore ∧
+      frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
+      frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+      Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
+      RuntimeWriteAuthority officialParams frameRoot occurrence.node
+        .adminConfiguration ∧
+      frameRoot.sevm.caller.toB256 = officialParams.admin := by
+  obtain ⟨ca, globalRoot, frameRoot, occurrence, site, instructionEq, rawRoots,
+    invocation, sameFrame, found, sitePc, authority⟩ :=
+    attainable_setPauseDurationConfig_adminConfiguration
+  refine ⟨ca, globalRoot, frameRoot, occurrence, site, found,
+    RuntimePersistentWrite.mem_runtimePersistentSourceSites found, ?_,
+    (RuntimePersistentWrite.sourceSite?_sound found).2, sitePc,
+    instructionEq, rawRoots, invocation, sameFrame, authority,
+    admin_heartbeat_within_role_guard_strength_control.1 officialParams
+      frameRoot occurrence.node authority⟩
+  have shape := setPauseDurationConfig_site_shape
+  rw [found] at shape
+  exact Option.some.inj shape
+
+/-- At inventory row `0` the permitted-role table is **exact**, not merely a
+sound upper bound: its single entry is attained.
+
+This is the positive direction `permitted_role_widening_rejected` above
+explicitly leaves open, and it is available here only because the row's set is
+a singleton *and* that one role now carries a witness.  Read it at exactly that
+width — it is a statement about one row, and it does not upgrade
+`RuntimePersistentWrite.permittedRoles` anywhere else. -/
+theorem setPauseDurationConfig_role_tightness_control :
+    RuntimePersistentWrite.permittedRoles .setPauseDurationConfig =
+        [.adminConfiguration] ∧
+      ∀ role ∈ RuntimePersistentWrite.permittedRoles .setPauseDurationConfig,
+        Attainable officialParams .setPauseDurationConfig role := by
+  refine ⟨rfl, ?_⟩
+  intro role member
+  have roleEq : role = .adminConfiguration := by
+    revert member
+    cases role <;> decide
+  subst roleEq
+  exact attainable_setPauseDurationConfig_adminConfiguration
 
 /-! ## AT6 owner-closure and settlement controls -/
 
