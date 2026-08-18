@@ -99,6 +99,7 @@ CONTRACTS = {
                              "LidoCircuitBreakerOwnerClosure",
                              "LidoCircuitBreakerRetainedAuthority",
                              "LidoCircuitBreakerAttainment",
+                             "LidoCircuitBreakerPauseSuffix",
                              "LidoCircuitBreakerRegistrationWorld",
                              "LidoCircuitBreakerCode",
                              "LidoCircuitBreakerDeploy"],

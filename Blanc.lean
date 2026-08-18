@@ -21,6 +21,7 @@ import Blanc.LidoCircuitBreakerReplacementRegistration
 import Blanc.LidoCircuitBreakerAuthority
 import Blanc.LidoCircuitBreakerOwnerClosure
 import Blanc.LidoCircuitBreakerRetainedAuthority
+import Blanc.LidoCircuitBreakerPauseSuffix
 import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.Weth10Core
