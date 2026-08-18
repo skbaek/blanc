@@ -492,11 +492,12 @@ may be read as claiming the role sets are exact.
 That the positive direction — tightness — is unproved was true when this control
 was written and is **no longer true in general**.  `Blanc/LidoCircuitBreakerAttainment.lean`
 now carries attainment witnesses, and at a row whose `permittedRoles` is a
-singleton a witness makes the set exact rather than merely sound.  Three rows are
+singleton a witness makes the set exact rather than merely sound.  Five rows are
 exact today on that argument: `.afterOldNewCount` at `[.adminRegistry]`,
-`.registerRetainedOldNewExpiry` at `[.adminExpiry]`, and
-`.setPauseDurationConfig` at `[.adminConfiguration]` — the last of which states
-the exactness itself, as `setPauseDurationConfig_role_tightness_control`.
+`.registerRetainedOldNewExpiry` at `[.adminExpiry]`, `.setPauseDurationConfig`
+and `.setHeartbeatIntervalConfig` at `[.adminConfiguration]`, and
+`.heartbeatExpiry` at `[.heartbeatExpiry]` — the last three of which state the
+exactness themselves, as the `*_role_tightness_control` family below.
 
 Every other row remains an upper bound only.  For a two-role row a single
 witness settles one side and says nothing about the other, so the ten registry
@@ -731,6 +732,157 @@ theorem setPauseDurationConfig_role_tightness_control :
     cases role <;> decide
   subst roleEq
   exact attainable_setPauseDurationConfig_adminConfiguration
+
+/-! ### AT8 executable controls at the two remaining main-function sites
+
+Inventory rows `1` and `2` — `setHeartbeatInterval`'s configuration `SSTORE`
+and the expiry `SSTORE` on `heartbeat`'s success arm — are the other two sites
+that live in the compiled main function, and they carry the same pair of
+controls as row `0` for the same reason: a reaching execution composed with the
+frozen compiled coordinates, and a per-row exactness statement.
+
+Row `2` is the one place a control reaches the `.heartbeatExpiry` role at all.
+Its site control extracts **both** entry facts the role carries — a nonzero
+entry count and strict entry liveness — from an authority that an actual
+execution produced, where
+`admin_heartbeat_within_role_guard_strength_control` extracts them from an
+arbitrary one.  Read the pair together: the fourth conjunct there says every
+`.heartbeatExpiry` authority has those facts, and this says one exists. -/
+
+set_option maxRecDepth 20000 in
+/-- The compiled coordinates of inventory row `1`'s own frozen source site:
+`PC 1333`, source function `0`, and a sixty-six-step path. -/
+private theorem setHeartbeatIntervalConfig_site_shape :
+    ((RuntimePersistentWrite.setHeartbeatIntervalConfig).sourceSite?
+        officialParams).map
+      (fun site =>
+        (site.pc, site.path.functionIndex, site.path.steps.length)) =
+      some (1333, 0, 66) := by
+  decide +kernel
+
+/-- One concrete production execution reaches inventory row `1`'s own frozen
+source site, and the authority it carries there really did compare the caller
+against the immutable admin. -/
+theorem setHeartbeatIntervalConfig_admin_site_control :
+    ∃ (ca : Adr) (globalRoot frameRoot : Exec.Deriv)
+      (occurrence : Exec.NinstOccurrence globalRoot) (site : Prog.SourceSite),
+      (RuntimePersistentWrite.setHeartbeatIntervalConfig).sourceSite?
+          officialParams = some site ∧
+      site ∈ runtimePersistentSourceSites officialParams ∧
+      (site.pc, site.path.functionIndex, site.path.steps.length) =
+          (1333, 0, 66) ∧
+      site.instruction = .reg .sstore ∧
+      site.pc = occurrence.node.pc ∧
+      occurrence.instruction = .reg .sstore ∧
+      frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
+      frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+      Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
+      RuntimeWriteAuthority officialParams frameRoot occurrence.node
+        .adminConfiguration ∧
+      frameRoot.sevm.caller.toB256 = officialParams.admin := by
+  obtain ⟨ca, globalRoot, frameRoot, occurrence, site, instructionEq, rawRoots,
+    invocation, sameFrame, found, sitePc, authority⟩ :=
+    attainable_setHeartbeatIntervalConfig_adminConfiguration
+  refine ⟨ca, globalRoot, frameRoot, occurrence, site, found,
+    RuntimePersistentWrite.mem_runtimePersistentSourceSites found, ?_,
+    (RuntimePersistentWrite.sourceSite?_sound found).2, sitePc,
+    instructionEq, rawRoots, invocation, sameFrame, authority,
+    admin_heartbeat_within_role_guard_strength_control.1 officialParams
+      frameRoot occurrence.node authority⟩
+  have shape := setHeartbeatIntervalConfig_site_shape
+  rw [found] at shape
+  exact Option.some.inj shape
+
+/-- At inventory row `1` the permitted-role table is **exact**, not merely a
+sound upper bound: its single entry is attained.  Read it at exactly that
+width — it is a statement about one row. -/
+theorem setHeartbeatIntervalConfig_role_tightness_control :
+    RuntimePersistentWrite.permittedRoles .setHeartbeatIntervalConfig =
+        [.adminConfiguration] ∧
+      ∀ role ∈
+        RuntimePersistentWrite.permittedRoles .setHeartbeatIntervalConfig,
+        Attainable officialParams .setHeartbeatIntervalConfig role := by
+  refine ⟨rfl, ?_⟩
+  intro role member
+  have roleEq : role = .adminConfiguration := by
+    revert member
+    cases role <;> decide
+  subst roleEq
+  exact attainable_setHeartbeatIntervalConfig_adminConfiguration
+
+set_option maxRecDepth 20000 in
+/-- The compiled coordinates of inventory row `2`'s own frozen source site:
+`PC 1745`, source function `0`, and a sixty-five-step path. -/
+private theorem heartbeatExpiry_site_shape :
+    ((RuntimePersistentWrite.heartbeatExpiry).sourceSite?
+        officialParams).map
+      (fun site =>
+        (site.pc, site.path.functionIndex, site.path.steps.length)) =
+      some (1745, 0, 65) := by
+  decide +kernel
+
+/-- One concrete production execution reaches inventory row `2`'s own frozen
+source site, and the authority it carries there really was a registered caller
+that was strictly live at frame entry.
+
+This is the positive half of the heartbeat guard obligation.  The negative
+half — that *every* `.heartbeatExpiry` authority carries those two facts — is
+`admin_heartbeat_within_role_guard_strength_control`'s fourth conjunct, which
+is vacuous on its own until something exhibits an authority of that role.  This
+exhibits one. -/
+theorem heartbeatExpiry_live_site_control :
+    ∃ (ca : Adr) (globalRoot frameRoot : Exec.Deriv)
+      (occurrence : Exec.NinstOccurrence globalRoot) (site : Prog.SourceSite),
+      (RuntimePersistentWrite.heartbeatExpiry).sourceSite?
+          officialParams = some site ∧
+      site ∈ runtimePersistentSourceSites officialParams ∧
+      (site.pc, site.path.functionIndex, site.path.steps.length) =
+          (1745, 0, 65) ∧
+      site.instruction = .reg .sstore ∧
+      site.pc = occurrence.node.pc ∧
+      occurrence.instruction = .reg .sstore ∧
+      frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
+      frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+      Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
+      RuntimeWriteAuthority officialParams frameRoot occurrence.node
+        .heartbeatExpiry ∧
+      frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+          (countSlot frameRoot.sevm.caller.toB256) ≠ 0 ∧
+      frameRoot.sevm.benvStat.time <
+        frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+          (expirySlot frameRoot.sevm.caller.toB256) := by
+  obtain ⟨ca, globalRoot, frameRoot, occurrence, site, instructionEq, rawRoots,
+    invocation, sameFrame, found, sitePc, authority⟩ :=
+    attainable_heartbeatExpiry_heartbeatExpiry
+  obtain ⟨registered, live⟩ :=
+    admin_heartbeat_within_role_guard_strength_control.2.2.2 officialParams
+      frameRoot occurrence.node authority
+  refine ⟨ca, globalRoot, frameRoot, occurrence, site, found,
+    RuntimePersistentWrite.mem_runtimePersistentSourceSites found, ?_,
+    (RuntimePersistentWrite.sourceSite?_sound found).2, sitePc,
+    instructionEq, rawRoots, invocation, sameFrame, authority, registered,
+    live⟩
+  have shape := heartbeatExpiry_site_shape
+  rw [found] at shape
+  exact Option.some.inj shape
+
+/-- At inventory row `2` the permitted-role table is **exact**, not merely a
+sound upper bound: its single entry is attained.  Read it at exactly that
+width — it is a statement about one row, and in particular it says nothing
+separating `.heartbeatExpiry` from `.adminConfiguration`, the two roles whose
+`writeSite` pins agree. -/
+theorem heartbeatExpiry_role_tightness_control :
+    RuntimePersistentWrite.permittedRoles .heartbeatExpiry =
+        [.heartbeatExpiry] ∧
+      ∀ role ∈ RuntimePersistentWrite.permittedRoles .heartbeatExpiry,
+        Attainable officialParams .heartbeatExpiry role := by
+  refine ⟨rfl, ?_⟩
+  intro role member
+  have roleEq : role = .heartbeatExpiry := by
+    revert member
+    cases role <;> decide
+  subst roleEq
+  exact attainable_heartbeatExpiry_heartbeatExpiry
 
 /-! ## AT6 owner-closure and settlement controls -/
 

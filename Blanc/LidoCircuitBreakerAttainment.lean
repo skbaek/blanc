@@ -566,6 +566,17 @@ def splitTest (pivot : B256) : Line :=
 def linearTest (word : B256) : Line :=
   [Ninst.dup 0, Ninst.pushB256 word, Ninst.eq]
 
+/-- The **final** entry of a `linearDispatchWith` chain, which is a different
+line: with no further entry to compare against, the chain does not `DUP` the
+selector, and the matched body is entered without the `POP` every earlier
+entry's arm carries.  Two instructions, not three.
+
+Both facts show up as path arithmetic — the chain's last entry contributes
+`replicate 2 .rest` where the others contribute `replicate 3 .rest`, and the
+body's first line starts at the body's own head. -/
+def lastLinearTest (word : B256) : Line :=
+  [Ninst.pushB256 word, Ninst.eq]
+
 /-- A pivot test leaves `pivot > selector` above the retained selector. -/
 theorem prefix_of_splitTest {sevm : Sevm} {s s' : Devm} {sel pivot : B256}
     {xs : Stack} (hp : sel :: xs <<+ s.stack)
@@ -589,6 +600,17 @@ theorem prefix_of_linearTest {sevm : Sevm} {s s' : Devm} {sel word : B256}
   cases r3
   exact prefix_of_eq hop (prefix_of_push (of_run_pushB256 hpush)
     (prefix_of_dup_val hdup (by show_nth) hp))
+
+/-- The last entry's test consumes the selector: what it leaves is the
+comparison alone, on top of whatever sat *under* the selector. -/
+theorem prefix_of_lastLinearTest {sevm : Sevm} {s s' : Devm} {sel word : B256}
+    {xs : Stack} (hp : sel :: xs <<+ s.stack)
+    (run : Line.Run sevm s (lastLinearTest word) s') :
+    (word =? sel) :: xs <<+ s'.stack := by
+  rcases Line.of_run_cons run with ⟨_s1, hpush, r1⟩
+  rcases Line.of_run_cons r1 with ⟨_s2, hop, r2⟩
+  cases r2
+  exact prefix_of_eq hop (prefix_of_push (of_run_pushB256 hpush) hp)
 
 set_option maxRecDepth 16384 in
 /-- The six selector crossings of `hybridDispatchWith`, on a walk whose
@@ -2084,43 +2106,51 @@ theorem attainable_registerRetainedOldNewExpiry_adminExpiry :
     (fun _devm _post h hstor hmem =>
       runtimeMain_routeTo_registerFreshArmExpiry h hstor hmem)
 
-/-! ## The `setPauseDuration.config` row, at its own world
+/-! ## The main-function rows, at worlds of their own
 
-Inventory index `0` is the one row this module cannot reach from the fresh
-registration walk: it is `setPauseDuration`'s configuration `SSTORE`, and that
-walk's calldata selects `registerPauser`.  So the row gets a second concrete
-world — an admin `setPauseDuration(1814400)` call on an otherwise untouched
-deployment — and everything above it is rebuilt for that world.
+Three inventory rows sit in the compiled **main function** rather than behind a
+`.call`: index `0`, `setPauseDuration`'s configuration `SSTORE`; index `1`,
+`setHeartbeatInterval`'s; and index `2`, the expiry `SSTORE` on `heartbeat`'s
+success arm.  None of the three is reachable from the fresh registration walk,
+whose calldata selects `registerPauser`, so `attainable_of_route` — welded as
+it is to that one walk — cannot serve any of them, and each gets its own
+concrete world.
 
-Three things make this leg cheaper than the registration one, and all three are
-structural rather than lucky.
+Being main-function-resident is the one thing these routes pay more for.  No
+`.call` restarts the source position, so a route has to carry its accumulated
+steps the whole way and finish against the row's frozen sixty-odd-step path,
+where `runtimeMain_routeTo_setPauserAssignment` could hand its arithmetic off
+to `setPauserSlot`'s root.  Measured, that is a non-issue: the accumulated
+steps are closed data, so they reduce definitionally and `routeTo_head` closes
+the path equation with no rewriting step of its own.
 
-The write sits in the **main function**, so no `.call` restarts the source
-position: the route has to carry its accumulated steps the whole way and finish
-against the frozen 64-step path, where `runtimeMain_routeTo_setPauserAssignment`
-could hand its arithmetic off to `setPauserSlot`'s root.  That is the one thing
-this route pays more for.
+Against it, **not one branch word is priced on the two configuration routes,
+and only the dispatcher's are priced on the heartbeat one**.  Every crossing is
+settled either on the concrete calldata selector or by a sibling arm that is
+`Func.rev` or a `.call` to a `runtimeError`, which `routeTo_branch*_of_*RevertsOk`
+refutes from the successful outcome alone.  Nothing storage-valued or
+memory-valued survives a crossing on any of the three, so no `Devm.getStor`
+chain and no memory image travel with these routes — including the heartbeat
+one, whose registered-caller and strict-liveness facts are consumed by its
+*body walk* and never by its route.
 
-Against it, **not one branch word is priced**.  Five of the ten crossings are
-dispatcher selector comparisons decided on the calldata selector alone, and the
-other five — the entry guard, `requireStaticArgs 1`, `onlyAdmin`, and the two
-configured-bound guards — each have a sibling arm that is `Func.rev` or a
-`.call` to one, so `routeTo_branch*_of_*RevertsOk` settles them from the
-successful outcome.  Nothing storage-valued or memory-valued survives a
-crossing here, so no `Devm.getStor` chain and no memory image travel with the
-route.
+What the three legs share is stated once here and used three times: a world
+skeleton (`breakerMsg`), and the tail from a routed run to an `Attainable`
+witness (`attainable_of_entryRoute`).  What they do not share is the route.  A
+route's crossing sequence is a function of its selector's position in the
+5/4/4/4 dispatch topology and of its body's own guard cascade, and no two of
+these three agree on either, so each is spelled out. -/
 
-And the walk itself is one `func_run`: `setPauseDuration` is
-`setHeartbeatInterval`'s exact structural twin, so the body reuses that
-family's measured charges (two `MSTORE` expansions at `3`, a `LOG1` at `1262`,
-a warm zero-to-nonzero `SSTORE` at `20000`) without restating any of its
-effects.  Effects are not restated because attainment does not need them: an
-`Attainable` witness consumes `.ok` and the route, and says nothing about what
-the write left behind. -/
+/-! ### A shared world skeleton
 
-/-! ### The world -/
+One deployment, three messages.  The worlds below differ in caller, storage,
+timestamp, calldata, warm keys and gas, and in nothing else, so that difference
+is exactly `breakerMsg`'s argument list.
 
-/-- The CircuitBreaker deployment this leg configures. -/
+A world is data, not a claim: nothing here is pinned or published, and what is
+proved *about* a world is what carries weight. -/
+
+/-- The CircuitBreaker deployment every world below installs. -/
 def configWorldOwner : Adr := Nat.toAdr 100
 
 /-- The admin caller.  `officialParams.admin` as an address. -/
@@ -2139,12 +2169,139 @@ def setPauseDurationCalldata (duration : B256) : Bytes :=
 def configWorldCode : ByteArray :=
   ByteArray.mk (lidoCircuitBreakerCode officialParams).toArray
 
-/-- World state: the CircuitBreaker account alone, with empty storage.  The
-configuration cell therefore reads zero, which is what makes the store a
-zero-to-nonzero set. -/
-def configWorldState : State :=
+/-- World state: the CircuitBreaker account alone, carrying `stor`. -/
+def breakerState (stor : Stor) : State :=
   State.set (.empty : State) configWorldOwner
-    { Acct.nil with code := configWorldCode }
+    { Acct.nil with stor := stor, code := configWorldCode }
+
+/-- A direct, non-static, zero-value message to that deployment.  Every world
+in this section is one of these. -/
+def breakerMsg (caller : Adr) (stor : Stor) (time : B256) (data : Bytes)
+    (keys : Std.HashSet (Adr × B256)) (gas : Nat) : Msg :=
+  { (default : Msg) with
+    benv :=
+      { (default : Benv) with
+        state := breakerState stor
+        stat :=
+          { (default : BenvStat) with
+            origState := breakerState stor
+            time := time } }
+    tenv := default
+    caller := caller
+    target := some configWorldOwner
+    currentTarget := configWorldOwner
+    gas := gas
+    value := 0
+    data := data
+    codeAddress := some configWorldOwner
+    code := configWorldCode
+    depth := 0
+    shouldTransferValue := false
+    isStatic := false
+    accessedAddresses := .emptyWithCapacity
+    accessedStorageKeys := keys
+    disablePrecompiles := false }
+
+/-- The deployment's storage at a world of the skeleton is the `stor` that
+world was built from.  Both the current and the original state are that one
+`stor`, so this lemma serves `getStorVal` and `getOrigStorVal` alike. -/
+theorem breakerState_stor (stor : Stor) :
+    ((breakerState stor).get configWorldOwner).stor = stor := by
+  rw [breakerState, State.get_set_self]
+
+private theorem breakerMsg_byteArray_ofList_toList (bs : Bytes) :
+    (ByteArray.mk bs.toArray).toList = bs := by
+  rw [ByteArray.toList_eq_toList_data]
+
+/-- Every world of the skeleton installs the production runtime bytes. -/
+theorem breakerMsg_codeBytes (caller : Adr) (stor : Stor) (time : B256)
+    (data : Bytes) (keys : Std.HashSet (Adr × B256)) (gas : Nat) :
+    (breakerMsg caller stor time data keys gas).code.toList =
+      lidoCircuitBreakerCode officialParams := by
+  simpa only [breakerMsg, configWorldCode] using
+    breakerMsg_byteArray_ofList_toList (lidoCircuitBreakerCode officialParams)
+
+/-! ### From a routed run to a witness
+
+`attainable_of_route` above is welded to the fresh registration walk, and
+consumes a storage and a memory antecedent that walk's route needs.  This is
+the same tail with the world abstracted away and both antecedents gone: it
+takes a run, a route from the program's own entry, and the two frame facts
+`exactInvocation` wants.
+
+It also drops that tail's `.pauseRegistry` refutation, because it does not need
+it.  All three rows below have a **singleton** `permittedRoles`, so the reached
+role is forced by membership and `roles` closes decidably.  A row with two
+permitted roles could not use this form. -/
+
+/-- A concrete exact invocation whose walk is routed from the program entry to
+a row's frozen source path attains that row, at whatever role its
+`permittedRoles` singleton names. -/
+theorem attainable_of_entryRoute {sevm : Sevm} {pre : Devm} {ca : Adr}
+    {row : RuntimePersistentWrite} {expected : InvocationRole}
+    {path : Prog.SourcePath}
+    (owner : sevm.currentTarget = ca)
+    (codeAddress : sevm.codeAddress = some ca)
+    (pin : ∀ {r : RuntimePersistentWrite} {site : Prog.SourceSite},
+      r.sourceSite? officialParams = some site → site.path = path → r = row)
+    (roles : ∀ r ∈ row.permittedRoles, r = expected)
+    (run : ∃ post,
+      Prog.RunCompiledTo sevm pre (runtime officialParams) (.ok post) ∧
+        some sevm.code.toList = Prog.compile (runtime officialParams))
+    (route : ∀ (devm post : Devm)
+      (h : Func.RunCompiledTo
+        ((runtime officialParams).main :: (runtime officialParams).aux)
+        sevm devm (runtime officialParams).main (.ok post)),
+      Func.RunCompiledTo.RouteTo ⟨0, []⟩ h path (.reg .sstore)) :
+    Attainable officialParams row expected := by
+  obtain ⟨post, hrun, hcompile⟩ := run
+  obtain ⟨mid, hburn, hwalk⟩ := hrun
+  have hroute := route mid post hwalk
+  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
+    sameFrame⟩ :=
+    Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
+  have invocation :
+      (⟨0, sevm, pre, .ok post, exc⟩ : Exec.Deriv).exactInvocation
+        (runtime officialParams) ca ca :=
+    ⟨rfl, owner, codeAddress, hcompile⟩
+  have instructionEq : occurrence.instruction = .reg .sstore :=
+    hinstr.trans hinstrTarget
+  obtain ⟨reached, rowSite, _rowMem, found, _classified, rowSitePc, _rowInstr,
+    _unique, role, rolePermitted, authority⟩ :=
+    Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot occurrence
+      instructionEq (Exec.mem_rawFrameRoots_self exc) invocation sameFrame
+  have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
+    unfold runtimePersistentSourceSites
+    rw [List.mem_filter]
+    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
+  have siteEq : rowSite = site :=
+    runtimePersistentSourceSite_eq_of_pc
+      (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
+      routedMember (rowSitePc.trans hpc)
+  have rowEq : reached = row := pin found (siteEq ▸ hpath)
+  subst rowEq
+  have roleEq : role = expected := roles role rolePermitted
+  subst roleEq
+  exact ⟨ca, ⟨0, sevm, pre, .ok post, exc⟩, ⟨0, sevm, pre, .ok post, exc⟩,
+    occurrence, rowSite, instructionEq, Exec.mem_rawFrameRoots_self exc,
+    invocation, sameFrame, found, rowSitePc, authority⟩
+
+/-! ## The `setPauseDuration.config` row, at its own world
+
+An admin `setPauseDuration(1814400)` call on an otherwise untouched deployment.
+
+The walk is one `func_run`: `setPauseDuration` is `setHeartbeatInterval`'s
+exact structural twin, so the body reuses that family's measured charges (two
+`MSTORE` expansions at `3`, a `LOG1` at `1262`, a warm zero-to-nonzero `SSTORE`
+at `20000`) without restating any of its effects.  Effects are not restated
+because attainment does not need them: an `Attainable` witness consumes `.ok`
+and the route, and says nothing about what the write left behind. -/
+
+/-! ### The world -/
+
+/-- World state for the configuration call: empty storage, so the
+configuration cell reads zero and the store is priced as a set. -/
+def configWorldState : State := breakerState Stor.empty
 
 /-- The one warm accessed key at message entry: the configuration slot the
 body both reads and writes.  Warm at entry is a choice, not a fact about the
@@ -2157,27 +2314,8 @@ def configWorldKeys : Std.HashSet (Adr × B256) :=
 /-- The concrete admin `setPauseDuration(1814400)` call.  The gas is the exact
 inclusive charge: `setPauseDurationDispatchGas` plus the body's `21498`. -/
 def configWorldMsg : Msg :=
-  { (default : Msg) with
-    benv :=
-      { (default : Benv) with
-        state := configWorldState
-        stat :=
-          { (default : BenvStat) with origState := configWorldState } }
-    tenv := default
-    caller := configWorldAdmin
-    target := some configWorldOwner
-    currentTarget := configWorldOwner
-    gas := 21649
-    value := 0
-    data := setPauseDurationCalldata configWorldDuration
-    codeAddress := some configWorldOwner
-    code := configWorldCode
-    depth := 0
-    shouldTransferValue := false
-    isStatic := false
-    accessedAddresses := .emptyWithCapacity
-    accessedStorageKeys := configWorldKeys
-    disablePrecompiles := false }
+  breakerMsg configWorldAdmin Stor.empty 0
+    (setPauseDurationCalldata configWorldDuration) configWorldKeys 21649
 
 def configWorldSevm : Sevm := initSevm configWorldMsg
 
@@ -2201,14 +2339,10 @@ theorem configWorld_admin :
 theorem configWorld_data :
     configWorldSevm.data = setPauseDurationCalldata configWorldDuration := rfl
 
-private theorem configWorld_byteArray_ofList_toList (bs : Bytes) :
-    (ByteArray.mk bs.toArray).toList = bs := by
-  rw [ByteArray.toList_eq_toList_data]
-
 theorem configWorld_codeBytes :
-    configWorldSevm.code.toList = lidoCircuitBreakerCode officialParams := by
-  simpa only [configWorldSevm, configWorldMsg, initSevm, configWorldCode] using
-    configWorld_byteArray_ofList_toList (lidoCircuitBreakerCode officialParams)
+    configWorldSevm.code.toList = lidoCircuitBreakerCode officialParams :=
+  breakerMsg_codeBytes configWorldAdmin Stor.empty 0
+    (setPauseDurationCalldata configWorldDuration) configWorldKeys 21649
 
 theorem configWorld_dataLength :
     configWorldSevm.data.length.toB256 = 36 := by
@@ -2244,14 +2378,14 @@ theorem configWorld_old :
     configWorldPre.getStorVal configWorldSevm.currentTarget
       pauseDurationSlot = 0 := by
   change (configWorldState.get configWorldOwner).stor.get pauseDurationSlot = 0
-  rw [configWorldState, State.get_set_self]
+  rw [configWorldState, breakerState_stor]
   rfl
 
 theorem configWorld_orig :
     getOrigStorVal configWorldSevm configWorldSevm.currentTarget
       pauseDurationSlot = 0 := by
   change (configWorldState.get configWorldOwner).stor.get pauseDurationSlot = 0
-  rw [configWorldState, State.get_set_self]
+  rw [configWorldState, breakerState_stor]
   rfl
 
 /-- The configured duration clears both immutable bounds inclusively and is
@@ -2405,19 +2539,6 @@ theorem configWorld_run :
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
 
-/-- The configuration world is an exact runtime invocation. -/
-theorem configWorld_exactInvocation {post : Devm}
-    (exc : Exec 0 configWorldSevm configWorldPre (.ok post)) :
-    (⟨0, configWorldSevm, configWorldPre, .ok post, exc⟩ :
-      Exec.Deriv).exactInvocation (runtime officialParams) configWorldOwner
-      configWorldOwner := by
-  refine ⟨rfl, configWorld_currentTarget, ?_, ?_⟩
-  · show configWorldSevm.codeAddress = some configWorldOwner
-    rw [configWorld_codeAddress, configWorld_currentTarget]
-  · show some configWorldSevm.code.toList =
-      Prog.compile (runtime officialParams)
-    rw [configWorld_codeBytes, lidoCircuitBreakerCode_compile]
-
 /-! ### The route
 
 Ten crossings, none of them priced.  The five dispatcher crossings read the
@@ -2560,46 +2681,784 @@ theorem setPauseDurationConfig_index_pin :
 
 Unconditional, and at a *different* world from the six above:
 `attainable_of_route` is tied to the fresh registration walk, whose calldata
-selects `registerPauser`, so this row cannot borrow it and the tail is redone
-here against `configWorld_run`.  The redone tail is also shorter — this row's
-`permittedRoles` is the singleton `[.adminConfiguration]`, so the reached role
-is forced by membership alone and no `.pauseRegistry` refutation is needed. -/
+selects `registerPauser`, so this row cannot borrow it.  What it borrows
+instead is `attainable_of_entryRoute`, which is that tail with the world
+abstracted away; the row-specific input is one index pin and one decidable
+membership fact, because this row's `permittedRoles` is the singleton
+`[.adminConfiguration]`. -/
 theorem attainable_setPauseDurationConfig_adminConfiguration :
     Attainable officialParams .setPauseDurationConfig .adminConfiguration := by
-  obtain ⟨post, hrun, hcompile⟩ := configWorld_run
-  obtain ⟨mid, hburn, hwalk⟩ := hrun
-  have hroute := runtimeMain_routeTo_setPauseDurationConfig officialParams
-    hwalk configWorld_selector
-  obtain ⟨exc, occurrence, site, hpath, hmem, hpc, hinstr, hinstrTarget,
-    sameFrame⟩ :=
-    Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
-  have invocation := configWorld_exactInvocation exc
-  have instructionEq : occurrence.instruction = .reg .sstore :=
-    hinstr.trans hinstrTarget
-  obtain ⟨reached, rowSite, _rowMem, found, _classified, rowSitePc, _rowInstr,
-    _unique, role, rolePermitted, authority⟩ :=
-    Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot occurrence
-      instructionEq (Exec.mem_rawFrameRoots_self exc) invocation sameFrame
-  have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
-    unfold runtimePersistentSourceSites
-    rw [List.mem_filter]
-    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
-  have siteEq : rowSite = site :=
-    runtimePersistentSourceSite_eq_of_pc
-      (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
-      routedMember (rowSitePc.trans hpc)
-  have rowEq : reached = .setPauseDurationConfig :=
-    RuntimePersistentWrite.eq_of_path setPauseDurationConfig_index_pin found
-      (siteEq ▸ hpath)
-  subst rowEq
-  have roleEq : role = .adminConfiguration := by
-    simpa [RuntimePersistentWrite.permittedRoles] using rolePermitted
-  subst roleEq
-  exact ⟨configWorldOwner,
-    ⟨0, configWorldSevm, configWorldPre, .ok post, exc⟩,
-    ⟨0, configWorldSevm, configWorldPre, .ok post, exc⟩, occurrence, rowSite,
-    instructionEq, Exec.mem_rawFrameRoots_self exc, invocation, sameFrame,
-    found, rowSitePc, authority⟩
+  refine attainable_of_entryRoute (ca := configWorldOwner)
+    configWorld_currentTarget ?_
+    (fun found pathEq =>
+      RuntimePersistentWrite.eq_of_path setPauseDurationConfig_index_pin found
+        pathEq)
+    (by decide) configWorld_run
+    (fun _devm _post h =>
+      runtimeMain_routeTo_setPauseDurationConfig officialParams h
+        configWorld_selector)
+  rw [configWorld_codeAddress, configWorld_currentTarget]
+
+/-! ## The `setHeartbeatInterval.config` row, at its own world
+
+Inventory index `1`, and the cheapest leg in the module.  `setHeartbeatInterval`
+is `setPauseDuration`'s exact structural twin — the same `requireStaticArgs 1`,
+the same `onlyAdmin`, the same pair of configured-bound guards with
+`.call`-to-error siblings, the same store-and-log tail — so the guard half of
+its route is `setPauseDuration`'s with four names changed.
+
+Nothing is restated for the walk itself.  `Blanc/LidoCircuitBreakerAccess.lean`
+already carries this endpoint's exact dispatcher bridge and body theorems, and
+that module sits in this one's import closure, so `intervalWorld_run` is one
+application of `setHeartbeatInterval_runCompiledTo_zero_of_inclusive` rather
+than a second `func_run` pair.  That is the whole reason index `0` needed its
+own `setPauseDuration_body_runCompiledTo` and this row needs nothing: the AT3
+family covers the interval setter and has no pause-duration counterpart.
+
+The dispatcher half is **not** shared, because the two selectors land in
+different chains of the 5/4/4/4 hybrid.  `setPauseDuration` is entry 16 of 17
+and sits third in the fourth chain; `setHeartbeatInterval` is entry 9 and sits
+**last** in the second.  Two consequences, both visible in the path: the top
+pivot is taken jumped here and fall-through there, and a chain's last entry
+compares without a `DUP` and enters its body without a `POP`, so this route's
+matching crossing contributes `replicate 2 .rest` where `setPauseDuration`'s
+contributes `replicate 3 .rest`, and its entry line is three instructions
+rather than four.  Sixty-six steps against sixty-four. -/
+
+/-! ### The world -/
+
+/-- The configured heartbeat interval: `officialConstructorArgs`' own initial
+value, which sits strictly inside the immutable `[2592000, 94608000]` bounds. -/
+def intervalWorldInterval : B256 := 31536000
+
+/-- The one warm accessed key at message entry: the configuration slot the body
+both reads and writes.  Warm at entry is a choice, not a fact about the
+contract, exactly as at the pause-duration world. -/
+def intervalWorldKeys : Std.HashSet (Adr × B256) :=
+  Std.HashSet.emptyWithCapacity.insert
+    (configWorldOwner, heartbeatIntervalSlot)
+
+/-- The concrete admin `setHeartbeatInterval(31536000)` call.  The gas is the
+exact inclusive charge: `setHeartbeatIntervalDispatchGas` plus
+`setHeartbeatIntervalBodyGasWarmSet`, which are `169` and `21498`. -/
+def intervalWorldMsg : Msg :=
+  breakerMsg configWorldAdmin Stor.empty 0
+    (setHeartbeatIntervalCalldata intervalWorldInterval) intervalWorldKeys
+    21667
+
+def intervalWorldSevm : Sevm := initSevm intervalWorldMsg
+
+def intervalWorldPre : Devm := initDevm intervalWorldMsg
+
+/-! ### Frame, calldata and storage facts -/
+
+theorem intervalWorld_currentTarget :
+    intervalWorldSevm.currentTarget = configWorldOwner := rfl
+
+theorem intervalWorld_value : intervalWorldSevm.value = 0 := rfl
+
+theorem intervalWorld_static : intervalWorldSevm.isStatic = false := rfl
+
+theorem intervalWorld_codeAddress :
+    intervalWorldSevm.codeAddress = some intervalWorldSevm.currentTarget := rfl
+
+theorem intervalWorld_admin :
+    intervalWorldSevm.caller.toB256 = officialParams.admin := rfl
+
+theorem intervalWorld_data :
+    intervalWorldSevm.data =
+      setHeartbeatIntervalCalldata intervalWorldInterval := rfl
+
+theorem intervalWorld_codeBytes :
+    intervalWorldSevm.code.toList = lidoCircuitBreakerCode officialParams :=
+  breakerMsg_codeBytes configWorldAdmin Stor.empty 0
+    (setHeartbeatIntervalCalldata intervalWorldInterval) intervalWorldKeys
+    21667
+
+theorem intervalWorld_dataLength :
+    intervalWorldSevm.data.length.toB256 = 36 := by
+  rw [intervalWorld_data]
+  simp only [setHeartbeatIntervalCalldata, List.length_append,
+    abiSelectorBytes_length, B256.length_toBytes]
+  decide +kernel
+
+/-- The selector really is `setHeartbeatInterval(uint256)`'s.  One kernel
+evaluation at a fully concrete message, as at the pause-duration world. -/
+theorem intervalWorld_selector :
+    Sevm.selector intervalWorldSevm =
+      selector "setHeartbeatInterval" [.uint256] := by
+  decide +kernel
+
+theorem intervalWorld_arg :
+    Sevm.dataWord intervalWorldSevm (32 * 0 + 4) = intervalWorldInterval := by
+  apply dataWord_of_append
+    (pre := abiSelectorBytes (selector "setHeartbeatInterval" [.uint256]))
+    (w := intervalWorldInterval) (post := [])
+  · rw [abiSelectorBytes_length]
+    rfl
+  · simpa [setHeartbeatIntervalCalldata] using intervalWorld_data
+
+theorem intervalWorld_warm :
+    (⟨intervalWorldSevm.currentTarget, heartbeatIntervalSlot⟩ : Adr × B256) ∈
+      intervalWorldPre.accessedStorageKeys :=
+  Std.HashSet.mem_insert_self
+
+theorem intervalWorld_old :
+    intervalWorldPre.getStorVal intervalWorldSevm.currentTarget
+      heartbeatIntervalSlot = 0 := by
+  change ((breakerState Stor.empty).get configWorldOwner).stor.get
+    heartbeatIntervalSlot = 0
+  rw [breakerState_stor]
+  rfl
+
+theorem intervalWorld_orig :
+    getOrigStorVal intervalWorldSevm intervalWorldSevm.currentTarget
+      heartbeatIntervalSlot = 0 := by
+  change ((breakerState Stor.empty).get configWorldOwner).stor.get
+    heartbeatIntervalSlot = 0
+  rw [breakerState_stor]
+  rfl
+
+/-- The configured interval clears both immutable bounds inclusively and is
+nonzero, so the two guard branches fall through and the store is priced as a
+set rather than an update. -/
+theorem intervalWorld_bounds :
+    officialParams.minHeartbeatInterval ≤ intervalWorldInterval ∧
+      intervalWorldInterval ≤ officialParams.maxHeartbeatInterval ∧
+      intervalWorldInterval ≠ 0 :=
+  ⟨by decide, by decide, by decide⟩
+
+/-- The concrete configuration call runs, gas-exactly, on the production
+runtime.  Everything here comes from the landed AT3 family; this world supplies
+only its premises. -/
+theorem intervalWorld_run :
+    ∃ post,
+      Prog.RunCompiledTo intervalWorldSevm intervalWorldPre
+        (runtime officialParams) (.ok post) ∧
+      some intervalWorldSevm.code.toList =
+        Prog.compile (runtime officialParams) := by
+  obtain ⟨post, hrun, _hgas, _hstore, _hlogs, _hexpiries, hcompile⟩ :=
+    setHeartbeatInterval_runCompiledTo_zero_of_inclusive officialParams
+      intervalWorldSevm intervalWorldPre intervalWorldInterval 0
+      intervalWorld_dataLength intervalWorld_value intervalWorld_selector
+      intervalWorld_codeAddress intervalWorld_codeBytes intervalWorld_admin
+      intervalWorld_arg intervalWorld_bounds.1 intervalWorld_bounds.2.1
+      intervalWorld_old intervalWorld_orig intervalWorld_warm
+      intervalWorld_static intervalWorld_bounds.2.2
+  have hentry :
+      intervalWorldPre.setMach ⟨[], Mem.empty,
+        0 + setHeartbeatIntervalDispatchGas +
+          setHeartbeatIntervalBodyGasWarmSet⟩ = intervalWorldPre := rfl
+  rw [hentry] at hrun
+  exact ⟨post, hrun, hcompile⟩
+
+/-! ### The route
+
+Eleven crossings, none of them priced.  Six read the calldata selector off the
+stack — one more than the pause-duration route, because the second chain is
+entered one pivot deeper — and the remaining five are the guard cascade, each
+settled by a certified-reverting sibling. -/
+
+/-- `setHeartbeatInterval`'s dispatched entry: `requireStaticArgs 1`'s guard
+line, with no leading `POP`.  This is the last-entry difference — the matched
+body of a chain's final entry is entered directly, because that entry's
+comparison already consumed the selector. -/
+def setHeartbeatIntervalEntryTest : Line :=
+  [Ninst.pushB256 (Nat.toB256 (4 + 32 * 1)), Ninst.calldatasize, Ninst.lt]
+
+/-- The configured-minimum guard line. -/
+def heartbeatIntervalMinTest (dp : DeployParams) : Line :=
+  [pushDeployWord dp.minHeartbeatInterval] ++ arg 0 ++ [Ninst.lt]
+
+/-- The configured-maximum guard line. -/
+def heartbeatIntervalMaxTest (dp : DeployParams) : Line :=
+  [pushDeployWord dp.maxHeartbeatInterval] ++ arg 0 ++ [Ninst.gt]
+
+/-- From the last guard to the configuration `SSTORE`: the old-value read, the
+two staged event words, the `LOG1` and the new value. -/
+def setHeartbeatIntervalConfigPrefix : Line :=
+  [Ninst.pushB256 heartbeatIntervalSlot, Ninst.sload] ++ mstoreAt 0 ++
+    arg 0 ++ mstoreAt 1 ++
+    [Ninst.pushB256 heartbeatIntervalUpdatedEvent] ++
+    logWith 0 0 2 ++ arg 0 ++ [Ninst.pushB256 heartbeatIntervalSlot]
+
+/-- Structural source position of the `setHeartbeatInterval.config` `SSTORE`:
+inventory index `1`, source function `0`, sixty-six steps.  Two more than the
+pause-duration path despite one fewer instruction in the entry line, because
+the second chain sits one pivot deeper than the fourth. -/
+def setHeartbeatIntervalConfigPath : Prog.SourcePath :=
+  ⟨0,
+    List.replicate 5 .rest ++ [.branchLeft] ++
+      List.replicate 7 .rest ++ [.branchRight] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 2 .rest ++ [.branchRight] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchRight] ++
+      List.replicate 4 .rest ++ [.branchLeft] ++
+      List.replicate 4 .rest ++ [.branchLeft] ++
+      List.replicate 15 .rest⟩
+
+set_option maxRecDepth 16384 in
+/-- The complete route from program entry to the `setHeartbeatInterval.config`
+`SSTORE`, across all eleven branches.  Only the calldata selector is an
+execution premise, exactly as on the pause-duration route.
+
+The final selector comparison is the chain's last, so it is crossed with
+`routeTo_branchRight` rather than the `_frame` form: nothing after it reads the
+selector, because nothing after it has the selector. -/
+theorem runtimeMain_routeTo_setHeartbeatIntervalConfig (dp : DeployParams)
+    {sevm : Sevm} {devm post : Devm}
+    (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
+      (runtime dp).main (.ok post))
+    (selectorEq :
+      Sevm.selector sevm = selector "setHeartbeatInterval" [.uint256]) :
+    Func.RunCompiledTo.RouteTo ⟨0, []⟩ h setHeartbeatIntervalConfigPath
+      (.reg .sstore) := by
+  refine routeTo_line runtimeMainEntryPrefix h (fun _entry _run tail => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail (fuel := 4) (by rfl)
+    (fun _body arm => ?_)
+  refine routeTo_line fsig arm (fun s0 run0 tail0 => ?_)
+  have p0 : Sevm.selector sevm :: [] <<+ s0.stack :=
+    prefix_of_fsig nil_pref run0
+  rw [selectorEq] at p0
+  refine routeTo_line (splitTest (selector "pause" [.address])) tail0
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_splitTest p0 run1
+  refine routeTo_branchRight_frame tail1
+    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _s2 _w2 hpop2 tail2 => ?_)
+  have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
+  refine routeTo_line (splitTest (selector "getPauser" [.address])) tail2
+    (fun _s3 run3 tail3 => ?_)
+  have p3 := prefix_of_splitTest p2 run3
+  refine routeTo_branchLeft_frame tail3
+    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _s4 hpop4 tail4 => ?_)
+  have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
+  refine routeTo_line (linearTest (selector "getPauser" [.address])) tail4
+    (fun _s5 run5 tail5 => ?_)
+  have p5 := prefix_of_linearTest p4 run5
+  refine routeTo_branchLeft_frame tail5
+    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
+    (fun _s6 hpop6 tail6 => ?_)
+  have p6 := tail_of_stack_prefix p5 ⟨_, hpop6.stack⟩
+  refine routeTo_line (linearTest (selector "getPausables" [])) tail6
+    (fun _s7 run7 tail7 => ?_)
+  have p7 := prefix_of_linearTest p6 run7
+  refine routeTo_branchLeft_frame tail7
+    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; decide)
+    (fun _s8 hpop8 tail8 => ?_)
+  have p8 := tail_of_stack_prefix p7 ⟨_, hpop8.stack⟩
+  refine routeTo_line (linearTest (selector "heartbeatInterval" [])) tail8
+    (fun _s9 run9 tail9 => ?_)
+  have p9 := prefix_of_linearTest p8 run9
+  refine routeTo_branchLeft_frame tail9
+    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; decide)
+    (fun _s10 hpop10 tail10 => ?_)
+  have p10 := tail_of_stack_prefix p9 ⟨_, hpop10.stack⟩
+  refine routeTo_line
+    (lastLinearTest (selector "setHeartbeatInterval" [.uint256])) tail10
+    (fun _s11 run11 tail11 => ?_)
+  have p11 := prefix_of_lastLinearTest p10 run11
+  refine routeTo_branchRight tail11
+    (fun _w _rest hs => by rw [head_of_stack_prefix p11 hs]; decide)
+    (fun _s12 arm12 => ?_)
+  refine routeTo_line setHeartbeatIntervalEntryTest arm12
+    (fun _s13 _run13 tail13 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail13 (fuel := 4) (by rfl)
+    (fun _s14 arm14 => ?_)
+  refine routeTo_line (adminTest dp) arm14 (fun _s15 _run15 tail15 => ?_)
+  refine routeTo_branchRight_of_leftRevertsOk tail15 (fuel := 8) (by rfl)
+    (fun _s16 arm16 => ?_)
+  refine routeTo_line (heartbeatIntervalMinTest dp) arm16
+    (fun _s17 _run17 tail17 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail17 (fuel := 8) (by rfl)
+    (fun _s18 arm18 => ?_)
+  refine routeTo_line (heartbeatIntervalMaxTest dp) arm18
+    (fun _s19 _run19 tail19 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail19 (fuel := 8) (by rfl)
+    (fun _s20 arm20 => ?_)
+  refine routeTo_line setHeartbeatIntervalConfigPrefix arm20
+    (fun _s21 _run21 write => ?_)
+  exact routeTo_head write setHeartbeatIntervalConfigPath
+
+/-! ### Pinning the row, and the witness -/
+
+set_option maxRecDepth 20000 in
+/-- Only inventory index `1` — `.setHeartbeatIntervalConfig` — nominates a site
+whose source path is `setHeartbeatIntervalConfigPath`. -/
+theorem setHeartbeatIntervalConfig_index_pin :
+    ∀ index ∈ List.range 20,
+      ((runtimePersistentSourceSites officialParams)[index]?.map
+          (fun s => s.path) = some setHeartbeatIntervalConfigPath) →
+        index = 1 := by
+  decide +kernel
+
+/-- The `setHeartbeatInterval.config` row is attained with the
+`.adminConfiguration` role.
+
+Unconditional.  Like the pause-duration row it consumes
+`attainable_of_entryRoute`, and like it its `permittedRoles` is the singleton
+`[.adminConfiguration]`, so the reached role is forced by membership and the
+two rows are exact rather than merely sound. -/
+theorem attainable_setHeartbeatIntervalConfig_adminConfiguration :
+    Attainable officialParams .setHeartbeatIntervalConfig
+      .adminConfiguration := by
+  refine attainable_of_entryRoute (ca := configWorldOwner)
+    intervalWorld_currentTarget ?_
+    (fun found pathEq =>
+      RuntimePersistentWrite.eq_of_path setHeartbeatIntervalConfig_index_pin
+        found pathEq)
+    (by decide) intervalWorld_run
+    (fun _devm _post h =>
+      runtimeMain_routeTo_setHeartbeatIntervalConfig officialParams h
+        intervalWorld_selector)
+  rw [intervalWorld_codeAddress, intervalWorld_currentTarget]
+
+/-! ## The `heartbeat.expiry` row, at its own world
+
+Inventory index `2`, and the module's only witness at a role that is neither
+`.admin*` nor reached from a configuration setter.  `RuntimeWriteAuthority`'s
+`.heartbeatExpiry` constructor demands two entry facts — the caller's count
+slot is nonzero, and the caller is *strictly* live at entry — so the world is
+the first here with non-empty deployed storage: a registered pauser with a
+live expiry, at a deployment carrying a configured heartbeat interval.
+
+Both facts come back out of the derivation rather than being asserted: the
+authority payload is produced by
+`Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot`, so this leg never
+constructs a `RuntimeWriteAuthority` and never restates its fields.  What the
+world supplies is what the *body walk* consumes, and
+`Blanc/LidoCircuitBreakerAccess.lean` already owns that walk exactly as it owns
+the interval setter's: `heartbeat_runCompiledTo_of_checkedExtension` takes the
+registered/live/interval facts and the checked-extension arithmetic and returns
+the gas-exact successful run.
+
+The route is again unpriced past the dispatcher.  All three body crossings —
+the registered-caller test, the strict-liveness test and
+`checkedHeartbeatExpiry`'s overflow test — have a sibling arm that is a `.call`
+to a `runtimeError` or to `arithmeticPanic`, so the successful outcome settles
+them without the storage or the timestamp appearing anywhere in the route.
+Note what that means: the route does *not* prove the caller is a live pauser.
+The body walk does, and the authority theorem re-derives it at the write. -/
+
+/-! ### The world -/
+
+/-- The registered pauser making the call, as an address. -/
+def heartbeatWorldCaller : Adr := Nat.toAdr 9
+
+/-- The same pauser as a storage-key payload. -/
+def heartbeatWorldPauser : B256 := 9
+
+/-- The pauser's assignment count.  Only its being nonzero is load-bearing. -/
+def heartbeatWorldCount : B256 := 1
+
+/-- Block timestamp at the heartbeat. -/
+def heartbeatWorldTime : B256 := 10
+
+/-- The pauser's expiry at entry: nonzero and strictly after the timestamp, so
+the caller is live and the guard falls the right way. -/
+def heartbeatWorldOldExpiry : B256 := 100
+
+/-- The deployment's configured heartbeat interval. -/
+def heartbeatWorldInterval : B256 := 2592000
+
+/-- The expiry the heartbeat installs, `time + interval` computed without
+overflow. -/
+def heartbeatWorldExpiry : B256 := 2592010
+
+/-- The deployed account storage: the configured interval, plus one registered
+and live pauser. -/
+def heartbeatWorldStor : Stor :=
+  ((Stor.empty.set heartbeatIntervalSlot heartbeatWorldInterval).set
+    (countSlot heartbeatWorldPauser) heartbeatWorldCount).set
+    (expirySlot heartbeatWorldPauser) heartbeatWorldOldExpiry
+
+/-- The three warm accessed keys at message entry: the two the guards read and
+the interval the extension reads.  Warm at entry is a choice, not a fact about
+the contract; it fixes the walk on the AT3 family's warm-update charge. -/
+def heartbeatWorldKeys : Std.HashSet (Adr × B256) :=
+  ((Std.HashSet.emptyWithCapacity.insert
+    (configWorldOwner, heartbeatIntervalSlot)).insert
+    (configWorldOwner, countSlot heartbeatWorldPauser)).insert
+    (configWorldOwner, expirySlot heartbeatWorldPauser)
+
+/-- The concrete registered-pauser `heartbeat()` call.  The gas is the exact
+inclusive charge: `heartbeatDispatchGas` plus
+`heartbeatBodySuccessGasWarmUpdate`, which are `192` and `4693`. -/
+def heartbeatWorldMsg : Msg :=
+  breakerMsg heartbeatWorldCaller heartbeatWorldStor heartbeatWorldTime
+    heartbeatCalldata heartbeatWorldKeys 4885
+
+def heartbeatWorldSevm : Sevm := initSevm heartbeatWorldMsg
+
+def heartbeatWorldPre : Devm := initDevm heartbeatWorldMsg
+
+/-! ### Slot separation
+
+Three slots, three regions, all payloads below `2 ^ 252`, so
+`slot_ne_of_region_ne` separates any two of them by region alone.  This is the
+only place in the module that needs storage-key separation at all — the two
+configuration worlds write one slot each. -/
+
+private theorem heartbeatWorld_payload_one : (1 : B256).toNat < 2 ^ 252 := by
+  change (1 : Nat) < 2 ^ 252
+  norm_num
+
+private theorem heartbeatWorld_payload_pauser :
+    heartbeatWorldPauser.toNat < 2 ^ 252 := by
+  unfold heartbeatWorldPauser
+  change (9 : Nat) < 2 ^ 252
+  norm_num
+
+private theorem heartbeatWorld_expiry_ne_count :
+    expirySlot heartbeatWorldPauser ≠ countSlot heartbeatWorldPauser := by
+  simpa only [expirySlot, countSlot] using
+    slot_ne_of_region_ne (leftRegion := expiryRegion)
+      (rightRegion := countRegion) (left := heartbeatWorldPauser)
+      (right := heartbeatWorldPauser)
+      (by norm_num [expiryRegion]) (by norm_num [countRegion])
+      heartbeatWorld_payload_pauser heartbeatWorld_payload_pauser
+      (by norm_num [expiryRegion, countRegion])
+
+private theorem heartbeatWorld_expiry_ne_interval :
+    expirySlot heartbeatWorldPauser ≠ heartbeatIntervalSlot := by
+  simpa only [expirySlot, heartbeatIntervalSlot] using
+    slot_ne_of_region_ne (leftRegion := expiryRegion)
+      (rightRegion := configRegion) (left := heartbeatWorldPauser)
+      (right := (1 : B256))
+      (by norm_num [expiryRegion]) (by norm_num [configRegion])
+      heartbeatWorld_payload_pauser heartbeatWorld_payload_one
+      (by norm_num [expiryRegion, configRegion])
+
+private theorem heartbeatWorld_count_ne_interval :
+    countSlot heartbeatWorldPauser ≠ heartbeatIntervalSlot := by
+  simpa only [countSlot, heartbeatIntervalSlot] using
+    slot_ne_of_region_ne (leftRegion := countRegion)
+      (rightRegion := configRegion) (left := heartbeatWorldPauser)
+      (right := (1 : B256))
+      (by norm_num [countRegion]) (by norm_num [configRegion])
+      heartbeatWorld_payload_pauser heartbeatWorld_payload_one
+      (by norm_num [countRegion, configRegion])
+
+/-! ### Frame, calldata and storage facts -/
+
+theorem heartbeatWorld_currentTarget :
+    heartbeatWorldSevm.currentTarget = configWorldOwner := rfl
+
+theorem heartbeatWorld_value : heartbeatWorldSevm.value = 0 := rfl
+
+theorem heartbeatWorld_static : heartbeatWorldSevm.isStatic = false := rfl
+
+theorem heartbeatWorld_codeAddress :
+    heartbeatWorldSevm.codeAddress = some heartbeatWorldSevm.currentTarget :=
+  rfl
+
+theorem heartbeatWorld_time :
+    heartbeatWorldSevm.benvStat.time = heartbeatWorldTime := rfl
+
+theorem heartbeatWorld_data : heartbeatWorldSevm.data = heartbeatCalldata := rfl
+
+theorem heartbeatWorld_codeBytes :
+    heartbeatWorldSevm.code.toList = lidoCircuitBreakerCode officialParams :=
+  breakerMsg_codeBytes heartbeatWorldCaller heartbeatWorldStor
+    heartbeatWorldTime heartbeatCalldata heartbeatWorldKeys 4885
+
+theorem heartbeatWorld_dataLength :
+    heartbeatWorldSevm.data.length.toB256 = 4 := by
+  rw [heartbeatWorld_data]
+  simp only [heartbeatCalldata, abiSelectorBytes_length]
+  decide +kernel
+
+/-- The selector really is `heartbeat()`'s.  One kernel evaluation at a fully
+concrete message. -/
+theorem heartbeatWorld_selector :
+    Sevm.selector heartbeatWorldSevm = selector "heartbeat" [] := by
+  decide +kernel
+
+theorem heartbeatWorld_count :
+    heartbeatWorldPre.getStorVal heartbeatWorldSevm.currentTarget
+      (countSlot heartbeatWorldSevm.caller.toB256) = heartbeatWorldCount := by
+  change ((breakerState heartbeatWorldStor).get configWorldOwner).stor.get
+    (countSlot heartbeatWorldPauser) = heartbeatWorldCount
+  rw [breakerState_stor, heartbeatWorldStor,
+    Stor.get_set_ne _ heartbeatWorld_expiry_ne_count, Stor.get_set_self]
+
+theorem heartbeatWorld_oldExpiry :
+    heartbeatWorldPre.getStorVal heartbeatWorldSevm.currentTarget
+      (expirySlot heartbeatWorldSevm.caller.toB256) =
+      heartbeatWorldOldExpiry := by
+  change ((breakerState heartbeatWorldStor).get configWorldOwner).stor.get
+    (expirySlot heartbeatWorldPauser) = heartbeatWorldOldExpiry
+  rw [breakerState_stor, heartbeatWorldStor, Stor.get_set_self]
+
+theorem heartbeatWorld_origExpiry :
+    getOrigStorVal heartbeatWorldSevm heartbeatWorldSevm.currentTarget
+      (expirySlot heartbeatWorldSevm.caller.toB256) =
+      heartbeatWorldOldExpiry := by
+  change ((breakerState heartbeatWorldStor).get configWorldOwner).stor.get
+    (expirySlot heartbeatWorldPauser) = heartbeatWorldOldExpiry
+  rw [breakerState_stor, heartbeatWorldStor, Stor.get_set_self]
+
+theorem heartbeatWorld_intervalValue :
+    heartbeatWorldPre.getStorVal heartbeatWorldSevm.currentTarget
+      heartbeatIntervalSlot = heartbeatWorldInterval := by
+  change ((breakerState heartbeatWorldStor).get configWorldOwner).stor.get
+    heartbeatIntervalSlot = heartbeatWorldInterval
+  rw [breakerState_stor, heartbeatWorldStor,
+    Stor.get_set_ne _ heartbeatWorld_expiry_ne_interval,
+    Stor.get_set_ne _ heartbeatWorld_count_ne_interval, Stor.get_set_self]
+
+theorem heartbeatWorld_warmCount :
+    (⟨heartbeatWorldSevm.currentTarget,
+      countSlot heartbeatWorldSevm.caller.toB256⟩ : Adr × B256) ∈
+      heartbeatWorldPre.accessedStorageKeys := by
+  change (configWorldOwner, countSlot heartbeatWorldPauser) ∈
+    heartbeatWorldKeys
+  rw [heartbeatWorldKeys]
+  exact Std.HashSet.mem_insert.mpr (Or.inr Std.HashSet.mem_insert_self)
+
+theorem heartbeatWorld_warmExpiry :
+    (⟨heartbeatWorldSevm.currentTarget,
+      expirySlot heartbeatWorldSevm.caller.toB256⟩ : Adr × B256) ∈
+      heartbeatWorldPre.accessedStorageKeys := by
+  change (configWorldOwner, expirySlot heartbeatWorldPauser) ∈
+    heartbeatWorldKeys
+  rw [heartbeatWorldKeys]
+  exact Std.HashSet.mem_insert_self
+
+theorem heartbeatWorld_warmInterval :
+    (⟨heartbeatWorldSevm.currentTarget, heartbeatIntervalSlot⟩ :
+      Adr × B256) ∈ heartbeatWorldPre.accessedStorageKeys := by
+  change (configWorldOwner, heartbeatIntervalSlot) ∈ heartbeatWorldKeys
+  rw [heartbeatWorldKeys]
+  exact Std.HashSet.mem_insert.mpr (Or.inr (Std.HashSet.mem_insert.mpr
+    (Or.inr Std.HashSet.mem_insert_self)))
+
+/-- The caller is strictly live at entry, its expiry is nonzero, and the
+heartbeat genuinely moves it. -/
+theorem heartbeatWorld_live :
+    heartbeatWorldTime < heartbeatWorldOldExpiry ∧
+      heartbeatWorldOldExpiry ≠ 0 ∧
+      heartbeatWorldOldExpiry ≠ heartbeatWorldExpiry ∧
+      heartbeatWorldCount ≠ 0 :=
+  ⟨by decide, by decide, by decide, by decide⟩
+
+/-- `time + interval` is exactly the installed expiry, and does not wrap. -/
+theorem heartbeatWorld_extension :
+    CheckedHeartbeatExtension heartbeatWorldTime heartbeatWorldInterval
+      heartbeatWorldExpiry :=
+  ⟨by decide, by decide⟩
+
+/-- The concrete heartbeat call runs, gas-exactly, on the production runtime.
+Everything here comes from the landed AT3 family; this world supplies only its
+premises. -/
+theorem heartbeatWorld_run :
+    ∃ post,
+      Prog.RunCompiledTo heartbeatWorldSevm heartbeatWorldPre
+        (runtime officialParams) (.ok post) ∧
+      some heartbeatWorldSevm.code.toList =
+        Prog.compile (runtime officialParams) := by
+  obtain ⟨post, hrun, _hgas, _hstore, _hlogs, hcompile⟩ :=
+    heartbeat_runCompiledTo_of_checkedExtension officialParams
+      heartbeatWorldSevm heartbeatWorldPre heartbeatWorldCount
+      heartbeatWorldOldExpiry heartbeatWorldTime heartbeatWorldInterval
+      heartbeatWorldExpiry 0
+      heartbeatWorld_dataLength heartbeatWorld_value heartbeatWorld_selector
+      heartbeatWorld_codeAddress heartbeatWorld_codeBytes heartbeatWorld_time
+      heartbeatWorld_count heartbeatWorld_live.2.2.2 heartbeatWorld_oldExpiry
+      heartbeatWorld_origExpiry heartbeatWorld_intervalValue
+      heartbeatWorld_warmCount heartbeatWorld_warmExpiry
+      heartbeatWorld_warmInterval heartbeatWorld_static heartbeatWorld_live.1
+      heartbeatWorld_live.2.1 heartbeatWorld_live.2.2.1
+      heartbeatWorld_extension
+  have hentry :
+      heartbeatWorldPre.setMach ⟨[], Mem.empty,
+        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate⟩ =
+        heartbeatWorldPre := rfl
+  rw [hentry] at hrun
+  exact ⟨post, hrun, hcompile⟩
+
+/-! ### The route
+
+Eleven crossings.  Six are the dispatcher's, read off the calldata selector;
+the remaining five — the entry guard and the three body guards, plus
+`checkedHeartbeatExpiry`'s overflow test — are settled by certified-reverting
+siblings.  `arithmeticPanic_revertsWithin` above is reused for the last of
+them; it is the one certificate on any route in this module that needs
+`decide +kernel`. -/
+
+/-- `heartbeat`'s registered-caller test: the caller's count slot, loaded and
+tested for zero. -/
+def heartbeatCountTest : Line :=
+  [Ninst.caller] ++ tagTop countRegion ++ [Ninst.sload, Ninst.iszero]
+
+/-- `heartbeat`'s strict-liveness test: the caller's expiry slot against the
+block timestamp.  The comparison is `timestamp < expiry`, so the successful arm
+is the *jumped* one. -/
+def heartbeatLiveTest : Line :=
+  [Ninst.caller] ++ tagTop expiryRegion ++
+    [Ninst.sload, Ninst.timestamp, Ninst.lt]
+
+/-- `checkedHeartbeatExpiry`'s whole line, from the timestamp to the Solidity
+0.8 overflow comparison. -/
+def checkedHeartbeatExpiryTest : Line :=
+  [Ninst.timestamp, Ninst.pushB256 heartbeatIntervalSlot, Ninst.sload,
+   Ninst.add, Ninst.dup 0, Ninst.timestamp, Ninst.swap 0, Ninst.lt]
+
+/-- From the overflow guard to the expiry `SSTORE`: the computed expiry is
+duplicated, staged for the event, and the caller's expiry key is built. -/
+def heartbeatExpiryStorePrefix : Line :=
+  [Ninst.dup 0] ++ mstoreAt 0 ++ [Ninst.caller] ++ tagTop expiryRegion
+
+/-- Structural source position of the `heartbeat.expiry` `SSTORE`: inventory
+index `2`, source function `0`, sixty-five steps. -/
+def heartbeatExpiryPath : Prog.SourcePath :=
+  ⟨0,
+    List.replicate 5 .rest ++ [.branchLeft] ++
+      List.replicate 7 .rest ++ [.branchRight] ++
+      List.replicate 3 .rest ++ [.branchRight] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 3 .rest ++ [.branchLeft] ++
+      List.replicate 2 .rest ++ [.branchRight] ++
+      List.replicate 5 .rest ++ [.branchLeft] ++
+      List.replicate 6 .rest ++ [.branchRight] ++
+      List.replicate 8 .rest ++ [.branchLeft] ++
+      List.replicate 6 .rest⟩
+
+set_option maxRecDepth 16384 in
+/-- The complete route from program entry to the `heartbeat.expiry` `SSTORE`,
+across all eleven branches.  Only the calldata selector is an execution
+premise: the registered-caller and strict-liveness facts this row's authority
+carries are *not* used here, because each of their guards has a
+certified-reverting sibling and a successful outcome already excludes it.
+
+Stated at `officialParams` where its two siblings are stated at an arbitrary
+`dp`, and the reason is `arithmeticPanic`.  Every other reverting sibling on
+every route in this module is certified `by rfl`, which reduces under a free
+deployment parameter; `arithmeticPanic` is `Func.revData` of a `Panic(0x11)`
+payload, whose certificate needs `decide +kernel` (see
+`arithmeticPanic_revertsWithin`), and `decide` refuses an expected type
+containing a free variable.  MEASURED, not assumed: the generic form was
+attempted and rejected with exactly that message.  Nothing needs the generic
+form — the witness instantiates at `officialParams` — so the premise is not
+carried as a hypothesis either. -/
+theorem runtimeMain_routeTo_heartbeatExpiry
+    {sevm : Sevm} {devm post : Devm}
+    (h : Func.RunCompiledTo ((runtime officialParams).main ::
+      (runtime officialParams).aux) sevm devm
+      (runtime officialParams).main (.ok post))
+    (selectorEq : Sevm.selector sevm = selector "heartbeat" []) :
+    Func.RunCompiledTo.RouteTo ⟨0, []⟩ h heartbeatExpiryPath
+      (.reg .sstore) := by
+  refine routeTo_line runtimeMainEntryPrefix h (fun _entry _run tail => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail (fuel := 4) (by rfl)
+    (fun _body arm => ?_)
+  refine routeTo_line fsig arm (fun s0 run0 tail0 => ?_)
+  have p0 : Sevm.selector sevm :: [] <<+ s0.stack :=
+    prefix_of_fsig nil_pref run0
+  rw [selectorEq] at p0
+  refine routeTo_line (splitTest (selector "pause" [.address])) tail0
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_splitTest p0 run1
+  refine routeTo_branchRight_frame tail1
+    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _s2 _w2 hpop2 tail2 => ?_)
+  have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
+  refine routeTo_line (splitTest (selector "getPauser" [.address])) tail2
+    (fun _s3 run3 tail3 => ?_)
+  have p3 := prefix_of_splitTest p2 run3
+  refine routeTo_branchRight_frame tail3
+    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _s4 _w4 hpop4 tail4 => ?_)
+  have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
+  refine routeTo_line (linearTest (selector "pauseDuration" [])) tail4
+    (fun _s5 run5 tail5 => ?_)
+  have p5 := prefix_of_linearTest p4 run5
+  refine routeTo_branchLeft_frame tail5
+    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
+    (fun _s6 hpop6 tail6 => ?_)
+  have p6 := tail_of_stack_prefix p5 ⟨_, hpop6.stack⟩
+  refine routeTo_line (linearTest (selector "MAX_PAUSE_DURATION" [])) tail6
+    (fun _s7 run7 tail7 => ?_)
+  have p7 := prefix_of_linearTest p6 run7
+  refine routeTo_branchLeft_frame tail7
+    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; decide)
+    (fun _s8 hpop8 tail8 => ?_)
+  have p8 := tail_of_stack_prefix p7 ⟨_, hpop8.stack⟩
+  refine routeTo_line (linearTest (selector "ADMIN" [])) tail8
+    (fun _s9 run9 tail9 => ?_)
+  have p9 := prefix_of_linearTest p8 run9
+  refine routeTo_branchLeft_frame tail9
+    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; decide)
+    (fun _s10 hpop10 tail10 => ?_)
+  have p10 := tail_of_stack_prefix p9 ⟨_, hpop10.stack⟩
+  refine routeTo_line
+    (linearTest (selector "registerPauser" [.address, .address])) tail10
+    (fun _s11 run11 tail11 => ?_)
+  have p11 := prefix_of_linearTest p10 run11
+  refine routeTo_branchLeft_frame tail11
+    (fun _w _rest hs => by rw [head_of_stack_prefix p11 hs]; decide)
+    (fun _s12 hpop12 tail12 => ?_)
+  have p12 := tail_of_stack_prefix p11 ⟨_, hpop12.stack⟩
+  refine routeTo_line (lastLinearTest (selector "heartbeat" [])) tail12
+    (fun _s13 run13 tail13 => ?_)
+  have p13 := prefix_of_lastLinearTest p12 run13
+  refine routeTo_branchRight tail13
+    (fun _w _rest hs => by rw [head_of_stack_prefix p13 hs]; decide)
+    (fun _s14 arm14 => ?_)
+  refine routeTo_line heartbeatCountTest arm14 (fun _s15 _run15 tail15 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail15 (fuel := 8) (by rfl)
+    (fun _s16 arm16 => ?_)
+  refine routeTo_line heartbeatLiveTest arm16 (fun _s17 _run17 tail17 => ?_)
+  refine routeTo_branchRight_of_leftRevertsOk tail17 (fuel := 8) (by rfl)
+    (fun _s18 arm18 => ?_)
+  refine routeTo_line checkedHeartbeatExpiryTest arm18
+    (fun _s19 _run19 tail19 => ?_)
+  refine routeTo_branchLeft_of_rightRevertsOk tail19 (fuel := 16)
+    arithmeticPanic_revertsWithin (fun _s20 arm20 => ?_)
+  refine routeTo_line heartbeatExpiryStorePrefix arm20
+    (fun _s21 _run21 write => ?_)
+  exact routeTo_head write heartbeatExpiryPath
+
+/-! ### Pinning the row, and the witness -/
+
+set_option maxRecDepth 20000 in
+/-- Only inventory index `2` — `.heartbeatExpiry` — nominates a site whose
+source path is `heartbeatExpiryPath`. -/
+theorem heartbeatExpiry_index_pin :
+    ∀ index ∈ List.range 20,
+      ((runtimePersistentSourceSites officialParams)[index]?.map
+          (fun s => s.path) = some heartbeatExpiryPath) →
+        index = 2 := by
+  decide +kernel
+
+/-- The `heartbeat.expiry` row is attained with the `.heartbeatExpiry` role.
+
+Unconditional.  Its `permittedRoles` is the singleton `[.heartbeatExpiry]`, so
+like the two configuration rows the reached role is forced by membership; and
+because the role is reached rather than merely permitted, that entry too is
+exact rather than a sound upper bound.
+
+What this does **not** say is worth stating.  `.heartbeatExpiry` and
+`.adminConfiguration` are the two roles whose `writeSite` pins agree — both
+live in the main function — so no refutation in this module separates them, and
+this witness settles only that the listed role is attained at its own row. -/
+theorem attainable_heartbeatExpiry_heartbeatExpiry :
+    Attainable officialParams .heartbeatExpiry .heartbeatExpiry := by
+  refine attainable_of_entryRoute (ca := configWorldOwner)
+    heartbeatWorld_currentTarget ?_
+    (fun found pathEq =>
+      RuntimePersistentWrite.eq_of_path heartbeatExpiry_index_pin found pathEq)
+    (by decide) heartbeatWorld_run
+    (fun _devm _post h =>
+      runtimeMain_routeTo_heartbeatExpiry h heartbeatWorld_selector)
+  rw [heartbeatWorld_codeAddress, heartbeatWorld_currentTarget]
 
 
 end Blanc.LidoCircuitBreaker

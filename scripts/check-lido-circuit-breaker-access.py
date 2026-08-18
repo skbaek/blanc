@@ -97,6 +97,13 @@ REQUIRED = (
     # invocation, and its permitted-role set shown exact rather than sound.
     "setPauseDurationConfig_admin_site_control",
     "setPauseDurationConfig_role_tightness_control",
+    "setHeartbeatIntervalConfig_admin_site_control",
+    "setHeartbeatIntervalConfig_role_tightness_control",
+    # The one control that exhibits a `.heartbeatExpiry` authority at all, so
+    # `admin_heartbeat_within_role_guard_strength_control`'s heartbeat conjunct
+    # is non-vacuous rather than true-because-unreachable.
+    "heartbeatExpiry_live_site_control",
+    "heartbeatExpiry_role_tightness_control",
     # AT8 asks for *each* admin/heartbeat/pause guard weakening to be rejected;
     # the pause control covers one of the three, this covers the other two.
     "admin_heartbeat_within_role_guard_strength_control",
@@ -403,6 +410,37 @@ ROLES = {
             "133ef1542d557a2778e459fa4d346174436df6cbbd4926dd31d8bd4e92360463",
         "setPauseDuration_dispatch_runCompiledTo":
             "b899ab2a93dc3b88ab00d37530c546d88545f688cb10241b2590ef60350cd96d",
+        # The shared witness tail.  Every main-function witness routes through
+        # it, so a weakening here is invisible in each witness's own header --
+        # which is exactly the blind spot `attainable_shape_control` covers for
+        # `Attainable` itself.
+        "attainable_of_entryRoute":
+            "e043cfd2d00a919420ed2b46a1033f06bd83f3cb2c2f6e7c222daef20d989de5",
+        "prefix_of_lastLinearTest":
+            "0d76807e9d0eba727a45a8e0e603f744034574aefe4400bcedcd3f85c8c024f1",
+        "breakerState_stor":
+            "6afa08b9b9387e42c9adb2162e2ce652ed084b14e4b8d9312913caaabf693885",
+        "breakerMsg_codeBytes":
+            "f61472e8f23473faa40dbe7aeade667b3c2cb5b1751baf11caf3dcec450bb16e",
+        # Row 1 -- `setPauseDuration`'s structural twin, one dispatcher pivot
+        # deeper.
+        "attainable_setHeartbeatIntervalConfig_adminConfiguration":
+            "ba9e20fa34a7dbeb1c2d83eb72ff7e260631c68944f44f2c4549c48c4f827687",
+        "runtimeMain_routeTo_setHeartbeatIntervalConfig":
+            "f378058ecb01ea9084e460502663b4b977fdc7e8d7709ca152e66a79144f54ed",
+        "setHeartbeatIntervalConfig_index_pin":
+            "4273b02a82a0d0c861f36b2146ae760100ff971de5e6f0c79642ec0c23c84c17",
+        "intervalWorld_run":
+            "8dfd1c053a0e6d894fd58d804a79f82bd5c3df4892ecd9895a56cdd6404b42f4",
+        # Row 2 -- the only witness at the `.heartbeatExpiry` role.
+        "attainable_heartbeatExpiry_heartbeatExpiry":
+            "4fbef29a1506c97b2efdd4341573b864ad3f579981883a8b6f4f8dafac369943",
+        "runtimeMain_routeTo_heartbeatExpiry":
+            "716c4635c53be00cbf618fc138e1feec6a58b5c421c726ace693a3d7cb4d6752",
+        "heartbeatExpiry_index_pin":
+            "ed70bd7e5ce821810e7970f8f1395bec188158711bd12528822fd326c1d36e83",
+        "heartbeatWorld_run":
+            "82bd70d34750714acf01a22898d74be39df85e36e0dfb6f42c770745ea844ddf",
         "attainable_setPauserAssignment_adminRegistry":
             "ec8411f23b0b0af25af485aae39ebcc0169663b17b986694c8eb94183ae1f399",
         "attainable_appendArrayEntry_adminRegistry":

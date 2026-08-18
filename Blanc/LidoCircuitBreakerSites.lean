@@ -165,11 +165,22 @@ Certified in one direction only: every role actually derived by the authority
 theorems lies in its row's list, so this list is a sound upper bound.
 Tightness — that each listed role is genuinely attainable at that row — is a
 separate obligation of the Stage 5 attainment controls, not of this definition,
-and it is **partially discharged**: six of the thirty (row, role) pairs carry a
-positive witness, and the one negative direction that matters here (a pause
-invocation can never reach `afterOldNewCount`) is proved.  The remaining
-twenty-four pairs are unproved in both directions, so this list stays a sound
-upper bound.  Do not describe the set as exact. -/
+and it is **partially discharged**: nine of the thirty (row, role) pairs carry
+a positive witness and three more are refuted, leaving eighteen unproved in
+both directions.
+
+For the list as a whole, that still leaves it a sound upper bound and nothing
+more — do not describe the whole table as exact.  **Five individual rows are
+exact**, though, and the argument is worth stating because it does not
+generalise: at a row whose list here is a *singleton*, one attainment witness
+closes the gap, because the single listed role is then both permitted and
+attained.  Those rows are `setPauseDurationConfig`, `setHeartbeatIntervalConfig`,
+`afterOldNewCount`, `registerRetainedOldNewExpiry` and `heartbeatExpiry`.
+
+No two-role row can become exact this way however many witnesses land, since a
+witness settles one side and says nothing about the other — which is why the ten
+registry rows remain upper bounds despite carrying four witnesses between
+them. -/
 def RuntimePersistentWrite.permittedRoles :
     RuntimePersistentWrite → List InvocationRole
   | .setPauseDurationConfig | .setHeartbeatIntervalConfig =>
