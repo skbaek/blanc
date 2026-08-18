@@ -518,6 +518,47 @@ theorem permitted_role_widening_rejected :
   subst roleEq
   exact not_attainable_afterOldNewCount_pauseRegistry
 
+/-- Within-role guard strength, which no header pin can reach.
+
+`permitted_role_widening_rejected` above catches a role set widened so that it
+accepts a role it should not.  It cannot catch the opposite failure: a role kept in place
+while the guard *inside* it is weakened, because `RuntimeWriteAuthority`'s
+constructor payloads are not part of any pinned theorem header.
+
+This control closes that by *extracting* both pause guards from an arbitrary
+actual pause authority.  Weaken the strict entry liveness to `≤`, or drop the
+assignment conjunct, and the corresponding extraction below stops elaborating.
+The final clause records why `≤` is a genuine weakening and not a restatement:
+the inclusive reading admits an entry state — exactly `time = expiry` — that the
+strict one rejects, which is the same boundary AT2 fixes for `isPauserLive`. -/
+theorem pause_within_role_guard_strength_control :
+    (∀ (dp : DeployParams) (frameRoot write : Exec.Deriv),
+      RuntimeWriteAuthority dp frameRoot write .pauseRegistry →
+        frameRoot.sevm.benvStat.time <
+          frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+            (expirySlot frameRoot.sevm.caller.toB256)) ∧
+    (∀ (dp : DeployParams) (frameRoot write : Exec.Deriv),
+      RuntimeWriteAuthority dp frameRoot write .pauseRegistry →
+        frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+          (assignmentSlot (Sevm.dataWord frameRoot.sevm 4)) =
+            frameRoot.sevm.caller.toB256) ∧
+    (∀ (dp : DeployParams) (frameRoot write : Exec.Deriv),
+      RuntimeWriteAuthority dp frameRoot write .pauseExpiry →
+        frameRoot.sevm.benvStat.time <
+          frameRoot.devm.getStorVal frameRoot.sevm.currentTarget
+            (expirySlot frameRoot.sevm.caller.toB256)) ∧
+    ∃ time expiry : B256, time ≤ expiry ∧ ¬ time < expiry := by
+  refine ⟨?_, ?_, ?_, 0, 0, by decide, by decide⟩
+  · intro _dp _frameRoot _write authority
+    cases authority with
+    | pauseRegistry _ _ _ _ live _ => exact live
+  · intro _dp _frameRoot _write authority
+    cases authority with
+    | pauseRegistry _ _ _ assigned _ _ => exact assigned
+  · intro _dp _frameRoot _write authority
+    cases authority with
+    | pauseExpiry _ _ _ _ live _ => exact live
+
 /-! ## AT6 owner-closure and settlement controls -/
 
 /-- The raw/retained separation at one concrete noncommitting execution: the

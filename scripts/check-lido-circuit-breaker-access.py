@@ -70,6 +70,13 @@ REQUIRED = (
     "constructor_domain_separate_control",
     # AT5 raw-authority controls.
     "permitted_role_widening_rejected",
+    # Within-role guard strength, which no header pin can reach: the pause
+    # arm's strict entry liveness and its assignment conjunct are extracted
+    # from an arbitrary actual authority, so weakening either stops the
+    # fixture elaborating.  VERIFIED non-vacuous by mutating the constructor
+    # field *and* its construction site together, so the whole library still
+    # compiled and only this control failed.
+    "pause_within_role_guard_strength_control",
     "raw_occurrence_commitment_premise_rejected",
     "guard_after_write_rejected",
     # AT6 closure/settlement controls.
