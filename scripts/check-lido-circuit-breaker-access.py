@@ -36,16 +36,20 @@ OWNERS = {
     "absent": ROOT / "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
     "unregister": ROOT / "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
     "replacement": ROOT / "Blanc/LidoCircuitBreakerReplacementRegistration.lean",
-    # AT7's pause conditional suffix, and the AT8 attainment family.  The last
-    # three are not in `Blanc.lean`'s import closure, so `check-trust-surface.sh`
-    # does not reach them; carrying them here is what puts them under a trust
-    # scan and an axiom probe at all.
+    # AT7's pause conditional suffix, and the AT8 attainment family.  Every one
+    # of these is now in `Blanc.lean`'s import closure and so is reached by
+    # `check-trust-surface.sh` as well; they were not when this block was
+    # written, and carrying them here is still what puts their exact headers
+    # under a pin and an axiom probe.
     "pauseSuffix": ROOT / "Blanc/LidoCircuitBreakerPauseSuffix.lean",
     "sourceAttainment": ROOT / "Blanc/SourceAttainment.lean",
     "attainment": ROOT / "Blanc/LidoCircuitBreakerAttainment.lean",
     "registrationWorld": ROOT / "Blanc/LidoCircuitBreakerRegistrationWorld.lean",
     "replacementWorld": ROOT / "Blanc/LidoCircuitBreakerReplacementWorld.lean",
     "pauseAttainment": ROOT / "Blanc/LidoCircuitBreakerPauseAttainment.lean",
+    "unregisterWorld": ROOT / "Blanc/LidoCircuitBreakerUnregisterWorld.lean",
+    "unregisterAttainment":
+        ROOT / "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -68,6 +72,8 @@ MODULES = {
     "registrationWorld": "Blanc.LidoCircuitBreakerRegistrationWorld",
     "replacementWorld": "Blanc.LidoCircuitBreakerReplacementWorld",
     "pauseAttainment": "Blanc.LidoCircuitBreakerPauseAttainment",
+    "unregisterWorld": "Blanc.LidoCircuitBreakerUnregisterWorld",
+    "unregisterAttainment": "Blanc.LidoCircuitBreakerUnregisterAttainment",
 }
 
 REQUIRED = (
@@ -492,6 +498,45 @@ ROLES = {
             "a5c9d06bb34ca29d012c48e8e4e4dc2b67d45093034e34ff7de7c2af11a82a87",
         "attainable_registerRetainedOldNewExpiry_adminExpiry":
             "2504e9425955b64ced04c55c90cab0ffc40d406aeadc305bada085bbac17b2a6",
+    },
+    # The admin unregistration world: one concrete `Msg`-rooted, gas-exact
+    # execution whose run ends `.ok`, unlike the pause world's, and the only
+    # world in the family that satisfies the Registry projections at entry.
+    "unregisterWorld": {
+        "unregisterWorld_run":
+            "d0d9af792251bcd66f56956c96668677c0b2feb99c044ec6332e58ee4f0cfe98",
+        "unregisterWorld_effects":
+            "5a9bf307d176bc10f6a5c4985711011d145f9cb626a1dfee42b454bd3ee483d9",
+        "unregisterWorld_settles":
+            "63ca8c1fe4d55f812474e1a687575d43aecc9fb34012ef5b168abdb80e7b47e8",
+        "unregWorldStor_witness":
+            "ae7af3faf795fe84a5b7cabd23ea39824b30b55df8b22924bec102a80ebcaa91",
+        "unregWorld_bodyGasEq":
+            "e57e87e73035c51199cd43cb551a957cd66fa5482362d24e749257491fe9c5a8",
+    },
+    # The `.adminRegistry` half of the six rows the pause world attains at
+    # `.pauseRegistry`.  The route and the shared tail are pinned alongside the
+    # six witnesses: a weakening in either would leave all six headers
+    # byte-identical.
+    "unregisterAttainment": {
+        "attainable_setPauserOldCount_adminRegistry":
+            "ea81e3701aed1f88410fb72919c563ffcefb0545f6c3e948a11e44052f85d206",
+        "attainable_removeArrayHole_adminRegistry":
+            "26ad08fe8f74b500530cab0eab041a4b8a370ff4d6c9dc74c7baac69dc2a7b75",
+        "attainable_removeMovedIndex_adminRegistry":
+            "be7a7223a50751a2c3e6c5db8762e667cef33f23420f4050b87cb78262bf352f",
+        "attainable_removeClearTail_adminRegistry":
+            "118563e572542d2ce493bbedd21e79502480889883e5a07a91689568deb094dc",
+        "attainable_removeArrayLength_adminRegistry":
+            "e6ccd0fda666c1d677cf21e1bfb5b920c4f34b2ab2fa765520daf2b9a6b89424",
+        "attainable_removeClearTargetIndex_adminRegistry":
+            "69eb21a8bc06e8a05196419d664ef827e80af522f7cd4c32d69f91ee8e67e6cf",
+        "attainable_adminRegistry_of_route":
+            "6b62790f8a04ce0a8f5271cfb34dad6b0403987351086b5e76cd51781477d83d",
+        "runtimeMain_routeTo_unregisterKernel":
+            "b149a880509ae920c2c934a76abf5141e883250516309610c5a807857f453d00",
+        "registerStaging_windows":
+            "2256e1201cdfc7541f09bd675564463b08dd964e96a80b51aecc562c9a48052e",
     },
     "replacementWorld": {
         "replRetainedWorld_run":
