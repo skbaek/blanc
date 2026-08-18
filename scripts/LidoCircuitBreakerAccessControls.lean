@@ -614,8 +614,8 @@ theorem admin_heartbeat_within_role_guard_strength_control :
   refine ⟨?_, ?_, ?_, ?_⟩
   · intro _dp _frameRoot _write authority
     cases authority with
-    | setPauseDuration _ _ callerEq => exact callerEq
-    | setHeartbeatInterval _ _ callerEq => exact callerEq
+    | setPauseDuration _ _ callerEq _ => exact callerEq
+    | setHeartbeatInterval _ _ callerEq _ => exact callerEq
   · intro _dp _frameRoot _write authority
     cases authority with
     | adminRegistry _ _ callerEq _ => exact callerEq
@@ -624,7 +624,7 @@ theorem admin_heartbeat_within_role_guard_strength_control :
     | adminExpiry _ _ callerEq _ => exact callerEq
   · intro _dp _frameRoot _write authority
     cases authority with
-    | heartbeatExpiry _ _ _ registered live => exact ⟨registered, live⟩
+    | heartbeatExpiry _ _ _ registered live _ => exact ⟨registered, live⟩
 
 /-! ## AT6 owner-closure and settlement controls -/
 

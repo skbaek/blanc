@@ -359,6 +359,15 @@ ROLES = {
             "571d0deef20617a570c60a61ef1465cf0663257145dbbfbe52a53817ab2d32be",
         "pauseSuccess_expiryWrite_stores_zero_iff":
             "e02394008e792f65b8f60ab38bbce2e8ee365b3a3f92d5c1a1a7cf2c311cfb1d",
+        # The same two results with the function table fixed to the deployed
+        # runtime's own, `(runtime dp).main :: (runtime dp).aux`.  Pinned
+        # because the whole content of each is that specialization: relax `fs`
+        # back to an arbitrary table and the walk is a same-shaped fragment
+        # resolved anywhere, which is the finding these close.
+        "pauseSuccess_expiryWrite_of_reached_runtime":
+            "d728d528cc6de079b108cba8c8ab8cb9902b2e3af69bb41e4e88f2d06b627fbc",
+        "pauseSuccess_expiryWrite_stores_zero_iff_runtime":
+            "4dee7d19b270f0f7d108af4233d2f9d068a641835b5ccac85f99988f6c7d62cb",
     },
     "attainment": {
         "not_attainable_afterOldNewCount_pauseRegistry":

@@ -601,4 +601,58 @@ theorem pauseSuccess_expiryWrite_stores_zero_iff
   ⟨pauseSuccess_expiryWrite_of_reached howner hcount hinterval hreached hrun,
     (pauseExpiryValue_ite hreached).eq_zero_iff_count_eq_zero nondegenerate⟩
 
+/-! ## The same two results at the production function table
+
+The results above quantify over an arbitrary `fs`, which is the altitude the
+walk inversion needs and nothing more: they read a supplied compiled walk of the
+source `Func pauseSuccess` against *some* function table.  The two corollaries
+below fix that table to the exact deployed runtime's own,
+`(runtime dp).main :: (runtime dp).aux` — the list `Prog.RunCompiledTo` builds
+for `runtime dp` — so the walk is one of the deployed program's, not of a
+same-shaped fragment resolved elsewhere.
+
+That is the whole strengthening, and it is worth being exact about what it is
+not.  Fixing `fs` does **not** join these results to AT5's classification: no
+`Exec.Deriv`, no `exactInvocation` frame and no `Prog.SourcePath` cursor appears
+here, so the write is still not identified as the `pauseLastTargetExpiry` or
+`pauseRetainedTargetExpiry` row, and no `RuntimeWriteAuthority … .pauseExpiry`
+is produced.  The general forms are kept: `pauseSuccess_expiryWrite_of_reached`
+is what `pauseSuccess_expiryWrite_stores_zero_iff` composes, both are pinned
+public headers of this owner, and the arbitrary table is the honest altitude of
+the inversion chain that proves them. -/
+
+/-- `pauseSuccess_expiryWrite_of_reached` at the deployed runtime's own
+function table. -/
+theorem pauseSuccess_expiryWrite_of_reached_runtime
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {ca : Adr} {count interval : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcount : Devm.getStorVal pre ca (countSlot sevm.caller.toB256) = count)
+    (hinterval : Devm.getStorVal pre ca heartbeatIntervalSlot = interval)
+    (hreached : count ≠ 0 → B256.Nof sevm.benvStat.time interval)
+    (hrun : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre pauseSuccess out) :
+    PauseExpiryWrite sevm pre ca
+      (if count = 0 then 0 else sevm.benvStat.time + interval) :=
+  pauseSuccess_expiryWrite_of_reached howner hcount hinterval hreached hrun
+
+/-- `pauseSuccess_expiryWrite_stores_zero_iff` at the deployed runtime's own
+function table. -/
+theorem pauseSuccess_expiryWrite_stores_zero_iff_runtime
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {ca : Adr} {count interval : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcount : Devm.getStorVal pre ca (countSlot sevm.caller.toB256) = count)
+    (hinterval : Devm.getStorVal pre ca heartbeatIntervalSlot = interval)
+    (nondegenerate : ¬ (sevm.benvStat.time = 0 ∧ interval = 0))
+    (hreached : count ≠ 0 → B256.Nof sevm.benvStat.time interval)
+    (hrun : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre pauseSuccess out) :
+    PauseExpiryWrite sevm pre ca
+        (if count = 0 then 0 else sevm.benvStat.time + interval) ∧
+      ((if count = 0 then (0 : B256) else sevm.benvStat.time + interval) = 0
+        ↔ count = 0) :=
+  pauseSuccess_expiryWrite_stores_zero_iff howner hcount hinterval
+    nondegenerate hreached hrun
+
 end Blanc.LidoCircuitBreaker

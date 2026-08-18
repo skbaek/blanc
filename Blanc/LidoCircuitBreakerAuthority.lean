@@ -40,7 +40,20 @@ structure RuntimeEndpointOccurrence
 /-- The six runtime-accepted authority roles, each carrying its actual endpoint
 and earlier guard occurrences together with the corresponding invocation-entry
 fact.  The indexed role is later checked against the exact source row's
-`permittedRoles`; this payload alone does not classify a source site. -/
+`permittedRoles`; this payload alone does not classify a source site.
+
+**Every** constructor also pins its own write's persistent source site into a
+set of source function indices — `writeSite` below.  That conjunct is what lets
+a consumer refute a `permittedRoles` widening without constructing an
+execution: compiled PCs identify persistent source sites
+(`runtimePersistentSourceSite_eq_of_pc`), so a role whose `writeSite` misses the
+row's frozen `sourceFunctionIndex` cannot hold at that row.  The pin is a
+function-index pin and nothing finer, so it separates the configuration/
+heartbeat functions (index `0`) from the registry functions (`14`, `15`, `16`,
+`17`) and from the two expiry functions (`registerAfterSetSlot`,
+`pauseAfterSetSlot`), but it does *not* separate two roles that live in the
+same compiled function — `.adminConfiguration` and `.heartbeatExpiry` both sit
+in the main function and are not told apart here. -/
 inductive RuntimeWriteAuthority
     (dp : DeployParams) (frameRoot write : Exec.Deriv) :
     InvocationRole → Prop
@@ -48,13 +61,17 @@ inductive RuntimeWriteAuthority
       (endpoint : RuntimeEndpointOccurrence dp frameRoot write
         (setPauseDuration dp))
       (guard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
-      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin) :
+      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin)
+      (writeSite : ∃ site ∈ runtimePersistentSourceSites dp,
+        site.pc = write.pc ∧ site.path.functionIndex = 0) :
       RuntimeWriteAuthority dp frameRoot write .adminConfiguration
   | setHeartbeatInterval
       (endpoint : RuntimeEndpointOccurrence dp frameRoot write
         (setHeartbeatInterval dp))
       (guard : RuntimeGuardOccurrence frameRoot write (.reg .eq))
-      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin) :
+      (callerEq : frameRoot.sevm.caller.toB256 = dp.admin)
+      (writeSite : ∃ site ∈ runtimePersistentSourceSites dp,
+        site.pc = write.pc ∧ site.path.functionIndex = 0) :
       RuntimeWriteAuthority dp frameRoot write .adminConfiguration
   | adminRegistry
       (endpoint : RuntimeEndpointOccurrence dp frameRoot write
@@ -82,7 +99,9 @@ inductive RuntimeWriteAuthority
         (countSlot frameRoot.sevm.caller.toB256) ≠ 0)
       (live : frameRoot.sevm.benvStat.time < frameRoot.devm.getStorVal
         frameRoot.sevm.currentTarget
-        (expirySlot frameRoot.sevm.caller.toB256)) :
+        (expirySlot frameRoot.sevm.caller.toB256))
+      (writeSite : ∃ site ∈ runtimePersistentSourceSites dp,
+        site.pc = write.pc ∧ site.path.functionIndex = 0) :
       RuntimeWriteAuthority dp frameRoot write .heartbeatExpiry
   | pauseRegistry
       (endpoint : RuntimeEndpointOccurrence dp frameRoot write pause)
@@ -5095,7 +5114,9 @@ private theorem heartbeatBodyAuthority
     (compiled : some frameRoot.sevm.code.toList = (runtime dp).compile)
     (targetAt : Ninst.At write.sevm.code write.pc (.reg .sstore))
     (route : Exec.Deriv.SourceCursor.Toward
-      initial write (.reg .sstore) bodyCursor) :
+      initial write (.reg .sstore) bodyCursor)
+    (writeSite : ∃ site ∈ runtimePersistentSourceSites dp,
+      site.pc = write.pc ∧ site.path.functionIndex = 0) :
     RuntimeWriteAuthority dp frameRoot write .heartbeatExpiry := by
   let endpoint := RuntimeEndpointOccurrence.ofCursor
     frameToInitial bodyCursor route
@@ -5295,7 +5316,7 @@ private theorem heartbeatBodyAuthority
         frameToInitial liveChronology liveEdge liveRun targetAt
           (by intro h; cases h)
       exact .heartbeatExpiry endpoint registeredOccurrence liveOccurrence
-        countNe liveLt
+        countNe liveLt writeSite
   · exact (errorCursor.noSstore_of_entrySstoreFree compiled
       [senderNotPauserErrorSlot] rfl
       (Exec.Deriv.SourceCursor.Toward.chronology
@@ -5373,8 +5394,13 @@ private theorem runtimeDispatchCut_configurationOrHeartbeatAuthority
         rfl
       have rowEq := configurationRow_of_terminal finalCursor found sitePc
         targetEq sourceMember exactSteps
+      have writeSite : ∃ writeSite ∈ runtimePersistentSourceSites dp,
+          writeSite.pc = write.pc ∧ writeSite.path.functionIndex = 0 :=
+        ⟨site, RuntimePersistentWrite.sourceSite?_mem found, sitePc, by
+          rcases rowEq with rfl | rfl <;>
+            exact RuntimePersistentWrite.sourceSite?_functionIndex found⟩
       refine ⟨.adminConfiguration, ?_,
-        .setPauseDuration endpoint guard callerEq⟩
+        .setPauseDuration endpoint guard callerEq writeSite⟩
       rcases rowEq with rfl | rfl <;>
         simp [RuntimePersistentWrite.permittedRoles]
   | setHeartbeatInterval cursor route entryStorage =>
@@ -5402,8 +5428,13 @@ private theorem runtimeDispatchCut_configurationOrHeartbeatAuthority
         rfl
       have rowEq := configurationRow_of_terminal finalCursor found sitePc
         targetEq sourceMember exactSteps
+      have writeSite : ∃ writeSite ∈ runtimePersistentSourceSites dp,
+          writeSite.pc = write.pc ∧ writeSite.path.functionIndex = 0 :=
+        ⟨site, RuntimePersistentWrite.sourceSite?_mem found, sitePc, by
+          rcases rowEq with rfl | rfl <;>
+            exact RuntimePersistentWrite.sourceSite?_functionIndex found⟩
       refine ⟨.adminConfiguration, ?_,
-        .setHeartbeatInterval endpoint guard callerEq⟩
+        .setHeartbeatInterval endpoint guard callerEq writeSite⟩
       rcases rowEq with rfl | rfl <;>
         simp [RuntimePersistentWrite.permittedRoles]
   | heartbeat cursor route entryStorage =>
@@ -5416,7 +5447,9 @@ private theorem runtimeDispatchCut_configurationOrHeartbeatAuthority
       exact ⟨.heartbeatExpiry, by
           simp [RuntimePersistentWrite.permittedRoles],
         heartbeatBodyAuthority cursor frameToMain
-          (entryStorage.trans mainStorage) compiled targetAt route⟩
+          (entryStorage.trans mainStorage) compiled targetAt route
+          ⟨site, RuntimePersistentWrite.sourceSite?_mem found, sitePc,
+            RuntimePersistentWrite.sourceSite?_functionIndex found⟩⟩
 
 private theorem runtimeDispatchCut_registerPauserAuthority
     {dp : DeployParams} {frameRoot write : Exec.Deriv}
