@@ -519,6 +519,44 @@ MUTATIONS = {
             "      dp.minHeartbeatInterval ≤ newInterval ∧",
             "      dp.minHeartbeatInterval ≤ newInterval ∧",
         ),
+        # AT8, "expired heartbeat renewal": the expiry boundary is inclusive on
+        # the failing side -- equality is expired. Narrowing the error theorem's
+        # premise to strict would leave `timestamp = oldExpiry` unaccounted, i.e.
+        # an expired pauser renewing itself.
+        "expired-heartbeat error premise narrowed to strict": (
+            "(hexpired : oldExpiry \u2264 timestamp) :",
+            "(hexpired : oldExpiry < timestamp) :",
+        ),
+        # AT8, "unchecked wrap": on checked-overflow the revert must leave owner
+        # storage untouched. Dropping the clause admits a wrapped write that is
+        # then reverted-but-observed.
+        "checked-overflow revert allowed to move storage": (
+            "      post.output = heartbeatArithmeticPanicData \u2227\n"
+            "      post.logs = base.logs \u2227\n"
+            "      (\u2200 a k, post.getStorVal a k = base.getStorVal a k) \u2227",
+            "      post.output = heartbeatArithmeticPanicData \u2227\n"
+            "      post.logs = base.logs \u2227",
+        ),
+        # AT8, heartbeat guard weakening: `SenderNotPauser` has precedence when
+        # the entry count is zero, and that failure must not write.
+        "zero-count heartbeat guard allowed to move storage": (
+            "      post.output = customErrorData \"SenderNotPauser\" \u2227\n"
+            "      post.logs = base.logs \u2227\n"
+            "      (\u2200 a k, post.getStorVal a k = base.getStorVal a k) \u2227",
+            "      post.output = customErrorData \"SenderNotPauser\" \u2227\n"
+            "      post.logs = base.logs \u2227",
+        ),
+        # AT8, "retroactive interval mutation": an interval update governs the
+        # NEXT successful registration or heartbeat and must move no existing
+        # expiry. Dropping the universally quantified preservation clause is
+        # exactly the retroactive reading.
+        "interval update no longer preserves existing expiries": (
+            "          old.toBytes ++ newInterval.toBytes\u27e9] \u2227\n"
+            "      \u2200 pauser, canonicalAddress pauser \u2192\n"
+            "        settled.getStorVal ca (expirySlot pauser) =\n"
+            "          (initDevm msg).getStorVal ca (expirySlot pauser) := by",
+            "          old.toBytes ++ newInterval.toBytes\u27e9] := by",
+        ),
     },
     "authority": {
         # AT8: a raw-occurrence theorem must NOT acquire a success or
