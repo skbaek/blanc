@@ -107,6 +107,7 @@ CONTRACTS = {
                              "LidoCircuitBreakerPauseRoute",
                              "LidoCircuitBreakerPauseGuards",
                              "LidoCircuitBreakerPauseAttainment",
+                             "LidoCircuitBreakerPauseWorld",
                              "LidoCircuitBreakerUnregisterAttainment",
                              "LidoCircuitBreakerCode",
                              "LidoCircuitBreakerDeploy"],

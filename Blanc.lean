@@ -31,6 +31,7 @@ import Blanc.LidoCircuitBreakerAttainment
 import Blanc.LidoCircuitBreakerPauseRoute
 import Blanc.LidoCircuitBreakerPauseGuards
 import Blanc.LidoCircuitBreakerPauseAttainment
+import Blanc.LidoCircuitBreakerPauseWorld
 import Blanc.LidoCircuitBreakerUnregisterAttainment
 import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerDeploy
