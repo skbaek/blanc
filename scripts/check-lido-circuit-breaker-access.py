@@ -29,17 +29,14 @@ OWNERS = {
     "ownerClosure": ROOT / "Blanc/LidoCircuitBreakerOwnerClosure.lean",
     "retained": ROOT / "Blanc/LidoCircuitBreakerRetainedAuthority.lean",
     "deploy": ROOT / "Blanc/LidoCircuitBreakerDeploy.lean",
+    # AT7 registration chronologies.  `substrate` holds the walks every leaf
+    # composes; the four leaves are siblings and may not import one another.
+    "substrate": ROOT / "Blanc/LidoCircuitBreakerRegistrySubstrate.lean",
+    "fresh": ROOT / "Blanc/LidoCircuitBreakerFreshRegistration.lean",
+    "absent": ROOT / "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
+    "unregister": ROOT / "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
+    "replacement": ROOT / "Blanc/LidoCircuitBreakerReplacementRegistration.lean",
 }
-# AT7 registration transitions are still being proved.  The four modules are
-# inside the trust scan from the first day each exists, but none of their
-# headers are pinned yet; see AT7_ROLES below.
-AT7_MODULES = (
-    ROOT / "Blanc/LidoCircuitBreakerRegistrySubstrate.lean",
-    ROOT / "Blanc/LidoCircuitBreakerFreshRegistration.lean",
-    ROOT / "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
-    ROOT / "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
-    ROOT / "Blanc/LidoCircuitBreakerReplacementRegistration.lean",
-)
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
 # Lean module names, used by the compiled-owner guard and the axiom probe.
@@ -50,6 +47,11 @@ MODULES = {
     "ownerClosure": "Blanc.LidoCircuitBreakerOwnerClosure",
     "retained": "Blanc.LidoCircuitBreakerRetainedAuthority",
     "deploy": "Blanc.LidoCircuitBreakerDeploy",
+    "substrate": "Blanc.LidoCircuitBreakerRegistrySubstrate",
+    "fresh": "Blanc.LidoCircuitBreakerFreshRegistration",
+    "absent": "Blanc.LidoCircuitBreakerAbsentRegistration",
+    "unregister": "Blanc.LidoCircuitBreakerUnregisterRegistration",
+    "replacement": "Blanc.LidoCircuitBreakerReplacementRegistration",
 }
 
 REQUIRED = (
@@ -243,15 +245,83 @@ ROLES = {
         "constructor_inventory_cardinalities":
             "6afbd83f5e15d39d0f5510085468508c4e43cc81ff277dcaabd869cda2578f69",
     },
+    # ---- AT7: the registration chronologies' public boundary ----
+    # The four Registry write chronologies are complete, so their public
+    # boundary is pinned here rather than merely trust-scanned.  What is pinned
+    # per leaf is the source-trace witness, each `RunCompiledTo` dispatch, and
+    # each `success_settled_effects` -- the strongest claim the leaf makes, and
+    # the one a weakening would most plausibly hide in.  The substrate pins the
+    # walks every leaf composes; the leaves are siblings and cannot import one
+    # another, so a walk two of them need lives there.
+    #
+    # NOT yet covered: AT7 semantic mutants.  `MUTATIONS` still has no entry for
+    # any of these owners, so a *header* change is caught but a proof rewritten
+    # to a weaker-but-identically-typed statement is not.  The goal's live-mutant
+    # list still wants lost last-pauser cleanup, registration revival requiring
+    # prior liveness, retroactive interval mutation and unchecked wrap.
+    "fresh": {
+        "freshRegistration_sourceTrace_witness":
+            "46aa83f709300ccb03334e27aee03b0fca8b9cbd1c5d3892d9404cb7a23f4657",
+        "registerPauser_runCompiledTo_freshNonzero":
+            "ee93c3052e9e62df1c5922e9be164c97c6301109db893a497d5d1296f8ef98e0",
+        "registerPauser_freshNonzero_success_settled_effects":
+            "077a0ecd6b4b32b32b8cd4f908d287bf9076118588300a722073416f95e99e6d",
+    },
+    "absent": {
+        "absentZeroRegistration_sourceTrace_witness":
+            "d73d20a0ad2e60eeac554250fb6ca9458afd6d1a5607565a8fc01bd71ec0508a",
+        "registerPauser_runCompiledTo_absentZero":
+            "ed4ca68e9b95155c3f8de0352cb2cf9fef8475a72aa026fb810de3cf8d180327",
+        "registerPauser_absentZero_success_settled_effects":
+            "8593869f241db143f0cb0ce6af0a5aa9fc895b669ff561faba5c80f1650a330d",
+    },
+    "unregister": {
+        "foundZeroRetainedRegistration_sourceTrace_witness":
+            "9e62f0cdecca971234d4cc239118aecefd58d3072f44f9df2ccc7a8a0c4e1439",
+        "registerPauser_runCompiledTo_foundZeroRetainedLast":
+            "1517babc34cf57a4397e1ea2b1ca1203760b804325eea455a6f514a7070df9c8",
+        "registerPauser_foundZeroRetainedLast_success_settled_effects":
+            "164008b806a8dad2af19dc522be8213e869df1bdbfb881a094c7ab0d2003d168",
+        "registerPauser_runCompiledTo_foundZeroRetainedSwapPop":
+            "9475ec1efded9d6d5a96174ad375d4b4e2423b7a171f37e73171f9b4e1b43ef0",
+        "registerPauser_foundZeroRetainedSwapPop_success_settled_effects":
+            "b43709356925020af281aae9405cbc1a03a974ffd38aee20e7308ff747791aa8",
+        "registerPauser_runCompiledTo_foundZeroOldLast":
+            "5b296587c33c08d7885654e4f9446e94a2fd57ac13e73bfcc08679a27f94de1d",
+        "registerPauser_foundZeroOldLast_success_settled_effects":
+            "1cab442db7419c6c13044e7c3ea15c0259369cb8f6a1f82a34e3716cfd63535a",
+        "registerPauser_runCompiledTo_foundZeroOldLastSwapPop":
+            "8a7b652f2ac8cd40bd4770baf375a417d806b3ff949affd8ec41905d1faad7c6",
+        "registerPauser_foundZeroOldLastSwapPop_success_settled_effects":
+            "bcac04940e2eb03de51412de209a4da22f2cb600dd4a4e75afc8b5ca997974b4",
+    },
+    "replacement": {
+        "foundNonzeroReplacement_sourceTrace_witness":
+            "39984f11d713ee86af9155e04308c48289e011a3f9718ba707f4d0f6d5032094",
+        "registerPauser_runCompiledTo_retainedNonzero":
+            "788c6a3d18d5ee0d77a524708c71799bebc54818fce4e93658ab26f913f37396",
+        "registerPauser_retainedNonzero_success_settled_effects":
+            "d14e1ec9f1889d5affb326f2203e2a15e8a872df143af8ddc7951127d9ea8b10",
+        "registerPauser_runCompiledTo_oldLastNonzero":
+            "613a775418efaa14c200bc01b7262ea4a6b71241f88cea9fcb407e5a31ea1bf7",
+        "registerPauser_oldLastNonzero_success_settled_effects":
+            "46cbd3df4784ba27a6d97f5ce5edcd50a74205e4bed63ca004b82c22d3d284ce",
+    },
+    "substrate": {
+        "registerPauser_stageArgs_runCompiled":
+            "8a710dafebb8b781eeb19ed8ccdf05e0a9517d607112c15cb1d6d0aec0e0b32b",
+        "setPauserKernel_foundNonzero_finishSetPauser_runCompiled":
+            "0af32ada94fc35c9d271a7ef683a2d5ff95fe3e2d140a9343cc45e08c8e08ded",
+        "removeTarget_toFinish_runCompiled":
+            "075d4645797b587ab0631d6a3cab458d94f31b7d6a99824c8442ae6795a9aa0f",
+        "removeTarget_runCompiled":
+            "7fe9298a4d0e0f72144e0722d5ec91ecd0eda5bd5247f4d13f186ed423224f4f",
+        "removeTarget_swapPop_toFinish_runCompiled":
+            "67ba1c8dab3cb51e5d52adae56165fa3a8cfbca782f99439048e5218cf623d85",
+        "removeTarget_swapPop_runCompiled":
+            "a420afa2432b0ec56ec74b984552b813622a5ad300c8392dc949224c78bd4760",
+    },
 }
-
-# AT7 registration transitions (`Blanc/LidoCircuitBreakerRegistrySubstrate.lean`,
-# `LidoCircuitBreakerFreshRegistration.lean`, `LidoCircuitBreakerAbsentRegistration.lean`,
-# `LidoCircuitBreakerUnregisterRegistration.lean`) are still being proved.  The
-# four modules are trust-scanned above but no header is pinned yet.  The lead
-# fills this in when the registration partitions land (fresh/nonzero,
-# absent/zero, found-zero-retained) and folds it into ROLES.
-AT7_ROLES: dict = {}
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
 # for its 439 audited rows: an EMPTY expectation means the theorem must depend
@@ -533,6 +603,44 @@ MUTATIONS = {
             "    Devm.getStor post ca = msg.benv.state.getStor ca := by",
         ),
     },
+    # ---- AT7: registration chronology weakenings ----
+    "unregister": {
+        # AT8, "lost last-pauser cleanup": when the removed target was the old
+        # pauser's last, that pauser's expiry MUST be cleared.  Dropping the
+        # clause leaves a retired pauser holding a live expiry.
+        "last-pauser expiry cleanup dropped from the conclusion": (
+            "settled.getStorVal ca (expirySlot oldPauser) = 0 \u2227\n"
+            "      \u2200 pauser, canonicalAddress pauser \u2192 pauser \u2260 oldPauser \u2192",
+            "      \u2200 pauser, canonicalAddress pauser \u2192 pauser \u2260 oldPauser \u2192",
+        ),
+        # AT8: the retired rows claim every *other* canonical pauser's expiry is
+        # preserved.  Narrowing the quantifier to the old pauser turns a
+        # noninterference claim into a restatement of the clause above it.
+        "other-pauser expiry preservation narrowed to the old pauser": (
+            "\u2200 pauser, canonicalAddress pauser \u2192 pauser \u2260 oldPauser \u2192",
+            "\u2200 pauser, canonicalAddress pauser \u2192 pauser = oldPauser \u2192",
+        ),
+    },
+    "replacement": {
+        # AT8: `HeartbeatUpdated` count and order *after* `PauserSet` is a named
+        # AT7 obligation, so an inverted record order must not pass as the same
+        # claim.
+        "emitted record order inverted": (
+            "[\u27e8ca, [pauserSetEvent, target, oldPauser, newPauser], []\u27e9,\n"
+            "         \u27e8ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes\u27e9]",
+            "[\u27e8ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes\u27e9,\n"
+            "         \u27e8ca, [pauserSetEvent, target, oldPauser, newPauser], []\u27e9]",
+        ),
+    },
+    "substrate": {
+        # AT8: the general swap-pop walk derives ten slot-disjointness facts from
+        # `idx \u2260 len`.  Without it the hole write and the tail clear may
+        # coincide and the walk degenerates into the target-is-last case it was
+        # written to generalise.
+        "swap-pop interior-target premise dropped": (
+            "(hidxNeLen : idx \u2260 len)", "",
+        ),
+    },
     "deploy": {
         # AT8: the constructor's effect domain is exactly 2/0/0 and separate
         # from the runtime's 20/3/2 source map.
@@ -630,11 +738,6 @@ def main() -> None:
         if not path.is_file():
             fail(f"missing sole production owner for {key}")
         no_trust_shortcut(path)
-    # AT7 is unpinned but never exempt from the trust scan.
-    for path in AT7_MODULES:
-        no_trust_shortcut(path)
-    if AT7_ROLES:
-        fail("AT7 headers are pinned in AT7_ROLES but not folded into ROLES")
     sources = {key: text(path) for key, path in OWNERS.items()}
     for key, source in sources.items():
         pin_role_headers(key, source)
@@ -650,7 +753,8 @@ def main() -> None:
     pinned = sum(len(names) for names in ROLES.values())
     controls = sum(len(mutations) for mutations in MUTATIONS.values())
     print(f"OK — S5 access assurance: {len(REQUIRED)} Lean controls; "
-          f"{pinned} exact public headers and axiom pins across six owners; "
+          f"{pinned} exact public headers and axiom pins across "
+          f"{len(OWNERS)} owners; "
           "AT4 twenty-site classifier uniqueness/inverse-coverage/exact-PC and "
           "three-domain separation; AT2 strict-liveness boundary, interval and "
           "canonical expiry views; AT3 admin-necessity and checked-extension "
