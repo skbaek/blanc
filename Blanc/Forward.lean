@@ -2288,6 +2288,28 @@ def dischargeValue (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit 
     return
   discharge g stxs
 
+/-- Discharge an obligation that the arm-choosing probe has *already* located.
+`assumption` would re-scan the whole local context to find the very declaration
+the probe just matched, and in a walk whose caller carries dozens of write-tower
+hypotheses -- many sharing the head symbol of the membership being sought, so
+that defeq cannot reject them cheaply -- that second scan is the dominant
+elaboration cost of the module.  Try the located declaration directly, and fall
+back to the tactics unchanged: the probe runs before `applyLemma`, so the goal it
+saw may be less instantiated than the one being closed. -/
+def dischargeLocated (g : MVarId) (located : Option Expr)
+    (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
+  if ← g.isAssigned then return
+  if let some fvar := located then
+    let closed ← g.withContext do
+      try
+        if ← isDefEq (← inferType fvar) (← g.getType) then
+          g.assign fvar
+          pure true
+        else pure false
+      catch _ => pure false
+    if closed then return
+  discharge g stxs
+
 /-- The gas obligation: always `base - n = (base - m) + c` over numerals. -/
 def gasTacs : ForwardM (List (TSyntax `tactic)) := do
   let t ← `(tactic|
@@ -2530,7 +2552,18 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         (← getLCtx).findDeclM? fun decl => do
           if decl.isImplementationDetail then return none
           if ← withNewMCtxDepth (isDefEq decl.type warmProp) then
-            return some decl.type
+            return some decl.toExpr
+          else return none
+      -- The cold arm's obligation is likewise already in the caller's context;
+      -- probe for it too, so neither arm pays for a second full scan.  This
+      -- probe never changes which arm is taken -- that is still decided by
+      -- `isWarm` alone.
+      let isCold ← if isWarm.isSome then pure none else g.withContext do
+        let coldProp ← mkAppM ``Not #[warmProp]
+        (← getLCtx).findDeclM? fun decl => do
+          if decl.isImplementationDetail then return none
+          if ← withNewMCtxDepth (isDefEq decl.type coldProp) then
+            return some decl.toExpr
           else return none
       let assum ← `(tactic| assumption)
       if isWarm.isSome then
@@ -2543,7 +2576,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         match gs with
         | [hstk, hwarm, hval, hg, hr] =>
           discharge hstk (← rflTacs)
-          discharge hwarm [assum]
+          dischargeLocated hwarm isWarm [assum]
           discharge hval (← rflTacs)
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
@@ -2560,7 +2593,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         match gs with
         | [hstk, hcold, hval, hg, hr] =>
           discharge hstk (← rflTacs)
-          discharge hcold [assum]
+          dischargeLocated hcold isCold [assum]
           discharge hval (← rflTacs)
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
@@ -2591,7 +2624,18 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         (← getLCtx).findDeclM? fun decl => do
           if decl.isImplementationDetail then return none
           if ← withNewMCtxDepth (isDefEq decl.type warmProp) then
-            return some decl.type
+            return some decl.toExpr
+          else return none
+      -- The cold arm's obligation is likewise already in the caller's context;
+      -- probe for it too, so neither arm pays for a second full scan.  This
+      -- probe never changes which arm is taken -- that is still decided by
+      -- `isWarm` alone.
+      let isCold ← if isWarm.isSome then pure none else g.withContext do
+        let coldProp ← mkAppM ``Not #[warmProp]
+        (← getLCtx).findDeclM? fun decl => do
+          if decl.isImplementationDetail then return none
+          if ← withNewMCtxDepth (isDefEq decl.type coldProp) then
+            return some decl.toExpr
           else return none
       let assum ← `(tactic| assumption)
       if isWarm.isSome then
@@ -2605,7 +2649,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         match gs with
         | [hstk, hwarm, hval, hg, hr] =>
           discharge hstk (← rflTacs)
-          discharge hwarm [assum]
+          dischargeLocated hwarm isWarm [assum]
           dischargeValue hval (← valTacs)
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
@@ -2620,7 +2664,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         match gs with
         | [hstk, hcold, hval, hg, hr] =>
           discharge hstk (← rflTacs)
-          discharge hcold [assum]
+          dischargeLocated hcold isCold [assum]
           dischargeValue hval (← valTacs)
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
@@ -2903,7 +2947,18 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         (← getLCtx).findDeclM? fun decl => do
           if decl.isImplementationDetail then return none
           if ← withNewMCtxDepth (isDefEq decl.type warmProp) then
-            return some decl.type
+            return some decl.toExpr
+          else return none
+      -- The cold arm's obligation is likewise already in the caller's context;
+      -- probe for it too, so neither arm pays for a second full scan.  This
+      -- probe never changes which arm is taken -- that is still decided by
+      -- `isWarm` alone.
+      let isCold ← if isWarm.isSome then pure none else g.withContext do
+        let coldProp ← mkAppM ``Not #[warmProp]
+        (← getLCtx).findDeclM? fun decl => do
+          if decl.isImplementationDetail then return none
+          if ← withNewMCtxDepth (isDefEq decl.type coldProp) then
+            return some decl.toExpr
           else return none
       let assum ← `(tactic| assumption)
       let sentry ← `(tactic|
@@ -2924,7 +2979,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       match gs with
       | [hstk, hwarmth, hsentry, hstatic, hcost, hrefund, hg] =>
         discharge hstk (← rflTacs)
-        discharge hwarmth [assum]
+        dischargeLocated hwarmth (if isWarm.isSome then isWarm else isCold) [assum]
         discharge hsentry [assum, sentry]
         discharge hstatic [assum]
         discharge hcost []
