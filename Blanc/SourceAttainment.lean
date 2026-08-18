@@ -399,21 +399,26 @@ theorem routeTo_branchRight {devm : Devm} {left right : Func}
 
 `routeTo_branchLeft` and `routeTo_branchRight` quantify their continuation
 over *every* `Devm`, so the `Devm.PopBurnBy` that `cases` binds — the only
-thing relating the post-branch stack to the pre-branch one — is discarded at
+thing relating the post-branch state to the pre-branch one — is discarded at
 each crossing.  That is fine for a single branch and fatal for a dispatcher,
-where one selector word has to survive every selector comparison in turn.
+where one selector word has to survive every selector comparison in turn, and
+fatal again for any branch word computed from storage or memory, since those
+too have to survive every earlier crossing.
 
-These two are the lemmas above with the pop's stack equation handed to the
-continuation.  Everything else is identical, so prefer them wherever the
-crossed branch is not the last. -/
+These two are the lemmas above with the whole pop handed to the continuation.
+A `Devm.PopBurnBy` is `Devm.Rels.eq` in every field but the stack and the gas,
+so one hypothesis carries the stack equation *and* the statement that a branch
+changes nothing else.  Everything else is identical, so prefer them wherever
+the crossed branch is not the last. -/
 
 /-- `routeTo_branchLeft`, keeping the branch's own pop. -/
-theorem routeTo_branchLeft_stack {devm : Devm} {left right : Func}
+theorem routeTo_branchLeft_frame {devm : Devm} {left right : Func}
     {functionIndex : Nat} {steps : List Prog.SourceStep}
     {target : Prog.SourcePath} {targetInstruction : Ninst}
     (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
     (branchWord : ∀ w : B256, ∀ rest : Stack, devm.stack = w :: rest → w = 0)
-    (armRoute : ∀ devm' : Devm, (∃ w : B256, devm.stack = w :: devm'.stack) →
+    (armRoute : ∀ devm' : Devm,
+      Devm.PopBurnBy [0] (gVerylow + gHigh) devm devm' →
       ∀ tail : Func.RunCompiledTo fs sevm devm' left out,
         Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchLeft]⟩
           tail target targetInstruction) :
@@ -422,17 +427,20 @@ theorem routeTo_branchLeft_stack {devm : Devm} {left right : Func}
   cases h with
   | zero room pop tail =>
       exact .branchLeft (room := room) (pop := pop) (tail := tail)
-        (armRoute _ ⟨0, pop.stack⟩ tail)
+        (armRoute _ pop tail)
   | succ nonzero room pop tail =>
       exact absurd (branchWord _ _ pop.stack) nonzero
 
-/-- `routeTo_branchRight`, keeping the branch's own pop. -/
-theorem routeTo_branchRight_stack {devm : Devm} {left right : Func}
+/-- `routeTo_branchRight`, keeping the branch's own pop.  The popped word is
+handed over too: the jumped arm is taken at every nonzero word, and the
+caller's `branchWord` obligation is what names it. -/
+theorem routeTo_branchRight_frame {devm : Devm} {left right : Func}
     {functionIndex : Nat} {steps : List Prog.SourceStep}
     {target : Prog.SourcePath} {targetInstruction : Ninst}
     (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
     (branchWord : ∀ w : B256, ∀ rest : Stack, devm.stack = w :: rest → w ≠ 0)
-    (armRoute : ∀ devm' : Devm, (∃ w : B256, devm.stack = w :: devm'.stack) →
+    (armRoute : ∀ (devm' : Devm) (word : B256),
+      Devm.PopBurnBy [word] (gVerylow + gHigh + gJumpdest) devm devm' →
       ∀ tail : Func.RunCompiledTo fs sevm devm' right out,
         Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchRight]⟩
           tail target targetInstruction) :
@@ -442,7 +450,7 @@ theorem routeTo_branchRight_stack {devm : Devm} {left right : Func}
   | zero room pop tail => exact absurd rfl (branchWord _ _ pop.stack)
   | succ nonzero room pop tail =>
       exact .branchRight (nonzero := nonzero) (room := room) (pop := pop)
-        (tail := tail) (armRoute _ ⟨_, pop.stack⟩ tail)
+        (tail := tail) (armRoute _ _ pop tail)
 
 end RouteKit
 
@@ -456,8 +464,11 @@ the dominant cost of a route.
 Often it is avoidable.  If the arm *not* taken can only ever revert, then a
 walk that ends `.ok` cannot have gone that way, and the arm is settled without
 computing anything about the stack.  `Func.alwaysRevertsWithin` is the
-executable certificate for "can only revert", and the two route lemmas at the
-foot of this section consume it in place of a branch word.
+executable certificate for "can only revert", and the route lemmas at the foot
+of this section consume it in place of a branch word — twice bare, and twice
+more in the `_frame` form that still hands the crossing's own pop to the
+continuation, because settling *which* arm ran says nothing about what the
+crossing did to the frame.
 
 The refutation is post-hoc, which is the point: it works on a *sealed*
 derivation, since it reads only the derivation's outcome index.
@@ -647,6 +658,50 @@ theorem routeTo_branchRight_of_leftRevertsOk {devm : Devm} {left right : Func}
   | succ nonzero room pop tail =>
       exact .branchRight (nonzero := nonzero) (room := room) (pop := pop)
         (tail := tail) (armRoute _ tail)
+
+/-- `routeTo_branchLeft_of_rightRevertsOk`, keeping the branch's own pop.  The
+certified-reverting sibling settles *which* arm ran; the pop is still the only
+thing that says what the crossing did to the frame. -/
+theorem routeTo_branchLeft_of_rightRevertsOk_frame {devm : Devm}
+    {left right : Func} {functionIndex : Nat} {steps : List Prog.SourceStep}
+    {target : Prog.SourcePath} {targetInstruction : Ninst} {fuel : Nat}
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) (.ok post))
+    (rightReverts : Func.alwaysRevertsWithin fuel fs right = true)
+    (armRoute : ∀ devm' : Devm,
+      Devm.PopBurnBy [0] (gVerylow + gHigh) devm devm' →
+      ∀ tail : Func.RunCompiledTo fs sevm devm' left (.ok post),
+        Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchLeft]⟩
+          tail target targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h target
+      targetInstruction := by
+  cases h with
+  | zero room pop tail =>
+      exact .branchLeft (room := room) (pop := pop) (tail := tail)
+        (armRoute _ pop tail)
+  | succ nonzero room pop tail =>
+      exact (Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin fuel tail
+        rightReverts).elim
+
+/-- `routeTo_branchRight_of_leftRevertsOk`, keeping the branch's own pop. -/
+theorem routeTo_branchRight_of_leftRevertsOk_frame {devm : Devm}
+    {left right : Func} {functionIndex : Nat} {steps : List Prog.SourceStep}
+    {target : Prog.SourcePath} {targetInstruction : Ninst} {fuel : Nat}
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) (.ok post))
+    (leftReverts : Func.alwaysRevertsWithin fuel fs left = true)
+    (armRoute : ∀ (devm' : Devm) (word : B256),
+      Devm.PopBurnBy [word] (gVerylow + gHigh + gJumpdest) devm devm' →
+      ∀ tail : Func.RunCompiledTo fs sevm devm' right (.ok post),
+        Func.RunCompiledTo.RouteTo ⟨functionIndex, steps ++ [.branchRight]⟩
+          tail target targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h target
+      targetInstruction := by
+  cases h with
+  | zero room pop tail =>
+      exact (Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin fuel tail
+        leftReverts).elim
+  | succ nonzero room pop tail =>
+      exact .branchRight (nonzero := nonzero) (room := room) (pop := pop)
+        (tail := tail) (armRoute _ _ pop tail)
 
 end OkWrongArm
 
