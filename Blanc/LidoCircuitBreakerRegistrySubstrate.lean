@@ -1562,7 +1562,10 @@ set_option maxHeartbeats 2400000 in
 assignment is overwritten with `newPauser`, the old pauser is saved to memory,
 and its assignment count is decremented before control reaches
 `afterOldPauser`.  Generic in `newPauser`, so it serves both unregistration
-(`newPauser = 0`) and replacement. -/
+(`newPauser = 0`) and replacement.  The memory premise is a lower bound and
+word alignment rather than the register image's exact `640`: every window this
+walk touches sits below `640`, so any aligned image at least that large serves
+— a larger staged image included. -/
 theorem setPauserKernel_found_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes) (out : Devm)
@@ -1576,7 +1579,7 @@ theorem setPauserKernel_found_runCompiled
       (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hsize : M.size = 640)
+    (hsizeLow : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
     (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
@@ -1617,17 +1620,16 @@ theorem setPauserKernel_found_runCompiled
     oldPauser.toBytes
   let elseGas := G + afterGas + 45 + countCost +
     temporalSloadCost sevm assignPost (countSlot oldPauser)
-  have halign : M.size % 32 = 0 := by rw [hsize]
   have hwf' : Mem.Wf M' := hwf.write _ _
   have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
-  have hsizeM' : M'.size = M.size := by
-    exact Mem.size_write_of_le (by
-      simpa only [B256.length_toBytes] using (show
-        (previousPauserWord * 32).toNat + 32 ≤ M.size by
-          rw [hsize]
-          decide))
-  have hsize' : M'.size = 640 := by rw [hsizeM', hsize]
-  have halign' : M'.size % 32 = 0 := by rw [hsize']
+  have hpreviousCovered : (previousPauserWord * 32).toNat + 32 ≤ M.size :=
+    Nat.le_trans (show (previousPauserWord * 32).toNat + 32 ≤ 640 by decide)
+      hsizeLow
+  have hsizeM' : M'.size = M.size :=
+    Mem.size_write_of_le (by
+      simpa only [B256.length_toBytes] using hpreviousCovered)
+  have hsizeLow' : 640 ≤ M'.size := by rw [hsizeM']; exact hsizeLow
+  have halign' : M'.size % 32 = 0 := by rw [hsizeM']; exact halign
   have htarget' : Bytes.toB256
       (img'.sliceD (targetWord * 32).toNat 32 0) = target := by
     dsimp only [img']
@@ -1643,19 +1645,17 @@ theorem setPauserKernel_found_runCompiled
     dsimp only [img']
     rw [show 32 = oldPauser.toBytes.length by rw [B256.length_toBytes],
       Bytes.sliceD_writeAt, B256.toB256_toBytes]
-  have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size := by
-    rw [hsize]
-    decide
-  have htargetCovered' : (targetWord * 32).toNat + 32 ≤ M'.size := by
-    rw [hsize']
-    decide
-  have hnewCovered' : (newPauserWord * 32).toNat + 32 ≤ M'.size := by
-    rw [hsize']
-    decide
+  have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size :=
+    Nat.le_trans (show (targetWord * 32).toNat + 32 ≤ 640 by decide) hsizeLow
+  have htargetCovered' : (targetWord * 32).toNat + 32 ≤ M'.size :=
+    Nat.le_trans (show (targetWord * 32).toNat + 32 ≤ 640 by decide) hsizeLow'
+  have hnewCovered' : (newPauserWord * 32).toNat + 32 ≤ M'.size :=
+    Nat.le_trans (show (newPauserWord * 32).toNat + 32 ≤ 640 by decide)
+      hsizeLow'
   have hpreviousCovered' :
-      (previousPauserWord * 32).toNat + 32 ≤ M'.size := by
-    rw [hsize']
-    decide
+      (previousPauserWord * 32).toNat + 32 ≤ M'.size :=
+    Nat.le_trans (show (previousPauserWord * 32).toNat + 32 ≤ 640 by decide)
+      hsizeLow'
   have htargetMemory : (M.read (targetWord * 32).toNat 32).2 = M := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le halign htargetCovered)]
   have htargetMemory' : (M'.read (targetWord * 32).toNat 32).2 = M' := by
@@ -1845,7 +1845,7 @@ theorem setPauserKernel_found_runCompiled
       out := by
     func_run (2) [0]
     case h_ext =>
-      rw [Devm.extCost_zero_of_le halign (by rw [hsize]; decide)]
+      rw [Devm.extCost_zero_of_le halign (Nat.le_trans (by decide) hsizeLow)]
     case a =>
       have hg : elseGas + 40 + assignmentCost - 6 =
           elseGas + 34 + assignmentCost := by omega
@@ -2100,8 +2100,8 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
     (64 + temporalSloadCost sevm
       (foundKernelPost sevm base target newPauser oldPauser oldCount)
       (countSlot newPauser) + newCountCost) G
-    hwf hreads htarget hnew htargetValid holdValid hsize hassignment
-    hassignmentOrig hassignmentCost hcount hcountOrig hcountCost
+    hwf hreads htarget hnew htargetValid holdValid hsize.symm.le halign
+    hassignment hassignmentOrig hassignmentCost hcount hcountOrig hcountCost
     (by omega) hstatic hafter
 
 /-! ## Fresh registration public boundary -/

@@ -974,7 +974,8 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
     assignmentCost countCost
     (2592 + holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
       indexClearCost) G
-    hwf hreads htarget hnew htargetValid holdValid hsize hstorAssignment
+    hwf hreads htarget hnew htargetValid holdValid hsize.symm.le
+    (by rw [hsize]) hstorAssignment
     hassignmentOrig hassignmentCost hcount hcountOrig hcountCost
     (by omega) hstatic
     (by
@@ -2180,7 +2181,8 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
     assignmentCost countCost
     (2592 + holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
       indexClearCost) G
-    hwf hreads htarget hnew htargetValid holdValid hsize hstorAssignment
+    hwf hreads htarget hnew htargetValid holdValid hsize.symm.le
+    (by rw [hsize]) hstorAssignment
     hassignmentOrig hassignmentCost hcount hcountOrig hcountCost
     (by omega) hstatic
     (by
@@ -3458,7 +3460,8 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
     assignmentCost countCost
     (4009 + clearCost + holeCost + movedIndexCost + tailClearCost +
       lengthRestoreCost + indexClearCost) G
-    hwf hreads htarget hnew htargetValid holdValid hsize hstorAssignment
+    hwf hreads htarget hnew htargetValid holdValid hsize.symm.le
+    (by rw [hsize]) hstorAssignment
     hassignmentOrig hassignmentCost hcount hcountOrig hcountCost
     (by omega) hstatic
     (by
@@ -4807,7 +4810,8 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
     assignmentCost countCost
     (4009 + clearCost + holeCost + movedIndexCost + tailClearCost +
       lengthRestoreCost + indexClearCost) G
-    hwf hreads htarget hnew htargetValid holdValid hsize hstorAssignment
+    hwf hreads htarget hnew htargetValid holdValid hsize.symm.le
+    (by rw [hsize]) hstorAssignment
     hassignmentOrig hassignmentCost hcount hcountOrig hcountCost
     (by omega) hstatic
     (by
