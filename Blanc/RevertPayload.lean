@@ -1139,6 +1139,183 @@ lemma Func.runCompiledTo_revReturnData {fs : List Func} {sevm : Sevm}
         (by simpa only [hw, B256.toNat_zero, Devm.setMach_setMach,
           Devm.memory_setMach] using hread)
 
+/-! ## Inverting the `revReturnData` walk
+
+Everything above *builds* a derivation.  A caller that holds one it did not
+build — the bubble arm of an outgoing call, which learns only that the frame
+settled somewhere — needs the other direction: read the reverting frame's
+output off an arbitrary walk, with no premise about gas, memory, code or world
+content.
+
+Three one-step inversions do all of it.  `Func.next` and `Func.last` are each
+produced by exactly one rule of `Func.RunCompiledTo`, so `cases` recovers their
+premises verbatim; and once the `REVERT`'s two operands are known to be on the
+stack, `chargeGas` is the only step of `Linst.run … .rev` left that can fail. -/
+
+/-- One `.next` step of a walk, inverted: the intermediate state and both
+premises, unchanged. -/
+private lemma of_runCompiledTo_next {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {i : Ninst} {f : Func} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (.next i f) ex) :
+    ∃ d, Ninst.RunCompiled sevm devm i d ∧
+      Func.RunCompiledTo fs sevm d f ex := by
+  cases h with | next h_n h_f => exact ⟨_, h_n, h_f⟩
+
+/-- The terminal step of a walk, inverted. -/
+private lemma of_runCompiledTo_last {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {i : Linst} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (.last i) ex) :
+    Linst.Run sevm devm i ex := by
+  cases h with | last h_l => exact h_l
+
+/-- `chargeGas`, evaluated forward on the arm the forward library never takes:
+without the gas the charge is refused, and the state is handed back untouched.
+The mirror of `Blanc.chargeGas_eq_ok`. -/
+private lemma chargeGas_eq_outOfGas {cost : Nat} {devm : Devm}
+    (h : devm.gasLeft < cost) :
+    chargeGas cost devm = .error ⟨.halt (.outOfGas .none), devm⟩ := by
+  rw [chargeGas_def]
+  have hs : safeSub devm.gasLeft cost = none := by
+    unfold safeSub
+    rw [if_neg (by omega)]
+  rw [hs]
+
+/-- `REVERT` over a stack whose top two words are known, inverted.
+
+Both operands are present, so neither `Devm.popToNat` can underflow and the
+window's expansion charge is the walk's last chance to fail.  Either it does —
+and the frame settles at an out-of-gas exceptional halt — or the `REVERT` goes
+through, in which case the output is the window read out of the frame's own
+memory.  The read is left as `Mem.read`, unevaluated, for the reason
+`Func.runCompiledTo_rev`'s docstring gives. -/
+private lemma of_run_rev {sevm : Sevm} {devm : Devm} {i sz : B256}
+    {s : List B256} {ex : Execution}
+    (h_stk : devm.stack = i :: sz :: s)
+    (h_run : Linst.Run sevm devm .rev ex) :
+    (∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+      (∃ post, ex = .error (.revert, post) ∧
+        post.output = (devm.memory.read i.toNat sz.toNat).1) := by
+  have h_eq : Linst.run sevm devm .rev = ex := h_run
+  rcases Nat.lt_or_ge devm.gasLeft (devm.extCost [⟨i.toNat, sz.toNat⟩])
+    with h_gas | h_gas
+  · have h_oog : Linst.run sevm devm .rev
+        = .error ⟨.halt (.outOfGas .none),
+            devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+      show (do
+        let ⟨index, d⟩ ← devm.popToNat
+        let ⟨size, d⟩ ← d.popToNat
+        let cost := d.extCost [⟨index, size⟩]
+        let d ← chargeGas cost d
+        let ⟨output, d⟩ := d.memRead index size
+        let d := d.withOutput output
+        Except.error ⟨.revert, d⟩) = _
+      rw [Devm.popToNat_eq_ok h_stk]
+      simp only [bind, Except.bind]
+      rw [Devm.popToNat_eq_ok
+        (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+      simp only [Devm.setMach_setMach, Devm.memory_setMach,
+        Devm.gasLeft_setMach]
+      have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+          [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
+      rw [h_ext, chargeGas_eq_outOfGas
+        (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    exact Or.inl ⟨_, h_eq.symm.trans h_oog⟩
+  · exact Or.inr ⟨_, h_eq.symm.trans (Linst.run_rev_eq_error h_stk h_gas rfl),
+      rfl⟩
+
+/-- Reading a window back at offset zero immediately after writing it there
+returns it, with no well-formedness premise and no side condition: the empty
+payload reads back as the empty window, and `Mem.read_write_zero` covers every
+other. -/
+private lemma Mem.read_write_zero_len (μ : Mem) (ys : Bytes) :
+    ((μ.write 0 ys).read 0 ys.length).1 = ys := by
+  cases ys with
+  | nil => rfl
+  | cons b bs => exact Mem.read_write_zero μ (by simp)
+
+/-- **`Func.revReturnData`'s walk, inverted.**
+
+The converse of `Func.runCompiledTo_revReturnData`: rather than producing a run
+from a gas budget, this reads the settled outcome off a run somebody else
+produced.  It carries no premise at all — not about gas, not about the frame's
+memory, not about the callee, its code, or any world content — because a
+derivation of the walk already witnesses that all six instructions before the
+`REVERT` succeeded.
+
+The disjunct is the honest residue of that.  `Func.revReturnData` ends in a
+`REVERT` over the window it has just filled, and a window costs memory
+expansion; the walk's derivation says nothing about the gas left when the
+charge falls due, so the frame may settle at an out-of-gas exceptional halt
+instead.  That is the left disjunct, and it is frame-local: it is the `REVERT`'s
+own charge that was refused, not the callee's gas and not the caller's.
+
+The output is stated raw, as `List.take` at the `B256` round trip of the
+returndata's length, because that is what the machine writes: `RETURNDATACOPY`
+copies `size` bytes where `size` is the word `RETURNDATASIZE` pushed.  Reading
+it as `devm.returnData` needs `devm.returnData.length < 2 ^ 256`, which is the
+consumer's obligation and not this lemma's — forcing it here would buy a
+premise for a rewrite the consumer can do itself. -/
+lemma Func.runCompiledTo_revReturnData_inv {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {ex : Execution}
+    (run : Func.RunCompiledTo fs sevm devm Func.revReturnData ex) :
+    (∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+      (∃ post, ex = .error (.revert, post) ∧
+        post.output =
+          devm.returnData.take devm.returnData.length.toB256.toNat) := by
+  unfold Func.revReturnData at run
+  obtain ⟨d1, r1, run⟩ := of_runCompiledTo_next run
+  obtain ⟨d2, r2, run⟩ := of_runCompiledTo_next run
+  obtain ⟨d3, r3, run⟩ := of_runCompiledTo_next run
+  obtain ⟨d4, r4, run⟩ := of_runCompiledTo_next run
+  obtain ⟨d5, r5, run⟩ := of_runCompiledTo_next run
+  obtain ⟨d6, r6, run⟩ := of_runCompiledTo_next run
+  have hrev := of_runCompiledTo_last run
+  have p1 := of_run_retdatasize_val (Ninst.Run.of_runCompiled r1)
+  have p2 := of_run_pushB256 (Ninst.Run.of_runCompiled r2)
+  have p3 := of_run_pushB256 (Ninst.Run.of_runCompiled r3)
+  obtain ⟨x, y, z, hpop, hle, hmem4, hrd4⟩ :=
+    of_run_retdatacopy_val (Ninst.Run.of_runCompiled r4)
+  have p5 := of_run_retdatasize_val (Ninst.Run.of_runCompiled r5)
+  have p6 := of_run_pushB256 (Ninst.Run.of_runCompiled r6)
+  have hrd3 : d3.returnData = devm.returnData :=
+    (p1.returnData.trans (p2.returnData.trans p3.returnData)).symm
+  have hm3 : d3.memory = devm.memory :=
+    (p1.memory.trans (p2.memory.trans p3.memory)).symm
+  obtain ⟨hs4, hx, hy, hz⟩ :
+      d4.stack = devm.stack ∧ x = 0 ∧ y = 0 ∧
+        z = Nat.toB256 devm.returnData.length := by
+    have e4 : d3.stack = x :: y :: z :: d4.stack := hpop
+    have e1 : d1.stack = Nat.toB256 devm.returnData.length :: devm.stack :=
+      p1.stack
+    have e2 : d2.stack = 0 :: d1.stack := p2.stack
+    have e3 : d3.stack = 0 :: d2.stack := p3.stack
+    rw [e2, e1] at e3
+    rw [e4] at e3
+    simp only [List.cons.injEq] at e3
+    exact ⟨e3.2.2.2, e3.1, e3.2.1, e3.2.2.1⟩
+  rw [hy, hz, hrd3, B256.toNat_zero, Nat.zero_add] at hle
+  have hm6 : d6.memory
+      = devm.memory.write 0
+          (devm.returnData.take (Nat.toB256 devm.returnData.length).toNat) := by
+    rw [← p6.memory, ← p5.memory, hmem4, hx, hy, hz, hm3, hrd3, B256.toNat_zero,
+      List.sliceD, List.drop_zero, List.takeD_eq_take _ hle]
+  have hs6 : d6.stack
+      = 0 :: Nat.toB256 devm.returnData.length :: devm.stack := by
+    have e5 : d5.stack = Nat.toB256 d4.returnData.length :: d4.stack := p5.stack
+    have e6 : d6.stack = 0 :: d5.stack := p6.stack
+    rw [e6, e5, hs4, hrd4, hrd3]
+  rcases of_run_rev hs6 hrev with h_oog | ⟨post, hpost, hout⟩
+  · exact Or.inl h_oog
+  · refine Or.inr ⟨post, hpost, ?_⟩
+    have hlt : (devm.returnData.take
+        (Nat.toB256 devm.returnData.length).toNat).length
+          = (Nat.toB256 devm.returnData.length).toNat := by
+      rw [List.length_take]; omega
+    have hread := Mem.read_write_zero_len devm.memory
+      (devm.returnData.take (Nat.toB256 devm.returnData.length).toNat)
+    rw [hlt] at hread
+    rw [hout, hm6, B256.toNat_zero, hread]
+
 /-! ## Message-altitude transport -/
 
 /-- **A frame whose code reverts settles with `.revert`, and rolled back.**
