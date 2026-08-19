@@ -53,7 +53,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "Tactics", "CommonProofs", "Ladder
           "BalanceAlgebra", "Compiled", "Forward", "Reverts", "ForwardCall",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
           "ExecutionOccurrence", "CycleWriteFree", "TransientSettlement",
-          "SourceAttainment"]
+          "SourceAttainment", "TransientInvariance"]
 
 CONTRACTS = {
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],

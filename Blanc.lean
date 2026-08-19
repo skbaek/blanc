@@ -6,6 +6,7 @@ import Blanc.ExecutionSettlement
 import Blanc.ExecutionOccurrence
 import Blanc.CycleWriteFree
 import Blanc.TransientSettlement
+import Blanc.TransientInvariance
 import Blanc.LidoCircuitBreakerCore
 import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreaker
