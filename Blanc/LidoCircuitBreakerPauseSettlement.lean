@@ -184,9 +184,14 @@ source trace applies at each world's entry list.  Following
 world, the projection is stated over the model's **applied writes**, not over
 the settled storage: a `RegistryWitness` quantifies over every canonical
 address, and the walk exports no universal storage frame that could discharge
-those quantifiers at the poststate.  What ties this to the run is the named
-cells in the settlement theorems above, which agree with the applied storage
-at exactly the slots the trace writes. -/
+those quantifiers at the poststate.  These two theorems are therefore about
+the model alone: they say what the Registry's own `setPauser` chronology does
+to each world's entry storage, and they are proved from the general transport
+`RegistryWitness.applySetPauserSourceTrace`, not from either run.  What the
+*run* leaves behind is the named cells in the settlement theorems above, and
+nothing here asserts that the two sides agree slot by slot -- see
+`pauseWorld_projectionAgrees` below for the part of that agreement which is
+actually proved. -/
 
 theorem pauseLastWorld_registryProjection :
     ∃ trace,
@@ -219,5 +224,76 @@ theorem pauseRetainedWorld_registryProjection :
     (pauseWorld_retainedPreWitness pauseRetainedWorldGas)
     (newPauser := 0) pauseWorld_calleeValid.2
     (show (0 : B256).toNat < 2 ^ 160 by decide) rfl
+
+/-! ## Where the model and the run do meet
+
+The projections above are model-side and the settlements are run-side; this
+theorem is the part of their agreement that is actually provable here.  At
+each world it takes the settled poststate's own Registry cells and the storage
+the model's trace writes produce, and states that they agree **at the slots
+the trace touches**.  It is deliberately not more: agreement at every slot is
+the universal storage frame the walk does not export. -/
+
+theorem pauseWorld_projectionAgrees :
+    (∃ post : Devm, exec ⟨0, pauseLastSevm, pauseLastPre⟩ = .ok post ∧
+      ∃ trace,
+        setPauserSourceTrace [(pauseWorldCallee.toB256, pauseWorldPauser)]
+          pauseWorldCallee.toB256 0 = some trace ∧
+        (let applied :=
+          applyRegistryWrites (Devm.getStor pauseLastPre configWorldOwner)
+            trace.writes
+        applied.get (assignmentSlot pauseWorldCallee.toB256) =
+            post.getStorVal configWorldOwner
+              (assignmentSlot pauseWorldCallee.toB256) ∧
+          applied.get (indexSlot pauseWorldCallee.toB256) =
+            post.getStorVal configWorldOwner
+              (indexSlot pauseWorldCallee.toB256) ∧
+          applied.get (countSlot pauseWorldPauser) =
+            post.getStorVal configWorldOwner (countSlot pauseWorldPauser) ∧
+          applied.get arrayLengthSlot =
+            post.getStorVal configWorldOwner arrayLengthSlot ∧
+          applied.get (arrayEntrySlot 1) =
+            post.getStorVal configWorldOwner (arrayEntrySlot 1))) ∧
+    (∃ post : Devm, exec ⟨0, pauseRetainedSevm, pauseRetainedPre⟩ = .ok post ∧
+      ∃ trace,
+        setPauserSourceTrace
+          [(pauseWorldCallee.toB256, pauseWorldPauser),
+            (pauseWorldT2, pauseWorldPauser)]
+          pauseWorldCallee.toB256 0 = some trace ∧
+        (let applied :=
+          applyRegistryWrites (Devm.getStor pauseRetainedPre configWorldOwner)
+            trace.writes
+        applied.get (assignmentSlot pauseWorldCallee.toB256) =
+            post.getStorVal configWorldOwner
+              (assignmentSlot pauseWorldCallee.toB256) ∧
+          applied.get (indexSlot pauseWorldCallee.toB256) =
+            post.getStorVal configWorldOwner
+              (indexSlot pauseWorldCallee.toB256) ∧
+          applied.get (countSlot pauseWorldPauser) =
+            post.getStorVal configWorldOwner (countSlot pauseWorldPauser) ∧
+          applied.get arrayLengthSlot =
+            post.getStorVal configWorldOwner arrayLengthSlot ∧
+          applied.get (arrayEntrySlot 1) =
+            post.getStorVal configWorldOwner (arrayEntrySlot 1) ∧
+          applied.get (arrayEntrySlot 2) =
+            post.getStorVal configWorldOwner (arrayEntrySlot 2) ∧
+          applied.get (indexSlot pauseWorldT2) =
+            post.getStorVal configWorldOwner (indexSlot pauseWorldT2))) := by
+  constructor
+  · obtain ⟨post, _hprog, hexec, _hne, _hgas, _herr, _hout, _hlock, _hexp,
+      hassign, hcount, hlen, harr, hidx, _hint, _hdur, _hother, _hlogs,
+      _hcompile⟩ := pauseLastWorld_effects
+    refine ⟨post, hexec, _, rfl, ?_⟩
+    simp only [pauseLastPre, pauseWorld_getStor]
+    rw [hassign, hcount, hlen, harr, hidx]
+    exact ⟨by decide, by decide, by decide, by decide, by decide⟩
+  · obtain ⟨post, _hprog, hexec, _hne, _hgas, _herr, _hout, _hlock, _hexp,
+      hassign, hcount, hlen, hh, htl, hidx, hmv, _hint, _hdur, _hother,
+      _hlogs, _hcompile⟩ := pauseRetainedWorld_effects
+    refine ⟨post, hexec, _, rfl, ?_⟩
+    simp only [pauseRetainedPre, pauseWorld_getStor]
+    rw [hassign, hcount, hlen, hh, htl, hidx, hmv]
+    exact ⟨by decide, by decide, by decide, by decide, by decide, by decide,
+      by decide⟩
 
 end Blanc.LidoCircuitBreaker
