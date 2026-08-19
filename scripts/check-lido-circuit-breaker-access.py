@@ -686,11 +686,11 @@ ROLES = {
             "9ae59f4ead58345814151e46d1c44b443176273be375a258fc896e43f62314e5",
         # The four route segments the finals compose, in program order.
         "runtimeMain_routeTo_pauseKernel_ok":
-            "0a62e732f151112df88bd15e836dcb6dceabe6370b00106cda4c4726bfa552f7",
+            "d10ad2d51832b98554875e3eb339c993880c6b9292ee1a4f766dfd967578ac8f",
         "pause_routeTo_setPauserCall_ok":
             "4bdbb39aa2664f81937dfe8f995d8b019b4b9e9a797b8832a5ea0bb0c3f7b229",
         "setPauserKernel_routeTo_pauseAfterSetCall":
-            "31914baf64d2f0682aa08c5e2ae69c36a51d46ccdf69a9412f968b35a76cbe45",
+            "412ad15155258112fbd7dcafa6cc0c116e4da5705dccab4422c6e795e6270cc9",
         "pauseAfterSet_routeTo_countBranch":
             "946c8717d0a918e16d37bf84bdead65a999597a17d5bf20d8d2d409043eaa260",
     },

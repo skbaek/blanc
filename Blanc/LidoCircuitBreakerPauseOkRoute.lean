@@ -134,19 +134,30 @@ theorem attainable_of_entryRoute_frame_burn {sevm : Sevm} {pre : Devm}
 /-! ## The staging line's third window
 
 `pauseStaging_windows` exports the two windows the shared kernel reads.  The
-`.ok` route needs a third: the `1` staged at `continuationWord`, which is what
+`.ok` route needs two more: the `1` staged at `continuationWord`, which is what
 `finishSetPauser`'s continuation test reads to send the walk into
-`pauseAfterSet` rather than back to `registerAfterSet`. -/
+`pauseAfterSet` rather than back to `registerAfterSet`, and the configured
+pause duration staged at `durationWord`, which `pauseAfterSet` reads back for
+the `pauseFor(uint256)` call and the `PauseTriggered` log.
+
+The duration window is where that word's provenance is born: the staging
+line's first two instructions are `PUSH pauseDurationSlot; SLOAD`, so the
+value stored is the configured duration read out of the contract's own
+storage — named here as `Devm.getStorVal stage sevm.currentTarget
+pauseDurationSlot` rather than left an unconstrained variable. -/
 
 set_option maxRecDepth 8192 in
-/-- `pause`'s staging line leaves the call's target argument at `targetWord`,
-a zero at `newPauserWord`, and a one at `continuationWord`. -/
+/-- `pause`'s staging line leaves the configured pause duration at
+`durationWord`, the call's target argument at `targetWord`, a zero at
+`newPauserWord`, and a one at `continuationWord`. -/
 theorem pauseStaging_windows3 {sevm : Sevm} {stage devm' : Devm} {img : Bytes}
     (image : MemImage stage img)
     (run : Line.Run sevm stage pauseStagingLine devm') :
     MemWordAt devm' (targetWord * 32).toNat (Sevm.argWord sevm 0) ∧
       MemWordAt devm' (newPauserWord * 32).toNat 0 ∧
-      MemWordAt devm' (continuationWord * 32).toNat 1 := by
+      MemWordAt devm' (continuationWord * 32).toNat 1 ∧
+      MemWordAt devm' (durationWord * 32).toNat
+        (Devm.getStorVal stage sevm.currentTarget pauseDurationSlot) := by
   unfold pauseStagingLine at run
   rcases of_run_append _ run with ⟨_u9, r9, rContinuation⟩
   rcases of_run_append _ r9 with ⟨_u8, r8, rPush1⟩
@@ -159,7 +170,25 @@ theorem pauseStaging_windows3 {sevm : Sevm} {stage devm' : Devm} {img : Bytes}
   rcases of_run_append _ r2 with ⟨_u1, r1, rDuration⟩
   have image1 : MemImage _u1 img :=
     MemImage.of_memory_eq (Line.of_inv Devm.memory (by line_inv) r1).symm image
-  obtain ⟨_dv, hmemDuration⟩ := of_run_mstoreAt_mem rDuration
+  have pDuration :
+      Devm.getStorVal stage sevm.currentTarget pauseDurationSlot :: []
+        <<+ _u1.stack := by
+    rcases Line.of_run_cons r1 with ⟨t1, o1, r1'⟩
+    rcases Line.of_run_cons r1' with ⟨_t2, o2, hnil⟩
+    cases hnil
+    obtain ⟨y, py, hy⟩ :=
+      prefix_of_sload o2 (prefix_of_push (of_run_pushB256 o1) nil_pref)
+    rw [hy, show Devm.getStorVal t1 sevm.currentTarget pauseDurationSlot
+          = Devm.getStorVal stage sevm.currentTarget pauseDurationSlot from
+        congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get pauseDurationSlot)
+          (Line.of_inv Devm.getStor (by line_inv)
+            (Line.Run.cons o1 Line.Run.nil)).symm] at py
+    exact py
+  obtain ⟨_dv, hmemDuration⟩ := of_run_mstoreAt_val rDuration pDuration
+  have windowD : MemWordAt _u2 (durationWord * 32).toNat
+      (Devm.getStorVal stage sevm.currentTarget pauseDurationSlot) :=
+    MemWordAt.of_write image1 hmemDuration
   have image2 := image1.write hmemDuration
   have image3 :=
     MemImage.of_memory_eq (Line.of_inv Devm.memory (by line_inv) rArg).symm
@@ -209,9 +238,16 @@ theorem pauseStaging_windows3 {sevm : Sevm} {stage devm' : Devm} {img : Bytes}
       cases hnil
       exact q)) nil_pref
   obtain ⟨_pCont, hmemCont⟩ := of_run_mstoreAt_val rContinuation pOne
+  have windowD9 :=
+    ((((windowD.acrossLine (by line_inv) rArg).acrossMstoreAt (by decide)
+      rTarget).acrossLine (by line_inv) rPush0a).acrossMstoreAt (by decide)
+      rNewPauser).acrossLine (by line_inv) rPush0b
   exact ⟨MemWordAt.writeMiss hmemCont (by decide) windowT9,
     MemWordAt.writeMiss hmemCont (by decide) windowN9,
-    MemWordAt.of_write image9 hmemCont⟩
+    MemWordAt.of_write image9 hmemCont,
+    MemWordAt.writeMiss hmemCont (by decide)
+      ((MemWordAt.writeMiss hmemPrev (by decide) windowD9).acrossLine
+        (by line_inv) rPush1)⟩
 
 /-! ## The pause body, on a successful outcome
 
@@ -312,10 +348,15 @@ theorem pause_routeTo_setPauserCall_ok (dp : DeployParams)
 
 set_option maxRecDepth 16384 in
 /-- The whole pause route down to `setPauserKernel`'s entry on a successful
-walk, with the three staged memory windows and the storage relation the
+walk, with the four staged memory windows and the storage relation the
 kernel's second branch needs.  The `.ok` sibling of
 `runtimeMain_routeTo_pauseKernel`: the entry guard and the five body guards
-are settled by the outcome, so only the calldata selector is a premise. -/
+are settled by the outcome, so only the calldata selector is a premise.
+
+The fourth window carries the staged pause duration, and it reaches the
+kernel already named as the message-entry storage word the staging line's
+`SLOAD` read — the staging line preserves storage, so the duration staged in
+memory is `devm`'s own `pauseDurationSlot`. -/
 theorem runtimeMain_routeTo_pauseKernel_ok (dp : DeployParams)
     {sevm : Sevm} {devm post : Devm} {img : Bytes} {code : ByteArray}
     {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
@@ -328,6 +369,8 @@ theorem runtimeMain_routeTo_pauseKernel_ok (dp : DeployParams)
       MemWordAt kernelStart (targetWord * 32).toNat (Sevm.argWord sevm 0) →
       MemWordAt kernelStart (newPauserWord * 32).toNat 0 →
       MemWordAt kernelStart (continuationWord * 32).toNat 1 →
+      MemWordAt kernelStart (durationWord * 32).toNat
+        (Devm.getStorVal devm sevm.currentTarget pauseDurationSlot) →
       Devm.getStor kernelStart = Devm.getStor devm →
       CodeAt kernelStart (Sevm.argWord sevm 0).toAdr code →
       ∀ tail : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
@@ -353,15 +396,25 @@ theorem runtimeMain_routeTo_pauseKernel_ok (dp : DeployParams)
   refine dispatch_routeTo_pause dp arm selectorEq
     (fun _current pauseEntry hstor hmem hcode bodyTail => ?_)
   refine pause_routeTo_setPauserCall_ok dp bodyTail
-    (fun _c _stage callState hstor' hmem' hcode' staging callTail => ?_)
-  obtain ⟨wT, wN, wC⟩ := pauseStaging_windows3
+    (fun _c stageState callState hstor' hmem' hcode' staging callTail => ?_)
+  obtain ⟨wT, wN, wC, wD⟩ := pauseStaging_windows3
     (MemImage.of_memory_eq (hmem'.trans (hmem.trans mb)) image) staging
+  have wD' : MemWordAt callState (durationWord * 32).toNat
+      (Devm.getStorVal devm sevm.currentTarget pauseDurationSlot) := by
+    rw [show Devm.getStorVal devm sevm.currentTarget pauseDurationSlot
+          = Devm.getStorVal stageState sevm.currentTarget pauseDurationSlot from
+        congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get pauseDurationSlot)
+          ((Line.of_inv Devm.getStor (by unfold pauseStagingLine; line_inv)
+            staging).trans (hstor'.trans (hstor.trans gb))).symm]
+    exact wD
   refine routeTo_call (body := setPauserKernel) callTail
     (by simp [runtime, aux, setPauserSlot]) (fun kernelStart kburn ktail => ?_)
   exact kernelRoute kernelStart
     (MemWordAt.of_memory_eq kburn.memory.symm wT)
     (MemWordAt.of_memory_eq kburn.memory.symm wN)
     (MemWordAt.of_memory_eq kburn.memory.symm wC)
+    (MemWordAt.of_memory_eq kburn.memory.symm wD')
     ((getStor_of_state kburn.state).symm.trans
       (hstor'.trans (hstor.trans gb)))
     ((congrFun ((getCode_of_state kburn.state).symm.trans
@@ -450,7 +503,7 @@ theorem MemWordAt.acrossRemoveTargetPrefix {e : Sevm} {a b : Devm}
 
 set_option maxRecDepth 8192 in
 /-- The kernel's second branch word at a target whose recorded pauser is the
-caller, with all three pause windows carried across the crossing, plus the
+caller, with all four pause windows carried across the crossing, plus the
 two facts the count thread needs: the crossing's own `MSTORE` leaves the
 *caller* at `previousPauserWord` — so the decrement that follows lands on the
 caller's count slot — and the crossing's `SSTORE` (at the target's assignment
@@ -458,10 +511,11 @@ slot) leaves the caller's count cell alone.  The sibling of
 `pauseKernel_previousPauserNonzero`, which carries only the `newPauserWord`
 window the unregistration continuation needs. -/
 theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
-    {target : B256}
+    {target duration : B256}
     (windowT : MemWordAt devm (targetWord * 32).toNat target)
     (windowN : MemWordAt devm (newPauserWord * 32).toNat 0)
     (windowC : MemWordAt devm (continuationWord * 32).toNat 1)
+    (windowD : MemWordAt devm (durationWord * 32).toNat duration)
     (hprevEq : Devm.getStorVal devm sevm.currentTarget
       (assignmentSlot target) = sevm.caller.toB256)
     (assigned :
@@ -471,6 +525,7 @@ theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
       MemWordAt devm' (targetWord * 32).toNat target ∧
       MemWordAt devm' (newPauserWord * 32).toNat 0 ∧
       MemWordAt devm' (continuationWord * 32).toNat 1 ∧
+      MemWordAt devm' (durationWord * 32).toNat duration ∧
       MemWordAt devm' (previousPauserWord * 32).toNat sevm.caller.toB256 ∧
       ∀ key : B256, assignmentSlot target ≠ key →
         Devm.getStorVal devm' sevm.currentTarget key =
@@ -518,6 +573,8 @@ theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
     MemWordAt.writeMiss hmem8 (by decide) (chain7 windowN)
   have windowC8 : MemWordAt s8 (continuationWord * 32).toNat 1 :=
     MemWordAt.writeMiss hmem8 (by decide) (chain7 windowC)
+  have windowD8 : MemWordAt s8 (durationWord * 32).toNat duration :=
+    MemWordAt.writeMiss hmem8 (by decide) (chain7 windowD)
   have hveq : v = sevm.caller.toB256 := by
     rw [hv,
       show Devm.getStorVal s4 sevm.currentTarget (assignmentSlot target)
@@ -569,7 +626,7 @@ theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
       q11).acrossMload q12).acrossNinst q13).acrossNinst q14).acrossNinst
       q15).acrossNinst q16
   refine ⟨?_, chainEnd windowT8, chainEnd windowN8, chainEnd windowC8,
-    chainEnd windowP8, ?_⟩
+    chainEnd windowD8, chainEnd windowP8, ?_⟩
   · intro w rest hstack
     rw [head_of_stack_prefix p16 hstack]
     simp [B256.eqCheck, hnonzero]
@@ -691,13 +748,14 @@ can name every span key concretely and decide its disjointness from the
 caller's count slot. -/
 theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
     {sevm : Sevm} {devm post : Devm} {target : B256} {code : ByteArray}
-    {idx0 len0 last0 : B256}
+    {idx0 len0 last0 : B256} {duration : B256}
     {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
     (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
       setPauserKernel (.ok post))
     (windowT : MemWordAt devm (targetWord * 32).toNat target)
     (windowN : MemWordAt devm (newPauserWord * 32).toNat 0)
     (windowC : MemWordAt devm (continuationWord * 32).toNat 1)
+    (windowD : MemWordAt devm (durationWord * 32).toNat duration)
     (codeAt : CodeAt devm target.toAdr code)
     (assigned :
       Devm.getStorVal devm sevm.currentTarget (assignmentSlot target) ≠ 0)
@@ -728,6 +786,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
           (countSlot sevm.caller.toB256))
     (bodyRoute : ∀ devm' : Devm,
       MemWordAt devm' (targetWord * 32).toNat target →
+      MemWordAt devm' (durationWord * 32).toNat duration →
       CodeAt devm' target.toAdr code →
       Devm.getStorVal devm' sevm.currentTarget
           (countSlot sevm.caller.toB256) =
@@ -764,6 +823,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wTz := windowT.acrossMemoryZeroCheck (k := targetWord) zrun
   have wNz := windowN.acrossMemoryZeroCheck (k := targetWord) zrun
   have wCz := windowC.acrossMemoryZeroCheck (k := targetWord) zrun
+  have wDz := windowD.acrossMemoryZeroCheck (k := targetWord) zrun
   have cz := codeAt.acrossLine (by unfold setPauserKernelZeroCheck; line_inv)
     zrun
   refine routeTo_branchLeft_of_rightRevertsOk_frame tail (fuel := 8) (by rfl)
@@ -773,6 +833,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wTa := MemWordAt.of_memory_eq hpop.memory.symm wTz
   have wNa := MemWordAt.of_memory_eq hpop.memory.symm wNz
   have wCa := MemWordAt.of_memory_eq hpop.memory.symm wCz
+  have wDa := MemWordAt.of_memory_eq hpop.memory.symm wDz
   have ca := cz.ofState hpop.state
   have arrA : Devm.getStorVal a sevm.currentTarget (indexSlot target)
         = idx0 ∧
@@ -780,8 +841,8 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
       Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 :=
     arrOf ga ⟨hidx0, hlen0, hlast0⟩
   refine routeTo_line pauseKernelAppendPrefix arm (fun _b brun tail2 => ?_)
-  obtain ⟨branchWord, wTb, wNb, wCb, wPb, presB⟩ :=
-    pauseKernel_previousPauserNonzero3 wTa wNa wCa
+  obtain ⟨branchWord, wTb, wNb, wCb, wDb, wPb, presB⟩ :=
+    pauseKernel_previousPauserNonzero3 wTa wNa wCa wDa
       (by
         rw [show Devm.getStorVal a sevm.currentTarget (assignmentSlot target)
               = Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
@@ -813,6 +874,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wTc := MemWordAt.of_memory_eq hpopc.memory.symm wTb
   have wNc := MemWordAt.of_memory_eq hpopc.memory.symm wNb
   have wCc := MemWordAt.of_memory_eq hpopc.memory.symm wCb
+  have wDc := MemWordAt.of_memory_eq hpopc.memory.symm wDb
   have wPc := MemWordAt.of_memory_eq hpopc.memory.symm wPb
   have cc := cb.ofState hpopc.state
   have kc : Devm.getStorVal c sevm.currentTarget
@@ -825,6 +887,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wTd := wTc.acrossOldCountPrefix drun
   have wNd := wNc.acrossOldCountPrefix drun
   have wCd := wCc.acrossOldCountPrefix drun
+  have wDd := wDc.acrossOldCountPrefix drun
   have cd := cc.acrossLine
     (by unfold oldCountPrefix previousCountKey loadWord tagTop; line_inv) drun
   have arrD := arrOf (Line.of_inv Devm.getStor
@@ -835,6 +898,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wTe := wTd.acrossNinst (Ninst.Run.of_runCompiled erun)
   have wNe := wNd.acrossNinst (Ninst.Run.of_runCompiled erun)
   have wCe := wCd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have wDe := wDd.acrossNinst (Ninst.Run.of_runCompiled erun)
   have ce := cd.acrossNinst (Ninst.Run.of_runCompiled erun)
   have hsetE := sstore_getStor_set (Ninst.Run.of_runCompiled erun) pd
   have ke : Devm.getStorVal e sevm.currentTarget
@@ -865,6 +929,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wTf := MemWordAt.of_memory_eq fburn.memory.symm wTe
   have wNf := MemWordAt.of_memory_eq fburn.memory.symm wNe
   have wCf := MemWordAt.of_memory_eq fburn.memory.symm wCe
+  have wDf := MemWordAt.of_memory_eq fburn.memory.symm wDe
   have cf := ce.ofState fburn.state
   have kf := (cellOf (getStor_of_state fburn.state).symm).trans ke
   have arrF := arrOf (getStor_of_state fburn.state).symm arrE
@@ -872,6 +937,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
     (fun g grun tail7 => ?_)
   have wTg := wTf.acrossMemoryZeroCheck (k := newPauserWord) grun
   have wCg := wCf.acrossMemoryZeroCheck (k := newPauserWord) grun
+  have wDg := wDf.acrossMemoryZeroCheck (k := newPauserWord) grun
   have cg := cf.acrossLine (by unfold memoryZeroCheck loadWord; line_inv) grun
   have kg := (cellOf (Line.of_inv Devm.getStor
     (by unfold memoryZeroCheck loadWord; line_inv) grun).symm).trans kf
@@ -884,6 +950,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
     (fun i _wi hpopi arm2 => ?_)
   have wTi := MemWordAt.of_memory_eq hpopi.memory.symm wTg
   have wCi := MemWordAt.of_memory_eq hpopi.memory.symm wCg
+  have wDi := MemWordAt.of_memory_eq hpopi.memory.symm wDg
   have ci := cg.ofState hpopi.state
   have ki := (cellOf (getStor_of_state hpopi.state).symm).trans kg
   have arrI := arrOf (getStor_of_state hpopi.state).symm arrG
@@ -891,6 +958,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
     (by simp [runtime, aux, removeTargetSlot]) (fun j jburn tail8 => ?_)
   have wTj := MemWordAt.of_memory_eq jburn.memory.symm wTi
   have wCj := MemWordAt.of_memory_eq jburn.memory.symm wCi
+  have wDj := MemWordAt.of_memory_eq jburn.memory.symm wDi
   have cj := ci.ofState jburn.state
   have kj := (cellOf (getStor_of_state jburn.state).symm).trans ki
   have arrJ := arrOf (getStor_of_state jburn.state).symm arrI
@@ -900,10 +968,13 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
     krun
   have wCk := wCj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
     krun
+  have wDk := wDj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
+    krun
   have ck := cj.acrossLine (by line_inv) krun
   refine routeTo_next tail9 (fun l lrun tail10 => ?_)
   have wTl := wTk.acrossNinst (Ninst.Run.of_runCompiled lrun)
   have wCl := wCk.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have wDl := wDk.acrossNinst (Ninst.Run.of_runCompiled lrun)
   have cl := ck.acrossNinst (Ninst.Run.of_runCompiled lrun)
   have kl := (hRemoveCount j k l wTj arrJ.1 arrJ.2.1 arrJ.2.2 krun
     lrun).trans kj
@@ -911,21 +982,25 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
     (by simp [runtime, aux, finishSetPauserSlot]) (fun m mburn tail11 => ?_)
   have wTm := MemWordAt.of_memory_eq mburn.memory.symm wTl
   have wCm := MemWordAt.of_memory_eq mburn.memory.symm wCl
+  have wDm := MemWordAt.of_memory_eq mburn.memory.symm wDl
   have cm := cl.ofState mburn.state
   have km := (cellOf (getStor_of_state mburn.state).symm).trans kl
   refine routeTo_line finishSetPauserPrefix tail11 (fun n nrun tail12 => ?_)
   have wTn := wTm.acrossFinishPrefix nrun
+  have wDn := wDm.acrossFinishPrefix nrun
   have cn := cm.acrossLine (by unfold finishSetPauserPrefix; line_inv) nrun
   have kn := (cellOf (Line.of_inv Devm.getStor finishSetPauserPrefix_storInv
     nrun).symm).trans km
   refine routeTo_branchLeft_frame tail12 (pause_continuationWord wCm nrun)
     (fun o hpopo arm3 => ?_)
   have wTo := MemWordAt.of_memory_eq hpopo.memory.symm wTn
+  have wDo := MemWordAt.of_memory_eq hpopo.memory.symm wDn
   have co := cn.ofState hpopo.state
   have ko := (cellOf (getStor_of_state hpopo.state).symm).trans kn
   refine routeTo_call (body := pauseAfterSet) arm3
     (by simp [runtime, aux, pauseAfterSetSlot]) (fun p pburn tail13 => ?_)
   exact bodyRoute p (MemWordAt.of_memory_eq pburn.memory.symm wTo)
+    (MemWordAt.of_memory_eq pburn.memory.symm wDo)
     (co.ofState pburn.state)
     ((cellOf (getStor_of_state pburn.state).symm).trans ko) tail13
 
@@ -1122,7 +1197,15 @@ them against its concrete responder crossings.
 The continuation is entered at the count branch — the one branch on the
 route with two live arms — with the crossed count-test `Line.Run`, from
 which the caller computes the branch word (`pauseCount_word` turns a storage
-fact into it). -/
+fact into it).
+
+The staged duration window arrives here too.  Nothing on *this* route reads
+it: `pauseCallStaging` copies it into the `pauseFor(uint256)` calldata word
+and `pauseSuccessEventLine` copies it into the log data, and neither of those
+facts leaves the route, because `hcall` hands the caller only the operand
+stack and the staged-target window.  The premise is the window's terminus —
+what a later cut that strengthens `hcall` to name the outgoing calldata word
+would consume — so it is carried, not used. -/
 theorem pauseAfterSet_routeTo_countBranch (dp : DeployParams)
     {sevm : Sevm} {devm post : Devm} {target : B256} {code : ByteArray}
     {countAfter : B256}
@@ -1421,10 +1504,10 @@ theorem runtimeMain_routeTo_pauseLastExpiry
       (.reg .sstore) := by
   refine runtimeMain_routeTo_pauseKernel_ok officialParams h image
     (targetEq ▸ hcode) selectorEq
-    (fun kernelStart wT wN wC hstor kcode ktail => ?_)
+    (fun kernelStart wT wN wC wD hstor kcode ktail => ?_)
   rw [targetEq] at wT kcode
   refine setPauserKernel_routeTo_pauseAfterSetCall officialParams ktail wT wN
-    wC kcode
+    wC wD kcode
     (by
       rw [show Devm.getStorVal kernelStart sevm.currentTarget
             (assignmentSlot target)
@@ -1460,7 +1543,7 @@ theorem runtimeMain_routeTo_pauseLastExpiry
           (f sevm.currentTarget).get (arrayEntrySlot len0)) hstor]
       exact hlast0)
     hneAC hneAI hneAL hneAE hneCI hneCL hneCE hRemoveCount
-    (fun entry wTe cTe kPA tailPA => ?_)
+    (fun entry wTe wDe cTe kPA tailPA => ?_)
   have kEntry : Devm.getStorVal entry sevm.currentTarget
       (countSlot sevm.caller.toB256) = countAfter := by
     rw [kPA,
@@ -1555,10 +1638,10 @@ theorem runtimeMain_routeTo_pauseRetainedExpiry
       (.reg .sstore) := by
   refine runtimeMain_routeTo_pauseKernel_ok officialParams h image
     (targetEq ▸ hcode) selectorEq
-    (fun kernelStart wT wN wC hstor kcode ktail => ?_)
+    (fun kernelStart wT wN wC wD hstor kcode ktail => ?_)
   rw [targetEq] at wT kcode
   refine setPauserKernel_routeTo_pauseAfterSetCall officialParams ktail wT wN
-    wC kcode
+    wC wD kcode
     (by
       rw [show Devm.getStorVal kernelStart sevm.currentTarget
             (assignmentSlot target)
@@ -1594,7 +1677,7 @@ theorem runtimeMain_routeTo_pauseRetainedExpiry
           (f sevm.currentTarget).get (arrayEntrySlot len0)) hstor]
       exact hlast0)
     hneAC hneAI hneAL hneAE hneCI hneCL hneCE hRemoveCount
-    (fun entry wTe cTe kPA tailPA => ?_)
+    (fun entry wTe wDe cTe kPA tailPA => ?_)
   have kEntry : Devm.getStorVal entry sevm.currentTarget
       (countSlot sevm.caller.toB256) = countAfter := by
     rw [kPA,
