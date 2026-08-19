@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blanc — barely a language, fully proved</title>
-<meta name="description" content="Suppose you want a contract that does X — and a machine-checked proof that it does X, with the least restriction on what X can be. Blanc is a full-stack answer in Lean 4 over the Jaune semantics: a four-constructor language, a verified compiler, contracts proved at chain altitude, and WETH10 reimplemented — every landed verification goal met — in under 24 hours of wall clock. The penultimate form of smart contract development.">
+<meta name="description" content="Barely a language, fully proved: a four-constructor contract language over the EVM, a compiler whose correctness is a machine-checked theorem, and contract properties proved about the exact bytes that deploy — one Lean 4 artifact over Jaune’s executable EVM semantics. WETH10, rebuilt from zero code to a verified drop-in in under 24 hours.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="site.css">
 <script>document.documentElement.classList.add('js');</script>
@@ -55,8 +55,7 @@
           of both, contract properties most toolchains cannot even state — one Lean&nbsp;4
           artifact, proved over
           <a href="https://skbaek.github.io/jaune/" style="text-decoration:underline;text-underline-offset:3px">Jaune</a>’s
-          executable EVM semantics, about the exact bytes that deploy. What that language is —
-          and why it is barely one — is directly below.
+          executable EVM semantics, about the exact bytes that deploy.
         </p>
         <div class="ctarow">
           <a class="btn primary" href="#claims">How we earn “does X”</a>
@@ -147,7 +146,7 @@
     <p class="eyebrow"><span class="secno">§ 1</span> The language</p>
     <h2 style="max-width:24ch">A blank canvas over the EVM.</h2>
     <p class="lede" style="margin-top:18px">
-      Hold the title block’s destination fixed — machine-checked claims about exact deployed
+      Hold the destination fixed — machine-checked claims about exact deployed
       bytes, for as wide an <em>X</em> as verification allows — and the language designs itself
       backwards. Contract languages usually add: types, objects, modifiers, a memory manager, an optimizer
       pipeline. Every addition is expressive power, and every addition is also distance between what
@@ -284,7 +283,7 @@
           Batteries are not included, and that is a fact about the project’s age as well as its taste:
           what exists today is what three contracts needed — a dispatcher pattern, ABI helpers, a
           shared <span class="mono">nonpayable</span> guard, a proof ladder. Each was written once,
-          proved, and reused by the next contract. §&nbsp;6 is about how fast that library grows now.
+          proved, and reused by the next contract.
         </p>
       </div>
     </div>
@@ -299,7 +298,7 @@
     <p class="lede" style="margin-top:18px">
       Each contract raised the bar for the next, and each has a page of its own: how we know it
       is the contract it names, the deviation registry, the measured deltas, and what the build
-      taught. Two kinds are kept deliberately distinct.
+      taught. Two kinds are kept distinct.
       <strong style="color:var(--ink)">Ports</strong> target a contract that already exists, so
       every claim can be checked against something you already trust.
       <strong style="color:var(--ink)">Études</strong> are composed from scratch — deliberately
@@ -366,7 +365,7 @@
       defined, that is evidence the thing was never contract-specific, and it moves upstream with a
       rename. The shared layer this discipline has accreted — the verification ladder, forward and
       inversion tactic families, the callback-crossing machinery — is the real asset: it is why the
-      third contract cost a day, not a season. A port joins this section when its registers close.
+      third contract cost a day, not a season. A contract joins the portfolio when its registers close.
     </p>
   </div>
 </section>
@@ -377,7 +376,7 @@
     <p class="eyebrow"><span class="secno">§ 3</span> The questions we expect</p>
     <h2 style="max-width:26ch">What a port claims — and how we earn it.</h2>
     <p class="lede" style="margin-top:18px">
-      The portfolio above is staged on contracts you already know — a WETH, a flash-mint
+      The portfolio is staged on contracts you already know — a WETH, a flash-mint
       token, a full 27-selector WETH10 — rebuilt in a language you have never heard of. Which
       invites a fair suspicion: <em>is this claiming to be WETH10 — to the byte? And if not,
       what kind of win is being advertised?</em>
@@ -388,16 +387,14 @@
       deployed today, the Blanc implementation would be a better way to build it</strong> — where
       better is three specific things: behavior that follows a stated, proved specification; an
       artifact that stays within reach of interactive verification; low-level freedom spent on
-      measured wins. The ports are demonstrations, staged on contracts whose behavior you already
-      know so that the demonstration can be checked against something you trust. And if what you
+      measured wins. And if what you
       need verified is bytecode already on chain, Blanc is not that instrument — every theorem
       here is about Blanc’s own artifact, a boundary §&nbsp;5’s ledger prices with the rest of
       the bill.
     </p>
     <p class="lede" style="margin-top:14px">
-      Now grant all of that, and you may still, reasonably, be wondering: <em>what counts as the
-      right behavior — and how do we know the ports have it?</em> This section exists to answer
-      exactly that. A familiar name is not evidence, and a correct compiler is
+      Grant all of that, and a harder question is still open: what counts as the right
+      behavior — and how do we know the ports have it? A familiar name is not evidence, and a correct compiler is
       no defense if the program it faithfully compiles is the wrong program. So the answer is
       built in layers — each catching a different way the claim could fail, none asked to do
       another’s job. WETH10, the fullest instance to date, answers like this:
@@ -502,10 +499,8 @@
     <h2 style="max-width:26ch">Theorems most stacks cannot state.</h2>
     <p class="lede" style="margin-top:18px">
       Because contracts, compiler, and chain semantics are one mathematical object, statements
-      that fall outside other tools’ vocabularies are ordinary here. What follows is the
-      inventory of those statement kinds, each with a landed instance you can open. The room a
-      kind gets below tracks how rarely the field can state it — which is why the first entry
-      is not a card.
+      that fall outside other tools’ vocabularies are ordinary here. Six kinds have landed so
+      far, each with an instance you can open.
     </p>
 
     <div id="flagship" style="margin-top:44px">
@@ -546,7 +541,7 @@
         about the window, not a trace extractor. The deployment root is no opaque axiom: from one
         successful canonical creation-block transition through Jaune’s actual Prague block pipeline,
         <span class="mono">DeploymentRoot</span> — receipt success, exact installed runtime, empty
-        storage — is derived, not assumed. And an all-holders sibling packages one history carrying
+        storage — is derived, not assumed. And an all-holders sibling delivers one history carrying
         the guarantee for every holder at once, without the dual-selector packaging.</p>
 
       <div class="grid2" style="margin-top:26px;align-items:start">
@@ -600,7 +595,7 @@
       </div>
     </div>
 
-    <h3 class="subhead" style="margin-top:48px">Five more kinds <i>— smaller entries, still uncommon</i></h3>
+    <h3 class="subhead" style="margin-top:48px">Five more kinds <i>— still uncommon</i></h3>
     <div class="grid3" style="margin-top:16px">
       <div class="panel">
         <span class="tick">adversarial settlement</span>
@@ -713,7 +708,7 @@
       upgradeable proxies and vendored library ecosystems, and anyone whose assurance story must be
       legible to today’s audit market. Who plausibly should: contracts whose invariants are worth
       more than their development cost — bridges, wrappers, vaults, anything whose one job is to
-      never lose the books. For that class, the next section is the part of the bill that changed.
+      never lose the books. For that class, §&nbsp;6 is the part of the bill that changed.
     </p>
   </div>
 </section>
@@ -725,7 +720,7 @@
     <h2 style="max-width:24ch">What agents change — with receipts.</h2>
     <p class="lede" style="margin-top:18px">
       The traditional objection to interactive verification is not doubt about the theorems; it is
-      the invoice — expert-months per contract. That number was measured this month, on this
+      the invoice — expert-months per contract. That number was measured in August 2026, on this
       repository, and it is no longer what people remember it being.
     </p>
 
@@ -981,13 +976,13 @@
         <p class="dim" style="font-size:.93rem;margin-bottom:0">
           <span class="mono">solc</span>’s built-in SMTChecker and the property fuzzers —
           Foundry’s, Echidna, Medusa — are valuable, cheap, and not in the business of
-          machine-checked functional specification; they complement everything above rather than
+          machine-checked functional specification; they complement the table rather than
           competing with it. Early-stage entrants (powdr’s Yul compiler work, small verified-WETH
-          exercises) are noted here rather than rowed. And the first of two notes from outside
+          exercises) are noted here rather than rowed. And from outside
           the EVM: the one ecosystem where revert-freedom is checked routinely, by default, at
           framework scale is the Move Prover’s <span class="mono">aborts_if</span> discipline — a
           different VM, and a standing reminder of how much ground this field, Blanc included, has
-          left to cover. The second note is below, and it is the more uncomfortable one.
+          left to cover.
         </p>
       </div>
     </div>
@@ -1009,8 +1004,8 @@
       Michelson, with a kernel-checkable proof, establishing that the market-maker invariant is
       strictly increasing and that all three contract balances stay strictly positive, for a
       contract live on mainnet at protocol level. That is a solvency-class property on an
-      automated market maker, and it clears every ask above. Why it was reachable there is this
-      section’s whole point: on Tezos the deployed artifact <em>is</em> Michelson — typed,
+      automated market maker, and it clears every ask above. The reason it was reachable there is
+      structural: on Tezos the deployed artifact <em>is</em> Michelson — typed,
       structured control flow, no computed jump targets — so the distance between the code on
       chain and the vocabulary a property is written in is short by construction. On the EVM that
       distance is the entire problem, and every project in the table above is a different way of

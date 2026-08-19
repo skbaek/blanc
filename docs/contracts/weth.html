@@ -80,8 +80,8 @@
       “Is WETH” means two checkable things here, and only those: the behavior agrees with the
       deployed reference on differential evidence a third party can re-run, and the load-bearing
       properties are theorems about the exact compiled bytes. The tests catch proving the wrong
-      program; the theorems quantify where tests can only sample. Both are collapsed below —
-      open what you want to audit.
+      program; the theorems quantify where tests can only sample. Open the
+      layer you want to audit.
     </p>
 
     <details class="fold">
@@ -159,7 +159,7 @@ chainUsing_preserves_solvent           <span class="c">   chain, across fork act
           lemmas in
           <a href="https://github.com/skbaek/blanc/blob/main/Blanc/WethGas.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">WethGas.lean</span></a>.
           The split is deliberate and honest: the solvency family is pure safety; these rows are
-          where liveness is actually earned. All of them sit in the repository’s 426-theorem
+          where liveness is actually earned. All of them sit in the repository-wide
           axiom audit, each pinned to its exact axiom set in CI.
         </p>
       </div>
