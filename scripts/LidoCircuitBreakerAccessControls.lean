@@ -3,6 +3,7 @@ import Blanc.LidoCircuitBreakerRetainedAuthority
 import Blanc.LidoCircuitBreakerAttainment
 import Blanc.LidoCircuitBreakerPauseJoin
 import Blanc.LidoCircuitBreakerPauseSettlement
+import Blanc.LidoCircuitBreakerPreControl
 
 /-!
 Gate-owned controls for the Stage 5 access and temporal-authority family.
@@ -1662,5 +1663,63 @@ theorem pause_settlement_message_content_control :
     have value : post.getStorVal configWorldOwner
         (expirySlot pauseWorldPauser) = 2592010 := hexp.trans (by decide)
     exact ⟨post, hmsg, value, by rw [value]; decide⟩
+
+/-! ## Pre-control: what is settled before the target gets control
+
+The pre-control family is the program's first claim quantified over arbitrary
+target bytecode, so the control it needs is the one no callee-pinning
+weakening could supply. -/
+
+/-- The pre-control results at an ARBITRARY target bytecode, joined into the
+consequence none of them states alone: at the instant the target receives
+control the paused target's assignment cell is `0` and the reentrancy lock is
+held, and a `pause` re-entered from that very state takes the lock guard's
+refusal arm and reverts with `ReentrantCall`'s own payload.
+
+`code` is universally quantified, and `hcode` is the only thing this control
+says about the code at `target` — which the first conjunct then carries
+across the span, so the arbitrary code is still the one installed when the
+target receives control.  A weakening that pinned the callee — an
+added hypothesis naming the target's bytecode, or one satisfiable only in a
+world where the target answers the pausable interface — could not discharge
+this control, because there is nothing here to discharge it with.
+
+The re-entrant frame is taken at `callPre` itself, the state the target is
+looking at the moment it receives control, rather than at a later
+reconstruction of it. -/
+theorem pre_control_arbitrary_target_code_control
+    (dp : DeployParams) (sevm sevm' : Sevm)
+    (entry guardPost branchPost callPre : Devm) (xs : List B256)
+    (target reentrantTarget : B256) (code : ByteArray) (G : Nat)
+    (hcode : CodeAt entry target.toAdr code)
+    (hguard : Line.Run sevm entry pauseCodeGuard guardPost)
+    (hbranch : Devm.PopBurn xs guardPost branchPost)
+    (hstaging : Line.Run sevm branchPost pauseCallStaging callPre)
+    (hassignment : entry.getStorVal sevm.currentTarget
+      (assignmentSlot target) = 0)
+    (hlock : entry.getTransVal sevm.currentTarget lockKey = 1)
+    (hframe : sevm'.currentTarget = sevm.currentTarget)
+    (hdataLength : sevm'.data.length = 36)
+    (hmask : addressMask &&& reentrantTarget = 0)
+    (hdataTarget : Sevm.dataWord sevm' 4 = reentrantTarget) :
+    CodeAt callPre target.toAdr code ∧
+      callPre.getStorVal sevm.currentTarget (assignmentSlot target) = 0 ∧
+      callPre.getTransVal sevm.currentTarget lockKey = 1 ∧
+      ∃ post,
+        Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm'
+          (callPre.setMach ⟨[], Mem.empty, G + pauseReentrantGas⟩)
+          pause (.error (.revert, post)) ∧
+        post.output = customErrorData "ReentrantCall" := by
+  obtain ⟨hassign', hlock'⟩ :=
+    pauseCallEntry_assignment_and_lock hguard hbranch hstaging hassignment
+      hlock
+  refine ⟨CodeAt.acrossLine pauseCallStaging_codeInv hstaging
+      (CodeAt.ofState hbranch.state
+        (CodeAt.acrossLine pauseCodeGuard_codeInv hguard hcode)),
+    hassign', hlock', ?_⟩
+  obtain ⟨post, hrun, hout, _, _, _⟩ :=
+    pause_body_runCompiledTo_error_of_locked dp sevm' callPre reentrantTarget G
+      hdataLength hmask hdataTarget (by rw [hframe, hlock']; decide)
+  exact ⟨post, hrun, hout⟩
 
 end Blanc.LidoCircuitBreaker.AccessControls

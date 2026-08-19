@@ -71,6 +71,11 @@ OWNERS = {
     # actually leaves behind once the frame settles.
     "pauseSettlement":
         ROOT / "Blanc/LidoCircuitBreakerPauseSettlement.lean",
+    # Stage 6's first cut: what the CircuitBreaker has already settled at the
+    # moment an arbitrary target receives control.  This is the first owner in
+    # the family whose statements quantify over the callee's bytecode, so its
+    # pins are what a callee-pinning weakening would have to move.
+    "preControl": ROOT / "Blanc/LidoCircuitBreakerPreControl.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -103,6 +108,7 @@ MODULES = {
     "pauseOkRoute": "Blanc.LidoCircuitBreakerPauseOkRoute",
     "pauseJoin": "Blanc.LidoCircuitBreakerPauseJoin",
     "pauseSettlement": "Blanc.LidoCircuitBreakerPauseSettlement",
+    "preControl": "Blanc.LidoCircuitBreakerPreControl",
 }
 
 REQUIRED = (
@@ -171,6 +177,14 @@ REQUIRED = (
     "storage_owner_identity_required_control",
     "code_address_identity_required_control",
     "noncommitting_root_has_no_authority_control",
+    # Stage 6 pre-control.  No header pin can reach the quantifier this family
+    # exists for: every one of P1-P4 is *stated* over an arbitrary callee, and
+    # a weakening that pinned the target's code would leave each header's
+    # meaning changed but its shape recognisable.  The control instantiates the
+    # family at a universally quantified `code`, carries that same code across
+    # the span to the CALL, and joins the halves into the consequence none of
+    # them states alone -- so a pinned callee has nothing to discharge it with.
+    "pre_control_arbitrary_target_code_control",
 )
 FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|opaque|native_decide|implemented_by)\b")
 
@@ -761,6 +775,42 @@ ROLES = {
             "7e62753e46d772a674e4f888469b81d1660e5bb1cc7d4569f78c29f11c8d2820",
         "pauseWorld_projectionAgrees":
             "c4ebe339e0da9136cc0f309f5341969bc0d135d5894666b72b5209dfa1fbee32",
+    },
+    # ---- Stage 6: settled before the target gets control ----
+    "preControl": {
+        # P2: the lock is set at the state `pause` hands its own body.
+        "pauseLockPost_lock":
+            "981e902f2bbf28e9686a38258607169ec396bf44bb100d076486addfb784ab23",
+        # P2: and it is still held where the Registry kernel is entered.
+        "pauseKernelBase_lock":
+            "d3e6d198d9213f0c92d2a430bffc44edbfbf74ba64cd732b622a7be57aa687be",
+        # P1: the kernel's clearing write, read back at the cell it lands in.
+        "assignmentPost_assignment":
+            "ec11a7f06a49a484ba2abe253dcb6869179ccb74549bac85466008f54f74099d",
+        # The removal span's storage frame: a cell missing all five written keys survives it. The swap-pop tower subsumes the degenerate walk, so this serves both.
+        "removalPost_getStorVal_other":
+            "0056a01ad9bfdd138d960238b5d39b74379def77f2a9a1c57cda53751ba95bfd",
+        # P1: the clearing survives the old pauser's count decrement.
+        "foundKernelPost_assignment":
+            "5a8e7737063afd6bfd92923c2426db142a47d850600dc30672fa985055bfa4c1",
+        # P1: the assignment cell is zero at the state `pause` hands `pauseAfterSet`, for arbitrary target bytecode.
+        "pauseAfterSetEntry_assignment":
+            "addd5265deefc79b9627c31db14841831fcf00f35c6cc970c02c571992f579a3",
+        # What makes the line above a fact about the pause: the tower plus the `PauserSet` record IS `pauseAfterSet`'s entry, on the pause's continuation.
+        "removeTarget_pauseAfterSet_runCompiled":
+            "cb411ff1fcfae53f3e13a2c9b3b8e9721d3f80b837a41ffdebdfdcfd4f4bbc28",
+        # P3: neither storage nor transient storage moves between the boundary and the CALL.
+        "pauseCallEntry_frame":
+            "3ab2582962f43225ded36acf5f835fdffdbda408072fdd3c9f96c4acca0e6566",
+        # P1 and P2 carried to the CALL itself -- the instant the target receives control.
+        "pauseCallEntry_assignment_and_lock":
+            "870ecb2b55649c76bd502afc1d08443d562651d5c27dfee94af9b5c3f669cb48",
+        # P4: a re-entering pause takes the lock guard's refusal arm, whatever the target's code.
+        "pause_body_runCompiledTo_error_of_locked":
+            "d121c6dbb924db996636324f0d041038e41cc3cf4eb35b939cc3e4b0b672459c",
+        # P4 at the deployed runtime's own entry.
+        "pause_runCompiledTo_error_of_locked":
+            "20f5072a984703c8d8d89ab0a3053c3e545a849e4c1064d42dc45659fd61473f",
     },
 }
 
@@ -1394,6 +1444,12 @@ def main() -> None:
           "worlds, its model-side Registry projections and the slotwise "
           "model/run agreement between them, with each world's surviving "
           "expiry word read back through its own ProcessMessage; "
+          "Stage 6's pre-control family -- the cleared assignment and held "
+          "lock at the moment an arbitrary target receives control, the "
+          "removal span's storage frame, the boundary's identification with "
+          "pauseAfterSet's own entry, and the refusal of a re-entering pause "
+          "-- with the family instantiated at a universally quantified target "
+          "bytecode carried across the span; "
           f"{controls} labelled header mutations, deletion and trust controls")
 
 if __name__ == "__main__":

@@ -609,6 +609,11 @@ theorem pauseCodeGuard_storInv : Line.Inv Devm.getStor pauseCodeGuard := by
   simp only [List.cons_append, List.nil_append]
   line_inv
 
+theorem pauseCodeGuard_codeInv : Line.Inv Devm.getCode pauseCodeGuard := by
+  unfold pauseCodeGuard loadWord
+  simp only [List.cons_append, List.nil_append]
+  line_inv
+
 theorem pauseCodeGuard_transInv :
     Line.Inv Devm.transientStorage pauseCodeGuard := by
   unfold pauseCodeGuard loadWord
