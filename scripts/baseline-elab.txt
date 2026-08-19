@@ -1072,3 +1072,35 @@ OK	23.536	Blanc/LidoCircuitBreakerPauseWorldRunKit.lean
 OK	8.995	Blanc/LidoCircuitBreakerPauseWorldRun.lean
 OK	10.415	Blanc/LidoCircuitBreakerPauseOkRoute.lean
 OK	2.119	Blanc/LidoCircuitBreakerPauseJoin.lean
+# ---- Pause settlement: one new module, no raises ----
+#
+# `Blanc/LidoCircuitBreakerPauseSettlement.lean` lifts both pause witness
+# worlds to the message altitude and states the model-side Registry
+# projections plus the slotwise model/run agreement between them.  It is a new
+# production module, admitted under the fixed three-run procedure; no existing
+# row is touched.
+#
+#   PauseSettlement: 1.643, 1.651, 1.647 -> 1.647  (new module)
+#
+# sha256(Blanc/LidoCircuitBreakerPauseSettlement.lean) =
+#   e58e694774c9c4a2e883f08b2fdecdb7252cd30af3bb71a52614712a934926db
+# candidate: Blanc `975463d` on codex/lido-circuit-breaker-pause-settlement,
+# working tree clean at every run.
+#
+# Three separate, sequential, uncontended `scripts/check-elab.sh --list
+# --no-build --report <abs-path>` runs over all 131 files, with the Lean
+# language server stopped first: whole-tree totals 909.5 s, 920.5 s, 927.8 s.
+# The module's own three values span 8 ms, so the median is not a coin flip.
+#
+# Every one of the 130 pre-existing rows holds in all three runs against the
+# gate's 2.0x drift criterion; none reached it.  The largest observed ratio is
+# 1.47x, on `RegistrySubstrate` (17.513 row; 25.588 / 25.660 / 23.428) — the
+# same row the pause-join goal recorded at 1.69x for the same reason, its
+# premise-weakening generalizations, and it is again left byte-for-byte
+# unchanged.  This goal is authorized to admit new rows, not to raise an
+# existing one; that row remains a candidate for a deliberate, separately
+# justified raise or a costed investigation in a later goal.
+#
+# `--rebase`, `--force` and cache seeding were not used, no run was refused
+# for contention, and this diff is additions-only.
+OK	1.647	Blanc/LidoCircuitBreakerPauseSettlement.lean
