@@ -69,9 +69,22 @@ below.
   other than `0`/`1`, `false`, reverting, or a valid first word with trailing
   bytes.  Every one of those cases is stated against the STATICCALL this module
   pins, and they are the next cut.
-* No claim that either edge is reached in any particular run.  Gas sufficiency
-  and frame depth appear as explicit conjuncts read off an actual derivation,
-  never assumed away silently.
+* No claim that either edge is reached in any particular run.  Gas sufficiency,
+  frame depth and the enclosing frame's dynamic context are the three honest
+  premises: they appear as explicit conjuncts or explicit hypotheses read off
+  an actual derivation, never assumed away silently.
+
+  The third of them is `pauseCall_boundary`'s
+  `h_dynamic : sevm.isStatic = false`, and it is a fact about the **enclosing
+  frame**, not about the callee.  `callMsg` sets
+  `isStatic := isStaticcall || sevm.isStatic`, and a `CALL` passes
+  `isStaticcall = false`, so a `CALL`'s `msg.isStatic = false` *is* that flag.
+  It is true of every real pause: `pause` writes the reentrancy lock with
+  `TSTORE`, which carries Jaune's `assertDynamic` guard
+  (`Jaune/Machine.lean:2573`, used at `:2853`), so a pause entered in a static
+  context halts with `writeInStaticContext` long before this edge.  Deriving it
+  here rather than carrying it would mean composing the whole `pause`-to-`CALL`
+  prefix, which this cut excludes.
 -/
 
 namespace Blanc.LidoCircuitBreaker
@@ -1333,5 +1346,238 @@ theorem pauseCallStaging_calldata {sevm : Sevm} {entry callPre : Devm}
     exact hr4.extend _ _
   rw [Mem.Reads.read hrFinal 0x11c 36]
   exact sliceD_stagedCalldata img pauseForSelector duration
+
+/-! ## The joined boundary
+
+The pieces above each cover one edge, one survival fact or one arm.  What none
+of them says alone is the sentence the cut is for: *at a pause's external
+boundary these are the CircuitBreaker's two outgoing messages, both to that
+target, in that order.*
+
+Joining them is not a conjunction.  Both boundary relations are stated at an
+operand stack, and a joined statement that took those stack shapes as premises
+would be worthless — the shapes are exactly what a consumer cannot check.  So
+they are **derived**: `pauseCallStaging` and `pauseStatStaging` are walked
+forward from the staged target word, and the seven and six operands come out of
+the staging lines rather than out of a hypothesis.  The second walk starts from
+the word `pauseCall_targetWord_survives` carried across the CALL, so nothing in
+it assumes the callee left memory alone. -/
+
+/-- The four selector bytes an `mstoreAt 8` leaves in the CALL's window: a
+selector sits right-aligned in its word, so `[284, 288)` is its low four
+bytes.  Pure `Bytes` arithmetic — the selector-only half of what
+`sliceD_stagedCalldata` proves for the 36-byte encoding. -/
+private lemma sliceD_stagedSelector (img : Bytes) (sel : B256) :
+    (Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 284 4 0 =
+      abiSelectorBytes sel := by
+  have hsel : (B256.toBytes sel).length = 32 := B256.length_toBytes sel
+  have hword :
+      (Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 256 32 0 =
+        B256.toBytes sel := by
+    have h := Bytes.sliceD_writeAt img (B256.toBytes sel) 256
+    rwa [hsel] at h
+  have hinner := sliceD_split
+    (Bytes.writeAt img 256 (B256.toBytes sel)) (0 : UInt8) 28 256 4
+  simp only [show (28 : Nat) + 4 = 32 from rfl,
+    show (256 : Nat) + 28 = 284 from rfl] at hinner
+  have hA : ((Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 256 28 0).length
+      = 28 := List.takeD_length _ _ _
+  have hd : abiSelectorBytes sel =
+      ((Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 256 28 0 ++
+          (Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 284 4 0).drop
+        28 := by
+    rw [← hinner, hword]
+    rfl
+  rw [hd, drop_of_length_append _ _ 28 hA]
+
+/-- **The observation's staging line builds `isPaused()`'s calldata.**  The
+selector is pushed and stored inside the line itself, so the only thing needed
+from before it is that memory has *some* image — no premise about what the
+callee left there. -/
+private lemma pauseStatStaging_calldata {sevm : Sevm} {armPre statPre : Devm}
+    (himage : ∃ img : Bytes, MemImage armPre img)
+    (hstaging : Line.Run sevm armPre pauseStatStaging statPre) :
+    (statPre.memory.read 0x11c 4).1 = isPausedCalldata := by
+  obtain ⟨img, hwf0, hreads0⟩ := himage
+  have hsel8 : ((8 : B256) * 32).toNat = 256 := by decide
+  unfold pauseStatStaging at hstaging
+  simp only [List.append_assoc] at hstaging
+  -- the selector push: memory untouched, selector on top
+  obtain ⟨s1, h1, hstaging⟩ :=
+    of_run_append [Ninst.pushB256 isPausedSelector] hstaging
+  have hm1 : armPre.memory = s1.memory :=
+    Line.of_inv Devm.memory (by line_inv) h1
+  have hp1 : isPausedSelector :: [] <<+ s1.stack := by
+    rcases Line.of_run_cons h1 with ⟨u1, hpush, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 hpush) nil_pref
+  have hwf1 : Mem.Wf s1.memory := by rw [← hm1]; exact hwf0
+  have hr1 : Mem.Reads s1.memory img := by rw [← hm1]; exact hreads0
+  -- `mstoreAt 8`: the selector word lands at 256
+  obtain ⟨s2, h2, hstaging⟩ := of_run_append (mstoreAt 8) hstaging
+  obtain ⟨-, hm2⟩ := of_run_mstoreAt_val h2 hp1
+  rw [hsel8] at hm2
+  have hr2 : Mem.Reads s2.memory
+      (Bytes.writeAt img 256 (B256.toBytes isPausedSelector)) := by
+    rw [hm2]; exact Mem.Reads.write hwf1 hr1 _ _
+  -- the four constant pushes, the target load and `GAS` only extend memory
+  obtain ⟨s3, h3, hstaging⟩ := of_run_append (pushList [32, 0, 4, 0x11c]) hstaging
+  have hm3 : s2.memory = s3.memory := by
+    refine Line.of_inv Devm.memory ?_ h3
+    unfold pushList
+    simp only [List.map]
+    line_inv
+  obtain ⟨s4, h4, h5⟩ := of_run_append (loadWord targetWord) hstaging
+  obtain ⟨i4, hm4⟩ := of_run_loadWord_mem h4
+  have hm5 : s4.memory = statPre.memory :=
+    Line.of_inv Devm.memory (by line_inv) h5
+  have hrFinal : Mem.Reads statPre.memory
+      (Bytes.writeAt img 256 (B256.toBytes isPausedSelector)) := by
+    rw [← hm5, hm4, ← hm3]
+    exact hr2.extend _ _
+  rw [Mem.Reads.read hrFinal 0x11c 4]
+  exact sliceD_stagedSelector img isPausedSelector
+
+/-- **The CALL's seven operands, derived.**  `pauseCallStaging`'s tail is
+`pushList [0, 0, 36, 0x11c, 0] ++ loadWord targetWord ++ [GAS]`, so the operand
+stack at the `CALL` is forced by the line and the staged target word: nothing
+about it is assumed.  The window is handed on as well, for the crossing. -/
+private lemma pauseCallStaging_operands {sevm : Sevm} {entry callPre : Devm}
+    {target : B256}
+    (hword : MemWordAt entry (targetWord * 32).toNat target)
+    (hstaging : Line.Run sevm entry pauseCallStaging callPre) :
+    ∃ (gasWord : B256) (rest : List B256),
+      callPre.stack =
+        gasWord :: target :: 0 :: 0x11c :: 36 :: 0 :: 0 :: rest ∧
+      MemWordAt callPre (targetWord * 32).toNat target := by
+  unfold pauseCallStaging at hstaging
+  simp only [List.append_assoc] at hstaging
+  obtain ⟨t1, u1, hstaging⟩ :=
+    of_run_append [Ninst.pop, Ninst.pushB256 pauseForSelector] hstaging
+  obtain ⟨t2, u2, hstaging⟩ := of_run_append (mstoreAt 8) hstaging
+  obtain ⟨t3, u3, hstaging⟩ := of_run_append (loadWord durationWord) hstaging
+  obtain ⟨t4, u4, hstaging⟩ := of_run_append (mstoreAt 9) hstaging
+  obtain ⟨t5, u5, hstaging⟩ :=
+    of_run_append (pushList [0, 0, 36, 0x11c, 0]) hstaging
+  obtain ⟨t6, u6, hstaging⟩ := of_run_append (loadWord targetWord) hstaging
+  have wt5 : MemWordAt t5 (targetWord * 32).toNat target :=
+    ((((hword.acrossLine (by line_inv) u1).acrossMstoreAt (by decide)
+      u2).acrossLoadWord u3).acrossMstoreAt (by decide) u4).acrossLine
+      (by line_inv) u5
+  have p5 : (0 : B256) :: 0x11c :: 36 :: 0 :: 0 :: [] <<+ t5.stack := by
+    simp only [pushList, List.map] at u5
+    rcases Line.of_run_cons u5 with ⟨_v1, x1, u5⟩
+    rcases Line.of_run_cons u5 with ⟨_v2, x2, u5⟩
+    rcases Line.of_run_cons u5 with ⟨_v3, x3, u5⟩
+    rcases Line.of_run_cons u5 with ⟨_v4, x4, u5⟩
+    rcases Line.of_run_cons u5 with ⟨_v5, x5, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 x5)
+      (prefix_of_push (of_run_pushB256 x4)
+        (prefix_of_push (of_run_pushB256 x3)
+          (prefix_of_push (of_run_pushB256 x2)
+            (prefix_of_push (of_run_pushB256 x1) nil_pref))))
+  have p6 : target :: 0 :: 0x11c :: 36 :: 0 :: 0 :: [] <<+ t6.stack :=
+    prefix_of_loadWord_window wt5 p5 u6
+  have wt6 := wt5.acrossLoadWord u6
+  rcases Line.of_run_cons hstaging with ⟨_t7, qg, hnil⟩
+  cases hnil
+  obtain ⟨gw, pbg⟩ := of_run_gas qg
+  obtain ⟨rest, hrest⟩ := prefix_of_push pbg p6
+  exact ⟨gw, rest, hrest, wt6.acrossNinst qg⟩
+
+/-- **The STATICCALL's six operands, derived.**  Same shape as its CALL
+sibling: `pauseStatStaging`'s tail is `pushList [32, 0, 4, 0x11c] ++
+loadWord targetWord ++ [GAS]`, so the operand stack at the `STATICCALL` follows
+from the line and the staged target word.  The word this consumes is the one
+`pauseCall_targetWord_survives` carries across the CALL, never an assumption
+that the callee left memory alone. -/
+private lemma pauseStatStaging_operands {sevm : Sevm} {armPre statPre : Devm}
+    {target : B256}
+    (hword : MemWordAt armPre (targetWord * 32).toNat target)
+    (hstaging : Line.Run sevm armPre pauseStatStaging statPre) :
+    ∃ (gasWord : B256) (rest : List B256),
+      statPre.stack = gasWord :: target :: 0x11c :: 4 :: 0 :: 32 :: rest ∧
+      MemWordAt statPre (targetWord * 32).toNat target := by
+  unfold pauseStatStaging at hstaging
+  simp only [List.append_assoc] at hstaging
+  obtain ⟨y1, v1, hstaging⟩ :=
+    of_run_append [Ninst.pushB256 isPausedSelector] hstaging
+  obtain ⟨y2, v2, hstaging⟩ := of_run_append (mstoreAt 8) hstaging
+  obtain ⟨y3, v3, hstaging⟩ :=
+    of_run_append (pushList [32, 0, 4, 0x11c]) hstaging
+  obtain ⟨y4, v4, hstaging⟩ := of_run_append (loadWord targetWord) hstaging
+  have wy3 : MemWordAt y3 (targetWord * 32).toNat target :=
+    ((hword.acrossLine (by line_inv) v1).acrossMstoreAt (by decide)
+      v2).acrossLine (by line_inv) v3
+  have q3 : (0x11c : B256) :: 4 :: 0 :: 32 :: [] <<+ y3.stack := by
+    simp only [pushList, List.map] at v3
+    rcases Line.of_run_cons v3 with ⟨_z1, c1, v3⟩
+    rcases Line.of_run_cons v3 with ⟨_z2, c2, v3⟩
+    rcases Line.of_run_cons v3 with ⟨_z3, c3, v3⟩
+    rcases Line.of_run_cons v3 with ⟨_z4, c4, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 c4)
+      (prefix_of_push (of_run_pushB256 c3)
+        (prefix_of_push (of_run_pushB256 c2)
+          (prefix_of_push (of_run_pushB256 c1) nil_pref)))
+  have q4 : target :: 0x11c :: 4 :: 0 :: 32 :: [] <<+ y4.stack :=
+    prefix_of_loadWord_window wy3 q3 v4
+  have wy4 := wy3.acrossLoadWord v4
+  rcases Line.of_run_cons hstaging with ⟨_y5, qg, hnil⟩
+  cases hnil
+  obtain ⟨gw, pbg⟩ := of_run_gas qg
+  obtain ⟨rest, hrest⟩ := prefix_of_push pbg q4
+  exact ⟨gw, rest, hrest, wy4.acrossNinst qg⟩
+
+/-- **The pause's external boundary, joined.**  From the two staged words and
+the two crossings: the CALL is `PauseCallBoundary`'s message to `target`, the
+staged target word is still the CircuitBreaker's when the observation is
+staged, and the STATICCALL is `PauseStatBoundary`'s message to the **same**
+target.  The order is in the statement's own shape — `callPost` is where
+`pauseStatStaging` starts — and `pauseCall_successArm_reachesStatcall` is what
+supplies that walk from the program.
+
+Neither operand stack is a premise.  Both are derived by forward evaluation of
+the staging lines, and the second is derived from the target word that
+`pauseCall_targetWord_survives` carries across the CALL, so no hypothesis here
+says the callee left memory, storage or anything else alone.
+
+What this does **not** claim about a hostile target.  It says nothing about
+what the target does with either message, what it returns, whether it honours
+the duration, or whether the pause completes; the published callback-visible
+liveness counterexample stands unchanged.  It does not say the two crossings
+are reached in any particular run — `hCall` and `hStat` are derivations handed
+in, and `hDepth`/`hDynamic` are the enclosing frame's honest premises.  And, as
+in `PauseStatBoundary` itself, `msg.isStatic = true` on the observation is a
+property of the **message the CircuitBreaker builds**, not a theorem that the
+child changed no state: deriving that would need a static-context no-write
+result over arbitrary code, which exists nowhere in Jaune or Blanc and is not
+built here. -/
+theorem pause_externalBoundary {sevm : Sevm} {target : Adr} {duration : B256}
+    {entry callPre callPost statPre statPost : Devm}
+    (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
+    (hDuration : MemWordAt entry (durationWord * 32).toNat duration)
+    (hCallStaging : Line.Run sevm entry pauseCallStaging callPre)
+    (hDepth : sevm.depth ≠ 0)
+    (hDynamic : sevm.isStatic = false)
+    (hCall : Ninst.RunCompiled sevm callPre (.exec .call) callPost)
+    (hStatStaging : Line.Run sevm callPost pauseStatStaging statPre)
+    (hStat : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
+    PauseCallBoundary sevm target duration callPre callPost ∧
+      MemWordAt statPre (targetWord * 32).toNat target.toB256 ∧
+      PauseStatBoundary sevm target statPre statPost := by
+  obtain ⟨gasWord, rest, hstk, wCall⟩ :=
+    pauseCallStaging_operands hTarget hCallStaging
+  have hcall : PauseCallBoundary sevm target duration callPre callPost :=
+    pauseCall_boundary hstk
+      (pauseCallStaging_calldata hDuration hCallStaging) hDepth hDynamic hCall
+  have wPost : MemWordAt callPost (targetWord * 32).toNat target.toB256 :=
+    pauseCall_targetWord_survives hcall wCall
+  obtain ⟨gasWord', rest', hstk', wStat⟩ :=
+    pauseStatStaging_operands wPost hStatStaging
+  exact ⟨hcall, wStat,
+    pauseStat_boundary hstk'
+      (pauseStatStaging_calldata wPost.memImage hStatStaging) hDepth hStat⟩
 
 end Blanc.LidoCircuitBreaker
