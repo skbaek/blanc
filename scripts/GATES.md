@@ -153,7 +153,8 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–134 measured files; 134 represented; full baseline set by the exact per-file rows below | from a few seconds when nothing is affected to ~16 min cache-cold or `--full` (measured 952.7 / 960.5 / 932.9 s, 2026-08-20) |
+| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–134 measured files; 134 represented; full baseline set by the exact per-file rows below | from a few seconds when nothing is affected to ~16 min cache-cold or `--full` (measured 952.7 / 960.5 / 932.9 s, 2026-08-20; 911.1 s on the current implementation) |
+| `scripts/check-elab.sh --calibrate` | the measurement command for admitting a new row: every module with no committed row, plus a commit-seeded stratified sample of provably-unaffected modules held to the row threshold, refusing at `2.0x` and annotating at `1.5x`. Writes nothing to the baseline and nothing to the local cache | 12 drawn controls from bands of 32/54/26/22, plus every mandatory row | ~52 s of measurement, about 5% of a whole-tree pass (measured 52.2 / 50.9 s, 2026-08-20) |
 
 No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
 sequential elaboration gate is the longest at roughly ten minutes; every gate
