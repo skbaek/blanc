@@ -466,7 +466,6 @@ theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
     (windowC : MemWordAt devm (continuationWord * 32).toNat 1)
     (hprevEq : Devm.getStorVal devm sevm.currentTarget
       (assignmentSlot target) = sevm.caller.toB256)
-    (hneAC : assignmentSlot target ≠ countSlot sevm.caller.toB256)
     (assigned :
       Devm.getStorVal devm sevm.currentTarget (assignmentSlot target) ≠ 0)
     (run : Line.Run sevm devm pauseKernelAppendPrefix devm') :
@@ -475,10 +474,9 @@ theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
       MemWordAt devm' (newPauserWord * 32).toNat 0 ∧
       MemWordAt devm' (continuationWord * 32).toNat 1 ∧
       MemWordAt devm' (previousPauserWord * 32).toNat sevm.caller.toB256 ∧
-      Devm.getStorVal devm' sevm.currentTarget
-          (countSlot sevm.caller.toB256) =
-        Devm.getStorVal devm sevm.currentTarget
-          (countSlot sevm.caller.toB256) := by
+      ∀ key : B256, assignmentSlot target ≠ key →
+        Devm.getStorVal devm' sevm.currentTarget key =
+          Devm.getStorVal devm sevm.currentTarget key := by
   unfold pauseKernelAppendPrefix setPauserKernelAssignmentPrefix at run
   rcases Line.of_run_cons run with ⟨s1, q1, run⟩
   rcases Line.of_run_cons run with ⟨s2, q2, run⟩
@@ -577,9 +575,9 @@ theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
   · intro w rest hstack
     rw [head_of_stack_prefix p16 hstack]
     simp [B256.eqCheck, hnonzero]
-  · show (Devm.getStor devm' sevm.currentTarget).get
-      (countSlot sevm.caller.toB256) = _
-    rw [← hstor16, hset, Stor.get_set_ne _ hneAC, hstor14]
+  · intro key hkey
+    show (Devm.getStor devm' sevm.currentTarget).get key = _
+    rw [← hstor16, hset, Stor.get_set_ne _ hkey, hstor14]
     rfl
 
 set_option maxRecDepth 8192 in
@@ -686,9 +684,16 @@ misses the cell (the `hneAC` disequality — decidable at any witness world),
 the decrement lands exactly on it (the `hprev` premise is what aims it), and
 `removeTarget`'s five writes are covered by `hRemoveCount`, a witness-side
 obligation because four of those keys carry storage-derived payloads whose
-bounds no route can know. -/
+bounds no route can know.  `hRemoveCount`'s three storage guards pin exactly
+the cells the span's key computations read — the target's reverse index, the
+array length, and the moved last entry — and the route threads those cells
+from the kernel entry across the assignment write (the `hneA*` misses) and
+the decrement (the `hneC*` misses), so a witness holding them at its world
+can name every span key concretely and decide its disjointness from the
+caller's count slot. -/
 theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
     {sevm : Sevm} {devm post : Devm} {target : B256} {code : ByteArray}
+    {idx0 len0 last0 : B256}
     {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
     (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
       setPauserKernel (.ok post))
@@ -700,9 +705,23 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
       Devm.getStorVal devm sevm.currentTarget (assignmentSlot target) ≠ 0)
     (hprev : Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
       = sevm.caller.toB256)
+    (hidx0 : Devm.getStorVal devm sevm.currentTarget (indexSlot target)
+      = idx0)
+    (hlen0 : Devm.getStorVal devm sevm.currentTarget arrayLengthSlot = len0)
+    (hlast0 : Devm.getStorVal devm sevm.currentTarget (arrayEntrySlot len0)
+      = last0)
     (hneAC : assignmentSlot target ≠ countSlot sevm.caller.toB256)
+    (hneAI : assignmentSlot target ≠ indexSlot target)
+    (hneAL : assignmentSlot target ≠ arrayLengthSlot)
+    (hneAE : assignmentSlot target ≠ arrayEntrySlot len0)
+    (hneCI : countSlot sevm.caller.toB256 ≠ indexSlot target)
+    (hneCL : countSlot sevm.caller.toB256 ≠ arrayLengthSlot)
+    (hneCE : countSlot sevm.caller.toB256 ≠ arrayEntrySlot len0)
     (hRemoveCount : ∀ (a b postW : Devm),
       MemWordAt a (targetWord * 32).toNat target →
+      Devm.getStorVal a sevm.currentTarget (indexSlot target) = idx0 →
+      Devm.getStorVal a sevm.currentTarget arrayLengthSlot = len0 →
+      Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 →
       Line.Run sevm a removeClearTargetIndexPrefix b →
       Ninst.RunCompiled sevm b Ninst.sstore postW →
       Devm.getStorVal postW sevm.currentTarget
@@ -722,12 +741,24 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
           targetInstruction) :
     Func.RunCompiledTo.RouteTo ⟨setPauserSlot, []⟩ h targetPath
       targetInstruction := by
+  have cellK : ∀ {x y : Devm} (key : B256), Devm.getStor x = Devm.getStor y →
+      Devm.getStorVal x sevm.currentTarget key =
+        Devm.getStorVal y sevm.currentTarget key :=
+    fun key heq => congrArg (fun f : Adr → Stor =>
+      (f sevm.currentTarget).get key) heq
   have cellOf : ∀ {x y : Devm}, Devm.getStor x = Devm.getStor y →
       Devm.getStorVal x sevm.currentTarget (countSlot sevm.caller.toB256) =
         Devm.getStorVal y sevm.currentTarget
-          (countSlot sevm.caller.toB256) :=
-    fun heq => congrArg (fun f : Adr → Stor =>
-      (f sevm.currentTarget).get (countSlot sevm.caller.toB256)) heq
+          (countSlot sevm.caller.toB256) := fun heq => cellK _ heq
+  have arrOf : ∀ {x y : Devm}, Devm.getStor x = Devm.getStor y →
+      Devm.getStorVal y sevm.currentTarget (indexSlot target) = idx0 ∧
+        Devm.getStorVal y sevm.currentTarget arrayLengthSlot = len0 ∧
+        Devm.getStorVal y sevm.currentTarget (arrayEntrySlot len0) = last0 →
+      Devm.getStorVal x sevm.currentTarget (indexSlot target) = idx0 ∧
+        Devm.getStorVal x sevm.currentTarget arrayLengthSlot = len0 ∧
+        Devm.getStorVal x sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    fun heq hy => ⟨(cellK _ heq).trans hy.1, (cellK _ heq).trans hy.2.1,
+      (cellK _ heq).trans hy.2.2⟩
   refine routeTo_line setPauserKernelZeroCheck h (fun z zrun tail => ?_)
   have gz : Devm.getStor z = Devm.getStor devm :=
     (Line.of_inv Devm.getStor
@@ -745,8 +776,13 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wNa := MemWordAt.of_memory_eq hpop.memory.symm wNz
   have wCa := MemWordAt.of_memory_eq hpop.memory.symm wCz
   have ca := cz.ofState hpop.state
+  have arrA : Devm.getStorVal a sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal a sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    arrOf ga ⟨hidx0, hlen0, hlast0⟩
   refine routeTo_line pauseKernelAppendPrefix arm (fun _b brun tail2 => ?_)
-  obtain ⟨branchWord, wTb, wNb, wCb, wPb, kb⟩ :=
+  obtain ⟨branchWord, wTb, wNb, wCb, wPb, presB⟩ :=
     pauseKernel_previousPauserNonzero3 wTa wNa wCa
       (by
         rw [show Devm.getStorVal a sevm.currentTarget (assignmentSlot target)
@@ -754,7 +790,6 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
             from congrArg (fun f : Adr → Stor =>
               (f sevm.currentTarget).get (assignmentSlot target)) ga]
         exact hprev)
-      hneAC
       (by
         rw [show Devm.getStorVal a sevm.currentTarget (assignmentSlot target)
               = Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
@@ -765,7 +800,14 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have kb' : Devm.getStorVal _b sevm.currentTarget
       (countSlot sevm.caller.toB256) =
       Devm.getStorVal devm sevm.currentTarget
-        (countSlot sevm.caller.toB256) := kb.trans (cellOf ga)
+        (countSlot sevm.caller.toB256) :=
+    (presB _ hneAC).trans (cellOf ga)
+  have arrB : Devm.getStorVal _b sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal _b sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal _b sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    ⟨(presB _ hneAI).trans arrA.1, (presB _ hneAL).trans arrA.2.1,
+      (presB _ hneAE).trans arrA.2.2⟩
   have cb := ca.acrossLine
     (by unfold pauseKernelAppendPrefix setPauserKernelAssignmentPrefix;
         line_inv) brun
@@ -780,26 +822,46 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
       Devm.getStorVal devm sevm.currentTarget
         (countSlot sevm.caller.toB256) :=
     (cellOf (getStor_of_state hpopc.state).symm).trans kb'
+  have arrC := arrOf (getStor_of_state hpopc.state).symm arrB
   refine routeTo_line oldCountPrefix tail3 (fun d drun tail4 => ?_)
   have wTd := wTc.acrossOldCountPrefix drun
   have wNd := wNc.acrossOldCountPrefix drun
   have wCd := wCc.acrossOldCountPrefix drun
   have cd := cc.acrossLine
     (by unfold oldCountPrefix previousCountKey loadWord tagTop; line_inv) drun
+  have arrD := arrOf (Line.of_inv Devm.getStor
+    (by unfold oldCountPrefix previousCountKey loadWord tagTop; line_inv)
+    drun).symm arrC
   have pd := pauseOldCount_stack wPc kc drun
   refine routeTo_next tail4 (fun e erun tail5 => ?_)
   have wTe := wTd.acrossNinst (Ninst.Run.of_runCompiled erun)
   have wNe := wNd.acrossNinst (Ninst.Run.of_runCompiled erun)
   have wCe := wCd.acrossNinst (Ninst.Run.of_runCompiled erun)
   have ce := cd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have hsetE := sstore_getStor_set (Ninst.Run.of_runCompiled erun) pd
   have ke : Devm.getStorVal e sevm.currentTarget
       (countSlot sevm.caller.toB256) =
       Devm.getStorVal devm sevm.currentTarget
         (countSlot sevm.caller.toB256) - 1 := by
     show (Devm.getStor e sevm.currentTarget).get
       (countSlot sevm.caller.toB256) = _
-    rw [sstore_getStor_set (Ninst.Run.of_runCompiled erun) pd,
-      Stor.get_set_self]
+    rw [hsetE, Stor.get_set_self]
+  have arrE : Devm.getStorVal e sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal e sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal e sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    ⟨by
+      show (Devm.getStor e sevm.currentTarget).get (indexSlot target) = _
+      rw [hsetE, Stor.get_set_ne _ hneCI]
+      exact arrD.1,
+     by
+      show (Devm.getStor e sevm.currentTarget).get arrayLengthSlot = _
+      rw [hsetE, Stor.get_set_ne _ hneCL]
+      exact arrD.2.1,
+     by
+      show (Devm.getStor e sevm.currentTarget).get (arrayEntrySlot len0) = _
+      rw [hsetE, Stor.get_set_ne _ hneCE]
+      exact arrD.2.2⟩
   refine routeTo_call (body := afterOldPauser) tail5
     (by simp [runtime, aux, afterOldPauserSlot]) (fun f fburn tail6 => ?_)
   have wTf := MemWordAt.of_memory_eq fburn.memory.symm wTe
@@ -807,6 +869,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wCf := MemWordAt.of_memory_eq fburn.memory.symm wCe
   have cf := ce.ofState fburn.state
   have kf := (cellOf (getStor_of_state fburn.state).symm).trans ke
+  have arrF := arrOf (getStor_of_state fburn.state).symm arrE
   refine routeTo_line (memoryZeroCheck newPauserWord) tail6
     (fun g grun tail7 => ?_)
   have wTg := wTf.acrossMemoryZeroCheck (k := newPauserWord) grun
@@ -814,6 +877,8 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have cg := cf.acrossLine (by unfold memoryZeroCheck loadWord; line_inv) grun
   have kg := (cellOf (Line.of_inv Devm.getStor
     (by unfold memoryZeroCheck loadWord; line_inv) grun).symm).trans kf
+  have arrG := arrOf (Line.of_inv Devm.getStor
+    (by unfold memoryZeroCheck loadWord; line_inv) grun).symm arrF
   refine routeTo_branchRight_frame tail7
     (fun w rest hstack => by
       rw [memoryZeroCheck_word (k := newPauserWord) wNf grun w rest hstack]
@@ -823,12 +888,14 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wCi := MemWordAt.of_memory_eq hpopi.memory.symm wCg
   have ci := cg.ofState hpopi.state
   have ki := (cellOf (getStor_of_state hpopi.state).symm).trans kg
+  have arrI := arrOf (getStor_of_state hpopi.state).symm arrG
   refine routeTo_call (body := removeTarget) arm2
     (by simp [runtime, aux, removeTargetSlot]) (fun j jburn tail8 => ?_)
   have wTj := MemWordAt.of_memory_eq jburn.memory.symm wTi
   have wCj := MemWordAt.of_memory_eq jburn.memory.symm wCi
   have cj := ci.ofState jburn.state
   have kj := (cellOf (getStor_of_state jburn.state).symm).trans ki
+  have arrJ := arrOf (getStor_of_state jburn.state).symm arrI
   refine routeTo_line removeClearTargetIndexPrefix tail8
     (fun k krun tail9 => ?_)
   have wTk := wTj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
@@ -840,7 +907,8 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have wTl := wTk.acrossNinst (Ninst.Run.of_runCompiled lrun)
   have wCl := wCk.acrossNinst (Ninst.Run.of_runCompiled lrun)
   have cl := ck.acrossNinst (Ninst.Run.of_runCompiled lrun)
-  have kl := (hRemoveCount j k l wTj krun lrun).trans kj
+  have kl := (hRemoveCount j k l wTj arrJ.1 arrJ.2.1 arrJ.2.2 krun
+    lrun).trans kj
   refine routeTo_call (body := finishSetPauser) tail10
     (by simp [runtime, aux, finishSetPauserSlot]) (fun m mburn tail11 => ?_)
   have wTm := MemWordAt.of_memory_eq mburn.memory.symm wTl
@@ -1292,7 +1360,7 @@ that steers the kernel, the two crossing continuations, and the count word
 so its `iszero` jumps). -/
 theorem runtimeMain_routeTo_pauseLastExpiry
     {sevm : Sevm} {devm post : Devm} {img : Bytes} {target : B256}
-    {code : ByteArray} {countAfter : B256}
+    {code : ByteArray} {countAfter idx0 len0 last0 : B256}
     (h : Func.RunCompiledTo
       ((runtime officialParams).main :: (runtime officialParams).aux) sevm
       devm (runtime officialParams).main (.ok post))
@@ -1304,12 +1372,26 @@ theorem runtimeMain_routeTo_pauseLastExpiry
       (assignmentSlot target) ≠ 0)
     (hprev : Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
       = sevm.caller.toB256)
+    (hidx0 : Devm.getStorVal devm sevm.currentTarget (indexSlot target)
+      = idx0)
+    (hlen0 : Devm.getStorVal devm sevm.currentTarget arrayLengthSlot = len0)
+    (hlast0 : Devm.getStorVal devm sevm.currentTarget (arrayEntrySlot len0)
+      = last0)
     (hneAC : assignmentSlot target ≠ countSlot sevm.caller.toB256)
+    (hneAI : assignmentSlot target ≠ indexSlot target)
+    (hneAL : assignmentSlot target ≠ arrayLengthSlot)
+    (hneAE : assignmentSlot target ≠ arrayEntrySlot len0)
+    (hneCI : countSlot sevm.caller.toB256 ≠ indexSlot target)
+    (hneCL : countSlot sevm.caller.toB256 ≠ arrayLengthSlot)
+    (hneCE : countSlot sevm.caller.toB256 ≠ arrayEntrySlot len0)
     (hcount : Devm.getStorVal devm sevm.currentTarget
       (countSlot sevm.caller.toB256) - 1 = countAfter)
     (hzero : countAfter = 0)
     (hRemoveCount : ∀ (a b postW : Devm),
       MemWordAt a (targetWord * 32).toNat target →
+      Devm.getStorVal a sevm.currentTarget (indexSlot target) = idx0 →
+      Devm.getStorVal a sevm.currentTarget arrayLengthSlot = len0 →
+      Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 →
       Line.Run sevm a removeClearTargetIndexPrefix b →
       Ninst.RunCompiled sevm b Ninst.sstore postW →
       Devm.getStorVal postW sevm.currentTarget
@@ -1360,7 +1442,27 @@ theorem runtimeMain_routeTo_pauseLastExpiry
         from congrArg (fun f : Adr → Stor =>
           (f sevm.currentTarget).get (assignmentSlot target)) hstor]
       exact hprev)
-    hneAC hRemoveCount
+    (by
+      rw [show Devm.getStorVal kernelStart sevm.currentTarget
+            (indexSlot target)
+          = Devm.getStorVal devm sevm.currentTarget (indexSlot target)
+        from congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get (indexSlot target)) hstor]
+      exact hidx0)
+    (by
+      rw [show Devm.getStorVal kernelStart sevm.currentTarget arrayLengthSlot
+          = Devm.getStorVal devm sevm.currentTarget arrayLengthSlot
+        from congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get arrayLengthSlot) hstor]
+      exact hlen0)
+    (by
+      rw [show Devm.getStorVal kernelStart sevm.currentTarget
+            (arrayEntrySlot len0)
+          = Devm.getStorVal devm sevm.currentTarget (arrayEntrySlot len0)
+        from congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get (arrayEntrySlot len0)) hstor]
+      exact hlast0)
+    hneAC hneAI hneAL hneAE hneCI hneCL hneCE hRemoveCount
     (fun entry wTe cTe kPA tailPA => ?_)
   have kEntry : Devm.getStorVal entry sevm.currentTarget
       (countSlot sevm.caller.toB256) = countAfter := by
@@ -1392,7 +1494,7 @@ after the decrement, so the `iszero` falls through into
 `arithmeticPanic`. -/
 theorem runtimeMain_routeTo_pauseRetainedExpiry
     {sevm : Sevm} {devm post : Devm} {img : Bytes} {target : B256}
-    {code : ByteArray} {countAfter : B256}
+    {code : ByteArray} {countAfter idx0 len0 last0 : B256}
     (h : Func.RunCompiledTo
       ((runtime officialParams).main :: (runtime officialParams).aux) sevm
       devm (runtime officialParams).main (.ok post))
@@ -1404,12 +1506,26 @@ theorem runtimeMain_routeTo_pauseRetainedExpiry
       (assignmentSlot target) ≠ 0)
     (hprev : Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
       = sevm.caller.toB256)
+    (hidx0 : Devm.getStorVal devm sevm.currentTarget (indexSlot target)
+      = idx0)
+    (hlen0 : Devm.getStorVal devm sevm.currentTarget arrayLengthSlot = len0)
+    (hlast0 : Devm.getStorVal devm sevm.currentTarget (arrayEntrySlot len0)
+      = last0)
     (hneAC : assignmentSlot target ≠ countSlot sevm.caller.toB256)
+    (hneAI : assignmentSlot target ≠ indexSlot target)
+    (hneAL : assignmentSlot target ≠ arrayLengthSlot)
+    (hneAE : assignmentSlot target ≠ arrayEntrySlot len0)
+    (hneCI : countSlot sevm.caller.toB256 ≠ indexSlot target)
+    (hneCL : countSlot sevm.caller.toB256 ≠ arrayLengthSlot)
+    (hneCE : countSlot sevm.caller.toB256 ≠ arrayEntrySlot len0)
     (hcount : Devm.getStorVal devm sevm.currentTarget
       (countSlot sevm.caller.toB256) - 1 = countAfter)
     (hnz : countAfter ≠ 0)
     (hRemoveCount : ∀ (a b postW : Devm),
       MemWordAt a (targetWord * 32).toNat target →
+      Devm.getStorVal a sevm.currentTarget (indexSlot target) = idx0 →
+      Devm.getStorVal a sevm.currentTarget arrayLengthSlot = len0 →
+      Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 →
       Line.Run sevm a removeClearTargetIndexPrefix b →
       Ninst.RunCompiled sevm b Ninst.sstore postW →
       Devm.getStorVal postW sevm.currentTarget
@@ -1460,7 +1576,27 @@ theorem runtimeMain_routeTo_pauseRetainedExpiry
         from congrArg (fun f : Adr → Stor =>
           (f sevm.currentTarget).get (assignmentSlot target)) hstor]
       exact hprev)
-    hneAC hRemoveCount
+    (by
+      rw [show Devm.getStorVal kernelStart sevm.currentTarget
+            (indexSlot target)
+          = Devm.getStorVal devm sevm.currentTarget (indexSlot target)
+        from congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get (indexSlot target)) hstor]
+      exact hidx0)
+    (by
+      rw [show Devm.getStorVal kernelStart sevm.currentTarget arrayLengthSlot
+          = Devm.getStorVal devm sevm.currentTarget arrayLengthSlot
+        from congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get arrayLengthSlot) hstor]
+      exact hlen0)
+    (by
+      rw [show Devm.getStorVal kernelStart sevm.currentTarget
+            (arrayEntrySlot len0)
+          = Devm.getStorVal devm sevm.currentTarget (arrayEntrySlot len0)
+        from congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get (arrayEntrySlot len0)) hstor]
+      exact hlast0)
+    hneAC hneAI hneAL hneAE hneCI hneCL hneCE hRemoveCount
     (fun entry wTe cTe kPA tailPA => ?_)
   have kEntry : Devm.getStorVal entry sevm.currentTarget
       (countSlot sevm.caller.toB256) = countAfter := by
