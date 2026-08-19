@@ -2,6 +2,7 @@ import Blanc.LidoCircuitBreakerAccess
 import Blanc.LidoCircuitBreakerRetainedAuthority
 import Blanc.LidoCircuitBreakerAttainment
 import Blanc.LidoCircuitBreakerPauseJoin
+import Blanc.LidoCircuitBreakerPauseSettlement
 
 /-!
 Gate-owned controls for the Stage 5 access and temporal-authority family.
@@ -1563,5 +1564,103 @@ theorem pause_join_expiry_value_control :
   · obtain ⟨mid, out, value, boundary, write, law, -⟩ :=
       pauseRetainedWorld_join
     exact ⟨mid, out, value, boundary, write, law⟩
+
+/-! ## What the settled message leaves behind
+
+`pauseLastWorld_settles` and `pauseRetainedWorld_settles` are the family's
+first message-altitude statements, and their entire lift over the raw run is
+the `ProcessMessage` conjunct.  `ProcessMessage` is a `def` unfolding to
+`RunFrame (Frame.ofCall msg)`, and `RunFrame` is a `def` too, so gutting
+either in `Blanc/Semantics.lean` -- `ProcessMessage _ _ _ := True` is the
+one-line version -- would leave all five pinned headers of
+`Blanc/LidoCircuitBreakerPauseSettlement.lean` byte-identical while making
+both settlements trivially provable and empty. -/
+
+/-- What a settled pause message leaves behind, read back out of the landed
+settlements rather than out of the run.
+
+The first clause is `RunFrame`'s whole content at the call frame, universally
+quantified: once a message's frame is entered, its result is *the settle of
+the raw execution* and not something the error path invented.  Gut `RunFrame`
+or `ProcessMessage` to anything trivially true and this clause stops being
+derivable at all, while both settlement headers -- which name only the `def`
+-- stay byte-identical and stay provable against the gutted target.  That
+asymmetry is the point, and it is the same blind spot
+`pause_join_expiry_value_control` covers for `PauseExpiryValue`.
+
+The last two clauses consume the two landed settlements at concrete data and
+extract each world's own surviving expiry word *through* its `ProcessMessage`,
+so neither survives that conjunct being dropped from a settlement: row 19
+retires the pauser and leaves `0`, row 18 retains it and leaves
+`pauseWorldInterval + pauseWorldTime = 2592010`, which is nonzero.  The two
+words are different, so neither clause restates the other and the `≠ 0`
+conjunct is not carried vacuously by the zero arm.
+
+NON-VACUITY.  First, structurally: the two closing existentials *are* the
+landed settlements, so the second and third clauses are witnessed rather than
+true-because-unsatisfiable, and the first clause's premise is inhabited at
+exactly those two worlds.
+
+Second, VERIFIED by mutation: seven single-edit rewrites of this control were
+each run through `lake env lean` on a throwaway copy carrying this control and
+its import, and each was rejected --
+(1) dropping the `ProcessMessage` premise from the first clause, which leaves
+the result unconstrained (`introN` failure);
+(2) taking that clause's settle at `Frame.ofCreate msg` instead of
+`Frame.ofCall msg` (type mismatch);
+(3) changing row 19's extracted expiry word from `0` to `1`;
+(4) replacing row 19's message world `pauseWorldMsg pauseLastWorldStor
+pauseLastWorldGas` by row 18's;
+(5) changing row 18's extracted expiry word from `2592010` to `0`;
+(6) replacing row 18's execution world `⟨0, pauseRetainedSevm,
+pauseRetainedPre⟩` by row 19's;
+(7) restating the closing arithmetic as `2592011`, which `decide` refutes
+outright.
+So the frame, the message world, the execution world and both extracted words
+are all load-bearing here.
+
+Recorded limit, and the reason this control is worth its cost: a gutted
+`RunFrame` would also break `RunFrame.some_inv` and much of the library above
+it, so `RunFrame` alone is not where a silent weakening could hide.
+`ProcessMessage` is: it is the thin specialization the settlements name, it
+has no other consumer in this family, and emptying *it* leaves every pinned
+header in this gate byte-identical.  This control is what does not survive
+that. -/
+theorem pause_settlement_message_content_control :
+    (∀ (msg : Msg) (evm : Evm) (raw : Execution)
+        (result : Except (EvmError × State × AdrSet × Tra) Devm),
+      (Frame.ofCall msg).enter = .run evm →
+      ProcessMessage msg (.some ⟨evm, raw⟩) result →
+        result = (Frame.ofCall msg).settle raw) ∧
+    (∃ post : Devm,
+      ProcessMessage (pauseWorldMsg pauseLastWorldStor pauseLastWorldGas)
+          (.some ⟨⟨0, pauseLastSevm, pauseLastPre⟩, (.ok post : Execution)⟩)
+          (.ok post) ∧
+        post.getStorVal configWorldOwner (expirySlot pauseWorldPauser) = 0) ∧
+    (∃ post : Devm,
+      ProcessMessage
+          (pauseWorldMsg pauseRetainedWorldStor pauseRetainedWorldGas)
+          (.some ⟨⟨0, pauseRetainedSevm, pauseRetainedPre⟩,
+            (.ok post : Execution)⟩) (.ok post) ∧
+        post.getStorVal configWorldOwner (expirySlot pauseWorldPauser) =
+          2592010 ∧
+        post.getStorVal configWorldOwner (expirySlot pauseWorldPauser) ≠ 0) ∧
+    (pauseWorldInterval + pauseWorldTime : B256) = 2592010 ∧
+    (2592010 : B256) ≠ 0 := by
+  refine ⟨?_, ?_, ?_, by decide, by decide⟩
+  · intro _msg evm raw result henter hrun
+    unfold ProcessMessage RunFrame at hrun
+    rw [henter] at hrun
+    obtain ⟨raw', hxl, hr⟩ := hrun
+    cases hxl
+    exact hr
+  · obtain ⟨post, _hexec, hmsg, _herr, _hout, _hgas, _hlock, hexp, -⟩ :=
+      pauseLastWorld_settles
+    exact ⟨post, hmsg, hexp⟩
+  · obtain ⟨post, _hexec, hmsg, _herr, _hout, _hgas, _hlock, hexp, -⟩ :=
+      pauseRetainedWorld_settles
+    have value : post.getStorVal configWorldOwner
+        (expirySlot pauseWorldPauser) = 2592010 := hexp.trans (by decide)
+    exact ⟨post, hmsg, value, by rw [value]; decide⟩
 
 end Blanc.LidoCircuitBreaker.AccessControls

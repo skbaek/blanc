@@ -67,6 +67,10 @@ OWNERS = {
     "pauseWorldRun": ROOT / "Blanc/LidoCircuitBreakerPauseWorldRun.lean",
     "pauseOkRoute": ROOT / "Blanc/LidoCircuitBreakerPauseOkRoute.lean",
     "pauseJoin": ROOT / "Blanc/LidoCircuitBreakerPauseJoin.lean",
+    # The message altitude above `pauseWorldRun`: what a cooperative pause
+    # actually leaves behind once the frame settles.
+    "pauseSettlement":
+        ROOT / "Blanc/LidoCircuitBreakerPauseSettlement.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -98,6 +102,7 @@ MODULES = {
     "pauseWorldRun": "Blanc.LidoCircuitBreakerPauseWorldRun",
     "pauseOkRoute": "Blanc.LidoCircuitBreakerPauseOkRoute",
     "pauseJoin": "Blanc.LidoCircuitBreakerPauseJoin",
+    "pauseSettlement": "Blanc.LidoCircuitBreakerPauseSettlement",
 }
 
 REQUIRED = (
@@ -134,6 +139,16 @@ REQUIRED = (
     # through `PauseExpiryValue`'s own laws.  VERIFIED non-vacuous by six
     # single-edit rewrites of the control, each rejected; see its docstring.
     "pause_join_expiry_value_control",
+    # One layer up again, and the same blind spot: `ProcessMessage` is a `def`
+    # whose whole content the two settlements borrow, so emptying it would
+    # leave every pinned header in `pauseSettlement` byte-identical while
+    # making both settlements trivially provable.  This control holds
+    # `RunFrame`'s content at the call frame universally, and reads each
+    # world's surviving expiry word back out THROUGH its `ProcessMessage` --
+    # `0` at row 19, `2592010` and nonzero at row 18.  VERIFIED non-vacuous by
+    # seven single-edit rewrites of the control, each rejected; see its
+    # docstring.
+    "pause_settlement_message_content_control",
     # AT8: row 0's executable controls -- the site reached by a real
     # invocation, and its permitted-role set shown exact rather than sound.
     "setPauseDurationConfig_admin_site_control",
@@ -700,6 +715,53 @@ ROLES = {
         "responder_hstat":
             "b1bcfd15b76d6e617bb94d77319735ffa6dc0c117c4fc8cf54101fb9c656dbfa",
     },
+    # ---- What the settled MESSAGE leaves behind, at the same two worlds ----
+    #
+    # `pauseWorldRun`'s two `_effects` say what the RAW poststate contains;
+    # these four say what survives the frame's settlement, which is a strictly
+    # stronger and differently falsifiable thing.  Each `_settles` conclusion
+    # carries the exec equation, the `ProcessMessage` at this world's own
+    # message, and then the surviving cells, the ordered log triple and
+    # other-pauser noninterference; the two rows differ exactly in their
+    # content -- row 19 retires the pauser and stores `0`, row 18 retains it and
+    # stores `pauseWorldInterval + pauseWorldTime` -- so restating either at the
+    # other's value is a different claim, not a rephrasing.  `MUTATIONS` below
+    # rejects three such rewrites: a dropped `ProcessMessage` conjunct, row 18's
+    # surviving expiry restated as row 19's `0`, and a relabelled post-removal
+    # entry list.
+    #
+    # What no header pin here can see is `RunFrame`/`ProcessMessage` gutted in
+    # `Blanc/Semantics.lean` as `def`s while all four headers stay
+    # byte-identical -- both settlements would then be trivially provable and
+    # would say nothing.  That is what
+    # `pause_settlement_message_content_control` in the fixture exists for, the
+    # same blind spot `pause_join_expiry_value_control` covers for
+    # `PauseExpiryValue`.
+    #
+    # The two projections are model-side by construction: they are stated over
+    # the model's applied writes, not the settled storage, and are pinned so
+    # that a widening to a poststate `RegistryWitness` cannot land silently.
+    # `pauseWorld_projectionAgrees` is the only place the model side and the
+    # run side meet, and what it pins is exactly how far the agreement goes:
+    # the two sides agree at the slots the trace TOUCHES -- five at the last
+    # world, seven at the swap-popping retained one -- and not at every slot,
+    # which would need the universal storage frame the walk does not export.
+    # Its agreement list is therefore content, not bookkeeping: `MUTATIONS`
+    # rejects narrowing the retained world's seven back to five, which would
+    # silently stop checking the two cells the swap-pop moves while the
+    # theorem still read as an agreement result.
+    "pauseSettlement": {
+        "pauseLastWorld_settles":
+            "f546d1ce25eea5c4f18e7d92b530aa21cf95b61653f3dd5fd6a050f1efe6dcac",
+        "pauseRetainedWorld_settles":
+            "91e0b7040e229c854ce6df20f292ede85a9adf046e5389b6eb55c123e99e4073",
+        "pauseLastWorld_registryProjection":
+            "bcb1a349f313b376e38af771aeaf696f53132f65de0bb6eeeae0b822264b6a7f",
+        "pauseRetainedWorld_registryProjection":
+            "7e62753e46d772a674e4f888469b81d1660e5bb1cc7d4569f78c29f11c8d2820",
+        "pauseWorld_projectionAgrees":
+            "c4ebe339e0da9136cc0f309f5341969bc0d135d5894666b72b5209dfa1fbee32",
+    },
 }
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
@@ -1163,6 +1225,55 @@ MUTATIONS = {
             ".pauseExpiry := by",
         ),
     },
+    "pauseSettlement": {
+        # AT8: the whole point of the settlement altitude is the
+        # `ProcessMessage` conjunct -- without it the theorem says only what
+        # the RAW run reached, which `pauseLastWorld_effects` already said, and
+        # nothing about what the MESSAGE left behind.
+        "row-19 settlement's ProcessMessage conjunct dropped": (
+            "      ProcessMessage (pauseWorldMsg pauseLastWorldStor "
+            "pauseLastWorldGas)\n"
+            "        (.some \u27e8\u27e80, pauseLastSevm, pauseLastPre\u27e9, "
+            "(.ok post : Execution)\u27e9)\n"
+            "        (.ok post) \u2227\n",
+            "",
+        ),
+        # AT8: row 18 RETAINS the pauser, so its expiry cell is stored at the
+        # checked arm.  Restating it as row 19's `0` would claim the retiring
+        # arm's cleanup for a pauser that is still registered -- a live pauser
+        # silently expired.
+        "row-18 surviving expiry restated as row 19's zero": (
+            "      post.getStorVal configWorldOwner (expirySlot "
+            "pauseWorldPauser) =\n"
+            "        pauseWorldInterval + pauseWorldTime \u2227",
+            "      post.getStorVal configWorldOwner (expirySlot "
+            "pauseWorldPauser) = 0 \u2227",
+        ),
+        # AT8: the agreement list IS the reach of the model/run agreement, and
+        # the two cells a swap-pop moves -- the vacated array slot and the
+        # moved target's reverse index -- are exactly the ones only the
+        # retained world has.  Narrowing seven slots to five stops checking
+        # them while the theorem still reads as an agreement result.
+        "retained world's agreement narrowed to the last world's five slots": (
+            " \u2227\n"
+            "          applied.get (arrayEntrySlot 2) =\n"
+            "            post.getStorVal configWorldOwner (arrayEntrySlot 2) "
+            "\u2227\n"
+            "          applied.get (indexSlot pauseWorldT2) =\n"
+            "            post.getStorVal configWorldOwner (indexSlot "
+            "pauseWorldT2))) := by",
+            ")) := by",
+        ),
+        # AT8: the Registry projection's content is the post-removal entry
+        # list.  Row 18's removal is a swap-pop that RETAINS the pauser's
+        # second target; relabelling its post-list as empty would project the
+        # row-19 outcome onto the row-18 world.
+        "row-18 projection's post-removal entry list emptied": (
+            "      trace.postEntries = [(pauseWorldT2, pauseWorldPauser)] "
+            "\u2227",
+            "      trace.postEntries = [] \u2227",
+        ),
+    },
 }
 
 def header_mutation_controls(sources: dict) -> None:
@@ -1279,7 +1390,10 @@ def main() -> None:
           "noncommitting negatives; constructor 2/0/0 domain separation; "
           "the pause .ok family's two .pauseExpiry rows, their route, worlds "
           "and joins, with the joins' value law extracted from an arbitrary "
-          "join; "
+          "join; what the settled pause MESSAGE leaves behind at those two "
+          "worlds, its model-side Registry projections and the slotwise "
+          "model/run agreement between them, with each world's surviving "
+          "expiry word read back through its own ProcessMessage; "
           f"{controls} labelled header mutations, deletion and trust controls")
 
 if __name__ == "__main__":
