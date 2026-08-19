@@ -50,6 +50,23 @@ OWNERS = {
     "unregisterWorld": ROOT / "Blanc/LidoCircuitBreakerUnregisterWorld.lean",
     "unregisterAttainment":
         ROOT / "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
+    # The pause `.ok` family.  `pauseJoin` states the goal's claims, and the
+    # route and world-run modules state the two halves it joins; the remaining
+    # four are internal.  `pauseWalk` -> `pauseSuffixWalk` -> `pauseWorldRunKit`
+    # -> `pauseWorldRun` is a *linear* chain, so each of those three is consumed
+    # by exactly one downstream module whose own public statement is pinned
+    # here, and `pauseWorld` is a concrete witness world, not a claim.  They are
+    # therefore registered pin-free, on the same footing as `registrationWorld`
+    # and `sourceAttainment`: the trust scan, the compiled-owner guard and the
+    # axiom probe's import list all reach them.
+    "pauseWalk": ROOT / "Blanc/LidoCircuitBreakerPauseWalk.lean",
+    "pauseWorld": ROOT / "Blanc/LidoCircuitBreakerPauseWorld.lean",
+    "pauseSuffixWalk": ROOT / "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean",
+    "pauseWorldRunKit":
+        ROOT / "Blanc/LidoCircuitBreakerPauseWorldRunKit.lean",
+    "pauseWorldRun": ROOT / "Blanc/LidoCircuitBreakerPauseWorldRun.lean",
+    "pauseOkRoute": ROOT / "Blanc/LidoCircuitBreakerPauseOkRoute.lean",
+    "pauseJoin": ROOT / "Blanc/LidoCircuitBreakerPauseJoin.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -74,6 +91,13 @@ MODULES = {
     "pauseAttainment": "Blanc.LidoCircuitBreakerPauseAttainment",
     "unregisterWorld": "Blanc.LidoCircuitBreakerUnregisterWorld",
     "unregisterAttainment": "Blanc.LidoCircuitBreakerUnregisterAttainment",
+    "pauseWalk": "Blanc.LidoCircuitBreakerPauseWalk",
+    "pauseWorld": "Blanc.LidoCircuitBreakerPauseWorld",
+    "pauseSuffixWalk": "Blanc.LidoCircuitBreakerPauseSuffixWalk",
+    "pauseWorldRunKit": "Blanc.LidoCircuitBreakerPauseWorldRunKit",
+    "pauseWorldRun": "Blanc.LidoCircuitBreakerPauseWorldRun",
+    "pauseOkRoute": "Blanc.LidoCircuitBreakerPauseOkRoute",
+    "pauseJoin": "Blanc.LidoCircuitBreakerPauseJoin",
 }
 
 REQUIRED = (
@@ -103,6 +127,13 @@ REQUIRED = (
     # `attainable_*` header byte-identical while making all of them cheaper to
     # prove.  The shape control is the only thing that catches it.
     "attainable_shape_control",
+    # The same blind spot one layer up: `PauseExpiryValue` is a `def`, and it
+    # carries the whole content of both pause joins' third conjunct.  This
+    # control extracts the concrete stored word at each witness world -- `0` at
+    # row 19, `2592010` and nonzero at row 18 -- from an ARBITRARY join,
+    # through `PauseExpiryValue`'s own laws.  VERIFIED non-vacuous by six
+    # single-edit rewrites of the control, each rejected; see its docstring.
+    "pause_join_expiry_value_control",
     # AT8: row 0's executable controls -- the site reached by a real
     # invocation, and its permitted-role set shown exact rather than sound.
     "setPauseDurationConfig_admin_site_control",
@@ -576,6 +607,99 @@ ROLES = {
         "runtimeMain_routeTo_pauseKernel":
             "dce61c19ade44c703e27d664d2ef4ffd29ff0079877e77f90653b65a28ca418e",
     },
+    # ---- The two `.pauseExpiry` rows, on runs that SUCCEED ----
+    #
+    # Read the `pauseAttainment` comment above first, and do not read these
+    # three blocks as widening it.  Those seven rows are `.pauseRegistry`
+    # raw-occurrence witnesses inside executions that then REVERT.  Rows 18 and
+    # 19 below are the family's first `.pauseExpiry` rows and their executions
+    # END `.ok` -- `pauseLastWorld_run` and `pauseRetainedWorld_run` each
+    # exhibit a `Prog.RunCompiledTo ... (.ok post)`.  So the two claims are
+    # different in kind, and neither implies the other: a succeeding pause is
+    # exhibited *here*, at the expiry cell, and nowhere else in this family; a
+    # pause that reaches a Registry row still reverts.
+    #
+    # What the succeeding runs do NOT claim is also on the record, in each
+    # join's own docstring honesty register: the entry world is Registry-well
+    # formed by *projection*, with no genesis- or deployment-reachability
+    # claim, and the callee is a neutral responder written for the crossing.
+    "pauseWorldRun": {
+        # The two concrete worlds' runs, and the `pauseSuccess` boundary each
+        # hands the dichotomy.  The boundary carries the post-callback count
+        # word -- `0` at row 19, `1` at row 18 -- which is the whole reason the
+        # two joins land on different arms of the value law.
+        "pauseLastWorld_run":
+            "b309478eecbbfaca97d5555ecbd5036b21133a1589de6d2582c45748b69f82f2",
+        "pauseRetainedWorld_run":
+            "95ff593a6342c46f442ef6503e254705a82f52c10be83ea96878a3d440998014",
+        "pauseLastWorld_successBoundary":
+            "4e526688540eee93d297279261e9024919be585a19dd8e3fc1c94991d84b7a65",
+        "pauseRetainedWorld_successBoundary":
+            "58c6cae27de0737a14b21558f68ddbe75841c84a5b003ae16d26bb0d641ee0d3",
+        # The full effect conjunctions the two above project out of.
+        "pauseLastWorld_effects":
+            "b806f3c14303c770b43d6b8b1bca6436cf40e79968e0b29040678ca7ea002697",
+        "pauseRetainedWorld_effects":
+            "2f1195252b0a13183e29f3277d7f1036f3d6a42e6a927885b77dd30f2dbb6c91",
+    },
+    "pauseOkRoute": {
+        # The two route finals, one per arm.
+        "runtimeMain_routeTo_pauseLastExpiry":
+            "3e75afe3366337ef76660926d0190bcc1d6af75483128b36d8f6f363b7e06aa5",
+        "runtimeMain_routeTo_pauseRetainedExpiry":
+            "5f290ce093f34d5a02363a28dd7e9a5085a871762a21b4b2c916c519617c2fd6",
+        # The shared tail both witnesses route through -- the burn-carrying
+        # sibling of `attainable_of_entryRoute_frame`, needed because this
+        # route reads `transientStorage` and must pin its states against a
+        # concrete world.  A weakening here is invisible in either witness's
+        # own header, which is exactly why it is pinned.
+        "attainable_of_entryRoute_frame_burn":
+            "9ae59f4ead58345814151e46d1c44b443176273be375a258fc896e43f62314e5",
+        # The four route segments the finals compose, in program order.
+        "runtimeMain_routeTo_pauseKernel_ok":
+            "0a62e732f151112df88bd15e836dcb6dceabe6370b00106cda4c4726bfa552f7",
+        "pause_routeTo_setPauserCall_ok":
+            "4bdbb39aa2664f81937dfe8f995d8b019b4b9e9a797b8832a5ea0bb0c3f7b229",
+        "setPauserKernel_routeTo_pauseAfterSetCall":
+            "31914baf64d2f0682aa08c5e2ae69c36a51d46ccdf69a9412f968b35a76cbe45",
+        "pauseAfterSet_routeTo_countBranch":
+            "946c8717d0a918e16d37bf84bdead65a999597a17d5bf20d8d2d409043eaa260",
+    },
+    "pauseJoin": {
+        # J1/J2: the two rows attained at `.pauseExpiry`.
+        "attainable_pauseLastTargetExpiry_pauseExpiry":
+            "82f9b2ae0e4593c6c8443e449fb4741d2c3919451cb8d0c1b07ad784a56beb19",
+        "attainable_pauseRetainedTargetExpiry_pauseExpiry":
+            "d9e1ecb8c415a96218ba85ab6b393816b95849cc205f8c1f9bc52a317b68ebd9",
+        # J3: the joins themselves.  Each conclusion carries FOUR conjuncts --
+        # the boundary walk, the reached expiry write, the value law at this
+        # world's count, and the attained row -- and dropping any one of them
+        # is a different, weaker claim.  `MUTATIONS` below rejects two such
+        # drops; `pause_join_expiry_value_control` in the fixture covers what a
+        # header pin cannot see, namely `PauseExpiryValue` being gutted as a
+        # `def` while both headers stay byte-identical.
+        "pauseLastWorld_join":
+            "a5ac85a9e93e62b1b66237ebb5e692ee1f70794a16394156e4c470d7bce852bc",
+        "pauseRetainedWorld_join":
+            "41a00c2f6264d4b1a588eb27714ecf9b824addc480e6deb830a3c3c9932f630d",
+        # The two index pins that make each route's path identify its row.
+        "pauseLastExpiry_index_pin":
+            "98c7b749e19b4671ef1cc75c9ba37085e06f9f9bc829c62109ac0100d841a720",
+        "pauseRetainedExpiry_index_pin":
+            "4caae19165afad2d4c71c8ee35e29256d126473f237d47f0381da4fb18c6aecf",
+        # The responder-crossing effect lemmas.  These are what let the route
+        # cross a CALL and a STATICCALL into a foreign account and still know
+        # the caller's storage, code and staged memory word survive; relax
+        # either conclusion and the crossing stops being a crossing.
+        "responder_call_effects":
+            "1e99a8c96ab905d1bfce1e4683e8186d200b37e487cf2dda97676266dc4964a2",
+        "responder_statcall_effects":
+            "0ebc83d783d16c055c8e9f4c7f41dea051fe58ae96de4ec0a82e3d54764128e7",
+        "responder_hcall":
+            "742387998c56dd1902b6a24592238b48df17689b2af9c6c2512dd644d8dec7a5",
+        "responder_hstat":
+            "b1bcfd15b76d6e617bb94d77319735ffa6dc0c117c4fc8cf54101fb9c656dbfa",
+    },
 }
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
@@ -987,6 +1111,58 @@ MUTATIONS = {
             "constructorProgramSiteCounts = (2, 1, 0) := by",
         ),
     },
+    # ---- The pause `.ok` family's weakenings ----
+    "pauseWorldRun": {
+        # AT8: the witness run must be a run of the DEPLOYED program.  Drop the
+        # compiled-code identity and `.ok` is reached by some program, which is
+        # not a statement about this contract at all.
+        "witness run's compiled-code identity dropped": (
+            "        (.ok post) ∧\n"
+            "        some pauseLastSevm.code.toList =\n"
+            "          Prog.compile (runtime officialParams) := by",
+            "        (.ok post) := by",
+        ),
+    },
+    "pauseOkRoute": {
+        # AT8: the shared burn-carrying tail derives its `exactInvocation` from
+        # storage-owner AND code-address identity.  Dropping the code address
+        # would let the route be attributed to a delegating frame.
+        "code-address identity dropped from the shared route tail": (
+            "    (codeAddress : sevm.codeAddress = some ca)\n", "",
+        ),
+    },
+    "pauseJoin": {
+        # AT8: the join's content is that the reached expiry write obeys the
+        # value law at THIS world's post-callback count.  Dropping the conjunct
+        # leaves a bare occurrence claim -- the write happened, with nothing
+        # said about the word stored -- which is the reading J5 exists to
+        # exclude.
+        "row-19 join value law dropped from the conclusion": (
+            "      PauseExpiryValue pauseLastSevm.benvStat.time "
+            "pauseWorldInterval 0\n        value ∧\n",
+            "",
+        ),
+        # AT8: row 18 is the CHECKED arm and its count word is `1`.  Restating
+        # it at `0` would claim the zero arm's law -- stored word zero -- for
+        # the arm that stores `pauseWorldTime + pauseWorldInterval`.
+        "row-18 join count argument replaced by the zero arm's": (
+            "PauseExpiryValue pauseRetainedSevm.benvStat.time "
+            "pauseWorldInterval 1",
+            "PauseExpiryValue pauseRetainedSevm.benvStat.time "
+            "pauseWorldInterval 0",
+        ),
+        # AT8: the two attained rows are distinct inventory rows, 19 and 18.
+        # A relabelled witness would attain one row twice and leave the other
+        # unattained while every header downstream still read the same.
+        "row-19 attainment witness relabelled to row 18": (
+            "theorem attainable_pauseLastTargetExpiry_pauseExpiry :\n"
+            "    Attainable officialParams .pauseLastTargetExpiry "
+            ".pauseExpiry := by",
+            "theorem attainable_pauseLastTargetExpiry_pauseExpiry :\n"
+            "    Attainable officialParams .pauseRetainedTargetExpiry "
+            ".pauseExpiry := by",
+        ),
+    },
 }
 
 def header_mutation_controls(sources: dict) -> None:
@@ -1101,6 +1277,9 @@ def main() -> None:
           "transitions; AT5 raw all-frame write authority with permitted roles; "
           "AT6 owner closure, retained last writer, settlement and the "
           "noncommitting negatives; constructor 2/0/0 domain separation; "
+          "the pause .ok family's two .pauseExpiry rows, their route, worlds "
+          "and joins, with the joins' value law extracted from an arbitrary "
+          "join; "
           f"{controls} labelled header mutations, deletion and trust controls")
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import Blanc.LidoCircuitBreakerAccess
 import Blanc.LidoCircuitBreakerRetainedAuthority
 import Blanc.LidoCircuitBreakerAttainment
+import Blanc.LidoCircuitBreakerPauseJoin
 
 /-!
 Gate-owned controls for the Stage 5 access and temporal-authority family.
@@ -1452,5 +1453,115 @@ theorem registerReplacementArm_role_tightness_control :
     have roleEq : role = .adminExpiry := by revert roleMember; cases role <;> decide
     subst roleEq
     exact attainable_registerLastOldNewExpiry_adminExpiry
+
+/-! ## The pause joins' value law
+
+`pauseLastWorld_join` and `pauseRetainedWorld_join` each conclude with a
+`PauseExpiryValue` conjunct.  `PauseExpiryValue` is a `def`, so — exactly as
+with `Attainable` above — a clause dropped from it would leave both join
+headers byte-identical while making both *cheaper* to prove, and no header pin
+in this gate would see anything. -/
+
+/-- The pause joins' value law, extracted from an **arbitrary** join rather
+than from the landed proof.
+
+Each of the first two clauses takes a join's own existential body at one
+witness world — the `pauseSuccess` boundary walk, the reached expiry `SSTORE`,
+and the value law at that world's post-callback count — and reads the concrete
+stored word back out *through* `PauseExpiryValue`'s own laws, never by
+re-deriving it from the suffix walk: row 19's count-zero arm stores `0`
+(`PauseExpiryValue.eq_zero_iff`, on the count-zero disjunct), and row 18's
+checked arm stores `pauseWorldTime + pauseWorldInterval = 2592010`, which is
+nonzero (`PauseExpiryValue.eq_zero_iff_count_eq_zero`, at this world, where
+the block time is `10` and so the degenerate zero-sum case is excluded).
+Weaken either clause of `PauseExpiryValue` and the corresponding extraction
+stops elaborating — while both joins, whose conclusions name only the `def`,
+stay provable against the weaker target and keep byte-identical headers.  That
+asymmetry is the point: a header pin cannot see this, and this can.
+
+NON-VACUITY.  First, structurally: the two closing existentials *are* the
+landed joins, so neither implication is true-because-unsatisfiable, and the
+two extracted words are different — `0` against `2592010` — so neither clause
+restates the other and the `value ≠ 0` conjunct is not carried vacuously by
+the zero arm.
+
+Second, VERIFIED by mutation: six single-edit rewrites of this control were
+each run through `lake env lean` on a throwaway copy and each was rejected —
+(1) replacing row 19's value-law premise by `True`; (2) changing row 19's
+extracted word to `1`; (3) changing row 18's extracted word to `0`;
+(4) changing row 19's count argument from `0` to `1`; (5) changing row 18's
+count argument from `1` to `0`, which `decide` refutes outright; and
+(6) reading row 18's law at `pauseWorldDuration` instead of the configured
+`pauseWorldInterval`.  So the world, the count and the extracted word are all
+load-bearing here, and none of them is recoverable from the boundary walk or
+the `PauseExpiryWrite` occurrence alone.
+
+Recorded limit, and the reason this control is worth its cost:
+`PauseExpiryValue.eq_zero_iff` is what ties the `def` down, and it is not a
+pinned header of this gate, so the `def` and that law could in principle be
+weakened *together* while `pauseSuccess_expiryWrite_stores_zero_iff` — whose
+statement is about the concrete `if`, not about `PauseExpiryValue` — keeps its
+pinned header and is re-proved directly.  Both join headers would survive that
+byte-identical.  This control is what does not. -/
+theorem pause_join_expiry_value_control :
+    (∀ (mid : Devm) (out : Execution) (value : B256),
+      Func.RunCompiledTo
+        ((runtime officialParams).main :: (runtime officialParams).aux)
+        pauseLastSevm mid pauseSuccess out →
+      PauseExpiryWrite pauseLastSevm mid configWorldOwner value →
+      PauseExpiryValue pauseLastSevm.benvStat.time pauseWorldInterval 0
+        value →
+        value = 0 ∧
+          PauseExpiryWrite pauseLastSevm mid configWorldOwner 0) ∧
+    (∀ (mid : Devm) (out : Execution) (value : B256),
+      Func.RunCompiledTo
+        ((runtime officialParams).main :: (runtime officialParams).aux)
+        pauseRetainedSevm mid pauseSuccess out →
+      PauseExpiryWrite pauseRetainedSevm mid configWorldOwner value →
+      PauseExpiryValue pauseRetainedSevm.benvStat.time pauseWorldInterval 1
+        value →
+        value = pauseWorldTime + pauseWorldInterval ∧ value ≠ 0 ∧
+          PauseExpiryWrite pauseRetainedSevm mid configWorldOwner
+            (pauseWorldTime + pauseWorldInterval)) ∧
+    (pauseWorldTime + pauseWorldInterval : B256) = 2592010 ∧
+    (2592010 : B256) ≠ 0 ∧
+    (∃ (mid : Devm) (out : Execution) (value : B256),
+      Func.RunCompiledTo
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          pauseLastSevm mid pauseSuccess out ∧
+        PauseExpiryWrite pauseLastSevm mid configWorldOwner value ∧
+        PauseExpiryValue pauseLastSevm.benvStat.time pauseWorldInterval 0
+          value) ∧
+    (∃ (mid : Devm) (out : Execution) (value : B256),
+      Func.RunCompiledTo
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          pauseRetainedSevm mid pauseSuccess out ∧
+        PauseExpiryWrite pauseRetainedSevm mid configWorldOwner value ∧
+        PauseExpiryValue pauseRetainedSevm.benvStat.time pauseWorldInterval 1
+          value) := by
+  refine ⟨?_, ?_, by decide, by decide, ?_, ?_⟩
+  · intro _mid _out value _boundary write law
+    have zero : value = 0 := law.eq_zero_iff.mpr (Or.inl rfl)
+    exact ⟨zero, zero ▸ write⟩
+  · intro _mid _out value _boundary write law
+    have nondegenerate :
+        ¬ (pauseRetainedSevm.benvStat.time = 0 ∧ pauseWorldInterval = 0) := by
+      rintro ⟨time, -⟩
+      exact absurd (time ▸ pauseWorld_time pauseRetainedWorldStor
+        pauseRetainedWorldGas) (by decide)
+    have nonzero : value ≠ 0 := fun hzero =>
+      absurd ((law.eq_zero_iff_count_eq_zero nondegenerate).mp hzero)
+        (by decide)
+    have extension := law.2 (by decide)
+    have sum : pauseRetainedSevm.benvStat.time + pauseWorldInterval = value :=
+      extension.add_eq
+    rw [show pauseRetainedSevm.benvStat.time = pauseWorldTime from
+      pauseWorld_time _ _] at sum
+    exact ⟨sum.symm, nonzero, sum ▸ write⟩
+  · obtain ⟨mid, out, value, boundary, write, law, -⟩ := pauseLastWorld_join
+    exact ⟨mid, out, value, boundary, write, law⟩
+  · obtain ⟨mid, out, value, boundary, write, law, -⟩ :=
+      pauseRetainedWorld_join
+    exact ⟨mid, out, value, boundary, write, law⟩
 
 end Blanc.LidoCircuitBreaker.AccessControls
