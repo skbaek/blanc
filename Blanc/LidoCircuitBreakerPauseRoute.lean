@@ -265,6 +265,12 @@ theorem prefix_of_argCheckNonAddress {e : Sevm} {s s' : Devm} {k : B256}
 
 /-! ## The dispatcher crossing -/
 
+/-- `Devm.getCode` depends only on the state, so a state-preserving relation
+carries the whole account-code map. -/
+theorem getCode_of_state {a b : Devm} (h : a.state = b.state) :
+    Devm.getCode a = Devm.getCode b := by
+  funext x; simp only [Devm.getCode, Devm.getAcct]; rw [h]
+
 set_option maxRecDepth 16384 in
 /-- The three selector crossings of `hybridDispatchWith` on a walk whose
 calldata selects `pause`: the outer pivot taken *fall-through* (the selector
@@ -285,6 +291,7 @@ theorem dispatch_routeTo_pause (dp : DeployParams)
     (bodyRoute : ∀ (current : Prog.SourcePath) (devm' : Devm),
       Devm.getStor devm' = Devm.getStor devm →
       devm'.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
       ∀ tail : Func.RunCompiledTo fs sevm devm' pause out,
         Func.RunCompiledTo.RouteTo current tail targetPath targetInstruction) :
     Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h targetPath
@@ -296,41 +303,50 @@ theorem dispatch_routeTo_pause (dp : DeployParams)
     (Line.of_inv Devm.getStor (by line_inv) run0).symm
   have m0 : s0.memory = devm.memory :=
     (Line.of_inv Devm.memory (by line_inv) run0).symm
+  have d0 : Devm.getCode s0 = Devm.getCode devm :=
+    (Line.of_inv Devm.getCode (by line_inv) run0).symm
   refine routeTo_line (splitTest (selector "pause" [.address])) tail0
     (fun _s1 run1 tail1 => ?_)
   have p1 := prefix_of_splitTest p0 run1
   have g1 := (Line.of_inv Devm.getStor (by line_inv) run1).symm.trans g0
   have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm.trans m0
+  have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm.trans d0
   refine routeTo_branchLeft_frame tail1
     (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
     (fun _s2 hpop2 tail2 => ?_)
   have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
   have g2 := (getStor_of_state hpop2.state).symm.trans g1
   have m2 := hpop2.memory.symm.trans m1
+  have d2 := (getCode_of_state hpop2.state).symm.trans d1
   refine routeTo_line (splitTest (selector "MIN_HEARTBEAT_INTERVAL" [])) tail2
     (fun _s3 run3 tail3 => ?_)
   have p3 := prefix_of_splitTest p2 run3
   have g3 := (Line.of_inv Devm.getStor (by line_inv) run3).symm.trans g2
   have m3 := (Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2
+  have d3 := (Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2
   refine routeTo_branchRight_frame tail3
     (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
     (fun _s4 _w4 hpop4 tail4 => ?_)
   have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
   have g4 := (getStor_of_state hpop4.state).symm.trans g3
   have m4 := hpop4.memory.symm.trans m3
+  have d4 := (getCode_of_state hpop4.state).symm.trans d3
   refine routeTo_line (linearTest (selector "pause" [.address])) tail4
     (fun _s5 run5 tail5 => ?_)
   have p5 := prefix_of_linearTest p4 run5
   have g5 := (Line.of_inv Devm.getStor (by line_inv) run5).symm.trans g4
   have m5 := (Line.of_inv Devm.memory (by line_inv) run5).symm.trans m4
+  have d5 := (Line.of_inv Devm.getCode (by line_inv) run5).symm.trans d4
   refine routeTo_branchRight_frame tail5
     (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
     (fun _s6 _w6 hpop6 tail6 => ?_)
   have g6 := (getStor_of_state hpop6.state).symm.trans g5
   have m6 := hpop6.memory.symm.trans m5
+  have d6 := (getCode_of_state hpop6.state).symm.trans d5
   refine routeTo_line [Ninst.pop] tail6 (fun _s7 run7 tail7 => ?_)
   exact bodyRoute _ _
     ((Line.of_inv Devm.getStor (by line_inv) run7).symm.trans g6)
-    ((Line.of_inv Devm.memory (by line_inv) run7).symm.trans m6) tail7
+    ((Line.of_inv Devm.memory (by line_inv) run7).symm.trans m6)
+    ((Line.of_inv Devm.getCode (by line_inv) run7).symm.trans d6) tail7
 
 end Blanc.LidoCircuitBreaker

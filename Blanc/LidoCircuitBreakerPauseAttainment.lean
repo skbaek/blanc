@@ -54,7 +54,7 @@ theorem runtimeMain_routeTo_pauseAssignment (dp : DeployParams)
       (.reg .sstore) := by
   refine runtimeMain_routeTo_dispatch dp h accepted (fun _entry arm => ?_)
   exact dispatch_routeTo_pause dp arm selectorEq
-    (fun _current _devm' _stor _mem bodyTail =>
+    (fun _current _devm' _stor _mem _code bodyTail =>
       pause_routeTo_setPauserCall dp bodyTail emptyOutput argsPresent
         targetCanonical
         (fun _c _stage _d _stor' _mem' _staging callTail =>
@@ -195,7 +195,7 @@ theorem runtimeMain_routeTo_pauseKernel (dp : DeployParams)
   have gb := (getStor_of_state hpop.state).symm.trans ge
   have mb := hpop.memory.symm.trans me
   refine dispatch_routeTo_pause dp arm selectorEq
-    (fun _current pauseEntry hstor hmem bodyTail => ?_)
+    (fun _current pauseEntry hstor hmem _code bodyTail => ?_)
   refine pause_routeTo_setPauserCall dp bodyTail emptyOutput argsPresent
     targetCanonical
     (fun _c _stage callState hstor' hmem' staging callTail => ?_)
