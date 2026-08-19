@@ -1163,4 +1163,175 @@ theorem pauseAfterCall_ok_forces_callSuccess {fs : List Func} {sevm : Sevm}
   · exact ⟨child, armPre, herr, hrd, hard,
       Func.RunCompiled.of_runCompiledTo_ok hstat⟩
 
+/-! ## The staged calldata
+
+`pauseCall_boundary`'s `h_window` premise asks for the 36 bytes at `0x11c`.
+This section discharges it from the staged duration word alone, so that the
+duration's provenance closes inside the staging line rather than being threaded
+through the pause route.
+
+The arithmetic is entirely about the CircuitBreaker's own memory: `mstoreAt 8`
+writes `[256, 288)`, `mstoreAt 9` writes `[288, 320)`, a selector sits
+right-aligned in its word so its four bytes are `[284, 288)`, and
+`0x11c = 284`.  The CALL's window `[284, 320)` is therefore the selector's four
+bytes followed by the whole duration word, which is `pauseForCalldata`. -/
+
+private lemma sliceD_split {ξ : Type} (xs : List ξ) (d : ξ) :
+    ∀ (a m b : Nat),
+      xs.sliceD m (a + b) d = xs.sliceD m a d ++ xs.sliceD (m + a) b d := by
+  intro a
+  induction a with
+  | zero => intro m b; simp [List.sliceD, List.takeD]
+  | succ a ih =>
+    intro m b
+    rw [show a + 1 + b = (a + b) + 1 from by omega, List.sliceD_succ,
+      ih (m + 1) b, List.sliceD_succ xs m a d,
+      show m + (a + 1) = m + 1 + a from by omega]
+    rfl
+
+private lemma drop_of_length_append {ξ : Type} (A B : List ξ) (n : Nat)
+    (h : A.length = n) : (A ++ B).drop n = B := by
+  subst h; exact List.drop_left
+
+/-- The 36 bytes the CALL's window reads out of an image carrying a selector
+word at `256` and a value word at `288`: the selector's low four bytes followed
+by the whole value word.  Pure `Bytes` arithmetic — no `Devm` and no run. -/
+private lemma sliceD_stagedCalldata (img : Bytes) (sel dur : B256) :
+    (Bytes.writeAt (Bytes.writeAt img 256 (B256.toBytes sel))
+        288 (B256.toBytes dur)).sliceD 284 36 0 =
+      abiSelectorBytes sel ++ B256.toBytes dur := by
+  have hsel : (B256.toBytes sel).length = 32 := B256.length_toBytes sel
+  have hdur : (B256.toBytes dur).length = 32 := B256.length_toBytes dur
+  have hhigh :
+      (Bytes.writeAt (Bytes.writeAt img 256 (B256.toBytes sel))
+        288 (B256.toBytes dur)).sliceD 288 32 0 = B256.toBytes dur := by
+    have h := Bytes.sliceD_writeAt
+      (Bytes.writeAt img 256 (B256.toBytes sel)) (B256.toBytes dur) 288
+    rwa [hdur] at h
+  have hlow0 :
+      (Bytes.writeAt (Bytes.writeAt img 256 (B256.toBytes sel))
+        288 (B256.toBytes dur)).sliceD 284 4 0 =
+      (Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 284 4 0 :=
+    Bytes.sliceD_writeAt_before _ _ 284 4 288 (by omega)
+  have hword :
+      (Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 256 32 0 =
+        B256.toBytes sel := by
+    have h := Bytes.sliceD_writeAt img (B256.toBytes sel) 256
+    rwa [hsel] at h
+  have hinner := sliceD_split
+    (Bytes.writeAt img 256 (B256.toBytes sel)) (0 : UInt8) 28 256 4
+  simp only [show (28 : Nat) + 4 = 32 from rfl,
+    show (256 : Nat) + 28 = 284 from rfl] at hinner
+  have hA : ((Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 256 28 0).length
+      = 28 := List.takeD_length _ _ _
+  have hlow :
+      (Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 284 4 0 =
+        abiSelectorBytes sel := by
+    have hd : abiSelectorBytes sel =
+        ((Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 256 28 0 ++
+            (Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 284 4 0).drop
+          28 := by
+      rw [← hinner, hword]
+      rfl
+    rw [hd, drop_of_length_append _ _ 28 hA]
+  have houter := sliceD_split
+    (Bytes.writeAt (Bytes.writeAt img 256 (B256.toBytes sel))
+      288 (B256.toBytes dur)) (0 : UInt8) 4 284 32
+  simp only [show (4 : Nat) + 32 = 36 from rfl,
+    show (284 : Nat) + 4 = 288 from rfl] at houter
+  rw [houter, hlow0, hlow, hhigh]
+
+/-- **The staging line builds `pauseFor(uint256)`'s calldata.**  From nothing
+but the staged duration word, the CALL's argument window at `0x11c` reads back
+as the canonical encoder's 36 bytes.
+
+This is a statement about the CircuitBreaker's own memory across its own
+straight-line code.  There is no callee in it: `pauseCallStaging` runs strictly
+*before* the `CALL`, so no premise here could constrain a target even in
+principle, and none is present — the only hypothesis is that memory reads
+`duration` at the duration word, which is where `pause` put it. -/
+theorem pauseCallStaging_calldata {sevm : Sevm} {entry callPre : Devm}
+    {duration : B256}
+    (hword : MemWordAt entry (durationWord * 32).toNat duration)
+    (hstaging : Line.Run sevm entry pauseCallStaging callPre) :
+    (callPre.memory.read 0x11c 36).1 = pauseForCalldata duration := by
+  obtain ⟨hwf0, img, hreads0, hslice0⟩ := hword
+  have hdw : ((durationWord : B256) * 32).toNat = 736 := by decide
+  have hsel8 : ((8 : B256) * 32).toNat = 256 := by decide
+  have hsel9 : ((9 : B256) * 32).toNat = 288 := by decide
+  have hlensel : (B256.toBytes pauseForSelector).length = 32 :=
+    B256.length_toBytes pauseForSelector
+  unfold pauseCallStaging at hstaging
+  simp only [List.append_assoc] at hstaging
+  -- `POP` and the selector push: memory untouched, selector on top
+  obtain ⟨s1, h1, hstaging⟩ := of_run_append _ hstaging
+  have hm1 : entry.memory = s1.memory :=
+    Line.of_inv Devm.memory (by line_inv) h1
+  have hp1 : pauseForSelector :: [] <<+ s1.stack := by
+    rcases Line.of_run_cons h1 with ⟨u1, -, h1'⟩
+    rcases Line.of_run_cons h1' with ⟨u2, hpush, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 hpush) nil_pref
+  have hwf1 : Mem.Wf s1.memory := by rw [← hm1]; exact hwf0
+  have hr1 : Mem.Reads s1.memory img := by rw [← hm1]; exact hreads0
+  -- `mstoreAt 8`: the selector word lands at 256
+  obtain ⟨s2, h2, hstaging⟩ := of_run_append _ hstaging
+  obtain ⟨-, hm2⟩ := of_run_mstoreAt_val h2 hp1
+  rw [hsel8] at hm2
+  have hwf2 : Mem.Wf s2.memory := by rw [hm2]; exact hwf1.write _ _
+  have hr2 : Mem.Reads s2.memory
+      (Bytes.writeAt img 256 (B256.toBytes pauseForSelector)) := by
+    rw [hm2]; exact Mem.Reads.write hwf1 hr1 _ _
+  -- `loadWord durationWord`: the staged word comes back, untouched by the
+  -- selector write, which lands 448 bytes below it
+  obtain ⟨s3, h3, hstaging⟩ := of_run_append _ hstaging
+  have hslice1 :
+      (Bytes.writeAt img 256 (B256.toBytes pauseForSelector)).sliceD 736 32 0 =
+        B256.toBytes duration := by
+    rw [Bytes.sliceD_writeAt_after img (B256.toBytes pauseForSelector)
+      736 32 256 (by rw [hlensel]; omega)]
+    rw [← hdw]; exact hslice0
+  have hp3 : duration :: [] <<+ s3.stack ∧ Mem.Wf s3.memory ∧
+      Mem.Reads s3.memory
+        (Bytes.writeAt img 256 (B256.toBytes pauseForSelector)) := by
+    rcases Line.of_run_cons h3 with ⟨v1, hoff, h3'⟩
+    rcases Line.of_run_cons h3' with ⟨v2, hml, hnil⟩
+    cases hnil
+    have hpb := of_run_pushB256 hoff
+    obtain ⟨hstk, hmem, -⟩ :=
+      prefix_of_mload_val hml (prefix_of_push hpb nil_pref)
+        (by rw [← hpb.memory]; exact hr2)
+    rw [hdw, hslice1, B256.toB256_toBytes] at hstk
+    refine ⟨hstk, ?_, ?_⟩
+    · rw [hmem, ← hpb.memory]; exact hwf2.extend _ _
+    · rw [hmem, ← hpb.memory]; exact hr2.extend _ _
+  obtain ⟨hp3stk, hwf3, hr3⟩ := hp3
+  -- `mstoreAt 9`: the duration word lands at 288, directly above the selector
+  obtain ⟨s4, h4, hstaging⟩ := of_run_append _ hstaging
+  obtain ⟨-, hm4⟩ := of_run_mstoreAt_val h4 hp3stk
+  rw [hsel9] at hm4
+  have hr4 : Mem.Reads s4.memory
+      (Bytes.writeAt (Bytes.writeAt img 256 (B256.toBytes pauseForSelector))
+        288 (B256.toBytes duration)) := by
+    rw [hm4]; exact Mem.Reads.write hwf3 hr3 _ _
+  have hwf4 : Mem.Wf s4.memory := by rw [hm4]; exact hwf3.write _ _
+  -- the five constant pushes, the target load and `GAS` only extend memory
+  obtain ⟨s5, h5, hstaging⟩ := of_run_append _ hstaging
+  have hm5 : s4.memory = s5.memory := by
+    refine Line.of_inv Devm.memory ?_ h5
+    unfold pushList
+    simp only [List.map]
+    line_inv
+  obtain ⟨s6, h6, h7⟩ := of_run_append _ hstaging
+  obtain ⟨i6, hm6⟩ := of_run_loadWord_mem h6
+  have hm7 : s6.memory = callPre.memory :=
+    Line.of_inv Devm.memory (by line_inv) h7
+  have hrFinal : Mem.Reads callPre.memory
+      (Bytes.writeAt (Bytes.writeAt img 256 (B256.toBytes pauseForSelector))
+        288 (B256.toBytes duration)) := by
+    rw [← hm7, hm6, ← hm5]
+    exact hr4.extend _ _
+  rw [Mem.Reads.read hrFinal 0x11c 36]
+  exact sliceD_stagedCalldata img pauseForSelector duration
+
 end Blanc.LidoCircuitBreaker
