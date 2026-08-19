@@ -117,6 +117,7 @@ CONTRACTS = {
                              "LidoCircuitBreakerPauseSettlement",
                              "LidoCircuitBreakerPreControl",
                              "LidoCircuitBreakerCallBoundary",
+                             "LidoCircuitBreakerObservation",
                              "LidoCircuitBreakerCode",
                              "LidoCircuitBreakerDeploy"],
 }
