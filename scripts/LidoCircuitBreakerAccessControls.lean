@@ -4,6 +4,7 @@ import Blanc.LidoCircuitBreakerAttainment
 import Blanc.LidoCircuitBreakerPauseJoin
 import Blanc.LidoCircuitBreakerPauseSettlement
 import Blanc.LidoCircuitBreakerPreControl
+import Blanc.LidoCircuitBreakerCallBoundary
 
 /-!
 Gate-owned controls for the Stage 5 access and temporal-authority family.
@@ -1721,5 +1722,134 @@ theorem pre_control_arbitrary_target_code_control
     pause_body_runCompiledTo_error_of_locked dp sevm' callPre reentrantTarget G
       hdataLength hmask hdataTarget (by rw [hframe, hlock']; decide)
   exact ⟨post, hrun, hout⟩
+
+/-! ## Call-boundary control: what the two outgoing messages carry
+
+Stage 6's second cut states what the CircuitBreaker *sends* at the pause's two
+external edges, for arbitrary target bytecode.  All of that content lives
+inside two `def` relations, `PauseCallBoundary` and `PauseStatBoundary`, where
+a header pin cannot reach it: a weakened clause leaves every public header in
+`callBoundary` byte-identical. -/
+
+/-- The pause's external boundary at an ARBITRARY target bytecode, read out of
+the two relations: at each edge, the argument window's bytes against the
+spelled-out encoder, and the message itself as a bare `ProcessMessage` fact.
+The CALL carries `pauseFor(uint256)`'s selector followed by the configured
+duration, goes to `target`, is sent by the CircuitBreaker, carries no value, is
+dynamic, and hands the callee the very transient storage that holds the
+reentrancy lock; the staged target word is still the CircuitBreaker's when the
+observation is staged, after arbitrary callee execution; and the STATICCALL
+carries `isPaused()`'s bare selector, goes to the **same** target, and is
+static.
+
+`hcode` is the only thing this control says about the code at `target`, and
+`code` is universally quantified.  It is bound and never used, deliberately:
+it is the shape a callee pin would have to take, and there is nothing here to
+satisfy one with.
+
+Three weakenings this control is the only thing standing between and a green
+gate.  None is reachable by a header pin, because each lives inside a
+relation's clauses or a `def`'s body rather than in a statement's shape:
+
+1. **Encoder substitution.**  `PauseCallBoundary` states its calldata twice —
+   once as the argument window's content at `0x11c`, once as `msg.data` — and
+   *either* could be restated against the window's own content,
+   `(callPre.memory.read 0x11c 36).1 = (callPre.memory.read 0x11c 36).1`,
+   which is what `callSpawnMsg` builds its calldata from anyway.  Both
+   boundary headers would stay byte-identical.  This control therefore reads
+   **both**: the window equation and the message's own `msg.data`.  It obtains
+   each **only by destructuring the relation**; it never calls
+   `pauseCallStaging_calldata` or any other staging lemma, which would
+   re-establish the encoder behind the relation's back and leave the control
+   green under exactly that substitution.  Both conclusions also spell the
+   encoder out — `abiSelectorBytes pauseForSelector ++ B256.toBytes duration`,
+   `abiSelectorBytes isPausedSelector` — rather than naming `pauseForCalldata`
+   or `isPausedCalldata`, so mutating an encoder's *definition* cannot rescue
+   it either.
+
+2. **A callee pin.**  An added premise naming the target's bytecode — a
+   `CodeAt callPre target calleeCode` on `pauseCall_boundary`, or any premise
+   satisfiable only in a world where the target answers the pausable
+   interface — would leave every header recognisable while silently restricting
+   the claim to a cooperative callee.  See `hcode` above: this control has an
+   arbitrary `code` and nothing else, so a pinned callee has nothing to
+   discharge it with.
+
+3. **A cooperative-callee premise on the observation.**  `PauseStatBoundary`
+   is stated downstream of arbitrary callee execution, so a premise of the
+   form "memory is unchanged across the callback" (`statPre.memory =
+   callPost.memory`, say) would read as bookkeeping and would restrict the
+   second edge to a target that left the CircuitBreaker's memory alone.  The
+   middle conjunct here is `pauseCall_targetWord_survives`'s conclusion, taken
+   from the joined boundary and nothing else, and the third is the STATICCALL
+   relation reached across that same span; neither is supplied with such a
+   premise.
+
+NON-VACUITY.  Structurally: every conjunct below is extracted from a relation
+`pause_externalBoundary` returns, so none is true-because-unsatisfiable.
+
+VERIFIED by mutation: each of the three weakenings above was applied to
+`Blanc/LidoCircuitBreakerCallBoundary.lean`, the **whole library rebuilt** so
+that the mutation was live rather than self-defeating upstream, and this
+control then rejected by `lake env lean`.  One measured limit is recorded with
+it: the encoder substitution had to be paired with its construction site
+(`h_window` -> `rfl` in `pauseCall_boundary`'s closing `refine`) to keep the
+library compiling, and an **earlier draft of this control that read only
+`msg.data` survived it** — the relation's two calldata clauses are independent,
+and `msg.data` stays pinned while the window clause is gutted.  The window
+equations in the conclusion are what close that hole; they were added in
+response to the measurement, not before it.
+
+What this control does **not** claim, matching the cut it guards: nothing about
+what the target does with either message or returns, no claim that the pause
+completes, and no claim that either edge is reached in any particular run —
+`hCall` and `hStat` are derivations handed in, and `hDepth`/`hDynamic` are the
+enclosing frame's honest premises.  `msg.isStatic = true` on the observation is
+a property of the message the CircuitBreaker builds, not a theorem that the
+child changed no state. -/
+theorem call_boundary_arbitrary_target_code_control
+    (sevm : Sevm) (target : Adr) (duration : B256) (code : ByteArray)
+    (entry callPre callPost statPre statPost : Devm)
+    (hcode : CodeAt entry target code)
+    (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
+    (hDuration : MemWordAt entry (durationWord * 32).toNat duration)
+    (hCallStaging : Line.Run sevm entry pauseCallStaging callPre)
+    (hDepth : sevm.depth ≠ 0)
+    (hDynamic : sevm.isStatic = false)
+    (hCall : Ninst.RunCompiled sevm callPre (.exec .call) callPost)
+    (hStatStaging : Line.Run sevm callPost pauseStatStaging statPre)
+    (hStat : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
+    ((callPre.memory.read 0x11c 36).1 =
+          abiSelectorBytes pauseForSelector ++ B256.toBytes duration ∧
+        ∃ msg xl child, ProcessMessage msg xl (.ok child) ∧
+          msg.data =
+            abiSelectorBytes pauseForSelector ++ B256.toBytes duration ∧
+          msg.currentTarget = target ∧ msg.caller = sevm.currentTarget ∧
+          msg.value = 0 ∧ msg.isStatic = false ∧
+          msg.tenv.transientStorage = callPre.transientStorage) ∧
+      MemWordAt statPre (targetWord * 32).toNat target.toB256 ∧
+      ((statPre.memory.read 0x11c 4).1 = abiSelectorBytes isPausedSelector ∧
+        ∃ msg xl child, ProcessMessage msg xl (.ok child) ∧
+          msg.data = abiSelectorBytes isPausedSelector ∧
+          msg.currentTarget = target ∧ msg.isStatic = true) := by
+  -- Everything below comes out of `pause_externalBoundary` and the two
+  -- relations it returns.  No staging lemma is invoked here.
+  obtain ⟨callB, word, statB⟩ :=
+    pause_externalBoundary hTarget hDuration hCallStaging hDepth hDynamic
+      hCall hStatStaging hStat
+  obtain ⟨callParent, callChild, callMessage, callSlot, callDelegated,
+    callCode, callGasWord, callChildGas,
+    -, callWindow, -, -, -, -, -, -, -, -, -, callTarget, -, callCaller,
+    callValue, callStatic, callData, callTrans, -, callProcess,
+    -, -, -, -, -⟩ := callB
+  obtain ⟨statParent, statChild, statMessage, statSlot, statDelegated,
+    statCode, statGasWord, statChildGas,
+    -, statWindow, -, -, -, -, -, -, -, -, -, statTarget, -, -, -, statStatic,
+    statData, -, -, statProcess, -, -, -, -, -⟩ := statB
+  exact ⟨⟨callWindow, callMessage, callSlot, callChild, callProcess, callData,
+      callTarget, callCaller, callValue, callStatic, callTrans⟩,
+    word,
+    ⟨statWindow, statMessage, statSlot, statChild, statProcess, statData,
+      statTarget, statStatic⟩⟩
 
 end Blanc.LidoCircuitBreaker.AccessControls

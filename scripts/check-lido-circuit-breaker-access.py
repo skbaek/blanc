@@ -185,6 +185,27 @@ REQUIRED = (
     # the span to the CALL, and joins the halves into the consequence none of
     # them states alone -- so a pinned callee has nothing to discharge it with.
     "pre_control_arbitrary_target_code_control",
+    # Stage 6 call boundary.  The same blind spot one cut later, and wider:
+    # `PauseCallBoundary` and `PauseStatBoundary` are `def`s, so every clause
+    # that says what the CircuitBreaker SENDS -- the argument window's encoder,
+    # the callee, the caller, the value, the static flag, the transient storage
+    # handed over -- sits where no header pin reaches.  Three weakenings would
+    # leave `pauseCall_boundary`, `pauseStat_boundary` and
+    # `pause_externalBoundary` byte-identical: substituting the window's own
+    # content for the encoder, pinning the callee's bytecode, and adding a
+    # cooperative-callee premise on the STATICCALL leg, which sits downstream
+    # of arbitrary callee execution.  This control reads each edge's argument
+    # window AND its `ProcessMessage` fact out of the RELATIONS -- never from a
+    # staging lemma, which would re-establish the encoder behind the relation's
+    # back -- spells both encoders out rather than naming `pauseForCalldata` or
+    # `isPausedCalldata`, carries the surviving target word across the
+    # callback, and says nothing about the code at `target` beyond a
+    # universally quantified `ByteArray`.  Reading BOTH calldata clauses is
+    # measured, not decorative: a draft that read only `msg.data` survived the
+    # window substitution, because the relation pins its calldata twice and the
+    # two clauses are independent.  All three weakenings verified rejected with
+    # the library rebuilt; see the control's docstring.
+    "call_boundary_arbitrary_target_code_control",
 )
 FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|opaque|native_decide|implemented_by)\b")
 
@@ -1450,6 +1471,12 @@ def main() -> None:
           "pauseAfterSet's own entry, and the refusal of a re-entering pause "
           "-- with the family instantiated at a universally quantified target "
           "bytecode carried across the span; "
+          "Stage 6's call boundary -- the pause's two outgoing messages, each "
+          "read out of its own relation as an argument window against the "
+          "spelled-out encoder plus a ProcessMessage fact naming callee, "
+          "caller, value and static flag, with the staged target word carried "
+          "across arbitrary callee execution and nothing said about the code "
+          "at the target beyond a universally quantified ByteArray; "
           f"{controls} labelled header mutations, deletion and trust controls")
 
 if __name__ == "__main__":
