@@ -1,4 +1,6 @@
 import Blanc.LidoCircuitBreakerPauseWalk
+import Blanc.LidoCircuitBreakerPauseOkRoute
+import Blanc.TransientInvariance
 
 /-!
 # What is already true before the target gets control
@@ -430,5 +432,89 @@ theorem pause_runCompiledTo_error_of_locked
       (.error (.revert, post)) hdataLength hvalue hselector hcodeAddress
       hcode hbody
   exact ⟨post, hprog, hcompile, hout, hlogs, hstor, htrans⟩
+
+/-! ## P3: nothing moves between the boundary and the CALL
+
+`pauseAfterSet` opens by loading the staged target, duplicating it and testing
+`EXTCODESIZE`, and its live arm drops the duplicate, stages the
+`pauseFor(uint256)` selector and the duration into memory, and pushes the
+CALL's seven operands.  Twenty-one instructions, of which the only writes are
+to memory: no `SSTORE` and no `TSTORE` stands between the boundary and the
+moment the target receives control.
+
+So P1 and P2 hold not merely at the `pauseAfterSet` entry but at the CALL
+itself.  The span stops at the CALL's pre-state, which is the whole point:
+what the callee does with control is exactly what these theorems decline to
+say, and `Ninst.Run` at `Ninst.exec Xinst.call` embeds a complete child-frame
+derivation, so no invariance across the CALL instruction could be true of an
+arbitrary callee anyway. -/
+
+theorem pauseCodeGuard_storInv : Line.Inv Devm.getStor pauseCodeGuard := by
+  unfold pauseCodeGuard loadWord
+  simp only [List.cons_append, List.nil_append]
+  line_inv
+
+theorem pauseCodeGuard_transInv :
+    Line.Inv Devm.transientStorage pauseCodeGuard := by
+  unfold pauseCodeGuard loadWord
+  simp only [List.cons_append, List.nil_append]
+  line_inv
+
+theorem pauseCallStaging_transInv :
+    Line.Inv Devm.transientStorage pauseCallStaging := by
+  unfold pauseCallStaging mstoreAt loadWord pushList
+  simp only [List.map, List.cons_append, List.nil_append]
+  line_inv
+
+/-- **P3.**  Neither storage nor transient storage moves between the
+`pauseAfterSet` entry and the external CALL.  The branch between the two named
+spans is the code-size guard's own dispatch, which only pops its flag. -/
+theorem pauseCallEntry_frame {sevm : Sevm}
+    {entry guardPost branchPost callPre : Devm} {xs : List B256}
+    (hguard : Line.Run sevm entry pauseCodeGuard guardPost)
+    (hbranch : Devm.PopBurn xs guardPost branchPost)
+    (hstaging : Line.Run sevm branchPost pauseCallStaging callPre) :
+    Devm.getStor callPre = Devm.getStor entry ∧
+      Devm.transientStorage callPre = Devm.transientStorage entry := by
+  refine ⟨?_, ?_⟩
+  · exact ((Line.of_inv Devm.getStor pauseCodeGuard_storInv hguard).trans
+      ((PopBurn.Inv.inv hbranch).trans
+        (Line.of_inv Devm.getStor pauseCallStaging_storInv hstaging))).symm
+  · exact ((Line.of_inv Devm.transientStorage pauseCodeGuard_transInv
+      hguard).trans ((PopBurn.Inv.inv hbranch).trans
+        (Line.of_inv Devm.transientStorage pauseCallStaging_transInv
+          hstaging))).symm
+
+/-- **P1 and P2 at the CALL itself.**  Whatever the target's code is, at the
+instant it receives control the CircuitBreaker's own state says the paused
+target has no pauser and the reentrancy lock is held.
+
+`entry` is the `pauseAfterSet` entry state, whose two cells
+`pauseAfterSetEntry_assignment` and the `pauseLockPost`/`pauseKernelBase` lock
+results supply; this carries both across the guard and the call staging to the
+CALL's pre-state.  Nothing constrains the code at `target`: the run hypotheses
+are about the CircuitBreaker's own frame, and a hostile callee is on the far
+side of the CALL this span stops at. -/
+theorem pauseCallEntry_assignment_and_lock {sevm : Sevm}
+    {entry guardPost branchPost callPre : Devm} {xs : List B256}
+    {target : B256}
+    (hguard : Line.Run sevm entry pauseCodeGuard guardPost)
+    (hbranch : Devm.PopBurn xs guardPost branchPost)
+    (hstaging : Line.Run sevm branchPost pauseCallStaging callPre)
+    (hassignment : entry.getStorVal sevm.currentTarget
+      (assignmentSlot target) = 0)
+    (hlock : entry.getTransVal sevm.currentTarget lockKey = 1) :
+    callPre.getStorVal sevm.currentTarget (assignmentSlot target) = 0 ∧
+      callPre.getTransVal sevm.currentTarget lockKey = 1 := by
+  obtain ⟨hstor, htrans⟩ := pauseCallEntry_frame hguard hbranch hstaging
+  refine ⟨?_, ?_⟩
+  · rw [show callPre.getStorVal sevm.currentTarget (assignmentSlot target) =
+      (Devm.getStor callPre sevm.currentTarget).get (assignmentSlot target)
+        from rfl, hstor]
+    exact hassignment
+  · rw [show callPre.getTransVal sevm.currentTarget lockKey =
+      (callPre.transientStorage.getD sevm.currentTarget Stor.empty).get lockKey
+        from rfl, htrans]
+    exact hlock
 
 end Blanc.LidoCircuitBreaker
