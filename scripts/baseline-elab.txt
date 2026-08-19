@@ -1132,3 +1132,34 @@ OK	1.647	Blanc/LidoCircuitBreakerPauseSettlement.lean
 # unchanged.
 OK	1.299	Blanc/TransientInvariance.lean
 OK	1.744	Blanc/LidoCircuitBreakerPreControl.lean
+#
+# 2026-08-20. Stage 6's second cut, the call boundary, adds exactly one module:
+# Blanc/LidoCircuitBreakerCallBoundary.lean, its own proof owner. It states
+# what the CircuitBreaker sends at the pause's two external edges for arbitrary
+# target bytecode, and carries the fifteen public theorems now pinned by
+# scripts/check-lido-circuit-breaker-access.py. The row below is the per-file
+# median of three separate, sequential, uncontended
+# `scripts/check-elab.sh --list --no-build` runs over all 134 files, with no
+# language server alive -- the resident Lean tree was stopped before the first
+# run and none was started between them.
+#
+#   Blanc/LidoCircuitBreakerCallBoundary.lean   3.175 / 3.198 / 3.148  -> 3.175
+#
+# Whole-tree times for those runs were 952.7 s, 960.5 s and 932.9 s. The
+# candidate was pinned at
+#   ce74eeeec5421d7bdc192a6d06c23ddf2895bbd6
+# and the measured source digest (SHA-256) at
+#   226408382bc3b484cdd8d64811794406fadce6a3fc4fb9e1599207a37287e70e
+#     Blanc/LidoCircuitBreakerCallBoundary.lean
+# both verified unchanged across all three runs against a clean tree.
+#
+# The three runs bracket the row tightly (spread 0.050 s), so the median is not
+# carrying host noise. As an environment control, run 1's 133 pre-existing rows
+# were compared against their recorded values: median measured/baseline 1.033,
+# mean 1.031, spread 0.71x-1.38x, and zero rows at or above the 2.0x fail
+# threshold -- so this row was taken on a host running about 3% slower than the
+# one that recorded its neighbours, well inside tolerance. `--rebase`, `--force`
+# and cache seeding were not used, no run was refused for contention, and this
+# diff is additions-only: every pre-existing reference row above remains
+# byte-for-byte unchanged.
+OK	3.175	Blanc/LidoCircuitBreakerCallBoundary.lean
