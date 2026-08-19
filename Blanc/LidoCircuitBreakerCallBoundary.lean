@@ -528,4 +528,224 @@ theorem pauseCall_boundary {sevm : Sevm} {callPre callPost : Devm}
     show sevm.isStatic = false
     exact h_dynamic
 
+/-! ## The STATICCALL edge, inverted
+
+The observation's edge is inverted the same way, and for the same reason: an
+arbitrary derivation carries no gas premise, so the branch that cannot pay the
+call's own charge is refuted rather than assumed away.  The helper below is a
+private copy of `Blanc/LidoCircuitBreakerPauseJoin.lean`'s equally private
+`.statcall` sibling, which that module does not export. -/
+
+/-- The `.statcall` arm on a frame that cannot pay the call's own charge:
+`chargeGas` fails and the step is an out-of-gas halt.  The failing sibling of
+`Xinst.step_statcall_spawn`. -/
+private lemma statEdge_step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
+    {gw tw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost tw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : d1.gasLeft < mcc + ext) :
+    Xinst.step sevm devm .statcall =
+      .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
+  subst h_ext; subst h_acc
+  show XStep.ofExcept (do
+    let ⟨gas, d⟩ ← devm.pop
+    let ⟨target, d⟩ ← d.popToAdr
+    let ⟨inputIndex, d⟩ ← d.popToNat
+    let ⟨inputSize, d⟩ ← d.popToNat
+    let ⟨outputIndex, d⟩ ← d.popToNat
+    let ⟨outputSize, d⟩ ← d.popToNat
+    let extendCost :=
+      d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+    let preAccessCost := accessCost target d.accessedAddresses
+    let d := addAccessedAddress d target
+    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+      accessDelegation d target
+    let accessCost := preAccessCost + delegatedAccessGasCost
+    let ⟨msgCallCost, msgCallStipend⟩ :=
+      calculateMsgCallGas 0 gas.toNat d.gasLeft extendCost accessCost
+    let d ← chargeGas (msgCallCost + extendCost) d
+    let d :=
+      d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+    return genericCall.step
+      sevm d msgCallStipend 0 sevm.currentTarget target target true true
+      inputIndex inputSize outputIndex outputSize code
+      disablePrecompiles) = _
+  rw [Devm.pop_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToAdr_eq_ok
+    (devm := devm.setMach ⟨tw :: iiw :: isw :: oiw :: osw :: s,
+      devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
+      devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
+      devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  simp only [h_del, h_split]
+  rw [callEdge_chargeGas_eq_error (devm := d1) h_gas]
+  rfl
+
+
+/-- **The STATICCALL edge, inverted.**  Any derivation that crosses the pause's
+`.statcall` instruction satisfies `PauseStatBoundary`: the six operands, the
+argument window's bytes, the suspended parent frame, the spawned message and
+the 32-byte-window resume are all read off that derivation.
+
+**No premise here constrains the callee**, and none constrains what the callee
+did before this edge either.  This instruction sits downstream of arbitrary
+callee execution — every step between it and the pause's CALL is the target's
+own run — so a premise of the form "suppose memory is unchanged after the
+callback" would empty the statement.  There is none: the argument window is
+supplied by `pauseCall_targetWord_survives`, which survives arbitrary child
+output by the shape of the CALL's empty resume.  There is likewise no code pin
+— the EIP-7702 cases come out of the delegation resolution as the relation's
+own disjunct — and no `isPrecomp` premise, because `ProcessMessage` is
+`RunFrame (Frame.ofCall ·)`, a precompile target takes `Frame.enter`'s `.done`
+branch with an empty slot, and `Xlot.Filled .none` is `True`.  Gas sufficiency
+is not assumed either: on the insufficient branch the step is an out-of-gas
+halt, which the derivation's `.ok statPost` refutes.
+
+Unlike `pauseCall_boundary` this theorem carries **no `sevm.isStatic`
+premise**, and the difference is not an oversight in either direction.
+`callMsg` sets `isStatic := isStaticcall || sevm.isStatic`; a `CALL` passes
+`isStaticcall = false`, leaving `msg.isStatic = false` equivalent to a fact
+about the enclosing frame, while a `STATICCALL` passes `isStaticcall = true`,
+so `msg.isStatic = true` holds outright whatever the enclosing frame's static
+flag is.  The conjunct closes by `rfl`.
+
+As on the CALL edge, the operand is `target.toB256` rather than an arbitrary
+word because `PauseStatBoundary` pins the canonical encoding of its `Adr`
+argument; `B256.toAdr` truncates, so at a stack word with high bits set the
+relation is false rather than merely unproved. -/
+theorem pauseStat_boundary {sevm : Sevm} {statPre statPost : Devm}
+    {gasWord : B256} {target : Adr} {rest : List B256}
+    (h_stk : statPre.stack =
+      gasWord :: target.toB256 :: 0x11c :: 4 :: 0 :: 32 :: rest)
+    (h_window : (statPre.memory.read 0x11c 4).1 = isPausedCalldata)
+    (h_depth : sevm.depth ≠ 0)
+    (run : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
+    PauseStatBoundary sevm target statPre statPost := by
+  obtain ⟨xl, hfill, hrun⟩ := run
+  have hx := hrun 0
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
+  have hta : (target.toB256).toAdr = target := toAdr_toB256 target
+  rcases hdel : accessDelegation
+      (addAccessedAddress
+        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft⟩) target)
+      target with ⟨dp, dadr, code, dgc, d1⟩
+  have h_del : accessDelegation
+      (addAccessedAddress
+        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft⟩)
+        (target.toB256).toAdr) (target.toB256).toAdr =
+      ⟨dp, dadr, code, dgc, d1⟩ := by rw [hta]; exact hdel
+  obtain ⟨ext, hext⟩ :
+      ∃ n : Nat,
+        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft⟩).extCost
+          [⟨(0x11c : B256).toNat, (4 : B256).toNat⟩,
+            ⟨(0 : B256).toNat, (32 : B256).toNat⟩] = n := ⟨_, rfl⟩
+  obtain ⟨acc, hacc⟩ :
+      ∃ n : Nat,
+        accessCost (target.toB256).toAdr
+          (statPre.setMach
+            ⟨rest, statPre.memory, statPre.gasLeft⟩).accessedAddresses
+            + dgc = n := ⟨_, rfl⟩
+  rcases hsplit : calculateMsgCallGas 0 gasWord.toNat d1.gasLeft ext acc
+    with ⟨mcc, mcs⟩
+  by_cases hga : mcc + ext ≤ d1.gasLeft
+  case neg =>
+    rw [statEdge_step_statcall_outOfGas h_stk hext h_del hacc hsplit
+      (by omega)] at hx
+    obtain ⟨-, hcontra⟩ := hx
+    cases hcontra
+  case pos =>
+    obtain ⟨hstep, -, -, -, -, -, -, htra⟩ :=
+      directStatcall_spawn h_stk hext h_del hacc hsplit hga h_depth
+    rw [hta] at hstep htra
+    obtain ⟨hd1stk, hd1mem, -, -⟩ := accessDelegation_inv hdel
+    obtain ⟨hd1state, hd1logs, -, -, -⟩ := accessDelegation_frame hdel
+    have hifr := accessDelegation_instructionFrame
+      (addAccessedAddress
+        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft⟩) target)
+      target
+    rw [hdel] at hifr
+    have hstk1 : d1.stack = rest := hd1stk
+    have hmem1 : d1.memory = statPre.memory := hd1mem
+    have hstate1 : d1.state = statPre.state := hd1state
+    have hlogs1 : d1.logs = statPre.logs := hd1logs
+    have hca1 : d1.createdAccounts = statPre.createdAccounts :=
+      hifr.createdAccounts.symm
+    set parent : Devm :=
+      callSpawnParent d1 (mcc + ext) ((284 : B256).toNat) ((4 : B256).toNat)
+        ((0 : B256).toNat) ((32 : B256).toNat) with hparent
+    have hpstk : parent.stack = rest := by rw [hparent]; exact hstk1
+    have hpmem : parent.memory =
+        statPre.memory.extends [(0x11c, 4), (0, 32)] := by
+      rw [hparent]
+      show d1.memory.extends _ = _
+      rw [hmem1]
+      rfl
+    have hpstate : parent.state = statPre.state := by
+      rw [hparent]; exact hstate1
+    have hplogs : parent.logs = statPre.logs := by rw [hparent]; exact hlogs1
+    have hpca : parent.createdAccounts = statPre.createdAccounts := by
+      rw [hparent]; exact hca1
+    have hprd : parent.returnData = [] := by rw [hparent]; rfl
+    have hptra : parent.transientStorage = statPre.transientStorage := htra
+    -- the argument window carries the encoder's bytes, not "whatever was there"
+    have hdata : parent.memory.data.sliceD ((284 : B256).toNat)
+        ((4 : B256).toNat) 0 = isPausedCalldata := by
+      rw [hpmem]; exact h_window
+    have hmsgeq : statcallSpawnMsg sevm parent mcs target ((284 : B256).toNat)
+        ((4 : B256).toNat) code dp =
+        callMsg sevm parent mcs 0 sevm.currentTarget target target true true
+          isPausedCalldata code dp := by
+      show callMsg sevm parent mcs 0 sevm.currentTarget target target true true
+        (parent.memory.data.sliceD ((284 : B256).toNat) ((4 : B256).toNat) 0)
+        code dp = _
+      rw [hdata]
+    -- the EIP-7702 disjunct, never a premise
+    have hdisj0 := accessDelegation_delegationCases hdel
+    have hdisj : (getDelegatedCodeAddress (statPre.getCode target) = none ∧
+          code = statPre.getCode target ∧ dp = false) ∨
+        (∃ delegatedTarget,
+          getDelegatedCodeAddress (statPre.getCode target) =
+            some delegatedTarget ∧
+          code = statPre.getCode delegatedTarget ∧ dp = true) := hdisj0
+    rw [hstep] at hx
+    obtain ⟨r, hframe, hres⟩ := hx
+    rcases r with ⟨e, st, ca, tra⟩ | child
+    · rw [Resume.run_call_fatal] at hres
+      cases hres
+    rw [hmsgeq] at hframe
+    have hres' : (Resume.call parent 0 32).run (.ok child) = .ok statPost :=
+      hres.symm
+    exact ⟨parent, child,
+      callMsg sevm parent mcs 0 sevm.currentTarget target target true true
+        isPausedCalldata code dp,
+      xl, dp, code, gasWord, mcs,
+      by rw [hpstk]; exact h_stk, h_window, hpmem, hpstate, hpca, hptra, hplogs,
+      hprd, h_depth, hdisj, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hptra, hfill,
+      hframe, hrun, hres', Resume.call_memory hres',
+      Resume.call_returnData hres', Resume.call_stack_flag hres'⟩
+
 end Blanc.LidoCircuitBreaker
