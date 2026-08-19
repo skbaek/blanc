@@ -125,6 +125,179 @@ theorem assignmentPost_assignment (sevm : Sevm) (base : Devm)
       sevm.currentTarget (assignmentSlot target) = newPauser :=
   temporalSstorePost_getStorVal_self _ _ _ _
 
+/-! ## The clearing survives to the boundary
+
+Between the kernel's assignment write and the `pauseAfterSet` entry a pause
+crosses the old pauser's count decrement and `removeTarget`'s five `SSTORE`s,
+and then emits `PauserSet`.  None of those six writes is in the assignment
+region, and the log is not a write at all.
+
+Both removal walks hand `finishSetPauser` a state the substrate names:
+`removeTarget_swapPop_toFinish_runCompiled` binds it as `indexClearPost sevm
+(swapPopClearPost sevm base lastTarget idx len) target oldLength`, and the
+degenerate walk's `entryClearPost sevm base target next` is the
+`lastTarget := target`, `idx = len := next` instance of `swapPopClearPost`
+(`swapPopClearPost_eq_entryClearPost`).  One frame therefore serves both.
+
+The transports below peel one named layer at a time.  Crossing the tower
+definitionally instead makes `whnf` unfold the base state at every layer and
+is measured to diverge; the substrate records that discipline beside its
+`accessedStorageKeys` and `logs` transports, which is where these would have
+lived had a `getStorVal` transport existed. -/
+
+private theorem pairNe {sevm : Sevm} {left right : B256} (h : left ≠ right) :
+    (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) :=
+  fun hp => h (congrArg Prod.snd hp)
+
+theorem entryWritePost_getStorVal_other (sevm : Sevm) (base : Devm)
+    (target next key : B256) (hne : key ≠ arrayEntrySlot next) :
+    (entryWritePost sevm base target next).getStorVal sevm.currentTarget key =
+      base.getStorVal sevm.currentTarget key := by
+  unfold entryWritePost
+  exact temporalSstorePost_other _ _ _ _ _ _ (pairNe hne)
+
+theorem indexWritePost_getStorVal_other (sevm : Sevm) (base : Devm)
+    (target next key : B256) (hentry : key ≠ arrayEntrySlot next)
+    (hindex : key ≠ indexSlot target) :
+    (indexWritePost sevm base target next).getStorVal sevm.currentTarget key =
+      base.getStorVal sevm.currentTarget key := by
+  unfold indexWritePost
+  rw [temporalSstorePost_other _ _ _ _ _ _ (pairNe hindex)]
+  exact entryWritePost_getStorVal_other sevm base target next key hentry
+
+theorem swapPopClearPost_getStorVal_other (sevm : Sevm) (base : Devm)
+    (lastTarget idx len key : B256)
+    (hmoved : key ≠ arrayEntrySlot idx)
+    (hlastIndex : key ≠ indexSlot lastTarget)
+    (htail : key ≠ arrayEntrySlot len) :
+    (swapPopClearPost sevm base lastTarget idx len).getStorVal
+      sevm.currentTarget key = base.getStorVal sevm.currentTarget key := by
+  unfold swapPopClearPost
+  rw [temporalSstorePost_other _ _ _ _ _ _ (pairNe htail)]
+  exact indexWritePost_getStorVal_other sevm base lastTarget idx key hmoved
+    hlastIndex
+
+theorem lengthWritePost_getStorVal_other (sevm : Sevm) (base : Devm)
+    (oldLength key : B256) (hne : key ≠ arrayLengthSlot) :
+    (lengthWritePost sevm base oldLength).getStorVal sevm.currentTarget key =
+      base.getStorVal sevm.currentTarget key := by
+  unfold lengthWritePost
+  exact temporalSstorePost_other _ _ _ _ _ _ (pairNe hne)
+
+theorem indexClearPost_getStorVal_other (sevm : Sevm) (base : Devm)
+    (target oldLength key : B256) (hlength : key ≠ arrayLengthSlot)
+    (hindex : key ≠ indexSlot target) :
+    (indexClearPost sevm base target oldLength).getStorVal
+      sevm.currentTarget key = base.getStorVal sevm.currentTarget key := by
+  unfold indexClearPost
+  rw [temporalSstorePost_other _ _ _ _ _ _ (pairNe hindex)]
+  exact lengthWritePost_getStorVal_other sevm base oldLength key hlength
+
+/-- The storage frame of `removeTarget`'s whole span, at the altitude both
+removal walks hand `finishSetPauser`: a cell missing all five written keys
+reads the same after the span as before it. -/
+theorem removalPost_getStorVal_other (sevm : Sevm) (base : Devm)
+    (target lastTarget idx len oldLength key : B256)
+    (hmoved : key ≠ arrayEntrySlot idx)
+    (hlastIndex : key ≠ indexSlot lastTarget)
+    (htail : key ≠ arrayEntrySlot len)
+    (hlength : key ≠ arrayLengthSlot)
+    (hindex : key ≠ indexSlot target) :
+    (indexClearPost sevm (swapPopClearPost sevm base lastTarget idx len)
+        target oldLength).getStorVal sevm.currentTarget key =
+      base.getStorVal sevm.currentTarget key := by
+  rw [indexClearPost_getStorVal_other _ _ _ _ _ hlength hindex]
+  exact swapPopClearPost_getStorVal_other sevm base lastTarget idx len key
+    hmoved hlastIndex htail
+
+/-! ### From the kernel's write to the boundary
+
+The remaining two layers are the old pauser's count decrement, which
+`foundKernelPost` names, and `finishSetPauser`'s `PauserSet` record, which is
+not a storage write at all. -/
+
+/-- The assignment cell survives the old pauser's count decrement. -/
+theorem foundKernelPost_assignment (sevm : Sevm) (base : Devm)
+    (target newPauser oldPauser oldCount : B256)
+    (hne : assignmentSlot target ≠ countSlot oldPauser) :
+    (foundKernelPost sevm base target newPauser oldPauser oldCount).getStorVal
+      sevm.currentTarget (assignmentSlot target) = newPauser := by
+  unfold foundKernelPost
+  rw [temporalSstorePost_other _ _ _ _ _ _ (pairNe hne),
+    temporalSloadBase_getStorVal]
+  exact assignmentPost_assignment sevm base target newPauser
+
+/-- Emitting a record and re-seating the machine word are not storage writes. -/
+theorem addLog_setMach_getStorVal (devm : Devm) (l : Log) (m : Mach)
+    (a : Adr) (key : B256) :
+    ((devm.addLog l).setMach m).getStorVal a key = devm.getStorVal a key := rfl
+
+/-- **P1.**  At the state `pause` hands to `pauseAfterSet` — the state at which
+the target first receives control — the paused target's assignment cell is
+`0`.
+
+Nothing here constrains the code at `target` or at any other address: `base` is
+an arbitrary `Devm`, so whatever bytecode sits at the paused address sits there
+in this statement too, and no hypothesis below could be discharged by a
+cooperating callee and not by a hostile one.  The premises are the payload
+bounds the Registry's region tagging needs — the addresses are canonical and
+the two array indices fit under the tag — and nothing else.
+
+The state is the one the substrate's own removal walks name: `base` is
+`removeTarget`'s entry state, `swapPopClearPost … lastTarget idx len` its five
+writes, `indexClearPost` the length restore and index clear, and the `addLog`
+`finishSetPauser`'s `PauserSet` record.  The degenerate already-last walk is
+the `lastTarget := target`, `idx = len := next` instance of the same tower.
+
+This says nothing about the pause completing.  A hostile target can prevent
+that outright, and the published callback-visible liveness counterexample
+stands. -/
+theorem pauseAfterSetEntry_assignment (sevm : Sevm) (base : Devm)
+    (target oldPauser oldCount lastTarget idx len oldLength : B256)
+    (l : Log) (m : Mach)
+    (htarget : canonicalAddress target)
+    (hlastTarget : canonicalAddress lastTarget)
+    (holdPauser : canonicalAddress oldPauser)
+    (hidx : idx.toNat < 2 ^ 252)
+    (hlen : len.toNat < 2 ^ 252) :
+    (((indexClearPost sevm
+          (swapPopClearPost sevm
+            (foundKernelPost sevm base target 0 oldPauser oldCount)
+            lastTarget idx len)
+          target oldLength).addLog l).setMach m).getStorVal
+      sevm.currentTarget (assignmentSlot target) = 0 := by
+  have hmoved : assignmentSlot target ≠ arrayEntrySlot idx :=
+    (registryAddressFamilies_ne_arrayEntrySlot htarget holdPauser hidx).1
+  have htail : assignmentSlot target ≠ arrayEntrySlot len :=
+    (registryAddressFamilies_ne_arrayEntrySlot htarget holdPauser hlen).1
+  have hlength : assignmentSlot target ≠ arrayLengthSlot :=
+    (registryAddressFamilies_ne_arrayLengthSlot htarget holdPauser).1
+  have hlastIndex : assignmentSlot target ≠ indexSlot lastTarget := by
+    simpa [assignmentSlot, indexSlot] using
+      addressSlots_ne_of_region_ne
+        (leftRegion := assignmentRegion) (rightRegion := indexRegion)
+        (by norm_num [assignmentRegion]) (by norm_num [indexRegion])
+        htarget hlastTarget
+        (by norm_num [assignmentRegion, indexRegion])
+  have hindex : assignmentSlot target ≠ indexSlot target := by
+    simpa [assignmentSlot, indexSlot] using
+      addressSlots_ne_of_region_ne
+        (leftRegion := assignmentRegion) (rightRegion := indexRegion)
+        (by norm_num [assignmentRegion]) (by norm_num [indexRegion])
+        htarget htarget
+        (by norm_num [assignmentRegion, indexRegion])
+  have hcount : assignmentSlot target ≠ countSlot oldPauser := by
+    simpa [assignmentSlot, countSlot] using
+      addressSlots_ne_of_region_ne
+        (leftRegion := assignmentRegion) (rightRegion := countRegion)
+        (by norm_num [assignmentRegion]) (by norm_num [countRegion])
+        htarget holdPauser
+        (by norm_num [assignmentRegion, countRegion])
+  rw [addLog_setMach_getStorVal,
+    removalPost_getStorVal_other _ _ _ _ _ _ _ _ hmoved hlastIndex htail
+      hlength hindex]
+  exact foundKernelPost_assignment sevm base target 0 oldPauser oldCount hcount
+
 /-! ## P4: a re-entering pause is refused
 
 The lock is taken *before* `pause` yields control, so the target that receives
