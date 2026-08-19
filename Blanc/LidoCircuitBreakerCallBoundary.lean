@@ -748,4 +748,419 @@ theorem pauseStat_boundary {sevm : Sevm} {statPre statPost : Devm}
       hframe, hrun, hres', Resume.call_memory hres',
       Resume.call_returnData hres', Resume.call_stack_flag hres'⟩
 
+/-! ## The pause's post-CALL branch
+
+Everything above is about the two messages.  What follows is about the
+**order** in which the CircuitBreaker sends them: the second message exists
+only on the first one's success arm, and the first one's failure arm goes to
+the bubble instead.  The two names below cut `pauseAfterSet` at its `CALL` so
+that the ordering can be stated against the program rather than against a
+paraphrase of it. -/
+
+/-- The pause's observation arm: the `isPaused()` staging line, the
+`STATICCALL` itself, and the flag test that follows it. -/
+def pauseStatArm : Func :=
+  pauseStatStaging +++
+    (Ninst.statcall ::: Ninst.iszero :::
+      ((Func.call bubbleRevertSlot) <?> decodePausedResult))
+
+/-- Everything `pauseAfterSet` does after its `CALL`: the `ISZERO` that inverts
+the call's flag word, and the branch that reads the inverted word.  The bubble
+is the branch's **nonzero** arm and the observation its **zero** arm, which is
+what `pauseAfterCall_arms` below turns into a statement about the callee's
+success. -/
+def pauseAfterCallBranch : Func :=
+  Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> pauseStatArm)
+
+/-- The two names above are `pauseAfterSet` itself, cut at the code guard and
+at the `CALL`.  Nothing downstream is a claim about a paraphrase. -/
+theorem pauseAfterSet_eq_afterCall :
+    pauseAfterSet =
+      pauseCodeGuard +++
+        ((Func.call emptyRevertSlot) <?>
+          (pauseCallStaging +++ (Ninst.call ::: pauseAfterCallBranch))) := rfl
+
+/-! ## The branch flag, inverted
+
+The CALL pushes `1` on success and `0` on failure, and `pauseAfterSet` runs
+that word through `ISZERO` before the branch reads it.  So the branch's zero
+arm — the arm `Func.branch` takes when the popped word is `0` — is the arm the
+**successful** call reaches, and the nonzero arm is the failing call's.  The
+inversion is one instruction wide and is stated first, so that the two arm
+theorems below can be read without re-deriving it. -/
+
+/-- `ISZERO` at a known stack top: the word it pushes, the tail it leaves, and
+the return data it does not touch. -/
+private lemma iszero_inv {sevm : Sevm} {pre post : Devm} {w : B256}
+    {rest : List B256}
+    (run : Ninst.RunCompiled sevm pre Ninst.iszero post)
+    (h_stk : pre.stack = w :: rest) :
+    post.stack = (w =? 0) :: rest ∧ post.returnData = pre.returnData := by
+  rcases of_run_reg (Ninst.Run.of_runCompiled run) with ⟨pc, hrun⟩
+  simp only [Rinst.run, Rinst.runCore] at hrun
+  obtain ⟨x, hdiff⟩ := Devm.diffBurn_of_applyUnary hrun
+  obtain ⟨mid, hpop, hpush⟩ := hdiff.stack
+  have hpop' : w :: rest = x :: mid := by rw [← h_stk]; exact hpop
+  injection hpop' with hw hrest
+  subst hw
+  subst hrest
+  exact ⟨hpush, hdiff.returnData.symm⟩
+
+/-- **The word `pauseAfterSet`'s branch reads.**  The CALL's flag is `0`
+exactly when the child errored, and the `ISZERO` between the CALL and the
+branch inverts it, so the branch pops `1` exactly when the child errored.
+
+This is a statement about the CircuitBreaker's own stack and the `Devm` the
+frame layer handed back; **it constrains the callee in no way**.  Which of the
+two values the flag actually takes is the callee's business, and both are
+carried: the `if` is on `child.error.isSome`, which is left free here exactly
+as `PauseCallBoundary` leaves it free.  Nothing here says the child's error is
+its own fault, that the returndata means anything, or that either arm is
+reached in any particular run. -/
+theorem pauseCall_branchWord {sevm : Sevm} {target : Adr} {duration : B256}
+    {callPre callPost mid : Devm}
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (run : Ninst.RunCompiled sevm callPost Ninst.iszero mid) :
+    ∃ (child : Devm) (rest : List B256),
+      callPost.stack = (if child.error.isSome then 0 else 1) :: rest ∧
+      mid.stack = (if child.error.isSome then 1 else 0) :: rest ∧
+      callPost.returnData = child.output ∧
+      mid.returnData = child.output := by
+  obtain ⟨parent, child, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -,
+    -, -, -, -, -, -, -, -, -, -, -, -, -, hrd, hstk⟩ := boundary
+  obtain ⟨hmidstk, hmidrd⟩ := iszero_inv run hstk
+  refine ⟨child, parent.stack, hstk, ?_, hrd, hmidrd.trans hrd⟩
+  rw [hmidstk]
+  cases child.error.isSome <;>
+    simp only [Bool.false_eq_true, if_false] <;> rfl
+
+/-- **Both flag values occur in the relation, and only these two.**  A
+`PauseCallBoundary` never leaves the branch a third possibility, and it never
+decides which of the two it gets. -/
+theorem pauseCall_flag_dichotomy {sevm : Sevm} {target : Adr} {duration : B256}
+    {callPre callPost : Devm}
+    (boundary : PauseCallBoundary sevm target duration callPre callPost) :
+    callPost.stack.head? = some 0 ∨ callPost.stack.head? = some 1 := by
+  obtain ⟨parent, child, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -,
+    -, -, -, -, -, -, -, -, -, -, -, -, -, -, hstk⟩ := boundary
+  rw [hstk]
+  cases child.error.isSome
+  · exact Or.inr (by simp only [Bool.false_eq_true, if_false]; rfl)
+  · exact Or.inl rfl
+
+/-! ## Both arms
+
+The ordering claim itself.  `Func.RunCompiledTo` rather than
+`Func.RunCompiled` is the vehicle, because the bubble arm settles at a
+**revert**: an `.ok`-only relation cannot state what the failing arm does, only
+that it does not happen.  Both outcomes are in scope here, and which one occurs
+is read off the derivation rather than assumed. -/
+
+/-- `Func.RunCompiledTo` at a `.next` node, as an existential. -/
+private lemma runCompiledTo_next_inv {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {i : Ninst} {f : Func} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (Func.next i f) ex) :
+    ∃ mid, Ninst.RunCompiled sevm devm i mid ∧
+      Func.RunCompiledTo fs sevm mid f ex := by
+  cases h with | next hn hrest => exact ⟨_, hn, hrest⟩
+
+/-- `Func.RunCompiledTo` at a `.branch` node: the word the branch pops decides
+the arm, and the two arms are named by the word rather than by fiat. -/
+private lemma runCompiledTo_branch_inv {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {f g : Func} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (Func.branch f g) ex) :
+    (∃ armPre, devm.stack = 0 :: armPre.stack ∧
+        Devm.PopBurnBy [0] (gVerylow + gHigh) devm armPre ∧
+        Func.RunCompiledTo fs sevm armPre f ex) ∨
+      (∃ (w : B256) (armPre : Devm), w ≠ 0 ∧
+        devm.stack = w :: armPre.stack ∧
+        Devm.PopBurnBy [w] (gVerylow + gHigh + gJumpdest) devm armPre ∧
+        Func.RunCompiledTo fs sevm armPre g ex) := by
+  cases h with
+  | zero hroom hpop harm => exact Or.inl ⟨_, hpop.stack, hpop, harm⟩
+  | succ hne hroom hpop harm =>
+    exact Or.inr ⟨_, _, hne, hpop.stack, hpop, harm⟩
+
+/-- **The pause's post-CALL branch, inverted: both arms.**  A walk of the
+`ISZERO` and the branch that follows the pause's `CALL` takes the bubble arm
+exactly when the child errored, and the observation arm exactly when it did
+not.  In both cases the state entering the arm still carries the child's
+returndata.
+
+The continuation `g` is arbitrary: this theorem is about the branch, not about
+what the success arm goes on to do, and `pauseCall_successArm_reachesStatcall`
+below instantiates it at the program's own observation arm.
+
+**No premise constrains the callee.**  `child.error.isSome` is not assumed on
+either side; it is produced, together with the arm the derivation actually
+took.  Nothing here says the child's error is the child's fault, that a
+successful child honoured the duration, or that the pause completes.  In
+particular the success arm's conclusion is that the walk *continues*, not that
+it succeeds. -/
+theorem pauseAfterCall_arms {fs : List Func} {sevm : Sevm} {target : Adr}
+    {duration : B256} {callPre callPost : Devm} {ex : Execution} {g : Func}
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (run : Func.RunCompiledTo fs sevm callPost
+      (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> g)) ex) :
+    ∃ (child armPre : Devm) (rest : List B256),
+      callPost.stack = (if child.error.isSome then 0 else 1) :: rest ∧
+      callPost.returnData = child.output ∧
+      armPre.returnData = child.output ∧
+      ((child.error.isSome = true ∧
+          Func.RunCompiledTo fs sevm armPre (Func.call bubbleRevertSlot) ex) ∨
+        (child.error.isSome = false ∧
+          Func.RunCompiledTo fs sevm armPre g ex)) := by
+  obtain ⟨parent, child, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -,
+    -, -, -, -, -, -, -, -, -, -, -, -, -, hrd, hstk⟩ := boundary
+  obtain ⟨mid, hn, hrest⟩ := runCompiledTo_next_inv run
+  obtain ⟨hmidstk, hmidrd⟩ := iszero_inv hn hstk
+  rcases runCompiledTo_branch_inv hrest with
+    ⟨armPre, hmid0, hpop, harm⟩ | ⟨w, armPre, hne, hmidw, hpop, harm⟩
+  · -- the branch popped `0`: the `ISZERO` inverted a `1`, so the CALL succeeded
+    have hw : ((if child.error.isSome then (0 : B256) else 1) =? 0) = 0 := by
+      rw [hmidstk] at hmid0
+      exact (List.cons.inj hmid0).1
+    refine ⟨child, armPre, parent.stack, hstk, hrd,
+      (hpop.returnData.symm.trans hmidrd).trans hrd,
+      Or.inr ⟨?_, harm⟩⟩
+    revert hw
+    cases hc : child.error.isSome
+    · intro; rfl
+    · intro h; exact absurd h (by decide)
+  · -- the branch popped a nonzero word: the `ISZERO` inverted a `0`
+    have hw : ((if child.error.isSome then (0 : B256) else 1) =? 0) = w := by
+      rw [hmidstk] at hmidw
+      exact (List.cons.inj hmidw).1
+    refine ⟨child, armPre, parent.stack, hstk, hrd,
+      (hpop.returnData.symm.trans hmidrd).trans hrd,
+      Or.inl ⟨?_, harm⟩⟩
+    revert hw hne
+    cases hc : child.error.isSome
+    · intro hne hw; exact absurd (hw.symm.trans (by decide)) hne
+    · intro _ _; rfl
+
+/-! ## The failure arm: the bubble
+
+`bubbleRevertSlot` is `13`, and `aux`'s thirteenth entry — `aux[12]`, since the
+table is `main :: aux` — is `Func.revReturnData`, which copies the preceding
+call's complete returndata to memory `0` and reverts with it.  The lookup is a
+premise here rather than a computation, so that the statement is about
+*whatever* the table binds at that slot and a witness discharges it against the
+program it is actually running.
+
+The arm is selected by the flag word on the CircuitBreaker's own stack, which
+is what `pauseCall_flag_dichotomy` shows takes exactly the two values and
+`pauseCall_branchWord` shows equals `child.error.isSome`.  That is the case
+split C6 asks for, not a premise about the callee: the sibling theorem below
+states the other case, and neither is assumed away. -/
+
+/-- `Func.RunCompiledTo` at a `.call` node, against a known table entry. -/
+private lemma runCompiledTo_call_inv {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {k : Nat} {f : Func} {ex : Execution}
+    (h_get : fs[k]? = some f)
+    (h : Func.RunCompiledTo fs sevm devm (Func.call k) ex) :
+    ∃ mid, Devm.BurnBy (gVerylow + gMid + gJumpdest) devm mid ∧
+      Func.RunCompiledTo fs sevm mid f ex := by
+  cases h with
+  | call hget hroom hburn hrest =>
+    cases Option.some.inj (hget.symm.trans h_get)
+    exact ⟨_, hburn, hrest⟩
+
+/-- The CircuitBreaker's own table binds `bubbleRevertSlot` to
+`Func.revReturnData`, so the lookup premise the bubble theorems carry is
+discharged by the program itself rather than left to a consumer. -/
+theorem runtime_bubbleRevertSlot (dp : DeployParams) :
+    ((runtime dp).main :: (runtime dp).aux)[bubbleRevertSlot]? =
+      some Func.revReturnData := rfl
+
+/-- **The CALL's failure arm reaches the bubble, holding the callee's
+returndata.**  When the flag the CALL pushed is `0` the branch's nonzero arm is
+taken, that arm is the internal `.call` to `bubbleRevertSlot`, and the state
+that enters the slot's body still carries `child.output` as its return data —
+the `ISZERO`, the branch's own pop and the `.call`'s burn touch the stack and
+the gas and nothing else.
+
+What this does **not** claim.  It does not say the bubbled bytes mean anything:
+`child.output` is whatever the hostile target chose to return, including
+nothing at all, and `Func.revReturnData`'s own docstring records that a
+zero-length child revert is an ordinary empty revert.  It does not say the
+revert payload is byte-identical to `child.output` — that is the separate
+`Func.revReturnData` walk, and constructing it (`callbackBubble_runCompiledTo`
+is WETH10's instance) needs memory well-formedness, alignment and exact-gas
+premises this cut does not carry; see this section's closing note.  And it does
+not say this arm is reached: `h_fail` is the case hypothesis, discharged by a
+caller that has a flag, never by an assumption about how the callee
+behaves. -/
+theorem pauseCall_failureArm_bubbles {fs : List Func} {sevm : Sevm}
+    {target : Adr} {duration : B256} {callPre callPost : Devm}
+    {ex : Execution} {g : Func}
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (h_fail : callPost.stack.head? = some 0)
+    (run : Func.RunCompiledTo fs sevm callPost
+      (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> g)) ex) :
+    ∃ child bubblePre : Devm,
+      child.error.isSome = true ∧
+      callPost.returnData = child.output ∧
+      bubblePre.returnData = child.output ∧
+      Func.RunCompiledTo fs sevm bubblePre Func.revReturnData ex := by
+  obtain ⟨child, armPre, rest, hstk, hrd, hard, harm⟩ :=
+    pauseAfterCall_arms boundary run
+  rcases harm with ⟨herr, hcall⟩ | ⟨herr, -⟩
+  · obtain ⟨bubblePre, hburn, hbody⟩ := runCompiledTo_call_inv h_bubble hcall
+    exact ⟨child, bubblePre, herr, hrd,
+      (hburn.returnData.symm.trans hard), hbody⟩
+  · exfalso
+    rw [hstk, herr] at h_fail
+    exact absurd (Option.some.inj h_fail) (by decide)
+
+/-! ## The success arm: the observation
+
+Only here does the pause reach its second message.  The staging line and the
+`STATICCALL` are inside the branch's zero arm, so a derivation that gets to the
+`.statcall` instruction has already produced the CALL's success flag. -/
+
+/-- A walk of a `Line`-prefixed body splits at the line's end. -/
+private lemma runCompiledTo_prepend_inv {fs : List Func} {sevm : Sevm}
+    {l : Line} {f : Func} {ex : Execution} :
+    ∀ {devm : Devm}, Func.RunCompiledTo fs sevm devm (l +++ f) ex →
+      ∃ mid, Line.Run sevm devm l mid ∧
+        Func.RunCompiledTo fs sevm mid f ex := by
+  induction l with
+  | nil => exact fun h => ⟨_, Line.Run.nil, h⟩
+  | cons i l ih =>
+    intro devm h
+    obtain ⟨mid, hn, hrest⟩ := runCompiledTo_next_inv h
+    obtain ⟨fin, hline, hf⟩ := ih hrest
+    exact ⟨fin, Line.Run.cons (Ninst.Run.of_runCompiled hn) hline, hf⟩
+
+/-- **The CALL's success arm is the only route to the STATICCALL.**  When the
+flag the CALL pushed is `1` the branch's zero arm is taken, the walk runs
+`pauseStatStaging` — the `isPaused()` selector restage and the six operands —
+and then crosses the `.statcall` instruction itself, handing back exactly the
+`Ninst.RunCompiled` premise `pauseStat_boundary` consumes.
+
+What this does **not** claim.  It says nothing about the six operands' values:
+that the staged target word is still the CircuitBreaker's is
+`pauseCall_targetWord_survives`'s business, and it is proved there without a
+cooperative-callee premise rather than assumed here.  It does not say the
+observation succeeds, that the target answers, or that what comes back decodes
+— the continuation is handed on as a walk, not as a result.  And it does not
+say this arm is reached: `h_ok` is the case hypothesis, the sibling of
+`pauseCall_failureArm_bubbles`'s `h_fail`, and `pauseCall_flag_dichotomy` shows
+the two exhaust the possibilities. -/
+theorem pauseCall_successArm_reachesStatcall {fs : List Func} {sevm : Sevm}
+    {target : Adr} {duration : B256} {callPre callPost : Devm}
+    {ex : Execution}
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (h_ok : callPost.stack.head? = some 1)
+    (run : Func.RunCompiledTo fs sevm callPost pauseAfterCallBranch ex) :
+    ∃ child armPre statPre statPost : Devm,
+      child.error.isSome = false ∧
+      callPost.returnData = child.output ∧
+      armPre.returnData = child.output ∧
+      Line.Run sevm armPre pauseStatStaging statPre ∧
+      Ninst.RunCompiled sevm statPre (.exec .statcall) statPost ∧
+      Func.RunCompiledTo fs sevm statPost
+        (Ninst.iszero :::
+          ((Func.call bubbleRevertSlot) <?> decodePausedResult)) ex := by
+  rw [pauseAfterCallBranch] at run
+  obtain ⟨child, armPre, rest, hstk, hrd, hard, harm⟩ :=
+    pauseAfterCall_arms boundary run
+  rcases harm with ⟨herr, -⟩ | ⟨herr, hstat⟩
+  · exfalso
+    rw [hstk, herr] at h_ok
+    exact absurd (Option.some.inj h_ok) (by decide)
+  · rw [pauseStatArm] at hstat
+    obtain ⟨statPre, hline, hrest⟩ := runCompiledTo_prepend_inv hstat
+    obtain ⟨statPost, hcross, htail⟩ := runCompiledTo_next_inv hrest
+    exact ⟨child, armPre, statPre, statPost, herr, hrd, hard, hline, hcross,
+      htail⟩
+
+/-! ## What the failure arm settles at
+
+`Func.revReturnData` ends in `REVERT`, and `Blanc/SourceAttainment.lean`'s
+finite certificate already knows what that means for a whole body.  Two
+consequences are worth naming separately, because together they are the honest
+statement of "the pause bubbles": the arm the failing call takes cannot commit,
+and — contrapositively — a post-CALL walk that *does* commit was on the
+success arm all along.
+
+What is **not** proved here is the byte-level payload, `output = child.output`.
+Three things stand between this cut and it, and none of them is a fact about
+the callee's behaviour: an `Ninst`-altitude read-after-write lemma for `Mem`,
+enough frame gas for the `REVERT`'s memory expansion at the child's returndata
+length, and the `B256` round-trip `(n.toB256).toNat = n` on that length.  The
+forward direction with exactly those premises already exists in the tree as
+`Func.runCompiledTo_revReturnData`; turning it into an inversion is a separate
+piece of work, not a consequence of this boundary. -/
+
+/-- `Func.revReturnData` is certified-reverting against any table: it contains
+no `.call`, so the certificate does not consult one. -/
+private lemma revReturnData_alwaysReverts (fs : List Func) :
+    Func.alwaysRevertsWithin 7 fs Func.revReturnData = true := rfl
+
+/-- The bubble slot is certified-reverting once the table is known to bind it
+to `Func.revReturnData`. -/
+private lemma bubbleCall_alwaysReverts {fs : List Func}
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData) :
+    Func.alwaysRevertsWithin 8 fs (Func.call bubbleRevertSlot) = true := by
+  show (match fs[bubbleRevertSlot]? with
+    | none => false
+    | some body => Func.alwaysRevertsWithin 7 fs body) = true
+  rw [h_bubble]
+  exact revReturnData_alwaysReverts fs
+
+/-- **The failure arm cannot commit.**  When the flag the CALL pushed is `0`,
+the walk of the pause's post-CALL fragment settles at an outcome that does not
+commit — the bubble's `REVERT` is the only terminal it can reach.
+
+This says nothing about the payload, and nothing about the callee beyond the
+flag it caused: a target that reverts and a target that returns failure some
+other way are treated alike, because `PauseCallBoundary` distinguishes them
+not at all. -/
+theorem pauseCall_failureArm_neverCommits {fs : List Func} {sevm : Sevm}
+    {target : Adr} {duration : B256} {callPre callPost : Devm}
+    {ex : Execution} {g : Func}
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (h_fail : callPost.stack.head? = some 0)
+    (run : Func.RunCompiledTo fs sevm callPost
+      (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> g)) ex) :
+    Execution.commits ex = false := by
+  obtain ⟨child, bubblePre, -, -, -, hbody⟩ :=
+    pauseCall_failureArm_bubbles h_bubble boundary h_fail run
+  exact Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin 7 hbody
+    (revReturnData_alwaysReverts fs)
+
+/-- **The observation is reachable only after a successful CALL.**  The
+ordering claim with no case hypothesis at all: any *successful* walk of the
+pause's post-CALL fragment took the branch's zero arm, and that arm exists only
+because the child did not error.  The failure arm is excluded by its own
+terminal, not by a premise.
+
+This is the `.ok` shadow of `pauseAfterCall_arms`, and it is the form a caller
+that already holds a `Func.RunCompiled` derivation wants: it converts "the
+frame got past the branch" into "the `pauseFor(uint256)` call succeeded",
+without ever asking what the target did to succeed.  It still claims nothing
+about the observation that follows — only that the walk continues into it. -/
+theorem pauseAfterCall_ok_forces_callSuccess {fs : List Func} {sevm : Sevm}
+    {target : Adr} {duration : B256} {callPre callPost post : Devm} {g : Func}
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (run : Func.RunCompiled fs sevm callPost
+      (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> g)) post) :
+    ∃ child armPre : Devm,
+      child.error.isSome = false ∧
+      callPost.returnData = child.output ∧
+      armPre.returnData = child.output ∧
+      Func.RunCompiled fs sevm armPre g post := by
+  obtain ⟨child, armPre, rest, -, hrd, hard, harm⟩ :=
+    pauseAfterCall_arms boundary (Func.RunCompiledTo.of_runCompiled run)
+  rcases harm with ⟨-, hcall⟩ | ⟨herr, hstat⟩
+  · exact (Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin 8 hcall
+      (bubbleCall_alwaysReverts h_bubble)).elim
+  · exact ⟨child, armPre, herr, hrd, hard,
+      Func.RunCompiled.of_runCompiledTo_ok hstat⟩
+
 end Blanc.LidoCircuitBreaker
