@@ -300,6 +300,161 @@ theorem pauseAfterSetEntry_assignment (sevm : Sevm) (base : Devm)
       hlength hindex]
   exact foundKernelPost_assignment sevm base target 0 oldPauser oldCount hcount
 
+/-! ## The removal tower is the state `pauseAfterSet` is entered from
+
+`pauseAfterSetEntry_assignment` names a state and shows the assignment cell
+is `0` there; it says nothing about whether that state is actually where
+`pauseAfterSet` starts.  The substrate's two removal-walk theorems supply
+that: `removeTarget_swapPop_toFinish_runCompiled` reaches `finishSetPauser`'s
+entry, and `finishSetPauser_pauseAfterSet_runCompiled` crosses
+`finishSetPauser`'s own body — the `PauserSet` emission — to
+`pauseAfterSet`'s entry, gated on `hcontinuation`, the premise that picks out
+a pause's continuation rather than a registration's. Composing the two turns
+that chain into one machine-checked run. -/
+
+/-- The removal tower plus the `PauserSet` record, entered as
+`pauseAfterSet`'s own state on the pause's continuation.  This is the
+composition `pauseAfterSetEntry_assignment` needs to be a statement about the
+pause's actual boundary rather than about a state only this module named: it
+chains `removeTarget_swapPop_toFinish_runCompiled`'s five writes to
+`finishSetPauser_pauseAfterSet_runCompiled`'s crossing of `finishSetPauser`'s
+body, with `newPauser` fixed at `0` throughout, which is what a pause's
+clearing write means.
+
+`previousPauser` and the staged memory image `imgFinish` are not among
+`removeTarget_swapPop_toFinish_runCompiled`'s own premises — they belong to
+`finishSetPauser`'s record and to the memory layout its body reads, so they
+and the facts about them are supplied here as fresh premises rather than
+re-derived from the removal span's own hypotheses. `pauseGas` plays the same
+role for the gas split: `finishSetPauser_pauseAfterSet_runCompiled` fixes its
+own body's cost at `1934` against an arbitrary entry gas, so `hpauseGas`
+is the bridge that lets `finishGas` absorb it. -/
+theorem removeTarget_pauseAfterSet_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes)
+    (target lastTarget idx len oldLength : B256)
+    (stack : List B256)
+    (hstack : stack.length ≤ 1)
+    (holeCurrent movedCurrent : B256)
+    (holeOriginal movedOriginal tailOriginal lengthOriginal
+      indexOriginal : B256)
+    (holeCost movedIndexCost tailClearCost lengthRestoreCost
+      indexClearCost finishGas G : Nat)
+    (hwf : Mem.Wf M) (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (htargetValid : nonzeroCanonicalAddress target)
+    (hlastValid : canonicalAddress lastTarget)
+    (hlastNe : lastTarget ≠ target)
+    (hidxNonzero : idx ≠ 0) (hidxBound : idx.toNat < 2 ^ 252)
+    (hlenNonzero : len ≠ 0) (hlenBound : len.toNat < 2 ^ 252)
+    (hidxNeLen : idx ≠ len)
+    (entrySize indexExtCost lengthExtCost lastExtCost : Nat)
+    (hsize : M.size = entrySize) (halign : M.size % 32 = 0)
+    (hentryLow : 640 ≤ entrySize)
+    (hindexExtCost : calculateMemoryGasCost
+        (memExtSize entrySize (removedIndexWord * 32).toNat 32) -
+      calculateMemoryGasCost entrySize = indexExtCost)
+    (hlengthExtCost : calculateMemoryGasCost
+        (memExtSize (max entrySize 672) (arrayLengthWord * 32).toNat 32) -
+      calculateMemoryGasCost (max entrySize 672) = lengthExtCost)
+    (hlastExtCost : calculateMemoryGasCost
+        (memExtSize (max entrySize 704) (lastTargetWord * 32).toNat 32) -
+      calculateMemoryGasCost (max entrySize 704) = lastExtCost)
+    (hhole : base.getStorVal sevm.currentTarget
+      (arrayEntrySlot idx) = holeCurrent)
+    (hmoved : base.getStorVal sevm.currentTarget
+      (indexSlot lastTarget) = movedCurrent)
+    (htail : base.getStorVal sevm.currentTarget
+      (arrayEntrySlot len) = lastTarget)
+    (hindex : base.getStorVal sevm.currentTarget
+      (indexSlot target) = idx)
+    (hlength : base.getStorVal sevm.currentTarget
+      arrayLengthSlot = len)
+    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot idx) = holeOriginal)
+    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot lastTarget) = movedOriginal)
+    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot len) = tailOriginal)
+    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+      (indexSlot target) = indexOriginal)
+    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+      arrayLengthSlot = lengthOriginal)
+    (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
+      holeCost)
+    (hmovedIndexCost : sstoreValueCost movedOriginal movedCurrent idx =
+      movedIndexCost)
+    (htailClearCost : sstoreValueCost tailOriginal lastTarget 0 =
+      tailClearCost)
+    (hlengthRestoreCost : sstoreValueCost lengthOriginal len oldLength =
+      lengthRestoreCost)
+    (hindexClearCost : sstoreValueCost indexOriginal idx 0 =
+      indexClearCost)
+    (hwarmHole : (sevm.currentTarget, arrayEntrySlot idx) ∈
+      base.accessedStorageKeys)
+    (hwarmMoved : (sevm.currentTarget, indexSlot lastTarget) ∈
+      base.accessedStorageKeys)
+    (hwarmTail : (sevm.currentTarget, arrayEntrySlot len) ∈
+      base.accessedStorageKeys)
+    (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
+      base.accessedStorageKeys)
+    (hwarmLength : (sevm.currentTarget, arrayLengthSlot) ∈
+      base.accessedStorageKeys)
+    (hsub : len - 1 = oldLength)
+    (hgasFinal : gCallStipend < G + finishGas + 12 + indexClearCost)
+    (hstatic : sevm.isStatic = false)
+    (post : Devm)
+    (previousPauser : B256) (imgFinish : Bytes) (pauseGas : Nat)
+    (hpauseGas : G + finishGas = pauseGas + 1934)
+    (MLast : Mem)
+    (hMLast : MLast =
+      ((M.write (removedIndexWord * 32).toNat idx.toBytes).write
+          (arrayLengthWord * 32).toNat len.toBytes).write
+        (lastTargetWord * 32).toNat lastTarget.toBytes)
+    (hreadsFinish : Mem.Reads MLast imgFinish)
+    (htargetFinish : Bytes.toB256
+      (imgFinish.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hpreviousFinish : Bytes.toB256
+      (imgFinish.sliceD (previousPauserWord * 32).toNat 32 0) =
+      previousPauser)
+    (hnewFinish : Bytes.toB256
+      (imgFinish.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (hcontinuationFinish : Bytes.toB256
+      (imgFinish.sliceD (continuationWord * 32).toNat 32 0) = 1)
+    (hsizeFinish : 640 ≤ MLast.size) (halignFinish : MLast.size % 32 = 0)
+    (hpause : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (((indexClearPost sevm (swapPopClearPost sevm base lastTarget idx len)
+            target oldLength).addLog
+          ⟨sevm.currentTarget,
+            [pauserSetEvent, target, previousPauser, 0], []⟩).setMach
+        ⟨stack, MLast, pauseGas⟩)
+      pauseAfterSet post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨stack, M,
+        G + finishGas + 439 + lastExtCost + indexExtCost + lengthExtCost +
+          holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
+          indexClearCost⟩)
+      removeTarget post := by
+  refine removeTarget_swapPop_toFinish_runCompiled dp sevm base M img target
+    lastTarget idx len oldLength stack hstack holeCurrent movedCurrent
+    holeOriginal movedOriginal tailOriginal lengthOriginal indexOriginal
+    holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
+    finishGas G hwf hreads htarget htargetValid hlastValid hlastNe
+    hidxNonzero hidxBound hlenNonzero hlenBound hidxNeLen entrySize
+    indexExtCost lengthExtCost lastExtCost hsize halign hentryLow
+    hindexExtCost hlengthExtCost hlastExtCost hhole hmoved htail hindex
+    hlength hholeOrig hmovedOrig htailOrig hindexOrig hlengthOrig hholeCost
+    hmovedIndexCost htailClearCost hlengthRestoreCost hindexClearCost
+    hwarmHole hwarmMoved hwarmTail hwarmIndex hwarmLength hsub hgasFinal
+    hstatic post ?_
+  subst hMLast
+  rw [hpauseGas]
+  exact finishSetPauser_pauseAfterSet_runCompiled dp sevm _ _ imgFinish
+    target previousPauser 0 stack pauseGas post hstack hreadsFinish
+    htargetFinish hpreviousFinish hnewFinish hcontinuationFinish hsizeFinish
+    halignFinish hstatic hpause
+
 /-! ## P4: a re-entering pause is refused
 
 The lock is taken *before* `pause` yields control, so the target that receives
