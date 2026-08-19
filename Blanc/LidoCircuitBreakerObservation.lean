@@ -543,12 +543,15 @@ theorem pauseDecode_arms {fs : List Func} {sevm : Sevm} {decodePre : Devm}
     ∃ armPre : Devm,
       ((Nat.toB256 out.length < (32 : B256) ∧
           Func.RunCompiledTo fs sevm armPre (Func.call emptyRevertSlot) ex) ∨
-        (32 ≤ out.length ∧ pausedAnswer out = 0 ∧
+        (¬ Nat.toB256 out.length < (32 : B256) ∧ 32 ≤ out.length ∧
+          pausedAnswer out = 0 ∧
           Func.RunCompiledTo fs sevm armPre
             (Func.call pauseFailedErrorSlot) ex) ∨
-        (32 ≤ out.length ∧ pausedAnswer out ≠ 0 ∧ pausedAnswer out ≠ 1 ∧
+        (¬ Nat.toB256 out.length < (32 : B256) ∧ 32 ≤ out.length ∧
+          pausedAnswer out ≠ 0 ∧ pausedAnswer out ≠ 1 ∧
           Func.RunCompiledTo fs sevm armPre (Func.call emptyRevertSlot) ex) ∨
-        (32 ≤ out.length ∧ pausedAnswer out = 1 ∧
+        (¬ Nat.toB256 out.length < (32 : B256) ∧ 32 ≤ out.length ∧
+          pausedAnswer out = 1 ∧
           Func.RunCompiledTo fs sevm armPre pauseSuccess ex)) := by
   rw [decodePausedResult] at run
   obtain ⟨s1, hguard, run⟩ := runCompiledTo_prepend_inv run
@@ -561,8 +564,9 @@ theorem pauseDecode_arms {fs : List Func} {sevm : Sevm} {decodePre : Devm}
       obtain ⟨t, ht⟩ := hflag
       rw [ht] at hz
       exact (List.cons.inj hz).1
-    have hlong : 32 ≤ out.length :=
-      le_length_of_not_toB256_lt_32 (not_lt_of_ltCheck_eq_zero hflag0)
+    have hnotshort : ¬ Nat.toB256 out.length < (32 : B256) :=
+      not_lt_of_ltCheck_eq_zero hflag0
+    have hlong : 32 ≤ out.length := le_length_of_not_toB256_lt_32 hnotshort
     have hmem2 : armPre.memory = μ.write 0 (out.take 32) := by
       rw [← hpop.memory, hs1mem, h_mem]
     -- the load: the word is the child's answer
@@ -599,13 +603,15 @@ theorem pauseDecode_arms {fs : List Func} {sevm : Sevm} {decodePre : Devm}
           rw [ht] at hz3
           exact (List.cons.inj hz3).1
         exact ⟨armPre3, Or.inr (Or.inr (Or.inl
-          ⟨hlong, hne0, fun h => (ne_of_eqCheck_eq_zero hec) h.symm, harm3⟩))⟩
+          ⟨hnotshort, hlong, hne0,
+            fun h => (ne_of_eqCheck_eq_zero hec) h.symm, harm3⟩))⟩
       · -- the canonical `1`: `pauseSuccess`
         have hec : ((1 : B256) =? pausedAnswer out) = w3 := by
           obtain ⟨t, ht⟩ := hp6
           rw [ht] at hw3
           exact (List.cons.inj hw3).1
-        refine ⟨armPre3, Or.inr (Or.inr (Or.inr ⟨hlong, ?_, harm3⟩))⟩
+        refine ⟨armPre3,
+          Or.inr (Or.inr (Or.inr ⟨hnotshort, hlong, ?_, harm3⟩))⟩
         exact (eqCheck_ne_zero (fun h => hne3 (hec.symm.trans h))).symm
     · -- the answer is zero: `PauseFailed()`
       have hzc : (pausedAnswer out =? 0) = w2 := by
@@ -613,7 +619,8 @@ theorem pauseDecode_arms {fs : List Func} {sevm : Sevm} {decodePre : Devm}
         rw [ht] at hw2
         exact (List.cons.inj hw2).1
       exact ⟨armPre2, Or.inr (Or.inl
-        ⟨hlong, eqCheck_ne_zero (fun h => hne2 (hzc.symm.trans h)), harm2⟩)⟩
+        ⟨hnotshort, hlong,
+          eqCheck_ne_zero (fun h => hne2 (hzc.symm.trans h)), harm2⟩)⟩
   · -- the flag was set: fewer than 32 bytes came back, and nothing read a word
     have hflagw : (Nat.toB256 out.length <? (32 : B256)) = w := by
       obtain ⟨t, ht⟩ := hflag
@@ -621,3 +628,321 @@ theorem pauseDecode_arms {fs : List Func} {sevm : Sevm} {decodePre : Devm}
       exact (List.cons.inj hwstk).1
     exact ⟨armPre, Or.inl
       ⟨ltCheck_ne_zero (fun h => hne (hflagw.symm.trans h)), harm⟩⟩
+
+/-! ## What the three revert arms output
+
+Three of the decode's four outcomes end in a revert, and two of them end in the
+*same* body — `emptyRevertSlot`'s `Func.rev`.  Neither that body nor
+`pauseFailedErrorSlot`'s `Func.revSelector` had a payload inversion anywhere in
+the repository: only the construction direction existed, which builds a revert
+from an exact gas premise rather than reading one out of an arbitrary
+derivation.  Both are supplied here.
+
+The two differ in one respect that matters.  `Func.rev`'s `REVERT` window is
+`(0, 0)`, and `Devm.extCost_empty_window` prices a zero-size window at zero
+unconditionally, so its charge can never be refused and its inversion has **no
+out-of-gas leg**.  `Func.revSelector`'s window is `(28, 4)`, whose expansion is
+free only once memory is known to be word-aligned and at least 32 bytes wide;
+alignment is a fact about the CircuitBreaker's prior memory that an arbitrary
+derivation does not carry, so that inversion keeps the explicit out-of-gas
+disjunct the predecessor's bubble payload also keeps. -/
+
+/-- `Func.RunCompiledTo` at a `.last` node. -/
+theorem runCompiledTo_last_inv {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {l : Linst} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (Func.last l) ex) :
+    Linst.Run sevm devm l ex := by
+  cases h with | last h => exact h
+
+/-- `REVERT` over a `(0, 0)` window, inverted with no gas premise: the charge
+for a zero-size window is zero, so the halt branch is unreachable and the
+payload is empty. -/
+private lemma of_run_rev_empty {sevm : Sevm} {devm : Devm} {s : List B256}
+    {ex : Execution}
+    (h_stk : devm.stack = (0 : B256) :: (0 : B256) :: s)
+    (h_run : Linst.Run sevm devm .rev ex) :
+    ∃ post, ex = .error (.revert, post) ∧ post.output = [] := by
+  have h_eq : Linst.run sevm devm .rev = ex := h_run
+  have h_gas : devm.extCost
+      [⟨((0 : B256)).toNat, ((0 : B256)).toNat⟩] ≤ devm.gasLeft := by
+    rw [show ((0 : B256)).toNat = 0 from rfl, Devm.extCost_empty_window]
+    exact Nat.zero_le _
+  refine ⟨_, h_eq.symm.trans (Linst.run_rev_eq_error h_stk h_gas rfl), ?_⟩
+  show (devm.memory.read ((0 : B256)).toNat ((0 : B256)).toNat).1 = []
+  rfl
+
+/-- **`Func.rev` reverts with an empty payload, from an arbitrary walk.**  No
+gas premise, no memory premise, and no out-of-gas disjunct. -/
+theorem runCompiledTo_rev_inv {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {ex : Execution} (run : Func.RunCompiledTo fs sevm devm Func.rev ex) :
+    ∃ post, ex = .error (.revert, post) ∧ post.output = [] := by
+  rw [Func.rev] at run
+  obtain ⟨d1, r1, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨d2, r2, run⟩ := runCompiledTo_next_inv run
+  have hrev := runCompiledTo_last_inv run
+  have p1 := of_run_pushB256 (Ninst.Run.of_runCompiled r1)
+  have p2 := of_run_pushB256 (Ninst.Run.of_runCompiled r2)
+  have hstk : d2.stack = (0 : B256) :: (0 : B256) :: devm.stack := by
+    rw [p2.stack, p1.stack]; rfl
+  exact of_run_rev_empty hstk hrev
+
+/-- `REVERT` over a window whose two operands are known, inverted.  Both are
+present, so neither pop can underflow, and the window's own expansion charge is
+the walk's last chance to fail: either it does and the frame settles at an
+out-of-gas halt, or the payload is the window read out of the frame's memory. -/
+private lemma of_run_rev_window {sevm : Sevm} {devm : Devm} {i sz : B256}
+    {s : List B256} {ex : Execution}
+    (h_stk : devm.stack = i :: sz :: s)
+    (h_run : Linst.Run sevm devm .rev ex) :
+    (∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+      (∃ post, ex = .error (.revert, post) ∧
+        post.output = (devm.memory.read i.toNat sz.toNat).1) := by
+  have h_eq : Linst.run sevm devm .rev = ex := h_run
+  rcases Nat.lt_or_ge devm.gasLeft (devm.extCost [⟨i.toNat, sz.toNat⟩])
+    with h_gas | h_gas
+  · have h_oog : Linst.run sevm devm .rev
+        = .error ⟨.halt (.outOfGas .none),
+            devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+      show (do
+        let ⟨index, d⟩ ← devm.popToNat
+        let ⟨size, d⟩ ← d.popToNat
+        let cost := d.extCost [⟨index, size⟩]
+        let d ← chargeGas cost d
+        let ⟨output, d⟩ := d.memRead index size
+        let d := d.withOutput output
+        Except.error ⟨.revert, d⟩) = _
+      rw [Devm.popToNat_eq_ok h_stk]
+      simp only [bind, Except.bind]
+      rw [Devm.popToNat_eq_ok
+        (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+      simp only [Devm.setMach_setMach, Devm.memory_setMach,
+        Devm.gasLeft_setMach]
+      have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+          [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
+      rw [h_ext]
+      have hcg : chargeGas (devm.extCost [⟨i.toNat, sz.toNat⟩])
+          (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) =
+            .error ⟨.halt (.outOfGas .none),
+              devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+        rw [chargeGas_def]
+        have hs : safeSub (devm.setMach
+            ⟨s, devm.memory, devm.gasLeft⟩).gasLeft
+            (devm.extCost [⟨i.toNat, sz.toNat⟩]) = none := by
+          unfold safeSub
+          rw [if_neg (by simp only [Devm.gasLeft_setMach]; omega)]
+        rw [hs]
+      rw [hcg]
+    exact Or.inl ⟨_, h_eq.symm.trans h_oog⟩
+  · exact Or.inr ⟨_, h_eq.symm.trans (Linst.run_rev_eq_error h_stk h_gas rfl),
+      rfl⟩
+
+/-- The tail of a 32-byte word written at offset zero, read straight back.  No
+well-formedness premise and no memory image: `Mem.read_write_zero` supplies the
+whole window, and the four selector bytes are its last four. -/
+private lemma read_selector_of_write_zero {μ : Mem} {ys : Bytes}
+    (h : ys.length = 32) :
+    ((μ.write 0 ys).read 28 4).1 = ys.drop 28 := by
+  have hne : ys ≠ [] := by
+    intro hn; rw [hn] at h; exact absurd h (by decide)
+  have hfull := Mem.read_write_zero μ hne
+  rw [h] at hfull
+  have hshift : ∀ M : Mem, (M.read 28 4).1 = ((M.read 0 32).1).drop 28 := by
+    intro M
+    show Array.sliceD M.data 28 4 0 = (Array.sliceD M.data 0 32 0).drop 28
+    rw [Array.sliceD_eq_map, Array.sliceD_eq_map]
+    rfl
+  rw [hshift, hfull]
+
+/-- The selector word's low four bytes are the selector.  Re-derived here
+because `Blanc/RevertPayload.lean`'s version is private. -/
+private lemma toBytes_toB256_drop28 (data : Bytes) (h : data.length = 4) :
+    data.toB256.toBytes.drop 28 = data := by
+  have hp := Bytes.toBytes_toB256_of_length
+    (xs := List.replicate 28 0 ++ data) (by simp [h])
+  exact (by
+    simpa [Bytes.toB256_zero_cons] using congrArg (List.drop 28) hp)
+
+/-- **`Func.revSelector` reverts with exactly its four bytes, from an arbitrary
+walk.**  The out-of-gas leg stays explicit: the `REVERT`'s `(28, 4)` window
+expands for free only once memory is word-aligned and at least 32 bytes wide,
+and alignment is a property of the CircuitBreaker's prior memory that an
+arbitrary derivation does not carry.  Assuming it away would turn a payload
+statement into a liveness claim. -/
+theorem runCompiledTo_revSelector_inv {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {data : Bytes} {hlen : data.length = 4} {ex : Execution}
+    (run : Func.RunCompiledTo fs sevm devm (Func.revSelector data hlen) ex) :
+    (∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+      (∃ post, ex = .error (.revert, post) ∧ post.output = data) := by
+  rw [Func.revSelector] at run
+  obtain ⟨d1, r1, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨d2, r2, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨d3, r3, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨d4, r4, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨d5, r5, run⟩ := runCompiledTo_next_inv run
+  have hrev := runCompiledTo_last_inv run
+  have p1 := of_run_push (Ninst.Run.of_runCompiled r1)
+  have p2 := of_run_pushB256 (Ninst.Run.of_runCompiled r2)
+  have hp2 := prefix_of_push p2 (prefix_of_push p1 nil_pref)
+  obtain ⟨-, hm3⟩ :=
+    prefix_of_mstore_val (Ninst.Run.of_runCompiled r3) hp2
+  have p4 := of_run_pushB256 (Ninst.Run.of_runCompiled r4)
+  have p5 := of_run_pushB256 (Ninst.Run.of_runCompiled r5)
+  have hm5 : d5.memory = d2.memory.write 0 data.toB256.toBytes := by
+    rw [← p5.memory, ← p4.memory, hm3]; rfl
+  have hstk5 : d5.stack = (28 : B256) :: (4 : B256) :: d3.stack := by
+    rw [p5.stack, p4.stack]; rfl
+  rcases of_run_rev_window hstk5 hrev with h_oog | ⟨post, hpost, hout⟩
+  · exact Or.inl h_oog
+  · refine Or.inr ⟨post, hpost, ?_⟩
+    rw [hout, hm5,
+      show ((28 : B256)).toNat = 28 from rfl,
+      show ((4 : B256)).toNat = 4 from rfl,
+      read_selector_of_write_zero (B256.length_toBytes _),
+      toBytes_toB256_drop28 data hlen]
+
+/-! ## The six outcomes, each with its reached slot and its exact payload
+
+The table lookups below are discharged by the CircuitBreaker's own program, so
+the statements are about *whatever* the table binds at those slots and a
+witness settles it against the program actually running. -/
+
+/-- The CircuitBreaker's table binds `emptyRevertSlot` to the zero-length
+revert. -/
+theorem runtime_emptyRevertSlot (dp : DeployParams) :
+    ((runtime dp).main :: (runtime dp).aux)[emptyRevertSlot]? =
+      some Func.rev := rfl
+
+/-- The CircuitBreaker's table binds `pauseFailedErrorSlot` to
+`PauseFailed()`'s named-error reverter. -/
+theorem runtime_pauseFailedErrorSlot (dp : DeployParams) :
+    ((runtime dp).main :: (runtime dp).aux)[pauseFailedErrorSlot]? =
+      some pauseFailedError := rfl
+
+/-- **Outcome 4: an answer shorter than a word reverts empty.**
+
+D3 in its plain form: the hypothesis is `out.length < 32` and nothing else.
+There is **no premise about the CircuitBreaker's memory before the
+observation** — `μ` is universally quantified — and **no conclusion about the
+word at offset zero**, because below 32 bytes that window holds a mixture of
+the answer and whatever was staged earlier and no projection of the answer
+names it.  The length guard is what makes the mixture unreachable, and this is
+the theorem that shows it. -/
+theorem pauseDecode_shortReturn_payload {fs : List Func} {sevm : Sevm}
+    {decodePre : Devm} {μ : Mem} {out : Bytes} {ex : Execution}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_mem : decodePre.memory = μ.write 0 (out.take 32))
+    (h_rd : decodePre.returnData = out)
+    (h_short : out.length < 32)
+    (run : Func.RunCompiledTo fs sevm decodePre decodePausedResult ex) :
+    ∃ post, ex = .error (.revert, post) ∧ post.output = [] := by
+  obtain ⟨armPre, harm⟩ := pauseDecode_arms h_mem h_rd run
+  have hshort : Nat.toB256 out.length < (32 : B256) :=
+    toB256_lt_32_of_lt h_short
+  rcases harm with ⟨-, hcall⟩ | ⟨hns, -⟩ | ⟨hns, -⟩ | ⟨hns, -⟩
+  · obtain ⟨mid, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
+    exact runCompiledTo_rev_inv hbody
+  · exact absurd hshort hns
+  · exact absurd hshort hns
+  · exact absurd hshort hns
+
+/-- **Outcome 5: a returned `false` reverts with `PauseFailed()`'s four
+bytes.**
+
+The out-of-gas leg is explicit, for the reason
+`runCompiledTo_revSelector_inv` records.  `h_flag` is the guard's own verdict
+on the answer — a function of its length — and is what
+`pauseDecode_arms` produces on the arm that reads the word at all. -/
+theorem pauseDecode_false_payload {fs : List Func} {sevm : Sevm}
+    {decodePre : Devm} {μ : Mem} {out : Bytes} {ex : Execution}
+    (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
+    (h_mem : decodePre.memory = μ.write 0 (out.take 32))
+    (h_rd : decodePre.returnData = out)
+    (h_flag : ¬ Nat.toB256 out.length < (32 : B256))
+    (h_zero : pausedAnswer out = 0)
+    (run : Func.RunCompiledTo fs sevm decodePre decodePausedResult ex) :
+    (∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+      (∃ post, ex = .error (.revert, post) ∧
+        post.output = customErrorData "PauseFailed") := by
+  obtain ⟨armPre, harm⟩ := pauseDecode_arms h_mem h_rd run
+  rcases harm with ⟨hs, -⟩ | ⟨-, -, -, hcall⟩ | ⟨-, -, hne0, -⟩ |
+    ⟨-, -, hone, -⟩
+  · exact absurd hs h_flag
+  · obtain ⟨mid, -, hbody⟩ := runCompiledTo_call_inv h_failed hcall
+    rw [show pauseFailedError =
+      Func.revSelector (customErrorData "PauseFailed")
+        (by simp [customErrorData, B256.length_toBytes]) from rfl] at hbody
+    exact runCompiledTo_revSelector_inv hbody
+  · exact absurd h_zero hne0
+  · exact absurd (h_zero.symm.trans hone) (by decide)
+
+/-- **Outcome 6: a word that is neither `0` nor `1` reverts empty.**
+
+`false` has a named status and `true` is accepted; every other bit pattern is
+rejected without one.  The differential rows measure this against the oracle at
+`2`; the theorem covers every other word. -/
+theorem pauseDecode_noncanonical_payload {fs : List Func} {sevm : Sevm}
+    {decodePre : Devm} {μ : Mem} {out : Bytes} {ex : Execution}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_mem : decodePre.memory = μ.write 0 (out.take 32))
+    (h_rd : decodePre.returnData = out)
+    (h_flag : ¬ Nat.toB256 out.length < (32 : B256))
+    (h_ne0 : pausedAnswer out ≠ 0)
+    (h_ne1 : pausedAnswer out ≠ 1)
+    (run : Func.RunCompiledTo fs sevm decodePre decodePausedResult ex) :
+    ∃ post, ex = .error (.revert, post) ∧ post.output = [] := by
+  obtain ⟨armPre, harm⟩ := pauseDecode_arms h_mem h_rd run
+  rcases harm with ⟨hs, -⟩ | ⟨-, -, hzero, -⟩ | ⟨-, -, -, -, hcall⟩ |
+    ⟨-, -, hone, -⟩
+  · exact absurd hs h_flag
+  · exact absurd hzero h_ne0
+  · obtain ⟨mid, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
+    exact runCompiledTo_rev_inv hbody
+  · exact absurd hone h_ne1
+
+/-- **Outcome 7: a canonical `1` reaches `pauseSuccess`.**
+
+What this does **not** say is the point of the module's header: reaching
+`pauseSuccess` is not evidence that the target is paused.  A target that
+returns `1` without pausing is accepted, by construction, and the
+CircuitBreaker has no way to check it.  Nor does this say the pause completes —
+the walk is handed on as a walk, and everything `pauseSuccess` does is the next
+cut's business. -/
+theorem pauseDecode_accepts_one {fs : List Func} {sevm : Sevm}
+    {decodePre : Devm} {μ : Mem} {out : Bytes} {ex : Execution}
+    (h_mem : decodePre.memory = μ.write 0 (out.take 32))
+    (h_rd : decodePre.returnData = out)
+    (h_flag : ¬ Nat.toB256 out.length < (32 : B256))
+    (h_one : pausedAnswer out = 1)
+    (run : Func.RunCompiledTo fs sevm decodePre decodePausedResult ex) :
+    ∃ armPre : Devm, Func.RunCompiledTo fs sevm armPre pauseSuccess ex := by
+  obtain ⟨armPre, harm⟩ := pauseDecode_arms h_mem h_rd run
+  rcases harm with ⟨hs, -⟩ | ⟨-, -, hzero, -⟩ | ⟨-, -, -, hne1, -⟩ |
+    ⟨-, -, -, hsucc⟩
+  · exact absurd hs h_flag
+  · exact absurd (hzero.symm.trans h_one) (by decide)
+  · exact absurd h_one hne1
+  · exact ⟨armPre, hsucc⟩
+
+/-- **D6: a valid first word with any tail is accepted.**
+
+The accepting path carries no length equality, so this is a corollary rather
+than a new argument — but it is the one Stage 6 asks be stated, and it is
+falsifiable: a premise `out.length = 32` anywhere upstream would make it
+unprovable.  `tail` is arbitrary, including empty and including the 65 504
+bytes the largest differential row returns. -/
+theorem pauseDecode_accepts_one_withTail {fs : List Func} {sevm : Sevm}
+    {decodePre : Devm} {μ : Mem} {word tail : Bytes} {ex : Execution}
+    (h_word : word.length = 32)
+    (h_one : Bytes.toB256 word = 1)
+    (h_mem : decodePre.memory = μ.write 0 ((word ++ tail).take 32))
+    (h_rd : decodePre.returnData = word ++ tail)
+    (h_flag : ¬ Nat.toB256 (word ++ tail).length < (32 : B256))
+    (run : Func.RunCompiledTo fs sevm decodePre decodePausedResult ex) :
+    ∃ armPre : Devm, Func.RunCompiledTo fs sevm armPre pauseSuccess ex := by
+  refine pauseDecode_accepts_one h_mem h_rd h_flag ?_ run
+  have hslice : (word ++ tail).sliceD 0 32 0 = word := by
+    unfold List.sliceD
+    rw [List.drop_zero, List.takeD_eq_take _ (by simp [h_word]), ← h_word,
+      List.take_left]
+  rw [pausedAnswer, hslice]
+  exact h_one
