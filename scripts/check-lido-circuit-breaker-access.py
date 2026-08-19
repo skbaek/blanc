@@ -76,6 +76,11 @@ OWNERS = {
     # the family whose statements quantify over the callee's bytecode, so its
     # pins are what a callee-pinning weakening would have to move.
     "preControl": ROOT / "Blanc/LidoCircuitBreakerPreControl.lean",
+    # Stage 6's second cut: what the CircuitBreaker SENDS that target, and the
+    # order it sends it in.  Its statements sit downstream of arbitrary callee
+    # execution, so what they OMIT -- every storage, code or memory conjunct a
+    # cooperative callee would supply -- is as load-bearing as what they carry.
+    "callBoundary": ROOT / "Blanc/LidoCircuitBreakerCallBoundary.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -109,6 +114,7 @@ MODULES = {
     "pauseJoin": "Blanc.LidoCircuitBreakerPauseJoin",
     "pauseSettlement": "Blanc.LidoCircuitBreakerPauseSettlement",
     "preControl": "Blanc.LidoCircuitBreakerPreControl",
+    "callBoundary": "Blanc.LidoCircuitBreakerCallBoundary",
 }
 
 REQUIRED = (
@@ -833,6 +839,90 @@ ROLES = {
         "pause_runCompiledTo_error_of_locked":
             "20f5072a984703c8d8d89ab0a3053c3e545a849e4c1064d42dc45659fd61473f",
     },
+    # ---- Stage 6: what the CircuitBreaker SENDS, and in what order ----
+    #
+    # `PauseCallBoundary` and `PauseStatBoundary` are `def`s, and they carry
+    # this family's whole content: the argument windows' encoders, the callee,
+    # the caller, the value, the static flag, the transient storage handed
+    # over.  Emptying either would leave every header below byte-identical
+    # while making all of them trivially provable, so the pins here hold the
+    # statements' SHAPE and `call_boundary_arbitrary_target_code_control` in
+    # the fixture holds the relations' content -- the same division of labour
+    # `pause_join_expiry_value_control` performs for `PauseExpiryValue`.
+    #
+    # What the pins do reach is every place a premise could smuggle a
+    # cooperative callee in.  Each header below is stated at a universally
+    # quantified target, and the two that cross the callback -- the surviving
+    # target word and the joined boundary -- are pinned precisely because a
+    # weakening that added "suppose memory is unchanged after the callback"
+    # would still read as a crossing result.
+    "callBoundary": {
+        # The zero-byte return window is why the staged target word survives an
+        # arbitrary callee: the resume writes `child.output.take 0`.  A widened
+        # window makes this false rather than merely unproved.
+        "pauseCall_targetWord_survives":
+            "1db9b831ce405eab72549860ba80644bc7573fd80e8a403cb97205183320062e",
+        # The two edges themselves, each inverted out of the machine's own
+        # crossing for arbitrary target bytecode.  `pauseStat_boundary` sits
+        # downstream of the callee's whole run and still carries no premise
+        # about it.
+        "pauseCall_boundary":
+            "5305fcec2a37665ade6f7b77d8edd2f493d8c65cb3a3f9f87ade7357d3a75499",
+        "pauseStat_boundary":
+            "7ca1442b6252e24ef29693089cbd298a41e5a0b5d0993d30f00d688ba285ddfa",
+        # The program cut the ordering results are stated against.  It is a
+        # `rfl` identity with `pauseAfterSet`, so the branch results below are
+        # about the deployed program and not about a paraphrase of it.
+        "pauseAfterSet_eq_afterCall":
+            "ed220079a2b0e3cfa820425b27e82417100444b0f71c2fd20dec4e6b0f2c0e3d",
+        # The word the branch reads: the CALL's flag, inverted by the `ISZERO`
+        # between them, equal to the child's error -- and taking exactly two
+        # values, neither of which this family decides.
+        "pauseCall_branchWord":
+            "874625371dbe0826a8b2d9811c07cd0880b37266033d0cb801a3ab600e8c95d5",
+        "pauseCall_flag_dichotomy":
+            "3c96881687529c2e088856895179efb12edf4a698f9b79121724778e97834e6c",
+        # Both arms, PRODUCED from the derivation rather than assumed on either
+        # side.  The continuation is universally quantified, so this is a
+        # statement about the branch and not about what the success arm does.
+        "pauseAfterCall_arms":
+            "706a4d75c76db8f071614200d540983d2861dcc513ef41067ddf4bc6758298bf",
+        # The bubble slot's binding, discharged by the deployed table itself so
+        # the arm theorems' lookup premise is not left to a consumer.
+        "runtime_bubbleRevertSlot":
+            "91f34f8b61dc1595aa321501e1a98956cc33125cc8a169d774079b6d04cc4ac6",
+        # The failure arm: it reaches the bubble still holding the child's
+        # returndata, settles at an outcome that cannot commit, and outputs
+        # either that returndata or the bubble's own memory-expansion refusal.
+        # The payload's `List.take` at the length round trip is content, not
+        # bookkeeping -- collapsing it to `child.output` would take a premise
+        # about what the callee returned, which this family admits nowhere.
+        "pauseCall_failureArm_bubbles":
+            "4122d1ebc430e8a82a9182d29d55760499b472729afd6f5d2c80388ed5278ef7",
+        "pauseCall_failureArm_neverCommits":
+            "9a383c051c3f665a098f6f70123cceebdda5dd0bd0947e9c232a11037857f9a3",
+        "pauseCall_failureArm_payload":
+            "82a97e33bfab77f19d288436cc01e958a644ea15d531c3325335f64b11dc3f96",
+        # The success arm is the only route to the STATICCALL, handing on the
+        # crossing premise `pauseStat_boundary` consumes; and its `.ok` shadow,
+        # which carries no case hypothesis at all and converts "the frame got
+        # past the branch" into "the pauseFor(uint256) call succeeded".
+        "pauseCall_successArm_reachesStatcall":
+            "623499f01e5574230c23b97bea25e9a782745487c9dfb40920894112ad71e3dc",
+        "pauseAfterCall_ok_forces_callSuccess":
+            "084d8e98ce45cd1fb40d975e73245ac9cb0fbe3a7e9f471b40f1617ed7d5c700",
+        # The CALL's argument window built from the staged duration word by the
+        # CircuitBreaker's own straight-line code.  No callee appears in the
+        # statement, because the staging runs strictly before the crossing.
+        "pauseCallStaging_calldata":
+            "327e214d91ae56d3067bb996bd59dc9d96a819891297af5b364d0bb359555344",
+        # The joined boundary: both messages at the SAME target, both operand
+        # stacks derived by forward evaluation rather than assumed, and the
+        # second staging reached through the target word carried across the
+        # callback.  The order is in the statement's own shape.
+        "pause_externalBoundary":
+            "a85d61145a4f802704234fd2dae7e78629a73c2283377a2831fc3d0ebd76608c",
+    },
 }
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
@@ -1476,7 +1566,19 @@ def main() -> None:
           "spelled-out encoder plus a ProcessMessage fact naming callee, "
           "caller, value and static flag, with the staged target word carried "
           "across arbitrary callee execution and nothing said about the code "
-          "at the target beyond a universally quantified ByteArray; "
+          "at the target beyond a universally quantified ByteArray; that "
+          "call's argument window built from the staged duration word by the "
+          "CircuitBreaker's own straight-line staging, and the two edges "
+          "joined at one target with both operand stacks derived rather than "
+          "assumed; and the ORDER between them -- pauseAfterSet cut at its own "
+          "CALL by a rfl identity, the branch flag shown to take exactly two "
+          "values and to invert the callee's error, both arms produced from "
+          "the derivation rather than assumed, the failure arm reaching the "
+          "deployed table's own revReturnData slot, settling at no commit and "
+          "outputting the child's returndata or the bubble's own "
+          "memory-expansion refusal, the success arm as the sole route to the "
+          "STATICCALL, and any successful walk past the branch forcing the "
+          "pauseFor(uint256) call to have succeeded; "
           f"{controls} labelled header mutations, deletion and trust controls")
 
 if __name__ == "__main__":
