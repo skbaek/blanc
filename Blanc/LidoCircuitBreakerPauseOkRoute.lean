@@ -17,10 +17,8 @@ than in the revert one: every untaken arm on the path is `Func.rev` or a
 without a branch word.  The count branch (`B7`) is the one branch with two
 live arms; its word, and the facts that survive the two external crossings,
 are taken in continuation-passing style — quantified over the walk's own
-states — so the witness side pins the crossing poststates against its
-concrete responder crossings with `Ninst.RunCompiled.unique`
-(`Blanc/ExecutionOccurrence.lean`) and discharges the storage guard from its
-world.
+states — so the witness side discharges them against its concrete responder
+crossings and supplies the storage guard from its world.
 
 The `attainable_of_entryRoute_frame` sibling at the foot passes the route the
 **full** entry-burn fact rather than only its storage and memory projections:
@@ -1119,8 +1117,7 @@ poststates the caller pins — the `hcall`/`hstat` premises quantify over the
 walk's own crossing states, handing the caller the crossing's
 `Ninst.RunCompiled` step, the operand stack shape and the staged-target
 window, and asking back only that the window survive.  A witness discharges
-them against its concrete responder crossings with
-`Ninst.RunCompiled.unique`.
+them against its concrete responder crossings.
 
 The continuation is entered at the count branch — the one branch on the
 route with two live arms — with the crossed count-test `Line.Run`, from
