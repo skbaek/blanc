@@ -1099,14 +1099,23 @@ statement of "the pause bubbles": the arm the failing call takes cannot commit,
 and — contrapositively — a post-CALL walk that *does* commit was on the
 success arm all along.
 
-What is **not** proved here is the byte-level payload, `output = child.output`.
-Three things stand between this cut and it, and none of them is a fact about
-the callee's behaviour: an `Ninst`-altitude read-after-write lemma for `Mem`,
-enough frame gas for the `REVERT`'s memory expansion at the child's returndata
-length, and the `B256` round-trip `(n.toB256).toNat = n` on that length.  The
-forward direction with exactly those premises already exists in the tree as
-`Func.runCompiledTo_revReturnData`; turning it into an inversion is a separate
-piece of work, not a consequence of this boundary. -/
+The byte-level payload is settled below by `pauseCall_failureArm_payload`,
+against `Func.runCompiledTo_revReturnData_inv`.  Of the three obstacles this
+note used to list, two are gone: the read-after-write lemma exists, and the
+`REVERT`'s memory expansion needed no gas premise at all, because every earlier
+step of `Func.RunCompiledTo` witnesses that its own instruction succeeded.
+
+What remains is **not** removable and is stated as a disjunct rather than
+assumed away: without `memory.size % 32 = 0` the `REVERT`'s own expansion charge
+is not provably zero — memory size `33` with a `33`-byte payload expands to
+`ceil32 33 = 64` — so no honest inequality in `gasLeft` alone refutes it.
+
+The `B256` round-trip is also unresolved, and deliberately so.  Collapsing
+`take (n.toB256).toNat` to the whole list needs `n < 2 ^ 256` for the child's
+output length, which is not a fact about this edge but the invariant that every
+`Devm` reachable under `Exec` has bounded output — an induction over `Exec` and
+every precompile, belonging upstream rather than in a contract module.  The raw
+form is carried instead. -/
 
 /-- `Func.revReturnData` is certified-reverting against any table: it contains
 no `.call`, so the certificate does not consult one. -/
@@ -1175,6 +1184,79 @@ theorem pauseAfterCall_ok_forces_callSuccess {fs : List Func} {sevm : Sevm}
       (bubbleCall_alwaysReverts h_bubble)).elim
   · exact ⟨child, armPre, herr, hrd, hard,
       Func.RunCompiled.of_runCompiledTo_ok hstat⟩
+
+/-! ## What the failure arm outputs
+
+The note above listed three things standing between this boundary and the
+byte-level payload, and recorded that turning `Func.runCompiledTo_revReturnData`
+into an inversion was separate work.  That work now exists upstream as
+`Func.runCompiledTo_revReturnData_inv`, which reads the settled outcome off an
+arbitrary derivation of the walk and carries no premise at all — not about gas,
+not about the frame's memory, not about the callee.  Applying it to the bubble
+that `pauseCall_failureArm_bubbles` already hands over is all that remains.
+
+One of the three obstructions survives the inversion, and it is stated rather
+than assumed away.  `Func.revReturnData` ends in a `REVERT` over the window it
+has just filled, and that `REVERT` pays its own memory-expansion charge; the
+walk says nothing about the gas left when the charge falls due, so the pause
+frame may settle at an out-of-gas exceptional halt instead.  No bound on
+`gasLeft` alone refutes that leg either: the expansion is free only at an
+aligned memory size, and at an unaligned one it is genuinely nonzero — size
+`33` with a 33-byte payload expands to `ceil32 33 = 64` — while this cut
+carries no alignment fact about the CircuitBreaker's memory.  So the conclusion
+below is a **two-leg disjunction**, and its left leg is real. -/
+
+/-- **What the failure arm outputs: out of gas, or the callee's bytes.**  When
+the flag the CALL pushed is `0`, the pause frame settles in exactly one of two
+ways — it ran out of gas at the bubble's own `REVERT`, or it reverted carrying
+the callee's returndata as its payload.
+
+Read the disjunction as written; this is **not** an unconditional payload
+claim.  The left leg is the bubble's `REVERT` refusing its own
+memory-expansion charge, and it is frame-local: the CircuitBreaker's gas, not
+the callee's and not the caller's.  It is not removable at this cut, for the
+reason the section note above records.
+
+The payload is stated as `List.take` at the `B256` round trip of the child
+output's length, because that is what the machine copies: `RETURNDATACOPY`
+moves `size` bytes where `size` is the word `RETURNDATASIZE` pushed.  It is the
+*whole* of `child.output` at every length a real execution can produce, since
+`List.take n xs = xs` as soon as `xs.length ≤ n`, and `(Nat.toB256 n).toNat = n`
+for `n < 2 ^ 256`.  Collapsing it to `child.output` in the statement would take
+`child.output.length < 2 ^ 256` as a hypothesis — a premise about what the
+callee returned, and this module admits none.  The bound is true of every
+reachable execution, but deriving it is an invariant over `Exec` and the
+precompiles, not a consequence of this boundary.
+
+What this does **not** claim.  It does not say the bubbled bytes mean anything:
+`child.output` is whatever the hostile target chose to return, empty included,
+and `Func.revReturnData`'s own docstring records that a zero-length child
+revert is an ordinary empty revert.  And it does not say this arm is reached —
+`h_fail` is the case hypothesis, the sibling of
+`pauseCall_successArm_reachesStatcall`'s `h_ok`, and
+`pauseCall_flag_dichotomy` shows the two exhaust the possibilities. -/
+theorem pauseCall_failureArm_payload {fs : List Func} {sevm : Sevm}
+    {target : Adr} {duration : B256} {callPre callPost : Devm}
+    {ex : Execution} {g : Func}
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (h_fail : callPost.stack.head? = some 0)
+    (run : Func.RunCompiledTo fs sevm callPost
+      (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> g)) ex) :
+    ∃ child : Devm,
+      child.error.isSome = true ∧
+      callPost.returnData = child.output ∧
+      ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+        (∃ post, ex = .error (.revert, post) ∧
+          post.output =
+            child.output.take child.output.length.toB256.toNat)) := by
+  obtain ⟨child, bubblePre, herr, hrd, hard, hbody⟩ :=
+    pauseCall_failureArm_bubbles h_bubble boundary h_fail run
+  refine ⟨child, herr, hrd, ?_⟩
+  rcases Func.runCompiledTo_revReturnData_inv hbody with
+    h_oog | ⟨post, hpost, hout⟩
+  · exact Or.inl h_oog
+  · exact Or.inr ⟨post, hpost, by rw [hout, hard]⟩
 
 /-! ## The staged calldata
 
