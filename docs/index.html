@@ -106,8 +106,8 @@
       in-window <span class="mono">approve</span>, or its in-window <span class="mono">permit</span>.
       Behavioral claims are defended in layers — a frozen compatibility boundary, a 147-row
       differential corpus beside the deployed reference, universal theorems over the exact compiled
-      bytes, a published assurance boundary — and closed with a standing, falsifiable wager for
-      whatever the layers missed.
+      bytes, a published assurance boundary — and a deviation registry that publishes and defends
+      every known divergence before anyone asks.
       Blanc does not verify contracts already deployed, and does not pretend
       the switch is cheap: it is a new, deliberately bare language, and the mature toolchains stay
       behind. The bet is that what it buys exists at no other counter. MIT-licensed.</p>
@@ -217,21 +217,24 @@
           closure, no key custody or inclusion, no gas, storage, or codehash parity. Deviations
           from the reference are governed, not forbidden: each is a registry row with a stance
           and evidence — WETH10’s registry currently holds zero accepted rows in its stated
-          scope — and an observable difference with no row is a defect by the project’s own
-          rules. <strong>Silence is the one prohibited move.</strong></p></div>
+          scope — and an observable difference, once discovered, must be restored or recorded.
+          The registry is non-exhaustive; <strong>leaving a known divergence unrecorded is the one
+          prohibited move.</strong></p></div>
       </div>
     </div>
 
     <div class="grid2" style="margin-top:30px;align-items:start">
       <div class="panel">
-        <span class="tick">the layer no list can close</span>
+        <span class="tick">the scope of the burden</span>
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          No specification list is ever finished, so the defense ends in a <em>standing wager</em>,
-          deliberately falsifiable: produce a specification that is true of the deployed original
-          and that its authors and users would endorse as a feature, and either it holds of the
-          Blanc port, provably, or a pre-dated registry row already priced the divergence. If
-          neither, the wager is lost — in public. The burden is the project’s; “that was never
-          claimed” is not an available answer, and neither is “we could probably prove it.”
+          No specification list is ever finished, and the port does not pretend otherwise. It
+          answers, item by item, for everything it wrote — every proved specification and every
+          differential expectation is offered as a statement of what the contract is
+          <em>for</em>, individually contestable — and for anything it is shown, under the
+          registry’s discovered-difference rule. It does not pre-accept burden for specifications
+          no one has written. An earlier, more ambitious instrument that did — a standing wager
+          over every feature-level truth of the deployed original — was retired in August 2026 as
+          unadjudicable in principle; PORTING.md’s policy note records why.
         </p>
       </div>
       <div class="panel">
@@ -240,8 +243,9 @@
           A property believed but not yet proved is recorded as a counted <em>verification
           debt</em>, never asserted — asserting unproved properties is what every unverified
           contract already offers. When a property resists proof, the rule is: claim less, never
-          assert more. The standing terms — the wager’s two conditions, the interface/accident
-          boundary, the timestamp rule that stops a stance being invented after a challenge — are
+          assert more. The standing terms — the feature test, the interface/accident
+          boundary, the publish-when-discovered rule that stops a stance being invented after a
+          challenge — are
           <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>’s.
           This page summarises it; that document governs.
         </p>
@@ -1135,9 +1139,10 @@
       <div class="aud">
         <h3>Auditors &amp; professional skeptics</h3>
         <p>This project keeps a register you can attack: deviation rows with stances, counted
-          verification debts, falsifier tables, and a standing wager that invites you to produce a
-          specification the port should satisfy. If you find silence where a row should be, that is
-          a defect by the project’s own rules — file it.</p>
+          verification debts, and falsifier tables. Every proved specification and differential
+          expectation is offered as a statement of what the contract is for — contest any item and
+          an answer is owed. And if you find a divergence with no row, that is a defect by the
+          project’s own rules — file it.</p>
         <div class="hook">start: WETH10_DEVIATIONS.md — zero accepted deviations<br>then: scripts/GATES.md — every gate, scale, and pass criterion</div>
       </div>
     </div>
@@ -1182,7 +1187,7 @@
         </div>
         <dl style="margin:0">
           <div class="kv"><dt>the behavior</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/WETH10_COMPATIBILITY.md" style="text-decoration:underline;text-underline-offset:3px">WETH10_COMPATIBILITY.md</a> — “right”, written down: the frozen boundary, row by row</dd></div>
-          <div class="kv"><dt>the rules</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a> — what a port claims, the wager, the deviation discipline</dd></div>
+          <div class="kv"><dt>the rules</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a> — what a port claims, the deviation discipline, and the note retiring the old wager</dd></div>
           <div class="kv"><dt>the map</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/README.md" style="text-decoration:underline;text-underline-offset:3px">README.md</a> — every module, every theorem family, the assurance boundary</dd></div>
           <div class="kv"><dt>the gates</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md" style="text-decoration:underline;text-underline-offset:3px">scripts/GATES.md</a> — each gate’s command, scale, runtime, and pass criterion</dd></div>
           <div class="kv"><dt>the flagship</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/Blanc/Weth10FutureRedeemable.lean" style="text-decoration:underline;text-underline-offset:3px">Blanc/Weth10FutureRedeemable.lean</a> — read the statement, then its docstring’s scope notes</dd></div>
