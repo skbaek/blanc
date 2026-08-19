@@ -1104,3 +1104,31 @@ OK	2.119	Blanc/LidoCircuitBreakerPauseJoin.lean
 # `--rebase`, `--force` and cache seeding were not used, no run was refused
 # for contention, and this diff is additions-only.
 OK	1.647	Blanc/LidoCircuitBreakerPauseSettlement.lean
+
+# 2026-08-19. Stage 6's first pre-control cut added exactly two modules:
+# Blanc/TransientInvariance.lean, the contract-neutral `Devm.transientStorage`
+# invariance family the goal's amendment authorised, and
+# Blanc/LidoCircuitBreakerPreControl.lean, the cut's own proof owner. Each row
+# below is the per-file median of three separate, sequential, uncontended
+# `scripts/check-elab.sh --list --no-build` runs over all 133 files, with no
+# language server alive — the resident Lean tree was stopped before the first
+# run and none was started between them.
+#
+#   Blanc/LidoCircuitBreakerPreControl.lean   1.744 / 1.742 / 1.777
+#   Blanc/TransientInvariance.lean            1.299 / 1.270 / 1.318
+#
+# Run totals were 931.2 s, 923.8 s and 957.4 s. The candidate is blanc
+# fc0f97d93ca5c9e8df84ca032f05d8a056170a2a, and the measured sources digest
+# (SHA-256) to
+#   9aaa23a1139fb6c8600ab0db5953c467a141043fb5f5e1044efc3eb4c97d2220
+#     Blanc/LidoCircuitBreakerPreControl.lean
+#   e916daa89845b46a017f6c0d7cbd24aab15ff0b56f6b8222777f0585da7fcb74
+#     Blanc/TransientInvariance.lean
+#
+# The three runs bracket each row tightly (spread 0.035 s and 0.048 s), so the
+# median is not carrying host noise. `--rebase`, `--force` and cache seeding
+# were not used, no run was refused for contention, and this diff is
+# additions-only: every pre-existing reference row above remains byte-for-byte
+# unchanged.
+OK	1.299	Blanc/TransientInvariance.lean
+OK	1.744	Blanc/LidoCircuitBreakerPreControl.lean
