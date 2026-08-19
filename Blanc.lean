@@ -41,6 +41,7 @@ import Blanc.LidoCircuitBreakerPauseOkRoute
 import Blanc.LidoCircuitBreakerPauseJoin
 import Blanc.LidoCircuitBreakerPauseSettlement
 import Blanc.LidoCircuitBreakerPreControl
+import Blanc.LidoCircuitBreakerCallBoundary
 import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.Weth10Core
