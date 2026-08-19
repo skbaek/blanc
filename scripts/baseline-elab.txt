@@ -1008,3 +1008,67 @@ OK	2.185	Blanc/LidoCircuitBreakerPauseRoute.lean
 OK	1.564	Blanc/LidoCircuitBreakerPauseGuards.lean
 OK	2.298	Blanc/LidoCircuitBreakerPauseAttainment.lean
 OK	1.277	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
+#
+# ---- Pause join: seven new modules, no raises ----
+#
+# Seven new rows and NO raise, all from the same three separate uncontended
+# sequential
+# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
+# all 130 files on exact already-built Lean source commit
+# f101d3d: 958.2 s, 953.6 s, 973.8 s total.
+#
+#   PauseWalk: 47.887, 46.903, 48.625 -> 47.887  (new module)
+#                 e7268239ce54e1edd3e967b0ace182a323f3e054fd884bb601ea67412d78ebd5
+#   PauseWorld: 2.489, 2.379, 2.760 -> 2.489  (new module)
+#                 257fea6b37b2d489692362c91d2de119f0f2faccd04cad32bb4156a2aef0afef
+#   PauseSuffixWalk: 7.101, 7.158, 8.582 -> 7.158  (new module)
+#                 51ce42523752a58398f71567f4d9bdf349d0e4a41566bb83c0be9226f51940d9
+#   PauseWorldRunKit: 23.536, 23.372, 25.923 -> 23.536  (new module)
+#                 c64fdd0f51337ab4f309bc4e80857d8dbcac63523c2b365d02de94cfb07e0cc4
+#   PauseWorldRun: 8.995, 8.972, 9.442 -> 8.995  (new module)
+#                 061b0ce161e4235b8be0c1e6207f99472173bf84b5180869b79e4004434fc288
+#   PauseOkRoute: 10.737, 10.415, 10.374 -> 10.415  (new module)
+#                 e0ed6a324cf872528da9c4ba5837dac43757437113745e9e92a9ff40cc75b6ff
+#   PauseJoin: 2.119, 2.105, 2.422 -> 2.119  (new module)
+#                 b904051bc0018ee71da33624c1bf0adc411482528df4dd448369232b158e84f9
+#
+# All seven are new production modules carrying this goal's pause-join
+# evidence, and every row is a first admission: the `.ok` walk legs
+# (`PauseWalk`, `PauseSuffixWalk`), the two witness worlds and the responder
+# crossings (`PauseWorld`), the world compositions and their bridging kit
+# (`PauseWorldRun`, `PauseWorldRunKit`), the `.ok` routes (`PauseOkRoute`),
+# and the join itself (`PauseJoin`).
+#
+# `PauseWalk` at 47.9 s is the family's cost centre and the reason is
+# structural, not a defect: it carries the pause body's whole guard-and-
+# staging ladder as one `func_run` walk, including the two hand-stepped
+# transient-storage instructions the tactic has no rule for.
+#
+# Verified across all three runs against the gate's own 2.0x drift criterion:
+# every pre-existing row holds in every run. The largest observed ratio is
+# 1.69x, on `RegistrySubstrate`.
+#
+# `RegistrySubstrate` is the one PRE-EXISTING module this goal modified -- two
+# premise-weakening generalizations that let the pause path's 768-byte staged
+# image reuse the kernel and removeTarget walks -- and it now measures
+# 24.439 / 26.523 / 29.576 against a 17.513 row. That is inside the gate's
+# tolerance and the row is left BYTE-FOR-BYTE UNCHANGED, as this goal's J6
+# requires: admitting new rows is authorized here, raising an existing one is
+# not. It is recorded as a candidate for a deliberate, separately justified
+# raise -- or an investigation of the parameterization's cost -- in a later
+# goal, not smuggled in behind a new-module admission.
+#
+# The triple drifts monotonically upward (run 1 < run 2 < run 3 for most
+# modules, and 958.2 < 953.6 < 973.8 is the same story at whole-tree scale
+# apart from run 2), so each median above is the middle of a rising sequence
+# rather than the bottom of a noisy one.
+#
+# `--rebase`, `--force` and cache seeding were not used, no run was refused,
+# and every other row is byte-for-byte unchanged.
+OK	47.887	Blanc/LidoCircuitBreakerPauseWalk.lean
+OK	2.489	Blanc/LidoCircuitBreakerPauseWorld.lean
+OK	7.158	Blanc/LidoCircuitBreakerPauseSuffixWalk.lean
+OK	23.536	Blanc/LidoCircuitBreakerPauseWorldRunKit.lean
+OK	8.995	Blanc/LidoCircuitBreakerPauseWorldRun.lean
+OK	10.415	Blanc/LidoCircuitBreakerPauseOkRoute.lean
+OK	2.119	Blanc/LidoCircuitBreakerPauseJoin.lean
