@@ -46,6 +46,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | a WETH10 flagship statement | `scripts/check-claims.sh` | `scripts/check.sh --no-build` |
 | a protected Lido artifact statement or canary | `scripts/check-claims.sh` | `scripts/check.sh --no-build` |
 | anything that could move elaboration cost | `scripts/check-elab.sh` | — |
+| a new module that must state its elaboration cost | `scripts/check-elab.sh --calibrate` | — |
 | the elaboration selector, cache contract, or timing-gate implementation | `scripts/check-elab.sh --self-test` | `scripts/check-elab.sh --full` |
 | a contract's compiled bytes | `scripts/check-fmint.sh --no-build` + `scripts/check-weth.sh --no-build` | both `scripts/check-*-coverage.sh` |
 | a fixture, a fixture generator, or a borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
@@ -143,7 +144,7 @@ against the gate.
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 988 bytes | sub-second |
 | `scripts/check-fmint-coverage.sh` | selector reachability split into direct top-level entry, post-state-witnessed internal CALL, and uncredited embedding; five built-in callsite corruptions prove the evidence channel is live | 12 selectors: 2 direct + 7 witnessed internal, budget 3 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
-| `scripts/check-elab.sh --self-test` | fail-closed elaboration-selection behavior: cache-cold full selection, unchanged-tree reuse, exact leaf/upstream/import-edge propagation, global configuration invalidation, new/deleted modules, corrupt-cache fallback, failed-result non-persistence, independent-green-result retention, concurrent-source-drift rejection, stable/changed/missing Lake trace evidence, and missing/cyclic local-import rejection | 17 invalidation/cache controls | sub-second |
+| `scripts/check-elab.sh --self-test` | fail-closed elaboration-selection behavior: cache-cold full selection, unchanged-tree reuse, exact leaf/upstream/import-edge propagation, global configuration invalidation, new/deleted modules, corrupt-cache fallback, failed-result non-persistence, independent-green-result retention, concurrent-source-drift rejection, stable/changed/missing Lake trace evidence, and missing/cyclic local-import rejection; and the calibration sampler: commit-seeded reproducible order-independent draw, per-band quotas drawn from inside their own boundaries, under-populated bands, band membership recomputed from the current baseline, at-most-one displacement when the library grows, mandatory candidates never sampled, possibly-affected and vanished files never drawn, withheld controls still drawn while changed ones stop being drawn, the refuse/annotate/floor tiers, fail-closed rejection of a control or admission candidate that was not re-measured, refusal of a cache write from a calibration run, and an end-to-end verdict whose evidence block records the seed, digests, boundaries and every ratio | 39 invalidation/cache/sampling controls | sub-second |
 | `lake build` | integration elaboration, including the audited compile witnesses, production Lido runtime/constructor artifact family, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, and committed holder-flow conservation | 1052 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
 | `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set; the common rows include the direct spawned-code-address and source-chronology theorems, and the Lido rows include the universal runtime compile equation, source inventories, cycle canary/mutant, Registry mutation bridges, arbitrary-finite enumeration, coherent views, and local raw/error/committed observability boundaries | 439 theorems | ~4 s |
 | `scripts/check-claims.sh` | Lean-checked exact statement pins for the common direct spawned-code-address and source-chronology theorems, WETH10 flagships, and the Lido artifact, projection, Registry mutation, arbitrary-finite enumeration, coherent-view, and local raw/settled observability boundaries | 237 definitions/statements and constructors | ~2 s |
@@ -207,7 +208,7 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/selector_coverage.py` | both coverage gates | conservatively recognizes straight-line internal CALL sites tied to changed post-state recorder slots, inventories uncredited selector embeddings, and runs five corruption falsifiers |
 | `scripts/check-fmint-coverage.py` | `check-fmint-coverage.sh` | accounts for direct, witnessed-internal, embedded-only, and unreached selectors; identifies fmint by byte-equality against the committed literal |
 | `scripts/check-weth-coverage.py` | `check-weth-coverage.sh` | the same accounting for WETH, plus the direct empty-calldata fallback |
-| `scripts/check-elab-selection.py` | `check-elab.sh` | discovers all local Lean modules, parses the local import graph fail-closed, combines each module's recursive local-source fingerprint with Lake's transitive artifact `depHash`, selects only cache-invalid modules, atomically records non-drifting measurements after revalidating the tree while leaving any violating files invalid, and owns the 17 fast invalidation/cache controls |
+| `scripts/check-elab-selection.py` | `check-elab.sh` | discovers all local Lean modules, parses the local import graph fail-closed, combines each module's recursive local-source fingerprint with Lake's transitive artifact `depHash`, selects only cache-invalid modules, atomically records non-drifting measurements after revalidating the tree while leaving any violating files invalid, draws and adjudicates the commit-seeded stratified calibration sample, and owns the 39 fast invalidation/cache/sampling controls. It refuses to advance the cache from a calibration run, because that cache is what decides which modules the draw may treat as unaffected |
 | `scripts/gate-lock.sh` | `check-elab.sh` | exclusive gate locking; sourced, never run |
 
 ### Registry RI7 assurance ownership
@@ -268,6 +269,29 @@ row or bounded row refresh when it names the owner class, rationale,
 measurement procedure, and preservation rule for unrelated rows; the lead then
 performs and reports that admission as ordinary goal work. This does not
 authorize an unexplained regression, an unmeasured value, or broad rebasing.
+`check-elab.sh --calibrate` is the measurement command for such an
+admission. It measures every module with no committed row — those are the
+measurement, and are never sampled — together with a stratified random sample
+of modules the fingerprint proves the change cannot have affected, drawn with a
+seed derived from the candidate commit. Those drawn modules are controls on the
+host, not on the code: an undrawn file is not a coverage gap, because the
+fingerprint has already established it cannot have moved. A control at or above
+the same `2.0x` and `+1.0s` threshold the rows are held to **refuses** the run,
+naming the control and its ratio, so an admission cannot be taken on a host that
+far out; at or above `1.5x` it is annotated and the run passes. The seed, the
+band boundaries, the drawn set and every control's ratio are written to
+`scripts/report-elab-calibration.txt` in the form the baseline comment expects,
+so a reviewer can recompute the draw from the commit and check it was not
+gamed. There is deliberately no seed flag, and `--force` is refused as it is
+for `--rebase`. A calibration run also writes **nothing** to the local
+measurement cache: the draw is a function of which modules that cache says are
+unaffected, so a run that updated it would make the module it just measured
+drawable next time, and the runs of a measurement triple would stop agreeing on
+what they measured. Re-running at the same commit therefore draws the same
+controls, and a refusal cannot be retried away. The mode does not write to
+`scripts/baseline-elab.txt` either; the row and its provenance comment are still
+appended deliberately, additions-only.
+
 `check-elab.sh --rebase` exists
 for deliberate, reported re-baselining and refuses to run against a tree that
 failed to elaborate; it is never the way to make a red gate green. `--rebase`
@@ -373,4 +397,6 @@ worker that has been opening files. A `--force` run may not be rebased.
    after an ordinary proof edit merely for reassurance: the selector already
    includes the exact downstream local import closure. Use `--full` only for
    the special cases named above, and run `--self-test` when changing selection
-   or cache behavior.
+   or cache behavior. To admit a new module's row, use `--calibrate` rather
+   than a whole-tree run: the fingerprint, not the breadth of the measurement,
+   is what establishes that the rest of the tree did not move.

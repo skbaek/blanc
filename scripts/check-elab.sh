@@ -19,8 +19,8 @@
 # measured at all before this script.
 #
 # Usage:
-#   scripts/check-elab.sh [--full] [--rebase] [--list] [--no-build] [--force]
-#                         [--self-test]
+#   scripts/check-elab.sh [--full] [--rebase] [--list] [--calibrate]
+#                         [--no-build] [--force] [--self-test]
 #                         [--report <path>]
 #
 #   --full        measure every source file and refresh the local cache. Use for
@@ -31,6 +31,11 @@
 #                 only ever record a green tree. Implies --full.
 #   --list        measure and print, compare nothing, write no baseline. Use
 #                 when investigating rather than gating. Implies --full.
+#   --calibrate   measure every module that has no committed row, plus a seeded
+#                 stratified sample of modules this change provably cannot have
+#                 affected, and hold that sample to the same threshold the rows
+#                 are held to. This is the sampled alternative to a whole-tree
+#                 run when admitting a new row; see TWO JOBS below.
 #   --no-build    skip the `lake build` precondition. Permitted only when the
 #                 tree and every discovered module trace are already built at
 #                 this exact source revision;
@@ -73,6 +78,60 @@
 # refused. --force overrides for a deliberate investigation; a --force run may
 # not be rebased.
 #
+# TWO JOBS: WHY A SAMPLE IS ENOUGH TO ADMIT A ROW
+#
+# This gate does two things that look like one, and separating them is what
+# makes --calibrate sound rather than a cost-cutting compromise.
+#
+# The first job is REGRESSION DETECTION, and it is already exact and already
+# selective. The fingerprint above decides which modules *can* have moved: a
+# module whose own source, transitive repository-local import closure, shared
+# Lean/Lake configuration and Lake-recorded imported artifacts are all unchanged
+# has not moved, and re-measuring it can only re-confirm that. This is a
+# provable claim about the code, not a sampling estimate.
+#
+# The second job is CALIBRATION. A new module's measured time is only evidence
+# if the host was behaving normally while it was taken. But that is a question
+# about the environment, not about any particular module, and a sample answers
+# it. Measuring every module in the tree to learn one fact about the machine
+# resolves that fact roughly twenty times more finely than needed: the
+# threshold being protected is 2.0x, a 100% shift, and a whole-tree run resolves
+# about 1.5% while a twelve-file sample resolves about 5%.
+#
+# So an undrawn file is NOT a coverage gap. The fingerprint has already
+# established it cannot have moved; the sample was never what protected it.
+# Conflating the two jobs is what made a whole-tree pass look mandatory, and it
+# cost about 950s per run — roughly 46 minutes for the three-run median that
+# admitting a single row requires — to buy precision on a quantity where nothing
+# changes until you are 100% out.
+#
+# The sample is drawn pseudo-randomly with the seed derived from the candidate
+# commit. Random with respect to the portfolio, so it ages as the library grows
+# and carries no design-time cherry-picking; deterministic, so a reviewer can
+# recompute the same draw from the same commit and check it was not gamed; and
+# impossible to re-roll without changing what is being measured, which is the
+# only real objection to per-run randomisation. It is stratified by baseline
+# cost because cost is heavily skewed — the ten most expensive modules are
+# nearly half the tree — so a uniform draw would almost never reach the tail,
+# which is exactly where sustained throughput and thermal anomalies show.
+#
+# A calibration run measures, reports, and caches nothing. The draw is a
+# function of which modules this run believes are unaffected, and that belief
+# comes from the local cache; a run that wrote to it would move the ground under
+# its own successors, because the module it just measured would become
+# cache-valid and therefore drawable. The next run of the same measurement
+# triple would then draw a different sample, and a refusal could be retried away
+# without changing anything. So the cache is left exactly as the triple found
+# it, and the selector refuses a calibration run that tries to advance it.
+#
+# A drawn control is held to the row threshold below, and a control that
+# breaches it REFUSES the run. A host that far out is not an environment in
+# which a row may be admitted, and recording the number with a warning attached
+# would put a value in the baseline that later readers would treat as
+# comparable. Because the seed, the drawn set and every control's ratio are
+# recorded, a refusal is reproducible and cannot be waved away as an unlucky
+# draw.
+#
 # THRESHOLD
 #
 # A file fails when its time exceeds both 2x its baseline and its baseline plus
@@ -100,8 +159,10 @@
 # PROVENANCE is MEASURED or CACHED. The committed baseline retains its original
 # three-column format. STATUS is OK or ERROR. A source file with no baseline row
 # is a configuration error, not an unmeasured file: that is what forces a newly
-# added module to state its cost. A baseline row whose file no longer exists is
-# reported as a warning, never a failure.
+# added module to state its cost. Under --calibrate that same file is the
+# admission candidate rather than a violation — measuring it is the point of the
+# run. A baseline row whose file no longer exists is reported as a warning,
+# never a failure.
 
 set -u
 
@@ -139,6 +200,15 @@ DRIFT_FACTOR="2.0"
 DRIFT_FLOOR="1.0"
 IMPROVE_FACTOR="0.5"
 
+# A drawn control refuses the run at DRIFT_FACTOR and is annotated at this
+# softer factor. Both reuse DRIFT_FLOOR: the control carries the same factor and
+# the same absolute floor as a row, because without the floor the cheapest band
+# would refuse on ordinary scheduler noise — a half-second blip on a sub-second
+# file is a large ratio and no real change — and everyone would learn to route
+# around the mode. The one deliberate difference is the boundary itself: a row
+# fails above DRIFT_FACTOR, a control refuses at or above it.
+CALIBRATE_WARN_FACTOR="1.5"
+
 # Language-server contention thresholds, in MB of resident size. A server that
 # has opened no file sits near 40MB and cannot contend for anything; one holding
 # a mathlib environment sits near 900MB and is the case on record for driving
@@ -154,6 +224,12 @@ NO_BUILD=0
 FORCE=0
 FULL=0
 SELF_TEST=0
+CALIBRATE=0
+CANDIDATE_COMMIT=""
+CAL_RC=0
+CANDIDATE_NOTES=""
+CONTROLS=""
+CANDIDATES=""
 FULL_REASON="explicit --full"
 
 while [ $# -gt 0 ]; do
@@ -161,6 +237,7 @@ while [ $# -gt 0 ]; do
     --full)     FULL=1; shift ;;
     --rebase)   REBASE=1; shift ;;
     --list)     LIST_ONLY=1; shift ;;
+    --calibrate) CALIBRATE=1; shift ;;
     --no-build) NO_BUILD=1; shift ;;
     --force)    FORCE=1; shift ;;
     --self-test) SELF_TEST=1; shift ;;
@@ -171,7 +248,7 @@ while [ $# -gt 0 ]; do
       fi
       REPORT="$2"; shift 2 ;;
     *)
-      echo "usage: scripts/check-elab.sh [--full] [--rebase] [--list] [--no-build] [--force] [--self-test] [--report <path>]" >&2
+      echo "usage: scripts/check-elab.sh [--full] [--rebase] [--list] [--calibrate] [--no-build] [--force] [--self-test] [--report <path>]" >&2
       exit 2 ;;
   esac
 done
@@ -184,10 +261,19 @@ if [ "$REBASE" -eq 1 ] && [ "$FORCE" -eq 1 ]; then
   echo "usage error: --force may not be combined with --rebase; a contended run must never become the committed reference" >&2
   exit 2
 fi
+if [ "$CALIBRATE" -eq 1 ] \
+    && { [ "$FULL" -eq 1 ] || [ "$REBASE" -eq 1 ] || [ "$LIST_ONLY" -eq 1 ]; }; then
+  echo "usage error: --calibrate is the sampled alternative to a whole-tree run and may not be combined with --full, --rebase or --list" >&2
+  exit 2
+fi
+if [ "$CALIBRATE" -eq 1 ] && [ "$FORCE" -eq 1 ]; then
+  echo "usage error: --force may not be combined with --calibrate; a calibration run's numbers are pasted into the baseline as a new row, so a contended measurement must never become the committed reference" >&2
+  exit 2
+fi
 
 if [ "$SELF_TEST" -eq 1 ]; then
   if [ "$REBASE" -eq 1 ] || [ "$LIST_ONLY" -eq 1 ] || [ "$NO_BUILD" -eq 1 ] \
-      || [ "$FORCE" -eq 1 ] || [ "$FULL" -eq 1 ]; then
+      || [ "$FORCE" -eq 1 ] || [ "$FULL" -eq 1 ] || [ "$CALIBRATE" -eq 1 ]; then
     echo "usage error: --self-test must be used alone (apart from --report)" >&2
     exit 2
   fi
@@ -207,6 +293,22 @@ cd "$ROOT" || exit 2
 if [ ! -d "$SRC_DIR" ]; then
   echo "REGRESSION — elab: source tree not found: $ROOT/$SRC_DIR"
   exit 2
+fi
+
+# The draw's seed comes from the candidate commit and from nothing else: there
+# is deliberately no --seed, because a re-rollable seed would let a run that
+# refused be retried until it passed.
+if [ "$CALIBRATE" -eq 1 ]; then
+  if ! CANDIDATE_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"; then
+    echo "SETUP — elab: --calibrate seeds its draw from the candidate commit, and this tree has no resolvable HEAD"
+    echo "REGRESSION — elab: calibration precondition failed"
+    exit 2
+  fi
+  if [ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null)" ]; then
+    echo "NOTE — elab: working tree differs from the seeding commit $CANDIDATE_COMMIT;"
+    echo "NOTE — elab: the draw is still reproducible from that commit, but record the"
+    echo "NOTE — elab: measured source digests alongside it."
+  fi
 fi
 
 # --- concurrency guard ------------------------------------------------------
@@ -263,7 +365,14 @@ PLANFILE="$(mktemp)"
 MEASUREDFILE="$(mktemp)"
 : > "$MEASUREDFILE"
 
-if [ "$FULL" -eq 1 ]; then
+if [ "$CALIBRATE" -eq 1 ]; then
+  if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
+      --plan "$PLANFILE" --environment-id "$LEAN_ID" \
+      --baseline "$BASELINE" --commit "$CANDIDATE_COMMIT"; then
+    echo "REGRESSION — elab: could not construct a safe selection plan"
+    exit 2
+  fi
+elif [ "$FULL" -eq 1 ]; then
   if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
       --plan "$PLANFILE" --environment-id "$LEAN_ID" --full \
       --full-reason "$FULL_REASON"; then
@@ -283,6 +392,26 @@ AFFECTED="$(python3 "$SELECTOR" files --plan "$PLANFILE" --affected)" || exit 2
 NFILES="$(printf '%s\n' "$FILES" | grep -c .)"
 NMEASURE="$(printf '%s\n' "$AFFECTED" | grep -c .)"
 NSKIP=$((NFILES - NMEASURE))
+
+NCONTROL=0
+NCANDIDATE=0
+if [ "$CALIBRATE" -eq 1 ]; then
+  CONTROLS="$(python3 "$SELECTOR" files --plan "$PLANFILE" --controls)" || exit 2
+  CANDIDATES="$(python3 "$SELECTOR" files --plan "$PLANFILE" --candidates)" || exit 2
+  NCONTROL="$(printf '%s\n' "$CONTROLS" | grep -c .)"
+  NCANDIDATE="$(printf '%s\n' "$CANDIDATES" | grep -c .)"
+  CONTROLS="$(printf '%s' "$CONTROLS" | tr '\n' ' ')"
+  CANDIDATES="$(printf '%s' "$CANDIDATES" | tr '\n' ' ')"
+fi
+
+# Whole-word membership in a space-delimited list; paths never contain spaces
+# here, which the file loops below already assume.
+in_list() {
+  case " $2 " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 # --- contention guard -------------------------------------------------------
 # Cached files perform no timing work, so a no-op incremental run need not
@@ -345,6 +474,9 @@ NERR="$(printf '%s' "$RESULTS" | awk -F'\t' '$1=="ERROR"' | grep -c .)"
 
 echo "---"
 echo "elab: $NMEASURE measured, $NSKIP provably unaffected, $TOTAL s measured; report: ${REPORT#$ROOT/}"
+if [ "$CALIBRATE" -eq 1 ]; then
+  echo "elab: of those, $NCANDIDATE mandatory (no committed row) and $NCONTROL drawn control(s)"
+fi
 
 cache_results() {
   local EXCLUSIONS="${1:-}"
@@ -366,6 +498,17 @@ cache_results() {
     fi
   fi
   return 0
+}
+
+# A calibration run must leave the cache exactly as it found it; see the note on
+# recording nothing in TWO JOBS above. The selector refuses such a write anyway,
+# so this guard keeps the refusal from turning a green run red.
+maybe_cache_results() {
+  if [ "$CALIBRATE" -eq 1 ]; then
+    echo "NOTE — elab: calibration run — nothing was written to the local measurement cache"
+    return 0
+  fi
+  cache_results "${1:-}"
 }
 
 # --- list mode --------------------------------------------------------------
@@ -429,8 +572,24 @@ for f in $FILES; do
     continue
   fi
 
+  # A drawn control is adjudicated below as a control, not here as a row: the
+  # calibration rule names it and says by how much it moved, which is what lets
+  # the operator tell a bad host from a genuine tree-wide regression.
+  if [ "$CALIBRATE" -eq 1 ] && in_list "$f" "$CONTROLS"; then
+    continue
+  fi
+
   BASE_ROW="$(printf '%s' "$BASE_ROWS" | awk -F'\t' -v p="$f" '$3==p {print; exit}')"
   if [ -z "$BASE_ROW" ]; then
+    if [ "$CALIBRATE" -eq 1 ] && in_list "$f" "$CANDIDATES"; then
+      # Measuring this file is the point of the run, so a missing row is
+      # expected here rather than a violation. It stays uncached like every
+      # other measurement this mode takes, so each run of a measurement triple
+      # re-measures it instead of reading back the first run's number.
+      CANDIDATE_NOTES="${CANDIDATE_NOTES}CANDIDATE — elab: $f: ${CUR_TIME}s (no committed row yet)
+"
+      continue
+    fi
     printf '%s\n' "$f" >> "$EXCLUDEFILE"
     VIOLATIONS="${VIOLATIONS}ELAB — no baseline row (new module must state its cost): $f
 "
@@ -468,18 +627,65 @@ printf '%s\n' "$BASE_ROWS" | while IFS= read -r row; do
   [ -f "$ROOT/$p" ] || echo "WARNING — elab: stale baseline row, file no longer in source: $p"
 done
 
+# --- calibration verdict ----------------------------------------------------
+# Runs before the violation block so the evidence and any REFUSED line are
+# printed above the verdict, and so a coexisting row violation can say that a
+# control breached too rather than silently attributing the failure to rows.
+if [ "$CALIBRATE" -eq 1 ]; then
+  CALBLOCK="${REPORT%.txt}-calibration.txt"
+  if python3 "$SELECTOR" calibrate-verdict --plan "$PLANFILE" --report "$REPORT" \
+      --baseline "$BASELINE" --fail-factor "$DRIFT_FACTOR" \
+      --warn-factor "$CALIBRATE_WARN_FACTOR" --floor "$DRIFT_FLOOR" \
+      --block-out "$CALBLOCK"; then
+    CAL_RC=0
+  else
+    CAL_RC=$?
+  fi
+  if [ "$CAL_RC" -gt 1 ]; then
+    echo "REGRESSION — elab: calibration verdict could not be computed"
+    exit 2
+  fi
+  echo "NOTE — elab: calibration evidence written to ${CALBLOCK#$ROOT/}"
+  if [ "$NCONTROL" -eq 0 ]; then
+    echo "NOTE — elab: no control was drawn — every module carrying a baseline row"
+    echo "NOTE — elab: was measured by this run, so the run is its own control"
+  fi
+fi
+
 [ -n "$NOTES" ] && printf '%s' "$NOTES"
+[ -n "$CANDIDATE_NOTES" ] && printf '%s' "$CANDIDATE_NOTES"
 
 if [ -n "$VIOLATIONS" ]; then
   printf '%s' "$VIOLATIONS"
   NVIO="$(printf '%s' "$VIOLATIONS" | grep -c .)"
   BASE_TOTAL="$(printf '%s' "$BASE_ROWS" | awk -F'\t' 'NF{s+=$2} END {printf "%.1f", s}')"
-  cache_results "$EXCLUDEFILE" || exit 2
-  echo "REGRESSION — elab: $NVIO file(s) slower than ${DRIFT_FACTOR}x baseline (or newly failing); $NMEASURE measured in $TOTAL s, $NSKIP provably unaffected; $BASE_TOTAL s full baseline"
+  maybe_cache_results "$EXCLUDEFILE" || exit 2
+  CAL_SUFFIX=""
+  if [ "$CALIBRATE" -eq 1 ] && [ "$CAL_RC" -eq 1 ]; then
+    CAL_SUFFIX="; a drawn control also breached ${DRIFT_FACTOR}x, so this host is additionally unfit to admit a row"
+  fi
+  echo "REGRESSION — elab: $NVIO file(s) slower than ${DRIFT_FACTOR}x baseline (or newly failing); $NMEASURE measured in $TOTAL s, $NSKIP provably unaffected; $BASE_TOTAL s full baseline$CAL_SUFFIX"
   exit 1
 fi
 
 BASE_TOTAL="$(printf '%s' "$BASE_ROWS" | awk -F'\t' 'NF{s+=$2} END {printf "%.1f", s}')"
-cache_results || exit 2
+
+if [ "$CALIBRATE" -eq 1 ] && [ "$CAL_RC" -eq 1 ]; then
+  maybe_cache_results "$EXCLUDEFILE" || exit 2
+  echo "REGRESSION — elab: a drawn control is at or above ${DRIFT_FACTOR}x its baseline (named above); this host is not an environment in which a row may be admitted"
+  exit 1
+fi
+
+maybe_cache_results "$EXCLUDEFILE" || exit 2
+
+if [ "$CALIBRATE" -eq 1 ]; then
+  if [ "$NCONTROL" -eq 0 ]; then
+    echo "OK — elab calibration: $NCANDIDATE mandatory row(s) measured; no control was drawn because every module carrying a baseline row was measured and compared outright; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
+  else
+    echo "OK — elab calibration: $NCANDIDATE mandatory row(s) measured, $NCONTROL drawn control(s) below ${DRIFT_FACTOR}x; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
+  fi
+  exit 0
+fi
+
 echo "OK — elab: $NMEASURE measured, $NSKIP provably unaffected; all $NFILES file(s) within ${DRIFT_FACTOR}x baseline; $TOTAL s measured vs $BASE_TOTAL s full baseline"
 exit 0
