@@ -1251,11 +1251,13 @@ def calibration_verdict(
 ) -> dict[str, Any]:
     """Adjudicate the drawn controls against their committed baseline rows.
 
-    A control is held to the same rule the gate enforces on the rows
-    themselves: the factor *and* the absolute floor. Dropping the floor would
-    make the smallest band refuse on ordinary scheduler noise — a half-second
-    blip on a sub-second file is a large ratio and no real change — and a gate
-    that refuses on noise is a gate everyone learns to bypass.
+    A control carries the same factor and the same absolute floor as a row.
+    Dropping the floor would make the cheapest band refuse on ordinary
+    scheduler noise — a half-second blip on a sub-second file is a large ratio
+    and no real change — and a gate that refuses on noise is a gate everyone
+    learns to bypass. The one deliberate difference from the row rule is the
+    boundary itself: a row fails *above* the factor, a control refuses *at or
+    above* it, so a control is never the more permissive of the two.
     """
     calibration = plan.get("calibration")
     if not calibration:
