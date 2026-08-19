@@ -1059,13 +1059,42 @@
           Foundry’s, Echidna, Medusa — are valuable, cheap, and not in the business of
           machine-checked functional specification; they complement everything above rather than
           competing with it. Early-stage entrants (powdr’s Yul compiler work, small verified-WETH
-          exercises) are noted here rather than rowed. And one honest note from outside the EVM:
-          the one ecosystem where revert-freedom is checked routinely, by default, at framework
-          scale is the Move Prover’s <span class="mono">aborts_if</span> discipline — a different
-          VM, and a standing reminder of how much ground this field, Blanc included, has left to
-          cover.
+          exercises) are noted here rather than rowed. And the first of two notes from outside
+          the EVM: the one ecosystem where revert-freedom is checked routinely, by default, at
+          framework scale is the Move Prover’s <span class="mono">aborts_if</span> discipline — a
+          different VM, and a standing reminder of how much ground this field, Blanc included, has
+          left to cover. The second note is below, and it is the more uncomfortable one.
         </p>
       </div>
+    </div>
+
+    <div class="disclaim" style="margin-top:30px">
+      <span class="tick">the ceiling, and where it was already cleared</span>
+      <p style="margin-bottom:12px">Impose three asks at once — <b>verify the deployed
+      bytecode</b>, so no compiler is trusted; <b>emit a proof someone else can check</b>, so no
+      solver is trusted; and <b>state a real contract property</b>, not a semantics and not a
+      refinement — and the EVM literature thins out fast. Read on 2026-08-19, nothing on this
+      table clears all three much past a wrapper’s solvency. The near misses deserve naming
+      precisely, because they are near: Runtime Verification’s eth2 deposit contract and
+      MakerDAO <span class="mono">vat</span> proofs are genuinely bytecode-level and reach well
+      past any wrapper, and Certora’s production record reaches further still. All of them drop
+      the second ask and leave no artifact a third party can re-check. The complexity is
+      available; the checkable proof of it is not.</p>
+      <p>Off the EVM it has already been done, and above a wrapper. Nomadic Labs verified Tezos’
+      Liquidity Baking CPMM in Coq by way of Mi-Cho-Coq — at the level of the contract’s
+      Michelson, with a kernel-checkable proof, establishing that the market-maker invariant is
+      strictly increasing and that all three contract balances stay strictly positive, for a
+      contract live on mainnet at protocol level. That is a solvency-class property on an
+      automated market maker, and it clears every ask above. Why it was reachable there is this
+      section’s whole point: on Tezos the deployed artifact <em>is</em> Michelson — typed,
+      structured control flow, no computed jump targets — so the distance between the code on
+      chain and the vocabulary a property is written in is short by construction. On the EVM that
+      distance is the entire problem, and every project in the table above is a different way of
+      paying it. Blanc’s answer is to refuse to emit code that opens the gap rather than to close
+      it after the fact — which makes the Tezos result an existence proof that this family works
+      once the gap is shut, and somebody else’s result rather than evidence for this one. Both
+      stacks still trust their own semantics, Mi-Cho-Coq’s Michelson model and Jaune’s EVM
+      model alike: the assumption neither ask removes, only relocates.</p>
     </div>
 
     <p class="note" style="margin-top:26px">
