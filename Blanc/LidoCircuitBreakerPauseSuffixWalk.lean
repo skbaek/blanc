@@ -16,10 +16,13 @@ and from `pauseSuccess` to `Func.stop`.
 The factoring at the `pauseSuccess` boundary is load-bearing: the join theorem
 applies `pauseSuccess_expiryWrite_dichotomy` to the sub-walk entered there, so
 the two legs are separate lemmas composable at exactly that point.  The
-`pauseAfterSet` leg hands its continuation an *arbitrary* state pinned by
-projection facts — the crossing lemmas expose their post-states existentially,
-so the boundary state has no closed term — and the `pauseSuccess` legs are
-stated over an arbitrary `base` so the join can enter them at that state.
+`pauseAfterSet` leg **exports its boundary state existentially** — the
+crossing lemmas expose their post-states existentially, so the boundary state
+has no closed term, and its projection facts pin it only up to
+membership-extensionality of its accessed sets — together with a closure
+extending any continuation walk from that state to the full walk; the
+`pauseSuccess` legs are stated over an arbitrary `base` so a composition can
+enter them at exactly the exported state.
 
 Costs follow the register-side conventions: fixed charges are exact numerals,
 warmth-dependent charges are hypothesis-supplied numerals
@@ -996,11 +999,21 @@ set_option maxHeartbeats 3200000 in
 flavour: through the target-code guard (charge hypothesis-supplied, warmth
 being a frame fact), the `pauseFor(uint256)` `CALL` and the `isPaused()`
 `STATICCALL` — both crossing the responder callee, each costing exactly
-`117 = gasWarmAccess + 17` — and the decode.  The continuation is entered at
-the exact boundary state, which exists only behind the crossings'
-existentials, so it is universally quantified and pinned by projection facts:
-machine fields, result fields, meta-set memberships, and the state as the
-double zero-value `subBal`/`addBal` chain.
+`117 = gasWarmAccess + 17` — and the decode.
+
+The boundary state exists only behind the crossings' existentials, so it is
+**exported existentially**: the consumer receives the actual `mid`, its
+projection facts — machine fields, result fields, meta-set memberships, and
+the state as the double zero-value `subBal`/`addBal` chain — and a closure
+extending any continuation walk from `mid` to the full `pauseAfterSet` walk.
+
+An earlier form of this leg instead fixed its final state `post` *before*
+universally quantifying the boundary state and demanded a continuation walk
+from every conforming `mid` to that one `post`.  That premise is
+unsatisfiable: the projection facts pin the boundary state's accessed sets
+only up to membership-extensionality, so distinct conforming states exist,
+and a deterministic continuation cannot reach one fixed final state from all
+of them.  No composition could apply the leg; this shape is the repair.
 
 Charge `427 + codeCost`: `27 + codeCost` for the guard, `41` for the `CALL`
 staging, `117` for the `CALL`, `44` to the `STATICCALL`, `117` for it, and
@@ -1008,7 +1021,7 @@ staging, `117` for the `CALL`, `44` to the `STATICCALL`, `117` for it, and
 theorem pauseAfterSet_toSuccess_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (target duration : B256) (M : Mem) (img : Bytes)
-    (codeCost Gb : Nat) (post : Devm)
+    (codeCost Gb : Nat)
     (hwf : Mem.Wf M)
     (hreads : Mem.Reads M img)
     (htarget : Bytes.toB256
@@ -1020,28 +1033,29 @@ theorem pauseAfterSet_toSuccess_runCompiled
     (hcalleeCode : base.getCode target.toAdr = calleeCode)
     (hdepth : sevm.depth ≠ 0)
     (hnp : sevm.benvStat.rules.isPrecomp target.toAdr = false)
-    (hbound : Gb + 359 < 2 ^ 256)
-    (hsuccess : ∀ mid : Devm,
-      mid.stack = [] →
-      mid.memory = pauseDecodedMemory M duration →
-      mid.gasLeft = Gb →
-      mid.error = base.error →
-      mid.output = base.output →
-      mid.returnData = (1 : B256).toBytes →
-      mid.logs = base.logs →
-      mid.refundCounter = base.refundCounter →
-      mid.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty →
-      mid.transientStorage = base.transientStorage →
-      (∀ k, k ∈ mid.accessedStorageKeys ↔ k ∈ base.accessedStorageKeys) →
+    (hbound : Gb + 359 < 2 ^ 256) :
+    ∃ mid : Devm,
+      mid.stack = [] ∧
+      mid.memory = pauseDecodedMemory M duration ∧
+      mid.gasLeft = Gb ∧
+      mid.error = base.error ∧
+      mid.output = base.output ∧
+      mid.returnData = (1 : B256).toBytes ∧
+      mid.logs = base.logs ∧
+      mid.refundCounter = base.refundCounter ∧
+      mid.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
+      mid.transientStorage = base.transientStorage ∧
+      (∀ k, k ∈ mid.accessedStorageKeys ↔ k ∈ base.accessedStorageKeys) ∧
       (∀ a, a ∈ mid.accessedAddresses ↔
-        (a = target.toAdr ∨ a ∈ base.accessedAddresses)) →
+        (a = target.toAdr ∨ a ∈ base.accessedAddresses)) ∧
       (∃ st₁ st₂ : State,
         base.state.subBal sevm.currentTarget 0 = some st₁ ∧
         (st₁.addBal target.toAdr 0).subBal sevm.currentTarget 0 = some st₂ ∧
-        mid.state = st₂.addBal target.toAdr 0) →
-      Func.RunCompiled fs sevm mid pauseSuccess post) :
-    Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M, Gb + 427 + codeCost⟩) pauseAfterSet post := by
+        mid.state = st₂.addBal target.toAdr 0) ∧
+      ∀ post : Devm,
+        Func.RunCompiled fs sevm mid pauseSuccess post →
+        Func.RunCompiled fs sevm
+          (base.setMach ⟨[], M, Gb + 427 + codeCost⟩) pauseAfterSet post := by
   have halign : M.size % 32 = 0 := by omega
   -- the staged images and their windows
   have hwf1 : Mem.Wf (M.write 256 pauseForSelector.toBytes) := hwf.write _ _
@@ -1303,6 +1317,10 @@ theorem pauseAfterSet_toSuccess_runCompiled
       some st₂ := by
     rw [← hstate1]
     exact hsub2
+  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb⟩,
+    rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
+    haskB, haaB, ⟨st₁, st₂, hsub1', hsub2', hstate2⟩, ?_⟩
+  intro post hwalk
   -- segment C: the decode, from the second crossing to the boundary
   have hC : Func.RunCompiled fs sevm
       (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 81⟩)
@@ -1323,12 +1341,8 @@ theorem pauseAfterSet_toSuccess_runCompiled
       norm_num [gVerylow]
     case h_arm =>
       have hg : Gb + 81 - 81 = Gb := by omega
-      rw [hg]
-      refine hsuccess _ rfl ?_ rfl herrB houtB hret2 hlogsB hrefundB hatdB
-        htransB haskB haaB ⟨st₁, st₂, hsub1', hsub2', hstate2⟩
-      show ((pauseDecodedMemory M duration).read 0 32).2 =
-        pauseDecodedMemory M duration
-      exact hdecodedMemory
+      rw [hg, show ((0 : B256) * 32).toNat = 0 from by decide, hdecodedMemory]
+      exact hwalk
   -- segment B: from the first crossing to the second
   have hB : Func.RunCompiled fs sevm
       (post1.setMach ⟨[1],
