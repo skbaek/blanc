@@ -73,6 +73,7 @@ scripts/check-lido-circuit-breaker-constructor.sh
 scripts/check-lido-circuit-breaker-runtime-errors.sh
 scripts/check-lido-circuit-breaker-registry.sh
 scripts/check-lido-circuit-breaker-enumeration.sh
+scripts/check-lido-circuit-breaker-access.sh
 scripts/check-execution-settlement.sh
 scripts/check-execution-occurrence.sh
 scripts/check-cycle-write-free.sh
