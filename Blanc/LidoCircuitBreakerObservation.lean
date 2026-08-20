@@ -236,18 +236,18 @@ theorem pauseObservation_arms {fs : List Func} {sevm : Sevm} {target : Adr}
     (boundary : PauseStatBoundary sevm target statPre statPost)
     (run : Func.RunCompiledTo fs sevm statPost
       (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> g)) ex) :
-    ∃ (child armPre : Devm) (rest : List B256),
+    ∃ (child armPre : Devm) (rest : List B256) (μ : Mem),
       statPost.stack = (if child.error.isSome then 0 else 1) :: rest ∧
       statPost.returnData = child.output ∧
       armPre.returnData = child.output ∧
-      armPre.memory = statPost.memory ∧
+      armPre.memory = μ.write 0 (child.output.take 32) ∧
       ((child.error.isSome = true ∧
           Func.RunCompiledTo fs sevm armPre (Func.call bubbleRevertSlot) ex) ∨
         (child.error.isSome = false ∧
           Func.RunCompiledTo fs sevm armPre g ex)) := by
   obtain ⟨parent, child, msg, xl, delegated, code, gasWord, childGas,
     -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -,
-    -, hrd, hstk⟩ := boundary
+    hsmem, hrd, hstk⟩ := boundary
   obtain ⟨mid, hn, hrest⟩ := runCompiledTo_next_inv run
   obtain ⟨hmidstk, hmidmem, hmidrd⟩ := iszero_stack_inv hn hstk
   rcases runCompiledTo_branch_inv hrest with
@@ -256,9 +256,9 @@ theorem pauseObservation_arms {fs : List Func} {sevm : Sevm} {target : Adr}
     have hw : ((if child.error.isSome then (0 : B256) else 1) =? 0) = 0 := by
       rw [hmidstk] at hmid0
       exact (List.cons.inj hmid0).1
-    refine ⟨child, armPre, parent.stack, hstk, hrd,
+    refine ⟨child, armPre, parent.stack, parent.memory, hstk, hrd,
       (hpop.returnData.symm.trans hmidrd).trans hrd,
-      (hpop.memory.symm.trans hmidmem), Or.inr ⟨?_, harm⟩⟩
+      ((hpop.memory.symm.trans hmidmem).trans hsmem), Or.inr ⟨?_, harm⟩⟩
     revert hw
     cases hc : child.error.isSome
     · intro; rfl
@@ -267,9 +267,9 @@ theorem pauseObservation_arms {fs : List Func} {sevm : Sevm} {target : Adr}
     have hw : ((if child.error.isSome then (0 : B256) else 1) =? 0) = w := by
       rw [hmidstk] at hmidw
       exact (List.cons.inj hmidw).1
-    refine ⟨child, armPre, parent.stack, hstk, hrd,
+    refine ⟨child, armPre, parent.stack, parent.memory, hstk, hrd,
       (hpop.returnData.symm.trans hmidrd).trans hrd,
-      (hpop.memory.symm.trans hmidmem), Or.inl ⟨?_, harm⟩⟩
+      ((hpop.memory.symm.trans hmidmem).trans hsmem), Or.inl ⟨?_, harm⟩⟩
     revert hw hne
     cases hc : child.error.isSome
     · intro hne hw; exact absurd (hw.symm.trans (by decide)) hne
@@ -303,7 +303,7 @@ theorem pauseObservation_failureArm_bubbles {fs : List Func} {sevm : Sevm}
       statPost.returnData = child.output ∧
       bubblePre.returnData = child.output ∧
       Func.RunCompiledTo fs sevm bubblePre Func.revReturnData ex := by
-  obtain ⟨child, armPre, rest, hstk, hrd, hard, -, harm⟩ :=
+  obtain ⟨child, armPre, rest, μ, hstk, hrd, hard, -, harm⟩ :=
     pauseObservation_arms boundary run
   rcases harm with ⟨herr, hcall⟩ | ⟨herr, -⟩
   · obtain ⟨bubblePre, hburn, hbody⟩ := runCompiledTo_call_inv h_bubble hcall
@@ -359,18 +359,18 @@ theorem pauseObservation_successArm_reachesDecode {fs : List Func}
     (run : Func.RunCompiledTo fs sevm statPost
       (Ninst.iszero :::
         ((Func.call bubbleRevertSlot) <?> decodePausedResult)) ex) :
-    ∃ child decodePre : Devm,
+    ∃ (child decodePre : Devm) (μ : Mem),
       child.error.isSome = false ∧
       decodePre.returnData = child.output ∧
-      decodePre.memory = statPost.memory ∧
+      decodePre.memory = μ.write 0 (child.output.take 32) ∧
       Func.RunCompiledTo fs sevm decodePre decodePausedResult ex := by
-  obtain ⟨child, armPre, rest, hstk, hrd, hard, hamem, harm⟩ :=
+  obtain ⟨child, armPre, rest, μ, hstk, hrd, hard, hamem, harm⟩ :=
     pauseObservation_arms boundary run
   rcases harm with ⟨herr, -⟩ | ⟨herr, hdec⟩
   · exfalso
     rw [hstk, herr] at h_ok
     exact absurd (Option.some.inj h_ok) (by decide)
-  · exact ⟨child, armPre, herr, hard, hamem, hdec⟩
+  · exact ⟨child, armPre, μ, herr, hard, hamem, hdec⟩
 
 /-! ## The decode
 
@@ -946,3 +946,319 @@ theorem pauseDecode_accepts_one_withTail {fs : List Func} {sevm : Sevm}
       List.take_left]
   rw [pausedAnswer, hslice]
   exact h_one
+
+/-! ## The join
+
+One theorem for everything downstream of the observation's edge: five of the
+seven outcomes, each with the condition that selects it and the payload it
+produces.  Outcome 2 — the `pauseFor` CALL's own failure — is the predecessor's
+`pauseCall_failureArm_payload`, and outcome 1 is the code guard below; together
+the seven are exhaustive.
+
+This is a classification of derivations that **reach a result**, not a claim
+that any arm is reached.  Both out-of-gas legs stay explicit disjuncts.  The
+conditions are `child.error.isSome` and functions of `child.output`, so which
+outcome a run lands in is settled by the target's behaviour alone — and nothing
+here says the target's behaviour is constrained, or that an accepted answer is
+true. -/
+
+/-- **The observation's five outcomes, joined.**
+
+Reading the disjuncts in order: the observation itself failed, and its own
+returndata is bubbled (outcome 3 — **the observation's**, not the `pauseFor`
+call's); the answer was shorter than a word (4); it was a full word of `0` (5);
+a full word that is neither `0` nor `1` (6); or the canonical `1`, which
+reaches `pauseSuccess` (7). -/
+theorem pauseObservation_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
+    {statPre statPost : Devm} {ex : Execution}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
+    (boundary : PauseStatBoundary sevm target statPre statPost)
+    (run : Func.RunCompiledTo fs sevm statPost
+      (Ninst.iszero :::
+        ((Func.call bubbleRevertSlot) <?> decodePausedResult)) ex) :
+    ∃ child : Devm,
+      statPost.returnData = child.output ∧
+      -- outcome 3: the observation failed; its own returndata is bubbled
+      ((child.error.isSome = true ∧
+          ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+            (∃ post, ex = .error (.revert, post) ∧
+              post.output =
+                child.output.take child.output.length.toB256.toNat))) ∨
+        -- outcome 4: fewer than 32 bytes; no word is read
+        (child.error.isSome = false ∧
+          Nat.toB256 child.output.length < (32 : B256) ∧
+          (∃ post, ex = .error (.revert, post) ∧ post.output = [])) ∨
+        -- outcome 5: a returned `false`
+        (child.error.isSome = false ∧
+          ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+          32 ≤ child.output.length ∧ pausedAnswer child.output = 0 ∧
+          ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+            (∃ post, ex = .error (.revert, post) ∧
+              post.output = customErrorData "PauseFailed"))) ∨
+        -- outcome 6: a non-canonical Boolean
+        (child.error.isSome = false ∧
+          ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+          32 ≤ child.output.length ∧ pausedAnswer child.output ≠ 0 ∧
+          pausedAnswer child.output ≠ 1 ∧
+          (∃ post, ex = .error (.revert, post) ∧ post.output = [])) ∨
+        -- outcome 7: the canonical `1`
+        (child.error.isSome = false ∧
+          ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+          32 ≤ child.output.length ∧ pausedAnswer child.output = 1 ∧
+          ∃ successPre : Devm,
+            Func.RunCompiledTo fs sevm successPre pauseSuccess ex)) := by
+  obtain ⟨child, armPre, rest, μ, hstk, hrd, hard, hamem, harm⟩ :=
+    pauseObservation_arms boundary run
+  refine ⟨child, hrd, ?_⟩
+  rcases harm with ⟨herr, hcall⟩ | ⟨herr, hdec⟩
+  · obtain ⟨bubblePre, hburn, hbody⟩ := runCompiledTo_call_inv h_bubble hcall
+    have hbrd : bubblePre.returnData = child.output :=
+      hburn.returnData.symm.trans hard
+    rcases Func.runCompiledTo_revReturnData_inv hbody with
+      h_oog | ⟨post, hpost, hout⟩
+    · exact Or.inl ⟨herr, Or.inl h_oog⟩
+    · exact Or.inl ⟨herr, Or.inr ⟨post, hpost, by rw [hout, hbrd]⟩⟩
+  · obtain ⟨armPre2, harm2⟩ := pauseDecode_arms hamem hard hdec
+    rcases harm2 with ⟨hs, hcall⟩ | ⟨hns, hlong, hzero, hcall⟩ |
+      ⟨hns, hlong, hne0, hne1, hcall⟩ | ⟨hns, hlong, hone, hsucc⟩
+    · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
+      exact Or.inr (Or.inl ⟨herr, hs, runCompiledTo_rev_inv hbody⟩)
+    · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_failed hcall
+      rw [show pauseFailedError =
+        Func.revSelector (customErrorData "PauseFailed")
+          (by simp [customErrorData, B256.length_toBytes]) from rfl] at hbody
+      exact Or.inr (Or.inr (Or.inl
+        ⟨herr, hns, hlong, hzero, runCompiledTo_revSelector_inv hbody⟩))
+    · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
+      exact Or.inr (Or.inr (Or.inr (Or.inl
+        ⟨herr, hns, hlong, hne0, hne1, runCompiledTo_rev_inv hbody⟩)))
+    · exact Or.inr (Or.inr (Or.inr (Or.inr
+        ⟨herr, hns, hlong, hone, armPre2, hsucc⟩)))
+
+/-! ## Outcome 1: the code guard
+
+`pauseAfterSet` loads the staged target back, duplicates it, and tests
+`EXTCODESIZE` for zero before it sends anything.  Blanc's only `EXTCODESIZE`
+inversion leaves the pushed word anonymous and lives in a WETH10 module, which
+a Lido module must not import — contracts are siblings — so the
+value-carrying form is derived here. -/
+
+/-- `EXTCODESIZE` at a known stack top, **with its value**: the word it pushes
+is the code size of the account its operand names, read in the frame's own
+state, and memory is untouched. -/
+private lemma of_extcodesize_val {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
+    (hp : x :: xs <<+ s.stack)
+    (run : Ninst.Run e s Ninst.extcodesize r) :
+    ((s.getCode x.toAdr).size.toB256 :: xs <<+ r.stack) ∧
+      s.memory = r.memory := by
+  rcases of_run_reg run with ⟨pc, hrun⟩
+  simp only [Rinst.run, Rinst.runCore] at hrun
+  rcases Except.bind_eq_ok hrun with ⟨⟨adr, d1⟩, hpopAdr, hrun⟩
+  rw [Devm.popToAdr_def] at hpopAdr
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hpopAdr
+  rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;> simp [hpop] at hpopAdr
+  rcases hpopAdr with ⟨rfl, rfl⟩
+  have hpop' := Devm.pop_of_pop hpop
+  have hx : x = word :=
+    (List.of_cons_pref_of_cons_pref hp (pref_of_split hpop'.stack)).left
+  subst word
+  have htail : xs <<+ d0.stack := of_append_pref hpop'.stack hp
+  split at hrun
+  · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
+    have hst : s.state = d2.state :=
+      hpop'.state.trans (Devm.burn_of_chargeGas hgas).state
+    have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
+      unfold Devm.getCode Devm.getAcct; rw [hst]
+    refine ⟨?_, ?_⟩
+    · rw [← hcode]
+      exact append_pref (Devm.push_of_push hpush).stack
+        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+    · exact hpop'.memory.trans
+        ((Devm.burn_of_chargeGas hgas).memory.trans
+          (Devm.push_of_push hpush).memory)
+  · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
+    have hst : s.state = d2.state :=
+      hpop'.state.trans
+        ((show d0.state = (addAccessedAddress d0 x.toAdr).state from rfl).trans
+          (Devm.burn_of_chargeGas hgas).state)
+    have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
+      unfold Devm.getCode Devm.getAcct; rw [hst]
+    refine ⟨?_, ?_⟩
+    · rw [← hcode]
+      exact append_pref (Devm.push_of_push hpush).stack
+        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+    · exact hpop'.memory.trans
+        ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
+          ((Devm.burn_of_chargeGas hgas).memory.trans
+            (Devm.push_of_push hpush).memory))
+
+/-- **Outcome 1: a target with no code is rejected before anything is sent.**
+
+The guard's word is the `EXTCODESIZE` of the *staged* target — the word the
+CircuitBreaker itself put at `targetWord`, not one the callee supplied — and
+when it is zero the empty revert is reached without a message leaving the
+frame.  The condition is `(entry.getCode target).size.toB256 = 0` rather than
+`.size = 0` for the same reason the length guard's is stated at `toB256`: that
+is the word the machine actually tests, and the two agree on every code object
+an execution can hold. -/
+theorem pauseAfterSet_codeGuard_arms {fs : List Func} {sevm : Sevm}
+    {entry : Devm} {target : Adr} {ex : Execution}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
+    (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
+    ((entry.getCode target).size.toB256 = 0 ∧
+        ∃ post, ex = .error (.revert, post) ∧ post.output = []) ∨
+      ((entry.getCode target).size.toB256 ≠ 0 ∧
+        ∃ guardPost : Devm,
+          Func.RunCompiledTo fs sevm guardPost
+            (pauseCallStaging +++ (Ninst.call ::: pauseAfterCallBranch)) ex) := by
+  rw [pauseAfterSet_eq_afterCall] at run
+  obtain ⟨g1, hguard, run⟩ := runCompiledTo_prepend_inv run
+  unfold pauseCodeGuard at hguard
+  rcases of_run_append (loadWord targetWord) hguard with ⟨u0, hload, hrest⟩
+  have hw0 : target.toB256 :: [] <<+ u0.stack :=
+    prefix_of_loadWord_window hTarget nil_pref hload
+  rcases Line.of_run_cons hrest with ⟨u1, qdup, hrest⟩
+  have hw1 : target.toB256 :: [target.toB256] <<+ u1.stack :=
+    prefix_of_dup_val qdup (by show_nth) hw0
+  rcases Line.of_run_cons hrest with ⟨u2, qcs, hrest⟩
+  obtain ⟨hw2, -⟩ := of_extcodesize_val hw1 qcs
+  rcases Line.of_run_cons hrest with ⟨u3, qiz, hnil⟩
+  cases hnil
+  have hcode : u1.getCode = entry.getCode := by
+    have hc0 : Devm.getCode entry = Devm.getCode u0 :=
+      Line.of_inv Devm.getCode (by unfold loadWord; line_inv) hload
+    have hc1 : Devm.getCode u0 = Devm.getCode u1 :=
+      Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons qdup Line.Run.nil)
+    exact (hc0.trans hc1).symm
+  have htoadr : (target.toB256).toAdr = target := toAdr_toB256 target
+  rw [htoadr, hcode] at hw2
+  have hw3 := prefix_of_iszero qiz hw2
+  rcases runCompiledTo_branch_inv run with
+    ⟨armPre, hz, hpop, harm⟩ | ⟨w, armPre, hne, hwstk, hpop, harm⟩
+  · -- the guard's word was nonzero: the target carries code
+    have hflag0 : ((entry.getCode target).size.toB256 =? 0) = 0 := by
+      obtain ⟨t, ht⟩ := hw3
+      rw [ht] at hz
+      exact (List.cons.inj hz).1
+    exact Or.inr ⟨ne_of_eqCheck_eq_zero hflag0, armPre, harm⟩
+  · -- the guard's word was zero: the empty revert, and nothing was sent
+    have hflagw : ((entry.getCode target).size.toB256 =? 0) = w := by
+      obtain ⟨t, ht⟩ := hw3
+      rw [ht] at hwstk
+      exact (List.cons.inj hwstk).1
+    obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty harm
+    exact Or.inl ⟨eqCheck_ne_zero (fun h => hne (hflagw.symm.trans h)),
+      runCompiledTo_rev_inv hbody⟩
+
+/-! ## All seven, in one statement
+
+The two premises `h_call` and `h_observe` are the predecessor's boundary
+theorems applied at whatever states *this* derivation reaches.  Neither
+constrains the target: `pauseCall_boundary` and `pauseStat_boundary` are proved
+for an arbitrary callee carrying arbitrary bytecode, and their remaining
+hypotheses — the six staged operands and the argument window — are facts about
+the CircuitBreaker's own staging lines.
+
+Carrying them as premises rather than deriving them here is the one composition
+step this cut does not close, and the reason is mechanical rather than
+semantic: `pauseCallStaging_operands`, `pauseStatStaging_operands` and
+`pauseStatStaging_calldata` are `private` to
+`Blanc/LidoCircuitBreakerCallBoundary.lean`, and exporting them means editing a
+module that carries a baselined elaboration row.  The whole-`pause`-to-CALL
+composition therefore remains open exactly as the last two cuts left it. -/
+
+/-- **`pauseAfterSet`'s seven outcomes, partitioned.**
+
+Every derivation of `pauseAfterSet` that reaches a result lands in exactly one
+disjunct, and each names the condition that selected it and the payload it
+produced.  The conditions are the staged target's code size and, past the code
+guard, `child.error.isSome` and functions of `child.output` — the target's
+behaviour, and nothing else.
+
+Two children appear and they are **not** the same: outcome 2's is the
+`pauseFor` CALL's, outcomes 3 to 7's is the `isPaused()` STATICCALL's.  That
+distinction is the whole content of outcome 3, because both bubbles are the
+same one-line body at the same table slot.
+
+This is a classification of derivations that reach a result.  It is **not** a
+liveness claim: no arm is asserted to be reached, both out-of-gas legs stay
+explicit, and outcome 7 ends at `pauseSuccess`'s entry rather than at a
+completed pause.  And accepting `1` is still not evidence that the target is
+paused. -/
+theorem pauseAfterSet_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
+    {duration : B256} {entry : Devm} {ex : Execution}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
+    (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
+    (h_call : ∀ g p q : Devm, Line.Run sevm g pauseCallStaging p →
+      Ninst.RunCompiled sevm p (.exec .call) q →
+      PauseCallBoundary sevm target duration p q)
+    (h_observe : ∀ a p q : Devm, Line.Run sevm a pauseStatStaging p →
+      Ninst.RunCompiled sevm p (.exec .statcall) q →
+      PauseStatBoundary sevm target p q)
+    (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
+    -- 1: the target carries no code
+    ((entry.getCode target).size.toB256 = 0 ∧
+        ∃ post, ex = .error (.revert, post) ∧ post.output = []) ∨
+      -- 2: the `pauseFor` CALL failed; its returndata is bubbled
+      ((entry.getCode target).size.toB256 ≠ 0 ∧ ∃ callChild : Devm,
+        callChild.error.isSome = true ∧
+        ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+          (∃ post, ex = .error (.revert, post) ∧
+            post.output =
+              callChild.output.take callChild.output.length.toB256.toNat))) ∨
+      -- 3 to 7: the observation happened, and its answer was read
+      ((entry.getCode target).size.toB256 ≠ 0 ∧ ∃ child : Devm,
+        ((child.error.isSome = true ∧
+            ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+              (∃ post, ex = .error (.revert, post) ∧
+                post.output =
+                  child.output.take child.output.length.toB256.toNat))) ∨
+          (child.error.isSome = false ∧
+            Nat.toB256 child.output.length < (32 : B256) ∧
+            (∃ post, ex = .error (.revert, post) ∧ post.output = [])) ∨
+          (child.error.isSome = false ∧
+            ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+            32 ≤ child.output.length ∧ pausedAnswer child.output = 0 ∧
+            ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+              (∃ post, ex = .error (.revert, post) ∧
+                post.output = customErrorData "PauseFailed"))) ∨
+          (child.error.isSome = false ∧
+            ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+            32 ≤ child.output.length ∧ pausedAnswer child.output ≠ 0 ∧
+            pausedAnswer child.output ≠ 1 ∧
+            (∃ post, ex = .error (.revert, post) ∧ post.output = [])) ∨
+          (child.error.isSome = false ∧
+            ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+            32 ≤ child.output.length ∧ pausedAnswer child.output = 1 ∧
+            ∃ successPre : Devm,
+              Func.RunCompiledTo fs sevm successPre pauseSuccess ex))) := by
+  rcases pauseAfterSet_codeGuard_arms h_empty hTarget run with
+    ⟨hzero, hpost⟩ | ⟨hne, guardPost, hrun⟩
+  · exact Or.inl ⟨hzero, hpost⟩
+  obtain ⟨callPre, hstaging, hrun⟩ := runCompiledTo_prepend_inv hrun
+  obtain ⟨callPost, hcross, hrun⟩ := runCompiledTo_next_inv hrun
+  have boundaryCall := h_call guardPost callPre callPost hstaging hcross
+  rw [pauseAfterCallBranch] at hrun
+  obtain ⟨callChild, armPre, rest, hstk, hrd, hard, harm⟩ :=
+    pauseAfterCall_arms boundaryCall hrun
+  rcases harm with ⟨herr, hcall⟩ | ⟨-, hstat⟩
+  · refine Or.inr (Or.inl ⟨hne, callChild, herr, ?_⟩)
+    obtain ⟨bubblePre, hburn, hbody⟩ := runCompiledTo_call_inv h_bubble hcall
+    have hbrd : bubblePre.returnData = callChild.output :=
+      hburn.returnData.symm.trans hard
+    rcases Func.runCompiledTo_revReturnData_inv hbody with
+      h_oog | ⟨post, hpost, hout⟩
+    · exact Or.inl h_oog
+    · exact Or.inr ⟨post, hpost, by rw [hout, hbrd]⟩
+  · rw [pauseStatArm] at hstat
+    obtain ⟨statPre, hstatStaging, hstat⟩ := runCompiledTo_prepend_inv hstat
+    obtain ⟨statPost, hstatCross, hstat⟩ := runCompiledTo_next_inv hstat
+    obtain ⟨child, hrd', houtcomes⟩ :=
+      pauseObservation_outcomes h_empty h_bubble h_failed
+        (h_observe armPre statPre statPost hstatStaging hstatCross) hstat
+    exact Or.inr (Or.inr ⟨hne, child, houtcomes⟩)
