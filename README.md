@@ -284,6 +284,14 @@ contract (the same break, other direction), and on any module missing from its
 classification — so a new contract cannot escape the rule by never being
 listed. It needs no Lean toolchain and runs ahead of the build in CI.
 
+## Proof recipe lookup
+
+Before beginning a manual multi-step walk or inversion, consult the generated
+[proof recipe index](docs/PROOF_RECIPES.md) or run the read-only
+`blanc_suggest` tactic at the goal. The index and the tactic's lookup table are
+both generated from `scripts/proof-recipes.toml`; edit that registry and
+regenerate the surfaces rather than editing either generated file by hand.
+
 ## Proof-performance conventions: defeq and wide-recursion state towers
 
 Two definitional-equality cost bombs have been measured in this repository,

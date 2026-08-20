@@ -24,6 +24,9 @@ Choose the gate by what you changed, cheapest falsifier first:
 |---|---|---|
 | anything at all | `scripts/check-doc-counts.sh` + `scripts/check-layering.sh` + `lake build` | `scripts/check.sh --no-build` |
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
+| the proof-recipe registry, generator, generated documentation/Lean lookup, recipe tactic, or changed proof declarations | `scripts/check-proof-recipes.sh --base main` | the **full set**, in the order below |
+| a `maxHeartbeats` or `maxRecDepth` scope, its debt baseline, or a bounded debt exception | `scripts/check-proof-debt.sh` | the **full set**, in the order below |
+| a production Lean module, its size baseline, or a bounded module-size exception | `scripts/check-proof-module-size.sh` | the **full set**, in the order below |
 | the execution-settlement substrate, its consumers, or lift manifest | `scripts/check-extraction-ownership.sh` + `scripts/check-execution-settlement.sh` | the **full set**, in the order below |
 | the execution-occurrence substrate, source map, retained replay, WETH bridge, or fixtures | `scripts/check-execution-occurrence.sh` + `scripts/check-extraction-ownership.sh` | the **full set**, in the order below |
 | the cycle-safe same-frame source-level SSTORE-occurrence certificate, execution theorem, owner manifest, or fixtures | `scripts/check-cycle-write-free.sh` | the **full set**, in the order below |
@@ -64,6 +67,9 @@ self-inflicted contention.
 ```
 scripts/check-doc-counts.sh
 scripts/check-layering.sh
+scripts/check-proof-recipes.sh --base main
+scripts/check-proof-debt.sh
+scripts/check-proof-module-size.sh
 scripts/check-extraction-ownership.sh
 scripts/check-trust-surface.sh
 scripts/check-weth10-reference.sh
@@ -119,9 +125,12 @@ against the gate.
 | gate | proves | scale | time |
 |---|---|---|---|
 | `scripts/check-doc-counts.sh` | every public surface that quotes the audited-theorem count agrees with the count the axiom audit actually produces: the gate computes it from `scripts/AxiomCheck.lean` and checks each registered quotation in `README.md`, this file and `docs/index.html`. Anti-vacuous per pattern — a surface reworded out of the gate's sight FAILS rather than passing silently. Jaune's site quotes the same number and no gate can cross the repository boundary, so a pass prints that reminder rather than implying coverage it does not have | 11 quotations across 3 files; 2 published numbers deliberately unchecked and named in the script | sub-second |
-| `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 4 contracts, 134 modules, 132 non-root | sub-second |
+| `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 4 contracts, 136 modules, 134 non-root | sub-second |
+| `scripts/check-proof-recipes.sh --base main` | first fail-closed checks the proof-recipe registry and its generated documentation/Lean lookup, then reports high-confidence anti-patterns only in declarations changed from the selected base: byte-identical imported declaration copies after name/documentation normalization, and new local selector tables outside the registry-declared owner; exceptions are declaration-scoped, active-recipe-bound, expiring, and reject wildcards, duplicates, or orphans | changed declarations only; 2 report-only finding classes; 7 gate controls plus the generator's 8 controls | ~30 s self-test; ordinary runs are sub-second on a small diff |
+| `scripts/check-proof-debt.sh` | inventories every production `maxHeartbeats` and `maxRecDepth` scope with comment/string-aware parsing, distinguishes declaration, tactic-local, and honest ambient scopes, and report-only flags newly introduced or increased finite ceilings; the baseline ratchets downward, `0` remains unlimited, and exceptions are declaration-scoped and expiring, with no ambient or file-wide suppression | 423 scopes across 37 files: 134 heartbeat + 289 recursion-depth; 12 controls | sub-second |
+| `scripts/check-proof-module-size.sh` | inventories direct production modules, report-only warns at 1,250 lines and reports growth beyond grandfathered ceilings plus any new module above 8,000 lines; the all-module baseline ratchets downward, cannot grandfather a later hard-cap breach, and exceptions are module-scoped, expiring, and carry measured LSP latency evidence plus a split plan | 134 modules; 58 grandfathered ceilings; 8 controls | sub-second |
 | `scripts/check-extraction-ownership.sh` | the manifest's 14 execution-settlement declarations exist only under their common owners, no donor declaration or common-owner basename shadow/alias/export survives across the historical WETH10 donor family or the Lido family, and `Weth10HolderFlow` directly imports the common module; six controls exercise the old donor alias, Lido shadow and alias, missing common owner, missing direct import, and trailing-`?` declaration parser channels | 14 moved declarations; 6 negative controls | sub-second |
-| `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 122 closure modules; 21 exact allowlisted occurrences | sub-second |
+| `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 135 closure modules; 21 exact allowlisted occurrences | sub-second |
 | `scripts/check-execution-settlement.sh` | compiles the concrete execution-level CREATE code-deposit rollback fixture, requires its constructor SSTORE and branch conditions to evaluate exactly true, pins the required proof declarations with a live deletion control, proves canonical `rawFrameRoots` retains the entered child while settlement traversal prunes it, and requires both the legacy raw-commit and settlement-filtered raw-root mutants to fail for pinned reasons | 1 concrete `Exec.runOk` fixture; 3 required positive proofs + 1 deletion control; 2 raw-traversal mutants | ~8 s |
 | `scripts/check-execution-occurrence.sh` | compiles proof-indexed all-outcome, explicit child-order, compiler-source, exact-identity, PC-14 last-writer, target-directed source-chronology, and kernel-only direct spawned-code-address controls; requires terminal-error result evidence, no-op/reverted/later-OOG writes, committed/caught child raw/retained equations, exact-compiled caught-child and later-outer-rollback attribution, an actual fatal-resume `runErr` retaining its entered child roots with no continuation, exact compiled SSTORE path, PUSH-payload rejection, selected-branch and internal-call EQ-before-SSTORE chronology, a reached target before a terminal-error suffix, inhabited owner/code-address filtering, child/parent identity separation, final no-op maximality, successful foreign/nonempty CALL and STATICCALL, actual-spawn fresh/empty CREATE and CREATE2 boundaries, and retained-target CALLCODE and DELEGATECALL; pins every required positive proof declaration and all seven exact direct-code control propositions with typed aggregation and live deletion controls, parses both occurrence ownership manifests fail-closed, pins the exact common direct-code header and sole owner, enforces the exact migrated 1/1/2/1 WETH/Lido consumer inventory, rejects old-name/canonical shadows, aliases, exports, and unrelated-name proposition copies across WETH10 and Lido, exactly pins the selected-root source-attribution and chronology headers plus the sole shared traversal kernel and public delegation, reruns CREATE rollback after a child SSTORE, and requires all occurrence chronology, direct-code premise, bridge, and CREATE mutants to fail for pinned semantic reasons | 17 concrete occurrence + 6 direct-code controls; 21 occurrence + 2 direct-code Lean mutants; 27 required positive proofs + legacy deletion + 7 live direct-code deletions; 1 bridge mutant; 10 moved-owner rows + 8 exact direct-code headers + 23 parser controls; 28 raw-attribution owners + exact source/chronology signatures + shared kernel + 8 controls; 2 CREATE mutants | ~6 min |
 | `scripts/check-cycle-write-free.sh` | independently compiles the finite local/component/entry certificate controls, exact self-loop and two-node cyclic executions and source cursors, cycle-spanning same-frame prefixes, arbitrary-outcome no-SSTORE specializations, no-op/reverted/terminal-error SSTORE occurrences, exact-compiled accepted parent cursors around an external child-frame boundary, and a committing same-storage-owner CALLCODE child whose endpoint storage changes; rejects semantic mutants for entry linkage, lookup/index/body/component closure, missing same-frame prefix, pre/post-cycle and branch writers, bounded recursive substitution, byte scanning, source mismatch, arbitrary-outcome pruning, child-frame overreach, and endpoint equality; exactly pins the public theorem signatures and sole common owner/import surface, derives all contract-owned modules from the authoritative layering classification, rejects contract shadows/aliases/exports, and preserves the one exact WETH fuel-bounded legacy exemption | 23 evaluator controls; 20 Lean mutants; 22 positive proofs + 22 deletions; 18 owners; 7 signatures; 22 parser controls; 1 exemption | ~38 s |
@@ -153,8 +162,8 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–135 measured files; 135 represented; full baseline set by the exact per-file rows below | from a few seconds when nothing is affected to ~16 min cache-cold or `--full` (measured 952.7 / 960.5 / 932.9 s, 2026-08-20; 911.1 s on the current implementation) |
-| `scripts/check-elab.sh --calibrate` | the measurement command for admitting a new row: every module with no committed row, plus a commit-seeded stratified sample of provably-unaffected modules held to the row threshold, refusing at `2.0x` and annotating at `1.5x`. Writes nothing to the baseline and nothing to the local cache | 12 drawn controls from bands of 32/54/26/22, plus every mandatory row | ~52 s of measurement, about 5% of a whole-tree pass (measured 52.2 / 50.9 s, 2026-08-20) |
+| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–136 measured files; 136 represented; full baseline set by the exact per-file rows below | from a few seconds when nothing is affected to ~16 min cache-cold or `--full` (latest affected-closure run: 126 measured in 947.1 s vs a 961.3 s full baseline, 2026-08-21) |
+| `scripts/check-elab.sh --calibrate` | the measurement command for admitting a new row: every module with no committed row, plus a commit-seeded stratified sample of provably-unaffected modules held to the row threshold, refusing at `2.0x` and annotating at `1.5x`. Writes nothing to the baseline and nothing to the local cache | current baseline bands 34/54/26/22; latest admission measured 1 mandatory row and drew 9 controls from 10 provably unaffected rows | latest admission measured the 125 affected existing rows plus 1 mandatory row and 9 controls in 964.8 s; ordinary isolated admissions are about 5% of a whole-tree pass |
 
 No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
 sequential elaboration gate is the longest at roughly ten minutes; every gate
@@ -167,6 +176,10 @@ invoked by the scripts above and should not be run directly in a report:
 
 | helper | used by | what it does |
 |---|---|---|
+| `scripts/generate-proof-recipes.py` | `check-proof-recipes.sh` and explicit `--write` regeneration | validates the strict TOML registry, referenced symbols, example anchors and review dates, then deterministically generates `docs/PROOF_RECIPES.md` and the import-safe `Blanc.ProofRecipesGenerated` lookup table; `--check` byte-compares both outputs and `--self-test` exercises schema, trigger, symbol, anchor, and drift controls |
+| `scripts/check-proof-recipes.py` | `check-proof-recipes.sh` | runs the generator check, computes changed declarations from Git including untracked files, traverses local imports, reports only high-confidence normalized declaration copies and misplaced selector tables, and validates narrow expiring exceptions fail-closed |
+| `scripts/check-proof-debt.py` | `check-proof-debt.sh` | lexes production Lean without counting comments or literals, assigns resource settings to declaration/local/ambient scopes, compares the exact inventory with a monotone baseline, and validates declaration-scoped expiring exceptions |
+| `scripts/check-proof-module-size.py` | `check-proof-module-size.sh` | counts physical source lines in direct production modules, compares known-module membership and shrink-only ceilings, reports warning/hard-cap findings, and validates bounded evidence-bearing exceptions |
 | `scripts/check-doc-counts.py` | `check-doc-counts.sh` | derives the audited-theorem count from `scripts/AxiomCheck.lean` and fail-closed checks every registered quotation in the README, gate catalogue and site |
 | `scripts/check-extraction-ownership.py` | `check-extraction-ownership.sh` | strictly parses the sole lift manifest, common declaration/import ownership, WETH10/Lido shadow and alias absence, and five temp-tree negative controls |
 | `scripts/check-execution-settlement.py` | `check-execution-settlement.sh` | compiles the concrete CREATE rollback-after-SSTORE fixture, pins its three required positive proofs and evaluator verdict, runs a live deletion control, and requires both raw-retention mutants to fail for the child-frame reason |
@@ -235,6 +248,11 @@ Every gate prints exactly one summary line and exits nonzero on anything else.
 
 - **`OK — …`** is the only passing verdict. Read the line; it carries the
   counts, and a green run with the wrong count is a finding.
+- **`OK — … (report-only)`** is also a passing process verdict, but its finding
+  count is review evidence rather than permission to ignore the output. The
+  proof-recipe, proof-debt, and proof-module-size gates use this form for source
+  findings; malformed inputs, generated drift, stale baselines, and invalid
+  exceptions still exit nonzero as regressions.
 - **`REGRESSION — …`** means the gate's own invariant broke: a layering
   violation, an axiom set that moved, an elaboration time past threshold, a
   fixture whose contract bytes are not the committed literal, a coverage budget
@@ -262,8 +280,9 @@ at the expected assertion count.
 
 ### Baselines and budgets
 
-`scripts/baseline-elab.txt` and the two coverage budgets are **evidence, not
-knobs**. Absent explicit authority in a ready goal, a baseline, budget, or
+`scripts/baseline-elab.txt`, the proof-debt and proof-module-size baselines, and
+the two coverage budgets are **evidence, not knobs**. Absent explicit authority
+in a ready goal, a baseline, budget, or
 manifest count that must move for a gate to pass is a stop-and-report
 condition, not a step. A ready goal may pre-authorize an expected new-module
 row or bounded row refresh when it names the owner class, rationale,
@@ -308,6 +327,13 @@ it corrected the former gate's false equation of selector embedding with
 execution. It is not precedent for routine budget growth; from that corrected
 baseline, both coverage budgets remain shrink-only.
 
+`scripts/check-proof-debt.sh --write-baseline` and
+`scripts/check-proof-module-size.sh --write-baseline` are explicit evidence
+refreshes, never ordinary gate modes. Both preserve exact inventory membership
+and can only retain or lower an existing finite ceiling; neither can erase an
+unreviewed increase. Their exception registries remain separate, bounded,
+expiring evidence and may not be used to raise the baseline.
+
 ## One run at a time
 
 `check-elab.sh` takes an exclusive lock through `scripts/gate-lock.sh` and a
@@ -334,7 +360,7 @@ retry around** — it means two agents were competing for this host.
 | gate | report lock | heavy lock |
 |---|---|---|
 | `scripts/check-elab.sh` | yes | yes |
-| every other gate here | — (writes none) | no |
+| every other ordinary gate invocation here | — (writes none) | no |
 
 Only `check-elab.sh` writes a report (`scripts/report-elab.txt`) and local cache
 state (`.lake/check-elab-state.json`). Both paths are ignored by Git. The rest
@@ -372,6 +398,8 @@ worker that has been opening files. A `--force` run may not be rebased.
 4. **A gate's verdict is inherited only by commit identity.** Re-run rather than
    assume when the tree has moved.
 5. **Generated artifacts come from their generators**, never from hand editing:
+   `docs/PROOF_RECIPES.md` and `Blanc/ProofRecipesGenerated.lean` from
+   `scripts/generate-proof-recipes.py --write`;
    fixtures from `scripts/gen-*-fixtures.py`, borrower bytes from their
    committed artifact JSONs, `Blanc/FmintCode.lean` and `Blanc/WethCode.lean`
    from `scripts/gen-*-code.lean`, and the WETH10 differential manifest from

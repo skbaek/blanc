@@ -1,0 +1,159 @@
+schema_version = 1
+generated_notice = "Generated from scripts/proof-recipes.toml; do not edit by hand."
+
+[[recipe]]
+id = "runcompiled-construction"
+status = "active"
+triggers = [
+  "goal-head:Func.RunCompiled",
+  "goal-head:Func.RunCompiledTo",
+  "goal-head:Func.ExecTo",
+  "goal-head:Func.ExecWitness",
+]
+preferred_path = "Use `func_run` and its registered opcode arms."
+boundary = "This constructs a compiled walk; it does not invert an existing run or synthesize a parallel path certificate such as `DirectPausePath`."
+owner_module = "Blanc/Forward.lean"
+canonical_example = "Blanc/Weth10Redeemable.lean:withdrawTo_progExecSat"
+symbols = [
+  "tactic:func_run",
+  "declaration:Func.RunCompiled",
+  "declaration:Func.RunCompiledTo",
+  "declaration:Func.ExecTo",
+  "declaration:Func.ExecWitness",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "line-run-split"
+status = "active"
+triggers = ["implication-premise:Line.Run"]
+preferred_path = "Use `line_execute` or `line_execute_with`; revert a named run premise first when needed."
+boundary = "The tactic performs one split and does not automatically transport an arbitrary set of observations."
+owner_module = "Blanc/CommonProofs.lean"
+canonical_example = "Blanc/Conserved.lean:Fmint.of_prepApprove"
+symbols = ["tactic:line_execute", "tactic:line_execute_with", "declaration:Line.Run"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "func-run-prefix-split"
+status = "active"
+triggers = ["implication-premise:Func.Run"]
+preferred_path = "Use `func_execute n` or `func_execute_with line` to expose a known prefix."
+boundary = "This targets the older implication-shaped `Func.Run`; it is not `RunCompiled` construction and does not invert an arbitrary named derivation without first reverting it."
+owner_module = "Blanc/Tactics.lean"
+canonical_example = "Blanc/Solvent.lean:withdraw_preserves_solvent"
+symbols = ["tactic:func_execute", "tactic:func_execute_with", "declaration:Func.Run"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "stack-prefix-transport"
+status = "active"
+triggers = ["goal-shape:stack-prefix-line-run"]
+preferred_path = "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals."
+boundary = "`line_prefix` supports a finite instruction set and refuses instructions without a registered case."
+owner_module = "Blanc/Tactics.lean"
+canonical_example = "Blanc/Weth10HolderFlowCompiled.lean:recognized_of_run_dispatchWith"
+symbols = ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "state-context-cleanup"
+status = "active"
+triggers = ["context-shape:intermediate-devm"]
+preferred_path = "Use `clear_state hState` after transporting every fact that must survive."
+boundary = "This is destructive context cleanup: it removes the state and all local facts that depend on it."
+owner_module = "Blanc/Tactics.lean"
+canonical_example = "Blanc/Conserved.lean:Fmint.of_prepApprove"
+symbols = ["tactic:clear_state"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "line-observation-invariance"
+status = "active"
+triggers = ["goal-head:Line.Inv", "goal-head:Ninst.Inv", "goal-head:Rinst.Inv"]
+preferred_path = "Use `line_inv` through the registered `Ninst.Hinv` and `Rinst.Hinv` instances."
+boundary = "A missing contract-neutral instance belongs in the lowest common upstream layer; contract-specific semantic facts do not."
+owner_module = "Blanc/Tactics.lean"
+canonical_example = "Blanc/Weth10HolderFlowCompiled.lean:Devm.DispatchSilent.of_pushEq"
+symbols = [
+  "tactic:line_inv",
+  "declaration:Line.Inv",
+  "declaration:Ninst.Inv",
+  "declaration:Rinst.Inv",
+  "declaration:Ninst.Hinv",
+  "declaration:Rinst.Hinv",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "function-observation-invariance"
+status = "active"
+triggers = ["goal-head:Func.Inv"]
+preferred_path = "Use `func_inv` to assemble the function invariant from registered line and terminal invariants."
+boundary = "It deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry."
+owner_module = "Blanc/Tactics.lean"
+canonical_example = "Blanc/Solvent.lean:approve_preserves_bal"
+symbols = ["tactic:func_inv", "declaration:Func.Inv"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "call-boundary-outcomes"
+status = "active"
+triggers = ["goal-head:Func.ExecSat", "goal-head:Prog.ExecSat", "goal-head:Func.ExecWitness"]
+preferred_path = "Use the `ForwardCall` module and the live `ExecSat`/`ExecWitness` layer to cross calls or package multiple outcomes."
+boundary = "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone."
+owner_module = "Blanc/ForwardCall.lean"
+canonical_example = "Blanc/Weth10Redeemable.lean:withdrawTo_progExecSat"
+symbols = [
+  "module:Blanc/ForwardCall.lean",
+  "declaration:Func.ExecSat",
+  "declaration:Prog.ExecSat",
+  "declaration:Func.ExecWitness",
+  "declaration:Prog.ExecWitness",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "successor-projection-normalization"
+status = "partial"
+triggers = ["goal-shape:successor-projection"]
+preferred_path = "Use existing named, oriented, one-layer projection lemmas; the S3 pilot will decide whether to add a reviewed common normalizer."
+boundary = "Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges."
+owner_module = "Blanc/Forward.lean"
+canonical_example = "Blanc/Forward.lean:Devm.getStorVal_setMach"
+symbols = ["declaration:Devm.getStorVal_setMach"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "selector-separation"
+status = "planned"
+triggers = ["goal-shape:selector-separation"]
+preferred_path = "Pilot I3's canonical selector list, `Nodup` theorem, extractor, and named simp set before promoting this recipe."
+boundary = "No blocking rule may require this path until the pilot lands; existing tables need domain-by-domain review."
+owner_module = "Blanc/Weth10SelectorFacts.lean"
+canonical_example = "Blanc/Weth10SelectorFacts.lean:Weth10.selector_name_ne_approveSelector"
+symbols = ["declaration:Weth10.selector_name_ne_approveSelector"]
+anti_patterns = ["local-selector-table"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"
+
+[[recipe]]
+id = "fixed-byte-offsets"
+status = "partial"
+triggers = ["goal-shape:fixed-byte-offset"]
+preferred_path = "Use the existing `Mem.Wf` and `Mem.Reads` APIs; I8 proposes the missing `writeAt`/`sliceD` extension."
+boundary = "The current memory layer is live, but no gate may demand the proposed extension before it lands."
+owner_module = "Blanc/CommonCore.lean"
+canonical_example = "Blanc/Weth10HolderFlowCompiled.lean:exists_acceptedValueCallTrace_same_slot"
+symbols = ["declaration:Mem.Wf", "declaration:Mem.Reads"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-20"

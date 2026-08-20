@@ -1197,3 +1197,39 @@ OK	3.175	Blanc/LidoCircuitBreakerCallBoundary.lean
 # run was refused for contention, and this diff is additions-only: every
 # pre-existing reference row above remains byte-for-byte unchanged.
 OK	1.443	Blanc/LidoCircuitBreakerObservation.lean
+#
+# 2026-08-21. The preventive-spine goal adds exactly one generated pure-data
+# module, Blanc/ProofRecipesGenerated.lean. It is imported immediately upstream
+# of Blanc/Tactics.lean so the read-only `blanc_suggest` tactic consumes the
+# generated recipe table without referring to downstream proof declarations.
+#
+# The row below was measured by the additions-only admission command
+# `scripts/check-elab.sh --calibrate`; `--rebase`, `--force`, `--full`, and
+# cache seeding were not used. The run measured 135 modules in 964.8 s against
+# a 960.6 s full baseline. Nine drawn controls ranged from 0.92x to 1.03x with
+# median 1.010x, and no control reached the 1.50x annotation threshold.
+#
+# Seed domain blanc-elab-calibration-v1, candidate commit
+#   b068121bd8aedcee51c82eb72fd14d96e1ca3ca4
+# seed sha256(domain|commit)
+#   3065b90ec1b3a09630d04f1f1f2a5ae82a2778b3f88b7bf8b77f1381210a19cf
+# baseline sha256 before this additions-only admission
+#   3fa8ba6c6788b32b9c4b0b7417bcd30f0e9ac4b213e53a03e2824fa2684cfed7
+# source-set sha256 (every discovered path and its content)
+#   3f354f19a5ba254a24e127741528e4efc817744df3cc3b63c79af578f593ce6f
+#
+# Drawn controls (measured / baseline / ratio):
+#   Blanc/Basic.lean                         1.225 / 1.257 / 0.97
+#   Blanc/CommonCore.lean                    2.516 / 2.454 / 1.03
+#   Blanc/ExecDeterminism.lean               2.243 / 2.184 / 1.03
+#   Blanc/ExecutionSettlement.lean           1.353 / 1.409 / 0.96
+#   Blanc/Fmint.lean                         2.903 / 3.158 / 0.92
+#   Blanc/FmintCode.lean                     4.319 / 4.549 / 0.95
+#   Blanc/Semantics.lean                     1.699 / 1.656 / 1.03
+#   Blanc/Weth10Core.lean                    1.273 / 1.234 / 1.03
+#   Blanc/Weth10TemplateCode.lean            2.470 / 2.445 / 1.01
+#
+# The mandatory row measured 0.695 s. This diff adds only the provenance block
+# and row below; every pre-existing baseline row remains byte-for-byte
+# unchanged.
+OK	0.695	Blanc/ProofRecipesGenerated.lean

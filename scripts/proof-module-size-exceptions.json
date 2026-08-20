@@ -1,0 +1,5 @@
+{
+  "_comment": "Bounded, module-scoped proof-size exceptions. Every row expires and carries LSP latency evidence plus a split plan; wildcards are forbidden.",
+  "schemaVersion": 1,
+  "exceptions": []
+}

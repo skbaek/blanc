@@ -1,6 +1,7 @@
 -- Tactics.lean : tactic machinery and the statically quoted lemmas it requires.
 
 import Blanc.CommonCore
+import Blanc.ProofRecipesGenerated
 
 namespace Blanc
 
@@ -15,6 +16,101 @@ open Lean.Parser.Tactic
 open Lean.Elab.Term
 open Lean
 open Qq
+
+/-! ## Goal-time proof recipe lookup
+
+`blanc_suggest` deliberately matches raw declaration names.  Several relations
+it recognizes live downstream of this shared tactic module, so typed quotations
+would create an import cycle.  The tactic only reads the target and local
+context, filters the generated registry, and logs advice; it never assigns a
+metavariable or replaces a goal. -/
+
+def proofRecipeHeadName? : Lean.Expr → Option Lean.Name
+  | .const name _ => some name
+  | .app fn _ => proofRecipeHeadName? fn
+  | .mdata _ expr => proofRecipeHeadName? expr
+  | _ => none
+
+def proofRecipeContainsName (needle : Lean.Name) : Lean.Expr → Bool
+  | .bvar _ | .fvar _ | .mvar _ | .sort _ | .lit _ => false
+  | .const name _ => name == needle
+  | .app fn arg =>
+      proofRecipeContainsName needle fn || proofRecipeContainsName needle arg
+  | .lam _ type body _ | .forallE _ type body _ =>
+      proofRecipeContainsName needle type || proofRecipeContainsName needle body
+  | .letE _ type value body _ =>
+      proofRecipeContainsName needle type ||
+        proofRecipeContainsName needle value ||
+        proofRecipeContainsName needle body
+  | .mdata _ expr | .proj _ _ expr => proofRecipeContainsName needle expr
+
+def proofRecipeHasPremiseHead (needle : Lean.Name) : Lean.Expr → Bool
+  | .forallE _ domain body _ =>
+      proofRecipeHeadName? domain == some needle ||
+        proofRecipeHasPremiseHead needle body
+  | .letE _ _ _ body _ | .mdata _ body =>
+      proofRecipeHasPremiseHead needle body
+  | _ => false
+
+def proofRecipeLocalTypeCount (needle : Lean.Name) : TacticM Nat := do
+  let context ← Lean.MonadLCtx.getLCtx
+  let mut count := 0
+  for declaration in context do
+    unless declaration.isImplementationDetail do
+      let type ← Lean.instantiateMVars declaration.type
+      if proofRecipeHeadName? type == some needle then
+        count := count + 1
+  return count
+
+def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
+  let head := proofRecipeHeadName? target
+  match trigger with
+  | "goal-head:Func.RunCompiled" => return head == some `Blanc.Func.RunCompiled
+  | "goal-head:Func.RunCompiledTo" => return head == some `Blanc.Func.RunCompiledTo
+  | "goal-head:Func.ExecTo" => return head == some `Blanc.Func.ExecTo
+  | "goal-head:Func.ExecWitness" => return head == some `Blanc.Func.ExecWitness
+  | "goal-head:Func.ExecSat" => return head == some `Blanc.Func.ExecSat
+  | "goal-head:Prog.ExecSat" => return head == some `Blanc.Prog.ExecSat
+  | "goal-head:Line.Inv" => return head == some `Blanc.Line.Inv
+  | "goal-head:Ninst.Inv" => return head == some `Blanc.Ninst.Inv
+  | "goal-head:Rinst.Inv" => return head == some `Blanc.Rinst.Inv
+  | "goal-head:Func.Inv" => return head == some `Blanc.Func.Inv
+  | "implication-premise:Line.Run" =>
+      return proofRecipeHasPremiseHead `Blanc.Line.Run target
+  | "implication-premise:Func.Run" =>
+      return proofRecipeHasPremiseHead `Blanc.Func.Run target
+  | "goal-shape:stack-prefix-line-run" =>
+      return proofRecipeContainsName `Blanc.Pref target &&
+        proofRecipeContainsName `Blanc.Line.Run target
+  | "context-shape:intermediate-devm" =>
+      return (← proofRecipeLocalTypeCount `Jaune.Devm) > 2
+  | "goal-shape:successor-projection" =>
+      return head == some `Eq &&
+        proofRecipeContainsName `Jaune.Devm.setMach target
+  | "goal-shape:selector-separation" =>
+      return proofRecipeContainsName `Blanc.selector target
+  | "goal-shape:fixed-byte-offset" =>
+      return head == some `Blanc.Mem.Wf || head == some `Blanc.Mem.Reads
+  | _ => return false
+
+def proofRecipeMatches (target : Lean.Expr)
+    (recipe : ProofRecipes.Recipe) : TacticM Bool := do
+  for trigger in recipe.triggers do
+    if ← proofRecipeTriggerMatches target trigger then
+      return true
+  return false
+
+elab "blanc_suggest" : tactic =>
+  withMainContext do
+    let target ← Lean.instantiateMVars (← getMainTarget)
+    let mut found := false
+    for recipe in ProofRecipes.recipes do
+      if ← proofRecipeMatches target recipe then
+        found := true
+        Lean.logInfo m!"[proof-recipe:{recipe.id}] {recipe.preferredPath}\n\
+          Boundary: {recipe.boundary}"
+    unless found do
+      Lean.logInfo "blanc_suggest: no matching proof recipe"
 
 def String.toSyntax (s : String) : Lean.Syntax :=
   Lean.Syntax.ident Lean.SourceInfo.none s.toRawSubstring
