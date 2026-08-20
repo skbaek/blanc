@@ -1163,3 +1163,37 @@ OK	1.744	Blanc/LidoCircuitBreakerPreControl.lean
 # diff is additions-only: every pre-existing reference row above remains
 # byte-for-byte unchanged.
 OK	3.175	Blanc/LidoCircuitBreakerCallBoundary.lean
+#
+# 2026-08-20. Stage 6's third cut, the observation, adds exactly one module:
+# Blanc/LidoCircuitBreakerObservation.lean, its own proof owner. It states what
+# the CircuitBreaker does with the target's `isPaused()` answer, for an
+# arbitrary answer, and carries the twenty-eight public theorems now pinned by
+# scripts/check-lido-circuit-breaker-access.py.
+#
+# The row below was measured by `scripts/check-elab.sh --calibrate`, which is
+# the admission command scripts/GATES.md prescribes for a module with no
+# committed row. That mode replaced the fixed three-run whole-tree triple the
+# two predecessor cuts used; the earlier block above records the older
+# procedure and is left exactly as it was.
+#
+#   Blanc/LidoCircuitBreakerObservation.lean    1.443
+#
+# The run measured all 135 files in 962.9 s against a 959.2 s full baseline, so
+# the host was running about 0.4% slower than the one that recorded this row's
+# neighbours. No control was *drawn*: the shared Lean/Lake environment had
+# changed, so no module's fingerprint proved it unaffected, and the sampler
+# therefore measured every row-carrying module outright and compared it -- a
+# stronger control than a sample, and the gate says so in its own verdict.
+# The candidate was pinned at
+#   f04b897b1669f759ef3fce65b47b9fd0455652ed
+# and the measured source digest (SHA-256) at
+#   1b2d0a9b7970ef4d96990ed0f04efc845bbfbd56e2198506f938ab2068319a50
+#     Blanc/LidoCircuitBreakerObservation.lean
+#
+# Full evidence -- seed domain, seed, baseline and source-set digests, band
+# boundaries and the drawn set -- is in scripts/report-elab-calibration.txt,
+# written by the run itself so a reviewer can recompute the draw from the
+# commit. `--rebase`, `--force`, `--full` and cache seeding were not used, no
+# run was refused for contention, and this diff is additions-only: every
+# pre-existing reference row above remains byte-for-byte unchanged.
+OK	1.443	Blanc/LidoCircuitBreakerObservation.lean
