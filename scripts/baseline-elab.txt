@@ -669,7 +669,7 @@ OK	1.282	Blanc/Weth10HolderFlowConservation.lean
 OK	1.415	Blanc/Weth10HolderFlowDeterminism.lean
 OK	2.480	Blanc/Weth10HolderFlowEth.lean
 OK	8.517	Blanc/Weth10HolderFlowEthExec.lean
-OK	65.650	Blanc/Weth10HolderFlowExecAccounting.lean
+OK	17.056	Blanc/Weth10HolderFlowExecAccounting.lean
 OK	3.659	Blanc/Weth10HolderFlowFlashChronology.lean
 OK	1.334	Blanc/Weth10HolderFlowLocal.lean
 OK	1.813	Blanc/Weth10HolderFlowPermitChronology.lean
@@ -999,7 +999,7 @@ OK	30.894	Blanc/LidoCircuitBreakerReplacementRegistration.lean
 # landing it is the user's call. If it is ever landed, it must go in BEFORE a
 # baseline measurement -- it lowers many of these rows -- and never after.
 OK	1.658	Blanc/SourceAttainment.lean
-OK	40.258	Blanc/LidoCircuitBreakerAttainment.lean
+OK	32.134	Blanc/LidoCircuitBreakerAttainment.lean
 OK	2.590	Blanc/LidoCircuitBreakerRegistrationWorld.lean
 OK	2.414	Blanc/LidoCircuitBreakerReplacementWorld.lean
 OK	3.159	Blanc/LidoCircuitBreakerUnregisterWorld.lean
@@ -1232,4 +1232,21 @@ OK	1.443	Blanc/LidoCircuitBreakerObservation.lean
 # The mandatory row measured 0.695 s. This diff adds only the provenance block
 # and row below; every pre-existing baseline row remains byte-for-byte
 # unchanged.
-OK	0.695	Blanc/ProofRecipesGenerated.lean
+OK	0.664	Blanc/ProofRecipesGenerated.lean
+#
+# 2026-08-21. The elaboration-head audit ran the gate's deliberate
+# `scripts/check-elab.sh --rebase` procedure once, sequentially and without a
+# language server. The full survey measured all 136 modules in 889.9 s. The
+# rebase command rewrites every row mechanically; this goal restored all 133
+# unrelated rows byte-for-byte and retained only its two changed Lean modules
+# plus the pre-authorized stale wave-2 accounting row:
+#
+#   LidoCircuitBreakerAttainment       40.258 -> 32.134
+#   ProofRecipesGenerated               0.695 ->  0.664
+#   Weth10HolderFlowExecAccounting     65.650 -> 17.056
+#
+# Attainment's typed `SourceStep` helper is the measured local deliverable.
+# ExecAccounting's selector-table hoist was already measured near 17 s on the
+# wave-2 completion candidate; this full run refreshes its stale 65.650 s row.
+# The generated pure-data recipe module's 31 ms movement is ordinary noise but
+# is retained because its content changed. No upward row was admitted.

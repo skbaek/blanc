@@ -2612,24 +2612,24 @@ def setPauseDurationConfigPrefix : Line :=
   [Ninst.pushB256 pauseDurationSlot, Ninst.sload] ++ mstoreAt 0 ++ arg 0 ++
     mstoreAt 1 ++ [Ninst.pushB256 pauseDurationUpdatedEvent] ++
     logWith 0 0 2 ++ arg 0 ++ [Ninst.pushB256 pauseDurationSlot]
-
+private def sourceRests (n : Nat) : List Prog.SourceStep := List.replicate n .rest
 /-- Structural source position of the `setPauseDuration.config` `SSTORE`:
 inventory index `0`, source function `0`, sixty-four steps.  Unlike every other
 path in this module it is not rooted at an auxiliary table slot, because no
 `.call` intervenes between the program entry and this write. -/
 def setPauseDurationConfigPath : Prog.SourcePath :=
   ⟨0,
-    List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 7 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchRight] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchRight] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 15 .rest⟩
+    sourceRests 5 ++ [.branchLeft] ++
+      sourceRests 7 ++ [.branchLeft] ++
+      sourceRests 3 ++ [.branchLeft] ++
+      sourceRests 3 ++ [.branchLeft] ++
+      sourceRests 3 ++ [.branchLeft] ++
+      sourceRests 3 ++ [.branchRight] ++
+      sourceRests 4 ++ [.branchLeft] ++
+      sourceRests 3 ++ [.branchRight] ++
+      sourceRests 4 ++ [.branchLeft] ++
+      sourceRests 4 ++ [.branchLeft] ++
+      sourceRests 15⟩
 
 set_option maxRecDepth 16384 in
 /-- The complete route from program entry to the `setPauseDuration.config`

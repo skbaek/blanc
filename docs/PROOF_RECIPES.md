@@ -12,8 +12,8 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-head:Func.RunCompiled`, `goal-head:Func.RunCompiledTo`, `goal-head:Func.ExecTo`, `goal-head:Func.ExecWitness`
-- Preferred path: Use `func_run` and its registered opcode arms. For residual-cost attribution, opt in with the default-off `Blanc.Forward.discharge` trace before changing a fallback.
-- Boundary: This constructs a compiled walk; it does not invert an existing run, replace an already completed continuation with a summary, or synthesize a parallel path certificate such as `DirectPausePath`. The PauseWalk pilot attributed its dominant cost to failed defeq/whnf work in heterogeneous value fallbacks; the residual inventory supports only the homogeneous gas class (83/83 tactic 0, 0.754 s total) as the next bounded specialization candidate.
+- Preferred path: Use `func_run` and its registered opcode arms. For residual-cost attribution, opt in with the default-off `Blanc.Forward.discharge` trace and aggregate it with `scripts/read-discharge-trace.py` before changing a fallback.
+- Boundary: This constructs a compiled walk; it does not invert an existing run, replace an already completed continuation with a summary, synthesize a parallel path certificate such as `DirectPausePath`, or optimize route data before the proof begins. A three-module inventory found the gas class heterogeneous (1,180 tactic / 90 residual) and every expensive value class heterogeneous, so no shared discharge fold is licensed. `LidoCircuitBreakerAttainment` instead measured repeated underconstrained `SourceStep` constructors and its one-path typed-helper pilot reduced 10.321 s to 5.971 s; that result does not license other route retrofits. The Registry profile stopped at a deterministic `rfl`/`whnf` timeout before it could license S3, while both measured registration heads were kernel-checking costs reserved for family compression.
 - Owner module: [Blanc/Forward.lean](../Blanc/Forward.lean)
 - Canonical example: [Blanc/Weth10Redeemable.lean](../Blanc/Weth10Redeemable.lean) — `withdrawTo_progExecSat`
 - Registered symbols: `tactic:func_run`, `declaration:Func.RunCompiled`, `declaration:Func.RunCompiledTo`, `declaration:Func.ExecTo`, `declaration:Func.ExecWitness`
@@ -57,7 +57,7 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Status: `active`
 - Triggers: `context-shape:intermediate-devm`
 - Preferred path: Use `clear_state hState` after transporting every fact that must survive.
-- Boundary: This is destructive context cleanup: it removes the state and all local facts that depend on it. The continuation-summary pilot found this trigger to be a false positive after a continuation was already complete; direct reuse of the existing generic summary added two source lines and no measurable elaboration win.
+- Boundary: This is destructive context cleanup: it removes the state and all local facts that depend on it. The continuation-summary pilot found this trigger to be a false positive after a continuation was already complete; direct reuse of the existing generic summary added two source lines and no measurable elaboration win. Wave 3 touched no new eligible intermediate-`Devm` goal, so one false positive is insufficient evidence for a narrower predicate that would not introduce false negatives; the trigger deliberately remains a bare heuristic.
 - Owner module: [Blanc/Tactics.lean](../Blanc/Tactics.lean)
 - Canonical example: [Blanc/Conserved.lean](../Blanc/Conserved.lean) — `Fmint.of_prepApprove`
 - Registered symbols: `tactic:clear_state`
@@ -101,7 +101,7 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Status: `partial`
 - Triggers: `goal-shape:successor-projection`
 - Preferred path: Use an existing named, oriented, one-layer projection lemma when one already serves the goal; otherwise keep the explicit local normalization.
-- Boundary: Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges. On the heartbeatAfterCount/Expiry/Interval tower, adding six one-layer projection lemmas and six retrofits regressed module elaboration from 40.075 s to 41.944 s, so that shape does not justify a common normalizer.
+- Boundary: Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges. On the heartbeatAfterCount/Expiry/Interval tower, adding six one-layer projection lemmas and six retrofits regressed module elaboration from 40.075 s to 41.944 s. Wave 3 then found `LidoCircuitBreakerAccess` dominated by 27–28 s kernel checks, not its secondary setMach chains, and the Registry profile could not pass its independent `rfl`/`whnf` timeout; neither result reopens S3.
 - Owner module: [Blanc/Forward.lean](../Blanc/Forward.lean)
 - Canonical example: [Blanc/Forward.lean](../Blanc/Forward.lean) — `Devm.getStorVal_setMach`
 - Registered symbols: `declaration:Devm.getStorVal_setMach`
@@ -112,7 +112,7 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Status: `partial`
 - Triggers: `goal-shape:selector-separation`
 - Preferred path: Hoist a reviewed literal separation table ahead of repeated consumers and transport its facts directly; the ExecAccounting pilot reduced its module profile from 46.28 s to 17.74 s across 16 retrofits.
-- Boundary: The local table win does not establish I3's cross-domain canonical selector list, `Nodup` theorem, extractor, or named simp set; those remain unproved and no blocking rule may require them.
+- Boundary: The local table win does not establish I3's cross-domain canonical selector list, `Nodup` theorem, extractor, or named simp set; those remain unproved and no blocking rule may require them. Its 30-line module-size growth is the measured deliverable and remains assigned to the later WETH accounting family-compression/module-split goal; wave 3 refreshes the stale 65.650 s elaboration baseline through the gate's deliberate rebase procedure.
 - Owner module: [Blanc/Weth10SelectorFacts.lean](../Blanc/Weth10SelectorFacts.lean)
 - Canonical example: [Blanc/Weth10SelectorFacts.lean](../Blanc/Weth10SelectorFacts.lean) — `Weth10.selector_name_ne_approveSelector`
 - Registered symbols: `declaration:Weth10.selector_name_ne_approveSelector`
@@ -123,8 +123,8 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `partial`
 - Triggers: `goal-shape:fixed-byte-offset`
-- Preferred path: Use the existing `Mem.Wf` and `Mem.Reads` APIs; I8 proposes the missing `writeAt`/`sliceD` extension.
-- Boundary: The current memory layer is live, but no gate may demand the proposed extension before it lands.
+- Preferred path: Use the existing `Mem.Wf` and `Mem.Reads` APIs; I8 proposes the missing `writeAt`/`sliceD` extension. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost.
+- Boundary: The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained; the pilot was reverted and does not broaden this trigger.
 - Owner module: [Blanc/CommonCore.lean](../Blanc/CommonCore.lean)
 - Canonical example: [Blanc/Weth10HolderFlowCompiled.lean](../Blanc/Weth10HolderFlowCompiled.lean) — `exists_acceptedValueCallTrace_same_slot`
 - Registered symbols: `declaration:Mem.Wf`, `declaration:Mem.Reads`
