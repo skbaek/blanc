@@ -784,6 +784,17 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def remove_first_scalar_field(text: str, key: str, label: str) -> str:
+    """Remove the first one-line scalar field without pinning its value."""
+    pattern = re.compile(rf"^{re.escape(key)} = .*\n", re.MULTILINE)
+    mutated, count = pattern.subn("", text, count=1)
+    if count != 1:
+        raise RecipeError(
+            f"self-test setup {label}: expected at least one {key!r} scalar field"
+        )
+    return mutated
+
+
 def self_test(root: Path) -> None:
     controls = 0
     with tempfile.TemporaryDirectory(prefix="proof-recipes-") as directory:
@@ -863,12 +874,7 @@ def self_test(root: Path) -> None:
         )
         rejected(
             "missing-field",
-            replace_once(
-                original,
-                'boundary = "This constructs a compiled walk; it does not invert an existing run or synthesize a parallel path certificate such as `DirectPausePath`."\n',
-                "",
-                "missing-field",
-            ),
+            remove_first_scalar_field(original, "boundary", "missing-field"),
             "missing ['boundary']",
         )
         rejected(

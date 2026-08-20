@@ -21,8 +21,8 @@ def recipes : List Recipe := [
     id := "runcompiled-construction"
     status := "active"
     triggers := ["goal-head:Func.RunCompiled", "goal-head:Func.RunCompiledTo", "goal-head:Func.ExecTo", "goal-head:Func.ExecWitness"]
-    preferredPath := "Use `func_run` and its registered opcode arms."
-    boundary := "This constructs a compiled walk; it does not invert an existing run or synthesize a parallel path certificate such as `DirectPausePath`."
+    preferredPath := "Use `func_run` and its registered opcode arms. For residual-cost attribution, opt in with the default-off `Blanc.Forward.discharge` trace before changing a fallback."
+    boundary := "This constructs a compiled walk; it does not invert an existing run, replace an already completed continuation with a summary, or synthesize a parallel path certificate such as `DirectPausePath`. The PauseWalk pilot attributed its dominant cost to failed defeq/whnf work in heterogeneous value fallbacks; the residual inventory supports only the homogeneous gas class (83/83 tactic 0, 0.754 s total) as the next bounded specialization candidate."
   },
   {
     id := "line-run-split"
@@ -50,7 +50,7 @@ def recipes : List Recipe := [
     status := "active"
     triggers := ["context-shape:intermediate-devm"]
     preferredPath := "Use `clear_state hState` after transporting every fact that must survive."
-    boundary := "This is destructive context cleanup: it removes the state and all local facts that depend on it."
+    boundary := "This is destructive context cleanup: it removes the state and all local facts that depend on it. The continuation-summary pilot found this trigger to be a false positive after a continuation was already complete; direct reuse of the existing generic summary added two source lines and no measurable elaboration win."
   },
   {
     id := "line-observation-invariance"
@@ -77,15 +77,15 @@ def recipes : List Recipe := [
     id := "successor-projection-normalization"
     status := "partial"
     triggers := ["goal-shape:successor-projection"]
-    preferredPath := "Use existing named, oriented, one-layer projection lemmas; the S3 pilot will decide whether to add a reviewed common normalizer."
-    boundary := "Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges."
+    preferredPath := "Use an existing named, oriented, one-layer projection lemma when one already serves the goal; otherwise keep the explicit local normalization."
+    boundary := "Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges. On the heartbeatAfterCount/Expiry/Interval tower, adding six one-layer projection lemmas and six retrofits regressed module elaboration from 40.075 s to 41.944 s, so that shape does not justify a common normalizer."
   },
   {
     id := "selector-separation"
-    status := "planned"
+    status := "partial"
     triggers := ["goal-shape:selector-separation"]
-    preferredPath := "Pilot I3's canonical selector list, `Nodup` theorem, extractor, and named simp set before promoting this recipe."
-    boundary := "No blocking rule may require this path until the pilot lands; existing tables need domain-by-domain review."
+    preferredPath := "Hoist a reviewed literal separation table ahead of repeated consumers and transport its facts directly; the ExecAccounting pilot reduced its module profile from 46.28 s to 17.74 s across 16 retrofits."
+    boundary := "The local table win does not establish I3's cross-domain canonical selector list, `Nodup` theorem, extractor, or named simp set; those remain unproved and no blocking rule may require them."
   },
   {
     id := "fixed-byte-offsets"

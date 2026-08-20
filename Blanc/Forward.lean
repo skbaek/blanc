@@ -2122,6 +2122,8 @@ open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic
 
 namespace Forward
 
+initialize registerTraceClass `Blanc.Forward.discharge
+
 /-- The relation a walk builds: the head constant its goals are stated with, and
 the four structural rules it applies **by name**.
 
@@ -2265,18 +2267,47 @@ def tryTacOn (g : MVarId) (stx : TSyntax `tactic) : TacticM Bool := do
     saved.restore
     return false
 
-/-- Close `g` with the first tactic that works, or hand it back as a subgoal. -/
-def discharge (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
-  if ← g.isAssigned then return
+/-- How one of `func_run`'s side-condition dischargers finished. -/
+inductive DischargeOutcome where
+  | assigned
+  | exactLocal
+  | tactic (index attempts : Nat)
+  | residual (attempts : Nat)
+
+/-- The three residual families whose fallback distribution P5 measures. -/
+inductive DischargeKind where
+  | gas
+  | room
+  | value
+
+def DischargeKind.label : DischargeKind → String
+  | .gas => "gas"
+  | .room => "room"
+  | .value => "value"
+
+/-- Close `g` with the first tactic that works, recording which fallback won,
+or hand it back as a subgoal. -/
+def dischargeResult (g : MVarId)
+    (stxs : List (TSyntax `tactic)) : ForwardM DischargeOutcome := do
+  if ← g.isAssigned then return .assigned
+  let mut index := 0
   for stx in stxs do
-    if ← tryTacOn g stx then return
+    if ← tryTacOn g stx then return .tactic index (index + 1)
+    index := index + 1
   modify fun c => { c with side := c.side.push g }
+  return .residual index
+
+/-- Unit-valued compatibility wrapper for uninstrumented dischargers. -/
+def discharge (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
+  let _ ← dischargeResult g stxs
+  return
 
 /-- Value obligations often exactly repeat a caller hypothesis.  Check for that
 syntactically before invoking tactics, without paying to instantiate and scan
 the whole local context for every gas, room, and stack obligation in a walk. -/
-def dischargeValue (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
-  if ← g.isAssigned then return
+def dischargeValueResult (g : MVarId)
+    (stxs : List (TSyntax `tactic)) : ForwardM DischargeOutcome := do
+  if ← g.isAssigned then return .assigned
   let exactLocal? ← g.withContext do
     let target ← instantiateMVars (← g.getType)
     (← getLCtx).findDeclM? fun decl => do
@@ -2285,8 +2316,77 @@ def dischargeValue (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit 
       return none
   if let some fvar := exactLocal? then
     g.assign fvar
+    return .exactLocal
+  dischargeResult g stxs
+
+/-- Unit-valued compatibility wrapper for value discharges. -/
+def dischargeValue (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
+  let _ ← dischargeValueResult g stxs
+  return
+
+/-- A normalization-free syntactic head key.  P5 classification must not itself
+pay the `whnf`/defeq cost it is intended to inventory. -/
+def dischargeHeadKey (e : Expr) : String :=
+  match e.consumeMData.getAppFn.constName? with
+  | some name => name.toString
+  | none => "other"
+
+/-- Classify a residual by its proposition head and, for equality goals, the
+left-hand-side head.  This is called only after the trace option is enabled. -/
+def dischargeResidualClass (g : MVarId) : MetaM (String × String) := do
+  let target := (← instantiateMVars (← g.getType)).consumeMData
+  let outer := dischargeHeadKey target
+  match target.getAppFnArgs with
+  | (``Eq, #[_, lhs, _]) => return (outer, dischargeHeadKey lhs)
+  | _ => return (outer, outer)
+
+/-- The explicit P5 gate.  Bare elaboration pays only the `hasTrace` fast path;
+other tracing does not enable this instrument unless its exact class is set. -/
+def dischargeTraceEnabled : ForwardM Bool := do
+  let opts ← getOptions
+  if !opts.hasTrace then return false
+  Lean.isTracingEnabledFor `Blanc.Forward.discharge
+
+/-- Run and, when explicitly enabled, time one gas or room discharge. -/
+def dischargeProfiled (kind : DischargeKind) (g : MVarId)
+    (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
+  unless ← dischargeTraceEnabled do
+    discharge g stxs
     return
-  discharge g stxs
+  let (outer, subject) ← dischargeResidualClass g
+  let start ← IO.monoNanosNow
+  let outcome ← dischargeResult g stxs
+  let stop ← IO.monoNanosNow
+  let elapsed := stop - start
+  let emit (out idx : String) (attempts : Nat) :=
+    Lean.addTrace `Blanc.Forward.discharge
+      m!"BLANC_DISCHARGE_V1|kind={kind.label}|outer={outer}|subject={subject}|out={out}|idx={idx}|attempts={attempts}|elapsed_ns={elapsed}"
+  match outcome with
+  | .assigned => emit "assigned" "na" 0
+  | .exactLocal => emit "exactLocal" "na" 0
+  | .tactic index attempts => emit "tactic" (toString index) attempts
+  | .residual attempts => emit "residual" "na" attempts
+
+/-- Run and, when explicitly enabled, time one value discharge, including its
+exact-local scan before the tactic fallbacks. -/
+def dischargeValueProfiled (g : MVarId)
+    (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
+  unless ← dischargeTraceEnabled do
+    dischargeValue g stxs
+    return
+  let (outer, subject) ← dischargeResidualClass g
+  let start ← IO.monoNanosNow
+  let outcome ← dischargeValueResult g stxs
+  let stop ← IO.monoNanosNow
+  let elapsed := stop - start
+  let emit (out idx : String) (attempts : Nat) :=
+    Lean.addTrace `Blanc.Forward.discharge
+      m!"BLANC_DISCHARGE_V1|kind=value|outer={outer}|subject={subject}|out={out}|idx={idx}|attempts={attempts}|elapsed_ns={elapsed}"
+  match outcome with
+  | .assigned => emit "assigned" "na" 0
+  | .exactLocal => emit "exactLocal" "na" 0
+  | .tactic index attempts => emit "tactic" (toString index) attempts
+  | .residual attempts => emit "residual" "na" attempts
 
 /-- Discharge an obligation that the arm-choosing probe has *already* located.
 `assumption` would re-scan the whole local context to find the very declaration
@@ -2465,8 +2565,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
     match gs with
     | [hc, hg, hr] =>
       discharge hc [zero, ne, nek]
-      discharge hg (← gasTacs)
-      discharge hr (← roomTacs)
+      dischargeProfiled .gas hg (← gasTacs)
+      dischargeProfiled .room hr (← roomTacs)
     | _ => throwError "func_run: PUSH left {gs.length} obligations"
   | (``Jaune.Ninst.push, #[xs, le]) => do
     match xs.consumeMData.getAppFnArgs with
@@ -2478,8 +2578,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         [(0, sevm), (1, d), (2, w), (3, le), (4, gas')] [5, 6]
       match gs with
       | [hg, hr] =>
-        discharge hg (← gasTacs)
-        discharge hr (← roomTacs)
+        dischargeProfiled .gas hg (← gasTacs)
+        dischargeProfiled .room hr (← roomTacs)
       | _ =>
         throwError "func_run: full-width raw PUSH left {gs.length} obligations"
     | _ => do
@@ -2499,8 +2599,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       match gs with
       | [hc, hg, hr] =>
         discharge hc [rfl', dec, deck]
-        discharge hg (← gasTacs)
-        discharge hr (← roomTacs)
+        dischargeProfiled .gas hg (← gasTacs)
+        dischargeProfiled .room hr (← roomTacs)
       | _ => throwError "func_run: raw PUSH left {gs.length} obligations"
   | (``Jaune.Ninst.reg, #[r]) => do
     let r' ← whnfR r
@@ -2518,8 +2618,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       match gs with
       | [hget, hg, hr] =>
         discharge hget (← rflTacs)
-        discharge hg (← gasTacs)
-        discharge hr (← roomTacs)
+        dischargeProfiled .gas hg (← gasTacs)
+        dischargeProfiled .room hr (← roomTacs)
       | _ => throwError "func_run: DUP left {gs.length} obligations"
     | (``Jaune.Rinst.calldataload, #[]) => do
       let ([x], s) ← popStack 1 stk | throwError "func_run: CALLDATALOAD"
@@ -2534,9 +2634,9 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       match gs with
       | [hstk, hval, hg, hr] =>
         discharge hstk (← rflTacs)
-        dischargeValue hval (← valTacs)
-        discharge hg (← gasTacs)
-        discharge hr (← roomTacs)
+        dischargeValueProfiled hval (← valTacs)
+        dischargeProfiled .gas hg (← gasTacs)
+        dischargeProfiled .room hr (← roomTacs)
       | _ => throwError "func_run: CALLDATALOAD left {gs.length} obligations"
     | (``Jaune.Rinst.extcodesize, #[]) => do
       let ([x], s) ← popStack 1 stk | throwError "func_run: EXTCODESIZE"
@@ -2578,8 +2678,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hstk (← rflTacs)
           dischargeLocated hwarm isWarm [assum]
           discharge hval (← rflTacs)
-          discharge hg (← gasTacs)
-          discharge hr (← roomTacs)
+          dischargeProfiled .gas hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
         | _ =>
           throwError "func_run: warm EXTCODESIZE left {gs.length} obligations"
       else
@@ -2595,8 +2695,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hstk (← rflTacs)
           dischargeLocated hcold isCold [assum]
           discharge hval (← rflTacs)
-          discharge hg (← gasTacs)
-          discharge hr (← roomTacs)
+          dischargeProfiled .gas hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
         | _ => throwError "func_run: EXTCODESIZE left {gs.length} obligations"
     | (``Jaune.Rinst.sload, #[]) => do
       let ([k], s) ← popStack 1 stk | throwError "func_run: SLOAD"
@@ -2650,9 +2750,9 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         | [hstk, hwarm, hval, hg, hr] =>
           discharge hstk (← rflTacs)
           dischargeLocated hwarm isWarm [assum]
-          dischargeValue hval (← valTacs)
-          discharge hg (← gasTacs)
-          discharge hr (← roomTacs)
+          dischargeValueProfiled hval (← valTacs)
+          dischargeProfiled .gas hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
         | _ => throwError "func_run: warm SLOAD left {gs.length} obligations"
       else
         let base' ← mkAppM ``Jaune.addAccessedStorageKey #[d, tgt, k]
@@ -2665,9 +2765,9 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         | [hstk, hcold, hval, hg, hr] =>
           discharge hstk (← rflTacs)
           dischargeLocated hcold isCold [assum]
-          dischargeValue hval (← valTacs)
-          discharge hg (← gasTacs)
-          discharge hr (← roomTacs)
+          dischargeValueProfiled hval (← valTacs)
+          dischargeProfiled .gas hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
         | _ => throwError "func_run: SLOAD left {gs.length} obligations"
     | (``Jaune.Rinst.mstore, #[]) => do
       let ([idx, val], s) ← popStack 2 stk | throwError "func_run: MSTORE"
@@ -2687,7 +2787,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       | [hstk, hext, hg, hw] =>
         discharge hstk (← rflTacs)
         discharge hext []
-        discharge hg (← gasTacs)
+        dischargeProfiled .gas hg (← gasTacs)
         discharge hw (← rflTacs)
       | _ => throwError "func_run: MSTORE left {gs.length} obligations"
     | (``Jaune.Rinst.pop, #[]) => do
@@ -2700,7 +2800,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       match gs with
       | [hstk, hg] =>
         discharge hstk (← rflTacs)
-        discharge hg (← gasTacs)
+        dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: POP left {gs.length} obligations"
     | (``Jaune.Rinst.swap, #[k]) => do
       -- `List.swap (w₀ :: rest) k` exchanges `w₀` with `rest[k]`, which is the
@@ -2723,7 +2823,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       match gs with
       | [hswap, hg] =>
         discharge hswap (← rflTacs)
-        discharge hg (← gasTacs)
+        dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: SWAP left {gs.length} obligations"
     | (``Jaune.Rinst.gas, #[]) => do
       -- No hint and no value obligation: what `GAS` pushes is the successor's
@@ -2737,8 +2837,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         [(0, sevm), (1, d), (2, gas')] [3, 4]
       match gs with
       | [hg, hr] =>
-        discharge hg (← gasTacs)
-        discharge hr (← roomTacs)
+        dischargeProfiled .gas hg (← gasTacs)
+        dischargeProfiled .room hr (← roomTacs)
       | _ => throwError "func_run: GAS left {gs.length} obligations"
     | (``Jaune.Rinst.mload, #[]) => do
       let ([i], s) ← popStack 1 stk | throwError "func_run: MLOAD"
@@ -2762,8 +2862,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         discharge hcost []
         discharge hval (← rflTacs)
         discharge hmem (← rflTacs)
-        discharge hg (← gasTacs)
-        discharge hr (← roomTacs)
+        dischargeProfiled .gas hg (← gasTacs)
+        dischargeProfiled .room hr (← roomTacs)
       | _ => throwError "func_run: MLOAD left {gs.length} obligations"
     | (``Jaune.Rinst.kec, #[]) => do
       let ([i, sz], s) ← popStack 2 stk | throwError "func_run: KECCAK256"
@@ -2793,10 +2893,10 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       | [hstk, hcost, hval, hmem, hg, hr] =>
         discharge hstk (← rflTacs)
         discharge hcost []
-        dischargeValue hval (← valTacs)
+        dischargeValueProfiled hval (← valTacs)
         discharge hmem (← rflTacs)
-        discharge hg (← gasTacs)
-        discharge hr (← roomTacs)
+        dischargeProfiled .gas hg (← gasTacs)
+        dischargeProfiled .room hr (← roomTacs)
       | _ => throwError "func_run: KECCAK256 left {gs.length} obligations"
     | (``Jaune.Rinst.codecopy, #[]) => do
       let ([di, si, sz], s) ← popStack 3 stk
@@ -2824,7 +2924,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         discharge hstk (← rflTacs)
         discharge hcost []
         discharge hw (← rflTacs)
-        discharge hg (← gasTacs)
+        dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: CODECOPY left {gs.length} obligations"
     | (``Jaune.Rinst.calldatacopy, #[]) => do
       let ([di, si, sz], s) ← popStack 3 stk
@@ -2854,7 +2954,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         discharge hstk (← rflTacs)
         discharge hcost []
         discharge hw (← rflTacs)
-        discharge hg (← gasTacs)
+        dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: CALLDATACOPY left {gs.length} obligations"
     | (``Jaune.Rinst.retdatacopy, #[]) => do
       let ([di, ri, sz], s) ← popStack 3 stk
@@ -2887,7 +2987,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         -- hypothesis already says it.
         discharge hbound [assum]
         discharge hw (← rflTacs)
-        discharge hg (← gasTacs)
+        dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: RETURNDATACOPY left {gs.length} obligations"
     | (``Jaune.Rinst.log, #[k]) => do
       let some kv ← natOf? (← mkAppM ``Fin.val #[k])
@@ -2924,7 +3024,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         discharge hcost []
         discharge hdata (← rflTacs)
         discharge hmem (← rflTacs)
-        discharge hg (← gasTacs)
+        dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: LOG left {gs.length} obligations"
     | (``Jaune.Rinst.sstore, #[]) => do
       let ([k, v], s) ← popStack 2 stk | throwError "func_run: SSTORE"
@@ -2984,7 +3084,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         discharge hstatic [assum]
         discharge hcost []
         discharge hrefund (← rflTacs)
-        discharge hg (← gasTacs)
+        dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: SSTORE left {gs.length} obligations"
     | _ => do
       let core ← whnfUntilHead
@@ -3013,9 +3113,9 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hne [ne, ne']
           discharge hdef [rfl']
           discharge hstk (← rflTacs)
-          dischargeValue hval (← valTacs)
-          discharge hg (← gasTacs)
-          discharge hr (← roomTacs)
+          dischargeValueProfiled hval (← valTacs)
+          dischargeProfiled .gas hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
         | _ => throwError "func_run: binary opcode left {gs.length} obligations"
       | (``Jaune.applyUnary, #[f, costE, _]) => do
         let some cost ← natOf? costE
@@ -3036,9 +3136,9 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hne [ne, ne']
           discharge hdef [rfl']
           discharge hstk (← rflTacs)
-          dischargeValue hval (← valTacs)
-          discharge hg (← gasTacs)
-          discharge hr (← roomTacs)
+          dischargeValueProfiled hval (← valTacs)
+          dischargeProfiled .gas hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
         | _ => throwError "func_run: unary opcode left {gs.length} obligations"
       | (``Jaune.pushItem, #[x, costE, _]) => do
         -- The `pushItem` class: `ADDRESS`, `CALLER`, `CALLVALUE`, `ORIGIN`,
@@ -3062,8 +3162,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         | [hne, hdef, hg, hr] =>
           discharge hne [ne, ne']
           discharge hdef [rfl']
-          discharge hg (← gasTacs)
-          discharge hr (← roomTacs)
+          dischargeProfiled .gas hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
         | _ => throwError "func_run: pushItem opcode left {gs.length} obligations"
       | _ =>
         throwError m!"func_run: step {n + 1}: no forward rule for{indentExpr i'}" ++ m!"\nIts evaluation is{indentExpr core}"
@@ -3126,8 +3226,8 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
         match gs with
         | [hstk, hr, hg, harm] =>
           discharge hstk (← rflTacs)
-          discharge hr (← roomTacs)
-          discharge hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
+          dischargeProfiled .gas hg (← gasTacs)
           funcWalk (← retarget rel.head harm succ)
         | _ => throwError "func_run: `.zero` left {gs.length} obligations"
       else
@@ -3145,8 +3245,8 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
           else
             throwError m!"func_run: cannot tell whether the branch is taken. The JUMPI condition is{indentExpr w}" ++ m!"\nGive that value a hint."
           discharge hstk (← rflTacs)
-          discharge hr (← roomTacs)
-          discharge hg (← gasTacs)
+          dischargeProfiled .room hr (← roomTacs)
+          dischargeProfiled .gas hg (← gasTacs)
           funcWalk (← retarget rel.head harm succ)
         | _ => throwError "func_run: `.succ` left {gs.length} obligations"
     | (``Blanc.Func.call, #[k]) => do
@@ -3161,8 +3261,8 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
       | [hget, hr, hg, hbody] =>
         unless (← tryTacOn hget rfl') || (← tryTacOn hget dec) do
           throwError m!"func_run: cannot resolve the table entry that `.call` refers to:{indentExpr k}"
-        discharge hr (← roomTacs)
-        discharge hg (← gasTacs)
+        dischargeProfiled .room hr (← roomTacs)
+        dischargeProfiled .gas hg (← gasTacs)
         funcWalk (← retarget rel.head hbody succ)
       | _ => throwError "func_run: `.call` left {gs.length} obligations"
     | (``Blanc.Func.last, #[_]) =>

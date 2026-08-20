@@ -12,12 +12,12 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-head:Func.RunCompiled`, `goal-head:Func.RunCompiledTo`, `goal-head:Func.ExecTo`, `goal-head:Func.ExecWitness`
-- Preferred path: Use `func_run` and its registered opcode arms.
-- Boundary: This constructs a compiled walk; it does not invert an existing run or synthesize a parallel path certificate such as `DirectPausePath`.
+- Preferred path: Use `func_run` and its registered opcode arms. For residual-cost attribution, opt in with the default-off `Blanc.Forward.discharge` trace before changing a fallback.
+- Boundary: This constructs a compiled walk; it does not invert an existing run, replace an already completed continuation with a summary, or synthesize a parallel path certificate such as `DirectPausePath`. The PauseWalk pilot attributed its dominant cost to failed defeq/whnf work in heterogeneous value fallbacks; the residual inventory supports only the homogeneous gas class (83/83 tactic 0, 0.754 s total) as the next bounded specialization candidate.
 - Owner module: [Blanc/Forward.lean](../Blanc/Forward.lean)
 - Canonical example: [Blanc/Weth10Redeemable.lean](../Blanc/Weth10Redeemable.lean) — `withdrawTo_progExecSat`
 - Registered symbols: `tactic:func_run`, `declaration:Func.RunCompiled`, `declaration:Func.RunCompiledTo`, `declaration:Func.ExecTo`, `declaration:Func.ExecWitness`
-- Review: `proof-infrastructure` on `2026-08-20`
+- Review: `proof-infrastructure` on `2026-08-21`
 
 ## `line-run-split`
 
@@ -57,11 +57,11 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Status: `active`
 - Triggers: `context-shape:intermediate-devm`
 - Preferred path: Use `clear_state hState` after transporting every fact that must survive.
-- Boundary: This is destructive context cleanup: it removes the state and all local facts that depend on it.
+- Boundary: This is destructive context cleanup: it removes the state and all local facts that depend on it. The continuation-summary pilot found this trigger to be a false positive after a continuation was already complete; direct reuse of the existing generic summary added two source lines and no measurable elaboration win.
 - Owner module: [Blanc/Tactics.lean](../Blanc/Tactics.lean)
 - Canonical example: [Blanc/Conserved.lean](../Blanc/Conserved.lean) — `Fmint.of_prepApprove`
 - Registered symbols: `tactic:clear_state`
-- Review: `proof-infrastructure` on `2026-08-20`
+- Review: `proof-infrastructure` on `2026-08-21`
 
 ## `line-observation-invariance`
 
@@ -100,24 +100,24 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `partial`
 - Triggers: `goal-shape:successor-projection`
-- Preferred path: Use existing named, oriented, one-layer projection lemmas; the S3 pilot will decide whether to add a reviewed common normalizer.
-- Boundary: Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges.
+- Preferred path: Use an existing named, oriented, one-layer projection lemma when one already serves the goal; otherwise keep the explicit local normalization.
+- Boundary: Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges. On the heartbeatAfterCount/Expiry/Interval tower, adding six one-layer projection lemmas and six retrofits regressed module elaboration from 40.075 s to 41.944 s, so that shape does not justify a common normalizer.
 - Owner module: [Blanc/Forward.lean](../Blanc/Forward.lean)
 - Canonical example: [Blanc/Forward.lean](../Blanc/Forward.lean) — `Devm.getStorVal_setMach`
 - Registered symbols: `declaration:Devm.getStorVal_setMach`
-- Review: `proof-infrastructure` on `2026-08-20`
+- Review: `proof-infrastructure` on `2026-08-21`
 
 ## `selector-separation`
 
-- Status: `planned`
+- Status: `partial`
 - Triggers: `goal-shape:selector-separation`
-- Preferred path: Pilot I3's canonical selector list, `Nodup` theorem, extractor, and named simp set before promoting this recipe.
-- Boundary: No blocking rule may require this path until the pilot lands; existing tables need domain-by-domain review.
+- Preferred path: Hoist a reviewed literal separation table ahead of repeated consumers and transport its facts directly; the ExecAccounting pilot reduced its module profile from 46.28 s to 17.74 s across 16 retrofits.
+- Boundary: The local table win does not establish I3's cross-domain canonical selector list, `Nodup` theorem, extractor, or named simp set; those remain unproved and no blocking rule may require them.
 - Owner module: [Blanc/Weth10SelectorFacts.lean](../Blanc/Weth10SelectorFacts.lean)
 - Canonical example: [Blanc/Weth10SelectorFacts.lean](../Blanc/Weth10SelectorFacts.lean) — `Weth10.selector_name_ne_approveSelector`
 - Registered symbols: `declaration:Weth10.selector_name_ne_approveSelector`
 - Advisory anti-patterns: `local-selector-table`
-- Review: `proof-infrastructure` on `2026-08-20`
+- Review: `proof-infrastructure` on `2026-08-21`
 
 ## `fixed-byte-offsets`
 
