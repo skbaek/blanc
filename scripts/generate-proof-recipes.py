@@ -26,6 +26,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 REGISTRY_PATH = Path("scripts/proof-recipes.toml")
 MARKDOWN_PATH = Path("docs/PROOF_RECIPES.md")
 LEAN_PATH = Path("Blanc/ProofRecipesGenerated.lean")
+TACTICS_PATH = Path("Blanc/Tactics.lean")
 
 TOP_LEVEL_KEYS = {"schema_version", "generated_notice"}
 REQUIRED_RECIPE_KEYS = {
@@ -398,6 +399,91 @@ def validate_trigger(trigger: str, where: str) -> None:
         raise RecipeError(f"{where}: trigger {trigger!r} needs a lowercase kebab slug")
 
 
+def proof_recipe_trigger_inventory(root: Path) -> Set[str]:
+    """Read the explicit fail-closed trigger dispatch from Blanc/Tactics.lean."""
+    path = root / TACTICS_PATH
+    try:
+        clean = strip_lean_comments(path.read_text(encoding="utf-8"), str(path))
+    except OSError as exc:
+        raise RecipeError(f"cannot read trigger matcher {TACTICS_PATH}: {exc}") from exc
+
+    lines = clean.splitlines()
+    starts = [
+        index
+        for index, line in enumerate(lines)
+        if re.match(r"^def\s+proofRecipeTriggerMatches\b", line)
+    ]
+    if len(starts) != 1:
+        raise RecipeError(
+            f"{TACTICS_PATH}: expected exactly one proofRecipeTriggerMatches definition, "
+            f"found {len(starts)}"
+        )
+    start = starts[0]
+    end = next(
+        (
+            index
+            for index in range(start + 1, len(lines))
+            if lines[index] and not lines[index][0].isspace()
+        ),
+        len(lines),
+    )
+    body = lines[start:end]
+    matches = [
+        (index, match.group(1))
+        for index, line in enumerate(body)
+        if (match := re.match(r"^(\s*)match\s+trigger\s+with\s*$", line))
+    ]
+    if len(matches) != 1:
+        raise RecipeError(
+            f"{TACTICS_PATH}: proofRecipeTriggerMatches must contain exactly one "
+            f"`match trigger with`, found {len(matches)}"
+        )
+    match_index, indent = matches[0]
+    arm_re = re.compile(rf"^{re.escape(indent)}\|\s*(.*?)\s*=>")
+    literal_re = re.compile(r'"(?:[^"\\]|\\.)*"\Z')
+    triggers: Set[str] = set()
+    wildcard_count = 0
+    saw_wildcard = False
+    for line in body[match_index + 1 :]:
+        arm = arm_re.match(line)
+        if not arm:
+            continue
+        pattern = arm.group(1)
+        if saw_wildcard:
+            raise RecipeError(
+                f"{TACTICS_PATH}: proofRecipeTriggerMatches fail-closed wildcard "
+                "must be its final arm"
+            )
+        if pattern == "_":
+            if line.strip() != "| _ => return false":
+                raise RecipeError(
+                    f"{TACTICS_PATH}: proofRecipeTriggerMatches wildcard must be "
+                    "exactly `| _ => return false`"
+                )
+            wildcard_count += 1
+            saw_wildcard = True
+            continue
+        if not literal_re.fullmatch(pattern):
+            raise RecipeError(
+                f"{TACTICS_PATH}: unsupported proofRecipeTriggerMatches arm {pattern!r}; "
+                "use one explicit string literal per trigger"
+            )
+        trigger = parse_basic_string(pattern, f"{TACTICS_PATH}: trigger matcher arm")
+        if trigger in triggers:
+            raise RecipeError(
+                f"{TACTICS_PATH}: duplicate proofRecipeTriggerMatches arm {trigger!r}"
+            )
+        triggers.add(trigger)
+    if wildcard_count != 1:
+        raise RecipeError(
+            f"{TACTICS_PATH}: proofRecipeTriggerMatches must have exactly one "
+            f"fail-closed wildcard, found {wildcard_count}"
+        )
+    if not triggers:
+        raise RecipeError(f"{TACTICS_PATH}: proofRecipeTriggerMatches has no explicit triggers")
+    return triggers
+
+
 def validate_symbol(
     symbol: str,
     where: str,
@@ -452,6 +538,7 @@ def load_and_validate(root: Path) -> Registry:
 
     declarations, per_file = declaration_inventory(root)
     tactics = tactic_inventory(root)
+    supported_triggers = proof_recipe_trigger_inventory(root)
     seen_ids: Set[str] = set()
     recipes: List[Recipe] = []
     for index, raw in enumerate(raw_recipes, 1):
@@ -475,6 +562,11 @@ def load_and_validate(root: Path) -> Registry:
         triggers = expect_string_array(raw, "triggers", where)
         for trigger in triggers:
             validate_trigger(trigger, f"{where}.triggers")
+            if trigger not in supported_triggers:
+                raise RecipeError(
+                    f"{where}.triggers: trigger {trigger!r} is not implemented by "
+                    f"{TACTICS_PATH}"
+                )
         preferred_path = expect_string(raw, "preferred_path", where)
         boundary = expect_string(raw, "boundary", where)
         owner_module = expect_string(raw, "owner_module", where)
@@ -760,6 +852,16 @@ def self_test(root: Path) -> None:
             "controlled vocabulary",
         )
         rejected(
+            "unimplemented-trigger",
+            replace_once(
+                original,
+                '"goal-head:Func.RunCompiled",',
+                '"goal-head:Func.UnimplementedTrigger",',
+                "unimplemented-trigger",
+            ),
+            "is not implemented by Blanc/Tactics.lean",
+        )
+        rejected(
             "missing-field",
             replace_once(
                 original,
@@ -794,8 +896,8 @@ def self_test(root: Path) -> None:
             ),
             "does not exist",
         )
-    if controls != 8:
-        raise RecipeError(f"self-test accounting: expected 8 controls, ran {controls}")
+    if controls != 9:
+        raise RecipeError(f"self-test accounting: expected 9 controls, ran {controls}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -819,7 +921,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         if args.self_test:
             self_test(root)
-            print("OK — proof recipes self-test: 8/8 drift, schema, trigger, and symbol controls live")
+            print("OK — proof recipes self-test: 9/9 drift, schema, trigger, and symbol controls live")
             return 0
         registry = load_and_validate(root)
         surfaces = generated_surfaces(registry)
