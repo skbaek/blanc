@@ -47,7 +47,7 @@ DECL_KINDS = {
     "opaque", "structure", "theorem",
 }
 DECL_MODIFIERS = r"(?:(?:private|protected|noncomputable|unsafe|partial)\s+)*"
-NAME_PART = r"[A-Za-z_][A-Za-z0-9_'?!]*"
+NAME_PART = r"(?:[^\W\d]|_)[\w'?!]*"
 QUALIFIED = rf"{NAME_PART}(?:\.{NAME_PART})*"
 DECL_RE = re.compile(
     rf"^(?P<indent>\s*){DECL_MODIFIERS}"
@@ -373,10 +373,16 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
         if TOP_COMMAND_RE.match(without_newline) or without_newline.startswith("@["):
             boundaries.add(index)
             continue
-        if re.match(r"^instance\s*(?:\([^)]*\)\s*)?:", without_newline):
+        if re.fullmatch(
+            r"(?:(?:private|protected|noncomputable|unsafe|partial)\s+)*"
+            r"instance\s*(?:(?:\([^)]*\)|\{[^}]*\}|\[[^]]*\])\s*)*(?::.*)?",
+            without_newline,
+        ):
             # Unnamed instances have no declaration identifier suitable for a
-            # declaration-scoped exception. They still delimit adjacent named
-            # declarations, but are outside these two high-confidence rules.
+            # declaration-scoped exception. Their header may continue on the
+            # next line after one or more explicit/implicit binders; they still
+            # delimit adjacent named declarations, but are outside these two
+            # high-confidence rules.
             boundaries.add(index)
             continue
         # An unindented declaration-looking keyword outside the recognized
@@ -752,7 +758,11 @@ end Blanc.Fixture
 
 namespace Blanc.Fixture
 
-private theorem copiedLongLemma (n : Nat) :
+instance (α : Type)
+    (x : α) :
+    Inhabited α := ⟨x⟩
+
+private theorem copiedLongLemma₀ (n : Nat) :
     (n + 0) + 0 = n := by
   rw [Nat.add_zero]
   rw [Nat.add_zero]
@@ -778,7 +788,7 @@ end Blanc.Fixture
         parsed = index.parse_worktree("Blanc/Consumer.lean")
         changed = [ChangedDeclaration(decl, True) for decl in parsed.declarations]
         copies = imported_copy_findings(changed, index)
-        if len(copies) != 1 or copies[0].declaration != "Blanc.Fixture.copiedLongLemma":
+        if len(copies) != 1 or copies[0].declaration != "Blanc.Fixture.copiedLongLemma₀":
             raise GateError("self-test: imported byte-identical copy was not detected")
         registry = RegistryInfo(
             active_ids=frozenset({active_recipe_id}),
@@ -861,8 +871,8 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
         raise GateError("self-test requires at least one active recipe")
     detector_self_test(sorted(registry.active_ids)[0])
     print(
-        "OK — proof-recipe gate self-test: generated drift, imported copy, selector table, "
-        "and 5 exception controls passed"
+        "OK — proof-recipe gate self-test: generated drift, anonymous-instance boundary, "
+        "imported copy, selector table, and 5 exception controls passed"
     )
 
 
