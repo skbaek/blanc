@@ -422,7 +422,7 @@ private lemma ne_of_eqCheck_eq_zero {a b : B256} (h : (a =? b) = 0) :
   · assumption
 
 /-- A short answer sets the guard's flag. -/
-lemma toB256_lt_32_of_lt {n : Nat} (h : n < 32) :
+theorem toB256_lt_32_of_lt {n : Nat} (h : n < 32) :
     (Nat.toB256 n) < (32 : B256) := by
   rw [B256.lt_iff_toNat_lt_toNat,
     B256.toNat_toB256_of_lt (by omega),
@@ -432,7 +432,7 @@ lemma toB256_lt_32_of_lt {n : Nat} (h : n < 32) :
 /-- A cleared guard flag forces a full word of answer.  The contrapositive of
 `toB256_lt_32_of_lt`, and the step that lets everything downstream read the
 child's first word without any premise about the CircuitBreaker's memory. -/
-lemma le_length_of_not_toB256_lt_32 {n : Nat}
+theorem le_length_of_not_toB256_lt_32 {n : Nat}
     (h : ¬ (Nat.toB256 n) < (32 : B256)) : 32 ≤ n := by
   by_contra hlt
   exact h (toB256_lt_32_of_lt (by omega))
@@ -1153,22 +1153,7 @@ theorem pauseAfterSet_codeGuard_arms {fs : List Func} {sevm : Sevm}
     exact Or.inl ⟨eqCheck_ne_zero (fun h => hne (hflagw.symm.trans h)),
       runCompiledTo_rev_inv hbody⟩
 
-/-! ## All seven, in one statement
-
-The two premises `h_call` and `h_observe` are the predecessor's boundary
-theorems applied at whatever states *this* derivation reaches.  Neither
-constrains the target: `pauseCall_boundary` and `pauseStat_boundary` are proved
-for an arbitrary callee carrying arbitrary bytecode, and their remaining
-hypotheses — the six staged operands and the argument window — are facts about
-the CircuitBreaker's own staging lines.
-
-Carrying them as premises rather than deriving them here is the one composition
-step this cut does not close, and the reason is mechanical rather than
-semantic: `pauseCallStaging_operands`, `pauseStatStaging_operands` and
-`pauseStatStaging_calldata` are `private` to
-`Blanc/LidoCircuitBreakerCallBoundary.lean`, and exporting them means editing a
-module that carries a baselined elaboration row.  The whole-`pause`-to-CALL
-composition therefore remains open exactly as the last two cuts left it. -/
+/-! ## All seven, in one statement -/
 
 /-- **`pauseAfterSet`'s seven outcomes, partitioned.**
 
@@ -1177,6 +1162,23 @@ disjunct, and each names the condition that selected it and the payload it
 produced.  The conditions are the staged target's code size and, past the code
 guard, `child.error.isSome` and functions of `child.output` — the target's
 behaviour, and nothing else.
+
+**Why the two boundary relations are implications inside the conclusion rather
+than premises.**  They are stated at the states the derivation *actually*
+reaches, which is what keeps them satisfiable: an earlier draft carried them as
+premises universally quantified over every state the staging line could start
+from, and that form is false — instantiate it at a state whose memory holds
+neither word and the staging line still runs, the crossing still happens, and
+`PauseCallBoundary` still demands the operands be `target` and `duration`.  A
+false premise would have made outcomes 2 to 7 vacuous.  In this form each
+antecedent is exactly what `pauseCall_boundary` and `pauseStat_boundary` prove
+at those very states, so a consumer discharges it rather than assuming it.
+
+Carrying them at all is the one composition step this cut does not close, and
+the reason is mechanical rather than semantic: `pauseCallStaging_operands`,
+`pauseStatStaging_operands` and `pauseStatStaging_calldata` are `private` to
+`Blanc/LidoCircuitBreakerCallBoundary.lean`, and exporting them means editing a
+module that carries a baselined elaboration row.
 
 Two children appear and they are **not** the same: outcome 2's is the
 `pauseFor` CALL's, outcomes 3 to 7's is the `isPaused()` STATICCALL's.  That
@@ -1194,60 +1196,72 @@ theorem pauseAfterSet_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
-    (h_call : ∀ g p q : Devm, Line.Run sevm g pauseCallStaging p →
-      Ninst.RunCompiled sevm p (.exec .call) q →
-      PauseCallBoundary sevm target duration p q)
-    (h_observe : ∀ a p q : Devm, Line.Run sevm a pauseStatStaging p →
-      Ninst.RunCompiled sevm p (.exec .statcall) q →
-      PauseStatBoundary sevm target p q)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
-    -- 1: the target carries no code
+    -- outcome 1: the target carries no code
     ((entry.getCode target).size.toB256 = 0 ∧
         ∃ post, ex = .error (.revert, post) ∧ post.output = []) ∨
-      -- 2: the `pauseFor` CALL failed; its returndata is bubbled
-      ((entry.getCode target).size.toB256 ≠ 0 ∧ ∃ callChild : Devm,
-        callChild.error.isSome = true ∧
-        ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
-          (∃ post, ex = .error (.revert, post) ∧
-            post.output =
-              callChild.output.take callChild.output.length.toB256.toNat))) ∨
-      -- 3 to 7: the observation happened, and its answer was read
-      ((entry.getCode target).size.toB256 ≠ 0 ∧ ∃ child : Devm,
-        ((child.error.isSome = true ∧
-            ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
-              (∃ post, ex = .error (.revert, post) ∧
-                post.output =
-                  child.output.take child.output.length.toB256.toNat))) ∨
-          (child.error.isSome = false ∧
-            Nat.toB256 child.output.length < (32 : B256) ∧
-            (∃ post, ex = .error (.revert, post) ∧ post.output = [])) ∨
-          (child.error.isSome = false ∧
-            ¬ Nat.toB256 child.output.length < (32 : B256) ∧
-            32 ≤ child.output.length ∧ pausedAnswer child.output = 0 ∧
-            ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
-              (∃ post, ex = .error (.revert, post) ∧
-                post.output = customErrorData "PauseFailed"))) ∨
-          (child.error.isSome = false ∧
-            ¬ Nat.toB256 child.output.length < (32 : B256) ∧
-            32 ≤ child.output.length ∧ pausedAnswer child.output ≠ 0 ∧
-            pausedAnswer child.output ≠ 1 ∧
-            (∃ post, ex = .error (.revert, post) ∧ post.output = [])) ∨
-          (child.error.isSome = false ∧
-            ¬ Nat.toB256 child.output.length < (32 : B256) ∧
-            32 ≤ child.output.length ∧ pausedAnswer child.output = 1 ∧
-            ∃ successPre : Devm,
-              Func.RunCompiledTo fs sevm successPre pauseSuccess ex))) := by
+      ((entry.getCode target).size.toB256 ≠ 0 ∧
+        ∃ guardPost callPre callPost : Devm,
+          Line.Run sevm guardPost pauseCallStaging callPre ∧
+          Ninst.RunCompiled sevm callPre (.exec .call) callPost ∧
+          (PauseCallBoundary sevm target duration callPre callPost →
+            -- outcome 2: the `pauseFor` CALL failed; its returndata is bubbled
+            ((∃ callChild : Devm,
+                callChild.error.isSome = true ∧
+                callPost.returnData = callChild.output ∧
+                ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+                  (∃ post, ex = .error (.revert, post) ∧
+                    post.output = callChild.output.take
+                      callChild.output.length.toB256.toNat))) ∨
+              -- outcomes 3 to 7: the observation happened
+              (∃ armPre statPre statPost : Devm,
+                Line.Run sevm armPre pauseStatStaging statPre ∧
+                Ninst.RunCompiled sevm statPre (.exec .statcall) statPost ∧
+                (PauseStatBoundary sevm target statPre statPost →
+                  ∃ child : Devm,
+                    statPost.returnData = child.output ∧
+                    ((child.error.isSome = true ∧
+                        ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+                          (∃ post, ex = .error (.revert, post) ∧
+                            post.output = child.output.take
+                              child.output.length.toB256.toNat))) ∨
+                      (child.error.isSome = false ∧
+                        Nat.toB256 child.output.length < (32 : B256) ∧
+                        (∃ post, ex = .error (.revert, post) ∧
+                          post.output = [])) ∨
+                      (child.error.isSome = false ∧
+                        ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+                        32 ≤ child.output.length ∧
+                        pausedAnswer child.output = 0 ∧
+                        ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+                          (∃ post, ex = .error (.revert, post) ∧
+                            post.output = customErrorData "PauseFailed"))) ∨
+                      (child.error.isSome = false ∧
+                        ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+                        32 ≤ child.output.length ∧
+                        pausedAnswer child.output ≠ 0 ∧
+                        pausedAnswer child.output ≠ 1 ∧
+                        (∃ post, ex = .error (.revert, post) ∧
+                          post.output = [])) ∨
+                      (child.error.isSome = false ∧
+                        ¬ Nat.toB256 child.output.length < (32 : B256) ∧
+                        32 ≤ child.output.length ∧
+                        pausedAnswer child.output = 1 ∧
+                        ∃ successPre : Devm,
+                          Func.RunCompiledTo fs sevm successPre
+                            pauseSuccess ex))))))) := by
   rcases pauseAfterSet_codeGuard_arms h_empty hTarget run with
     ⟨hzero, hpost⟩ | ⟨hne, guardPost, hrun⟩
   · exact Or.inl ⟨hzero, hpost⟩
   obtain ⟨callPre, hstaging, hrun⟩ := runCompiledTo_prepend_inv hrun
   obtain ⟨callPost, hcross, hrun⟩ := runCompiledTo_next_inv hrun
-  have boundaryCall := h_call guardPost callPre callPost hstaging hcross
+  refine Or.inr ⟨hne, guardPost, callPre, callPost, hstaging, hcross,
+    fun boundaryCall => ?_⟩
   rw [pauseAfterCallBranch] at hrun
   obtain ⟨callChild, armPre, rest, hstk, hrd, hard, harm⟩ :=
     pauseAfterCall_arms boundaryCall hrun
   rcases harm with ⟨herr, hcall⟩ | ⟨-, hstat⟩
-  · refine Or.inr (Or.inl ⟨hne, callChild, herr, ?_⟩)
+  · refine Or.inl ⟨callChild, herr, hrd, ?_⟩
     obtain ⟨bubblePre, hburn, hbody⟩ := runCompiledTo_call_inv h_bubble hcall
     have hbrd : bubblePre.returnData = callChild.output :=
       hburn.returnData.symm.trans hard
@@ -1258,7 +1272,8 @@ theorem pauseAfterSet_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
   · rw [pauseStatArm] at hstat
     obtain ⟨statPre, hstatStaging, hstat⟩ := runCompiledTo_prepend_inv hstat
     obtain ⟨statPost, hstatCross, hstat⟩ := runCompiledTo_next_inv hstat
-    obtain ⟨child, hrd', houtcomes⟩ :=
-      pauseObservation_outcomes h_empty h_bubble h_failed
-        (h_observe armPre statPre statPost hstatStaging hstatCross) hstat
-    exact Or.inr (Or.inr ⟨hne, child, houtcomes⟩)
+    exact Or.inr ⟨armPre, statPre, statPost, hstatStaging, hstatCross,
+      fun boundaryStat =>
+        pauseObservation_outcomes h_empty h_bubble h_failed boundaryStat hstat⟩
+
+end Blanc.LidoCircuitBreaker

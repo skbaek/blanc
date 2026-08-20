@@ -5,6 +5,7 @@ import Blanc.LidoCircuitBreakerPauseJoin
 import Blanc.LidoCircuitBreakerPauseSettlement
 import Blanc.LidoCircuitBreakerPreControl
 import Blanc.LidoCircuitBreakerCallBoundary
+import Blanc.LidoCircuitBreakerObservation
 
 /-!
 Gate-owned controls for the Stage 5 access and temporal-authority family.
@@ -1851,5 +1852,124 @@ theorem call_boundary_arbitrary_target_code_control
     word,
     ⟨statWindow, statMessage, statSlot, statChild, statProcess, statData,
       statTarget, statStatic⟩⟩
+
+/-- **The observation's answer-handling is a function of the answer.**
+
+Four clauses, one per weakening this control exists to defeat, and all four are
+read — the lesson the predecessor's control learned the hard way is that a
+control which reads only one clause of a multi-clause relation survives a
+mutation that guts the others.
+
+* **(i)** defeats *decoder substitution*.  It spells `pausedAnswer`'s body out
+  in full — `Bytes.toB256 (out.sliceD 0 32 0)`, a projection of the child's
+  bytes — and quantifies over the CircuitBreaker's prior memory `μ`.  Restating
+  the decode against the word memory happens to hold makes this underivable,
+  because `μ` is unconstrained.
+* **(ii)** defeats a *stale-memory assumption on the short-return arm*.  The
+  two runs start from memories `μ₁` and `μ₂` that are arbitrary and unrelated,
+  and below 32 bytes the observation's write leaves the rest of the window
+  holding whatever each of them staged.  A proof that presumed those bytes zero
+  proves one of the two and not the other.
+* **(iii)** defeats *a length equality on the accepting path*.  `t ≠ []` forces
+  an answer strictly longer than a word, so any premise `length = 32` upstream
+  makes this underivable.  This is the Stage 6 trailing-bytes requirement,
+  stated so it can fail.
+* **(iv)** defeats *a cooperative-callee premise*.  It consumes the arms and
+  the join with exactly the premises they state and nothing else, so any
+  premise about how the callee behaves leaves it unprovable.  The target's
+  bytecode is arbitrary here without a `CodeAt` binder, because
+  `PauseStatBoundary` already binds the callee's code existentially and
+  constrains it not at all; a decorative binder would defend nothing.
+
+* **(v)** reads the **join** rather than the decode, and exists because an
+  earlier draft of `pauseAfterSet_outcomes` was vacuous in outcomes 2 to 7
+  while clauses (i) to (iv) noticed nothing: they exercise the decode
+  theorems, and a control guards the clauses it reads and nothing else.  This
+  one drives the join from a derivation of the whole routine and makes the code
+  guard's own condition decide outcome 1, so a join whose outcome-1 branch
+  stopped depending on the target's code size fails here.
+
+None of the pinned headers states the conjunction, and none states (i), (ii) or
+(iii) at an arbitrary prior memory at all. -/
+theorem observation_arbitrary_answer_control
+    (fs : List Func) (sevm : Sevm) (target : Adr) (duration : B256)
+    (statPre statPost : Devm) (ex : Execution)
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
+    (boundary : PauseStatBoundary sevm target statPre statPost)
+    (run : Func.RunCompiledTo fs sevm statPost
+      (Ninst.iszero :::
+        ((Func.call bubbleRevertSlot) <?> decodePausedResult)) ex) :
+    (∀ (μ : Mem) (s s' : Devm) (out : Bytes),
+        s.memory = μ.write 0 (out.take 32) → 32 ≤ out.length →
+        Line.Run sevm s (loadWord 0) s' →
+        ∃ rest, s'.stack = Bytes.toB256 (out.sliceD 0 32 0) :: rest) ∧
+      (∀ (μ₁ μ₂ : Mem) (p₁ p₂ : Devm) (e₁ e₂ : Execution) (out : Bytes),
+        p₁.memory = μ₁.write 0 (out.take 32) →
+        p₂.memory = μ₂.write 0 (out.take 32) →
+        p₁.returnData = out → p₂.returnData = out → out.length < 32 →
+        Func.RunCompiledTo fs sevm p₁ decodePausedResult e₁ →
+        Func.RunCompiledTo fs sevm p₂ decodePausedResult e₂ →
+        (∃ q, e₁ = .error (.revert, q) ∧ q.output = []) ∧
+          (∃ q, e₂ = .error (.revert, q) ∧ q.output = [])) ∧
+      (∀ (μ : Mem) (p : Devm) (e : Execution) (w t : Bytes),
+        w.length = 32 → Bytes.toB256 w = 1 → t ≠ [] →
+        p.memory = μ.write 0 ((w ++ t).take 32) → p.returnData = w ++ t →
+        ¬ Nat.toB256 (w ++ t).length < (32 : B256) →
+        Func.RunCompiledTo fs sevm p decodePausedResult e →
+        ∃ successPre, Func.RunCompiledTo fs sevm successPre pauseSuccess e) ∧
+      (∃ child : Devm,
+        statPost.returnData = child.output ∧
+        (child.error.isSome = false →
+          ¬ Nat.toB256 child.output.length < (32 : B256) →
+          (pausedAnswer child.output = 0 →
+            ((∃ d, ex = .error (.halt (.outOfGas .none), d)) ∨
+              (∃ post, ex = .error (.revert, post) ∧
+                post.output = customErrorData "PauseFailed"))) ∧
+          (pausedAnswer child.output = 1 →
+            ∃ successPre : Devm,
+              Func.RunCompiledTo fs sevm successPre pauseSuccess ex))) ∧
+      (∀ (entry : Devm) (e : Execution),
+        MemWordAt entry (targetWord * 32).toNat target.toB256 →
+        (entry.getCode target).size.toB256 = 0 →
+        Func.RunCompiledTo fs sevm entry pauseAfterSet e →
+        ∃ post, e = .error (.revert, post) ∧ post.output = []) := by
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · intro μ s s' out hmem hlong hrun
+    obtain ⟨hstk, -⟩ :=
+      pauseDecode_loadWord_eq_answer hmem hlong nil_pref hrun
+    obtain ⟨t, ht⟩ := hstk
+    exact ⟨t, ht⟩
+  · intro μ₁ μ₂ p₁ p₂ e₁ e₂ out hm₁ hm₂ hr₁ hr₂ hshort hrun₁ hrun₂
+    exact ⟨pauseDecode_shortReturn_payload h_empty hm₁ hr₁ hshort hrun₁,
+      pauseDecode_shortReturn_payload h_empty hm₂ hr₂ hshort hrun₂⟩
+  · intro μ p e w t hw hone hne hmem hrd hflag hrun
+    exact pauseDecode_accepts_one_withTail hw hone hmem hrd hflag hrun
+  · obtain ⟨child, hrd, houtcomes⟩ :=
+      pauseObservation_outcomes h_empty h_bubble h_failed boundary run
+    refine ⟨child, hrd, fun herr hflag => ⟨?_, ?_⟩⟩
+    · intro hzero
+      rcases houtcomes with ⟨he, -⟩ | ⟨-, hs, -⟩ | ⟨-, -, -, -, hpay⟩ |
+        ⟨-, -, -, hne0, -, -⟩ | ⟨-, -, -, hone, -⟩
+      · rw [herr] at he; exact absurd he (by decide)
+      · exact absurd hs hflag
+      · exact hpay
+      · exact absurd hzero hne0
+      · exact absurd (hzero.symm.trans hone) (by decide)
+    · intro hone
+      rcases houtcomes with ⟨he, -⟩ | ⟨-, hs, -⟩ | ⟨-, -, -, hzero, -⟩ |
+        ⟨-, -, -, -, hne1, -⟩ | ⟨-, -, -, -, hsucc⟩
+      · rw [herr] at he; exact absurd he (by decide)
+      · exact absurd hs hflag
+      · exact absurd (hzero.symm.trans hone) (by decide)
+      · exact absurd hone hne1
+      · exact hsucc
+  · intro entry e hword hzero hrun
+    rcases pauseAfterSet_outcomes (duration := duration)
+        h_empty h_bubble h_failed hword hrun with
+      ⟨-, hpost⟩ | ⟨hne, -⟩
+    · exact hpost
+    · exact absurd hzero hne
 
 end Blanc.LidoCircuitBreaker.AccessControls

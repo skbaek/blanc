@@ -81,6 +81,7 @@ OWNERS = {
     # execution, so what they OMIT -- every storage, code or memory conjunct a
     # cooperative callee would supply -- is as load-bearing as what they carry.
     "callBoundary": ROOT / "Blanc/LidoCircuitBreakerCallBoundary.lean",
+    "observation": ROOT / "Blanc/LidoCircuitBreakerObservation.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -115,6 +116,7 @@ MODULES = {
     "pauseSettlement": "Blanc.LidoCircuitBreakerPauseSettlement",
     "preControl": "Blanc.LidoCircuitBreakerPreControl",
     "callBoundary": "Blanc.LidoCircuitBreakerCallBoundary",
+    "observation": "Blanc.LidoCircuitBreakerObservation",
 }
 
 REQUIRED = (
@@ -212,6 +214,7 @@ REQUIRED = (
     # two clauses are independent.  All three weakenings verified rejected with
     # the library rebuilt; see the control's docstring.
     "call_boundary_arbitrary_target_code_control",
+    "observation_arbitrary_answer_control",
 )
 FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|opaque|native_decide|implemented_by)\b")
 
@@ -923,6 +926,68 @@ ROLES = {
         "pause_externalBoundary":
             "a85d61145a4f802704234fd2dae7e78629a73c2283377a2831fc3d0ebd76608c",
     },
+    # The observation cut: what the CircuitBreaker does with the target's
+    # answer.  Every outcome is indexed to a projection of the child's
+    # output, never to the word memory happened to hold, and the
+    # short-return arm draws no conclusion about that word at all.
+    "observation": {
+        "pauseStat_stagedWord_survives":
+            "851cfb0593ea694d4bff6b1fd2b6c2ab3a6f42983ec8aae8b769167e54d9fe84",
+        "pauseStat_window_holdsAnswer":
+            "b6147d863384ce4e0cb3df0b0aaf9c334f29cbb48a60801a5947bae3623d9142",
+        "runCompiledTo_next_inv":
+            "df77fdecaedf00c38e5d5bc385431712e65d7aa1b2c8064646fbcda13442f799",
+        "runCompiledTo_branch_inv":
+            "4f7adbbad3acb9008f35a7e1fd3ccdd988cb33c9d652b758e8c6ca2097952dd0",
+        "runCompiledTo_call_inv":
+            "946d4c4dc0f8cffd31285982d456299b5734938c2cef3952d661e392421853df",
+        "runCompiledTo_prepend_inv":
+            "6c3c0a7264e74aa0af713f1d29377cbd7c2a09ebf56c677d88e56bd4a495ded2",
+        "iszero_stack_inv":
+            "906557b6157bed0f18371fc7fb7eed0eb6e6330d2dbf533927ca45787c0bdd60",
+        "pauseObservation_arms":
+            "f65847961b539aec689255a7894acd4f4b11b7cb43342e6de47aba6228433362",
+        "pauseObservation_failureArm_bubbles":
+            "2ab199bc7e200393783dd79e446834cd28ac520e9ef1fae53deedf0a271a3366",
+        "pauseObservation_failureArm_payload":
+            "3f6f470536548f712f76f572c5231f9055fc64e31aa5b27a6b1436eeda71c666",
+        "pauseObservation_successArm_reachesDecode":
+            "9cf326e7bee90e0142af6e60d9568422169162fe74521cfcba0ee12e4308726a",
+        "toB256_lt_32_of_lt":
+            "97b943b7017d0d4b2bb6be5f46af15b4e5b76863cdb456f79b7fea5814b9f152",
+        "le_length_of_not_toB256_lt_32":
+            "3509e338b41374da0cf8b82cac49d7ae291c374911cd7c6ffa9830c5fc661111",
+        "pauseDecode_loadWord_eq_answer":
+            "d3b48bef5db1230359b40947514a7d8cba3f1ba3cf2d7b69d599149b50014097",
+        "pauseDecode_arms":
+            "8f8e6421e31e8608159adc50ae600ac248141981cce9a0cdb2de70d65ac11006",
+        "runCompiledTo_last_inv":
+            "212935a36e629c97d8b84cb3ab7a7fd42afae88e77446e72c87b9a609408fe39",
+        "runCompiledTo_rev_inv":
+            "4a7305a9f3950009b6f46121a7e9ba19cd748d3b23c6ce849fde3a17b60c3823",
+        "runCompiledTo_revSelector_inv":
+            "1a6c71f3ccbf28859fc5f4943ce70a8f3d9172db5db5298bc074d8a2dec4a4d7",
+        "runtime_emptyRevertSlot":
+            "4a4f3ec95f01060c2d9d806322baa7566fe4df9686e86f3ba0b89c653b61d4af",
+        "runtime_pauseFailedErrorSlot":
+            "9b538e272656e8be46949c9a84e31cb595468beebabd7be5f015d473d6835921",
+        "pauseDecode_shortReturn_payload":
+            "4ea8c2494c109b8ea43f5332b935ce82cd7fa5b31b4c25ee574d5ce8041766d7",
+        "pauseDecode_false_payload":
+            "196d728999b6d8e8c2e0ca8fa86a00d5b8bf4ea38e9d4d304a73539b52fa1315",
+        "pauseDecode_noncanonical_payload":
+            "330e67ac43353358aa8bafcfd605f46c75d374dfb8a0c4debb2fd8ff08544efb",
+        "pauseDecode_accepts_one":
+            "65e14cd6b758a0929a30f9297c32bb1a61a6929fb62843787d0a821e248059a5",
+        "pauseDecode_accepts_one_withTail":
+            "a7915d8553aef5031a4041a57bd7786da7bb04e8d4a856e0617f3d43a85ea4f6",
+        "pauseObservation_outcomes":
+            "c76ce7cee3f7bd67079157693a9ba48fffac877ddf8b84dddf3240f25fb7a5f7",
+        "pauseAfterSet_codeGuard_arms":
+            "23b220b4371839569937945ba4b532ada6456c62d1610534100b160e4459926d",
+        "pauseAfterSet_outcomes":
+            "a51a3a9f543bc979c519e91d1733f807f0245f0d1168f4dde1fe808d8caa63c7",
+    },
 }
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
@@ -1578,7 +1643,20 @@ def main() -> None:
           "outputting the child's returndata or the bubble's own "
           "memory-expansion refusal, the success arm as the sole route to the "
           "STATICCALL, and any successful walk past the branch forcing the "
-          "pauseFor(uint256) call to have succeeded; "
+          "pauseFor(uint256) call to have succeeded; Stage 6's observation "
+          "cut -- what the CircuitBreaker does with the target's answer, for "
+          "an arbitrary answer: all seven outcomes named with the aux slot "
+          "each reaches and the bytes each outputs, the decoded word proved "
+          "equal to a projection of the child's returned bytes rather than to "
+          "whatever memory held, the length guard deciding the short-return "
+          "arm on the answer's length alone with no premise about the "
+          "CircuitBreaker's prior memory and no claim about the mixed word "
+          "there, a valid word with any trailing bytes accepted, words staged "
+          "at or beyond 32 bytes surviving the observation whatever the child "
+          "returned while the word at zero is clobbered by the answer, and "
+          "one theorem partitioning pauseAfterSet's derivations across all "
+          "seven with both out-of-gas legs explicit and both boundary "
+          "relations applied at the states the derivation actually reaches; "
           f"{controls} labelled header mutations, deletion and trust controls")
 
 if __name__ == "__main__":
