@@ -3426,6 +3426,213 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil
     ⟨body, hmember⟩
   exact own.proofIndexed_of_childless hnotApproveCall hnotPermit chronology
 
+/-!
+The selector proofs below used to ask the kernel to reduce both Keccak calls in
+each selector inequality.  Freeze each selector word once, then keep the
+seventeen-word disjointness table entirely literal.  This is the same
+small-shape boundary used by the deployment proofs: the expensive source
+computation occurs once per named selector, while consumers only transport
+already-normalized facts.
+-/
+
+private theorem primaryDepositSelector_word_eq :
+    depositSelector = (0xd0e30db0 : B256) := by decide +kernel
+
+private theorem primaryDepositToSelector_word_eq :
+    depositToSelector = (0xb760faf9 : B256) := by decide +kernel
+
+private theorem primaryDepositToAndCallSelector_word_eq :
+    depositToAndCallSelector = (0x5ddb7d7e : B256) := by decide +kernel
+
+private theorem primaryTransferSelector_word_eq :
+    transferSelector = (0xa9059cbb : B256) := by decide +kernel
+
+private theorem primaryTransferAndCallSelector_word_eq :
+    transferAndCallSelector = (0x4000aea0 : B256) := by decide +kernel
+
+private theorem primaryTransferFromSelector_word_eq :
+    transferFromSelector = (0x23b872dd : B256) := by decide +kernel
+
+private theorem primaryWithdrawSelector_word_eq :
+    withdrawSelector = (0x2e1a7d4d : B256) := by decide +kernel
+
+private theorem primaryWithdrawToSelector_word_eq :
+    withdrawToSelector = (0x205c2878 : B256) := by decide +kernel
+
+private theorem primaryWithdrawFromSelector_word_eq :
+    withdrawFromSelector = (0x9555a942 : B256) := by decide +kernel
+
+private theorem primaryFlashLoanSelector_word_eq :
+    flashLoanSelector = (0x5cffe9de : B256) := by decide +kernel
+
+private structure SelectorWordNoPrimaryFlow (word : B256) : Prop where
+  deposit : word ≠ 0xd0e30db0
+  depositTo : word ≠ 0xb760faf9
+  depositToAndCall : word ≠ 0x5ddb7d7e
+  transfer : word ≠ 0xa9059cbb
+  transferAndCall : word ≠ 0x4000aea0
+  transferFrom : word ≠ 0x23b872dd
+  withdraw : word ≠ 0x2e1a7d4d
+  withdrawTo : word ≠ 0x205c2878
+  withdrawFrom : word ≠ 0x9555a942
+  flashLoan : word ≠ 0x5cffe9de
+
+private theorem SelectorWordNoPrimaryFlow.selectsNoPrimaryFlow
+    {e : Sevm} {word : B256}
+    (literal : SelectorWordNoPrimaryFlow word)
+    (selected : Sevm.selector e = word) :
+    SelectsNoPrimaryFlow e := by
+  constructor
+  · rw [selected, primaryDepositSelector_word_eq]
+    exact literal.deposit
+  · rw [selected, primaryDepositToSelector_word_eq]
+    exact literal.depositTo
+  · rw [selected, primaryDepositToAndCallSelector_word_eq]
+    exact literal.depositToAndCall
+  · rw [selected, primaryTransferSelector_word_eq]
+    exact literal.transfer
+  · rw [selected, primaryTransferAndCallSelector_word_eq]
+    exact literal.transferAndCall
+  · rw [selected, primaryTransferFromSelector_word_eq]
+    exact literal.transferFrom
+  · rw [selected, primaryWithdrawSelector_word_eq]
+    exact literal.withdraw
+  · rw [selected, primaryWithdrawToSelector_word_eq]
+    exact literal.withdrawTo
+  · rw [selected, primaryWithdrawFromSelector_word_eq]
+    exact literal.withdrawFrom
+  · rw [selected, primaryFlashLoanSelector_word_eq]
+    exact literal.flashLoan
+
+private theorem nameSelector_word_eq :
+    selector "name" [] = (0x06fdde03 : B256) := by decide +kernel
+
+private theorem approveSelector_word_eq :
+    selector "approve" [.address, .uint256] =
+      (0x095ea7b3 : B256) := by decide +kernel
+
+private theorem totalSupplySelector_word_eq :
+    selector "totalSupply" [] = (0x18160ddd : B256) := by decide +kernel
+
+private theorem permitTypehashSelector_word_eq_local :
+    selector "PERMIT_TYPEHASH" [] =
+      (0x30adf81f : B256) := by decide +kernel
+
+private theorem decimalsSelector_word_eq_local :
+    selector "decimals" [] = (0x313ce567 : B256) := by decide +kernel
+
+private theorem domainSeparatorSelector_word_eq :
+    selector "DOMAIN_SEPARATOR" [] =
+      (0x3644e515 : B256) := by decide +kernel
+
+private theorem maxFlashLoanSelector_word_eq :
+    selector "maxFlashLoan" [.address] =
+      (0x613255ab : B256) := by decide +kernel
+
+private theorem balanceOfSelector_word_eq :
+    selector "balanceOf" [.address] =
+      (0x70a08231 : B256) := by decide +kernel
+
+private theorem noncesSelector_word_eq_local :
+    selector "nonces" [.address] =
+      (0x7ecebe00 : B256) := by decide +kernel
+
+private theorem callbackSuccessSelector_word_eq :
+    selector "CALLBACK_SUCCESS" [] =
+      (0x8237e538 : B256) := by decide +kernel
+
+private theorem flashMintedSelector_word_eq :
+    selector "flashMinted" [] = (0x8b28d32f : B256) := by decide +kernel
+
+private theorem symbolSelector_word_eq :
+    selector "symbol" [] = (0x95d89b41 : B256) := by decide +kernel
+
+private theorem deploymentChainIdSelector_word_eq :
+    selector "deploymentChainId" [] =
+      (0xcd0d0096 : B256) := by decide +kernel
+
+private theorem approveAndCallSelector_word_eq :
+    approveAndCallSelector = (0xcae9ca51 : B256) := by decide +kernel
+
+private theorem permitSelector_word_eq :
+    permitSelector = (0xd505accf : B256) := by decide +kernel
+
+private theorem flashFeeSelector_word_eq_local :
+    selector "flashFee" [.address, .uint256] =
+      (0xd9d98ce4 : B256) := by decide +kernel
+
+private theorem allowanceSelector_word_eq_local :
+    selector "allowance" [.address, .address] =
+      (0xdd62ed3e : B256) := by decide +kernel
+
+private theorem nameSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x06fdde03 := by
+  constructor <;> decide +kernel
+
+private theorem approveSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x095ea7b3 := by
+  constructor <;> decide +kernel
+
+private theorem totalSupplySelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x18160ddd := by
+  constructor <;> decide +kernel
+
+private theorem permitTypehashSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x30adf81f := by
+  constructor <;> decide +kernel
+
+private theorem decimalsSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x313ce567 := by
+  constructor <;> decide +kernel
+
+private theorem domainSeparatorSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x3644e515 := by
+  constructor <;> decide +kernel
+
+private theorem maxFlashLoanSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x613255ab := by
+  constructor <;> decide +kernel
+
+private theorem balanceOfSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x70a08231 := by
+  constructor <;> decide +kernel
+
+private theorem noncesSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x7ecebe00 := by
+  constructor <;> decide +kernel
+
+private theorem callbackSuccessSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x8237e538 := by
+  constructor <;> decide +kernel
+
+private theorem flashMintedSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x8b28d32f := by
+  constructor <;> decide +kernel
+
+private theorem symbolSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x95d89b41 := by
+  constructor <;> decide +kernel
+
+private theorem deploymentChainIdSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0xcd0d0096 := by
+  constructor <;> decide +kernel
+
+private theorem approveAndCallSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0xcae9ca51 := by
+  constructor <;> decide +kernel
+
+private theorem permitSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0xd505accf := by
+  constructor <;> decide +kernel
+
+private theorem flashFeeSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0xd9d98ce4 := by
+  constructor <;> decide +kernel
+
+private theorem allowanceSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0xdd62ed3e := by
+  constructor <;> decide +kernel
+
 private def nameLine : Line :=
   [pushB256 (Blanc.String.toBytes "Wrapped Ether v10").toB256,
     pushB256 120, shl] ++
@@ -3448,7 +3655,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_name
   refine ⟨name, hnonempty, ?_, name_childlessTerminal, ?_, ?_, ?_⟩
   · rw [hselector]
     exact List.mem_cons.mpr (Or.inl rfl)
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact nameSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans nameSelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3478,7 +3686,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permitTypehash
     aesop
   · simpa only [permitTypehash] using
       returnWord_childlessTerminal PERMIT_TYPEHASH
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact permitTypehashSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans permitTypehashSelector_word_eq_local)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3499,7 +3708,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_decimals
   · exact ⟨returnWordLine 0x12, .ret, rfl, by
       simp [returnWordLine, NinstIsChildless, Ninst.pushB256,
         mstoreAt, pushList]⟩
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact decimalsSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans decimalsSelector_word_eq_local)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3520,7 +3730,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_callbackSuccess
     aesop
   · simpa only [callbackSuccess] using
       returnWord_childlessTerminal CALLBACK_SUCCESS
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact callbackSuccessSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans callbackSuccessSelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3605,7 +3816,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_totalSupply
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact totalSupplySelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans totalSupplySelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3625,7 +3837,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_balanceOf
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact balanceOfSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans balanceOfSelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3643,7 +3856,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_nonces
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact noncesSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans noncesSelector_word_eq_local)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3662,7 +3876,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashMinted
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact flashMintedSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans flashMintedSelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3680,7 +3895,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_symbol
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact symbolSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans symbolSelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3700,7 +3916,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deploymentChainId
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact deploymentChainIdSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans deploymentChainIdSelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3720,7 +3937,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowance
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact allowanceSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans allowanceSelector_word_eq_local)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3785,7 +4003,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_domainSeparator
     aesop
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact domainSeparatorSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans domainSeparatorSelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3849,7 +4068,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_maxFlashLoan
     aesop
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact maxFlashLoanSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans maxFlashLoanSelector_word_eq)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -3922,7 +4142,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashFee
     aesop
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
-  · constructor <;> rw [hselector] <;> decide +kernel
+  · exact flashFeeSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans flashFeeSelector_word_eq_local)
   · rw [hselector]
     decide +kernel
   · rw [hselector]
@@ -4222,7 +4443,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approveAndCall
     context.invocation.2.1
   rw [htarget] at hsilent
   have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
-    constructor <;> rw [hselector] <;> decide +kernel
+    exact approveAndCallSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans approveAndCallSelector_word_eq)
   have hnone := Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow (frame := frame) context
     hnoPrimary hnonempty
   have own := Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame) context hnone
@@ -4871,7 +5093,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
       (Devm.getStor callPost ca) (Devm.getStor frame.post ca) := by
     simpa only [htarget] using ownSuffix.storage
   have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
-    constructor <;> rw [hselector] <;> decide +kernel
+    exact permitSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans permitSelector_word_eq)
   have classified := Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow (frame := frame)
     context hnoPrimary hnonempty
   have ownRoot := Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame)
@@ -5303,199 +5526,6 @@ theorem Exec.Frame.CallFreeNoFlowStorageBranch.nonempty
     (branch : Blanc.Weth10.Exec.Frame.CallFreeNoFlowStorageBranch frame) :
     frame.sevm.data.length.toB256 ≠ 0 := by
   cases branch <;> assumption
-
-/-!
-The selector dispatcher below used to ask the kernel to reduce both Keccak
-calls in each of fifteen-by-ten selector inequalities.  Freeze each selector
-word once, then keep the quadratic disjointness table entirely literal.  This
-is the same small-shape boundary used by the deployment proofs: the expensive
-source computation occurs once per named selector, while the structural
-dispatcher only transports already-normalized facts.
--/
-
-private theorem primaryDepositSelector_word_eq :
-    depositSelector = (0xd0e30db0 : B256) := by decide +kernel
-
-private theorem primaryDepositToSelector_word_eq :
-    depositToSelector = (0xb760faf9 : B256) := by decide +kernel
-
-private theorem primaryDepositToAndCallSelector_word_eq :
-    depositToAndCallSelector = (0x5ddb7d7e : B256) := by decide +kernel
-
-private theorem primaryTransferSelector_word_eq :
-    transferSelector = (0xa9059cbb : B256) := by decide +kernel
-
-private theorem primaryTransferAndCallSelector_word_eq :
-    transferAndCallSelector = (0x4000aea0 : B256) := by decide +kernel
-
-private theorem primaryTransferFromSelector_word_eq :
-    transferFromSelector = (0x23b872dd : B256) := by decide +kernel
-
-private theorem primaryWithdrawSelector_word_eq :
-    withdrawSelector = (0x2e1a7d4d : B256) := by decide +kernel
-
-private theorem primaryWithdrawToSelector_word_eq :
-    withdrawToSelector = (0x205c2878 : B256) := by decide +kernel
-
-private theorem primaryWithdrawFromSelector_word_eq :
-    withdrawFromSelector = (0x9555a942 : B256) := by decide +kernel
-
-private theorem primaryFlashLoanSelector_word_eq :
-    flashLoanSelector = (0x5cffe9de : B256) := by decide +kernel
-
-private structure SelectorWordNoPrimaryFlow (word : B256) : Prop where
-  deposit : word ≠ 0xd0e30db0
-  depositTo : word ≠ 0xb760faf9
-  depositToAndCall : word ≠ 0x5ddb7d7e
-  transfer : word ≠ 0xa9059cbb
-  transferAndCall : word ≠ 0x4000aea0
-  transferFrom : word ≠ 0x23b872dd
-  withdraw : word ≠ 0x2e1a7d4d
-  withdrawTo : word ≠ 0x205c2878
-  withdrawFrom : word ≠ 0x9555a942
-  flashLoan : word ≠ 0x5cffe9de
-
-private theorem SelectorWordNoPrimaryFlow.selectsNoPrimaryFlow
-    {e : Sevm} {word : B256}
-    (literal : SelectorWordNoPrimaryFlow word)
-    (selected : Sevm.selector e = word) :
-    SelectsNoPrimaryFlow e := by
-  constructor
-  · rw [selected, primaryDepositSelector_word_eq]
-    exact literal.deposit
-  · rw [selected, primaryDepositToSelector_word_eq]
-    exact literal.depositTo
-  · rw [selected, primaryDepositToAndCallSelector_word_eq]
-    exact literal.depositToAndCall
-  · rw [selected, primaryTransferSelector_word_eq]
-    exact literal.transfer
-  · rw [selected, primaryTransferAndCallSelector_word_eq]
-    exact literal.transferAndCall
-  · rw [selected, primaryTransferFromSelector_word_eq]
-    exact literal.transferFrom
-  · rw [selected, primaryWithdrawSelector_word_eq]
-    exact literal.withdraw
-  · rw [selected, primaryWithdrawToSelector_word_eq]
-    exact literal.withdrawTo
-  · rw [selected, primaryWithdrawFromSelector_word_eq]
-    exact literal.withdrawFrom
-  · rw [selected, primaryFlashLoanSelector_word_eq]
-    exact literal.flashLoan
-
-private theorem nameSelector_word_eq :
-    selector "name" [] = (0x06fdde03 : B256) := by decide +kernel
-
-private theorem approveSelector_word_eq :
-    selector "approve" [.address, .uint256] =
-      (0x095ea7b3 : B256) := by decide +kernel
-
-private theorem totalSupplySelector_word_eq :
-    selector "totalSupply" [] = (0x18160ddd : B256) := by decide +kernel
-
-private theorem permitTypehashSelector_word_eq_local :
-    selector "PERMIT_TYPEHASH" [] =
-      (0x30adf81f : B256) := by decide +kernel
-
-private theorem decimalsSelector_word_eq_local :
-    selector "decimals" [] = (0x313ce567 : B256) := by decide +kernel
-
-private theorem domainSeparatorSelector_word_eq :
-    selector "DOMAIN_SEPARATOR" [] =
-      (0x3644e515 : B256) := by decide +kernel
-
-private theorem maxFlashLoanSelector_word_eq :
-    selector "maxFlashLoan" [.address] =
-      (0x613255ab : B256) := by decide +kernel
-
-private theorem balanceOfSelector_word_eq :
-    selector "balanceOf" [.address] =
-      (0x70a08231 : B256) := by decide +kernel
-
-private theorem noncesSelector_word_eq_local :
-    selector "nonces" [.address] =
-      (0x7ecebe00 : B256) := by decide +kernel
-
-private theorem callbackSuccessSelector_word_eq :
-    selector "CALLBACK_SUCCESS" [] =
-      (0x8237e538 : B256) := by decide +kernel
-
-private theorem flashMintedSelector_word_eq :
-    selector "flashMinted" [] = (0x8b28d32f : B256) := by decide +kernel
-
-private theorem symbolSelector_word_eq :
-    selector "symbol" [] = (0x95d89b41 : B256) := by decide +kernel
-
-private theorem deploymentChainIdSelector_word_eq :
-    selector "deploymentChainId" [] =
-      (0xcd0d0096 : B256) := by decide +kernel
-
-private theorem flashFeeSelector_word_eq_local :
-    selector "flashFee" [.address, .uint256] =
-      (0xd9d98ce4 : B256) := by decide +kernel
-
-private theorem allowanceSelector_word_eq_local :
-    selector "allowance" [.address, .address] =
-      (0xdd62ed3e : B256) := by decide +kernel
-
-private theorem nameSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x06fdde03 := by
-  constructor <;> decide +kernel
-
-private theorem approveSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x095ea7b3 := by
-  constructor <;> decide +kernel
-
-private theorem totalSupplySelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x18160ddd := by
-  constructor <;> decide +kernel
-
-private theorem permitTypehashSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x30adf81f := by
-  constructor <;> decide +kernel
-
-private theorem decimalsSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x313ce567 := by
-  constructor <;> decide +kernel
-
-private theorem domainSeparatorSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x3644e515 := by
-  constructor <;> decide +kernel
-
-private theorem maxFlashLoanSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x613255ab := by
-  constructor <;> decide +kernel
-
-private theorem balanceOfSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x70a08231 := by
-  constructor <;> decide +kernel
-
-private theorem noncesSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x7ecebe00 := by
-  constructor <;> decide +kernel
-
-private theorem callbackSuccessSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x8237e538 := by
-  constructor <;> decide +kernel
-
-private theorem flashMintedSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x8b28d32f := by
-  constructor <;> decide +kernel
-
-private theorem symbolSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x95d89b41 := by
-  constructor <;> decide +kernel
-
-private theorem deploymentChainIdSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0xcd0d0096 := by
-  constructor <;> decide +kernel
-
-private theorem flashFeeSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0xd9d98ce4 := by
-  constructor <;> decide +kernel
-
-private theorem allowanceSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0xdd62ed3e := by
-  constructor <;> decide +kernel
 
 /-- Every closed non-flow selector is disjoint from all ten primary-flow
 selector families. -/
