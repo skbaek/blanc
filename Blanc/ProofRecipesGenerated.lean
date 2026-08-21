@@ -92,14 +92,14 @@ def recipes : List Recipe := [
     status := "partial"
     triggers := ["goal-shape:selector-separation"]
     preferredPath := "Hoist a reviewed literal separation table ahead of repeated consumers and transport its facts directly; the ExecAccounting pilot reduced its module profile from 46.28 s to 17.74 s across 16 retrofits."
-    boundary := "The local table win does not establish I3's cross-domain canonical selector list, `Nodup` theorem, extractor, or named simp set; those remain unproved and no blocking rule may require them. Its 30-line module-size growth is the measured deliverable and remains assigned to the later WETH accounting family-compression/module-split goal; wave 3 refreshes the stale 65.650 s elaboration baseline through the gate's deliberate rebase procedure."
+    boundary := "The local table win does not establish I3's cross-domain canonical selector list, `Nodup` theorem, extractor, or named simp set; those remain unproved and no blocking rule may require them. The hoist originally added 30 physical lines. The WETH10 proof-architecture follow-up retained every private certificate and proof term but put each of 17 three-line certificates on one line, taking `Weth10HolderFlowExecAccounting` from 6398 to 6364 lines and its serialized median from 19.24 to 16.94 s. That stable layout reduction discharges the module's 6368-line growth finding; it does not justify a new selector abstraction or cross-module placement. `blanc_suggest` still misses the literal `SelectorWordNoPrimaryFlow` certificate goal, so callers must consult this recipe manually for that shape."
   },
   {
     id := "fixed-byte-offsets"
     status := "partial"
     triggers := ["goal-shape:fixed-byte-offset"]
     preferredPath := "Use the existing `Mem.Wf` and `Mem.Reads` APIs; I8 proposes the missing `writeAt`/`sliceD` extension. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost."
-    boundary := "The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained; the pilot was reverted and does not broaden this trigger."
+    boundary := "The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained. A later pilot promoted the whole local parameterized tail proof to a top-level private theorem: the owner median moved only from 48.11 to 46.85 s (-2.62%) and the same dominant 46.568 s kernel check remained. Both pilots were exactly reverted. Reopen only for a representation that removes or materially shrinks that kernel check, not for another naming or step-factorization variant."
   },
 ]
 

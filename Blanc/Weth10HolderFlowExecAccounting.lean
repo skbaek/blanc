@@ -3565,73 +3565,39 @@ private theorem allowanceSelector_word_eq_local :
     selector "allowance" [.address, .address] =
       (0xdd62ed3e : B256) := by decide +kernel
 
-private theorem nameSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x06fdde03 := by
-  constructor <;> decide +kernel
+private theorem nameSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x06fdde03 := by constructor <;> decide +kernel
 
-private theorem approveSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x095ea7b3 := by
-  constructor <;> decide +kernel
+private theorem approveSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x095ea7b3 := by constructor <;> decide +kernel
 
-private theorem totalSupplySelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x18160ddd := by
-  constructor <;> decide +kernel
+private theorem totalSupplySelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x18160ddd := by constructor <;> decide +kernel
 
-private theorem permitTypehashSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x30adf81f := by
-  constructor <;> decide +kernel
+private theorem permitTypehashSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x30adf81f := by constructor <;> decide +kernel
 
-private theorem decimalsSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x313ce567 := by
-  constructor <;> decide +kernel
+private theorem decimalsSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x313ce567 := by constructor <;> decide +kernel
 
-private theorem domainSeparatorSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x3644e515 := by
-  constructor <;> decide +kernel
+private theorem domainSeparatorSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x3644e515 := by constructor <;> decide +kernel
 
-private theorem maxFlashLoanSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x613255ab := by
-  constructor <;> decide +kernel
+private theorem maxFlashLoanSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x613255ab := by constructor <;> decide +kernel
 
-private theorem balanceOfSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x70a08231 := by
-  constructor <;> decide +kernel
+private theorem balanceOfSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x70a08231 := by constructor <;> decide +kernel
 
-private theorem noncesSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x7ecebe00 := by
-  constructor <;> decide +kernel
+private theorem noncesSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x7ecebe00 := by constructor <;> decide +kernel
 
-private theorem callbackSuccessSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x8237e538 := by
-  constructor <;> decide +kernel
+private theorem callbackSuccessSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x8237e538 := by constructor <;> decide +kernel
 
-private theorem flashMintedSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x8b28d32f := by
-  constructor <;> decide +kernel
+private theorem flashMintedSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x8b28d32f := by constructor <;> decide +kernel
 
-private theorem symbolSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0x95d89b41 := by
-  constructor <;> decide +kernel
+private theorem symbolSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0x95d89b41 := by constructor <;> decide +kernel
 
-private theorem deploymentChainIdSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0xcd0d0096 := by
-  constructor <;> decide +kernel
+private theorem deploymentChainIdSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0xcd0d0096 := by constructor <;> decide +kernel
 
-private theorem approveAndCallSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0xcae9ca51 := by
-  constructor <;> decide +kernel
+private theorem approveAndCallSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0xcae9ca51 := by constructor <;> decide +kernel
 
-private theorem permitSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0xd505accf := by
-  constructor <;> decide +kernel
+private theorem permitSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0xd505accf := by constructor <;> decide +kernel
 
-private theorem flashFeeSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0xd9d98ce4 := by
-  constructor <;> decide +kernel
+private theorem flashFeeSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0xd9d98ce4 := by constructor <;> decide +kernel
 
-private theorem allowanceSelector_noPrimaryFlow :
-    SelectorWordNoPrimaryFlow 0xdd62ed3e := by
-  constructor <;> decide +kernel
+private theorem allowanceSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0xdd62ed3e := by constructor <;> decide +kernel
 
 private def nameLine : Line :=
   [pushB256 (Blanc.String.toBytes "Wrapped Ether v10").toB256,

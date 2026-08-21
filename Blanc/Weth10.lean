@@ -791,11 +791,11 @@ theorem weth10_compileShape_eq_zero (dp : DeployParams) :
     (weth10 dp).compileShape = (weth10 ⟨0, 0⟩).compileShape :=
   weth10_compileShape_eq dp
 
-/-- The repository's one full kernel evaluation of the WETH10 compiler:
-the zero-parameter program compiles to exactly the committed template
-literal.  `weth10CompilesZero` below and `weth10RuntimeTemplate`'s
-identity in `Blanc/Weth10Deploy.lean` both derive from this witness
-instead of re-running the compiler in the kernel. -/
+/-- The zero-parameter template's direct full kernel evaluation of the WETH10
+compiler.  The generated mainnet artifact witness in `Blanc/Weth10Code.lean`
+performs a separate direct evaluation.  `weth10CompilesZero` below and
+`weth10RuntimeTemplate`'s identity in `Blanc/Weth10Deploy.lean` both derive
+from this template witness instead of re-running the compiler. -/
 theorem weth10TemplateCode_compile :
     Prog.compile (weth10 ⟨0, 0⟩) = some weth10TemplateCode := by
   decide +kernel
