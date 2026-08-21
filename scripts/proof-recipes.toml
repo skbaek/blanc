@@ -11,7 +11,7 @@ triggers = [
   "goal-head:Func.ExecWitness",
 ]
 preferred_path = "Use `func_run` and its registered opcode arms. For residual-cost attribution, opt in with the default-off `Blanc.Forward.discharge` trace and aggregate it with `scripts/read-discharge-trace.py` before changing a fallback."
-boundary = "This constructs a compiled walk; it does not invert an existing run, replace an already completed continuation with a summary, synthesize a parallel path certificate such as `DirectPausePath`, or optimize route data before the proof begins. A three-module inventory found the gas class heterogeneous (1,180 tactic / 90 residual) and every expensive value class heterogeneous, so no shared discharge fold is licensed. `LidoCircuitBreakerAttainment` instead measured repeated underconstrained `SourceStep` constructors and its one-path typed-helper pilot reduced 10.321 s to 5.971 s; that result does not license other route retrofits. The Registry profile stopped at a deterministic `rfl`/`whnf` timeout before it could license S3, while both measured registration heads were kernel-checking costs reserved for family compression."
+boundary = "This constructs a compiled walk; it does not invert an existing run, replace an already completed continuation with a summary, synthesize a parallel path certificate such as `DirectPausePath`, or optimize route data before the proof begins. A three-module inventory found the gas class heterogeneous (1,180 tactic / 90 residual) and every expensive value class heterogeneous, so no shared discharge fold is licensed. `LidoCircuitBreakerAttainment` instead measured repeated underconstrained `SourceStep` constructors and its one-path typed-helper pilot reduced 10.321 s to 5.971 s; that result does not license other route retrofits. Wave 4 found that exact proof-copy deletion moved `PauseWorldRunKit` only -1.1%, while a body-from-kernel summary moved `UnregisterRegistration` 38.482 to 21.610 s but required a new recursion ceiling and was reverted. Moving the same helper into `RegistrySubstrate` made that row 35.288 s and the gate red, so the cross-module extension is also closed."
 owner_module = "Blanc/Forward.lean"
 canonical_example = "Blanc/Weth10Redeemable.lean:withdrawTo_progExecSat"
 symbols = [
@@ -65,7 +65,7 @@ id = "state-context-cleanup"
 status = "active"
 triggers = ["context-shape:intermediate-devm"]
 preferred_path = "Use `clear_state hState` after transporting every fact that must survive."
-boundary = "This is destructive context cleanup: it removes the state and all local facts that depend on it. The continuation-summary pilot found this trigger to be a false positive after a continuation was already complete; direct reuse of the existing generic summary added two source lines and no measurable elaboration win. Wave 3 touched no new eligible intermediate-`Devm` goal, so one false positive is insufficient evidence for a narrower predicate that would not introduce false negatives; the trigger deliberately remains a bare heuristic."
+boundary = "This is destructive context cleanup: it removes the state and all local facts that depend on it. The continuation-summary pilot found this trigger to be a false positive after a continuation was already complete; direct reuse of the existing generic summary added two source lines and no measurable elaboration win. Wave 4 supplied a second eligible false positive in the exact-helper reuse experiment: the goal was discharged by an existing `RunCompiled` summary, so clearing state would only destroy usable hypotheses. The trigger deliberately remains the bare more-than-two-`Devm` heuristic because summary availability is semantic, not recoverable from the context count; narrowing by goal head would introduce false negatives in real construction goals. Treat the trigger as a prompt to check for a completed summary first, never as an automatic cleanup command."
 owner_module = "Blanc/Tactics.lean"
 canonical_example = "Blanc/Conserved.lean:Fmint.of_prepApprove"
 symbols = ["tactic:clear_state"]
@@ -126,10 +126,24 @@ id = "successor-projection-normalization"
 status = "partial"
 triggers = ["goal-shape:successor-projection"]
 preferred_path = "Use an existing named, oriented, one-layer projection lemma when one already serves the goal; otherwise keep the explicit local normalization."
-boundary = "Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges. On the heartbeatAfterCount/Expiry/Interval tower, adding six one-layer projection lemmas and six retrofits regressed module elaboration from 40.075 s to 41.944 s. Wave 3 then found `LidoCircuitBreakerAccess` dominated by 27–28 s kernel checks, not its secondary setMach chains, and the Registry profile could not pass its independent `rfl`/`whnf` timeout; neither result reopens S3."
+boundary = "Do not replace deep state towers with transparent abbreviations or broad unfolding; `RegistrySubstrate` records why that diverges. On the heartbeatAfterCount/Expiry/Interval tower, adding six one-layer projection lemmas and six retrofits regressed module elaboration from 40.075 s to 41.944 s. Wave 3 then found `LidoCircuitBreakerAccess` dominated by 27–28 s kernel checks, not its secondary setMach chains. Wave 4 attributed the Registry tail to `directPauseControl_gas` (defeq/whnf plus kernel checking) and `directPauseControl_run` (kernel checking); all later declarations stayed below 2 s and none of the module's 212 `Devm.setMach_setMach` citations occurs after that obstacle. This does not reopen S3, S1, S2, or a module split."
 owner_module = "Blanc/Forward.lean"
 canonical_example = "Blanc/Forward.lean:Devm.getStorVal_setMach"
 symbols = ["declaration:Devm.getStorVal_setMach"]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-21"
+
+[[recipe]]
+id = "runcompiled-family-compression"
+status = "partial"
+triggers = ["goal-shape:runcompiled-family-compression"]
+preferred_path = "When two expensive bodies repeat the same post-kernel walk, freeze a committed-row decision rule, factor the body-from-kernel boundary, preserve the old statements as instantiations, profile the generic and instances, run the bare elaboration gate, withhold the generic in an isolated falsifier, and reject any candidate that adds a proof-resource ceiling before landing."
+boundary = "G1: deleting 687 exact proof-copy lines moved `PauseWorldRunKit` 23.536 to 23.273 s (-1.1%) and raised `RegistrySubstrate` 17.513 to 26.909 s, so exact source duplication alone is not a timing signal. G2: the private `foundZeroOldLast`/`foundZeroOldLastSwapPop` body summary moved `UnregisterRegistration` 38.482 to 21.610 s (-43.8%), but without a new `maxRecDepth` scope it failed at the 24-step walk; a split after static-argument validation still failed in the canonical-address tail, so the no-escalation invariant refuted it and the proof edit was reverted. G3: the real `ReplacementRegistration.oldLastNonzero` body fell below 0.5 s and its module reached 21.433 s, but required shared placement made `RegistrySubstrate` 35.288 s (>2x baseline), so that extension is refuted until independent shared-ancestor headroom exists. G4: the Registry tail is sparse and kernel/defeq-owned, not a compression family. G5: `PauseWorldRun` (8.995 s), the WETH accounting pair (25.573 s combined), and the rich/local twin (4.424 s) are maintainability-only; source symmetry does not license a timing retrofit."
+owner_module = "Blanc/LidoCircuitBreakerUnregisterRegistration.lean"
+canonical_example = "Blanc/LidoCircuitBreakerUnregisterRegistration.lean:registerPauser_body_foundZeroOldLast_runCompiled"
+symbols = [
+  "declaration:Blanc.LidoCircuitBreaker.registerPauser_stageArgs_runCompiled",
+]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-21"
 

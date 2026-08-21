@@ -91,6 +91,9 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeContainsName `Blanc.selector target
   | "goal-shape:fixed-byte-offset" =>
       return head == some `Blanc.Mem.Wf || head == some `Blanc.Mem.Reads
+  | "goal-shape:runcompiled-family-compression" =>
+      return head == some `Blanc.Func.RunCompiled ||
+        head == some `Blanc.Func.RunCompiledTo
   | _ => return false
 
 def proofRecipeMatches (target : Lean.Expr)
