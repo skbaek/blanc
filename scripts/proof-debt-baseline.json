@@ -623,17 +623,6 @@
       "ceiling": 4096
     },
     {
-      "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatIntervalUpdateTail_runCompiled#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatIntervalUpdateTail_runCompiled",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatIntervalUpdateTail_runCompiled_generic#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerAccess.lean",
       "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatIntervalUpdateTail_runCompiled_generic",
@@ -643,72 +632,6 @@
       "option": "maxRecDepth",
       "value": 16384,
       "ceiling": 16384
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatIntervalUpdateTail_runCompiled_noop#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatIntervalUpdateTail_runCompiled_noop",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatIntervalUpdateTail_runCompiled_zero#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatIntervalUpdateTail_runCompiled_zero",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatInterval_body_runCompiled_noop_of_inclusive#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatInterval_body_runCompiled_noop_of_inclusive",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatInterval_body_runCompiled_of_inclusive#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatInterval_body_runCompiled_of_inclusive",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatInterval_body_runCompiled_of_inclusive_generic#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatInterval_body_runCompiled_of_inclusive_generic",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatInterval_body_runCompiled_zero_of_inclusive#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatInterval_body_runCompiled_zero_of_inclusive",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
     },
     {
       "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.setHeartbeatInterval_dispatch_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
