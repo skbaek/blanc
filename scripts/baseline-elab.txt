@@ -597,656 +597,143 @@
 # Result 4.070 -> 1.502) and any unrelated drift into this goal's commit.
 # Those four rows are left at their old values, which is the conservative
 # reading: an improvement is a note, never a failure.
+# G4b on 2026-08-22 ratcheted each row to min(previous baseline, five-pass
+# whole-tree median). Upward medians were recorded as current-cost evidence but
+# did not loosen this 2x gate. See ~/plans/reports/blanc-elab-instrument-2026-08-22.md.
+#
 OK	1.241	Blanc.lean
-OK	1.164	Blanc/BalanceAlgebra.lean
-OK	1.257	Blanc/Basic.lean
+OK	1.150	Blanc/BalanceAlgebra.lean
+OK	1.233	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
 OK	1.786	Blanc/Compiled.lean
 OK	2.178	Blanc/Conserved.lean
-OK	3.158	Blanc/Fmint.lean
-OK	4.549	Blanc/FmintCode.lean
-OK	3.121	Blanc/Ladder.lean
-OK	1.656	Blanc/Semantics.lean
-OK	2.053	Blanc/Solvent.lean
-OK	2.113	Blanc/Tactics.lean
-OK	2.461	Blanc/Weth.lean
-OK	2.355	Blanc/Weth10Backed.lean
-OK	1.234	Blanc/Weth10Core.lean
-OK	1.187	Blanc/Weth10Spec.lean
-OK	3.845	Blanc/WethCode.lean
-OK	1.283	Main.lean
-OK	2.002	Blanc/FlashSpec.lean
-OK	11.154	Blanc/Forward.lean
-OK	1.227	Blanc/Reverts.lean
-OK	4.684	Blanc/FmintLive.lean
-OK	5.574	Blanc/FmintReverts.lean
-OK	5.383	Blanc/WethLive.lean
-OK	7.978	Blanc/WethGas.lean
+OK	1.289	Blanc/CycleWriteFree.lean
+OK	2.184	Blanc/ExecDeterminism.lean
+OK	6.583	Blanc/ExecutionOccurrence.lean
+OK	1.347	Blanc/ExecutionSettlement.lean
+OK	1.891	Blanc/FlashSpec.lean
+OK	2.973	Blanc/Fmint.lean
+OK	4.485	Blanc/FmintCode.lean
 OK	7.098	Blanc/FmintGas.lean
-OK	1.743	Blanc/ForwardCall.lean
+OK	4.096	Blanc/FmintLive.lean
+OK	5.266	Blanc/FmintReverts.lean
 OK	27.664	Blanc/FmintSettles.lean
+OK	11.154	Blanc/Forward.lean
+OK	1.743	Blanc/ForwardCall.lean
+OK	3.121	Blanc/Ladder.lean
+OK	15.805	Blanc/LidoCircuitBreaker.lean
+OK	15.066	Blanc/LidoCircuitBreakerAbsentRegistration.lean
+OK	36.398	Blanc/LidoCircuitBreakerAccess.lean
+OK	32.134	Blanc/LidoCircuitBreakerAttainment.lean
+OK	9.765	Blanc/LidoCircuitBreakerAuthority.lean
+OK	3.164	Blanc/LidoCircuitBreakerCallBoundary.lean
+OK	1.341	Blanc/LidoCircuitBreakerCode.lean
+OK	1.230	Blanc/LidoCircuitBreakerCore.lean
+OK	7.130	Blanc/LidoCircuitBreakerDeploy.lean
+OK	40.326	Blanc/LidoCircuitBreakerEnumeration.lean
+OK	17.604	Blanc/LidoCircuitBreakerFreshRegistration.lean
+OK	1.393	Blanc/LidoCircuitBreakerObservation.lean
+OK	2.810	Blanc/LidoCircuitBreakerOwnerClosure.lean
+OK	2.207	Blanc/LidoCircuitBreakerPauseAttainment.lean
+OK	1.509	Blanc/LidoCircuitBreakerPauseGuards.lean
+OK	2.071	Blanc/LidoCircuitBreakerPauseJoin.lean
+OK	10.037	Blanc/LidoCircuitBreakerPauseOkRoute.lean
+OK	2.118	Blanc/LidoCircuitBreakerPauseRoute.lean
+OK	1.635	Blanc/LidoCircuitBreakerPauseSettlement.lean
+OK	1.247	Blanc/LidoCircuitBreakerPauseSuffix.lean
+OK	7.158	Blanc/LidoCircuitBreakerPauseSuffixWalk.lean
+OK	46.476	Blanc/LidoCircuitBreakerPauseWalk.lean
+OK	2.391	Blanc/LidoCircuitBreakerPauseWorld.lean
+OK	8.953	Blanc/LidoCircuitBreakerPauseWorldRun.lean
+OK	23.238	Blanc/LidoCircuitBreakerPauseWorldRunKit.lean
+OK	1.717	Blanc/LidoCircuitBreakerPreControl.lean
+OK	2.475	Blanc/LidoCircuitBreakerRegistrationWorld.lean
+OK	67.133	Blanc/LidoCircuitBreakerRegistry.lean
+OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean
+OK	17.513	Blanc/LidoCircuitBreakerRegistrySubstrate.lean
+OK	30.155	Blanc/LidoCircuitBreakerReplacementRegistration.lean
+OK	2.232	Blanc/LidoCircuitBreakerReplacementWorld.lean
+OK	1.261	Blanc/LidoCircuitBreakerRetainedAuthority.lean
+OK	16.620	Blanc/LidoCircuitBreakerSites.lean
+OK	1.269	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
+OK	5.286	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
+OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
+OK	0.594	Blanc/ProofRecipesGenerated.lean
 OK	1.630	Blanc/RevertPayload.lean
-OK	20.879	Blanc/Weth10.lean
-OK	13.609	Blanc/Weth10Code.lean
-OK	45.126	Blanc/Weth10Deploy.lean
-OK	17.160	Blanc/Weth10DeployDomainSlices.lean
-OK	1.973	Blanc/Weth10DeployExec.lean
-OK	2.780	Blanc/Weth10DeployProof.lean
-OK	12.082	Blanc/Weth10DeployUpperSlices.lean
-OK	1.703	Blanc/Weth10DeploymentRoot.lean
+OK	1.178	Blanc/Reverts.lean
+OK	1.597	Blanc/Semantics.lean
+OK	1.981	Blanc/Solvent.lean
+OK	1.553	Blanc/SourceAttainment.lean
+OK	1.999	Blanc/Tactics.lean
+OK	1.208	Blanc/TransientInvariance.lean
+OK	1.269	Blanc/TransientSettlement.lean
+OK	2.356	Blanc/Weth.lean
+OK	20.746	Blanc/Weth10.lean
+OK	1.676	Blanc/Weth10AllowanceAccounting.lean
+OK	1.436	Blanc/Weth10AllowanceArms.lean
+OK	1.766	Blanc/Weth10AllowanceArmsBalance.lean
+OK	2.090	Blanc/Weth10AllowanceArmsCallback.lean
+OK	2.355	Blanc/Weth10AllowanceArmsFlash.lean
+OK	2.117	Blanc/Weth10AllowanceArmsPermit.lean
+OK	1.741	Blanc/Weth10AllowanceArmsRedeem.lean
+OK	1.848	Blanc/Weth10AllowanceArmsSpend.lean
+OK	2.000	Blanc/Weth10AllowanceArmsSpendRedeem.lean
+OK	1.572	Blanc/Weth10AllowanceArmsViews.lean
+OK	1.189	Blanc/Weth10AllowanceDispatch.lean
+OK	1.321	Blanc/Weth10AllowanceHistory.lean
+OK	2.106	Blanc/Weth10AllowanceRecursion.lean
+OK	1.289	Blanc/Weth10AnyOrder.lean
+OK	1.899	Blanc/Weth10Attribution.lean
+OK	1.467	Blanc/Weth10AttributionChronology.lean
+OK	2.353	Blanc/Weth10Backed.lean
+OK	12.944	Blanc/Weth10Code.lean
+OK	1.230	Blanc/Weth10Core.lean
+OK	43.631	Blanc/Weth10Deploy.lean
+OK	16.847	Blanc/Weth10DeployDomainSlices.lean
+OK	1.949	Blanc/Weth10DeployExec.lean
+OK	2.767	Blanc/Weth10DeployProof.lean
+OK	11.936	Blanc/Weth10DeployUpperSlices.lean
+OK	1.695	Blanc/Weth10DeploymentRoot.lean
+OK	2.213	Blanc/Weth10Dormant.lean
 OK	1.679	Blanc/Weth10Erc677Functional.lean
 OK	2.238	Blanc/Weth10Errors.lean
 OK	2.350	Blanc/Weth10FlashFunctional.lean
-OK	1.267	Blanc/Weth10Functional.lean
-OK	8.200	Blanc/Weth10Live.lean
+OK	1.210	Blanc/Weth10Functional.lean
+OK	1.195	Blanc/Weth10FutureRedeemable.lean
+OK	2.689	Blanc/Weth10Hardened.lean
+OK	1.712	Blanc/Weth10HolderFlow.lean
+OK	1.156	Blanc/Weth10HolderFlowAlgebra.lean
+OK	1.163	Blanc/Weth10HolderFlowAuthenticity.lean
+OK	4.424	Blanc/Weth10HolderFlowCompiled.lean
+OK	1.247	Blanc/Weth10HolderFlowConservation.lean
+OK	1.310	Blanc/Weth10HolderFlowDeterminism.lean
+OK	2.421	Blanc/Weth10HolderFlowEth.lean
+OK	8.399	Blanc/Weth10HolderFlowEthExec.lean
+OK	17.056	Blanc/Weth10HolderFlowExecAccounting.lean
+OK	2.428	Blanc/Weth10HolderFlowFlashChronology.lean
+OK	1.334	Blanc/Weth10HolderFlowLocal.lean
+OK	1.795	Blanc/Weth10HolderFlowPermitChronology.lean
+OK	1.476	Blanc/Weth10HolderFlowResult.lean
+OK	2.283	Blanc/Weth10HolderFlowSelectorFacts.lean
+OK	1.263	Blanc/Weth10HolderFlowStorage.lean
+OK	1.565	Blanc/Weth10HolderFlowTransferAndCallChronology.lean
+OK	7.549	Blanc/Weth10HolderFlowWriteCompleteness.lean
+OK	7.970	Blanc/Weth10Live.lean
 OK	4.589	Blanc/Weth10Permit.lean
+OK	1.363	Blanc/Weth10PermitRawEffect.lean
 OK	1.521	Blanc/Weth10Read.lean
 OK	8.252	Blanc/Weth10Redeemable.lean
-OK	1.294	Blanc/Weth10Sound.lean
-OK	1.203	Blanc/Weth10Stable.lean
-OK	1.452	Blanc/Weth10StateFunctional.lean
-OK	6.079	Blanc/Weth10StateSound.lean
-OK	1.795	Blanc/Weth10TransferFunctional.lean
-OK	2.445	Blanc/Weth10TemplateCode.lean
-
-# 2026-08-11. The execution-authentic WETH10 holder-flow conservation work
-# added the following 17 modules. These rows are the exact sequential
-# `scripts/check-elab.sh` measurements of the optimized 69-file candidate
-# (451.4 s total), with no Lean language server or competing build alive.
-# Before admitting them, the closed-program pcFree/SSTORE inventory walks and
-# repeated selector-hash comparisons were factored into symbolic composition;
-# all three proof-budget overrides introduced during development were removed.
-# Only these new rows were appended. Every pre-existing reference time above
-# remains byte-for-byte unchanged; `--rebase` was not run.
-OK	2.184	Blanc/ExecDeterminism.lean
-OK	1.409	Blanc/ExecutionSettlement.lean
-OK	1.975	Blanc/Weth10HolderFlow.lean
-OK	1.173	Blanc/Weth10HolderFlowAlgebra.lean
-OK	1.187	Blanc/Weth10HolderFlowAuthenticity.lean
-OK	4.424	Blanc/Weth10HolderFlowCompiled.lean
-OK	1.282	Blanc/Weth10HolderFlowConservation.lean
-OK	1.415	Blanc/Weth10HolderFlowDeterminism.lean
-OK	2.480	Blanc/Weth10HolderFlowEth.lean
-OK	8.517	Blanc/Weth10HolderFlowEthExec.lean
-OK	17.056	Blanc/Weth10HolderFlowExecAccounting.lean
-OK	3.659	Blanc/Weth10HolderFlowFlashChronology.lean
-OK	1.334	Blanc/Weth10HolderFlowLocal.lean
-OK	1.813	Blanc/Weth10HolderFlowPermitChronology.lean
-OK	1.480	Blanc/Weth10HolderFlowResult.lean
-OK	1.279	Blanc/Weth10HolderFlowStorage.lean
-OK	1.577	Blanc/Weth10HolderFlowTransferAndCallChronology.lean
-OK	7.603	Blanc/Weth10HolderFlowWriteCompleteness.lean
-OK	1.919	Blanc/Weth10Attribution.lean
-OK	1.514	Blanc/Weth10AttributionChronology.lean
 OK	3.003	Blanc/Weth10SelectorFacts.lean
-OK	2.325	Blanc/Weth10HolderFlowSelectorFacts.lean
-OK	1.776	Blanc/Weth10AllowanceAccounting.lean
-OK	2.144	Blanc/Weth10AllowanceRecursion.lean
-OK	1.386	Blanc/Weth10AllowanceHistory.lean
-OK	1.510	Blanc/Weth10AllowanceArms.lean
-OK	1.629	Blanc/Weth10AllowanceArmsViews.lean
-OK	1.804	Blanc/Weth10AllowanceArmsBalance.lean
-OK	1.867	Blanc/Weth10AllowanceArmsSpend.lean
-OK	2.000	Blanc/Weth10AllowanceArmsSpendRedeem.lean
-OK	1.741	Blanc/Weth10AllowanceArmsRedeem.lean
-OK	2.090	Blanc/Weth10AllowanceArmsCallback.lean
-OK	2.117	Blanc/Weth10AllowanceArmsPermit.lean
-OK	2.387	Blanc/Weth10AllowanceArmsFlash.lean
-OK	1.218	Blanc/Weth10AllowanceDispatch.lean
-OK	2.098	Blanc/Weth10StaticSilence.lean
-OK	1.366	Blanc/Weth10PermitRawEffect.lean
-OK	2.708	Blanc/Weth10Hardened.lean
-OK	2.213	Blanc/Weth10Dormant.lean
-OK	1.195	Blanc/Weth10FutureRedeemable.lean
-OK	1.350	Blanc/Weth10AnyOrder.lean
-
-# 2026-08-13. The execution-occurrence foundation added exactly one module,
-# Blanc/ExecutionOccurrence.lean. Its 6.587 s row is from a sequential
-# `scripts/check-elab.sh --list --no-build` run over all 94 files (449.7 s
-# total) after the exact source revision was built; the gate accepted the
-# connected Lean server as idle and below its contention limits. Only this new
-# row is admitted. Every pre-existing reference time above remains byte-for-byte
-# unchanged, and `--rebase` and `--force` were not used.
-OK	6.587	Blanc/ExecutionOccurrence.lean
-
-# 2026-08-14. The cycle-safe SSTORE-freedom foundation added exactly one
-# module, Blanc/CycleWriteFree.lean. Its 1.349 s row is the median of three
-# separate sequential `scripts/check-elab.sh --list --no-build` runs over all
-# 95 files on exact built tree 27d6c03 (the repaired 6722598 Lean source plus
-# two independently landed documentation-only commits): 1.288 s / 441.5 s
-# total, 1.349 s / 460.9 s total, and 1.466 s / 440.0 s total. `--rebase` and
-# `--force` were not used. Only this new row is admitted, and every
-# pre-existing reference row above remains byte-for-byte unchanged.
-OK	1.349	Blanc/CycleWriteFree.lean
-
-# 2026-08-14. The transient-settlement foundation added exactly one module,
-# Blanc/TransientSettlement.lean. Its 1.314 s row is the median of three
-# separate uncontended sequential `scripts/check-elab.sh --list --no-build`
-# runs over all 96 files on the exact final Lean source tree: 1.314 s / 431.2 s
-# total, 1.311 s / 432.1 s total, and 1.320 s / 432.1 s total. Only the gate's
-# Python mutant descriptions changed between the first measurement and the
-# final commit; every measured Lean source was byte-identical. `--rebase` and
-# `--force` were not used. Only this new row is admitted, and every
-# pre-existing reference row above remains byte-for-byte unchanged.
-OK	1.314	Blanc/TransientSettlement.lean
-
-# 2026-08-14. The Lido CircuitBreaker artifact-conformance goal added exactly
-# five production modules. Each row below is the per-file median of three
-# separate uncontended sequential `scripts/check-elab.sh --list --no-build`
-# runs over all 101 files on the exact already-built final Lean candidate:
-# 469.3 s, 462.3 s, and 460.1 s total. The five measurement triples were
-# recorded in `/private/tmp/lido-final-elab-{1,2,3}.txt`; only these new rows
-# are admitted. Every pre-existing reference row above remains byte-for-byte
-# unchanged, and `--rebase` and `--force` were not used.
-OK	20.843	Blanc/LidoCircuitBreaker.lean
-OK	1.550	Blanc/LidoCircuitBreakerCode.lean
-OK	1.230	Blanc/LidoCircuitBreakerCore.lean
-OK	7.353	Blanc/LidoCircuitBreakerDeploy.lean
-OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean
-
-# 2026-08-15. The compiled Registry-integrity goal added exactly one proof
-# owner, Blanc/LidoCircuitBreakerRegistry.lean. Its 68.192 s row is the median
-# of three separate uncontended sequential
-# `scripts/check-elab.sh --list --no-build` runs over all 102 files on the
-# exact already-built final Lean candidate: 68.192 s / 533.0 s total,
-# 68.432 s / 529.4 s total, and 67.295 s / 527.2 s total. The reports are
-# `/private/tmp/lido-registry-elab.SLoJC5/run{1,2,3}.txt`; the measured owner
-# SHA-256 is 064a1c8213b218c5894288c0b200e2c424914b74551211c93b2e1ea3467062bc.
-# Only this new row is admitted. Every pre-existing row above remains
-# byte-for-byte unchanged, and `--rebase` and `--force` were not used.
-OK	68.192	Blanc/LidoCircuitBreakerRegistry.lean
-
-# 2026-08-16. The Lido CircuitBreaker enumeration-observability goal added
-# exactly one proof owner, Blanc/LidoCircuitBreakerEnumeration.lean. Its
-# 42.170 s row is the median of three separate uncontended sequential
-# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
-# all 103 files on the exact already-built pre-admission candidate based on
-# Blanc 6b79e80 with task patch SHA-256
-# 0b83e76dc9c0c98072c4deb09a530f6916f289f46246cdb98e048edc21c3f8d0:
-# 39.740 s / 564.2 s total, 50.174 s / 616.0 s total, and 42.170 s /
-# 569.3 s total. The reports are `/private/tmp/lido-enum-elab-{1,2,3}.json`;
-# the measured owner SHA-256 is
-# 43d8e963ac3c6e7928664e9b18476e425b8f03ba64bc35b3b0d31853674101a8.
-# Only this new row is admitted. Every pre-existing row above remains
-# byte-for-byte unchanged, and `--rebase`, `--force`, and `--full` were not
-# used.
-OK	42.170	Blanc/LidoCircuitBreakerEnumeration.lean
-
-# 2026-08-16. The user explicitly authorized admitting the expected Stage 5
-# access/authority ownership cut after the chronology prerequisite made the
-# omitted rows visible to the content-addressed gate. Four new production
-# modules receive rows, and Blanc/LidoCircuitBreakerDeploy.lean is refreshed
-# from its pre-Stage-5 1.202 s row to account for its added compiled-execution
-# theorem. Each value is the per-file median of three separate uncontended
-# sequential `scripts/check-elab.sh --list --no-build --report <absolute-path>`
-# runs over all 107 files on exact already-built Lean source commit 1ff7d5b:
-# 607.0 s, 604.2 s, and 618.4 s total. The reports are
-# `/private/tmp/chronology-elab-{1,2,3}.txt`. Values and SHA-256 digests:
-#
-#   Access:       15.239, 14.370, 12.889 -> 14.370
-#                 16b8549d16a5ee97d7bbbe0272643c9c92122e84012e24bdeb95fcaf947444cc
-#   Authority:     1.206,  1.221,  1.223 ->  1.221
-#                 2285b1d4c5b35267389f75118026cb9e04ea08f94a64d6cddff059ac0e325c0f
-#   Deploy:        7.364,  6.992,  7.353 ->  7.353
-#                 7b7033cf07df9734e92f28dcdb600b57775d533e9b77365945da766852eed7ec
-#   OwnerClosure:  2.831,  2.703,  2.883 ->  2.831
-#                 06923c1b0b2e78b04c88264db21af55c258bdbb367daa6c218fecaa5b5a36d90
-#   Sites:         16.793, 16.649, 17.197 -> 16.793
-#                 4506b5c2f5892785cb8592da3930741687c0df6b1ca7b9f2cfcfb5f50b5f41cf
-#
-# `--rebase`, `--force`, and manual cache editing were not used. Apart from
-# the one explicitly authorized Deploy refresh, every pre-existing row remains
-# byte-for-byte unchanged.
-OK	46.880	Blanc/LidoCircuitBreakerAccess.lean
-OK	9.765	Blanc/LidoCircuitBreakerAuthority.lean
-OK	2.831	Blanc/LidoCircuitBreakerOwnerClosure.lean
-OK	16.793	Blanc/LidoCircuitBreakerSites.lean
-#
-# The five rows below admit the Stage 5 registration family. Four are the
-# modules created when the 8,086-line Blanc/LidoCircuitBreakerTemporalTransitions
-# was partitioned into a shared substrate plus one leaf per registration
-# chronology (that module is deleted and holds no row); the fifth,
-# RetainedAuthority, is a genuine pre-existing omission - it was registered in
-# Blanc.lean without a row, which the gate counts as a regression.
-#
-# Each value is the per-file median of three separate uncontended sequential
-# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
-# all 112 files on exact already-built Lean source commit
-# 0d1b2af2f41245d41bc078993f18d32be628e6d7: 726.3 s, 730.7 s, and 720.3 s
-# total. The reports are `<session-scratchpad>/elab-run{1,2,3}.txt`. Values and
-# SHA-256 digests:
-#
-#   AbsentRegistration:      15.526, 15.113, 15.245 -> 15.245
-#                 3fe2f055b8c6241ecbd825b421b4365f64217a5d719c6c4d75c2230b54b1bf87
-#   FreshRegistration:       23.775, 23.714, 23.625 -> 23.714
-#                 61151c23bd7e13497db2d79f8141dc602270a401cd2e56eab2f71ef1d220d8ad
-#   RegistrySubstrate:       11.326, 11.647, 11.411 -> 11.411
-#                 1a3ba4a091a619a4be282ce7890f528b639d5d0789f71c93f7d5a50ddb100e28
-#   RetainedAuthority:        1.254,  1.274,  1.261 ->  1.261
-#                 16cc014986befe80becedd4d72ff11cc9f800e547ec09125c7f48ef02348c0b5
-#   UnregisterRegistration:  15.922, 16.220, 15.719 -> 15.922
-#                 bd6ff7d52b05646ec9cb52443dc9d07daf8d8e9450737de82abdc9d3dd7b3647
-#
-# `--rebase`, `--force`, `--full`, and manual cache editing were not used; the
-# runs measured all 112 files because the local cache was cold, which is the
-# documented automatic full fallback. Every pre-existing row remains
-# byte-for-byte unchanged.
-#
-# TWO EXPLICITLY AUTHORIZED ROW RE-SETS: the Access and Authority rows above.
-# Both were correctly admitted at commit 1ff7d5b and described those files as
-# they were then. Each row's recorded digest still matches its file at that
-# commit and no longer matches the file, so neither row had ever measured the
-# content it was guarding:
-#
-#   Access:     was 14.370 s, digest 16b8549d...,  753 lines at 1ff7d5b.
-#               Now 4,218 lines, measured 46.880 / 47.153 / 40.044 s
-#               -> 46.880 s. New threshold 94.760 s.
-#   Authority:  was  1.221 s, digest 2285b1d4...,   68 lines at 1ff7d5b.
-#               Now 6,071 lines, measured 9.877 / 9.583 / 9.765 s
-#               -> 9.765 s. New threshold 19.530 s.
-#
-# Neither file was touched by the registration split or the tactic optimization
-# that produced the rows below; both grew in earlier work, and neither row was
-# re-admitted when it did. The gate read green throughout only because these
-# modules' fingerprints stayed valid, so the cache kept reissuing the pre-growth
-# measurements, and because `--list` compares nothing. The three full runs
-# recorded below refreshed the cache with honest values, which is what made the
-# condition visible.
-#
-# These are size admissions, not performance concessions, and each was checked
-# for waste before being admitted rather than assumed benign:
-#
-#   Authority ran at 112% CPU - essentially serial - so 9.765 s is the honest
-#   sum of many small costs. Its most expensive declaration is a 2.07 s
-#   `private def`, and only about ten exceed 500 ms. At 1.6 s per thousand lines
-#   it is the cheapest module in the Lido family; the 68-line stub it replaced
-#   cost roughly eleven times more per line.
-#
-#   Access holds 24 `func_run` endpoint walks over the heartbeat and
-#   setHeartbeatInterval families, totalling 77.8 s of genuine instruction
-#   stepping, plus 76.1 s of `rfl` spread over 100 sites at 0.76 s each and
-#   18.8 s of `assumption` over 19. It contains no `all_goals first`, so the
-#   combinator-backtracking defect that cost the registration family 95 s is
-#   absent. At 10.5 s per thousand lines it is in family norms (FreshRegistration
-#   is 11.2, RegistrySubstrate 4.5). The diffuse `rfl` cost is the one real
-#   inefficiency and would take a hundred-site rewrite to recover; the
-#   `32 * (bytesWords heartbeatArithmeticPanicData).length` and `.zipIdx` terms
-#   near lines 3953-3998 are the likely contributors, and they sit inside
-#   statements, so reducing them is not statement-preserving.
-#
-# Measurements were taken by three separate uncontended
-# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
-# all 112 files at commit 0d1b2af (726.3 s, 730.7 s, 720.3 s). Both files are
-# byte-identical at the current candidate - Access de5b9036..., Authority
-# f21e5a09... - so those measurements describe exactly this content and were not
-# re-run. `--rebase`, `--force`, `--full` and cache seeding were not used.
-OK	15.245	Blanc/LidoCircuitBreakerAbsentRegistration.lean
-OK	23.714	Blanc/LidoCircuitBreakerFreshRegistration.lean
-OK	17.513	Blanc/LidoCircuitBreakerRegistrySubstrate.lean
-OK	1.261	Blanc/LidoCircuitBreakerRetainedAuthority.lean
-OK	38.482	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
-#
-# One new row and one explicitly authorized raise, both from the same three
-# separate uncontended sequential
-# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
-# all 113 files on exact already-built Lean source commit
-# f34542ce058bae716af8cdc1e2f24fe96e01dee2: 720.5 s, 706.2 s, 738.3 s total.
-#
-#   RegistrySubstrate:  17.513, 16.678, 17.820 -> 17.513  (raised from 11.411)
-#                 2013729970caa2b10c96a20fc708fe079bbf0ad28ca99710bdde7eb8c103d7d1
-#   ReplacementRegistration: 1.308, 1.203, 1.280 -> 1.280  (new module)
-#                 39972fd92b9da6bf5809d3cde077835aa5f69e543fbb7ccee6a06f0fdd78b7e6
-#
-# The substrate raise supersedes the 11.411 s figure recorded in the block
-# above, and is a size admission, not a performance concession. That row was
-# admitted at 2,544 lines; the module is now 3,829. Per thousand lines the cost
-# is essentially unchanged - 4.49 s/kline then, 4.68 s/kline now, a 4.4% drift
-# inside measurement noise - because the growth is relocation, not new expense:
-# the registration leaves are siblings and may not import one another, so every
-# result a second chronology needs must move here. The family total went DOWN
-# across the same change, from 70.69 s to 67.90 s, while gaining four theorems
-# and a module, because FreshRegistration shed 5.7 s as its private copies were
-# promoted. The row has to rise because the accounting boundary moved.
-#
-# ReplacementRegistration is a new production module and its row is a first
-# admission; essentially all 1.280 s is import cost, its own four declarations
-# each profiling under the 400 ms trace threshold.
-#
-# Verified across all three runs: no module exceeds its row, including the two
-# rows re-set earlier for Access and Authority. `--rebase`, `--force`, `--full`
-# and cache seeding were not used, and every other row is byte-for-byte
-# unchanged. A fourth run was refused by the gate under language-server
-# contention (an editor's Lean server holding 1,228 MB against a 250 MB limit)
-# and was discarded rather than forced; the three runs above are the clean ones.
-OK	30.894	Blanc/LidoCircuitBreakerReplacementRegistration.lean
-#
-# ---- Access and temporal authority: ten new modules, two raises ----
-#
-# Admitted under the goal's elaboration-baseline procedure: three separate,
-# sequential, UNCONTENDED `scripts/check-elab.sh --list --no-build --report
-# <abs-path>` runs with distinct report paths, the MEDIAN of the three as the
-# row. All three values are recorded per row below. `--rebase`, `--force`,
-# `--full`-for-reassurance and cache seeding were not used, and every
-# pre-existing row other than the two named raises is byte-for-byte unchanged.
-#
-# Candidate: 8345cabd57824e69180e0e436999c074dffb26ae
-# Runs: 123 files each; 817.4 s, 850.9 s and 854.6 s of measured elaboration.
-# No language server was alive and no build or edit touched the tree between
-# the first run's start and the third run's end.
-#
-# New production modules. A file with no row here is a REGRESSION -- a new
-# module must state its cost -- so these rows are an extension to admit new
-# content, not a relaxation to admit a failure. `Blanc/SourceAttainment.lean`
-# is the one REUSABLE SHARED owner among them, and its row follows from the
-# user's approval of the shared attribution package rather than from the
-# new-module pre-authorization that covers the other nine.
-#
-#   Blanc/SourceAttainment.lean
-#     runs 1.596 / 1.658 / 1.660  ->  median 1.658
-#     sha256 6ae94497bab3c3c170db77817848b294c15a313ac40acdf5ed53cc99576590b6
-#   Blanc/LidoCircuitBreakerAttainment.lean
-#     runs 37.865 / 40.258 / 40.409  ->  median 40.258
-#     sha256 2283b66466f84d0b9ea32143e101a4ad1c1a1de455d1925df0a5ad2c71188e6d
-#   Blanc/LidoCircuitBreakerRegistrationWorld.lean
-#     runs 2.517 / 2.590 / 2.601  ->  median 2.590
-#     sha256 a80a8472abf0a096474b30a6f3de68d98ea0e809e65b7491e64c88d45dcc40a7
-#   Blanc/LidoCircuitBreakerReplacementWorld.lean
-#     runs 2.306 / 2.548 / 2.414  ->  median 2.414
-#     sha256 3bd9f5d4316773f86cc06b172d797294fc078eb6f7710d9fce14ab5e3828d354
-#   Blanc/LidoCircuitBreakerUnregisterWorld.lean
-#     runs 2.996 / 3.159 / 3.173  ->  median 3.159
-#     sha256 6c84e5daed29a8d1d5137900f972c7d94e6332fd009db148a6cefc5412c52e6e
-#   Blanc/LidoCircuitBreakerPauseSuffix.lean
-#     runs 1.270 / 1.307 / 1.308  ->  median 1.307
-#     sha256 4fe42e7f1d617b5788de38a65b016c50e670667cd8dc0ef427b5545e304f31ef
-#   Blanc/LidoCircuitBreakerPauseRoute.lean
-#     runs 2.107 / 2.185 / 2.210  ->  median 2.185
-#     sha256 2bc7080006211f15142e673d141c0e27f0004d0785bb8e9dad084e9c211fa8ba
-#   Blanc/LidoCircuitBreakerPauseGuards.lean
-#     runs 1.516 / 1.564 / 1.573  ->  median 1.564
-#     sha256 75b1ff5458ed003be3bfa6c61461fdabd592c92a4b20660a0e761697b9fb57d3
-#   Blanc/LidoCircuitBreakerPauseAttainment.lean
-#     runs 2.212 / 2.298 / 2.301  ->  median 2.298
-#     sha256 44767e8a749120f603b96256ce2016e3a984c3aeee37e7729730c28cebb43288
-#   Blanc/LidoCircuitBreakerUnregisterAttainment.lean
-#     runs 1.244 / 1.278 / 1.277  ->  median 1.277
-#     sha256 e771a23470e70289065963b2ad970b05020418c4d1fa4e608990dcc9b74164a1
-#
-# Two RAISES to existing rows. An increase is reserved to the user by the
-# goal; both were put to the user and taken as SIZE admissions, on the
-# density analysis recorded in the state brief -- each module got cheaper or
-# stayed in family per line while taking on several times its original
-# content. They are not performance concessions.
-#
-#   Blanc/LidoCircuitBreakerReplacementRegistration.lean
-#     row 1.280 -> median 30.894  (runs 30.290 / 31.782 / 30.894)
-#     sha256 5eeee3b9b0da452ceae913f25c1c64ece4479fd205592f6a827127b8258ef4da
-#   Blanc/LidoCircuitBreakerUnregisterRegistration.lean
-#     row 15.922 -> median 38.482  (runs 37.737 / 38.482 / 38.485)
-#     sha256 00b618cf53b693e677a30b024f474af47dc067276c10c33114aa782aa0ce8580
-#
-# `ReplacementRegistration`'s old row was never a measurement of this module:
-# it was admitted at 262 lines, where essentially all of the 1.280 s was
-# import cost and each of its four declarations profiled under the 400 ms
-# trace threshold. It now carries both arms of chronology 4 in 1,956 lines.
-# `UnregisterRegistration`'s row was admitted when the module carried one of
-# chronology 3's four cells; it now carries all four, at 1,410 -> 5,364 lines,
-# and is CHEAPER per line than when the row was set.
-#
-# A measured ~13% saving in `func_run` is available and deliberately NOT
-# taken here: `Blanc/Forward.lean` is outside this goal's module family, so
-# landing it is the user's call. If it is ever landed, it must go in BEFORE a
-# baseline measurement -- it lowers many of these rows -- and never after.
-OK	1.658	Blanc/SourceAttainment.lean
-OK	32.134	Blanc/LidoCircuitBreakerAttainment.lean
-OK	2.590	Blanc/LidoCircuitBreakerRegistrationWorld.lean
-OK	2.414	Blanc/LidoCircuitBreakerReplacementWorld.lean
-OK	3.159	Blanc/LidoCircuitBreakerUnregisterWorld.lean
-OK	1.307	Blanc/LidoCircuitBreakerPauseSuffix.lean
-OK	2.185	Blanc/LidoCircuitBreakerPauseRoute.lean
-OK	1.564	Blanc/LidoCircuitBreakerPauseGuards.lean
-OK	2.298	Blanc/LidoCircuitBreakerPauseAttainment.lean
-OK	1.277	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
-#
-# ---- Pause join: seven new modules, no raises ----
-#
-# Seven new rows and NO raise, all from the same three separate uncontended
-# sequential
-# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
-# all 130 files on exact already-built Lean source commit
-# f101d3d: 958.2 s, 953.6 s, 973.8 s total.
-#
-#   PauseWalk: 47.887, 46.903, 48.625 -> 47.887  (new module)
-#                 e7268239ce54e1edd3e967b0ace182a323f3e054fd884bb601ea67412d78ebd5
-#   PauseWorld: 2.489, 2.379, 2.760 -> 2.489  (new module)
-#                 257fea6b37b2d489692362c91d2de119f0f2faccd04cad32bb4156a2aef0afef
-#   PauseSuffixWalk: 7.101, 7.158, 8.582 -> 7.158  (new module)
-#                 51ce42523752a58398f71567f4d9bdf349d0e4a41566bb83c0be9226f51940d9
-#   PauseWorldRunKit: 23.536, 23.372, 25.923 -> 23.536  (new module)
-#                 c64fdd0f51337ab4f309bc4e80857d8dbcac63523c2b365d02de94cfb07e0cc4
-#   PauseWorldRun: 8.995, 8.972, 9.442 -> 8.995  (new module)
-#                 061b0ce161e4235b8be0c1e6207f99472173bf84b5180869b79e4004434fc288
-#   PauseOkRoute: 10.737, 10.415, 10.374 -> 10.415  (new module)
-#                 e0ed6a324cf872528da9c4ba5837dac43757437113745e9e92a9ff40cc75b6ff
-#   PauseJoin: 2.119, 2.105, 2.422 -> 2.119  (new module)
-#                 b904051bc0018ee71da33624c1bf0adc411482528df4dd448369232b158e84f9
-#
-# All seven are new production modules carrying this goal's pause-join
-# evidence, and every row is a first admission: the `.ok` walk legs
-# (`PauseWalk`, `PauseSuffixWalk`), the two witness worlds and the responder
-# crossings (`PauseWorld`), the world compositions and their bridging kit
-# (`PauseWorldRun`, `PauseWorldRunKit`), the `.ok` routes (`PauseOkRoute`),
-# and the join itself (`PauseJoin`).
-#
-# `PauseWalk` at 47.9 s is the family's cost centre and the reason is
-# structural, not a defect: it carries the pause body's whole guard-and-
-# staging ladder as one `func_run` walk, including the two hand-stepped
-# transient-storage instructions the tactic has no rule for.
-#
-# Verified across all three runs against the gate's own 2.0x drift criterion:
-# every pre-existing row holds in every run. The largest observed ratio is
-# 1.69x, on `RegistrySubstrate`.
-#
-# `RegistrySubstrate` is the one PRE-EXISTING module this goal modified -- two
-# premise-weakening generalizations that let the pause path's 768-byte staged
-# image reuse the kernel and removeTarget walks -- and it now measures
-# 24.439 / 26.523 / 29.576 against a 17.513 row. That is inside the gate's
-# tolerance and the row is left BYTE-FOR-BYTE UNCHANGED, as this goal's J6
-# requires: admitting new rows is authorized here, raising an existing one is
-# not. It is recorded as a candidate for a deliberate, separately justified
-# raise -- or an investigation of the parameterization's cost -- in a later
-# goal, not smuggled in behind a new-module admission.
-#
-# The triple drifts monotonically upward (run 1 < run 2 < run 3 for most
-# modules, and 958.2 < 953.6 < 973.8 is the same story at whole-tree scale
-# apart from run 2), so each median above is the middle of a rising sequence
-# rather than the bottom of a noisy one.
-#
-# `--rebase`, `--force` and cache seeding were not used, no run was refused,
-# and every other row is byte-for-byte unchanged.
-OK	47.887	Blanc/LidoCircuitBreakerPauseWalk.lean
-OK	2.489	Blanc/LidoCircuitBreakerPauseWorld.lean
-OK	7.158	Blanc/LidoCircuitBreakerPauseSuffixWalk.lean
-OK	23.536	Blanc/LidoCircuitBreakerPauseWorldRunKit.lean
-OK	8.995	Blanc/LidoCircuitBreakerPauseWorldRun.lean
-OK	10.415	Blanc/LidoCircuitBreakerPauseOkRoute.lean
-OK	2.119	Blanc/LidoCircuitBreakerPauseJoin.lean
-# ---- Pause settlement: one new module, no raises ----
-#
-# `Blanc/LidoCircuitBreakerPauseSettlement.lean` lifts both pause witness
-# worlds to the message altitude and states the model-side Registry
-# projections plus the slotwise model/run agreement between them.  It is a new
-# production module, admitted under the fixed three-run procedure; no existing
-# row is touched.
-#
-#   PauseSettlement: 1.643, 1.651, 1.647 -> 1.647  (new module)
-#
-# sha256(Blanc/LidoCircuitBreakerPauseSettlement.lean) =
-#   e58e694774c9c4a2e883f08b2fdecdb7252cd30af3bb71a52614712a934926db
-# candidate: Blanc `975463d` on codex/lido-circuit-breaker-pause-settlement,
-# working tree clean at every run.
-#
-# Three separate, sequential, uncontended `scripts/check-elab.sh --list
-# --no-build --report <abs-path>` runs over all 131 files, with the Lean
-# language server stopped first: whole-tree totals 909.5 s, 920.5 s, 927.8 s.
-# The module's own three values span 8 ms, so the median is not a coin flip.
-#
-# Every one of the 130 pre-existing rows holds in all three runs against the
-# gate's 2.0x drift criterion; none reached it.  The largest observed ratio is
-# 1.47x, on `RegistrySubstrate` (17.513 row; 25.588 / 25.660 / 23.428) — the
-# same row the pause-join goal recorded at 1.69x for the same reason, its
-# premise-weakening generalizations, and it is again left byte-for-byte
-# unchanged.  This goal is authorized to admit new rows, not to raise an
-# existing one; that row remains a candidate for a deliberate, separately
-# justified raise or a costed investigation in a later goal.
-#
-# `--rebase`, `--force` and cache seeding were not used, no run was refused
-# for contention, and this diff is additions-only.
-OK	1.647	Blanc/LidoCircuitBreakerPauseSettlement.lean
-
-# 2026-08-19. Stage 6's first pre-control cut added exactly two modules:
-# Blanc/TransientInvariance.lean, the contract-neutral `Devm.transientStorage`
-# invariance family the goal's amendment authorised, and
-# Blanc/LidoCircuitBreakerPreControl.lean, the cut's own proof owner. Each row
-# below is the per-file median of three separate, sequential, uncontended
-# `scripts/check-elab.sh --list --no-build` runs over all 133 files, with no
-# language server alive — the resident Lean tree was stopped before the first
-# run and none was started between them.
-#
-#   Blanc/LidoCircuitBreakerPreControl.lean   1.744 / 1.742 / 1.777
-#   Blanc/TransientInvariance.lean            1.299 / 1.270 / 1.318
-#
-# Run totals were 931.2 s, 923.8 s and 957.4 s. The candidate is blanc
-# fc0f97d93ca5c9e8df84ca032f05d8a056170a2a, and the measured sources digest
-# (SHA-256) to
-#   9aaa23a1139fb6c8600ab0db5953c467a141043fb5f5e1044efc3eb4c97d2220
-#     Blanc/LidoCircuitBreakerPreControl.lean
-#   e916daa89845b46a017f6c0d7cbd24aab15ff0b56f6b8222777f0585da7fcb74
-#     Blanc/TransientInvariance.lean
-#
-# The three runs bracket each row tightly (spread 0.035 s and 0.048 s), so the
-# median is not carrying host noise. `--rebase`, `--force` and cache seeding
-# were not used, no run was refused for contention, and this diff is
-# additions-only: every pre-existing reference row above remains byte-for-byte
-# unchanged.
-OK	1.299	Blanc/TransientInvariance.lean
-OK	1.744	Blanc/LidoCircuitBreakerPreControl.lean
-#
-# 2026-08-20. Stage 6's second cut, the call boundary, adds exactly one module:
-# Blanc/LidoCircuitBreakerCallBoundary.lean, its own proof owner. It states
-# what the CircuitBreaker sends at the pause's two external edges for arbitrary
-# target bytecode, and carries the fifteen public theorems now pinned by
-# scripts/check-lido-circuit-breaker-access.py. The row below is the per-file
-# median of three separate, sequential, uncontended
-# `scripts/check-elab.sh --list --no-build` runs over all 134 files, with no
-# language server alive -- the resident Lean tree was stopped before the first
-# run and none was started between them.
-#
-#   Blanc/LidoCircuitBreakerCallBoundary.lean   3.175 / 3.198 / 3.148  -> 3.175
-#
-# Whole-tree times for those runs were 952.7 s, 960.5 s and 932.9 s. The
-# candidate was pinned at
-#   ce74eeeec5421d7bdc192a6d06c23ddf2895bbd6
-# and the measured source digest (SHA-256) at
-#   226408382bc3b484cdd8d64811794406fadce6a3fc4fb9e1599207a37287e70e
-#     Blanc/LidoCircuitBreakerCallBoundary.lean
-# both verified unchanged across all three runs against a clean tree.
-#
-# The three runs bracket the row tightly (spread 0.050 s), so the median is not
-# carrying host noise. As an environment control, run 1's 133 pre-existing rows
-# were compared against their recorded values: median measured/baseline 1.033,
-# mean 1.031, spread 0.71x-1.38x, and zero rows at or above the 2.0x fail
-# threshold -- so this row was taken on a host running about 3% slower than the
-# one that recorded its neighbours, well inside tolerance. `--rebase`, `--force`
-# and cache seeding were not used, no run was refused for contention, and this
-# diff is additions-only: every pre-existing reference row above remains
-# byte-for-byte unchanged.
-OK	3.175	Blanc/LidoCircuitBreakerCallBoundary.lean
-#
-# 2026-08-20. Stage 6's third cut, the observation, adds exactly one module:
-# Blanc/LidoCircuitBreakerObservation.lean, its own proof owner. It states what
-# the CircuitBreaker does with the target's `isPaused()` answer, for an
-# arbitrary answer, and carries the twenty-eight public theorems now pinned by
-# scripts/check-lido-circuit-breaker-access.py.
-#
-# The row below was measured by `scripts/check-elab.sh --calibrate`, which is
-# the admission command scripts/GATES.md prescribes for a module with no
-# committed row. That mode replaced the fixed three-run whole-tree triple the
-# two predecessor cuts used; the earlier block above records the older
-# procedure and is left exactly as it was.
-#
-#   Blanc/LidoCircuitBreakerObservation.lean    1.443
-#
-# The run measured all 135 files in 962.9 s against a 959.2 s full baseline, so
-# the host was running about 0.4% slower than the one that recorded this row's
-# neighbours. No control was *drawn*: the shared Lean/Lake environment had
-# changed, so no module's fingerprint proved it unaffected, and the sampler
-# therefore measured every row-carrying module outright and compared it -- a
-# stronger control than a sample, and the gate says so in its own verdict.
-# The candidate was pinned at
-#   f04b897b1669f759ef3fce65b47b9fd0455652ed
-# and the measured source digest (SHA-256) at
-#   1b2d0a9b7970ef4d96990ed0f04efc845bbfbd56e2198506f938ab2068319a50
-#     Blanc/LidoCircuitBreakerObservation.lean
-#
-# Full evidence -- seed domain, seed, baseline and source-set digests, band
-# boundaries and the drawn set -- is in scripts/report-elab-calibration.txt,
-# written by the run itself so a reviewer can recompute the draw from the
-# commit. `--rebase`, `--force`, `--full` and cache seeding were not used, no
-# run was refused for contention, and this diff is additions-only: every
-# pre-existing reference row above remains byte-for-byte unchanged.
-OK	1.443	Blanc/LidoCircuitBreakerObservation.lean
-#
-# 2026-08-21. The preventive-spine goal adds exactly one generated pure-data
-# module, Blanc/ProofRecipesGenerated.lean. It is imported immediately upstream
-# of Blanc/Tactics.lean so the read-only `blanc_suggest` tactic consumes the
-# generated recipe table without referring to downstream proof declarations.
-#
-# The row below was measured by the additions-only admission command
-# `scripts/check-elab.sh --calibrate`; `--rebase`, `--force`, `--full`, and
-# cache seeding were not used. The run measured 135 modules in 964.8 s against
-# a 960.6 s full baseline. Nine drawn controls ranged from 0.92x to 1.03x with
-# median 1.010x, and no control reached the 1.50x annotation threshold.
-#
-# Seed domain blanc-elab-calibration-v1, candidate commit
-#   b068121bd8aedcee51c82eb72fd14d96e1ca3ca4
-# seed sha256(domain|commit)
-#   3065b90ec1b3a09630d04f1f1f2a5ae82a2778b3f88b7bf8b77f1381210a19cf
-# baseline sha256 before this additions-only admission
-#   3fa8ba6c6788b32b9c4b0b7417bcd30f0e9ac4b213e53a03e2824fa2684cfed7
-# source-set sha256 (every discovered path and its content)
-#   3f354f19a5ba254a24e127741528e4efc817744df3cc3b63c79af578f593ce6f
-#
-# Drawn controls (measured / baseline / ratio):
-#   Blanc/Basic.lean                         1.225 / 1.257 / 0.97
-#   Blanc/CommonCore.lean                    2.516 / 2.454 / 1.03
-#   Blanc/ExecDeterminism.lean               2.243 / 2.184 / 1.03
-#   Blanc/ExecutionSettlement.lean           1.353 / 1.409 / 0.96
-#   Blanc/Fmint.lean                         2.903 / 3.158 / 0.92
-#   Blanc/FmintCode.lean                     4.319 / 4.549 / 0.95
-#   Blanc/Semantics.lean                     1.699 / 1.656 / 1.03
-#   Blanc/Weth10Core.lean                    1.273 / 1.234 / 1.03
-#   Blanc/Weth10TemplateCode.lean            2.470 / 2.445 / 1.01
-#
-# The mandatory row measured 0.695 s. This diff adds only the provenance block
-# and row below; every pre-existing baseline row remains byte-for-byte
-# unchanged.
-OK	0.664	Blanc/ProofRecipesGenerated.lean
-#
-# 2026-08-21. The elaboration-head audit ran the gate's deliberate
-# `scripts/check-elab.sh --rebase` procedure once, sequentially and without a
-# language server. The full survey measured all 136 modules in 889.9 s. The
-# rebase command rewrites every row mechanically; this goal restored all 133
-# unrelated rows byte-for-byte and retained only its two changed Lean modules
-# plus the pre-authorized stale wave-2 accounting row:
-#
-#   LidoCircuitBreakerAttainment       40.258 -> 32.134
-#   ProofRecipesGenerated               0.695 ->  0.664
-#   Weth10HolderFlowExecAccounting     65.650 -> 17.056
-#
-# Attainment's typed `SourceStep` helper is the measured local deliverable.
-# ExecAccounting's selector-table hoist was already measured near 17 s on the
-# wave-2 completion candidate; this full run refreshes its stale 65.650 s row.
-# The generated pure-data recipe module's 31 ms movement is ordinary noise but
-# is retained because its content changed. No upward row was admitted.
+OK	1.239	Blanc/Weth10Sound.lean
+OK	1.187	Blanc/Weth10Spec.lean
+OK	1.169	Blanc/Weth10Stable.lean
+OK	1.414	Blanc/Weth10StateFunctional.lean
+OK	6.079	Blanc/Weth10StateSound.lean
+OK	1.809	Blanc/Weth10StaticSilence.lean
+OK	2.419	Blanc/Weth10TemplateCode.lean
+OK	1.750	Blanc/Weth10TransferFunctional.lean
+OK	3.793	Blanc/WethCode.lean
+OK	7.978	Blanc/WethGas.lean
+OK	5.383	Blanc/WethLive.lean
+OK	1.158	Main.lean
