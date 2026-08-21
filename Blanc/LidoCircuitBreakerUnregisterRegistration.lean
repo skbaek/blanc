@@ -1051,6 +1051,214 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
             (expirySlot pauser) (pairNe hexpiryRegistry.1),
           temporalSloadBase_getStorVal]
 
+/-! ## Shared production-body prefix
+
+`func_run` can traverse this prefix in one shot, but elaborating the resulting
+proof term exceeds Lean's default recursion depth.  Keep each computational
+step behind a named theorem boundary where its exact successor state is already
+known; the composed proof then checks at the default resource limits and is
+shared by the four zero-pauser chronology leaves below. -/
+
+private theorem pushNotZero_prepend_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {tail : Func} {post : Devm} {target : B256}
+    (htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], M, G⟩) tail post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨target :: [], M, G + 5⟩)
+      ([pushB256 0, not] +++ tail) post := by
+  func_run (2) [~~~(0 : B256)]
+  case a => exact htail
+
+private theorem shiftAddressMask_prepend_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {tail : Func} {post : Devm} {target : B256}
+    (htail : Func.RunCompiled fs sevm
+      (base.setMach
+        ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
+          M, G⟩) tail post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], M, G + 6⟩)
+      ([pushB256 (Nat.toB256 160), shl] +++ tail) post := by
+  func_run (2)
+    [((~~~(0 : B256)) <<< (Nat.toB256 160).toNat)]
+  case a => exact htail
+
+private theorem canonicalBranch_success_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {body : Func} {post : Devm} {target : B256}
+    (hmask : addressMask &&& target = 0)
+    (hbody : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G⟩) body post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨addressMask :: target :: [], M, G + 16⟩)
+      ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
+  func_run (2) [0]
+  case h_arm =>
+    have hg : G + 16 - 16 = G := by omega
+    rw [hg]
+    exact hbody
+
+private theorem checkNonAddress_success_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {body : Func} {post : Devm} {target : B256}
+    (hmask : addressMask &&& target = 0)
+    (hbody : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G⟩) body post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨target :: [], M, G + 27⟩)
+      (checkNonAddress +++ ((.call emptyRevertSlot) <?> body)) post := by
+  have hbranch := canonicalBranch_success_runCompiled hmask hbody
+  have hshiftRaw :
+      Func.RunCompiled fs sevm
+        (base.setMach
+          ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
+            M, G + 16⟩)
+        ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
+    rw [← addressMask_eq_shl]
+    exact hbranch
+  have hshift := shiftAddressMask_prepend_runCompiled hshiftRaw
+  have hnot := pushNotZero_prepend_runCompiled hshift
+  have hg : G + 16 + 6 + 5 = G + 27 := by omega
+  have hsplit :
+      checkNonAddress +++ ((.call emptyRevertSlot) <?> body) =
+        [pushB256 0, not] +++
+          ([pushB256 (Nat.toB256 160), shl] +++
+            ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body))) := by
+    rfl
+  rw [← hg, hsplit]
+  exact hnot
+
+private theorem arg0_prepend_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {tail : Func} {post : Devm} {target : B256}
+    (harg : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨target :: [], M, G⟩) tail post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + 6⟩)
+      (arg 0 +++ tail) post := by
+  unfold arg cdl
+  func_run (2)
+  case a => rw [harg]; exact htail
+
+private theorem arg1_prepend_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {tail : Func} {post : Devm} {target : B256}
+    (harg : Sevm.dataWord sevm (32 * 1 + 4) = target)
+    (htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨target :: [], M, G⟩) tail post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + 6⟩)
+      (arg 1 +++ tail) post := by
+  unfold arg cdl
+  func_run (2)
+  case a => rw [harg]; exact htail
+
+private theorem canonicalAddressArg0_success_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {body : Func} {post : Devm} {target : B256}
+    (harg : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hmask : addressMask &&& target = 0)
+    (hbody : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G⟩) body post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + 33⟩)
+      (canonicalAddressArg 0 body) post := by
+  have hcheck := checkNonAddress_success_runCompiled hmask hbody
+  have hargRun := arg0_prepend_runCompiled harg hcheck
+  have hg : G + 27 + 6 = G + 33 := by omega
+  have hsplit :
+      canonicalAddressArg 0 body =
+        arg 0 +++
+          (checkNonAddress +++ ((.call emptyRevertSlot) <?> body)) := by
+    rfl
+  rw [← hg, hsplit]
+  exact hargRun
+
+private theorem canonicalAddressArg1_success_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {body : Func} {post : Devm} {target : B256}
+    (harg : Sevm.dataWord sevm (32 * 1 + 4) = target)
+    (hmask : addressMask &&& target = 0)
+    (hbody : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G⟩) body post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + 33⟩)
+      (canonicalAddressArg 1 body) post := by
+  have hcheck := checkNonAddress_success_runCompiled hmask hbody
+  have hargRun := arg1_prepend_runCompiled harg hcheck
+  have hg : G + 27 + 6 = G + 33 := by omega
+  have hsplit :
+      canonicalAddressArg 1 body =
+        arg 1 +++
+          (checkNonAddress +++ ((.call emptyRevertSlot) <?> body)) := by
+    rfl
+  rw [← hg, hsplit]
+  exact hargRun
+
+private theorem requireStaticArgs_success_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {G : Nat} {body : Func} {post : Devm}
+    (hdata : sevm.data.length.toB256 <? 68 = 0)
+    (hbody : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G⟩) body post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + 21⟩)
+      (requireStaticArgs 2 body) post := by
+  unfold requireStaticArgs
+  func_run (4) [0]
+  case h_arm =>
+    have hg : G + 21 - 21 = G := by omega
+    rw [hg]
+    exact hbody
+
+private theorem onlyAdmin_success_runCompiled
+    {fs : List Func} {dp : DeployParams} {sevm : Sevm}
+    {base : Devm} {M : Mem} {G : Nat} {body : Func} {post : Devm}
+    (hadmin : sevm.caller.toB256 = dp.admin)
+    (hbody : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G⟩) body post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + 22⟩)
+      (onlyAdmin dp body) post := by
+  unfold onlyAdmin pushDeployWord
+  func_run (4) [1]
+  case h_val => simp [hadmin, B256.eqCheck]
+  case h_arm => simpa using hbody
+
+private theorem registerPauser_body_from_kernel_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (target : B256) (kernelGas : Nat) (post : Devm)
+    (hdata : sevm.data.length.toB256 <? 68 = 0)
+    (hadmin : sevm.caller.toB256 = dp.admin)
+    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hargNew : Sevm.dataWord sevm (32 * 1 + 4) = 0)
+    (htargetMask : addressMask &&& target = 0)
+    (hnewMask : addressMask &&& (0 : B256) = 0)
+    (hkernel : Func.RunCompiled
+      ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], registerMemory target 0, kernelGas⟩)
+      setPauserKernel post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, kernelGas + 221⟩)
+      (registerPauser dp) post := by
+  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target 0
+    kernelGas post hargTarget hargNew hkernel
+  have hadminRun := onlyAdmin_success_runCompiled hadmin hstage
+  have hnewRun :=
+    canonicalAddressArg1_success_runCompiled hargNew hnewMask hadminRun
+  have htargetRun :=
+    canonicalAddressArg0_success_runCompiled hargTarget htargetMask hnewRun
+  have hstaticRun :=
+    requireStaticArgs_success_runCompiled hdata htargetRun
+  have hg :
+      ((((kernelGas + 112) + 22) + 33) + 33) + 21 =
+        kernelGas + 221 := by
+    omega
+  rw [← hg]
+  simpa only [registerPauser] using hstaticRun
+
 /-- Exact production-body reserve for unregistering a recorded target that is
 already the array's last entry, with the old pauser retained. -/
 def foundZeroRetainedLastRegisterBodyGas (sevm : Sevm) (base : Devm)
@@ -1061,8 +1269,6 @@ def foundZeroRetainedLastRegisterBodyGas (sevm : Sevm) (base : Devm)
     assignmentCost countCost holeCost movedIndexCost tailClearCost
     lengthRestoreCost indexClearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact successful production body for unregistering a recorded target under
 the two restrictions the removal machinery supports: the removed target is
 already the array's last entry (`index + 1 = entries.length`), and the old
@@ -1155,36 +1361,26 @@ theorem registerPauser_body_foundZeroRetainedLast_runCompiled
       hindexClearCost hwarmArray hwarmIndex hwarmLength hgasFinal hstatic with
     ⟨trace, post, htrace, hpostEntries, hwpost, hkernel, hgas, hlogs,
       hexpiries⟩
-  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target 0
-    (G + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
-      assignmentCost countCost holeCost movedIndexCost tailClearCost
-      lengthRestoreCost indexClearCost) post hargTarget hargNew hkernel
   refine ⟨trace, post, htrace, hpostEntries, hwpost, ?_, hgas, hlogs,
     hexpiries⟩
   have htargetMask := canonicalAddress_mask_zero htargetValid.2
-  have hnewMask : (0 : B256) &&& addressMask = 0 := by decide +kernel
-  unfold registerPauser requireStaticArgs canonicalAddressArg onlyAdmin arg cdl
-    checkNonAddress pushAddressMask pushDeployWord
-  func_run (24) [0, ~~~(0 : B256), addressMask, 0,
-    ~~~(0 : B256), addressMask, 0, 1]
-  all_goals try { rw [hargTarget]; exact htargetMask }
-  all_goals try { rw [hargNew]; exact hnewMask }
-  all_goals try { simp [hadmin, B256.eqCheck] }
-  all_goals first
-    | (simp only [Devm.gasLeft_setMach, foundZeroRetainedLastRegisterBodyGas]
-       norm_num [gBase, gVerylow, gHigh, gMid, gJumpdest]
-       omega)
-    | skip
-  case h_arm =>
-    simp only [foundZeroRetainedLastRegisterBodyGas]
-    have hg : G + (221 + foundZeroRetainedLastSetPauserKernelGas sevm base
-          target oldPauser assignmentCost countCost holeCost movedIndexCost
-          tailClearCost lengthRestoreCost indexClearCost) - 109 =
-        G + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
-          assignmentCost countCost holeCost movedIndexCost tailClearCost
-          lengthRestoreCost indexClearCost + 112 := by omega
-    rw [hg]
-    simpa only [arg, cdl] using hstage
+  have hnewMask : addressMask &&& (0 : B256) = 0 := by decide +kernel
+  have hbody := registerPauser_body_from_kernel_runCompiled dp sevm base target
+    (G + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
+      assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost) post hdata hadmin hargTarget hargNew
+    htargetMask hnewMask hkernel
+  simp only [foundZeroRetainedLastRegisterBodyGas]
+  have hg :
+      G + (221 + foundZeroRetainedLastSetPauserKernelGas sevm base target
+        oldPauser assignmentCost countCost holeCost movedIndexCost
+        tailClearCost lengthRestoreCost indexClearCost) =
+      (G + foundZeroRetainedLastSetPauserKernelGas sevm base target oldPauser
+        assignmentCost countCost holeCost movedIndexCost tailClearCost
+        lengthRestoreCost indexClearCost) + 221 := by
+    omega
+  rw [hg]
+  exact hbody
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
@@ -2272,8 +2468,6 @@ def foundZeroRetainedSwapPopRegisterBodyGas (sevm : Sevm) (base : Devm)
     assignmentCost countCost holeCost movedIndexCost tailClearCost
     lengthRestoreCost indexClearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact successful production body for unregistering a recorded target that
 is **not** the array's last entry (`index + 1 < entries.length`), with the old
 pauser retained (`oldCount - 1 ≠ 0`), so `registerAfterSet` stops without
@@ -2376,37 +2570,26 @@ theorem registerPauser_body_foundZeroRetainedSwapPop_runCompiled
       hwarmIndex hwarmLength hgasFinal hstatic with
     ⟨trace, post, htrace, hpostEntries, hwpost, hkernel, hgas, hlogs,
       hexpiries⟩
-  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target 0
-    (G + foundZeroRetainedSwapPopSetPauserKernelGas sevm base target oldPauser
-      assignmentCost countCost holeCost movedIndexCost tailClearCost
-      lengthRestoreCost indexClearCost) post hargTarget hargNew hkernel
   refine ⟨trace, post, htrace, hpostEntries, hwpost, ?_, hgas, hlogs,
     hexpiries⟩
   have htargetMask := canonicalAddress_mask_zero htargetValid.2
-  have hnewMask : (0 : B256) &&& addressMask = 0 := by decide +kernel
-  unfold registerPauser requireStaticArgs canonicalAddressArg onlyAdmin arg cdl
-    checkNonAddress pushAddressMask pushDeployWord
-  func_run (24) [0, ~~~(0 : B256), addressMask, 0,
-    ~~~(0 : B256), addressMask, 0, 1]
-  all_goals try { rw [hargTarget]; exact htargetMask }
-  all_goals try { rw [hargNew]; exact hnewMask }
-  all_goals try { simp [hadmin, B256.eqCheck] }
-  all_goals first
-    | (simp only [Devm.gasLeft_setMach,
-         foundZeroRetainedSwapPopRegisterBodyGas]
-       norm_num [gBase, gVerylow, gHigh, gMid, gJumpdest]
-       omega)
-    | skip
-  case h_arm =>
-    simp only [foundZeroRetainedSwapPopRegisterBodyGas]
-    have hg : G + (221 + foundZeroRetainedSwapPopSetPauserKernelGas sevm base
-          target oldPauser assignmentCost countCost holeCost movedIndexCost
-          tailClearCost lengthRestoreCost indexClearCost) - 109 =
-        G + foundZeroRetainedSwapPopSetPauserKernelGas sevm base target
-          oldPauser assignmentCost countCost holeCost movedIndexCost
-          tailClearCost lengthRestoreCost indexClearCost + 112 := by omega
-    rw [hg]
-    simpa only [arg, cdl] using hstage
+  have hnewMask : addressMask &&& (0 : B256) = 0 := by decide +kernel
+  have hbody := registerPauser_body_from_kernel_runCompiled dp sevm base target
+    (G + foundZeroRetainedSwapPopSetPauserKernelGas sevm base target oldPauser
+      assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost) post hdata hadmin hargTarget hargNew
+    htargetMask hnewMask hkernel
+  simp only [foundZeroRetainedSwapPopRegisterBodyGas]
+  have hg :
+      G + (221 + foundZeroRetainedSwapPopSetPauserKernelGas sevm base target
+        oldPauser assignmentCost countCost holeCost movedIndexCost
+        tailClearCost lengthRestoreCost indexClearCost) =
+      (G + foundZeroRetainedSwapPopSetPauserKernelGas sevm base target
+        oldPauser assignmentCost countCost holeCost movedIndexCost
+        tailClearCost lengthRestoreCost indexClearCost) + 221 := by
+    omega
+  rw [hg]
+  exact hbody
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
@@ -3558,8 +3741,6 @@ def foundZeroOldLastRegisterBodyGas (sevm : Sevm) (base : Devm)
     assignmentCost countCost holeCost movedIndexCost tailClearCost
     lengthRestoreCost indexClearCost clearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact successful production body for unregistering a recorded target that is
 already the array's last entry (`index + 1 = entries.length`) and retires the old
 pauser (`oldCount - 1 = 0`). -/
@@ -3662,37 +3843,26 @@ theorem registerPauser_body_foundZeroOldLast_runCompiled
       hwarmExpiry hgasStipend hstatic with
     ⟨trace, post, htrace, hpostEntries, hwpost, hkernel, hgas, hlogs,
       holdExpiryPost, hexpiries⟩
-  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target 0
-    (G + foundZeroOldLastSetPauserKernelGas sevm base target oldPauser
-      assignmentCost countCost holeCost movedIndexCost tailClearCost
-      lengthRestoreCost indexClearCost clearCost) post hargTarget hargNew
-    hkernel
   refine ⟨trace, post, htrace, hpostEntries, hwpost, ?_, hgas, hlogs,
     holdExpiryPost, hexpiries⟩
   have htargetMask := canonicalAddress_mask_zero htargetValid.2
-  have hnewMask : (0 : B256) &&& addressMask = 0 := by decide +kernel
-  unfold registerPauser requireStaticArgs canonicalAddressArg onlyAdmin arg cdl
-    checkNonAddress pushAddressMask pushDeployWord
-  func_run (24) [0, ~~~(0 : B256), addressMask, 0,
-    ~~~(0 : B256), addressMask, 0, 1]
-  all_goals try { rw [hargTarget]; exact htargetMask }
-  all_goals try { rw [hargNew]; exact hnewMask }
-  all_goals try { simp [hadmin, B256.eqCheck] }
-  all_goals first
-    | (simp only [Devm.gasLeft_setMach, foundZeroOldLastRegisterBodyGas]
-       norm_num [gBase, gVerylow, gHigh, gMid, gJumpdest]
-       omega)
-    | skip
-  case h_arm =>
-    simp only [foundZeroOldLastRegisterBodyGas]
-    have hg : G + (221 + foundZeroOldLastSetPauserKernelGas sevm base
-          target oldPauser assignmentCost countCost holeCost movedIndexCost
-          tailClearCost lengthRestoreCost indexClearCost clearCost) - 109 =
-        G + foundZeroOldLastSetPauserKernelGas sevm base target oldPauser
-          assignmentCost countCost holeCost movedIndexCost tailClearCost
-          lengthRestoreCost indexClearCost clearCost + 112 := by omega
-    rw [hg]
-    simpa only [arg, cdl] using hstage
+  have hnewMask : addressMask &&& (0 : B256) = 0 := by decide +kernel
+  have hbody := registerPauser_body_from_kernel_runCompiled dp sevm base target
+    (G + foundZeroOldLastSetPauserKernelGas sevm base target oldPauser
+      assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost clearCost) post hdata hadmin hargTarget
+    hargNew htargetMask hnewMask hkernel
+  simp only [foundZeroOldLastRegisterBodyGas]
+  have hg :
+      G + (221 + foundZeroOldLastSetPauserKernelGas sevm base target oldPauser
+        assignmentCost countCost holeCost movedIndexCost tailClearCost
+        lengthRestoreCost indexClearCost clearCost) =
+      (G + foundZeroOldLastSetPauserKernelGas sevm base target oldPauser
+        assignmentCost countCost holeCost movedIndexCost tailClearCost
+        lengthRestoreCost indexClearCost clearCost) + 221 := by
+    omega
+  rw [hg]
+  exact hbody
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
@@ -4912,8 +5082,6 @@ def foundZeroOldLastSwapPopRegisterBodyGas (sevm : Sevm) (base : Devm)
     assignmentCost countCost holeCost movedIndexCost tailClearCost
     lengthRestoreCost indexClearCost clearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact successful production body for the last combination: the removed
 target is not the array's last entry (`index + 1 < entries.length`) and the old
 pauser is retired (`oldCount - 1 = 0`). -/
@@ -5025,39 +5193,26 @@ theorem registerPauser_body_foundZeroOldLastSwapPop_runCompiled
       hwarmTail hwarmIndex hwarmLength hwarmExpiry hgasStipend hstatic with
     ⟨trace, post, htrace, hpostEntries, hwpost, hkernel, hgas, hlogs,
       holdExpiryPost, hexpiries⟩
-  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target 0
-    (G + foundZeroOldLastSwapPopSetPauserKernelGas sevm base target oldPauser
-      assignmentCost countCost holeCost movedIndexCost tailClearCost
-      lengthRestoreCost indexClearCost clearCost) post hargTarget hargNew
-    hkernel
   refine ⟨trace, post, htrace, hpostEntries, hwpost, ?_, hgas, hlogs,
     holdExpiryPost, hexpiries⟩
   have htargetMask := canonicalAddress_mask_zero htargetValid.2
-  have hnewMask : (0 : B256) &&& addressMask = 0 := by decide +kernel
-  unfold registerPauser requireStaticArgs canonicalAddressArg onlyAdmin arg cdl
-    checkNonAddress pushAddressMask pushDeployWord
-  func_run (24) [0, ~~~(0 : B256), addressMask, 0,
-    ~~~(0 : B256), addressMask, 0, 1]
-  all_goals try { rw [hargTarget]; exact htargetMask }
-  all_goals try { rw [hargNew]; exact hnewMask }
-  all_goals try { simp [hadmin, B256.eqCheck] }
-  all_goals first
-    | (simp only [Devm.gasLeft_setMach,
-         foundZeroOldLastSwapPopRegisterBodyGas]
-       norm_num [gBase, gVerylow, gHigh, gMid, gJumpdest]
-       omega)
-    | skip
-  case h_arm =>
-    simp only [foundZeroOldLastSwapPopRegisterBodyGas]
-    have hg : G + (221 + foundZeroOldLastSwapPopSetPauserKernelGas sevm base
-          target oldPauser assignmentCost countCost holeCost movedIndexCost
-          tailClearCost lengthRestoreCost indexClearCost clearCost) - 109 =
-        G + foundZeroOldLastSwapPopSetPauserKernelGas sevm base target
-          oldPauser assignmentCost countCost holeCost movedIndexCost
-          tailClearCost lengthRestoreCost indexClearCost clearCost + 112 := by
-      omega
-    rw [hg]
-    simpa only [arg, cdl] using hstage
+  have hnewMask : addressMask &&& (0 : B256) = 0 := by decide +kernel
+  have hbody := registerPauser_body_from_kernel_runCompiled dp sevm base target
+    (G + foundZeroOldLastSwapPopSetPauserKernelGas sevm base target oldPauser
+      assignmentCost countCost holeCost movedIndexCost tailClearCost
+      lengthRestoreCost indexClearCost clearCost) post hdata hadmin hargTarget
+    hargNew htargetMask hnewMask hkernel
+  simp only [foundZeroOldLastSwapPopRegisterBodyGas]
+  have hg :
+      G + (221 + foundZeroOldLastSwapPopSetPauserKernelGas sevm base target
+        oldPauser assignmentCost countCost holeCost movedIndexCost
+        tailClearCost lengthRestoreCost indexClearCost clearCost) =
+      (G + foundZeroOldLastSwapPopSetPauserKernelGas sevm base target
+        oldPauser assignmentCost countCost holeCost movedIndexCost
+        tailClearCost lengthRestoreCost indexClearCost clearCost) + 221 := by
+    omega
+  rw [hg]
+  exact hbody
 
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 2400000 in
