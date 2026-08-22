@@ -316,6 +316,14 @@ theorem funcSound_of_storFixed {dp : DeployParams} {ca : Adr} {f : Func}
   rw [h h_run]
   exact h_pre.inv.1 rfl
 
+/-- The program-free core: a body that maps Registry-coherent storage at the
+active target to Registry-coherent storage.  This is the obligation shape for a
+target whose writes are real but land outside every Registry region. -/
+theorem funcSound_of_registryCore {dp : DeployParams} {ca : Adr} {f : Func}
+    (h : Func.Core ((runtime dp).main :: aux) RegistryCoherent f) :
+    (registrySpec dp).FuncSound ca aux f :=
+  ContractSpec.funcSound_of_core (fun _ => trivial) (fun h => h) h
+
 /-! ## The open-contract frame theorem
 
 `Sound` quantifies over arbitrary successful runs of the exact runtime and
