@@ -671,17 +671,6 @@ private theorem pauseExpiryFinish_trace
   exact ⟨lockPost, hex, storePost, zeroPost, lockPre, lockPost, tail,
     hvalue, hstore, hpushZero, hpushKey, htstore, hstop'⟩
 
-/-- `TIMESTAMP` pushes the block time. -/
-private theorem prefix_of_timestamp
-    {sevm : Sevm} {pre post : Devm} {xs : Stack}
-    (stackPrefix : xs <<+ pre.stack)
-    (run : Ninst.Run sevm pre Ninst.timestamp post) :
-    sevm.benvStat.time :: xs <<+ post.stack := by
-  change Ninst.Run sevm pre (.reg .timestamp) post at run
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  exact prefix_of_push (Devm.pushBurn_of_pushItem instructionRun) stackPrefix
-
 /-- The checked-addition line leaves Solidity's overflow flag above the
 computed expiry, for the interval read at the line's own entry state. -/
 private theorem checkedHeartbeatExpiryTest_result
@@ -701,8 +690,16 @@ private theorem checkedHeartbeatExpiryTest_result
   rcases Line.of_run_cons run with ⟨s7, qswap, run⟩
   rcases Line.of_run_cons run with ⟨_, qlt, hnil⟩
   cases hnil
+  have timestampPush : ∀ {a b : Devm},
+      Ninst.Run sevm a Ninst.timestamp b →
+        Devm.PushBurn [sevm.benvStat.time] a b := by
+    intro a b q
+    change Ninst.Run sevm a (.reg .timestamp) b at q
+    rcases of_run_reg q with ⟨pc, instructionRun⟩
+    simp only [Rinst.run, Rinst.runCore] at instructionRun
+    exact Devm.pushBurn_of_pushItem instructionRun
   have p1 : [sevm.benvStat.time] <<+ s1.stack :=
-    prefix_of_timestamp nil_pref qtime1
+    prefix_of_push (timestampPush qtime1) nil_pref
   have p2 : heartbeatIntervalSlot :: sevm.benvStat.time ::
       ([] : Stack) <<+ s2.stack :=
     prefix_of_push (of_run_pushB256 qslot) p1
@@ -722,7 +719,7 @@ private theorem checkedHeartbeatExpiryTest_result
     prefix_of_dup_val qdup (by show_nth) p4
   have p6 : sevm.benvStat.time :: (interval + sevm.benvStat.time) ::
       (interval + sevm.benvStat.time) :: ([] : Stack) <<+ s6.stack :=
-    prefix_of_timestamp p5 qtime2
+    prefix_of_push (timestampPush qtime2) p5
   have hswap : Stack.Swap (0 : Fin 16).val
       [sevm.benvStat.time, interval + sevm.benvStat.time,
         interval + sevm.benvStat.time]
