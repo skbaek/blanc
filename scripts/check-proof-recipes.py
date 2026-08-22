@@ -14,6 +14,19 @@ The two source findings remain report-only:
 Near-duplicates are intentionally invisible. The exact-copy detector also
 requires five substantive lines and 160 bytes after normalization, avoiding
 accidental matches among tiny wrapper declarations.
+
+``--duplication`` runs a different thing in the same file: the **blocking**
+whole-tree K1 duplication ratchet. K1 is the standing inventory of production
+declarations that are byte-identical after the same normalization and at the
+same floor, grouped into families by their normalized bytes. It is measured
+over the whole ``Blanc/*.lean`` corpus rather than the changed set, compared
+against a shrink-only baseline, and any rise without a matching bounded
+exception exits nonzero. The report-only character of the two findings above is
+unchanged and belongs to the ordinary mode alone; ``--duplication`` is reached
+only through ``scripts/check-proof-duplication.sh``.
+
+CLI contract for both modes: exit 0 if and only if the gate passes, and output
+ends with one unambiguous verdict line naming which part produced it.
 """
 
 from __future__ import annotations
@@ -740,6 +753,598 @@ def _exception_for(finding: Finding, recipe_id: str, expiry: dt.date) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# K1 duplication ratchet
+#
+# The ratcheted quantity is K1: whole production declarations that are
+# byte-identical after this gate's own name-and-documentation normalization,
+# at the same 160-byte / 5-substantive-line floor the imported-copy detector
+# uses. It is computed over the whole production tree rather than the changed
+# set, so it is a standing inventory rather than a diff finding.
+#
+# Only K1 is ratcheted. The corpus census is deliberately not: overlapping
+# shingles double-count, adoption boilerplate moves it, and the frozen rule
+# forbids summing kinds. K1 has none of those properties -- every site is a
+# whole declaration, and a call site is not a declaration.
+#
+# Unlike the two source findings above, this part BLOCKS: a rise without a
+# matching bounded exception exits nonzero.
+# ---------------------------------------------------------------------------
+
+DUPLICATION_BASELINE_REL = pathlib.Path("scripts/proof-duplication-baseline.json")
+DUPLICATION_EXCEPTIONS_REL = pathlib.Path("scripts/proof-duplication-exceptions.json")
+DUPLICATION_SCAN_ROOT = "Blanc"
+DUPLICATION_BASELINE_COMMENT = (
+    "K1 duplication ratchet: production declarations that are byte-identical after "
+    "the proof-recipe gate's own name-and-documentation normalization, at its "
+    "160-byte / 5-substantive-line floor. restated_lines is sites minus families. "
+    "Shrink-only evidence, not a knob: regenerate only with "
+    "scripts/check-proof-duplication.sh --write-baseline, which never raises a site "
+    "count, never admits a new family, and never grandfathers a newly unparsable "
+    "module. A family id is the first 16 hex digits of its own normalized_sha256; "
+    "run the gate with --list to see where a family's sites currently are."
+)
+DUPLICATION_MODULE_RE = re.compile(r"Blanc/[A-Za-z_][A-Za-z0-9_]*\.lean\Z")
+FAMILY_ID_RE = re.compile(r"[0-9a-f]{16}\Z")
+FULL_DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
+SLUG_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
+DUPLICATION_BASELINE_FIELDS = {
+    "_comment", "schema_version", "scan_root", "min_copy_bytes", "min_copy_lines",
+    "families", "sites", "restated_lines", "unparsable_modules", "entries", "digest",
+}
+DUPLICATION_ENTRY_FIELDS = {"id", "normalized_sha256", "sites"}
+DUPLICATION_EXCEPTION_FIELDS = {
+    "id", "family_id", "allowed_sites", "rationale", "evidence", "owner",
+    "expires", "removal_condition",
+}
+DUPLICATION_RISE_KINDS = ("new-family", "family-growth")
+
+
+@dataclass(frozen=True)
+class DuplicationFamily:
+    id: str
+    digest: str
+    sites: int
+    locations: Tuple[str, ...]
+
+
+@dataclass
+class DuplicationInventory:
+    modules: int
+    declarations: int
+    families: Dict[str, DuplicationFamily]
+    unparsable: Dict[str, str]
+
+    @property
+    def sites(self) -> int:
+        return sum(family.sites for family in self.families.values())
+
+    @property
+    def restated_lines(self) -> int:
+        return self.sites - len(self.families)
+
+
+@dataclass(frozen=True)
+class DuplicationEntry:
+    id: str
+    digest: str
+    sites: int
+
+
+@dataclass
+class DuplicationBaseline:
+    families: Dict[str, DuplicationEntry]
+    unparsable_modules: Tuple[str, ...]
+
+    @property
+    def sites(self) -> int:
+        return sum(entry.sites for entry in self.families.values())
+
+    @property
+    def restated_lines(self) -> int:
+        return self.sites - len(self.families)
+
+
+@dataclass(frozen=True)
+class DuplicationFinding:
+    kind: str
+    subject: str
+    sites: int
+    baseline_sites: Optional[int]
+    detail: str
+
+
+@dataclass(frozen=True)
+class DuplicationImprovement:
+    kind: str
+    subject: str
+    before: int
+    after: int
+    detail: str
+
+
+@dataclass
+class DuplicationResult:
+    inventory: DuplicationInventory
+    baseline: DuplicationBaseline
+    findings: List[DuplicationFinding]
+    improvements: List[DuplicationImprovement]
+    exceptions: Dict[str, dict]
+
+    @property
+    def blocking(self) -> List[DuplicationFinding]:
+        return [
+            finding for finding in self.findings
+            if not (finding.kind in DUPLICATION_RISE_KINDS
+                    and finding.subject in self.exceptions)
+        ]
+
+
+def strict_json_pairs(pairs: Sequence[Tuple[str, object]]) -> dict:
+    result: Dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise GateError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
+def load_strict_json(text: str, where: str):
+    try:
+        return json.loads(text, object_pairs_hook=strict_json_pairs)
+    except json.JSONDecodeError as error:
+        raise GateError(f"{where}: invalid JSON: {error}") from error
+
+
+def production_modules(root: pathlib.Path) -> List[str]:
+    """The ratchet's corpus.
+
+    This mirrors ``production_modules`` in scripts/check-proof-module-size.py
+    exactly -- the non-recursive ``Blanc/*.lean`` glob, sorted, and an empty
+    result is an error, never an empty pass. Both gates state the same corpus
+    contract, so a disagreement between their module counts is itself visible.
+    """
+    source = root / DUPLICATION_SCAN_ROOT
+    if not source.is_dir():
+        raise GateError(f"production source directory not found: {source}")
+    modules = [path.relative_to(root).as_posix() for path in sorted(source.glob("*.lean"))]
+    if not modules:
+        raise GateError(
+            f"no production {DUPLICATION_SCAN_ROOT}/*.lean modules found under {root}"
+        )
+    return modules
+
+
+def duplication_inventory(
+    root: pathlib.Path, index: Optional[SourceIndex] = None,
+) -> DuplicationInventory:
+    """Group every substantive production declaration by its normalized bytes."""
+    index = index or SourceIndex(root)
+    modules = production_modules(root)
+    groups: Dict[bytes, List[Declaration]] = {}
+    unparsable: Dict[str, str] = {}
+    declarations = 0
+    for rel in modules:
+        try:
+            parsed = index.parse_worktree(rel)
+        except GateError as error:
+            # Recorded, never silently dropped: a module this gate cannot read
+            # is a hole in the census, so the pinned set of them is ratcheted
+            # alongside the families themselves.
+            unparsable[rel] = str(error)
+            continue
+        declarations += len(parsed.declarations)
+        for declaration in parsed.declarations:
+            if substantive(declaration.normalized):
+                groups.setdefault(declaration.normalized, []).append(declaration)
+    if declarations == 0:
+        raise GateError(
+            f"anti-vacuity: inspected 0 declarations across {len(modules)} module(s); "
+            "a run that saw nothing FAILS rather than reporting zero families"
+        )
+    families: Dict[str, DuplicationFamily] = {}
+    duplicated = 0
+    for normalized, found in groups.items():
+        if len(found) < 2:
+            continue
+        duplicated += 1
+        digest = hashlib.sha256(normalized).hexdigest()
+        families[digest[:16]] = DuplicationFamily(
+            id=digest[:16],
+            digest=digest,
+            sites=len(found),
+            locations=tuple(sorted(
+                f"{item.file}:{item.start_line}:{item.name}" for item in found
+            )),
+        )
+    if len(families) != duplicated:
+        raise GateError("duplication family id collision at 16 hex digits")
+    return DuplicationInventory(len(modules), declarations, families, unparsable)
+
+
+def duplication_digest(document: dict) -> str:
+    payload = {key: value for key, value in document.items() if key != "digest"}
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def duplication_document(baseline: DuplicationBaseline) -> dict:
+    entries = [
+        {"id": entry.id, "normalized_sha256": entry.digest, "sites": entry.sites}
+        for entry in sorted(baseline.families.values(), key=lambda item: item.id)
+    ]
+    document = {
+        "_comment": DUPLICATION_BASELINE_COMMENT,
+        "schema_version": SCHEMA_VERSION,
+        "scan_root": DUPLICATION_SCAN_ROOT,
+        "min_copy_bytes": MIN_COPY_BYTES,
+        "min_copy_lines": MIN_COPY_LINES,
+        "families": len(entries),
+        "sites": baseline.sites,
+        "restated_lines": baseline.restated_lines,
+        "unparsable_modules": list(baseline.unparsable_modules),
+        "entries": entries,
+    }
+    document["digest"] = duplication_digest(document)
+    return document
+
+
+def load_duplication_baseline_text(text: str, where: str) -> DuplicationBaseline:
+    raw = load_strict_json(text, where)
+    if not isinstance(raw, dict) or set(raw) != DUPLICATION_BASELINE_FIELDS:
+        missing = sorted(DUPLICATION_BASELINE_FIELDS - set(raw if isinstance(raw, dict) else {}))
+        extra = sorted(set(raw if isinstance(raw, dict) else {}) - DUPLICATION_BASELINE_FIELDS)
+        raise GateError(f"{where}: baseline fields mismatch; missing={missing}, extra={extra}")
+    if raw["schema_version"] != SCHEMA_VERSION:
+        raise GateError(f"{where}: baseline schema_version must be {SCHEMA_VERSION}")
+    if raw["scan_root"] != DUPLICATION_SCAN_ROOT:
+        raise GateError(f"{where}: baseline scan_root must be {DUPLICATION_SCAN_ROOT!r}")
+    # The floor is what decides which declarations are counted at all. A
+    # baseline recorded under a different floor is not comparable with this
+    # code's inventory, so it is rejected rather than silently reinterpreted.
+    if raw["min_copy_bytes"] != MIN_COPY_BYTES or raw["min_copy_lines"] != MIN_COPY_LINES:
+        raise GateError(
+            f"{where}: baseline floor {raw['min_copy_bytes']}/{raw['min_copy_lines']} "
+            f"disagrees with this gate's pinned floor {MIN_COPY_BYTES}/{MIN_COPY_LINES}"
+        )
+    if not isinstance(raw["_comment"], str) or not raw["_comment"].strip():
+        raise GateError(f"{where}: _comment must be a nonempty string")
+    if raw["digest"] != duplication_digest(raw):
+        raise GateError(f"{where}: recorded digest does not match the baseline contents")
+    entries_raw = raw["entries"]
+    if not isinstance(entries_raw, list):
+        raise GateError(f"{where}: entries must be a list")
+    families: Dict[str, DuplicationEntry] = {}
+    previous = ""
+    for index, item in enumerate(entries_raw):
+        at = f"{where}:entries[{index}]"
+        if not isinstance(item, dict) or set(item) != DUPLICATION_ENTRY_FIELDS:
+            raise GateError(f"{at}: entry fields must be exactly {sorted(DUPLICATION_ENTRY_FIELDS)}")
+        digest = item["normalized_sha256"]
+        entry_id = item["id"]
+        sites = item["sites"]
+        if not isinstance(digest, str) or not FULL_DIGEST_RE.fullmatch(digest):
+            raise GateError(f"{at}: normalized_sha256 must be 64 lowercase hex digits")
+        if not isinstance(entry_id, str) or not FAMILY_ID_RE.fullmatch(entry_id):
+            raise GateError(f"{at}: id must be 16 lowercase hex digits")
+        if entry_id != digest[:16]:
+            raise GateError(f"{at}: id does not match its fields (normalized_sha256 prefix)")
+        if type(sites) is not int or sites < 2:
+            raise GateError(f"{at}: sites must be an integer of at least 2")
+        if entry_id in families:
+            raise GateError(f"{at}: duplicate baseline family id {entry_id}")
+        if entry_id <= previous:
+            raise GateError(f"{where}: entries are not strictly sorted by id")
+        previous = entry_id
+        families[entry_id] = DuplicationEntry(entry_id, digest, sites)
+    unparsable_raw = raw["unparsable_modules"]
+    if not isinstance(unparsable_raw, list):
+        raise GateError(f"{where}: unparsable_modules must be a list")
+    unparsable: List[str] = []
+    for item in unparsable_raw:
+        if not isinstance(item, str) or not DUPLICATION_MODULE_RE.fullmatch(item):
+            raise GateError(
+                f"{where}: unparsable_modules must name concrete Blanc/*.lean modules"
+            )
+        unparsable.append(item)
+    if tuple(sorted(unparsable)) != tuple(unparsable) or len(set(unparsable)) != len(unparsable):
+        raise GateError(f"{where}: unparsable_modules must be sorted and unique")
+    baseline = DuplicationBaseline(families, tuple(unparsable))
+    if raw["families"] != len(families):
+        raise GateError(f"{where}: recorded families disagrees with the entry list")
+    if raw["sites"] != baseline.sites:
+        raise GateError(f"{where}: recorded sites disagrees with the entry list")
+    if raw["restated_lines"] != baseline.restated_lines:
+        raise GateError(f"{where}: recorded restated_lines disagrees with the entry list")
+    return baseline
+
+
+def load_duplication_baseline(root: pathlib.Path) -> DuplicationBaseline:
+    path = root / DUPLICATION_BASELINE_REL
+    if not path.is_file():
+        raise GateError(f"missing duplication baseline: {DUPLICATION_BASELINE_REL}")
+    return load_duplication_baseline_text(path.read_text(encoding="utf-8"), str(path))
+
+
+def duplication_findings(
+    inventory: DuplicationInventory, baseline: DuplicationBaseline,
+) -> Tuple[List[DuplicationFinding], List[DuplicationImprovement]]:
+    findings: List[DuplicationFinding] = []
+    improvements: List[DuplicationImprovement] = []
+    for family_id in sorted(inventory.families):
+        family = inventory.families[family_id]
+        entry = baseline.families.get(family_id)
+        where = ", ".join(family.locations)
+        if entry is None:
+            findings.append(DuplicationFinding(
+                "new-family", family_id, family.sites, None,
+                f"{family.sites} byte-identical site(s) with no baseline family: {where}",
+            ))
+        elif family.sites > entry.sites:
+            findings.append(DuplicationFinding(
+                "family-growth", family_id, family.sites, entry.sites,
+                f"{entry.sites} -> {family.sites} byte-identical site(s): {where}",
+            ))
+        elif family.sites < entry.sites:
+            improvements.append(DuplicationImprovement(
+                "family-shrank", family_id, entry.sites, family.sites,
+                f"{entry.sites} -> {family.sites} site(s): {where}",
+            ))
+    for family_id in sorted(baseline.families):
+        if family_id not in inventory.families:
+            # Documented rule: a baseline family that no longer exists in the
+            # tree is the ratchet's success case, not a stale-baseline error.
+            # It is reported as an improvement and the run still passes; the
+            # totals are always recomputed from the tree, so a leftover entry
+            # can never mask a rise. --write-baseline drops it.
+            improvements.append(DuplicationImprovement(
+                "family-resolved", family_id, baseline.families[family_id].sites, 0,
+                "no longer present in the tree; ratchet with --write-baseline",
+            ))
+    for rel in sorted(inventory.unparsable):
+        if rel not in baseline.unparsable_modules:
+            findings.append(DuplicationFinding(
+                "unparsable-module", rel, 0, None,
+                f"module is outside the census and is not pinned in the baseline: "
+                f"{inventory.unparsable[rel]}",
+            ))
+    for rel in baseline.unparsable_modules:
+        if rel not in inventory.unparsable:
+            improvements.append(DuplicationImprovement(
+                "module-now-parsable", rel, 1, 0,
+                "pinned unparsable module now parses; ratchet with --write-baseline",
+            ))
+    if not findings and inventory.restated_lines > baseline.restated_lines:
+        raise GateError(
+            "internal inconsistency: restated_lines rose "
+            f"{baseline.restated_lines} -> {inventory.restated_lines} with no per-family finding"
+        )
+    return findings, improvements
+
+
+def validate_duplication_exceptions(
+    path: pathlib.Path,
+    findings: Sequence[DuplicationFinding],
+    today: Optional[dt.date] = None,
+) -> Dict[str, dict]:
+    if not path.is_file():
+        raise GateError(f"missing exception registry: {path}")
+    raw = load_strict_json(path.read_text(encoding="utf-8"), str(path))
+    if not isinstance(raw, dict) or set(raw) != {"_comment", "schema_version", "exceptions"}:
+        raise GateError(f"{path}: expected _comment, schema_version and exceptions")
+    if raw["schema_version"] != SCHEMA_VERSION or not isinstance(raw["exceptions"], list):
+        raise GateError(f"{path}: unsupported schema or non-list exceptions")
+    if not isinstance(raw["_comment"], str) or not raw["_comment"].strip():
+        raise GateError(f"{path}: _comment must be a nonempty string")
+    today = today or dt.date.today()
+    violations = {
+        finding.subject: finding for finding in findings
+        if finding.kind in DUPLICATION_RISE_KINDS
+    }
+    applied: Dict[str, dict] = {}
+    ids: Set[str] = set()
+    for index, exception in enumerate(raw["exceptions"]):
+        where = f"{path}:exceptions[{index}]"
+        if not isinstance(exception, dict) or set(exception) != DUPLICATION_EXCEPTION_FIELDS:
+            raise GateError(
+                f"{where}: fields must be exactly {sorted(DUPLICATION_EXCEPTION_FIELDS)}"
+            )
+        exception_id = exception["id"]
+        if not isinstance(exception_id, str) or not SLUG_RE.fullmatch(exception_id):
+            raise GateError(f"{where}: id must be a lowercase kebab slug")
+        if exception_id in ids:
+            raise GateError(f"{where}: duplicate exception id {exception_id}")
+        ids.add(exception_id)
+        family_id = exception["family_id"]
+        if not isinstance(family_id, str) or not FAMILY_ID_RE.fullmatch(family_id):
+            raise GateError(
+                f"{where}: family_id must be exactly one concrete 16-hex-digit family; "
+                "wildcards and file-wide selectors are forbidden"
+            )
+        if family_id in applied:
+            raise GateError(f"{where}: duplicate exception for family {family_id}")
+        finding = violations.get(family_id)
+        if finding is None:
+            raise GateError(
+                f"{where}: orphan exception does not match a live duplication rise"
+            )
+        allowed = exception["allowed_sites"]
+        if type(allowed) is not int or allowed != finding.sites:
+            raise GateError(
+                f"{where}: allowed_sites must exactly equal the current violating value "
+                f"({finding.sites})"
+            )
+        expires_text = exception["expires"]
+        if not isinstance(expires_text, str):
+            raise GateError(f"{where}: expires must be a canonical YYYY-MM-DD string")
+        try:
+            expiry = dt.date.fromisoformat(expires_text)
+        except ValueError as error:
+            raise GateError(f"{where}: expires must be a canonical YYYY-MM-DD string") from error
+        if expiry.isoformat() != expires_text:
+            raise GateError(f"{where}: expires must be a canonical YYYY-MM-DD string")
+        if expiry < today:
+            raise GateError(f"{where}: exception expired on {expiry.isoformat()}")
+        owner = exception["owner"]
+        if not isinstance(owner, str) or not SLUG_RE.fullmatch(owner):
+            raise GateError(f"{where}: owner must be a lowercase kebab slug")
+        for field in ("rationale", "evidence", "removal_condition"):
+            if not isinstance(exception[field], str) or not exception[field].strip():
+                raise GateError(f"{where}: {field} must be a nonempty string")
+        applied[family_id] = exception
+    return applied
+
+
+def evaluate_duplication(
+    root: pathlib.Path, today: Optional[dt.date] = None,
+) -> DuplicationResult:
+    inventory = duplication_inventory(root)
+    baseline = load_duplication_baseline(root)
+    findings, improvements = duplication_findings(inventory, baseline)
+    exceptions = validate_duplication_exceptions(
+        root / DUPLICATION_EXCEPTIONS_REL, findings, today
+    )
+    return DuplicationResult(inventory, baseline, findings, improvements, exceptions)
+
+
+def monotone_duplication_update(
+    inventory: DuplicationInventory, previous: Optional[DuplicationBaseline],
+) -> DuplicationBaseline:
+    """Shrink-only writer. Bootstrap records the tree; afterwards it can only fall."""
+    if previous is None:
+        return DuplicationBaseline(
+            {
+                family.id: DuplicationEntry(family.id, family.digest, family.sites)
+                for family in inventory.families.values()
+            },
+            tuple(sorted(inventory.unparsable)),
+        )
+    raised: List[str] = []
+    families: Dict[str, DuplicationEntry] = {}
+    for family_id in sorted(inventory.families):
+        family = inventory.families[family_id]
+        entry = previous.families.get(family_id)
+        if entry is None:
+            raised.append(f"refuses to admit a new family: {family_id} at {family.sites} site(s)")
+            continue
+        if family.sites > entry.sites:
+            raised.append(
+                f"refuses to raise sites for {family_id}: {entry.sites} -> {family.sites}"
+            )
+            continue
+        families[family_id] = DuplicationEntry(family_id, family.digest, family.sites)
+    unparsable: List[str] = []
+    for rel in sorted(inventory.unparsable):
+        if rel not in previous.unparsable_modules:
+            raised.append(f"refuses to grandfather a newly unparsable module: {rel}")
+            continue
+        unparsable.append(rel)
+    if raised:
+        raise GateError(
+            "duplication baseline writer is shrink-only:\n  " + "\n  ".join(raised)
+        )
+    candidate = DuplicationBaseline(families, tuple(unparsable))
+    if candidate.restated_lines > previous.restated_lines:
+        raise GateError(
+            "duplication baseline writer refuses to raise restated_lines "
+            f"{previous.restated_lines} -> {candidate.restated_lines}"
+        )
+    return candidate
+
+
+def write_duplication_atomic(path: pathlib.Path, document: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+    handle = tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", newline="", dir=str(path.parent),
+        prefix=f".{path.name}.", delete=False,
+    )
+    temporary = pathlib.Path(handle.name)
+    try:
+        with handle:
+            handle.write(text)
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def build_duplication_baseline(root: pathlib.Path) -> DuplicationBaseline:
+    """Compute and write the shrink-only baseline. Raises rather than raising a value."""
+    inventory = duplication_inventory(root)
+    path = root / DUPLICATION_BASELINE_REL
+    previous = load_duplication_baseline(root) if path.is_file() else None
+    updated = monotone_duplication_update(inventory, previous)
+    write_duplication_atomic(path, duplication_document(updated))
+    return updated
+
+
+def write_duplication_baseline(root: pathlib.Path) -> int:
+    previous = (root / DUPLICATION_BASELINE_REL).is_file()
+    updated = build_duplication_baseline(root)
+    print(
+        f"OK — proof duplication baseline: {len(updated.families)} K1 families, "
+        f"{updated.sites} sites, {updated.restated_lines} restated lines, "
+        f"{len(updated.unparsable_modules)} pinned unparsable module(s); "
+        f"{'monotone baseline written' if previous else 'bootstrapped'}"
+    )
+    return 0
+
+
+def run_duplication(root: pathlib.Path, list_families: bool = False) -> int:
+    result = evaluate_duplication(root)
+    inventory = result.inventory
+    baseline = result.baseline
+    print(
+        f"duplication scan: {inventory.modules} production module(s), "
+        f"{inventory.declarations} declaration(s), "
+        f"{len(inventory.unparsable)} unparsable module(s)"
+    )
+    if list_families:
+        for family_id in sorted(inventory.families):
+            family = inventory.families[family_id]
+            print(f"  FAMILY {family_id} x{family.sites}: {', '.join(family.locations)}")
+    for finding in result.findings:
+        excepted = (
+            finding.kind in DUPLICATION_RISE_KINDS and finding.subject in result.exceptions
+        )
+        status = "EXCEPTED" if excepted else "FINDING"
+        suffix = ""
+        if excepted:
+            exception = result.exceptions[finding.subject]
+            suffix = f" [exception {exception['id']} through {exception['expires']}]"
+        print(f"  {status} {finding.kind}: {finding.subject} — {finding.detail}{suffix}")
+    for improvement in result.improvements:
+        print(
+            f"  IMPROVED {improvement.kind}: {improvement.subject} — {improvement.detail}"
+        )
+    blocking = result.blocking
+    new_families = sum(1 for item in blocking if item.kind == "new-family")
+    grown = sum(1 for item in blocking if item.kind == "family-growth")
+    unreadable = sum(1 for item in blocking if item.kind == "unparsable-module")
+    if blocking:
+        print(
+            f"REGRESSION — proof duplication ratchet: the K1 duplication ratchet FAILED "
+            f"with {len(blocking)} unexcepted finding(s) "
+            f"({new_families} new family/families, {grown} grown, {unreadable} newly unparsable); "
+            f"sites {baseline.sites} -> {inventory.sites}, restated lines "
+            f"{baseline.restated_lines} -> {inventory.restated_lines}; the recipe-copy and "
+            f"selector-table checks are separate and unaffected"
+        )
+        return 1
+    print(
+        f"OK — proof duplication ratchet: {inventory.modules} module(s), "
+        f"{inventory.declarations} declaration(s); {len(inventory.families)} K1 families, "
+        f"{inventory.sites} site(s), {inventory.restated_lines} restated line(s) "
+        f"against a baseline of {len(baseline.families)}/{baseline.sites}/"
+        f"{baseline.restated_lines}; 0 unexcepted rise(s), "
+        f"{len(result.improvements)} improvement(s), {len(result.exceptions)} exception(s) "
+        f"applied, {len(baseline.unparsable_modules)} pinned unparsable module(s)"
+    )
+    return 0
+
+
 def detector_self_test(active_recipe_id: str) -> None:
     owner_source = """namespace Blanc.Fixture
 
@@ -859,6 +1464,304 @@ end Blanc.Fixture
             raise GateError("self-test: planned selector finding received an exception")
 
 
+DUPLICATION_CONTROL_COUNT = 18
+UNPARSABLE_FIXTURE_SOURCE = """namespace Blanc.DupFixture
+
+private theorem
+    brokenHeaderLemma (n : Nat) :
+    (n + 0) + 0 = n := by
+  rw [Nat.add_zero]
+  rw [Nat.add_zero]
+  have stable : n = n := rfl
+  exact stable
+
+end Blanc.DupFixture
+"""
+
+
+def _dup_declaration(name: str, tag: str) -> str:
+    """A substantive declaration whose normalized bytes depend only on ``tag``."""
+    return (
+        f"private theorem {name} (n : Nat) :\n"
+        "    (n + 0) + 0 = n := by\n"
+        "  rw [Nat.add_zero]\n"
+        "  rw [Nat.add_zero]\n"
+        f"  have step{tag} : n = n := rfl\n"
+        f"  have again{tag} : n = n := step{tag}\n"
+        f"  have last{tag} : n = n := again{tag}\n"
+        f"  exact last{tag}\n"
+    )
+
+
+def _dup_module(root: pathlib.Path, name: str, declarations: Sequence[Tuple[str, str]]) -> None:
+    body = "\n".join(_dup_declaration(decl, tag) for decl, tag in declarations)
+    (root / "Blanc" / name).write_text(
+        "namespace Blanc.DupFixture\n\n" + body + "\nend Blanc.DupFixture\n",
+        encoding="utf-8",
+    )
+
+
+def _write_dup_exceptions(root: pathlib.Path, rows: Sequence[dict]) -> None:
+    write_duplication_atomic(
+        root / DUPLICATION_EXCEPTIONS_REL,
+        {"_comment": "fixture registry", "schema_version": SCHEMA_VERSION,
+         "exceptions": list(rows)},
+    )
+
+
+def _dup_exception(family_id: str, sites: int, expires: dt.date) -> dict:
+    return {
+        "id": "fixture-duplication-exception",
+        "family_id": family_id,
+        "allowed_sites": sites,
+        "rationale": "fixture rationale",
+        "evidence": "fixture exact-byte evidence",
+        "owner": "proof-infrastructure",
+        "expires": expires.isoformat(),
+        "removal_condition": "remove when the fixture family is deduplicated",
+    }
+
+
+def _mutate_dup_baseline(root: pathlib.Path, mutate, reseal: bool) -> None:
+    document = duplication_document(load_duplication_baseline(root))
+    mutate(document)
+    if reseal:
+        document["digest"] = duplication_digest(document)
+    write_duplication_atomic(root / DUPLICATION_BASELINE_REL, document)
+
+
+def duplication_self_test(today: Optional[dt.date] = None) -> int:
+    """Named duplication controls with an explicitly enforced count."""
+    today = today or dt.date(2026, 8, 22)
+    future = today + dt.timedelta(days=30)
+    past = today - dt.timedelta(days=1)
+    base = {
+        "Alpha.lean": [("alphaOne", "A"), ("alphaTwo", "B")],
+        "Beta.lean": [("betaOne", "A")],
+        "Gamma.lean": [("gammaOne", "A")],
+    }
+    controls = 0
+
+    def expect_error(label: str, action, expected: str) -> None:
+        nonlocal controls
+        try:
+            action()
+        except GateError as error:
+            if expected not in str(error):
+                raise GateError(
+                    f"self-test {label}: expected {expected!r}, got {str(error)!r}"
+                ) from error
+        else:
+            raise GateError(f"self-test {label}: invalid control passed")
+        controls += 1
+
+    def expect_blocking(label: str, root: pathlib.Path, kinds: Sequence[str]) -> DuplicationResult:
+        nonlocal controls
+        result = evaluate_duplication(root, today)
+        observed = sorted(item.kind for item in result.blocking)
+        if observed != sorted(kinds):
+            raise GateError(
+                f"self-test {label}: expected blocking {sorted(kinds)}, got {observed}"
+            )
+        controls += 1
+        return result
+
+    def expect_pass(label: str, root: pathlib.Path, improvement: Optional[str] = None) -> DuplicationResult:
+        nonlocal controls
+        result = evaluate_duplication(root, today)
+        if result.blocking:
+            raise GateError(
+                f"self-test {label}: expected a pass, blocked on "
+                f"{[item.kind for item in result.blocking]}"
+            )
+        if improvement is not None and not any(
+            item.kind == improvement for item in result.improvements
+        ):
+            raise GateError(f"self-test {label}: expected an {improvement} improvement")
+        controls += 1
+        return result
+
+    with tempfile.TemporaryDirectory(prefix="proof-duplication-") as directory:
+        parent = pathlib.Path(directory)
+        made = 0
+
+        def make(modules: Dict[str, List[Tuple[str, str]]], bootstrap: bool = True) -> pathlib.Path:
+            nonlocal made
+            made += 1
+            root = parent / f"case{made}"
+            (root / "Blanc").mkdir(parents=True)
+            (root / "scripts").mkdir(parents=True)
+            for name, declarations in modules.items():
+                _dup_module(root, name, declarations)
+            _write_dup_exceptions(root, [])
+            if bootstrap:
+                build_duplication_baseline(root)
+            return root
+
+        # 1. rise-new-family-blocks
+        new_family_root = make(base)
+        _dup_module(new_family_root, "Delta.lean", [("deltaOne", "B")])
+        expect_blocking("rise-new-family-blocks", new_family_root, ["new-family"])
+
+        # 2. rise-family-growth-blocks
+        growth_root = make(base)
+        _dup_module(growth_root, "Delta.lean", [("deltaOne", "A")])
+        growth = expect_blocking("rise-family-growth-blocks", growth_root, ["family-growth"])
+        grown_family = growth.blocking[0].subject
+        if growth.blocking[0].sites != 4 or growth.blocking[0].baseline_sites != 3:
+            raise GateError("self-test rise-family-growth-blocks: wrong site accounting")
+
+        # 3. fall-reported-as-improvement
+        shrink_root = make(base)
+        _dup_module(shrink_root, "Gamma.lean", [("gammaOne", "C")])
+        expect_pass("fall-reported-as-improvement", shrink_root, "family-shrank")
+
+        # 4. writer-refuses-raise
+        expect_error(
+            "writer-refuses-raise",
+            lambda: build_duplication_baseline(growth_root),
+            "refuses to raise sites",
+        )
+
+        # 5. writer-refuses-new-family
+        expect_error(
+            "writer-refuses-new-family",
+            lambda: build_duplication_baseline(new_family_root),
+            "refuses to admit a new family",
+        )
+
+        # 6. writer-ratchets-fall
+        build_duplication_baseline(shrink_root)
+        ratcheted = load_duplication_baseline(shrink_root)
+        if ratcheted.sites != 2 or ratcheted.restated_lines != 1 or len(ratcheted.families) != 1:
+            raise GateError("self-test writer-ratchets-fall: decrease did not ratchet down")
+        expect_pass("writer-ratchets-fall", shrink_root)
+
+        # 7. exception-expired-rejected
+        _write_dup_exceptions(growth_root, [_dup_exception(grown_family, 4, past)])
+        expect_error(
+            "exception-expired-rejected",
+            lambda: evaluate_duplication(growth_root, today),
+            "expired on",
+        )
+
+        # 8. exception-orphan-rejected
+        _write_dup_exceptions(growth_root, [_dup_exception("0" * 16, 4, future)])
+        expect_error(
+            "exception-orphan-rejected",
+            lambda: evaluate_duplication(growth_root, today),
+            "orphan exception",
+        )
+
+        # 9. exception-wildcard-family-id-rejected
+        _write_dup_exceptions(growth_root, [_dup_exception("*", 4, future)])
+        expect_error(
+            "exception-wildcard-family-id-rejected",
+            lambda: evaluate_duplication(growth_root, today),
+            "wildcards and file-wide selectors are forbidden",
+        )
+
+        # 10. exception-allowed-sites-mismatch-rejected
+        _write_dup_exceptions(growth_root, [_dup_exception(grown_family, 3, future)])
+        expect_error(
+            "exception-allowed-sites-mismatch-rejected",
+            lambda: evaluate_duplication(growth_root, today),
+            "must exactly equal the current violating value",
+        )
+
+        # 11. exception-nonslug-owner-rejected
+        bad_owner = _dup_exception(grown_family, 4, future)
+        bad_owner["owner"] = "Proof Infrastructure"
+        _write_dup_exceptions(growth_root, [bad_owner])
+        expect_error(
+            "exception-nonslug-owner-rejected",
+            lambda: evaluate_duplication(growth_root, today),
+            "owner must be a lowercase kebab slug",
+        )
+
+        # 12. exception-suppresses-rise
+        _write_dup_exceptions(growth_root, [_dup_exception(grown_family, 4, future)])
+        suppressed = expect_pass("exception-suppresses-rise", growth_root)
+        if len(suppressed.exceptions) != 1 or len(suppressed.findings) != 1:
+            raise GateError("self-test exception-suppresses-rise: exception was not applied")
+        _write_dup_exceptions(growth_root, [])
+
+        # 13. baseline-id-disagrees-with-fields-rejected
+        forged_root = make(base)
+
+        def forge_id(document: dict) -> None:
+            document["entries"][0]["id"] = "f" * 16
+
+        _mutate_dup_baseline(forged_root, forge_id, reseal=True)
+        expect_error(
+            "baseline-id-disagrees-with-fields-rejected",
+            lambda: load_duplication_baseline(forged_root),
+            "id does not match its fields",
+        )
+
+        # 14. baseline-digest-mismatch-rejected
+        tampered_root = make(base)
+
+        def bump_sites(document: dict) -> None:
+            document["entries"][0]["sites"] += 1
+            document["sites"] += 1
+            document["restated_lines"] += 1
+
+        _mutate_dup_baseline(tampered_root, bump_sites, reseal=False)
+        expect_error(
+            "baseline-digest-mismatch-rejected",
+            lambda: load_duplication_baseline(tampered_root),
+            "recorded digest does not match",
+        )
+
+        # 15. baseline-floor-mismatch-rejected
+        floor_root = make(base)
+
+        def lower_floor(document: dict) -> None:
+            document["min_copy_bytes"] = 1
+            document["min_copy_lines"] = 1
+
+        _mutate_dup_baseline(floor_root, lower_floor, reseal=True)
+        expect_error(
+            "baseline-floor-mismatch-rejected",
+            lambda: load_duplication_baseline(floor_root),
+            "disagrees with this gate's pinned floor",
+        )
+
+        # 16. baseline-stale-family-is-improvement
+        stale_root = make(base)
+        (stale_root / "Blanc/Beta.lean").unlink()
+        (stale_root / "Blanc/Gamma.lean").unlink()
+        stale = expect_pass("baseline-stale-family-is-improvement", stale_root, "family-resolved")
+        if stale.inventory.families:
+            raise GateError("self-test baseline-stale-family-is-improvement: family survived")
+
+        # 17. unparsable-module-blocks
+        broken_root = make(base)
+        (broken_root / "Blanc/Broken.lean").write_text(
+            UNPARSABLE_FIXTURE_SOURCE, encoding="utf-8"
+        )
+        expect_blocking("unparsable-module-blocks", broken_root, ["unparsable-module"])
+
+        # 18. anti-vacuity-zero-declarations-fails
+        empty_root = make({}, bootstrap=False)
+        (empty_root / "Blanc/Empty.lean").write_text(
+            "-- a module with no declarations at all\n", encoding="utf-8"
+        )
+        expect_error(
+            "anti-vacuity-zero-declarations-fails",
+            lambda: duplication_inventory(empty_root),
+            "anti-vacuity",
+        )
+
+    if controls != DUPLICATION_CONTROL_COUNT:
+        raise GateError(
+            f"self-test accounting: expected {DUPLICATION_CONTROL_COUNT} duplication "
+            f"controls, ran {controls}"
+        )
+    return controls
+
+
 def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     # The generator owns the byte-drift fixture. Invoking its self-test here
     # proves this gate's blocking dependency remains live without mutating the
@@ -870,9 +1773,11 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     if not registry.active_ids:
         raise GateError("self-test requires at least one active recipe")
     detector_self_test(sorted(registry.active_ids)[0])
+    controls = duplication_self_test()
     print(
         "OK — proof-recipe gate self-test: generated drift, anonymous-instance boundary, "
-        "imported copy, selector table, and 5 exception controls passed"
+        "imported copy, selector table, and 5 exception controls passed; "
+        f"duplication ratchet {controls}/{controls} controls passed"
     )
 
 
@@ -881,8 +1786,43 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--root", type=pathlib.Path, default=ROOT)
     parser.add_argument("--base", default="HEAD", help="git-ish used to identify changed declarations")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument(
+        "--duplication", action="store_true",
+        help="run the blocking whole-tree K1 duplication ratchet instead of the "
+             "report-only changed-declaration recipe checks",
+    )
+    parser.add_argument(
+        "--write-baseline", action="store_true",
+        help=f"rewrite {DUPLICATION_BASELINE_REL.as_posix()}; shrink-only, implies --duplication",
+    )
+    parser.add_argument(
+        "--list", action="store_true", dest="list_families",
+        help="with --duplication, also print every live K1 family and its sites",
+    )
     args = parser.parse_args(argv)
     root = args.root.resolve()
+
+    if args.write_baseline or args.duplication:
+        # The duplication ratchet owns its own verdict prefix so an exit code is
+        # never ambiguous about which part of this file failed. Both verdicts go
+        # to stdout so the verdict line is genuinely the last line of output.
+        try:
+            if args.write_baseline:
+                if args.self_test:
+                    raise GateError("--write-baseline and --self-test are mutually exclusive")
+                return write_duplication_baseline(root)
+            if args.self_test:
+                controls = duplication_self_test()
+                print(
+                    f"OK — proof duplication ratchet self-test: {controls}/{controls} rise, "
+                    "improvement, writer-monotonicity, exception, baseline-integrity, "
+                    "unparsable-coverage and anti-vacuity controls live"
+                )
+                return 0
+            return run_duplication(root, args.list_families)
+        except GateError as error:
+            print(f"REGRESSION — proof duplication ratchet: {error}")
+            return 1
 
     generator_check(root)
     registry = load_registry_info(root)

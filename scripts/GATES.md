@@ -27,6 +27,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | the proof-recipe registry, generator, generated documentation/Lean lookup, recipe tactic, or changed proof declarations | `scripts/check-proof-recipes.sh --base main` | the **full set**, in the order below |
 | a `maxHeartbeats` or `maxRecDepth` scope, its debt baseline, or a bounded debt exception | `scripts/check-proof-debt.sh` | the **full set**, in the order below |
 | a production Lean module, its size baseline, or a bounded module-size exception | `scripts/check-proof-module-size.sh` | the **full set**, in the order below |
+| the text of a production Lean declaration, the K1 duplication baseline, or a bounded duplication exception | `scripts/check-proof-duplication.sh` | the **full set**, in the order below |
 | the execution-settlement substrate, its consumers, or lift manifest | `scripts/check-extraction-ownership.sh` + `scripts/check-execution-settlement.sh` | the **full set**, in the order below |
 | the execution-occurrence substrate, source map, retained replay, WETH bridge, or fixtures | `scripts/check-execution-occurrence.sh` + `scripts/check-extraction-ownership.sh` | the **full set**, in the order below |
 | the cycle-safe same-frame source-level SSTORE-occurrence certificate, execution theorem, owner manifest, or fixtures | `scripts/check-cycle-write-free.sh` | the **full set**, in the order below |
@@ -70,6 +71,7 @@ scripts/check-layering.sh
 scripts/check-proof-recipes.sh --base main
 scripts/check-proof-debt.sh
 scripts/check-proof-module-size.sh
+scripts/check-proof-duplication.sh
 scripts/check-extraction-ownership.sh
 scripts/check-trust-surface.sh
 scripts/check-weth10-reference.sh
@@ -126,9 +128,10 @@ against the gate.
 |---|---|---|---|
 | `scripts/check-doc-counts.sh` | every public surface that quotes the audited-theorem count agrees with the count the axiom audit actually produces: the gate computes it from `scripts/AxiomCheck.lean` and checks each registered quotation in `README.md`, this file and `docs/index.html`. Anti-vacuous per pattern — a surface reworded out of the gate's sight FAILS rather than passing silently. Jaune's site quotes the same number and no gate can cross the repository boundary, so a pass prints that reminder rather than implying coverage it does not have | 11 quotations across 3 files; 2 published numbers deliberately unchecked and named in the script | sub-second |
 | `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 4 contracts, 136 modules, 134 non-root | sub-second |
-| `scripts/check-proof-recipes.sh --base main` | first fail-closed checks the proof-recipe registry and its generated documentation/Lean lookup, then reports high-confidence anti-patterns only in declarations changed from the selected base: byte-identical imported declaration copies after name/documentation normalization, and new local selector tables outside the registry-declared owner; exceptions are declaration-scoped, active-recipe-bound, expiring, and reject wildcards, duplicates, or orphans | changed declarations only; 2 report-only finding classes; 7 gate controls plus the generator's 9 controls | ~30 s self-test; ordinary runs are sub-second on a small diff |
+| `scripts/check-proof-recipes.sh --base main` | first fail-closed checks the proof-recipe registry and its generated documentation/Lean lookup, then reports high-confidence anti-patterns only in declarations changed from the selected base: byte-identical imported declaration copies after name/documentation normalization, and new local selector tables outside the registry-declared owner; exceptions are declaration-scoped, active-recipe-bound, expiring, and reject wildcards, duplicates, or orphans | changed declarations only; 2 report-only finding classes; 7 gate controls plus the generator's 9 controls, and its `--self-test` also runs the 18 duplication controls of the row below | ~30 s self-test; ordinary runs are sub-second on a small diff |
 | `scripts/check-proof-debt.sh` | inventories every production `maxHeartbeats` and `maxRecDepth` scope with comment/string-aware parsing, distinguishes declaration, tactic-local, and honest ambient scopes, and report-only flags newly introduced or increased finite ceilings; the baseline ratchets downward, `0` remains unlimited, and exceptions are declaration-scoped and expiring, with no ambient or file-wide suppression | 408 scopes across 37 files: 130 heartbeat + 278 recursion-depth; 12 controls | sub-second |
 | `scripts/check-proof-module-size.sh` | inventories direct production modules, report-only warns at 1,250 lines and reports growth beyond grandfathered ceilings plus any new module above 8,000 lines; the all-module baseline ratchets downward, cannot grandfather a later hard-cap breach, and exceptions are module-scoped, expiring, and carry measured LSP latency evidence plus a split plan | 134 modules; 58 grandfathered ceilings; 8 controls | sub-second |
+| `scripts/check-proof-duplication.sh` | blocking, shrink-only ratchet on K1: production declarations that are byte-identical after the proof-recipe gate's own name-and-documentation normalization, at its 160-byte / 5-substantive-line floor, grouped into families by normalized bytes over the whole non-recursive `Blanc/*.lean` corpus. Every family's site count and the total may fall freely; any rise, any new family, and any module the census cannot read that is not already pinned exits nonzero without a matching bounded exception. The baseline is evidence, not a knob: each entry recomputes its own id from its own `normalized_sha256`, the floor constants are re-verified against the code at load, the whole document carries a digest, and `--write-baseline` refuses to raise any value. A run that inspected zero declarations FAILS rather than reporting zero families, and a baseline family that no longer exists in the tree is reported as an improvement rather than a stale-baseline error. Exceptions name exactly one concrete 16-hex-digit family, must equal its current site count exactly, expire, and reject wildcards, duplicates and orphans. Only K1 is ratcheted; the whole-corpus census is the deliberate out-of-band instrument, not a per-commit number | 134 modules, 9,190 declarations; 54 K1 families, 118 sites, 64 restated lines; 2 pinned unparsable modules; 18 controls | ~1.4 s |
 | `scripts/check-extraction-ownership.sh` | the manifest's 14 execution-settlement declarations exist only under their common owners, no donor declaration or common-owner basename shadow/alias/export survives across the historical WETH10 donor family or the Lido family, and `Weth10HolderFlow` directly imports the common module; six controls exercise the old donor alias, Lido shadow and alias, missing common owner, missing direct import, and trailing-`?` declaration parser channels | 14 moved declarations; 6 negative controls | sub-second |
 | `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 135 closure modules; 21 exact allowlisted occurrences | sub-second |
 | `scripts/check-execution-settlement.sh` | compiles the concrete execution-level CREATE code-deposit rollback fixture, requires its constructor SSTORE and branch conditions to evaluate exactly true, pins the required proof declarations with a live deletion control, proves canonical `rawFrameRoots` retains the entered child while settlement traversal prunes it, and requires both the legacy raw-commit and settlement-filtered raw-root mutants to fail for pinned reasons | 1 concrete `Exec.runOk` fixture; 3 required positive proofs + 1 deletion control; 2 raw-traversal mutants | ~8 s |
@@ -177,7 +180,7 @@ invoked by the scripts above and should not be run directly in a report:
 | helper | used by | what it does |
 |---|---|---|
 | `scripts/generate-proof-recipes.py` | `check-proof-recipes.sh` and explicit `--write` regeneration | validates the strict TOML registry, referenced symbols, example anchors and review dates, then deterministically generates `docs/PROOF_RECIPES.md` and the import-safe `Blanc.ProofRecipesGenerated` lookup table; `--check` byte-compares both outputs and `--self-test` exercises schema, trigger, symbol, anchor, and drift controls |
-| `scripts/check-proof-recipes.py` | `check-proof-recipes.sh` | runs the generator check, computes changed declarations from Git including untracked files, traverses local imports, reports only high-confidence normalized declaration copies and misplaced selector tables, and validates narrow expiring exceptions fail-closed |
+| `scripts/check-proof-recipes.py` | `check-proof-recipes.sh` and `check-proof-duplication.sh` | in its ordinary mode runs the generator check, computes changed declarations from Git including untracked files, traverses local imports, reports only high-confidence normalized declaration copies and misplaced selector tables, and validates narrow expiring exceptions fail-closed; in `--duplication` mode it reuses that same parser, normalization and substantive floor to inventory every K1 family over the whole production corpus, compares it with the digest-sealed shrink-only baseline, validates family-scoped expiring exceptions, and blocks on any rise. `--write-baseline` is its shrink-only evidence refresh, `--list` prints where each live family's sites are, and `--self-test` runs the recipe controls together with the 18 duplication controls while `check-proof-duplication.sh --self-test` runs the duplication controls alone |
 | `scripts/check-proof-debt.py` | `check-proof-debt.sh` | lexes production Lean without counting comments or literals, assigns resource settings to declaration/local/ambient scopes, compares the exact inventory with a monotone baseline, and validates declaration-scoped expiring exceptions |
 | `scripts/check-proof-module-size.py` | `check-proof-module-size.sh` | counts physical source lines in direct production modules, compares known-module membership and shrink-only ceilings, reports warning/hard-cap findings, and validates bounded evidence-bearing exceptions |
 | `scripts/check-doc-counts.py` | `check-doc-counts.sh` | derives the audited-theorem count from `scripts/AxiomCheck.lean` and fail-closed checks every registered quotation in the README, gate catalogue and site |
@@ -253,6 +256,8 @@ Every gate prints exactly one summary line and exits nonzero on anything else.
   proof-recipe, proof-debt, and proof-module-size gates use this form for source
   findings; malformed inputs, generated drift, stale baselines, and invalid
   exceptions still exit nonzero as regressions.
+  `check-proof-duplication.sh` is deliberately **not** in that list: its source
+  findings block, so it has no report-only verdict at all.
 - **`REGRESSION — …`** means the gate's own invariant broke: a layering
   violation, an axiom set that moved, an elaboration time past threshold, a
   fixture whose contract bytes are not the committed literal, a coverage budget
@@ -280,7 +285,8 @@ at the expected assertion count.
 
 ### Baselines and budgets
 
-`scripts/baseline-elab.txt`, the proof-debt and proof-module-size baselines, and
+`scripts/baseline-elab.txt`, the proof-debt, proof-module-size and
+proof-duplication baselines, and
 the two coverage budgets are **evidence, not knobs**. Absent explicit authority
 in a ready goal, a baseline, budget, or
 manifest count that must move for a gate to pass is a stop-and-report
@@ -333,6 +339,14 @@ refreshes, never ordinary gate modes. Both preserve exact inventory membership
 and can only retain or lower an existing finite ceiling; neither can erase an
 unreviewed increase. Their exception registries remain separate, bounded,
 expiring evidence and may not be used to raise the baseline.
+
+`scripts/check-proof-duplication.sh --write-baseline` is the same kind of
+refresh under a stricter rule, because that ratchet blocks: it will not admit a
+new K1 family, raise any family's site count, raise the total, or grandfather a
+module the census has newly stopped being able to read. It only lowers counts,
+drops families that no longer exist, and drops modules that now parse. A rise
+that must be carried is a bounded, expiring, family-scoped exception with an
+owner and a removal condition — never a rewritten baseline.
 
 ## One run at a time
 

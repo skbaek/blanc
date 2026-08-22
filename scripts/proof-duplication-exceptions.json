@@ -1,0 +1,5 @@
+{
+  "_comment": "Bounded, family-scoped K1 duplication exceptions. Every row names exactly one concrete 16-hex-digit family id, states the exact current site count it allows, expires, and carries a rationale, byte-level evidence, a kebab-slug owner and a removal condition. Wildcards, file-wide selectors and orphans are rejected; an exception is a dated reason to carry a rise, never a way to raise the baseline.",
+  "schema_version": 1,
+  "exceptions": []
+}
