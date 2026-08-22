@@ -130,6 +130,43 @@ This repo contains the following files:
   Registry writes. The committed local-monitor corollary re-runs the three
   exact views on the matching clean snapshot; it is not a history, finality,
   delivery, callback, or real-block-feasibility claim.
+- [LidoCircuitBreakerHistory.lean](Blanc/LidoCircuitBreakerHistory.lean),
+  [LidoCircuitBreakerHistoryEndpoints.lean](Blanc/LidoCircuitBreakerHistoryEndpoints.lean)
+  and
+  [LidoCircuitBreakerHistoryChain.lean](Blanc/LidoCircuitBreakerHistoryChain.lean):
+  the induction principle that carries Registry integrity through arbitrary
+  histories. Registry coherence — *some* ordered entry list witnesses every
+  projected Registry region of the contract's own storage — is packaged as a
+  storage-only `ContractSpec`, discharged one dispatch target at a time, joined
+  across the exact three-pivot hybrid dispatcher rather than either dispatcher
+  shape the generic ladder already supports, and lifted from there to messages,
+  transactions, blocks and chain reachability: from a checkpoint where the exact
+  compiled runtime is installed at an address and that address's storage carries
+  a `RegistryWitness`, every state reachable by the configured valid-chain
+  relation still has that runtime installed and still admits a witness. The
+  reach is in what the premises decline to say — the frame theorem quantifies
+  over arbitrary successful runs of the exact runtime and over arbitrary callee
+  bytecode, including code that re-enters this very instance, and the transport
+  above it takes arbitrary finite sequences of successful and reverting
+  transactions. The witness it produces need not be the one it started with, and
+  that is deliberate: a callback re-entering as admin may register a pauser, so
+  requiring the returned entry list to be the entered list would be a false
+  strengthening. Read the boundary as closely as the statement. The checkpoint
+  is a hypothesis; there is no constructor or deployment-root result here and
+  nothing shows that any deployment *establishes* it. Because the invariant is
+  existential, nothing says a transaction returns the entry list it began with,
+  and nothing produces a source-level history trace. Nothing states that the
+  pauser count and the recorded expiry are coherent at callback time, and
+  nothing composes the public `pause` entry through `setPauser`. Every
+  statement is partial correctness over storage: no gas, liveness, or
+  differential claim, universal or otherwise. And none of it speaks about Lido's
+  deployed bytecode — that remains the interface/accident port claim
+  [`PORTING.md`](PORTING.md) owns, supported separately by the pinned
+  differential campaign. The family is not finished: the Chain owner still
+  carries one `sorry` (`registrySpec_sound`), so its transaction- and
+  chain-level statements are stated and pinned but not yet discharged.
+  `scripts/check-lido-circuit-breaker-history.sh` is the family's assurance
+  gate, and its own summary line is the authority on which owners are live.
 - [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
   and the first place in this repository where a contract call is proved to
   **succeed**. `fmint_totalSupply_succeeds` drives `func_run` over `fmint`'s
@@ -478,9 +515,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 439 named results and
+   current source inventory pins the exact axiom set of 445 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `439/439` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `445/445` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -508,7 +545,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **439** top theorems. `scripts/check.sh`'s
+current source inventory contains **445** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
