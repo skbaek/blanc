@@ -425,7 +425,7 @@ theorem fmintSpec_funcSound {fa : Adr} (f : Func)
         Stor.Conserved (Devm.getStor s sevm.currentTarget) →
         Stor.Conserved (Devm.getStor r sevm.currentTarget) ) :
     fmintSpec.FuncSound fa Fmint.fmintAux f := by
-  intro sevm s r h_ct h_pre _ h_run
+  intro sevm s r h_ct h_pre _ _ h_run
   subst h_ct
   exact ⟨trivial, h_cons h_run (fmintSpec_preInv_iff.mp h_pre.inv)⟩
 
@@ -463,7 +463,7 @@ says no `Func.Run` witnesses it, so the obligation is vacuous — which is what
 "an unrecognized selector reverts" buys at the proof layer. -/
 theorem fmintSpec_funcSound_rev {fa : Adr} :
     fmintSpec.FuncSound fa Fmint.fmintAux Func.rev := by
-  intro _ _ _ _ _ _ h_run
+  intro _ _ _ _ _ _ _ h_run
   exact absurd h_run not_run_rev
 
 /-! ### The eight read-only targets
@@ -1164,7 +1164,7 @@ argument WETH's proof makes — a compiled program is never a delegation
 designator, so `accessDelegation` resolves to the code itself. -/
 lemma conserved_of_call {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {xs : Stack}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget Fmint.fmint
-      (fmintSpec.Pre sevm.currentTarget) (fmintSpec.Post sevm.currentTarget))
+      (fmintSpec.PreWf sevm.currentTarget) (fmintSpec.Post sevm.currentTarget))
     (hp : (g :: w :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile Fmint.fmint)
     (h_cons : Stor.Conserved (Devm.getStor s sevm.currentTarget))
@@ -1462,7 +1462,7 @@ lemma conserved_of_call {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {
         have hpost : fmintSpec.Post sevm.currentTarget
             (initSevm (childMsg.withBenv benv')) child :=
           ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
-            (.ok child) ex_sub h_depth_lt h_at h_precond
+            (.ok child) ex_sub h_depth_lt h_at ⟨h_precond, fun _ => Mem.wf_empty⟩
         have h_post_cons : Stor.Conserved (Devm.getStor child sevm.currentTarget) :=
           fmintSpec_postInv_iff.mp hpost.inv
         rw [getStor_eq_of_state_eq h_sf_state sevm.currentTarget]
@@ -2067,7 +2067,7 @@ the returndata checks, and the repayment converging on the burn pair. -/
 theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
     (cond : fmintSpec.Pre sevm.currentTarget sevm s)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget Fmint.fmint
-      (fmintSpec.Pre sevm.currentTarget) (fmintSpec.Post sevm.currentTarget))
+      (fmintSpec.PreWf sevm.currentTarget) (fmintSpec.Post sevm.currentTarget))
     (h_run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s Fmint.flashLoan r) :
     Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
   have h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile Fmint.fmint :=
@@ -2499,7 +2499,7 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
 induction hypothesis — the mirror of WETH's `wethSpec_funcSound_withdraw`. -/
 theorem fmintSpec_funcSound_flashLoan {fa : Adr} :
     fmintSpec.FuncSound fa Fmint.fmintAux Fmint.flashLoan := by
-  intro sevm s r h_ct h_pre ih h_run
+  intro sevm s r h_ct h_pre _ ih h_run
   subst h_ct
   refine ⟨trivial, ?_⟩
   exact flashLoan_preserves_conserved h_pre ih h_run
@@ -2580,6 +2580,7 @@ theorem fmint_preserves_conserved (fa : Adr) :
     ∀ sevm pre post,
       Exec 0 sevm pre (.ok post) →
       (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile Fmint.fmint) →
+      (sevm.currentTarget = fa → Mem.Wf pre.memory) →
       PrecondC fa sevm pre →
       PostcondC fa sevm post := by
   simpa only [ContractSpec.Preserves, fmintSpec_prog_eq, fmintSpec_pre_eq, fmintSpec_post_eq]

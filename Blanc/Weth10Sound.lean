@@ -27,7 +27,7 @@ theorem backedSpec_nonpayable_funcSound_of_inv
     (h_stor : Func.Inv Devm.getStor Devm.getStor (nonpayable body))
     (h_bal : Func.Inv Devm.getBal Devm.getBal (nonpayable body)) :
     (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable body) := by
-  intro sevm s r h_target h_pre h_ih run
+  intro sevm s r h_target h_pre _ h_ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -129,7 +129,7 @@ address: neither affects the concrete receive body. -/
 theorem backedSpec_receiveEther_funcSound
     (dp : DeployParams) (ca : Adr) :
     (backedSpec weth10 dp).FuncSound ca weth10Aux receiveEther := by
-  intro sevm s r h_target h_pre _ run
+  intro sevm s r h_target h_pre _ _ run
   subst ca
   refine ⟨?_, ?_⟩
   · change sum r.getBal < 2 ^ 256
@@ -259,7 +259,7 @@ theorem run_flashFee_observations_eq
 theorem backedSpec_flashFee_funcSound (dp : DeployParams) (ca : Adr) :
     (backedSpec weth10 dp).FuncSound ca weth10Aux
       (nonpayable flashFee) := by
-  intro sevm s r h_target h_pre h_ih run
+  intro sevm s r h_target h_pre _ h_ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -302,7 +302,7 @@ theorem backedSpec_sound_of_funcSound_all
     (fallback := Func.rev) (receive := receiveEther)
     rfl (List.cons_ne_nil _ _) rfl h_funcs ?_
     (backedSpec_receiveEther_funcSound dp ca)
-  intro sevm s r h_target h_pre h_ih run
+  intro sevm s r h_target h_pre _ h_ih run
   exact absurd run not_run_rev
 
 /-- The frame-level soundness result has the same sole remaining selector-family

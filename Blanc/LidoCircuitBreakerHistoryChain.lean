@@ -14,6 +14,34 @@ open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
 
+/-! ## Worked example: the memory invariant inside a `FuncSound` obligation
+
+Throwaway; delete it once the Registry-mutating endpoints land.  It witnesses
+one thing: `ContractSpec.FuncSound` now hands a target `Mem.Wf` for its entry
+state, so the target may take the write step that carrying a memory *image*
+requires and that was unreachable at this altitude before.  `Mem.write`'s
+growth branch reallocates to `ceil32 (n + ys.length)` and `Array.copyD` drops
+whatever does not fit, so without the invariant a write silently truncates the
+materialised array and destroys the image; `Mem.Reads.write` is exactly the
+step the invariant buys, and here it is discharged from the obligation's own
+hypotheses with no extra premise on the target. -/
+private theorem funcSound_memWf_available
+    {dp : DeployParams} {ca : Adr} {f : Func}
+    (h : ∀ {sevm : Sevm} {s r : Devm},
+      sevm.currentTarget = ca →
+      (registrySpec dp).Pre ca sevm s →
+      ( ∀ (img : Bytes) (n : Nat) (ys : Bytes),
+          Mem.Reads s.memory img →
+          Mem.Reads (s.memory.write n ys) (Bytes.writeAt img n ys) ) →
+      Exec.InvDepth sevm.depth ca (registrySpec dp).prog
+        ((registrySpec dp).PreWf ca) ((registrySpec dp).Post ca) →
+      Func.Run ((registrySpec dp).prog.main :: aux) sevm s f r →
+      (registrySpec dp).Post ca sevm r) :
+    (registrySpec dp).FuncSound ca aux f := by
+  intro sevm s r h_ct h_pre h_wf h_ih h_run
+  exact h h_ct h_pre
+    (fun _ n ys h_reads => Mem.Reads.write h_wf h_reads n ys) h_ih h_run
+
 theorem registrySpec_sound (dp : DeployParams) (ca : Adr) :
     (registrySpec dp).Sound ca := by
   sorry
@@ -139,7 +167,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
     {s parent child : Devm} {xl : Xlot} {gas : Nat} {value : B256}
     {target : Adr} {del isStatic : Bool} {code : ByteArray} {cd : Bytes}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
-      ((registrySpec dp).Pre sevm.currentTarget)
+      ((registrySpec dp).PreWf sevm.currentTarget)
       ((registrySpec dp).Post sevm.currentTarget))
     (h_depth : 0 < sevm.depth)
     (h_pstate : parent.state = s.state)
@@ -269,7 +297,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
       have hpost : (registrySpec dp).Post sevm.currentTarget
           (initSevm (childMsg.withBenv benv')) child :=
         ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
-          (.ok child) ex_sub h_depth_lt h_at h_precond
+          (.ok child) ex_sub h_depth_lt h_at ⟨h_precond, fun _ => Mem.wf_empty⟩
       exact hpost.inv
 
 /-- **The `CALL` transport lemma.**  One arbitrary `CALL` issued from the
@@ -286,7 +314,7 @@ caller's world unchanged; the frame that does open is handed to
 theorem coherent_of_call {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
     {g w v ii is oi os : B256} {xs : Stack}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
-      ((registrySpec dp).Pre sevm.currentTarget)
+      ((registrySpec dp).PreWf sevm.currentTarget)
       ((registrySpec dp).Post sevm.currentTarget))
     (hp : (g :: w :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))
@@ -319,7 +347,7 @@ child argument is shared verbatim. -/
 theorem coherent_of_statcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
     {g t ii is oi os : B256} {xs : Stack}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
-      ((registrySpec dp).Pre sevm.currentTarget)
+      ((registrySpec dp).PreWf sevm.currentTarget)
       ((registrySpec dp).Post sevm.currentTarget))
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))

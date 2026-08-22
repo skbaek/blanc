@@ -1007,7 +1007,7 @@ lemma solvent_of_state_eq {sf s₁ : Devm} {ct : Adr} {wad : B256}
 
 lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth
-      (Precond sevm.currentTarget) (Postcond sevm.currentTarget))
+      (wethSpec.PreWf sevm.currentTarget) (Postcond sevm.currentTarget))
     (hp : [wad] <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile weth)
     (h_nof : sum s.getBal < 2 ^ 256)
@@ -1307,14 +1307,16 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
         -- apply the induction hypothesis
         have hpost : Postcond sevm.currentTarget (initSevm (childMsg.withBenv benv')) child :=
           ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
-            (.ok child) ex_sub h_depth_lt h_at h_precond
+            (.ok child) ex_sub h_depth_lt h_at
+            ⟨wethSpec_pre_iff.mpr h_precond, fun _ => Mem.wf_empty⟩
         rw [getStor_eq_of_state_eq h_sf_state sevm.currentTarget,
             getBal_eq_of_state_eq h_sf_state sevm.currentTarget]
         exact hpost.solvent
 
 lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
     (cond : Precond sevm.currentTarget sevm s)
-    (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth (Precond sevm.currentTarget) (Postcond sevm.currentTarget))
+    (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth
+      (wethSpec.PreWf sevm.currentTarget) (Postcond sevm.currentTarget))
     (run : Func.Run (weth.main :: weth.aux) sevm s withdraw r) :
     Devm.PostSolvent r sevm.currentTarget := by
   revert run
@@ -1422,7 +1424,7 @@ lemma wethSpec_funcSound {wa : Adr} (f : Func)
         Devm.PreSolvent s sevm.currentTarget sevm →
         Devm.PostSolvent r sevm.currentTarget ) :
     wethSpec.FuncSound wa weth.aux f := by
-  intro sevm s r h_ct h_pre _ h_run
+  intro sevm s r h_ct h_pre _ _ h_run
   subst h_ct
   exact wethSpec_post_iff.mpr
     (run_preserves_cond f h_solv h_run (wethSpec_pre_iff.mp h_pre))
@@ -1431,9 +1433,9 @@ lemma wethSpec_funcSound {wa : Adr} (f : Func)
 target that consumes `FuncSound`'s deeper-frame induction hypothesis. -/
 lemma wethSpec_funcSound_withdraw {wa : Adr} :
     wethSpec.FuncSound wa weth.aux withdraw := by
-  intro sevm s r h_ct h_pre ih h_run
+  intro sevm s r h_ct h_pre _ ih h_run
   subst h_ct
-  simp only [wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq] at ih
+  simp only [wethSpec_prog_eq, wethSpec_post_eq] at ih
   refine wethSpec_post_iff.mpr ⟨Func.preserves_nof h_run (wethSpec_pre_iff.mp h_pre).nof, ?_⟩
   exact withdraw_preserves_solvent (wethSpec_pre_iff.mp h_pre) ih h_run
 
@@ -1445,9 +1447,9 @@ precondition rides across that state equality. -/
 lemma wethSpec_funcSound_nonpayable {wa : Adr} {f : Func}
     (h : wethSpec.FuncSound wa weth.aux f) :
     wethSpec.FuncSound wa weth.aux (nonpayable f) := by
-  intro sevm s r h_ct h_pre ih h_run
-  rcases run_body_of_run_nonpayable h_run with ⟨mid, -, hstate, hbody⟩
-  exact h h_ct (h_pre.state_eq hstate.symm) ih hbody
+  intro sevm s r h_ct h_pre h_wf ih h_run
+  rcases run_body_of_run_nonpayable_frame h_run with ⟨mid, -, hstate, hmem, hbody⟩
+  exact h h_ct (h_pre.state_eq hstate.symm) (by rw [← hmem]; exact h_wf) ih hbody
 
 
 -- started after a balance transfer from a non-WETH sender
@@ -1491,6 +1493,7 @@ theorem weth_preserves_solvent (wa : Adr) :
     ∀ sevm pre post,
       Exec 0 sevm pre (.ok post)  →
       (sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth) →
+      (sevm.currentTarget = wa → Mem.Wf pre.memory) →
       Precond wa sevm pre →
       Postcond wa sevm post := by
   simpa only [ContractSpec.Preserves, wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq]
@@ -1502,9 +1505,10 @@ theorem exec_preserves_solvent (wa : Adr)
     (sevm : Sevm) (pre post : Devm)
     (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
+    (h_wf : sevm.currentTarget = wa → Mem.Wf pre.memory)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
   exact wethSpec_post_iff.mp
-    (wethSpec.exec_preserves_inv wa (wethSpec_preserves wa) sevm pre post h_run h_code
+    (wethSpec.exec_preserves_inv wa (wethSpec_preserves wa) sevm pre post h_run h_code h_wf
       (wethSpec_pre_iff.mpr h_pc))
 
 /-! ### Bridge to the frame-level invariant
