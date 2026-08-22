@@ -6,6 +6,7 @@ import Blanc.LidoCircuitBreakerPauseSettlement
 import Blanc.LidoCircuitBreakerPreControl
 import Blanc.LidoCircuitBreakerCallBoundary
 import Blanc.LidoCircuitBreakerObservation
+import Blanc.LidoCircuitBreakerSuccess
 
 /-!
 Gate-owned controls for the Stage 5 access and temporal-authority family.
@@ -1971,5 +1972,116 @@ theorem observation_arbitrary_answer_control
       ⟨-, hpost⟩ | ⟨hne, -⟩
     · exact hpost
     · exact absurd hzero hne
+
+/-- **The success result stays post-callback, transported, coupled, and exact.**
+
+This one control reads every clause protected by the success cut's five fixed
+anti-vacuity decisions.  It starts only with the two memory windows before the
+observation, an arbitrary `PauseStatBoundary`, the two explicitly named
+storage noninterference equalities, and the actual answer-handling run.
+
+* The `PauseSuccessInputs` extracted below bind count and interval at the
+  reached `successPre`; `PauseSuccessNoninterference` then binds those same
+  values to `entry`.  Substituting entry-time reads inside the result therefore
+  removes evidence this conclusion consumes.
+* Target and duration are recovered at `successPre` from the two pre-observation
+  windows.  There is no success-entry window premise and no concrete word.
+* `value` is one binder shared by `PauseExpiryWrite`, `PauseExpiryValue`, and
+  `heartbeatUpdatedLog`; splitting the log word from the write loses the
+  displayed conjunction.
+* The accepting hypothesis says only that the child's first decoded word is
+  one.  No bytecode, exact returndata, or no-tail premise occurs; arbitrary
+  trailing bytes remain admitted.
+* The log equation is the entire walk's exact two-record delta in source order,
+  so adding or permitting any other emitted record cannot satisfy it.
+
+The panic disjunct remains because a canonical answer can still encounter the
+post-callback checked-addition overflow.  Thus the control neither assumes
+success nor hides an out-of-gas/revert route. -/
+theorem success_commit_arbitrary_target_control
+    (fs : List Func) (sevm : Sevm) (entry statPre statPost : Devm)
+    (target : Adr) (duration : B256) (ex : Execution)
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
+    (h_panic : fs[arithmeticPanicSlot]? =
+      some (Func.revData heartbeatArithmeticPanicData))
+    (boundary : PauseStatBoundary sevm target statPre statPost)
+    (targetWindow : MemWordAt statPre
+      (targetWord * 32).toNat target.toB256)
+    (durationWindow : MemWordAt statPre
+      (durationWord * 32).toNat duration)
+    (noninterference : ∀ successPre,
+      Func.RunCompiledTo fs sevm successPre pauseSuccess ex →
+        PauseSuccessNoninterference sevm entry successPre)
+    (run : Func.RunCompiledTo fs sevm statPost
+      (Ninst.iszero :::
+        ((Func.call bubbleRevertSlot) <?> decodePausedResult)) ex) :
+    ∃ child : Devm,
+      statPost.returnData = child.output ∧
+      (child.error.isSome = false →
+        ¬ Nat.toB256 child.output.length < (32 : B256) →
+        pausedAnswer child.output = 1 →
+        ∃ successPre : Devm,
+          Func.RunCompiledTo fs sevm successPre pauseSuccess ex ∧
+          PauseSuccessNoninterference sevm entry successPre ∧
+          PauseSuccessInputs sevm successPre target.toB256 duration
+            (entry.getStorVal sevm.currentTarget
+              (countSlot sevm.caller.toB256))
+            (entry.getStorVal sevm.currentTarget heartbeatIntervalSlot) ∧
+          ((∃ post value,
+              ex = .ok post ∧
+              PauseSuccessCommitTrace fs sevm successPre post
+                target.toB256 duration value ∧
+              PauseExpiryWrite sevm successPre sevm.currentTarget value ∧
+              PauseExpiryValue sevm.benvStat.time
+                (entry.getStorVal sevm.currentTarget heartbeatIntervalSlot)
+                (entry.getStorVal sevm.currentTarget
+                  (countSlot sevm.caller.toB256)) value ∧
+              post.logs = successPre.logs ++
+                [pauseTriggeredLog sevm target.toB256 duration,
+                  heartbeatUpdatedLog sevm value] ∧
+              (∀ owner,
+                Devm.getStor post owner =
+                  if owner = sevm.currentTarget then
+                    (Devm.getStor successPre owner).set
+                      (expirySlot sevm.caller.toB256) value
+                  else Devm.getStor successPre owner) ∧
+              post.getTransVal sevm.currentTarget lockKey = 0 ∧
+              (∀ owner key,
+                (owner, key) ≠ (sevm.currentTarget, lockKey) →
+                  post.getTransVal owner key =
+                    successPre.getTransVal owner key) ∧
+              post.output = successPre.output) ∨
+            PauseSuccessPanic fs sevm successPre target.toB256 duration
+              (entry.getStorVal sevm.currentTarget
+                (countSlot sevm.caller.toB256))
+              (entry.getStorVal sevm.currentTarget heartbeatIntervalSlot)
+              ex)) := by
+  obtain ⟨child, hreturn, outcomes⟩ :=
+    pauseObservation_committed_outcomes h_empty h_bubble h_failed h_panic
+      boundary targetWindow durationWindow noninterference run
+  refine ⟨child, hreturn, ?_⟩
+  intro hclean hlong hone
+  rcases outcomes with
+    ⟨herror, -⟩ |
+      ⟨-, hshort, -⟩ |
+      ⟨-, -, -, hzero, -⟩ |
+      ⟨-, -, -, -, hnotone, -⟩ |
+      ⟨-, -, -, -, successPre, hsuccess, hni, houtcome⟩
+  · rw [hclean] at herror
+    exact absurd herror (by decide)
+  · exact absurd hshort hlong
+  · rw [hone] at hzero
+    exact absurd hzero (by decide)
+  · exact absurd hone hnotone
+  · rcases houtcome with ⟨post, value, hex, commit⟩ | panic
+    · rcases commit with
+        ⟨inputs, -, trace, write, expiryValue, logs, storage, lock, other,
+          output⟩
+      exact ⟨successPre, hsuccess, hni, inputs, Or.inl
+        ⟨post, value, hex, trace, write, expiryValue, logs, storage, lock,
+          other, output⟩⟩
+    · exact ⟨successPre, hsuccess, hni, panic.1, Or.inr panic⟩
 
 end Blanc.LidoCircuitBreaker.AccessControls

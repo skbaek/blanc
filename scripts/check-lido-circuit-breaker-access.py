@@ -82,6 +82,7 @@ OWNERS = {
     # cooperative callee would supply -- is as load-bearing as what they carry.
     "callBoundary": ROOT / "Blanc/LidoCircuitBreakerCallBoundary.lean",
     "observation": ROOT / "Blanc/LidoCircuitBreakerObservation.lean",
+    "success": ROOT / "Blanc/LidoCircuitBreakerSuccess.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -117,6 +118,7 @@ MODULES = {
     "preControl": "Blanc.LidoCircuitBreakerPreControl",
     "callBoundary": "Blanc.LidoCircuitBreakerCallBoundary",
     "observation": "Blanc.LidoCircuitBreakerObservation",
+    "success": "Blanc.LidoCircuitBreakerSuccess",
 }
 
 REQUIRED = (
@@ -215,6 +217,7 @@ REQUIRED = (
     # the library rebuilt; see the control's docstring.
     "call_boundary_arbitrary_target_code_control",
     "observation_arbitrary_answer_control",
+    "success_commit_arbitrary_target_control",
 )
 FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|opaque|native_decide|implemented_by)\b")
 
@@ -988,6 +991,29 @@ ROLES = {
         "pauseAfterSet_outcomes":
             "a51a3a9f543bc979c519e91d1733f807f0245f0d1168f4dde1fe808d8caa63c7",
     },
+    # Stage 6's final cut: the post-callback success walk and its composition
+    # into the observation.  The result vocabulary is carried in `def`s, so
+    # these pins hold every public theorem's quantifier/premise/conclusion
+    # shape while `success_commit_arbitrary_target_control` reads the defs'
+    # post-callback, transported-word, shared-binder and exact-log content.
+    "success": {
+        "pauseSuccess_pauseTriggered_prefix":
+            "e09c4fa9d9962fb93adee7a2b928cb856f36b87354a201d0741107a8133fcd85",
+        "PauseSuccessCommit.output_empty":
+            "6bb2ed9af03c26ee0b5017bc43f3d6276ce9459d1505e8291683f876edcf294a",
+        "PauseSuccessFinishTrace.result":
+            "4a64c69a9dde408a0f5bfde4e6ff25e2278e070ce30512ef0942cff97b19bca5",
+        "PauseSuccessCommitTrace.result":
+            "45baa21932f701cf7641a58b4aba7da4797a4be8b729390130d2e380fbe8317b",
+        "pauseSuccess_outcome":
+            "22719c1fc4d3b2769870232e2bafc57554f21803386fc0d13efaecd16ea2a1a8",
+        "pauseObservation_committed_outcomes":
+            "949fa243e627f679ee9c24c5f1d3f46a4847e936497905a03a1761b7603b4ea2",
+        "pauseAfterSet_committed_outcomes":
+            "e20a928c42aee513bd2e5b7acc1238ecc37bcd7a1c79742b782ea038640eb9b9",
+        "PauseSuccessInputs.of_noninterference":
+            "4ed80d8e7d93fd675e24c28a6ee37b60e3f5b8240672c9a48a2cc980b7c191bf",
+    },
 }
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
@@ -1657,6 +1683,15 @@ def main() -> None:
           "one theorem partitioning pauseAfterSet's derivations across all "
           "seven with both out-of-gas legs explicit and both boundary "
           "relations applied at the states the derivation actually reaches; "
+          "Stage 6's success cut -- the two post-callback storage reads named "
+          "separately from entry-time noninterference, staged target and "
+          "duration words transported into the accepting walk, the expiry "
+          "write and HeartbeatUpdated data sharing one binder, exactly the "
+          "two source-ordered records, the one-cell persistent and transient "
+          "effects, terminal STOP/output frame, arithmetic panic alternative, "
+          "and the accepting observation composed to that committed result "
+          "without constraining target bytecode or answer bytes after the "
+          "canonical first word; "
           f"{controls} labelled header mutations, deletion and trust controls")
 
 if __name__ == "__main__":
