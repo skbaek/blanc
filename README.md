@@ -416,13 +416,31 @@ what makes this rewrite mechanical.
 
 ## Proof-module size and partition
 
-A derivation module grows until the edit-observe loop stops being interactive.
-Measured here: a 1,244-line model module answers a whole-file language-server
-query in about 21 seconds, while an 8,000-line derivation module never answers
-inside the client's inactivity window — and the empty diagnostics list it
-returns then is a timeout, not a clean bill of health. Split before a module
-reaches that size, because an author with no cheap feedback is writing proofs
-blind.
+A derivation module should be partitioned from its dependency structure, not
+from an assumed line-count latency threshold. On 2026-08-22, using Lean 4.32.1
+at Blanc commit `159b75f4f1c09b5a6c3b596da9e933e1881a5cbd`, a serialized
+fresh-server protocol measured cold open, warm goal, matching-version
+whole-file diagnostics, and harmless tail and line-1 edits three times on eight
+modules. An independent 135-unit reproduction repeated the result. The
+1,244-line `LidoCircuitBreakerRegistryModel.lean` cold-open median was 1.971 s
+(2.069 s reproduction), not the formerly quoted ~21 s. Three modules over
+8,000 lines had cold medians of 71.835, 8.566, and 10.815 s (71.393, 8.719, and
+10.981 s reproduction), so 8,000 lines did not define a client-latency
+boundary.
+
+Cold-open and line-1-edit medians correlated with committed batch elaboration
+cost at Spearman 1.000 and with physical lines at 0.119. A 722-line module cost
+about 48 s while a 5,528-line module cost about 7 s. Tail edits remained
+0.074–1.738 s, real warm goals 0.0007–0.0041 s, and current full-file
+diagnostics 0.00018–0.00094 s. Therefore the 1,250 warning and 8,000 hard cap
+are not supported as author-visible latency constants by current evidence.
+They may remain separate structural policy constants only with a rationale
+that does not cite the former timing claims.
+
+The experiment did not split a module. Use the mechanical dependency partition
+below as a candidate construction, then measure the same practical upstream
+edit before and after. Do not claim that a shorter file improves the edit loop
+until the isolated elaboration/import closure is actually faster.
 
 Three rules make the split mechanical rather than a judgement call.
 
