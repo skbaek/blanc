@@ -219,6 +219,9 @@ lemma permit_eq_deadlineGuard (dp : DeployParams) :
   unfold permit permitAfterDeadline permitDomainDispatch
   rfl
 
+/-- Exact straight-line deadline test at the head of `permit`. -/
+def permitDeadlineLine : Line := arg 3 ++ [Ninst.timestamp, Ninst.gt]
+
 /-- Reader-level image after nonce word 4 and the struct-hash suffix have
 overwritten all six words of the permit struct. -/
 def permitStructMemoryImage (img : Bytes) (owner spender : Adr)
@@ -1038,6 +1041,64 @@ lemma recoverPermitSigner_eq_prepare :
     recoverPermitSigner =
       permitRecoverPrepare ++ [statcall, pop, pushB256 128, mload] := by
   rfl
+
+/-- The arbitrary word consumed into scratch word zero is enough to derive
+the six exact ECRECOVER operands at the following `STATICCALL`. -/
+theorem permitRecoverPrepare_stack
+    {sevm : Sevm} {pre post : Devm} {word : B256} {tail : Stack}
+    (hp : word :: tail <<+ pre.stack)
+    (run : Line.Run sevm pre permitRecoverPrepare post) :
+    ∃ gasWord : B256,
+      gasWord :: (1 : B256) :: (0 : B256) :: (128 : B256) ::
+        (128 : B256) :: (32 : B256) :: tail <<+ post.stack := by
+  unfold permitRecoverPrepare permitRecoverWrites at run
+  rcases of_run_append (mstoreAt 0) run with ⟨s1, h1, run⟩
+  rcases of_run_mstoreAt_val h1 hp with ⟨hp1, _⟩
+  rcases of_run_append (arg 4) run with ⟨s2, h2, run⟩
+  have hp2 : Sevm.argWord sevm 4 :: tail <<+ s2.stack := prefix_of_arg hp1 h2
+  rcases of_run_append (mstoreAt 1) run with ⟨s3, h3, run⟩
+  rcases of_run_mstoreAt_val h3 hp2 with ⟨hp3, _⟩
+  rcases of_run_append (arg 5) run with ⟨s4, h4, run⟩
+  have hp4 : Sevm.argWord sevm 5 :: tail <<+ s4.stack := prefix_of_arg hp3 h4
+  rcases of_run_append (mstoreAt 2) run with ⟨s5, h5, run⟩
+  rcases of_run_mstoreAt_val h5 hp4 with ⟨hp5, _⟩
+  rcases of_run_append (arg 6) run with ⟨s6, h6, run⟩
+  have hp6 : Sevm.argWord sevm 6 :: tail <<+ s6.stack := prefix_of_arg hp5 h6
+  rcases of_run_append (mstoreAt 3) run with ⟨s7, h7, run⟩
+  rcases of_run_mstoreAt_val h7 hp6 with ⟨hp7, _⟩
+  rcases of_run_append [pushB256 0] run with ⟨s8, h8, run⟩
+  rcases Line.of_run_cons h8 with ⟨u8, q8, hnil⟩
+  cases hnil
+  have hp8 : (0 : B256) :: tail <<+ s8.stack :=
+    prefix_of_push (of_run_pushB256 q8) hp7
+  rcases of_run_append (mstoreAt 4) run with ⟨s9, h9, run⟩
+  rcases of_run_mstoreAt_val h9 hp8 with ⟨hp9, _⟩
+  rcases of_run_append (pushList [32, 128, 128, 0, 1]) run with
+    ⟨s10, hpushes, hgas⟩
+  simp only [pushList, List.map] at hpushes
+  rcases Line.of_run_cons hpushes with ⟨u1, q1, hpushes⟩
+  have hp10a : (32 : B256) :: tail <<+ u1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp9
+  rcases Line.of_run_cons hpushes with ⟨u2, q2, hpushes⟩
+  have hp10b : (128 : B256) :: (32 : B256) :: tail <<+ u2.stack :=
+    prefix_of_push (of_run_pushB256 q2) hp10a
+  rcases Line.of_run_cons hpushes with ⟨u3, q3, hpushes⟩
+  have hp10c : (128 : B256) :: (128 : B256) :: (32 : B256) ::
+      tail <<+ u3.stack :=
+    prefix_of_push (of_run_pushB256 q3) hp10b
+  rcases Line.of_run_cons hpushes with ⟨u4, q4, hpushes⟩
+  have hp10d : (0 : B256) :: (128 : B256) :: (128 : B256) ::
+      (32 : B256) :: tail <<+ u4.stack :=
+    prefix_of_push (of_run_pushB256 q4) hp10c
+  rcases Line.of_run_cons hpushes with ⟨u5, q5, hnil⟩
+  cases hnil
+  have hp10 : (1 : B256) :: (0 : B256) :: (128 : B256) ::
+      (128 : B256) :: (32 : B256) :: tail <<+ s10.stack :=
+    prefix_of_push (of_run_pushB256 q5) hp10d
+  rcases Line.of_run_cons hgas with ⟨s11, q11, hnil⟩
+  cases hnil
+  rcases of_run_gas q11 with ⟨gasWord, hpush⟩
+  exact ⟨gasWord, prefix_of_push hpush hp10⟩
 
 /-- Exact local image immediately before permit's `STATICCALL`. -/
 theorem of_permitRecoverPrepare
@@ -2823,6 +2884,61 @@ def permitSignerGuards : Func :=
 
 lemma permitRecover_eq :
     permitRecover = permitDigest +++ recoverPermitSigner +++ permitSignerGuards := by
+  rfl
+
+/-! ## Shared cursor decompositions
+
+These names expose the exact WETH10 program fragments used by both the
+allowance and holder-flow cursor proofs. -/
+
+def approvePermitLine : Line :=
+  argCopy 0 0 2 ++ allowanceKeyFromMemory ++
+  Blanc.arg 2 ++ [Ninst.swap 0, Ninst.sstore] ++
+  Blanc.arg 2 ++ mstoreAt 0 ++ Blanc.arg 1 ++ Blanc.arg 0 ++
+  [Ninst.pushB256 Blanc.approvalEvent] ++ logWith 2 0 1
+
+theorem approvePermit_shape :
+    approvePermit = approvePermitLine +++ Func.stop := by
+  simp only [approvePermit, approvePermitLine, prepend_append,
+    List.append_assoc, prepend]
+
+def permitFirstSignerGuardLine : Line :=
+  [Ninst.pop, Ninst.pushB256 128, Ninst.mload, Ninst.dup 0, Ninst.iszero]
+
+def permitSecondSignerGuardLine : Line :=
+  arg 0 ++ [Ninst.eq, Ninst.iszero]
+
+def permitAfterStaticcall : Func :=
+  permitFirstSignerGuardLine +++
+    (.branch
+      (permitSecondSignerGuardLine +++
+        (.branch approvePermit (.call invalidPermitErrorSlot)))
+      (.call invalidPermitErrorSlot))
+
+theorem permitRecover_afterStaticcall_shape :
+    permitRecover =
+      (permitDigest ++ permitRecoverPrepare) +++
+        (Ninst.statcall ::: permitAfterStaticcall) := by
+  rw [permitRecover_eq, recoverPermitSigner_eq_prepare]
+  unfold permitSignerGuards permitAfterStaticcall
+    permitFirstSignerGuardLine permitSecondSignerGuardLine
+  rfl
+
+def permitDomainTestLine (dp : DeployParams) : Line :=
+  [Ninst.dup 1, pushDeployWord dp.deploymentChainId, Ninst.eq]
+
+def permitCalculatedDomainPrefix : Line :=
+  [Ninst.swap 0] ++ calculateDomainSeparator
+
+def permitCachedDomainPrefix (dp : DeployParams) : Line :=
+  [Ninst.swap 0, Ninst.pop, pushDeployWord dp.cachedDomainSeparator]
+
+theorem permitDomainDispatch_shape (dp : DeployParams) :
+    permitDomainDispatch dp =
+      permitDomainTestLine dp +++
+        (.branch
+          (permitCalculatedDomainPrefix +++ .call permitRecoverSlot)
+          (permitCachedDomainPrefix dp +++ .call permitRecoverSlot)) := by
   rfl
 
 /-- Exact successful policy enforced after ECRECOVER, together with the frame

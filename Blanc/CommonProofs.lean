@@ -9789,6 +9789,26 @@ lemma prefix_of_mstore_val {e} {x y xs} {s s' : Devm}
   rw [hx, hy] at h1
   exact of_append_pref h2 h1
 
+/-- Every successful `mstoreAt` run begins with the word it consumes at the
+head of the input stack. -/
+theorem mstoreAt_stack_head
+    {e : Sevm} {pre post : Devm} {k : B256}
+    (run : Line.Run e pre (mstoreAt k) post) :
+    ∃ word tail, word :: tail <<+ pre.stack := by
+  unfold mstoreAt at run
+  rcases Line.of_run_cons run with ⟨afterPush, hpush, run⟩
+  rcases Line.of_run_cons run with ⟨afterStore, hstore, hnil⟩
+  cases hnil
+  have pushed := of_run_pushB256 hpush
+  rcases of_run_mstore hstore with ⟨offset, word, hpop⟩
+  have hstack : (k * 32) :: pre.stack =
+      offset :: word :: post.stack :=
+    pushed.stack.symm.trans hpop
+  injection hstack with hoff htail
+  refine ⟨word, post.stack, ?_⟩
+  rw [htail]
+  simpa using (pref_append (word :: post.stack) [])
+
 /-- `mstoreAt k` writes the stack top into memory word `k`.
 
 The `Line`-level form, and the one every `storeCallbackHead`-shaped fragment

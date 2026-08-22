@@ -839,17 +839,6 @@ private theorem permitNoncePrepare_observations
         pushAddressMask tagNonceKey mstoreAt
       line_inv) originalRun
 
-private def approvePermitLine : Line :=
-  argCopy 0 0 2 ++ allowanceKeyFromMemory ++
-  Blanc.arg 2 ++ [Ninst.swap 0, Ninst.sstore] ++
-  Blanc.arg 2 ++ mstoreAt 0 ++ Blanc.arg 1 ++ Blanc.arg 0 ++
-  [Ninst.pushB256 Blanc.approvalEvent] ++ logWith 2 0 1
-
-private theorem approvePermit_shape :
-    approvePermit = approvePermitLine +++ Func.stop := by
-  simp only [approvePermit, approvePermitLine, prepend_append,
-    List.append_assoc, prepend]
-
 private theorem stop_getCode_inv_permit :
     Func.Inv Devm.getCode Devm.getCode Func.stop := by
   intro fs e pre post run
@@ -913,85 +902,6 @@ private theorem approvePermit_observations
         pushList Blanc.arg cdl mstoreAt logWith
       line_inv) hline).trans (stop_getCode_inv_permit hstop)
 
-private theorem exists_head_of_run_mstoreAt_permit
-    {e : Sevm} {pre post : Devm} {k : B256}
-    (run : Line.Run e pre (mstoreAt k) post) :
-    ∃ word tail, word :: tail <<+ pre.stack := by
-  unfold mstoreAt at run
-  rcases Line.of_run_cons run with ⟨afterPush, hpush, run⟩
-  rcases Line.of_run_cons run with ⟨afterStore, hstore, hnil⟩
-  cases hnil
-  have pushed := of_run_pushB256 hpush
-  rcases of_run_mstore hstore with ⟨offset, word, hpop⟩
-  have hstack : (k * 32) :: pre.stack =
-      offset :: word :: post.stack :=
-    pushed.stack.symm.trans hpop
-  injection hstack with hoff htail
-  refine ⟨word, post.stack, ?_⟩
-  rw [htail]
-  simpa using (pref_append (word :: post.stack) [])
-
-/-- The arbitrary word consumed into scratch word zero is enough to derive
-the six exact ECRECOVER operands at the following `STATICCALL`. -/
-private theorem permitRecoverPrepare_stack
-    {sevm : Sevm} {pre post : Devm} {word : B256} {tail : Stack}
-    (hp : word :: tail <<+ pre.stack)
-    (run : Line.Run sevm pre permitRecoverPrepare post) :
-    ∃ gasWord : B256,
-      gasWord :: (1 : B256) :: (0 : B256) :: (128 : B256) ::
-        (128 : B256) :: (32 : B256) :: tail <<+ post.stack := by
-  unfold permitRecoverPrepare permitRecoverWrites at run
-  rcases of_run_append (mstoreAt 0) run with ⟨s1, h1, run⟩
-  rcases of_run_mstoreAt_val h1 hp with ⟨hp1, hm1⟩
-  rcases of_run_append (arg 4) run with ⟨s2, h2, run⟩
-  have hp2 : Sevm.argWord sevm 4 :: tail <<+ s2.stack :=
-    prefix_of_arg hp1 h2
-  rcases of_run_append (mstoreAt 1) run with ⟨s3, h3, run⟩
-  rcases of_run_mstoreAt_val h3 hp2 with ⟨hp3, hm3⟩
-  rcases of_run_append (arg 5) run with ⟨s4, h4, run⟩
-  have hp4 : Sevm.argWord sevm 5 :: tail <<+ s4.stack :=
-    prefix_of_arg hp3 h4
-  rcases of_run_append (mstoreAt 2) run with ⟨s5, h5, run⟩
-  rcases of_run_mstoreAt_val h5 hp4 with ⟨hp5, hm5⟩
-  rcases of_run_append (arg 6) run with ⟨s6, h6, run⟩
-  have hp6 : Sevm.argWord sevm 6 :: tail <<+ s6.stack :=
-    prefix_of_arg hp5 h6
-  rcases of_run_append (mstoreAt 3) run with ⟨s7, h7, run⟩
-  rcases of_run_mstoreAt_val h7 hp6 with ⟨hp7, hm7⟩
-  rcases of_run_append [Ninst.pushB256 0] run with ⟨s8, h8, run⟩
-  rcases Line.of_run_cons h8 with ⟨u8, q8, hnil⟩
-  cases hnil
-  have hp8 : (0 : B256) :: tail <<+ s8.stack :=
-    prefix_of_push (of_run_pushB256 q8) hp7
-  rcases of_run_append (mstoreAt 4) run with ⟨s9, h9, run⟩
-  rcases of_run_mstoreAt_val h9 hp8 with ⟨hp9, hm9⟩
-  rcases of_run_append (pushList [32, 128, 128, 0, 1]) run with
-    ⟨s10, hpushes, hgas⟩
-  simp only [pushList, List.map] at hpushes
-  rcases Line.of_run_cons hpushes with ⟨u1, q1, hpushes⟩
-  have hp10a : (32 : B256) :: tail <<+ u1.stack :=
-    prefix_of_push (of_run_pushB256 q1) hp9
-  rcases Line.of_run_cons hpushes with ⟨u2, q2, hpushes⟩
-  have hp10b : (128 : B256) :: (32 : B256) :: tail <<+ u2.stack :=
-    prefix_of_push (of_run_pushB256 q2) hp10a
-  rcases Line.of_run_cons hpushes with ⟨u3, q3, hpushes⟩
-  have hp10c : (128 : B256) :: (128 : B256) :: (32 : B256) ::
-      tail <<+ u3.stack :=
-    prefix_of_push (of_run_pushB256 q3) hp10b
-  rcases Line.of_run_cons hpushes with ⟨u4, q4, hpushes⟩
-  have hp10d : (0 : B256) :: (128 : B256) :: (128 : B256) ::
-      (32 : B256) :: tail <<+ u4.stack :=
-    prefix_of_push (of_run_pushB256 q4) hp10c
-  rcases Line.of_run_cons hpushes with ⟨u5, q5, hnil⟩
-  cases hnil
-  have hp10 : (1 : B256) :: (0 : B256) :: (128 : B256) ::
-      (128 : B256) :: (32 : B256) :: tail <<+ s10.stack :=
-    prefix_of_push (of_run_pushB256 q5) hp10d
-  rcases Line.of_run_cons hgas with ⟨s11, q11, hnil⟩
-  cases hnil
-  rcases of_run_gas q11 with ⟨gasWord, hpush⟩
-  exact ⟨gasWord, prefix_of_push hpush hp10⟩
-
 private theorem permitRecoverPrepare_observations
     {sevm : Sevm} {pre post : Devm}
     (run : Line.Run sevm pre permitRecoverPrepare post) :
@@ -1013,37 +923,18 @@ private theorem permitRecoverPrepare_observations
     hbalWrites.trans (funext (getBal_eq_of_state_eq hpush.state)),
     hcode⟩
 
-private def permitFirstSignerGuardLine : Line :=
-  [Ninst.pop, Ninst.pushB256 128, Ninst.mload, Ninst.dup 0, Ninst.iszero]
-
-private def permitSecondSignerGuardLine : Line :=
-  arg 0 ++ [Ninst.eq, Ninst.iszero]
-
-private def permitAfterStaticcall : Func :=
-  permitFirstSignerGuardLine +++
-    (.branch
-      (permitSecondSignerGuardLine +++
-        (.branch approvePermit (.call invalidPermitErrorSlot)))
-      (.call invalidPermitErrorSlot))
-
-private theorem permitRecover_afterStaticcall_shape :
-    permitRecover =
-      (permitDigest ++ permitRecoverPrepare) +++
-        (Ninst.statcall ::: permitAfterStaticcall) := by
-  rw [permitRecover_eq, recoverPermitSigner_eq_prepare]
-  unfold permitSignerGuards permitAfterStaticcall
-    permitFirstSignerGuardLine permitSecondSignerGuardLine
-  rfl
-
-private theorem Exec.Frame.CompiledCursor.castSource_actions_permit
+private theorem Exec.Frame.CompiledCursor.castSourceFrame_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {source target : Func} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable source final)
     (hsource : source = target) :
-    (hsource ▸ cursor).actions = cursor.actions := by
-  cases hsource
-  rfl
+    ∃ targetCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
+        target final,
+      targetCursor.pre = cursor.pre ∧
+      targetCursor.actions = cursor.actions := by
+  subst target
+  exact ⟨cursor, rfl, rfl⟩
 
 /-- Complete the parent-only signer/allowance suffix after the static child.
 The two rejected arms are fixed reverters, so the literal retained path ends
@@ -1076,13 +967,8 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
         simp [weth10, weth10Aux, invalidPermitErrorSlot,
           invalidPermitError])) with
     ⟨approveCursor, hsecondPop, hsecondBranchActions⟩
-  let terminalCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
-      ((weth10 dp).main :: weth10Aux)
-      (table 0 ((weth10 dp).main :: weth10Aux))
-      (approvePermitLine +++ Func.stop) frame.post :=
-    approvePermit_shape ▸ approveCursor
-  have hterminalActions : terminalCursor.actions = approveCursor.actions :=
-    approveCursor.castSource_actions_permit approvePermit_shape
+  rcases approveCursor.castSourceFrame_permit approvePermit_shape with
+    ⟨terminalCursor, _hterminalPre, hterminalActions⟩
   have hdesc : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       approveCursor.actions :=
     (terminalCursor.finishTerminalChildlessLine (by
@@ -1118,23 +1004,6 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
     (hsecondActions.trans
       (hfirstBranchActions.trans hfirstActions)))
 
-private def permitDomainTestLine (dp : DeployParams) : Line :=
-  [Ninst.dup 1, pushDeployWord dp.deploymentChainId, Ninst.eq]
-
-private def permitCalculatedDomainPrefix : Line :=
-  [Ninst.swap 0] ++ calculateDomainSeparator
-
-private def permitCachedDomainPrefix (dp : DeployParams) : Line :=
-  [Ninst.swap 0, Ninst.pop, pushDeployWord dp.cachedDomainSeparator]
-
-private theorem permitDomainDispatch_shape (dp : DeployParams) :
-    permitDomainDispatch dp =
-      permitDomainTestLine dp +++
-        (.branch
-          (permitCalculatedDomainPrefix +++ .call permitRecoverSlot)
-          (permitCachedDomainPrefix dp +++ .call permitRecoverSlot)) := by
-  rfl
-
 /-- Both runtime domain-separator arms reach the same recovery body through
 parent-only instructions and the generated internal call scaffold. -/
 private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
@@ -1150,18 +1019,12 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
       permitRecover final,
       recoverCursor.actions = cursor.actions ∧
       PermitOwnObservations frame.sevm cursor.pre recoverCursor.pre := by
-  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    (permitDomainTestLine dp +++
-      (.branch
-        (permitCalculatedDomainPrefix +++ .call permitRecoverSlot)
-        (permitCachedDomainPrefix dp +++ .call permitRecoverSlot)))
-    final at cursor
-  rcases cursor.peelChildlessLine (line := permitDomainTestLine dp) (by
+  rcases cursor.castSourceFrame_permit (permitDomainDispatch_shape dp) with
+    ⟨domainCursor, hdomainPre, hdomainActions⟩
+  rcases domainCursor.peelChildlessLine (line := permitDomainTestLine dp) (by
       simp [permitDomainTestLine, pushDeployWord, NinstIsChildless]) with
     ⟨branchCursor, htest, htestActions⟩
-  have htestObs : PermitOwnObservations frame.sevm cursor.pre
+  have htestObs : PermitOwnObservations frame.sevm domainCursor.pre
       branchCursor.pre :=
     PermitOwnObservations.of_line (by
       unfold permitDomainTestLine pushDeployWord
@@ -1196,9 +1059,10 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
       simpa [weth10, weth10Aux, permitRecoverSlot] using hget.symm
     subst body
     exact ⟨bodyCursor,
-      hbodyActions.trans (hlineActions.trans
-        (hcalculatedActions.trans htestActions)),
-      htestObs.trans (hbranchObs.trans (hlineObs.trans hcallObs))⟩
+      (hbodyActions.trans (hlineActions.trans
+        (hcalculatedActions.trans htestActions))).trans hdomainActions,
+      by simpa only [hdomainPre] using
+        htestObs.trans (hbranchObs.trans (hlineObs.trans hcallObs))⟩
   · rcases hcached with ⟨cachedCursor, hcachedActions, hbranchObs⟩
     rcases cachedCursor.peelChildlessLine
         (line := permitCachedDomainPrefix dp) (by
@@ -1220,9 +1084,10 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
       simpa [weth10, weth10Aux, permitRecoverSlot] using hget.symm
     subst body
     exact ⟨bodyCursor,
-      hbodyActions.trans (hlineActions.trans
-        (hcachedActions.trans htestActions)),
-      htestObs.trans (hbranchObs.trans (hlineObs.trans hcallObs))⟩
+      (hbodyActions.trans (hlineActions.trans
+        (hcachedActions.trans htestActions))).trans hdomainActions,
+      by simpa only [hdomainPre] using
+        htestObs.trans (hbranchObs.trans (hlineObs.trans hcallObs))⟩
 
 private theorem Exec.Frame.CompiledCursor.enterPermitAfterDeadline
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
@@ -1262,9 +1127,6 @@ private theorem Exec.Frame.CompiledCursor.enterPermitAfterDeadline
   exact ⟨recoverCursor,
     hrecoverActions.trans (hstructActions.trans hnonceActions),
     hnonceObs.trans (hstructObs.trans hdomainObs)⟩
-
-private def permitDeadlineLine : Line :=
-  arg 3 ++ [Ninst.timestamp, Ninst.gt]
 
 /-- Reach the unique permit recovery auxiliary on the original selector
 cursor.  All earlier generated instructions contribute no descendant action;
@@ -1375,11 +1237,14 @@ theorem Exec.Frame.compiledPermitChronology
   rcases Blanc.Weth10.Exec.Frame.reachCompiledPermitRecover (frame := frame)
       context hselector hnonempty with
     ⟨recoverCursor, hrecoverActions, hrecoverObs⟩
-  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    ((permitDigest ++ permitRecoverPrepare) +++
-      (Ninst.statcall ::: permitAfterStaticcall)) frame.post at recoverCursor
+  rcases recoverCursor.castSourceFrame_permit
+      permitRecover_afterStaticcall_shape with
+    ⟨recoverCursor, hrecoverPre, hrecoverCastActions⟩
+  have hrecoverActions : recoverCursor.actions = [] :=
+    hrecoverCastActions.trans hrecoverActions
+  have hrecoverObs : PermitOwnObservations frame.sevm frame.pre
+      recoverCursor.pre := by
+    simpa only [hrecoverPre] using hrecoverObs
   rcases recoverCursor.peelChildlessLine
       (line := permitDigest ++ permitRecoverPrepare) (by
         simp [permitDigest, permitRecoverPrepare, permitRecoverWrites,
@@ -1396,7 +1261,7 @@ theorem Exec.Frame.compiledPermitChronology
       ⟨firstPost, hfirst, _hrest⟩
     exact ⟨firstPost, hfirst⟩
   rcases hfirst with ⟨firstPost, hfirst⟩
-  rcases exists_head_of_run_mstoreAt_permit hfirst with
+  rcases mstoreAt_stack_head hfirst with
     ⟨word, tail, hword⟩
   rcases permitRecoverPrepare_stack hword hprepare with
     ⟨gasWord, hoperands⟩

@@ -698,63 +698,6 @@ theorem stor_of_processMessage_staticPrecomp
           exact (of_state_transfer_fields hsub).1 a
     · exact False.elim (hinterp.1 (by exact hpre))
 
-/-- The six `STATICCALL` operands permit pushes, without naming the words it
-stored into the scratch window. -/
-private theorem of_permitRecoverPrepare_raw_stack
-    {sevm : Sevm} {s t : Devm} {digest : B256} {xs : Stack}
-    (hp : digest :: xs <<+ s.stack)
-    (run : Line.Run sevm s permitRecoverPrepare t) :
-    ∃ g : B256,
-      g :: (1 : B256) :: (0 : B256) :: (128 : B256) ::
-        (128 : B256) :: (32 : B256) :: xs <<+ t.stack := by
-  unfold permitRecoverPrepare permitRecoverWrites at run
-  rcases of_run_append (mstoreAt 0) run with ⟨s1, h1, run⟩
-  rcases of_run_mstoreAt_val h1 hp with ⟨hp1, _⟩
-  rcases of_run_append (arg 4) run with ⟨s2, h2, run⟩
-  have hp2 : Sevm.argWord sevm 4 :: xs <<+ s2.stack := prefix_of_arg hp1 h2
-  rcases of_run_append (mstoreAt 1) run with ⟨s3, h3, run⟩
-  rcases of_run_mstoreAt_val h3 hp2 with ⟨hp3, _⟩
-  rcases of_run_append (arg 5) run with ⟨s4, h4, run⟩
-  have hp4 : Sevm.argWord sevm 5 :: xs <<+ s4.stack := prefix_of_arg hp3 h4
-  rcases of_run_append (mstoreAt 2) run with ⟨s5, h5, run⟩
-  rcases of_run_mstoreAt_val h5 hp4 with ⟨hp5, _⟩
-  rcases of_run_append (arg 6) run with ⟨s6, h6, run⟩
-  have hp6 : Sevm.argWord sevm 6 :: xs <<+ s6.stack := prefix_of_arg hp5 h6
-  rcases of_run_append (mstoreAt 3) run with ⟨s7, h7, run⟩
-  rcases of_run_mstoreAt_val h7 hp6 with ⟨hp7, _⟩
-  rcases of_run_append [pushB256 0] run with ⟨s8, h8, run⟩
-  rcases Line.of_run_cons h8 with ⟨u8, q8, hnil⟩
-  cases hnil
-  have hp8 : (0 : B256) :: xs <<+ s8.stack :=
-    prefix_of_push (of_run_pushB256 q8) hp7
-  rcases of_run_append (mstoreAt 4) run with ⟨s9, h9, run⟩
-  rcases of_run_mstoreAt_val h9 hp8 with ⟨hp9, _⟩
-  rcases of_run_append (pushList [32, 128, 128, 0, 1]) run with
-    ⟨s10, h10, run⟩
-  simp only [pushList, List.map] at h10
-  rcases Line.of_run_cons h10 with ⟨u1, q1, h10⟩
-  have hp10a : (32 : B256) :: xs <<+ u1.stack :=
-    prefix_of_push (of_run_pushB256 q1) hp9
-  rcases Line.of_run_cons h10 with ⟨u2, q2, h10⟩
-  have hp10b : (128 : B256) :: (32 : B256) :: xs <<+ u2.stack :=
-    prefix_of_push (of_run_pushB256 q2) hp10a
-  rcases Line.of_run_cons h10 with ⟨u3, q3, h10⟩
-  have hp10c : (128 : B256) :: (128 : B256) :: (32 : B256) :: xs <<+
-      u3.stack := prefix_of_push (of_run_pushB256 q3) hp10b
-  rcases Line.of_run_cons h10 with ⟨u4, q4, h10⟩
-  have hp10d : (0 : B256) :: (128 : B256) :: (128 : B256) ::
-      (32 : B256) :: xs <<+ u4.stack :=
-    prefix_of_push (of_run_pushB256 q4) hp10c
-  rcases Line.of_run_cons h10 with ⟨u5, q5, hnil⟩
-  cases hnil
-  have hp10 : (1 : B256) :: (0 : B256) :: (128 : B256) ::
-      (128 : B256) :: (32 : B256) :: xs <<+ s10.stack :=
-    prefix_of_push (of_run_pushB256 q5) hp10d
-  rcases Line.of_run_cons run with ⟨s11, q11, hnil⟩
-  cases hnil
-  rcases of_run_gas q11 with ⟨g, hpush⟩
-  exact ⟨g, prefix_of_push hpush hp10⟩
-
 /-- Raw storage frame for permit's whole recovery line.  The recovered word
 is left existential: the only thing the raw storage image needs from the
 `STATICCALL` is that no account's storage moved. -/
@@ -768,7 +711,7 @@ theorem of_recoverPermitSigner_raw
       Devm.getStor t = Devm.getStor s := by
   rw [recoverPermitSigner_eq_prepare] at run
   rcases of_run_append permitRecoverPrepare run with ⟨q, hprep, run⟩
-  rcases of_permitRecoverPrepare_raw_stack hp hprep with ⟨g, hpq⟩
+  rcases permitRecoverPrepare_stack hp hprep with ⟨g, hpq⟩
   rcases permitRecoverPrepare_frame hprep with
     ⟨hstorPrep, _, _, hcodePrep⟩
   have hnodelegQ : getDelegatedCodeAddress (q.getCode 1) = none := by
@@ -1036,7 +979,7 @@ theorem of_recoverPermitSigner_raw_region
           (Devm.getStor s sevm.currentTarget).get key := by
   rw [recoverPermitSigner_eq_prepare] at run
   rcases of_run_append permitRecoverPrepare run with ⟨q, hprep, run⟩
-  rcases of_permitRecoverPrepare_raw_stack hp hprep with ⟨g, hpq⟩
+  rcases permitRecoverPrepare_stack hp hprep with ⟨g, hpq⟩
   rcases permitRecoverPrepare_frame hprep with
     ⟨hstorPrep, _, _, hcodePrep⟩
   rcases Line.of_run_cons run with ⟨u, qstat, htail⟩

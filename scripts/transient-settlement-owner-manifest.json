@@ -69,13 +69,13 @@
   },
   "touchedConsumerHashes": {
     "Blanc/Weth10StaticSilence.lean": "7d99de5ead573717042030decbcc18f341a7a3d7dcb68d15bf6334299ba5887a",
-    "Blanc/Weth10AllowanceArmsPermit.lean": "6de9df894e616157984faf9e6a1ed07deab3b1388b414fe7faa6aa068a7053b4"
+    "Blanc/Weth10AllowanceArmsPermit.lean": "37c51c2936f461527d170a68371546da827cdbea2e3b1effc28d4de2d6bfe1d0"
   },
   "jaunePinFiles": {
     "lakefile.lean": "58b96d456fb06d0cdf06cc84640f2aa92543bf7d07423ce6533022c2f4458506",
     "lake-manifest.json": "cf992d946883cfc8c842e998d2b54f733e4c865a929a76f33c9c21d11bd94fcf"
   },
-  "wethPublicHeaderAggregate": "2c5919e7cd58c3b72fc6bcc1f9fb87c2440edebbba0c970b8c3e693a71f170a2",
+  "wethPublicHeaderAggregate": "773571264b848ecd66549aa6d1bf6a48c19579d1029083f659d3ee148cbcdc8e",
   "requiredSharedClassification": "TransientSettlement",
   "forbiddenTraceFamily": [
     "ProcessMessageTrace",

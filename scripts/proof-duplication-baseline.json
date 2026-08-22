@@ -7,10 +7,7 @@
   "families": 54,
   "sites": 118,
   "restated_lines": 64,
-  "unparsable_modules": [
-    "Blanc/Weth10AllowanceArmsPermit.lean",
-    "Blanc/Weth10AllowanceHistory.lean"
-  ],
+  "unparsable_modules": [],
   "entries": [
     {
       "id": "0386205139381b71",
@@ -283,5 +280,5 @@
       "sites": 2
     }
   ],
-  "digest": "18fdb5efba2a38d59c48af6bae20592c7d2e641ab59ecfb702b72ab42e75c9fc"
+  "digest": "f9401b363530ea09819901147e3c6bfd8ded17b70059afa87e8086261d2391dc"
 }

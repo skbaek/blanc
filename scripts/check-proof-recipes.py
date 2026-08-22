@@ -67,6 +67,16 @@ DECL_RE = re.compile(
     rf"(?P<kind>{'|'.join(sorted(DECL_KINDS))})\s+"
     rf"(?P<name>{QUALIFIED})(?=\s|:|\{{|\(|$)"
 )
+# This intentionally recognizes only the one wrapped form present in the
+# production corpus: a complete modifier/kind line, followed immediately by
+# an indented name.  It is not a general multi-line Lean header parser.
+WRAPPED_DECL_RE = re.compile(
+    rf"^(?P<indent>\s*){DECL_MODIFIERS}"
+    rf"(?P<kind>{'|'.join(sorted(DECL_KINDS))})\s*$"
+)
+WRAPPED_NAME_RE = re.compile(
+    rf"^(?P<indent>[ \t]+)(?P<name>{QUALIFIED})(?=\s|:|\{{|\(|$)"
+)
 NAMESPACE_RE = re.compile(rf"^\s*namespace\s+({QUALIFIED})\s*$")
 SECTION_RE = re.compile(rf"^\s*(?:noncomputable\s+)?section(?:\s+{QUALIFIED})?\s*$")
 END_RE = re.compile(rf"^\s*end(?:\s+{QUALIFIED})?\s*$")
@@ -98,6 +108,9 @@ class Declaration:
     kind: str
     start_line: int
     end_line: int
+    name_start_offset: int
+    name_end_offset: int
+    name_line: int
     raw: str
     normalized: bytes
 
@@ -111,6 +124,18 @@ class ParsedFile:
     file: str
     imports: Tuple[str, ...]
     declarations: Tuple[Declaration, ...]
+
+
+@dataclass(frozen=True)
+class DeclarationHeader:
+    """A declaration boundary plus the original source span of its name."""
+
+    boundary_line: int
+    kind: str
+    name: str
+    name_start_offset: int
+    name_end_offset: int
+    name_line: int
 
 
 @dataclass(frozen=True)
@@ -345,7 +370,7 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
 
     imports: List[str] = []
     scopes: List[Tuple[str, List[str]]] = []
-    headers: List[Tuple[int, re.Match, str]] = []
+    headers: List[DeclarationHeader] = []
     boundaries: Set[int] = set()
     namespace_for_line: Dict[int, Tuple[str, ...]] = {}
 
@@ -380,9 +405,34 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
         match = DECL_RE.match(without_newline)
         if match:
             full_name = qualify(namespace, match.group("name"))
-            headers.append((index, match, full_name))
+            headers.append(DeclarationHeader(
+                boundary_line=index,
+                kind=match.group("kind"),
+                name=full_name,
+                name_start_offset=offsets[index] + match.start("name"),
+                name_end_offset=offsets[index] + match.end("name"),
+                name_line=index + 1,
+            ))
             boundaries.add(index)
             continue
+        match = WRAPPED_DECL_RE.match(without_newline)
+        if match and index + 1 < len(masked_lines):
+            name_match = WRAPPED_NAME_RE.match(masked_lines[index + 1].rstrip("\r\n"))
+            if name_match:
+                full_name = qualify(namespace, name_match.group("name"))
+                headers.append(DeclarationHeader(
+                    boundary_line=index,
+                    kind=match.group("kind"),
+                    name=full_name,
+                    name_start_offset=offsets[index + 1] + name_match.start("name"),
+                    name_end_offset=offsets[index + 1] + name_match.end("name"),
+                    name_line=index + 2,
+                ))
+                # The keyword line, rather than the indented name line, is the
+                # declaration boundary.  This preserves the source slice and
+                # makes the following declaration delimit this one as usual.
+                boundaries.add(index)
+                continue
         if TOP_COMMAND_RE.match(without_newline) or without_newline.startswith("@["):
             boundaries.add(index)
             continue
@@ -409,7 +459,8 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
     sorted_boundaries = sorted(boundaries)
     counts: Dict[str, int] = {}
     declarations: List[Declaration] = []
-    for header_line, match, full_name in headers:
+    for header in headers:
+        header_line = header.boundary_line
         end_line = len(original_lines)
         for boundary in sorted_boundaries:
             if boundary > header_line:
@@ -443,16 +494,19 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
         raw = text[raw_start:raw_end]
         header_absolute = offsets[header_line]
         header_offset = header_absolute - raw_start
-        name_start = header_offset + match.start("name")
-        name_end = header_offset + match.end("name")
-        counts[full_name] = counts.get(full_name, 0) + 1
+        name_start = header.name_start_offset - raw_start
+        name_end = header.name_end_offset - raw_start
+        counts[header.name] = counts.get(header.name, 0) + 1
         declarations.append(Declaration(
             file=rel,
-            name=full_name,
-            ordinal=counts[full_name],
-            kind=match.group("kind"),
+            name=header.name,
+            ordinal=counts[header.name],
+            kind=header.kind,
             start_line=start_line + 1,
             end_line=end_line,
+            name_start_offset=header.name_start_offset,
+            name_end_offset=header.name_end_offset,
+            name_line=header.name_line,
             raw=raw,
             normalized=normalize_declaration(raw, header_offset, name_start, name_end),
         ))
@@ -1345,6 +1399,74 @@ def run_duplication(root: pathlib.Path, list_families: bool = False) -> int:
     return 0
 
 
+PARSER_HEADER_CONTROL_COUNT = 3
+
+
+def parser_header_self_test() -> int:
+    """Controls for the deliberately narrow, exact-source header parser."""
+    wrapped_source = """namespace Blanc.Fixture
+
+private theorem
+    Nested.wrappedHeader (n : Nat) :
+    n = n := by
+  exact rfl
+
+end Blanc.Fixture
+"""
+    wrapped = parse_lean_file(wrapped_source, "Blanc/WrappedHeader.lean").declarations
+    if len(wrapped) != 1:
+        raise GateError("self-test wrapped-header: expected one declaration")
+    declaration = wrapped[0]
+    expected_name = "Blanc.Fixture.Nested.wrappedHeader"
+    expected_normalized = (
+        b"private theorem\n"
+        b"    $DECL (n : Nat) :\n"
+        b"    n = n := by\n"
+        b"  exact rfl"
+    )
+    if (
+        declaration.kind != "theorem"
+        or declaration.name != expected_name
+        or declaration.start_line != 3
+        or declaration.name_line != 4
+        or wrapped_source[declaration.name_start_offset:declaration.name_end_offset]
+        != "Nested.wrappedHeader"
+        or declaration.normalized != expected_normalized
+    ):
+        raise GateError("self-test wrapped-header: kind, span, boundary, or normalized bytes changed")
+
+    same_line_source = """namespace Blanc.Fixture
+
+private theorem Nested.sameLineHeader (n : Nat) :
+    n = n := by
+  exact rfl
+
+end Blanc.Fixture
+"""
+    same_line = parse_lean_file(same_line_source, "Blanc/SameLineHeader.lean").declarations
+    expected_same_line = (
+        b"private theorem $DECL (n : Nat) :\n"
+        b"    n = n := by\n"
+        b"  exact rfl"
+    )
+    if len(same_line) != 1 or same_line[0].normalized != expected_same_line:
+        raise GateError("self-test same-line-normalized-bytes: pre-existing bytes changed")
+
+    unsupported_source = """private theorem [unsupported]
+    unsupportedHeader (n : Nat) :
+    n = n := by
+  exact rfl
+"""
+    try:
+        parse_lean_file(unsupported_source, "Blanc/UnsupportedHeader.lean")
+    except GateError as error:
+        if "cannot parse top-level declaration header" not in str(error):
+            raise
+    else:
+        raise GateError("self-test unsupported-declaration-looking-header: invalid header passed")
+    return PARSER_HEADER_CONTROL_COUNT
+
+
 def detector_self_test(active_recipe_id: str) -> None:
     owner_source = """namespace Blanc.Fixture
 
@@ -1467,7 +1589,7 @@ end Blanc.Fixture
 DUPLICATION_CONTROL_COUNT = 18
 UNPARSABLE_FIXTURE_SOURCE = """namespace Blanc.DupFixture
 
-private theorem
+private theorem [unsupported]
     brokenHeaderLemma (n : Nat) :
     (n + 0) + 0 = n := by
   rw [Nat.add_zero]
@@ -1772,11 +1894,14 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     )
     if not registry.active_ids:
         raise GateError("self-test requires at least one active recipe")
+    parser_controls = parser_header_self_test()
     detector_self_test(sorted(registry.active_ids)[0])
     controls = duplication_self_test()
     print(
-        "OK — proof-recipe gate self-test: generated drift, anonymous-instance boundary, "
-        "imported copy, selector table, and 5 exception controls passed; "
+        "OK — proof-recipe gate self-test: generated drift; parser headers "
+        f"{parser_controls}/{parser_controls} (wrapped-header, same-line normalization, "
+        "unsupported-header); anonymous-instance boundary plus 7 detector controls "
+        "(imported copy, selector table, 5 exception controls) passed; "
         f"duplication ratchet {controls}/{controls} controls passed"
     )
 
