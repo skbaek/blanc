@@ -120,7 +120,10 @@ CONTRACTS = {
                              "LidoCircuitBreakerObservation",
                              "LidoCircuitBreakerSuccess",
                              "LidoCircuitBreakerCode",
-                             "LidoCircuitBreakerDeploy"],
+                             "LidoCircuitBreakerDeploy",
+                             "LidoCircuitBreakerHistory",
+                             "LidoCircuitBreakerHistoryEndpoints",
+                             "LidoCircuitBreakerHistoryChain"],
 }
 
 ROOTS = ["Blanc", "Main"]

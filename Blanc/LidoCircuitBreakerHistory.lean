@@ -241,6 +241,81 @@ private theorem post_of_run_hybridDispatch {fallback : Func}
 
 end Dispatch
 
+/-! ## Storage-silent bodies
+
+`Func.Inv` quantifies over the context list, so it refuses a tail jump: the
+callee is arbitrary at that altitude.  Every Lido view tail-jumps to the
+empty-revert slot, and `getPausables` tail-jumps to itself.  `StorFixed` is the
+same property stated with the exact runtime context fixed, which is what lets a
+jump be discharged by the slot it actually reaches. -/
+
+/-- A body that changes no account's persistent storage on any successful run
+in the exact runtime context. -/
+def StorFixed (dp : DeployParams) (f : Func) : Prop :=
+  ∀ {sevm : Sevm} {s r : Devm},
+    Func.Run ((runtime dp).main :: aux) sevm s f r →
+    Devm.getStor r = Devm.getStor s
+
+namespace StorFixed
+
+variable {dp : DeployParams}
+
+theorem of_inv {f : Func} (h : Func.Inv Devm.getStor Devm.getStor f) :
+    StorFixed dp f := fun hr => (h hr).symm
+
+/-- A terminal instruction other than `JUMPDEST` cannot write storage. -/
+theorem last {l : Linst} (h : Linst.Inv Devm.getStor Devm.getStor l) :
+    StorFixed dp (.last l) := of_inv (last_inv h)
+
+theorem prepend {l : Line} {f : Func} (hl : Line.Inv Devm.getStor l)
+    (hf : StorFixed dp f) : StorFixed dp (l +++ f) := by
+  intro sevm s r h
+  rcases of_run_prepend _ _ h with ⟨s', hl', hf'⟩
+  exact (hf hf').trans (hl hl').symm
+
+theorem next {i : Ninst} {f : Func} [Ninst.Hinv Devm.getStor i]
+    (hf : StorFixed dp f) : StorFixed dp (i ::: f) := by
+  intro sevm s r h
+  cases h with
+  | next hi hrest =>
+    exact (hf hrest).trans (Ninst.Hinv.inv (f := Devm.getStor) hi).symm
+
+theorem branch {f g : Func} (hf : StorFixed dp f) (hg : StorFixed dp g) :
+    StorFixed dp (Func.branch f g) := by
+  intro sevm s r h
+  rcases of_run_branch h with
+    ⟨s', hpb, hrun⟩ | ⟨w, s', s'', hw, hpb, hb, hrun⟩
+  · exact (hf hrun).trans (funext (getStor_eq_of_state_eq hpb.state.symm))
+  · refine (hg hrun).trans (funext (getStor_eq_of_state_eq ?_))
+    exact (hpb.state.trans hb.state).symm
+
+theorem call {k : Nat} {g : Func}
+    (hk : ((runtime dp).main :: aux)[k]? = some g) (hg : StorFixed dp g) :
+    StorFixed dp (.call k) := by
+  intro sevm s r h
+  cases h with
+  | call hget hburn hrun =>
+    have heq := Option.some.inj (hk.symm.trans hget)
+    subst heq
+    exact (hg hrun).trans (funext (getStor_eq_of_state_eq hburn.state.symm))
+
+/-- `Func.rev` has no successful run at all. -/
+theorem rev : StorFixed dp Func.rev := fun h => absurd h not_run_rev
+
+end StorFixed
+
+/-- A storage-silent body satisfies its `FuncSound` obligation outright: the
+invariant is a predicate on the contract's storage, the side condition is
+trivial, and the deeper-frame hypothesis is not needed. -/
+theorem funcSound_of_storFixed {dp : DeployParams} {ca : Adr} {f : Func}
+    (h : StorFixed dp f) : (registrySpec dp).FuncSound ca aux f := by
+  intro sevm s r h_ct h_pre _ h_run
+  subst h_ct
+  refine ⟨trivial, ?_⟩
+  show RegistryCoherent (Devm.getStor r sevm.currentTarget)
+  rw [h h_run]
+  exact h_pre.inv.1 rfl
+
 /-! ## The open-contract frame theorem
 
 `Sound` quantifies over arbitrary successful runs of the exact runtime and
@@ -300,101 +375,6 @@ theorem registrySpec_sound_of_funcSound (dp : DeployParams) (ca : Adr)
       (congrFun (Line.of_inv Devm.getStor (by line_inv) h₃).symm ca)
   exact post_of_run_hybridDispatch (k := fallbackSlot) (fallback := Func.rev)
     rfl (funcSound_rev dp ca) (funcs dp) h_all ⟨h_ca, h_pre₃, ih'⟩ run₃
-
-theorem registrySpec_sound (dp : DeployParams) (ca : Adr) :
-    (registrySpec dp).Sound ca := by
-  sorry
-
-theorem registrySpec_preserves (dp : DeployParams) (ca : Adr) :
-    (registrySpec dp).Preserves ca :=
-  ContractSpec.preserves_inv (registrySpec dp) ca (registrySpec_sound dp ca)
-
-/-! ## Messages, transactions, blocks and histories -/
-
-theorem processMessageCall_preserves_registryStable (dp : DeployParams)
-    {ca : Adr} {msg : Msg} {st' : Jaune.State} {out : MsgCallOutput}
-    (h_run : processMessageCall msg = .ok ⟨st', out⟩)
-    (h_inv : (registrySpec dp).MsgInv ca msg) :
-    RegistryStable dp ca st' :=
-  (registryStable_iff_stateInv dp ca st').mpr
-    (ContractSpec.processMessageCall_preserves_inv (registrySpec_preserves dp ca) h_run h_inv).1
-
-theorem processTransaction_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat)
-    (st : Jaune.State)
-    (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
-    (h_sum : sum benv.state.bal < 2 ^ 256)
-    (h_fresh : ca ∉ benv.createdAccounts)
-    (h_stable : RegistryStable dp ca benv.state) :
-    RegistryStable dp ca st :=
-  (registryStable_iff_stateInv dp ca st).mpr
-    (ContractSpec.processTransaction_preserves_inv ca (registrySpec_preserves dp ca) benv bout
-      bout' tx i st h_run h_sum
-      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩).state
-
-theorem applyTransactions_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (txis : List (Nat × Tx)) (benv benv' : Benv)
-    (bout bout' : BlockOutput)
-    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
-    (h_sum : sum benv.state.bal < 2 ^ 256)
-    (h_fresh : ca ∉ benv.createdAccounts)
-    (h_stable : RegistryStable dp ca benv.state) :
-    RegistryStable dp ca benv'.state :=
-  (registryStable_iff_stateInv dp ca benv'.state).mpr
-    (ContractSpec.applyTransactions_preserves_inv ca (registrySpec_preserves dp ca) txis benv
-      benv' bout bout' h_run h_sum
-      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩).state
-
-theorem stateTransitionWith_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (rules : ForkRules) (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionWith rules ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_stable : RegistryStable dp ca ch.state) :
-    RegistryStable dp ca ch'.state :=
-  (registryStable_iff_stateInv dp ca ch'.state).mpr
-    (ContractSpec.stateTransitionWith_preserves_inv ca (registrySpec_preserves dp ca) rules ch
-      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
-
-theorem stateTransitionUsing_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (cfg : ChainConfig) (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionUsing cfg ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_stable : RegistryStable dp ca ch.state) :
-    RegistryStable dp ca ch'.state :=
-  (registryStable_iff_stateInv dp ca ch'.state).mpr
-    (ContractSpec.stateTransitionUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg ch
-      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
-
-theorem stateTransition_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransition ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_stable : RegistryStable dp ca ch.state) :
-    RegistryStable dp ca ch'.state :=
-  (registryStable_iff_stateInv dp ca ch'.state).mpr
-    (ContractSpec.stateTransition_preserves_inv ca (registrySpec_preserves dp ca) ch ch' block
-      h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
-
-/-- The headline configured-chain theorem: from an exact-runtime stable
-checkpoint, every state reachable by the configured valid-chain relation is
-still stable. -/
-theorem chainUsing_preserves_registryStable (dp : DeployParams) (ca : Adr)
-    (cfg : ChainConfig) (checkpoint future : BlockChain)
-    (reach : BlockChain.ReachUsing cfg checkpoint future)
-    (stable : RegistryStable dp ca checkpoint.state) :
-    RegistryStable dp ca future.state :=
-  (registryStable_iff_stateInv dp ca future.state).mpr
-    (ContractSpec.chainUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg checkpoint
-      future reach ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable))
-
-theorem chain_preserves_registryStable (dp : DeployParams) (ca : Adr)
-    (checkpoint future : BlockChain)
-    (reach : BlockChain.Reach checkpoint future)
-    (stable : RegistryStable dp ca checkpoint.state) :
-    RegistryStable dp ca future.state :=
-  (registryStable_iff_stateInv dp ca future.state).mpr
-    (ContractSpec.chain_preserves_inv ca (registrySpec_preserves dp ca) checkpoint future reach
-      ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable))
 
 end LidoCircuitBreaker
 

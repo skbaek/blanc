@@ -46,6 +46,9 @@ import Blanc.LidoCircuitBreakerObservation
 import Blanc.LidoCircuitBreakerSuccess
 import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerDeploy
+import Blanc.LidoCircuitBreakerHistory
+import Blanc.LidoCircuitBreakerHistoryEndpoints
+import Blanc.LidoCircuitBreakerHistoryChain
 import Blanc.Weth10Core
 import Blanc.Weth10Backed
 import Blanc.Weth10Spec
