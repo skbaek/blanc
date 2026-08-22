@@ -601,6 +601,61 @@
 # whole-tree median). Upward medians were recorded as current-cost evidence but
 # did not loosen this 2x gate. See ~/plans/reports/blanc-elab-instrument-2026-08-22.md.
 #
+# Calibration control — scripts/check-elab.sh --calibrate
+#
+# Regression detection and calibration are different jobs. The content and
+# import-closure fingerprint has already established that every undrawn
+# module cannot have moved, so an undrawn file is not a coverage gap; the
+# sample only establishes that this host was behaving normally while the
+# mandatory rows below were measured.
+#
+# Seed domain blanc-elab-calibration-v1, candidate commit
+#   d554c88e05af25ffac6153a24f68ba340ebe25b1
+# seed sha256(domain|commit)
+#   832664a7d0d229e3106cde9dc4e52322ed5f8b9784e66e8d26b1441177579b8b
+# baseline sha256
+#   850db650badc560e4b16348e4679629141d46f1d0c677693d8a6c6a26c488a03
+# source-set sha256 (every discovered path and its content)
+#   c252873fbffece2570bdc04c5e36e249d43e058ad2958683f36964fa4c4a9f4f
+#
+# Drawn from the 135 of 136 baseline rows that this run's content and
+# import-closure fingerprint proves unaffected; within a band, the first
+# k paths ordered by sha256(seed|path). Boundaries are fixed; membership
+# is recomputed from the baseline current at this commit.
+#
+# The remaining 1 row(s) were not drawn because this run measured and
+# compared them outright:
+#     Blanc.lean
+#
+#   band            population  drawn
+#   [0, 1.5)                36      4
+#   [1.5, 3)                54      4
+#   [3, 10)                 24      2
+#   [10, inf)               21      2
+#
+#   mandatory (measured, never sampled)                     seconds
+#   Blanc/LidoCircuitBreakerSuccess.lean                     1.586
+#
+#   control                                              measured  baseline  ratio
+#   Blanc/LidoCircuitBreakerPauseJoin.lean                   2.031     2.071   0.98
+#   Blanc/LidoCircuitBreakerUnregisterRegistration.lean      4.899     5.286   0.93
+#   Blanc/ProofRecipesGenerated.lean                         0.659     0.594   1.11
+#   Blanc/Reverts.lean                                       1.220     1.178   1.04
+#   Blanc/TransientInvariance.lean                           1.251     1.208   1.04
+#   Blanc/Weth10.lean                                       20.545    20.746   0.99
+#   Blanc/Weth10AllowanceAccounting.lean                     1.829     1.676   1.09
+#   Blanc/Weth10AllowanceArms.lean                           1.512     1.436   1.05
+#   Blanc/Weth10AllowanceArmsCallback.lean                   2.432     2.090   1.16
+#   Blanc/Weth10DeployUpperSlices.lean                      11.804    11.936   0.99
+#   Blanc/Weth10HolderFlowWriteCompleteness.lean             7.573     7.549   1.00
+#   Blanc/Weth10TemplateCode.lean                            2.418     2.419   1.00
+#
+# 12 controls, median ratio 1.036, spread 0.93x-1.16x.
+# A control refuses the run at 2.00x and is annotated at 1.50x,
+# each also requiring the same 1.0s absolute excess the gate applies to
+# the rows themselves.
+# No control reached 1.50x.
+#
 OK	1.241	Blanc.lean
 OK	1.150	Blanc/BalanceAlgebra.lean
 OK	1.233	Blanc/Basic.lean
@@ -656,6 +711,7 @@ OK	30.155	Blanc/LidoCircuitBreakerReplacementRegistration.lean
 OK	2.232	Blanc/LidoCircuitBreakerReplacementWorld.lean
 OK	1.261	Blanc/LidoCircuitBreakerRetainedAuthority.lean
 OK	16.620	Blanc/LidoCircuitBreakerSites.lean
+OK	1.586	Blanc/LidoCircuitBreakerSuccess.lean
 OK	1.269	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
 OK	5.286	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
