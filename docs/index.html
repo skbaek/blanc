@@ -56,12 +56,13 @@
           correctness is itself a machine-checked theorem, and the contract proofs on top, all over
           <a href="https://skbaek.github.io/jaune/" style="text-decoration:underline;text-underline-offset:3px">Jaune</a>’s
           executable EVM semantics. The bill is one line: a new, deliberately bare language,
-          austere to write and austere to prove in. §&nbsp;1–6 are what you keep. §&nbsp;7 is what
-          you pay. And the austerity has lately been repriced — §&nbsp;6 keeps the receipts.
+          austere to write and austere to prove in. §&nbsp;1–6 are what you keep. §&nbsp;7 is the
+          language you pay it in; §&nbsp;8, the bill. And the austerity has lately been repriced —
+          §&nbsp;6 keeps the receipts.
         </p>
         <div class="ctarow">
-          <a class="btn primary" href="#machine">What you keep — § 1–6</a>
-          <a class="btn" href="#price">What you pay — § 7</a>
+          <a class="btn primary" href="#bytes">What you keep — § 1–6</a>
+          <a class="btn" href="#canvas">What you pay — § 7–8</a>
         </div>
       </div>
 
@@ -133,125 +134,42 @@
     <nav class="toc" id="toc" aria-label="Contents">
       <h2>Contents</h2>
       <ol>
-        <li><a href="#machine"><span class="no">1</span> Keep the machine <span class="dots"></span></a></li>
+        <li><a href="#bytes"><span class="no">1</span> Keep the bytes <span class="dots"></span></a></li>
         <li><a href="#standard"><span class="no">2</span> Keep the standard of proof <span class="dots"></span></a></li>
         <li><a href="#ground"><span class="no">3</span> Keep the ground under the theorems <span class="dots"></span></a></li>
         <li><a href="#freedom"><span class="no">4</span> Keep the whole design space <span class="dots"></span></a></li>
         <li><a href="#kinds"><span class="no">5</span> Keep the ceiling <span class="dots"></span></a></li>
         <li><a href="#agents"><span class="no">6</span> Keep the pace <span class="dots"></span></a></li>
-        <li><a href="#price"><span class="no">7</span> The fee, unvarnished <span class="dots"></span></a></li>
-        <li><a href="#portfolio"><span class="no">8</span> The implementations <span class="dots"></span></a></li>
-        <li><a href="#claims"><span class="no">9</span> What a port claims — and how we earn it <span class="dots"></span></a></li>
-        <li><a href="#penultimate"><span class="no">10</span> The penultimate form <span class="dots"></span></a></li>
-        <li><a href="#landscape"><span class="no">11</span> The lay of the land <span class="dots"></span></a></li>
-        <li><a href="#waysin"><span class="no">12</span> Ways in <span class="dots"></span></a></li>
-        <li><a href="#build"><span class="no">13</span> Build it <span class="dots"></span></a></li>
+        <li><a href="#canvas"><span class="no">7</span> Barely a language <span class="dots"></span></a></li>
+        <li><a href="#price"><span class="no">8</span> The fee, unvarnished <span class="dots"></span></a></li>
+        <li><a href="#portfolio"><span class="no">9</span> The implementations <span class="dots"></span></a></li>
+        <li><a href="#claims"><span class="no">10</span> What a port claims — and how we earn it <span class="dots"></span></a></li>
+        <li><a href="#penultimate"><span class="no">11</span> The penultimate form <span class="dots"></span></a></li>
+        <li><a href="#landscape"><span class="no">12</span> The lay of the land <span class="dots"></span></a></li>
+        <li><a href="#waysin"><span class="no">13</span> Ways in <span class="dots"></span></a></li>
+        <li><a href="#build"><span class="no">14</span> Build it <span class="dots"></span></a></li>
       </ol>
     </nav>
   </div>
 </section>
 
-<!-- ═══════════════════════ §1 THE MACHINE ═══════════════════════ -->
-<section id="machine">
+<!-- ═══════════════════════ §1 THE BYTES ═══════════════════════ -->
+<section id="bytes">
   <div class="wrap">
     <p class="eyebrow"><span class="secno">§ 1</span> What you keep</p>
-    <h2 style="max-width:24ch">Keep the machine.</h2>
+    <h2 style="max-width:24ch">Keep the bytes.</h2>
     <p class="lede" style="margin-top:18px">
-      Hold the destination fixed — machine-checked claims about exact deployed
-      bytes, for as wide an <em>X</em> as verification allows — and the language designs itself
-      backwards. Contract languages usually add: types, objects, modifiers, a memory manager, an optimizer
-      pipeline. Every addition is expressive power, and every addition is also distance between what
-      you wrote and what the chain runs — distance you end up paying for in trust. Blanc subtracts
-      instead. The EVM’s own instructions are the vocabulary; four constructors — branch, last,
-      next, call: they spell the name, and they are the whole language — arrange them; the
-      compiler’s one real job is placing jumps. What is left out is the point — the developer
-      keeps the whole surface of the machine, and the verifier keeps a language small enough to
-      prove things <em>about</em>.
+      Every contract theorem on this page is about the exact runtime bytes that deploy — not about
+      a source file a trusted toolchain will later turn into something else. Between your program
+      and the chain sits exactly one added artifact, the compiler, and it enters the theorems
+      rather than the trust base: its correctness is itself a machine-checked theorem, proved
+      once, inherited by every contract, and nothing is taken on its word.
     </p>
 
-    <div class="grid3" style="margin-top:40px">
-      <div class="panel">
-        <span class="tick">1.1 — the name is the syntax</span>
-        <h3>Four constructors, no fifth</h3>
-        <p class="dim">
-          A <span class="mono">Func</span> is a <span class="mono">branch</span> on the stack top, a
-          straight-line <span class="mono">next</span>, a terminal <span class="mono">last</span>, or a
-          <span class="mono">call</span> into the program’s function table. There are no expressions,
-          no variables, no loops-as-syntax — recursion through <span class="mono">call</span> and the
-          machine’s own stack are all there is, which is exactly what a proof has to walk.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">1.2 — structure where it pays</span>
-        <h3>The one liberty withheld</h3>
-        <p class="dim">
-          Raw bytecode lets a program compute a jump target from anything. Blanc doesn’t: control flow
-          is the tree you wrote, and the compiler owns every offset. That single restriction is what
-          makes a reusable proof stack possible — inversion tactics that take an execution apart along
-          the program’s own shape, and forward tactics that build one, gas account included, without
-          per-contract jump reasoning.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">1.3 — freedom where it pays</span>
-        <h3>Everything else is yours</h3>
-        <p class="dim">
-          Storage schemes, stack discipline, dispatch order, calldata handling, error genre, gas
-          layout: all open. No mandated dispatcher, no compiler-shaped prologue, no scaffolding you
-          didn’t ask for — the artifact is exactly what the contract needs, instruction by
-          instruction. What spending that freedom has bought, measured and proved, is §&nbsp;4.
-        </p>
-      </div>
-    </div>
-
-    <h3 style="margin:48px 0 6px">The whole grammar, a real endpoint, and the theorem that connects them</h3>
-    <div class="grid2" style="align-items:start;margin-top:22px">
+    <div class="grid2" style="margin-top:34px;align-items:start">
       <div>
-        <div class="tabs" role="tablist" aria-label="Blanc code">
-          <button class="tab" role="tab" aria-selected="true" aria-controls="tp1" id="tb1">the language</button>
-          <button class="tab" role="tab" aria-selected="false" aria-controls="tp2" id="tb2">weth10.withdraw</button>
-          <button class="tab" role="tab" aria-selected="false" aria-controls="tp3" id="tb3">the compiler theorem</button>
-        </div>
-        <div class="tabpanel" role="tabpanel" id="tp1" aria-labelledby="tb1">
-          <div class="listing">
-            <div class="bar"><span>Blanc/Semantics.lean</span><span class="tag">the entire syntax</span></div>
-<pre><span class="c">-- B·La·N·C.  This is the whole abstract syntax of the</span>
-<span class="c">-- language: four constructors over Jaune's instruction</span>
-<span class="c">-- types, and a program is functions in a table.</span>
-<span class="k">inductive</span> <span class="t">Func</span> : <span class="t">Type</span>
-  | branch : <span class="t">Func</span> → <span class="t">Func</span> → <span class="t">Func</span>
-  | last : <span class="t">Linst</span> → <span class="t">Func</span>
-  | next : <span class="t">Ninst</span> → <span class="t">Func</span> → <span class="t">Func</span>
-  | call : <span class="t">Nat</span> → <span class="t">Func</span>
-
-<span class="k">structure</span> <span class="t">Prog</span> : <span class="t">Type</span> <span class="k">where</span>
-  (main : <span class="t">Func</span>)
-  (aux : <span class="t">List</span> <span class="t">Func</span>)</pre>
-          </div>
-        </div>
-        <div class="tabpanel" role="tabpanel" id="tp2" aria-labelledby="tb2" hidden>
-          <div class="listing">
-            <div class="bar"><span>Blanc/Weth10.lean</span><span class="tag">source</span></div>
-<pre><span class="k">def</span> <span class="d">withdraw</span> : <span class="t">Func</span> :=
-  loadCallerBalanceAmount 0 +++ balanceTooSmall +++
-  (.call burnBalanceErrorSlot) &lt;?&gt;
-  (debitLoadedBalance +++
-    caller ::: arg 0 +++ pushB256 0 ::: emitTransfer +++
-    swap 0 ::: pop :::
-    sendValueToCaller +++ iszero :::
-    (.call ethTransferErrorSlot) &lt;?&gt;
-    <span class="t">Func</span>.stop)</pre>
-          </div>
-          <p class="dim" style="font-size:.9rem;margin-top:14px;margin-bottom:0">
-            Instructions are the EVM’s own; <span class="mono">:::</span> is
-            <span class="mono">next</span>, <span class="mono">&lt;?&gt;</span> is
-            <span class="mono">branch</span>, and every name above it is ordinary Lean definition —
-            the “standard library” is whatever you prove you need.
-          </p>
-        </div>
-        <div class="tabpanel" role="tabpanel" id="tp3" aria-labelledby="tb3" hidden>
-          <div class="listing">
-            <div class="bar"><span>Blanc/CommonCore.lean · Blanc/Compiled.lean</span><span class="tag">compiler correctness</span></div>
+        <div class="listing">
+          <div class="bar"><span>Blanc/CommonCore.lean · Blanc/Compiled.lean</span><span class="tag">compiler correctness</span></div>
 <pre><span class="c">-- Backward simulation: from any successful EVM execution</span>
 <span class="c">-- of the compiled bytes, recover a source-level run.</span>
 <span class="k">theorem</span> <span class="d">correct</span> (sevm : <span class="t">Sevm</span>) (pre : <span class="t">Devm</span>) (p : <span class="t">Prog</span>) (post : <span class="t">Devm</span>)
@@ -264,35 +182,28 @@
 <span class="c">-- take one apart.</span>
 <span class="k">theorem</span> <span class="d">Prog.runCompiled_iff_exec</span> …
     <span class="t">Prog</span>.<span class="t">RunCompiled</span> sevm pre p post ↔ exec ⟨0, sevm, pre⟩ = .ok post</pre>
-          </div>
-          <p class="dim" style="font-size:.9rem;margin-top:14px;margin-bottom:0">
-            The direction of <span class="mono">correct</span> matters: a property proved of the
-            source is thereby a fact about what the EVM executes. The biconditional adds the forward
-            direction, which is what liveness and exact-gas theorems are built on.
-          </p>
         </div>
+        <p class="dim" style="font-size:.9rem;margin-top:14px;margin-bottom:0">
+          The direction of <span class="mono">correct</span> matters: a property proved of the
+          source is thereby a fact about what the EVM executes. The biconditional adds the forward
+          direction, which is what liveness and exact-gas theorems are built on.
+        </p>
       </div>
 
-      <div>
-        <div class="panel">
-          <span class="tick">the one artifact added — and discharged</span>
-          <p class="dim" style="font-size:.94rem">
-            Between your source and the chain, Blanc adds exactly one artifact: the compiler. It
-            enters the theorems, not the trust base. <span class="mono">correct</span> recovers a
-            source-level run from any successful EVM execution of the compiled bytes, and the
-            gas-exact biconditional builds real executions forward — so a property proved of the
-            source is a fact about the deployed bytes, and nothing is taken on the compiler’s word.
-          </p>
-          <p class="dim" style="font-size:.94rem;margin-bottom:0">
-            What the machine itself does is not Blanc’s to say. That ground — and the evidence it
-            stands on — is §&nbsp;3.
-          </p>
-        </div>
-        <p class="note" style="margin-top:16px">
-          Batteries are not included — §&nbsp;7 prices that with the rest of the bill. What exists
-          today is what three contracts needed: a dispatcher pattern, ABI helpers, a shared
-          <span class="mono">nonpayable</span> guard, a proof ladder — each written once, proved,
-          and reused by the next contract.
+      <div class="panel">
+        <span class="tick">what lands on the bytes</span>
+        <p class="dim" style="font-size:.94rem">
+          Everything downstream is stated at this altitude. The property inventory of §&nbsp;5 and
+          the endpoint families of §&nbsp;10 hypothesise the compiled bytes in so many words —
+          <span class="mono">some sevm.code.toList = p.compile</span> is a premise found inside
+          the statements, not a convention explained beside them. Even deployment stays on the
+          bytes: WETH10’s root is derived through the real creation-block pipeline — receipt,
+          installed runtime, and all.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          What the machine itself does is not Blanc’s to say. That ground — and the evidence it
+          stands on — is §&nbsp;3. The language the bytes are written in — and what it costs —
+          is §&nbsp;7.
         </p>
       </div>
     </div>
@@ -319,7 +230,7 @@
           pinned in CI to exactly <span class="mono">propext</span>,
           <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span> —
           Lean’s three canonical axioms, the same ground ordinary classical mathematics stands on.
-          The audit — 439/439 at the current snapshot — fails on an extra axiom <em>or a missing
+          The audit fails on an extra axiom <em>or a missing
           one</em>, on <span class="mono">sorryAx</span>, and on any
           <span class="mono">native_decide</span>-style escape into compiled evaluation. Nothing
           out-of-kernel stands between a statement and its checking.
@@ -400,10 +311,11 @@
     <p class="eyebrow"><span class="secno">§ 4</span> What you keep</p>
     <h2 style="max-width:24ch">Keep the whole design space.</h2>
     <p class="lede" style="margin-top:18px">
-      §&nbsp;1 left every implementation decision open; this section is why that is worth
-      protecting. Instruction-level freedom is not an aesthetic. It is where whole classes of
-      hypothesis, byte, and gas get designed out before anyone has to argue them away — and each
-      dividend below is either proved or measured, never projected.
+      Storage schemes, stack discipline, dispatch order, calldata handling, error genre, gas
+      layout: every implementation decision is yours, down to the instruction. That freedom is not
+      an aesthetic. It is where whole classes of hypothesis, byte, and gas get designed out before
+      anyone has to argue them away — and each dividend below is either proved or measured, never
+      projected.
     </p>
 
     <div class="grid3" style="margin-top:40px">
@@ -443,9 +355,9 @@
     </div>
 
     <p class="note" style="margin-top:26px">
-      The liberty withheld stays withheld — no computed jump targets, §&nbsp;1’s one trade.
-      Everything else about the artifact is yours to decide, which is the difference between a
-      language that permits optimization and a language that merely tolerates it.
+      One liberty is withheld — computed jump targets, the single structural trade §&nbsp;7 spells
+      out. Everything else about the artifact is yours to decide, which is the difference between
+      a language that permits optimization and a language that merely tolerates it.
     </p>
   </div>
 </section>
@@ -698,15 +610,119 @@
   </div>
 </section>
 
-<!-- ═══════════════════════ §7 THE FEE ═══════════════════════ -->
-<section id="price">
+<!-- ═══════════════════════ §7 THE LANGUAGE ═══════════════════════ -->
+<section id="canvas">
   <div class="wrap">
     <p class="eyebrow"><span class="secno">§ 7</span> What you pay</p>
+    <h2 style="max-width:24ch">Barely a language.</h2>
+    <p class="lede" style="margin-top:18px">
+      Contract languages usually add: types, objects, modifiers, a memory manager, an optimizer
+      pipeline. Every addition is expressive power, and every addition is also distance between
+      what you wrote and what the chain runs — distance that ends up paid for in trust. Blanc
+      subtracts instead. The EVM’s own instructions are the vocabulary; four constructors —
+      branch, last, next, call: they spell the name, and they are the whole language — arrange
+      them; the compiler’s one real job is placing jumps. What is left out is the point — the
+      developer keeps the whole surface of the machine, and the verifier keeps a language small
+      enough to prove things <em>about</em>.
+    </p>
+
+    <div class="grid3" style="margin-top:40px">
+      <div class="panel">
+        <span class="tick">7.1 — the name is the syntax</span>
+        <h3>Four constructors, no fifth</h3>
+        <p class="dim">
+          A <span class="mono">Func</span> is a <span class="mono">branch</span> on the stack top, a
+          straight-line <span class="mono">next</span>, a terminal <span class="mono">last</span>, or a
+          <span class="mono">call</span> into the program’s function table. There are no expressions,
+          no variables, no loops-as-syntax — recursion through <span class="mono">call</span> and the
+          machine’s own stack are all there is, which is exactly what a proof has to walk.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">7.2 — structure where it pays</span>
+        <h3>The one liberty withheld</h3>
+        <p class="dim">
+          Raw bytecode lets a program compute a jump target from anything. Blanc doesn’t: control flow
+          is the tree you wrote, and the compiler owns every offset. That single restriction is what
+          makes a reusable proof stack possible — inversion tactics that take an execution apart along
+          the program’s own shape, and forward tactics that build one, gas account included, without
+          per-contract jump reasoning.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">7.3 — batteries, written and proved</span>
+        <h3>The library is whatever you prove</h3>
+        <p class="dim">
+          No standard library comes along to be trusted either: what exists today is what three
+          contracts needed — a dispatcher pattern, ABI helpers, a shared
+          <span class="mono">nonpayable</span> guard, a proof ladder — each an ordinary Lean
+          definition, written once, proved, and reused by the next contract. §&nbsp;8 prices what
+          the austerity costs; §&nbsp;4 measured what it buys.
+        </p>
+      </div>
+    </div>
+
+    <h3 style="margin:48px 0 6px">The whole grammar, and a real endpoint</h3>
+    <div style="max-width:640px;margin-top:22px">
+      <div class="tabs" role="tablist" aria-label="Blanc code">
+        <button class="tab" role="tab" aria-selected="true" aria-controls="tp1" id="tb1">the language</button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="tp2" id="tb2">weth10.withdraw</button>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="tp1" aria-labelledby="tb1">
+        <div class="listing">
+          <div class="bar"><span>Blanc/Semantics.lean</span><span class="tag">the entire syntax</span></div>
+<pre><span class="c">-- B·La·N·C.  This is the whole abstract syntax of the</span>
+<span class="c">-- language: four constructors over Jaune's instruction</span>
+<span class="c">-- types, and a program is functions in a table.</span>
+<span class="k">inductive</span> <span class="t">Func</span> : <span class="t">Type</span>
+  | branch : <span class="t">Func</span> → <span class="t">Func</span> → <span class="t">Func</span>
+  | last : <span class="t">Linst</span> → <span class="t">Func</span>
+  | next : <span class="t">Ninst</span> → <span class="t">Func</span> → <span class="t">Func</span>
+  | call : <span class="t">Nat</span> → <span class="t">Func</span>
+
+<span class="k">structure</span> <span class="t">Prog</span> : <span class="t">Type</span> <span class="k">where</span>
+  (main : <span class="t">Func</span>)
+  (aux : <span class="t">List</span> <span class="t">Func</span>)</pre>
+        </div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="tp2" aria-labelledby="tb2" hidden>
+        <div class="listing">
+          <div class="bar"><span>Blanc/Weth10.lean</span><span class="tag">source</span></div>
+<pre><span class="k">def</span> <span class="d">withdraw</span> : <span class="t">Func</span> :=
+  loadCallerBalanceAmount 0 +++ balanceTooSmall +++
+  (.call burnBalanceErrorSlot) &lt;?&gt;
+  (debitLoadedBalance +++
+    caller ::: arg 0 +++ pushB256 0 ::: emitTransfer +++
+    swap 0 ::: pop :::
+    sendValueToCaller +++ iszero :::
+    (.call ethTransferErrorSlot) &lt;?&gt;
+    <span class="t">Func</span>.stop)</pre>
+        </div>
+        <p class="dim" style="font-size:.9rem;margin-top:14px;margin-bottom:0">
+          Instructions are the EVM’s own; <span class="mono">:::</span> is
+          <span class="mono">next</span>, <span class="mono">&lt;?&gt;</span> is
+          <span class="mono">branch</span>, and every name above it is ordinary Lean definition —
+          the “standard library” is whatever you prove you need.
+        </p>
+      </div>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      Four constructors is a position, not a shortage — §&nbsp;11 defends it, one step up from
+      the obvious alternative of none at all.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════════════════ §8 THE FEE ═══════════════════════ -->
+<section id="price">
+  <div class="wrap">
+    <p class="eyebrow"><span class="secno">§ 8</span> What you pay</p>
     <h2 style="max-width:22ch">The fee, unvarnished.</h2>
     <p class="lede" style="margin-top:18px">
-      Everything above is bought with a single purchase, and the purchase is real: a new,
-      deliberately bare language, austere twice over — once to write your contract in four
-      constructors, once to prove it in an interactive theorem prover. One line on the bill; this
+      Everything §&nbsp;1–6 keeps is bought with a single purchase — the language above: new,
+      deliberately bare, austere twice over — once to write your contract in four constructors,
+      once to prove it in an interactive theorem prover. One line on the bill; this
       section itemises it. The pitch was never that the fee is small — it is that what it buys is
       not sold elsewhere, and that nothing else is on the bill.
     </p>
@@ -752,10 +768,10 @@
   </div>
 </section>
 
-<!-- ═══════════════════════ §8 IMPLEMENTATIONS ═══════════════════════ -->
+<!-- ═══════════════════════ §9 IMPLEMENTATIONS ═══════════════════════ -->
 <section id="portfolio">
   <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 8</span> Implementations</p>
+    <p class="eyebrow"><span class="secno">§ 9</span> Implementations</p>
     <h2 style="max-width:22ch">Three contracts in.</h2>
     <p class="lede" style="margin-top:18px">
       Each contract raised the bar for the next, and each has a page of its own: how we know it
@@ -832,10 +848,10 @@
   </div>
 </section>
 
-<!-- ═══════════════════════ §9 THE QUESTION ═══════════════════════ -->
+<!-- ═══════════════════════ §10 THE QUESTION ═══════════════════════ -->
 <section id="claims">
   <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 9</span> The questions we expect</p>
+    <p class="eyebrow"><span class="secno">§ 10</span> The questions we expect</p>
     <h2 style="max-width:26ch">What a port claims — and how we earn it.</h2>
     <p class="lede" style="margin-top:18px">
       The portfolio is staged on contracts you already know — a WETH, a flash-mint
@@ -851,7 +867,7 @@
       artifact that stays within reach of interactive verification; low-level freedom spent on
       measured wins. And if what you
       need verified is bytecode already on chain, Blanc is not that instrument — every theorem
-      here is about Blanc’s own artifact, a boundary §&nbsp;7’s ledger prices with the rest of
+      here is about Blanc’s own artifact, a boundary §&nbsp;8’s ledger prices with the rest of
       the bill.
     </p>
     <p class="lede" style="margin-top:14px">
@@ -954,10 +970,10 @@
   </div>
 </section>
 
-<!-- ═══════════════════════ §10 PENULTIMATE ═══════════════════════ -->
+<!-- ═══════════════════════ §11 PENULTIMATE ═══════════════════════ -->
 <section id="penultimate">
   <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 10</span> Position</p>
+    <p class="eyebrow"><span class="secno">§ 11</span> Position</p>
     <h2 style="max-width:24ch">The penultimate form.</h2>
 
     <div class="pull">
@@ -1001,10 +1017,10 @@
   </div>
 </section>
 
-<!-- ═══════════════════════ §11 LANDSCAPE ═══════════════════════ -->
+<!-- ═══════════════════════ §12 LANDSCAPE ═══════════════════════ -->
 <section id="landscape">
   <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 11</span> The field</p>
+    <p class="eyebrow"><span class="secno">§ 12</span> The field</p>
     <h2 style="max-width:22ch">The lay of the land.</h2>
     <p class="lede" style="margin-top:18px">
       Blanc is one answer in a field of serious ones, and the honest way to be compared is to
@@ -1039,7 +1055,7 @@
             <td class="dim">its own four-constructor source, tied to the exact compiled bytes by a proved compiler; properties lifted to block and chain altitude</td>
             <td class="dim">exact — proved equations, gas-exact in both run directions</td>
             <td class="dim">constructed successful executions, at message and transaction altitude</td>
-            <td class="dim">cannot verify contracts already deployed; a new, deliberately bare language — §&nbsp;7 is the bill</td>
+            <td class="dim">cannot verify contracts already deployed; a new, deliberately bare language — §&nbsp;8 is the bill</td>
           </tr>
           <tr>
             <td><b><a href="https://github.com/lfglabs-dev/verity" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">Verity</a></b><br><span class="dimmer">LFG Labs</span></td>
@@ -1189,16 +1205,16 @@
       source, the first family trades familiarity for depth — Verity keeps more of the familiar
       toolchain and trusts <span class="mono">solc</span> at the boundary; Blanc spends the
       familiarity and buys the exact bytes, exact gas, chain altitude, and constructed liveness.
-      §&nbsp;7 prices that trade honestly. This table will be re-read and corrected as the field
+      §&nbsp;8 prices that trade honestly. This table will be re-read and corrected as the field
       moves; it is a map, not a defense.
     </p>
   </div>
 </section>
 
-<!-- ═══════════════════════ §12 WAYS IN ═══════════════════════ -->
+<!-- ═══════════════════════ §13 WAYS IN ═══════════════════════ -->
 <section id="waysin">
   <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 12</span> Who this is for</p>
+    <p class="eyebrow"><span class="secno">§ 13</span> Who this is for</p>
     <h2>Three ways in.</h2>
 
     <div class="grid3" style="margin-top:34px">
@@ -1231,10 +1247,10 @@
   </div>
 </section>
 
-<!-- ═══════════════════════ §13 BUILD ═══════════════════════ -->
+<!-- ═══════════════════════ §14 BUILD ═══════════════════════ -->
 <section id="build">
   <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 13</span> Reproduce it</p>
+    <p class="eyebrow"><span class="secno">§ 14</span> Reproduce it</p>
     <h2>One clone, a build, and the audit.</h2>
     <p class="lede" style="margin-top:16px">
       The only prerequisite is <a href="https://github.com/leanprover/elan" target="_blank" rel="noopener"
@@ -1286,7 +1302,7 @@
           the way its own section states — theorems with pinned axiom closures where it says
           proved, dated gate output where it says measured, and an open run ledger where it says
           evidenced. It does not mean every true property of every contract has been proved —
-          §&nbsp;9’s claim-discipline governs, and declared non-claims are listed in each
+          §&nbsp;10’s claim-discipline governs, and declared non-claims are listed in each
           contract’s registry.</li>
         <li id="fn2">Timeline per the committed goal ledger (<span class="mono">realistic-lender-v1</span>):
           opened 2026-08-08 02:53 KST, closed 2026-08-09 00:00 KST — 76,049 s elapsed; 13 of its 14
@@ -1300,7 +1316,7 @@
           page</a> for its conformance evidence.</li>
         <li id="fn4">Every figure about this repository on this page is drawn from a committed
           report, registry, gate summary, or theorem in the repository; the snapshot is current
-          as of 2026-08-13. §&nbsp;11’s landscape table is the one deliberate exception — it
+          as of 2026-08-13. §&nbsp;12’s landscape table is the one deliberate exception — it
           describes other people’s projects, on the terms its own disclaimer states. Gate
           lines shown are verbatim output — Fig.&nbsp;1 from a 2026-08-13 run, Fig.&nbsp;2 from
           2026-08-12 — except that one long line is wrapped and ellipses mark elision; the
@@ -1328,7 +1344,7 @@
       <p class="dimmer" style="font-size:.85rem;margin:0">
         MIT-licensed. This page states nothing about Blanc that is not backed by a committed
         theorem, registry row, gate summary, or goal ledger in the repository — and where
-        evidence ends, it says so. What it says about neighbouring projects, §&nbsp;11’s
+        evidence ends, it says so. What it says about neighbouring projects, §&nbsp;12’s
         disclaimer governs.
       </p>
     </div>
