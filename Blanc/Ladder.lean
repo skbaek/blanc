@@ -2566,20 +2566,14 @@ lemma GenericCall.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
     · rw [hbody.2, processMessage.settle_error] at hset
       cases hset
     have run_ec : ExecuteCode (childMsg.withBenv benv) .none r0 := hbody
-    rcases r0 with x | evm2
-    · rw [processMessage.settle_error] at hset
-      cases hset
-    unfold processMessage.settle at hset
-    dsimp only [bind, Except.bind] at hset
-    by_cases h_err2 : evm2.error.isSome = true
-    · rw [if_pos h_err2] at hset
-      apply funext
+    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+    subst h_r0
+    rcases h_settle with ⟨h_err2, h_child⟩ | ⟨h_err2, h_child⟩
+    · apply funext
       apply getStor_eq_of_state_eq
-      rw [h_inter_state, ← Except.ok.inj hset.symm]
+      rw [h_inter_state, ← h_child]
       exact hc_state
-    · rw [if_neg h_err2] at hset
-      have h_eq_child := Except.ok.inj hset.symm
-      subst h_eq_child
+    · subst h_child
       have hc_ca2 : (childMsg.withBenv benv).codeAddress = some codeAddress :=
         hc_ca
       rcases of_executeCode_someCode hc_ca2 run_ec with
@@ -3115,20 +3109,14 @@ lemma GenericCall.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : 
     · rw [hbody.2, processMessage.settle_error] at hset
       cases hset
     have run_ec : ExecuteCode (childMsg.withBenv benv) .none r0 := hbody
-    rcases r0 with x | evm2
-    · rw [processMessage.settle_error] at hset
-      cases hset
-    unfold processMessage.settle at hset
-    dsimp only [bind, Except.bind] at hset
-    by_cases h_err2 : evm2.error.isSome = true
-    · rw [if_pos h_err2] at hset
-      apply h_pc.state_eq
-      rw [h_inter_state, ← Except.ok.inj hset.symm]
+    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+    subst h_r0
+    rcases h_settle with ⟨h_err2, h_child⟩ | ⟨h_err2, h_child⟩
+    · apply h_pc.state_eq
+      rw [h_inter_state, ← h_child]
       show childMsg.benv.state = devm.state
       exact hc_state
-    · rw [if_neg h_err2] at hset
-      have h_eq_child := Except.ok.inj hset.symm
-      subst h_eq_child
+    · subst h_child
       have hc_ca2 : (childMsg.withBenv benv).codeAddress = some codeAddress := hc_ca
       rcases of_executeCode_someCode hc_ca2 run_ec with
         ⟨_, _, h_he⟩ | ⟨_, exn, h_xl_some, _⟩

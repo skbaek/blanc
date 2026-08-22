@@ -8028,6 +8028,36 @@ lemma processMessage.settle_error {msg : Msg}
     {e : EvmError × Jaune.State × AdrSet × Tra} :
     processMessage.settle msg (.error e) = .error e := rfl
 
+/-- **Message settlement inverted.**  A frame that settles `.ok` came from an
+`.ok` sub-result, and the settled state is either that sub-result rolled back
+to the message's entry world, or the sub-result itself — according to whether
+it carried an error.
+
+This is the general shape that `processMessage.settle_ok_gasLe` upstream
+projects onto gas.  Consumers previously re-derived it inline: dispatch the
+`.error` arm through `settle_error`, unfold the settle, and split on
+`evm.error.isSome`.  Taking the disjunction directly replaces that walk with a
+single `rcases`, and keeps the rollback's world arguments named rather than
+re-elaborated at each site. -/
+theorem processMessage.settle_ok_cases {msg : Msg}
+    {r : Except (EvmError × Jaune.State × AdrSet × Tra) Devm} {post : Devm}
+    (hset : processMessage.settle msg r = .ok post) :
+    ∃ evm : Devm, r = .ok evm ∧
+      (evm.error.isSome = true ∧
+          evm.rollback msg.benv.state msg.tenv.transientStorage = post
+        ∨ ¬ evm.error.isSome = true ∧ evm = post) := by
+  cases r with
+  | error e => exact absurd hset (by rw [processMessage.settle_error]; simp)
+  | ok evm =>
+    refine ⟨evm, rfl, ?_⟩
+    unfold processMessage.settle at hset
+    dsimp only [bind, Except.bind] at hset
+    by_cases herr : evm.error.isSome = true
+    · rw [if_pos herr] at hset
+      exact .inl ⟨herr, Except.ok.inj hset⟩
+    · rw [if_neg herr] at hset
+      exact .inr ⟨herr, Except.ok.inj hset⟩
+
 /-- Master balance effect for the code-execution layer: running the callee's
 code (interpreter, precompile, or the empty-code no-op) never increases the
 total balance relative to the freshly-initialised message state. The `Xlot`

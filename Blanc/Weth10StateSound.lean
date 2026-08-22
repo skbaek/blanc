@@ -1430,22 +1430,13 @@ theorem backedPost_of_value_call
       · exact h_benv_state
       · exact hc_target
       · exact hc_value
-    rcases r0 with err | evm2
-    · rw [processMessage.settle_error] at hset
-      cases hset
-    unfold processMessage.settle at hset
-    dsimp only [bind, Except.bind] at hset
-    by_cases h_err2 : evm2.error.isSome = true
-    · rw [if_pos h_err2] at hset
-      have h_eq : evm2.rollback childMsg.benv.state
-          childMsg.tenv.transientStorage = child :=
-        Except.ok.inj hset.symm
-      have : child.error.isSome = true := by
+    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+    subst h_r0
+    rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
+    · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
       simp [h_child_clean] at this
-    rw [if_neg h_err2] at hset
-    have h_eq_child : evm2 = child := Except.ok.inj hset.symm
     rw [h_eq_child] at h_exec h_err2
     have h_child_post : (backedSpec weth10 dp).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
@@ -3729,22 +3720,13 @@ theorem flashFloorPost_of_value_call
           ((st_mid.addBal c.toAdr v).get ca).stor
         rw [h_t_stor ca]
         exact h_floor
-    rcases r0 with err | evm2
-    · rw [processMessage.settle_error] at hset
-      cases hset
-    unfold processMessage.settle at hset
-    dsimp only [bind, Except.bind] at hset
-    by_cases h_err2 : evm2.error.isSome = true
-    · rw [if_pos h_err2] at hset
-      have h_eq : evm2.rollback childMsg.benv.state
-          childMsg.tenv.transientStorage = child :=
-        Except.ok.inj hset.symm
-      have : child.error.isSome = true := by
+    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+    subst h_r0
+    rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
+    · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
       simp [h_child_clean] at this
-    rw [if_neg h_err2] at hset
-    have h_eq_child : evm2 = child := Except.ok.inj hset.symm
     rw [h_eq_child] at h_exec h_err2
     have h_child_post : (flashFloorSpec dp floor).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
@@ -7426,22 +7408,13 @@ theorem flashExactRel_of_value_call
       change ((st_mid.addBal c.toAdr v).get ca).stor =
         (s.state.get ca).stor
       rw [h_t_stor ca]
-    rcases r0 with err | evm2
-    · rw [processMessage.settle_error] at hset
-      cases hset
-    unfold processMessage.settle at hset
-    dsimp only [bind, Except.bind] at hset
-    by_cases h_err2 : evm2.error.isSome = true
-    · rw [if_pos h_err2] at hset
-      have h_eq : evm2.rollback childMsg.benv.state
-          childMsg.tenv.transientStorage = child :=
-        Except.ok.inj hset.symm
-      have : child.error.isSome = true := by
+    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+    subst h_r0
+    rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
+    · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
       simp [h_child_clean] at this
-    rw [if_neg h_err2] at hset
-    have h_eq_child : evm2 = child := Except.ok.inj hset.symm
     rw [h_eq_child] at h_exec h_err2
     have h_child_exact :
         FlashExactRel dp ca (initSevm (childMsg.withBenv benv))
@@ -7585,22 +7558,13 @@ theorem backedPost_of_static_call
       · exact h_benv_state
       · exact hc_target
       · exact hc_value
-    rcases r0 with err | evm2
-    · rw [processMessage.settle_error] at hset
-      cases hset
-    unfold processMessage.settle at hset
-    dsimp only [bind, Except.bind] at hset
-    by_cases h_err2 : evm2.error.isSome = true
-    · rw [if_pos h_err2] at hset
-      have h_eq : evm2.rollback childMsg.benv.state
-          childMsg.tenv.transientStorage = child :=
-        Except.ok.inj hset.symm
-      have : child.error.isSome = true := by
+    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+    subst h_r0
+    rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
+    · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
       simp [h_child_clean] at this
-    rw [if_neg h_err2] at hset
-    have h_eq_child : evm2 = child := Except.ok.inj hset.symm
     rw [h_eq_child] at h_exec h_err2
     have h_child_post : (backedSpec weth10 dp).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
@@ -7726,22 +7690,13 @@ theorem flashExactRel_of_static_call
       change ((st_mid.addBal t.toAdr 0).get ca).stor =
         (s.state.get ca).stor
       rw [h_t_stor ca]
-    rcases r0 with err | evm2
-    · rw [processMessage.settle_error] at hset
-      cases hset
-    unfold processMessage.settle at hset
-    dsimp only [bind, Except.bind] at hset
-    by_cases h_err2 : evm2.error.isSome = true
-    · rw [if_pos h_err2] at hset
-      have h_eq : evm2.rollback childMsg.benv.state
-          childMsg.tenv.transientStorage = child :=
-        Except.ok.inj hset.symm
-      have : child.error.isSome = true := by
+    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+    subst h_r0
+    rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
+    · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
       simp [h_child_clean] at this
-    rw [if_neg h_err2] at hset
-    have h_eq_child : evm2 = child := Except.ok.inj hset.symm
     rw [h_eq_child] at h_exec h_err2
     have h_child_exact :
         FlashExactRel dp ca (initSevm (childMsg.withBenv benv))

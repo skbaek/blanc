@@ -1174,23 +1174,17 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
       have hBs : benv'.state = st_mid.addBal sevm.caller wad := by
         rw [hB, hc_ct, hc_value]; rfl
       -- resolve the inner split : either rollback or a clean sub-message result
-      rcases r0 with x | evm2
-      · rw [processMessage.settle_error] at hset
-        cases hset
-      unfold processMessage.settle at hset
-      dsimp only [bind, Except.bind] at hset
-      by_cases h_err2 : evm2.error.isSome = true
+      obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+      subst h_r0
+      rcases h_settle with ⟨h_err2, h_if⟩ | ⟨h_err2, h_if⟩
       · -- sub-message failed : state rolled back to the pre-transfer state
-        rw [if_pos h_err2] at hset
-        have h_if := Except.ok.inj hset.symm
         apply solvent_of_state_eq _ h_le h_sv
         rw [h_sf_state, ← h_if]
         show childMsg.benv.state = s₁.state
         exact hc_state
       -- sub-message succeeded
-      rw [if_neg h_err2] at hset
-      have h_if := (Except.ok.inj hset.symm).symm
-      subst h_if
+      have h_if' := h_if.symm
+      subst h_if'
       have h_wb_ca : (childMsg.withBenv benv').codeAddress = some sevm.caller := hc_ca
       rcases of_executeCode_someCode h_wb_ca run_ec with
         ⟨h_prec, h_xl_none, h_he⟩ | ⟨h_prec, ex''', h_xl_some, h_he⟩
