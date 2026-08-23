@@ -1375,6 +1375,405 @@ theorem chain_preserves_registryStable (dp : DeployParams) (ca : Adr)
     (ContractSpec.chain_preserves_inv ca (registrySpec_preserves dp ca) checkpoint future reach
       ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable))
 
+/-! ## Reader-facing consequences of a stable future
+
+`RegistryStable` is what the ladder carries; what a reader wants at the far end
+of a history is its content.  The declarations below turn a stable world into
+the facts that content supports — the installed runtime, an actual
+`RegistryWitness`, the membership and index equivalences at an arbitrary
+canonical target, and global count conservation — so that a caller never has to
+unfold `RegistryCoherent` to use the headline theorem.
+
+The witness is returned **existentially**, and deliberately so.  The entry list
+at a future state need not be the checkpoint's: a callback re-entering the
+contract as admin may legitimately register a pauser, which is exactly why the
+invariant is existential in the list.  No declaration below states a same-list
+claim, and none is derivable from what is proved here. -/
+
+/-- The bridge between the two storage vocabularies.  The Registry results are
+stated over `Devm.getStor post ca`, while a history-level world is a
+`Jaune.State`.  The two lookups are the same function — `Devm.getStor d a`
+is `(d.state.get a).stor` and `Jaune.State.getStor w a` is `(w.get a).stor` —
+so a machine whose world state is `w` identifies them.  Only the world-state
+field is set; nothing about the machine's stack, memory, gas or metadata
+enters, and no execution is claimed to reach this machine. -/
+private def registryView (w : Jaune.State) : Devm :=
+  { (default : Devm) with
+    world := { (default : Devm).world with state := w } }
+
+/-- The bridge equation.  It holds by `rfl`, so it rewrites in either
+direction. -/
+private theorem registryView_getStor (w : Jaune.State) (a : Adr) :
+    Devm.getStor (registryView w) a = w.getStor a := rfl
+
+/-- **Consequence 1: the exact installed code.**  A stable world holds the
+compiled runtime bytes at `ca`, spelled as the artifact rather than as a
+`Prog.compile` obligation. -/
+theorem RegistryStable.installedCode {dp : DeployParams} {ca : Adr}
+    {w : Jaune.State} (stable : RegistryStable dp ca w) :
+    (w.getCode ca).toList = lidoCircuitBreakerCode dp :=
+  Option.some.inj (stable.code.trans (lidoCircuitBreakerCode_compile dp))
+
+/-- **Consequence 2: an actual witness.**  The entry list is existential: it is
+the list `ca`'s storage carries at `w`, not the one carried at any earlier
+checkpoint. -/
+theorem RegistryStable.witness {dp : DeployParams} {ca : Adr}
+    {w : Jaune.State} (stable : RegistryStable dp ca w) :
+    ∃ entries, RegistryWitness (logicalStorageOfStor (w.getStor ca)) entries :=
+  stable.coherent
+
+/-- `membershipEquivalence_registerPauser`, transported across the storage
+bridge to a world state. -/
+private theorem membership_of_witness {w : Jaune.State} {ca : Adr}
+    {entries : List Entry}
+    (hw : RegistryWitness (logicalStorageOfStor (w.getStor ca)) entries)
+    {target : B256} (htarget : canonicalAddress target) :
+    ((w.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+      target ∈ entries.map Prod.fst) ∧
+    ((w.getStor ca).get (indexSlot target) ≠ 0 ↔
+      target ∈ entries.map Prod.fst) ∧
+    ∀ index pauser, findEntry entries target = some (index, pauser) →
+      (w.getStor ca).get (assignmentSlot target) = pauser ∧
+      (w.getStor ca).get (indexSlot target) = Nat.toB256 (index + 1) ∧
+      targetAt entries index = target ∧
+      ∀ otherIndex, otherIndex < entries.length →
+        targetAt entries otherIndex = target → otherIndex = index := by
+  rw [← registryView_getStor w ca] at hw ⊢
+  exact membershipEquivalence_registerPauser hw htarget
+
+/-- `globalCountConservation_registerPauser`, transported across the storage
+bridge to a world state. -/
+private theorem countConservation_of_witness {w : Jaune.State} {ca : Adr}
+    {entries : List Entry}
+    (hw : RegistryWitness (logicalStorageOfStor (w.getStor ca)) entries) :
+    (∀ pauser, canonicalAddress pauser →
+      (w.getStor ca).get (countSlot pauser) =
+        Nat.toB256 (assignmentCount entries pauser)) ∧
+    (w.getStor ca).get (countSlot 0) = 0 ∧
+    (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+      ((w.getStor ca).get (countSlot pauser)).toNat) = entries.length := by
+  rw [← registryView_getStor w ca] at hw ⊢
+  exact globalCountConservation_registerPauser hw
+
+/-- **Consequence 3: membership and index equivalence.**  At an arbitrary
+canonical target, a nonzero assignment word, a nonzero index word and
+membership in the witness list are the same fact, and a target the list does
+contain sits at the unique array position its index word names. -/
+theorem RegistryStable.membership {dp : DeployParams} {ca : Adr}
+    {w : Jaune.State} (stable : RegistryStable dp ca w)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (w.getStor ca)) entries ∧
+      ((w.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((w.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (w.getStor ca).get (assignmentSlot target) = pauser ∧
+        (w.getStor ca).get (indexSlot target) = Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index := by
+  obtain ⟨entries, hw⟩ := stable.coherent
+  exact ⟨entries, hw, membership_of_witness hw htarget⟩
+
+/-- **Consequence 4: global count conservation.**  Every canonical pauser's
+count word is its multiplicity in the witness list, the zero pauser's count is
+clear, and the live per-pauser counts sum to the array length. -/
+theorem RegistryStable.countConservation {dp : DeployParams} {ca : Adr}
+    {w : Jaune.State} (stable : RegistryStable dp ca w) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (w.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (w.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (w.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((w.getStor ca).get (countSlot pauser)).toNat) = entries.length := by
+  obtain ⟨entries, hw⟩ := stable.coherent
+  exact ⟨entries, hw, countConservation_of_witness hw⟩
+
+/-! ### The same four facts, read off a reachable future
+
+Each corollary takes the checkpoint's stability and a reachability witness and
+concludes about `future.state` directly.  They are the headline theorem's
+content in the form a reader consumes it. -/
+
+/-- The compiled runtime is still the code installed at `ca` at every state the
+configured valid-chain relation reaches. -/
+theorem chainUsing_future_installedCode (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    (future.state.getCode ca).toList = lidoCircuitBreakerCode dp :=
+  (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
+    stable).installedCode
+
+/-- Some ordered entry list witnesses every projected Registry region of `ca`'s
+storage at the reached future.  The list is existential: a callback that
+re-enters as admin may register a pauser, so it need not be the checkpoint's,
+and no same-list claim is made. -/
+theorem chainUsing_future_witness (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries :=
+  (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
+    stable).witness
+
+/-- Membership and index equivalence at an arbitrary canonical target, at the
+reached future. -/
+theorem chainUsing_future_membership (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      ((future.state.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (future.state.getStor ca).get (assignmentSlot target) = pauser ∧
+        (future.state.getStor ca).get (indexSlot target) =
+          Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index :=
+  (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
+    stable).membership htarget
+
+/-- Global count conservation at the reached future. -/
+theorem chainUsing_future_countConservation (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (future.state.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (countSlot pauser)).toNat) =
+          entries.length :=
+  (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
+    stable).countConservation
+
+/-- The Prague instance of `chainUsing_future_installedCode`. -/
+theorem chain_future_installedCode (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    (future.state.getCode ca).toList = lidoCircuitBreakerCode dp :=
+  (chain_preserves_registryStable dp ca checkpoint future reach
+    stable).installedCode
+
+/-- The Prague instance of `chainUsing_future_witness`. -/
+theorem chain_future_witness (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries :=
+  (chain_preserves_registryStable dp ca checkpoint future reach stable).witness
+
+/-- The Prague instance of `chainUsing_future_membership`. -/
+theorem chain_future_membership (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      ((future.state.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (future.state.getStor ca).get (assignmentSlot target) = pauser ∧
+        (future.state.getStor ca).get (indexSlot target) =
+          Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index :=
+  (chain_preserves_registryStable dp ca checkpoint future reach
+    stable).membership htarget
+
+/-- The Prague instance of `chainUsing_future_countConservation`. -/
+theorem chain_future_countConservation (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (future.state.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (countSlot pauser)).toNat) =
+          entries.length :=
+  (chain_preserves_registryStable dp ca checkpoint future reach
+    stable).countConservation
+
+/-! ## Anti-vacuity controls
+
+Three checks that the results above have content.  Each one reads the fields
+*inside* `RegistryWitness` — or exhibits a state satisfying them — rather than
+restating a public header, so a `RegistryCoherent` weakened to something that
+no longer yields a real witness, or a `RegistryWitness` field gutted to a
+triviality, fails here rather than passing silently. -/
+
+private theorem byteArray_mk_toArray_toList (bs : Bytes) :
+    (ByteArray.mk bs.toArray).toList = bs := by
+  rw [ByteArray.toList_eq_toList_data]
+
+/-- A synthetic world holding the compiled runtime at `ca` over an all-zero
+Registry.
+
+**This is not a deployment.**  No constructor runs, no transaction executes,
+and nothing here claims that any chain ever reaches this world — pairing it
+with `ReachUsing.refl` would add nothing, because a zero-step reach carries no
+execution.  Its only job is to exhibit one model of `RegistryStable`, so that
+the history theorems above are not vacuously true. -/
+def emptyRegistryWorld (dp : DeployParams) (ca : Adr) : Jaune.State :=
+  Jaune.State.set (.empty : Jaune.State) ca
+    { Acct.nil with code := ByteArray.mk (lidoCircuitBreakerCode dp).toArray }
+
+private theorem emptyRegistryWorld_get (dp : DeployParams) (ca : Adr) :
+    (emptyRegistryWorld dp ca).get ca =
+      { Acct.nil with
+        code := ByteArray.mk (lidoCircuitBreakerCode dp).toArray } :=
+  Jaune.State.get_set_self _ _ _
+
+/-- **Control 1, satisfiability.**  The all-zero Registry really does satisfy
+every `RegistryWitness` field at the empty entry list: the length word, the
+array words, the assignment, index and count words at every canonical
+argument, and the zero-pauser count.  This is the whole structure, checked
+field by field against `emptyWitness`, not a header. -/
+theorem emptyRegistryWorld_witness (dp : DeployParams) (ca : Adr) :
+    RegistryWitness
+      (logicalStorageOfStor ((emptyRegistryWorld dp ca).getStor ca)) [] := by
+  show RegistryWitness
+    (logicalStorageOfStor ((emptyRegistryWorld dp ca).get ca).stor) []
+  rw [emptyRegistryWorld_get]
+  exact emptyWitness
+
+/-- **Control 1, the invariant is inhabited.**  `RegistryStable` holds at the
+synthetic world, so the frame, transaction, block and history theorems above
+have a nonempty premise set.  Again: an exhibit, not a deployment. -/
+theorem emptyRegistryWorld_registryStable (dp : DeployParams) (ca : Adr) :
+    RegistryStable dp ca (emptyRegistryWorld dp ca) where
+  code := by
+    show some ((emptyRegistryWorld dp ca).get ca).code.toList = _
+    rw [emptyRegistryWorld_get, lidoCircuitBreakerCode_compile]
+    exact congrArg some (byteArray_mk_toArray_toList _)
+  coherent := ⟨[], emptyRegistryWorld_witness dp ca⟩
+
+/-- **Control 1, the fields at the exhibited world.**  The satisfying world's
+Registry slots, read off the witness field by field: a clear length word, a
+clear zero-pauser count, and clear assignment, index and count words at every
+canonical argument.  Naming the fields is the point — a witness whose
+`lengthWord`, `assignments`, `indices`, `counts` or `zeroCount` field had been
+gutted could not supply these. -/
+theorem emptyRegistryWorld_registryFields (dp : DeployParams) (ca : Adr) :
+    ((emptyRegistryWorld dp ca).getStor ca).get arrayLengthSlot = 0 ∧
+    ((emptyRegistryWorld dp ca).getStor ca).get (countSlot 0) = 0 ∧
+    ∀ target, canonicalAddress target →
+      ((emptyRegistryWorld dp ca).getStor ca).get (assignmentSlot target) = 0 ∧
+      ((emptyRegistryWorld dp ca).getStor ca).get (indexSlot target) = 0 ∧
+      ((emptyRegistryWorld dp ca).getStor ca).get (countSlot target) = 0 := by
+  have hw := emptyRegistryWorld_witness dp ca
+  have hzero : Nat.toB256 0 = (0 : B256) := rfl
+  refine ⟨?_, ?_, ?_⟩
+  · simpa [logicalStorageOfStor, hzero] using hw.lengthWord
+  · simpa [logicalStorageOfStor] using hw.zeroCount
+  · intro target htarget
+    refine ⟨?_, ?_, ?_⟩
+    · simpa [logicalStorageOfStor, assignmentAt] using
+        hw.assignments target htarget
+    · simpa [logicalStorageOfStor, oneBasedIndexAt, hzero] using
+        hw.indices target htarget
+    · simpa [logicalStorageOfStor, assignmentCount, hzero] using
+        hw.counts target htarget
+
+/-- **Control 2, an arbitrary execution.**  The public frame theorem is applied
+to an unconstrained successful execution rooted at the contract's own program:
+the callee of every `CALL` and `STATICCALL` the run issues is unconstrained,
+there is no non-reentrancy premise, no target-bytecode premise, and no
+direct-call-only premise.  Beside the execution itself, the hypotheses are
+exactly the three `ContractSpec.Preserves` carries: the contract's own compiled
+program at the frame's root, memory well-formedness when the frame is the
+contract's own, and the frame-entry precondition.
+
+The conclusion reads fields: the length word, every array word below the
+length, and the zero-pauser count are projected out of the post-witness.  A
+witness whose `lengthWord`, `arrayWords` or `zeroCount` field had been gutted
+could not supply them. -/
+theorem arbitraryExec_post_registryFields (dp : DeployParams) (ca : Adr)
+    (sevm : Sevm) (pre post : Devm)
+    (hexec : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.currentTarget = ca →
+      some sevm.code.toList = Prog.compile (runtime dp))
+    (hwf : sevm.currentTarget = ca → Mem.Wf pre.memory)
+    (hpre : (registrySpec dp).Pre ca sevm pre) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (Devm.getStor post ca)) entries ∧
+      (Devm.getStor post ca).get arrayLengthSlot = Nat.toB256 entries.length ∧
+      (∀ index, index < entries.length →
+        (Devm.getStor post ca).get (arrayEntrySlot (Nat.toB256 (index + 1))) =
+          targetAt entries index) ∧
+      (Devm.getStor post ca).get (countSlot 0) = 0 := by
+  obtain ⟨entries, hw⟩ :=
+    (registrySpec_preserves dp ca sevm pre post hexec hcode hwf hpre).inv
+  refine ⟨entries, hw, ?_, ?_, ?_⟩
+  · simpa [logicalStorageOfStor] using hw.lengthWord
+  · intro index bound
+    simpa [logicalStorageOfStor] using hw.arrayWords index bound
+  · simpa [logicalStorageOfStor] using hw.zeroCount
+
+/-- **Control 3, fields at an arbitrary reachable future.**  From nothing but a
+stable checkpoint and a reachability witness, six `RegistryWitness` fields are
+projected out at the future state — `targetsNodup`, `pausersValid`,
+`lengthWord`, `arrayWords`, `counts` and `zeroCount` — together with the index
+membership equivalence the assignment and index fields support.
+
+Every conjunct is a field read, not a restatement of a public header, so
+weakening `RegistryCoherent` to something that no longer yields a real witness
+breaks this control. -/
+theorem arbitraryFuture_registryFields (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state)
+    (target : B256) (htarget : canonicalAddress target) :
+    ∃ entries,
+      (entries.map Prod.fst).Nodup ∧
+      (∀ entry ∈ entries, nonzeroCanonicalAddress entry.2) ∧
+      (future.state.getStor ca).get arrayLengthSlot =
+        Nat.toB256 entries.length ∧
+      (∀ index, index < entries.length →
+        (future.state.getStor ca).get
+            (arrayEntrySlot (Nat.toB256 (index + 1))) =
+          targetAt entries index) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      (future.state.getStor ca).get (countSlot target) =
+        Nat.toB256 (assignmentCount entries target) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 := by
+  obtain ⟨entries, hw⟩ :=
+    (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
+      stable).coherent
+  refine ⟨entries, hw.targetsNodup, hw.pausersValid, ?_, ?_, ?_, ?_, ?_⟩
+  · simpa [logicalStorageOfStor] using hw.lengthWord
+  · intro index bound
+    simpa [logicalStorageOfStor] using hw.arrayWords index bound
+  · exact (membership_of_witness hw htarget).2.1
+  · simpa [logicalStorageOfStor] using hw.counts target htarget
+  · simpa [logicalStorageOfStor] using hw.zeroCount
+
 end LidoCircuitBreaker
 
 end Blanc
