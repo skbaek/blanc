@@ -72,6 +72,7 @@ import Blanc.Conserved
 import Blanc.FmintCode
 import Blanc.FlashSpec
 import Blanc.Compiled
+import Blanc.DeploymentCompiled
 import Blanc.Forward
 import Blanc.Reverts
 import Blanc.RevertPayload

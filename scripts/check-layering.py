@@ -50,7 +50,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
-          "BalanceAlgebra", "Compiled", "Forward", "Reverts", "ForwardCall",
+          "BalanceAlgebra", "Compiled", "DeploymentCompiled", "Forward", "Reverts", "ForwardCall",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
           "ExecutionOccurrence", "CycleWriteFree", "TransientSettlement",
           "SourceAttainment", "TransientInvariance"]
