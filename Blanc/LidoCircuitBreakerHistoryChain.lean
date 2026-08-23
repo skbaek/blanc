@@ -585,7 +585,7 @@ private theorem coherent_registerPauser (dp : DeployParams)
       hpreviousPost htargetPost hcontinuationPost rfl hregisterLookup
       hpauseLookup hfinishRun with hregister | hpause
   · rcases hregister with
-      ⟨-, registerPre, -, hwfRegister, hrRegister, hstorRegister,
+      ⟨-, registerPre, -, hwfRegister, hrRegister, hstorRegister, -,
         hregisterRun⟩
     have hwRegister : RegistryWitness
         (logicalStorageOfStor (Devm.getStor registerPre sevm.currentTarget))
@@ -709,33 +709,6 @@ private theorem prefix_of_loadWord {sevm : Sevm} {s s' : Devm} {word : B256}
   rcases Line.of_run_cons run with ⟨u2, q2, hnil⟩
   cases hnil
   exact prefix_of_mload q2 (prefix_of_push (of_run_pushB256 q) hp)
-
-/-- The image read-back across `loadWord`, the mirror of `mstoreAt_image`: the
-word the walk pushes is the one the image holds at that scratch slot, and the
-load's own memory expansion neither breaks well-formedness nor moves the
-image.  Registry's own copy of this bridge is private to that module. -/
-private theorem loadWord_image {sevm : Sevm} {pre post : Devm} {xs : Stack}
-    {img : Bytes} {word value : B256}
-    (hp : xs <<+ pre.stack)
-    (hwf : Mem.Wf pre.memory)
-    (hr : Mem.Reads pre.memory img)
-    (hvalue : Bytes.toB256 (img.sliceD (word * 32).toNat 32 0) = value)
-    (run : Line.Run sevm pre (loadWord word) post) :
-    value :: xs <<+ post.stack ∧ Mem.Wf post.memory ∧
-      Mem.Reads post.memory img := by
-  unfold loadWord at run
-  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
-  have hb1 := of_run_pushB256 q1
-  have hp1 : (word * 32) :: xs <<+ s1.stack := prefix_of_push hb1 hp
-  have hr1 : Mem.Reads s1.memory img := by rw [← hb1.memory]; exact hr
-  have hwf1 : Mem.Wf s1.memory := by rw [← hb1.memory]; exact hwf
-  rcases Line.of_run_cons run with ⟨s2, q2, hnil⟩
-  cases hnil
-  rcases prefix_of_mload_val q2 hp1 hr1 with ⟨hp2, hm2, -⟩
-  rw [hvalue] at hp2
-  refine ⟨hp2, ?_, ?_⟩
-  · rw [hm2]; exact hwf1.extend _ _
-  · rw [hm2]; exact Mem.Reads.extend hr1 _ _
 
 private theorem code_of_getCode_eq {dp : DeployParams} {ca : Adr} {s s' : Devm}
     (h : Devm.getCode s = Devm.getCode s')
@@ -901,10 +874,9 @@ out of the endpoint walk so that the extraction lemma's own unification runs in
 a small context; the endpoint supplies the staged image and the guard's
 canonicality.
 
-The event suffix is peeled here rather than taken from
-`finishSetPauser_run_split_continuation`, because the continuation's entry
-state has to carry the contract's own compiled program and the split lemma
-reports storage only. -/
+The event suffix is taken whole from
+`finishSetPauser_run_split_continuation`, whose continuation arms carry the
+contract's own compiled program across the suffix alongside its storage. -/
 private theorem coherent_of_pauseKernelRun (dp : DeployParams)
     {sevm : Sevm} {k r : Devm} {img : Bytes} {target : B256}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
@@ -936,6 +908,8 @@ private theorem coherent_of_pauseKernelRun (dp : DeployParams)
     some finishSetPauser := rfl
   have hpauseLookup : ((runtime dp).main :: aux)[pauseAfterSetSlot]? =
     some pauseAfterSet := rfl
+  have hregisterLookup : ((runtime dp).main :: aux)[registerAfterSetSlot]? =
+    some registerAfterSet := rfl
   obtain ⟨entries, hw⟩ := hcoh
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
@@ -953,83 +927,17 @@ private theorem coherent_of_pauseKernelRun (dp : DeployParams)
     ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost, hnewPost,
       hpreviousPost, hcontinuationPost, hstorPost, hwPost, hcodePost,
       hfinishRun⟩
-  -- the event suffix, peeled to the continuation branch
-  simp only [finishSetPauser] at hfinishRun
-  rcases of_run_prepend (loadWord newPauserWord) _ hfinishRun with
-    ⟨v₁, m₁, hfin⟩
-  rcases of_run_prepend (loadWord previousPauserWord) _ hfin with
-    ⟨v₂, m₂, hfin⟩
-  rcases of_run_prepend (loadWord targetWord) _ hfin with ⟨v₃, m₃, hfin⟩
-  rcases of_run_next hfin with ⟨v₄, m₄, hfin⟩
-  rcases of_run_prepend (logWith 3 0 0) _ hfin with ⟨v₅, m₅, hfin⟩
-  rcases of_run_prepend (loadWord continuationWord) _ hfin with
-    ⟨v₆, m₆, hfin⟩
-  rcases of_run_next hfin with ⟨v₇, m₇, hbranch⟩
-  -- storage and the contract's own code cross the whole suffix untouched
-  have hSfin : Devm.getStor postRegistry = Devm.getStor v₇ :=
-    (Line.of_inv Devm.getStor (by line_inv) m₁).trans
-      ((Line.of_inv Devm.getStor (by line_inv) m₂).trans
-        ((Line.of_inv Devm.getStor (by line_inv) m₃).trans
-          ((Ninst.Hinv.inv (f := Devm.getStor) m₄).trans
-            ((Line.of_inv Devm.getStor (by line_inv) m₅).trans
-              ((Line.of_inv Devm.getStor (by line_inv) m₆).trans
-                (Ninst.Hinv.inv (f := Devm.getStor) m₇))))))
-  have hEfin : Devm.getCode postRegistry = Devm.getCode v₇ :=
-    (Line.of_inv Devm.getCode (by line_inv) m₁).trans
-      ((Line.of_inv Devm.getCode (by line_inv) m₂).trans
-        ((Line.of_inv Devm.getCode (by line_inv) m₃).trans
-          ((Ninst.Hinv.inv (f := Devm.getCode) m₄).trans
-            ((Line.of_inv Devm.getCode (by line_inv) m₅).trans
-              ((Line.of_inv Devm.getCode (by line_inv) m₆).trans
-                (Ninst.Hinv.inv (f := Devm.getCode) m₇))))))
-  -- the image survives the three staged loads, the push and the event
-  obtain ⟨-, hwf₁, hr₁⟩ := loadWord_image nil_pref hwfPost hrPost hnewPost m₁
-  obtain ⟨-, hwf₂, hr₂⟩ := loadWord_image nil_pref hwf₁ hr₁ hpreviousPost m₂
-  obtain ⟨-, hwf₃, hr₃⟩ := loadWord_image nil_pref hwf₂ hr₂ htargetPost m₃
-  have hlogLine : Line.Run sevm v₄
-      [Ninst.pushB256 (0 * 32), Ninst.pushB256 (0 * 32),
-        log ((3 : Fin 4).succ)] v₅ := by
-    simpa [logWith] using m₅
-  rcases Line.of_run_cons hlogLine with ⟨u₁, qsize, hlogRest⟩
-  rcases Line.of_run_cons hlogRest with ⟨u₂, qoffset, hlogRest⟩
-  rcases Line.of_run_cons hlogRest with ⟨u₃, qlog, hlogNil⟩
-  cases hlogNil
-  rcases of_run_log_mem qlog with ⟨mi, sz, hmemLog⟩
-  have hmemEvent : v₃.memory = u₂.memory :=
-    ((of_run_pushB256 m₄).memory).trans
-      (((of_run_pushB256 qsize).memory).trans
-        ((of_run_pushB256 qoffset).memory))
-  have hwf₅ : Mem.Wf v₅.memory := by
-    rw [hmemLog]
-    exact (wf_of_mem_eq hmemEvent hwf₃).extend mi sz
-  have hr₅ : Mem.Reads v₅.memory postImg := by
-    rw [hmemLog]
-    exact Mem.Reads.extend (hmemEvent ▸ hr₃) mi sz
-  obtain ⟨hpCont, -, -⟩ :=
-    loadWord_image nil_pref hwf₅ hr₅ hcontinuationPost m₆
-  have hpFlag : ((1 : B256) =? 0) :: ([] : Stack) <<+ v₇.stack :=
-    prefix_of_iszero m₇ hpCont
-  cases hbranch with
-  | succ hnz hpop _hburn _hcall =>
-      rename_i flag _afterPop _registerPre
-      refine absurd ?_ hnz
-      have hflag : ((1 : B256) =? 0) = flag :=
-        (List.of_cons_pref_of_cons_pref hpFlag (pref_of_split hpop.stack)).left
-      rw [← hflag, B256.eqCheck, if_neg flag_one_ne_zero]
-  | zero hpop hpauseCall =>
-      rcases of_run_call hpauseCall with ⟨body, pausePre, hget, hburn, hbody⟩
-      rw [hpauseLookup] at hget
-      obtain rfl : pauseAfterSet = body := Option.some.inj hget
-      have hEpause : Devm.getCode postRegistry = Devm.getCode pausePre :=
-        hEfin.trans
-          ((getCode_of_state hpop.state).trans (getCode_of_state hburn.state))
-      have hSpause : Devm.getStor postRegistry = Devm.getStor pausePre :=
-        hSfin.trans ((PopBurn.Inv.inv hpop).trans (Burn.Inv.inv hburn))
-      refine coherent_pauseAfterSet ih
-        (code_of_getCode_eq (hcodePost.trans hEpause) hcode)
-        ⟨trace.postEntries, ?_⟩ hbody
-      rw [← congrFun hSpause sevm.currentTarget]
-      exact hwPost
+  rcases finishSetPauser_run_split_continuation hwfPost hrPost hnewPost
+      hpreviousPost htargetPost hcontinuationPost rfl hregisterLookup
+      hpauseLookup hfinishRun with hregister | hpause
+  · exact absurd hregister.1 flag_one_ne_zero
+  rcases hpause with
+    ⟨-, pausePre, -, -, -, hstorPause, hcodePause, hpauseRun⟩
+  refine coherent_pauseAfterSet ih
+    (code_of_getCode_eq (hcodePost.trans hcodePause) hcode)
+    ⟨trace.postEntries, ?_⟩ hpauseRun
+  rw [hstorPause]
+  exact hwPost
 
 
 /-- **`pause` preserves Registry coherence.**

@@ -4057,6 +4057,7 @@ theorem finishSetPauser_run_split_continuation
         Mem.Reads registerPre.memory img ∧
         Devm.getStor registerPre sevm.currentTarget =
           Devm.getStor pre ca ∧
+        Devm.getCode pre = Devm.getCode registerPre ∧
         Func.Run fs sevm registerPre registerAfterSet final) ∨
     (continuation ≠ 0 ∧
       ∃ pausePre,
@@ -4065,6 +4066,7 @@ theorem finishSetPauser_run_split_continuation
         Mem.Reads pausePre.memory img ∧
         Devm.getStor pausePre sevm.currentTarget =
           Devm.getStor pre ca ∧
+        Devm.getCode pre = Devm.getCode pausePre ∧
         Func.Run fs sevm pausePre pauseAfterSet final) := by
   simp only [finishSetPauser] at hrun
   rcases of_run_prepend (loadWord newPauserWord) _ hrun with
@@ -4179,6 +4181,14 @@ theorem finishSetPauser_run_split_continuation
     Ninst.Hinv.inv (f := Devm.getStor) hiszero
   have hstorPreFlag : Devm.getStor pre = Devm.getStor sFlag :=
     hstorPreLog.trans (hstorContinuation.trans hstorIszero)
+  have hcodePreFlag : Devm.getCode pre = Devm.getCode sFlag :=
+    (Line.of_inv Devm.getCode (by line_inv) hloadNew).trans
+      ((Line.of_inv Devm.getCode (by line_inv) hloadPrevious).trans
+        ((Line.of_inv Devm.getCode (by line_inv) hloadTarget).trans
+          ((Ninst.Hinv.inv (f := Devm.getCode) hpushEvent).trans
+            ((Line.of_inv Devm.getCode (by line_inv) hlog).trans
+              ((Line.of_inv Devm.getCode (by line_inv) hloadContinuation).trans
+                (Ninst.Hinv.inv (f := Devm.getCode) hiszero))))))
   cases hbranch with
   | zero hpop hpauseCall =>
       rename_i pauseCallPre
@@ -4208,12 +4218,16 @@ theorem finishSetPauser_run_split_continuation
       have hstorBody : Devm.getStor pre = Devm.getStor pausePre :=
         hstorPreFlag.trans
           ((PopBurn.Inv.inv hpop).trans (Burn.Inv.inv hburn))
+      have hcodeBody : Devm.getCode pre = Devm.getCode pausePre :=
+        hcodePreFlag.trans
+          ((getCode_of_state_eq hpop.state).trans
+            (getCode_of_state_eq hburn.state))
       right
       exact ⟨hcontinuation, pausePre, hstackBody, hwfBody, hrBody,
         by
           rw [howner]
           exact (congrFun hstorBody ca).symm,
-        hbody⟩
+        hcodeBody, hbody⟩
   | succ hnz hpop hbranchBurn hregisterCall =>
       rename_i flag afterPop registerCallPre
       have hflag : (continuation =? 0) = flag :=
@@ -4250,12 +4264,17 @@ theorem finishSetPauser_run_split_continuation
         hstorPreFlag.trans
           ((PopBurn.Inv.inv hpop).trans
             ((Burn.Inv.inv hbranchBurn).trans (Burn.Inv.inv hburn)))
+      have hcodeBody : Devm.getCode pre = Devm.getCode registerPre :=
+        hcodePreFlag.trans
+          ((getCode_of_state_eq hpop.state).trans
+            ((getCode_of_state_eq hbranchBurn.state).trans
+              (getCode_of_state_eq hburn.state)))
       left
       exact ⟨hcontinuation, registerPre, hstackBody, hwfBody, hrBody,
         by
           rw [howner]
           exact (congrFun hstorBody ca).symm,
-        hbody⟩
+        hcodeBody, hbody⟩
 
 private theorem revData_not_run
     {fs : List Func} {sevm : Sevm} {pre final : Devm} {blob : Bytes} :
@@ -17333,7 +17352,7 @@ theorem registerPauser_kernel_exec_preserves_registry
     hregister | hpause
   · rcases hregister with
       ⟨_, registerPre, _hstack, hwfRegister, hrRegister,
-        hstorRegister, hregisterRun⟩
+        hstorRegister, -, hregisterRun⟩
     have hwRegister : RegistryWitness
         (logicalStorageOfStor (Devm.getStor registerPre ca))
           trace.postEntries := by
@@ -17408,7 +17427,7 @@ theorem pause_kernel_exec_reaches_pauseAfterSet
   · exact (hcontinuation hregister.1).elim
   · rcases hpause with
       ⟨_, pausePre, _hstack, hwfPause, hrPause, hstorPause,
-        hpauseRun⟩
+        -, hpauseRun⟩
     have htarget0 : target ≠ 0 := by
       intro heq
       rw [heq, setPauserSourceTrace_target_zero] at htrace

@@ -506,7 +506,6 @@ HEADER_PINS = {
         "get_bubbleRevertSlot": "2cacc0b135c8adfd5d72ba23accba9fe28c69039cb9cd5dc2e36134f5323ae84",
         "get_setPauserSlot": "356a0b153cab58e5fc360d6659fad2f00844a0fe5362b87f45a010d563f10cd3",
         "inv_prependStoresRev": "99b793be0df1604ba759744fd411ea3526b27502468e0f6e2627eadc44740507",
-        "loadWord_image": "022f4737a3d9e540eda72a78f97afaa5827d2645462fe8befb601c0bf883472c",
         "mem_reads_data": "ab0541e0dfa602787703695b60ad3802a71d8152bef0c99a0165b220a9bce3f7",
         "membership_of_witness": "088e491da668b5dba5ee947948d09559b8ba62ff528e4340160a07ffd7d98bde",
         "mstoreAt_image": "d0096a04bc4e5fd4e171485ed45f392e7a02280c36292d5c51892f8f62d92f54",

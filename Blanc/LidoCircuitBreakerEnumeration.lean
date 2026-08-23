@@ -2025,6 +2025,7 @@ theorem pauserSet_local_transition
             Mem.Reads registerPre.memory postImg ∧
             Devm.getStor registerPre sevm.currentTarget =
               Devm.getStor postRegistry ca ∧
+            Devm.getCode postRegistry = Devm.getCode registerPre ∧
             Func.Run ((runtime dp).main :: (runtime dp).aux)
               sevm registerPre registerAfterSet final) ∨
         (continuation ≠ 0 ∧
@@ -2034,6 +2035,7 @@ theorem pauserSet_local_transition
             Mem.Reads pausePre.memory postImg ∧
             Devm.getStor pausePre sevm.currentTarget =
               Devm.getStor postRegistry ca ∧
+            Devm.getCode postRegistry = Devm.getCode pausePre ∧
             Func.Run ((runtime dp).main :: (runtime dp).aux)
               sevm pausePre pauseAfterSet final)) := by
   rcases setPauserKernel_exec_extracts_sourceTrace dp howner hcodeAddress
