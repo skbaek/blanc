@@ -1,10 +1,14 @@
-import Blanc.LidoCircuitBreakerHistory
+import Blanc.LidoCircuitBreakerHistoryEndpoints
 
 /-!
 # Registry integrity through arbitrary histories — frame join and history ladder
 
 The Registry-mutating endpoints, the open-contract frame theorem, and the
 specialization of the landed generic ladder up to chain reachability.
+
+`registerPauser`'s obligation is closed here.  `pause`'s is closed up to one
+*code* fact — see `coherent_pause_or_codeGap` — that the landed kernel
+extraction does not export, so `registrySpec_sound` still carries its `sorry`.
 -/
 
 namespace Blanc
@@ -14,128 +18,75 @@ open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
 
-/-! ## Worked example: the memory invariant inside a `FuncSound` obligation
+/-! ## Walk-altitude plumbing: memory images and the contract's own code
 
-Throwaway; delete it once the Registry-mutating endpoints land.  It witnesses
-one thing: `ContractSpec.FuncSound` now hands a target `Mem.Wf` for its entry
-state, so the target may take the write step that carrying a memory *image*
-requires and that was unreachable at this altitude before.  `Mem.write`'s
-growth branch reallocates to `ceil32 (n + ys.length)` and `Array.copyD` drops
-whatever does not fit, so without the invariant a write silently truncates the
-materialised array and destroys the image; `Mem.Reads.write` is exactly the
-step the invariant buys, and here it is discharged from the obligation's own
-hypotheses with no extra premise on the target. -/
-private theorem funcSound_memWf_available
-    {dp : DeployParams} {ca : Adr} {f : Func}
-    (h : ∀ {sevm : Sevm} {s r : Devm},
-      sevm.currentTarget = ca →
-      (registrySpec dp).Pre ca sevm s →
-      ( ∀ (img : Bytes) (n : Nat) (ys : Bytes),
-          Mem.Reads s.memory img →
-          Mem.Reads (s.memory.write n ys) (Bytes.writeAt img n ys) ) →
-      Exec.InvDepth sevm.depth ca (registrySpec dp).prog
-        ((registrySpec dp).PreWf ca) ((registrySpec dp).Post ca) →
-      Func.Run ((registrySpec dp).prog.main :: aux) sevm s f r →
-      (registrySpec dp).Post ca sevm r) :
-    (registrySpec dp).FuncSound ca aux f := by
-  intro sevm s r h_ct h_pre h_wf h_ih h_run
-  exact h h_ct h_pre
-    (fun _ n ys h_reads => Mem.Reads.write h_wf h_reads n ys) h_ih h_run
+Three bridges the two Registry-mutating endpoints need and the landed chain
+does not supply.  None of them mentions the contract, and `codePreserve_of_run`
+in particular is EVM-generic: it belongs beside `Func.effect` in
+`Blanc/CommonProofs.lean` and sits here only because that module is outside
+this change's tree. -/
 
-theorem registrySpec_sound (dp : DeployParams) (ca : Adr) :
-    (registrySpec dp).Sound ca := by
-  sorry
+/-- Every machine memory has an image: its own materialised backing array.
+`Mem.Reads` compares with `getD` on both sides, so the bytes past the array
+are zero on both, and no well-formedness is needed to name the image. -/
+private theorem mem_reads_data (μ : Mem) : Mem.Reads μ μ.data.toList := by
+  intro index
+  by_cases bound : index < μ.data.size <;>
+    simp [Array.getD, bound, List.getD_eq_getElem?_getD]
 
-theorem registrySpec_preserves (dp : DeployParams) (ca : Adr) :
-    (registrySpec dp).Preserves ca :=
-  ContractSpec.preserves_inv (registrySpec dp) ca (registrySpec_sound dp ca)
+/-- The run-level bridge from an `mstoreAt` fragment to `Mem.write`.  This is
+the step the `Mem.Wf` binder buys: `Mem.write`'s growth branch reallocates to
+`ceil32 (n + ys.length)` and `Array.copyD` drops whatever does not fit, so
+without well-formedness a write silently truncates the materialised array and
+destroys the image. -/
+private theorem mstoreAt_image {sevm : Sevm} {pre post : Devm} {xs : Stack}
+    {img : Bytes} {word value : B256}
+    (hp : value :: xs <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (run : Line.Run sevm pre (mstoreAt word) post) :
+    xs <<+ post.stack ∧ Mem.Wf post.memory ∧
+      Mem.Reads post.memory
+        (Bytes.writeAt img (word * 32).toNat value.toBytes) := by
+  rcases of_run_mstoreAt_val run hp with ⟨hp', hm⟩
+  refine ⟨hp', ?_, ?_⟩
+  · rw [hm]; exact hwf.write _ _
+  · rw [hm]; exact Mem.Reads.write hwf hr _ _
 
-/-! ## Messages, transactions, blocks and histories -/
+/-- Successful-run code preservation for one nonterminal instruction, for
+every instruction: the relational masters cover the `CALL` and `CREATE`
+families too, so this needs no case analysis at the use site. -/
+private theorem ninst_codePreserve (n : Ninst) :
+    Ninst.Effect Devm.CodePreserve n :=
+  Ninst.effect_of_effectRec codePreserve_refl_trans.1 codePreserve_refl_trans.2
+    Ninst.codePreserve_effectRec Jinst.codePreserve_effect
+    Linst.codePreserve_effect n
 
-theorem processMessageCall_preserves_registryStable (dp : DeployParams)
-    {ca : Adr} {msg : Msg} {st' : Jaune.State} {out : MsgCallOutput}
-    (h_run : processMessageCall msg = .ok ⟨st', out⟩)
-    (h_inv : (registrySpec dp).MsgInv ca msg) :
-    RegistryStable dp ca st' :=
-  (registryStable_iff_stateInv dp ca st').mpr
-    (ContractSpec.processMessageCall_preserves_inv (registrySpec_preserves dp ca) h_run h_inv).1
+/-- **Nonempty code survives an arbitrary walk.**  `Func.effect` composes the
+per-instruction masters, so this holds of any body in any context — including
+one that yields to arbitrary callee code. -/
+theorem codePreserve_of_run {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {f : Func} (run : Func.Run fs sevm pre f post) :
+    Devm.CodePreserve pre post := by
+  refine Func.effect (R := Devm.CodePreserve) codePreserve_refl_trans.2
+    ?_ ?_ ninst_codePreserve Linst.codePreserve_effect run
+  · exact fun _ a b h c _ => (getCode_of_state h.state).symm ▸ rfl
+  · exact fun a b h c _ => (getCode_of_state h.state).symm ▸ rfl
 
-theorem processTransaction_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat)
-    (st : Jaune.State)
-    (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
-    (h_sum : sum benv.state.bal < 2 ^ 256)
-    (h_fresh : ca ∉ benv.createdAccounts)
-    (h_stable : RegistryStable dp ca benv.state) :
-    RegistryStable dp ca st :=
-  (registryStable_iff_stateInv dp ca st).mpr
-    (ContractSpec.processTransaction_preserves_inv ca (registrySpec_preserves dp ca) benv bout
-      bout' tx i st h_run h_sum
-      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩).state
-
-theorem applyTransactions_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (txis : List (Nat × Tx)) (benv benv' : Benv)
-    (bout bout' : BlockOutput)
-    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
-    (h_sum : sum benv.state.bal < 2 ^ 256)
-    (h_fresh : ca ∉ benv.createdAccounts)
-    (h_stable : RegistryStable dp ca benv.state) :
-    RegistryStable dp ca benv'.state :=
-  (registryStable_iff_stateInv dp ca benv'.state).mpr
-    (ContractSpec.applyTransactions_preserves_inv ca (registrySpec_preserves dp ca) txis benv
-      benv' bout bout' h_run h_sum
-      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩).state
-
-theorem stateTransitionWith_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (rules : ForkRules) (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionWith rules ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_stable : RegistryStable dp ca ch.state) :
-    RegistryStable dp ca ch'.state :=
-  (registryStable_iff_stateInv dp ca ch'.state).mpr
-    (ContractSpec.stateTransitionWith_preserves_inv ca (registrySpec_preserves dp ca) rules ch
-      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
-
-theorem stateTransitionUsing_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (cfg : ChainConfig) (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionUsing cfg ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_stable : RegistryStable dp ca ch.state) :
-    RegistryStable dp ca ch'.state :=
-  (registryStable_iff_stateInv dp ca ch'.state).mpr
-    (ContractSpec.stateTransitionUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg ch
-      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
-
-theorem stateTransition_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransition ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_stable : RegistryStable dp ca ch.state) :
-    RegistryStable dp ca ch'.state :=
-  (registryStable_iff_stateInv dp ca ch'.state).mpr
-    (ContractSpec.stateTransition_preserves_inv ca (registrySpec_preserves dp ca) ch ch' block
-      h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
-
-/-- The headline configured-chain theorem: from an exact-runtime stable
-checkpoint, every state reachable by the configured valid-chain relation is
-still stable. -/
-theorem chainUsing_preserves_registryStable (dp : DeployParams) (ca : Adr)
-    (cfg : ChainConfig) (checkpoint future : BlockChain)
-    (reach : BlockChain.ReachUsing cfg checkpoint future)
-    (stable : RegistryStable dp ca checkpoint.state) :
-    RegistryStable dp ca future.state :=
-  (registryStable_iff_stateInv dp ca future.state).mpr
-    (ContractSpec.chainUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg checkpoint
-      future reach ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable))
-
-theorem chain_preserves_registryStable (dp : DeployParams) (ca : Adr)
-    (checkpoint future : BlockChain)
-    (reach : BlockChain.Reach checkpoint future)
-    (stable : RegistryStable dp ca checkpoint.state) :
-    RegistryStable dp ca future.state :=
-  (registryStable_iff_stateInv dp ca future.state).mpr
-    (ContractSpec.chain_preserves_inv ca (registrySpec_preserves dp ca) checkpoint future reach
-      ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable))
+/-- The contract's own compiled program is still installed at its own address
+after any successful walk: a compiled program is never empty, so
+`Devm.CodePreserve` pins that cell. -/
+theorem code_of_run {dp : DeployParams} {fs : List Func} {sevm : Sevm}
+    {pre post : Devm} {f : Func} {ca : Adr}
+    (hcode : some (pre.getCode ca).toList = Prog.compile (runtime dp))
+    (run : Func.Run fs sevm pre f post) :
+    some (post.getCode ca).toList = Prog.compile (runtime dp) := by
+  have hne : (pre.getCode ca).toList ≠ [] := by
+    intro hc
+    apply @Prog.compile_ne_nil (runtime dp)
+    rw [← hcode, hc]
+  rw [codePreserve_of_run run ca hne]
+  exact hcode
 
 /-! ## The external-call transport lemma -/
 
@@ -369,6 +320,1023 @@ theorem coherent_of_statcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
       exact coherent_of_childFrame ih h_dep h_pst h_code h_coh h_sel h_fill h_pm
     · rw [h_sfstk]
       exact pref_cons hp
+
+/-! ## The two Registry-mutating endpoints
+
+Both stage the shared kernel's four scratch words and tail-jump to it, so both
+have to carry the memory invariant across a *writing* prefix before the landed
+kernel chain will accept them. -/
+
+/-- `setPauserSlot` is index 14, and `aux`'s fourteenth entry is the shared
+Registry mutation kernel. -/
+theorem get_setPauserSlot (dp : DeployParams) :
+    ((runtime dp).main :: aux)[setPauserSlot]? = some setPauserKernel := rfl
+
+private theorem coherent_of_stor_eq {s s' : Devm} {ct : Adr}
+    (h : Devm.getStor s = Devm.getStor s')
+    (hcoh : RegistryCoherent (Devm.getStor s ct)) :
+    RegistryCoherent (Devm.getStor s' ct) := by
+  rw [← congrFun h ct]; exact hcoh
+
+private theorem wf_of_mem_eq {s s' : Devm} (h : s.memory = s'.memory)
+    (hwf : Mem.Wf s.memory) : Mem.Wf s'.memory := by rw [← h]; exact hwf
+
+/-- The calldata guard's own conclusion, in the Registry's vocabulary:
+`checkNonAddress` clears exactly the words below `2 ^ 160`, which is
+`canonicalAddress`.  This is the step that keeps a staged word inside the
+domain on which the Registry slot functions are injective. -/
+private theorem canonicalAddress_of_validAdr {w : B256} (h : ValidAdr w) :
+    canonicalAddress w := by
+  obtain ⟨a, rfl⟩ := h
+  exact canonicalAddress_toB256 a
+
+/-- Reading back the word just written at its own offset. -/
+private theorem read_writeAt_self (img : Bytes) (word value : B256) :
+    Bytes.toB256
+      ((Bytes.writeAt img (word * 32).toNat value.toBytes).sliceD
+        (word * 32).toNat 32 0) = value := by
+  rw [show (32 : Nat) = value.toBytes.length from
+      (B256.length_toBytes value).symm,
+    Bytes.sliceD_writeAt]
+  exact B256.toB256_toBytes value
+
+/-- A later write at a strictly higher word leaves an earlier read alone. -/
+private theorem read_writeAt_before {img : Bytes} (word other value : B256)
+    {v : B256} (hoff : (word * 32).toNat + 32 ≤ (other * 32).toNat)
+    (h : Bytes.toB256 (img.sliceD (word * 32).toNat 32 0) = v) :
+    Bytes.toB256
+      ((Bytes.writeAt img (other * 32).toNat value.toBytes).sliceD
+        (word * 32).toNat 32 0) = v := by
+  rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
+  exact h
+
+/-- **`registerPauser` preserves Registry coherence.**  The admin path stages
+the target, the new pauser, a zero previous-pauser and the zero continuation
+word, then tail-jumps to the shared kernel; the landed chain carries the
+witness through the kernel, the event suffix and the whole register
+continuation, including its checked-expiry panic arm.  Every guard arm is a
+custom-error reverter, and each is storage-silent. -/
+private theorem coherent_registerPauser (dp : DeployParams)
+    {sevm : Sevm} {s r : Devm}
+    (hwf : Mem.Wf s.memory)
+    (hcoh : RegistryCoherent (Devm.getStor s sevm.currentTarget))
+    (hrun : Func.Run ((runtime dp).main :: aux) sevm s (registerPauser dp) r) :
+    RegistryCoherent (Devm.getStor r sevm.currentTarget) := by
+  have herror : ((runtime dp).main :: aux)[pausableZeroErrorSlot]? =
+    some pausableZeroError := rfl
+  have happend : ((runtime dp).main :: aux)[appendTargetSlot]? =
+    some appendTarget := rfl
+  have hafter : ((runtime dp).main :: aux)[afterOldPauserSlot]? =
+    some afterOldPauser := rfl
+  have hremove : ((runtime dp).main :: aux)[removeTargetSlot]? =
+    some removeTarget := rfl
+  have hfinish : ((runtime dp).main :: aux)[finishSetPauserSlot]? =
+    some finishSetPauser := rfl
+  have hregisterLookup : ((runtime dp).main :: aux)[registerAfterSetSlot]? =
+    some registerAfterSet := rfl
+  have hpauseLookup : ((runtime dp).main :: aux)[pauseAfterSetSlot]? =
+    some pauseAfterSet := rfl
+  have hpanicLookup := get_arithmeticPanicSlot dp
+  simp only [registerPauser, requireStaticArgs, canonicalAddressArg,
+    onlyAdmin, pushDeployWord] at hrun
+  -- (1) the static-argument guard
+  rcases of_run_next hrun with ⟨a₁, q₁, hrun⟩
+  rcases of_run_next hrun with ⟨a₂, q₂, hrun⟩
+  rcases of_run_next hrun with ⟨a₃, q₃, hrun⟩
+  rcases of_run_branch_rev hrun with ⟨a₄, p₄, hrun⟩
+  have hS : Devm.getStor s = Devm.getStor a₄ :=
+    ((Ninst.Hinv.inv (f := Devm.getStor) q₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) q₂).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) q₃))).trans (PopBurn.Inv.inv p₄)
+  have hM : s.memory = a₄.memory :=
+    ((Ninst.Hinv.inv (f := Devm.memory) q₁).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) q₂).trans
+        (Ninst.Hinv.inv (f := Devm.memory) q₃))).trans p₄.memory
+  -- (2) the first canonical-address guard
+  refine run_prepend_elim _ (arg 0 ++ checkNonAddress) ?_ hrun
+  intro a₅ g₅ hrun
+  obtain ⟨y₀, hy₀, hiff₀⟩ := prefix_of_argCheckNonAddress nil_pref g₅
+  have hS := hS.trans (Line.of_inv Devm.getStor (by line_inv) g₅)
+  have hM := hM.trans (Line.of_inv Devm.memory (by line_inv) g₅)
+  rcases of_run_branch hrun with ⟨a₆, p₆, hrun⟩ | ⟨w₆, b₆, c₆, hw₆, pb₆, bb₆, hrun⟩
+  case inr =>
+    exact Coherent.call (get_emptyRevertSlot dp)
+      (Coherent.of_storFixed StorFixed.rev) hrun
+      (coherent_of_stor_eq
+        (hS.trans ((PopBurn.Inv.inv pb₆).trans (Burn.Inv.inv bb₆))) hcoh)
+  have hvalid₀ : ValidAdr (Sevm.argWord sevm 0) :=
+    hiff₀.mp (popBurn_pref p₆ hy₀).1.symm
+  have hS := hS.trans (PopBurn.Inv.inv p₆)
+  have hM := hM.trans p₆.memory
+  -- (3) the second canonical-address guard
+  refine run_prepend_elim _ (arg 1 ++ checkNonAddress) ?_ hrun
+  intro a₇ g₇ hrun
+  obtain ⟨y₁, hy₁, hiff₁⟩ := prefix_of_argCheckNonAddress nil_pref g₇
+  have hS := hS.trans (Line.of_inv Devm.getStor (by line_inv) g₇)
+  have hM := hM.trans (Line.of_inv Devm.memory (by line_inv) g₇)
+  rcases of_run_branch hrun with ⟨a₈, p₈, hrun⟩ | ⟨w₈, b₈, c₈, hw₈, pb₈, bb₈, hrun⟩
+  case inr =>
+    exact Coherent.call (get_emptyRevertSlot dp)
+      (Coherent.of_storFixed StorFixed.rev) hrun
+      (coherent_of_stor_eq
+        (hS.trans ((PopBurn.Inv.inv pb₈).trans (Burn.Inv.inv bb₈))) hcoh)
+  have hvalid₁ : ValidAdr (Sevm.argWord sevm 1) :=
+    hiff₁.mp (popBurn_pref p₈ hy₁).1.symm
+  have hS := hS.trans (PopBurn.Inv.inv p₈)
+  have hM := hM.trans p₈.memory
+  -- (4) the admin guard
+  rcases of_run_next hrun with ⟨a₉, q₉, hrun⟩
+  rcases of_run_next hrun with ⟨a₁₀, q₁₀, hrun⟩
+  rcases of_run_next hrun with ⟨a₁₁, q₁₁, hrun⟩
+  have hS := hS.trans
+    ((Ninst.Hinv.inv (f := Devm.getStor) q₉).trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) q₁₀).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) q₁₁)))
+  have hM := hM.trans
+    ((Ninst.Hinv.inv (f := Devm.memory) q₉).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) q₁₀).trans
+        (Ninst.Hinv.inv (f := Devm.memory) q₁₁)))
+  rcases of_run_branch hrun with ⟨a₁₂, p₁₂, hrun⟩ | ⟨w₁₂, b₁₂, c₁₂, hw₁₂, pb₁₂, bb₁₂, hrun⟩
+  case inl =>
+    exact Coherent.call rfl
+      (Coherent.of_storFixed (storFixed_senderNotAdminError dp)) hrun
+      (coherent_of_stor_eq (hS.trans (PopBurn.Inv.inv p₁₂)) hcoh)
+  have hS := hS.trans ((PopBurn.Inv.inv pb₁₂).trans (Burn.Inv.inv bb₁₂))
+  have hM := hM.trans (pb₁₂.memory.trans bb₁₂.memory)
+  -- (5) the four staged scratch words
+  have hwf₀ : Mem.Wf c₁₂.memory := wf_of_mem_eq hM hwf
+  obtain ⟨img₀, hr₀⟩ : ∃ img, Mem.Reads c₁₂.memory img := ⟨_, mem_reads_data _⟩
+  refine run_prepend_elim _ (arg 0) ?_ hrun
+  intro t₁ ga₀ hrun
+  have hpt₁ := prefix_of_arg (xs := ([] : Stack)) nil_pref ga₀
+  have hmt₁ : c₁₂.memory = t₁.memory := Line.of_inv Devm.memory (by line_inv) ga₀
+  have hS := hS.trans (Line.of_inv Devm.getStor (by line_inv) ga₀)
+  refine run_prepend_elim _ (mstoreAt targetWord) ?_ hrun
+  intro t₂ gm₀ hrun
+  obtain ⟨hpt₂, hwft₂, hrt₂⟩ :=
+    mstoreAt_image hpt₁ (wf_of_mem_eq hmt₁ hwf₀) (hmt₁ ▸ hr₀) gm₀
+  have hS := hS.trans
+    (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) gm₀)
+  refine run_prepend_elim _ (arg 1) ?_ hrun
+  intro t₃ ga₁ hrun
+  have hpt₃ := prefix_of_arg hpt₂ ga₁
+  have hmt₃ : t₂.memory = t₃.memory := Line.of_inv Devm.memory (by line_inv) ga₁
+  have hS := hS.trans (Line.of_inv Devm.getStor (by line_inv) ga₁)
+  refine run_prepend_elim _ (mstoreAt newPauserWord) ?_ hrun
+  intro t₄ gm₁ hrun
+  obtain ⟨hpt₄, hwft₄, hrt₄⟩ :=
+    mstoreAt_image hpt₃ (wf_of_mem_eq hmt₃ hwft₂) (hmt₃ ▸ hrt₂) gm₁
+  have hS := hS.trans
+    (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) gm₁)
+  rcases of_run_next hrun with ⟨t₅, qz₀, hrun⟩
+  have hpt₅ := prefix_of_push (of_run_pushB256 qz₀) hpt₄
+  have hmt₅ : t₄.memory = t₅.memory := (of_run_pushB256 qz₀).memory
+  have hS := hS.trans (Ninst.Hinv.inv (f := Devm.getStor) qz₀)
+  refine run_prepend_elim _ (mstoreAt previousPauserWord) ?_ hrun
+  intro t₆ gm₂ hrun
+  obtain ⟨hpt₆, hwft₆, hrt₆⟩ :=
+    mstoreAt_image hpt₅ (wf_of_mem_eq hmt₅ hwft₄) (hmt₅ ▸ hrt₄) gm₂
+  have hS := hS.trans
+    (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) gm₂)
+  rcases of_run_next hrun with ⟨t₇, qz₁, hrun⟩
+  have hpt₇ := prefix_of_push (of_run_pushB256 qz₁) hpt₆
+  have hmt₇ : t₆.memory = t₇.memory := (of_run_pushB256 qz₁).memory
+  have hS := hS.trans (Ninst.Hinv.inv (f := Devm.getStor) qz₁)
+  refine run_prepend_elim _ (mstoreAt continuationWord) ?_ hrun
+  intro t₈ gm₃ hrun
+  obtain ⟨hpt₈, hwft₈, hrt₈⟩ :=
+    mstoreAt_image hpt₇ (wf_of_mem_eq hmt₇ hwft₆) (hmt₇ ▸ hrt₆) gm₃
+  have hS := hS.trans
+    (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) gm₃)
+  -- (6) the tail jump into the shared kernel
+  rcases of_run_call hrun with ⟨body, k₀, hget, hburn, hrun⟩
+  obtain rfl : setPauserKernel = body :=
+    Option.some.inj ((get_setPauserSlot dp).symm.trans hget)
+  have hS := hS.trans (Burn.Inv.inv hburn)
+  have hwfk : Mem.Wf k₀.memory := wf_of_mem_eq hburn.memory hwft₈
+  have hrk : Mem.Reads k₀.memory _ := hburn.memory ▸ hrt₈
+  -- (7) the staged words, read back out of the image the kernel receives
+  have hreadTarget :=
+    read_writeAt_before targetWord continuationWord 0 (by decide)
+      (read_writeAt_before targetWord previousPauserWord 0 (by decide)
+        (read_writeAt_before targetWord newPauserWord (Sevm.argWord sevm 1)
+          (by decide)
+          (read_writeAt_self img₀ targetWord
+            (Sevm.argWord sevm 0))))
+  have hreadNew :=
+    read_writeAt_before newPauserWord continuationWord 0 (by decide)
+      (read_writeAt_before newPauserWord previousPauserWord 0 (by decide)
+        (read_writeAt_self
+          (Bytes.writeAt img₀ (targetWord * 32).toNat
+            (Sevm.argWord sevm 0).toBytes)
+          newPauserWord (Sevm.argWord sevm 1)))
+  have hreadCont := read_writeAt_self
+    (Bytes.writeAt
+      (Bytes.writeAt
+        (Bytes.writeAt img₀ (targetWord * 32).toNat
+          (Sevm.argWord sevm 0).toBytes)
+        (newPauserWord * 32).toNat (Sevm.argWord sevm 1).toBytes)
+      (previousPauserWord * 32).toNat (B256.toBytes 0))
+    continuationWord 0
+  -- (8) the landed kernel chain
+  obtain ⟨entries, hw⟩ := coherent_of_stor_eq hS hcoh
+  have htarget0 : Sevm.argWord sevm 0 ≠ 0 :=
+    (setPauser_run_extracts_nonzero_guard hwfk hrk hreadTarget herror hrun).1
+  obtain ⟨trace, htrace⟩ :
+      ∃ trace, setPauserSourceTrace entries (Sevm.argWord sevm 0)
+        (Sevm.argWord sevm 1) = some trace := by
+    cases hfind : findEntry entries (Sevm.argWord sevm 0) <;>
+      by_cases hnew0 : Sevm.argWord sevm 1 = 0 <;>
+      simp [setPauserSourceTrace, setPauser, htarget0, hfind, hnew0]
+  rcases setPauser_run_extracts_sourceTrace hwfk hrk hreadTarget hreadNew
+      hreadCont rfl hw (canonicalAddress_of_validAdr hvalid₀)
+      (canonicalAddress_of_validAdr hvalid₁) herror happend hafter hremove
+      hfinish hrun htrace with
+    ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost, hnewPost,
+      hpreviousPost, hcontinuationPost, hstorPost, hwPost, hfinishRun⟩
+  refine ⟨trace.postEntries, ?_⟩
+  rcases finishSetPauser_run_split_continuation hwfPost hrPost hnewPost
+      hpreviousPost htargetPost hcontinuationPost rfl hregisterLookup
+      hpauseLookup hfinishRun with hregister | hpause
+  · rcases hregister with
+      ⟨-, registerPre, -, hwfRegister, hrRegister, hstorRegister,
+        hregisterRun⟩
+    have hwRegister : RegistryWitness
+        (logicalStorageOfStor (Devm.getStor registerPre sevm.currentTarget))
+        trace.postEntries := by
+      rw [hstorRegister]; exact hwPost
+    exact registerAfterSet_preserves_registry hwfRegister hrRegister
+      hpreviousPost hnewPost rfl (hw.assignmentAt_canonical _)
+      (canonicalAddress_of_validAdr hvalid₁) hwRegister hpanicLookup
+      hregisterRun
+  · exact (hpause.1 rfl).elim
+
+/-- **The sixteenth dispatch obligation.**  `registerPauser` never yields to
+foreign code, so the deeper-frame hypothesis is unused; what it does need, and
+what the ladder now supplies, is the memory invariant at the body's entry. -/
+theorem registerPauser_funcSound (dp : DeployParams) (ca : Adr) :
+    (registrySpec dp).FuncSound ca aux (registerPauser dp) := by
+  intro sevm s r h_ct h_pre h_wf _ h_run
+  subst h_ct
+  exact ⟨trivial, coherent_registerPauser dp h_wf (h_pre.inv.1 rfl) h_run⟩
+
+/-! ## `pause`'s post-kernel continuation
+
+`pauseAfterSet` is the only body in the runtime that yields to arbitrary code,
+and it does so twice.  Everything between the two yields is storage-silent, and
+its own single persistent write is the caller's expiry cell — canonical for
+free, because its key is built from the `CALLER` opcode. -/
+
+theorem storFixed_pauseFailedError (dp : DeployParams) :
+    StorFixed dp pauseFailedError := StorFixed.of_inv (by func_inv)
+
+theorem storFixed_reentrantCallError (dp : DeployParams) :
+    StorFixed dp reentrantCallError := StorFixed.of_inv (by func_inv)
+
+theorem storFixed_revReturnData (dp : DeployParams) :
+    StorFixed dp Func.revReturnData := StorFixed.of_inv (by func_inv)
+
+/-- `bubbleRevertSlot` is index 13, and `aux`'s thirteenth entry is the
+returndata bubble. -/
+theorem get_bubbleRevertSlot (dp : DeployParams) :
+    ((runtime dp).main :: aux)[bubbleRevertSlot]? = some Func.revReturnData := rfl
+
+/-- `Func.revData`'s node count depends on a Keccak image, so the arithmetic
+panic reverter is handled generically over the blob.  (The Endpoints module
+proves the same fact for its own use; that copy is `private`.) -/
+private theorem inv_prependStoresRev :
+    ∀ (iws : List (B256 × Nat)) {rest : Func},
+      Func.Inv Devm.getStor Devm.getStor rest →
+      Func.Inv Devm.getStor Devm.getStor (prependStoresRev iws rest)
+  | [], _, h => h
+  | _ :: iws, _, h =>
+      inv_prependStoresRev iws
+        (next_inv Ninst.Hinv.inv
+          (next_inv Ninst.Hinv.inv (next_inv Ninst.Hinv.inv h)))
+
+private theorem storFixed_panicData {dp : DeployParams} (blob : Bytes) :
+    StorFixed dp (Func.revData blob) :=
+  StorFixed.of_inv
+    (inv_prependStoresRev _
+      (next_inv Ninst.Hinv.inv
+        (next_inv Ninst.Hinv.inv (last_inv Linst.Hinv.inv))))
+
+/-- The heartbeat write shared by both `pauseExpiryFinish` arms: one expiry
+cell, then the transient lock clear, then `STOP`. -/
+private theorem coherent_pauseExpiryFinish (dp : DeployParams) :
+    Coherent dp pauseExpiryFinish := by
+  unfold pauseExpiryFinish storeHeartbeatExpiryFromStack
+  refine Coherent.next (Coherent.next (Coherent.next ?_))
+  exact Coherent.callerTagSstore
+    (fun a _ _ hcoh => hcoh.expiry_set (canonicalAddress_toB256 a))
+    (StorFixed.of_inv (by func_inv))
+
+theorem coherent_pauseSuccess (dp : DeployParams) : Coherent dp pauseSuccess := by
+  unfold pauseSuccess checkedHeartbeatExpiry
+  refine Coherent.prepend (by line_inv) (Coherent.prepend (by line_inv)
+    (Coherent.next (Coherent.prepend (by line_inv) (Coherent.next
+      (Coherent.prepend (by line_inv) (Coherent.next
+        (Coherent.prepend (by line_inv) (Coherent.next (Coherent.next
+          (Coherent.branch ?_ ?_)))))))))) 
+  · refine Coherent.next (Coherent.next (Coherent.next (Coherent.next
+      (Coherent.next (Coherent.next (Coherent.next (Coherent.next
+        (Coherent.branch (coherent_pauseExpiryFinish dp)
+          (Coherent.call (get_arithmeticPanicSlot dp)
+            (Coherent.of_storFixed (storFixed_panicData _)))))))))))
+  · exact Coherent.next (coherent_pauseExpiryFinish dp)
+
+theorem coherent_decodePausedResult (dp : DeployParams) :
+    Coherent dp decodePausedResult := by
+  unfold decodePausedResult
+  refine Coherent.prepend (by line_inv) (Coherent.branch ?_
+    (Coherent.call (get_emptyRevertSlot dp)
+      (Coherent.of_storFixed StorFixed.rev)))
+  refine Coherent.prepend (by line_inv) (Coherent.next (Coherent.next
+    (Coherent.branch ?_ (Coherent.call rfl
+      (Coherent.of_storFixed (storFixed_pauseFailedError dp))))))
+  exact Coherent.next (Coherent.next
+    (Coherent.branch
+      (Coherent.call (get_emptyRevertSlot dp)
+        (Coherent.of_storFixed StorFixed.rev))
+      (coherent_pauseSuccess dp)))
+
+/-- The contract's own compiled program survives one instruction. -/
+private theorem code_of_ninst {dp : DeployParams} {ca : Adr} {sevm : Sevm}
+    {s s' : Devm} {i : Ninst}
+    (hcode : some (s.getCode ca).toList = Prog.compile (runtime dp))
+    (h : Ninst.Run sevm s i s') :
+    some (s'.getCode ca).toList = Prog.compile (runtime dp) := by
+  have hne : (s.getCode ca).toList ≠ [] := by
+    intro hc
+    apply @Prog.compile_ne_nil (runtime dp)
+    rw [← hcode, hc]
+  rw [ninst_codePreserve i h ca hne]
+  exact hcode
+
+/-- `loadWord` pushes one word. -/
+private theorem prefix_of_loadWord {sevm : Sevm} {s s' : Devm} {word : B256}
+    {xs : Stack} (hp : xs <<+ s.stack)
+    (run : Line.Run sevm s (loadWord word) s') :
+    ∃ y, y :: xs <<+ s'.stack := by
+  unfold loadWord at run
+  rcases Line.of_run_cons run with ⟨u, q, run⟩
+  rcases Line.of_run_cons run with ⟨u2, q2, hnil⟩
+  cases hnil
+  exact prefix_of_mload q2 (prefix_of_push (of_run_pushB256 q) hp)
+
+private theorem code_of_getCode_eq {dp : DeployParams} {ca : Adr} {s s' : Devm}
+    (h : Devm.getCode s = Devm.getCode s')
+    (hcode : some (s.getCode ca).toList = Prog.compile (runtime dp)) :
+    some (s'.getCode ca).toList = Prog.compile (runtime dp) := by
+  rw [← congrFun h ca]; exact hcode
+
+/-- **`pauseAfterSet` preserves Registry coherence across both of its yields.**
+
+No premise restricts either callee.  The `CALL` forwards `pauseFor(uint256)`
+to whatever address the pause target happens to be and the `STATICCALL` reads
+`isPaused()` back from it; both are discharged by the deeper-frame transport
+lemmas, which need only the contract's own compiled program at the yielding
+state.  Between and after the yields the walk is storage-silent except for the
+caller's own expiry cell, whose key comes from `CALLER` and is therefore
+canonical by construction, and the transient lock, which `Devm.getStor` does
+not see. -/
+theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
+    (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
+      ((registrySpec dp).PreWf sevm.currentTarget)
+      ((registrySpec dp).Post sevm.currentTarget))
+    (hcode : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))
+    (hcoh : RegistryCoherent (Devm.getStor s sevm.currentTarget))
+    (hrun : Func.Run ((runtime dp).main :: aux) sevm s pauseAfterSet r) :
+    RegistryCoherent (Devm.getStor r sevm.currentTarget) := by
+  simp only [pauseAfterSet] at hrun
+  -- the callee-has-code guard
+  refine run_prepend_elim _ (loadWord targetWord) ?_ hrun
+  intro c₁ l₁ hrun
+  have hC := coherent_of_stor_eq (Line.of_inv Devm.getStor (by line_inv) l₁) hcoh
+  have hK := code_of_getCode_eq (Line.of_inv Devm.getCode (by line_inv) l₁) hcode
+  rcases of_run_next hrun with ⟨c₂, q₂, hrun⟩
+  rcases of_run_next hrun with ⟨c₃, q₃, hrun⟩
+  rcases of_run_next hrun with ⟨c₄, q₄, hrun⟩
+  have hC := coherent_of_stor_eq
+    ((Ninst.Hinv.inv (f := Devm.getStor) q₂).trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) q₃).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) q₄))) hC
+  have hK := code_of_getCode_eq
+    ((Ninst.Hinv.inv (f := Devm.getCode) q₂).trans
+      ((Ninst.Hinv.inv (f := Devm.getCode) q₃).trans
+        (Ninst.Hinv.inv (f := Devm.getCode) q₄))) hK
+  rcases of_run_branch hrun with ⟨c₅, p₅, hrun⟩ | ⟨wg, bg, cg, hwg, pbg, bbg, hrun⟩
+  case inr =>
+    exact Coherent.call (get_emptyRevertSlot dp)
+      (Coherent.of_storFixed StorFixed.rev) hrun
+      (coherent_of_stor_eq ((PopBurn.Inv.inv pbg).trans (Burn.Inv.inv bbg)) hC)
+  have hC := coherent_of_stor_eq (PopBurn.Inv.inv p₅) hC
+  have hK := code_of_getCode_eq (getCode_of_state p₅.state) hK
+  -- the outgoing `pauseFor(uint256)` argument window
+  rcases of_run_next hrun with ⟨d₁, qpop, hrun⟩
+  rcases of_run_next hrun with ⟨d₂, qsel, hrun⟩
+  have hC := coherent_of_stor_eq
+    ((Ninst.Hinv.inv (f := Devm.getStor) qpop).trans
+      (Ninst.Hinv.inv (f := Devm.getStor) qsel)) hC
+  have hK := code_of_getCode_eq
+    ((Ninst.Hinv.inv (f := Devm.getCode) qpop).trans
+      (Ninst.Hinv.inv (f := Devm.getCode) qsel)) hK
+  refine run_prepend_elim _ (mstoreAt 8) ?_ hrun
+  intro d₃ l₃ hrun
+  refine run_prepend_elim _ (loadWord durationWord) ?_ hrun
+  intro d₄ l₄ hrun
+  refine run_prepend_elim _ (mstoreAt 9) ?_ hrun
+  intro d₅ l₅ hrun
+  have hC := coherent_of_stor_eq
+    ((Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) l₃).trans
+      ((Line.of_inv Devm.getStor (by line_inv) l₄).trans
+        (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) l₅))) hC
+  have hK := code_of_getCode_eq
+    ((Line.of_inv Devm.getCode (by unfold mstoreAt; line_inv) l₃).trans
+      ((Line.of_inv Devm.getCode (by line_inv) l₄).trans
+        (Line.of_inv Devm.getCode (by unfold mstoreAt; line_inv) l₅))) hK
+  refine run_prepend_elim _ (pushList [0, 0, 36, 0x11c, 0]) ?_ hrun
+  intro d₆ l₆ hrun
+  have hC := coherent_of_stor_eq (Line.of_inv Devm.getStor (by line_inv) l₆) hC
+  have hK := code_of_getCode_eq (Line.of_inv Devm.getCode (by line_inv) l₆) hK
+  refine run_prepend_elim _ (loadWord targetWord) ?_ hrun
+  intro d₇ l₇ hrun
+  have hC := coherent_of_stor_eq (Line.of_inv Devm.getStor (by line_inv) l₇) hC
+  have hK := code_of_getCode_eq (Line.of_inv Devm.getCode (by line_inv) l₇) hK
+  rcases of_run_next hrun with ⟨d₈, qgas, hrun⟩
+  rcases of_run_next hrun with ⟨d₉, qcall, hrun⟩
+  -- the seven `CALL` operands, read off the pushes that put them there
+  rcases Line.of_run_cons l₆ with ⟨e₁, r₁, l₆'⟩
+  rcases Line.of_run_cons l₆' with ⟨e₂, r₂, l₆'⟩
+  rcases Line.of_run_cons l₆' with ⟨e₃, r₃, l₆'⟩
+  rcases Line.of_run_cons l₆' with ⟨e₄, r₄, l₆'⟩
+  rcases Line.of_run_cons l₆' with ⟨e₅, r₅, hnil⟩
+  cases hnil
+  obtain ⟨tw, hptw⟩ := prefix_of_loadWord
+    (prefix_of_push (of_run_pushB256 r₅)
+      (prefix_of_push (of_run_pushB256 r₄)
+        (prefix_of_push (of_run_pushB256 r₃)
+          (prefix_of_push (of_run_pushB256 r₂)
+            (prefix_of_push (of_run_pushB256 r₁) nil_pref))))) l₇
+  obtain ⟨gw, hgw⟩ := of_run_gas qgas
+  have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qgas) hC
+  have hK := code_of_getCode_eq (Ninst.Hinv.inv (f := Devm.getCode) qgas) hK
+  have hpcall : gw :: tw :: (0 : B256) :: (0x11c : B256) :: (36 : B256) ::
+      (0 : B256) :: (0 : B256) :: ([] : Stack) <<+ d₈.stack := by
+    simpa using prefix_of_push hgw hptw
+  obtain ⟨hC, -⟩ := coherent_of_call ih hpcall hK hC qcall
+  have hK := code_of_ninst hK qcall
+  rcases of_run_next hrun with ⟨d₁₀, qiz, hrun⟩
+  have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qiz) hC
+  have hK := code_of_getCode_eq (Ninst.Hinv.inv (f := Devm.getCode) qiz) hK
+  rcases of_run_branch hrun with ⟨f₀, pf₀, hrun⟩ | ⟨wb, bb, cb, hwb, pbb, bbb, hrun⟩
+  case inr =>
+    exact Coherent.call (get_bubbleRevertSlot dp)
+      (Coherent.of_storFixed (storFixed_revReturnData dp)) hrun
+      (coherent_of_stor_eq ((PopBurn.Inv.inv pbb).trans (Burn.Inv.inv bbb)) hC)
+  have hC := coherent_of_stor_eq (PopBurn.Inv.inv pf₀) hC
+  have hK := code_of_getCode_eq (getCode_of_state pf₀.state) hK
+  -- the outgoing `isPaused()` argument window
+  rcases of_run_next hrun with ⟨g₁, qsel2, hrun⟩
+  have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qsel2) hC
+  have hK := code_of_getCode_eq (Ninst.Hinv.inv (f := Devm.getCode) qsel2) hK
+  refine run_prepend_elim _ (mstoreAt 8) ?_ hrun
+  intro g₂ m₂ hrun
+  have hC := coherent_of_stor_eq
+    (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) m₂) hC
+  have hK := code_of_getCode_eq
+    (Line.of_inv Devm.getCode (by unfold mstoreAt; line_inv) m₂) hK
+  refine run_prepend_elim _ (pushList [32, 0, 4, 0x11c]) ?_ hrun
+  intro g₃ m₃ hrun
+  have hC := coherent_of_stor_eq (Line.of_inv Devm.getStor (by line_inv) m₃) hC
+  have hK := code_of_getCode_eq (Line.of_inv Devm.getCode (by line_inv) m₃) hK
+  refine run_prepend_elim _ (loadWord targetWord) ?_ hrun
+  intro g₄ m₄ hrun
+  have hC := coherent_of_stor_eq (Line.of_inv Devm.getStor (by line_inv) m₄) hC
+  have hK := code_of_getCode_eq (Line.of_inv Devm.getCode (by line_inv) m₄) hK
+  rcases of_run_next hrun with ⟨g₅, qgas2, hrun⟩
+  rcases of_run_next hrun with ⟨g₆, qstat, hrun⟩
+  rcases Line.of_run_cons m₃ with ⟨u₁, s₁, m₃'⟩
+  rcases Line.of_run_cons m₃' with ⟨u₂, s₂, m₃'⟩
+  rcases Line.of_run_cons m₃' with ⟨u₃, s₃, m₃'⟩
+  rcases Line.of_run_cons m₃' with ⟨u₄, s₄, hnil2⟩
+  cases hnil2
+  obtain ⟨tw2, hptw2⟩ := prefix_of_loadWord
+    (prefix_of_push (of_run_pushB256 s₄)
+      (prefix_of_push (of_run_pushB256 s₃)
+        (prefix_of_push (of_run_pushB256 s₂)
+          (prefix_of_push (of_run_pushB256 s₁) nil_pref)))) m₄
+  obtain ⟨gw2, hgw2⟩ := of_run_gas qgas2
+  have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qgas2) hC
+  have hK := code_of_getCode_eq (Ninst.Hinv.inv (f := Devm.getCode) qgas2) hK
+  have hpstat : gw2 :: tw2 :: (0x11c : B256) :: (4 : B256) :: (0 : B256) ::
+      (32 : B256) :: ([] : Stack) <<+ g₅.stack := by
+    simpa using prefix_of_push hgw2 hptw2
+  obtain ⟨hC, -⟩ := coherent_of_statcall ih hpstat hK hC qstat
+  rcases of_run_next hrun with ⟨g₇, qiz2, hrun⟩
+  have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qiz2) hC
+  rcases of_run_branch hrun with ⟨h₀, ph₀, hrun⟩ | ⟨wb2, bb2, cb2, hwb2, pbb2, bbb2, hrun⟩
+  case inr =>
+    exact Coherent.call (get_bubbleRevertSlot dp)
+      (Coherent.of_storFixed (storFixed_revReturnData dp)) hrun
+      (coherent_of_stor_eq ((PopBurn.Inv.inv pbb2).trans (Burn.Inv.inv bbb2)) hC)
+  exact coherent_decodePausedResult dp hrun
+    (coherent_of_stor_eq (PopBurn.Inv.inv ph₀) hC)
+
+/-- The landed kernel chain, consumed at `pause`'s continuation word.  Split
+out of the endpoint walk so that the extraction lemma's own unification runs in
+a small context; the endpoint supplies the staged image and the guard's
+canonicality. -/
+private theorem coherentOrGap_of_pauseKernelRun (dp : DeployParams)
+    {sevm : Sevm} {k r : Devm} {img : Bytes} {target : B256}
+    (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
+      ((registrySpec dp).PreWf sevm.currentTarget)
+      ((registrySpec dp).Post sevm.currentTarget))
+    (hwf : Mem.Wf k.memory)
+    (hr : Mem.Reads k.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)
+    (hcontRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 1)
+    (htargetCanonical : canonicalAddress target)
+    (hcode : some (k.getCode sevm.currentTarget).toList
+      = Prog.compile (runtime dp))
+    (hcoh : RegistryCoherent (Devm.getStor k sevm.currentTarget))
+    (hrun : Func.Run ((runtime dp).main :: aux) sevm k setPauserKernel r) :
+    RegistryCoherent (Devm.getStor r sevm.currentTarget) ∨
+      ∃ mid : Devm,
+        (mid.getCode sevm.currentTarget).toList = [] ∧
+        RegistryCoherent (Devm.getStor mid sevm.currentTarget) ∧
+        Func.Run ((runtime dp).main :: aux) sevm mid pauseAfterSet r := by
+  have herror : ((runtime dp).main :: aux)[pausableZeroErrorSlot]? =
+    some pausableZeroError := rfl
+  have happend : ((runtime dp).main :: aux)[appendTargetSlot]? =
+    some appendTarget := rfl
+  have hafter : ((runtime dp).main :: aux)[afterOldPauserSlot]? =
+    some afterOldPauser := rfl
+  have hremove : ((runtime dp).main :: aux)[removeTargetSlot]? =
+    some removeTarget := rfl
+  have hfinish : ((runtime dp).main :: aux)[finishSetPauserSlot]? =
+    some finishSetPauser := rfl
+  have hregisterLookup : ((runtime dp).main :: aux)[registerAfterSetSlot]? =
+    some registerAfterSet := rfl
+  have hpauseLookup : ((runtime dp).main :: aux)[pauseAfterSetSlot]? =
+    some pauseAfterSet := rfl
+  obtain ⟨entries, hw⟩ := hcoh
+  have hzeroCanonical : canonicalAddress (0 : B256) := by
+    unfold canonicalAddress
+    change (0 : Nat) < 2 ^ 160
+    norm_num
+  have htarget0 : target ≠ 0 :=
+    (setPauser_run_extracts_nonzero_guard hwf hr htargetRead herror hrun).1
+  obtain ⟨trace, htrace⟩ :
+      ∃ trace, setPauserSourceTrace entries target 0 = some trace := by
+    cases hfind : findEntry entries target <;>
+      simp [setPauserSourceTrace, setPauser, htarget0, hfind]
+  rcases setPauser_run_extracts_sourceTrace hwf hr htargetRead hnewRead
+      hcontRead rfl hw htargetCanonical hzeroCanonical
+      herror happend hafter hremove hfinish hrun htrace with
+    ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost, hnewPost,
+      hpreviousPost, hcontinuationPost, hstorPost, hwPost, hfinishRun⟩
+  rcases finishSetPauser_run_split_continuation hwfPost hrPost hnewPost
+      hpreviousPost htargetPost hcontinuationPost rfl hregisterLookup
+      hpauseLookup hfinishRun with hregister | hpauseBranch
+  · exact absurd hregister.1 (by decide)
+  obtain ⟨-, pausePre, -, -, -, hstorPause, hpauseRun⟩ := hpauseBranch
+  have hcohPause : RegistryCoherent (Devm.getStor pausePre sevm.currentTarget) :=
+    ⟨trace.postEntries, by rw [hstorPause]; exact hwPost⟩
+  -- the residue: the contract's own code at the continuation's entry
+  by_cases hempty : (pausePre.getCode sevm.currentTarget).toList = []
+  · exact Or.inr ⟨pausePre, hempty, hcohPause, hpauseRun⟩
+  refine Or.inl (coherent_pauseAfterSet ih ?_ hcohPause hpauseRun)
+  rw [← codePreserve_of_run hpauseRun sevm.currentTarget hempty]
+  exact code_of_run hcode hrun
+
+
+/-- **`pause` preserves Registry coherence, except on one residue the landed
+kernel chain cannot rule out here.**
+
+Everything the endpoint does is discharged: the reentrancy lock, the
+assignment and heartbeat guards, the five staged scratch words, the shared
+kernel, the event suffix, and — through `coherent_pauseAfterSet` — the two
+yields to arbitrary code and the caller's own expiry write.
+
+The residue is the second disjunct, and it is a *code* fact, not a Registry
+fact.  `coherent_of_call` needs the contract's own compiled program at the
+state that issues the `CALL`, and that state sits behind
+`setPauser_run_extracts_sourceTrace`'s existential: the landed extraction
+exports `Mem.Wf`, the memory image, `Devm.getStor` at the owner and the
+`RegistryWitness`, but not `Devm.getCode`.  `Devm.CodePreserve` recovers the
+fact from the walk's own tail whenever the cell is nonempty, so the only
+surviving case is the one below — the contract's code being *empty* at the
+point `pauseAfterSet` begins.  Refuting it needs one extra conclusion on the
+extraction lemma, in a module this packet may not edit. -/
+theorem coherent_pause_or_codeGap (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
+      ((registrySpec dp).PreWf sevm.currentTarget)
+      ((registrySpec dp).Post sevm.currentTarget))
+    (hwf : Mem.Wf s.memory)
+    (hcode : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))
+    (hcoh : RegistryCoherent (Devm.getStor s sevm.currentTarget))
+    (hrun : Func.Run ((runtime dp).main :: aux) sevm s pause r) :
+    RegistryCoherent (Devm.getStor r sevm.currentTarget) ∨
+      ∃ mid : Devm,
+        (mid.getCode sevm.currentTarget).toList = [] ∧
+        RegistryCoherent (Devm.getStor mid sevm.currentTarget) ∧
+        Func.Run ((runtime dp).main :: aux) sevm mid pauseAfterSet r := by
+  have herror : ((runtime dp).main :: aux)[pausableZeroErrorSlot]? =
+    some pausableZeroError := rfl
+  have happend : ((runtime dp).main :: aux)[appendTargetSlot]? =
+    some appendTarget := rfl
+  have hafter : ((runtime dp).main :: aux)[afterOldPauserSlot]? =
+    some afterOldPauser := rfl
+  have hremove : ((runtime dp).main :: aux)[removeTargetSlot]? =
+    some removeTarget := rfl
+  have hfinish : ((runtime dp).main :: aux)[finishSetPauserSlot]? =
+    some finishSetPauser := rfl
+  have hregisterLookup : ((runtime dp).main :: aux)[registerAfterSetSlot]? =
+    some registerAfterSet := rfl
+  have hpauseLookup : ((runtime dp).main :: aux)[pauseAfterSetSlot]? =
+    some pauseAfterSet := rfl
+  have hpanicLookup := get_arithmeticPanicSlot dp
+  simp only [pause, requireStaticArgs, canonicalAddressArg] at hrun
+  -- (1) the static-argument guard
+  rcases of_run_next hrun with ⟨a₁, q₁, hrun⟩
+  rcases of_run_next hrun with ⟨a₂, q₂, hrun⟩
+  rcases of_run_next hrun with ⟨a₃, q₃, hrun⟩
+  rcases of_run_branch_rev hrun with ⟨a₄, p₄, hrun⟩
+  have hS : Devm.getStor s = Devm.getStor a₄ :=
+    ((Ninst.Hinv.inv (f := Devm.getStor) q₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) q₂).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) q₃))).trans (PopBurn.Inv.inv p₄)
+  have hM : s.memory = a₄.memory :=
+    ((Ninst.Hinv.inv (f := Devm.memory) q₁).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) q₂).trans
+        (Ninst.Hinv.inv (f := Devm.memory) q₃))).trans p₄.memory
+  have hE : Devm.getCode s = Devm.getCode a₄ :=
+    ((Ninst.Hinv.inv (f := Devm.getCode) q₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getCode) q₂).trans
+        (Ninst.Hinv.inv (f := Devm.getCode) q₃))).trans (getCode_of_state p₄.state)
+  -- (2) the canonical-address guard
+  refine run_prepend_elim _ (arg 0 ++ checkNonAddress) ?_ hrun
+  intro a₅ g₅ hrun
+  obtain ⟨y₀, hy₀, hiff₀⟩ := prefix_of_argCheckNonAddress nil_pref g₅
+  have hS := hS.trans (Line.of_inv Devm.getStor (by line_inv) g₅)
+  have hM := hM.trans (Line.of_inv Devm.memory (by line_inv) g₅)
+  have hE := hE.trans (Line.of_inv Devm.getCode (by line_inv) g₅)
+  rcases of_run_branch hrun with ⟨a₆, p₆, hrun⟩ | ⟨w₆, b₆, c₆, hw₆, pb₆, bb₆, hrun⟩
+  case inr =>
+    exact Or.inl (Coherent.call (get_emptyRevertSlot dp)
+      (Coherent.of_storFixed StorFixed.rev) hrun
+      (coherent_of_stor_eq
+        (hS.trans ((PopBurn.Inv.inv pb₆).trans (Burn.Inv.inv bb₆))) hcoh))
+  have hvalid₀ : ValidAdr (Sevm.argWord sevm 0) :=
+    hiff₀.mp (popBurn_pref p₆ hy₀).1.symm
+  have hS := hS.trans (PopBurn.Inv.inv p₆)
+  have hM := hM.trans p₆.memory
+  have hE := hE.trans (getCode_of_state p₆.state)
+  -- (3) the reentrancy lock
+  rcases of_run_next hrun with ⟨b₁, r₁, hrun⟩
+  rcases of_run_next hrun with ⟨b₂, r₂, hrun⟩
+  rcases of_run_next hrun with ⟨b₃, r₃, hrun⟩
+  have hS := hS.trans
+    ((Ninst.Hinv.inv (f := Devm.getStor) r₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) r₂).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) r₃)))
+  have hM := hM.trans
+    ((Ninst.Hinv.inv (f := Devm.memory) r₁).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) r₂).trans
+        (Ninst.Hinv.inv (f := Devm.memory) r₃)))
+  have hE := hE.trans
+    ((Ninst.Hinv.inv (f := Devm.getCode) r₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getCode) r₂).trans
+        (Ninst.Hinv.inv (f := Devm.getCode) r₃)))
+  rcases of_run_branch hrun with ⟨b₄, p₄', hrun⟩ | ⟨w₇, b₇, c₇, hw₇, pb₇, bb₇, hrun⟩
+  case inl =>
+    exact Or.inl (Coherent.call rfl
+      (Coherent.of_storFixed (storFixed_reentrantCallError dp)) hrun
+      (coherent_of_stor_eq (hS.trans (PopBurn.Inv.inv p₄')) hcoh))
+  have hS := hS.trans ((PopBurn.Inv.inv pb₇).trans (Burn.Inv.inv bb₇))
+  have hM := hM.trans (pb₇.memory.trans bb₇.memory)
+  have hE := hE.trans
+    ((getCode_of_state pb₇.state).trans (getCode_of_state bb₇.state))
+  -- (4) the lock is set, then the assignment check
+  rcases of_run_next hrun with ⟨c₁, t₁, hrun⟩
+  rcases of_run_next hrun with ⟨c₂, t₂, hrun⟩
+  rcases of_run_next hrun with ⟨c₃, t₃, hrun⟩
+  have hS := hS.trans
+    ((Ninst.Hinv.inv (f := Devm.getStor) t₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) t₂).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) t₃)))
+  have hM := hM.trans
+    ((Ninst.Hinv.inv (f := Devm.memory) t₁).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) t₂).trans
+        (Ninst.Hinv.inv (f := Devm.memory) t₃)))
+  have hE := hE.trans
+    ((Ninst.Hinv.inv (f := Devm.getCode) t₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getCode) t₂).trans
+        (Ninst.Hinv.inv (f := Devm.getCode) t₃)))
+  refine run_prepend_elim _ (arg 0) ?_ hrun
+  intro c₄ u₄ hrun
+  refine run_prepend_elim _ (tagTop assignmentRegion) ?_ hrun
+  intro c₅ u₅ hrun
+  have hS := hS.trans
+    ((Line.of_inv Devm.getStor (by line_inv) u₄).trans
+      (Line.of_inv Devm.getStor (by unfold tagTop; line_inv) u₅))
+  have hM := hM.trans
+    ((Line.of_inv Devm.memory (by line_inv) u₄).trans
+      (Line.of_inv Devm.memory (by unfold tagTop; line_inv) u₅))
+  have hE := hE.trans
+    ((Line.of_inv Devm.getCode (by line_inv) u₄).trans
+      (Line.of_inv Devm.getCode (by unfold tagTop; line_inv) u₅))
+  rcases of_run_next hrun with ⟨c₆, v₁, hrun⟩
+  rcases of_run_next hrun with ⟨c₇, v₂, hrun⟩
+  rcases of_run_next hrun with ⟨c₈, v₃, hrun⟩
+  have hS := hS.trans
+    ((Ninst.Hinv.inv (f := Devm.getStor) v₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) v₂).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) v₃)))
+  have hM := hM.trans
+    ((Ninst.Hinv.inv (f := Devm.memory) v₁).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) v₂).trans
+        (Ninst.Hinv.inv (f := Devm.memory) v₃)))
+  have hE := hE.trans
+    ((Ninst.Hinv.inv (f := Devm.getCode) v₁).trans
+      ((Ninst.Hinv.inv (f := Devm.getCode) v₂).trans
+        (Ninst.Hinv.inv (f := Devm.getCode) v₃)))
+  rcases of_run_branch hrun with ⟨c₉, p₉, hrun⟩ | ⟨w₈, b₈, c₁₀, hw₈, pb₈, bb₈, hrun⟩
+  case inl =>
+    exact Or.inl (Coherent.call rfl
+      (Coherent.of_storFixed (storFixed_senderNotPauserError dp)) hrun
+      (coherent_of_stor_eq (hS.trans (PopBurn.Inv.inv p₉)) hcoh))
+  have hS := hS.trans ((PopBurn.Inv.inv pb₈).trans (Burn.Inv.inv bb₈))
+  have hM := hM.trans (pb₈.memory.trans bb₈.memory)
+  have hE := hE.trans
+    ((getCode_of_state pb₈.state).trans (getCode_of_state bb₈.state))
+  -- (5) the heartbeat-liveness check
+  rcases of_run_next hrun with ⟨d₁, x₁, hrun⟩
+  refine run_prepend_elim _ (tagTop expiryRegion) ?_ hrun
+  intro d₂ x₂ hrun
+  rcases of_run_next hrun with ⟨d₃, x₃, hrun⟩
+  rcases of_run_next hrun with ⟨d₄, x₄, hrun⟩
+  rcases of_run_next hrun with ⟨d₅, x₅, hrun⟩
+  have hS := hS.trans
+    ((Ninst.Hinv.inv (f := Devm.getStor) x₁).trans
+      ((Line.of_inv Devm.getStor (by unfold tagTop; line_inv) x₂).trans
+        ((Ninst.Hinv.inv (f := Devm.getStor) x₃).trans
+          ((Ninst.Hinv.inv (f := Devm.getStor) x₄).trans
+            (Ninst.Hinv.inv (f := Devm.getStor) x₅)))))
+  have hM := hM.trans
+    ((Ninst.Hinv.inv (f := Devm.memory) x₁).trans
+      ((Line.of_inv Devm.memory (by unfold tagTop; line_inv) x₂).trans
+        ((Ninst.Hinv.inv (f := Devm.memory) x₃).trans
+          ((Ninst.Hinv.inv (f := Devm.memory) x₄).trans
+            (Ninst.Hinv.inv (f := Devm.memory) x₅)))))
+  have hE := hE.trans
+    ((Ninst.Hinv.inv (f := Devm.getCode) x₁).trans
+      ((Line.of_inv Devm.getCode (by unfold tagTop; line_inv) x₂).trans
+        ((Ninst.Hinv.inv (f := Devm.getCode) x₃).trans
+          ((Ninst.Hinv.inv (f := Devm.getCode) x₄).trans
+            (Ninst.Hinv.inv (f := Devm.getCode) x₅)))))
+  rcases of_run_branch hrun with ⟨d₆, p₆', hrun⟩ | ⟨w₉, b₉, c₁₁, hw₉, pb₉, bb₉, hrun⟩
+  case inl =>
+    exact Or.inl (Coherent.call rfl
+      (Coherent.of_storFixed (storFixed_heartbeatExpiredError dp)) hrun
+      (coherent_of_stor_eq (hS.trans (PopBurn.Inv.inv p₆')) hcoh))
+  have hS := hS.trans ((PopBurn.Inv.inv pb₉).trans (Burn.Inv.inv bb₉))
+  have hM := hM.trans (pb₉.memory.trans bb₉.memory)
+  have hE := hE.trans
+    ((getCode_of_state pb₉.state).trans (getCode_of_state bb₉.state))
+  -- (6) the five staged scratch words
+  have hwf₀ : Mem.Wf c₁₁.memory := wf_of_mem_eq hM hwf
+  obtain ⟨img₀, hr₀⟩ : ∃ img, Mem.Reads c₁₁.memory img := ⟨_, mem_reads_data _⟩
+  rcases of_run_next hrun with ⟨e₁, z₁, hrun⟩
+  rcases of_run_next hrun with ⟨e₂, z₂, hrun⟩
+  obtain ⟨dur, hpdur, -⟩ :=
+    prefix_of_sload z₂ (prefix_of_push (of_run_pushB256 z₁) nil_pref)
+  have hme₂ : c₁₁.memory = e₂.memory :=
+    (Ninst.Hinv.inv (f := Devm.memory) z₁).trans
+      (Ninst.Hinv.inv (f := Devm.memory) z₂)
+  have hS := hS.trans
+    ((Ninst.Hinv.inv (f := Devm.getStor) z₁).trans
+      (Ninst.Hinv.inv (f := Devm.getStor) z₂))
+  have hE := hE.trans
+    ((Ninst.Hinv.inv (f := Devm.getCode) z₁).trans
+      (Ninst.Hinv.inv (f := Devm.getCode) z₂))
+  refine run_prepend_elim _ (mstoreAt durationWord) ?_ hrun
+  intro e₃ m₃ hrun
+  obtain ⟨hp₃, hwf₃, hr₃⟩ :=
+    mstoreAt_image hpdur (wf_of_mem_eq hme₂ hwf₀) (hme₂ ▸ hr₀) m₃
+  have hS := hS.trans (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) m₃)
+  have hE := hE.trans (Line.of_inv Devm.getCode (by unfold mstoreAt; line_inv) m₃)
+  refine run_prepend_elim _ (arg 0) ?_ hrun
+  intro e₄ m₄ hrun
+  have hp₄ := prefix_of_arg hp₃ m₄
+  have hme₄ : e₃.memory = e₄.memory := Line.of_inv Devm.memory (by line_inv) m₄
+  have hS := hS.trans (Line.of_inv Devm.getStor (by line_inv) m₄)
+  have hE := hE.trans (Line.of_inv Devm.getCode (by line_inv) m₄)
+  refine run_prepend_elim _ (mstoreAt targetWord) ?_ hrun
+  intro e₅ m₅ hrun
+  obtain ⟨hp₅, hwf₅, hr₅⟩ :=
+    mstoreAt_image hp₄ (wf_of_mem_eq hme₄ hwf₃) (hme₄ ▸ hr₃) m₅
+  have hS := hS.trans (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) m₅)
+  have hE := hE.trans (Line.of_inv Devm.getCode (by unfold mstoreAt; line_inv) m₅)
+  rcases of_run_next hrun with ⟨e₆, z₆, hrun⟩
+  have hp₆ := prefix_of_push (of_run_pushB256 z₆) hp₅
+  have hme₆ : e₅.memory = e₆.memory := (of_run_pushB256 z₆).memory
+  have hS := hS.trans (Ninst.Hinv.inv (f := Devm.getStor) z₆)
+  have hE := hE.trans (Ninst.Hinv.inv (f := Devm.getCode) z₆)
+  refine run_prepend_elim _ (mstoreAt newPauserWord) ?_ hrun
+  intro e₇ m₇ hrun
+  obtain ⟨hp₇, hwf₇, hr₇⟩ :=
+    mstoreAt_image hp₆ (wf_of_mem_eq hme₆ hwf₅) (hme₆ ▸ hr₅) m₇
+  have hS := hS.trans (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) m₇)
+  have hE := hE.trans (Line.of_inv Devm.getCode (by unfold mstoreAt; line_inv) m₇)
+  rcases of_run_next hrun with ⟨e₈, z₈, hrun⟩
+  have hp₈ := prefix_of_push (of_run_pushB256 z₈) hp₇
+  have hme₈ : e₇.memory = e₈.memory := (of_run_pushB256 z₈).memory
+  have hS := hS.trans (Ninst.Hinv.inv (f := Devm.getStor) z₈)
+  have hE := hE.trans (Ninst.Hinv.inv (f := Devm.getCode) z₈)
+  refine run_prepend_elim _ (mstoreAt previousPauserWord) ?_ hrun
+  intro e₉ m₉ hrun
+  obtain ⟨hp₉, hwf₉, hr₉⟩ :=
+    mstoreAt_image hp₈ (wf_of_mem_eq hme₈ hwf₇) (hme₈ ▸ hr₇) m₉
+  have hS := hS.trans (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) m₉)
+  have hE := hE.trans (Line.of_inv Devm.getCode (by unfold mstoreAt; line_inv) m₉)
+  rcases of_run_next hrun with ⟨f₁, z₁₀, hrun⟩
+  have hp₁₀ := prefix_of_push (of_run_pushB256 z₁₀) hp₉
+  have hme₁₀ : e₉.memory = f₁.memory := (of_run_pushB256 z₁₀).memory
+  have hS := hS.trans (Ninst.Hinv.inv (f := Devm.getStor) z₁₀)
+  have hE := hE.trans (Ninst.Hinv.inv (f := Devm.getCode) z₁₀)
+  refine run_prepend_elim _ (mstoreAt continuationWord) ?_ hrun
+  intro f₂ m₁₁ hrun
+  obtain ⟨hp₁₁, hwf₁₁, hr₁₁⟩ :=
+    mstoreAt_image hp₁₀ (wf_of_mem_eq hme₁₀ hwf₉) (hme₁₀ ▸ hr₉) m₁₁
+  have hS := hS.trans (Line.of_inv Devm.getStor (by unfold mstoreAt; line_inv) m₁₁)
+  have hE := hE.trans (Line.of_inv Devm.getCode (by unfold mstoreAt; line_inv) m₁₁)
+  -- (7) the tail jump into the shared kernel
+  rcases of_run_call hrun with ⟨body, k₀, hget, hburn, hrun⟩
+  obtain rfl : setPauserKernel = body :=
+    Option.some.inj ((get_setPauserSlot dp).symm.trans hget)
+  have hS := hS.trans (Burn.Inv.inv hburn)
+  have hE := hE.trans (getCode_of_state hburn.state)
+  have hwfk : Mem.Wf k₀.memory := wf_of_mem_eq hburn.memory hwf₁₁
+  have hrk : Mem.Reads k₀.memory _ := hburn.memory ▸ hr₁₁
+  have hcodek : some (k₀.getCode sevm.currentTarget).toList
+      = Prog.compile (runtime dp) := code_of_getCode_eq hE hcode
+  -- (8) the staged words, read back out of the image the kernel receives
+  have hreadTarget :=
+    read_writeAt_before targetWord continuationWord 1 (by decide)
+      (read_writeAt_before targetWord previousPauserWord 0 (by decide)
+        (read_writeAt_before targetWord newPauserWord 0 (by decide)
+          (read_writeAt_self
+            (Bytes.writeAt img₀ (durationWord * 32).toNat
+              dur.toBytes)
+            targetWord (Sevm.argWord sevm 0))))
+  have hreadNew :=
+    read_writeAt_before newPauserWord continuationWord 1 (by decide)
+      (read_writeAt_before newPauserWord previousPauserWord 0 (by decide)
+        (read_writeAt_self
+          (Bytes.writeAt
+            (Bytes.writeAt img₀ (durationWord * 32).toNat
+              dur.toBytes)
+            (targetWord * 32).toNat (Sevm.argWord sevm 0).toBytes)
+          newPauserWord 0))
+  have hreadCont := read_writeAt_self
+    (Bytes.writeAt
+      (Bytes.writeAt
+        (Bytes.writeAt
+          (Bytes.writeAt img₀ (durationWord * 32).toNat
+            dur.toBytes)
+          (targetWord * 32).toNat (Sevm.argWord sevm 0).toBytes)
+        (newPauserWord * 32).toNat (B256.toBytes 0))
+      (previousPauserWord * 32).toNat (B256.toBytes 0))
+    continuationWord 1
+  -- (9) the landed kernel chain
+  exact coherentOrGap_of_pauseKernelRun dp ih hwfk hrk hreadTarget hreadNew
+    hreadCont (canonicalAddress_of_validAdr hvalid₀) hcodek
+    (coherent_of_stor_eq hS hcoh) hrun
+
+/-- **The seventeenth obligation, up to the same residue.**  The `FuncSound`
+shape of `coherent_pause_or_codeGap`: everything `pause` does is discharged,
+and the second disjunct is the one code fact the landed kernel extraction does
+not export.  Refuting it closes `pause_funcSound`, and with it
+`registrySpec_sound`, in three lines. -/
+theorem pause_funcSound_or_codeGap (dp : DeployParams) (ca : Adr)
+    {sevm : Sevm} {s r : Devm}
+    (h_ct : sevm.currentTarget = ca)
+    (h_pre : (registrySpec dp).Pre ca sevm s)
+    (h_wf : Mem.Wf s.memory)
+    (h_ih : Exec.InvDepth sevm.depth ca (registrySpec dp).prog
+      ((registrySpec dp).PreWf ca) ((registrySpec dp).Post ca))
+    (h_run : Func.Run ((registrySpec dp).prog.main :: aux) sevm s pause r) :
+    (registrySpec dp).Post ca sevm r ∨
+      ∃ mid : Devm,
+        (mid.getCode ca).toList = [] ∧
+        RegistryCoherent (Devm.getStor mid ca) ∧
+        Func.Run ((runtime dp).main :: aux) sevm mid pauseAfterSet r := by
+  subst h_ct
+  rcases coherent_pause_or_codeGap dp h_ih h_wf h_pre.code (h_pre.inv.1 rfl)
+    h_run with hok | hgap
+  · exact Or.inl ⟨trivial, hok⟩
+  · exact Or.inr hgap
+
+theorem registrySpec_sound (dp : DeployParams) (ca : Adr) :
+    (registrySpec dp).Sound ca := by
+  sorry
+
+theorem registrySpec_preserves (dp : DeployParams) (ca : Adr) :
+    (registrySpec dp).Preserves ca :=
+  ContractSpec.preserves_inv (registrySpec dp) ca (registrySpec_sound dp ca)
+
+/-! ## Messages, transactions, blocks and histories -/
+
+theorem processMessageCall_preserves_registryStable (dp : DeployParams)
+    {ca : Adr} {msg : Msg} {st' : Jaune.State} {out : MsgCallOutput}
+    (h_run : processMessageCall msg = .ok ⟨st', out⟩)
+    (h_inv : (registrySpec dp).MsgInv ca msg) :
+    RegistryStable dp ca st' :=
+  (registryStable_iff_stateInv dp ca st').mpr
+    (ContractSpec.processMessageCall_preserves_inv (registrySpec_preserves dp ca) h_run h_inv).1
+
+theorem processTransaction_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat)
+    (st : Jaune.State)
+    (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
+    (h_sum : sum benv.state.bal < 2 ^ 256)
+    (h_fresh : ca ∉ benv.createdAccounts)
+    (h_stable : RegistryStable dp ca benv.state) :
+    RegistryStable dp ca st :=
+  (registryStable_iff_stateInv dp ca st).mpr
+    (ContractSpec.processTransaction_preserves_inv ca (registrySpec_preserves dp ca) benv bout
+      bout' tx i st h_run h_sum
+      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩).state
+
+theorem applyTransactions_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (txis : List (Nat × Tx)) (benv benv' : Benv)
+    (bout bout' : BlockOutput)
+    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
+    (h_sum : sum benv.state.bal < 2 ^ 256)
+    (h_fresh : ca ∉ benv.createdAccounts)
+    (h_stable : RegistryStable dp ca benv.state) :
+    RegistryStable dp ca benv'.state :=
+  (registryStable_iff_stateInv dp ca benv'.state).mpr
+    (ContractSpec.applyTransactions_preserves_inv ca (registrySpec_preserves dp ca) txis benv
+      benv' bout bout' h_run h_sum
+      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩).state
+
+theorem stateTransitionWith_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (rules : ForkRules) (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionWith rules ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_stable : RegistryStable dp ca ch.state) :
+    RegistryStable dp ca ch'.state :=
+  (registryStable_iff_stateInv dp ca ch'.state).mpr
+    (ContractSpec.stateTransitionWith_preserves_inv ca (registrySpec_preserves dp ca) rules ch
+      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
+
+theorem stateTransitionUsing_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (cfg : ChainConfig) (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionUsing cfg ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_stable : RegistryStable dp ca ch.state) :
+    RegistryStable dp ca ch'.state :=
+  (registryStable_iff_stateInv dp ca ch'.state).mpr
+    (ContractSpec.stateTransitionUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg ch
+      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
+
+theorem stateTransition_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransition ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_stable : RegistryStable dp ca ch.state) :
+    RegistryStable dp ca ch'.state :=
+  (registryStable_iff_stateInv dp ca ch'.state).mpr
+    (ContractSpec.stateTransition_preserves_inv ca (registrySpec_preserves dp ca) ch ch' block
+      h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
+
+/-- The headline configured-chain theorem: from an exact-runtime stable
+checkpoint, every state reachable by the configured valid-chain relation is
+still stable. -/
+theorem chainUsing_preserves_registryStable (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    RegistryStable dp ca future.state :=
+  (registryStable_iff_stateInv dp ca future.state).mpr
+    (ContractSpec.chainUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg checkpoint
+      future reach ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable))
+
+theorem chain_preserves_registryStable (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    RegistryStable dp ca future.state :=
+  (registryStable_iff_stateInv dp ca future.state).mpr
+    (ContractSpec.chain_preserves_inv ca (registrySpec_preserves dp ca) checkpoint future reach
+      ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable))
 
 end LidoCircuitBreaker
 
