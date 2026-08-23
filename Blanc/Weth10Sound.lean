@@ -26,8 +26,8 @@ theorem backedSpec_nonpayable_funcSound_of_inv
     (dp : DeployParams) (ca : Adr) (body : Func)
     (h_stor : Func.Inv Devm.getStor Devm.getStor (nonpayable body))
     (h_bal : Func.Inv Devm.getBal Devm.getBal (nonpayable body)) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable body) := by
-  intro sevm s r h_target h_pre _ h_ih run
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable body) := by
+  intro sevm s r h_target h_pre h_ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -123,13 +123,13 @@ theorem mintCaller_storage {fs : List Func} {sevm : Sevm} {s r : Devm}
         balanceKey_ne_flashMintedSlot sevm.caller
     rw [← hs_after, h_set, Stor.get_set_ne _ h_flash_ne _, ← hs_before]
 
-/-- The receive-specific `FuncSound` premise of the generic receive-aware
+/-- The receive-specific `FuncSoundNoMem` premise of the generic receive-aware
 dispatcher theorem.  It is uniform in both deployment parameters and contract
 address: neither affects the concrete receive body. -/
 theorem backedSpec_receiveEther_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux receiveEther := by
-  intro sevm s r h_target h_pre _ _ run
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux receiveEther := by
+  intro sevm s r h_target h_pre _ run
   subst ca
   refine ⟨?_, ?_⟩
   · change sum r.getBal < 2 ^ 256
@@ -149,29 +149,29 @@ theorem backedSpec_receiveEther_funcSound
     exact Stor.Weth10Inv.deposit h_inv h_inc h_flash
 
 theorem backedSpec_deposit_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux deposit :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux deposit :=
   backedSpec_receiveEther_funcSound dp ca
 
 /-! ## State-silent nonpayable selectors -/
 
 theorem backedSpec_name_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable name) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable name) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca name (by func_inv) (by func_inv)
 
 theorem backedSpec_totalSupply_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable totalSupply) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable totalSupply) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca totalSupply (by func_inv) (by func_inv)
 
 theorem backedSpec_permitTypehash_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable permitTypehash) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable permitTypehash) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca permitTypehash (by func_inv) (by func_inv)
 
 theorem backedSpec_decimals_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable decimals) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable decimals) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca decimals (by func_inv) (by func_inv)
 
 theorem backedSpec_domainSeparator_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable (domainSeparator dp)) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca (domainSeparator dp)
     (by
@@ -182,37 +182,37 @@ theorem backedSpec_domainSeparator_funcSound (dp : DeployParams) (ca : Adr) :
       func_inv)
 
 theorem backedSpec_maxFlashLoan_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable maxFlashLoan) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable maxFlashLoan) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca maxFlashLoan
     (by func_inv) (by func_inv)
 
 theorem backedSpec_balanceOf_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable balanceOfEndpoint) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca balanceOfEndpoint
     (by func_inv) (by func_inv)
 
 theorem backedSpec_nonces_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable nonces) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable nonces) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca nonces (by func_inv) (by func_inv)
 
 theorem backedSpec_callbackSuccess_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable callbackSuccess) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca callbackSuccess
     (by func_inv) (by func_inv)
 
 theorem backedSpec_flashMinted_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable flashMinted) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable flashMinted) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca flashMinted
     (by func_inv) (by func_inv)
 
 theorem backedSpec_symbol_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable symbol) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable symbol) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca symbol (by func_inv) (by func_inv)
 
 theorem backedSpec_deploymentChainId_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable (deploymentChainId dp)) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca (deploymentChainId dp)
     (by
@@ -223,7 +223,7 @@ theorem backedSpec_deploymentChainId_funcSound (dp : DeployParams) (ca : Adr) :
       func_inv)
 
 theorem backedSpec_allowance_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux (nonpayable allowance) :=
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux (nonpayable allowance) :=
   backedSpec_nonpayable_funcSound_of_inv dp ca allowance (by func_inv) (by func_inv)
 
 /-! ## Fixed-error view selector -/
@@ -257,9 +257,9 @@ theorem run_flashFee_observations_eq
     exact absurd hrev Func.not_run_revWith
 
 theorem backedSpec_flashFee_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable flashFee) := by
-  intro sevm s r h_target h_pre _ h_ih run
+  intro sevm s r h_target h_pre h_ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -290,19 +290,23 @@ theorem backedSpec_flashFee_funcSound (dp : DeployParams) (ca : Adr) :
 /-! ## Receive-aware dispatcher assembly -/
 
 /-- With receive and the reverting fallback discharged here, the exact WETH10
-runtime has one remaining program-soundness premise: `FuncSound` for every member of its
-27-entry selector list. -/
+runtime has one remaining program-soundness premise: `FuncSoundNoMem` for every
+member of its 27-entry selector list.
+
+`FuncSoundNoMem`, not `FuncSound`: no WETH10 selector reads the machine's
+memory, so none of them is handed `Mem.Wf` at frame entry, and the frame
+theorem below carries no memory premise. -/
 theorem backedSpec_sound_of_funcSound_all
     (dp : DeployParams) (ca : Adr)
     (h_funcs : ∀ p ∈ weth10Funcs dp,
-      (backedSpec weth10 dp).FuncSound ca weth10Aux p.2) :
-    (backedSpec weth10 dp).Sound ca := by
-  refine ContractSpec.sound_of_receive_dispatch
+      (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux p.2) :
+    (backedSpec weth10 dp).SoundNoMem ca := by
+  refine ContractSpec.soundNoMem_of_receive_dispatch
     (k := fallbackSlot) (funcs := weth10Funcs dp) (aux := weth10Aux)
     (fallback := Func.rev) (receive := receiveEther)
     rfl (List.cons_ne_nil _ _) rfl h_funcs ?_
     (backedSpec_receiveEther_funcSound dp ca)
-  intro sevm s r h_target h_pre _ h_ih run
+  intro sevm s r h_target h_pre h_ih run
   exact absurd run not_run_rev
 
 /-- The frame-level soundness result has the same sole remaining selector-family
@@ -310,9 +314,9 @@ premise; all receive-aware dispatcher and ladder plumbing is discharged. -/
 theorem backedSpec_preserves_of_funcSound_all
     (dp : DeployParams) (ca : Adr)
     (h_funcs : ∀ p ∈ weth10Funcs dp,
-      (backedSpec weth10 dp).FuncSound ca weth10Aux p.2) :
-    (backedSpec weth10 dp).Preserves ca :=
-  (backedSpec weth10 dp).preserves_inv ca
+      (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux p.2) :
+    (backedSpec weth10 dp).PreservesNoMem ca :=
+  (backedSpec weth10 dp).preserves_noMem ca
     (backedSpec_sound_of_funcSound_all dp ca h_funcs)
 
 end Weth10

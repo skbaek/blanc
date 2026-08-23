@@ -1411,8 +1411,9 @@ lemma run_preserves_cond (f : Func)
   · apply Func.preserves_nof run cond.nof
   · apply h_solv run cond.solvent
 
-/-- WETH's dispatch targets, in the form `ContractSpec.sound_of_dispatch`
-consumes.  `FuncSound` at `wethSpec` is exactly `Precond → Postcond` across the
+/-- WETH's dispatch targets, in the form
+`ContractSpec.soundNoMem_of_dispatch` consumes.  `FuncSoundNoMem` at
+`wethSpec` is exactly `Precond → Postcond` across the
 target's own run, once the frame's target is known to be the contract — so each
 storage-only target is `run_preserves_cond` at its `*_preserves_solvent` lemma
 and nothing more.  The deeper-frame induction hypothesis is discarded here;
@@ -1423,33 +1424,33 @@ lemma wethSpec_funcSound {wa : Adr} (f : Func)
         Func.Run (weth.main :: weth.aux) sevm s f r →
         Devm.PreSolvent s sevm.currentTarget sevm →
         Devm.PostSolvent r sevm.currentTarget ) :
-    wethSpec.FuncSound wa weth.aux f := by
-  intro sevm s r h_ct h_pre _ _ h_run
+    wethSpec.FuncSoundNoMem wa weth.aux f := by
+  intro sevm s r h_ct h_pre _ h_run
   subst h_ct
   exact wethSpec_post_iff.mpr
     (run_preserves_cond f h_solv h_run (wethSpec_pre_iff.mp h_pre))
 
 /-- `withdraw` sends ETH out, so it re-enters the contract and is the one
-target that consumes `FuncSound`'s deeper-frame induction hypothesis. -/
+target that consumes `FuncSoundNoMem`'s deeper-frame induction hypothesis. -/
 lemma wethSpec_funcSound_withdraw {wa : Adr} :
-    wethSpec.FuncSound wa weth.aux withdraw := by
-  intro sevm s r h_ct h_pre _ ih h_run
+    wethSpec.FuncSoundNoMem wa weth.aux withdraw := by
+  intro sevm s r h_ct h_pre ih h_run
   subst h_ct
   simp only [wethSpec_prog_eq, wethSpec_post_eq] at ih
   refine wethSpec_post_iff.mpr ⟨Func.preserves_nof h_run (wethSpec_pre_iff.mp h_pre).nof, ?_⟩
   exact withdraw_preserves_solvent (wethSpec_pre_iff.mp h_pre) ih h_run
 
-/-- `FuncSound` transports through the shared `nonpayable` wrapper
+/-- `FuncSoundNoMem` transports through the shared `nonpayable` wrapper
 (`Blanc/CommonCore.lean`): a successful run of the guarded endpoint factors
 through the body from an entry state with the same world state
 (`run_body_of_run_nonpayable`, `Blanc/CommonProofs.lean`), and the
 precondition rides across that state equality. -/
 lemma wethSpec_funcSound_nonpayable {wa : Adr} {f : Func}
-    (h : wethSpec.FuncSound wa weth.aux f) :
-    wethSpec.FuncSound wa weth.aux (nonpayable f) := by
-  intro sevm s r h_ct h_pre h_wf ih h_run
-  rcases run_body_of_run_nonpayable_frame h_run with ⟨mid, -, hstate, hmem, hbody⟩
-  exact h h_ct (h_pre.state_eq hstate.symm) (by rw [← hmem]; exact h_wf) ih hbody
+    (h : wethSpec.FuncSoundNoMem wa weth.aux f) :
+    wethSpec.FuncSoundNoMem wa weth.aux (nonpayable f) := by
+  intro sevm s r h_ct h_pre ih h_run
+  rcases run_body_of_run_nonpayable h_run with ⟨mid, -, hstate, hbody⟩
+  exact h h_ct (h_pre.state_eq hstate.symm) ih hbody
 
 
 -- started after a balance transfer from a non-WETH sender
@@ -1458,15 +1459,20 @@ lemma wethSpec_funcSound_nonpayable {wa : Adr} {f : Func}
 -- nonempty code is unchanged by a (sub-)execution
 
 
-/-- WETH's own frame-level obligation — the one input `ContractSpec.preserves_inv`
-cannot supply.  The statement is the original first bullet of
-`weth_preserves_solvent`, unchanged; the proof is now nothing but WETH's eleven
-per-function obligations handed to `ContractSpec.sound_of_dispatch`, which owns
-the shared dispatcher reasoning.  Nothing here names the program's shape: `k`,
-the function list and the aux context are read off `wethSpec.prog` by
-unification, which is why both shape side conditions are `rfl`. -/
-theorem wethSpec_sound (wa : Adr) : wethSpec.Sound wa := by
-  refine ContractSpec.sound_of_dispatch (k := 1) (funcs := wethFuncs)
+/-- WETH's own frame-level obligation — the one input
+`ContractSpec.preserves_noMem` cannot supply.  The statement is the original
+first bullet of `weth_preserves_solvent`, unchanged; the proof is now nothing
+but WETH's eleven per-function obligations handed to
+`ContractSpec.soundNoMem_of_dispatch`, which owns the shared dispatcher
+reasoning.  Nothing here names the program's shape: `k`, the function list and
+the aux context are read off `wethSpec.prog` by unification, which is why both
+shape side conditions are `rfl`.
+
+`SoundNoMem` rather than `Sound`: no WETH target reads the machine's memory,
+so none of them is handed `Mem.Wf` at frame entry, and the frame theorem below
+carries no memory premise. -/
+theorem wethSpec_soundNoMem (wa : Adr) : wethSpec.SoundNoMem wa := by
+  refine ContractSpec.soundNoMem_of_dispatch (k := 1) (funcs := wethFuncs)
     (aux := weth.aux) (fallback := deposit) rfl (List.cons_ne_nil _ _) rfl ?_ ?_
   · intro wf h_mem
     -- Drive the membership unfolding with `List.mem_cons`, never with `decide`:
@@ -1486,18 +1492,28 @@ theorem wethSpec_sound (wa : Adr) : wethSpec.Sound wa := by
     · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound allowance allowance_preserves_solvent)
   · exact wethSpec_funcSound deposit deposit_preserves_solvent
 
+/-- The memory-carrying obligation, for any consumer that wants it: dropping a
+premise WETH never used. -/
+theorem wethSpec_sound (wa : Adr) : wethSpec.Sound wa :=
+  ContractSpec.SoundNoMem.sound (wethSpec_soundNoMem wa)
+
+/-- WETH's frame-level result, with no memory premise. -/
+theorem wethSpec_preservesNoMem (wa : Adr) : wethSpec.PreservesNoMem wa :=
+  wethSpec.preserves_noMem wa (wethSpec_soundNoMem wa)
+
+/-- The memory-carrying form the message-, transaction- and block-level rungs
+consume. -/
 theorem wethSpec_preserves (wa : Adr) : wethSpec.Preserves wa :=
-  wethSpec.preserves_inv wa (wethSpec_sound wa)
+  ContractSpec.PreservesNoMem.preserves (wethSpec_preservesNoMem wa)
 
 theorem weth_preserves_solvent (wa : Adr) :
     ∀ sevm pre post,
       Exec 0 sevm pre (.ok post)  →
       (sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth) →
-      (sevm.currentTarget = wa → Mem.Wf pre.memory) →
       Precond wa sevm pre →
       Postcond wa sevm post := by
-  simpa only [ContractSpec.Preserves, wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq]
-    using wethSpec_preserves wa
+  simpa only [ContractSpec.PreservesNoMem, wethSpec_prog_eq, wethSpec_pre_eq,
+    wethSpec_post_eq] using wethSpec_preservesNoMem wa
 -- Counterpart of `weth_preserves_solvent` for the total executable `exec`.  With
 -- sufficiency proved in Jaune there is no fuel to quantify away: the
 -- hypothesis is a plain equation about the interpreter.
@@ -1505,10 +1521,9 @@ theorem exec_preserves_solvent (wa : Adr)
     (sevm : Sevm) (pre post : Devm)
     (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
-    (h_wf : sevm.currentTarget = wa → Mem.Wf pre.memory)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
   exact wethSpec_post_iff.mp
-    (wethSpec.exec_preserves_inv wa (wethSpec_preserves wa) sevm pre post h_run h_code h_wf
+    (wethSpec.exec_preserves_noMem wa (wethSpec_preservesNoMem wa) sevm pre post h_run h_code
       (wethSpec_pre_iff.mpr h_pc))
 
 /-! ### Bridge to the frame-level invariant

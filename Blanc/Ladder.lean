@@ -3849,6 +3849,60 @@ def Sound (c : ContractSpec) (ca : Adr) : Prop :=
     c.Pre ca sevm pre →
     c.Post ca sevm post
 
+/-- The same obligation for a contract whose targets never consult the memory
+invariant: `Sound` without the `Mem.Wf` premise on the entry state.
+
+This is the *stronger* obligation — it has to hold at an arbitrary entry
+memory — and it is the one a contract that never reads memory should be
+stating, because it is what buys the premise-free frame theorem
+`preserves_noMem`.  `SoundNoMem.sound` weakens it back wherever a `Sound`
+consumer is what is wanted.
+
+The deeper-frame hypothesis is *not* weakened: it stays phrased at `PreWf`,
+because that is what the ladder can deliver, and a re-entrant target consumes
+it at a child frame whose memory is `initDevm`'s. -/
+def SoundNoMem (c : ContractSpec) (ca : Adr) : Prop :=
+  ∀ {sevm pre post},
+    Prog.Run sevm pre c.prog post →
+    sevm.currentTarget = ca →
+    ( ∀ pc' sevm' pre' post',
+        Exec pc' sevm' pre' (.ok post') →
+        sevm'.depth < sevm.depth →
+        Prog.At c.prog ca pc' sevm' pre' →
+        c.PreWf ca sevm' pre' →
+        c.Post ca sevm' post' ) →
+    c.Pre ca sevm pre →
+    c.Post ca sevm post
+
+/-- Dropping a premise the obligation never used. -/
+theorem SoundNoMem.sound {c : ContractSpec} {ca : Adr} (h : c.SoundNoMem ca) :
+    c.Sound ca :=
+  fun h_run h_ca h_ih _ h_pre => h h_run h_ca h_ih h_pre
+
+/-- `Sound` with the memory premise left as a parameter.  `mw := Mem.Wf` is
+`Sound`; `mw := fun _ => True` is `SoundNoMem` with the premise supplied by
+`trivial`.  Only the generic dispatcher plumbing is stated at it, so that
+`sound_of_dispatch` and `soundNoMem_of_dispatch` are one proof rather than
+two; a contract states its own obligation at `Sound` or `SoundNoMem`. -/
+def SoundWith (c : ContractSpec) (ca : Adr) (mw : Mem → Prop) : Prop :=
+  ∀ {sevm pre post},
+    Prog.Run sevm pre c.prog post →
+    sevm.currentTarget = ca →
+    ( ∀ pc' sevm' pre' post',
+        Exec pc' sevm' pre' (.ok post') →
+        sevm'.depth < sevm.depth →
+        Prog.At c.prog ca pc' sevm' pre' →
+        c.PreWf ca sevm' pre' →
+        c.Post ca sevm' post' ) →
+    mw pre.memory →
+    c.Pre ca sevm pre →
+    c.Post ca sevm post
+
+/-- `SoundWith` at the trivial memory premise is `SoundNoMem`. -/
+theorem SoundWith.soundNoMem {c : ContractSpec} {ca : Adr}
+    (h : c.SoundWith ca (fun _ => True)) : c.SoundNoMem ca :=
+  fun h_run h_ca h_ih h_pre => h h_run h_ca h_ih trivial h_pre
+
 /-- What the frame-level ladder delivers, and what every rung above it
 consumes.  `preserves_inv : c.Sound ca → c.Preserves ca`. -/
 def Preserves (c : ContractSpec) (ca : Adr) : Prop :=
@@ -3859,6 +3913,24 @@ def Preserves (c : ContractSpec) (ca : Adr) : Prop :=
     c.Pre ca sevm pre →
     c.Post ca sevm post
 
+/-- What the frame-level ladder delivers for a contract that never reads
+memory: `Preserves` with no memory premise at all, so an arbitrary successful
+execution starting in the contract's frame is covered whatever the machine's
+memory looks like.  `preserves_noMem : c.SoundNoMem ca → c.PreservesNoMem ca`,
+and `PreservesNoMem.preserves` weakens it back for the message-, transaction-
+and block-level rungs, every one of which consumes `c.Preserves ca`. -/
+def PreservesNoMem (c : ContractSpec) (ca : Adr) : Prop :=
+  ∀ sevm pre post,
+    Exec 0 sevm pre (.ok post) →
+    (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
+    c.Pre ca sevm pre →
+    c.Post ca sevm post
+
+/-- Dropping a premise the frame theorem never used. -/
+theorem PreservesNoMem.preserves {c : ContractSpec} {ca : Adr}
+    (h : c.PreservesNoMem ca) : c.Preserves ca :=
+  fun sevm pre post exc h_code _ h_pre => h sevm pre post exc h_code h_pre
+
 /-! ### The frame-level ladder
 
 `lift_inv` (CommonProofs.lean) is already generic in the program and in the two
@@ -3866,17 +3938,48 @@ predicates; what was WETH-specific about `weth_preserves_solvent` was only the
 five obligations fed to it.  Four of those are discharged here once and for
 all, for every contract.  The fifth — that a top-level run of the contract's
 own program takes the precondition to the postcondition — is the contract's
-own work and stays a hypothesis. -/
+own work and stays a hypothesis.
 
-theorem preserves_inv (c : ContractSpec) (ca : Adr) (body : c.Sound ca) :
-    c.Preserves ca := by
-  intro sevm devm exn exc h_code h_wf h_pc
-  apply lift_inv ca c.prog (c.PreWf ca) (c.Post ca)
-  · intro sevm' pre' post' h_run' h_eq' h_ih' h_pre'
-    exact body h_run' h_eq' h_ih' (h_pre'.wf h_eq') h_pre'.pre
+`preserves_lift` does that work once, generic in the frame invariant `σ` that
+`lift_inv` is instantiated at, because two instantiations are wanted:
+`c.PreWf ca` for a contract that reasons about memory, and `c.Pre ca` for one
+that does not.  The four ladder rungs are indifferent to the difference — each
+re-establishes `σ` under `sevm.currentTarget ≠ ca`, where a memory conjunct is
+vacuous, and the one rung that also has to produce `σ` at a *spawned child*
+frame gets `Mem.Wf` outright from `Xinst.some_child_wf`.  So the three
+transport hypotheses below are everything `σ` has to expose, and there is one
+ladder proof rather than one per memory discipline. -/
+
+theorem preserves_lift (c : ContractSpec) (ca : Adr)
+    (σ : Sevm → Devm → Prop)
+    (σ_pre : ∀ {e : Sevm} {d : Devm}, σ e d → c.Pre ca e d)
+    (σ_of_ne : ∀ {e : Sevm} {d : Devm},
+      e.currentTarget ≠ ca → c.Pre ca e d → σ e d)
+    (σ_of_wf : ∀ {e : Sevm} {d : Devm},
+      Mem.Wf d.memory → c.Pre ca e d → σ e d)
+    ( body :
+      ∀ {sevm pre post},
+        Prog.Run sevm pre c.prog post →
+        sevm.currentTarget = ca →
+        ( ∀ pc' sevm' pre' post',
+            Exec pc' sevm' pre' (.ok post') →
+            sevm'.depth < sevm.depth →
+            Prog.At c.prog ca pc' sevm' pre' →
+            σ sevm' pre' →
+            c.Post ca sevm' post' ) →
+        σ sevm pre →
+        c.Post ca sevm post ) :
+    ∀ sevm pre post,
+      Exec 0 sevm pre (.ok post) →
+      (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
+      σ sevm pre →
+      c.Post ca sevm post := by
+  intro sevm devm exn exc h_code h_pc
+  apply lift_inv ca c.prog σ (c.Post ca)
+  · exact body
   · intro pc' sevm' pre' n' inter' h_at' h_run' h_ne' h_pc'
-    refine ⟨?_, fun hc => absurd hc h_ne'⟩
-    replace h_pc' := h_pc'.pre
+    refine σ_of_ne h_ne' ?_
+    replace h_pc' := σ_pre h_pc'
     cases n' with
     | push xs le =>
       simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run'
@@ -3914,17 +4017,44 @@ theorem preserves_inv (c : ContractSpec) (ca : Adr) (body : c.Sound ca) :
         simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
           using h_run'
       obtain ⟨h_child, h_back⟩ :=
-        Xinst.some_preserves_precond (x := x) hx ex_sub' h_ne' h_pc'.pre
-      exact ⟨⟨h_child, fun _ => Xinst.some_child_wf hx⟩,
-        fun h_if => ⟨h_back h_if, fun hc => absurd hc h_ne'⟩⟩
+        Xinst.some_preserves_precond (x := x) hx ex_sub' h_ne' (σ_pre h_pc')
+      exact ⟨σ_of_wf (Xinst.some_child_wf hx) h_child,
+        fun h_if => σ_of_ne h_ne' (h_back h_if)⟩
   · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' h_pc'
-    exact ⟨Pre.state_eq h_pc'.pre (Jinst.preserves_state h_run'),
-      fun hc => absurd hc h_ne'⟩
+    exact σ_of_ne h_ne'
+      (Pre.state_eq (σ_pre h_pc') (Jinst.preserves_state h_run'))
   · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' h_pc'
-    exact Linst.inv_postcond h_run' h_ne' h_pc'.pre
+    exact Linst.inv_postcond h_run' h_ne' (σ_pre h_pc')
   · exact exc
-  · exact ⟨h_pc.1, λ h => ⟨h_code h, rfl⟩⟩
-  · exact ⟨h_pc, h_wf⟩
+  · exact ⟨(σ_pre h_pc).1, λ h => ⟨h_code h, rfl⟩⟩
+  · exact h_pc
+
+/-- The memory-carrying frame-level ladder: `lift_inv` at `σ := c.PreWf ca`,
+which is what a contract obligation that reasons about memory needs. -/
+theorem preserves_inv (c : ContractSpec) (ca : Adr) (body : c.Sound ca) :
+    c.Preserves ca := by
+  intro sevm devm exn exc h_code h_wf h_pc
+  refine preserves_lift c ca (c.PreWf ca) (fun h => h.pre)
+    (fun h_ne h => ⟨h, fun hc => absurd hc h_ne⟩)
+    (fun h_wf' h => ⟨h, fun _ => h_wf'⟩) ?_ sevm devm exn exc h_code ⟨h_pc, h_wf⟩
+  intro sevm' pre' post' h_run' h_eq' h_ih' h_pre'
+  exact body h_run' h_eq' h_ih' (h_pre'.wf h_eq') h_pre'.pre
+
+/-- The premise-free frame-level ladder: the same `lift_inv` plumbing at
+`σ := c.Pre ca`, so no memory premise is manufactured anywhere and none
+reaches the frame theorem.  The obligation's deeper-frame hypothesis is still
+phrased at `PreWf`, which is strictly less than what this instantiation
+delivers, so it is weakened on the way in. -/
+theorem preserves_noMem (c : ContractSpec) (ca : Adr) (body : c.SoundNoMem ca) :
+    c.PreservesNoMem ca := by
+  intro sevm devm exn exc h_code h_pc
+  refine preserves_lift c ca (c.Pre ca) (fun h => h) (fun _ h => h)
+    (fun _ h => h) ?_ sevm devm exn exc h_code h_pc
+  intro sevm' pre' post' h_run' h_eq' h_ih' h_pre'
+  exact body h_run' h_eq'
+    (fun pc'' sevm'' pre'' post'' hex hd hat hpw =>
+      h_ih' pc'' sevm'' pre'' post'' hex hd hat hpw.pre)
+    h_pre'
 
 /-- The `exec` counterpart: with sufficiency proved in Jaune there is no fuel
 to quantify away, so the hypothesis is a plain equation about the interpreter. -/
@@ -3937,6 +4067,16 @@ theorem exec_preserves_inv (c : ContractSpec) (ca : Adr) (hp : c.Preserves ca)
   obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
   exact hp sevm pre post exc h_code h_wf h_pc
 
+/-- The `exec` counterpart of `PreservesNoMem`, with no memory premise. -/
+theorem exec_preserves_noMem (c : ContractSpec) (ca : Adr)
+    (hp : c.PreservesNoMem ca)
+    (sevm : Sevm) (pre post : Devm)
+    (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
+    (h_code : sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog)
+    (h_pc : c.Pre ca sevm pre) : c.Post ca sevm post := by
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
+  exact hp sevm pre post exc h_code h_pc
+
 
 /-! ### The dispatcher decomposition of `Sound`
 
@@ -3944,12 +4084,19 @@ The plain Blanc dispatch protocol has program shape
 `⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩`; receive-aware contracts
 put one empty-calldata branch in front of that same dispatcher.  The reasoning
 that carries a run from `fsig` down to one of its dispatch targets is shared in
-full by `post_of_run_dispatch`.  `sound_of_dispatch` absorbs the plain
+full by `post_of_run_dispatch_with`.  `sound_of_dispatch_with` absorbs the plain
 `Prog.Run`/`call 0` unwrap and `fsig` prefix, while
-`sound_of_receive_dispatch` also absorbs the receive split.  Both reuse
-`dispatchWith_inv`'s two scratch-line side conditions and its tree-shaped
-membership obligation, and leave a contract with one `FuncSound` obligation per
+`sound_of_receive_dispatch_with` also absorbs the receive split.  All three
+reuse `dispatchWith_inv`'s two scratch-line side conditions and its tree-shaped
+membership obligation, and leave a contract with one per-target obligation per
 entry of its own function *list*, plus one for the fallback at index `k`.
+
+All three are generic in the memory premise `mw`, which the dispatch walk
+transports along line and pop steps but never inspects.  `sound_of_dispatch`
+and `sound_of_receive_dispatch` are the `Mem.Wf` instances — `FuncSound` in,
+`Sound` out — and `soundNoMem_of_dispatch` and `soundNoMem_of_receive_dispatch`
+are the trivial ones — `FuncSoundNoMem` in, `SoundNoMem` out, which is the
+route to a frame theorem with no memory premise.
 
 Two notes on the hypotheses, both results rather than bookkeeping:
 
@@ -4003,8 +4150,10 @@ across an intervening walk for free: a wrapper that *writes* memory (WETH10's
 allowance spending writes two scratch words and hashes them) has to
 re-establish it through `Mem.Wf.write`/`.extend` before it can hand it on.  A
 family of targets that never reads the invariant should not have to pay for
-that transport, so it states its obligations here and promotes them with
-`FuncSoundNoMem.funcSound` at the dispatcher.
+that transport, and — more to the point — a contract all of whose targets are
+stated here assembles to `SoundNoMem`, hence to the premise-free frame theorem
+`PreservesNoMem`.  This is the stronger of the two obligations: it has to hold
+at an arbitrary entry memory.
 
 The deeper-frame hypothesis is *not* weakened: it stays phrased at `PreWf`,
 because that is what the ladder can deliver, and a re-entrant target consumes
@@ -4017,26 +4166,56 @@ def FuncSoundNoMem (c : ContractSpec) (ca : Adr) (aux : List Func) (f : Func) : 
     Func.Run (c.prog.main :: aux) sevm s f r →
     c.Post ca sevm r
 
+/-- Dropping a premise the obligation never used.  `funcSound_of_core` is the
+in-tree consumer: a storage-only target's obligation is established at
+`FuncSoundNoMem`, where it belongs, and weakened here for callers (Lido's
+storage-silent leaves) that want the memory-carrying form. -/
 theorem FuncSoundNoMem.funcSound {c : ContractSpec} {ca : Adr}
     {aux : List Func} {f : Func} (h : c.FuncSoundNoMem ca aux f) :
     c.FuncSound ca aux f :=
+  fun h_ct h_pre _ h_ih h_run => h h_ct h_pre h_ih h_run
+
+/-- `FuncSound` with the memory premise left as a parameter; the per-target
+counterpart of `SoundWith`, and the form the generic dispatcher plumbing
+consumes so that the memory-carrying and premise-free dispatch theorems share
+a single proof. -/
+def FuncSoundWith (c : ContractSpec) (ca : Adr) (aux : List Func)
+    (mw : Mem → Prop) (f : Func) : Prop :=
+  ∀ {sevm : Sevm} {s r : Devm},
+    sevm.currentTarget = ca →
+    c.Pre ca sevm s →
+    mw s.memory →
+    Exec.InvDepth sevm.depth ca c.prog (c.PreWf ca) (c.Post ca) →
+    Func.Run (c.prog.main :: aux) sevm s f r →
+    c.Post ca sevm r
+
+/-- A target that never reads memory meets the parameterised obligation at
+*every* memory premise, the trivial one included. -/
+theorem FuncSoundNoMem.funcSoundWith {c : ContractSpec} {ca : Adr}
+    {aux : List Func} {mw : Mem → Prop} {f : Func}
+    (h : c.FuncSoundNoMem ca aux f) : c.FuncSoundWith ca aux mw f :=
   fun h_ct h_pre _ h_ih h_run => h h_ct h_pre h_ih h_run
 
 /-- The contract-neutral core of dispatcher soundness.  Starting immediately
 after `fsig`, a successful walk through a generated dispatch tree reaches
 either its indexed fallback or one of the listed targets.  Keeping this as a
 run-level theorem lets alternate public ingress shapes (notably a payable
-empty-calldata receive branch) share the exact selector/fallback proof. -/
-theorem post_of_run_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+empty-calldata receive branch) share the exact selector/fallback proof.
+
+Generic in the memory premise `mw`: the walk only ever *transports* it along
+line and pop steps, never inspects it, so the memory-carrying and premise-free
+dispatch theorems are this one proof at two instantiations. -/
+theorem post_of_run_dispatch_with {c : ContractSpec} {ca : Adr} {k : Nat}
     {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
+    {mw : Mem → Prop}
     (h_ne : funcs ≠ [])
     (h_fb : (c.prog.main :: aux)[k]? = some fallback)
-    (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
-    (h_fall : FuncSound c ca aux fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSoundWith c ca aux mw p.2)
+    (h_fall : FuncSoundWith c ca aux mw fallback)
     {sevm : Sevm} {s r : Devm}
     (h_ca : sevm.currentTarget = ca)
     (h_pre : c.Pre ca sevm s)
-    (h_wf : Mem.Wf s.memory)
+    (h_wf : mw s.memory)
     (h_ih : Exec.InvDepth sevm.depth ca c.prog (c.PreWf ca) (c.Post ca))
     (h_run :
       Func.Run (c.prog.main :: aux) sevm s
@@ -4048,7 +4227,7 @@ theorem post_of_run_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
         ( fun e s =>
             e.currentTarget = ca ∧
             c.Pre ca e s ∧
-            Mem.Wf s.memory ∧
+            mw s.memory ∧
             Exec.InvDepth e.depth ca c.prog (c.PreWf ca) (c.Post ca) )
         (fun e r => c.Post ca e r)
         ?_ ?_ h_fb ?_ (DispatchTree.ofSorted funcs) ?_
@@ -4075,17 +4254,37 @@ theorem post_of_run_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
     exact h_funcs wf (DispatchTree.mem_of_mem_ofSorted h_ne h_mem)
       h_ct hp hmw hih hrun
 
-/-- `Sound` for a dispatcher-shaped program, reduced to one `FuncSound` per
-dispatch target plus one for the fallback.  `h_fb` locates the fallback at the
-index the generated `Func.call k` uses; at a concrete contract it is `rfl`. -/
-theorem sound_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+/-- The memory-carrying instance of `post_of_run_dispatch_with`. -/
+theorem post_of_run_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
     {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
-    (h_shape : c.prog = ⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩)
     (h_ne : funcs ≠ [])
     (h_fb : (c.prog.main :: aux)[k]? = some fallback)
     (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
-    (h_fall : FuncSound c ca aux fallback) :
-    c.Sound ca := by
+    (h_fall : FuncSound c ca aux fallback)
+    {sevm : Sevm} {s r : Devm}
+    (h_ca : sevm.currentTarget = ca)
+    (h_pre : c.Pre ca sevm s)
+    (h_wf : Mem.Wf s.memory)
+    (h_ih : Exec.InvDepth sevm.depth ca c.prog (c.PreWf ca) (c.Post ca))
+    (h_run :
+      Func.Run (c.prog.main :: aux) sevm s
+        (dispatchWith k (DispatchTree.ofSorted funcs)) r) :
+    c.Post ca sevm r :=
+  post_of_run_dispatch_with (mw := Mem.Wf) h_ne h_fb (fun p hp => h_funcs p hp)
+    h_fall h_ca h_pre h_wf h_ih h_run
+
+/-- `SoundWith` for a dispatcher-shaped program, reduced to one per-target
+obligation plus one for the fallback.  `h_fb` locates the fallback at the
+index the generated `Func.call k` uses; at a concrete contract it is `rfl`. -/
+theorem sound_of_dispatch_with {c : ContractSpec} {ca : Adr} {k : Nat}
+    {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
+    {mw : Mem → Prop}
+    (h_shape : c.prog = ⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSoundWith c ca aux mw p.2)
+    (h_fall : FuncSoundWith c ca aux mw fallback) :
+    c.SoundWith ca mw := by
   have h_aux : c.prog.aux = aux := by rw [h_shape]
   have h_main : c.prog.main = Func.mainWith k (DispatchTree.ofSorted funcs) := by rw [h_shape]
   have h_fs : Func.mainWith k (DispatchTree.ofSorted funcs) :: aux = c.prog.main :: aux := by
@@ -4109,7 +4308,7 @@ theorem sound_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
   rename Devm => s₀
   cases h_eq
   have h_pre₀ : c.Pre ca sevm s₀ := h_pre.state_eq burn.state.symm
-  have h_wf₀ : Mem.Wf s₀.memory := by rw [← burn.memory]; exact h_wf
+  have h_wf₀ : mw s₀.memory := by rw [← burn.memory]; exact h_wf
   clear h_pre h_wf burn pre
   rw [h_main] at run
   -- run off the `fsig` prefix of `Func.mainWith`
@@ -4120,29 +4319,59 @@ theorem sound_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
       (congrFun (Line.of_inv Devm.getCode (by line_inv) h₁).symm ca)
       (Line.of_inv Devm.getBal (by line_inv) h₁).symm
       (congrFun (Line.of_inv Devm.getStor (by line_inv) h₁).symm ca)
-  have h_wf₁ : Mem.Wf s₁.memory := by
+  have h_wf₁ : mw s₁.memory := by
     rw [← Line.of_inv Devm.memory (by line_inv) h₁]; exact h_wf₀
   clear h_pre₀ h_wf₀ h₁ run s₀
   rw [h_fs] at run₁
-  exact post_of_run_dispatch h_ne h_fb h_funcs h_fall h_ca h_pre₁ h_wf₁ ih' run₁
+  exact post_of_run_dispatch_with h_ne h_fb h_funcs h_fall h_ca h_pre₁ h_wf₁ ih' run₁
 
-/-- `Sound` for the receive-aware public ingress used by wrapped-native-token
-contracts.  Empty calldata takes `receive`; nonempty calldata runs the same
-`fsig`/generated-dispatch protocol as `sound_of_dispatch`.  Successful receive,
-fallback, and selector walks are reduced uniformly to `FuncSound`. -/
-theorem sound_of_receive_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+/-- `Sound` for a dispatcher-shaped program, reduced to one `FuncSound` per
+dispatch target plus one for the fallback. -/
+theorem sound_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+    {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
+    (h_shape : c.prog = ⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
+    (h_fall : FuncSound c ca aux fallback) :
+    c.Sound ca :=
+  sound_of_dispatch_with (mw := Mem.Wf) h_shape h_ne h_fb
+    (fun p hp => h_funcs p hp) h_fall
+
+/-- `SoundNoMem` for a dispatcher-shaped program, reduced to one
+`FuncSoundNoMem` per dispatch target plus one for the fallback.  This is the
+route to the premise-free frame theorem. -/
+theorem soundNoMem_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+    {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
+    (h_shape : c.prog = ⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSoundNoMem c ca aux p.2)
+    (h_fall : FuncSoundNoMem c ca aux fallback) :
+    c.SoundNoMem ca :=
+  SoundWith.soundNoMem
+    (sound_of_dispatch_with (mw := fun _ => True) h_shape h_ne h_fb
+      (fun p hp => FuncSoundNoMem.funcSoundWith (mw := fun _ => True) (h_funcs p hp))
+      (FuncSoundNoMem.funcSoundWith (mw := fun _ => True) h_fall))
+
+/-- `SoundWith` for the receive-aware public ingress used by
+wrapped-native-token contracts.  Empty calldata takes `receive`; nonempty
+calldata runs the same `fsig`/generated-dispatch protocol as
+`sound_of_dispatch_with`.  Successful receive, fallback, and selector walks are
+reduced uniformly to the per-target obligation. -/
+theorem sound_of_receive_dispatch_with {c : ContractSpec} {ca : Adr} {k : Nat}
     {funcs : List (B256 × Func)} {aux : List Func}
-    {fallback receive : Func}
+    {fallback receive : Func} {mw : Mem → Prop}
     (h_shape : c.prog =
       ⟨Ninst.calldatasize ::: Ninst.iszero :::
         (receive <?>
           (fsig +++ dispatchWith k (DispatchTree.ofSorted funcs))), aux⟩)
     (h_ne : funcs ≠ [])
     (h_fb : (c.prog.main :: aux)[k]? = some fallback)
-    (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
-    (h_fall : FuncSound c ca aux fallback)
-    (h_receive : FuncSound c ca aux receive) :
-    c.Sound ca := by
+    (h_funcs : ∀ p ∈ funcs, FuncSoundWith c ca aux mw p.2)
+    (h_fall : FuncSoundWith c ca aux mw fallback)
+    (h_receive : FuncSoundWith c ca aux mw receive) :
+    c.SoundWith ca mw := by
   have h_aux : c.prog.aux = aux := by rw [h_shape]
   have h_main : c.prog.main =
       Ninst.calldatasize ::: Ninst.iszero :::
@@ -4171,7 +4400,7 @@ theorem sound_of_receive_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
   rename Devm => s₀
   cases h_eq
   have h_pre₀ : c.Pre ca sevm s₀ := h_pre.state_eq burn.state.symm
-  have h_wf₀ : Mem.Wf s₀.memory := by rw [← burn.memory]; exact h_wf
+  have h_wf₀ : mw s₀.memory := by rw [← burn.memory]; exact h_wf
   clear h_pre h_wf burn pre
   rw [h_main] at run
   refine run_prepend_elim _ [Ninst.calldatasize, Ninst.iszero] ?_ run
@@ -4181,7 +4410,7 @@ theorem sound_of_receive_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
       (congrFun (Line.of_inv Devm.getCode (by line_inv) h₁).symm ca)
       (Line.of_inv Devm.getBal (by line_inv) h₁).symm
       (congrFun (Line.of_inv Devm.getStor (by line_inv) h₁).symm ca)
-  have h_wf₁ : Mem.Wf s₁.memory := by
+  have h_wf₁ : mw s₁.memory := by
     rw [← Line.of_inv Devm.memory (by line_inv) h₁]; exact h_wf₀
   clear h_pre₀ h_wf₀ h₁ run s₀
   rcases of_run_branch run₁ with
@@ -4195,16 +4424,55 @@ theorem sound_of_receive_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
         (congrFun (Line.of_inv Devm.getCode (by line_inv) h_fsig).symm ca)
         (Line.of_inv Devm.getBal (by line_inv) h_fsig).symm
         (congrFun (Line.of_inv Devm.getStor (by line_inv) h_fsig).symm ca)
-    have h_wf₃ : Mem.Wf s₃.memory := by
+    have h_wf₃ : mw s₃.memory := by
       rw [← Line.of_inv Devm.memory (by line_inv) h_fsig, ← h_pop.memory]
       exact h_wf₁
-    exact post_of_run_dispatch h_ne h_fb h_funcs h_fall
+    exact post_of_run_dispatch_with h_ne h_fb h_funcs h_fall
       h_ca h_pre₃ h_wf₃ ih' h_dispatch'
   · rw [h_ctx] at h_receive_run
     refine h_receive h_ca
       (h_pre₁.state_eq (h_burn.state.symm.trans h_pop.state.symm))
       ?_ ih' h_receive_run
     rw [← h_burn.memory, ← h_pop.memory]; exact h_wf₁
+
+/-- `Sound` for the receive-aware public ingress, at `FuncSound`. -/
+theorem sound_of_receive_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+    {funcs : List (B256 × Func)} {aux : List Func}
+    {fallback receive : Func}
+    (h_shape : c.prog =
+      ⟨Ninst.calldatasize ::: Ninst.iszero :::
+        (receive <?>
+          (fsig +++ dispatchWith k (DispatchTree.ofSorted funcs))), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
+    (h_fall : FuncSound c ca aux fallback)
+    (h_receive : FuncSound c ca aux receive) :
+    c.Sound ca :=
+  sound_of_receive_dispatch_with (mw := Mem.Wf) h_shape h_ne h_fb
+    (fun p hp => h_funcs p hp) h_fall h_receive
+
+/-- `SoundNoMem` for the receive-aware public ingress, at `FuncSoundNoMem`:
+the route to the premise-free frame theorem for a receive-aware contract whose
+targets never read memory. -/
+theorem soundNoMem_of_receive_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+    {funcs : List (B256 × Func)} {aux : List Func}
+    {fallback receive : Func}
+    (h_shape : c.prog =
+      ⟨Ninst.calldatasize ::: Ninst.iszero :::
+        (receive <?>
+          (fsig +++ dispatchWith k (DispatchTree.ofSorted funcs))), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSoundNoMem c ca aux p.2)
+    (h_fall : FuncSoundNoMem c ca aux fallback)
+    (h_receive : FuncSoundNoMem c ca aux receive) :
+    c.SoundNoMem ca :=
+  SoundWith.soundNoMem
+    (sound_of_receive_dispatch_with (mw := fun _ => True) h_shape h_ne h_fb
+      (fun p hp => FuncSoundNoMem.funcSoundWith (mw := fun _ => True) (h_funcs p hp))
+      (FuncSoundNoMem.funcSoundWith (mw := fun _ => True) h_fall)
+      (FuncSoundNoMem.funcSoundWith (mw := fun _ => True) h_receive))
 
 
 
@@ -4443,8 +4711,9 @@ end ContractSpec
 invariant of *any* dispatcher-shaped program all of whose targets satisfy
 `FuncSound` is preserved by arbitrary executions — `sound_of_dispatch`
 composed with `preserves_inv`, named so the quantified claim is a theorem
-rather than a proof pattern.  `Blanc/Conserved.lean`'s `fmintSpec_preserves`
-is its instantiation.
+rather than a proof pattern.  `preservesNoMem_of_dispatch` beside it is the
+premise-free form, for a program none of whose targets reads memory; that is
+the one `Blanc/Conserved.lean`'s `fmintSpec_preservesNoMem` instantiates.
 
 **Context stability** is the rest of the section.  `FuncSound` cannot be
 weakened across a program extension directly — `Pre`'s `code` field pins
@@ -4595,6 +4864,20 @@ theorem preserves_of_dispatch {c : ContractSpec} {ca : Adr}
     c.Preserves ca :=
   c.preserves_inv ca (sound_of_dispatch h_shape h_ne h_fb h_funcs h_fall)
 
+/-- The premise-free counterpart of `preserves_of_dispatch`: with every target
+stated at `FuncSoundNoMem`, the frame theorem carries no memory premise at
+all.  `PreservesNoMem.preserves` recovers `preserves_of_dispatch`'s conclusion
+for the rungs above. -/
+theorem preservesNoMem_of_dispatch {c : ContractSpec} {ca : Adr}
+    {k : Nat} {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
+    (h_shape : c.prog = ⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, c.FuncSoundNoMem ca aux p.2)
+    (h_fall : c.FuncSoundNoMem ca aux fallback) :
+    c.PreservesNoMem ca :=
+  c.preserves_noMem ca (soundNoMem_of_dispatch h_shape h_ne h_fb h_funcs h_fall)
+
 /-- The receive-aware counterpart of `preserves_of_dispatch`.  It adds exactly
 one contract obligation: `FuncSound` for the empty-calldata receive target. -/
 theorem preserves_of_receive_dispatch {c : ContractSpec} {ca : Adr}
@@ -4615,18 +4898,29 @@ theorem preserves_of_receive_dispatch {c : ContractSpec} {ca : Adr}
 
 /-- A storage-only invariant's per-target obligation is exactly its
 program-free core: for a spec whose `Side` is trivial and whose `Inv`
-ignores the callvalue and balance arguments, `FuncSound` follows from
+ignores the callvalue and balance arguments, `FuncSoundNoMem` follows from
 `Func.Core` alone.  This is how a transported core re-enters the extended
-contract's obligations without a re-walk. -/
+contract's obligations without a re-walk.  It lands at `FuncSoundNoMem`
+because a program-free core cannot read memory: nothing here needs the
+entry-memory premise, so nothing here should charge for it. -/
+theorem funcSoundNoMem_of_core {c : ContractSpec} {ca : Adr}
+    {aux : List Func} {f : Func}
+    (h_side : ∀ bal, c.Side bal)
+    (h_stor : ∀ {s : Stor} {v b v' b' : B256}, c.Inv s v b → c.Inv s v' b')
+    (h_core : Func.Core (c.prog.main :: aux) (fun st => c.Inv st 0 0) f) :
+    c.FuncSoundNoMem ca aux f := by
+  intro sevm s r h_ct h_pre _ h_run
+  subst h_ct
+  exact ⟨h_side _, h_stor (h_core h_run (h_stor (h_pre.inv.1 rfl)))⟩
+
+/-- `funcSoundNoMem_of_core` weakened to the memory-carrying obligation. -/
 theorem funcSound_of_core {c : ContractSpec} {ca : Adr}
     {aux : List Func} {f : Func}
     (h_side : ∀ bal, c.Side bal)
     (h_stor : ∀ {s : Stor} {v b v' b' : B256}, c.Inv s v b → c.Inv s v' b')
     (h_core : Func.Core (c.prog.main :: aux) (fun st => c.Inv st 0 0) f) :
-    c.FuncSound ca aux f := by
-  intro sevm s r h_ct h_pre _ _ h_run
-  subst h_ct
-  exact ⟨h_side _, h_stor (h_core h_run (h_stor (h_pre.inv.1 rfl)))⟩
+    c.FuncSound ca aux f :=
+  FuncSoundNoMem.funcSound (funcSoundNoMem_of_core h_side h_stor h_core)
 
 end ContractSpec
 

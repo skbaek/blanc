@@ -732,9 +732,9 @@ theorem approvePrefix_storage_silent {sevm : Sevm}
 
 /-- The exact nonpayable `approve` selector preserves WETH10 backing. -/
 theorem backedSpec_approve_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable approve) := by
-  intro sevm s r h_target h_pre _ h_ih run
+  intro sevm s r h_target h_pre h_ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -852,8 +852,8 @@ theorem depositTo_storage {fs : List Func} {sevm : Sevm}
 /-- The exact payable `depositTo` selector preserves WETH10 backing for both
 canonical and dirty address words; the runtime normalizes both to low 160 bits. -/
 theorem backedSpec_depositTo_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux depositTo := by
-  intro sevm s r h_target h_pre _ h_ih run
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux depositTo := by
+  intro sevm s r h_target h_pre h_ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -1350,7 +1350,7 @@ theorem backedPre_of_withdraw_transfer (dp : DeployParams)
 /-- A zero-length value `CALL` made after a synchronized token debit restores
 the ordinary WETH10 postcondition.  The child may be a precompile, delegated
 code, arbitrary bytecode, or a reentrant WETH10 frame; the last case is exactly
-where `FuncSound`'s deeper-frame hypothesis is consumed. -/
+where `FuncSoundNoMem`'s deeper-frame hypothesis is consumed. -/
 theorem backedPost_of_value_call
     (dp : DeployParams) (ca : Adr)
     {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
@@ -1997,9 +1997,9 @@ theorem backedPost_of_transferZero (dp : DeployParams) (ca : Adr)
 accepted value-call result supplies the ETH cover premise, while the exact
 token debit and unchanged flash counter supply the storage premises. -/
 theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable withdraw) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -2162,9 +2162,9 @@ Raw zero takes the ETH-withdrawal branch; every nonzero ABI word takes the
 normalized token-credit branch, including dirty words whose low 160 bits are
 zero. -/
 theorem backedSpec_transfer_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable transfer) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   subst ca
   obtain ⟨mid, h_value, h_state_mid, h_body⟩ :=
     run_body_of_run_nonpayable run
@@ -2233,9 +2233,9 @@ theorem backedSpec_transfer_funcSound (dp : DeployParams) (ca : Adr) :
 /-- The exact nonpayable `withdrawTo` selector preserves WETH10 backing for
 arbitrary canonical or dirty target words. -/
 theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable withdrawTo) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -2752,9 +2752,9 @@ theorem backedPost_of_transferFromCore (dp : DeployParams) (ca : Adr)
 /-- The exact nonpayable `transferFrom` selector preserves WETH10 backing,
 including its self/infinite/finite allowance paths. -/
 theorem backedSpec_transferFrom_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable transferFrom) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   subst ca
   obtain ⟨mid, h_value, h_state_mid, h_body⟩ :=
     run_body_of_run_nonpayable run
@@ -2943,9 +2943,9 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
 /-- The exact nonpayable `withdrawFrom` selector preserves WETH10 backing,
 including its self/infinite/finite allowance paths and dirty target words. -/
 theorem backedSpec_withdrawFrom_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable withdrawFrom) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   subst ca
   obtain ⟨mid, h_value, h_state_mid, h_body⟩ :=
     run_body_of_run_nonpayable run
@@ -3355,8 +3355,8 @@ The mint prefix establishes backing before the arbitrary zero-value callback;
 the fixed Boolean decoder is world-state silent on every successful path. -/
 theorem backedSpec_depositToAndCall_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux depositToAndCall := by
-  intro sevm s r h_target h_pre _ ih run
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux depositToAndCall := by
+  intro sevm s r h_target h_pre ih run
   subst ca
   simp only [depositToAndCall] at run
   rcases of_run_prepend mintToPrefix _ run with
@@ -3393,9 +3393,9 @@ Its tagged allowance write is invariant-silent before the arbitrary zero-value
 callback. -/
 theorem backedSpec_approveAndCall_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable approveAndCall) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   subst ca
   obtain ⟨mid, h_value, h_state_mid, h_body⟩ :=
     run_body_of_run_nonpayable run
@@ -3437,9 +3437,9 @@ Both runtime transfer branches establish backing before entering the arbitrary
 zero-value Boolean callback. -/
 theorem backedSpec_transferAndCall_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable transferAndCall) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   subst ca
   obtain ⟨mid, h_value, h_state_mid, h_body⟩ :=
     run_body_of_run_nonpayable run
@@ -3585,7 +3585,8 @@ def FlashStable (dp : DeployParams) (f : Func) : Prop :=
     (Devm.getStor r sevm.currentTarget).get flashMintedSlot =
       (Devm.getStor s sevm.currentTarget).get flashMintedSlot
 
-/-- A flash-stable body satisfies every flash-floor `FuncSound` obligation. -/
+/-- A flash-stable body satisfies every flash-floor `FuncSoundNoMem`
+obligation. -/
 theorem flashFloor_funcSound_of_stable
     (dp : DeployParams) (floor : B256) (ca : Adr) {f : Func}
     (hstable : FlashStable dp f) :
@@ -6894,7 +6895,8 @@ theorem of_run_flashLoanFromCall
 
 /-! ### Relational flash-floor dispatch
 
-A fixed-floor `FuncSound` induction hypothesis cannot be instantiated at the
+A fixed-floor `FuncSoundNoMem` induction hypothesis cannot be instantiated at
+the
 larger counter created immediately before a flash callback.  The relation
 below quantifies the floor outside `Pre`/`Post`; a successful subexecution can
 therefore be reused at the counter actually present at that subexecution's
@@ -7488,7 +7490,7 @@ theorem flashExactRel_of_value_call
 /-- An arbitrary successful `STATICCALL` from a zero-value WETH10 frame
 preserves the frozen backing invariant.  A failed call retains the parent
 world; an entered call is discharged by ordinary child-frame settlement and
-the recursive `FuncSound` hypothesis. -/
+the recursive `FuncSoundNoMem` hypothesis. -/
 theorem backedPost_of_static_call
     (dp : DeployParams) (ca : Adr)
     {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256}
@@ -9156,9 +9158,9 @@ theorem permit_exactRelFuncSound
 invariant, including arbitrary delegated/static recovery subtrees. -/
 theorem backedSpec_permit_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable (permit dp)) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   rcases run_body_of_run_nonpayable run with
     ⟨mid, h_value, h_state, hrun⟩
   have hpreMid : (backedSpec weth10 dp).Pre ca sevm mid :=
@@ -10467,9 +10469,9 @@ theorem backedPost_of_flashSettle
 invariant. -/
 theorem backedSpec_flashLoan_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable flashLoan) := by
-  intro sevm s r h_target h_pre _ ih run
+  intro sevm s r h_target h_pre ih run
   subst ca
   obtain ⟨mid, h_value, h_state_mid, h_body⟩ :=
     run_body_of_run_nonpayable run
@@ -10497,7 +10499,7 @@ invariant. -/
 theorem weth10Funcs_backed_funcSound
     (dp : DeployParams) (ca : Adr) :
     ∀ p ∈ weth10Funcs dp,
-      (backedSpec weth10 dp).FuncSound ca weth10Aux p.2 := by
+      (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux p.2 := by
   intro p hp
   simp only [weth10Funcs, List.mem_cons] at hp
   rcases hp with
@@ -10534,18 +10536,33 @@ theorem weth10Funcs_backed_funcSound
   · simp at hnil
 
 /-- Premise-free receive-aware soundness of the compiled Blanc WETH10 program
-for the frozen backing invariant. -/
-theorem backedSpec_sound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).Sound ca :=
+for the frozen backing invariant.  Premise-free in both senses: no unproved
+selector obligation is left over, and the obligation itself carries no memory
+premise. -/
+theorem backedSpec_soundNoMem (dp : DeployParams) (ca : Adr) :
+    (backedSpec weth10 dp).SoundNoMem ca :=
   backedSpec_sound_of_funcSound_all dp ca
     (weth10Funcs_backed_funcSound dp ca)
 
+/-- The memory-carrying obligation, for any consumer that wants it: dropping a
+premise WETH10 never used. -/
+theorem backedSpec_sound (dp : DeployParams) (ca : Adr) :
+    (backedSpec weth10 dp).Sound ca :=
+  ContractSpec.SoundNoMem.sound (backedSpec_soundNoMem dp ca)
+
 /-- Every successful WETH10 subexecution preserves the frozen backing
-invariant, at arbitrary depth and through receive dispatch. -/
-theorem backedSpec_preserves (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).Preserves ca :=
+invariant, at arbitrary depth and through receive dispatch — whatever the
+machine's memory holds on entry. -/
+theorem backedSpec_preservesNoMem (dp : DeployParams) (ca : Adr) :
+    (backedSpec weth10 dp).PreservesNoMem ca :=
   backedSpec_preserves_of_funcSound_all dp ca
     (weth10Funcs_backed_funcSound dp ca)
+
+/-- The memory-carrying form the message-, transaction- and block-level rungs
+consume. -/
+theorem backedSpec_preserves (dp : DeployParams) (ca : Adr) :
+    (backedSpec weth10 dp).Preserves ca :=
+  ContractSpec.PreservesNoMem.preserves (backedSpec_preservesNoMem dp ca)
 
 end Weth10
 

@@ -20,13 +20,15 @@
 -- (`~/plans/fmint-conserved.md`) is complete: the `Stor.Conserved` algebra —
 -- the two invisibility lemmas, `Stor.Silent`, the four preservation
 -- combinators and the `balance ≤ supply` bound corollary — the `fmintSpec`
--- bridges, all twelve `FuncSound` obligations plus the reverting fallback, and
--- the assembly through `ContractSpec.sound_of_dispatch` and
--- `ContractSpec.preserves_inv`.  `fmint_preserves_conserved` and
+-- bridges, all twelve `FuncSoundNoMem` obligations plus the reverting fallback,
+-- and
+-- the assembly through `ContractSpec.soundNoMem_of_dispatch` and
+-- `ContractSpec.preserves_noMem`.  `fmint_preserves_conserved` and
 -- `chain_preserves_conserved` carry the statements this module used to hold as
 -- `Prop`-valued definitions asserted of nothing.  The arc's conditional Step 6
--- added the quantified open-contract layer: `fmintSpec_preserves` is now the
--- instantiation of `ContractSpec.preserves_of_dispatch` (`Blanc/Ladder.lean`),
+-- added the quantified open-contract layer: `fmintSpec_preservesNoMem` is now
+-- the instantiation of `ContractSpec.preservesNoMem_of_dispatch`
+-- (`Blanc/Ladder.lean`),
 -- and context stability across program extension is settled at the foot of
 -- this module (`fmint_core_stable`, `fmint_funcSound_stable`) — eleven of the
 -- twelve obligations transport verbatim; `flashLoan` is re-discharge.  The
@@ -405,8 +407,9 @@ theorem fmintSpec_preInv_iff {ca : Adr} {sevm : Sevm} {devm : Devm} :
 theorem fmintSpec_postInv_iff {ca : Adr} {devm : Devm} :
     fmintSpec.PostInv devm ca ↔ Stor.Conserved (Devm.getStor devm ca) := Iff.rfl
 
-/-- fmint's dispatch targets, in the form `ContractSpec.sound_of_dispatch`
-consumes — the counterpart of `wethSpec_funcSound`, and simpler than it in
+/-- fmint's dispatch targets, in the form
+`ContractSpec.soundNoMem_of_dispatch` consumes — the counterpart of
+`wethSpec_funcSound`, and simpler than it in
 exactly one way.  fmint's `Side` is `True`, so there is no `nof` conjunct to
 thread through `Func.preserves_nof`: the obligation *is* "this target preserves
 `Stor.Conserved` at the frame's own target", with nothing else attached.  That
@@ -414,7 +417,7 @@ simplification is the whole point of the instance having declined the side
 condition.
 
 Per-function lemmas are stated at `sevm.currentTarget` (`dispatch-generic`'s
-design correction): `FuncSound` carries `sevm.currentTarget = ca` in entry
+design correction): `FuncSoundNoMem` carries `sevm.currentTarget = ca` in entry
 position and this helper is where that equation is discharged.  The
 deeper-frame induction hypothesis is discarded here; `flashLoan` is the only
 target that consumes it. -/
@@ -424,8 +427,8 @@ theorem fmintSpec_funcSound {fa : Adr} (f : Func)
         Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s f r →
         Stor.Conserved (Devm.getStor s sevm.currentTarget) →
         Stor.Conserved (Devm.getStor r sevm.currentTarget) ) :
-    fmintSpec.FuncSound fa Fmint.fmintAux f := by
-  intro sevm s r h_ct h_pre _ _ h_run
+    fmintSpec.FuncSoundNoMem fa Fmint.fmintAux f := by
+  intro sevm s r h_ct h_pre _ h_run
   subst h_ct
   exact ⟨trivial, h_cons h_run (fmintSpec_preInv_iff.mp h_pre.inv)⟩
 
@@ -462,8 +465,8 @@ macro_rules
 says no `Func.Run` witnesses it, so the obligation is vacuous — which is what
 "an unrecognized selector reverts" buys at the proof layer. -/
 theorem fmintSpec_funcSound_rev {fa : Adr} :
-    fmintSpec.FuncSound fa Fmint.fmintAux Func.rev := by
-  intro _ _ _ _ _ _ _ h_run
+    fmintSpec.FuncSoundNoMem fa Fmint.fmintAux Func.rev := by
+  intro _ _ _ _ _ _ h_run
   exact absurd h_run not_run_rev
 
 /-! ### The eight read-only targets
@@ -2060,7 +2063,8 @@ theorem transferFrom_preserves_conserved {sevm : Sevm} {s r : Devm}
   rcases Fmint.of_transferFrom run with ⟨⟨_, _, _, h_tr⟩, h_sup⟩
   exact h.transfer h_tr h_sup
 
-/-- **The twelfth `FuncSound` input.**  `flashLoan` preserves conservation.
+/-- **The twelfth `FuncSoundNoMem` input.**  `flashLoan` preserves
+conservation.
 Walked in the program's own order: the three guards, the mint pair completing
 before the `CALL`, the callback under the deeper-frame induction hypothesis,
 the returndata checks, and the repayment converging on the burn pair. -/
@@ -2495,11 +2499,11 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
   rw [← congr_fun hg4 sevm.currentTarget]
   exact h_cons44
 
-/-- `flashLoan` is the one target that consumes `FuncSound`'s deeper-frame
+/-- `flashLoan` is the one target that consumes `FuncSoundNoMem`'s deeper-frame
 induction hypothesis — the mirror of WETH's `wethSpec_funcSound_withdraw`. -/
 theorem fmintSpec_funcSound_flashLoan {fa : Adr} :
-    fmintSpec.FuncSound fa Fmint.fmintAux Fmint.flashLoan := by
-  intro sevm s r h_ct h_pre _ ih h_run
+    fmintSpec.FuncSoundNoMem fa Fmint.fmintAux Fmint.flashLoan := by
+  intro sevm s r h_ct h_pre ih h_run
   subst h_ct
   refine ⟨trivial, ?_⟩
   exact flashLoan_preserves_conserved h_pre ih h_run
@@ -2508,16 +2512,19 @@ end
 
 /-! ## Assembly
 
-The twelve `FuncSound` obligations above, plus the reverting fallback, are the
+The twelve `FuncSoundNoMem` obligations above, plus the reverting fallback, are
+the
 whole input to the generic dispatcher argument.  Everything from here down is
 instantiation: no walk, no invariant reasoning, and nothing that names the
 program's shape beyond reading it off `fmintSpec.prog` by unification. -/
 
-/-- The twelve `FuncSound` obligations, packaged in the form both
-`ContractSpec.sound_of_dispatch` and `ContractSpec.preserves_of_dispatch`
-consume. -/
+/-- The twelve per-target obligations, packaged in the form both
+`ContractSpec.soundNoMem_of_dispatch` and
+`ContractSpec.preservesNoMem_of_dispatch` consume.  They are stated at
+`FuncSoundNoMem` because no fmint target reads the machine's memory, which is
+what keeps the frame theorem below premise-free. -/
 theorem fmintSpec_funcSound_all (fa : Adr) :
-    ∀ p ∈ Fmint.fmintFuncs, fmintSpec.FuncSound fa Fmint.fmintAux p.2 := by
+    ∀ p ∈ Fmint.fmintFuncs, fmintSpec.FuncSoundNoMem fa Fmint.fmintAux p.2 := by
   intro f h_mem
   -- Drive the membership unfolding with `List.mem_cons`, never with `decide`:
   -- deciding anything about these leaves forces the `String.keccak` behind
@@ -2538,30 +2545,41 @@ theorem fmintSpec_funcSound_all (fa : Adr) :
   · exact fmintSpec_funcSound Fmint.flashFee flashFee_preserves_conserved
   · exact fmintSpec_funcSound allowance allowance_preserves_conserved
 
-/-- fmint's frame-level obligation, the one input `ContractSpec.preserves_inv`
-cannot supply.  The proof is `wethSpec_sound`'s, with twelve dispatch targets
-where WETH has ten and a *reverting* fallback where WETH has `deposit`, so the
-fallback obligation is vacuous rather than a walk.
+/-- fmint's frame-level obligation, the one input
+`ContractSpec.preserves_noMem` cannot supply.  The proof is
+`wethSpec_soundNoMem`'s, with twelve dispatch targets where WETH has ten and a
+*reverting* fallback where WETH has `deposit`, so the fallback obligation is
+vacuous rather than a walk.
 
 Both shape side conditions are `rfl`: `k`, the function list and the aux context
 are read off `fmintSpec.prog` by unification.  The fallback lookup at index 1
 reduces — unlike `burnSlot`'s at index 2, which needs `get_burnSlot`'s explicit
 `List.getElem?` route. -/
-theorem fmintSpec_sound (fa : Adr) : fmintSpec.Sound fa :=
-  ContractSpec.sound_of_dispatch (k := Fmint.fallbackSlot)
+theorem fmintSpec_soundNoMem (fa : Adr) : fmintSpec.SoundNoMem fa :=
+  ContractSpec.soundNoMem_of_dispatch (k := Fmint.fallbackSlot)
     (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.rev)
     rfl (List.cons_ne_nil _ _) rfl (fmintSpec_funcSound_all fa)
     fmintSpec_funcSound_rev
 
+/-- The memory-carrying obligation, for any consumer that wants it: dropping a
+premise fmint never used. -/
+theorem fmintSpec_sound (fa : Adr) : fmintSpec.Sound fa :=
+  ContractSpec.SoundNoMem.sound (fmintSpec_soundNoMem fa)
+
 /-- fmint's own result, as the instantiation of the quantified open-contract
-statement (`ContractSpec.preserves_of_dispatch`, `Blanc/Ladder.lean`): the
+statement (`ContractSpec.preservesNoMem_of_dispatch`, `Blanc/Ladder.lean`): the
 same twelve obligations and the same vacuous fallback, consumed by the named
 theorem rather than by its proof pattern. -/
-theorem fmintSpec_preserves (fa : Adr) : fmintSpec.Preserves fa :=
-  ContractSpec.preserves_of_dispatch (k := Fmint.fallbackSlot)
+theorem fmintSpec_preservesNoMem (fa : Adr) : fmintSpec.PreservesNoMem fa :=
+  ContractSpec.preservesNoMem_of_dispatch (k := Fmint.fallbackSlot)
     (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.rev)
     rfl (List.cons_ne_nil _ _) rfl (fmintSpec_funcSound_all fa)
     fmintSpec_funcSound_rev
+
+/-- The memory-carrying form the message-, transaction- and block-level rungs
+consume. -/
+theorem fmintSpec_preserves (fa : Adr) : fmintSpec.Preserves fa :=
+  ContractSpec.PreservesNoMem.preserves (fmintSpec_preservesNoMem fa)
 
 /-- **Headline 1 of `flashmint-proposal.md`**, now a theorem: an arbitrary
 execution that starts in an fmint frame with the supply conserved ends with the
@@ -2580,11 +2598,10 @@ theorem fmint_preserves_conserved (fa : Adr) :
     ∀ sevm pre post,
       Exec 0 sevm pre (.ok post) →
       (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile Fmint.fmint) →
-      (sevm.currentTarget = fa → Mem.Wf pre.memory) →
       PrecondC fa sevm pre →
       PostcondC fa sevm post := by
-  simpa only [ContractSpec.Preserves, fmintSpec_prog_eq, fmintSpec_pre_eq, fmintSpec_post_eq]
-    using fmintSpec_preserves fa
+  simpa only [ContractSpec.PreservesNoMem, fmintSpec_prog_eq, fmintSpec_pre_eq,
+    fmintSpec_post_eq] using fmintSpec_preservesNoMem fa
 
 /-! ### The chain rungs
 
