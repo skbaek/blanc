@@ -12,13 +12,6 @@ open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
 
-def officialConstructorEventScratch : Nat :=
-  constructorEventScratch 4282
-
-theorem officialConstructorEventScratch_eq :
-    officialConstructorEventScratch = 4512 := by
-  decide
-
 def officialConstructorPauseZeroMemory : Mem :=
   officialConstructorPatchedMemory.write officialConstructorEventScratch
     (0 : B256).toBytes

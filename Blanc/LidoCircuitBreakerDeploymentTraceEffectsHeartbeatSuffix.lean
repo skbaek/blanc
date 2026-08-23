@@ -9,20 +9,6 @@ open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
 
-def officialConstructorHeartbeatSuffix : Func :=
-  pushB256 0 :::
-  storeByteOffset officialConstructorEventScratch +++
-  loadArgumentIndex 6 +++
-  storeByteOffset (officialConstructorEventScratch + 32) +++
-  pushB256 heartbeatIntervalUpdatedEvent :::
-  logWith 0
-    (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
-  loadArgumentIndex 6 +++
-  pushB256 heartbeatIntervalSlot ::: sstore :::
-  pushFixedNat 4282 :::
-  pushCompactNat constructorRuntimeBase :::
-  Func.ret
-
 theorem officialConstructorHeartbeatSuffix_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
     (hcold : (sevm.currentTarget, heartbeatIntervalSlot) ∉

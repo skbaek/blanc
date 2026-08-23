@@ -74,35 +74,60 @@ theorem officialFullCreateInput_slice_runtimeTemplate {sevm : Sevm}
 
 /-! ## Body-pinned successful effect arm -/
 
+/-- First word-aligned scratch address following the copied official runtime. -/
+def officialConstructorEventScratch : Nat :=
+  constructorEventScratch 4282
+
+theorem officialConstructorEventScratch_eq :
+    officialConstructorEventScratch = 4512 := by
+  decide
+
+/-- Heartbeat initialization through the constructor return, named at the
+shape layer so every later execution proof shares one opaque tail. -/
+def officialConstructorHeartbeatSuffix : Func :=
+  pushB256 0 :::
+  storeByteOffset officialConstructorEventScratch +++
+  loadArgumentIndex 6 +++
+  storeByteOffset (officialConstructorEventScratch + 32) +++
+  pushB256 heartbeatIntervalUpdatedEvent :::
+  logWith 0
+    (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
+  loadArgumentIndex 6 +++
+  pushB256 heartbeatIntervalSlot ::: sstore :::
+  pushFixedNat 4282 :::
+  pushCompactNat constructorRuntimeBase :::
+  Func.ret
+
+/-- Pause-duration initialization before the shared heartbeat tail. -/
+def officialConstructorConfigurationPrefix : Line :=
+  [pushB256 0] ++
+  storeByteOffset officialConstructorEventScratch ++
+  loadArgumentIndex 5 ++
+  storeByteOffset (officialConstructorEventScratch + 32) ++
+  [pushB256 pauseDurationUpdatedEvent] ++
+  logWith 0 (Nat.toB256 (officialConstructorEventScratch / 32)) 2 ++
+  loadArgumentIndex 5 ++
+  [pushB256 pauseDurationSlot, sstore]
+
+/-- Both projected configuration writes and events, through return. -/
+def officialConstructorConfigurationSuffix : Func :=
+  officialConstructorConfigurationPrefix +++
+    officialConstructorHeartbeatSuffix
+
+/-- Initialized event prefix between the runtime patch line and configuration
+initialization. -/
+def officialConstructorInitializedPrefix : Line :=
+  loadArgumentIndex 0 ++
+  [pushB256 circuitBreakerInitializedEvent] ++
+  logWith 1 1 4
+
 /-- The exact residual constructor body after all ten successful validation
 branches have placed the runtime-copy operands on the stack. -/
 def officialConstructorEffectBody : Func :=
   codecopy :::
     patchRuntimeLine constructorRuntimeBase +++
-    loadArgumentIndex 0 +++
-    pushB256 circuitBreakerInitializedEvent :::
-    logWith 1 1 4 +++
-    pushB256 0 :::
-    storeByteOffset (constructorEventScratch 4282) +++
-    loadArgumentIndex 5 +++
-    storeByteOffset (constructorEventScratch 4282 + 32) +++
-    pushB256 pauseDurationUpdatedEvent :::
-    logWith 0
-      (Nat.toB256 (constructorEventScratch 4282 / 32)) 2 +++
-    loadArgumentIndex 5 +++
-    pushB256 pauseDurationSlot ::: sstore :::
-    pushB256 0 :::
-    storeByteOffset (constructorEventScratch 4282) +++
-    loadArgumentIndex 6 +++
-    storeByteOffset (constructorEventScratch 4282 + 32) +++
-    pushB256 heartbeatIntervalUpdatedEvent :::
-    logWith 0
-      (Nat.toB256 (constructorEventScratch 4282 / 32)) 2 +++
-    loadArgumentIndex 6 +++
-    pushB256 heartbeatIntervalSlot ::: sstore :::
-    pushFixedNat 4282 :::
-    pushCompactNat constructorRuntimeBase :::
-    Func.ret
+    officialConstructorInitializedPrefix +++
+    officialConstructorConfigurationSuffix
 
 /-- The exact official length, decode, canonical-address, and nine validation
 tree, ending at `officialConstructorEffectBody`. Its branches retain every
@@ -210,7 +235,8 @@ private theorem constructorValidationErrorArmIndices_prepend
 
 private theorem officialConstructorEffectBody_validationErrorArmIndices :
     constructorValidationErrorArmIndices officialConstructorEffectBody = [] := by
-  unfold officialConstructorEffectBody
+  unfold officialConstructorEffectBody officialConstructorConfigurationSuffix
+    officialConstructorHeartbeatSuffix
   simp only [constructorValidationErrorArmIndices,
     constructorValidationErrorArmIndices_prepend, Func.ret]
 
