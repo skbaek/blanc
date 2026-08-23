@@ -722,6 +722,49 @@ private theorem officialConstructorPatchLine_runCompiled
   have h1 := officialConstructorPatchLine1_4_runCompiled (G := G + 96) h5
   simpa only [officialConstructorPatchLine, prepend_append] using h1
 
+private theorem officialConstructorCopyPatch_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hcode : sevm.code.toList = officialFullCreateInput)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchedMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach
+        ⟨[(224 : B256), (616 : B256), (4282 : B256)],
+          officialConstructorDecodedMemory, G + 985⟩)
+      (codecopy ::: patchRuntimeLine constructorRuntimeBase +++ rest) post := by
+  have hpatch := officialConstructorPatchLine_runCompiled hrest
+  refine Func.RunCompiled.next
+    (devm' := base.setMach
+      ⟨[], officialConstructorCopiedMemory, G + 140⟩) ?_ ?_
+  · have hstep := Ninst.runCompiled_codecopy_of
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨[(224 : B256), (616 : B256), (4282 : B256)],
+          officialConstructorDecodedMemory, G + 985⟩)
+      (di := (224 : B256)) (si := (616 : B256)) (sz := (4282 : B256))
+      (s := []) (c := 845) (G := G + 140)
+      (M := officialConstructorCopiedMemory)
+      (by simp only [Devm.stack_setMach])
+      (by
+        simp only [show (224 : B256).toNat = 224 by decide,
+          show (4282 : B256).toNat = 4282 by decide]
+        exact Devm.extCost_add_of_size
+          (a := gVerylow + gasCopy * ceilDiv 4282 32)
+          officialConstructorDecodedMemory_size (by decide))
+      (by
+        simp only [Devm.memory_setMach,
+          show (224 : B256).toNat = 224 by decide,
+          show (616 : B256).toNat = 616 by decide,
+          show (4282 : B256).toNat = 4282 by decide]
+        rw [officialFullCreateInput_slice_runtimeTemplate hcode]
+        rfl)
+      (by simp only [Devm.gasLeft_setMach])
+    simpa only [Devm.setMach_setMach] using hstep
+  · rw [patchRuntimeLine_official_eq]
+    exact hpatch
+
 private theorem officialConstructorPatches_fit :
     ∀ patch ∈ runtimeImmutablePatches officialParams,
       constructorRuntimeBase + patch.offset + 32 ≤ 4512 := by
@@ -1225,6 +1268,32 @@ private theorem officialConstructorValidationPrefix_runCompiled
 
 /-! ## Named constructor effects and final frame -/
 
+private theorem constructorSlice_split {ξ : Type} (xs : List ξ) (d : ξ) :
+    ∀ (a m b : Nat),
+      xs.sliceD m (a + b) d =
+        xs.sliceD m a d ++ xs.sliceD (m + a) b d := by
+  intro a
+  induction a with
+  | zero =>
+      intro m b
+      simp [List.sliceD, List.takeD]
+  | succ a ih =>
+      intro m b
+      rw [show a + 1 + b = (a + b) + 1 by omega,
+        List.sliceD_succ, ih (m + 1) b,
+        List.sliceD_succ xs m a d,
+        show m + (a + 1) = m + 1 + a by omega]
+      rfl
+
+private theorem ConstructorPatchInvariant.read_argument_bytes
+    {memory : Mem} (h : ConstructorPatchInvariant memory) (i : Fin 7) :
+    h.image.sliceD (32 * i.val) 32 0 =
+      (officialConstructorArgumentWord i).toBytes := by
+  have hlen : (h.image.sliceD (32 * i.val) 32 0).length = 32 := by
+    unfold List.sliceD
+    rw [List.takeD_length]
+  rw [← h.argument_reads i, Bytes.toBytes_toB256_of_length hlen]
+
 /-- Exact gas consumed by the successful source-level constructor function,
 excluding the compiler table's leading `JUMPDEST`. -/
 def officialConstructorFuncGas : Nat := 50328
@@ -1239,6 +1308,47 @@ private def officialConstructorInitializedLog (ca : Adr) : Log :=
       officialParams.maxPauseDuration.toBytes ++
       officialParams.minHeartbeatInterval.toBytes ++
       officialParams.maxHeartbeatInterval.toBytes⟩
+
+private theorem officialConstructorPatchedMemory_read_initializedData :
+    (officialConstructorPatchedMemory.read 32 128).1 =
+      officialParams.minPauseDuration.toBytes ++
+        officialParams.maxPauseDuration.toBytes ++
+        officialParams.minHeartbeatInterval.toBytes ++
+        officialParams.maxHeartbeatInterval.toBytes := by
+  rw [← officialConstructorPatchMemory12_eq_patched,
+    Mem.Reads.read officialConstructorPatchInvariant12.memory_reads]
+  have hminPause :
+      officialConstructorPatchInvariant12.image.sliceD 32 32 0 =
+        officialParams.minPauseDuration.toBytes := by
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorPatchInvariant12.read_argument_bytes
+        ⟨1, by decide⟩
+  have hmaxPause :
+      officialConstructorPatchInvariant12.image.sliceD 64 32 0 =
+        officialParams.maxPauseDuration.toBytes := by
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorPatchInvariant12.read_argument_bytes
+        ⟨2, by decide⟩
+  have hminHeartbeat :
+      officialConstructorPatchInvariant12.image.sliceD 96 32 0 =
+        officialParams.minHeartbeatInterval.toBytes := by
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorPatchInvariant12.read_argument_bytes
+        ⟨3, by decide⟩
+  have hmaxHeartbeat :
+      officialConstructorPatchInvariant12.image.sliceD 128 32 0 =
+        officialParams.maxHeartbeatInterval.toBytes := by
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorPatchInvariant12.read_argument_bytes
+        ⟨4, by decide⟩
+  rw [constructorSlice_split
+      officialConstructorPatchInvariant12.image 0 32 32 96,
+    constructorSlice_split
+      officialConstructorPatchInvariant12.image 0 32 64 64,
+    constructorSlice_split
+      officialConstructorPatchInvariant12.image 0 32 96 32,
+    hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat]
+  simp only [List.append_assoc]
 
 private def officialConstructorPauseLog (ca : Adr) : Log :=
   ⟨ca, [pauseDurationUpdatedEvent],
@@ -1285,6 +1395,67 @@ def officialConstructorPost
     (sevm : Sevm) (base : Devm) (G : Nat) : Devm :=
   let returned := officialConstructorReturnRead sevm base G
   returned.2.withOutput returned.1
+
+private theorem officialConstructorReturnLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hrest : Func.RunCompiled fs sevm
+      (officialConstructorReturnPre sevm base G) rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorEffectBase sevm base).setMach
+        ⟨[], officialConstructorFinalMemory, G + 6⟩)
+      (pushFixedNat 4282 :::
+        pushCompactNat constructorRuntimeBase ::: rest) post := by
+  unfold pushFixedNat pushCompactNat
+  simp only [if_pos (show 4282 < 2 ^ 16 by decide)]
+  func_run (2)
+  exact hrest
+
+private theorem officialConstructorReturn_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat} :
+    Func.RunCompiled fs sevm
+      (officialConstructorReturnPre sevm base G) Func.ret
+      (officialConstructorPost sevm base G) := by
+  have hindex : (Nat.toB256 constructorRuntimeBase).toNat =
+      constructorRuntimeBase := by
+    apply B256.toNat_toB256_of_lt
+    unfold constructorRuntimeBase constructorArgumentBytes
+    decide
+  have hstack : (officialConstructorReturnPre sevm base G).stack =
+      [Nat.toB256 constructorRuntimeBase, (4282 : B256)] := by
+    simp only [officialConstructorReturnPre, Devm.stack_setMach]
+  have hext : (officialConstructorReturnPre sevm base G).extCost
+      [⟨constructorRuntimeBase, 4282⟩] = 0 := by
+    unfold officialConstructorReturnPre
+    exact Devm.extCost_zero_of_le
+      (N := officialConstructorFinalMemory)
+      (i := constructorRuntimeBase) (sz := 4282)
+      (by rw [officialConstructorFinalMemory_size])
+      (by
+        rw [officialConstructorFinalMemory_size]
+        unfold constructorRuntimeBase constructorArgumentBytes
+        decide)
+  have hgas : (officialConstructorReturnPre sevm base G).gasLeft =
+      G + (officialConstructorReturnPre sevm base G).extCost
+        [⟨(Nat.toB256 constructorRuntimeBase).toNat,
+          (4282 : B256).toNat⟩] := by
+    rw [hindex, show (4282 : B256).toNat = 4282 by decide, hext]
+    simp only [officialConstructorReturnPre, Devm.gasLeft_setMach, Nat.add_zero]
+  have hread :
+      ((officialConstructorReturnPre sevm base G).setMach
+        ⟨[], (officialConstructorReturnPre sevm base G).memory, G⟩).memRead
+          (Nat.toB256 constructorRuntimeBase).toNat (4282 : B256).toNat =
+        officialConstructorReturnRead sevm base G := by
+    unfold officialConstructorReturnRead
+    rw [hindex, show (4282 : B256).toNat = 4282 by decide]
+  have hrun := Func.runCompiled_ret
+    (fs := fs) (sevm := sevm)
+    (devm := officialConstructorReturnPre sevm base G)
+    (i := Nat.toB256 constructorRuntimeBase) (sz := (4282 : B256))
+    (s := []) (out := (officialConstructorReturnRead sevm base G).1)
+    (d' := (officialConstructorReturnRead sevm base G).2) (G := G)
+    hstack hgas (by simpa only [Prod.eta] using hread)
+  simpa only [officialConstructorPost, Func.ret] using hrun
 
 end LidoCircuitBreaker
 
