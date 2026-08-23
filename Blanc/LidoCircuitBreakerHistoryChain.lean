@@ -343,6 +343,55 @@ private theorem read_writeAt_before {img : Bytes} (word other value : B256)
   rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
   exact h
 
+/-- The staging offsets, computed once rather than re-established at every use.
+
+`mstoreAt w` writes at byte offset `w * 32`, and the staged words are the
+literals `targetWord = 16`, `newPauserWord = 17`, `previousPauserWord = 18`
+and `continuationWord = 19`.  So every "earlier word, later word" side
+condition of `read_writeAt_before` along the register and unregister prologues
+is one closed comparison between two byte offsets.  Each offset is settled
+here by `rfl` and the comparison by `omega`, which keeps these side conditions
+off any evaluation path and out of proof positions that carry a whole
+dispatcher walk in their context. -/
+private theorem target_before_newPauser :
+    (targetWord * 32).toNat + 32 ≤ (newPauserWord * 32).toNat := by
+  have hword : (targetWord * 32).toNat = 512 := rfl
+  have hother : (newPauserWord * 32).toNat = 544 := rfl
+  omega
+
+/-- `targetWord` is staged two words below `previousPauserWord`. -/
+private theorem target_before_previousPauser :
+    (targetWord * 32).toNat + 32 ≤ (previousPauserWord * 32).toNat := by
+  have hword : (targetWord * 32).toNat = 512 := rfl
+  have hother : (previousPauserWord * 32).toNat = 576 := rfl
+  omega
+
+/-- `targetWord` is staged three words below `continuationWord`. -/
+private theorem target_before_continuation :
+    (targetWord * 32).toNat + 32 ≤ (continuationWord * 32).toNat := by
+  have hword : (targetWord * 32).toNat = 512 := rfl
+  have hother : (continuationWord * 32).toNat = 608 := rfl
+  omega
+
+/-- `newPauserWord` is staged one word below `previousPauserWord`. -/
+private theorem newPauser_before_previousPauser :
+    (newPauserWord * 32).toNat + 32 ≤ (previousPauserWord * 32).toNat := by
+  have hword : (newPauserWord * 32).toNat = 544 := rfl
+  have hother : (previousPauserWord * 32).toNat = 576 := rfl
+  omega
+
+/-- `newPauserWord` is staged two words below `continuationWord`. -/
+private theorem newPauser_before_continuation :
+    (newPauserWord * 32).toNat + 32 ≤ (continuationWord * 32).toNat := by
+  have hword : (newPauserWord * 32).toNat = 544 := rfl
+  have hother : (continuationWord * 32).toNat = 608 := rfl
+  omega
+
+/-- The branch flag the register prologue reads back is the literal `1`, so
+the `iszero` it feeds cannot take the nonzero arm. -/
+private theorem flag_one_ne_zero : (1 : B256) ≠ 0 :=
+  fun h => B256.zero_ne_one h.symm
+
 /-- **`registerPauser` preserves Registry coherence.**  The admin path stages
 the target, the new pauser, a zero previous-pauser and the zero continuation
 word, then tail-jumps to the shared kernel; the landed chain carries the
@@ -490,15 +539,19 @@ private theorem coherent_registerPauser (dp : DeployParams)
   have hrk : Mem.Reads k₀.memory _ := hburn.memory ▸ hrt₈
   -- (7) the staged words, read back out of the image the kernel receives
   have hreadTarget :=
-    read_writeAt_before targetWord continuationWord 0 (by decide)
-      (read_writeAt_before targetWord previousPauserWord 0 (by decide)
+    read_writeAt_before targetWord continuationWord 0
+      target_before_continuation
+      (read_writeAt_before targetWord previousPauserWord 0
+        target_before_previousPauser
         (read_writeAt_before targetWord newPauserWord (Sevm.argWord sevm 1)
-          (by decide)
+          target_before_newPauser
           (read_writeAt_self img₀ targetWord
             (Sevm.argWord sevm 0))))
   have hreadNew :=
-    read_writeAt_before newPauserWord continuationWord 0 (by decide)
-      (read_writeAt_before newPauserWord previousPauserWord 0 (by decide)
+    read_writeAt_before newPauserWord continuationWord 0
+      newPauser_before_continuation
+      (read_writeAt_before newPauserWord previousPauserWord 0
+        newPauser_before_previousPauser
         (read_writeAt_self
           (Bytes.writeAt img₀ (targetWord * 32).toNat
             (Sevm.argWord sevm 0).toBytes)
@@ -962,7 +1015,7 @@ private theorem coherent_of_pauseKernelRun (dp : DeployParams)
       refine absurd ?_ hnz
       have hflag : ((1 : B256) =? 0) = flag :=
         (List.of_cons_pref_of_cons_pref hpFlag (pref_of_split hpop.stack)).left
-      rw [← hflag, B256.eqCheck, if_neg (by decide : (1 : B256) ≠ 0)]
+      rw [← hflag, B256.eqCheck, if_neg flag_one_ne_zero]
   | zero hpop hpauseCall =>
       rcases of_run_call hpauseCall with ⟨body, pausePre, hget, hburn, hbody⟩
       rw [hpauseLookup] at hget
@@ -1236,16 +1289,21 @@ theorem coherent_pause (dp : DeployParams) {sevm : Sevm} {s r : Devm}
       = Prog.compile (runtime dp) := code_of_getCode_eq hE hcode
   -- (8) the staged words, read back out of the image the kernel receives
   have hreadTarget :=
-    read_writeAt_before targetWord continuationWord 1 (by decide)
-      (read_writeAt_before targetWord previousPauserWord 0 (by decide)
-        (read_writeAt_before targetWord newPauserWord 0 (by decide)
+    read_writeAt_before targetWord continuationWord 1
+      target_before_continuation
+      (read_writeAt_before targetWord previousPauserWord 0
+        target_before_previousPauser
+        (read_writeAt_before targetWord newPauserWord 0
+          target_before_newPauser
           (read_writeAt_self
             (Bytes.writeAt img₀ (durationWord * 32).toNat
               dur.toBytes)
             targetWord (Sevm.argWord sevm 0))))
   have hreadNew :=
-    read_writeAt_before newPauserWord continuationWord 1 (by decide)
-      (read_writeAt_before newPauserWord previousPauserWord 0 (by decide)
+    read_writeAt_before newPauserWord continuationWord 1
+      newPauser_before_continuation
+      (read_writeAt_before newPauserWord previousPauserWord 0
+        newPauser_before_previousPauser
         (read_writeAt_self
           (Bytes.writeAt
             (Bytes.writeAt img₀ (durationWord * 32).toNat

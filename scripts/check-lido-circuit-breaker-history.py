@@ -480,6 +480,7 @@ HEADER_PINS = {
         "emptyRegistryWorld_registryFields": "c1bdbecb7f6ae2edb3bb1732d4ae1af9cedd51f5ca43f9d6595e2387c3cc5886",
         "emptyRegistryWorld_registryStable": "e2f9f534bf9c45ea39ce150d6c978bda0f073260d6b16fb42ca1dd0f9a491184",
         "emptyRegistryWorld_witness": "cc20dec3daeb91307cfc0e7608883ea41a041fbd553d7271a5531d5b81182928",
+        "flag_one_ne_zero": "0d81ff2080dfc86b0a4d592ca6d50ac08a8afa9a52f30790ee5a16ed65958534",
         "getDelegatedCodeAddress_of_compile": "f66592652157a05d32cda724de8f7223b7bc74467b91d640b75d1610e0c925cf",
         "get_bubbleRevertSlot": "2cacc0b135c8adfd5d72ba23accba9fe28c69039cb9cd5dc2e36134f5323ae84",
         "get_setPauserSlot": "356a0b153cab58e5fc360d6659fad2f00844a0fe5362b87f45a010d563f10cd3",
@@ -488,6 +489,8 @@ HEADER_PINS = {
         "mem_reads_data": "ab0541e0dfa602787703695b60ad3802a71d8152bef0c99a0165b220a9bce3f7",
         "membership_of_witness": "088e491da668b5dba5ee947948d09559b8ba62ff528e4340160a07ffd7d98bde",
         "mstoreAt_image": "d0096a04bc4e5fd4e171485ed45f392e7a02280c36292d5c51892f8f62d92f54",
+        "newPauser_before_continuation": "3e07a570c6bb016821e4effb6034383059e512a0354377a8e8c92a058c778502",
+        "newPauser_before_previousPauser": "454fe16bc178bec031f704b10086b9583e877c740efc6e81a47c27a4487b27e6",
         "ninst_codePreserve": "48005abd46b387de3f3e07e7b67984d54094f05aa763c8dd608b3667b4992632",
         "pause_funcSound": "0f8f4f627e60c022bcc8067fed1a0f3eb41e294158283ae53ce11b9972c60a57",
         "prefix_of_loadWord": "928ce57c0b0c886947c16d463eb5845d9325fd6c76ca161aa182a49bd5e8893d",
@@ -506,6 +509,9 @@ HEADER_PINS = {
         "storFixed_pauseFailedError": "33afc0df5c18a96f633763a2ece5f6d0a759abdbbb3dcf2acbcff00b24070a0e",
         "storFixed_reentrantCallError": "6c06d4a2c38ac889ff0791a9835de3a8685cd7f84fec8da82dc4f0ba19ac9cf8",
         "storFixed_revReturnData": "35fa1fb99aaf5928e589fee886454b23261ab21be3f2acc9f9bc9f6b590cc719",
+        "target_before_continuation": "ff315b73d44babd7158264305bd824495206423decf0508a3a2362b65603a7f7",
+        "target_before_newPauser": "79d88294a262da8d2ad4b96536037df97983f24cd15c19c7fcf9f6e477e3c9ff",
+        "target_before_previousPauser": "16fe4791738160d9ad9fdf657b60dc12b60dbe15c3d225dcd54147eb9a189d56",
         "wf_of_mem_eq": "42de7af2573700b9593a25fd9da7ab8ff418dd5f93de91e07bf28e992715cd71"
     },
     "endpoints": {
@@ -1674,51 +1680,86 @@ def axiom_checks(root: Path, sources: dict) -> int:
 # The repairs are the minimum that keeps the library building while the CLAIM
 # is strictly weaker.
 #
+# An edit is either a REPLACEMENT `(file, old, new)`, where `old` must occur
+# exactly once, or a SPAN `(file, start, end, new)`, which replaces everything
+# from the single occurrence of `start` through the first following occurrence
+# of `end`.  The span form exists because a self-consistent weakening usually
+# has to delete or trivialise a whole declaration, and quoting a two-hundred
+# line proof body as an anchor would make the case rot at the first unrelated
+# proof edit.  Two short anchors rot only when the declaration itself moves,
+# which is the change that should invalidate the case.
+#
+# An edit may target any file this gate READS -- the three owners, the program
+# source, and the premise-vocabulary files (`Blanc/Ladder.lean`,
+# `Blanc/LidoCircuitBreakerRegistryModel.lean`).  Patching one of those is not
+# an edit to the repository: every case is applied inside the caller's
+# isolated worktree, or into a throwaway staging tree for the dry run.
+#
 # The harness never runs against the repository root.
 #
-# FIRST RUN, against the completed tree: M2 and M5 are CREDITED -- each
-# elaborates and is then rejected with every digest re-taken from the mutant.
-# M1, M3 and M4 FAIL LIVE CONFIRMATION and are not credited.  All three fail
-# for one structural reason, and it is a finding about the family rather than
-# a defect in the harness:
+# CAMPAIGN HISTORY.  The first run against the completed Chain owner credited
+# M2 and M5 and FAILED LIVE CONFIRMATION on M1, M3 and M4.  The reason was
+# structural rather than a defect in the harness, and it is worth keeping:
 #
-#   Every one of these patches was designed while the Chain owner was a
-#   dormant stub.  That owner is now complete, and it CONSUMES what the
-#   patches weaken.  A cooperative-world premise introduced at an internal
-#   node (M3 at `registrySpec_sound_of_funcSound`, M4 at `coherent_of_call`)
-#   is unsatisfiable at its new consumers, and it cannot be threaded upward
-#   to escape them, because the statements above it are typed by
-#   `ContractSpec.Sound` / `.FuncSound`, whose shape is fixed in
-#   `Blanc/Ladder.lean`.  Threading it there would now trip VOCABULARY_PINS.
+#   Those three patches were designed while the Chain owner was a dormant
+#   stub.  That owner is now complete, and it CONSUMES what the patches
+#   weaken.  A cooperative-world premise introduced BELOW the public ladder
+#   (M3 at `registrySpec_sound_of_funcSound`, M4 at `coherent_of_call`) is
+#   unsatisfiable at its consumers, and escaping them means threading it
+#   through every public statement above it; and gutting `RegistryCoherent`
+#   leaves `RegistryStable.witness`, its reader-facing corollaries and both
+#   `arbitrary*_registryFields` controls with no proof at all.
 #
-#   M1 is stronger still: gutting `RegistryCoherent` cannot be repaired at
-#   all.  The H8 anti-vacuity controls publicly export `∃ entries,
-#   RegistryWitness ...` and every one of the structure's nine fields is
-#   projected 12-22 times across the owners, so a vacuous invariant leaves
-#   `RegistryStable.witness` and its four reader-facing corollaries with no
-#   proof and no possible repair short of DELETING them -- which the pin
-#   tables catch as a pinned declaration gone absent.
+# All three were then REDESIGNED, on the rule that a mutation must be
+# SELF-CONSISTENT: it weakens the claim AND repairs whatever the weakening
+# makes unprovable, so that what fails is this gate rather than the
+# elaborator.
 #
-# The honest reading is that families (ii) and (iii) are live-confirmed here,
-# and family (i) is now enforced by the module's own structure BEFORE this
-# gate ever sees it.  That is a better outcome than a credited rejection, but
-# it is not the same claim, and it must not be recorded as one.  Restoring a
-# credited family-(i) mutant needs a redesign -- a mutant that guts the
-# invariant AND removes the controls that would fail to compile -- which is a
-# design decision, not a repair-set adjustment.
+#   * M1 now guts `RegistryCoherent` and, in the same patch, trivialises the
+#     two coherence walks and DELETES the seven reader-facing consequences
+#     that would otherwise fail to elaborate.  That is the honest shape of the
+#     weakening: an invariant that yields no witness cannot keep the controls
+#     that publish one.  What rejects it is the semantic channel on
+#     `RegistryCoherent`, which no re-pin can restore.
+#
+#   * M3 and M4 now place their cooperative premise where it CAN be threaded:
+#     on a headline chain theorem and the reader-facing corollaries that read
+#     through it.  That is not a softer target.  It is the only placement at
+#     which such a premise elaborates at all, because every statement below
+#     the public ladder feeds a generic ladder lemma whose shape is fixed in
+#     `Blanc/Ladder.lean` -- and adding the premise there does not escape the
+#     problem either.  That was MEASURED, not assumed: replacing
+#     `Exec.InvDepth ...` in `ContractSpec.FuncSound` by "every account runs
+#     `c.prog`" fails to elaborate inside `Blanc/Ladder.lean` itself, at
+#     `FuncSoundNoMem.funcSound`, `post_of_run_dispatch`, `sound_of_dispatch`
+#     and `sound_of_receive_dispatch`, none of which can discharge a world
+#     assumption any more than the S7 owners can.
+#
+# So the family-(iii) finding stands and is now RUNNABLE: a cooperative-callee
+# restriction cannot hide at an internal node, and where it can hide -- on the
+# public surface -- the open-world bar rejects it, with every digest re-taken.
 
 MUTATIONS = (
     {
         "name": "M1-registry-coherent-vacuous",
         "family": "(i) the invariant no longer yields a real witness",
-        "requires_chain": False,
+        "requires_chain": True,
         "expect": "RegistryCoherent",
         "why": (
             "`RegistryCoherent` is a `def`.  Emptied to `True`, every theorem "
-            "header in the family stays byte-identical, every proof still "
-            "goes through, and the whole chain result says nothing at all.  "
-            "No header pin can see this; DEFINITION_PINS and "
-            "SEMANTIC_CHANNELS are what must."),
+            "header in the family stays byte-identical, every remaining proof "
+            "still goes through, and the whole chain result says nothing at "
+            "all.  No header pin can see this; DEFINITION_PINS and "
+            "SEMANTIC_CHANNELS are what must.\n"
+            "The repair set is the interesting half.  An invariant that yields "
+            "no witness cannot keep the declarations that PUBLISH one, so this "
+            "patch also trivialises the two coherence walks and deletes "
+            "`RegistryStable.witness`, `.membership`, `.countConservation`, "
+            "their six reader-facing corollaries and both anti-vacuity "
+            "controls that read witness fields.  That is what makes the "
+            "mutant a weakening rather than a syntax error -- and the "
+            "deletions are exactly the price the module's own structure "
+            "charges for the weakening."),
         "edits": (
             ("Blanc/LidoCircuitBreakerHistory.lean",
              "def RegistryCoherent (s : Stor) : Prop :=\n"
@@ -1743,6 +1784,71 @@ MUTATIONS = (
             ("Blanc/LidoCircuitBreakerHistoryEndpoints.lean",
              "    (fun a _ _ hcoh => hcoh.expiry_set (canonicalAddress_toB256 a))",
              "    (fun _ _ _ _ => trivial)"),
+            # The two Registry-mutating walks now have a trivial conclusion,
+            # so their bodies are replaced wholesale rather than repaired.
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "private theorem coherent_registerPauser (dp : DeployParams)",
+             "/-- **The sixteenth dispatch obligation.**",
+             "private theorem coherent_registerPauser (dp : DeployParams)\n"
+             "    {sevm : Sevm} {s r : Devm}\n"
+             "    (hwf : Mem.Wf s.memory)\n"
+             "    (hcoh : RegistryCoherent (Devm.getStor s sevm.currentTarget))\n"
+             "    (hrun : Func.Run ((runtime dp).main :: aux) sevm s "
+             "(registerPauser dp) r) :\n"
+             "    RegistryCoherent (Devm.getStor r sevm.currentTarget) := "
+             "trivial\n"
+             "\n"
+             "/-- **The sixteenth dispatch obligation.**"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "private theorem coherent_of_pauseKernelRun (dp : DeployParams)",
+             "/-- **`pause` preserves Registry coherence.**",
+             "private theorem coherent_of_pauseKernelRun (dp : DeployParams)\n"
+             "    {sevm : Sevm} {k r : Devm} {img : Bytes} {target : B256}\n"
+             "    (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)\n"
+             "      ((registrySpec dp).PreWf sevm.currentTarget)\n"
+             "      ((registrySpec dp).Post sevm.currentTarget))\n"
+             "    (hwf : Mem.Wf k.memory)\n"
+             "    (hr : Mem.Reads k.memory img)\n"
+             "    (htargetRead : Bytes.toB256\n"
+             "      (img.sliceD (targetWord * 32).toNat 32 0) = target)\n"
+             "    (hnewRead : Bytes.toB256\n"
+             "      (img.sliceD (newPauserWord * 32).toNat 32 0) = 0)\n"
+             "    (hcontRead : Bytes.toB256\n"
+             "      (img.sliceD (continuationWord * 32).toNat 32 0) = 1)\n"
+             "    (htargetCanonical : canonicalAddress target)\n"
+             "    (hcode : some (k.getCode sevm.currentTarget).toList\n"
+             "      = Prog.compile (runtime dp))\n"
+             "    (hcoh : RegistryCoherent (Devm.getStor k sevm.currentTarget))\n"
+             "    (hrun : Func.Run ((runtime dp).main :: aux) sevm k "
+             "setPauserKernel r) :\n"
+             "    RegistryCoherent (Devm.getStor r sevm.currentTarget) := "
+             "trivial\n"
+             "\n"
+             "/-- **`pause` preserves Registry coherence.**"),
+            # Consequences 2-4 and the two private transports they use.
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "/-- **Consequence 2: an actual witness.**",
+             "  exact ⟨entries, hw, countConservation_of_witness hw⟩\n",
+             ""),
+            # The reader-facing witness corollaries, on both ladders.
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "/-- Some ordered entry list witnesses every projected Registry "
+             "region of `ca`'s",
+             "    stable).countConservation\n",
+             ""),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "/-- The Prague instance of `chainUsing_future_witness`. -/",
+             "    stable).countConservation\n",
+             ""),
+            # The exhibited world no longer exhibits anything.
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  coherent := ⟨[], emptyRegistryWorld_witness dp ca⟩",
+             "  coherent := trivial"),
+            # Controls 2 and 3, which read witness fields directly.
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "/-- **Control 2, an arbitrary execution.**",
+             "end LidoCircuitBreaker",
+             "end LidoCircuitBreaker"),
         ),
     },
     {
@@ -1787,46 +1893,224 @@ MUTATIONS = (
         "name": "M3-cooperative-callee-premise",
         "family": "(iii) a cooperative-callee restriction behind an "
                   "unchanged-looking wrapper",
-        "requires_chain": False,
+        "requires_chain": True,
         "expect": "code at",
         "why": (
             "A premise built entirely from vocabulary the family already uses, "
             "with a binder name a reviewer skims past, that quietly says every "
-            "account in the world runs this contract's code.  The conclusion "
-            "is unchanged and the proof ignores the premise, so the module "
-            "builds.  The positive allowlist rejects it because its SHAPE is "
-            "not admissible -- not because anyone listed its name."),
+            "account in the world runs this contract's code.  Every conclusion "
+            "is unchanged and no proof mentions the premise, so the module "
+            "builds.  The own-address rule rejects it because a public "
+            "statement of this family may only speak about the code at the "
+            "contract's own address.\n"
+            "It is carried on the configured-ladder headline and on everything "
+            "that reads through it, because that is the only place such a "
+            "premise ELABORATES: added at an internal node it is unsatisfiable "
+            "at its consumers, and adding it to `ContractSpec.Sound` or "
+            "`.FuncSound` in `Blanc/Ladder.lean` does not help, because "
+            "`sound_of_dispatch` and `preserves_inv` consume those and cannot "
+            "discharge a world assumption either."),
         "edits": (
-            ("Blanc/LidoCircuitBreakerHistory.lean",
-             "theorem registrySpec_sound_of_funcSound (dp : DeployParams) (ca : Adr)\n"
-             "    (h_all : ∀ p ∈ funcs dp, (registrySpec dp).FuncSound ca aux p.2) :",
-             "theorem registrySpec_sound_of_funcSound (dp : DeployParams) (ca : Adr)\n"
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chainUsing_preserves_registryStable (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chainUsing_preserves_registryStable (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
              "    (h_frame : ∀ (s : Devm) (t : Adr),\n"
              "      some (s.getCode t).toList = Prog.compile (runtime dp))\n"
-             "    (h_all : ∀ p ∈ funcs dp, (registrySpec dp).FuncSound ca aux p.2) :"),
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chainUsing_future_installedCode (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chainUsing_future_installedCode (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (h_frame : ∀ (s : Devm) (t : Adr),\n"
+             "      some (s.getCode t).toList = Prog.compile (runtime dp))\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chainUsing_future_witness (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chainUsing_future_witness (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (h_frame : ∀ (s : Devm) (t : Adr),\n"
+             "      some (s.getCode t).toList = Prog.compile (runtime dp))\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chainUsing_future_membership (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chainUsing_future_membership (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (h_frame : ∀ (s : Devm) (t : Adr),\n"
+             "      some (s.getCode t).toList = Prog.compile (runtime dp))\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chainUsing_future_countConservation (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chainUsing_future_countConservation (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (h_frame : ∀ (s : Devm) (t : Adr),\n"
+             "      some (s.getCode t).toList = Prog.compile (runtime dp))\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem arbitraryFuture_registryFields (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem arbitraryFuture_registryFields (dp : DeployParams) (ca : Adr)\n"
+             "    (cfg : ChainConfig) (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.ReachUsing cfg checkpoint future)\n"
+             "    (h_frame : ∀ (s : Devm) (t : Adr),\n"
+             "      some (s.getCode t).toList = Prog.compile (runtime dp))\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach\n"
+             "    stable).installedCode",
+             "  (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach h_frame\n"
+             "    stable).installedCode"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach\n"
+             "    stable).witness",
+             "  (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach h_frame\n"
+             "    stable).witness"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach\n"
+             "    stable).membership htarget",
+             "  (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach h_frame\n"
+             "    stable).membership htarget"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach\n"
+             "    stable).countConservation",
+             "  (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach h_frame\n"
+             "    stable).countConservation"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "    (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach\n"
+             "      stable).coherent",
+             "    (chainUsing_preserves_registryStable dp ca cfg checkpoint "
+             "future reach h_frame\n"
+             "      stable).coherent"),
         ),
     },
     {
-        "name": "M4-chain-callee-pinned",
-        "family": "(iii) a cooperative-callee restriction, at the external edge",
+        "name": "M4-direct-call-only-premise",
+        "family": "(iii) a non-reentrancy / direct-call-only restriction "
+                  "behind an unchanged-looking wrapper",
         "requires_chain": True,
-        "expect": "code at",
+        "expect": "unrecognised",
         "why": (
-            "`coherent_of_call` is the one public statement that stands "
-            "downstream of arbitrary callee execution.  Pinning the callee's "
-            "bytecode there leaves the conclusion identical and the proof "
-            "easier, and turns an open-world transport lemma into a "
-            "closed-world one.  Two independent nets must reject it: the "
-            "own-address rule and the allowlist."),
+            "The other closed-world flavour, and the one the docstring names "
+            "second: a premise saying the contract is only ever ENTERED at the "
+            "top level, so no callback ever re-enters it.  It is spelled out "
+            "of `Sevm`'s own fields, its binder is called `hentry`, and none "
+            "of its words is in the token denylist -- so the positive "
+            "allowlist is what must reject it, on SHAPE, and does.  Carried on "
+            "the Prague headline and the four corollaries that read through "
+            "it, for the same elaboration reason as M3."),
         "edits": (
             ("Blanc/LidoCircuitBreakerHistoryChain.lean",
-             "    (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))\n"
-             "    (h_coh : RegistryCoherent (Devm.getStor s sevm.currentTarget))\n"
-             "    (h_run : Ninst.Run sevm s call sf) :",
-             "    (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))\n"
-             "    (h_callee : some (s.getCode w.toAdr).toList = Prog.compile (runtime dp))\n"
-             "    (h_coh : RegistryCoherent (Devm.getStor s sevm.currentTarget))\n"
-             "    (h_run : Ninst.Run sevm s call sf) :"),
+             "theorem chain_preserves_registryStable (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_preserves_registryStable (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hentry : ∀ (sevm : Sevm), sevm.currentTarget = ca → "
+             "sevm.depth = 0)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_future_installedCode (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_future_installedCode (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hentry : ∀ (sevm : Sevm), sevm.currentTarget = ca → "
+             "sevm.depth = 0)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_future_witness (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_future_witness (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hentry : ∀ (sevm : Sevm), sevm.currentTarget = ca → "
+             "sevm.depth = 0)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_future_membership (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_future_membership (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hentry : ∀ (sevm : Sevm), sevm.currentTarget = ca → "
+             "sevm.depth = 0)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_future_countConservation (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_future_countConservation (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hentry : ∀ (sevm : Sevm), sevm.currentTarget = ca → "
+             "sevm.depth = 0)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chain_preserves_registryStable dp ca checkpoint future "
+             "reach\n"
+             "    stable).installedCode",
+             "  (chain_preserves_registryStable dp ca checkpoint future "
+             "reach hentry\n"
+             "    stable).installedCode"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chain_preserves_registryStable dp ca checkpoint future "
+             "reach\n"
+             "    stable).membership htarget",
+             "  (chain_preserves_registryStable dp ca checkpoint future "
+             "reach hentry\n"
+             "    stable).membership htarget"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chain_preserves_registryStable dp ca checkpoint future "
+             "reach\n"
+             "    stable).countConservation",
+             "  (chain_preserves_registryStable dp ca checkpoint future "
+             "reach hentry\n"
+             "    stable).countConservation"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chain_preserves_registryStable dp ca checkpoint future reach "
+             "stable).witness",
+             "  (chain_preserves_registryStable dp ca checkpoint future reach "
+             "hentry stable).witness"),
         ),
     },
     {
@@ -1948,21 +2232,50 @@ MUTATIONS = (
              "  (chain_preserves_registryStable dp ca checkpoint future reach hcarry\n"
              "    stable).countConservation"),
         ),
-    },
-)
+    },)
+
+
+def patched(relative: str, text: str, edit) -> str:
+    """Apply one edit to one file's text, or fail.
+
+    `(file, old, new)` replaces the single occurrence of `old`.
+    `(file, start, end, new)` replaces the whole span from the single
+    occurrence of `start` through the first following occurrence of `end`,
+    inclusive -- which is how a case deletes or trivialises a declaration
+    without quoting its body.
+    """
+    if len(edit) == 3:
+        _, old, new_text = edit
+        count = text.count(old)
+        if count != 1:
+            fail(f"mutation edit is not unique in {relative} (found {count}): "
+                 f"{old.splitlines()[0]!r}")
+        return text.replace(old, new_text, 1)
+    _, start, end, new_text = edit
+    count = text.count(start)
+    if count != 1:
+        fail(f"mutation span start is not unique in {relative} (found "
+             f"{count}): {start.splitlines()[0]!r}")
+    begin = text.index(start)
+    stop = text.find(end, begin)
+    if stop < 0:
+        fail(f"mutation span end never occurs after its start in {relative}: "
+             f"{end.splitlines()[0]!r}")
+    return text[:begin] + new_text + text[stop + len(end):]
+
+
+def edit_target(edit) -> str:
+    return edit[0]
 
 
 def apply_edits(root: Path, edits) -> dict:
     original = {}
-    for relative, old, new in edits:
+    for edit in edits:
+        relative = edit_target(edit)
         path = root / relative
         text = path.read_text(encoding="utf-8")
         original.setdefault(relative, text)
-        if old not in text:
-            fail(f"mutation edit does not apply to {relative}: {old!r}")
-        if text.count(old) != 1:
-            fail(f"mutation edit is not unique in {relative}: {old!r}")
-        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        path.write_text(patched(relative, text, edit), encoding="utf-8")
     return original
 
 
@@ -2045,34 +2358,43 @@ def stage_mutant(root: Path, case: dict, staging: Path) -> None:
         texts[relative] = read_source(root, relative)
     if CHAIN.active:
         texts[CHAIN.path] = read_source(root, CHAIN.path)
-    for relative, old, new in case["edits"]:
+    for edit in case["edits"]:
+        relative = edit_target(edit)
         if relative not in texts:
             fail(f"{case['name']}: target {relative} is not staged; a "
                  "chain-targeting case cannot be judged while the owner is "
                  "dormant")
-        count = texts[relative].count(old)
-        if count != 1:
-            fail(f"{case['name']}: anchor occurs {count} times in {relative}, "
-                 f"expected exactly once: {old.splitlines()[0]!r}")
-        texts[relative] = texts[relative].replace(old, new, 1)
+        try:
+            texts[relative] = patched(relative, texts[relative], edit)
+        except Failure as exc:
+            fail(f"{case['name']}: {exc}")
     for relative, text in texts.items():
         (staging / relative).write_text(text, encoding="utf-8")
 
 
 def mutation_anchors_apply(root: Path, case: dict) -> str:
-    """Check a patch still applies, reading the dormant Chain owner from git."""
+    """Check a patch still applies, reading the dormant Chain owner from git.
+
+    Every file this gate reads is a legal target, not only the owners: a case
+    may narrow the premise vocabulary in `Blanc/Ladder.lean` or the dispatcher
+    in the program source, and a dry run that could not see those targets
+    would report them as unknown rather than as stale.
+    """
     texts = {relative: read_source(root, relative)
              for relative in OWNERS.values()}
+    texts[PROGRAM_SOURCE] = read_source(root, PROGRAM_SOURCE)
+    for relative in VOCABULARY_SOURCES:
+        texts[relative] = read_source(root, relative)
     texts[CHAIN.path] = (read_source(root, CHAIN.path) if CHAIN.active
                          else chain_source(root))
-    for relative, old, new in case["edits"]:
+    for edit in case["edits"]:
+        relative = edit_target(edit)
         if relative not in texts:
             return f"unknown target {relative}"
-        count = texts[relative].count(old)
-        if count != 1:
-            return (f"anchor occurs {count} times in {relative}, expected "
-                    f"exactly once: {old.splitlines()[0]!r}")
-        texts[relative] = texts[relative].replace(old, new, 1)
+        try:
+            texts[relative] = patched(relative, texts[relative], edit)
+        except Failure as exc:
+            return str(exc)
     return ""
 
 
