@@ -1902,6 +1902,130 @@ private theorem officialConstructorHeartbeatStoreLine_runCompiled
           omega
       · simpa only [Devm.setMach_setMach] using hstore
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+private theorem officialConstructorHeartbeatScratchLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorPauseStoredBase sevm base).setMach
+        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorPauseStoredBase sevm base).setMach
+        ⟨[], officialConstructorPauseMemory, G + 20⟩)
+      (pushB256 0 :::
+        storeByteOffset officialConstructorEventScratch +++
+        loadArgumentIndex 6 +++
+        storeByteOffset (officialConstructorEventScratch + 32) +++
+        rest) post := by
+  let zeroMemory := officialConstructorPauseMemory.write
+    officialConstructorEventScratch (0 : B256).toBytes
+  have hzeroEq : officialConstructorPauseMemory.write
+      officialConstructorEventScratch (0 : B256).toBytes = zeroMemory := by
+    rfl
+  have hzeroSize : zeroMemory.size = 4576 := by
+    unfold zeroMemory
+    rw [Mem.size_write_of_le]
+    · exact officialConstructorPauseMemory_size
+    · rw [B256.length_toBytes, officialConstructorPauseMemory_size,
+        officialConstructorEventScratch_eq]
+      decide
+  have hzeroWf : Mem.Wf zeroMemory := by
+    exact Mem.Wf.write officialConstructorPauseMemory_wf _ _
+  have hzeroReads : Mem.Reads zeroMemory
+      (Bytes.writeAt officialConstructorPauseImage
+        officialConstructorEventScratch (0 : B256).toBytes) := by
+    exact Mem.Reads.write officialConstructorPauseMemory_wf
+      officialConstructorPauseMemory_reads _ _
+  have hvalue : Bytes.toB256 ((zeroMemory.read 192 32).1) =
+      officialConstructorArgs.initialHeartbeatInterval := by
+    rw [Mem.Reads.read hzeroReads]
+    rw [Bytes.sliceD_writeAt_before _ _ 192 32
+      officialConstructorEventScratch (by
+        rw [officialConstructorEventScratch_eq]
+        decide)]
+    rw [← Mem.Reads.read officialConstructorPauseMemory_reads]
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorPauseMemory_read_argument ⟨6, by decide⟩
+  have hmemory : (zeroMemory.read 192 32).2 = zeroMemory := by
+    apply Mem.read_snd_eq_self
+    apply memExtSize_of_le
+    · rw [hzeroSize]
+    · rw [hzeroSize]
+      decide
+  have hfinal : zeroMemory.write (officialConstructorEventScratch + 32)
+      officialConstructorArgs.initialHeartbeatInterval.toBytes =
+        officialConstructorHeartbeatMemory := by
+    rfl
+  have hscratchLt : officialConstructorEventScratch < 2 ^ 16 := by
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hnextLt : officialConstructorEventScratch + 32 < 2 ^ 16 := by
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hscratchNat :
+      (Bytes.toB256
+        [(officialConstructorEventScratch >>> 8).toUInt8,
+          officialConstructorEventScratch.toUInt8]).toNat =
+        officialConstructorEventScratch := by
+    rw [List.toB256_pair officialConstructorEventScratch hscratchLt]
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hnextNat :
+      (Bytes.toB256
+        [((officialConstructorEventScratch + 32) >>> 8).toUInt8,
+          (officialConstructorEventScratch + 32).toUInt8]).toNat =
+        officialConstructorEventScratch + 32 := by
+    rw [List.toB256_pair (officialConstructorEventScratch + 32) hnextLt]
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hindex : (Nat.toB256 (32 * 6)).toNat = 192 := by decide
+  have hlastExt :
+      ((officialConstructorPauseStoredBase sevm base).setMach
+        ⟨[Bytes.toB256
+            [((officialConstructorEventScratch + 32) >>> 8).toUInt8,
+              (officialConstructorEventScratch + 32).toUInt8],
+            officialConstructorArgs.initialHeartbeatInterval],
+          zeroMemory, G + 20 - 17⟩).extCost
+        [⟨officialConstructorEventScratch + 32, 32⟩] = 0 := by
+    exact Devm.extCost_zero_of_le
+      (N := zeroMemory) (i := officialConstructorEventScratch + 32) (sz := 32)
+      (by rw [hzeroSize])
+      (by rw [hzeroSize, officialConstructorEventScratch_eq])
+  unfold storeByteOffset loadArgumentIndex pushCompactNat pushFixedNat
+  simp only [if_pos hscratchLt, if_pos hnextLt]
+  func_run (7) [0, 3, 0]
+  all_goals try rw [hscratchNat]
+  all_goals try rw [hnextNat]
+  all_goals try rw [hindex]
+  all_goals try rw [hzeroEq]
+  all_goals try rw [hmemory]
+  all_goals try rw [hvalue]
+  all_goals try rw [hfinal]
+  all_goals try rw [Devm.extCost_zero_of_le
+    (N := officialConstructorPauseMemory)
+    (by rw [officialConstructorPauseMemory_size])
+    (by rw [officialConstructorPauseMemory_size,
+      officialConstructorEventScratch_eq]; decide)]
+  all_goals try rw [Devm.extCost_zero_of_le
+    (N := zeroMemory) (i := 192) (sz := 32)
+    (by rw [hzeroSize])
+    (by rw [hzeroSize]; decide)]
+  all_goals try rw [Devm.extCost_zero_of_le
+    (N := zeroMemory) (i := officialConstructorEventScratch + 32) (sz := 32)
+    (by rw [hzeroSize])
+    (by rw [hzeroSize, officialConstructorEventScratch_eq]; decide)]
+  all_goals try
+    exact Devm.extCost_zero_of_le
+      (N := zeroMemory) (i := officialConstructorEventScratch + 32) (sz := 32)
+      (by rw [hzeroSize])
+      (by rw [hzeroSize, officialConstructorEventScratch_eq]; decide)
+  all_goals try exact hlastExt
+  all_goals try decide
+  all_goals try omega
+  exact hrest
+
 end LidoCircuitBreaker
 
 end Blanc
