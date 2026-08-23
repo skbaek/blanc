@@ -2065,6 +2065,95 @@ private theorem officialConstructorHeartbeatSuffix_runCompiled
   unfold officialConstructorHeartbeatSuffix
   convert hscratch using 1 <;> omega
 
+private theorem officialConstructorPauseMemory_read_argument_memory
+    (i : Fin 7) :
+    (officialConstructorPauseMemory.read (32 * i.val) 32).2 =
+      officialConstructorPauseMemory := by
+  apply Mem.read_snd_eq_self
+  apply memExtSize_of_le
+  · rw [officialConstructorPauseMemory_size]
+  · rw [officialConstructorPauseMemory_size]
+    have hi := i.isLt
+    omega
+
+set_option maxRecDepth 4096 in
+private theorem officialConstructorPauseStoreLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hcold : (sevm.currentTarget, pauseDurationSlot) ∉
+      (officialConstructorPauseLoggedBase sevm base).accessedStorageKeys)
+    (horiginal : getOrigStorVal sevm sevm.currentTarget
+      pauseDurationSlot = 0)
+    (hcurrent : (officialConstructorPauseLoggedBase sevm base).getStorVal
+      sevm.currentTarget pauseDurationSlot = 0)
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorPauseStoredBase sevm base).setMach
+        ⟨[], officialConstructorPauseMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorPauseLoggedBase sevm base).setMach
+        ⟨[], officialConstructorPauseMemory, G + 22109⟩)
+      (loadArgumentIndex 5 +++
+        pushB256 pauseDurationSlot ::: sstore ::: rest) post := by
+  have hvalue : Bytes.toB256
+      ((officialConstructorPauseMemory.read 160 32).1) =
+        officialConstructorArgs.initialPauseDuration := by
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorPauseMemory_read_argument ⟨5, by decide⟩
+  have hmemory :
+      (officialConstructorPauseMemory.read 160 32).2 =
+        officialConstructorPauseMemory := by
+    simpa using officialConstructorPauseMemory_read_argument_memory
+      ⟨5, by decide⟩
+  have hrest' : Func.RunCompiled fs sevm
+      ((officialConstructorColdStore sevm
+          (officialConstructorPauseLoggedBase sevm base)
+          pauseDurationSlot
+          officialConstructorArgs.initialPauseDuration).setMach
+        ⟨[], officialConstructorPauseMemory, G⟩)
+      rest post := by
+    simpa only [officialConstructorPauseStoredBase] using hrest
+  have hstore := officialConstructorColdStore_runCompiled
+    hcold horiginal hcurrent
+    (by unfold officialConstructorArgs; decide)
+    (by simp only [gCallStipend]; omega) hstatic hrest'
+  have hindex : (Nat.toB256 (32 * 5)).toNat = 160 := by decide
+  unfold loadArgumentIndex pushCompactNat
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 22106)
+    · decide
+    · simp only [Devm.gasLeft_setMach]
+    · simp only [Devm.stack_setMach, List.length_nil]
+      omega
+  · apply Func.RunCompiled.next
+    · apply Ninst.runCompiled_mload_of
+          (i := Nat.toB256 (32 * 5))
+          (v := officialConstructorArgs.initialPauseDuration)
+          (s := []) (M := officialConstructorPauseMemory)
+          (c := 3) (G := G + 22103)
+      · simp only [Devm.stack_setMach]
+      · simp only [Devm.memory_setMach, hindex]
+        rw [Devm.extCost_zero_of_le
+          (N := officialConstructorPauseMemory)
+          (by rw [officialConstructorPauseMemory_size])
+          (by rw [officialConstructorPauseMemory_size]; decide)]
+        decide
+      · simpa only [Devm.memory_setMach, hindex] using hvalue
+      · simpa only [Devm.memory_setMach, hindex] using hmemory
+      · simp only [Devm.gasLeft_setMach]
+      · simp only [Devm.stack_setMach, List.length_nil]
+        omega
+    · apply Func.RunCompiled.next
+      · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 22100)
+        · simpa only [gVerylow] using pushCost_of_ne_zero
+            (w := pauseDurationSlot) (by decide +kernel)
+        · simp only [Devm.gasLeft_setMach]
+          omega
+        · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega
+      · simpa only [Devm.setMach_setMach] using hstore
+
 end LidoCircuitBreaker
 
 end Blanc
