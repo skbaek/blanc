@@ -42,12 +42,20 @@ exactly one verdict line.
 
 Owners
 ------
-`Blanc/LidoCircuitBreakerHistory.lean` and
-`Blanc/LidoCircuitBreakerHistoryEndpoints.lean` are stable and committed and
-are checked in full.  `Blanc/LidoCircuitBreakerHistoryChain.lean` is in flight;
-its pins are already recorded, and `CHAIN.active = False` is the single switch
-that brings its owner row, its header pins, its trust scan and its axiom probe
-online.  Nothing else needs editing to activate it.
+All three of `Blanc/LidoCircuitBreakerHistory.lean`,
+`Blanc/LidoCircuitBreakerHistoryEndpoints.lean` and
+`Blanc/LidoCircuitBreakerHistoryChain.lean` are committed and checked in full.
+The Chain owner was dormant behind `CHAIN.active` while `registrySpec_sound`
+carried a `sorry`; that proof is closed and the switch is on, so its pins, its
+channels, its allowlist, its trust scan and its axiom probe are all live.
+
+A fourth net was added once the family was complete.  `VOCABULARY_PINS` pins
+the declarations this family is WRITTEN IN but does not own -- `RegistryWitness`
+and the `ContractSpec` premise vocabulary in `Blanc/Ladder.lean`.  Without it a
+pinned statement can keep its digest while the words it is made of change
+meaning underneath it, which is not hypothetical: threading `Mem.Wf` through
+the ladder moved `DispatchInv` and three Chain statements from `Pre` to `PreWf`
+while every public S7 digest stayed byte-identical.
 """
 from __future__ import annotations
 
@@ -95,39 +103,50 @@ PROGRAM_SOURCE = "Blanc/LidoCircuitBreaker.lean"
 
 
 class ChainActivation:
-    """The single switch for the in-flight Chain owner.
+    """The switch for the Chain owner, now ACTIVE.
 
-    `Blanc/LidoCircuitBreakerHistoryChain.lean` is being written by another
-    worker.  Its twelve public statements' text is final, so their pins are
-    already recorded in `HEADER_PINS["chain"]`; what is not final is the proof
-    of `registrySpec_sound`, which still carries a `sorry` and would fail both
-    the trust scan and the axiom probe today.
+    `Blanc/LidoCircuitBreakerHistoryChain.lean` was dormant while
+    `registrySpec_sound` still carried a `sorry`.  That proof is closed, the
+    seventeen endpoint obligations are discharged, and this owner is checked
+    in full: its pins, its semantic channels, its open-world allowlist, the
+    trust scan and the axiom probe.
 
-    Activation runbook, for the lead:
+    `--chain-dry-run` survives activation as a review aid.  While the owner
+    was dormant it read the frozen revision named by `pinned_at`; now that the
+    owner is live, reporting about bytes that no longer exist would be worse
+    than not reporting at all, so `pinned_at()` resolves the branch tip and
+    `chain_source` reads the working file.
 
-      1. `scripts/check-lido-circuit-breaker-history.sh --chain-dry-run`
-         reads the PINNED COMMITTED revision (never the working file) and
-         reports whether the recorded pins, the semantic channels and the
-         open-world allowlist still accept the module.
-      2. Flip `active` to `True` here.  Nothing else in this file needs
-         editing.
-      3. Run the gate.  The first activated run may report declarations the
-         finished module gained that have no pin yet, and will report the
-         `sorry` in `registrySpec_sound` if it is still there.  Both reports
-         are the review list, not a gate defect: read the new statements, then
-         add their digests from `--print-observed-digests`.
-      4. `--mutations-dry-run` then judges M4 and M5, which target this owner
-         and are skipped while it is dormant.
-      5. `--mutations --worktree <isolated tree>` runs the campaign.
+    Reactivating a future in-flight successor is the reverse: set `active` to
+    `False` and pin `pinned_at` to a literal revision.
     """
 
-    active = False
+    active = True
     key = "chain"
     path = "Blanc/LidoCircuitBreakerHistoryChain.lean"
     module = "Blanc.LidoCircuitBreakerHistoryChain"
-    # Recorded from the committed revision the pins were taken at, so a
-    # deliberate restatement is distinguishable from a drifting one.
-    pinned_at = "7f6c147"
+
+    # The revision this owner's pins describe.  While the owner is ACTIVE that
+    # is whatever the branch tip currently is, resolved on every call, because
+    # the pins are taken from the working tree and a stale literal here would
+    # make `--chain-dry-run` report about bytes that no longer exist.  While
+    # DORMANT this must be a literal revision, so that a deliberate
+    # restatement stays distinguishable from a drifting one.
+    _frozen_at = None
+
+    @staticmethod
+    def pinned_at() -> str:
+        if ChainActivation._frozen_at is not None:
+            return ChainActivation._frozen_at
+        run = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        if run.returncode:
+            fail("cannot resolve the branch tip for the Chain owner: "
+                 + run.stderr.strip())
+        return run.stdout.strip()
+
     # The twelve public statements the packet requires this owner to pin.
     # Checked for presence in `HEADER_PINS["chain"]` whether active or not, so
     # a pin deleted while the owner is dormant still fails the gate.
@@ -424,20 +443,70 @@ def binder_parts(binder: str) -> tuple:
 # >>> HEADER PINS >>>
 HEADER_PINS = {
     "chain": {
+        "RegistryStable.countConservation": "7dc9d9d097f7a5ed984b3426610dfdbcdb007ae711e8b3f0d1ec58b050ed0e9e",
+        "RegistryStable.installedCode": "41a7a10fa90009b7ceb0e682eaae597c888428f439cd6b108a02a6293201630b",
+        "RegistryStable.membership": "d231f193d9c11dc6e5110e827efc4677d2bdeebbf2b359cf9db98760761b3f88",
+        "RegistryStable.witness": "8223252dc9bcc9444e013cf099698c1d1282532a53b5198ec106d5777f413494",
         "applyTransactions_preserves_registryStable": "216b5d62d37262ac4a8283537f335721f10982be48ad92e45921ff6f92c49289",
+        "arbitraryExec_post_registryFields": "0a56502f3a3ef61956b59321465e5e6a4a2f6c4369239b0a677cc42ea250110c",
+        "arbitraryFuture_registryFields": "622966ab492e4424080b6be75b2db09e86a883be32a3dacdce687bcec0054f36",
+        "byteArray_mk_toArray_toList": "833da9eb2aec073dbae18ba4a12124b84186c8c8f7855d5c38f89390dcc8d6ff",
+        "canonicalAddress_of_validAdr": "ab44120194f37987906fcff8a601470e5d6915bdd1e86773eb4be3006b3c470c",
+        "chainUsing_future_countConservation": "faa418e40238422f55ce6ff55b056985a6b18b6ca3dd736f735d4d4ff970bb01",
+        "chainUsing_future_installedCode": "db5ccd573daf4a1378370723f4c68c9302d621c25ae91356616c45b88706ab35",
+        "chainUsing_future_membership": "aaad5e70bbf514d0f76c6a05df6dbc65ae05927d5fc8752fa01e007734aeea50",
+        "chainUsing_future_witness": "a781e8139ad4980b25abf0164c9002dc670911c29c794c704e88088ee9a7edb4",
         "chainUsing_preserves_registryStable": "5a7616fb3453eb6237cc0f02587269c9dfcea53cb96bef2fee89e10f6a325d9b",
+        "chain_future_countConservation": "126adfae446c60cea2733475117b9d5ea131c98a04efbd71446430f54a6bf95d",
+        "chain_future_installedCode": "b85f35e640916c95b7bfe327f900c90690428f1a5503c883749eabc03a07465d",
+        "chain_future_membership": "fd31c5dcdfbc15de120d9fdb13e8b9239e6a8e07678ea1348a1d3d6cd84d8171",
+        "chain_future_witness": "3bc21c16606ed4a08cb11237c2df726208a309c7568452790dbc40279182b899",
         "chain_preserves_registryStable": "379a64905d5e77c1fc786cca27e020af6a21f9eb1081ff4a39c9fc1d86831c7a",
-        "coherent_of_call": "35f266f40ae2e413182d744452fbb3f46b68335396edb5f2de6237ba0d917a97",
-        "coherent_of_childFrame": "a31e3cc630b02fd1a4ade56a1b6e818480d5e8f6e49525807d181b13912c198d",
-        "coherent_of_statcall": "4e584a4681f68ef15c80f6969296a5bb310ec47b1f6a04d9564aa74fe0065724",
+        "code_of_getCode_eq": "9eceb2c4927697718444e48be5ac7244f1bd22b36817c610aab53e3625b5a31b",
+        "code_of_ninst": "d2223c28b97a7c0065ded9a7199503aed5682db64f31b588ed9aa2c451e48f97",
+        "coherent_decodePausedResult": "a86b5eae04d4ea1ee7fa2f9248cff86e2ff2e50e022bd34cf212ec7aba1b6b96",
+        "coherent_of_call": "65c1bb0a008188b7f6ca7530bab5fd7034ec587b3847a061151a750555e49c77",
+        "coherent_of_childFrame": "3c66c3cbb5072d6a97364391dff57f663c02dd8b59f116bdc2b4f7c50ca59a3b",
+        "coherent_of_pauseKernelRun": "05586b650f7988578c3a7a6300ac20e7c08bb6b8aa6117af516dfb82733015e2",
+        "coherent_of_statcall": "8419a5a1efc954bb60e35f6c0e463978f61d1df2600edac30eeeec4e2b110c58",
+        "coherent_of_stor_eq": "551252a0eb60d8b475dfcac896f1925944c673ae5727e4b27de9e18f8ed81747",
+        "coherent_pause": "f93b9cf653e402f26d5a42959706485877fdc0c78deeafbb97ec6c58afca65df",
+        "coherent_pauseAfterSet": "a7011633d88b410cdf8c2553861abbcb4b399a3469cf01998ebaea27ec08db30",
+        "coherent_pauseExpiryFinish": "0c60bd470c5dfdf553e744892d43bdbc366c0a10a935fe7ae9675997bd7484f5",
+        "coherent_pauseSuccess": "1eb7968c6719dbd66f9595d0f235876bb76794e990e7db3d41eefc5d10087118",
+        "coherent_registerPauser": "073d49d054131384f0ea0bc0e1264ccef3451288386883a70a915eeb0626225e",
+        "countConservation_of_witness": "d22f06901a52e5c525291e7e5a1b5d823c59a046e50d94f3934d6010eec5c090",
+        "emptyRegistryWorld_get": "d26476e458668b113473ec9e9621ac7818d03bfe076fc00c8cb1afefd3b6cd65",
+        "emptyRegistryWorld_registryFields": "c1bdbecb7f6ae2edb3bb1732d4ae1af9cedd51f5ca43f9d6595e2387c3cc5886",
+        "emptyRegistryWorld_registryStable": "e2f9f534bf9c45ea39ce150d6c978bda0f073260d6b16fb42ca1dd0f9a491184",
+        "emptyRegistryWorld_witness": "cc20dec3daeb91307cfc0e7608883ea41a041fbd553d7271a5531d5b81182928",
         "getDelegatedCodeAddress_of_compile": "f66592652157a05d32cda724de8f7223b7bc74467b91d640b75d1610e0c925cf",
+        "get_bubbleRevertSlot": "2cacc0b135c8adfd5d72ba23accba9fe28c69039cb9cd5dc2e36134f5323ae84",
+        "get_setPauserSlot": "356a0b153cab58e5fc360d6659fad2f00844a0fe5362b87f45a010d563f10cd3",
+        "inv_prependStoresRev": "99b793be0df1604ba759744fd411ea3526b27502468e0f6e2627eadc44740507",
+        "loadWord_image": "022f4737a3d9e540eda72a78f97afaa5827d2645462fe8befb601c0bf883472c",
+        "mem_reads_data": "ab0541e0dfa602787703695b60ad3802a71d8152bef0c99a0165b220a9bce3f7",
+        "membership_of_witness": "088e491da668b5dba5ee947948d09559b8ba62ff528e4340160a07ffd7d98bde",
+        "mstoreAt_image": "d0096a04bc4e5fd4e171485ed45f392e7a02280c36292d5c51892f8f62d92f54",
+        "ninst_codePreserve": "48005abd46b387de3f3e07e7b67984d54094f05aa763c8dd608b3667b4992632",
+        "pause_funcSound": "0f8f4f627e60c022bcc8067fed1a0f3eb41e294158283ae53ce11b9972c60a57",
+        "prefix_of_loadWord": "928ce57c0b0c886947c16d463eb5845d9325fd6c76ca161aa182a49bd5e8893d",
         "processMessageCall_preserves_registryStable": "3ef951b8bc65c64427d44f69d865aacf7c0249ad03e55af41b7133998331197e",
         "processTransaction_preserves_registryStable": "3bf66acf5d10535ef86e3322c3853939a12b1e1c296a1bdd334fcc5ccc942ade",
+        "read_writeAt_before": "85c845d584c9b9bb05ab3773af90d3caacda6169bf1d8cab4fbbd51042c52873",
+        "read_writeAt_self": "e99b44fd30069121952d8c4744913f3f87b2208d3e7d3b899837c0c0145031f4",
+        "registerPauser_funcSound": "27f070b62065a2522b330ae2fe4089c247837133ac2c194d97735d3bf7d73a6f",
         "registrySpec_preserves": "8c9fd57bcd6db635dcbeeb49151d882c7eed51fd7f14429b61fce9721c6658d3",
         "registrySpec_sound": "9d734939dbef20c5d9ebc23eafbbba573f40928d8d1ddb44c61d874490d3f09b",
+        "registryView_getStor": "b1027f30a809194c720b520851cf8c637bfd095562da5a430adacb00110b19ec",
         "stateTransitionUsing_preserves_registryStable": "3bcf31c79ca247a7e1da8257b102850a525da4fbd987bb33dc112f274ea88bfe",
         "stateTransitionWith_preserves_registryStable": "66bad9dce69cb11405add9c6dd4a20b0c1fe65d0478dfa4467c8baaffda9b9b3",
-        "stateTransition_preserves_registryStable": "6b35ef2155acbddf9deb5fa585e78e584518a9b2907cb0adc1e8eecda5b5d4ed"
+        "stateTransition_preserves_registryStable": "6b35ef2155acbddf9deb5fa585e78e584518a9b2907cb0adc1e8eecda5b5d4ed",
+        "storFixed_panicData": "299e2de33b8ee57325bd573d07682a77645dab5966791407b6a72c90891529dd",
+        "storFixed_pauseFailedError": "33afc0df5c18a96f633763a2ece5f6d0a759abdbbb3dcf2acbcff00b24070a0e",
+        "storFixed_reentrantCallError": "6c06d4a2c38ac889ff0791a9835de3a8685cd7f84fec8da82dc4f0ba19ac9cf8",
+        "storFixed_revReturnData": "35fa1fb99aaf5928e589fee886454b23261ab21be3f2acc9f9bc9f6b590cc719",
+        "wf_of_mem_eq": "42de7af2573700b9593a25fd9da7ab8ff418dd5f93de91e07bf28e992715cd71"
     },
     "endpoints": {
         "Coherent.branch": "6d6e880d4d47972acf6dae481c57875cb0bf8161d528036caee19823b2fe2726",
@@ -507,7 +576,7 @@ HEADER_PINS = {
         "zero_payload_lt": "922afcf6132058b18913124957a5976912db5b72dc8666229a5a5e13d69aace5"
     },
     "history": {
-        "DispatchInv.line": "8993f6e83b843f214c6aff2191af5ff632c29c9d7d404ef3090bd1a37b06b99e",
+        "DispatchInv.line": "cff8acdb47e0462f062e95da9430bee555547ba980a87d6a6c0ac3b62d7f0266",
         "StorFixed.branch": "02c20eca6deb206ec555a60141acd73398733b5e4bc8e1ab2bbed0359b1d5c9d",
         "StorFixed.call": "93493a61a89b2062964f285fb45f6cc80f1a8e2c25aa5df70b1398f74afdff56",
         "StorFixed.last": "d7984be51107bca69a3219b910498b877ee908ea7472618058a3ff9b72a08b53",
@@ -532,13 +601,16 @@ HEADER_PINS = {
 
 # >>> DEFINITION PINS >>>
 DEFINITION_PINS = {
-    "chain": {},
+    "chain": {
+        "emptyRegistryWorld": "998a5a115f4bb8a70f569e7cf09c7c012014b32296c464904b91485534b6170f",
+        "registryView": "0a512b4685656d8302e6a33b6f9c9e09ddd782a9e746ed50e1ecdb83041f2177"
+    },
     "endpoints": {
         "Coherent": "71e0b8a9297e1779023ccf8d81524e81b2b484acc2c674e6f746e5b3fcdc019a",
         "SilentIn": "439123a9eb01411614919e885f7f655bef1bf6656461efa4cfa728b96a44d531"
     },
     "history": {
-        "DispatchInv": "1471170e6ef9daf0bbf8133fe7113ab3f265be70212c4cc2d1d6f0d001d687e2",
+        "DispatchInv": "574528abf00a3e3d21cf448fbc6410b106d0987add183df57a88b977ff6b1e2d",
         "RegistryCoherent": "e89b4dcf96254b323d874f57fc07f0c22e642c46297152a325de097ed875fa00",
         "RegistryStable": "099ddbc2833ee8e3ea9bee46492656e357496f545563ee5c63cf3508f4613eba",
         "StorFixed": "1803c987cdacc7b80b0c59518a9878f11bf1803b40f0c27c70c858493da7b123",
@@ -548,7 +620,7 @@ DEFINITION_PINS = {
 # <<< DEFINITION PINS <<<
 
 # >>> IMPORT PINS >>>
-IMPORT_PINS = {'chain': ('import Blanc.LidoCircuitBreakerHistory',), 'endpoints': ('import Blanc.LidoCircuitBreakerHistory',), 'history': ('import Blanc.LidoCircuitBreakerSuccess',)}
+IMPORT_PINS = {'chain': ('import Blanc.LidoCircuitBreakerHistoryEndpoints',), 'endpoints': ('import Blanc.LidoCircuitBreakerHistory',), 'history': ('import Blanc.LidoCircuitBreakerSuccess',)}
 # <<< IMPORT PINS <<<
 
 # >>> VARIABLE PINS >>>
@@ -580,8 +652,209 @@ SEMANTIC_CHANNELS = {
     "Coherent": ("Func.Core", "(runtime dp).main :: aux", "RegistryCoherent"),
     "SilentIn": ("Linst.Inv Devm.getStor Devm.getStor",
                  "Ninst.Inv Devm.getStor"),
-    "DispatchInv": ("c.Pre ca e s", "Exec.InvDepth"),
+    # `PreWf` and `Mem.Wf` are listed because the deeper-frame hypothesis is
+    # phrased at the STRONGER antecedent, which is what makes the dispatcher
+    # lemmas the stronger claim; a re-pin that quietly put `c.Pre ca` back
+    # into the `Exec.InvDepth` argument would restore the weaker theorem.
+    "DispatchInv": ("c.Pre ca e s", "Mem.Wf s.memory", "Exec.InvDepth",
+                    "c.PreWf ca", "c.Post ca"),
 }
+
+
+# --------------------------------------------------------------------------
+# Vocabulary pins: declarations this family NAMES but does not own
+# --------------------------------------------------------------------------
+#
+# Every pin above is scoped to an owner, and an owner is a file this gate
+# checks in full.  That leaves a hole exactly where the family's meaning
+# actually lives: the premise vocabulary its pinned statements are written IN.
+#
+#   * `RegistryWitness` (`Blanc/LidoCircuitBreakerRegistryModel.lean`) is the
+#     structure the whole invariant bottoms out in.  `RegistryCoherent` is
+#     `∃ entries, RegistryWitness ... entries`, and SEMANTIC_CHANNELS makes
+#     sure it keeps saying so -- but nothing pinned what `RegistryWitness`
+#     MEANS.  Gut one field (`arrayWords : ∀ index, index < entries.length →
+#     True`) and every S7 pin, every channel token and every allowlist pattern
+#     stays byte-identical while the invariant goes near-vacuous.  The registry
+#     gate does not cover it either: its coverage is the dotted
+#     `RegistryWitness.*` theorems, not the structure.
+#
+#   * `ContractSpec` and its fields (`Pre`, `PreWf`, `Post`, `Sound`,
+#     `FuncSound`, `Preserves`, `StateInv`, `MsgInv`), `Exec.InvDepth`, and
+#     `BlockChain.Reach`/`ReachUsing` (`Blanc/Ladder.lean`) are named by pinned
+#     S7 statements and pinned by nothing.  The worked exploit: add
+#     `block.txs = []` to `BlockChain.ReachUsing.step` and
+#     `chain_preserves_registryStable` still READS "every state reachable by
+#     the configured valid-chain relation", with an unchanged digest, while
+#     covering only empty blocks.
+#
+# This is not a second owner relation: these files are read, and only the
+# named declarations are pinned, exactly as `PROGRAM_SOURCE` is read rather
+# than owned.  Nothing here requires the rest of either file to hold still.
+#
+# The threading of `Mem.Wf` through this vocabulary is precisely the change
+# that moved `DispatchInv` and three Chain statements from `Pre` to `PreWf`
+# while leaving every public S7 digest untouched -- which is this hole being
+# exercised in the ordinary course of work, not a hypothetical.
+
+# The authoritative list of what is pinned, per file.  `VOCABULARY_PINS` below
+# holds a digest for exactly these names -- no more, no less -- so that
+# dropping a name from this tuple is a visible edit rather than a silently
+# missing pin, and so that the digest emitter cannot bootstrap itself from an
+# empty table.
+VOCABULARY_NAMES = {
+    "Blanc/LidoCircuitBreakerRegistryModel.lean": (
+        "Blanc.LidoCircuitBreaker.RegistryWitness",
+    ),
+    "Blanc/Ladder.lean": (
+        "Blanc.ContractSpec",
+        "Blanc.ContractSpec.Pre",
+        "Blanc.ContractSpec.PreWf",
+        "Blanc.ContractSpec.Post",
+        "Blanc.ContractSpec.Sound",
+        "Blanc.ContractSpec.FuncSound",
+        "Blanc.ContractSpec.Preserves",
+        "Blanc.ContractSpec.StateInv",
+        "Blanc.ContractSpec.MsgInv",
+        "Blanc.Exec.InvDepth",
+        "Blanc.BlockChain.Reach",
+        "Blanc.BlockChain.ReachUsing",
+    ),
+}
+
+VOCABULARY_SOURCES = tuple(VOCABULARY_NAMES)
+
+# >>> VOCABULARY PINS >>>
+VOCABULARY_PINS = {
+    "Blanc/Ladder.lean": {
+        "Blanc.BlockChain.Reach": "f65d2cfb2dd0fa916d35deac841a6eeebd45676aec48c7b5e76c2898807f6244",
+        "Blanc.BlockChain.ReachUsing": "cf3e4d62373f92180b65f6a0458426517e58e8ba501c0cf31ec744dd33ce386c",
+        "Blanc.ContractSpec": "74cb032721b7e1cdff473d3da8860eda24ad0e2521b806386e659c5201ca116c",
+        "Blanc.ContractSpec.FuncSound": "2d6e17d10b936922813c6ed7c44521c2c2771728a130abdb9ab1f8b9f4c09346",
+        "Blanc.ContractSpec.MsgInv": "3ef6dcf39e3da7573446e9726f2d8524c4cc58aaef8e682c0f404134a6a527b2",
+        "Blanc.ContractSpec.Post": "9f679f2df84d0d895c840ecac3adace6100217e20e096ddb7afb63a6ab369128",
+        "Blanc.ContractSpec.Pre": "4bb25d71b8813e4ddb95628f959896908e5e7b6a19bfcbd4fa8f7b27e6859281",
+        "Blanc.ContractSpec.PreWf": "3d7d6e012e6ab6371fc1a760edfd3bde1b0b9784ddd6c137172b9c6d062d9955",
+        "Blanc.ContractSpec.Preserves": "ab90b4aa2e5f5959592f8fb423c98d56bc572cc2740ab0aabc839c8f071dc4e3",
+        "Blanc.ContractSpec.Sound": "e16750a15964eaa6797c0f04c9d06a3a66e07346b1f09c1892b66dfcc7060a38",
+        "Blanc.ContractSpec.StateInv": "e934052b2170660338713cb8b3adb45902fd7b1783ad709e4d0ac4947b7dd322",
+        "Blanc.Exec.InvDepth": "59fc3b3886be2ff06afcbb5d211e3e6928d37c592221353c4c686f4fdb67e82a"
+    },
+    "Blanc/LidoCircuitBreakerRegistryModel.lean": {
+        "Blanc.LidoCircuitBreaker.RegistryWitness": "56689ed4cf8d2222dfdb372dc7886763d21cb6c5f7b3f62211533861fec8ea0a"
+    }
+}
+# <<< VOCABULARY PINS <<<
+
+# The second net under `VOCABULARY_PINS`, in the same spirit as
+# `SEMANTIC_CHANNELS`: a digest re-taken in a hurry over a gutted declaration
+# passes by construction and fails here.  For `RegistryWitness` the tokens are
+# its field NAMES plus the terms that make each field say something -- a field
+# whose body has been replaced by `True` keeps its name but loses its term.
+VOCABULARY_CHANNELS = {
+    "Blanc.LidoCircuitBreaker.RegistryWitness": (
+        "targetsNodup", "targetsValid", "pausersValid", "lengthWord",
+        "arrayWords", "assignments", "indices", "counts", "zeroCount",
+        # One content token PER FIELD, not one shared token: a field name
+        # survives its own body being replaced by `True`, and a token that
+        # appears in a sibling field (`nonzeroCanonicalAddress` is in both
+        # `targetsValid` and `pausersValid`) would let either be gutted while
+        # the other kept the channel satisfied.
+        "(entries.map Prod.fst).Nodup",
+        "nonzeroCanonicalAddress entry.1",
+        "nonzeroCanonicalAddress entry.2",
+        "storage.read arrayLengthSlot = Nat.toB256 entries.length",
+        "targetAt entries index", "assignmentAt entries target",
+        "Nat.toB256 (oneBasedIndexAt entries target)",
+        "Nat.toB256 (assignmentCount entries pauser)",
+        "storage.read (countSlot 0) = 0"),
+    "Blanc.ContractSpec.Pre": ("Prog.compile c.prog", "c.Side devm.getBal",
+                               "c.PreInv devm ca sevm"),
+    "Blanc.ContractSpec.PreWf": ("c.Pre ca sevm devm",
+                                 "Mem.Wf devm.memory"),
+    "Blanc.ContractSpec.Post": ("c.Side devm.getBal", "c.PostInv devm ca"),
+    "Blanc.ContractSpec.Sound": ("Prog.Run sevm pre c.prog post",
+                                 "sevm.currentTarget = ca",
+                                 "c.PreWf ca sevm' pre'", "Mem.Wf pre.memory",
+                                 "c.Pre ca sevm pre", "c.Post ca sevm post"),
+    "Blanc.ContractSpec.Preserves": ("Exec 0 sevm pre (.ok post)",
+                                     "Prog.compile c.prog",
+                                     "Mem.Wf pre.memory",
+                                     "c.Pre ca sevm pre",
+                                     "c.Post ca sevm post"),
+    "Blanc.ContractSpec.FuncSound": ("c.Pre ca sevm s", "Mem.Wf s.memory",
+                                     "Exec.InvDepth sevm.depth ca c.prog",
+                                     "c.PreWf ca", "c.Post ca",
+                                     "Func.Run (c.prog.main :: aux) sevm s f r"),
+    "Blanc.Exec.InvDepth": ("ForallDeeperAt k ca p",
+                            "σ sevm pre → ifOk (ρ sevm) exn"),
+    # The reachability relations carry the family's headline quantifier.  The
+    # tokens are the step rules' own content: drop or restrict a step and the
+    # relation still reads as "reachable" while covering less.
+    "Blanc.BlockChain.Reach": (
+        "refl (ch : BlockChain) : Reach ch ch",
+        "sum ch'.state.bal + wdsum block.wds < 2 ^ 256",
+        "stateTransition ch' block = .ok ch''", "Reach ch ch''"),
+    "Blanc.BlockChain.ReachUsing": (
+        "cfg.Valid", "ch.ValidContext", "cfg.chainId = ch.chainId",
+        "sum ch'.state.bal + wdsum block.wds < 2 ^ 256",
+        "stateTransitionUsing cfg ch' block = .ok ch''",
+        "ReachUsing cfg ch ch''"),
+    "Blanc.ContractSpec.StateInv": ("Prog.compile c.prog", "c.Side w.bal",
+                                    "c.Inv (w.getStor ca) 0 (w.bal ca)"),
+}
+
+
+def vocabulary_key(declaration: dict) -> str:
+    namespace = declaration["namespace"]
+    return (namespace + "." + declaration["name"]).lstrip(".")
+
+
+def vocabulary_map(source: str) -> dict:
+    found = {}
+    for declaration in declarations(source):
+        found[vocabulary_key(declaration)] = declaration
+    return found
+
+
+def vocabulary_pins(root: Path) -> None:
+    """Pin the named declarations of the files this family is written IN.
+
+    Unlike an owner, only the NAMED declarations are checked; the rest of each
+    file is free to move.  Every pinned name must still exist, and every
+    channel token must still appear.
+    """
+    for relative, names in sorted(VOCABULARY_NAMES.items()):
+        expected = VOCABULARY_PINS.get(relative) or {}
+        if sorted(expected) != sorted(names):
+            fail(f"vocabulary pin table for {relative} does not match its "
+                 f"name list: pinned {sorted(expected)}, expected "
+                 f"{sorted(names)}. The premise vocabulary this family's "
+                 "statements are written in must be pinned, or a statement "
+                 "can keep its digest while its words change meaning "
+                 "underneath it")
+        found = vocabulary_map(read_source(root, relative))
+        for name, pin in sorted(expected.items()):
+            if name not in found:
+                fail(f"vocabulary declaration {name} is absent from "
+                     f"{relative} -- renamed, moved or deleted; every pinned "
+                     "S7 statement that names it now means something this "
+                     "gate cannot see")
+            actual = digest(found[name]["text"])
+            if actual != pin:
+                fail(f"vocabulary declaration {name} changed in {relative}. "
+                     "A pinned S7 statement can keep its digest while this "
+                     "changes underneath it, so this is a claim change until "
+                     "review says otherwise")
+        for name, tokens in VOCABULARY_CHANNELS.items():
+            if name not in found:
+                continue
+            text = normalize(found[name]["text"])
+            for token in tokens:
+                if normalize(token) not in text:
+                    fail(f"vocabulary declaration {name} no longer mentions "
+                         f"{token!r}; its pin may have been re-taken over a "
+                         "gutted body")
 
 
 # --------------------------------------------------------------------------
@@ -607,7 +880,8 @@ DATA_TYPES = frozenset({
     "BlockOutput", "Bool", "ByteArray", "Bytes", "ChainConfig",
     "ContractSpec", "DeployParams", "Devm", "ForkRules", "Func",
     "Jaune.State", "Line", "Linst", "List (B256 × Func)", "List (Nat × Tx)",
-    "List Entry", "List Func", "Msg", "MsgCallOutput", "Nat", "Nat → Prop",
+    "List Entry", "List Func", "Mem", "Msg", "MsgCallOutput", "Nat",
+    "Nat → Prop",
     "Ninst", "Prog", "Sevm", "Stack", "Stor", "Tx", "Xlot",
 })
 
@@ -627,6 +901,12 @@ ADMISSIBLE_HYPOTHESES = (
     ("fragment storage-invariance",
      rf"(Func|Linst)\.Inv Devm\.getStor Devm\.getStor {_ID}", True),
     ("line storage-invariance", rf"Line\.Inv Devm\.(getStor|state) {_ID}", True),
+    # Added as its own row rather than by widening the alternation above: the
+    # dispatcher's selector-comparison lines must leave the MACHINE's memory
+    # alone as well as the world's storage, because `DispatchInv` now carries
+    # `Mem.Wf`.  Same character as the two projections above -- a line that
+    # changes nothing -- and it restricts no callee.
+    ("line memory-invariance", rf"Line\.Inv Devm\.memory {_ID}", True),
     ("instruction storage-invariance",
      rf"Ninst\.Hinv Devm\.getStor {_ID}", True),
     # ---- the obligation shapes ----
@@ -687,9 +967,22 @@ ADMISSIBLE_HYPOTHESES = (
     #
     # Also address-pinned: this is the hypothesis that says re-entry into THIS
     # contract is handled, and it must be about this contract.
+    #
+    # The antecedent is `PreWf`, and this row was REPLACED rather than widened
+    # to `(Pre|PreWf)` when the ladder started threading `Mem.Wf`.  The
+    # direction is what makes that mandatory.  `Exec.InvDepth k ca p σ ρ` puts
+    # `σ` in the ANTECEDENT of its implication (`σ sevm pre → ifOk (ρ sevm)`),
+    # so `σ` sits in negative position and a STRONGER `σ` yields a WEAKER
+    # hypothesis.  `PreWf` is `Pre` plus `sevm.currentTarget = ca → Mem.Wf
+    # devm.memory`, hence strictly stronger, hence `InvDepth ... PreWf ...` is
+    # the weaker premise and the theorem carrying it is the stronger claim.
+    # A row reading `(Pre|PreWf)` would keep admitting the older, stronger
+    # premise -- the weaker theorem -- under a label that says the opposite,
+    # which is precisely the "widening an allowlist pattern by one character"
+    # this file's own comment names as the hazard.
     ("deeper-frame induction hypothesis at the contract's own target",
      r"Exec\.InvDepth sevm\.depth sevm\.currentTarget \(runtime dp\) "
-     r"\(\(registrySpec dp\)\.Pre sevm\.currentTarget\) "
+     r"\(\(registrySpec dp\)\.PreWf sevm\.currentTarget\) "
      r"\(\(registrySpec dp\)\.Post sevm\.currentTarget\)", True),
     # ---- the external edges ----
     ("operand-stack prefix",
@@ -721,6 +1014,97 @@ ADMISSIBLE_HYPOTHESES = (
     ("account not created in this block", r"ca ∉ benv\.createdAccounts", True),
     ("chain reachability",
      r"BlockChain\.Reach(Using cfg)? checkpoint future", True),
+
+    # ---- `ContractSpec.Preserves`, spelled out ----
+    #
+    # `arbitraryExec_post_registryFields` is an anti-vacuity control: it takes
+    # an ARBITRARY successful execution from the contract's frame and projects
+    # real `RegistryWitness` fields out of the post-state.  Its four premises
+    # are verbatim the binders of `ContractSpec.Preserves` (`Blanc/Ladder.lean`
+    # `Blanc.ContractSpec.Preserves`, whose text this gate now pins), in order:
+    # the execution, the code guard, the memory guard and the precondition.
+    #
+    # None of the four is a cooperative-world premise.  The two implications
+    # are guarded by `sevm.currentTarget = ca`, so they say nothing whatever
+    # about any other account -- they are the ladder's own way of saying "when
+    # this frame IS the contract, its code is the compiled runtime and its
+    # memory is well-formed", both of which the rungs above discharge at
+    # `initDevm`.  They are listed as four separate rows rather than one
+    # catch-all so that a fifth premise appearing alongside them still fails.
+    ("Preserves shape: an arbitrary successful execution from frame entry",
+     r"Exec 0 sevm pre \(\.ok post\)", True),
+    ("Preserves shape: the code guard, on the contract's own frame only",
+     r"sevm\.currentTarget = ca → "
+     r"some sevm\.code\.toList = Prog\.compile \(runtime dp\)", True),
+    ("Preserves shape: the memory guard, on the contract's own frame only",
+     r"sevm\.currentTarget = ca → Mem\.Wf pre\.memory", True),
+    ("Preserves shape: the frame-entry precondition",
+     r"\(registrySpec dp\)\.Pre ca sevm pre", True),
+
+    # ---- the machine's memory invariant ----
+    #
+    # `Mem.Wf μ` is `μ.data.size ≤ μ.size` (`Blanc/CommonCore.lean`): a
+    # statement about the machine's own memory REPRESENTATION, not about the
+    # world.  It restricts no callee, no depth and no caller.  It has to be
+    # carried rather than derived because `Mem.write`'s in-place branch
+    # preserves its negation just as faithfully; the rungs above discharge it
+    # at `initDevm` via `Mem.wf_empty`, which is why no headline statement of
+    # this family carries it.
+    ("machine memory well-formedness", rf"Mem\.Wf {_ID}\.memory", True),
+    ("memory unchanged across a step", rf"{_ID}\.memory = {_ID}\.memory", False),
+    ("memory image", rf"Mem\.Reads {_ID}\.memory img", False),
+    ("memory word read", rf"Bytes\.toB256 \({_ID}\.sliceD \({_ID} \* 32\)"
+     rf"\.toNat 32 0\) = (?:{_ID}|[0-9]+)", False),
+    ("memory word disjointness",
+     rf"\({_ID} \* 32\)\.toNat \+ 32 ≤ \({_ID} \* 32\)\.toNat", False),
+
+    # ---- the stable checkpoint, at a world variable ----
+    #
+    # The `RegistryStable.*` reader-facing corollaries project the checkpoint
+    # predicate at a bare `w : Jaune.State` rather than at `checkpoint.state`.
+    # This is the family's own invariant appearing as a hypothesis, which is
+    # the thing the corollaries exist to unpack; it constrains nothing beyond
+    # the contract's own storage and code.
+    ("stable checkpoint at a world", r"RegistryStable dp ca w", True),
+
+    # ---- coherence-preservation of a NAMED body, spelled out ----
+    #
+    # `coherent_pause` and `coherent_pauseAfterSet` are the `Coherent dp f`
+    # discipline written longhand, because these two bodies additionally need
+    # the deeper-frame hypothesis and the memory invariant, which `Coherent`
+    # does not carry.  `Coherent dp f` and `StorFixed dp f` are already
+    # public-admissible and are THEMSELVES universally quantified over
+    # `Func.Run ((runtime dp).main :: aux) sevm s f r`, so this row admits no
+    # shape those two do not already admit.
+    #
+    # The pattern is deliberately tight: the walk must be over the EXACT
+    # runtime table, the state binders must be the theorem's own universally
+    # quantified `sevm`/`s`/`r`, and the body must be a bare name.  A premise
+    # about some particular walk supplied from outside cannot wear this shape.
+    ("coherence walk of a named body in the exact runtime context",
+     rf"Func\.Run \(\(runtime dp\)\.main :: aux\) sevm s {_ID} r", True),
+    ("coherence walk of a named body, mid-inversion",
+     r"Func\.Run \(\(runtime dp\)\.main :: aux\) sevm [a-z]+ "
+     rf"\(?{_ID}( dp)?\)? [a-z]+", False),
+    ("line walk of a named fragment", rf"Line\.Run sevm {_ID} \({_ID} {_ID}\) "
+     rf"{_ID}", False),
+    ("instruction walk", rf"Ninst\.Run sevm {_ID} i {_ID}", False),
+
+    # ---- inversion residue inside the Chain owner ----
+    ("storage image unchanged", r"Devm\.getStor s = Devm\.getStor s'", False),
+    ("code image unchanged", r"Devm\.getCode s = Devm\.getCode s'", False),
+    ("Registry coherence at a named frame's target",
+     rf"RegistryCoherent \(Devm\.getStor {_ID} "
+     rf"(sevm\.currentTarget|ct)\)", False),
+    ("Registry witness at a world's contract storage",
+     rf"RegistryWitness \(logicalStorageOfStor \({_ID}\.getStor ca\)\) "
+     r"entries", False),
+    ("installed exact runtime, mid-inversion",
+     rf"some \({_ID}\.getCode (ca|sevm\.currentTarget)\)\.toList = "
+     r"Prog\.compile \(runtime dp\)", False),
+    ("address-range validity", rf"ValidAdr {_ID}", False),
+    ("operand-stack prefix, mid-inversion",
+     rf"({_ID} :: )*xs <<\+ {_ID}\.stack", False),
 )
 
 # The redundant second net.  These tokens name closed-world restrictions this
@@ -1230,22 +1614,23 @@ def compiled_owners_present(root: Path) -> None:
 def axiom_checks(root: Path, sources: dict) -> int:
     targets = probe_targets(sources)
     compiled_owners_present(root)
-    handle = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".lean", prefix="history-axioms-", dir=root,
-        encoding="utf-8", delete=False)
-    with handle:
-        for module in probe_imports():
-            handle.write("import " + module + "\n")
-        for name in targets:
-            handle.write("#print axioms " + name + "\n")
-    temporary = Path(handle.name)
-    try:
+    # The probe file lives in a real temporary DIRECTORY, not in the
+    # repository.  Written into `root` it was one hard kill away from leaving
+    # a stray `history-axioms-*.lean` behind in the tree -- which `lake` would
+    # then try to build, and which a `git add -A` would happily commit.
+    # `lake env` only sets the environment, so `lean` finds the owners through
+    # LEAN_PATH and the probe file itself need not sit inside the package.
+    with tempfile.TemporaryDirectory(prefix="s7-axioms-") as staging:
+        temporary = Path(staging) / "history-axioms.lean"
+        with temporary.open("w", encoding="utf-8") as handle:
+            for module in probe_imports():
+                handle.write("import " + module + "\n")
+            for name in targets:
+                handle.write("#print axioms " + name + "\n")
         run = subprocess.run(
-            ["lake", "env", "lean", str(temporary.relative_to(root))],
+            ["lake", "env", "lean", str(temporary)],
             cwd=root, text=True, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT)
-    finally:
-        temporary.unlink(missing_ok=True)
     if run.returncode:
         fail("axiom probe failed:\n" + run.stdout)
     for name in targets:
@@ -1289,10 +1674,38 @@ def axiom_checks(root: Path, sources: dict) -> int:
 # The repairs are the minimum that keeps the library building while the CLAIM
 # is strictly weaker.
 #
-# The harness never runs against the repository root, and this packet did not
-# run it: the tree was mid-change and the host shared.  The patches below are
-# therefore DESIGNED and UNVERIFIED. A case that fails live confirmation on
-# first run needs its repair set adjusted, not its rejection assumed.
+# The harness never runs against the repository root.
+#
+# FIRST RUN, against the completed tree: M2 and M5 are CREDITED -- each
+# elaborates and is then rejected with every digest re-taken from the mutant.
+# M1, M3 and M4 FAIL LIVE CONFIRMATION and are not credited.  All three fail
+# for one structural reason, and it is a finding about the family rather than
+# a defect in the harness:
+#
+#   Every one of these patches was designed while the Chain owner was a
+#   dormant stub.  That owner is now complete, and it CONSUMES what the
+#   patches weaken.  A cooperative-world premise introduced at an internal
+#   node (M3 at `registrySpec_sound_of_funcSound`, M4 at `coherent_of_call`)
+#   is unsatisfiable at its new consumers, and it cannot be threaded upward
+#   to escape them, because the statements above it are typed by
+#   `ContractSpec.Sound` / `.FuncSound`, whose shape is fixed in
+#   `Blanc/Ladder.lean`.  Threading it there would now trip VOCABULARY_PINS.
+#
+#   M1 is stronger still: gutting `RegistryCoherent` cannot be repaired at
+#   all.  The H8 anti-vacuity controls publicly export `∃ entries,
+#   RegistryWitness ...` and every one of the structure's nine fields is
+#   projected 12-22 times across the owners, so a vacuous invariant leaves
+#   `RegistryStable.witness` and its four reader-facing corollaries with no
+#   proof and no possible repair short of DELETING them -- which the pin
+#   tables catch as a pinned declaration gone absent.
+#
+# The honest reading is that families (ii) and (iii) are live-confirmed here,
+# and family (i) is now enforced by the module's own structure BEFORE this
+# gate ever sees it.  That is a better outcome than a credited rejection, but
+# it is not the same claim, and it must not be recorded as one.  Restoring a
+# credited family-(i) mutant needs a redesign -- a mutant that guts the
+# invariant AND removes the controls that would fail to compile -- which is a
+# design decision, not a repair-set adjustment.
 
 MUTATIONS = (
     {
@@ -1357,6 +1770,17 @@ MUTATIONS = (
              "  · exact setPauseDuration_funcSound dp ca\n"
              "  · exact hlive\n\n"
              "/-- The same fifteen rows"),
+            # The Chain owner is now a real consumer of the collection
+            # theorem, so the demoted endpoint has to be supplied at its call
+            # site or the mutant does not elaborate at all.  It IS suppliable
+            # -- `isPauserLive_funcSound` is still proved in the endpoints
+            # owner -- which is exactly what makes this a WEAKENING of the
+            # collection theorem rather than a broken edit.
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "    funcSound_of_mem_funcs dp ca (registerPauser_funcSound dp ca)\n"
+             "      (pause_funcSound dp ca) hp",
+             "    funcSound_of_mem_funcs dp ca (registerPauser_funcSound dp ca)\n"
+             "      (pause_funcSound dp ca) (isPauserLive_funcSound dp ca) hp"),
         ),
     },
     {
@@ -1419,10 +1843,22 @@ MUTATIONS = (
             "reading exactly as it does now.  The binder is called `hcarry`, "
             "not `sameEntries`, on purpose: the token denylist must NOT be "
             "what catches this one."),
+        # The anchor names the theorem's own header line.  The two-binder
+        # anchor this case used while the Chain owner was dormant became
+        # ambiguous the moment the H7 reader-facing corollaries landed: three
+        # of them carry the same `reach`/`stable` pair, so the patch matched
+        # four places and the harness refused it. The MUTATION is unchanged --
+        # only the anchor is narrowed to the one theorem it was written for.
         "edits": (
             ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_preserves_registryStable (dp : DeployParams) "
+             "(ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
              "    (reach : BlockChain.Reach checkpoint future)\n"
              "    (stable : RegistryStable dp ca checkpoint.state) :",
+             "theorem chain_preserves_registryStable (dp : DeployParams) "
+             "(ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
              "    (reach : BlockChain.Reach checkpoint future)\n"
              "    (hcarry : ∀ entries,\n"
              "      RegistryWitness (logicalStorageOfStor "
@@ -1430,6 +1866,87 @@ MUTATIONS = (
              "      RegistryWitness (logicalStorageOfStor "
              "(future.state.getStor ca)) entries)\n"
              "    (stable : RegistryStable dp ca checkpoint.state) :"),
+            # The four reader-facing corollaries call the headline theorem,
+            # so a premise added to it has to be threaded through them or
+            # nothing elaborates.  Threading it is the honest repair: a
+            # narrowing of the headline IS a narrowing of everything that
+            # reads through it, and the gate rejects the first of them.
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_future_installedCode (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_future_installedCode (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hcarry : ∀ entries,\n"
+             "      RegistryWitness (logicalStorageOfStor "
+             "(checkpoint.state.getStor ca)) entries →\n"
+             "      RegistryWitness (logicalStorageOfStor "
+             "(future.state.getStor ca)) entries)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chain_preserves_registryStable dp ca checkpoint future reach\n"
+             "    stable).installedCode",
+             "  (chain_preserves_registryStable dp ca checkpoint future reach hcarry\n"
+             "    stable).installedCode"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_future_witness (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_future_witness (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hcarry : ∀ entries,\n"
+             "      RegistryWitness (logicalStorageOfStor "
+             "(checkpoint.state.getStor ca)) entries →\n"
+             "      RegistryWitness (logicalStorageOfStor "
+             "(future.state.getStor ca)) entries)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chain_preserves_registryStable dp ca checkpoint future "
+             "reach stable).witness",
+             "  (chain_preserves_registryStable dp ca checkpoint future "
+             "reach hcarry stable).witness"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_future_membership (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_future_membership (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hcarry : ∀ entries,\n"
+             "      RegistryWitness (logicalStorageOfStor "
+             "(checkpoint.state.getStor ca)) entries →\n"
+             "      RegistryWitness (logicalStorageOfStor "
+             "(future.state.getStor ca)) entries)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chain_preserves_registryStable dp ca checkpoint future reach\n"
+             "    stable).membership htarget",
+             "  (chain_preserves_registryStable dp ca checkpoint future reach hcarry\n"
+             "    stable).membership htarget"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "theorem chain_future_countConservation (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)",
+             "theorem chain_future_countConservation (dp : DeployParams) (ca : Adr)\n"
+             "    (checkpoint future : BlockChain)\n"
+             "    (reach : BlockChain.Reach checkpoint future)\n"
+             "    (hcarry : ∀ entries,\n"
+             "      RegistryWitness (logicalStorageOfStor "
+             "(checkpoint.state.getStor ca)) entries →\n"
+             "      RegistryWitness (logicalStorageOfStor "
+             "(future.state.getStor ca)) entries)\n"
+             "    (stable : RegistryStable dp ca checkpoint.state)"),
+            ("Blanc/LidoCircuitBreakerHistoryChain.lean",
+             "  (chain_preserves_registryStable dp ca checkpoint future reach\n"
+             "    stable).countConservation",
+             "  (chain_preserves_registryStable dp ca checkpoint future reach hcarry\n"
+             "    stable).countConservation"),
         ),
     },
 )
@@ -1470,7 +1987,7 @@ def repinned(tree: Path):
     re-pin of the active owners must not quietly erase them.
     """
     names = ("HEADER_PINS", "DEFINITION_PINS", "IMPORT_PINS", "VARIABLE_PINS",
-             "DISPATCHER_PIN", "COMMENT_TRUST_ROWS")
+             "DISPATCHER_PIN", "COMMENT_TRUST_ROWS", "VOCABULARY_PINS")
     fresh = observed_pins(tree, include_chain=CHAIN.active)
     saved = {name: globals()[name] for name in names}
     try:
@@ -1524,6 +2041,8 @@ def stage_mutant(root: Path, case: dict, staging: Path) -> None:
     texts = {relative: read_source(root, relative)
              for relative in OWNERS.values()}
     texts[PROGRAM_SOURCE] = read_source(root, PROGRAM_SOURCE)
+    for relative in VOCABULARY_SOURCES:
+        texts[relative] = read_source(root, relative)
     if CHAIN.active:
         texts[CHAIN.path] = read_source(root, CHAIN.path)
     for relative, old, new in case["edits"]:
@@ -1697,6 +2216,7 @@ def run_static_checks(root: Path) -> dict:
     sources = load_owners(root)
     program = read_source(root, PROGRAM_SOURCE)
     chain_pin_integrity()
+    vocabulary_pins(root)
     found_by_owner, binders = {}, 0
     for key, source in sorted(sources.items()):
         found = pin_declarations(key, source)
@@ -1711,6 +2231,8 @@ def run_static_checks(root: Path) -> dict:
     result["pins"] = sum(len(HEADER_PINS.get(key, {})) +
                          len(DEFINITION_PINS.get(key, {}))
                          for key in sources)
+    result["vocabulary"] = sum(len(names)
+                               for names in VOCABULARY_NAMES.values())
     return result
 
 
@@ -1821,6 +2343,47 @@ SELF_TESTS = (
      "variable {dp : DeployParams}",
      "variable {dp : DeployParams} (hWorld : StorFixed dp Func.rev)",
      "not a declared data type"),
+    # The vocabulary net.  Neither of these touches an owner, so every header
+    # pin, every definition pin, every channel token and every allowlist
+    # pattern in the family stays byte-identical while the meaning of the
+    # words the pinned statements are written in changes underneath them.
+    ("vocabulary: a RegistryWitness field gutted", "vocabulary",
+     "Blanc/LidoCircuitBreakerRegistryModel.lean",
+     "  arrayWords : ∀ index, index < entries.length →\n"
+     "    storage.read (arrayEntrySlot (Nat.toB256 (index + 1))) = "
+     "targetAt entries index",
+     "  arrayWords : ∀ index, index < entries.length → True",
+     "changed in"),
+    ("vocabulary: a RegistryWitness field gutted AND its digest re-taken",
+     "vocabulary-channels",
+     "Blanc/LidoCircuitBreakerRegistryModel.lean",
+     "  arrayWords : ∀ index, index < entries.length →\n"
+     "    storage.read (arrayEntrySlot (Nat.toB256 (index + 1))) = "
+     "targetAt entries index",
+     "  arrayWords : ∀ index, index < entries.length → True",
+     "no longer mentions"),
+    # Proves the per-field split above is load-bearing: `targetsValid` shares
+    # `nonzeroCanonicalAddress` with `pausersValid`, so a single shared token
+    # would leave this gutting undetected once the digest was re-taken.
+    ("vocabulary: a second RegistryWitness field gutted, digest re-taken",
+     "vocabulary-channels",
+     "Blanc/LidoCircuitBreakerRegistryModel.lean",
+     "  targetsValid : ∀ entry ∈ entries, nonzeroCanonicalAddress entry.1",
+     "  targetsValid : ∀ entry ∈ entries, True",
+     "no longer mentions"),
+    ("vocabulary: valid-chain reachability restricted to empty blocks",
+     "vocabulary", "Blanc/Ladder.lean",
+     "      ReachUsing cfg ch ch' →\n"
+     "      sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →",
+     "      ReachUsing cfg ch ch' →\n"
+     "      block.txs = [] →\n"
+     "      sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →",
+     "changed in"),
+    ("vocabulary: a pinned premise definition renamed away", "vocabulary",
+     "Blanc/Ladder.lean",
+     "def Preserves (c : ContractSpec) (ca : Adr) : Prop :=",
+     "def PreservesRenamed (c : ContractSpec) (ca : Adr) : Prop :=",
+     "is absent from"),
 )
 
 
@@ -1852,12 +2415,36 @@ def self_test(root: Path) -> int:
             trust_scan(copy)
         elif kind == "variable":
             pin_imports_and_variables(key, mutated)
+        elif kind in ("vocabulary", "vocabulary-channels"):
+            found = vocabulary_map(mutated)
+            names = VOCABULARY_NAMES[key]
+            for name in names:
+                if name not in found:
+                    fail(f"vocabulary declaration {name} is absent from "
+                         f"{key} -- renamed, moved or deleted")
+                if kind == "vocabulary":
+                    if digest(found[name]["text"]) != \
+                            VOCABULARY_PINS[key][name]:
+                        fail(f"vocabulary declaration {name} changed in {key}")
+            for name, tokens in VOCABULARY_CHANNELS.items():
+                if name not in found:
+                    continue
+                text = normalize(found[name]["text"])
+                for token in tokens:
+                    if normalize(token) not in text:
+                        fail(f"vocabulary declaration {name} no longer "
+                             f"mentions {token!r}")
         else:
             fail(f"unknown self-test kind {kind}")
 
     problems = []
     for label, kind, key, old, new, expected in SELF_TESTS:
-        base = program if key == "program" else sources[key]
+        if kind in ("vocabulary", "vocabulary-channels"):
+            base = read_source(root, key)
+        elif key == "program":
+            base = program
+        else:
+            base = sources[key]
         if old not in base:
             problems.append(f"{label}: the mutation no longer applies; this "
                             "self-test has gone stale and is proving nothing")
@@ -1901,10 +2488,10 @@ def chain_source(root: Path) -> str:
     if CHAIN.active:
         return read_source(root, CHAIN.path)
     run = subprocess.run(
-        ["git", "show", f"{CHAIN.pinned_at}:{CHAIN.path}"],
+        ["git", "show", f"{CHAIN.pinned_at()}:{CHAIN.path}"],
         cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if run.returncode:
-        fail(f"cannot read {CHAIN.path} at {CHAIN.pinned_at}: {run.stderr}")
+        fail(f"cannot read {CHAIN.path} at {CHAIN.pinned_at()}: {run.stderr}")
     return run.stdout
 
 
@@ -1933,8 +2520,15 @@ def observed_pins(root: Path, include_chain: bool = True) -> dict:
                                if re.match(r"^variable\b", line))
         comment_rows |= scan_rows(relatives[key], comment_text(source))
     entries = dispatcher_inventory(read_source(root, PROGRAM_SOURCE))
+    vocabulary = {}
+    for relative, wanted in VOCABULARY_NAMES.items():
+        found = vocabulary_map(read_source(root, relative))
+        vocabulary[relative] = {
+            name: digest(found[name]["text"])
+            for name in sorted(wanted) if name in found}
     return {
         "HEADER_PINS": headers,
+        "VOCABULARY_PINS": vocabulary,
         "DEFINITION_PINS": bodies,
         "IMPORT_PINS": {key: tuple(value) for key, value in imports.items()},
         "VARIABLE_PINS": {key: tuple(value)
@@ -1969,6 +2563,9 @@ def print_observed_digests(root: Path) -> int:
          "DISPATCHER_PIN = " + repr(dispatcher_digest(entries))),
         ("COMMENT TRUST ROWS",
          "COMMENT_TRUST_ROWS = " + repr(tuple(sorted(comment_rows)))),
+        ("VOCABULARY PINS", "VOCABULARY_PINS = " + json.dumps(
+            pins["VOCABULARY_PINS"], indent=4, ensure_ascii=False,
+            sort_keys=True)),
     ]
     for label, block in blocks:
         print(f"\n# >>> {label} >>>\n{block}\n# <<< {label} <<<")
@@ -1978,17 +2575,19 @@ def print_observed_digests(root: Path) -> int:
 
 
 def chain_dry_run(root: Path) -> int:
-    """Everything the Chain owner's activation will require, run against the
-    PINNED COMMITTED revision rather than the working file.
+    """The Chain owner's pins, channels and open-world bar, on their own.
 
-    The working file belongs to whoever is finishing `registrySpec_sound`, so
-    this gate never reads it while dormant.  What this mode answers is the only
-    question worth answering before flipping the switch: do the recorded pins,
-    the semantic channels and the open-world allowlist actually accept the
-    module as committed?  The trust scan is deliberately NOT run here -- the
-    committed revision still carries the `sorry` that is the reason the owner
-    is dormant, and pretending otherwise would be the one thing this gate must
-    never do.
+    While the owner was DORMANT this read the frozen revision named by
+    `pinned_at`, never the working file, and deliberately skipped the trust
+    scan: the committed revision still carried the `sorry` that was the reason
+    for dormancy, and pretending otherwise would have been the one thing this
+    gate must never do.
+
+    The owner is now ACTIVE, so this reads the working file at the branch tip
+    and the trust scan is reported rather than skipped -- a dry run that talks
+    about bytes which no longer exist is worse than no dry run.  The mode is
+    kept because it isolates this owner's static nets from the other two, and
+    because a future in-flight successor will want it back.
     """
     source = chain_source(root)
     found = pin_declarations(CHAIN.key, source)
@@ -1998,15 +2597,21 @@ def chain_dry_run(root: Path) -> int:
     missing = [name for name in CHAIN.required_public if name not in found]
     if missing:
         fail(f"{CHAIN.key}: required public statements absent at "
-             f"{CHAIN.pinned_at}: {missing}")
+             f"{CHAIN.pinned_at()}: {missing}")
     code_rows = scan_rows(CHAIN.path, strip_comments(source))
-    print(f"OK — {VERDICT} chain dry run at {CHAIN.pinned_at}: "
-          f"{len(found)} declarations all pinned, "
+    if CHAIN.active and code_rows:
+        fail("trust token in CODE (not in a comment):\n        " +
+             "\n        ".join(sorted(code_rows)))
+    trust = ("trust scan clean in code" if CHAIN.active else
+             "trust scan NOT run (the committed revision still carries "
+             f"{sorted(row.split()[0] for row in code_rows)}, which is why "
+             "CHAIN.active is False)")
+    where = ("the working file at branch tip" if CHAIN.active
+             else "the frozen revision")
+    print(f"OK — {VERDICT} chain dry run at {CHAIN.pinned_at()} "
+          f"({where}): {len(found)} declarations all pinned, "
           f"{len(CHAIN.required_public)} required public statements present, "
-          f"{binders} binders past the open-world allowlist; trust scan NOT "
-          f"run (the committed revision still carries "
-          f"{sorted(row.split()[0] for row in code_rows)}, which is why "
-          f"CHAIN.active is False)")
+          f"{binders} binders past the open-world allowlist; {trust}")
     return 0
 
 
@@ -2083,7 +2688,10 @@ def main() -> int:
         f"direct-call, target-honesty, entry-list-identification or "
         f"PauseSuccessNoninterference premise admitted; the invariant, the "
         f"spec, the stable checkpoint and both assembly disciplines held to "
-        f"their semantic channels; {len(result['program'])} dispatch entries "
+        f"their semantic channels; {result['vocabulary']} premise-vocabulary "
+        f"declarations pinned across {len(VOCABULARY_NAMES)} files this "
+        f"family is written in but does not own; "
+        f"{len(result['program'])} dispatch entries "
         f"derived from `funcs` and matched in program order against "
         f"{len(result['discharged'])} discharged endpoints plus "
         f"{len(result['mutating'])} Registry-mutating obligations "

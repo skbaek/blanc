@@ -86,7 +86,7 @@ EXPECTED_HEADERS = {
     "RegistryWitness.entries_length_le": "a902c072a364170df688195267472463bfcf716d605523bec1c81c077f85fd41",
     "setPauserSourceTrace": "5bbf19b18e73638ff009eef8a98bbf75cdaa8aaaee35b12b5f5122851521407b",
     "setPauserSourceTrace_writes": "893de8d4caa8ff467be119a6ca341930e88d0192f8b158f2ad27dd018044f946",
-    "setPauser_run_extracts_sourceTrace": "fb3efeb75bc202f0c9389e7e0c7d4623b3af4e1b58953598d8efc3b7e20039c5",
+    "setPauser_run_extracts_sourceTrace": "36ac538aedc949dd8d1091635f88823cd03b1bc546bb62892db9803f0d8c5e1e",
     "setPauser_sourceTrace_refines_model": "56eff48639fd6519f545e0aa3a8d15a487780a6578bcfcb6344811eb727080ca",
     "RegistryWitness.applySetPauserSourceTrace": "3f2c0af350bf81e6a4467d1e21ea54be9b7fc8cf092252311f2f3f68ad0172a7",
     "setPauserKernel_tableEntry": "9879e741fcb228f9fac6cb0f82112b446e4f03566e4bdd1fa414f317c886da64",
