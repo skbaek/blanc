@@ -586,6 +586,43 @@ theorem lidoCircuitBreakerInitPrefix_length_exact :
     hmaxHeartbeat]
   decide +kernel
 
+set_option maxHeartbeats 3000000 in
+/-- The official twelve-write patch plan reconstructs the exact official
+runtime compiler artifact. -/
+theorem patchRuntimeTemplate_official :
+    patchRuntimeTemplate officialParams =
+      lidoCircuitBreakerCode officialParams := by
+  rcases constructor_immutable_word_offsets_exact with
+    ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
+  simp only [patchRuntimeTemplate, runtimeImmutablePatches,
+    immutableParameters, List.flatMap_cons, List.flatMap_nil,
+    List.map_cons, List.map_nil, hadmin, hminPause, hmaxPause,
+    hminHeartbeat, hmaxHeartbeat, ImmutableParameter.value]
+  decide +kernel
+
+/-- Exact code coordinate at which the seven-word constructor head begins. -/
+theorem lidoCircuitBreakerCreationTemplate_length_exact :
+    lidoCircuitBreakerCreationTemplate.length = 4898 := by
+  simp [lidoCircuitBreakerCreationTemplate,
+    lidoCircuitBreakerInitPrefix_length_exact,
+    runtimeTemplateCode_length_exact]
+
+/-- The frozen official input is exactly prefix, neutral runtime, then the
+official seven-word ABI head. -/
+theorem officialFullCreateInput_eq_layout :
+    officialFullCreateInput =
+      lidoCircuitBreakerInitPrefix ++ runtimeTemplateCode ++
+        abiEncodeConstructorArgs officialConstructorArgs := by
+  rfl
+
+/-- Exact full official creation-input length observed by `CODESIZE`. -/
+theorem officialFullCreateInput_length_exact :
+    officialFullCreateInput.length = 5122 := by
+  rw [officialFullCreateInput_eq_layout]
+  simp [lidoCircuitBreakerInitPrefix_length_exact,
+    runtimeTemplateCode_length_exact, abiEncodeConstructorArgs_length,
+    constructorArgumentBytes]
+
 end LidoCircuitBreaker
 
 end Blanc
