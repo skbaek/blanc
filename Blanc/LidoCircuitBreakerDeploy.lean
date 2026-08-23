@@ -21,12 +21,16 @@ namespace LidoCircuitBreaker
 def constructorArgumentBytes : Nat := 7 * 32
 def eip3860InitcodeLimit : Nat := 49152
 
-private def constructorRuntimeBase : Nat := constructorArgumentBytes
+/-- Low-memory base at which the validated constructor copies the runtime. -/
+def constructorRuntimeBase : Nat := constructorArgumentBytes
 
-private def constructorEventScratch (runtimeLength : Nat) : Nat :=
+/-- First word-aligned scratch address following the copied runtime. -/
+def constructorEventScratch (runtimeLength : Nat) : Nat :=
   ((constructorRuntimeBase + runtimeLength + 31) / 32) * 32
 
-private def pushFixedNat (value : Nat) : Ninst :=
+/-- Constructor coordinate push: fixed-width while the coordinate fits PUSH2,
+with a full-width fallback that never truncates a future layout. -/
+def pushFixedNat (value : Nat) : Ninst :=
   if value < 2 ^ 16 then
     Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
   else
@@ -35,36 +39,45 @@ private def pushFixedNat (value : Nat) : Ninst :=
     -- constructor passes retain the same compiler shape.
     pushDeployWord (Nat.toB256 value)
 
-private def pushCompactNat (value : Nat) : Ninst :=
+/-- Compact constructor push for a non-layout natural-number operand. -/
+def pushCompactNat (value : Nat) : Ninst :=
   pushB256 (Nat.toB256 value)
 
-private def loadArgumentIndex (index : Nat) : Line :=
+/-- Load one word from the decoded seven-word constructor head. -/
+def loadArgumentIndex (index : Nat) : Line :=
   [pushCompactNat (32 * index), mload]
 
-private def storeByteOffset (offset : Nat) : Line :=
+/-- Store the stack head at a fixed constructor-memory byte offset. -/
+def storeByteOffset (offset : Nat) : Line :=
   [pushFixedNat offset, mstore]
 
-private def constructorError (name : String) : Func :=
+/-- One named constructor error-table body. -/
+def constructorError (name : String) : Func :=
   Func.revSelector (customErrorData name) (by
     simp [customErrorData, B256.length_toBytes])
 
-private def patchArgumentIndex : ImmutableParameter → Nat
+/-- Constructor-head index supplying one immutable runtime parameter. -/
+def patchArgumentIndex : ImmutableParameter → Nat
   | .admin => 0
   | .minPauseDuration => 1
   | .maxPauseDuration => 2
   | .minHeartbeatInterval => 3
   | .maxHeartbeatInterval => 4
 
-private def patchFieldLine
+/-- All runtime-memory patches for one immutable parameter. -/
+def patchFieldLine
     (runtimeBase : Nat) (field : ImmutableParameter) : Line :=
   (immutableWordOffsets field).flatMap fun offset =>
     loadArgumentIndex (patchArgumentIndex field) ++
       storeByteOffset (runtimeBase + offset)
 
-private def patchRuntimeLine (runtimeBase : Nat) : Line :=
+/-- Complete source-ordered immutable patch line for the copied runtime. -/
+def patchRuntimeLine (runtimeBase : Nat) : Line :=
   immutableParameters.flatMap (patchFieldLine runtimeBase)
 
-private def constructorBody
+/-- Exact constructor body after the outer nonpayability guard.  This handle is
+public so the deployment proof can pin source-ordered validation checkpoints. -/
+def constructorBody
     (runtimeOffset argsOffset runtimeLength : Nat) : Func :=
   let eventScratch := constructorEventScratch runtimeLength
   -- The full input must contain the complete static seven-word head.  Extra
@@ -136,7 +149,8 @@ private def constructorBody
                                               pushCompactNat constructorRuntimeBase :::
                                               Func.ret))))))))))))))))))))))
 
-private def constructorProgram
+/-- Exact table-bearing constructor program at supplied layout coordinates. -/
+def constructorProgram
     (runtimeOffset argsOffset runtimeLength : Nat) : Prog :=
   { main := callvalue ::: iszero :::
       (constructorBody runtimeOffset argsOffset runtimeLength <?> (.call 1))
@@ -151,7 +165,9 @@ private def constructorProgram
       constructorError "HeartbeatIntervalBelowMin",
       constructorError "HeartbeatIntervalAboveMax"] }
 
-private def provisionalConstructorPrefix : Bytes :=
+/-- First compiler pass used only to obtain the stable constructor-prefix
+length for the final layout. -/
+def provisionalConstructorPrefix : Bytes :=
   (Prog.compile
     (constructorProgram 0 0 runtimeTemplateCode.length)).getD []
 
