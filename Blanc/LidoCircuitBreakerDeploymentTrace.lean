@@ -2341,6 +2341,51 @@ private theorem officialConstructorPauseScratchLine_runCompiled
   all_goals try omega
   exact hrest
 
+private def officialConstructorConfigurationSuffix : Func :=
+  pushB256 0 :::
+  storeByteOffset officialConstructorEventScratch +++
+  loadArgumentIndex 5 +++
+  storeByteOffset (officialConstructorEventScratch + 32) +++
+  pushB256 pauseDurationUpdatedEvent :::
+  logWith 0
+    (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
+  loadArgumentIndex 5 +++
+  pushB256 pauseDurationSlot ::: sstore :::
+  officialConstructorHeartbeatSuffix
+
+private theorem officialConstructorConfigurationSuffix_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
+      (officialConstructorPauseLoggedBase sevm base).accessedStorageKeys)
+    (hpauseOriginal : getOrigStorVal sevm sevm.currentTarget
+      pauseDurationSlot = 0)
+    (hpauseCurrent : (officialConstructorPauseLoggedBase sevm base).getStorVal
+      sevm.currentTarget pauseDurationSlot = 0)
+    (hheartbeatCold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
+      (officialConstructorHeartbeatLoggedBase sevm base).accessedStorageKeys)
+    (hheartbeatOriginal : getOrigStorVal sevm sevm.currentTarget
+      heartbeatIntervalSlot = 0)
+    (hheartbeatCurrent :
+      (officialConstructorHeartbeatLoggedBase sevm base).getStorVal
+        sevm.currentTarget heartbeatIntervalSlot = 0)
+    (hstatic : sevm.isStatic = false) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨[], officialConstructorPatchedMemory, G + 46813⟩)
+      officialConstructorConfigurationSuffix
+      (officialConstructorPost sevm base G) := by
+  have hheartbeat := officialConstructorHeartbeatSuffix_runCompiled
+    (fs := fs) (G := G) hheartbeatCold hheartbeatOriginal
+    hheartbeatCurrent hstatic
+  have hpauseStore := officialConstructorPauseStoreLine_runCompiled
+    hpauseCold hpauseOriginal hpauseCurrent hstatic hheartbeat
+  have hpauseLog := officialConstructorPauseLogLine_runCompiled
+    hstatic hpauseStore
+  have hpauseScratch :=
+    officialConstructorPauseScratchLine_runCompiled hpauseLog
+  unfold officialConstructorConfigurationSuffix
+  convert hpauseScratch using 1 <;> omega
+
 end LidoCircuitBreaker
 
 end Blanc
