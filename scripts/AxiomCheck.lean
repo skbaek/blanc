@@ -45,6 +45,8 @@ import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.LidoCircuitBreakerRegistryModel
+import Blanc.LidoCircuitBreakerHistory
+import Blanc.LidoCircuitBreakerHistoryEndpoints
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -485,3 +487,9 @@ import Blanc.LidoCircuitBreakerRegistryModel
 #print axioms Blanc.LidoCircuitBreaker.pauserSet_register_success_committed
 #print axioms Blanc.LidoCircuitBreaker.pauserSet_settled_error_not_observable
 #print axioms Blanc.LidoCircuitBreaker.registryObservation_sound
+#print axioms Blanc.LidoCircuitBreaker.registryStable_iff_stateInv
+#print axioms Blanc.LidoCircuitBreaker.funcSound_of_storFixed
+#print axioms Blanc.LidoCircuitBreaker.funcSound_of_registryCore
+#print axioms Blanc.LidoCircuitBreaker.registrySpec_sound_of_funcSound
+#print axioms Blanc.LidoCircuitBreaker.funcSound_of_mem_funcs
+#print axioms Blanc.LidoCircuitBreaker.funcSound_of_mem_nonRegistry

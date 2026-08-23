@@ -1373,6 +1373,16 @@ private theorem pausableZeroError_not_run
       rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
       contradiction
 
+/-- `Devm.getCode` reads only the world, so a state-preserving step carries the
+whole account-code map.  The two stack-only steps a `Func` walk crosses — the
+branch pop and the tail-call burn — are exactly of that shape, and every
+instruction the Registry kernel decodes leaves the map alone outright. -/
+private theorem getCode_of_state_eq {a b : Devm} (h : a.state = b.state) :
+    Devm.getCode a = Devm.getCode b := by
+  funext x
+  simp only [Devm.getCode, Devm.getAcct]
+  rw [h]
+
 /-- A successful source kernel run necessarily takes the nonzero-target arm;
 the result also exposes that residual arm for the Registry-write inversion. -/
 theorem setPauser_run_extracts_nonzero_guard
@@ -1390,6 +1400,7 @@ theorem setPauser_run_extracts_nonzero_guard
         Mem.Wf guardPre.memory ∧
         Mem.Reads guardPre.memory img ∧
         Devm.getStor pre = Devm.getStor guardPre ∧
+        Devm.getCode pre = Devm.getCode guardPre ∧
         Func.Run fs sevm guardPre
           (targetKey +++ sload ::: dup 0 ::: mstoreAt previousPauserWord +++
             loadWord newPauserWord +++ targetKey +++ sstore :::
@@ -1444,7 +1455,10 @@ theorem setPauser_run_extracts_nonzero_guard
       have hstorPop : Devm.getStor s3 = Devm.getStor guardPre :=
         PopBurn.Inv.inv hpop
       exact ⟨htarget, _, hstack, hwfGuard, hrGuard,
-        hstorLoad.trans (hstorIszero.trans hstorPop), hbody⟩
+        hstorLoad.trans (hstorIszero.trans hstorPop),
+        (Line.of_inv Devm.getCode (by line_inv) hprefix).trans
+          (getCode_of_state_eq hpop.state),
+        hbody⟩
   | succ _ _ _ herror =>
       rcases of_run_call herror with ⟨body, errorPre, hget, _, hbody⟩
       rw [herrorLookup] at hget
@@ -1488,6 +1502,7 @@ theorem setPauser_run_extracts_assignment_write
           oldPauser.toBytes) ∧
       Devm.getStor postAssign ca =
         (Devm.getStor pre ca).set (assignmentSlot target) newPauser ∧
+      Devm.getCode pre = Devm.getCode postAssign ∧
       Func.Run fs sevm postAssign
         (iszero :::
           ((.call appendTargetSlot) <?>
@@ -1581,8 +1596,16 @@ theorem setPauser_run_extracts_assignment_write
       (congrArg
         (fun stor => stor.set (assignmentSlot target) newPauser)
         (congrFun hstorBefore ca).symm)
+  have hcodePost : Devm.getCode pre = Devm.getCode postAssign := by
+    rw [Line.of_inv Devm.getCode (by line_inv) hkey1,
+      Ninst.Hinv.inv (f := Devm.getCode) hsload,
+      Ninst.Hinv.inv (f := Devm.getCode) hdup,
+      Line.of_inv Devm.getCode (by line_inv) hprev,
+      Line.of_inv Devm.getCode (by line_inv) hnewLoad,
+      Line.of_inv Devm.getCode (by line_inv) hkey2,
+      Ninst.Hinv.inv (f := Devm.getCode) hstore]
   exact ⟨oldPauser, postAssign, hold, hstackPost, hwfPost, hrPost,
-    hstorPost, hresidual⟩
+    hstorPost, hcodePost, hresidual⟩
 
 private theorem setPauser_run_split_old_assignment
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
@@ -1602,6 +1625,7 @@ private theorem setPauser_run_split_old_assignment
         Mem.Wf appendPre.memory ∧
         Mem.Reads appendPre.memory img ∧
         Devm.getStor pre = Devm.getStor appendPre ∧
+        Devm.getCode pre = Devm.getCode appendPre ∧
         Func.Run fs sevm appendPre (.call appendTargetSlot) final) ∨
     (oldPauser ≠ 0 ∧
       ∃ oldCountPre,
@@ -1609,6 +1633,7 @@ private theorem setPauser_run_split_old_assignment
         Mem.Wf oldCountPre.memory ∧
         Mem.Reads oldCountPre.memory img ∧
         Devm.getStor pre = Devm.getStor oldCountPre ∧
+        Devm.getCode pre = Devm.getCode oldCountPre ∧
         Func.Run fs sevm oldCountPre
           (previousCountKey +++ sload ::: pushB256 1 ::: swap 0 ::: sub :::
             previousCountKey +++ sstore ::: .call afterOldPauserSlot)
@@ -1635,7 +1660,10 @@ private theorem setPauser_run_split_old_assignment
       right
       exact ⟨hold, oldCountPre, htail,
         hmem ▸ hwf, hmem ▸ hr,
-        hstorIszero.trans (PopBurn.Inv.inv hpop), hbody⟩
+        hstorIszero.trans (PopBurn.Inv.inv hpop),
+        (Ninst.Hinv.inv (f := Devm.getCode) hiszero).trans
+          (getCode_of_state_eq hpop.state),
+        hbody⟩
   | succ hnz hpop hburn hbody =>
       rename_i w afterPop appendPre
       have hflag : (oldPauser =? 0) = w :=
@@ -1659,6 +1687,9 @@ private theorem setPauser_run_split_old_assignment
         hmem ▸ hwf, hmem ▸ hr,
         hstorIszero.trans
           ((PopBurn.Inv.inv hpop).trans (Burn.Inv.inv hburn)),
+        (Ninst.Hinv.inv (f := Devm.getCode) hiszero).trans
+          ((getCode_of_state_eq hpop.state).trans
+            (getCode_of_state_eq hburn.state)),
         hbody⟩
 
 private theorem setPauser_run_extracts_old_count_write
@@ -1689,6 +1720,7 @@ private theorem setPauser_run_extracts_old_count_write
         (entryStor.set (assignmentSlot target) newPauser).set
           (countSlot oldPauser)
           (Nat.toB256 (assignmentCount entries oldPauser - 1)) ∧
+      Devm.getCode pre = Devm.getCode postOld ∧
       Func.Run fs sevm postOld (.call afterOldPauserSlot) final := by
   rcases of_run_prepend previousCountKey _ hrun with
     ⟨sKey1, hkey1, h1⟩
@@ -1785,7 +1817,16 @@ private theorem setPauser_run_extracts_old_count_write
       (fun stor => stor.set (countSlot oldPauser)
         (Nat.toB256 (assignmentCount entries oldPauser - 1)))
       ((congrFun hstorBefore ca).symm.trans hstor))
-  exact ⟨postOld, hstackPost, hwfPost, hrPost, hstorPost, hresidual⟩
+  have hcodePost : Devm.getCode pre = Devm.getCode postOld := by
+    rw [Line.of_inv Devm.getCode (by line_inv) hkey1,
+      Ninst.Hinv.inv (f := Devm.getCode) hsload,
+      Ninst.Hinv.inv (f := Devm.getCode) hpush,
+      Ninst.Hinv.inv (f := Devm.getCode) hswap,
+      Ninst.Hinv.inv (f := Devm.getCode) hsub,
+      Line.of_inv Devm.getCode (by line_inv) hkey2,
+      Ninst.Hinv.inv (f := Devm.getCode) hstore]
+  exact ⟨postOld, hstackPost, hwfPost, hrPost, hstorPost, hcodePost,
+    hresidual⟩
 
 set_option maxRecDepth 2048 in
 private theorem appendTarget_run_extracts_writes
@@ -1815,6 +1856,7 @@ private theorem appendTarget_run_extracts_writes
           (arrayEntrySlot (Nat.toB256 (entries.length + 1))) target).set
           (indexSlot target) (Nat.toB256 (entries.length + 1))).set
           arrayLengthSlot (Nat.toB256 (entries.length + 1)) ∧
+      Devm.getCode pre = Devm.getCode postAppend ∧
       Func.Run fs sevm postAppend afterOldPauser final := by
   simp only [appendTarget] at hrun
   rcases of_run_next hrun with ⟨sLenKey, hpushLen, h1⟩
@@ -2044,7 +2086,25 @@ private theorem appendTarget_run_extracts_writes
         (indexSlot target) (Nat.toB256 (entries.length + 1))).set
         arrayLengthSlot (Nat.toB256 (entries.length + 1)) := by
     exact (congrFun (Burn.Inv.inv hburn).symm ca).trans hstor3
-  exact ⟨postAppend, hpPost, hwfPost, hrPost, hstorPost, hbody⟩
+  have hcodePost : Devm.getCode pre = Devm.getCode postAppend := by
+    rw [Ninst.Hinv.inv (f := Devm.getCode) hpushLen,
+      Ninst.Hinv.inv (f := Devm.getCode) hsloadLen,
+      Ninst.Hinv.inv (f := Devm.getCode) hpushOne,
+      Ninst.Hinv.inv (f := Devm.getCode) hadd,
+      Ninst.Hinv.inv (f := Devm.getCode) hdup,
+      Line.of_inv Devm.getCode (by line_inv) hmemStore,
+      Line.of_inv Devm.getCode (by line_inv) htargetLoad,
+      Line.of_inv Devm.getCode (by line_inv) hlengthLoad1,
+      Line.of_inv Devm.getCode (by line_inv) harrayKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hstore1,
+      Line.of_inv Devm.getCode (by line_inv) hlengthLoad2,
+      Line.of_inv Devm.getCode (by line_inv) hindexKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hstore2,
+      Line.of_inv Devm.getCode (by line_inv) hlengthLoad3,
+      Ninst.Hinv.inv (f := Devm.getCode) hpushLengthKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hstore3,
+      getCode_of_state_eq hburn.state]
+  exact ⟨postAppend, hpPost, hwfPost, hrPost, hstorPost, hcodePost, hbody⟩
 
 private theorem afterOldPauser_run_split_new_assignment
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
@@ -2061,6 +2121,7 @@ private theorem afterOldPauser_run_split_new_assignment
         Mem.Wf removePre.memory ∧
         Mem.Reads removePre.memory img ∧
         Devm.getStor pre = Devm.getStor removePre ∧
+        Devm.getCode pre = Devm.getCode removePre ∧
         Func.Run fs sevm removePre (.call removeTargetSlot) final) ∨
     (newPauser ≠ 0 ∧
       ∃ newCountPre,
@@ -2068,6 +2129,7 @@ private theorem afterOldPauser_run_split_new_assignment
         Mem.Wf newCountPre.memory ∧
         Mem.Reads newCountPre.memory img ∧
         Devm.getStor pre = Devm.getStor newCountPre ∧
+        Devm.getCode pre = Devm.getCode newCountPre ∧
         Func.Run fs sevm newCountPre
           (newCountKey +++ sload ::: pushB256 1 ::: add :::
             newCountKey +++ sstore ::: .call finishSetPauserSlot)
@@ -2100,7 +2162,11 @@ private theorem afterOldPauser_run_split_new_assignment
       exact ⟨hnew, newCountPre, htail,
         hmem ▸ hwfLoad, hmem ▸ hrLoad,
         hstorLoad.trans
-          (hstorIszero.trans (PopBurn.Inv.inv hpop)), hbody⟩
+          (hstorIszero.trans (PopBurn.Inv.inv hpop)),
+        (Line.of_inv Devm.getCode (by line_inv) hload).trans
+          ((Ninst.Hinv.inv (f := Devm.getCode) hiszero).trans
+            (getCode_of_state_eq hpop.state)),
+        hbody⟩
   | succ hnz hpop hburn hbody =>
       rename_i w afterPop removePre
       have hflag : (newPauser =? 0) = w :=
@@ -2125,6 +2191,10 @@ private theorem afterOldPauser_run_split_new_assignment
         hstorLoad.trans
           (hstorIszero.trans
             ((PopBurn.Inv.inv hpop).trans (Burn.Inv.inv hburn))),
+        (Line.of_inv Devm.getCode (by line_inv) hload).trans
+          ((Ninst.Hinv.inv (f := Devm.getCode) hiszero).trans
+            ((getCode_of_state_eq hpop.state).trans
+              (getCode_of_state_eq hburn.state))),
         hbody⟩
 
 set_option maxRecDepth 2048 in
@@ -2155,6 +2225,7 @@ private theorem afterOldPauser_run_extracts_new_count_write
       Devm.getStor postRegistry ca =
         currentStor.set (countSlot newPauser)
           (Nat.toB256 (countBefore + 1)) ∧
+      Devm.getCode pre = Devm.getCode postRegistry ∧
       Func.Run fs sevm postRegistry finishSetPauser final := by
   rcases of_run_prepend newCountKey _ hrun with
     ⟨sKey1, hkey1, h1⟩
@@ -2245,7 +2316,16 @@ private theorem afterOldPauser_run_extracts_new_count_write
       currentStor.set (countSlot newPauser)
         (Nat.toB256 (countBefore + 1)) :=
     (congrFun (Burn.Inv.inv hburn).symm ca).trans hstorStore
-  exact ⟨postRegistry, hstackPost, hwfPost, hrPost, hstorPost, hbody⟩
+  have hcodePost : Devm.getCode pre = Devm.getCode postRegistry := by
+    rw [Line.of_inv Devm.getCode (by line_inv) hkey1,
+      Ninst.Hinv.inv (f := Devm.getCode) hsload,
+      Ninst.Hinv.inv (f := Devm.getCode) hpush,
+      Ninst.Hinv.inv (f := Devm.getCode) hadd,
+      Line.of_inv Devm.getCode (by line_inv) hkey2,
+      Ninst.Hinv.inv (f := Devm.getCode) hstore,
+      getCode_of_state_eq hburn.state]
+  exact ⟨postRegistry, hstackPost, hwfPost, hrPost, hstorPost, hcodePost,
+    hbody⟩
 
 set_option maxRecDepth 4096 in
 private theorem removeTarget_run_extracts_writes
@@ -2282,6 +2362,7 @@ private theorem removeTarget_run_extracts_writes
           (arrayEntrySlot lengthWord) 0).set
           arrayLengthSlot newLengthWord).set
           (indexSlot target) 0) ∧
+      Devm.getCode pre = Devm.getCode postRemove ∧
       Func.Run fs sevm postRemove finishSetPauser final := by
   simp only [removeTarget] at hrun
   rcases of_run_prepend targetIndexKey _ hrun with
@@ -2706,7 +2787,39 @@ private theorem removeTarget_run_extracts_writes
         arrayLengthSlot newLengthWord).set
         (indexSlot target) 0) :=
     (congrFun (Burn.Inv.inv hburn).symm ca).trans hstorRemoved
-  exact ⟨postRemove, hpPost, hwfPost, hrPost, hstorPost, hbody⟩
+  have hcodePost : Devm.getCode pre = Devm.getCode postRemove := by
+    rw [Line.of_inv Devm.getCode (by line_inv) hindexKey1,
+      Ninst.Hinv.inv (f := Devm.getCode) hsloadIndex,
+      Line.of_inv Devm.getCode (by line_inv) hstoreIndexMem,
+      Ninst.Hinv.inv (f := Devm.getCode) hpushLengthSlot,
+      Ninst.Hinv.inv (f := Devm.getCode) hsloadLength,
+      Line.of_inv Devm.getCode (by line_inv) hstoreLengthMem,
+      Line.of_inv Devm.getCode (by line_inv) hloadLengthForLast,
+      Line.of_inv Devm.getCode (by line_inv) hlastKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hsloadLast,
+      Line.of_inv Devm.getCode (by line_inv) hstoreLastMem,
+      Line.of_inv Devm.getCode (by line_inv) hloadLastForHole,
+      Line.of_inv Devm.getCode (by line_inv) hloadIndexForHole,
+      Line.of_inv Devm.getCode (by line_inv) hholeKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hstoreHole,
+      Line.of_inv Devm.getCode (by line_inv) hloadIndexForMoved,
+      Line.of_inv Devm.getCode (by line_inv) hmovedKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hstoreMoved,
+      Ninst.Hinv.inv (f := Devm.getCode) hpushZeroTail,
+      Line.of_inv Devm.getCode (by line_inv) hloadLengthForTail,
+      Line.of_inv Devm.getCode (by line_inv) htailKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hstoreTail,
+      Line.of_inv Devm.getCode (by line_inv) hloadLengthForSub,
+      Ninst.Hinv.inv (f := Devm.getCode) hpushOne,
+      Ninst.Hinv.inv (f := Devm.getCode) hswap,
+      Ninst.Hinv.inv (f := Devm.getCode) hsub,
+      Ninst.Hinv.inv (f := Devm.getCode) hpushLengthKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hstoreLength,
+      Ninst.Hinv.inv (f := Devm.getCode) hpushZeroIndex,
+      Line.of_inv Devm.getCode (by line_inv) hremovedKey,
+      Ninst.Hinv.inv (f := Devm.getCode) hstoreRemoved,
+      getCode_of_state_eq hburn.state]
+  exact ⟨postRemove, hpPost, hwfPost, hrPost, hstorPost, hcodePost, hbody⟩
 
 private theorem appendedRegistryStorage_reads
     {s : Stor} {entries : List Entry} {target newPauser : B256}
@@ -3441,11 +3554,12 @@ theorem setPauser_run_extracts_sourceTrace
       RegistryWitness
         (logicalStorageOfStor (Devm.getStor postRegistry ca))
         trace.postEntries ∧
+      Devm.getCode pre = Devm.getCode postRegistry ∧
       Func.Run fs sevm postRegistry finishSetPauser final := by
   rcases setPauser_run_extracts_nonzero_guard
       hwf hr htargetRead herrorLookup hrun with
     ⟨htarget0, guardPre, hguardStack, hwfGuard, hrGuard,
-      hstorGuard, hguardRun⟩
+      hstorGuard, hcodeGuard, hguardRun⟩
   have htarget : nonzeroCanonicalAddress target :=
     ⟨htarget0, htargetCanonical⟩
   have hwGuard : RegistryWitness
@@ -3456,7 +3570,9 @@ theorem setPauser_run_extracts_sourceTrace
       hguardStack hwfGuard hrGuard htargetRead hnewRead howner hwGuard
       htarget hnewCanonical hguardRun with
     ⟨oldPauser, postAssign, holdPauser, hassignStack, hwfAssign,
-      hrAssign, hstorAssign, hassignRun⟩
+      hrAssign, hstorAssign, hcodeAssign, hassignRun⟩
+  have hcodeToAssign : Devm.getCode pre = Devm.getCode postAssign :=
+    hcodeGuard.trans hcodeAssign
   let imgPrev := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
   have htargetPrev : Bytes.toB256
@@ -3491,7 +3607,7 @@ theorem setPauser_run_extracts_sourceTrace
     holdZero | holdNonzero
   · rcases holdZero with
       ⟨holdZero, appendCallPre, happendStack, hwfAppendCall,
-        hrAppendCall, hstorAppendCall, happendCallRun⟩
+        hrAppendCall, hstorAppendCall, hcodeAppendCall, happendCallRun⟩
     cases hfind : findEntry entries target with
     | some found =>
         obtain ⟨index, foundPauser⟩ := found
@@ -3536,7 +3652,10 @@ theorem setPauser_run_extracts_sourceTrace
             happendBodyStack hwfAppend hrAppend htargetPrev howner hwGuard
             hstorAppend htarget hafterLookup happendBodyRun with
           ⟨postAppend, hpostAppendStack, hwfPostAppend, hrPostAppend,
-            hstorPostAppend, hafterRun⟩
+            hstorPostAppend, hcodeAppend, hafterRun⟩
+        have hcodeToMid : Devm.getCode pre = Devm.getCode postAppend :=
+          hcodeToAssign.trans (hcodeAppendCall.trans
+            ((getCode_of_state_eq happendBurn.state).trans hcodeAppend))
         let entryStor := Devm.getStor guardPre ca
         let imgNext := Bytes.writeAt imgPrev
           (arrayLengthWord * 32).toNat
@@ -3577,7 +3696,8 @@ theorem setPauser_run_extracts_sourceTrace
           hnewZero | hnewNonzero
         · rcases hnewZero with
             ⟨hnewZero, removeCallPre, hremoveStack, hwfRemoveCall,
-              hrRemoveCall, hstorRemoveCall, hremoveCallRun⟩
+              hrRemoveCall, hstorRemoveCall, hcodeRemoveCall,
+              hremoveCallRun⟩
           rcases of_run_call hremoveCallRun with
             ⟨removeBody, removePre, hremoveGet, hremoveBurn,
               hremoveBodyRun⟩
@@ -3616,7 +3736,7 @@ theorem setPauser_run_extracts_sourceTrace
               hstorRemove hreads.1 hreads.2.1 hreads.2.2.1
               hreads.2.2.2.2 hfinishLookup hremoveBodyRun with
             ⟨postRegistry, _, hwfPost, hrPost, hstorPostRegistry,
-              hfinishRun⟩
+              hcodePostRegistry, hfinishRun⟩
           let postImg := Bytes.writeAt
             (Bytes.writeAt
               (Bytes.writeAt imgNext (removedIndexWord * 32).toNat
@@ -3666,13 +3786,16 @@ theorem setPauser_run_extracts_sourceTrace
             rw [hnewZero, ← congrFun hstorGuard ca]
           refine ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost,
             hnewPost, hpreviousPost, hcontinuationPost, hpostStor, ?_,
+            hcodeToMid.trans (hcodeRemoveCall.trans
+              ((getCode_of_state_eq hremoveBurn.state).trans
+                hcodePostRegistry)),
             hfinishRun⟩
           rw [hpostStor]
           exact hw.applySetPauserSourceTrace
             htargetCanonical hnewCanonical htrace
         · rcases hnewNonzero with
             ⟨hnew0, newCountPre, hnewCountStack, hwfNewCount,
-              hrNewCount, hstorNewCount, hnewCountRun⟩
+              hrNewCount, hstorNewCount, hcodeNewCount, hnewCountRun⟩
           have hnew : nonzeroCanonicalAddress newPauser :=
             ⟨hnew0, hnewCanonical⟩
           have hreads := appendedRegistryStorage_reads hwGuard htarget hnew.2
@@ -3691,7 +3814,7 @@ theorem setPauser_run_extracts_sourceTrace
               (hwGuard.assignmentCountWord_succ_eq_add_one newPauser)
               hfinishLookup hnewCountRun with
             ⟨postRegistry, _, hwfPost, hrPost, hstorPostRegistry,
-              hfinishRun⟩
+              hcodePostRegistry, hfinishRun⟩
           have hwrites :=
             (setPauser_sourceTrace_refines_model htarget0 htrace).2
           rw [setPauserSourceWrites_fresh_nonzero entries target newPauser
@@ -3706,13 +3829,14 @@ theorem setPauser_run_extracts_sourceTrace
             rw [← congrFun hstorGuard ca]
           refine ⟨postRegistry, imgNext, hwfPost, hrPost, htargetNext,
             hnewNext, hpreviousNext, hcontinuationNext, hpostStor, ?_,
+            hcodeToMid.trans (hcodeNewCount.trans hcodePostRegistry),
             hfinishRun⟩
           rw [hpostStor]
           exact hw.applySetPauserSourceTrace
             htargetCanonical hnewCanonical htrace
   · rcases holdNonzero with
       ⟨holdNonzero, oldCountPre, holdCountStack, hwfOldCount,
-        hrOldCount, hstorOldCount, holdCountRun⟩
+        hrOldCount, hstorOldCount, hcodeOldCount, holdCountRun⟩
     cases hfind : findEntry entries target with
     | none =>
         have holdZero : oldPauser = 0 :=
@@ -3741,7 +3865,7 @@ theorem setPauser_run_extracts_sourceTrace
             holdCountStack hwfOldCount hrOldCount hprevPrev howner hwGuard
             htarget hfind hstorOld holdCountRun with
           ⟨postOld, hpostOldStack, hwfPostOld, hrPostOld,
-            hstorPostOld, hafterCallRun⟩
+            hstorPostOld, hcodeOld, hafterCallRun⟩
         rcases of_run_call hafterCallRun with
           ⟨afterBody, afterPre, hafterGet, hafterBurn, hafterBodyRun⟩
         rw [hafterLookup] at hafterGet
@@ -3757,12 +3881,16 @@ theorem setPauser_run_extracts_sourceTrace
         have hrAfter : Mem.Reads afterPre.memory imgPrev := by
           rw [← hafterBurn.memory]
           exact hrPostOld
+        have hcodeToMid : Devm.getCode pre = Devm.getCode afterPre :=
+          hcodeToAssign.trans (hcodeOldCount.trans
+            (hcodeOld.trans (getCode_of_state_eq hafterBurn.state)))
         rcases afterOldPauser_run_split_new_assignment
             hafterStack hwfAfter hrAfter hnewPrev hafterBodyRun with
           hnewZero | hnewNonzero
         · rcases hnewZero with
             ⟨hnewZero, removeCallPre, hremoveStack, hwfRemoveCall,
-              hrRemoveCall, hstorRemoveCall, hremoveCallRun⟩
+              hrRemoveCall, hstorRemoveCall, hcodeRemoveCall,
+              hremoveCallRun⟩
           rcases of_run_call hremoveCallRun with
             ⟨removeBody, removePre, hremoveGet, hremoveBurn,
               hremoveBodyRun⟩
@@ -3804,7 +3932,7 @@ theorem setPauser_run_extracts_sourceTrace
               hcurrent hreads.1 hreads.2.1 hreads.2.2.1
               hreads.2.2.2 hfinishLookup hremoveBodyRun with
             ⟨postRegistry, _, hwfPost, hrPost, hstorPostRegistry,
-              hfinishRun⟩
+              hcodePostRegistry, hfinishRun⟩
           let postImg := Bytes.writeAt
             (Bytes.writeAt
               (Bytes.writeAt imgPrev (removedIndexWord * 32).toNat
@@ -3853,13 +3981,16 @@ theorem setPauser_run_extracts_sourceTrace
             rw [hstorPostRegistry, ← congrFun hstorGuard ca]
           refine ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost,
             hnewPost, hpreviousPost, hcontinuationPost, hpostStor, ?_,
+            hcodeToMid.trans (hcodeRemoveCall.trans
+              ((getCode_of_state_eq hremoveBurn.state).trans
+                hcodePostRegistry)),
             hfinishRun⟩
           rw [hpostStor]
           exact hw.applySetPauserSourceTrace
             htargetCanonical hnewCanonical htrace
         · rcases hnewNonzero with
             ⟨hnew0, newCountPre, hnewCountStack, hwfNewCount,
-              hrNewCount, hstorNewCount, hnewCountRun⟩
+              hrNewCount, hstorNewCount, hcodeNewCount, hnewCountRun⟩
           have hnew : nonzeroCanonicalAddress newPauser :=
             ⟨hnew0, hnewCanonical⟩
           have hcurrent : Devm.getStor newCountPre ca =
@@ -3879,7 +4010,7 @@ theorem setPauser_run_extracts_sourceTrace
               hnewCountStack hwfNewCount hrNewCount hnewPrev howner
               hcurrent hreads.1 hreads.2 hfinishLookup hnewCountRun with
             ⟨postRegistry, _, hwfPost, hrPost, hstorPostRegistry,
-              hfinishRun⟩
+              hcodePostRegistry, hfinishRun⟩
           have hwrites :=
             (setPauser_sourceTrace_refines_model htarget0 htrace).2
           rw [setPauserSourceWrites_found_nonzero entries target newPauser
@@ -3892,6 +4023,7 @@ theorem setPauser_run_extracts_sourceTrace
             rw [hstorPostRegistry, ← congrFun hstorGuard ca]
           refine ⟨postRegistry, imgPrev, hwfPost, hrPost, htargetPrev,
             hnewPrev, hpreviousPrev, hcontinuationPrev, hpostStor, ?_,
+            hcodeToMid.trans (hcodeNewCount.trans hcodePostRegistry),
             hfinishRun⟩
           rw [hpostStor]
           exact hw.applySetPauserSourceTrace
@@ -17078,9 +17210,13 @@ private theorem setPauserKernel_exec_extracts_sourceTrace_of_trace
     hbytes htable hexec
   rcases runtime_registry_lookups dp with
     ⟨herror, happend, hafter, hremove, hfinish⟩
-  exact setPauser_run_extracts_sourceTrace hwf hr htargetRead hnewRead
-    hcontinuationRead howner hw htarget hnew herror happend hafter hremove
-    hfinish hrun htrace
+  obtain ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost, hnewPost,
+      hpreviousPost, hcontinuationPost, hstorPost, hwPost, -, hfinishRun⟩ :=
+    setPauser_run_extracts_sourceTrace hwf hr htargetRead hnewRead
+      hcontinuationRead howner hw htarget hnew herror happend hafter hremove
+      hfinish hrun htrace
+  exact ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost, hnewPost,
+    hpreviousPost, hcontinuationPost, hstorPost, hwPost, hfinishRun⟩
 
 set_option maxRecDepth 4096 in
 /-- Every successful execution at the exact production kernel slice chooses

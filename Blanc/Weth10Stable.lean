@@ -51,7 +51,7 @@ theorem flashExactSpec_preserves
     (dp : DeployParams) (ca : Adr) (flash : B256) :
     (flashExactSpec dp flash).Preserves ca :=
   ContractSpec.preserves_inv _ _ (by
-    intro sevm pre post run h_target _ h_pre
+    intro sevm pre post run h_target _ _ h_pre
     exact (flashExactSpecsRel_of_prog_run dp ca
       (weth10Funcs_exactRelFuncSound dp ca)
       (receiveEther_exactRelFuncSound dp ca)

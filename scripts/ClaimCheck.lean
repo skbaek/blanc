@@ -71,6 +71,67 @@ example (dp : DeployParams) (ca : Adr) :
     (backedSpec weth10 dp).Preserves ca :=
   backedSpec_preserves dp ca
 
+/-!
+The two pins above name `ContractSpec.Sound` and `ContractSpec.Preserves`,
+which are `def`s: adding a premise to either changes what the flagship claims
+while leaving those two examples typechecking.  The four pins below spell the
+quantifier and premise list out instead, so the premise list itself is what is
+pinned and a premise added anywhere in it breaks this file.
+
+The flagship obligations are the `NoMem` ones: no WETH10 selector reads the
+machine's memory, so neither the obligation nor the frame theorem is entitled
+to a `Mem.Wf` premise.  The memory-carrying pair is pinned too, because the
+message-, transaction- and block-level rungs consume it.
+-/
+
+example (dp : DeployParams) (ca : Adr) :
+    ∀ {sevm : Sevm} {pre post : Devm},
+      Prog.Run sevm pre (backedSpec weth10 dp).prog post →
+      sevm.currentTarget = ca →
+      ( ∀ pc' sevm' pre' post',
+          Exec pc' sevm' pre' (.ok post') →
+          sevm'.depth < sevm.depth →
+          Prog.At (backedSpec weth10 dp).prog ca pc' sevm' pre' →
+          (backedSpec weth10 dp).PreWf ca sevm' pre' →
+          (backedSpec weth10 dp).Post ca sevm' post' ) →
+      (backedSpec weth10 dp).Pre ca sevm pre →
+      (backedSpec weth10 dp).Post ca sevm post :=
+  backedSpec_soundNoMem dp ca
+
+example (dp : DeployParams) (ca : Adr) :
+    ∀ sevm pre post,
+      Exec 0 sevm pre (.ok post) →
+      (sevm.currentTarget = ca →
+        some sevm.code.toList = Prog.compile (backedSpec weth10 dp).prog) →
+      (backedSpec weth10 dp).Pre ca sevm pre →
+      (backedSpec weth10 dp).Post ca sevm post :=
+  backedSpec_preservesNoMem dp ca
+
+example (dp : DeployParams) (ca : Adr) :
+    ∀ {sevm : Sevm} {pre post : Devm},
+      Prog.Run sevm pre (backedSpec weth10 dp).prog post →
+      sevm.currentTarget = ca →
+      ( ∀ pc' sevm' pre' post',
+          Exec pc' sevm' pre' (.ok post') →
+          sevm'.depth < sevm.depth →
+          Prog.At (backedSpec weth10 dp).prog ca pc' sevm' pre' →
+          (backedSpec weth10 dp).PreWf ca sevm' pre' →
+          (backedSpec weth10 dp).Post ca sevm' post' ) →
+      Mem.Wf pre.memory →
+      (backedSpec weth10 dp).Pre ca sevm pre →
+      (backedSpec weth10 dp).Post ca sevm post :=
+  backedSpec_sound dp ca
+
+example (dp : DeployParams) (ca : Adr) :
+    ∀ sevm pre post,
+      Exec 0 sevm pre (.ok post) →
+      (sevm.currentTarget = ca →
+        some sevm.code.toList = Prog.compile (backedSpec weth10 dp).prog) →
+      (sevm.currentTarget = ca → Mem.Wf pre.memory) →
+      (backedSpec weth10 dp).Pre ca sevm pre →
+      (backedSpec weth10 dp).Post ca sevm post :=
+  backedSpec_preserves dp ca
+
 example (msg : Msg)
     (h_value : msg.value = 0)
     (h_codeAddress : msg.codeAddress = .none)
@@ -2531,6 +2592,7 @@ example {fs : List Func} {sevm : Sevm} {pre final : Devm}
       RegistryWitness
         (logicalStorageOfStor (Devm.getStor postRegistry ca))
         trace.postEntries ∧
+      Devm.getCode pre = Devm.getCode postRegistry ∧
       Func.Run fs sevm postRegistry finishSetPauser final :=
   setPauser_run_extracts_sourceTrace hwf hr htargetRead hnewRead
     hcontinuationRead howner hw htargetCanonical hnewCanonical herrorLookup

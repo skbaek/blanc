@@ -656,6 +656,33 @@
 # the rows themselves.
 # No control reached 1.50x.
 #
+# 2026-08-23. ~/plans/lido-circuit-breaker-history-goal.md (H11) added the
+# three Stage 7 Registry-history owners, and their rows are ADDITIONS admitting
+# new content, not relaxations admitting a failure: a file with no row here is
+# a REGRESSION, so a new module must state its cost.
+#
+#   Blanc/LidoCircuitBreakerHistory.lean            1.244
+#   Blanc/LidoCircuitBreakerHistoryChain.lean       1.502
+#   Blanc/LidoCircuitBreakerHistoryEndpoints.lean   1.375
+#
+# Measured by `scripts/check-elab.sh --calibrate` at a938b9e with no language
+# server alive -- the run before it REFUSED at 1252MB of retained Lean
+# environment, which is the condition that refusal exists for. Seed d2f030edc3c6
+# derived from that commit; 11 controls drawn across four bands, median ratio
+# 1.061, spread 0.97x-1.26x, none reaching the 1.50x annotation threshold let
+# alone the 2.00x refusal. Full evidence in scripts/report-elab-calibration.txt,
+# recomputable from the commit.
+#
+# No pre-existing row moved. That is the substantive claim, not the three new
+# numbers: this goal edited Blanc/Ladder.lean, which sits near the base of the
+# import graph, so the change invalidated and re-measured 128 modules -- and
+# every one of them held its committed baseline. The whole Stage 7 family costs
+# ~4.1s, which is why the ladder work paid for itself: the history rungs are
+# thin specializations of machinery that already existed.
+#
+# `--rebase` was NOT run, and `--force` was not used. Neither is a way to make
+# a red gate green, and a --force run may not be rebased.
+#
 OK	1.241	Blanc.lean
 OK	1.150	Blanc/BalanceAlgebra.lean
 OK	1.233	Blanc/Basic.lean
@@ -688,6 +715,9 @@ OK	1.230	Blanc/LidoCircuitBreakerCore.lean
 OK	7.130	Blanc/LidoCircuitBreakerDeploy.lean
 OK	40.326	Blanc/LidoCircuitBreakerEnumeration.lean
 OK	17.604	Blanc/LidoCircuitBreakerFreshRegistration.lean
+OK	1.244	Blanc/LidoCircuitBreakerHistory.lean
+OK	1.502	Blanc/LidoCircuitBreakerHistoryChain.lean
+OK	1.375	Blanc/LidoCircuitBreakerHistoryEndpoints.lean
 OK	1.393	Blanc/LidoCircuitBreakerObservation.lean
 OK	2.810	Blanc/LidoCircuitBreakerOwnerClosure.lean
 OK	2.207	Blanc/LidoCircuitBreakerPauseAttainment.lean

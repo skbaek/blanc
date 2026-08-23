@@ -732,7 +732,7 @@ theorem approvePrefix_storage_silent {sevm : Sevm}
 
 /-- The exact nonpayable `approve` selector preserves WETH10 backing. -/
 theorem backedSpec_approve_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable approve) := by
   intro sevm s r h_target h_pre h_ih run
   subst ca
@@ -852,7 +852,7 @@ theorem depositTo_storage {fs : List Func} {sevm : Sevm}
 /-- The exact payable `depositTo` selector preserves WETH10 backing for both
 canonical and dirty address words; the runtime normalizes both to low 160 bits. -/
 theorem backedSpec_depositTo_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux depositTo := by
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux depositTo := by
   intro sevm s r h_target h_pre h_ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
@@ -1350,14 +1350,14 @@ theorem backedPre_of_withdraw_transfer (dp : DeployParams)
 /-- A zero-length value `CALL` made after a synchronized token debit restores
 the ordinary WETH10 postcondition.  The child may be a precompile, delegated
 code, arbitrary bytecode, or a reentrant WETH10 frame; the last case is exactly
-where `FuncSound`'s deeper-frame hypothesis is consumed. -/
+where `FuncSoundNoMem`'s deeper-frame hypothesis is consumed. -/
 theorem backedPost_of_value_call
     (dp : DeployParams) (ca : Adr)
     {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     {xs : Stack}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_side : SumNof s.getBal)
@@ -1487,7 +1487,8 @@ theorem backedPost_of_value_call
         exact ih 0
           (initSevm (childMsg.withBenv benv))
           (initDevm (childMsg.withBenv benv))
-          (.ok child) h_exec_child h_depth_lt h_at h_pre
+          (.ok child) h_exec_child h_depth_lt h_at
+          ⟨h_pre, fun _ => Mem.wf_empty⟩
     refine ⟨?_, ?_⟩
     · show SumNof sf.getBal
       have h_bal : sf.getBal = child.getBal :=
@@ -1778,7 +1779,7 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
     (h_target : sevm.currentTarget = ca)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_value : sevm.value = 0)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (transferZeroThen next) r) :
@@ -1971,7 +1972,7 @@ theorem backedPost_of_transferZero (dp : DeployParams) (ca : Adr)
     (h_target : sevm.currentTarget = ca)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_value : sevm.value = 0)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (transferZeroThen returnTrue) r) :
@@ -1996,7 +1997,7 @@ theorem backedPost_of_transferZero (dp : DeployParams) (ca : Adr)
 accepted value-call result supplies the ETH cover premise, while the exact
 token debit and unchanged flash counter supply the storage premises. -/
 theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable withdraw) := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -2161,7 +2162,7 @@ Raw zero takes the ETH-withdrawal branch; every nonzero ABI word takes the
 normalized token-credit branch, including dirty words whose low 160 bits are
 zero. -/
 theorem backedSpec_transfer_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable transfer) := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -2232,7 +2233,7 @@ theorem backedSpec_transfer_funcSound (dp : DeployParams) (ca : Adr) :
 /-- The exact nonpayable `withdrawTo` selector preserves WETH10 backing for
 arbitrary canonical or dirty target words. -/
 theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable withdrawTo) := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -2513,7 +2514,7 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
     (h_target : sevm.currentTarget = ca)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_value : sevm.value = 0)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       transferFromZero r) :
@@ -2681,7 +2682,7 @@ theorem backedPost_of_transferFromCore (dp : DeployParams) (ca : Adr)
     (h_target : sevm.currentTarget = ca)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_value : sevm.value = 0)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       transferFromCore r) :
@@ -2751,7 +2752,7 @@ theorem backedPost_of_transferFromCore (dp : DeployParams) (ca : Adr)
 /-- The exact nonpayable `transferFrom` selector preserves WETH10 backing,
 including its self/infinite/finite allowance paths. -/
 theorem backedSpec_transferFrom_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable transferFrom) := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -2778,7 +2779,7 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
     (h_target : sevm.currentTarget = ca)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_value : sevm.value = 0)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       withdrawFromCore r) :
@@ -2942,7 +2943,7 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
 /-- The exact nonpayable `withdrawFrom` selector preserves WETH10 backing,
 including its self/infinite/finite allowance paths and dirty target words. -/
 theorem backedSpec_withdrawFrom_funcSound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable withdrawFrom) := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -3308,7 +3309,7 @@ theorem backedPost_of_run_callBoolCallback
     {value : Line}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_side : SumNof s.getBal)
     (h_inv : Stor.Weth10Inv (Devm.getStor s ca) 0 (s.getBal ca))
@@ -3354,7 +3355,7 @@ The mint prefix establishes backing before the arbitrary zero-value callback;
 the fixed Boolean decoder is world-state silent on every successful path. -/
 theorem backedSpec_depositToAndCall_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux depositToAndCall := by
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux depositToAndCall := by
   intro sevm s r h_target h_pre ih run
   subst ca
   simp only [depositToAndCall] at run
@@ -3392,7 +3393,7 @@ Its tagged allowance write is invariant-silent before the arbitrary zero-value
 callback. -/
 theorem backedSpec_approveAndCall_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable approveAndCall) := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -3436,7 +3437,7 @@ Both runtime transfer branches establish backing before entering the arbitrary
 zero-value Boolean callback. -/
 theorem backedSpec_transferAndCall_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable transferAndCall) := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -3584,11 +3585,12 @@ def FlashStable (dp : DeployParams) (f : Func) : Prop :=
     (Devm.getStor r sevm.currentTarget).get flashMintedSlot =
       (Devm.getStor s sevm.currentTarget).get flashMintedSlot
 
-/-- A flash-stable body satisfies every flash-floor `FuncSound` obligation. -/
+/-- A flash-stable body satisfies every flash-floor `FuncSoundNoMem`
+obligation. -/
 theorem flashFloor_funcSound_of_stable
     (dp : DeployParams) (floor : B256) (ca : Adr) {f : Func}
     (hstable : FlashStable dp f) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux f := by
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux f := by
   intro sevm s r h_target h_pre _ run
   subst ca
   refine ⟨trivial, ?_⟩
@@ -3628,8 +3630,8 @@ theorem FlashStable.nonpayable (dp : DeployParams) {body : Func}
 entry wrapper while retaining the same deeper-frame hypothesis. -/
 theorem flashFloor_nonpayable_funcSound_of_body
     (dp : DeployParams) (floor : B256) (ca : Adr) {body : Func}
-    (hbody : (flashFloorSpec dp floor).FuncSound ca weth10Aux body) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (hbody : (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux body) :
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable body) := by
   intro sevm s r h_target h_pre ih run
   rcases run_body_of_run_nonpayable run with
@@ -3645,7 +3647,7 @@ theorem flashFloorPost_of_value_call
     {xs : Stack}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca))
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
@@ -3776,7 +3778,8 @@ theorem flashFloorPost_of_value_call
         exact ih 0
           (initSevm (childMsg.withBenv benv))
           (initDevm (childMsg.withBenv benv))
-          (.ok child) h_exec_child h_depth_lt h_at h_pre
+          (.ok child) h_exec_child h_depth_lt h_at
+          ⟨h_pre, fun _ => Mem.wf_empty⟩
     refine ⟨trivial, ?_⟩
     change Stor.FlashFloor floor (Devm.getStor sf ca)
     have h_stor : Devm.getStor sf ca = Devm.getStor child ca :=
@@ -3788,7 +3791,7 @@ theorem flashFloorPost_of_value_call
 
 theorem flashFloorSpec_receiveEther_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux receiveEther := by
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux receiveEther := by
   apply flashFloor_funcSound_of_stable dp floor ca
   intro sevm s r run
   exact (mintCaller_storage (by
@@ -3796,14 +3799,14 @@ theorem flashFloorSpec_receiveEther_funcSound
 
 theorem flashFloorSpec_deposit_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux deposit := by
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux deposit := by
   apply flashFloor_funcSound_of_stable dp floor ca
   intro sevm s r run
   exact (mintCaller_storage (by simpa only [deposit] using run)).2
 
 theorem flashFloorSpec_approve_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable approve) := by
   apply flashFloor_funcSound_of_stable dp floor ca
   apply FlashStable.nonpayable dp
@@ -3812,42 +3815,42 @@ theorem flashFloorSpec_approve_funcSound
 
 theorem flashFloorSpec_depositTo_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux depositTo := by
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux depositTo := by
   apply flashFloor_funcSound_of_stable dp floor ca
   intro sevm s r run
   exact (depositTo_storage run).choose_spec.2
 
 theorem flashFloorSpec_name_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable name) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_totalSupply_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable totalSupply) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_permitTypehash_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable permitTypehash) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_decimals_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable decimals) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_domainSeparator_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable (domainSeparator dp)) := by
   apply flashFloor_funcSound_of_stable dp floor ca
   apply FlashStable.nonpayable dp
@@ -3857,49 +3860,49 @@ theorem flashFloorSpec_domainSeparator_funcSound
 
 theorem flashFloorSpec_maxFlashLoan_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable maxFlashLoan) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_balanceOf_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable balanceOfEndpoint) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_nonces_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable nonces) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_callbackSuccess_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable callbackSuccess) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_flashMinted_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable flashMinted) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_symbol_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable symbol) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_deploymentChainId_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable (deploymentChainId dp)) := by
   apply flashFloor_funcSound_of_stable dp floor ca
   apply FlashStable.nonpayable dp
@@ -3909,14 +3912,14 @@ theorem flashFloorSpec_deploymentChainId_funcSound
 
 theorem flashFloorSpec_allowance_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable allowance) :=
   flashFloor_funcSound_of_stable dp floor ca
     (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
 
 theorem flashFloorSpec_flashFee_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable flashFee) := by
   apply flashFloor_funcSound_of_stable dp floor ca
   apply FlashStable.nonpayable dp
@@ -3934,7 +3937,7 @@ theorem flashFloorPost_of_run_callBoolCallback
     {value : Line}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca))
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
@@ -3973,7 +3976,7 @@ theorem flashFloorCode_of_call_success_guard
     {g c v ii is oi os : B256} {xs : Stack}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca))
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ sc.stack)
     (h_code : some (sc.getCode ca).toList = Prog.compile (weth10 dp))
@@ -4012,7 +4015,7 @@ theorem flashFloorCode_of_call_success_guard
 
 theorem flashFloorSpec_depositToAndCall_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       depositToAndCall := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -4042,7 +4045,7 @@ theorem flashFloorSpec_depositToAndCall_funcSound
 
 theorem flashFloorSpec_approveAndCall_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable approveAndCall) := by
   apply flashFloor_nonpayable_funcSound_of_body dp floor ca
   intro sevm s r h_target h_pre ih run
@@ -4166,7 +4169,7 @@ theorem of_callerBurnThen_floor
     {sevm : Sevm} {s r : Devm}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca))
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
@@ -4360,7 +4363,7 @@ theorem of_argBurnThen_floor
     {sevm : Sevm} {s r : Devm}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca))
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
@@ -4483,7 +4486,7 @@ theorem of_transferZeroThen_floor
     {sevm : Sevm} {s r : Devm} {next : Func}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca))
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
@@ -4624,7 +4627,7 @@ theorem of_transferThen_floor
     {sevm : Sevm} {s r : Devm} {next : Func}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca))
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
@@ -4695,7 +4698,7 @@ theorem of_transferThen_floor
 
 theorem flashFloorSpec_transfer_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable transfer) := by
   apply flashFloor_nonpayable_funcSound_of_body dp floor ca
   intro sevm s r h_target h_pre ih run
@@ -4714,7 +4717,7 @@ theorem flashFloorSpec_transfer_funcSound
 
 theorem flashFloorSpec_transferAndCall_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable transferAndCall) := by
   apply flashFloor_nonpayable_funcSound_of_body dp floor ca
   intro sevm s r h_target h_pre ih run
@@ -4731,7 +4734,7 @@ theorem flashFloorSpec_transferAndCall_funcSound
 
 theorem flashFloorSpec_withdraw_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable withdraw) := by
   apply flashFloor_nonpayable_funcSound_of_body dp floor ca
   intro sevm s r h_target h_pre ih run
@@ -4759,7 +4762,7 @@ theorem flashFloorSpec_withdraw_funcSound
 
 theorem flashFloorSpec_withdrawTo_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable withdrawTo) := by
   apply flashFloor_nonpayable_funcSound_of_body dp floor ca
   intro sevm s r h_target h_pre ih run
@@ -4788,14 +4791,14 @@ theorem flashFloorSpec_withdrawTo_funcSound
 
 theorem flashFloorSpec_transferFromNonzero_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       transferFromNonzero :=
   flashFloor_funcSound_of_stable dp floor ca
     (transferFromNonzero_flashStable dp)
 
 theorem flashFloorSpec_transferFromZero_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       transferFromZero := by
   intro sevm s r h_target h_pre ih run
   change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
@@ -4848,7 +4851,7 @@ theorem flashFloorPre_of_silent
 
 theorem flashFloorSpec_transferFromCore_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       transferFromCore := by
   intro sevm s r h_target h_pre ih run
   change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
@@ -4905,7 +4908,7 @@ theorem flashFloorSpec_transferFromCore_funcSound
 
 theorem flashFloorSpec_transferFrom_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable transferFrom) := by
   apply flashFloor_nonpayable_funcSound_of_body dp floor ca
   intro sevm s r h_target h_pre ih run
@@ -4928,7 +4931,7 @@ theorem flashFloorSpec_transferFrom_funcSound
 
 theorem flashFloorSpec_withdrawFromCore_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       withdrawFromCore := by
   intro sevm s r h_target h_pre ih run
   change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
@@ -4957,7 +4960,7 @@ theorem flashFloorSpec_withdrawFromCore_funcSound
 
 theorem flashFloorSpec_withdrawFrom_funcSound
     (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSound ca weth10Aux
+    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
       (nonpayable withdrawFrom) := by
   apply flashFloor_nonpayable_funcSound_of_body dp floor ca
   intro sevm s r h_target h_pre ih run
@@ -6892,7 +6895,8 @@ theorem of_run_flashLoanFromCall
 
 /-! ### Relational flash-floor dispatch
 
-A fixed-floor `FuncSound` induction hypothesis cannot be instantiated at the
+A fixed-floor `FuncSoundNoMem` induction hypothesis cannot be instantiated at
+the
 larger counter created immediately before a flash callback.  The relation
 below quantifies the floor outside `Pre`/`Post`; a successful subexecution can
 therefore be reused at the counter actually present at that subexecution's
@@ -6925,14 +6929,14 @@ theorem flashFloorInvDepth_of_rel
     (dp : DeployParams) (ca : Adr) (floor : B256) {depth : Nat}
     (ih : FlashFloorsDepth dp ca depth) :
     Exec.InvDepth depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca) := by
   intro pc' sevm' pre' exn' ex' h_depth h_at
   cases exn' with
   | error e => simp only [ifOk, implies_true]
   | ok post' =>
     intro h_pre'
-    exact ih pc' sevm' pre' post' ex' h_depth h_at floor h_pre'
+    exact ih pc' sevm' pre' post' ex' h_depth h_at floor h_pre'.pre
 
 /-- The floor-preserving call lemma with the resumed Boolean flag retained on
 the caller stack, for bodies that continue after the callback. -/
@@ -6942,7 +6946,7 @@ theorem flashFloorPostStack_of_value_call
     {xs : Stack}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).Pre ca)
+      ((flashFloorSpec dp floor).PreWf ca)
       ((flashFloorSpec dp floor).Post ca))
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
@@ -6977,7 +6981,7 @@ fixed floor. -/
 theorem FloorRelFuncSound.of_funcSound
     (dp : DeployParams) (ca : Adr) {f : Func}
     (h : ∀ floor,
-      (flashFloorSpec dp floor).FuncSound ca weth10Aux f) :
+      (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux f) :
     FloorRelFuncSound dp ca f := by
   intro floor sevm s r h_target h_pre ih run
   apply h floor h_target h_pre
@@ -7486,7 +7490,7 @@ theorem flashExactRel_of_value_call
 /-- An arbitrary successful `STATICCALL` from a zero-value WETH10 frame
 preserves the frozen backing invariant.  A failed call retains the parent
 world; an entered call is discharged by ordinary child-frame settlement and
-the recursive `FuncSound` hypothesis. -/
+the recursive `FuncSoundNoMem` hypothesis. -/
 theorem backedPost_of_static_call
     (dp : DeployParams) (ca : Adr)
     {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256}
@@ -7494,7 +7498,7 @@ theorem backedPost_of_static_call
     (h_target : sevm.currentTarget = ca)
     (h_value : sevm.value = 0)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (h_run : Ninst.Run sevm s statcall sf) :
@@ -7614,7 +7618,8 @@ theorem backedPost_of_static_call
         exact ih 0
           (initSevm (childMsg.withBenv benv))
           (initDevm (childMsg.withBenv benv))
-          (.ok child) h_exec_child h_depth_lt h_at h_pre_child
+          (.ok child) h_exec_child h_depth_lt h_at
+          ⟨h_pre_child, fun _ => Mem.wf_empty⟩
     refine ⟨?_, ?_⟩
     · show SumNof sf.getBal
       have h_bal : sf.getBal = child.getBal :=
@@ -8150,7 +8155,7 @@ private theorem recoverPermitSigner_backed
     (h_value : sevm.value = 0)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (run : Line.Run sevm s recoverPermitSigner r) :
     (backedSpec weth10 dp).Post ca sevm r := by
   change Line.Run sevm s
@@ -8487,7 +8492,7 @@ private theorem permitRecover_backed
     (h_value : sevm.value = 0)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       permitRecover r) :
     (backedSpec weth10 dp).Post ca sevm r := by
@@ -8734,7 +8739,7 @@ private theorem permitDomainFlashDispatch_backed
     (h_value : sevm.value = 0)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (permitDomainFlashDispatch dp) r) :
     (backedSpec weth10 dp).Post ca sevm r := by
@@ -8950,7 +8955,7 @@ private theorem permitAfterDeadline_backed
     (h_value : sevm.value = 0)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (permitAfterDeadlineFlash dp) r) :
     (backedSpec weth10 dp).Post ca sevm r := by
@@ -9069,7 +9074,7 @@ private theorem permitBody_backed
     (h_value : sevm.value = 0)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (permit dp) r) :
     (backedSpec weth10 dp).Post ca sevm r := by
@@ -9153,7 +9158,7 @@ theorem permit_exactRelFuncSound
 invariant, including arbitrary delegated/static recovery subtrees. -/
 theorem backedSpec_permit_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable (permit dp)) := by
   intro sevm s r h_target h_pre ih run
   rcases run_body_of_run_nonpayable run with
@@ -10362,7 +10367,7 @@ theorem of_flashLoanFromCall_backed
     {recipient : Adr}
     (h_target : sevm.currentTarget = ca)
     (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((backedSpec weth10 dp).Pre ca) ((backedSpec weth10 dp).Post ca))
+      ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_inv_sc : Stor.Weth10Inv
       (Devm.getStor sc ca) 0 (Devm.getBal sc ca))
     (h_code_sc : some (sc.getCode ca).toList =
@@ -10464,7 +10469,7 @@ theorem backedPost_of_flashSettle
 invariant. -/
 theorem backedSpec_flashLoan_funcSound
     (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).FuncSound ca weth10Aux
+    (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable flashLoan) := by
   intro sevm s r h_target h_pre ih run
   subst ca
@@ -10494,7 +10499,7 @@ invariant. -/
 theorem weth10Funcs_backed_funcSound
     (dp : DeployParams) (ca : Adr) :
     ∀ p ∈ weth10Funcs dp,
-      (backedSpec weth10 dp).FuncSound ca weth10Aux p.2 := by
+      (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux p.2 := by
   intro p hp
   simp only [weth10Funcs, List.mem_cons] at hp
   rcases hp with
@@ -10531,18 +10536,33 @@ theorem weth10Funcs_backed_funcSound
   · simp at hnil
 
 /-- Premise-free receive-aware soundness of the compiled Blanc WETH10 program
-for the frozen backing invariant. -/
-theorem backedSpec_sound (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).Sound ca :=
+for the frozen backing invariant.  Premise-free in both senses: no unproved
+selector obligation is left over, and the obligation itself carries no memory
+premise. -/
+theorem backedSpec_soundNoMem (dp : DeployParams) (ca : Adr) :
+    (backedSpec weth10 dp).SoundNoMem ca :=
   backedSpec_sound_of_funcSound_all dp ca
     (weth10Funcs_backed_funcSound dp ca)
 
+/-- The memory-carrying obligation, for any consumer that wants it: dropping a
+premise WETH10 never used. -/
+theorem backedSpec_sound (dp : DeployParams) (ca : Adr) :
+    (backedSpec weth10 dp).Sound ca :=
+  ContractSpec.SoundNoMem.sound (backedSpec_soundNoMem dp ca)
+
 /-- Every successful WETH10 subexecution preserves the frozen backing
-invariant, at arbitrary depth and through receive dispatch. -/
-theorem backedSpec_preserves (dp : DeployParams) (ca : Adr) :
-    (backedSpec weth10 dp).Preserves ca :=
+invariant, at arbitrary depth and through receive dispatch — whatever the
+machine's memory holds on entry. -/
+theorem backedSpec_preservesNoMem (dp : DeployParams) (ca : Adr) :
+    (backedSpec weth10 dp).PreservesNoMem ca :=
   backedSpec_preserves_of_funcSound_all dp ca
     (weth10Funcs_backed_funcSound dp ca)
+
+/-- The memory-carrying form the message-, transaction- and block-level rungs
+consume. -/
+theorem backedSpec_preserves (dp : DeployParams) (ca : Adr) :
+    (backedSpec weth10 dp).Preserves ca :=
+  ContractSpec.PreservesNoMem.preserves (backedSpec_preservesNoMem dp ca)
 
 end Weth10
 
