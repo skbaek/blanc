@@ -1599,6 +1599,309 @@ private theorem officialConstructorReturn_runCompiled
     hstack hgas (by simpa only [Prod.eta] using hread)
   simpa only [officialConstructorPost, Func.ret] using hrun
 
+/-! ## Composed constructor effect suffix -/
+
+private theorem officialConstructorColdStore_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {key value : B256} {memory : Mem} {G : Nat} {rest : Func}
+    (hcold : (sevm.currentTarget, key) ∉ base.accessedStorageKeys)
+    (horiginal : getOrigStorVal sevm sevm.currentTarget key = 0)
+    (hcurrent : base.getStorVal sevm.currentTarget key = 0)
+    (hvalue : value ≠ 0)
+    (hsentry : gCallStipend < G + 22100)
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorColdStore sevm base key value).setMach
+        ⟨[], memory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[key, value], memory, G + 22100⟩)
+      (sstore ::: rest) post := by
+  have hzeroValue : (0 : B256) ≠ value := Ne.symm hvalue
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_sstore_cold
+        (c := 22100) (G := G) (rc := base.refundCounter)
+    · rfl
+    · simpa only [Devm.setMach, Devm.accessedStorageKeys] using hcold
+    · simpa only [Devm.gasLeft_setMach] using hsentry
+    · exact hstatic
+    · simp only [Devm.getStorVal_setMach, hcurrent, horiginal]
+      simp [sstoreValueCost, hzeroValue, gasColdSload, gasStorageSet]
+    · simp only [Devm.getStorVal_setMach, Devm.setMach,
+        Devm.refundCounter, hcurrent, horiginal]
+      simp [sstoreNewRefundCounter, hzeroValue]
+    · simp only [Devm.gasLeft_setMach]
+  · change Func.RunCompiled fs sevm
+      ((officialConstructorColdStore sevm base key value).setMach
+        ⟨[], memory, G⟩)
+      rest post
+    exact hrest
+
+private def officialConstructorInitializedBase
+    (sevm : Sevm) (base : Devm) : Devm :=
+  base.addLog (officialConstructorInitializedLog sevm.currentTarget)
+
+private def officialConstructorPauseLoggedBase
+    (sevm : Sevm) (base : Devm) : Devm :=
+  (officialConstructorInitializedBase sevm base).addLog
+    (officialConstructorPauseLog sevm.currentTarget)
+
+private def officialConstructorPauseStoredBase
+    (sevm : Sevm) (base : Devm) : Devm :=
+  officialConstructorColdStore sevm
+    (officialConstructorPauseLoggedBase sevm base)
+    pauseDurationSlot officialConstructorArgs.initialPauseDuration
+
+private def officialConstructorHeartbeatLoggedBase
+    (sevm : Sevm) (base : Devm) : Devm :=
+  (officialConstructorPauseStoredBase sevm base).addLog
+    (officialConstructorHeartbeatLog sevm.currentTarget)
+
+private theorem officialConstructorHeartbeatStore_eq_effectBase
+    (sevm : Sevm) (base : Devm) :
+    officialConstructorColdStore sevm
+        (officialConstructorHeartbeatLoggedBase sevm base)
+        heartbeatIntervalSlot
+        officialConstructorArgs.initialHeartbeatInterval =
+      officialConstructorEffectBase sevm base := by
+  rfl
+
+private theorem officialConstructorHeartbeatSstore_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hcold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
+      (officialConstructorHeartbeatLoggedBase sevm base).accessedStorageKeys)
+    (horiginal : getOrigStorVal sevm sevm.currentTarget
+      heartbeatIntervalSlot = 0)
+    (hcurrent : (officialConstructorHeartbeatLoggedBase sevm base).getStorVal
+      sevm.currentTarget heartbeatIntervalSlot = 0)
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorEffectBase sevm base).setMach
+        ⟨[], officialConstructorFinalMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorHeartbeatLoggedBase sevm base).setMach
+        ⟨[heartbeatIntervalSlot,
+            officialConstructorArgs.initialHeartbeatInterval],
+          officialConstructorHeartbeatMemory, G + 22100⟩)
+      (sstore ::: rest) post := by
+  have hrest' : Func.RunCompiled fs sevm
+      ((officialConstructorColdStore sevm
+          (officialConstructorHeartbeatLoggedBase sevm base)
+          heartbeatIntervalSlot
+          officialConstructorArgs.initialHeartbeatInterval).setMach
+        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+      rest post := by
+    rw [officialConstructorHeartbeatStore_eq_effectBase,
+      officialConstructorHeartbeatMemory_eq_final]
+    exact hrest
+  exact officialConstructorColdStore_runCompiled hcold horiginal hcurrent
+    (by unfold officialConstructorArgs; decide)
+    (by simp only [gCallStipend]; omega) hstatic hrest'
+
+private theorem officialConstructorHeartbeatLogOpcode_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorHeartbeatLoggedBase sevm base).setMach
+        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorPauseStoredBase sevm base).setMach
+        ⟨[Nat.toB256 (officialConstructorEventScratch / 32) * 32,
+            (2 : B256) * 32, heartbeatIntervalUpdatedEvent],
+          officialConstructorHeartbeatMemory, G + 1262⟩)
+      (Ninst.log (Fin.succ 0) ::: rest) post := by
+  have hi :
+      (Nat.toB256 (officialConstructorEventScratch / 32) * 32).toNat =
+        officialConstructorEventScratch := by
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hsz : ((2 : B256) * 32).toNat = 64 := by decide
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_log_of
+        (n := Fin.succ 0)
+        (i := Nat.toB256 (officialConstructorEventScratch / 32) * 32)
+        (sz := (2 : B256) * 32)
+        (topics := [heartbeatIntervalUpdatedEvent]) (s := [])
+        (c := 1262) (G := G)
+        (M := officialConstructorHeartbeatMemory)
+        (data := (0 : B256).toBytes ++
+          officialConstructorArgs.initialHeartbeatInterval.toBytes)
+    · rfl
+    · rfl
+    · exact hstatic
+    · rw [hi, hsz]
+      rw [Devm.extCost_zero_of_le
+        (N := officialConstructorHeartbeatMemory)
+        (by rw [officialConstructorHeartbeatMemory_size])
+        (by rw [officialConstructorHeartbeatMemory_size,
+          officialConstructorEventScratch_eq])]
+      decide
+    · simp only [Devm.memory_setMach, hi, hsz]
+      exact officialConstructorHeartbeatMemory_read_data
+    · simp only [Devm.memory_setMach, hi, hsz]
+      exact officialConstructorHeartbeatMemory_read_memory
+    · simp only [Devm.gasLeft_setMach]
+  · change Func.RunCompiled fs sevm
+      ((officialConstructorHeartbeatLoggedBase sevm base).setMach
+        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+      rest post
+    exact hrest
+
+set_option maxRecDepth 4096 in
+private theorem officialConstructorHeartbeatLogLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorHeartbeatLoggedBase sevm base).setMach
+        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorPauseStoredBase sevm base).setMach
+        ⟨[], officialConstructorHeartbeatMemory, G + 1271⟩)
+      (pushB256 heartbeatIntervalUpdatedEvent :::
+        logWith 0
+          (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
+        rest) post := by
+  have hlog := officialConstructorHeartbeatLogOpcode_runCompiled
+    hstatic hrest
+  unfold logWith
+  func_run (3)
+  all_goals try decide +kernel
+  exact hlog
+
+private theorem officialConstructorPatchedMemory_read_argument
+    (i : Fin 7) :
+    Bytes.toB256
+        ((officialConstructorPatchedMemory.read (32 * i.val) 32).1) =
+      officialConstructorArgumentWord i := by
+  rw [← officialConstructorPatchMemory12_eq_patched]
+  exact officialConstructorPatchInvariant12.read_argument i
+
+private theorem officialConstructorPauseMemory_read_argument
+    (i : Fin 7) :
+    Bytes.toB256
+        ((officialConstructorPauseMemory.read (32 * i.val) 32).1) =
+      officialConstructorArgumentWord i := by
+  rw [Mem.Reads.read officialConstructorPauseMemory_reads]
+  unfold officialConstructorPauseImage
+  rw [Bytes.sliceD_writeAt_before _ _ (32 * i.val) 32
+      (officialConstructorEventScratch + 32) (by
+        rw [officialConstructorEventScratch_eq]
+        have hi := i.isLt
+        omega),
+    Bytes.sliceD_writeAt_before _ _ (32 * i.val) 32
+      officialConstructorEventScratch (by
+        rw [officialConstructorEventScratch_eq]
+        have hi := i.isLt
+        omega),
+    ← Mem.Reads.read officialConstructorPatchedMemory_reads]
+  exact officialConstructorPatchedMemory_read_argument i
+
+private theorem officialConstructorHeartbeatMemory_read_argument
+    (i : Fin 7) :
+    Bytes.toB256
+        ((officialConstructorHeartbeatMemory.read (32 * i.val) 32).1) =
+      officialConstructorArgumentWord i := by
+  rw [Mem.Reads.read officialConstructorHeartbeatMemory_reads]
+  unfold officialConstructorHeartbeatImage
+  rw [Bytes.sliceD_writeAt_before _ _ (32 * i.val) 32
+      (officialConstructorEventScratch + 32) (by
+        rw [officialConstructorEventScratch_eq]
+        have hi := i.isLt
+        omega),
+    Bytes.sliceD_writeAt_before _ _ (32 * i.val) 32
+      officialConstructorEventScratch (by
+        rw [officialConstructorEventScratch_eq]
+        have hi := i.isLt
+        omega),
+    ← Mem.Reads.read officialConstructorPauseMemory_reads]
+  exact officialConstructorPauseMemory_read_argument i
+
+private theorem officialConstructorHeartbeatMemory_read_argument_memory
+    (i : Fin 7) :
+    (officialConstructorHeartbeatMemory.read (32 * i.val) 32).2 =
+      officialConstructorHeartbeatMemory := by
+  apply Mem.read_snd_eq_self
+  apply memExtSize_of_le
+  · rw [officialConstructorHeartbeatMemory_size]
+  · rw [officialConstructorHeartbeatMemory_size]
+    have hi := i.isLt
+    omega
+
+set_option maxRecDepth 4096 in
+private theorem officialConstructorHeartbeatStoreLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hcold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
+      (officialConstructorHeartbeatLoggedBase sevm base).accessedStorageKeys)
+    (horiginal : getOrigStorVal sevm sevm.currentTarget
+      heartbeatIntervalSlot = 0)
+    (hcurrent : (officialConstructorHeartbeatLoggedBase sevm base).getStorVal
+      sevm.currentTarget heartbeatIntervalSlot = 0)
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorEffectBase sevm base).setMach
+        ⟨[], officialConstructorFinalMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorHeartbeatLoggedBase sevm base).setMach
+        ⟨[], officialConstructorHeartbeatMemory, G + 22109⟩)
+      (loadArgumentIndex 6 +++
+        pushB256 heartbeatIntervalSlot ::: sstore ::: rest) post := by
+  have hvalue : Bytes.toB256
+      ((officialConstructorHeartbeatMemory.read 192 32).1) =
+        officialConstructorArgs.initialHeartbeatInterval := by
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorHeartbeatMemory_read_argument
+        ⟨6, by decide⟩
+  have hmemory :
+      (officialConstructorHeartbeatMemory.read 192 32).2 =
+        officialConstructorHeartbeatMemory := by
+    simpa using officialConstructorHeartbeatMemory_read_argument_memory
+      ⟨6, by decide⟩
+  have hstore := officialConstructorHeartbeatSstore_runCompiled
+    hcold horiginal hcurrent hstatic hrest
+  have hindex : (Nat.toB256 (32 * 6)).toNat = 192 := by decide
+  unfold loadArgumentIndex pushCompactNat
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 22106)
+    · decide
+    · simp only [Devm.gasLeft_setMach]
+    · simp only [Devm.stack_setMach, List.length_nil]
+      omega
+  · apply Func.RunCompiled.next
+    · apply Ninst.runCompiled_mload_of
+          (i := Nat.toB256 (32 * 6))
+          (v := officialConstructorArgs.initialHeartbeatInterval)
+          (s := []) (M := officialConstructorHeartbeatMemory)
+          (c := 3) (G := G + 22103)
+      · simp only [Devm.stack_setMach]
+      · simp only [Devm.memory_setMach, hindex]
+        rw [Devm.extCost_zero_of_le
+          (N := officialConstructorHeartbeatMemory)
+          (by rw [officialConstructorHeartbeatMemory_size])
+          (by rw [officialConstructorHeartbeatMemory_size]; decide)]
+        decide
+      · simpa only [Devm.memory_setMach, hindex] using hvalue
+      · simpa only [Devm.memory_setMach, hindex] using hmemory
+      · simp only [Devm.gasLeft_setMach]
+      · simp only [Devm.stack_setMach, List.length_nil]
+        omega
+    · apply Func.RunCompiled.next
+      · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 22100)
+        · simpa only [gVerylow] using pushCost_of_ne_zero
+            (w := heartbeatIntervalSlot) (by decide +kernel)
+        · simp only [Devm.gasLeft_setMach]
+          omega
+        · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega
+      · simpa only [Devm.setMach_setMach] using hstore
+
 end LidoCircuitBreaker
 
 end Blanc
