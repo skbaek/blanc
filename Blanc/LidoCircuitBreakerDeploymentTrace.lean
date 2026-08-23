@@ -431,6 +431,27 @@ private theorem constructorPatchPair_runCompiled
       rw [hg]
       exact hrest
 
+private theorem ConstructorPatchInvariant.runCompiled_write
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {memory : Mem} {i : Fin 7} {offset pushGas G : Nat}
+    {value : B256} {rest : Func}
+    (h : ConstructorPatchInvariant memory)
+    (hoffset : offset < 2 ^ 16)
+    (hpush : pushCost ((Nat.toB256 (32 * i.val)).toBytes.sig) = pushGas)
+    (hvalue : officialConstructorArgumentWord i = value)
+    (hfit : offset + 32 ≤ 4512)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], memory.write offset value.toBytes, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], memory, G + (pushGas + 9)⟩)
+      (loadArgumentIndex i.val +++ storeByteOffset offset +++ rest) post := by
+  apply constructorPatchPair_runCompiled hoffset hpush h.memory_size hfit
+  · rw [h.read_argument i, hvalue]
+  · exact h.read_memory i
+  · rfl
+  · exact hrest
+
 private def officialConstructorPatchMemory1 : Mem :=
   officialConstructorCopiedMemory.write 398 officialParams.admin.toBytes
 
@@ -553,6 +574,153 @@ private theorem officialConstructorPatchMemory12_eq_patched :
   simp only [List.foldl_append, List.foldl_cons, List.foldl_nil,
     applyConstructorMemoryPatch, constructorArgumentBytes,
     constructorRuntimeBase]
+
+private def officialConstructorPatchLine : Line :=
+  loadArgumentIndex 0 ++ storeByteOffset 398 ++
+  loadArgumentIndex 0 ++ storeByteOffset 1318 ++
+  loadArgumentIndex 0 ++ storeByteOffset 2057 ++
+  loadArgumentIndex 0 ++ storeByteOffset 2144 ++
+  loadArgumentIndex 1 ++ storeByteOffset 441 ++
+  loadArgumentIndex 1 ++ storeByteOffset 937 ++
+  loadArgumentIndex 2 ++ storeByteOffset 482 ++
+  loadArgumentIndex 2 ++ storeByteOffset 2185 ++
+  loadArgumentIndex 3 ++ storeByteOffset 732 ++
+  loadArgumentIndex 3 ++ storeByteOffset 1361 ++
+  loadArgumentIndex 4 ++ storeByteOffset 896 ++
+  loadArgumentIndex 4 ++ storeByteOffset 1402
+
+private theorem patchRuntimeLine_official_eq :
+    patchRuntimeLine constructorRuntimeBase =
+      officialConstructorPatchLine := by
+  rcases constructor_immutable_word_offsets_exact with
+    ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
+  simp only [patchRuntimeLine, patchFieldLine, immutableParameters,
+    List.flatMap_cons, List.flatMap_nil, hadmin, hminPause, hmaxPause,
+    hminHeartbeat, hmaxHeartbeat, patchArgumentIndex,
+    officialConstructorPatchLine, constructorRuntimeBase,
+    constructorArgumentBytes, List.nil_append, List.append_nil,
+    List.append_assoc]
+
+private theorem officialConstructorPatchLine9_12_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchMemory12, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchMemory8, G + 48⟩)
+      (loadArgumentIndex 3 +++ storeByteOffset 732 +++
+        loadArgumentIndex 3 +++ storeByteOffset 1361 +++
+        loadArgumentIndex 4 +++ storeByteOffset 896 +++
+        loadArgumentIndex 4 +++ storeByteOffset 1402 +++ rest) post := by
+  have h12 := officialConstructorPatchInvariant11.runCompiled_write
+    (i := ⟨4, by decide⟩) (offset := 1402) (pushGas := 3)
+    (G := G) (value := officialParams.maxHeartbeatInterval)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory12] using hrest)
+  have h11 := officialConstructorPatchInvariant10.runCompiled_write
+    (i := ⟨4, by decide⟩) (offset := 896) (pushGas := 3)
+    (G := G + 12) (value := officialParams.maxHeartbeatInterval)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory11] using h12)
+  have h10 := officialConstructorPatchInvariant9.runCompiled_write
+    (i := ⟨3, by decide⟩) (offset := 1361) (pushGas := 3)
+    (G := G + 24) (value := officialParams.minHeartbeatInterval)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory10] using h11)
+  have h9 := officialConstructorPatchInvariant8.runCompiled_write
+    (i := ⟨3, by decide⟩) (offset := 732) (pushGas := 3)
+    (G := G + 36) (value := officialParams.minHeartbeatInterval)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory9] using h10)
+  exact h9
+
+private theorem officialConstructorPatchLine5_8_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchMemory8, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchMemory4, G + 48⟩)
+      (loadArgumentIndex 1 +++ storeByteOffset 441 +++
+        loadArgumentIndex 1 +++ storeByteOffset 937 +++
+        loadArgumentIndex 2 +++ storeByteOffset 482 +++
+        loadArgumentIndex 2 +++ storeByteOffset 2185 +++ rest) post := by
+  have h8 := officialConstructorPatchInvariant7.runCompiled_write
+    (i := ⟨2, by decide⟩) (offset := 2185) (pushGas := 3)
+    (G := G) (value := officialParams.maxPauseDuration)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory8] using hrest)
+  have h7 := officialConstructorPatchInvariant6.runCompiled_write
+    (i := ⟨2, by decide⟩) (offset := 482) (pushGas := 3)
+    (G := G + 12) (value := officialParams.maxPauseDuration)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory7] using h8)
+  have h6 := officialConstructorPatchInvariant5.runCompiled_write
+    (i := ⟨1, by decide⟩) (offset := 937) (pushGas := 3)
+    (G := G + 24) (value := officialParams.minPauseDuration)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory6] using h7)
+  have h5 := officialConstructorPatchInvariant4.runCompiled_write
+    (i := ⟨1, by decide⟩) (offset := 441) (pushGas := 3)
+    (G := G + 36) (value := officialParams.minPauseDuration)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory5] using h6)
+  exact h5
+
+private theorem officialConstructorPatchLine1_4_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchMemory4, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorCopiedMemory, G + 44⟩)
+      (loadArgumentIndex 0 +++ storeByteOffset 398 +++
+        loadArgumentIndex 0 +++ storeByteOffset 1318 +++
+        loadArgumentIndex 0 +++ storeByteOffset 2057 +++
+        loadArgumentIndex 0 +++ storeByteOffset 2144 +++ rest) post := by
+  have h4 := officialConstructorPatchInvariant3.runCompiled_write
+    (i := ⟨0, by decide⟩) (offset := 2144) (pushGas := 2)
+    (G := G) (value := officialParams.admin)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory4] using hrest)
+  have h3 := officialConstructorPatchInvariant2.runCompiled_write
+    (i := ⟨0, by decide⟩) (offset := 2057) (pushGas := 2)
+    (G := G + 11) (value := officialParams.admin)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory3] using h4)
+  have h2 := officialConstructorPatchInvariant1.runCompiled_write
+    (i := ⟨0, by decide⟩) (offset := 1318) (pushGas := 2)
+    (G := G + 22) (value := officialParams.admin)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory2] using h3)
+  have h1 := officialConstructorCopiedMemory_invariant.runCompiled_write
+    (i := ⟨0, by decide⟩) (offset := 398) (pushGas := 2)
+    (G := G + 33) (value := officialParams.admin)
+    (by decide) (by decide +kernel) rfl (by decide) (by
+      simpa only [officialConstructorPatchMemory1] using h2)
+  exact h1
+
+private theorem officialConstructorPatchLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchedMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorCopiedMemory, G + 140⟩)
+      (officialConstructorPatchLine +++ rest) post := by
+  have hrest12 : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchMemory12, G⟩)
+      rest post := by
+    rw [officialConstructorPatchMemory12_eq_patched]
+    exact hrest
+  have h9 := officialConstructorPatchLine9_12_runCompiled hrest12
+  have h5 := officialConstructorPatchLine5_8_runCompiled (G := G + 48) h9
+  have h1 := officialConstructorPatchLine1_4_runCompiled (G := G + 96) h5
+  simpa only [officialConstructorPatchLine, prepend_append] using h1
 
 private theorem officialConstructorPatches_fit :
     ∀ patch ∈ runtimeImmutablePatches officialParams,
