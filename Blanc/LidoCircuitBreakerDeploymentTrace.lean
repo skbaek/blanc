@@ -2227,6 +2227,120 @@ private theorem officialConstructorPauseLogLine_runCompiled
   all_goals try decide +kernel
   exact hlog
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+private theorem officialConstructorPauseScratchLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨[], officialConstructorPauseMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨[], officialConstructorPatchedMemory, G + 27⟩)
+      (pushB256 0 :::
+        storeByteOffset officialConstructorEventScratch +++
+        loadArgumentIndex 5 +++
+        storeByteOffset (officialConstructorEventScratch + 32) +++
+        rest) post := by
+  let zeroMemory := officialConstructorPatchedMemory.write
+    officialConstructorEventScratch (0 : B256).toBytes
+  have hzeroEq : officialConstructorPatchedMemory.write
+      officialConstructorEventScratch (0 : B256).toBytes = zeroMemory := by
+    rfl
+  have hzeroSize : zeroMemory.size = 4544 := by
+    unfold zeroMemory
+    rw [Mem.size_write_word_at, officialConstructorPatchedMemory_size,
+      officialConstructorEventScratch_eq]
+    decide
+  have hzeroWf : Mem.Wf zeroMemory := by
+    exact Mem.Wf.write officialConstructorPatchedMemory_wf _ _
+  have hzeroReads : Mem.Reads zeroMemory
+      (Bytes.writeAt officialConstructorPatchedImage
+        officialConstructorEventScratch (0 : B256).toBytes) := by
+    exact Mem.Reads.write officialConstructorPatchedMemory_wf
+      officialConstructorPatchedMemory_reads _ _
+  have hvalue : Bytes.toB256 ((zeroMemory.read 160 32).1) =
+      officialConstructorArgs.initialPauseDuration := by
+    rw [Mem.Reads.read hzeroReads]
+    rw [Bytes.sliceD_writeAt_before _ _ 160 32
+      officialConstructorEventScratch (by
+        rw [officialConstructorEventScratch_eq]
+        decide)]
+    rw [← Mem.Reads.read officialConstructorPatchedMemory_reads]
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorPatchedMemory_read_argument ⟨5, by decide⟩
+  have hmemory : (zeroMemory.read 160 32).2 = zeroMemory := by
+    apply Mem.read_snd_eq_self
+    apply memExtSize_of_le
+    · rw [hzeroSize]
+    · rw [hzeroSize]
+      decide
+  have hfinal : zeroMemory.write (officialConstructorEventScratch + 32)
+      officialConstructorArgs.initialPauseDuration.toBytes =
+        officialConstructorPauseMemory := by
+    rfl
+  have hscratchLt : officialConstructorEventScratch < 2 ^ 16 := by
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hnextLt : officialConstructorEventScratch + 32 < 2 ^ 16 := by
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hscratchNat :
+      (Bytes.toB256
+        [(officialConstructorEventScratch >>> 8).toUInt8,
+          officialConstructorEventScratch.toUInt8]).toNat =
+        officialConstructorEventScratch := by
+    rw [List.toB256_pair officialConstructorEventScratch hscratchLt]
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hnextNat :
+      (Bytes.toB256
+        [((officialConstructorEventScratch + 32) >>> 8).toUInt8,
+          (officialConstructorEventScratch + 32).toUInt8]).toNat =
+        officialConstructorEventScratch + 32 := by
+    rw [List.toB256_pair (officialConstructorEventScratch + 32) hnextLt]
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hindex : (Nat.toB256 (32 * 5)).toNat = 160 := by decide
+  have hfirstExt (S : List B256) (G' : Nat) :
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨S, officialConstructorPatchedMemory, G'⟩).extCost
+          [⟨officialConstructorEventScratch, 32⟩] = 4 := by
+    exact Devm.extCost_of_size officialConstructorPatchedMemory_size (by
+      rw [officialConstructorEventScratch_eq]
+      decide +kernel)
+  have hloadExt (S : List B256) (G' : Nat) :
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨S, zeroMemory, G'⟩).extCost [⟨160, 32⟩] = 0 := by
+    exact Devm.extCost_zero_of_le
+      (N := zeroMemory) (i := 160) (sz := 32)
+      (by rw [hzeroSize]) (by rw [hzeroSize]; decide)
+  have hlastExt (S : List B256) (G' : Nat) :
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨S, zeroMemory, G'⟩).extCost
+          [⟨officialConstructorEventScratch + 32, 32⟩] = 3 := by
+    exact Devm.extCost_of_size hzeroSize (by
+      rw [officialConstructorEventScratch_eq]
+      decide +kernel)
+  unfold storeByteOffset loadArgumentIndex pushCompactNat pushFixedNat
+  simp only [if_pos hscratchLt, if_pos hnextLt]
+  func_run (7) [4, 3, 3]
+  all_goals try rw [hscratchNat]
+  all_goals try rw [hnextNat]
+  all_goals try rw [hindex]
+  all_goals try rw [hzeroEq]
+  all_goals try rw [hmemory]
+  all_goals try rw [hvalue]
+  all_goals try rw [hfinal]
+  all_goals try exact hfirstExt _ _
+  all_goals try exact hloadExt _ _
+  all_goals try exact hlastExt _ _
+  all_goals try decide
+  all_goals try omega
+  exact hrest
+
 end LidoCircuitBreaker
 
 end Blanc
