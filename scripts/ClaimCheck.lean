@@ -2592,6 +2592,7 @@ example {fs : List Func} {sevm : Sevm} {pre final : Devm}
       RegistryWitness
         (logicalStorageOfStor (Devm.getStor postRegistry ca))
         trace.postEntries ∧
+      Devm.getCode pre = Devm.getCode postRegistry ∧
       Func.Run fs sevm postRegistry finishSetPauser final :=
   setPauser_run_extracts_sourceTrace hwf hr htargetRead hnewRead
     hcontinuationRead howner hw htargetCanonical hnewCanonical herrorLookup

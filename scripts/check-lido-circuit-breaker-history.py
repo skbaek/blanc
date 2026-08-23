@@ -147,9 +147,18 @@ class ChainActivation:
                  + run.stderr.strip())
         return run.stdout.strip()
 
-    # The twelve public statements the packet requires this owner to pin.
+    # The fourteen public statements the packet requires this owner to pin.
     # Checked for presence in `HEADER_PINS["chain"]` whether active or not, so
     # a pin deleted while the owner is dormant still fails the gate.
+    #
+    # This list is the one net a re-pin cannot dissolve.  Every digest in this
+    # file is re-taken from the mutant by `repinned`, deliberately, because a
+    # digest that only the author's good faith preserves proves nothing.  A
+    # NAME is different: it lives in the gate's own source, so a declaration
+    # deleted from the owner is missing from the freshly observed pin table
+    # and `chain_pin_integrity` fails whether the digests were re-taken or
+    # not.  That is why the two narrowing controls are listed here and not
+    # merely pinned.
     required_public = (
         "registrySpec_sound",
         "registrySpec_preserves",
@@ -163,6 +172,18 @@ class ChainActivation:
         "chain_preserves_registryStable",
         "coherent_of_call",
         "coherent_of_statcall",
+        # The compile-time narrowing controls on the two reach relations.
+        # `VOCABULARY_PINS` catches an edit to `BlockChain.Reach` or
+        # `BlockChain.ReachUsing` in `Blanc/Ladder.lean`, but `repinned`
+        # re-takes those pins, and `VOCABULARY_CHANNELS` checks that the
+        # required tokens are PRESENT -- so a narrowing that only ADDS a
+        # premise to `step` leaves every token where it was and survives the
+        # re-pin.  These two theorems close that: each applies `step` to a
+        # universally quantified, otherwise unconstrained block, so an
+        # additive narrowing stops them elaborating.  A failed elaboration is
+        # not a recorded string and cannot be re-taken.
+        "reachUsing_extends_by_arbitrary_block",
+        "reach_extends_by_arbitrary_block",
     )
 
 
@@ -496,6 +517,8 @@ HEADER_PINS = {
         "prefix_of_loadWord": "928ce57c0b0c886947c16d463eb5845d9325fd6c76ca161aa182a49bd5e8893d",
         "processMessageCall_preserves_registryStable": "3ef951b8bc65c64427d44f69d865aacf7c0249ad03e55af41b7133998331197e",
         "processTransaction_preserves_registryStable": "3bf66acf5d10535ef86e3322c3853939a12b1e1c296a1bdd334fcc5ccc942ade",
+        "reachUsing_extends_by_arbitrary_block": "f6d606bca9238ea699cf4beba93309ba5540ae2c282846bc689d592bc24bd95e",
+        "reach_extends_by_arbitrary_block": "9889bb79e3291be8eaf434079e0e6e90fc3c03a73bca9d8af576ba0281183048",
         "read_writeAt_before": "85c845d584c9b9bb05ab3773af90d3caacda6169bf1d8cab4fbbd51042c52873",
         "read_writeAt_self": "e99b44fd30069121952d8c4744913f3f87b2208d3e7d3b899837c0c0145031f4",
         "registerPauser_funcSound": "27f070b62065a2522b330ae2fe4089c247837133ac2c194d97735d3bf7d73a6f",
@@ -1020,6 +1043,25 @@ ADMISSIBLE_HYPOTHESES = (
     ("account not created in this block", r"ca ∉ benv\.createdAccounts", True),
     ("chain reachability",
      r"BlockChain\.Reach(Using cfg)? checkpoint future", True),
+    # ---- one further block on a reached chain ----
+    #
+    # The two narrowing controls extend a reach chain by a block about which
+    # nothing is assumed, so they carry the reach relation's own `step`
+    # premises at the family's `checkpoint`/`future` binder names rather than
+    # at `Blanc/Ladder.lean`'s `ch`/`ch'`.  Added as their own rows rather
+    # than by loosening the two rows above, which stay pinned to the binder
+    # names the ladder rungs actually use.
+    #
+    # Neither row restricts the world.  The first is the same no-overflow
+    # bound the ladder already carries; the second is one successful block
+    # import, with the block universally quantified and the resulting chain
+    # existentially named -- it says nothing about the block's transactions,
+    # its author, or the accounts it touches, which is precisely what the
+    # controls exist to keep true.
+    ("balance-sum bound with withdrawals, at a reached chain",
+     r"sum future\.state\.bal \+ wdsum block\.wds < 2 \^ 256", True),
+    ("one further block on a reached chain",
+     r"stateTransition(Using cfg)? future block = \.ok extended", True),
 
     # ---- `ContractSpec.Preserves`, spelled out ----
     #
@@ -2521,9 +2563,9 @@ def chain_pin_integrity() -> None:
     """
     pins = HEADER_PINS.get(CHAIN.key)
     if not pins:
-        fail(f"{CHAIN.key}: no header pins recorded; the twelve public "
-             "statements of the history ladder must stay pinned even while "
-             "the owner is dormant")
+        fail(f"{CHAIN.key}: no header pins recorded; the fourteen public "
+             "statements of the history ladder and its narrowing controls "
+             "must stay pinned even while the owner is dormant")
     for name in CHAIN.required_public:
         if name not in pins:
             fail(f"{CHAIN.key}: required public statement {name} has no pin")
@@ -2706,6 +2748,22 @@ SELF_TESTS = (
      "def Preserves (c : ContractSpec) (ca : Adr) : Prop :=",
      "def PreservesRenamed (c : ContractSpec) (ca : Adr) : Prop :=",
      "is absent from"),
+    # The narrowing controls, deleted with every digest re-taken.
+    #
+    # Deleting one of these in normal mode is caught by its own header pin,
+    # like any other declaration.  That is not the case worth testing: this
+    # gate's whole discipline is that a digest gets re-taken, and a re-pin
+    # taken from a tree the control has been deleted from simply does not
+    # record it.  What catches the deletion then is the control's NAME in
+    # `CHAIN.required_public`, which lives in this file and no re-pin
+    # rewrites.  The check below re-pins the owner from the mutant first, so
+    # a pass here would mean the family had lost the one net that survives
+    # the campaign's own re-pin.
+    ("required: a narrowing control deleted, with the owner re-pinned",
+     "required", "chain",
+     "theorem reachUsing_extends_by_arbitrary_block (cfg : ChainConfig)",
+     "-- theorem reachUsing_extends_by_arbitrary_block (cfg : ChainConfig)",
+     "required public statement"),
 )
 
 
@@ -2737,6 +2795,21 @@ def self_test(root: Path) -> int:
             trust_scan(copy)
         elif kind == "variable":
             pin_imports_and_variables(key, mutated)
+        elif kind == "required":
+            # Re-take the owner's header table from the mutant, on
+            # `repinned`'s own rule that a theorem or lemma is pinned by its
+            # normalized statement, and then run the one check that reads
+            # names rather than digests.  Only the header table matters here:
+            # `required_public` is checked against it alone.
+            fresh = {name: digest(statement_of(declaration))
+                     for name, declaration in declarations_map(mutated).items()
+                     if declaration["kind"] in ("theorem", "lemma")}
+            saved = HEADER_PINS
+            globals()["HEADER_PINS"] = {**saved, key: fresh}
+            try:
+                chain_pin_integrity()
+            finally:
+                globals()["HEADER_PINS"] = saved
         elif kind in ("vocabulary", "vocabulary-channels"):
             found = vocabulary_map(mutated)
             names = VOCABULARY_NAMES[key]

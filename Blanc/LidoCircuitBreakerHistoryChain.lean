@@ -1677,6 +1677,60 @@ theorem chain_future_countConservation (dp : DeployParams) (ca : Adr)
   (chain_preserves_registryStable dp ca checkpoint future reach
     stable).countConservation
 
+/-! ## Narrowing controls on the shared reachability vocabulary
+
+Two obligations that no re-pinning can reach.
+
+`BlockChain.Reach` and `BlockChain.ReachUsing` are `Blanc/Ladder.lean`'s, not
+this family's: the history theorems are written in them but do not own them.
+Their text is pinned outside this file, and so are the tokens their bodies
+must still mention -- but a token net checks *presence*, so a narrowing that
+only ADDS a premise to `step` leaves every required token exactly where it
+was.  Re-taken digests would then carry it through, and the headline history
+theorems would quietly become claims about the narrowed blocks alone.
+
+The two controls below are the net that is not a recorded string.  Each
+extends a reach chain by a block of which nothing whatever is assumed beyond
+`step`'s own two premises, so a `step` that demanded anything further -- an
+empty transaction list, a bound on the block's own contents, a restriction on
+who may have authored it -- could not be applied, and the control would stop
+compiling.  A digest survives being re-taken; a failed elaboration does not. -/
+
+/-- **Narrowing control, the configured chain.**  A `ReachUsing` chain extends
+by an arbitrary block.  `block` is universally quantified, and the only things
+assumed of it are the no-overflow bound and the successful configured
+transition, which are exactly `BlockChain.ReachUsing.step`'s own premises.
+
+Any further premise added to that constructor breaks this control, because a
+narrowed `step` is not applicable to an unconstrained `block`.  That is the
+point: the reachable futures `chainUsing_preserves_registryStable` and the
+four `chainUsing_future_*` corollaries quantify over are as wide as the
+constructor lets them be, and this obligation is what holds them there. -/
+theorem reachUsing_extends_by_arbitrary_block (cfg : ChainConfig)
+    {checkpoint future extended : BlockChain} (block : Block)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
+    (h_bound : sum future.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_step : stateTransitionUsing cfg future block = .ok extended) :
+    BlockChain.ReachUsing cfg checkpoint extended :=
+  .step reach h_bound h_step
+
+/-- **Narrowing control, the Prague chain.**  The same obligation at
+`BlockChain.Reach`, at the same strength: its `step` carries the same two
+premises over the unconfigured transition, so the same arbitrary `block`
+discharges it and the same additive narrowing breaks it.
+
+Both relations are held here rather than only the configured one, because
+`chain_preserves_registryStable` and the four `chain_future_*` corollaries
+read their futures off `Reach`, and a narrowing there would restrict them
+without touching `ReachUsing` at all. -/
+theorem reach_extends_by_arbitrary_block
+    {checkpoint future extended : BlockChain} (block : Block)
+    (reach : BlockChain.Reach checkpoint future)
+    (h_bound : sum future.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_step : stateTransition future block = .ok extended) :
+    BlockChain.Reach checkpoint extended :=
+  .step reach h_bound h_step
+
 /-! ## Anti-vacuity controls
 
 Three checks that the results above have content.  Each one reads the fields
