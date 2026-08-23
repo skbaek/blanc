@@ -1009,6 +1009,31 @@ theorem officialConstructorFinalMemory_read_runtime :
   rw [Mem.Reads.read officialConstructorFinalMemory_reads]
   exact officialConstructorFinalImage_runtime
 
+private theorem officialConstructorFinalMemory_read_memory :
+    (officialConstructorFinalMemory.read constructorRuntimeBase 4282).2 =
+      officialConstructorFinalMemory := by
+  apply Mem.read_snd_eq_self
+  apply memExtSize_of_le
+  · rw [officialConstructorFinalMemory_size]
+  · rw [officialConstructorFinalMemory_size]
+    unfold constructorRuntimeBase constructorArgumentBytes
+    decide
+
+/-- The terminal return window reads the exact runtime without extending the
+named final memory. -/
+theorem officialConstructorFinalMemory_read :
+    officialConstructorFinalMemory.read constructorRuntimeBase 4282 =
+      (lidoCircuitBreakerCode officialParams,
+        officialConstructorFinalMemory) := by
+  cases hread : officialConstructorFinalMemory.read
+      constructorRuntimeBase 4282 with
+  | mk out memory =>
+      have hout : out = lidoCircuitBreakerCode officialParams := by
+        simpa only [hread] using officialConstructorFinalMemory_read_runtime
+      have hmemory : memory = officialConstructorFinalMemory := by
+        simpa only [hread] using officialConstructorFinalMemory_read_memory
+      simp only [hread, hout, hmemory]
+
 /-! ## Gas-exact validation prefix -/
 
 set_option maxRecDepth 16384 in
@@ -1636,6 +1661,39 @@ def officialConstructorPost
     (sevm : Sevm) (base : Devm) (G : Nat) : Devm :=
   let returned := officialConstructorReturnRead sevm base G
   returned.2.withOutput returned.1
+
+private theorem withMemory_setMach_same
+    (base : Devm) (stack : List B256) (memory : Mem) (gas : Nat) :
+    (base.setMach ⟨stack, memory, gas⟩).withMemory memory =
+      base.setMach ⟨stack, memory, gas⟩ := by
+  rfl
+
+private theorem officialConstructorReturnRead_eq
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    officialConstructorReturnRead sevm base G =
+      (lidoCircuitBreakerCode officialParams,
+        (officialConstructorEffectBase sevm base).setMach
+          ⟨[], officialConstructorFinalMemory, G⟩) := by
+  unfold officialConstructorReturnRead officialConstructorReturnPre
+  change ((officialConstructorEffectBase sevm base).setMach
+      ⟨[], officialConstructorFinalMemory, G⟩).memRead
+        constructorRuntimeBase 4282 = _
+  unfold Devm.memRead
+  simp only [Devm.memory_setMach]
+  rw [officialConstructorFinalMemory_read]
+  simp only [withMemory_setMach_same]
+
+/-- The exact constructor post-frame is the named two-write/three-log effect
+frame with empty stack, final memory, residual gas, and official runtime
+output. -/
+theorem officialConstructorPost_eq
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    officialConstructorPost sevm base G =
+      ((officialConstructorEffectBase sevm base).setMach
+        ⟨[], officialConstructorFinalMemory, G⟩).withOutput
+          (lidoCircuitBreakerCode officialParams) := by
+  unfold officialConstructorPost
+  rw [officialConstructorReturnRead_eq]
 
 private theorem officialConstructorReturnLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
