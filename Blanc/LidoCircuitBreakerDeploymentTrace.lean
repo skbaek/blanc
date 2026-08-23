@@ -794,6 +794,69 @@ private theorem officialConstructorValidationPrefix_runCompiled
   rw [hstack]
   exact hrest'
 
+/-! ## Named constructor effects and final frame -/
+
+/-- Exact gas consumed by the successful source-level constructor function,
+excluding the compiler table's leading `JUMPDEST`. -/
+def officialConstructorFuncGas : Nat := 50328
+
+/-- Exact gas consumed by the compiled successful constructor from pc zero,
+including the compiler table's leading `JUMPDEST`. -/
+def officialConstructorRequiredGas : Nat := 50329
+
+private def officialConstructorInitializedLog (ca : Adr) : Log :=
+  ⟨ca, [circuitBreakerInitializedEvent, officialParams.admin],
+    officialParams.minPauseDuration.toBytes ++
+      officialParams.maxPauseDuration.toBytes ++
+      officialParams.minHeartbeatInterval.toBytes ++
+      officialParams.maxHeartbeatInterval.toBytes⟩
+
+private def officialConstructorPauseLog (ca : Adr) : Log :=
+  ⟨ca, [pauseDurationUpdatedEvent],
+    (0 : B256).toBytes ++
+      officialConstructorArgs.initialPauseDuration.toBytes⟩
+
+private def officialConstructorHeartbeatLog (ca : Adr) : Log :=
+  ⟨ca, [heartbeatIntervalUpdatedEvent],
+    (0 : B256).toBytes ++
+      officialConstructorArgs.initialHeartbeatInterval.toBytes⟩
+
+private def officialConstructorColdStore
+    (sevm : Sevm) (base : Devm) (key value : B256) : Devm :=
+  (((addAccessedStorageKey base sevm.currentTarget key).withRefundCounter
+    base.refundCounter).setStorVal sevm.currentTarget key value)
+
+/-- The non-machine constructor effects after the three logs and the two cold
+zero-to-nonzero configuration writes, in exact source order. -/
+def officialConstructorEffectBase (sevm : Sevm) (base : Devm) : Devm :=
+  let initialized :=
+    base.addLog (officialConstructorInitializedLog sevm.currentTarget)
+  let pauseLogged :=
+    initialized.addLog (officialConstructorPauseLog sevm.currentTarget)
+  let pauseStored := officialConstructorColdStore sevm pauseLogged
+    pauseDurationSlot officialConstructorArgs.initialPauseDuration
+  let heartbeatLogged :=
+    pauseStored.addLog (officialConstructorHeartbeatLog sevm.currentTarget)
+  officialConstructorColdStore sevm heartbeatLogged heartbeatIntervalSlot
+    officialConstructorArgs.initialHeartbeatInterval
+
+private def officialConstructorReturnPre
+    (sevm : Sevm) (base : Devm) (G : Nat) : Devm :=
+  (officialConstructorEffectBase sevm base).setMach
+    ⟨[Nat.toB256 constructorRuntimeBase, (4282 : B256)],
+      officialConstructorFinalMemory, G⟩
+
+private def officialConstructorReturnRead
+    (sevm : Sevm) (base : Devm) (G : Nat) : Bytes × Devm :=
+  let pre := officialConstructorReturnPre sevm base G
+  (pre.setMach ⟨[], pre.memory, G⟩).memRead constructorRuntimeBase 4282
+
+/-- Exact successful constructor post-frame at its final remaining gas. -/
+def officialConstructorPost
+    (sevm : Sevm) (base : Devm) (G : Nat) : Devm :=
+  let returned := officialConstructorReturnRead sevm base G
+  returned.2.withOutput returned.1
+
 end LidoCircuitBreaker
 
 end Blanc
