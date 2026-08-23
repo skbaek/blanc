@@ -1866,6 +1866,203 @@ private theorem not_mem_hashSet_insert {α : Type _} [BEq α] [Hashable α]
   · exact hne (eq_of_beq he)
   · exact h hp
 
+/-- The constructor effect changes the target's persistent storage by exactly
+the two source-ordered configuration writes. -/
+theorem officialConstructorEffectBase_getStor
+    (sevm : Sevm) (base : Devm) :
+    Devm.getStor (officialConstructorEffectBase sevm base)
+        sevm.currentTarget =
+      ((Devm.getStor base sevm.currentTarget).set pauseDurationSlot
+        officialConstructorArgs.initialPauseDuration).set
+          heartbeatIntervalSlot
+          officialConstructorArgs.initialHeartbeatInterval := by
+  change Devm.getStor
+      (officialConstructorColdStore sevm
+        (officialConstructorHeartbeatLoggedBase sevm base)
+        heartbeatIntervalSlot
+        officialConstructorArgs.initialHeartbeatInterval)
+      sevm.currentTarget = _
+  unfold officialConstructorColdStore
+  rw [setStorVal_getStor_self]
+  apply congrArg (fun s : Stor =>
+    s.set heartbeatIntervalSlot
+      officialConstructorArgs.initialHeartbeatInterval)
+  change Devm.getStor
+      (addAccessedStorageKey
+        (officialConstructorHeartbeatLoggedBase sevm base)
+        sevm.currentTarget heartbeatIntervalSlot)
+      sevm.currentTarget = _
+  rw [addAccessedStorageKey_getStor]
+  exact officialConstructorHeartbeatLoggedBase_getStor sevm base
+
+/-- The terminal return preserves the exact two-write storage effect. -/
+theorem officialConstructorPost_getStor
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    Devm.getStor (officialConstructorPost sevm base G)
+        sevm.currentTarget =
+      ((Devm.getStor base sevm.currentTarget).set pauseDurationSlot
+        officialConstructorArgs.initialPauseDuration).set
+          heartbeatIntervalSlot
+          officialConstructorArgs.initialHeartbeatInterval := by
+  rw [officialConstructorPost_eq]
+  change Devm.getStor (officialConstructorEffectBase sevm base)
+    sevm.currentTarget = _
+  exact officialConstructorEffectBase_getStor sevm base
+
+/-- The official pause duration is readable in the raw constructor post-frame. -/
+theorem officialConstructorPost_pauseDuration
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    (officialConstructorPost sevm base G).getStorVal
+        sevm.currentTarget pauseDurationSlot =
+      officialConstructorArgs.initialPauseDuration := by
+  change (Devm.getStor (officialConstructorPost sevm base G)
+    sevm.currentTarget).get pauseDurationSlot = _
+  rw [officialConstructorPost_getStor,
+    Stor.get_set_ne _
+      (show heartbeatIntervalSlot ≠ pauseDurationSlot by decide),
+    Stor.get_set_self]
+
+/-- The official heartbeat interval is readable in the raw constructor
+post-frame. -/
+theorem officialConstructorPost_heartbeatInterval
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    (officialConstructorPost sevm base G).getStorVal
+        sevm.currentTarget heartbeatIntervalSlot =
+      officialConstructorArgs.initialHeartbeatInterval := by
+  change (Devm.getStor (officialConstructorPost sevm base G)
+    sevm.currentTarget).get heartbeatIntervalSlot = _
+  rw [officialConstructorPost_getStor, Stor.get_set_self]
+
+private theorem constructorAddLog_logs (base : Devm) (log : Log) :
+    (base.addLog log).logs = base.logs ++ [log] := by
+  rfl
+
+private theorem officialConstructorColdStore_logs
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    (officialConstructorColdStore sevm base key value).logs = base.logs := by
+  rfl
+
+private theorem officialConstructorLogs_eq_named (ca : Adr) :
+    officialConstructorLogs ca =
+      [officialConstructorInitializedLog ca,
+        officialConstructorPauseLog ca,
+        officialConstructorHeartbeatLog ca] := by
+  rfl
+
+/-- The effect frame appends exactly the three constructor logs in source
+order, preserving any incoming log prefix. -/
+theorem officialConstructorEffectBase_logs
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).logs =
+      base.logs ++ officialConstructorLogs sevm.currentTarget := by
+  unfold officialConstructorEffectBase
+  simp only [constructorAddLog_logs, officialConstructorColdStore_logs,
+    officialConstructorLogs_eq_named, List.append_assoc]
+  rfl
+
+/-- The terminal return preserves the exact ordered constructor logs. -/
+theorem officialConstructorPost_logs
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    (officialConstructorPost sevm base G).logs =
+      base.logs ++ officialConstructorLogs sevm.currentTarget := by
+  rw [officialConstructorPost_eq]
+  change (officialConstructorEffectBase sevm base).logs = _
+  exact officialConstructorEffectBase_logs sevm base
+
+/-- The successful constructor returns with an empty stack. -/
+theorem officialConstructorPost_stack
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    (officialConstructorPost sevm base G).stack = [] := by
+  rw [officialConstructorPost_eq]
+  rfl
+
+/-- The successful constructor retains the exact named final memory. -/
+theorem officialConstructorPost_memory
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    (officialConstructorPost sevm base G).memory =
+      officialConstructorFinalMemory := by
+  rw [officialConstructorPost_eq]
+  rfl
+
+/-- `G` is the exact residual gas after the 50,329-gas compiled run. -/
+theorem officialConstructorPost_gasLeft
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    (officialConstructorPost sevm base G).gasLeft = G := by
+  rw [officialConstructorPost_eq]
+  rfl
+
+private theorem withOutput_output (base : Devm) (output : Bytes) :
+    (base.withOutput output).output = output := by
+  rfl
+
+/-- The constructor's terminal output is the exact official runtime artifact. -/
+theorem officialConstructorPost_output
+    (sevm : Sevm) (base : Devm) (G : Nat) :
+    (officialConstructorPost sevm base G).output =
+      lidoCircuitBreakerCode officialParams := by
+  rw [officialConstructorPost_eq]
+  exact withOutput_output _ _
+
+/-- Apart from the two configuration writes, the effect frame leaves the
+world state untouched. -/
+theorem officialConstructorEffectBase_state
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).state =
+      (base.state.setStorVal sevm.currentTarget pauseDurationSlot
+        officialConstructorArgs.initialPauseDuration).setStorVal
+          sevm.currentTarget heartbeatIntervalSlot
+          officialConstructorArgs.initialHeartbeatInterval := by
+  rfl
+
+theorem officialConstructorEffectBase_refundCounter
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).refundCounter =
+      base.refundCounter := by
+  rfl
+
+theorem officialConstructorEffectBase_returnData
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).returnData =
+      base.returnData := by
+  rfl
+
+theorem officialConstructorEffectBase_error
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).error = base.error := by
+  rfl
+
+theorem officialConstructorEffectBase_accountsToDelete
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).accountsToDelete =
+      base.accountsToDelete := by
+  rfl
+
+theorem officialConstructorEffectBase_createdAccounts
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).createdAccounts =
+      base.createdAccounts := by
+  rfl
+
+theorem officialConstructorEffectBase_accessedAddresses
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).accessedAddresses =
+      base.accessedAddresses := by
+  rfl
+
+theorem officialConstructorEffectBase_transientStorage
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).transientStorage =
+      base.transientStorage := by
+  rfl
+
+theorem officialConstructorEffectBase_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorEffectBase sevm base).accessedStorageKeys =
+      (base.accessedStorageKeys.insert
+        (sevm.currentTarget, pauseDurationSlot)).insert
+          (sevm.currentTarget, heartbeatIntervalSlot) := by
+  rfl
+
 private theorem officialConstructorHeartbeatStore_eq_effectBase
     (sevm : Sevm) (base : Devm) :
     officialConstructorColdStore sevm
