@@ -1657,6 +1657,58 @@ private def officialConstructorHeartbeatLoggedBase
   (officialConstructorPauseStoredBase sevm base).addLog
     (officialConstructorHeartbeatLog sevm.currentTarget)
 
+private theorem officialConstructorHeartbeatLoggedBase_getStor
+    (sevm : Sevm) (base : Devm) :
+    Devm.getStor (officialConstructorHeartbeatLoggedBase sevm base)
+        sevm.currentTarget =
+      (Devm.getStor base sevm.currentTarget).set pauseDurationSlot
+        officialConstructorArgs.initialPauseDuration := by
+  unfold officialConstructorHeartbeatLoggedBase
+    officialConstructorPauseStoredBase officialConstructorColdStore
+  change Devm.getStor
+      (((addAccessedStorageKey
+          (officialConstructorPauseLoggedBase sevm base)
+          sevm.currentTarget pauseDurationSlot).withRefundCounter _).setStorVal
+        sevm.currentTarget pauseDurationSlot
+          officialConstructorArgs.initialPauseDuration)
+        sevm.currentTarget = _
+  rw [setStorVal_getStor_self]
+  apply congrArg (fun s : Stor =>
+    s.set pauseDurationSlot officialConstructorArgs.initialPauseDuration)
+  change Devm.getStor
+      (addAccessedStorageKey (officialConstructorPauseLoggedBase sevm base)
+        sevm.currentTarget pauseDurationSlot)
+        sevm.currentTarget = Devm.getStor base sevm.currentTarget
+  rw [addAccessedStorageKey_getStor]
+  rfl
+
+private theorem officialConstructorPauseLoggedBase_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorPauseLoggedBase sevm base).accessedStorageKeys =
+      base.accessedStorageKeys := by
+  rfl
+
+private theorem officialConstructorPauseLoggedBase_getStorVal
+    (sevm : Sevm) (base : Devm) (a : Adr) (key : B256) :
+    (officialConstructorPauseLoggedBase sevm base).getStorVal a key =
+      base.getStorVal a key := by
+  rfl
+
+private theorem officialConstructorHeartbeatLoggedBase_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) :
+    (officialConstructorHeartbeatLoggedBase sevm base).accessedStorageKeys =
+      base.accessedStorageKeys.insert
+        (sevm.currentTarget, pauseDurationSlot) := by
+  rfl
+
+private theorem not_mem_hashSet_insert {α : Type _} [BEq α] [Hashable α]
+    [LawfulBEq α] {s : Std.HashSet α} {x p : α}
+    (h : p ∉ s) (hne : x ≠ p) : p ∉ s.insert x := by
+  intro hmem
+  rcases Std.HashSet.mem_insert.mp hmem with he | hp
+  · exact hne (eq_of_beq he)
+  · exact h hp
+
 private theorem officialConstructorHeartbeatStore_eq_effectBase
     (sevm : Sevm) (base : Devm) :
     officialConstructorColdStore sevm
@@ -2568,6 +2620,53 @@ private theorem officialConstructorProgram_runCompiled
   · simp only [Devm.stack_setMach, Devm.memory_setMach,
       Devm.setMach_setMach]
   · exact hmain
+
+/-- The exact official constructor run from a fresh target frame. The cold and
+zero-valued premises are stated on the incoming frame; the proof derives the
+corresponding intermediate premises after the first logs and configuration
+write. -/
+theorem officialConstructorProgram_runCompiled_fresh
+    {sevm : Sevm} {base : Devm} {G : Nat}
+    (hvalue : sevm.value = 0)
+    (hcode : sevm.code.toList = officialFullCreateInput)
+    (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
+      base.accessedStorageKeys)
+    (hpauseOriginal : getOrigStorVal sevm sevm.currentTarget
+      pauseDurationSlot = 0)
+    (hpauseCurrent : base.getStorVal sevm.currentTarget
+      pauseDurationSlot = 0)
+    (hheartbeatCold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
+      base.accessedStorageKeys)
+    (hheartbeatOriginal : getOrigStorVal sevm sevm.currentTarget
+      heartbeatIntervalSlot = 0)
+    (hheartbeatCurrent : base.getStorVal sevm.currentTarget
+      heartbeatIntervalSlot = 0)
+    (hstatic : sevm.isStatic = false) :
+    Prog.RunCompiled sevm
+      (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩)
+      lidoCircuitBreakerConstructorProgram
+      (officialConstructorPost sevm base G) := by
+  apply officialConstructorProgram_runCompiled hvalue hcode
+  · rw [officialConstructorPauseLoggedBase_accessedStorageKeys]
+    exact hpauseCold
+  · exact hpauseOriginal
+  · rw [officialConstructorPauseLoggedBase_getStorVal]
+    exact hpauseCurrent
+  · rw [officialConstructorHeartbeatLoggedBase_accessedStorageKeys]
+    apply not_mem_hashSet_insert hheartbeatCold
+    intro hpair
+    have hslots : pauseDurationSlot = heartbeatIntervalSlot :=
+      congrArg Prod.snd hpair
+    exact (show pauseDurationSlot ≠ heartbeatIntervalSlot by decide) hslots
+  · exact hheartbeatOriginal
+  · change (Devm.getStor
+      (officialConstructorHeartbeatLoggedBase sevm base)
+        sevm.currentTarget).get heartbeatIntervalSlot = 0
+    rw [officialConstructorHeartbeatLoggedBase_getStor,
+      Stor.get_set_ne _
+        (show pauseDurationSlot ≠ heartbeatIntervalSlot by decide)]
+    exact hheartbeatCurrent
+  · exact hstatic
 
 end LidoCircuitBreaker
 
