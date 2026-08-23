@@ -2154,6 +2154,79 @@ private theorem officialConstructorPauseStoreLine_runCompiled
           omega
       · simpa only [Devm.setMach_setMach] using hstore
 
+private theorem officialConstructorPauseLogOpcode_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorPauseLoggedBase sevm base).setMach
+        ⟨[], officialConstructorPauseMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨[Nat.toB256 (officialConstructorEventScratch / 32) * 32,
+            (2 : B256) * 32, pauseDurationUpdatedEvent],
+          officialConstructorPauseMemory, G + 1262⟩)
+      (Ninst.log (Fin.succ 0) ::: rest) post := by
+  have hi :
+      (Nat.toB256 (officialConstructorEventScratch / 32) * 32).toNat =
+        officialConstructorEventScratch := by
+    rw [officialConstructorEventScratch_eq]
+    decide
+  have hsz : ((2 : B256) * 32).toNat = 64 := by decide
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_log_of
+        (n := Fin.succ 0)
+        (i := Nat.toB256 (officialConstructorEventScratch / 32) * 32)
+        (sz := (2 : B256) * 32)
+        (topics := [pauseDurationUpdatedEvent]) (s := [])
+        (c := 1262) (G := G)
+        (M := officialConstructorPauseMemory)
+        (data := (0 : B256).toBytes ++
+          officialConstructorArgs.initialPauseDuration.toBytes)
+    · rfl
+    · rfl
+    · exact hstatic
+    · rw [hi, hsz]
+      rw [Devm.extCost_zero_of_le
+        (N := officialConstructorPauseMemory)
+        (by rw [officialConstructorPauseMemory_size])
+        (by rw [officialConstructorPauseMemory_size,
+          officialConstructorEventScratch_eq])]
+      decide
+    · simp only [Devm.memory_setMach, hi, hsz]
+      exact officialConstructorPauseMemory_read_data
+    · simp only [Devm.memory_setMach, hi, hsz]
+      exact officialConstructorPauseMemory_read_memory
+    · simp only [Devm.gasLeft_setMach]
+  · change Func.RunCompiled fs sevm
+      ((officialConstructorPauseLoggedBase sevm base).setMach
+        ⟨[], officialConstructorPauseMemory, G⟩)
+      rest post
+    exact hrest
+
+set_option maxRecDepth 4096 in
+private theorem officialConstructorPauseLogLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorPauseLoggedBase sevm base).setMach
+        ⟨[], officialConstructorPauseMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨[], officialConstructorPauseMemory, G + 1271⟩)
+      (pushB256 pauseDurationUpdatedEvent :::
+        logWith 0
+          (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
+        rest) post := by
+  have hlog := officialConstructorPauseLogOpcode_runCompiled hstatic hrest
+  unfold logWith
+  func_run (3)
+  all_goals try decide +kernel
+  exact hlog
+
 end LidoCircuitBreaker
 
 end Blanc
