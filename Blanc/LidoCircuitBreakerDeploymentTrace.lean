@@ -164,6 +164,105 @@ theorem lidoCircuitBreakerConstructorProgram_main_official :
     (constructorBody 616 4898 4282 <?> (.call 1)) = _
   rw [constructorBody_official_eq]
 
+/-! ## Body-pinned validation and table-call layout -/
+
+/-- Structural traversal of internal compiler-table call sites. These are
+Blanc function-table calls, not external EVM `CALL` instructions. -/
+def constructorTableCallIndices : Func → List Nat
+  | .branch left right =>
+      constructorTableCallIndices left ++ constructorTableCallIndices right
+  | .last _ => []
+  | .next _ rest => constructorTableCallIndices rest
+  | .call index => [index]
+
+/-- The outer nonpayability branch stores its direct error-table call in the
+first branch arm because the successful selector is nonzero. -/
+def constructorOuterErrorArmIndices : Func → List Nat
+  | .next _ (.next _ (.branch (.call index) _)) => [index]
+  | _ => []
+
+/-- The length, canonical-address, and nine source validation branches store
+their direct error-table call in the second arm because every successful
+selector is zero. -/
+def constructorValidationErrorArmIndices : Func → List Nat
+  | .branch success (.call index) =>
+      index :: constructorValidationErrorArmIndices success
+  | .next _ rest => constructorValidationErrorArmIndices rest
+  | _ => []
+
+/-- Every internal call site in the exact constructor program, including its
+call-free auxiliary error bodies. -/
+def officialConstructorTableCallIndices : List Nat :=
+  constructorOuterErrorArmIndices lidoCircuitBreakerConstructorProgram.main ++
+    constructorValidationErrorArmIndices officialConstructorValidationBody ++
+    (lidoCircuitBreakerConstructorProgram.aux.map
+      constructorTableCallIndices).flatten
+
+private theorem constructorValidationErrorArmIndices_prepend
+    (line : Line) (rest : Func) :
+    constructorValidationErrorArmIndices (line +++ rest) =
+      constructorValidationErrorArmIndices rest := by
+  induction line with
+  | nil => rfl
+  | cons _ line ih =>
+      simp only [prepend, constructorValidationErrorArmIndices]
+      exact ih
+
+private theorem officialConstructorEffectBody_validationErrorArmIndices :
+    constructorValidationErrorArmIndices officialConstructorEffectBody = [] := by
+  unfold officialConstructorEffectBody
+  simp only [constructorValidationErrorArmIndices,
+    constructorValidationErrorArmIndices_prepend, Func.ret]
+
+private theorem officialConstructorValidationBody_errorArmIndices :
+    constructorValidationErrorArmIndices officialConstructorValidationBody =
+      [1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] := by
+  unfold officialConstructorValidationBody
+  simp only [constructorValidationErrorArmIndices,
+    constructorValidationErrorArmIndices_prepend,
+    officialConstructorEffectBody_validationErrorArmIndices]
+
+/-- The exact constructor's ten auxiliary error-table entries, in source
+validation order after the bare revert entry. -/
+theorem lidoCircuitBreakerConstructorProgram_aux_official :
+    lidoCircuitBreakerConstructorProgram.aux =
+      [Func.rev,
+        constructorError "AdminZero",
+        constructorError "MinPauseDurationZero",
+        constructorError "MinPauseDurationExceedsMax",
+        constructorError "MinHeartbeatIntervalZero",
+        constructorError "MinHeartbeatIntervalExceedsMax",
+        constructorError "PauseDurationBelowMin",
+        constructorError "PauseDurationAboveMax",
+        constructorError "HeartbeatIntervalBelowMin",
+        constructorError "HeartbeatIntervalAboveMax"] := by
+  rfl
+
+private theorem constructorTableCallIndices_constructorError (name : String) :
+    constructorTableCallIndices (constructorError name) = [] := by
+  unfold constructorError Func.revSelector
+  rfl
+
+private theorem officialConstructorAuxTableCallIndices_empty :
+    (lidoCircuitBreakerConstructorProgram.aux.map
+      constructorTableCallIndices).flatten = [] := by
+  rw [lidoCircuitBreakerConstructorProgram_aux_official]
+  simp only [List.map_cons, List.map_nil, List.flatten_cons,
+    List.flatten_nil, constructorTableCallIndices, Func.rev,
+    constructorTableCallIndices_constructorError, List.nil_append]
+
+/-- The three source-position calls to table entry one and the single calls to
+entries two through ten are all retained in exact program order. -/
+theorem officialConstructorTableCallIndices_exact :
+    officialConstructorTableCallIndices =
+      [1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] := by
+  unfold officialConstructorTableCallIndices
+  rw [lidoCircuitBreakerConstructorProgram_main_official]
+  simp only [constructorOuterErrorArmIndices,
+    officialConstructorValidationBody_errorArmIndices,
+    officialConstructorAuxTableCallIndices_empty, List.append_nil]
+  rfl
+
 /-! ## Named official memory images -/
 
 def officialConstructorDecodedMemory : Mem :=
