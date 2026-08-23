@@ -2519,6 +2519,56 @@ private theorem officialConstructorEffectBody_runCompiled
   rw [← hstart]
   exact hcopy
 
+private theorem officialConstructorProgram_runCompiled
+    {sevm : Sevm} {base : Devm} {G : Nat}
+    (hvalue : sevm.value = 0)
+    (hcode : sevm.code.toList = officialFullCreateInput)
+    (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
+      (officialConstructorPauseLoggedBase sevm base).accessedStorageKeys)
+    (hpauseOriginal : getOrigStorVal sevm sevm.currentTarget
+      pauseDurationSlot = 0)
+    (hpauseCurrent : (officialConstructorPauseLoggedBase sevm base).getStorVal
+      sevm.currentTarget pauseDurationSlot = 0)
+    (hheartbeatCold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
+      (officialConstructorHeartbeatLoggedBase sevm base).accessedStorageKeys)
+    (hheartbeatOriginal : getOrigStorVal sevm sevm.currentTarget
+      heartbeatIntervalSlot = 0)
+    (hheartbeatCurrent :
+      (officialConstructorHeartbeatLoggedBase sevm base).getStorVal
+        sevm.currentTarget heartbeatIntervalSlot = 0)
+    (hstatic : sevm.isStatic = false) :
+    Prog.RunCompiled sevm
+      (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩)
+      lidoCircuitBreakerConstructorProgram
+      (officialConstructorPost sevm base G) := by
+  have heffect := officialConstructorEffectBody_runCompiled
+    (fs := lidoCircuitBreakerConstructorProgram.main ::
+      lidoCircuitBreakerConstructorProgram.aux)
+    (G := G) hcode hpauseCold hpauseOriginal hpauseCurrent
+    hheartbeatCold hheartbeatOriginal hheartbeatCurrent hstatic
+  have heffect' : Func.RunCompiled
+      (lidoCircuitBreakerConstructorProgram.main ::
+        lidoCircuitBreakerConstructorProgram.aux)
+      sevm
+      (base.setMach
+        ⟨[(224 : B256), (616 : B256), (4282 : B256)],
+          officialConstructorDecodedMemory, (G + 50328) - 367⟩)
+      officialConstructorEffectBody
+      (officialConstructorPost sevm base G) := by
+    have hgas : (G + 50328) - 367 = G + 49961 := by omega
+    rw [hgas]
+    exact heffect
+  have hmain := officialConstructorValidationPrefix_runCompiled
+    (base := base) (g := G + 50328) hvalue hcode (by omega) heffect'
+  apply Prog.runCompiled_intro
+    (G := G + 50328)
+    (mid := base.setMach ⟨[], Mem.empty, G + 50328⟩)
+  · simp only [Devm.gasLeft_setMach, officialConstructorRequiredGas,
+      gJumpdest]
+  · simp only [Devm.stack_setMach, Devm.memory_setMach,
+      Devm.setMach_setMach]
+  · exact hmain
+
 end LidoCircuitBreaker
 
 end Blanc
