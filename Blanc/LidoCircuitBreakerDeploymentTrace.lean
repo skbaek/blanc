@@ -2767,6 +2767,39 @@ theorem officialConstructorProgram_runCompiled_fresh
     exact hheartbeatCurrent
   · exact hstatic
 
+/-- The gas-exact fresh-frame run executes against the complete official code
+image: the compiled constructor prefix followed by the runtime template and
+the seven-word ABI suffix observed by `CODESIZE` and `CODECOPY`. -/
+theorem officialConstructor_exec_fresh
+    {sevm : Sevm} {base : Devm} {G : Nat}
+    (hvalue : sevm.value = 0)
+    (hcode : sevm.code.toList = officialFullCreateInput)
+    (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
+      base.accessedStorageKeys)
+    (hpauseOriginal : getOrigStorVal sevm sevm.currentTarget
+      pauseDurationSlot = 0)
+    (hpauseCurrent : base.getStorVal sevm.currentTarget
+      pauseDurationSlot = 0)
+    (hheartbeatCold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
+      base.accessedStorageKeys)
+    (hheartbeatOriginal : getOrigStorVal sevm sevm.currentTarget
+      heartbeatIntervalSlot = 0)
+    (hheartbeatCurrent : base.getStorVal sevm.currentTarget
+      heartbeatIntervalSlot = 0)
+    (hstatic : sevm.isStatic = false) :
+    exec ⟨0, sevm,
+        base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩⟩ =
+      .ok (officialConstructorPost sevm base G) := by
+  apply Prog.exec_of_runCompiled_appended
+    (pfxCode := lidoCircuitBreakerInitPrefix)
+    (sfxData := runtimeTemplateCode ++
+      abiEncodeConstructorArgs officialConstructorArgs)
+    (officialConstructorProgram_runCompiled_fresh hvalue hcode
+      hpauseCold hpauseOriginal hpauseCurrent hheartbeatCold
+      hheartbeatOriginal hheartbeatCurrent hstatic)
+  · exact lidoCircuitBreakerConstructorProgram_compile.symm
+  · rw [hcode, officialFullCreateInput_eq_layout, List.append_assoc]
+
 end LidoCircuitBreaker
 
 end Blanc
