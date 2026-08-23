@@ -1285,6 +1285,15 @@ private theorem constructorSlice_split {ξ : Type} (xs : List ξ) (d : ξ) :
         show m + (a + 1) = m + 1 + a by omega]
       rfl
 
+private theorem Bytes.sliceD_writeAt_pair
+    (bs xs ys : Bytes) (n : Nat) :
+    (Bytes.writeAt (Bytes.writeAt bs n xs) (n + xs.length) ys).sliceD
+        n (xs.length + ys.length) 0 =
+      xs ++ ys := by
+  rw [constructorSlice_split _ 0 xs.length n ys.length,
+    Bytes.sliceD_writeAt_before _ _ n xs.length (n + xs.length) (by omega),
+    Bytes.sliceD_writeAt, Bytes.sliceD_writeAt]
+
 private theorem ConstructorPatchInvariant.read_argument_bytes
     {memory : Mem} (h : ConstructorPatchInvariant memory) (i : Fin 7) :
     h.image.sliceD (32 * i.val) 32 0 =
@@ -1359,6 +1368,139 @@ private def officialConstructorHeartbeatLog (ca : Adr) : Log :=
   ⟨ca, [heartbeatIntervalUpdatedEvent],
     (0 : B256).toBytes ++
       officialConstructorArgs.initialHeartbeatInterval.toBytes⟩
+
+private def officialConstructorEventScratch : Nat :=
+  constructorEventScratch 4282
+
+private theorem officialConstructorEventScratch_eq :
+    officialConstructorEventScratch = 4512 := by
+  decide
+
+private def officialConstructorPauseMemory : Mem :=
+  (officialConstructorPatchedMemory.write officialConstructorEventScratch
+    (0 : B256).toBytes).write (officialConstructorEventScratch + 32)
+      officialConstructorArgs.initialPauseDuration.toBytes
+
+private def officialConstructorPauseImage : Bytes :=
+  Bytes.writeAt
+    (Bytes.writeAt officialConstructorPatchedImage
+      officialConstructorEventScratch (0 : B256).toBytes)
+    (officialConstructorEventScratch + 32)
+    officialConstructorArgs.initialPauseDuration.toBytes
+
+private def officialConstructorHeartbeatMemory : Mem :=
+  (officialConstructorPauseMemory.write officialConstructorEventScratch
+    (0 : B256).toBytes).write (officialConstructorEventScratch + 32)
+      officialConstructorArgs.initialHeartbeatInterval.toBytes
+
+private def officialConstructorHeartbeatImage : Bytes :=
+  Bytes.writeAt
+    (Bytes.writeAt officialConstructorPauseImage
+      officialConstructorEventScratch (0 : B256).toBytes)
+    (officialConstructorEventScratch + 32)
+    officialConstructorArgs.initialHeartbeatInterval.toBytes
+
+private theorem officialConstructorHeartbeatMemory_eq_final :
+    officialConstructorHeartbeatMemory = officialConstructorFinalMemory := by
+  rfl
+
+private theorem officialConstructorPauseMemory_wf :
+    Mem.Wf officialConstructorPauseMemory := by
+  unfold officialConstructorPauseMemory
+  exact Mem.Wf.write
+    (Mem.Wf.write officialConstructorPatchedMemory_wf _ _) _ _
+
+private theorem officialConstructorPauseMemory_reads :
+    Mem.Reads officialConstructorPauseMemory
+      officialConstructorPauseImage := by
+  unfold officialConstructorPauseMemory officialConstructorPauseImage
+  exact Mem.Reads.write
+    (Mem.Wf.write officialConstructorPatchedMemory_wf _ _)
+    (Mem.Reads.write officialConstructorPatchedMemory_wf
+      officialConstructorPatchedMemory_reads _ _) _ _
+
+private theorem officialConstructorPauseMemory_size :
+    officialConstructorPauseMemory.size = 4576 := by
+  unfold officialConstructorPauseMemory
+  rw [Mem.size_write_word_at, Mem.size_write_word_at,
+    officialConstructorPatchedMemory_size,
+    officialConstructorEventScratch_eq]
+  decide
+
+private theorem officialConstructorHeartbeatMemory_wf :
+    Mem.Wf officialConstructorHeartbeatMemory := by
+  unfold officialConstructorHeartbeatMemory
+  exact Mem.Wf.write
+    (Mem.Wf.write officialConstructorPauseMemory_wf _ _) _ _
+
+private theorem officialConstructorHeartbeatMemory_reads :
+    Mem.Reads officialConstructorHeartbeatMemory
+      officialConstructorHeartbeatImage := by
+  unfold officialConstructorHeartbeatMemory officialConstructorHeartbeatImage
+  exact Mem.Reads.write
+    (Mem.Wf.write officialConstructorPauseMemory_wf _ _)
+    (Mem.Reads.write officialConstructorPauseMemory_wf
+      officialConstructorPauseMemory_reads _ _) _ _
+
+private theorem officialConstructorHeartbeatMemory_size :
+    officialConstructorHeartbeatMemory.size = 4576 := by
+  rw [officialConstructorHeartbeatMemory_eq_final,
+    officialConstructorFinalMemory_size]
+
+private theorem officialConstructorPauseMemory_read_data :
+    (officialConstructorPauseMemory.read
+        officialConstructorEventScratch 64).1 =
+      (0 : B256).toBytes ++
+        officialConstructorArgs.initialPauseDuration.toBytes := by
+  rw [Mem.Reads.read officialConstructorPauseMemory_reads]
+  unfold officialConstructorPauseImage
+  simpa only [B256.length_toBytes] using
+    Bytes.sliceD_writeAt_pair officialConstructorPatchedImage
+      (0 : B256).toBytes
+      officialConstructorArgs.initialPauseDuration.toBytes
+      officialConstructorEventScratch
+
+private theorem officialConstructorHeartbeatMemory_read_data :
+    (officialConstructorHeartbeatMemory.read
+        officialConstructorEventScratch 64).1 =
+      (0 : B256).toBytes ++
+        officialConstructorArgs.initialHeartbeatInterval.toBytes := by
+  rw [Mem.Reads.read officialConstructorHeartbeatMemory_reads]
+  unfold officialConstructorHeartbeatImage
+  simpa only [B256.length_toBytes] using
+    Bytes.sliceD_writeAt_pair officialConstructorPauseImage
+      (0 : B256).toBytes
+      officialConstructorArgs.initialHeartbeatInterval.toBytes
+      officialConstructorEventScratch
+
+private theorem officialConstructorPatchedMemory_read_initializedMemory :
+    (officialConstructorPatchedMemory.read 32 128).2 =
+      officialConstructorPatchedMemory := by
+  apply Mem.read_snd_eq_self
+  apply memExtSize_of_le
+  · rw [officialConstructorPatchedMemory_size]
+  · rw [officialConstructorPatchedMemory_size]
+    decide
+
+private theorem officialConstructorPauseMemory_read_memory :
+    (officialConstructorPauseMemory.read
+        officialConstructorEventScratch 64).2 =
+      officialConstructorPauseMemory := by
+  apply Mem.read_snd_eq_self
+  apply memExtSize_of_le
+  · rw [officialConstructorPauseMemory_size]
+  · rw [officialConstructorPauseMemory_size,
+      officialConstructorEventScratch_eq]
+
+private theorem officialConstructorHeartbeatMemory_read_memory :
+    (officialConstructorHeartbeatMemory.read
+        officialConstructorEventScratch 64).2 =
+      officialConstructorHeartbeatMemory := by
+  apply Mem.read_snd_eq_self
+  apply memExtSize_of_le
+  · rw [officialConstructorHeartbeatMemory_size]
+  · rw [officialConstructorHeartbeatMemory_size,
+      officialConstructorEventScratch_eq]
 
 private def officialConstructorColdStore
     (sevm : Sevm) (base : Devm) (key value : B256) : Devm :=
