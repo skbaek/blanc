@@ -293,6 +293,267 @@ private theorem officialConstructorCopiedMemory_size :
     rw [hlen, officialConstructorDecodedMemory_size]
     decide
 
+private theorem officialConstructorDecodedMemory_wf :
+    Mem.Wf officialConstructorDecodedMemory := by
+  exact Mem.Wf.write Mem.wf_empty _ _
+
+private theorem officialConstructorCopiedMemory_wf :
+    Mem.Wf officialConstructorCopiedMemory := by
+  exact Mem.Wf.write officialConstructorDecodedMemory_wf _ _
+
+private theorem officialConstructorCopiedMemory_reads :
+    Mem.Reads officialConstructorCopiedMemory officialConstructorCopiedImage := by
+  exact Mem.Reads.write officialConstructorDecodedMemory_wf
+    officialConstructorDecodedMemory_reads _ _
+
+/-- The copied runtime and every in-bounds immutable patch preserve the decoded
+seven-word constructor head. -/
+private structure ConstructorPatchInvariant (memory : Mem) : Type where
+  image : Bytes
+  memory_wf : Mem.Wf memory
+  memory_reads : Mem.Reads memory image
+  memory_size : memory.size = 4512
+  argument_reads : ∀ i : Fin 7,
+    Bytes.toB256 (image.sliceD (32 * i.val) 32 0) =
+      officialConstructorArgumentWord i
+
+private def officialConstructorCopiedMemory_invariant :
+    ConstructorPatchInvariant officialConstructorCopiedMemory := by
+  refine ⟨officialConstructorCopiedImage,
+    officialConstructorCopiedMemory_wf,
+    officialConstructorCopiedMemory_reads,
+    officialConstructorCopiedMemory_size, ?_⟩
+  intro i
+  unfold officialConstructorCopiedImage
+  rw [Bytes.sliceD_writeAt_before officialConstructorDecodedImage
+    runtimeTemplateCode (32 * i.val) 32 constructorRuntimeBase (by
+      unfold constructorRuntimeBase constructorArgumentBytes
+      have hi := i.isLt
+      omega)]
+  have h := officialConstructorDecodedMemory_read_argument i
+  rw [Mem.Reads.read officialConstructorDecodedMemory_reads] at h
+  exact h
+
+private def ConstructorPatchInvariant.write
+    {memory : Mem} (h : ConstructorPatchInvariant memory)
+    (offset : Nat) (value : B256)
+    (hbefore : constructorArgumentBytes ≤ offset)
+    (hfit : offset + 32 ≤ 4512) :
+    ConstructorPatchInvariant (memory.write offset value.toBytes) := by
+  refine ⟨Bytes.writeAt h.image offset value.toBytes,
+    Mem.Wf.write h.memory_wf _ _,
+    Mem.Reads.write h.memory_wf h.memory_reads _ _, ?_, ?_⟩
+  · rw [Mem.size_write_of_le]
+    · exact h.memory_size
+    · rw [B256.length_toBytes, h.memory_size]
+      exact hfit
+  · intro i
+    rw [Bytes.sliceD_writeAt_before h.image value.toBytes
+      (32 * i.val) 32 offset (by
+        have hi := i.isLt
+        unfold constructorArgumentBytes at hbefore
+        omega)]
+    exact h.argument_reads i
+
+private theorem ConstructorPatchInvariant.read_argument
+    {memory : Mem} (h : ConstructorPatchInvariant memory) (i : Fin 7) :
+    Bytes.toB256 ((memory.read (32 * i.val) 32).1) =
+      officialConstructorArgumentWord i := by
+  rw [Mem.Reads.read h.memory_reads]
+  exact h.argument_reads i
+
+private theorem ConstructorPatchInvariant.read_memory
+    {memory : Mem} (h : ConstructorPatchInvariant memory) (i : Fin 7) :
+    (memory.read (32 * i.val) 32).2 = memory := by
+  apply Mem.read_snd_eq_self
+  apply memExtSize_of_le
+  · rw [h.memory_size]
+  · rw [h.memory_size]
+    have hi := i.isLt
+    omega
+
+private theorem constructorPatchPair_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {M M' : Mem} {i : Fin 7} {offset pushGas G : Nat}
+    {value : B256} {rest : Func}
+    (hoffset : offset < 2 ^ 16)
+    (hpush : pushCost ((Nat.toB256 (32 * i.val)).toBytes.sig) = pushGas)
+    (hsize : M.size = 4512)
+    (hfit : offset + 32 ≤ 4512)
+    (hargument : Bytes.toB256 ((M.read (32 * i.val) 32).1) = value)
+    (hargumentMemory : (M.read (32 * i.val) 32).2 = M)
+    (hwrite : M.write offset value.toBytes = M')
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M', G⟩) rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + (pushGas + 9)⟩)
+      (loadArgumentIndex i.val +++ storeByteOffset offset +++ rest) post := by
+  have hindexBound : 32 * i.val < 2 ^ 256 := by
+    apply Nat.lt_trans (show 32 * i.val < 224 by
+      have hi := i.isLt
+      omega)
+    decide
+  have hindex : (Nat.toB256 (32 * i.val)).toNat = 32 * i.val :=
+    B256.toNat_toB256_of_lt hindexBound
+  have hoffsetBound : offset < 2 ^ 256 := by
+    apply Nat.lt_trans hoffset
+    rw [Nat.pow_lt_pow_iff_right] <;> omega
+  have hoffsetNat : (Nat.toB256 offset).toNat = offset :=
+    B256.toNat_toB256_of_lt hoffsetBound
+  unfold loadArgumentIndex storeByteOffset pushCompactNat pushFixedNat
+  simp only [if_pos hoffset]
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_pushB256 (c := pushGas) (G := G + 9) hpush
+    · simp only [Devm.gasLeft_setMach]
+      omega
+    · simp only [Devm.stack_setMach, List.length_nil]
+      omega
+  · func_run (3) [3, 0]
+    all_goals try rw [List.toB256_pair offset hoffset, hoffsetNat]
+    case h_cost =>
+      simp only [Devm.memory_setMach, Devm.stack_setMach, hindex]
+      rw [Devm.extCost_zero_of_le (N := M) (i := 32 * i.val) (sz := 32)
+        (by rw [hsize]) (by
+          rw [hsize]
+          have hi := i.isLt
+          omega)]
+      rfl
+    case h_ext =>
+      simp only [Devm.memory_setMach, Devm.stack_setMach, hindex,
+        hargumentMemory]
+      exact Devm.extCost_zero_of_le (N := M) (i := offset) (sz := 32)
+        (by rw [hsize]) (by rw [hsize]; exact hfit)
+    case a =>
+      simp only [Devm.memory_setMach, Devm.stack_setMach, hindex,
+        hargumentMemory, hargument, Devm.setMach_setMach]
+      rw [hwrite]
+      have hg : G + 9 - 9 = G := by omega
+      rw [hg]
+      exact hrest
+
+private def officialConstructorPatchMemory1 : Mem :=
+  officialConstructorCopiedMemory.write 398 officialParams.admin.toBytes
+
+private def officialConstructorPatchMemory2 : Mem :=
+  officialConstructorPatchMemory1.write 1318 officialParams.admin.toBytes
+
+private def officialConstructorPatchMemory3 : Mem :=
+  officialConstructorPatchMemory2.write 2057 officialParams.admin.toBytes
+
+private def officialConstructorPatchMemory4 : Mem :=
+  officialConstructorPatchMemory3.write 2144 officialParams.admin.toBytes
+
+private def officialConstructorPatchMemory5 : Mem :=
+  officialConstructorPatchMemory4.write 441
+    officialParams.minPauseDuration.toBytes
+
+private def officialConstructorPatchMemory6 : Mem :=
+  officialConstructorPatchMemory5.write 937
+    officialParams.minPauseDuration.toBytes
+
+private def officialConstructorPatchMemory7 : Mem :=
+  officialConstructorPatchMemory6.write 482
+    officialParams.maxPauseDuration.toBytes
+
+private def officialConstructorPatchMemory8 : Mem :=
+  officialConstructorPatchMemory7.write 2185
+    officialParams.maxPauseDuration.toBytes
+
+private def officialConstructorPatchMemory9 : Mem :=
+  officialConstructorPatchMemory8.write 732
+    officialParams.minHeartbeatInterval.toBytes
+
+private def officialConstructorPatchMemory10 : Mem :=
+  officialConstructorPatchMemory9.write 1361
+    officialParams.minHeartbeatInterval.toBytes
+
+private def officialConstructorPatchMemory11 : Mem :=
+  officialConstructorPatchMemory10.write 896
+    officialParams.maxHeartbeatInterval.toBytes
+
+private def officialConstructorPatchMemory12 : Mem :=
+  officialConstructorPatchMemory11.write 1402
+    officialParams.maxHeartbeatInterval.toBytes
+
+private def officialConstructorPatchInvariant1 :
+    ConstructorPatchInvariant officialConstructorPatchMemory1 :=
+  officialConstructorCopiedMemory_invariant.write 398 officialParams.admin
+    (by decide) (by decide)
+
+private def officialConstructorPatchInvariant2 :
+    ConstructorPatchInvariant officialConstructorPatchMemory2 :=
+  officialConstructorPatchInvariant1.write 1318 officialParams.admin
+    (by decide) (by decide)
+
+private def officialConstructorPatchInvariant3 :
+    ConstructorPatchInvariant officialConstructorPatchMemory3 :=
+  officialConstructorPatchInvariant2.write 2057 officialParams.admin
+    (by decide) (by decide)
+
+private def officialConstructorPatchInvariant4 :
+    ConstructorPatchInvariant officialConstructorPatchMemory4 :=
+  officialConstructorPatchInvariant3.write 2144 officialParams.admin
+    (by decide) (by decide)
+
+private def officialConstructorPatchInvariant5 :
+    ConstructorPatchInvariant officialConstructorPatchMemory5 :=
+  officialConstructorPatchInvariant4.write 441
+    officialParams.minPauseDuration (by decide) (by decide)
+
+private def officialConstructorPatchInvariant6 :
+    ConstructorPatchInvariant officialConstructorPatchMemory6 :=
+  officialConstructorPatchInvariant5.write 937
+    officialParams.minPauseDuration (by decide) (by decide)
+
+private def officialConstructorPatchInvariant7 :
+    ConstructorPatchInvariant officialConstructorPatchMemory7 :=
+  officialConstructorPatchInvariant6.write 482
+    officialParams.maxPauseDuration (by decide) (by decide)
+
+private def officialConstructorPatchInvariant8 :
+    ConstructorPatchInvariant officialConstructorPatchMemory8 :=
+  officialConstructorPatchInvariant7.write 2185
+    officialParams.maxPauseDuration (by decide) (by decide)
+
+private def officialConstructorPatchInvariant9 :
+    ConstructorPatchInvariant officialConstructorPatchMemory9 :=
+  officialConstructorPatchInvariant8.write 732
+    officialParams.minHeartbeatInterval (by decide) (by decide)
+
+private def officialConstructorPatchInvariant10 :
+    ConstructorPatchInvariant officialConstructorPatchMemory10 :=
+  officialConstructorPatchInvariant9.write 1361
+    officialParams.minHeartbeatInterval (by decide) (by decide)
+
+private def officialConstructorPatchInvariant11 :
+    ConstructorPatchInvariant officialConstructorPatchMemory11 :=
+  officialConstructorPatchInvariant10.write 896
+    officialParams.maxHeartbeatInterval (by decide) (by decide)
+
+private def officialConstructorPatchInvariant12 :
+    ConstructorPatchInvariant officialConstructorPatchMemory12 :=
+  officialConstructorPatchInvariant11.write 1402
+    officialParams.maxHeartbeatInterval (by decide) (by decide)
+
+private theorem officialConstructorPatchMemory12_eq_patched :
+    officialConstructorPatchMemory12 = officialConstructorPatchedMemory := by
+  rcases constructor_immutable_word_offsets_exact with
+    ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
+  simp only [officialConstructorPatchMemory12,
+    officialConstructorPatchMemory11, officialConstructorPatchMemory10,
+    officialConstructorPatchMemory9, officialConstructorPatchMemory8,
+    officialConstructorPatchMemory7, officialConstructorPatchMemory6,
+    officialConstructorPatchMemory5, officialConstructorPatchMemory4,
+    officialConstructorPatchMemory3, officialConstructorPatchMemory2,
+    officialConstructorPatchMemory1, officialConstructorPatchedMemory,
+    runtimeImmutablePatches, immutableParameters, List.flatMap_cons,
+    List.flatMap_nil, List.map_cons, List.map_nil, hadmin, hminPause,
+    hmaxPause, hminHeartbeat, hmaxHeartbeat, applyConstructorMemoryPatch,
+    ImmutableParameter.value]
+  simp only [List.foldl_append, List.foldl_cons, List.foldl_nil,
+    applyConstructorMemoryPatch, constructorArgumentBytes,
+    constructorRuntimeBase]
+
 private theorem officialConstructorPatches_fit :
     ∀ patch ∈ runtimeImmutablePatches officialParams,
       constructorRuntimeBase + patch.offset + 32 ≤ 4512 := by
