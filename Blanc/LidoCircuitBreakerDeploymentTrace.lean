@@ -2386,6 +2386,95 @@ private theorem officialConstructorConfigurationSuffix_runCompiled
   unfold officialConstructorConfigurationSuffix
   convert hpauseScratch using 1 <;> omega
 
+private theorem officialConstructorInitializedLogOpcode_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨[], officialConstructorPatchedMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach
+        ⟨[(1 : B256) * 32, (4 : B256) * 32,
+            circuitBreakerInitializedEvent, officialParams.admin],
+          officialConstructorPatchedMemory, G + 2149⟩)
+      (Ninst.log (Fin.succ 1) ::: rest) post := by
+  have hi : ((1 : B256) * 32).toNat = 32 := by decide
+  have hsz : ((4 : B256) * 32).toNat = 128 := by decide
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_log_of
+        (n := Fin.succ 1)
+        (i := (1 : B256) * 32) (sz := (4 : B256) * 32)
+        (topics := [circuitBreakerInitializedEvent, officialParams.admin])
+        (s := []) (c := 2149) (G := G)
+        (M := officialConstructorPatchedMemory)
+        (data := officialParams.minPauseDuration.toBytes ++
+          officialParams.maxPauseDuration.toBytes ++
+          officialParams.minHeartbeatInterval.toBytes ++
+          officialParams.maxHeartbeatInterval.toBytes)
+    · rfl
+    · rfl
+    · exact hstatic
+    · rw [hi, hsz]
+      rw [Devm.extCost_zero_of_le
+        (N := officialConstructorPatchedMemory)
+        (by rw [officialConstructorPatchedMemory_size])
+        (by rw [officialConstructorPatchedMemory_size]; decide)]
+      decide
+    · simp only [Devm.memory_setMach, hi, hsz]
+      exact officialConstructorPatchedMemory_read_initializedData
+    · simp only [Devm.memory_setMach, hi, hsz]
+      exact officialConstructorPatchedMemory_read_initializedMemory
+    · simp only [Devm.gasLeft_setMach]
+  · change Func.RunCompiled fs sevm
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨[], officialConstructorPatchedMemory, G⟩)
+      rest post
+    exact hrest
+
+set_option maxRecDepth 4096 in
+private theorem officialConstructorInitializedLogLine_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {G : Nat} {rest : Func}
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((officialConstructorInitializedBase sevm base).setMach
+        ⟨[], officialConstructorPatchedMemory, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], officialConstructorPatchedMemory, G + 2163⟩)
+      (loadArgumentIndex 0 +++
+        pushB256 circuitBreakerInitializedEvent :::
+        logWith 1 1 4 +++ rest) post := by
+  have hvalue : Bytes.toB256
+      ((officialConstructorPatchedMemory.read 0 32).1) =
+        officialParams.admin := by
+    simpa [officialConstructorArgumentWord] using
+      officialConstructorPatchedMemory_read_argument ⟨0, by decide⟩
+  have hmemory : (officialConstructorPatchedMemory.read 0 32).2 =
+      officialConstructorPatchedMemory := by
+    apply Mem.read_snd_eq_self
+    apply memExtSize_of_le
+    · rw [officialConstructorPatchedMemory_size]
+    · rw [officialConstructorPatchedMemory_size]
+      decide
+  have hlog := officialConstructorInitializedLogOpcode_runCompiled
+    hstatic hrest
+  unfold loadArgumentIndex pushCompactNat logWith
+  func_run (5) [3]
+  all_goals try
+    simp only [show (Nat.toB256 0).toNat = 0 by decide]
+  all_goals try rw [hmemory]
+  all_goals try rw [hvalue]
+  all_goals try
+    exact Devm.extCost_add_of_size
+      (a := gVerylow) officialConstructorPatchedMemory_size
+      (by decide +kernel)
+  all_goals try decide +kernel
+  all_goals try omega
+  convert hlog using 1 <;> omega
+
 end LidoCircuitBreaker
 
 end Blanc
