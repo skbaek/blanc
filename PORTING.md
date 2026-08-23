@@ -250,6 +250,40 @@ the deployed Solidity runtime. Concrete redemption fixtures are finite checks
 of chosen histories; they neither construct a Lean `AccountedHistory` nor
 widen the theorem's scope.
 
+The Lido CircuitBreaker Registry-history family has an exact Blanc-only
+boundary of the same kind. From a checkpoint at which the exact compiled
+Blanc runtime is installed at an address and that address's storage admits a
+`RegistryWitness`, every state reachable by the configured valid-chain
+relation still has that exact runtime installed and still admits a
+`RegistryWitness` — possibly a different one. The quantifier covers
+arbitrary finite sequences of successful and reverting transactions and
+arbitrary callee bytecode, including code that re-enters the same instance;
+there is no target-honesty premise and no count or interval noninterference
+premise. Its reader-facing corollaries deliver, at the reached state and at
+the configured-chain and Prague rungs alike, the exact installed runtime, an
+actual witness, membership and index equivalence at an arbitrary canonical
+target, and global count conservation.
+
+That checkpoint is a hypothesis. Nothing in the family shows that a
+constructor or any deployment establishes it; a synthetic satisfying world
+is exhibited only so the results are not vacuous, and it is not a deployment
+and may not be read as one. Because the invariant is existential, nothing
+claims a transaction returns the entry list it began with, and nothing
+produces a source-level history trace. The family states nothing about count
+and expiry coherence at callback time, composes nothing from the public
+`pause` entry through `setPauser`, and makes no gas, liveness, or
+differential claim. Its reachability relation carries a bound of its own: a
+block enters only when total wei plus that block's withdrawals stays below
+`2 ^ 256`, so any history crossing that bound falls outside "every reachable
+state" — a restriction the Registry invariant itself never consults. It does
+not verify the deployed Solidity runtime; agreement with the pinned v1.0.0
+reference rests on
+[LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md](LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md)
+and
+[LIDO_CIRCUIT_BREAKER_DEVIATIONS.md](LIDO_CIRCUIT_BREAKER_DEVIATIONS.md),
+and that finite differential manifest enlarges neither the theorems nor the
+port-conformance claim.
+
 Two registers are available for what a port has not established, and only
 one of them is honest. Declaring a non-claim in advance — this boundary is
 not covered, this property is not attempted — bounds the claim and asserts
