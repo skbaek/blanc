@@ -126,6 +126,7 @@ CONTRACTS = {
                              "LidoCircuitBreakerDeploymentInput",
                              "LidoCircuitBreakerDeploymentMessage",
                              "LidoCircuitBreakerDeploymentTransaction",
+                             "LidoCircuitBreakerDeploymentBlock",
                              "LidoCircuitBreakerHistory",
                              "LidoCircuitBreakerHistoryEndpoints",
                              "LidoCircuitBreakerHistoryChain"],

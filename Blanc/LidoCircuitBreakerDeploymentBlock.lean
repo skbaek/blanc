@@ -1,0 +1,134 @@
+-- LidoCircuitBreakerDeploymentBlock.lean : official request suffix and block
+-- body composition.
+
+import Blanc.LidoCircuitBreakerDeploymentTransaction
+
+namespace Blanc
+
+open Jaune
+
+namespace LidoCircuitBreaker
+
+/-! ## Exact post-transaction request suffix -/
+
+/-- Proof-produced evidence for Prague's two checked request-system calls.
+Both calls execute the installed nonempty system program, return no request
+bytes, and leave the official deployment poststate and block output unchanged.
+-/
+structure OfficialDeploymentSuffixResult
+    (chainId : UInt64) (ca : Adr)
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (post : State) (bout : BlockOutput) : Type where
+  withdrawalOut : MsgCallOutput
+  consolidationOut : MsgCallOutput
+  withdrawalRun :
+    processCheckedSystemTransaction (ctx.txInput.withState post)
+      withdrawalRequestPredeployAddress [] = .ok (post, withdrawalOut)
+  withdrawalReturnData : withdrawalOut.returnData = []
+  consolidationRun :
+    processCheckedSystemTransaction
+      ((ctx.txInput.withState post).withState post)
+      consolidationRequestPredeployAddress [] = .ok (post, consolidationOut)
+  consolidationReturnData : consolidationOut.returnData = []
+  run : processGeneralPurposeRequests (ctx.txInput.withState post) bout =
+    .ok (post, bout)
+  stable : RegistryStable officialParams ca post
+
+/-- Execute the exact checked request suffix after the official deployment
+transaction. -/
+theorem canonicalDeploymentSuffix_succeeds
+    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (tx : Tx) (sender ca : Adr)
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (post : State) (bout : BlockOutput)
+    (htx : OfficialDeploymentTransactionResult chainId ca ctx post bout) :
+    Nonempty (OfficialDeploymentSuffixResult chainId ca ctx post bout) := by
+  obtain ⟨withdrawalOut, hwithdrawal, _, _, _, _, hwithdrawalReturn⟩ :=
+    processCheckedSystemTransaction_deploymentSystemProgram
+      (ctx.txInput.withState post) withdrawalRequestPredeployAddress []
+      (by simpa [Benv.withState] using htx.withdrawalRequestCode)
+      (by
+        rw [ctx.systemPrefix.environment_eq]
+        change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress
+        decide)
+  obtain ⟨consolidationOut, hconsolidation, _, _, _, _,
+      hconsolidationReturn⟩ :=
+    processCheckedSystemTransaction_deploymentSystemProgram
+      ((ctx.txInput.withState post).withState post)
+      consolidationRequestPredeployAddress []
+      (by simpa [Benv.withState] using htx.consolidationRequestCode)
+      (by
+        rw [ctx.systemPrefix.environment_eq]
+        change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress
+        decide)
+  have hrun : processGeneralPurposeRequests
+      (ctx.txInput.withState post) bout = .ok (post, bout) := by
+    unfold processGeneralPurposeRequests
+    rw [htx.depositRequests]
+    simp only [List.length_nil, Nat.lt_irrefl, if_false, bind, Except.bind]
+    rw [hwithdrawal]
+    simp only [hwithdrawalReturn, List.length_nil, Nat.lt_irrefl, if_false]
+    change (do
+      let ⟨state, consolidationOutput⟩ ←
+        processCheckedSystemTransaction
+          ((ctx.txInput.withState post).withState post)
+          consolidationRequestPredeployAddress []
+      if consolidationOutput.returnData.length > 0 then
+        .ok (state, {bout with requests := bout.requests ++
+          [consolidationRequestType ++ consolidationOutput.returnData]})
+      else .ok (state, {bout with requests := bout.requests})) =
+        .ok (post, bout)
+    simp only [hconsolidation, bind, Except.bind, hconsolidationReturn,
+      List.length_nil, Nat.lt_irrefl, if_false]
+    rfl
+  exact ⟨⟨withdrawalOut, consolidationOut, hwithdrawal,
+    hwithdrawalReturn, hconsolidation, hconsolidationReturn, hrun,
+    htx.stable⟩⟩
+
+/-! ## Complete configured block body -/
+
+/-- Compose the recovered beacon/history prefix, singleton decoded
+transaction, empty withdrawal stage, and exact request suffix into Jaune's real
+block body. -/
+theorem canonicalDeploymentApplyBody_succeeds
+    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (txBytes : Bytes) (tx : Tx) (sender ca : Adr)
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca)
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (post : State) (bout : BlockOutput)
+    (htx : OfficialDeploymentTransactionResult chainId ca ctx post bout)
+    (hsuffix : OfficialDeploymentSuffixResult chainId ca ctx post bout) :
+    applyBody (initBenv pragueRules base cb.block.header)
+      cb.block.txs cb.block.wds = .ok (post, bout) := by
+  unfold applyBody
+  have hbeacon := ctx.systemPrefix.beaconRun
+  change processUncheckedSystemTransaction
+    (initBenv pragueRules base cb.block.header)
+    beaconRootsAddress
+    (initBenv pragueRules base cb.block.header).stat.parentBeaconBlockRoot.toBytes =
+      .ok (ctx.systemPrefix.stBeacon, ctx.systemPrefix.outBeacon) at hbeacon
+  rw [hbeacon]
+  simp only [Except.mapError, bind, Except.bind]
+  rw [ctx.systemPrefix.lastHashEq]
+  simp only [Option.toExcept]
+  rw [ctx.systemPrefix.historyRun]
+  rw [henv.txs_eq]
+  simp only [List.mapM_cons, List.mapM_nil, henv.decode_eq, bind,
+    Except.bind, List.putIndex]
+  rw [← ctx.systemPrefix.txInput_eq]
+  change (do
+    let ⟨benvTxs, boutTxs⟩ ← applyTransactions [(0, tx)] ctx.txInput .init
+    let ⟨stWds, boutWds⟩ :=
+      processWithdrawals benvTxs boutTxs cb.block.wds
+    processGeneralPurposeRequests (benvTxs.withState stWds) boutWds) =
+      .ok (post, bout)
+  simp only [applyTransactions, htx.run, bind, Except.bind]
+  rw [henv.withdrawals_eq]
+  change processGeneralPurposeRequests (ctx.txInput.withState post) bout =
+    .ok (post, bout)
+  exact hsuffix.run
+
+end LidoCircuitBreaker
+
+end Blanc
