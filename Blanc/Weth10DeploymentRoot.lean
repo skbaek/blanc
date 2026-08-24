@@ -19,19 +19,19 @@ namespace Weth10
 /-! ## Canonical deployment inputs -/
 
 /-- Compatibility aliases for the contract-neutral deployment plumbing. -/
-abbrev deploymentSystemProgram : Prog := Blanc.deploymentSystemProgram
+def deploymentSystemProgram : Prog := Blanc.deploymentSystemProgram
 
-abbrev deploymentReceiptKey (index : Nat) : Bytes :=
+def deploymentReceiptKey (index : Nat) : Bytes :=
   Blanc.deploymentReceiptKey index
 
-abbrev deploymentTxPreludeBout
+def deploymentTxPreludeBout
     (bout : BlockOutput) (tx : Tx) (index : Nat) : BlockOutput :=
   Blanc.deploymentTxPreludeBout bout tx index
 
-abbrev deploymentIntrinsicGas (tx : Tx) : Nat :=
+def deploymentIntrinsicGas (tx : Tx) : Nat :=
   Blanc.deploymentIntrinsicGas tx
 
-abbrev deploymentCalldataFloorGas (tx : Tx) : Nat :=
+def deploymentCalldataFloorGas (tx : Tx) : Nat :=
   Blanc.deploymentCalldataFloorGas tx
 
 /-- The canonical transaction budget crosses both EIP-7623's calldata floor
@@ -40,30 +40,56 @@ def deploymentTransactionGasBound (tx : Tx) : Nat :=
   max (deploymentCalldataFloorGas tx)
     (deploymentIntrinsicGas tx + weth10CreateMessageGasAccounting)
 
-abbrev deploymentEffectiveGasPrice (benv : Benv) (tx : Tx) : Nat :=
+def deploymentEffectiveGasPrice (benv : Benv) (tx : Tx) : Nat :=
   Blanc.deploymentEffectiveGasPrice benv tx
 
-abbrev deploymentTenv
+def deploymentTenv
     (benv : Benv) (tx : Tx) (sender : Adr) (index : Nat) : Tenv :=
   Blanc.deploymentTenv benv tx sender index
 
-abbrev deploymentUsedGasFromMessage (tx : Tx) (out : MsgCallOutput) : Nat :=
+def deploymentUsedGasFromMessage (tx : Tx) (out : MsgCallOutput) : Nat :=
   Blanc.deploymentUsedGasFromMessage tx out
 
-abbrev deploymentFinalState
+def deploymentFinalState
     (benv : Benv) (tx : Tx) (sender : Adr)
     (messagePost : State) (usedGas : Nat) : State :=
   Blanc.deploymentFinalState benv tx sender messagePost usedGas
 
-abbrev deploymentFinalBout
+def deploymentFinalBout
     (bout : BlockOutput) (tx : Tx) (index : Nat)
     (out : MsgCallOutput) (usedGas : Nat) : BlockOutput :=
   Blanc.deploymentFinalBout bout tx index out usedGas
 
-/-- Compatibility alias for the contract-neutral configured deployment base. -/
-abbrev CanonicalDeploymentBase
-    (chainId : UInt64) (base : BlockChain) (sender ca : Adr) : Prop :=
-  Blanc.CanonicalDeploymentBase chainId base sender ca
+/-- Valid configured base state and collision-free target facts.  The four
+system-address fields describe only pre-state code; no system-call result or
+post-state is admitted here. -/
+structure CanonicalDeploymentBase
+    (chainId : UInt64) (base : BlockChain) (sender ca : Adr) : Prop where
+  chainId_eq : chainId = base.chainId
+  validContext : base.ValidContext
+  sumNof : SumNof base.state.bal
+  target_eq : ca = computeContractAddress sender (base.state.getNonce sender)
+  target_ne_zero : ca ≠ 0
+  target_not_precompile : ¬ pragueRules.isPrecomp ca
+  sender_ne_target : sender ≠ ca
+  withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca
+  consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca
+  target_noCodeOrNonce : accountHasCodeOrNonce base.state ca = false
+  target_noStorage : accountHasStorage base.state ca = false
+  lastBlockHash : ∃ lastHash,
+    List.getLast? (getLast256BlockHashes base) = some lastHash
+  beaconCode :
+    some (base.state.getCode beaconRootsAddress).toList =
+      Prog.compile deploymentSystemProgram
+  historyCode :
+    some (base.state.getCode historyStorageAddress).toList =
+      Prog.compile deploymentSystemProgram
+  withdrawalRequestCode :
+    some (base.state.getCode withdrawalRequestPredeployAddress).toList =
+      Prog.compile deploymentSystemProgram
+  consolidationRequestCode :
+    some (base.state.getCode consolidationRequestPredeployAddress).toList =
+      Prog.compile deploymentSystemProgram
 
 /-- The strict Prague block and type-2 creation transaction profile.  The
 `CanonicalBlock` parameter itself retains the original bytes, strict
@@ -107,10 +133,35 @@ structure CanonicalWeth10DeploymentBlock
 
 /-! ## Proof-produced pipeline contexts -/
 
-/-- Compatibility alias for the contract-neutral recovered system prefix. -/
-abbrev DeploymentSystemPrefix
-    (base : BlockChain) (block : Block) (txInput : Benv) : Type :=
-  Blanc.DeploymentSystemPrefix base block txInput
+/-- The mandatory beacon-roots and history-storage calls recovered from the
+real block prefix. This structure is conclusion evidence, never input data. -/
+structure DeploymentSystemPrefix
+    (base : BlockChain) (block : Block) (txInput : Benv) : Type where
+  stBeacon : State
+  outBeacon : MsgCallOutput
+  lastHash : B256
+  stHistory : State
+  outHistory : MsgCallOutput
+  beaconRun :
+    processUncheckedSystemTransaction
+      (initBenv pragueRules base block.header)
+      beaconRootsAddress block.header.parentBeaconBlockRoot.toBytes =
+      .ok (stBeacon, outBeacon)
+  lastHashEq :
+    List.getLast?
+      ((initBenv pragueRules base block.header).withState stBeacon).stat.blockHashes =
+        some lastHash
+  historyRun :
+    processUncheckedSystemTransaction
+      ((initBenv pragueRules base block.header).withState stBeacon)
+      historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory)
+  txInput_eq :
+    txInput =
+      ((initBenv pragueRules base block.header).withState stBeacon).withState
+        stHistory
+  environment_eq : txInput = initBenv pragueRules base block.header
+  state_eq : txInput.state = base.state
+  createdAccounts_eq : txInput.createdAccounts = .emptyWithCapacity
 
 /-- The transaction contexts are kept distinct: recovered prefix input,
 `beginTransaction`, nonce/fee-updated state, and the actual prepared message.
@@ -188,6 +239,46 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
   exact Blanc.processCheckedSystemTransaction_deploymentSystemProgram
     benv target data hcode hnp
 
+private theorem canonicalDeploymentBaseToShared
+    (hbase : CanonicalDeploymentBase chainId base sender ca) :
+    Blanc.CanonicalDeploymentBase chainId base sender ca where
+  chainId_eq := hbase.chainId_eq
+  validContext := hbase.validContext
+  sumNof := hbase.sumNof
+  target_eq := hbase.target_eq
+  target_ne_zero := hbase.target_ne_zero
+  target_not_precompile := hbase.target_not_precompile
+  sender_ne_target := hbase.sender_ne_target
+  withdrawalRequest_ne_target := hbase.withdrawalRequest_ne_target
+  consolidationRequest_ne_target := hbase.consolidationRequest_ne_target
+  target_noCodeOrNonce := hbase.target_noCodeOrNonce
+  target_noStorage := hbase.target_noStorage
+  lastBlockHash := hbase.lastBlockHash
+  beaconCode := by
+    simpa only [deploymentSystemProgram] using hbase.beaconCode
+  historyCode := by
+    simpa only [deploymentSystemProgram] using hbase.historyCode
+  withdrawalRequestCode := by
+    simpa only [deploymentSystemProgram] using hbase.withdrawalRequestCode
+  consolidationRequestCode := by
+    simpa only [deploymentSystemProgram] using hbase.consolidationRequestCode
+
+private def deploymentSystemPrefixOfShared
+    (hprefix : Blanc.DeploymentSystemPrefix base block txInput) :
+    DeploymentSystemPrefix base block txInput where
+  stBeacon := hprefix.stBeacon
+  outBeacon := hprefix.outBeacon
+  lastHash := hprefix.lastHash
+  stHistory := hprefix.stHistory
+  outHistory := hprefix.outHistory
+  beaconRun := hprefix.beaconRun
+  lastHashEq := hprefix.lastHashEq
+  historyRun := hprefix.historyRun
+  txInput_eq := hprefix.txInput_eq
+  environment_eq := hprefix.environment_eq
+  state_eq := hprefix.state_eq
+  createdAccounts_eq := hprefix.createdAccounts_eq
+
 /-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
 canonical pre-state; neither call is smuggled into the input record. -/
 theorem canonicalDeploymentSystemPrefix
@@ -195,7 +286,10 @@ theorem canonicalDeploymentSystemPrefix
     (sender ca : Adr)
     (hbase : CanonicalDeploymentBase chainId base sender ca) :
     Nonempty (Σ txInput, DeploymentSystemPrefix base cb.block txInput) := by
-  exact Blanc.canonicalDeploymentSystemPrefix chainId base cb sender ca hbase
+  obtain ⟨⟨txInput, hprefix⟩⟩ :=
+    Blanc.canonicalDeploymentSystemPrefix chainId base cb sender ca
+      (canonicalDeploymentBaseToShared hbase)
+  exact ⟨⟨txInput, deploymentSystemPrefixOfShared hprefix⟩⟩
 
 /-- Produce the real transaction input, transaction-local origin boundary,
 upfront nonce/fee debit, and the message returned by `prepareMessage`.
@@ -589,6 +683,7 @@ theorem canonicalDeploymentTransaction_succeeds
     simp only [deploymentTenv, Blanc.deploymentTenv,
       Blanc.deploymentIntrinsicGas, Benv.beginTransaction] at hprepare
     simp only [List.map_nil, List.flatten_nil]
+    simp only [deploymentEffectiveGasPrice] at hprepare ⊢
     rw [hprepare]
     simp only [hmessage.run]
     rw [hrefund]
@@ -659,7 +754,7 @@ theorem canonicalDeploymentTransaction_succeeds
     unfold parseDepositRequests
     have hkeys : bout.receiptKeys = [deploymentReceiptKey 0] := by
       dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
-      simp [Blanc.deploymentTxPreludeBout,
+      simp [Blanc.deploymentTxPreludeBout, deploymentReceiptKey,
         BlockOutput.init]
     rw [hkeys]
     have hentry' := hentry

@@ -28,6 +28,12 @@ theorem freshDeployParams_runtime_compile
       some (weth10Code (freshDeployParams chainId contractAddress)) :=
   weth10Code_compile _
 
+/-- Jaune's creation preparation clears the target storage. -/
+theorem processCreateMessage_msg_getStor_currentTarget (msg : Msg) :
+    (processCreateMessage.msg msg).benv.state.getStor msg.currentTarget =
+      Stor.empty := by
+  exact Blanc.processCreateMessage_msg_getStor_currentTarget msg
+
 /-- The storage seeded by Jaune's generic creation preparation establishes
 WETH10's exact backing invariant when its logical callvalue and ETH-balance
 parameters are both instantiated with zero. -/

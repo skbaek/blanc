@@ -180,8 +180,8 @@ def deploymentFinalBout
 field describes only the supplied prestate. -/
 structure CanonicalDeploymentBase
     (chainId : UInt64) (base : BlockChain) (sender ca : Adr) : Prop where
-  chainId_eq : chainId = base.chainId
   validContext : base.ValidContext
+  chainId_eq : chainId = base.chainId
   sumNof : SumNof base.state.bal
   target_eq : ca = computeContractAddress sender (base.state.getNonce sender)
   target_ne_zero : ca ≠ 0
@@ -210,8 +210,8 @@ structure CanonicalDeploymentBase
 real block prefix. This structure is conclusion evidence, never input data. -/
 structure DeploymentSystemPrefix
     (base : BlockChain) (block : Block) (txInput : Benv) : Type where
-  stBeacon : State
   outBeacon : MsgCallOutput
+  stBeacon : State
   lastHash : B256
   stHistory : State
   outHistory : MsgCallOutput
@@ -388,13 +388,20 @@ theorem canonicalDeploymentSystemPrefix
       (initial.withState base.state) historyStorageAddress lastHash.toBytes
       (by simpa [initial, initBenv, Benv.withState] using hbase.historyCode)
       (by change ¬ pragueRules.isPrecomp historyStorageAddress; decide)
-  refine ⟨⟨initial, base.state, outBeacon, lastHash, base.state, outHistory,
-    hbeacon, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
+  refine ⟨⟨initial, {
+    outBeacon := outBeacon
+    stBeacon := base.state
+    lastHash := lastHash
+    stHistory := base.state
+    outHistory := outHistory
+    beaconRun := hbeacon
+    lastHashEq := ?_
+    historyRun := ?_
+    txInput_eq := by rfl
+    environment_eq := by rfl
+    state_eq := by rfl
+    createdAccounts_eq := by rfl }⟩⟩
   · simpa [initial, initBenv, initBenvStat, Benv.withState] using hlast
   · simpa [initial, Benv.withState] using hhistory
-  · rfl
-  · rfl
-  · rfl
-  · rfl
 
 end Blanc
