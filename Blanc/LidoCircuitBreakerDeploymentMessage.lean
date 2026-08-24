@@ -1040,6 +1040,116 @@ theorem processCreateMessage_establishes_officialRegistryStable
     accountsToDelete := hchargedDelete
     gasLeft := hchargedGas }
 
+/-! ## Collision-checked top-level creation message -/
+
+/-- The exact output produced by the successful `processMessageCall.create`
+wrapper around an official constructor poststate. -/
+def officialMessageOutputOf (post : Devm) : MsgCallOutput :=
+  { gasLeft := post.gasLeft
+    refundCounter := 0
+    logs := post.logs
+    accountsToDelete := post.accountsToDelete
+    error := post.error
+    returnData := post.output }
+
+/-- Settled top-level creation-message result, retaining the complete direct
+CREATE certificate rather than only its projected world state. -/
+structure OfficialConstructorMessageResult
+    (ca : Adr) (msg : Msg) (post : State) (out : MsgCallOutput) : Prop where
+  target_eq : msg.currentTarget = ca
+  target_none : msg.target = none
+  run : processMessageCall msg = .ok (post, out)
+  creation : ∃ createPost,
+    OfficialCreateMessageResult ca msg createPost ∧
+    post = createPost.state ∧ out = officialMessageOutputOf createPost
+  installed : some (post.getCode ca).toList =
+    Prog.compile (runtime officialParams)
+  pauseDuration : (post.getStor ca).get pauseDurationSlot =
+    officialConstructorArgs.initialPauseDuration
+  heartbeatInterval : (post.getStor ca).get heartbeatIntervalSlot =
+    officialConstructorArgs.initialHeartbeatInterval
+  emptyRegistry : RegistryWitness
+    (logicalStorageOfStor (post.getStor ca)) []
+  logs : out.logs = officialConstructorLogs ca
+  returnData : out.returnData = lidoCircuitBreakerCode officialParams
+  gasLeft : out.gasLeft = msg.gas - officialCreateMessageGasAccounting
+  error : out.error = .none
+  accountsToDelete : out.accountsToDelete = .emptyWithCapacity
+  stable : RegistryStable officialParams ca post
+
+/-- The official direct creation crosses the collision-checked
+`processMessageCall` creation arm and produces the exact successful wrapper
+output. Collision freedom is stated at this prepared message state. -/
+theorem processMessageCall_establishes_officialRegistryStable
+    (ca : Adr) (msg : Msg)
+    (htarget : msg.currentTarget = ca)
+    (htargetNone : msg.target = none)
+    (hnoCodeOrNonce :
+      accountHasCodeOrNonce msg.benv.state ca = false)
+    (hnoStorage : accountHasStorage msg.benv.state ca = false)
+    (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = .none)
+    (hcode : msg.code.toList = officialFullCreateInput)
+    (hgas : officialCreateMessageGasAccounting ≤ msg.gas)
+    (hmax : 4282 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (hpauseCold : (msg.currentTarget, pauseDurationSlot) ∉
+      msg.accessedStorageKeys)
+    (hpauseOriginal :
+      (msg.benv.stat.origState.get msg.currentTarget).stor.get
+        pauseDurationSlot = 0)
+    (hheartbeatCold : (msg.currentTarget, heartbeatIntervalSlot) ∉
+      msg.accessedStorageKeys)
+    (hheartbeatOriginal :
+      (msg.benv.stat.origState.get msg.currentTarget).stor.get
+        heartbeatIntervalSlot = 0)
+    (hstatic : msg.isStatic = false) :
+    ∃ post out, OfficialConstructorMessageResult ca msg post out := by
+  obtain ⟨createPost, hcreate⟩ :=
+    processCreateMessage_establishes_officialRegistryStable msg hvalue
+      hcodeAddress hcode hgas hmax hpauseCold hpauseOriginal
+      hheartbeatCold hheartbeatOriginal hstatic
+  have hcreate' : OfficialCreateMessageResult ca msg createPost := by
+    simpa only [htarget] using hcreate
+  let out := officialMessageOutputOf createPost
+  have htoNat : Int.toNat? createPost.refundCounter = some 0 := by
+    rw [hcreate'.refundCounter]
+    rfl
+  have hrun :
+      processMessageCall msg = .ok (createPost.state, out) := by
+    unfold processMessageCall
+    rw [show msg.target.isNone = true by simp [htargetNone]]
+    unfold processMessageCall.create
+    simp only [if_true]
+    rw [htarget]
+    simp [hnoCodeOrNonce, hnoStorage, Except.bimap, hcreate'.run,
+      hcreate'.error, htoNat, out, officialMessageOutputOf]
+    rfl
+  refine ⟨createPost.state, out, {
+    target_eq := htarget
+    target_none := htargetNone
+    run := hrun
+    creation := ⟨createPost, hcreate', rfl, rfl⟩
+    installed := hcreate'.installed
+    pauseDuration := ?_
+    heartbeatInterval := ?_
+    emptyRegistry := hcreate'.emptyRegistry
+    logs := ?_
+    returnData := ?_
+    gasLeft := ?_
+    error := ?_
+    accountsToDelete := ?_
+    stable := hcreate'.stable }⟩
+  · simpa [Devm.getStorVal, Devm.getAcct, State.getStor] using
+      hcreate'.pauseDuration
+  · simpa [Devm.getStorVal, Devm.getAcct, State.getStor] using
+      hcreate'.heartbeatInterval
+  · simpa only [out, officialMessageOutputOf] using hcreate'.logs
+  · simpa only [out, officialMessageOutputOf] using hcreate'.returnData
+  · simpa only [out, officialMessageOutputOf] using hcreate'.gasLeft
+  · simpa only [out, officialMessageOutputOf] using hcreate'.error
+  · simpa only [out, officialMessageOutputOf] using
+      hcreate'.accountsToDelete
+
 end LidoCircuitBreaker
 
 end Blanc
