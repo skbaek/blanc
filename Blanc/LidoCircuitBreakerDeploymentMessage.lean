@@ -15,6 +15,8 @@ open Jaune
 
 namespace LidoCircuitBreaker
 
+open DeploymentProof
+
 /-! ## Exact successful constructor effect checkpoint -/
 
 theorem officialConstructorPost_state
@@ -206,21 +208,21 @@ structure OfficialValidationCheckpoints
 These calls are internal error arms skipped by the successful run, not external
 EVM calls. -/
 structure OfficialConstructorErrorArmLayout : Prop where
-  body : constructorBody 616 4898 4282 = officialConstructorValidationBody
+  body : constructorBodyForProof 616 4898 4282 = officialConstructorValidationBody
   main : lidoCircuitBreakerConstructorProgram.main =
     Ninst.callvalue ::: Ninst.iszero :::
       (officialConstructorValidationBody <?> (.call 1))
   aux : lidoCircuitBreakerConstructorProgram.aux =
     [Func.rev,
-      constructorError "AdminZero",
-      constructorError "MinPauseDurationZero",
-      constructorError "MinPauseDurationExceedsMax",
-      constructorError "MinHeartbeatIntervalZero",
-      constructorError "MinHeartbeatIntervalExceedsMax",
-      constructorError "PauseDurationBelowMin",
-      constructorError "PauseDurationAboveMax",
-      constructorError "HeartbeatIntervalBelowMin",
-      constructorError "HeartbeatIntervalAboveMax"]
+      constructorErrorForProof "AdminZero",
+      constructorErrorForProof "MinPauseDurationZero",
+      constructorErrorForProof "MinPauseDurationExceedsMax",
+      constructorErrorForProof "MinHeartbeatIntervalZero",
+      constructorErrorForProof "MinHeartbeatIntervalExceedsMax",
+      constructorErrorForProof "PauseDurationBelowMin",
+      constructorErrorForProof "PauseDurationAboveMax",
+      constructorErrorForProof "HeartbeatIntervalBelowMin",
+      constructorErrorForProof "HeartbeatIntervalAboveMax"]
   sites : officialConstructorTableCallIndices =
     [1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 

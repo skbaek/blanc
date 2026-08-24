@@ -30,6 +30,7 @@ def fail(message: str) -> None:
 # message execution, transaction, suffix, and root.  WETH is architectural
 # evidence only and is forbidden from this family.
 SOURCES = {
+    "constructor": "Blanc/LidoCircuitBreakerDeploy.lean",
     "compiled": "Blanc/DeploymentCompiled.lean",
     "base": "Blanc/DeploymentMessage.lean",
     "layout": "Blanc/LidoCircuitBreakerDeploymentLayout.lean",
@@ -59,7 +60,11 @@ AXIOM_EXPECTATIONS_SHA256 = (
 PINS = {
     # Filled from the committed direct-root interface by this gate's author.
     # Values are patched in with the parser below; an empty value fails closed.
+    "OfficialConstructorEffectCheckpoints": "49ebc8bfbc946946b286b7b1cddf0e3cb4983c1fd6fc80fd9e149ead5ff85243",
+    "OfficialValidationCheckpoints": "eee90b21c6badda76100e3521893ad199010d6d556c735b14f1980f030f7cdba",
+    "OfficialConstructorErrorArmLayout": "7794b05af6601aa1cc9af3785828fcd4e1ba5fcbbdf73313ca68af58005d6b12",
     "OfficialConstructorExecutionTrace": "65a6a11a222041800858428fceebe46d319e704bc27aec768d504e270d48b889",
+    "OfficialCreateMessageExecution": "f3f2fbb91c379302af9eff908b70bb2761b3be215ce7a07049b269f23e64ec58",
     "OfficialCreateMessageResult": "846e6ca7c073eb4575bf827e1e68c4d671a3e35e13624b81c0766376f3263612",
     "OfficialConstructorMessageResult": "ac72fa7080ad768826622ca3a4d17f6a859c7be69d8b52426fffd0304087b5ab",
     "CanonicalDeploymentBase": "7a3fcdd9ac9e90418d31c9425eef3e21fdb7d41798ef54f219652bcf0914787a",
@@ -82,10 +87,52 @@ PINS = {
 # They are intentionally redundant with PINS: this makes a careless re-pin a
 # detectable review event, not a way to bless result smuggling or a weak root.
 CHANNELS = {
+    "OfficialConstructorEffectCheckpoints": (
+        "exactPost :", "state :", "storage :",
+        "storage : Devm.getStor post sevm.currentTarget =", "logs :",
+        "logs : post.logs = base.logs ++ officialConstructorLogs sevm.currentTarget",
+        "stack :", "memory :", "gasLeft :", "output :",
+        "output : post.output = lidoCircuitBreakerCode officialParams",
+        "refundCounter :", "returnData :",
+        "returnData : post.returnData = base.returnData", "error :",
+        "accountsToDelete :",
+        "createdAccounts :", "accessedAddresses :",
+        "accessedStorageKeys :", "transientStorage :", "siteCounts :",
+        "constructorProgramSiteCounts = (2, 0, 0)",
+        "persistentInventory :", "constructor.pauseDuration",
+        "constructor.heartbeatInterval", "transientInventory :",
+        "constructorTransientWriteInventory = []",
+        "externalCallInventory :", "constructorExternalCallInventory = []",
+    ),
+    "OfficialValidationCheckpoints": (
+        "run :", "Prog.RunCompiled", "effectEntry :", "Func.RunCompiled",
+        "inputLength :", "sevm.code.size = 5122", "decodedArguments :",
+        "officialConstructorArgumentWord", "canonicalAdmin :",
+        "addressMask &&& officialParams.admin = 0", "adminNonzero :",
+        "minPauseNonzero :", "pauseBounds :", "minHeartbeatNonzero :",
+        "heartbeatBounds :", "initialPauseAboveMin :",
+        "initialPauseBelowMax :", "initialHeartbeatAboveMin :",
+        "initialHeartbeatBelowMax :",
+    ),
+    "OfficialConstructorErrorArmLayout": (
+        "body :", "constructorBodyForProof 616 4898 4282",
+        "main :", "officialConstructorValidationBody <?> (.call 1)",
+        "aux :", "constructorErrorForProof \"AdminZero\"",
+        "constructorErrorForProof \"HeartbeatIntervalAboveMax\"",
+        "sites :", "[1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]",
+    ),
     "OfficialConstructorExecutionTrace": (
         "target_eq", "fullInput", "prefixCompile", "validationCheckpoints",
         "errorArmLayout", "effectCheckpoints", "Jaune.exec",
         "officialConstructorRequiredGas",
+    ),
+    "OfficialCreateMessageExecution": (
+        "pipeline :", "benvAfterTransfer = .ok benv",
+        "G = msg.gas - officialConstructorRequiredGas",
+        "processMessage (processCreateMessage.msg msg) = .ok raw",
+        "OfficialConstructorExecutionTrace ca",
+        "chargeCodeGas msg.benv.stat.rules raw = .ok charged",
+        "post = charged.setCode msg.currentTarget",
     ),
     "OfficialCreateMessageResult": (
         "processCreateMessage", "OfficialCreateMessageExecution", "installed",
@@ -155,6 +202,86 @@ CHANNELS = {
     "DeploymentRoot.reachable_countConservation": (
         "ReachUsing", "countSlot", "assignmentCount", "entries.length",
     ),
+}
+
+ORDERED_CHANNELS = {
+    "OfficialValidationCheckpoints": (
+        "run :", "effectEntry :", "inputLength :", "decodedArguments :",
+        "canonicalAdmin :", "adminNonzero :", "minPauseNonzero :",
+        "pauseBounds :", "minHeartbeatNonzero :", "heartbeatBounds :",
+        "initialPauseAboveMin :", "initialPauseBelowMax :",
+        "initialHeartbeatAboveMin :", "initialHeartbeatBelowMax :",
+    ),
+    "OfficialConstructorEffectCheckpoints": (
+        "exactPost :", "state :", "storage :", "logs :", "stack :",
+        "memory :", "gasLeft :", "output :", "refundCounter :",
+        "returnData :", "error :", "accountsToDelete :",
+        "createdAccounts :", "accessedAddresses :",
+        "accessedStorageKeys :", "transientStorage :", "siteCounts :",
+        "persistentInventory :", "transientInventory :",
+        "externalCallInventory :",
+    ),
+    "OfficialConstructorErrorArmLayout": (
+        "body :", "main :", "aux :", "sites :",
+    ),
+    "OfficialCreateMessageExecution": (
+        "pipeline :", "benvAfterTransfer = .ok benv",
+        "G = msg.gas - officialConstructorRequiredGas",
+        "processMessage (processCreateMessage.msg msg) = .ok raw",
+        "OfficialConstructorExecutionTrace ca",
+        "chargeCodeGas msg.benv.stat.rules raw = .ok charged",
+        "post = charged.setCode msg.currentTarget",
+    ),
+}
+
+PROOF_ALIAS_TARGETS = {
+    "DeploymentProof.constructorRuntimeBaseForProof": "constructorRuntimeBase",
+    "DeploymentProof.constructorEventScratchForProof": "constructorEventScratch",
+    "DeploymentProof.pushFixedNatForProof": "pushFixedNat",
+    "DeploymentProof.pushCompactNatForProof": "pushCompactNat",
+    "DeploymentProof.loadArgumentIndexForProof": "loadArgumentIndex",
+    "DeploymentProof.storeByteOffsetForProof": "storeByteOffset",
+    "DeploymentProof.constructorErrorForProof": "constructorError",
+    "DeploymentProof.patchArgumentIndexForProof": "patchArgumentIndex",
+    "DeploymentProof.patchFieldLineForProof": "patchFieldLine",
+    "DeploymentProof.patchRuntimeLineForProof": "patchRuntimeLine",
+    "DeploymentProof.constructorBodyForProof": "constructorBody",
+    "DeploymentProof.constructorProgramForProof": "constructorProgram",
+    "DeploymentProof.provisionalConstructorPrefixForProof":
+        "provisionalConstructorPrefix",
+}
+
+# These are proof-engineering architecture rather than public security claims,
+# so keep them distinct from PINS.  Exact hashes make the compact reduction
+# interface fail closed: downstream proofs never need to unfold a public alias
+# whose body points at an inaccessible private executable helper.
+REDUCTION_CERTIFICATE_PINS = {
+    "constructorRuntimeBaseForProof_eq":
+        "7c426ea6e64e92807736503b754434950728996384aa16689cdb3a06b9e2afc4",
+    "constructorEventScratchForProof_eq":
+        "11f3afd3869a7e088b05f8caa35ccfa886affccbd42bf837698b8471abaea304",
+    "pushFixedNatForProof_eq":
+        "e23ff17bf282441826503a63e5419677cf0616eb4b125da7809dc0ca255a8013",
+    "pushCompactNatForProof_eq":
+        "48aacc9dac407e821560027485983269bb99e8dc534008e548fed5934ef43d89",
+    "loadArgumentIndexForProof_eq":
+        "d8af6fb0e04124b2c0327733a5ff8a4d55486b237a7c693b0c9e3e1e348779f8",
+    "storeByteOffsetForProof_eq":
+        "1ec139ad147a1801a4f25652729dd959f6974d198f9a8282db32fa4f1a47bec0",
+    "constructorErrorForProof_eq":
+        "f0c3c2c02858bd8653e8cb7b66e2628af9c4022125300b289d5843c3e0ef1406",
+    "patchArgumentIndexForProof_eq":
+        "ee7bb202f8884d084b181f6afbd4940ed2953d9529bdb2a7f9705fa3c7f5da52",
+    "patchFieldLineForProof_eq":
+        "bc7a42b83697bf90c27d025cb798fe93a8531b338433958263169e716834f162",
+    "patchRuntimeLineForProof_eq":
+        "4aafe97642fcb39c5c4e6d28380a0364af7bcc22e3313456fb265368576aa702",
+    "constructorBodyForProof_eq":
+        "0d4ab5a9de1607f52825f2016243799013b20ae6d10177ab30a750bf28d90db3",
+    "constructorProgramForProof_eq":
+        "0d3810af42a58ab41a0d21cb190f2291ac8f00cf07f7fbda1cbc9db938ae0840",
+    "provisionalConstructorPrefixForProof_eq":
+        "25cb23715e608565d03eaae9b740fad0ecaea18d8bfc61289a4c5bcfda99bea9",
 }
 
 DECL_KINDS = r"(?:theorem|lemma|def|abbrev|structure|inductive|instance|class|example)"
@@ -295,7 +422,13 @@ def public_theorem_names(sources: dict[str, str]) -> list[str]:
 
 def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
     """Tie this source family to its exact repository-wide axiom probes."""
-    names = public_theorem_names(sources)
+    # The constructor owner is included only to enforce the private-to-proof
+    # façade below.  Its pre-existing theorem inventory is outside the nine
+    # deployment proof owners and therefore outside this exact 161-name set.
+    names = public_theorem_names({
+        owner: source for owner, source in sources.items()
+        if owner != "constructor"
+    })
     if len(names) != PUBLIC_THEOREM_COUNT or len(set(names)) != len(names):
         fail(
             "public theorem inventory changed "
@@ -349,6 +482,49 @@ def require_channels(decls: dict[str, str]) -> None:
         for token in tokens:
             if token not in text:
                 fail(f"{name}: missing required semantic fragment {token!r}")
+    for name, tokens in ORDERED_CHANNELS.items():
+        text = decls[name]
+        positions = [text.index(token) for token in tokens]
+        if positions != sorted(positions) or len(set(positions)) != len(positions):
+            fail(f"{name}: required semantic order changed")
+
+
+def require_private_proof_facade(decls: dict[str, str]) -> None:
+    """Keep executable helpers private and aliases one-way and proof-only."""
+    for alias, target in PROOF_ALIAS_TARGETS.items():
+        original = decls.get(target)
+        if original is None:
+            fail(f"missing original private constructor helper {target}")
+        if not normalise(original).startswith(f"private def {target}"):
+            fail(f"{target}: original constructor helper is not private")
+        proof_alias = decls.get(alias)
+        if proof_alias is None:
+            fail(f"missing proof-only constructor alias {alias}")
+        normalised = normalise(proof_alias)
+        if not normalised.startswith(f"abbrev {alias}") or \
+                not normalised.endswith(f":= {target}"):
+            fail(f"{alias}: proof abbreviation is not a one-way alias to {target}")
+    certificate_name = "DeploymentProof.lidoCircuitBreakerConstructorProgram_eq"
+    certificate = normalise(decls.get(certificate_name, ""))
+    for token in (
+        "def DeploymentProof.lidoCircuitBreakerConstructorProgram_eq",
+        "lidoCircuitBreakerConstructorProgram =",
+        "provisionalConstructorPrefixForProof.length",
+        "constructorProgramForProof prefixLength",
+        ":= by rfl",
+    ):
+        if token not in certificate:
+            fail(f"{certificate_name}: missing proof bridge fragment {token!r}")
+    for name, expected in REDUCTION_CERTIFICATE_PINS.items():
+        actual = decls.get(name)
+        if actual is None:
+            fail(f"missing proof reduction certificate {name}")
+        observed = digest(actual)
+        if observed != expected:
+            fail(
+                f"{name}: proof reduction certificate changed "
+                f"(expected {expected}, got {observed})"
+            )
 
 
 def require_pins(decls: dict[str, str]) -> None:
@@ -435,6 +611,7 @@ def run(root: Path) -> None:
     decls = all_declarations(sources)
     require_pins(decls)
     require_channels(decls)
+    require_private_proof_facade(decls)
     premise_discipline(decls)
     actual_execution_sites(decls)
     trust_and_scope(sources)
@@ -464,6 +641,7 @@ def main(argv: list[str]) -> int:
         return 1
     print(
         f"{VERDICT}: PASS ({len(PINS)} full pins, "
+        f"{len(REDUCTION_CERTIFICATE_PINS)} reduction certificates, "
         f"{sum(map(len, CHANNELS.values()))} semantic fragments, "
         f"{PUBLIC_THEOREM_COUNT} axiom-pinned public theorems)"
     )

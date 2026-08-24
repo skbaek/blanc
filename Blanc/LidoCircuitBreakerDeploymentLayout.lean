@@ -11,8 +11,207 @@ import Blanc.LidoCircuitBreakerDeploy
 namespace Blanc
 
 open Jaune
+open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
+
+open DeploymentProof
+
+/-! ## Stable reduction interface for the private constructor
+
+The production helpers remain private.  These proof-valued equations expose
+their exact reductions without publishing or duplicating an executable helper.
+All downstream computation uses this namespace-owned interface. -/
+
+set_option maxRecDepth 100000 in
+set_option linter.defProp false in
+/-- One-way proof certificate for the private constructor assembly.  This
+belongs to the proof owner rather than the pre-existing executable owner so its
+large equality type is elaborated only where deployment proofs are measured. -/
+def DeploymentProof.lidoCircuitBreakerConstructorProgram_eq :
+    lidoCircuitBreakerConstructorProgram =
+      let prefixLength :=
+        DeploymentProof.provisionalConstructorPrefixForProof.length
+      DeploymentProof.constructorProgramForProof prefixLength
+        (prefixLength + runtimeTemplateCode.length)
+        runtimeTemplateCode.length := by
+  rfl
+
+namespace DeploymentProof
+
+section ReductionCertificates
+
+set_option linter.defProp false
+
+def constructorRuntimeBaseForProof_eq :
+    constructorRuntimeBaseForProof = constructorArgumentBytes := by
+  rfl
+
+def constructorEventScratchForProof_eq (runtimeLength : Nat) :
+    constructorEventScratchForProof runtimeLength =
+      ((constructorRuntimeBaseForProof + runtimeLength + 31) / 32) * 32 := by
+  rfl
+
+def pushFixedNatForProof_eq (value : Nat) :
+    pushFixedNatForProof value =
+      if value < 2 ^ 16 then
+        Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
+      else
+        pushDeployWord (Nat.toB256 value) := by
+  rfl
+
+def pushCompactNatForProof_eq (value : Nat) :
+    pushCompactNatForProof value = pushB256 (Nat.toB256 value) := by
+  rfl
+
+def loadArgumentIndexForProof_eq (index : Nat) :
+    loadArgumentIndexForProof index =
+      [pushCompactNatForProof (32 * index), Ninst.mload] := by
+  rfl
+
+def storeByteOffsetForProof_eq (offset : Nat) :
+    storeByteOffsetForProof offset = [pushFixedNatForProof offset, Ninst.mstore] := by
+  rfl
+
+def constructorErrorForProof_eq (name : String) :
+    constructorErrorForProof name =
+      Func.revSelector (customErrorData name) (by
+        simp [customErrorData, B256.length_toBytes]) := by
+  rfl
+
+def patchArgumentIndexForProof_eq (field : ImmutableParameter) :
+    patchArgumentIndexForProof field =
+      match field with
+      | .admin => 0
+      | .minPauseDuration => 1
+      | .maxPauseDuration => 2
+      | .minHeartbeatInterval => 3
+      | .maxHeartbeatInterval => 4 := by
+  cases field <;> rfl
+
+def patchFieldLineForProof_eq
+    (runtimeBase : Nat) (field : ImmutableParameter) :
+    patchFieldLineForProof runtimeBase field =
+      (immutableWordOffsets field).flatMap fun offset =>
+        loadArgumentIndexForProof (patchArgumentIndexForProof field) ++
+          storeByteOffsetForProof (runtimeBase + offset) := by
+  rfl
+
+def patchRuntimeLineForProof_eq (runtimeBase : Nat) :
+    patchRuntimeLineForProof runtimeBase =
+      immutableParameters.flatMap (patchFieldLineForProof runtimeBase) := by
+  rfl
+
+set_option maxRecDepth 100000 in
+def constructorBodyForProof_eq
+    (runtimeOffset argsOffset runtimeLength : Nat) :
+    constructorBodyForProof runtimeOffset argsOffset runtimeLength =
+      let eventScratch := constructorEventScratchForProof runtimeLength
+      pushFixedNatForProof (argsOffset + constructorArgumentBytes) :::
+      codesize ::: lt :::
+      ((.call 1) <?>
+        (pushCompactNatForProof constructorArgumentBytes :::
+          pushFixedNatForProof argsOffset :::
+          pushCompactNatForProof 0 ::: codecopy :::
+          loadArgumentIndexForProof 0 +++ checkNonAddress +++
+          ((.call 1) <?>
+            (loadArgumentIndexForProof 0 +++ iszero :::
+              ((.call 2) <?>
+                (loadArgumentIndexForProof 1 +++ iszero :::
+                  ((.call 3) <?>
+                    (loadArgumentIndexForProof 2 +++
+                      loadArgumentIndexForProof 1 +++ gt :::
+                      ((.call 4) <?>
+                        (loadArgumentIndexForProof 3 +++ iszero :::
+                          ((.call 5) <?>
+                            (loadArgumentIndexForProof 4 +++
+                              loadArgumentIndexForProof 3 +++ gt :::
+                              ((.call 6) <?>
+                                (loadArgumentIndexForProof 1 +++
+                                  loadArgumentIndexForProof 5 +++ lt :::
+                                  ((.call 7) <?>
+                                    (loadArgumentIndexForProof 2 +++
+                                      loadArgumentIndexForProof 5 +++ gt :::
+                                      ((.call 8) <?>
+                                        (loadArgumentIndexForProof 3 +++
+                                          loadArgumentIndexForProof 6 +++ lt :::
+                                          ((.call 9) <?>
+                                            (loadArgumentIndexForProof 4 +++
+                                              loadArgumentIndexForProof 6 +++ gt :::
+                                              ((.call 10) <?>
+                                                (pushFixedNatForProof runtimeLength :::
+                                                  pushFixedNatForProof runtimeOffset :::
+                                                  pushCompactNatForProof
+                                                    constructorRuntimeBaseForProof :::
+                                                  codecopy :::
+                                                  patchRuntimeLineForProof
+                                                    constructorRuntimeBaseForProof +++
+                                                  loadArgumentIndexForProof 0 +++
+                                                  pushB256
+                                                    circuitBreakerInitializedEvent :::
+                                                  logWith 1 1 4 +++
+                                                  pushB256 0 :::
+                                                  storeByteOffsetForProof
+                                                    eventScratch +++
+                                                  loadArgumentIndexForProof 5 +++
+                                                  storeByteOffsetForProof
+                                                    (eventScratch + 32) +++
+                                                  pushB256
+                                                    pauseDurationUpdatedEvent :::
+                                                  logWith 0
+                                                    (Nat.toB256
+                                                      (eventScratch / 32)) 2 +++
+                                                  loadArgumentIndexForProof 5 +++
+                                                  pushB256 pauseDurationSlot :::
+                                                  sstore :::
+                                                  pushB256 0 :::
+                                                  storeByteOffsetForProof
+                                                    eventScratch +++
+                                                  loadArgumentIndexForProof 6 +++
+                                                  storeByteOffsetForProof
+                                                    (eventScratch + 32) +++
+                                                  pushB256
+                                                    heartbeatIntervalUpdatedEvent :::
+                                                  logWith 0
+                                                    (Nat.toB256
+                                                      (eventScratch / 32)) 2 +++
+                                                  loadArgumentIndexForProof 6 +++
+                                                  pushB256 heartbeatIntervalSlot :::
+                                                  sstore :::
+                                                  pushFixedNatForProof runtimeLength :::
+                                                  pushCompactNatForProof
+                                                    constructorRuntimeBaseForProof :::
+                                                  Func.ret)))))))))))))))))))))) := by
+  rfl
+
+set_option maxRecDepth 100000 in
+def constructorProgramForProof_eq
+    (runtimeOffset argsOffset runtimeLength : Nat) :
+    constructorProgramForProof runtimeOffset argsOffset runtimeLength =
+      { main := callvalue ::: iszero :::
+          (constructorBodyForProof runtimeOffset argsOffset runtimeLength <?>
+            (.call 1))
+        aux := [Func.rev,
+          constructorErrorForProof "AdminZero",
+          constructorErrorForProof "MinPauseDurationZero",
+          constructorErrorForProof "MinPauseDurationExceedsMax",
+          constructorErrorForProof "MinHeartbeatIntervalZero",
+          constructorErrorForProof "MinHeartbeatIntervalExceedsMax",
+          constructorErrorForProof "PauseDurationBelowMin",
+          constructorErrorForProof "PauseDurationAboveMax",
+          constructorErrorForProof "HeartbeatIntervalBelowMin",
+          constructorErrorForProof "HeartbeatIntervalAboveMax"] } := by
+  rfl
+
+def provisionalConstructorPrefixForProof_eq :
+    provisionalConstructorPrefixForProof =
+      (Prog.compile
+        (constructorProgramForProof 0 0 runtimeTemplateCode.length)).getD [] := by
+  rfl
+
+end ReductionCertificates
+
+end DeploymentProof
 
 /-! ## Small neutral list facts used by the closed layout certificate -/
 
@@ -501,7 +700,7 @@ private theorem immutableWordOffsets_admin_exact :
 
 /-- Exact compiler-derived payload coordinates consumed by the constructor.
 The conjunction order follows `immutableParameters` and therefore the source
-order of `patchRuntimeLine`. -/
+order of `patchRuntimeLineForProof`. -/
 theorem constructor_immutable_word_offsets_exact :
     immutableWordOffsets .admin = [174, 1094, 1833, 1920] ∧
     immutableWordOffsets .minPauseDuration = [217, 713] ∧
@@ -518,42 +717,54 @@ theorem constructor_immutable_word_offsets_exact :
 
 set_option maxHeartbeats 3000000 in
 private theorem provisionalConstructorProgram_compiles :
-    Prog.compiles (constructorProgram 0 0 4282) = true := by
+    Prog.compiles (constructorProgramForProof 0 0 4282) = true := by
   rcases constructor_immutable_word_offsets_exact with
     ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
-  simp only [constructorProgram, constructorBody, patchRuntimeLine,
+  simp only [constructorProgramForProof_eq, constructorBodyForProof_eq,
+    constructorEventScratchForProof_eq, patchRuntimeLineForProof_eq,
+    patchFieldLineForProof_eq, patchArgumentIndexForProof_eq,
+    loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
+    pushCompactNatForProof_eq, pushFixedNatForProof_eq,
+    constructorErrorForProof_eq, constructorRuntimeBaseForProof_eq,
     immutableParameters, List.flatMap_cons, List.flatMap_nil,
-    patchFieldLine, hadmin, hminPause, hmaxPause, hminHeartbeat,
-    hmaxHeartbeat]
+    hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat]
   decide +kernel
 
 set_option maxHeartbeats 3000000 in
 /-- The first compiler pass has the same 616-byte shape as the final
 constructor. -/
 theorem provisionalConstructorPrefix_length_exact :
-    provisionalConstructorPrefix.length = 616 := by
-  unfold provisionalConstructorPrefix
+    provisionalConstructorPrefixForProof.length = 616 := by
+  rw [provisionalConstructorPrefixForProof_eq]
   rw [runtimeTemplateCode_length_exact]
   have hcompile := Prog.compile_eq_some_getD_of_compiles
-    (constructorProgram 0 0 4282) provisionalConstructorProgram_compiles
+    (constructorProgramForProof 0 0 4282) provisionalConstructorProgram_compiles
   rw [Prog.length_compile hcompile]
   rcases constructor_immutable_word_offsets_exact with
     ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
-  simp only [constructorProgram, constructorBody, patchRuntimeLine,
+  simp only [constructorProgramForProof_eq, constructorBodyForProof_eq,
+    constructorEventScratchForProof_eq, patchRuntimeLineForProof_eq,
+    patchFieldLineForProof_eq, patchArgumentIndexForProof_eq,
+    loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
+    pushCompactNatForProof_eq, pushFixedNatForProof_eq,
+    constructorErrorForProof_eq, constructorRuntimeBaseForProof_eq,
     immutableParameters, List.flatMap_cons, List.flatMap_nil,
-    patchFieldLine, hadmin, hminPause, hmaxPause, hminHeartbeat,
-    hmaxHeartbeat]
+    hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat]
   decide +kernel
 
 set_option maxHeartbeats 3000000 in
 private theorem finalConstructorProgram_compiles :
-    Prog.compiles (constructorProgram 616 4898 4282) = true := by
+    Prog.compiles (constructorProgramForProof 616 4898 4282) = true := by
   rcases constructor_immutable_word_offsets_exact with
     ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
-  simp only [constructorProgram, constructorBody, patchRuntimeLine,
+  simp only [constructorProgramForProof_eq, constructorBodyForProof_eq,
+    constructorEventScratchForProof_eq, patchRuntimeLineForProof_eq,
+    patchFieldLineForProof_eq, patchArgumentIndexForProof_eq,
+    loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
+    pushCompactNatForProof_eq, pushFixedNatForProof_eq,
+    constructorErrorForProof_eq, constructorRuntimeBaseForProof_eq,
     immutableParameters, List.flatMap_cons, List.flatMap_nil,
-    patchFieldLine, hadmin, hminPause, hmaxPause, hminHeartbeat,
-    hmaxHeartbeat]
+    hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat]
   decide +kernel
 
 /-- Exact successful compilation of the table-bearing constructor prefix.
@@ -563,7 +774,7 @@ theorem lidoCircuitBreakerConstructorProgram_compile :
       some lidoCircuitBreakerInitPrefix := by
   unfold lidoCircuitBreakerInitPrefix
   apply Prog.compile_eq_some_getD_of_compiles
-  unfold lidoCircuitBreakerConstructorProgram
+  rw [DeploymentProof.lidoCircuitBreakerConstructorProgram_eq]
   rw [provisionalConstructorPrefix_length_exact,
     runtimeTemplateCode_length_exact]
   norm_num
@@ -574,16 +785,20 @@ set_option maxHeartbeats 3000000 in
 theorem lidoCircuitBreakerInitPrefix_length_exact :
     lidoCircuitBreakerInitPrefix.length = 616 := by
   rw [Prog.length_compile lidoCircuitBreakerConstructorProgram_compile]
-  unfold lidoCircuitBreakerConstructorProgram
+  rw [DeploymentProof.lidoCircuitBreakerConstructorProgram_eq]
   rw [provisionalConstructorPrefix_length_exact,
     runtimeTemplateCode_length_exact]
   norm_num
   rcases constructor_immutable_word_offsets_exact with
     ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
-  simp only [constructorProgram, constructorBody, patchRuntimeLine,
+  simp only [constructorProgramForProof_eq, constructorBodyForProof_eq,
+    constructorEventScratchForProof_eq, patchRuntimeLineForProof_eq,
+    patchFieldLineForProof_eq, patchArgumentIndexForProof_eq,
+    loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
+    pushCompactNatForProof_eq, pushFixedNatForProof_eq,
+    constructorErrorForProof_eq, constructorRuntimeBaseForProof_eq,
     immutableParameters, List.flatMap_cons, List.flatMap_nil,
-    patchFieldLine, hadmin, hminPause, hmaxPause, hminHeartbeat,
-    hmaxHeartbeat]
+    hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat]
   decide +kernel
 
 set_option maxHeartbeats 3000000 in

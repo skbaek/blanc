@@ -269,13 +269,14 @@ synthetic satisfiability exhibit remains a hand-built non-deployment. A
 separate Blanc deployment-root family now discharges the hypothesis for one
 exact official case: a valid base world, the frozen official constructor
 arguments and full CREATE input, zero endowment, and a strict singleton type-2
-Prague block whose configured transition succeeds. It derives the sender and
-CREATE address, actual constructor/message/transaction/block execution,
-successful receipt and three ordered constructor logs, empty requests, the
-exact installed Blanc runtime and configuration slots, an empty Registry
-witness, and a valid deployed context. Its root methods instantiate the
-history theorem for every configured future reachable from that deployed
-checkpoint.
+Prague block whose configured transition succeeds. Under explicit recovered-
+sender and computed-address premises, it derives the prepared message target
+and execution at that address, then proves actual constructor/message/
+transaction/block execution, successful receipt and three ordered constructor
+logs, empty requests, the exact installed Blanc runtime and configuration
+slots, an empty Registry witness, and a valid deployed context. Its root
+methods instantiate the history theorem for every configured future reachable
+from that deployed checkpoint.
 
 The base and strict-envelope predicates carry valid context, sender recovery
 and transaction checking, funding, gas/code-size, system-predeploy,

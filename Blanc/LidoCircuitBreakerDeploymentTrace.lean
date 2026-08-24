@@ -13,6 +13,8 @@ open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
 
+open DeploymentProof
+
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceShape.lean`. -/
 
 /-! ## Exact public constructor observations -/
@@ -76,7 +78,7 @@ theorem officialFullCreateInput_slice_runtimeTemplate {sevm : Sevm}
 
 /-- First word-aligned scratch address following the copied official runtime. -/
 def officialConstructorEventScratch : Nat :=
-  constructorEventScratch 4282
+  constructorEventScratchForProof 4282
 
 theorem officialConstructorEventScratch_eq :
     officialConstructorEventScratch = 4512 := by
@@ -86,27 +88,27 @@ theorem officialConstructorEventScratch_eq :
 shape layer so every later execution proof shares one sealed tail. -/
 def officialConstructorHeartbeatSuffix : Func :=
   pushB256 0 :::
-  storeByteOffset officialConstructorEventScratch +++
-  loadArgumentIndex 6 +++
-  storeByteOffset (officialConstructorEventScratch + 32) +++
+  storeByteOffsetForProof officialConstructorEventScratch +++
+  loadArgumentIndexForProof 6 +++
+  storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
   pushB256 heartbeatIntervalUpdatedEvent :::
   logWith 0
     (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
-  loadArgumentIndex 6 +++
+  loadArgumentIndexForProof 6 +++
   pushB256 heartbeatIntervalSlot ::: sstore :::
-  pushFixedNat 4282 :::
-  pushCompactNat constructorRuntimeBase :::
+  pushFixedNatForProof 4282 :::
+  pushCompactNatForProof constructorRuntimeBaseForProof :::
   Func.ret
 
 /-- Pause-duration initialization before the shared heartbeat tail. -/
 def officialConstructorConfigurationPrefix : Line :=
   [pushB256 0] ++
-  storeByteOffset officialConstructorEventScratch ++
-  loadArgumentIndex 5 ++
-  storeByteOffset (officialConstructorEventScratch + 32) ++
+  storeByteOffsetForProof officialConstructorEventScratch ++
+  loadArgumentIndexForProof 5 ++
+  storeByteOffsetForProof (officialConstructorEventScratch + 32) ++
   [pushB256 pauseDurationUpdatedEvent] ++
   logWith 0 (Nat.toB256 (officialConstructorEventScratch / 32)) 2 ++
-  loadArgumentIndex 5 ++
+  loadArgumentIndexForProof 5 ++
   [pushB256 pauseDurationSlot, sstore]
 
 /-- Both projected configuration writes and events, through return. -/
@@ -117,7 +119,7 @@ def officialConstructorConfigurationSuffix : Func :=
 /-- Initialized event prefix between the runtime patch line and configuration
 initialization. -/
 def officialConstructorInitializedPrefix : Line :=
-  loadArgumentIndex 0 ++
+  loadArgumentIndexForProof 0 ++
   [pushB256 circuitBreakerInitializedEvent] ++
   logWith 1 1 4
 
@@ -125,7 +127,7 @@ def officialConstructorInitializedPrefix : Line :=
 branches have placed the runtime-copy operands on the stack. -/
 def officialConstructorEffectBody : Func :=
   codecopy :::
-    patchRuntimeLine constructorRuntimeBase +++
+    patchRuntimeLineForProof constructorRuntimeBaseForProof +++
     officialConstructorInitializedPrefix +++
     officialConstructorConfigurationSuffix
 
@@ -133,47 +135,47 @@ def officialConstructorEffectBody : Func :=
 tree, ending at `officialConstructorEffectBody`. Its branches retain every
 skipped error-arm call at the source position compiled by the constructor. -/
 def officialConstructorValidationBody : Func :=
-  pushFixedNat 5122 ::: codesize ::: lt :::
+  pushFixedNatForProof 5122 ::: codesize ::: lt :::
   ((.call 1) <?>
-    (pushCompactNat 224 ::: pushFixedNat 4898 ::: pushCompactNat 0 :::
+    (pushCompactNatForProof 224 ::: pushFixedNatForProof 4898 ::: pushCompactNatForProof 0 :::
       codecopy :::
-      loadArgumentIndex 0 +++ checkNonAddress +++
+      loadArgumentIndexForProof 0 +++ checkNonAddress +++
       ((.call 1) <?>
-        (loadArgumentIndex 0 +++ iszero :::
+        (loadArgumentIndexForProof 0 +++ iszero :::
           ((.call 2) <?>
-            (loadArgumentIndex 1 +++ iszero :::
+            (loadArgumentIndexForProof 1 +++ iszero :::
               ((.call 3) <?>
-                (loadArgumentIndex 2 +++
-                  loadArgumentIndex 1 +++ gt :::
+                (loadArgumentIndexForProof 2 +++
+                  loadArgumentIndexForProof 1 +++ gt :::
                   ((.call 4) <?>
-                    (loadArgumentIndex 3 +++ iszero :::
+                    (loadArgumentIndexForProof 3 +++ iszero :::
                       ((.call 5) <?>
-                        (loadArgumentIndex 4 +++
-                          loadArgumentIndex 3 +++ gt :::
+                        (loadArgumentIndexForProof 4 +++
+                          loadArgumentIndexForProof 3 +++ gt :::
                           ((.call 6) <?>
-                            (loadArgumentIndex 1 +++
-                              loadArgumentIndex 5 +++ lt :::
+                            (loadArgumentIndexForProof 1 +++
+                              loadArgumentIndexForProof 5 +++ lt :::
                               ((.call 7) <?>
-                                (loadArgumentIndex 2 +++
-                                  loadArgumentIndex 5 +++ gt :::
+                                (loadArgumentIndexForProof 2 +++
+                                  loadArgumentIndexForProof 5 +++ gt :::
                                   ((.call 8) <?>
-                                    (loadArgumentIndex 3 +++
-                                      loadArgumentIndex 6 +++ lt :::
+                                    (loadArgumentIndexForProof 3 +++
+                                      loadArgumentIndexForProof 6 +++ lt :::
                                       ((.call 9) <?>
-                                        (loadArgumentIndex 4 +++
-                                          loadArgumentIndex 6 +++ gt :::
+                                        (loadArgumentIndexForProof 4 +++
+                                          loadArgumentIndexForProof 6 +++ gt :::
                                           ((.call 10) <?>
-                                            (pushFixedNat 4282 :::
-                                              pushFixedNat 616 :::
-                                              pushCompactNat
-                                                constructorRuntimeBase :::
+                                            (pushFixedNatForProof 4282 :::
+                                              pushFixedNatForProof 616 :::
+                                              pushCompactNatForProof
+                                                constructorRuntimeBaseForProof :::
                                               officialConstructorEffectBody
                                             ))))))))))))))))))))))
 
 /-- The body-pinned official validation/effect presentation is definitionally
 the constructor source specialized to its certified 616/4,898/4,282 layout. -/
 theorem constructorBody_official_eq :
-    constructorBody 616 4898 4282 = officialConstructorValidationBody := by
+    constructorBodyForProof 616 4898 4282 = officialConstructorValidationBody := by
   rfl
 
 /-- The exact main function joins the nonpayable guard to the body-pinned
@@ -182,12 +184,11 @@ theorem lidoCircuitBreakerConstructorProgram_main_official :
     lidoCircuitBreakerConstructorProgram.main =
       callvalue ::: iszero :::
         (officialConstructorValidationBody <?> (.call 1)) := by
-  unfold lidoCircuitBreakerConstructorProgram constructorProgram
-  rw [provisionalConstructorPrefix_length_exact,
+  rw [DeploymentProof.lidoCircuitBreakerConstructorProgram_eq,
+    provisionalConstructorPrefix_length_exact,
     runtimeTemplateCode_length_exact]
-  change callvalue ::: iszero :::
-    (constructorBody 616 4898 4282 <?> (.call 1)) = _
-  rw [constructorBody_official_eq]
+  norm_num
+  rw [constructorProgramForProof_eq, constructorBody_official_eq]
 
 /-! ## Body-pinned validation and table-call layout -/
 
@@ -253,20 +254,21 @@ validation order after the bare revert entry. -/
 theorem lidoCircuitBreakerConstructorProgram_aux_official :
     lidoCircuitBreakerConstructorProgram.aux =
       [Func.rev,
-        constructorError "AdminZero",
-        constructorError "MinPauseDurationZero",
-        constructorError "MinPauseDurationExceedsMax",
-        constructorError "MinHeartbeatIntervalZero",
-        constructorError "MinHeartbeatIntervalExceedsMax",
-        constructorError "PauseDurationBelowMin",
-        constructorError "PauseDurationAboveMax",
-        constructorError "HeartbeatIntervalBelowMin",
-        constructorError "HeartbeatIntervalAboveMax"] := by
+        constructorErrorForProof "AdminZero",
+        constructorErrorForProof "MinPauseDurationZero",
+        constructorErrorForProof "MinPauseDurationExceedsMax",
+        constructorErrorForProof "MinHeartbeatIntervalZero",
+        constructorErrorForProof "MinHeartbeatIntervalExceedsMax",
+        constructorErrorForProof "PauseDurationBelowMin",
+        constructorErrorForProof "PauseDurationAboveMax",
+        constructorErrorForProof "HeartbeatIntervalBelowMin",
+        constructorErrorForProof "HeartbeatIntervalAboveMax"] := by
   rfl
 
 private theorem constructorTableCallIndices_constructorError (name : String) :
-    constructorTableCallIndices (constructorError name) = [] := by
-  unfold constructorError Func.revSelector
+    constructorTableCallIndices (constructorErrorForProof name) = [] := by
+  rw [constructorErrorForProof_eq]
+  unfold Func.revSelector
   rfl
 
 private theorem officialConstructorAuxTableCallIndices_empty :
@@ -297,23 +299,23 @@ def officialConstructorDecodedMemory : Mem :=
   Mem.empty.write 0 (abiEncodeConstructorArgs officialConstructorArgs)
 
 def officialConstructorCopiedMemory : Mem :=
-  officialConstructorDecodedMemory.write constructorRuntimeBase
+  officialConstructorDecodedMemory.write constructorRuntimeBaseForProof
     runtimeTemplateCode
 
 def applyConstructorMemoryPatch
     (memory : Mem) (patch : ImmutablePatch) : Mem :=
-  memory.write (constructorRuntimeBase + patch.offset) patch.value.toBytes
+  memory.write (constructorRuntimeBaseForProof + patch.offset) patch.value.toBytes
 
 def applyConstructorImagePatch
     (image : Bytes) (patch : ImmutablePatch) : Bytes :=
-  Bytes.writeAt image (constructorRuntimeBase + patch.offset)
+  Bytes.writeAt image (constructorRuntimeBaseForProof + patch.offset)
     patch.value.toBytes
 
 def officialConstructorDecodedImage : Bytes :=
   Bytes.writeAt [] 0 (abiEncodeConstructorArgs officialConstructorArgs)
 
 def officialConstructorCopiedImage : Bytes :=
-  Bytes.writeAt officialConstructorDecodedImage constructorRuntimeBase
+  Bytes.writeAt officialConstructorDecodedImage constructorRuntimeBaseForProof
     runtimeTemplateCode
 
 private theorem officialConstructorDecodedMemory_reads :
@@ -421,8 +423,9 @@ def officialConstructorCopiedMemory_invariant :
   intro i
   unfold officialConstructorCopiedImage
   rw [Bytes.sliceD_writeAt_before officialConstructorDecodedImage
-    runtimeTemplateCode (32 * i.val) 32 constructorRuntimeBase (by
-      unfold constructorRuntimeBase constructorArgumentBytes
+    runtimeTemplateCode (32 * i.val) 32 constructorRuntimeBaseForProof (by
+      rw [constructorRuntimeBaseForProof_eq]
+      unfold constructorArgumentBytes
       have hi := i.isLt
       omega)]
   have h := officialConstructorDecodedMemory_read_argument i
@@ -484,7 +487,7 @@ theorem constructorPatchPair_runCompiled
       (base.setMach ⟨[], M', G⟩) rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], M, G + (pushGas + 9)⟩)
-      (loadArgumentIndex i.val +++ storeByteOffset offset +++ rest) post := by
+      (loadArgumentIndexForProof i.val +++ storeByteOffsetForProof offset +++ rest) post := by
   have hindexBound : 32 * i.val < 2 ^ 256 := by
     apply Nat.lt_trans (show 32 * i.val < 224 by
       have hi := i.isLt
@@ -497,8 +500,8 @@ theorem constructorPatchPair_runCompiled
     rw [Nat.pow_lt_pow_iff_right] <;> omega
   have hoffsetNat : (Nat.toB256 offset).toNat = offset :=
     B256.toNat_toB256_of_lt hoffsetBound
-  unfold loadArgumentIndex storeByteOffset pushCompactNat pushFixedNat
-  simp only [if_pos hoffset]
+  simp only [loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
+    pushCompactNatForProof_eq, pushFixedNatForProof_eq, if_pos hoffset]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256 (c := pushGas) (G := G + 9) hpush
     · simp only [Devm.gasLeft_setMach]
@@ -542,7 +545,7 @@ theorem ConstructorPatchInvariant.runCompiled_write
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G + (pushGas + 9)⟩)
-      (loadArgumentIndex i.val +++ storeByteOffset offset +++ rest) post := by
+      (loadArgumentIndexForProof i.val +++ storeByteOffsetForProof offset +++ rest) post := by
   apply constructorPatchPair_runCompiled hoffset hpush h.memory_size hfit
   · rw [h.read_argument i, hvalue]
   · exact h.read_memory i
@@ -590,10 +593,10 @@ theorem officialConstructorPatchLine1_4_runCompiled
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorCopiedMemory, G + 44⟩)
-      (loadArgumentIndex 0 +++ storeByteOffset 398 +++
-        loadArgumentIndex 0 +++ storeByteOffset 1318 +++
-        loadArgumentIndex 0 +++ storeByteOffset 2057 +++
-        loadArgumentIndex 0 +++ storeByteOffset 2144 +++ rest) post := by
+      (loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 398 +++
+        loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 1318 +++
+        loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 2057 +++
+        loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 2144 +++ rest) post := by
   have h4 := officialConstructorPatchInvariant3.runCompiled_write
     (i := ⟨0, by decide⟩) (offset := 2144) (pushGas := 2)
     (G := G) (value := officialParams.admin)
@@ -661,10 +664,10 @@ theorem officialConstructorPatchLine5_8_runCompiled
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchMemory4, G + 48⟩)
-      (loadArgumentIndex 1 +++ storeByteOffset 441 +++
-        loadArgumentIndex 1 +++ storeByteOffset 937 +++
-        loadArgumentIndex 2 +++ storeByteOffset 482 +++
-        loadArgumentIndex 2 +++ storeByteOffset 2185 +++ rest) post := by
+      (loadArgumentIndexForProof 1 +++ storeByteOffsetForProof 441 +++
+        loadArgumentIndexForProof 1 +++ storeByteOffsetForProof 937 +++
+        loadArgumentIndexForProof 2 +++ storeByteOffsetForProof 482 +++
+        loadArgumentIndexForProof 2 +++ storeByteOffsetForProof 2185 +++ rest) post := by
   have h8 := officialConstructorPatchInvariant7.runCompiled_write
     (i := ⟨2, by decide⟩) (offset := 2185) (pushGas := 3)
     (G := G) (value := officialParams.maxPauseDuration)
@@ -739,10 +742,10 @@ theorem officialConstructorPatchLine9_12_runCompiled
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchMemory8, G + 48⟩)
-      (loadArgumentIndex 3 +++ storeByteOffset 732 +++
-        loadArgumentIndex 3 +++ storeByteOffset 1361 +++
-        loadArgumentIndex 4 +++ storeByteOffset 896 +++
-        loadArgumentIndex 4 +++ storeByteOffset 1402 +++ rest) post := by
+      (loadArgumentIndexForProof 3 +++ storeByteOffsetForProof 732 +++
+        loadArgumentIndexForProof 3 +++ storeByteOffsetForProof 1361 +++
+        loadArgumentIndexForProof 4 +++ storeByteOffsetForProof 896 +++
+        loadArgumentIndexForProof 4 +++ storeByteOffsetForProof 1402 +++ rest) post := by
   have h12 := officialConstructorPatchInvariant11.runCompiled_write
     (i := ⟨4, by decide⟩) (offset := 1402) (pushGas := 3)
     (G := G) (value := officialParams.maxHeartbeatInterval)
@@ -1039,7 +1042,7 @@ theorem officialConstructorFinalMemory_reads :
 
 set_option maxHeartbeats 3000000 in
 private theorem officialConstructorFinalImage_runtime :
-    officialConstructorFinalImage.sliceD constructorRuntimeBase 4282 0 =
+    officialConstructorFinalImage.sliceD constructorRuntimeBaseForProof 4282 0 =
       lidoCircuitBreakerCode officialParams := by
   rw [← patchRuntimeTemplate_official]
   rcases constructor_immutable_word_offsets_exact with
@@ -1048,34 +1051,35 @@ private theorem officialConstructorFinalImage_runtime :
     runtimeImmutablePatches, immutableParameters,
     List.flatMap_cons, List.flatMap_nil, List.map_cons, List.map_nil,
     hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat,
-    ImmutableParameter.value, constructorRuntimeBase]
+    ImmutableParameter.value, constructorRuntimeBaseForProof]
   decide +kernel
 
 /-- The final `RETURN` window reads the exact official runtime artifact. -/
 theorem officialConstructorFinalMemory_read_runtime :
-    (officialConstructorFinalMemory.read constructorRuntimeBase 4282).1 =
+    (officialConstructorFinalMemory.read constructorRuntimeBaseForProof 4282).1 =
       lidoCircuitBreakerCode officialParams := by
   rw [Mem.Reads.read officialConstructorFinalMemory_reads]
   exact officialConstructorFinalImage_runtime
 
 private theorem officialConstructorFinalMemory_read_memory :
-    (officialConstructorFinalMemory.read constructorRuntimeBase 4282).2 =
+    (officialConstructorFinalMemory.read constructorRuntimeBaseForProof 4282).2 =
       officialConstructorFinalMemory := by
   apply Mem.read_snd_eq_self
   apply memExtSize_of_le
   · rw [officialConstructorFinalMemory_size]
   · rw [officialConstructorFinalMemory_size]
-    unfold constructorRuntimeBase constructorArgumentBytes
+    rw [constructorRuntimeBaseForProof_eq]
+    unfold constructorArgumentBytes
     decide
 
 /-- The terminal return window reads the exact runtime without extending the
 named final memory. -/
 theorem officialConstructorFinalMemory_read :
-    officialConstructorFinalMemory.read constructorRuntimeBase 4282 =
+    officialConstructorFinalMemory.read constructorRuntimeBaseForProof 4282 =
       (lidoCircuitBreakerCode officialParams,
         officialConstructorFinalMemory) := by
   cases hread : officialConstructorFinalMemory.read
-      constructorRuntimeBase 4282 with
+      constructorRuntimeBaseForProof 4282 with
   | mk out memory =>
       have hout : out = lidoCircuitBreakerCode officialParams := by
         simpa only [hread] using officialConstructorFinalMemory_read_runtime
@@ -1460,7 +1464,7 @@ theorem constructorArgumentSstorePrefix_runCompiled
       (sstore ::: rest) post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore⟩)
-      (loadArgumentIndex i.val +++
+      (loadArgumentIndexForProof i.val +++
         pushB256 key ::: sstore ::: rest) post := by
   rw [hgas]
   have hindexBound : 32 * i.val < 2 ^ 256 := by
@@ -1470,7 +1474,7 @@ theorem constructorArgumentSstorePrefix_runCompiled
     decide
   have hindex : (Nat.toB256 (32 * i.val)).toNat = 32 * i.val :=
     B256.toNat_toB256_of_lt hindexBound
-  unfold loadArgumentIndex pushCompactNat
+  rw [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256 (c := 3) (G := Gafter + 6)
       hloadPush
@@ -1626,8 +1630,8 @@ theorem constructorArgumentMstorePrefix_runCompiled
       (base.setMach ⟨[], memory', Gafter⟩) rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore⟩)
-      (loadArgumentIndex i.val +++
-        storeByteOffset offset +++ rest) post := by
+      (loadArgumentIndexForProof i.val +++
+        storeByteOffsetForProof offset +++ rest) post := by
   rw [hgas]
   have hindexBound : 32 * i.val < 2 ^ 256 := by
     apply Nat.lt_trans (show 32 * i.val < 224 by
@@ -1643,8 +1647,8 @@ theorem constructorArgumentMstorePrefix_runCompiled
         [(offset >>> 8).toUInt8, offset.toUInt8]).toNat = offset := by
     rw [List.toB256_pair offset hoffsetLt]
     exact B256.toNat_toB256_of_lt hoffsetBound
-  unfold loadArgumentIndex storeByteOffset pushCompactNat pushFixedNat
-  simp only [if_pos hoffsetLt]
+  simp only [loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
+    pushCompactNatForProof_eq, pushFixedNatForProof_eq, if_pos hoffsetLt]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256
         (c := indexPushCost)
@@ -1713,7 +1717,7 @@ theorem constructorZeroMstorePrefix_runCompiled
       (base.setMach ⟨[], memory', Gafter⟩) rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore⟩)
-      (pushB256 0 ::: storeByteOffset offset +++ rest) post := by
+      (pushB256 0 ::: storeByteOffsetForProof offset +++ rest) post := by
   rw [hgas]
   have hoffsetBound : offset < 2 ^ 256 :=
     Nat.lt_trans hoffsetLt (by decide)
@@ -1722,8 +1726,8 @@ theorem constructorZeroMstorePrefix_runCompiled
         [(offset >>> 8).toUInt8, offset.toUInt8]).toNat = offset := by
     rw [List.toB256_pair offset hoffsetLt]
     exact B256.toNat_toB256_of_lt hoffsetBound
-  unfold storeByteOffset pushFixedNat
-  simp only [if_pos hoffsetLt]
+  simp only [storeByteOffsetForProof_eq, pushFixedNatForProof_eq,
+    if_pos hoffsetLt]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256 (c := 2)
         (G := Gafter + (6 + storeExt))
@@ -1835,7 +1839,7 @@ theorem constructorArgumentLog2Prefix_runCompiled
       (Ninst.log (Fin.succ 1) ::: rest) post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore⟩)
-      (loadArgumentIndex i.val +++
+      (loadArgumentIndexForProof i.val +++
         pushB256 eventTopic ::: logWith 1 1 4 +++ rest) post := by
   rw [hgas]
   have hindexBound : 32 * i.val < 2 ^ 256 := by
@@ -1845,7 +1849,8 @@ theorem constructorArgumentLog2Prefix_runCompiled
     decide
   have hindex : (Nat.toB256 (32 * i.val)).toNat = 32 * i.val :=
     B256.toNat_toB256_of_lt hindexBound
-  unfold loadArgumentIndex pushCompactNat logWith
+  unfold logWith
+  rw [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256
         (c := indexPushCost)
@@ -1901,13 +1906,13 @@ theorem constructorArgumentLog2Prefix_runCompiled
 private def officialConstructorReturnPre
     (sevm : Sevm) (base : Devm) (G : Nat) : Devm :=
   (officialConstructorEffectBase sevm base).setMach
-    ⟨[Nat.toB256 constructorRuntimeBase, (4282 : B256)],
+    ⟨[Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)],
       officialConstructorFinalMemory, G⟩
 
 private def officialConstructorReturnRead
     (sevm : Sevm) (base : Devm) (G : Nat) : Bytes × Devm :=
   let pre := officialConstructorReturnPre sevm base G
-  (pre.setMach ⟨[], pre.memory, G⟩).memRead constructorRuntimeBase 4282
+  (pre.setMach ⟨[], pre.memory, G⟩).memRead constructorRuntimeBaseForProof 4282
 
 /-- Exact successful constructor post-frame at its final remaining gas. -/
 def officialConstructorPost
@@ -1943,9 +1948,9 @@ private theorem officialConstructorReturnRead_eq
   unfold officialConstructorReturnRead officialConstructorReturnPre
   exact memRead_setMach_of_read
     (base := officialConstructorEffectBase sevm base)
-    (stack := [Nat.toB256 constructorRuntimeBase, (4282 : B256)])
+    (stack := [Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)])
     (memory := officialConstructorFinalMemory) (gas := G)
-    (i := constructorRuntimeBase) (sz := 4282)
+    (i := constructorRuntimeBaseForProof) (sz := 4282)
     (output := lidoCircuitBreakerCode officialParams)
     officialConstructorFinalMemory_read
 
@@ -1966,14 +1971,14 @@ theorem officialConstructorReturnLine_runCompiled
     {memory : Mem} {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[Nat.toB256 constructorRuntimeBase, (4282 : B256)], memory, G⟩)
+        ⟨[Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)], memory, G⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G + 6⟩)
-      (pushFixedNat 4282 :::
-        pushCompactNat constructorRuntimeBase ::: rest) post := by
-  unfold pushFixedNat pushCompactNat
-  simp only [if_pos (show 4282 < 2 ^ 16 by decide)]
+      (pushFixedNatForProof 4282 :::
+        pushCompactNatForProof constructorRuntimeBaseForProof ::: rest) post := by
+  simp only [pushFixedNatForProof_eq, pushCompactNatForProof_eq,
+    if_pos (show 4282 < 2 ^ 16 by decide)]
   func_run (2)
   exact hrest
 
@@ -1982,42 +1987,44 @@ theorem officialConstructorReturn_runCompiled
     Func.RunCompiled fs sevm
       (officialConstructorReturnPre sevm base G) Func.ret
       (officialConstructorPost sevm base G) := by
-  have hindex : (Nat.toB256 constructorRuntimeBase).toNat =
-      constructorRuntimeBase := by
+  have hindex : (Nat.toB256 constructorRuntimeBaseForProof).toNat =
+      constructorRuntimeBaseForProof := by
     apply B256.toNat_toB256_of_lt
-    unfold constructorRuntimeBase constructorArgumentBytes
+    rw [constructorRuntimeBaseForProof_eq]
+    unfold constructorArgumentBytes
     decide
   have hstack : (officialConstructorReturnPre sevm base G).stack =
-      [Nat.toB256 constructorRuntimeBase, (4282 : B256)] := by
+      [Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)] := by
     simp only [officialConstructorReturnPre, Devm.stack_setMach]
   have hext : (officialConstructorReturnPre sevm base G).extCost
-      [⟨constructorRuntimeBase, 4282⟩] = 0 := by
+      [⟨constructorRuntimeBaseForProof, 4282⟩] = 0 := by
     unfold officialConstructorReturnPre
     exact Devm.extCost_zero_of_le
       (N := officialConstructorFinalMemory)
-      (i := constructorRuntimeBase) (sz := 4282)
+      (i := constructorRuntimeBaseForProof) (sz := 4282)
       (by rw [officialConstructorFinalMemory_size])
       (by
         rw [officialConstructorFinalMemory_size]
-        unfold constructorRuntimeBase constructorArgumentBytes
+        rw [constructorRuntimeBaseForProof_eq]
+        unfold constructorArgumentBytes
         decide)
   have hgas : (officialConstructorReturnPre sevm base G).gasLeft =
       G + (officialConstructorReturnPre sevm base G).extCost
-        [⟨(Nat.toB256 constructorRuntimeBase).toNat,
+        [⟨(Nat.toB256 constructorRuntimeBaseForProof).toNat,
           (4282 : B256).toNat⟩] := by
     rw [hindex, show (4282 : B256).toNat = 4282 by decide, hext]
     simp only [officialConstructorReturnPre, Devm.gasLeft_setMach, Nat.add_zero]
   have hread :
       ((officialConstructorReturnPre sevm base G).setMach
         ⟨[], (officialConstructorReturnPre sevm base G).memory, G⟩).memRead
-          (Nat.toB256 constructorRuntimeBase).toNat (4282 : B256).toNat =
+          (Nat.toB256 constructorRuntimeBaseForProof).toNat (4282 : B256).toNat =
         officialConstructorReturnRead sevm base G := by
     unfold officialConstructorReturnRead
     rw [hindex, show (4282 : B256).toNat = 4282 by decide]
   have hrun := Func.runCompiled_ret
     (fs := fs) (sevm := sevm)
     (devm := officialConstructorReturnPre sevm base G)
-    (i := Nat.toB256 constructorRuntimeBase) (sz := (4282 : B256))
+    (i := Nat.toB256 constructorRuntimeBaseForProof) (sz := (4282 : B256))
     (s := []) (out := (officialConstructorReturnRead sevm base G).1)
     (d' := (officialConstructorReturnRead sevm base G).2) (G := G)
     hstack hgas (by simpa only [Prod.eta] using hread)
@@ -2198,7 +2205,7 @@ theorem officialConstructorHeartbeatStoreLine_runCompiled
     Func.RunCompiled fs sevm
       ((officialConstructorHeartbeatLoggedBase sevm base).setMach
         ⟨[], officialConstructorHeartbeatMemory, G + 22109⟩)
-      (loadArgumentIndex 6 +++
+      (loadArgumentIndexForProof 6 +++
         pushB256 heartbeatIntervalSlot ::: sstore ::: rest) post := by
   apply constructorArgumentSstorePrefix_runCompiled
       (i := ⟨6, by decide⟩)
@@ -2358,8 +2365,8 @@ theorem officialConstructorHeartbeatScratchValue_runCompiled
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorHeartbeatZeroMemory, G + 12⟩)
-      (loadArgumentIndex 6 +++
-        storeByteOffset (officialConstructorEventScratch + 32) +++
+      (loadArgumentIndexForProof 6 +++
+        storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
   apply constructorArgumentMstorePrefix_runCompiled
     (i := ⟨6, by decide⟩)
@@ -2424,7 +2431,7 @@ theorem officialConstructorHeartbeatScratchZero_runCompiled
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorPauseMemory, G + 20⟩)
       (pushB256 0 :::
-        storeByteOffset officialConstructorEventScratch +++ rest) post := by
+        storeByteOffsetForProof officialConstructorEventScratch +++ rest) post := by
   apply constructorZeroMstorePrefix_runCompiled
     (offset := officialConstructorEventScratch) (storeExt := 0)
     (memory' := officialConstructorHeartbeatZeroMemory)
@@ -2454,9 +2461,9 @@ theorem officialConstructorHeartbeatScratchLine_runCompiled
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorPauseMemory, G + 20⟩)
       (pushB256 0 :::
-        storeByteOffset officialConstructorEventScratch +++
-        loadArgumentIndex 6 +++
-        storeByteOffset (officialConstructorEventScratch + 32) +++
+        storeByteOffsetForProof officialConstructorEventScratch +++
+        loadArgumentIndexForProof 6 +++
+        storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
   have hvalue := officialConstructorHeartbeatScratchValue_runCompiled hrest
   exact officialConstructorHeartbeatScratchZero_runCompiled hvalue
@@ -2560,7 +2567,7 @@ theorem officialConstructorPauseStoreLine_runCompiled
     Func.RunCompiled fs sevm
       ((officialConstructorPauseLoggedBase sevm base).setMach
         ⟨[], officialConstructorPauseMemory, G + 22109⟩)
-      (loadArgumentIndex 5 +++
+      (loadArgumentIndexForProof 5 +++
         pushB256 pauseDurationSlot ::: sstore ::: rest) post := by
   apply constructorArgumentSstorePrefix_runCompiled
       (i := ⟨5, by decide⟩)
@@ -2712,8 +2719,8 @@ theorem officialConstructorPauseScratchValue_runCompiled
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPauseZeroMemory, G + 15⟩)
-      (loadArgumentIndex 5 +++
-        storeByteOffset (officialConstructorEventScratch + 32) +++
+      (loadArgumentIndexForProof 5 +++
+        storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
   apply constructorArgumentMstorePrefix_runCompiled
       (i := ⟨5, by decide⟩)
@@ -2765,7 +2772,7 @@ theorem officialConstructorPauseScratchZero_runCompiled
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPatchedMemory, G + 27⟩)
       (pushB256 0 :::
-        storeByteOffset officialConstructorEventScratch +++ rest) post := by
+        storeByteOffsetForProof officialConstructorEventScratch +++ rest) post := by
   apply constructorZeroMstorePrefix_runCompiled
       (offset := officialConstructorEventScratch) (storeExt := 4)
       (memory' := officialConstructorPauseZeroMemory)
@@ -2793,9 +2800,9 @@ theorem officialConstructorPauseScratchLine_runCompiled
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPatchedMemory, G + 27⟩)
       (pushB256 0 :::
-        storeByteOffset officialConstructorEventScratch +++
-        loadArgumentIndex 5 +++
-        storeByteOffset (officialConstructorEventScratch + 32) +++
+        storeByteOffsetForProof officialConstructorEventScratch +++
+        loadArgumentIndexForProof 5 +++
+        storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
   have hvalue := officialConstructorPauseScratchValue_runCompiled hrest
   exact officialConstructorPauseScratchZero_runCompiled hvalue
@@ -2941,28 +2948,29 @@ theorem officialConstructorInitializedLogLine_runCompiled
 /-! Consolidated from `LidoCircuitBreakerDeploymentTracePatchAssembly.lean`. -/
 
 private def officialConstructorPatchLine : Line :=
-  loadArgumentIndex 0 ++ storeByteOffset 398 ++
-  loadArgumentIndex 0 ++ storeByteOffset 1318 ++
-  loadArgumentIndex 0 ++ storeByteOffset 2057 ++
-  loadArgumentIndex 0 ++ storeByteOffset 2144 ++
-  loadArgumentIndex 1 ++ storeByteOffset 441 ++
-  loadArgumentIndex 1 ++ storeByteOffset 937 ++
-  loadArgumentIndex 2 ++ storeByteOffset 482 ++
-  loadArgumentIndex 2 ++ storeByteOffset 2185 ++
-  loadArgumentIndex 3 ++ storeByteOffset 732 ++
-  loadArgumentIndex 3 ++ storeByteOffset 1361 ++
-  loadArgumentIndex 4 ++ storeByteOffset 896 ++
-  loadArgumentIndex 4 ++ storeByteOffset 1402
+  loadArgumentIndexForProof 0 ++ storeByteOffsetForProof 398 ++
+  loadArgumentIndexForProof 0 ++ storeByteOffsetForProof 1318 ++
+  loadArgumentIndexForProof 0 ++ storeByteOffsetForProof 2057 ++
+  loadArgumentIndexForProof 0 ++ storeByteOffsetForProof 2144 ++
+  loadArgumentIndexForProof 1 ++ storeByteOffsetForProof 441 ++
+  loadArgumentIndexForProof 1 ++ storeByteOffsetForProof 937 ++
+  loadArgumentIndexForProof 2 ++ storeByteOffsetForProof 482 ++
+  loadArgumentIndexForProof 2 ++ storeByteOffsetForProof 2185 ++
+  loadArgumentIndexForProof 3 ++ storeByteOffsetForProof 732 ++
+  loadArgumentIndexForProof 3 ++ storeByteOffsetForProof 1361 ++
+  loadArgumentIndexForProof 4 ++ storeByteOffsetForProof 896 ++
+  loadArgumentIndexForProof 4 ++ storeByteOffsetForProof 1402
 
 private theorem patchRuntimeLine_official_eq :
-    patchRuntimeLine constructorRuntimeBase =
+    patchRuntimeLineForProof constructorRuntimeBaseForProof =
       officialConstructorPatchLine := by
   rcases constructor_immutable_word_offsets_exact with
     ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
-  simp only [patchRuntimeLine, patchFieldLine, immutableParameters,
+  simp only [patchRuntimeLineForProof_eq, patchFieldLineForProof_eq,
+    immutableParameters,
     List.flatMap_cons, List.flatMap_nil, hadmin, hminPause, hmaxPause,
-    hminHeartbeat, hmaxHeartbeat, patchArgumentIndex,
-    officialConstructorPatchLine, constructorRuntimeBase,
+    hminHeartbeat, hmaxHeartbeat, patchArgumentIndexForProof_eq,
+    officialConstructorPatchLine, constructorRuntimeBaseForProof_eq,
     constructorArgumentBytes, List.append_nil,
     List.append_assoc]
 private theorem officialConstructorPatchLine_runCompiled
@@ -2995,7 +3003,7 @@ theorem officialConstructorCopyPatch_runCompiled
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
           officialConstructorDecodedMemory, G + 985⟩)
-      (codecopy ::: patchRuntimeLine constructorRuntimeBase +++ rest) post := by
+      (codecopy ::: patchRuntimeLineForProof constructorRuntimeBaseForProof +++ rest) post := by
   have hpatch := officialConstructorPatchLine_runCompiled hrest
   refine Func.RunCompiled.next
     (devm' := base.setMach
@@ -3084,64 +3092,64 @@ certificates.  These suffix names give proof elaboration bounded continuation
 checkpoints without changing that source presentation. -/
 
 private def officialConstructorValidationFinish : Func :=
-  pushFixedNat 4282 :::
-  pushFixedNat 616 :::
-  pushCompactNat constructorRuntimeBase :::
+  pushFixedNatForProof 4282 :::
+  pushFixedNatForProof 616 :::
+  pushCompactNatForProof constructorRuntimeBaseForProof :::
   officialConstructorEffectBody
 
 private def officialConstructorInitialHeartbeatMaxStage : Func :=
-  loadArgumentIndex 4 +++
-  loadArgumentIndex 6 +++ gt :::
+  loadArgumentIndexForProof 4 +++
+  loadArgumentIndexForProof 6 +++ gt :::
   ((.call 10) <?> officialConstructorValidationFinish)
 
 private def officialConstructorInitialHeartbeatMinStage : Func :=
-  loadArgumentIndex 3 +++
-  loadArgumentIndex 6 +++ lt :::
+  loadArgumentIndexForProof 3 +++
+  loadArgumentIndexForProof 6 +++ lt :::
   ((.call 9) <?> officialConstructorInitialHeartbeatMaxStage)
 
 private def officialConstructorInitialPauseMaxStage : Func :=
-  loadArgumentIndex 2 +++
-  loadArgumentIndex 5 +++ gt :::
+  loadArgumentIndexForProof 2 +++
+  loadArgumentIndexForProof 5 +++ gt :::
   ((.call 8) <?> officialConstructorInitialHeartbeatMinStage)
 
 private def officialConstructorInitialPauseMinStage : Func :=
-  loadArgumentIndex 1 +++
-  loadArgumentIndex 5 +++ lt :::
+  loadArgumentIndexForProof 1 +++
+  loadArgumentIndexForProof 5 +++ lt :::
   ((.call 7) <?> officialConstructorInitialPauseMaxStage)
 
 private def officialConstructorHeartbeatBoundsStage : Func :=
-  loadArgumentIndex 4 +++
-  loadArgumentIndex 3 +++ gt :::
+  loadArgumentIndexForProof 4 +++
+  loadArgumentIndexForProof 3 +++ gt :::
   ((.call 6) <?> officialConstructorInitialPauseMinStage)
 
 private def officialConstructorMinHeartbeatNonzeroStage : Func :=
-  loadArgumentIndex 3 +++ iszero :::
+  loadArgumentIndexForProof 3 +++ iszero :::
   ((.call 5) <?> officialConstructorHeartbeatBoundsStage)
 
 private def officialConstructorPauseBoundsStage : Func :=
-  loadArgumentIndex 2 +++
-  loadArgumentIndex 1 +++ gt :::
+  loadArgumentIndexForProof 2 +++
+  loadArgumentIndexForProof 1 +++ gt :::
   ((.call 4) <?> officialConstructorMinHeartbeatNonzeroStage)
 
 private def officialConstructorMinPauseNonzeroStage : Func :=
-  loadArgumentIndex 1 +++ iszero :::
+  loadArgumentIndexForProof 1 +++ iszero :::
   ((.call 3) <?> officialConstructorPauseBoundsStage)
 
 private def officialConstructorAdminNonzeroStage : Func :=
-  loadArgumentIndex 0 +++ iszero :::
+  loadArgumentIndexForProof 0 +++ iszero :::
   ((.call 2) <?> officialConstructorMinPauseNonzeroStage)
 
 private def officialConstructorCanonicalAdminStage : Func :=
-  loadArgumentIndex 0 +++ checkNonAddress +++
+  loadArgumentIndexForProof 0 +++ checkNonAddress +++
   ((.call 1) <?> officialConstructorAdminNonzeroStage)
 
 private theorem officialConstructorValidationBody_eq_staged :
     officialConstructorValidationBody =
-      pushFixedNat 5122 ::: codesize ::: lt :::
+      pushFixedNatForProof 5122 ::: codesize ::: lt :::
       ((.call 1) <?>
-        (pushCompactNat 224 :::
-          pushFixedNat 4898 :::
-          pushCompactNat 0 :::
+        (pushCompactNatForProof 224 :::
+          pushFixedNatForProof 4898 :::
+          pushCompactNatForProof 0 :::
           codecopy :::
           officialConstructorCanonicalAdminStage)) := by
   unfold officialConstructorValidationBody
@@ -3168,8 +3176,8 @@ private theorem officialConstructorValidationFinish_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 9⟩)
       officialConstructorValidationFinish post := by
-  unfold officialConstructorValidationFinish pushCompactNat pushFixedNat
-  simp only [
+  unfold officialConstructorValidationFinish
+  simp only [pushCompactNatForProof_eq, pushFixedNatForProof_eq,
     if_pos (show 4282 < 2 ^ 16 by decide),
     if_pos (show 616 < 2 ^ 16 by decide)]
   func_run (3)
@@ -3199,8 +3207,8 @@ private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
   have hm6 : (officialConstructorDecodedMemory.read 192 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩
-  unfold officialConstructorInitialHeartbeatMaxStage loadArgumentIndex
-    pushCompactNat
+  unfold officialConstructorInitialHeartbeatMaxStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 128).toNat = 128 by decide]
   all_goals try simp_rw [hm4, hv4]
@@ -3242,8 +3250,8 @@ private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
   have hm6 : (officialConstructorDecodedMemory.read 192 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩
-  unfold officialConstructorInitialHeartbeatMinStage loadArgumentIndex
-    pushCompactNat
+  unfold officialConstructorInitialHeartbeatMinStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 96).toNat = 96 by decide]
   all_goals try simp_rw [hm3, hv3]
@@ -3285,8 +3293,8 @@ private theorem officialConstructorInitialPauseMaxStage_runCompiled
   have hm5 : (officialConstructorDecodedMemory.read 160 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩
-  unfold officialConstructorInitialPauseMaxStage loadArgumentIndex
-    pushCompactNat
+  unfold officialConstructorInitialPauseMaxStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 64).toNat = 64 by decide]
   all_goals try simp_rw [hm2, hv2]
@@ -3328,8 +3336,8 @@ private theorem officialConstructorInitialPauseMinStage_runCompiled
   have hm5 : (officialConstructorDecodedMemory.read 160 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩
-  unfold officialConstructorInitialPauseMinStage loadArgumentIndex
-    pushCompactNat
+  unfold officialConstructorInitialPauseMinStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 32).toNat = 32 by decide]
   all_goals try simp_rw [hm1, hv1]
@@ -3371,8 +3379,8 @@ private theorem officialConstructorHeartbeatBoundsStage_runCompiled
   have hm3 : (officialConstructorDecodedMemory.read 96 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
-  unfold officialConstructorHeartbeatBoundsStage loadArgumentIndex
-    pushCompactNat
+  unfold officialConstructorHeartbeatBoundsStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 128).toNat = 128 by decide]
   all_goals try simp_rw [hm4, hv4]
@@ -3406,8 +3414,8 @@ private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
   have hm3 : (officialConstructorDecodedMemory.read 96 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
-  unfold officialConstructorMinHeartbeatNonzeroStage loadArgumentIndex
-    pushCompactNat
+  unfold officialConstructorMinHeartbeatNonzeroStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 96).toNat = 96 by decide]
   all_goals try simp_rw [hm3, hv3]
@@ -3442,7 +3450,8 @@ private theorem officialConstructorPauseBoundsStage_runCompiled
   have hm1 : (officialConstructorDecodedMemory.read 32 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
-  unfold officialConstructorPauseBoundsStage loadArgumentIndex pushCompactNat
+  unfold officialConstructorPauseBoundsStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 64).toNat = 64 by decide]
   all_goals try simp_rw [hm2, hv2]
@@ -3476,7 +3485,8 @@ private theorem officialConstructorMinPauseNonzeroStage_runCompiled
   have hm1 : (officialConstructorDecodedMemory.read 32 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
-  unfold officialConstructorMinPauseNonzeroStage loadArgumentIndex pushCompactNat
+  unfold officialConstructorMinPauseNonzeroStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 32).toNat = 32 by decide]
   all_goals try simp_rw [hm1, hv1]
@@ -3503,7 +3513,8 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
   have hm0 : (officialConstructorDecodedMemory.read 0 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩
-  unfold officialConstructorAdminNonzeroStage loadArgumentIndex pushCompactNat
+  unfold officialConstructorAdminNonzeroStage
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 0).toNat = 0 by decide]
   all_goals try simp_rw [hm0, hv0]
@@ -3530,8 +3541,8 @@ private theorem officialConstructorCanonicalAdminStage_runCompiled
   have hm0 : (officialConstructorDecodedMemory.read 0 32).2 =
       officialConstructorDecodedMemory := by
     simpa using officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩
-  unfold officialConstructorCanonicalAdminStage loadArgumentIndex
-    pushCompactNat checkNonAddress pushAddressMask
+  unfold officialConstructorCanonicalAdminStage checkNonAddress pushAddressMask
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
   all_goals try simp only [show (Nat.toB256 0).toNat = 0 by decide]
   all_goals try simp_rw [hm0, hv0]
@@ -3557,10 +3568,9 @@ private theorem officialConstructorValidationDecode_runCompiled
       officialFullCreateInput_length_exact]
   rw [lidoCircuitBreakerConstructorProgram_main_official,
     officialConstructorValidationBody_eq_staged]
-  simp only [pushFixedNat,
+  simp only [pushFixedNatForProof_eq, pushCompactNatForProof_eq,
     if_pos (show 5122 < 2 ^ 16 by decide),
     if_pos (show 4898 < 2 ^ 16 by decide)]
-  unfold pushCompactNat
   func_run (11) [1, 0, 45]
   all_goals try simp [B256.eqCheck, hvalue]
   all_goals try simp_rw [hcodeSize]

@@ -195,9 +195,11 @@ This repo contains the following files:
   [DeploymentMessage.lean](Blanc/DeploymentMessage.lean): the exact official
   direct-deployment ladder. From a valid base world and a strict singleton
   type-2 Prague block envelope, its only named-chain premise is the configured
-  `stateTransitionUsing` equation. The ladder derives the sender and CREATE
-  address, runs the frozen 5,122-byte official creation input through the actual
-  constructor and creation-message machinery, proves the collision check,
+  `stateTransitionUsing` equation. Under the envelope's explicit recovered-
+  sender and computed-address premises, the ladder derives the prepared message
+  target and executes at that address, runs the frozen 5,122-byte official
+  creation input through the actual constructor and creation-message machinery,
+  proves the collision check,
   transaction settlement, successful receipt, request-empty system suffix, and
   deployed valid context, and reconstructs the resulting root. That root pins
   the 4,282-byte official runtime, the two official configuration values, the

@@ -3040,6 +3040,130 @@ gate additionally hashes each normalized declaration header fail-closed. -/
 /-! S9 carrier-field pins. The dedicated deployment gate hashes the complete
 record bodies; these Lean wrappers independently pin each public field's type. -/
 
+example {sevm : Sevm} {base post : Devm} {G : Nat}
+    (h : OfficialValidationCheckpoints sevm base post G) :
+    Prog.RunCompiled sevm
+        (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩)
+        lidoCircuitBreakerConstructorProgram post ∧
+      Func.RunCompiled
+        (lidoCircuitBreakerConstructorProgram.main ::
+          lidoCircuitBreakerConstructorProgram.aux)
+        sevm
+        (base.setMach
+          ⟨[(224 : B256), (616 : B256), (4282 : B256)],
+            officialConstructorDecodedMemory, G + 49961⟩)
+        officialConstructorEffectBody post ∧
+      sevm.code.size = 5122 ∧
+      (∀ i : Fin 7,
+        Bytes.toB256
+            ((officialConstructorDecodedMemory.read (32 * i.val) 32).1) =
+          officialConstructorArgumentWord i) ∧
+      addressMask &&& officialParams.admin = 0 ∧
+      officialParams.admin ≠ 0 ∧
+      officialParams.minPauseDuration ≠ 0 ∧
+      officialParams.minPauseDuration.toNat ≤
+        officialParams.maxPauseDuration.toNat ∧
+      officialParams.minHeartbeatInterval ≠ 0 ∧
+      officialParams.minHeartbeatInterval.toNat ≤
+        officialParams.maxHeartbeatInterval.toNat ∧
+      officialParams.minPauseDuration.toNat ≤
+        officialConstructorArgs.initialPauseDuration.toNat ∧
+      officialConstructorArgs.initialPauseDuration.toNat ≤
+        officialParams.maxPauseDuration.toNat ∧
+      officialParams.minHeartbeatInterval.toNat ≤
+        officialConstructorArgs.initialHeartbeatInterval.toNat ∧
+      officialConstructorArgs.initialHeartbeatInterval.toNat ≤
+        officialParams.maxHeartbeatInterval.toNat :=
+  ⟨h.run, h.effectEntry, h.inputLength, h.decodedArguments,
+    h.canonicalAdmin, h.adminNonzero, h.minPauseNonzero, h.pauseBounds,
+    h.minHeartbeatNonzero, h.heartbeatBounds, h.initialPauseAboveMin,
+    h.initialPauseBelowMax, h.initialHeartbeatAboveMin,
+    h.initialHeartbeatBelowMax⟩
+
+example {sevm : Sevm} {base post : Devm} {G : Nat}
+    (h : OfficialConstructorEffectCheckpoints sevm base post G) :
+    post = officialConstructorPost sevm base G ∧
+      post.state =
+        (base.state.setStorVal sevm.currentTarget pauseDurationSlot
+          officialConstructorArgs.initialPauseDuration).setStorVal
+            sevm.currentTarget heartbeatIntervalSlot
+            officialConstructorArgs.initialHeartbeatInterval ∧
+      Devm.getStor post sevm.currentTarget =
+        ((Devm.getStor base sevm.currentTarget).set pauseDurationSlot
+          officialConstructorArgs.initialPauseDuration).set
+            heartbeatIntervalSlot
+            officialConstructorArgs.initialHeartbeatInterval ∧
+      post.logs = base.logs ++ officialConstructorLogs sevm.currentTarget ∧
+      post.stack = [] ∧
+      post.memory = officialConstructorFinalMemory ∧
+      post.gasLeft = G ∧
+      post.output = lidoCircuitBreakerCode officialParams ∧
+      post.refundCounter = base.refundCounter ∧
+      post.returnData = base.returnData ∧
+      post.error = base.error ∧
+      post.accountsToDelete = base.accountsToDelete ∧
+      post.createdAccounts = base.createdAccounts ∧
+      post.accessedAddresses = base.accessedAddresses ∧
+      post.accessedStorageKeys =
+        (base.accessedStorageKeys.insert
+          (sevm.currentTarget, pauseDurationSlot)).insert
+            (sevm.currentTarget, heartbeatIntervalSlot) ∧
+      post.transientStorage = base.transientStorage ∧
+      constructorProgramSiteCounts = (2, 0, 0) ∧
+      constructorPersistentWriteInventory =
+        [(⟨"constructor.pauseDuration", 0⟩, .configuration),
+          (⟨"constructor.heartbeatInterval", 1⟩, .configuration)] ∧
+      constructorTransientWriteInventory = [] ∧
+      constructorExternalCallInventory = [] :=
+  ⟨h.exactPost, h.state, h.storage, h.logs, h.stack, h.memory, h.gasLeft,
+    h.output, h.refundCounter, h.returnData, h.error, h.accountsToDelete,
+    h.createdAccounts, h.accessedAddresses, h.accessedStorageKeys,
+    h.transientStorage, h.siteCounts, h.persistentInventory,
+    h.transientInventory, h.externalCallInventory⟩
+
+example (h : OfficialConstructorErrorArmLayout) :
+    DeploymentProof.constructorBodyForProof 616 4898 4282 =
+        officialConstructorValidationBody ∧
+      lidoCircuitBreakerConstructorProgram.main =
+        Ninst.callvalue ::: Ninst.iszero :::
+          (officialConstructorValidationBody <?> (.call 1)) ∧
+      lidoCircuitBreakerConstructorProgram.aux =
+        [Func.rev,
+          DeploymentProof.constructorErrorForProof "AdminZero",
+          DeploymentProof.constructorErrorForProof "MinPauseDurationZero",
+          DeploymentProof.constructorErrorForProof
+            "MinPauseDurationExceedsMax",
+          DeploymentProof.constructorErrorForProof
+            "MinHeartbeatIntervalZero",
+          DeploymentProof.constructorErrorForProof
+            "MinHeartbeatIntervalExceedsMax",
+          DeploymentProof.constructorErrorForProof "PauseDurationBelowMin",
+          DeploymentProof.constructorErrorForProof "PauseDurationAboveMax",
+          DeploymentProof.constructorErrorForProof
+            "HeartbeatIntervalBelowMin",
+          DeploymentProof.constructorErrorForProof
+            "HeartbeatIntervalAboveMax"] ∧
+      officialConstructorTableCallIndices =
+        [1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] :=
+  ⟨h.body, h.main, h.aux, h.sites⟩
+
+example {ca : Adr} {msg : Msg} {post : Devm}
+    (h : OfficialCreateMessageExecution ca msg post) :
+    ∃ (benv : Benv) (raw charged : Devm) (G : Nat),
+      (processCreateMessage.msg msg).benvAfterTransfer = .ok benv ∧
+      G = msg.gas - officialConstructorRequiredGas ∧
+      processMessage (processCreateMessage.msg msg) = .ok raw ∧
+      OfficialConstructorExecutionTrace ca
+        (initSevm ((processCreateMessage.msg msg).withBenv benv))
+        (initDevm ((processCreateMessage.msg msg).withBenv benv)) raw G ∧
+      processCreateMessage.chargeCodeGas msg.benv.stat.rules raw = .ok charged ∧
+      post = charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩ := by
+  rcases h.pipeline with
+    ⟨benv, raw, charged, G, htransfer, hgas, hprocess, htrace, hcharge,
+      hpost⟩
+  exact ⟨benv, raw, charged, G, htransfer, hgas, hprocess, htrace, hcharge,
+    hpost⟩
+
 example {ca : Adr} {sevm : Sevm} {base post : Devm} {G : Nat}
     (h : OfficialConstructorExecutionTrace ca sevm base post G) :
     sevm.currentTarget = ca ∧
