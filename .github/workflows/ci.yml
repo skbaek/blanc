@@ -39,10 +39,9 @@ jobs:
         run: scripts/check-weth10-reference.sh
       - name: Lido CircuitBreaker reference lock (offline)
         run: scripts/check-lido-circuit-breaker-reference.sh
-      # The Lido dispatcher and differential remain mandatory local candidate
-      # gates. This job does not provision the clean execution-specs checkout
-      # and venv at the gates' pinned EELS commit, so CI cannot satisfy their
-      # dependency contract without a separately reviewed provisioning change.
+      # The dispatcher and differential matrices remain mandatory local
+      # candidate gates. The narrowly provisioned EELS checkout below is owned
+      # by the deployment-root singleton replay only.
       - uses: leanprover/lean-action@v1
       - name: Lido CircuitBreaker Registry RI7 assurance
         run: scripts/check-lido-circuit-breaker-registry.sh
@@ -52,6 +51,26 @@ jobs:
         run: scripts/check-lido-circuit-breaker-access.sh
       - name: Lido CircuitBreaker Registry-history S7 assurance
         run: scripts/check-lido-circuit-breaker-history.sh
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Checkout pinned execution-specs for deployment-root replay
+        uses: actions/checkout@v6
+        with:
+          repository: ethereum/execution-specs
+          ref: 4198b9c5996713b268aed602739d5aa40e277694
+          path: execution-specs
+          fetch-depth: 1
+      - name: Install pinned execution-specs environment
+        run: |
+          python -m venv execution-specs/venv
+          execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs
+      - name: Build the Jaune fixture runner
+        run: lake build jaune/jaune
+      - name: Lido CircuitBreaker direct deployment-root S9 assurance
+        env:
+          EELS_ROOT: ${{ github.workspace }}/execution-specs
+        run: scripts/check-lido-circuit-breaker-deployment.sh
       - name: Lido launch/current artifact ownership ledgers (offline)
         run: scripts/check-lido-circuit-breaker-artifact-profile.sh
       - name: Lido constructor emitted-byte schema (offline)
@@ -72,8 +91,6 @@ jobs:
         run: scripts/check.sh --no-build
       - name: Pin WETH10/Lido artifact statements
         run: scripts/check-claims.sh
-      - name: Build the Jaune fixture runner
-        run: lake build jaune/jaune
       - name: WETH fixture suite (Jaune vs frozen EELS on the witnessed bytes)
         run: scripts/check-weth.sh --no-build
       - name: WETH selector coverage (shrink-only budget)
