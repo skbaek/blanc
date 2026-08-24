@@ -385,11 +385,12 @@ Before beginning a manual multi-step walk or inversion, consult the generated
 both generated from `scripts/proof-recipes.toml`; edit that registry and
 regenerate the surfaces rather than editing either generated file by hand.
 
-## Proof-performance conventions: defeq and wide-recursion state towers
+## Proof-performance conventions: defeq, wide-recursion state towers, and walk term size
 
-Two definitional-equality cost bombs have been measured in this repository,
-and the conventions below are the working rules for avoiding them. They apply
-to all Blanc proof work, whatever the contract and whatever agent or editor is
+Three elaboration-cost bombs have been measured in this repository — two
+definitional-equality bombs and one term-size bomb in forward walks — and the
+conventions below are the working rules for avoiding them. They apply to all
+Blanc proof work, whatever the contract and whatever agent or editor is
 driving it.
 
 **The predictor.** Call a definition a *wide-recursion state constructor* when
@@ -434,6 +435,48 @@ kernel eagerly folding `Nat` operations at closed program-sized terms — is
 documented in the WETH10 elaboration-cost history and has the same flavor:
 keep expensive evaluation out of both the elaborator's and the kernel's
 definitional paths by routing through named lemmas.
+
+**The third bomb: forward walks that carry their own concrete internals.**
+The two traps above are about definitional equality; this one is about the size
+of the term itself. Constructing a compiled walk over a large concrete body —
+`Func.RunCompiled` and its siblings, driven by `func_run` — builds an
+intermediate term at every step. When each step carries the whole concrete
+remaining program, the memory image written so far, and the concrete values
+staged into it, that term grows along the walk instead of staying flat, and the
+cost grows with it.
+
+**Its signature** is a staging or patching walk over a concrete body that only
+gets through after a `maxRecDepth` or `maxHeartbeats` ceiling is raised,
+typically across a run of consecutive `MSTORE`s. The raised ceiling is the
+symptom that gets treated; the term growth is the disease. Raising a ceiling
+suppresses the diagnostic without reducing the work, so a walk that compiles
+only because its ceiling was raised is a candidate, not a solved problem.
+
+**The route** is to factor the walk into named sub-components, abstract each
+one over the memory or value it threads, and instantiate the concrete facts
+through opaque top-level lemmas. This is safe route 1 above applied to a walk
+rather than to a `let`-bound state tower, and it works for the same reason: one
+layer over a variable stays small, and abstractions compose additively where
+term growth composes multiplicatively. The worked instance is
+`ConstructorPatchInvariant` in `Blanc/LidoCircuitBreakerDeploymentTrace.lean` —
+a carrier structure over a variable `Mem`, stepped by
+`ConstructorPatchInvariant.runCompiled_write`, driving a named staircase in
+place of a concrete memory tower.
+
+**Measured on the Lido constructor walk, 2026-08-23.** Abstracting a three-op
+prefix over memory and value took its artifact from a 14.5 GiB store wall that
+did not complete to a 0.8 s build. The constructor body went from a
+15.5-minute hard stop with 12.6 GiB of swap to a 737 ms compile. These are
+whole-artifact build times from that goal's working log rather than
+`check-elab.sh` rows; they are recorded here because this class had no measured
+entry at all, not because they are gate evidence.
+
+**The discipline**, in the form it was stated when it was found: build each
+certificate separately, and abstract only the ones that cross the breaker. The
+abstraction costs source and indirection, and a short bounded walk does not
+need it. WETH10 largely does not — it already uses dispatcher views and named
+line certificates. The known un-retrofitted candidates are Lido's, and they are
+named in the `runcompiled-construction` entry of the proof recipe registry.
 
 **Why budgets do not save you.** Inside `simp`'s defeq discharging the work is
 not heartbeat-metered, and the kernel's certificate check ignores
