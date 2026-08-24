@@ -50,7 +50,7 @@
       "anchor": "Blanc.Fmint.fmint_fallback_is_rev"
     },
     {
-      "id": "Blanc/FmintSettles.lean::$ambient#0::ambient_command::Blanc.Fmint.Devm.logs_setMach::maxRecDepth#1",
+      "id": "Blanc/FmintSettles.lean::$ambient#0::ambient_command::Blanc.Fmint.Sevm.argWord_eq_dataWord::maxRecDepth#1",
       "file": "Blanc/FmintSettles.lean",
       "declaration": null,
       "declaration_ordinal": null,
@@ -59,7 +59,7 @@
       "option": "maxRecDepth",
       "value": 40000,
       "ceiling": 40000,
-      "anchor": "Blanc.Fmint.Devm.logs_setMach"
+      "anchor": "Blanc.Fmint.Sevm.argWord_eq_dataWord"
     },
     {
       "id": "Blanc/LidoCircuitBreaker.lean::Blanc.LidoCircuitBreaker.runtimeEntryShapes_eq#1::command_scoped::-::maxHeartbeats#1",
