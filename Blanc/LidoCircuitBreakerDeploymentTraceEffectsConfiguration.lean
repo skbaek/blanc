@@ -1,3 +1,0 @@
--- LidoCircuitBreakerDeploymentTraceEffectsConfiguration.lean : compatibility facade.
-
-import Blanc.LidoCircuitBreakerDeploymentTraceEffectsConfigurationSuffix
