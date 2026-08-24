@@ -5,847 +5,75 @@
 # alive. A file fails the gate above both 2.0x its time here and that time
 # plus 1.0s. Rewrite with: scripts/check-elab.sh --rebase
 #
-# The Blanc/Conserved.lean row was hand-raised from 1.235 to its measured
-# 2.178 when Arc B of ~/plans/flashmint-proposal.md turned that module from a
-# 123-line statement stub into fmint's conservation proof: growth there was
-# the deliverable, not drift. Every other row is from the last full rebase,
-# and the gate was green against the old row when the edit was made.
-#
-# The Blanc/Compiled.lean row was hand-set to its measured 1.207 when Step 1
-# of ~/plans/liveness-prelude.md added that module: a file with no row here is
-# a REGRESSION ("a new module must state its cost"), so the row is an
-# extension to admit new content, not a relaxation to admit a failure. It was
-# measured by `scripts/check-elab.sh --list --no-build` on a tree with no
-# language server alive, and it is re-set by hand at each later step of that
-# arc that grows the module. `--rebase` was not run: it rewrites every row and
-# would launder unrelated drift into an arc commit.
-#
-# Step 2 of that arc (the forward direction, `runCompiled_of_exec`) re-set the
-# row from 1.207 to its measured 1.309 while nearly tripling the module's
-# length. The proof reuses `correct_core`'s structure rather than restating it,
-# so nearly all the added text is a thin gas-accounting layer; the one
-# expensive-looking declaration, `Rinst.runCore_pc_irrel`, is a ~70-constructor
-# case bash whose every case closes by `rfl`. Same measurement conditions, and
-# again by hand rather than `--rebase`.
-#
-# Step 3 of that arc (jumpability of compiled jump targets) re-set the row from
-# 1.309 to its measured 1.608. The added material is all at the level of
-# Jaune's bytes: a specification for `noPushBefore`'s backward scan, the
-# transport lemma over one complete instruction, and the `Func.compile`- and
-# `Table.compile`-shaped walks that carry it. No opcode inductive is
-# case-bashed -- the one fact needed about opcode bytes goes through the
-# existing `toInstType` lemmas -- so the growth is proportional to the text.
-# Same measurement conditions, and again by hand rather than `--rebase`.
-#
-# Step 4 of that arc (the liveness direction and the biconditional) re-set the
-# row from 1.608 to its measured 1.786. The added material constructs `Exec`
-# derivations from `RunCompiled` premises: forward evaluation of
-# `chargeGas`/`push`/`pop`, one `.cont` equation per hidden instruction, a
-# 14-projection extensionality bridge, and the derivation induction. Every
-# state identification is by projection `rfl`s plus one `omega`, so the growth
-# is again proportional to the text. Same measurement conditions, and again by
-# hand rather than `--rebase`.
-#
-# 2026-08-06. Step 3 of ~/plans/fmint-restoration.md re-set the
-# Blanc/FlashSpec.lean row from 1.146 to its measured 2.002. Be clear about
-# what that raise is made of, because only part of it is this arc's:
-#
-#   * ~0.12 s IS this arc's growth. Step 2 added `rollback_of_callback_failure`
-#     (1.844 -> 1.884) and Step 3 added the restoration family -- the abstract
-#     core `rollback_of_no_success`, its total-function corollary, and seven
-#     one-line instantiations, one per landed `no_success_of_*` (1.884 ->
-#     ~2.00). The core is ~25 tactic lines; the other nine statements are term
-#     proofs one application deep, so the growth is proportional to the text
-#     and not to any new proof search.
-#   * ~0.73 s was ALREADY there and is not this arc's. The 1.146 row has been
-#     below the module's measured cost since Arc C of
-#     ~/plans/flashmint-proposal.md, which reported 1.931 against it; the
-#     planning session for this arc measured 1.874 on untouched `main`. This
-#     arc did not create that gap and is not hiding it: the closure report
-#     (~/plans/reports/fmint-restoration-step-3.md) states both numbers.
-#
-# The raise is taken from GREEN, not to rescue a red gate: at the old row the
-# module measured 1.982-2.134 against a 2.292 threshold and passed every run.
-# It is taken anyway because ~0.16 s of margin is inside this host's observed
-# noise -- during this step's verification `Blanc.lean` (untouched by the arc)
-# spiked from its 1.241 row to 3.651 on one contended run and returned to
-# 1.249 on the next -- and the next arc to grow this module should meet a row
-# that reflects the module, not one that would force a re-set from red.
-#
-# 2.002 is the median of three sequential measurements of the merge candidate
-# (2.002, 2.134, 1.982), each taken with no language server alive.
-# `--rebase` was NOT run: it rewrites every row and would launder unrelated
-# drift into an arc commit. Blanc/CommonProofs.lean (6.143, measured ~6.97)
-# and Blanc/Ladder.lean (3.121, measured ~3.55) are stale in the same
-# direction and were deliberately LEFT ALONE -- their thresholds are 12.286
-# and 6.242, so neither is close, and re-setting a row that is not at risk
-# would be drift laundering with no benefit.
-#
-# The Blanc/Forward.lean row was hand-set to 1.188 when Step 1 of
-# ~/plans/forward-witness.md added that module, on the same rule and for the
-# same reason as Blanc/Compiled.lean's above: a file with no row here is a
-# REGRESSION, so a new module's row is an extension to admit new content, not
-# a relaxation to admit a failure. 1.188 is the median of three sequential
-# `scripts/check-elab.sh --list --no-build` measurements (1.181, 1.188, 1.193)
-# with no language server alive. `--rebase` and `--force` are prohibited for
-# the whole of that arc, for the reason already recorded above.
-#
-# Step 1's third checkpoint re-set that row from 1.188 to 1.288 (median of
-# 1.286, 1.288, 1.289) when building the witness turned the wrapper layer from
-# the subtractive gas form into the relation's own additive one, and added the
-# `SLOAD`/`MSTORE`/`RETURN` steps. Same rule as Blanc/Compiled.lean's: a row
-# re-set by hand at the step that grows the module, never a red row made green.
-#
-# Step 2 of that arc (the tactic layer) re-set the Blanc/Forward.lean row from
-# 1.288 to its measured 4.514 (median of 4.496, 4.514, 4.529). Most of the raise
-# is not proof text: the step adds `func_run`, a `TacticM` walk over the `Func`
-# structure, and a module that defines a tactic pays to compile its
-# metaprogram as well as elaborate it. The rest is the one-word memory window
-# (`Mem.size_write_word`, `Mem.read_write_word`, the two `Devm.extCost` facts
-# and `Devm.memRead_word_fst`), lifted out of the demonstration module so that
-# any target returning a word from offset 0 gets them. Growth here is the
-# deliverable; the row is re-set by hand at the step that causes it, on the
-# same rule as every raise above, and never to make a red row green.
-# `--rebase` and `--force` remain prohibited for the whole of this arc.
-#
-# Blanc/FmintLive.lean's row was hand-set to a measured 4.684 (median of 4.684,
-# 4.681, 4.697) when that same checkpoint added it. It is the second most
-# expensive module in the repository, behind Blanc/CommonProofs.lean, and the
-# cost is concentrated in the five `decide +kernel` calls that settle the
-# dispatch comparisons on keccak-derived selectors -- the same computation
-# `Blanc/Fmint.lean`'s `fmintFuncs_sorted` pays for. A tactic layer that
-# discharges those comparisons once rather than per-target is Step 2's
-# business, not a reason to hold this row open.
-#
-# Blanc/WethLive.lean's row was hand-set to a measured 5.383 (median of 5.383,
-# 5.359, 5.422) when Step 3 of that arc added it, on the same rule as every new
-# module above: a file with no row here is a REGRESSION, so the row is an
-# extension to admit new content and not a relaxation to admit a failure. It is
-# now the most expensive module in the repository, ahead of
-# Blanc/CommonProofs.lean, and the cost is NOT the proof -- the whole module is
-# two theorems whose derivations are one `func_run` call each. It is the
-# dispatch comparisons, exactly as Blanc/FmintLive.lean's note above predicts:
-# `wethTree` puts `balanceOf()` four forks down where `fmintTree` puts
-# `totalSupply()` three, so the walk settles five keccak-derived selector
-# comparisons rather than four, and each one forces a `String.keccak`. Step 2's
-# tactic discharges them uniformly but cannot avoid computing them, which is the
-# honest per-target floor for this genre and is recorded as such in
-# ~/plans/reports/forward-witness-step-3.md.
-#
-# No pre-existing row was touched by that step. `--rebase` and `--force` remain
-# prohibited for the whole of the arc.
-#
-# Blanc/WethGas.lean's row was hand-set to a measured 5.380 (median of 5.380,
-# 5.374, 5.434) and Blanc/FmintGas.lean's to a measured 3.976 (median of 3.948,
-# 3.976, 4.006) when Step 1 of ~/plans/gas-cost.md added both modules -- a file
-# with no row here is a REGRESSION, so each row is an extension to admit new
-# content, not a relaxation to admit a failure. Both measured with
-# `scripts/check-elab.sh --list --no-build` with no language server alive.
-#
-# Both rows are well above the arc's own ~2 s expectation for a module doing
-# no new `func_run` walk (`~/plans/gas-cost.md` Step 1, deliverable 5): each
-# module's exactness theorem at the `exec` altitude re-derives
-# `weth_balanceOf_runCompiled`/`totalSupply_runCompiled`'s witness rather than
-# reusing the existing theorem's existential, because that existential does
-# not expose which witness it constructed and the new theorem's extra
-# `gasLeft` conjunct needs the concrete one. That re-derivation calls
-# `func_run` a second time in the module -- the same walk, not a new *shape*
-# of walk -- so it pays the dispatch tree's keccak cost (`String.keccak` per
-# fork) twice rather than once: `WethGas.lean` walks a four-fork tree twice
-# (5.380 against `WethLive.lean`'s 5.383 for one walk) and `FmintGas.lean` a
-# three-fork tree twice (3.976 against `FmintLive.lean`'s 4.684 for one walk,
-# where fmint's single walk already carries the five `decide +kernel` dispatch
-# comparisons `FmintLive.lean`'s own note above records). No pre-existing row
-# was touched.
-#
-# Step 2 of that arc re-set both rows when it added a second entrypoint to each
-# contract -- `decimals()`, on a path never walked before: Blanc/WethGas.lean
-# from 5.380 to its measured 6.794 (median of 6.786, 6.816, 6.794) and
-# Blanc/FmintGas.lean from 3.976 to its measured 6.287 (median of 6.267, 6.287,
-# 6.288). Same conditions as every row above: three sequential
-# `scripts/check-elab.sh --list --no-build` runs with no language server alive,
-# hand-set rather than `--rebase`, which stays prohibited for the whole arc.
-#
-# The interesting number is how SMALL these raises are, because they correct
-# the arc's own budgeting. ~/plans/gas-cost.md section 2 budgets "every new
-# *walk* at ~5 s". A whole new walk PLUS the selector-indexed cost function,
-# its `...With` form, the selector disequality and the restated exactness
-# theorems cost Blanc/WethGas.lean 1.414 s and Blanc/FmintGas.lean 2.311 s.
-#
-# The ~5 s figure is real, but it is a per-MODULE-FIRST-WALK floor rather than
-# a per-walk one, and the note above this one is the evidence: WethGas.lean
-# measured 5.380 for its single walk where WethLive.lean measured 5.383 for
-# its single walk of the same tree. The floor is `String.keccak` per dispatch
-# fork and the elaborator computes each keccak once per module, so a second
-# walk that descends forks the module has already forced re-forces nothing.
-# `decimals()` and `balanceOf()` take the SAME four forks of `wethTree`,
-# comparing against the same `leftmostFsig` words, which is why WETH's second
-# walk is nearly free. fmint's is dearer for the reason that account predicts:
-# its `decimals()` sits at a depth-4 leaf where its `totalSupply()` sat at a
-# depth-3 one, so the walk meets one fork comparison and one leaf comparison
-# this module had not yet forced, and pays ~0.9 s more than WETH's for them.
-#
-# Worth stating for successors: co-locating targets that share a dispatch
-# prefix in ONE module is far cheaper than one module per target, and a
-# per-target budget taken from the first target in a fresh module overestimates
-# every later one in that module by roughly 4 s.
-#
-# Re-measured once more at the end of the same step, after four further
-# restatements of the hypothesis-altitude theorems through the cost functions
-# (derived theorems, one application deep): Blanc/WethGas.lean 6.794 -> 6.857
-# (median of 6.993, 6.857, 6.792) and Blanc/FmintGas.lean 6.287 -> 6.226
-# (median of 6.226, 6.127, 6.273). Both moves are INSIDE this host's
-# run-to-run noise -- one row went up and the other down while the module only
-# grew -- and neither was needed to pass: the gate thresholds were 13.588 and
-# 12.574. The rows are re-set anyway so that each equals the measured median
-# of the tip it ships with, which is the invariant every note above asserts.
-#
-# No pre-existing row was touched by this step either.
-#
-# Step 3 of that arc -- the warm/cold SLOAD split -- re-set THREE rows:
-# Blanc/Forward.lean 4.514 -> 4.829 (median of 4.838, 4.829, 4.787),
-# Blanc/WethGas.lean 6.857 -> 7.978 (median of 7.917, 8.034, 7.978) and
-# Blanc/FmintGas.lean 6.226 -> 7.098 (median of 7.443, 7.098, 7.078). Same
-# conditions as every row above: three sequential
-# `scripts/check-elab.sh --no-build` runs, no language server alive,
-# hand-set rather than `--rebase`, which stays prohibited for the whole arc.
-#
-# Blanc/Forward.lean is the one PRE-EXISTING row this arc was permitted to
-# move, and only here, and only for a shared forward rule
-# (~/plans/gas-cost.md, correction C4). The +0.315 s buys the warm SLOAD pair
-# -- `Rinst.runCore_sload_warm_eq_ok` and `Ninst.runCompiled_sload_warm` --
-# plus the `func_run` arm that selects between warm and cold by reading the
-# frame's own hypotheses. **The row did not have to move to pass**: the gate
-# threshold was 9.028 and the measurement was 4.829, so this is a re-set to
-# the measured median of the tip it ships with, not a relaxation to admit a
-# failure. The same is true of the other two rows (thresholds 13.714 and
-# 12.452 against measurements of 7.978 and 7.098).
-#
-# The two arc rows carry a SECOND `func_run` walk each -- the warm derivation
-# of `balanceOf(address)` and of `totalSupply()`, run against the warm lemma
-# pair -- and cost 1.121 s and 0.872 s for them. That is the third independent
-# confirmation of the finding two notes above, and the sharpest: these warm
-# walks descend the SAME forks as their cold twins, against the same
-# `leftmostFsig` words, so they force no keccak the module has not already
-# computed and pay only for their own instruction steps. ~/plans/gas-cost.md
-# Step 3 budgeted "~5 s more in Blanc/WethGas.lean's row" for exactly this
-# walk. It cost 1.121 s. A per-walk budget of ~5 s overestimates a
-# same-prefix second walk by roughly 4 s, on three measurements now.
-#
-# 2026-08-06. The Blanc/Reverts.lean row was hand-set to a measured 1.214
-# (median of 1.214, 1.207, 1.225) when Step 2 of ~/plans/error-genre.md added
-# that module, on the same rule as every new module above: a file with no row
-# here is a REGRESSION, so the row is an extension to admit new content and
-# not a relaxation to admit a failure. Measured by three sequential
-# `scripts/check-elab.sh --list --no-build` runs with no language server
-# alive. `--rebase` and `--force` are prohibited for the whole of that arc.
-#
-# The row is re-set by hand at each later checkpoint of that step which grows
-# the module -- the `exec` bridge, then the `.rev` terminal rules -- exactly as
-# Blanc/Compiled.lean's and Blanc/Forward.lean's rows were re-set across their
-# own arcs. No pre-existing row is touched by any of them.
-#
-# The bridge checkpoint re-set the row 1.214 -> 1.209 (median of 1.223, 1.203,
-# 1.209) -- a DOWNWARD move, inside this host's noise, while the module grew by
-# ~90 lines. Worth stating plainly because it is evidence about this arc's
-# largest cost question: the mirrored induction
-# `Func.exec_of_runCompiledTo_core` is not a second elaboration of
-# `Blanc/Compiled.lean`'s `Func.exec_of_runCompiled_core`'s WORK, only of its
-# TEXT. Four of its five cases apply lemmas that are already elaborated in
-# `Blanc/Compiled.lean` (`Evm.branch_zero_steps`, `Evm.branch_succ_steps`,
-# `Evm.call_steps`, `Ninst.exec_of_stepRun`) and the fifth is three tactics, so
-# the duplication decision E5 makes costs ~90 lines of source and nothing
-# measurable in time. The row is re-set anyway so that it equals the measured
-# median of the tip it ships with, which is the invariant every note above
-# asserts.
-#
-# The terminal checkpoint re-set the row 1.209 -> 1.227 (median of 1.221,
-# 1.227, 1.227) when it added the constructor-side wrappers, the `.rev`
-# forward-evaluation family and the `Func.rev` composite. +0.018 s, again
-# inside noise. Blanc/Reverts.lean ships at 1.227 for ~470 lines, which makes
-# it the cheapest per-line module in the repository -- and the reason is worth
-# recording for successors sizing this genre: the module contains no `func_run`
-# walk and therefore forces no `String.keccak`, which the FmintLive/WethLive
-# notes above identify as the real per-module floor. The relation layer is
-# cheap; the dispatch walks that consume it are not, and they will be measured
-# in a contract-owned module where they belong.
-#
-# 2026-08-06. The Blanc/FmintReverts.lean row was hand-set to a measured 3.863
-# (median of 3.868, 3.863, 3.821) when Step 3 of ~/plans/error-genre.md added
-# that module, on the same rule as every new module above: a file with no row
-# here is a REGRESSION, so the row is an extension to admit new content and not
-# a relaxation to admit a failure. Three sequential
-# `scripts/check-elab.sh --list --no-build` runs, no language server alive.
-# `--rebase` and `--force` are prohibited for the whole of that arc, and no
-# pre-existing row is touched by it -- Blanc/Forward.lean's 4.829, which that
-# step also grows, measured 5.138 and stays where it is.
-#
-# The figure is the prediction the Reverts row's note above makes, arriving:
-# this module DOES contain `func_run` walks, so it pays the `String.keccak`
-# floor those walks force at every dispatch fork, and it lands in
-# Blanc/FmintLive.lean's neighbourhood (4.684) rather than Blanc/Reverts.lean's
-# (1.227) despite being a fraction of the latter's length. The relation layer
-# is cheap; the walks that consume it are not, and the cost is dispatch, not
-# proof.
-#
-# The second target of that step (`flashLoan` with `token != self`) re-set the
-# row 3.863 -> 5.574 (median of 5.602, 5.574, 5.521), same conditions. +1.711 s
-# for a second walk of the same dispatcher plus one guard, which is the marginal
-# cost of a target inside this genre and is the number a successor sizing it
-# should use. **The gate was already green against 3.863** -- its 2.0x threshold
-# is 7.726 -- so this is the file's own invariant being maintained (a row equals
-# the measured median of the tip it ships with), not a row raised to rescue a
-# red gate, which would be a stop condition. It is this arc's own new module's
-# row, re-set inside the step that created it, exactly as Blanc/Reverts.lean's
-# was at Step 2's three checkpoints. No pre-existing row was touched by either
-# step: Blanc/Forward.lean, which Step 3 grows with the generalised walk and the
-# `pushItem`-class rule, measured 5.094 (median of 5.094, 5.078, 5.298) against
-# its UNCHANGED 4.829 row.
-#
-# 2026-08-06. Step 1 of ~/plans/adversarial-progress.md adds Blanc/ForwardCall
-# .lean -- the `CALL`-crossing layer -- and hand-sets its row to a measured
-# 1.511 (median of 1.511, 1.514, 1.511), by `scripts/check-elab.sh --list
-# --no-build` on a tree with no language server alive, three sequential runs.
-# `--rebase` was not run: it rewrites every row and would launder unrelated
-# drift into an arc commit. A file with no row here is a REGRESSION ("a new
-# module must state its cost"), so this is an extension to admit new content,
-# not a relaxation to admit a failure.
-#
-# 1.5 s is what a crossing layer costs when the child is an opaque term. The
-# module's expensive-looking declaration is `Xinst.step_call_zero_value`, which
-# transcribes and evaluates the whole seven-pop `.call` arm, and it is cheap for
-# the same reason the arm is tractable at all: at `value = 0` the new-account
-# charge, the transfer charge and the stipend are literals, the static assertion
-# closes on its right disjunct, and the balance short-circuit is unreachable, so
-# nothing branches. The three resume lemmas are `rfl` after one `if`.
-#
-# NO PRE-EXISTING ROW MOVED, and the one to watch is Blanc/Forward.lean's
-# 4.829, which the same step grows with ten instruction rules and their tactic
-# arms. It measured 8.449 (median of 8.446, 8.471, 8.449) under the same
-# conditions -- 1.75x the row, inside the 2.0x threshold of 9.658 with 1.21 s to
-# spare, and stable to +/- 0.02 s across the three runs, so the headroom is real
-# and not measurement luck. **A successor that wants to grow Blanc/Forward.lean
-# again should not**: A4 of that plan says to overflow into the shared crossing
-# module instead, and `Devm.popToAdr_eq_ok` -- which belongs beside
-# `Devm.popToNat_eq_ok` on every other ground -- was placed in ForwardCall.lean
-# for exactly that reason. The cost is not in the rule statements; profiling
-# attributes it to kernel type-checking of the ten evaluation lemmas' proof
-# terms and to LCNF compilation of the enlarged `ninstStep`.
-#
-# 2026-08-06. Step 2 of the same arc adds Blanc/FmintSettles.lean -- fmint's
-# first forward walk through state-changing code -- and hand-sets its row to a
-# measured 6.377 (median of 6.377, 6.403, 6.364), by `scripts/check-elab.sh
-# --list --no-build` on a tree with no language server alive, three sequential
-# runs. `--rebase` was not run, and remains prohibited for the whole arc. A file
-# with no row here is a REGRESSION, so this is an extension to admit new
-# content, not a relaxation to admit a failure.
-#
-# 6.4 s for one walk of ~60 nodes is the FmintReverts neighbourhood (5.574 for
-# two shorter walks of the same dispatcher), and the reason is the one every
-# note above gives: the floor is `String.keccak` per dispatch fork, not the
-# instruction steps. This module walks the same three forks once.
-#
-# Blanc/ForwardCall.lean's row is re-set 1.511 -> 1.517 (median of 1.514,
-# 1.610, 1.517) by the same step, which adds the warmth-agnostic `SLOAD` rule
-# and the two continuation-passing storage steps to it. +0.006 s is inside this
-# host's noise; the row is re-set so that it equals the measured median of the
-# tip it ships with, which is the invariant every note above asserts. It is
-# this arc's own module, grown by the step that re-sets it.
-#
-# NO PRE-EXISTING ROW MOVED. Blanc/Forward.lean, which this step also touches
-# (the walk's node budget and the `consumeMData` fix), measured 8.340 (median of
-# 8.305, 8.340, 8.381) against its UNCHANGED 4.829 row -- a hair BELOW Step 1's
-# 8.449 under the same conditions, so the ~15 lines of metaprogram this step
-# adds cost nothing measurable, and the 9.658 threshold still has 1.3 s of head
-# room. A4's instruction stands: a successor that wants to grow that file
-# should overflow into Blanc/ForwardCall.lean instead.
-#
-# 2026-08-06. Checkpoint 2b of the same arc closes the trunk -- the mint's
-# `Transfer` log, the callback's argument build, the `CALLDATACOPY` of the
-# caller's payload, and the exact state at the `CALL` -- and re-sets
-# Blanc/FmintSettles.lean's row 6.377 -> 11.849 (median of 11.820, 11.849,
-# 12.251), by `scripts/check-elab.sh --list --no-build` on a tree with no
-# language server alive, three sequential runs. `--rebase` was not run and
-# remains prohibited for the whole arc. This is the arc's OWN module, re-set by
-# the step that grows it, on exactly the footing 2a re-set Blanc/ForwardCall
-# .lean's row: the row equals the measured median of the tip it ships with.
-#
-# The old row would still have passed -- 11.849 is inside 2.0x of 6.377 (12.754)
-# -- and it is re-set anyway, because leaving it would hand Step 3 nine tenths
-# of a second of head room for the whole post-`CALL` case tree.
-#
-# What the 5.5 s bought: a second walk of ~60 nodes, eight `MSTORE`s, a `LOG`,
-# a `CALLDATACOPY` with a symbolic charge, and the memory-image equation. The
-# cost is NOT the dispatcher this time (the second walk re-uses the first
-# lemma's exit state), it is the eleven `by decide` window-charge obligations and
-# the eight named memory images. A measured trap worth recording: walking the
-# same eight `MSTORE`s through `func_run`'s own arm instead costs ~1.5 s PER
-# NODE after the sixth store, because the image is then a term whose payloads
-# are concrete -- a `keccak`-derived selector among them -- and every later
-# `whnf` runs the chain. `Func.runCompiledTo_mstore_step` names each image
-# instead and the per-node cost stays at ~0.1 s.
-#
-# Blanc/ForwardCall.lean's row is re-set 1.517 -> 1.576 (median of 1.624,
-# 1.576, 1.559) by the same step, which adds the `MSTORE`, `LOG` and
-# `CALLDATACOPY` walk steps and three memory-window lemmas to it.
-#
-# NO PRE-EXISTING ROW MOVED. Blanc/Forward.lean is untouched by this checkpoint
-# and its 4.829 row stands.
-#
-# 2026-08-07. Step 3 of the same arc (checkpoint 3a) crosses the `CALL`.
-#
-# Blanc/FmintSettles.lean's row is re-set 11.849 -> 20.492 (median of 20.374,
-# 20.492, 21.045, three sequential `--list --no-build` runs, no language server
-# alive). The growth is the two `ExecSat`-form trunk walks -- the mint and call
-# scripts re-run over `Func.ExecSat`, because the fixed-outcome forms cannot
-# thread the settlement trichotomy's existential (a continuation-passing walk
-# universally quantifies its successor states, so no single outcome term can be
-# named before the case analysis on the callback's settle) -- plus the crossing
-# `flashLoan_execSat_flag` and the callback-failed leaf. The fixed-outcome
-# trunks are checkpoint 2b's landed surface and stay; the ~8.5 s of deliberate
-# duplication is recorded in the step report as a closure question for the
-# user: nothing downstream consumes the fixed-outcome forms today.
-#
-# Blanc/ForwardCall.lean's row is re-set 1.576 -> 1.743 (median of 1.707,
-# 1.743, 1.768) by the same checkpoint, which adds the `Func.ExecTo` /
-# `Func.ExecSat` layer (the derivation-level transport of a walk, with the
-# fatal-`CALL` terminal `Func.RunCompiledTo` cannot express), the five
-# `execSat_*` step siblings, `NonConsensus` and the non-consensus channel
-# lemmas, and the depth-limit `CALL` arm.
-#
-# Blanc/Forward.lean's 4.829 row again did NOT move: checkpoint 3a adds only
-# the ten-line `execSpec` row to the RelSpec table (the extension the plan
-# explicitly reserves for this arc), measured 8.654 (median of 8.569, 8.654,
-# 8.718) against the unchanged threshold 9.658.
-#
-# The same step's second commit adds the returndata-short leaf;
-# Blanc/FmintSettles.lean re-measured 20.575 (median of 20.321, 20.575,
-# 20.745), row re-set 20.492 -> 20.575 on the same footing.
-#
-# 2026-08-07. Step 3's second session (checkpoint 3b) adds the magic-mismatch
-# and slot-collision leaves plus the two continuation-passing transports into
-# `spendAllowanceThenBurn`/`spendFromHash`; Blanc/FmintSettles.lean re-measured
-# 21.582 (median of 21.321, 21.582, 23.273), row re-set 20.575 -> 21.582 on the
-# established footing.  Blanc/ForwardCall.lean gains the covered-window family
-# (`memExtSize_of_le`, `Devm.extCost_zero_of_le`, `Mem.size_write_of_le`,
-# `Mem.size_read_snd_of_le`) and the `.ret` outcome terminal
-# `Func.runCompiledTo_ret_word`, and measured 1.687 (median of 1.677, 1.687,
-# 1.690) — *below* its 1.743 row, so that row is left alone.
-# Blanc/Forward.lean is untouched by this checkpoint; its 4.829 row stands.
-#
-# Checkpoint 3c (same session) adds the allowance-low, balance-low and success
-# leaves, the two allowance-arm transports, and the flashLoanContGasMax
-# symbol constants; Blanc/FmintSettles.lean re-measured 25.043 (median of
-# 23.620, 25.139, 25.043, no language-server workers), row re-set
-# 21.582 -> 25.043 on the established footing.  No other file touched.
-#
-# Checkpoint 3d (same session) adds the term-keyed returndata-short sibling,
-# flashLoanGas with its numeral lemma, and the pinned headline
-# fmint_flashLoan_settles (the 86th audited row); Blanc/FmintSettles.lean
-# re-measured 27.664 (median of 27.664, 30.563, 26.507, no language-server
-# workers; the middle run trailed a killed 1.3GB server and reads high), row
-# re-set 25.043 -> 27.664 on the established footing.  No other file touched.
-#
-# 2026-08-07. Step 3 of ~/plans/weth10-foundation.md adds the shared
-# Blanc/BalanceAlgebra.lean module and hand-sets its new row to 1.164 s, the
-# median of three sequential clean-host `scripts/check-elab.sh --list
-# --no-build` runs: 1.155, 1.164, and 1.184. No language-server worker was
-# alive for any run. `--rebase` and `--force` were not used, and no
-# pre-existing row moved.
-#
-# 2026-08-07. Step 4 of ~/plans/weth10-foundation.md adds the contract-low
-# Blanc/Weth10Core.lean module and hand-sets its new row to 1.234 s, the median
-# of three sequential clean-host `scripts/check-elab.sh --list --no-build`
-# runs: 1.314, 1.234, and 1.229. No Lean language-server worker was alive for
-# any run. `--rebase` and `--force` were not used, and no pre-existing row
-# moved.
-#
-# 2026-08-07. Step 5 of ~/plans/weth10-foundation.md adds the WETH10 property
-# Blanc/Weth10Backed.lean module and hand-sets its new row to 2.355 s, the
-# median of three sequential clean-host `scripts/check-elab.sh --list
-# --no-build` runs: 2.371, 2.355, and 2.352. No Lean language-server worker
-# was alive for any run. `--rebase` and `--force` were not used, and no
-# pre-existing row moved.
-#
-# 2026-08-07. Step 6 of ~/plans/weth10-foundation.md adds the WETH10 ladder
-# integration module Blanc/Weth10Spec.lean and hand-sets its new row to
-# 1.187 s, the median of three sequential clean-host
-# `scripts/check-elab.sh --list --no-build` runs: 1.187, 1.194, and 1.183.
-# No Lean language-server worker was alive for any run. `--rebase` and
-# `--force` were not used, and no pre-existing row moved.
-#
-# 2026-08-07. Step 1 of ~/plans/revert-payload.md adds the SHARED
-# Blanc/RevertPayload.lean module and hand-sets its new row to 1.630 s, the
-# median of three sequential quiescent-host measurements: 1.610, 1.640, and
-# 1.630. Lean language-server workers were stopped before all three runs;
-# `--rebase` and `--force` were not used, and no pre-existing row moved.
-#
-# 2026-08-08. The realistic-lender WETH10 closure adds baseline rows for the
-# 18 modules that were still absent here.  Each value is the median of three
-# sequential clean-host `scripts/check-elab.sh --list --no-build` runs after a
-# green full `lake build`; the runs covered the same 48 files and totaled
-# 470.8 s, 466.5 s, and 449.5 s.  Their unique reports are
-# `/private/tmp/weth10-elab-run1.tsv`,
-# `/private/tmp/weth10-elab-run2.tsv`, and
-# `/private/tmp/weth10-elab-run3.tsv`.
-# No language-server contention was reported, and `--rebase` and `--force`
-# were not used.  Twenty-nine pre-existing baseline rows below remain
-# byte-for-byte unchanged.  Blanc/Forward.lean is the sole targeted reset:
-# this candidate materially extends that shared module, and its old 4.829 s
-# row failed the non-rebasing gate at 10.789 s after measuring
-# 11.154/11.432/10.870 s in the three clean runs.  Its row is therefore set
-# to the 11.154 s median rather than hiding stable source-attributable drift.
-# The 18 new-module measured triples (median last) were:
-#
-#   Weth10 19.767/20.049/19.249 -> 19.767;
-#   Weth10Code 13.609/13.679/13.096 -> 13.609;
-#   Weth10Deploy 89.228/90.083/85.702 -> 89.228;
-#   Weth10DeployDomainSlices 33.248/31.545/31.729 -> 31.729;
-#   Weth10DeployExec 28.503/28.817/27.752 -> 28.503;
-#   Weth10DeployProof 65.215/62.829/62.251 -> 62.829;
-#   Weth10DeployUpperSlices 47.407/44.586/44.974 -> 44.974;
-#   Weth10Erc677Functional 1.805/1.679/1.652 -> 1.679;
-#   Weth10Errors 2.427/2.238/2.231 -> 2.238;
-#   Weth10FlashFunctional 2.503/2.346/2.350 -> 2.350;
-#   Weth10Functional 1.337/1.267/1.260 -> 1.267;
-#   Weth10Live 8.834/8.200/8.162 -> 8.200;
-#   Weth10Permit 14.325/13.471/13.548 -> 13.548;
-#   Weth10Read 1.636/1.521/1.511 -> 1.521;
-#   Weth10Sound 1.385/1.294/1.279 -> 1.294;
-#   Weth10StateFunctional 1.523/1.451/1.452 -> 1.452;
-#   Weth10StateSound 6.419/6.079/5.980 -> 6.079; and
-#   Weth10TransferFunctional 1.929/1.795/1.779 -> 1.795.
-#
-# 2026-08-09. The WETH10 elaboration-time optimization (blanc branch
-# codex/weth10-elab) re-set EIGHT rows and added ONE, from medians of three
-# sequential clean-host `scripts/check-elab.sh --list --no-build` runs
-# (271.3/271.5/270.1 s across all 49 files; no language-server worker above
-# the contention limits).  `--rebase` was NOT run: it rewrites every row and
-# would launder unrelated drift (Blanc/CommonProofs.lean measured ~7.6
-# against its documented-stale 6.143 row, threshold 12.286; Blanc/Ladder.lean
-# ~3.76 against 3.121, threshold 6.242; both deliberately LEFT ALONE, as
-# before).  The work is proof-internal only — no theorem statement moved —
-# plus one definition repoint (weth10RuntimeTemplate now unfolds to the
-# generated literal in the new Blanc/Weth10TemplateCode.lean, with the
-# identity to `weth10Code ⟨0, 0⟩` kernel-checked once).  The mechanism notes
-# live in the commits; the headline: the kernel eagerly literal-folds closed
-# Nat arithmetic and walks the whole compiled program each time a proof
-# term exposes it, so the family paid the same ~7-10 s AST walk dozens of
-# times.  Sizes are now composed from per-leaf decides, and the two
-# remaining full-program kernel evaluations are weth10TemplateCode_compile
-# (Blanc/Weth10.lean) and the mainnet artifact witness (Blanc/Weth10Code.lean).
-#
-#   Weth10 (19.767) 20.879/21.757/20.717 -> 20.879;
-#   Weth10Deploy (89.228) 44.833/45.126/46.094 -> 45.126;
-#   Weth10DeployDomainSlices (31.729) 17.471/17.062/17.160 -> 17.160;
-#   Weth10DeployExec (28.503) 1.953/1.973/1.992 -> 1.973;
-#   Weth10DeployProof (62.829) 2.757/2.780/2.782 -> 2.780;
-#   Weth10DeployUpperSlices (44.974) 12.032/12.082/12.084 -> 12.082;
-#   Weth10Permit (13.548) 4.471/4.654/4.589 -> 4.589;
-#   Weth10TemplateCode (new module) 2.373/2.445/2.479 -> 2.445; and
-#   the totals fell 453.4 -> 270.1 s.
-# Blanc/Weth10Code.lean measured 12.896 against its 13.609 row (source
-# untouched; the small drop rides the import change) and is LEFT ALONE on
-# the same no-laundering rule.
-#
-# 2026-08-09. Blanc/Weth10Stable.lean was added for the public invariant and
-# chain-preservation package. Its 1.203 s row is the result of a sequential
-# clean-host `scripts/check-elab.sh --list --no-build` run over all 50 files
-# (271.0 s total), with no Lean language server alive. Only this new row was
-# added; every existing reference time remains unchanged.
-#
-# The twenty-five weth10-redeem-future-v2 rows below were hand-set to their
-# measured costs when that goal's hardened-provenance development was
-# root-imported: attribution semantics, the allowance-region transport and its
-# thirty-one selector arms, the recursion and history lifts, the dispatcher,
-# and the hardened, dormancy, future-redeemability and any-order results. A
-# file with no row here is a REGRESSION ("a new module must state its cost"),
-# so these rows admit new content rather than relaxing a failure, and the user
-# authorized the admission against the measured list.
-#
-# 2026-08-12: two of the admitted rows (Weth10AllowanceCompleteness 1.171,
-# Weth10AllowanceSweep 1.334) were REMOVED together with their modules when
-# the goal's owner adjudicated the H2 occurrence-level completeness row out
-# of scope: the flagship's own provability already forces completeness for
-# every balance-affecting event, so the audit-only remainder was dropped.
-# The paragraph below describes the original 25-row admission; 23 remain.
-#
-# 2026-08-12 (weth10-redeem-future-v2 close-out): FIVE rows this goal moved
-# are refreshed to their measured values, and only those. Four had gone
-# stale-HIGH after the goal's selector-separation hoist, and a stale-high
-# baseline WEAKENS this gate rather than being conservative: the threshold is
-# 2.0x, so Weth10HolderFlowCompiled at a 45.717 baseline would have silently
-# tolerated 91.4 s against a real cost of 4.4 s -- a twentyfold regression,
-# unnoticed. Refreshing them restores the gate's power to detect. The fifth,
-# Weth10Attribution 1.686 -> 1.919, is this goal's computed dirty-pair keccak.
-# `--rebase` was still NOT run: it rewrites every row and would absorb drift
-# this goal did not cause -- Blanc/CommonProofs.lean, for one, has drifted
-# 6.143 -> 7.804 across several measurements and is deliberately left alone.
-# Measured on a quiesced host (language servers stopped first, load 2.65),
-# 92 files, 415.7 s total.
-#
-# They total 45.6 s and none exceeds 3.1 s. The suite nevertheless FELL from
-# 455.1 s over 69 files to 423.4 s over 94: the selector-separation hoist in
-# the same goal (each kernel-decided disequality had been recomputing two
-# keccaks) freed more time than the whole development costs. Measured
-# sequentially on a quiesced host — three language servers at 38 MB against
-# the gate's 250 MB guard — and `--force` was not used.
-#
-# `--rebase` was deliberately NOT run. It rewrites every row, which would
-# absorb the four IMPROVED rows this goal produced (Weth10HolderFlowCompiled
-# 45.717 -> 4.426, EthExec 20.273 -> 8.916, WriteCompleteness 16.981 -> 7.502,
-# Result 4.070 -> 1.502) and any unrelated drift into this goal's commit.
-# Those four rows are left at their old values, which is the conservative
-# reading: an improvement is a note, never a failure.
-# G4b on 2026-08-22 ratcheted each row to min(previous baseline, five-pass
-# whole-tree median). Upward medians were recorded as current-cost evidence but
-# did not loosen this 2x gate. See ~/plans/reports/blanc-elab-instrument-2026-08-22.md.
-#
-# Calibration control — scripts/check-elab.sh --calibrate
-#
-# Regression detection and calibration are different jobs. The content and
-# import-closure fingerprint has already established that every undrawn
-# module cannot have moved, so an undrawn file is not a coverage gap; the
-# sample only establishes that this host was behaving normally while the
-# mandatory rows below were measured.
-#
-# Seed domain blanc-elab-calibration-v1, candidate commit
-#   d554c88e05af25ffac6153a24f68ba340ebe25b1
-# seed sha256(domain|commit)
-#   832664a7d0d229e3106cde9dc4e52322ed5f8b9784e66e8d26b1441177579b8b
-# baseline sha256
-#   850db650badc560e4b16348e4679629141d46f1d0c677693d8a6c6a26c488a03
-# source-set sha256 (every discovered path and its content)
-#   c252873fbffece2570bdc04c5e36e249d43e058ad2958683f36964fa4c4a9f4f
-#
-# Drawn from the 135 of 136 baseline rows that this run's content and
-# import-closure fingerprint proves unaffected; within a band, the first
-# k paths ordered by sha256(seed|path). Boundaries are fixed; membership
-# is recomputed from the baseline current at this commit.
-#
-# The remaining 1 row(s) were not drawn because this run measured and
-# compared them outright:
-#     Blanc.lean
-#
-#   band            population  drawn
-#   [0, 1.5)                36      4
-#   [1.5, 3)                54      4
-#   [3, 10)                 24      2
-#   [10, inf)               21      2
-#
-#   mandatory (measured, never sampled)                     seconds
-#   Blanc/LidoCircuitBreakerSuccess.lean                     1.586
-#
-#   control                                              measured  baseline  ratio
-#   Blanc/LidoCircuitBreakerPauseJoin.lean                   2.031     2.071   0.98
-#   Blanc/LidoCircuitBreakerUnregisterRegistration.lean      4.899     5.286   0.93
-#   Blanc/ProofRecipesGenerated.lean                         0.659     0.594   1.11
-#   Blanc/Reverts.lean                                       1.220     1.178   1.04
-#   Blanc/TransientInvariance.lean                           1.251     1.208   1.04
-#   Blanc/Weth10.lean                                       20.545    20.746   0.99
-#   Blanc/Weth10AllowanceAccounting.lean                     1.829     1.676   1.09
-#   Blanc/Weth10AllowanceArms.lean                           1.512     1.436   1.05
-#   Blanc/Weth10AllowanceArmsCallback.lean                   2.432     2.090   1.16
-#   Blanc/Weth10DeployUpperSlices.lean                      11.804    11.936   0.99
-#   Blanc/Weth10HolderFlowWriteCompleteness.lean             7.573     7.549   1.00
-#   Blanc/Weth10TemplateCode.lean                            2.418     2.419   1.00
-#
-# 12 controls, median ratio 1.036, spread 0.93x-1.16x.
-# A control refuses the run at 2.00x and is annotated at 1.50x,
-# each also requiring the same 1.0s absolute excess the gate applies to
-# the rows themselves.
-# No control reached 1.50x.
-#
-# 2026-08-23. ~/plans/lido-circuit-breaker-history-goal.md (H11) added the
-# three Stage 7 Registry-history owners, and their rows are ADDITIONS admitting
-# new content, not relaxations admitting a failure: a file with no row here is
-# a REGRESSION, so a new module must state its cost.
-#
-#   Blanc/LidoCircuitBreakerHistory.lean            1.244
-#   Blanc/LidoCircuitBreakerHistoryChain.lean       1.502
-#   Blanc/LidoCircuitBreakerHistoryEndpoints.lean   1.375
-#
-# Measured by `scripts/check-elab.sh --calibrate` at a938b9e with no language
-# server alive -- the run before it REFUSED at 1252MB of retained Lean
-# environment, which is the condition that refusal exists for. Seed d2f030edc3c6
-# derived from that commit; 11 controls drawn across four bands, median ratio
-# 1.061, spread 0.97x-1.26x, none reaching the 1.50x annotation threshold let
-# alone the 2.00x refusal. Full evidence in scripts/report-elab-calibration.txt,
-# recomputable from the commit.
-#
-# No pre-existing row moved. That is the substantive claim, not the three new
-# numbers: this goal edited Blanc/Ladder.lean, which sits near the base of the
-# import graph, so the change invalidated and re-measured 128 modules -- and
-# every one of them held its committed baseline. The whole Stage 7 family costs
-# ~4.1s, which is why the ladder work paid for itself: the history rungs are
-# thin specializations of machinery that already existed.
-#
-# `--rebase` was NOT run, and `--force` was not used. Neither is a way to make
-# a red gate green, and a --force run may not be rebased.
-#
-# Calibration control — scripts/check-elab.sh --calibrate
-#
-# Regression detection and calibration are different jobs. The content and
-# import-closure fingerprint has already established that every undrawn
-# module cannot have moved, so an undrawn file is not a coverage gap; the
-# sample only establishes that this host was behaving normally while the
-# mandatory rows below were measured.
-#
-# Seed domain blanc-elab-calibration-v1, candidate commit
-#   c2072f946b19180c037e6c5261f57d06bee6af03
-# seed sha256(domain|commit)
-#   154ccd1cba5a5eb437e772497c2e9e59317cd82faafffbc98b07d688dacfbd07
-# baseline sha256
-#   6e72712a9005ee7c1dcc67d9de293f077f6438c6f35eee6b398f92ad1eac2d0a
-# source-set sha256 (every discovered path and its content)
-#   28adf8c5dfe702062cc8bdea902e1eee842826e68c3298615fdb18c3098d87e7
-#
-# Drawn from the 63 of 140 baseline rows that this run's content and
-# import-closure fingerprint proves unaffected; within a band, the first
-# k paths ordered by sha256(seed|path). Boundaries are fixed; membership
-# is recomputed from the baseline current at this commit.
-#
-# The remaining 77 row(s) were not drawn because this run measured and
-# compared them outright:
-#     Blanc.lean
-#     Blanc/LidoCircuitBreakerAbsentRegistration.lean
-#     Blanc/LidoCircuitBreakerAccess.lean
-#     Blanc/LidoCircuitBreakerAttainment.lean
-#     Blanc/LidoCircuitBreakerAuthority.lean
-#     Blanc/LidoCircuitBreakerCallBoundary.lean
-#     Blanc/LidoCircuitBreakerDeploy.lean
-#     Blanc/LidoCircuitBreakerFreshRegistration.lean
-#     Blanc/LidoCircuitBreakerHistory.lean
-#     Blanc/LidoCircuitBreakerHistoryChain.lean
-#     Blanc/LidoCircuitBreakerHistoryEndpoints.lean
-#     Blanc/LidoCircuitBreakerObservation.lean
-#     ... and 65 more
-#
-#   band            population  drawn
-#   [0, 1.5)                19      4
-#   [1.5, 3)                21      4
-#   [3, 10)                 13      2
-#   [10, inf)               10      2
-#
-#   mandatory (measured, never sampled)                     seconds
-#   Blanc/DeploymentCompiled.lean                            1.174
-#   Blanc/DeploymentMessage.lean                             1.243
-#   Blanc/LidoCircuitBreakerDeploymentBlock.lean             1.364
-#   Blanc/LidoCircuitBreakerDeploymentInput.lean            12.023
-#   Blanc/LidoCircuitBreakerDeploymentLayout.lean           53.318
-#   Blanc/LidoCircuitBreakerDeploymentMessage.lean         216.135
-#   Blanc/LidoCircuitBreakerDeploymentRoot.lean              1.272
-#   Blanc/LidoCircuitBreakerDeploymentTrace.lean            90.719
-#   Blanc/LidoCircuitBreakerDeploymentTransaction.lean       2.227
-#
-#   control                                              measured  baseline  ratio
-#   Blanc/BalanceAlgebra.lean                                1.155     1.150   1.00
-#   Blanc/CycleWriteFree.lean                                1.275     1.289   0.99
-#   Blanc/FlashSpec.lean                                     1.869     1.891   0.99
-#   Blanc/FmintReverts.lean                                  5.526     5.266   1.05
-#   Blanc/LidoCircuitBreaker.lean                           15.650    15.805   0.99
-#   Blanc/LidoCircuitBreakerRegistry.lean                   70.318    67.133   1.05
-#   Blanc/LidoCircuitBreakerRegistryModel.lean               1.766     1.180   1.50
-#   Blanc/RevertPayload.lean                                 1.801     1.630   1.10
-#   Blanc/SourceAttainment.lean                              1.607     1.553   1.03
-#   Blanc/Weth10FlashFunctional.lean                         2.479     2.350   1.05
-#   Blanc/Weth10Sound.lean                                   1.267     1.239   1.02
-#   Blanc/WethGas.lean                                       9.096     7.978   1.14
-#
-# 12 controls, median ratio 1.047, spread 0.99x-1.50x.
-# A control refuses the run at 2.00x and is annotated at 1.50x,
-# each also requiring the same 1.0s absolute excess the gate applies to
-# the rows themselves.
-# No control reached 1.50x.
-#
-# 2026-08-24. ~/plans/lido-circuit-breaker-deployment-root-goal.md
-# (DR11) admitted exactly two contract-neutral deployment owners and seven
-# Lido-local deployment owners. These are additions for new content, never
-# relaxations of a failing row. Three sequential calibration runs at the
-# candidate above measured the identical 98-file set with the identical 12
-# controls and finished green in 928.8s, 936.8s, and 958.2s.
-#
-#   owner                                                     pass 1    pass 2    pass 3    median
-#   Blanc/DeploymentCompiled.lean                              1.226     1.258     1.174     1.226
-#   Blanc/DeploymentMessage.lean                               1.288     1.313     1.243     1.288
-#   Blanc/LidoCircuitBreakerDeploymentBlock.lean               1.239     1.230     1.364     1.239
-#   Blanc/LidoCircuitBreakerDeploymentInput.lean              11.624    11.641    12.023    11.641
-#   Blanc/LidoCircuitBreakerDeploymentLayout.lean             51.374    51.141    53.318    51.374
-#   Blanc/LidoCircuitBreakerDeploymentMessage.lean           213.683   210.244   216.135   213.683
-#   Blanc/LidoCircuitBreakerDeploymentRoot.lean                1.233     1.222     1.272     1.233
-#   Blanc/LidoCircuitBreakerDeploymentTrace.lean              91.131    91.456    90.719    91.131
-#   Blanc/LidoCircuitBreakerDeploymentTransaction.lean         2.292     2.183     2.227     2.227
-#
-# Every one of the 140 pre-existing rows stayed green and is retained
-# byte-for-byte. `--rebase`, `--full`, `--list`, `--force`, and cache seeding
-# were not used. The calibration mode wrote neither the baseline nor its
-# local cache; the nine rows below are deliberate additions using the
-# three-run medians.
-#
-OK	1.241	Blanc.lean
+# 2026-08-25 R7 shrink-only reconciliation, explicitly authorized by
+# the project owner after a 149-module `check-elab.sh --rebase` pass:
+# each row is min(committed row, measured row). The pass measured
+# 1198.614 s total; 55 reductions are recorded, 94 lower committed
+# rows are preserved, no row rises, and this ratchet totals 1161.025 s.
+OK	1.167	Blanc.lean
 OK	1.150	Blanc/BalanceAlgebra.lean
-OK	1.233	Blanc/Basic.lean
+OK	1.231	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
-OK	1.786	Blanc/Compiled.lean
-OK	2.178	Blanc/Conserved.lean
+OK	1.771	Blanc/Compiled.lean
+OK	2.147	Blanc/Conserved.lean
 OK	1.289	Blanc/CycleWriteFree.lean
-OK	1.226	Blanc/DeploymentCompiled.lean
-OK	1.288	Blanc/DeploymentMessage.lean
+OK	1.176	Blanc/DeploymentCompiled.lean
+OK	1.235	Blanc/DeploymentMessage.lean
 OK	2.184	Blanc/ExecDeterminism.lean
 OK	6.583	Blanc/ExecutionOccurrence.lean
 OK	1.347	Blanc/ExecutionSettlement.lean
 OK	1.891	Blanc/FlashSpec.lean
-OK	2.973	Blanc/Fmint.lean
-OK	4.485	Blanc/FmintCode.lean
+OK	2.888	Blanc/Fmint.lean
+OK	4.390	Blanc/FmintCode.lean
 OK	7.098	Blanc/FmintGas.lean
-OK	4.096	Blanc/FmintLive.lean
-OK	5.266	Blanc/FmintReverts.lean
-OK	27.664	Blanc/FmintSettles.lean
+OK	4.036	Blanc/FmintLive.lean
+OK	5.199	Blanc/FmintReverts.lean
+OK	26.721	Blanc/FmintSettles.lean
 OK	11.154	Blanc/Forward.lean
 OK	1.743	Blanc/ForwardCall.lean
 OK	3.121	Blanc/Ladder.lean
 OK	15.805	Blanc/LidoCircuitBreaker.lean
-OK	15.066	Blanc/LidoCircuitBreakerAbsentRegistration.lean
-OK	36.398	Blanc/LidoCircuitBreakerAccess.lean
+OK	15.033	Blanc/LidoCircuitBreakerAbsentRegistration.lean
+OK	34.643	Blanc/LidoCircuitBreakerAccess.lean
 OK	32.134	Blanc/LidoCircuitBreakerAttainment.lean
-OK	9.765	Blanc/LidoCircuitBreakerAuthority.lean
-OK	3.164	Blanc/LidoCircuitBreakerCallBoundary.lean
+OK	9.360	Blanc/LidoCircuitBreakerAuthority.lean
+OK	3.151	Blanc/LidoCircuitBreakerCallBoundary.lean
 OK	1.341	Blanc/LidoCircuitBreakerCode.lean
 OK	1.230	Blanc/LidoCircuitBreakerCore.lean
 OK	7.130	Blanc/LidoCircuitBreakerDeploy.lean
 OK	1.239	Blanc/LidoCircuitBreakerDeploymentBlock.lean
-OK	11.641	Blanc/LidoCircuitBreakerDeploymentInput.lean
+OK	11.640	Blanc/LidoCircuitBreakerDeploymentInput.lean
 OK	51.374	Blanc/LidoCircuitBreakerDeploymentLayout.lean
-OK	213.683	Blanc/LidoCircuitBreakerDeploymentMessage.lean
-OK	1.233	Blanc/LidoCircuitBreakerDeploymentRoot.lean
-OK	91.131	Blanc/LidoCircuitBreakerDeploymentTrace.lean
-OK	2.227	Blanc/LidoCircuitBreakerDeploymentTransaction.lean
+OK	211.587	Blanc/LidoCircuitBreakerDeploymentMessage.lean
+OK	1.206	Blanc/LidoCircuitBreakerDeploymentRoot.lean
+OK	89.131	Blanc/LidoCircuitBreakerDeploymentTrace.lean
+OK	2.121	Blanc/LidoCircuitBreakerDeploymentTransaction.lean
 OK	40.326	Blanc/LidoCircuitBreakerEnumeration.lean
-OK	17.604	Blanc/LidoCircuitBreakerFreshRegistration.lean
-OK	1.244	Blanc/LidoCircuitBreakerHistory.lean
-OK	1.502	Blanc/LidoCircuitBreakerHistoryChain.lean
+OK	17.331	Blanc/LidoCircuitBreakerFreshRegistration.lean
+OK	1.225	Blanc/LidoCircuitBreakerHistory.lean
+OK	1.466	Blanc/LidoCircuitBreakerHistoryChain.lean
 OK	1.375	Blanc/LidoCircuitBreakerHistoryEndpoints.lean
-OK	1.393	Blanc/LidoCircuitBreakerObservation.lean
-OK	2.810	Blanc/LidoCircuitBreakerOwnerClosure.lean
-OK	2.207	Blanc/LidoCircuitBreakerPauseAttainment.lean
-OK	1.509	Blanc/LidoCircuitBreakerPauseGuards.lean
-OK	2.071	Blanc/LidoCircuitBreakerPauseJoin.lean
-OK	10.037	Blanc/LidoCircuitBreakerPauseOkRoute.lean
-OK	2.118	Blanc/LidoCircuitBreakerPauseRoute.lean
+OK	1.373	Blanc/LidoCircuitBreakerObservation.lean
+OK	2.725	Blanc/LidoCircuitBreakerOwnerClosure.lean
+OK	2.160	Blanc/LidoCircuitBreakerPauseAttainment.lean
+OK	1.494	Blanc/LidoCircuitBreakerPauseGuards.lean
+OK	2.016	Blanc/LidoCircuitBreakerPauseJoin.lean
+OK	9.696	Blanc/LidoCircuitBreakerPauseOkRoute.lean
+OK	2.066	Blanc/LidoCircuitBreakerPauseRoute.lean
 OK	1.635	Blanc/LidoCircuitBreakerPauseSettlement.lean
 OK	1.247	Blanc/LidoCircuitBreakerPauseSuffix.lean
-OK	7.158	Blanc/LidoCircuitBreakerPauseSuffixWalk.lean
-OK	46.476	Blanc/LidoCircuitBreakerPauseWalk.lean
-OK	2.391	Blanc/LidoCircuitBreakerPauseWorld.lean
-OK	8.953	Blanc/LidoCircuitBreakerPauseWorldRun.lean
-OK	23.238	Blanc/LidoCircuitBreakerPauseWorldRunKit.lean
+OK	6.794	Blanc/LidoCircuitBreakerPauseSuffixWalk.lean
+OK	31.952	Blanc/LidoCircuitBreakerPauseWalk.lean
+OK	2.256	Blanc/LidoCircuitBreakerPauseWorld.lean
+OK	8.715	Blanc/LidoCircuitBreakerPauseWorldRun.lean
+OK	23.010	Blanc/LidoCircuitBreakerPauseWorldRunKit.lean
 OK	1.717	Blanc/LidoCircuitBreakerPreControl.lean
 OK	2.475	Blanc/LidoCircuitBreakerRegistrationWorld.lean
 OK	67.133	Blanc/LidoCircuitBreakerRegistry.lean
 OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean
 OK	17.513	Blanc/LidoCircuitBreakerRegistrySubstrate.lean
-OK	30.155	Blanc/LidoCircuitBreakerReplacementRegistration.lean
+OK	2.486	Blanc/LidoCircuitBreakerReplacementRegistration.lean
 OK	2.232	Blanc/LidoCircuitBreakerReplacementWorld.lean
 OK	1.261	Blanc/LidoCircuitBreakerRetainedAuthority.lean
 OK	16.620	Blanc/LidoCircuitBreakerSites.lean
@@ -863,13 +91,13 @@ OK	1.999	Blanc/Tactics.lean
 OK	1.208	Blanc/TransientInvariance.lean
 OK	1.269	Blanc/TransientSettlement.lean
 OK	2.356	Blanc/Weth.lean
-OK	20.746	Blanc/Weth10.lean
-OK	1.676	Blanc/Weth10AllowanceAccounting.lean
+OK	20.615	Blanc/Weth10.lean
+OK	1.546	Blanc/Weth10AllowanceAccounting.lean
 OK	1.436	Blanc/Weth10AllowanceArms.lean
 OK	1.766	Blanc/Weth10AllowanceArmsBalance.lean
 OK	2.090	Blanc/Weth10AllowanceArmsCallback.lean
 OK	2.355	Blanc/Weth10AllowanceArmsFlash.lean
-OK	2.117	Blanc/Weth10AllowanceArmsPermit.lean
+OK	2.086	Blanc/Weth10AllowanceArmsPermit.lean
 OK	1.741	Blanc/Weth10AllowanceArmsRedeem.lean
 OK	1.848	Blanc/Weth10AllowanceArmsSpend.lean
 OK	2.000	Blanc/Weth10AllowanceArmsSpendRedeem.lean
@@ -881,17 +109,17 @@ OK	1.289	Blanc/Weth10AnyOrder.lean
 OK	1.899	Blanc/Weth10Attribution.lean
 OK	1.467	Blanc/Weth10AttributionChronology.lean
 OK	2.353	Blanc/Weth10Backed.lean
-OK	12.944	Blanc/Weth10Code.lean
+OK	12.823	Blanc/Weth10Code.lean
 OK	1.230	Blanc/Weth10Core.lean
-OK	43.631	Blanc/Weth10Deploy.lean
-OK	16.847	Blanc/Weth10DeployDomainSlices.lean
+OK	43.283	Blanc/Weth10Deploy.lean
+OK	16.628	Blanc/Weth10DeployDomainSlices.lean
 OK	1.949	Blanc/Weth10DeployExec.lean
-OK	2.767	Blanc/Weth10DeployProof.lean
-OK	11.936	Blanc/Weth10DeployUpperSlices.lean
-OK	1.695	Blanc/Weth10DeploymentRoot.lean
+OK	2.760	Blanc/Weth10DeployProof.lean
+OK	11.889	Blanc/Weth10DeployUpperSlices.lean
+OK	1.658	Blanc/Weth10DeploymentRoot.lean
 OK	2.213	Blanc/Weth10Dormant.lean
 OK	1.679	Blanc/Weth10Erc677Functional.lean
-OK	2.238	Blanc/Weth10Errors.lean
+OK	2.191	Blanc/Weth10Errors.lean
 OK	2.350	Blanc/Weth10FlashFunctional.lean
 OK	1.210	Blanc/Weth10Functional.lean
 OK	1.195	Blanc/Weth10FutureRedeemable.lean
@@ -903,31 +131,31 @@ OK	4.424	Blanc/Weth10HolderFlowCompiled.lean
 OK	1.247	Blanc/Weth10HolderFlowConservation.lean
 OK	1.310	Blanc/Weth10HolderFlowDeterminism.lean
 OK	2.421	Blanc/Weth10HolderFlowEth.lean
-OK	8.399	Blanc/Weth10HolderFlowEthExec.lean
+OK	8.338	Blanc/Weth10HolderFlowEthExec.lean
 OK	17.056	Blanc/Weth10HolderFlowExecAccounting.lean
 OK	2.428	Blanc/Weth10HolderFlowFlashChronology.lean
 OK	1.334	Blanc/Weth10HolderFlowLocal.lean
-OK	1.795	Blanc/Weth10HolderFlowPermitChronology.lean
+OK	1.724	Blanc/Weth10HolderFlowPermitChronology.lean
 OK	1.476	Blanc/Weth10HolderFlowResult.lean
 OK	2.283	Blanc/Weth10HolderFlowSelectorFacts.lean
 OK	1.263	Blanc/Weth10HolderFlowStorage.lean
 OK	1.565	Blanc/Weth10HolderFlowTransferAndCallChronology.lean
 OK	7.549	Blanc/Weth10HolderFlowWriteCompleteness.lean
-OK	7.970	Blanc/Weth10Live.lean
+OK	7.939	Blanc/Weth10Live.lean
 OK	4.589	Blanc/Weth10Permit.lean
-OK	1.363	Blanc/Weth10PermitRawEffect.lean
-OK	1.521	Blanc/Weth10Read.lean
+OK	1.353	Blanc/Weth10PermitRawEffect.lean
+OK	1.519	Blanc/Weth10Read.lean
 OK	8.252	Blanc/Weth10Redeemable.lean
 OK	3.003	Blanc/Weth10SelectorFacts.lean
 OK	1.239	Blanc/Weth10Sound.lean
 OK	1.187	Blanc/Weth10Spec.lean
 OK	1.169	Blanc/Weth10Stable.lean
 OK	1.414	Blanc/Weth10StateFunctional.lean
-OK	6.079	Blanc/Weth10StateSound.lean
-OK	1.809	Blanc/Weth10StaticSilence.lean
-OK	2.419	Blanc/Weth10TemplateCode.lean
+OK	6.069	Blanc/Weth10StateSound.lean
+OK	1.786	Blanc/Weth10StaticSilence.lean
+OK	2.388	Blanc/Weth10TemplateCode.lean
 OK	1.750	Blanc/Weth10TransferFunctional.lean
-OK	3.793	Blanc/WethCode.lean
+OK	3.780	Blanc/WethCode.lean
 OK	7.978	Blanc/WethGas.lean
 OK	5.383	Blanc/WethLive.lean
 OK	1.158	Main.lean

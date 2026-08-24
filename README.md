@@ -471,12 +471,22 @@ whole-artifact build times from that goal's working log rather than
 `check-elab.sh` rows; they are recorded here because this class had no measured
 entry at all, not because they are gate evidence.
 
-**The discipline**, in the form it was stated when it was found: build each
-certificate separately, and abstract only the ones that cross the breaker. The
-abstraction costs source and indirection, and a short bounded walk does not
-need it. WETH10 largely does not — it already uses dispatcher views and named
-line certificates. The known un-retrofitted candidates are Lido's, and they are
-named in the `runcompiled-construction` entry of the proof recipe registry.
+**The discipline** is to build each certificate separately and abstract only
+the ones that cross the breaker. The abstraction costs source and indirection,
+and a short bounded walk does not need it. WETH10 largely does not — it already
+uses dispatcher views and named line certificates. The 2026-08-25 Lido
+retrofit applied local carriers to `pause_stageArgs_runCompiled` and the two
+replacement-registration body walks, removing all six of their raised
+recursion/heartbeat scopes. In sequential `check-elab.sh` checkpoints the
+Pause owner moved from 47.842 s to 31.984 s and Replacement from 30.441 s to
+2.326 s; target profiler entries that had been 29.898 s, 28.371 s and 41.545 s
+all fell below the 2 s reporting threshold. The Registry staging walk stayed
+concrete: its carrier improved the isolated target from 15.638 s to 10.531 s
+but regressed the three-owner closure from 23.655/47.842/30.441 s to
+37.989/67.316/53.222 s, so it was reverted. That is the intended boundary:
+cross the breaker on the closure that owns the walk, not on a target-only
+profile. The exact dispositions and non-applicability boundaries remain in the
+`runcompiled-construction` proof-recipe entry.
 
 **Why budgets do not save you.** Inside `simp`'s defeq discharging the work is
 not heartbeat-metered, and the kernel's certificate check ignores

@@ -312,8 +312,121 @@ theorem pause_dispatch_runCompiledTo
 
 /-! ## The staging line -/
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
+private structure PauseStageMemory (memory : Mem) : Prop where
+  size_eq : memory.size = 768
+
+private theorem PauseStageMemory.duration (duration : B256) :
+    PauseStageMemory
+      (Mem.empty.write (durationWord * 32).toNat duration.toBytes) := by
+  constructor
+  rw [Mem.size_write_word_at]
+  decide +kernel
+
+private theorem PauseStageMemory.write
+    {memory : Mem} (h : PauseStageMemory memory)
+    (offset : B256) (value : B256)
+    (hfit : (offset * 32).toNat + 32 ≤ 768) :
+    PauseStageMemory
+      (memory.write (offset * 32).toNat value.toBytes) := by
+  constructor
+  rw [Mem.size_write_of_le]
+  · exact h.size_eq
+  · rw [B256.length_toBytes, h.size_eq]
+    exact hfit
+
+private theorem pauseStageDuration_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {duration : B256} {G : Nat} {rest : Func}
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[],
+        Mem.empty.write (durationWord * 32).toNat duration.toBytes, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[duration], Mem.empty, G + 79⟩)
+      (mstoreAt durationWord +++ rest) post := by
+  func_run (2) [73]
+  case h_ext =>
+    exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
+  case a =>
+    have hgas : G + 79 - 79 = G := by omega
+    simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach, hgas] using hrest
+
+private theorem PauseStageMemory.runCompiled_pushMstore
+    {memory : Mem} (h : PauseStageMemory memory)
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {offset value : B256} {pushGas G : Nat} {rest : Func}
+    (hoffset : pushCost (offset * 32).toBytes.sig = 3)
+    (hvalue : pushCost value.toBytes.sig = pushGas)
+    (hfit : (offset * 32).toNat + 32 ≤ 768)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[],
+        memory.write (offset * 32).toNat value.toBytes, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], memory, G + (pushGas + 6)⟩)
+      (pushB256 value ::: mstoreAt offset +++ rest) post := by
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_pushB256 (c := pushGas) (G := G + 6) hvalue
+    · simp only [Devm.gasLeft_setMach]
+      omega
+    · simp only [Devm.stack_setMach, List.length_nil]
+      omega
+  · apply Func.RunCompiled.next
+    · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 3) hoffset
+      · simp only [Devm.gasLeft_setMach]
+      · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega
+    · func_run (1) [0]
+      case h_ext =>
+        simp only [Devm.memory_setMach]
+        exact Devm.extCost_zero_of_le (by rw [h.size_eq]) (by
+          rw [h.size_eq]
+          exact hfit)
+      case a =>
+        have hgas : G + 3 - 3 = G := by omega
+        simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+          Devm.memory_setMach, Devm.gasLeft_setMach, hgas] using hrest
+
+private theorem PauseStageMemory.runCompiled_argTarget
+    {memory : Mem} (h : PauseStageMemory memory)
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {target : B256} {G : Nat} {rest : Func}
+    (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hfit : (targetWord * 32).toNat + 32 ≤ 768)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[],
+        memory.write (targetWord * 32).toNat target.toBytes, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], memory, G + 12⟩)
+      (arg 0 +++ mstoreAt targetWord +++ rest) post := by
+  unfold arg cdl
+  func_run (4) [0]
+  case h_ext =>
+    exact Devm.extCost_zero_of_le (by rw [h.size_eq]) (by
+      rw [h.size_eq]
+      exact hfit)
+  case a =>
+    rw [hargTarget]
+    have hgas : G + 12 - 12 = G := by omega
+    simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach, hgas] using hrest
+
+private theorem pauseStageCall_runCompiled
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (memory : Mem) (G : Nat) (post : Devm)
+    (hkernel : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], memory, G⟩) setPauserKernel post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], memory, G + 12⟩)
+      (.call setPauserSlot) post := by
+  func_run (1)
+  case h_body =>
+    have hgas : G + 12 - 12 = G := by omega
+    simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach, hgas] using hkernel
+
 /-- The five scratch writes `pause`'s body performs between its liveness guard
 and the Registry kernel call, with the pause duration already on the stack.
 
@@ -336,45 +449,82 @@ theorem pause_stageArgs_runCompiled
         pushB256 0 ::: mstoreAt previousPauserWord +++
         pushB256 1 ::: mstoreAt continuationWord +++
         .call setPauserSlot) post := by
-  have hM1Size (w : B256) :
-      (Mem.empty.write (durationWord * 32).toNat w.toBytes).size = 768 := by
-    rw [Mem.size_write_word_at]
+  let M1 := Mem.empty.write (durationWord * 32).toNat duration.toBytes
+  let M2 := M1.write (targetWord * 32).toNat target.toBytes
+  let M3 := M2.write (newPauserWord * 32).toNat (0 : B256).toBytes
+  let M4 := M3.write (previousPauserWord * 32).toNat (0 : B256).toBytes
+  let M5 := M4.write (continuationWord * 32).toNat (1 : B256).toBytes
+  have htargetFit : (targetWord * 32).toNat + 32 ≤ 768 := by
     decide +kernel
-  have hM2Size (w₁ w₂ : B256) :
-      ((Mem.empty.write (durationWord * 32).toNat w₁.toBytes).write
-        (targetWord * 32).toNat w₂.toBytes).size = 768 := by
-    rw [Mem.size_write_word_at, hM1Size]
+  have hnewFit : (newPauserWord * 32).toNat + 32 ≤ 768 := by
     decide +kernel
-  have hM3Size (w₁ w₂ : B256) :
-      (((Mem.empty.write (durationWord * 32).toNat w₁.toBytes).write
-        (targetWord * 32).toNat w₂.toBytes).write
-        (newPauserWord * 32).toNat (0 : B256).toBytes).size = 768 := by
-    rw [Mem.size_write_word_at, hM2Size]
+  have hpreviousFit : (previousPauserWord * 32).toNat + 32 ≤ 768 := by
     decide +kernel
-  have hM4Size (w₁ w₂ : B256) :
-      ((((Mem.empty.write (durationWord * 32).toNat w₁.toBytes).write
-        (targetWord * 32).toNat w₂.toBytes).write
-        (newPauserWord * 32).toNat (0 : B256).toBytes).write
-        (previousPauserWord * 32).toNat (0 : B256).toBytes).size = 768 := by
-    rw [Mem.size_write_word_at, hM3Size]
+  have hcontinuationFit : (continuationWord * 32).toNat + 32 ≤ 768 := by
     decide +kernel
-  unfold arg cdl
-  func_run (16) [73, 0, 0, 0, 0]
-  case h_ext => exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
-  case h_ext =>
-    exact Devm.extCost_of_size (n := 768) (hM1Size _) (by decide +kernel)
-  case h_ext =>
-    exact Devm.extCost_of_size (n := 768) (hM2Size _ _) (by decide +kernel)
-  case h_ext =>
-    exact Devm.extCost_of_size (n := 768) (hM3Size _ _) (by decide +kernel)
-  case h_ext =>
-    exact Devm.extCost_of_size (n := 768) (hM4Size _ _) (by decide +kernel)
-  case h_body =>
-    rw [hargTarget]
-    change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], pauseMemory target duration, kernelGas⟩)
-      setPauserKernel post
-    exact hkernel
+  have hnewOffset : pushCost (newPauserWord * 32).toBytes.sig = 3 := by
+    decide +kernel
+  have hpreviousOffset :
+      pushCost (previousPauserWord * 32).toBytes.sig = 3 := by
+    decide +kernel
+  have hcontinuationOffset :
+      pushCost (continuationWord * 32).toBytes.sig = 3 := by
+    decide +kernel
+  have hpushZero : pushCost (0 : B256).toBytes.sig = 2 := by
+    decide +kernel
+  have hpushOne : pushCost (1 : B256).toBytes.sig = 3 := by
+    decide +kernel
+  have hM1 : PauseStageMemory M1 := by
+    simpa only [M1] using PauseStageMemory.duration duration
+  have hM2 : PauseStageMemory M2 := by
+    simpa only [M2] using hM1.write targetWord target htargetFit
+  have hM3 : PauseStageMemory M3 := by
+    simpa only [M3] using hM2.write newPauserWord 0 hnewFit
+  have hM4 : PauseStageMemory M4 := by
+    simpa only [M4] using hM3.write previousPauserWord 0 hpreviousFit
+  have hcall : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], M5, kernelGas + 12⟩)
+      (.call setPauserSlot) post := by
+    apply pauseStageCall_runCompiled dp sevm base M5 kernelGas post
+    simpa only [M5, M4, M3, M2, M1, pauseMemory] using hkernel
+  have hcontinuation :
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        (base.setMach ⟨[], M4, kernelGas + 21⟩)
+        (pushB256 1 ::: mstoreAt continuationWord +++
+          .call setPauserSlot) post := by
+    simpa only [M5, show (kernelGas + 12) + (3 + 6) = kernelGas + 21 by omega]
+      using hM4.runCompiled_pushMstore hcontinuationOffset hpushOne
+        hcontinuationFit hcall
+  have hprevious :
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        (base.setMach ⟨[], M3, kernelGas + 29⟩)
+        (pushB256 0 ::: mstoreAt previousPauserWord +++
+          pushB256 1 ::: mstoreAt continuationWord +++
+          .call setPauserSlot) post := by
+    simpa only [M4, show (kernelGas + 21) + (2 + 6) = kernelGas + 29 by omega]
+      using hM3.runCompiled_pushMstore hpreviousOffset hpushZero
+        hpreviousFit hcontinuation
+  have hnew : Func.RunCompiled
+      ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], M2, kernelGas + 37⟩)
+      (pushB256 0 ::: mstoreAt newPauserWord +++
+        pushB256 0 ::: mstoreAt previousPauserWord +++
+        pushB256 1 ::: mstoreAt continuationWord +++
+        .call setPauserSlot) post := by
+    simpa only [M3, show (kernelGas + 29) + (2 + 6) = kernelGas + 37 by omega]
+      using hM2.runCompiled_pushMstore hnewOffset hpushZero hnewFit hprevious
+  have htarget : Func.RunCompiled
+      ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], M1, kernelGas + 49⟩)
+      (arg 0 +++ mstoreAt targetWord +++
+        pushB256 0 ::: mstoreAt newPauserWord +++
+        pushB256 0 ::: mstoreAt previousPauserWord +++
+        pushB256 1 ::: mstoreAt continuationWord +++
+        .call setPauserSlot) post := by
+    simpa only [M2, show (kernelGas + 37) + 12 = kernelGas + 49 by omega]
+      using hM1.runCompiled_argTarget hargTarget htargetFit hnew
+  simpa only [M1, show (kernelGas + 49) + 79 = kernelGas + 128 by omega]
+    using pauseStageDuration_runCompiled htarget
 
 /-! ## The guarded body -/
 
