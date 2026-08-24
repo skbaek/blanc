@@ -264,15 +264,37 @@ the configured-chain and Prague rungs alike, the exact installed runtime, an
 actual witness, membership and index equivalence at an arbitrary canonical
 target, and global count conservation.
 
-That checkpoint is a hypothesis. Nothing in the family shows that a
-constructor or any deployment establishes it; a synthetic satisfying world
-is exhibited only so the results are not vacuous, and it is not a deployment
-and may not be read as one. Because the invariant is existential, nothing
-claims a transaction returns the entry list it began with, and nothing
-produces a source-level history trace. The family states nothing about count
-and expiry coherence at callback time, composes nothing from the public
-`pause` entry through `setPauser`, and makes no gas, liveness, or
-differential claim. Its reachability relation carries a bound of its own: a
+The history theorem itself takes that checkpoint as a hypothesis, and its
+synthetic satisfiability exhibit remains a hand-built non-deployment. A
+separate Blanc deployment-root family now discharges the hypothesis for one
+exact official case: a valid base world, the frozen official constructor
+arguments and full CREATE input, zero endowment, and a strict singleton type-2
+Prague block whose configured transition succeeds. It derives the sender and
+CREATE address, actual constructor/message/transaction/block execution,
+successful receipt and three ordered constructor logs, empty requests, the
+exact installed Blanc runtime and configuration slots, an empty Registry
+witness, and a valid deployed context. Its root methods instantiate the
+history theorem for every configured future reachable from that deployed
+checkpoint.
+
+The base and strict-envelope predicates carry valid context, sender recovery
+and transaction checking, funding, gas/code-size, system-predeploy,
+nonce/address, and block-shape obligations. The prepared context derives the
+collision check after the system prefix, nonce increment, and fee debit. The
+root theorem does not prove the named configured transition from no premises:
+it takes the successful `stateTransitionUsing` equation and reconstructs the
+body/poststate/receipt/root relationship from it.
+
+This does not say that an arbitrary deployment establishes the checkpoint. It
+does not cover arbitrary constructor parameters, co-blocks,
+factory/proxy/clone/CREATE2 creation, nonzero endowment, arbitrary block shapes
+or forks, signing-key or signature construction, transaction propagation or
+historical mainnet inclusion, or the deployed Solidity bytecode. Because the invariant is
+existential, nothing claims a transaction returns the entry list it began
+with, and nothing produces a source-level history trace. The family states
+nothing about count and expiry coherence at callback time, composes nothing
+from the public `pause` entry through `setPauser`, and makes no liveness or
+universal differential claim. Its reachability relation carries a bound of its own: a
 block enters only when total wei plus that block's withdrawals stays below
 `2 ^ 256`, so any history crossing that bound falls outside "every reachable
 state" — a restriction the Registry invariant itself never consults. It does
@@ -280,8 +302,12 @@ not verify the deployed Solidity runtime; agreement with the pinned v1.0.0
 reference rests on
 [LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md](LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md)
 and
-[LIDO_CIRCUIT_BREAKER_DEVIATIONS.md](LIDO_CIRCUIT_BREAKER_DEVIATIONS.md),
-and that finite differential manifest enlarges neither the theorems nor the
+[LIDO_CIRCUIT_BREAKER_DEVIATIONS.md](LIDO_CIRCUIT_BREAKER_DEVIATIONS.md).
+The exact Blanc root is stated in
+[LidoCircuitBreakerDeploymentRoot.lean](Blanc/LidoCircuitBreakerDeploymentRoot.lean).
+A temporary pinned-EELS/Jaune replay checks one synthetic strict singleton
+block as a separate finite channel. It is no Lean premise, and neither it nor
+the finite differential manifest enlarges the Lean theorems or the
 port-conformance claim.
 
 Two registers are available for what a port has not established, and only

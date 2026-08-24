@@ -13,10 +13,12 @@ import Blanc.LidoCircuitBreakerDeploy
 import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
+import Blanc.LidoCircuitBreakerDeploymentRoot
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
-CircuitBreaker artifact witnesses/canaries.  Each
+CircuitBreaker artifact, Registry, and exact direct-deployment/root carriers.
+Each
 wrapper has the exact intended type and uses the named declaration as its
 body, so a statement change breaks this file while a proof-only refactor does
 not.  `Stor.Weth10Inv` is pinned separately by definitional unfolding.
@@ -3034,6 +3036,463 @@ gate additionally hashes each normalized declaration header fail-closed. -/
 #check pauserSet_register_success_committed
 #check pauserSet_settled_error_not_observable
 #check registryObservation_sound
+
+/-! S9 carrier-field pins. The dedicated deployment gate hashes the complete
+record bodies; these Lean wrappers independently pin each public field's type. -/
+
+example {ca : Adr} {sevm : Sevm} {base post : Devm} {G : Nat}
+    (h : OfficialConstructorExecutionTrace ca sevm base post G) :
+    sevm.currentTarget = ca ∧
+      sevm.code.toList = officialFullCreateInput ∧
+      Prog.compile lidoCircuitBreakerConstructorProgram =
+        some lidoCircuitBreakerInitPrefix ∧
+      OfficialValidationCheckpoints sevm base post G ∧
+      OfficialConstructorErrorArmLayout ∧
+      OfficialConstructorEffectCheckpoints sevm base post G ∧
+      Jaune.exec ⟨0, sevm,
+          base.setMach
+            ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩⟩ =
+        .ok post :=
+  ⟨h.target_eq, h.fullInput, h.prefixCompile, h.validationCheckpoints,
+    h.errorArmLayout, h.effectCheckpoints, h.exec⟩
+
+example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
+    (h : CanonicalDeploymentBase chainId base sender ca) :
+    base.ValidContext ∧
+      chainId = base.chainId ∧
+      SumNof base.state.bal ∧
+      ca = computeContractAddress sender (base.state.getNonce sender) ∧
+      ca ≠ 0 ∧
+      (¬ pragueRules.isPrecomp ca) ∧
+      sender ≠ ca ∧
+      withdrawalRequestPredeployAddress ≠ ca ∧
+      consolidationRequestPredeployAddress ≠ ca ∧
+      accountHasCodeOrNonce base.state ca = false ∧
+      accountHasStorage base.state ca = false ∧
+      (∃ lastHash,
+        List.getLast? (getLast256BlockHashes base) = some lastHash) ∧
+      some (base.state.getCode beaconRootsAddress).toList =
+        Prog.compile deploymentSystemProgram ∧
+      some (base.state.getCode historyStorageAddress).toList =
+        Prog.compile deploymentSystemProgram ∧
+      some (base.state.getCode withdrawalRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram ∧
+      some (base.state.getCode consolidationRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram :=
+  ⟨h.validContext, h.chainId_eq, h.sumNof, h.target_eq, h.target_ne_zero,
+    h.target_not_precompile, h.sender_ne_target,
+    h.withdrawalRequest_ne_target, h.consolidationRequest_ne_target,
+    h.target_noCodeOrNonce, h.target_noStorage, h.lastBlockHash, h.beaconCode,
+    h.historyCode, h.withdrawalRequestCode, h.consolidationRequestCode⟩
+
+example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {txBytes : Bytes} {tx : Tx} {sender ca : Adr}
+    (h : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca) :
+    cb.block.txs = [.inl txBytes] ∧
+      decodeTx (.inl txBytes) = .ok tx ∧
+      cb.block.ommers = [] ∧
+      cb.block.wds = [] ∧
+      (∃ maxPriorityFee maxFee,
+        tx.type = .two chainId maxPriorityFee maxFee none []) ∧
+      tx.value = 0 ∧
+      tx.data = officialFullCreateInput ∧
+      tx.nonce = base.state.getNonce sender ∧
+      tx.nonce ≠ UInt64.max ∧
+      recoverSender chainId tx = .ok sender ∧
+      validateTransaction pragueRules tx =
+        .ok (calculateIntrinsicCost tx) ∧
+      (let benv := initBenv pragueRules base cb.block.header
+       checkTransaction benv.beginTransaction
+          (deploymentTxPreludeBout .init tx 0) tx =
+        .ok (sender, deploymentEffectiveGasPrice benv tx, [], 0)) ∧
+      cb.block.header.baseFeePerGas ≤
+        deploymentEffectiveGasPrice
+          (initBenv pragueRules base cb.block.header) tx ∧
+      tx.gas * deploymentEffectiveGasPrice
+          (initBenv pragueRules base cb.block.header) tx ≤
+        (base.state.bal sender).toNat ∧
+      deploymentTransactionGasBound tx ≤ tx.gas ∧
+      tx.gas ≤ cb.block.header.gasLimit ∧
+      ca = computeContractAddress sender tx.nonce :=
+  ⟨h.txs_eq, h.decode_eq, h.ommers_eq, h.withdrawals_eq, h.type_eq,
+    h.value_eq, h.data_eq, h.nonce_eq, h.nonce_not_max,
+    h.recoveredSender, h.validated, h.checked, h.base_fee_le_effective,
+    h.upfront_funded, h.gas_bound, h.block_gas_room, h.target_eq⟩
+
+example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {tx : Tx} {sender ca : Adr}
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
+    ctx.txInput =
+        ((initBenv pragueRules base cb.block.header).withState
+          ctx.systemPrefix.stBeacon).withState ctx.systemPrefix.stHistory ∧
+      ctx.begun = ctx.txInput.beginTransaction ∧
+      (ctx.begun.state.incrNonce sender).subBal sender
+          (tx.gas * deploymentEffectiveGasPrice ctx.txInput tx).toB256 =
+        some ctx.debit ∧
+      ctx.tenv = deploymentTenv ctx.txInput tx sender 0 ∧
+      prepareMessage {ctx.begun with state := ctx.debit} ctx.tenv tx =
+        .ok ctx.msg ∧
+      ctx.msg.benv = {ctx.begun with state := ctx.debit} ∧
+      ctx.msg.caller = sender ∧
+      ctx.msg.target = none ∧
+      ctx.msg.gas = tx.gas - deploymentIntrinsicGas tx ∧
+      ctx.msg.value = 0 ∧
+      ctx.msg.data = [] ∧
+      ctx.msg.code.toList = officialFullCreateInput ∧
+      ctx.msg.codeAddress = none ∧
+      ctx.msg.shouldTransferValue = true ∧
+      ctx.msg.tenv.stat.auths = [] ∧
+      ctx.msg.benv.stat.rules = pragueRules ∧
+      ctx.msg.benv.stat.chainId = chainId ∧
+      ctx.msg.currentTarget = ca ∧
+      accountHasCodeOrNonce ctx.msg.benv.state ca = false ∧
+      accountHasStorage ctx.msg.benv.state ca = false ∧
+      ctx.msg.benv.stat.origState = base.state ∧
+      (ca, pauseDurationSlot) ∉ ctx.msg.accessedStorageKeys ∧
+      (ca, heartbeatIntervalSlot) ∉ ctx.msg.accessedStorageKeys ∧
+      (ctx.msg.benv.stat.origState.get ca).stor.get pauseDurationSlot = 0 ∧
+      (ctx.msg.benv.stat.origState.get ca).stor.get
+        heartbeatIntervalSlot = 0 ∧
+      ctx.msg.isStatic = false :=
+  ⟨ctx.systemPrefix.txInput_eq, ctx.begun_eq, ctx.debit_eq, ctx.tenv_eq,
+    ctx.prepare_eq, ctx.msg_benv_eq, ctx.msg_caller_eq, ctx.msg_target_eq,
+    ctx.msg_gas_eq, ctx.msg_value_eq, ctx.msg_data_eq, ctx.msg_code_eq,
+    ctx.msg_codeAddress_eq, ctx.msg_shouldTransferValue_eq, ctx.msg_auths_eq,
+    ctx.msg_rules_eq, ctx.msg_chainId_eq, ctx.target_eq, ctx.noCodeOrNonce,
+    ctx.noStorage, ctx.originalState_eq, ctx.pauseCold, ctx.heartbeatCold,
+    ctx.pauseOriginal, ctx.heartbeatOriginal, ctx.msg_static_eq⟩
+
+example {ca : Adr} {msg : Msg} {post : Devm}
+    (h : OfficialCreateMessageResult ca msg post) :
+    msg.currentTarget = ca ∧
+      processCreateMessage msg = .ok post ∧
+      OfficialCreateMessageExecution ca msg post ∧
+      some (post.getCode ca).toList =
+        Prog.compile (runtime officialParams) ∧
+      post.state.getStor ca =
+        ((Stor.empty.set pauseDurationSlot
+          officialConstructorArgs.initialPauseDuration).set
+            heartbeatIntervalSlot
+            officialConstructorArgs.initialHeartbeatInterval) ∧
+      post.getStorVal ca pauseDurationSlot =
+        officialConstructorArgs.initialPauseDuration ∧
+      post.getStorVal ca heartbeatIntervalSlot =
+        officialConstructorArgs.initialHeartbeatInterval ∧
+      RegistryWitness (logicalStorageOfStor (post.state.getStor ca)) [] ∧
+      RegistryCoherent (post.state.getStor ca) ∧
+      post.logs = officialConstructorLogs ca ∧
+      post.output = lidoCircuitBreakerCode officialParams ∧
+      post.returnData = [] ∧
+      post.gasLeft = msg.gas - officialCreateMessageGasAccounting ∧
+      post.error = .none ∧
+      post.refundCounter = 0 ∧
+      post.accountsToDelete = .emptyWithCapacity ∧
+      RegistryStable officialParams ca post.state :=
+  ⟨h.target_eq, h.run, h.trace, h.installed, h.storage, h.pauseDuration,
+    h.heartbeatInterval, h.emptyRegistry, h.coherent, h.logs, h.returnData,
+    h.frameReturnData, h.gasLeft, h.error, h.refundCounter,
+    h.accountsToDelete, h.stable⟩
+
+example {ca : Adr} {msg : Msg} {post : State} {out : MsgCallOutput}
+    (h : OfficialConstructorMessageResult ca msg post out) :
+    msg.currentTarget = ca ∧
+      msg.target = none ∧
+      processMessageCall msg = .ok (post, out) ∧
+      (∃ createPost,
+        OfficialCreateMessageResult ca msg createPost ∧
+        post = createPost.state ∧ out = officialMessageOutputOf createPost) ∧
+      some (post.getCode ca).toList =
+        Prog.compile (runtime officialParams) ∧
+      (post.getStor ca).get pauseDurationSlot =
+        officialConstructorArgs.initialPauseDuration ∧
+      (post.getStor ca).get heartbeatIntervalSlot =
+        officialConstructorArgs.initialHeartbeatInterval ∧
+      RegistryWitness (logicalStorageOfStor (post.getStor ca)) [] ∧
+      out.logs = officialConstructorLogs ca ∧
+      out.returnData = lidoCircuitBreakerCode officialParams ∧
+      out.gasLeft = msg.gas - officialCreateMessageGasAccounting ∧
+      out.error = .none ∧
+      out.accountsToDelete = .emptyWithCapacity ∧
+      RegistryStable officialParams ca post :=
+  ⟨h.target_eq, h.target_none, h.run, h.creation, h.installed,
+    h.pauseDuration, h.heartbeatInterval, h.emptyRegistry, h.logs,
+    h.returnData, h.gasLeft, h.error, h.accountsToDelete, h.stable⟩
+
+example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {tx : Tx} {sender ca : Adr}
+    {ctx : PreparedDeploymentContext chainId base cb tx sender ca}
+    {post : State} {bout : BlockOutput}
+    (h : OfficialDeploymentTransactionResult chainId ca ctx post bout) :
+    processTransaction ctx.txInput .init tx 0 = .ok (post, bout) ∧
+      (∃ messagePost out,
+        OfficialConstructorMessageResult ca ctx.msg messagePost out) ∧
+      some (post.getCode ca).toList =
+        Prog.compile (runtime officialParams) ∧
+      (post.getStor ca).get pauseDurationSlot =
+        officialConstructorArgs.initialPauseDuration ∧
+      (post.getStor ca).get heartbeatIntervalSlot =
+        officialConstructorArgs.initialHeartbeatInterval ∧
+      RegistryWitness (logicalStorageOfStor (post.getStor ca)) [] ∧
+      RegistryStable officialParams ca post ∧
+      bout.blockLogs = officialConstructorLogs ca ∧
+      bout.requests = [] ∧
+      parseDepositRequests bout = .ok [] ∧
+      bout.receiptKeys = [deploymentReceiptKey 0] ∧
+      (∃ entry,
+        Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0) =
+            some entry ∧
+        entry.2.logs = officialConstructorLogs ca ∧
+        entry.2.succeeded = true) ∧
+      (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
+          (fun entry => entry.2.logs) =
+        some (officialConstructorLogs ca) ∧
+      (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
+          (fun entry => entry.2.succeeded) = some true ∧
+      some (post.getCode withdrawalRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram ∧
+      some (post.getCode consolidationRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram :=
+  ⟨h.run, h.message, h.installed, h.pauseDuration, h.heartbeatInterval,
+    h.emptyRegistry, h.stable, h.blockLogs, h.requests, h.depositRequests,
+    h.receiptKeys, h.receiptEntry, h.receiptLogs, h.receiptSucceeded,
+    h.withdrawalRequestCode, h.consolidationRequestCode⟩
+
+example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {tx : Tx} {sender ca : Adr}
+    {ctx : PreparedDeploymentContext chainId base cb tx sender ca}
+    {post : State} {bout : BlockOutput}
+    (h : OfficialDeploymentSuffixResult chainId ca ctx post bout) :
+    processCheckedSystemTransaction (ctx.txInput.withState post)
+        withdrawalRequestPredeployAddress [] = .ok (post, h.withdrawalOut) ∧
+      h.withdrawalOut.returnData = [] ∧
+      processCheckedSystemTransaction
+          ((ctx.txInput.withState post).withState post)
+          consolidationRequestPredeployAddress [] =
+        .ok (post, h.consolidationOut) ∧
+      h.consolidationOut.returnData = [] ∧
+      processGeneralPurposeRequests (ctx.txInput.withState post) bout =
+        .ok (post, bout) ∧
+      RegistryStable officialParams ca post :=
+  ⟨h.withdrawalRun, h.withdrawalReturnData, h.consolidationRun,
+    h.consolidationReturnData, h.run, h.stable⟩
+
+/-! S9 constructor-to-block theorem pins. These wrappers freeze every public
+premise, including the distinction between raw CREATE success, collision-
+checked message settlement, receipt success, and the complete request suffix. -/
+
+example (msg : Msg)
+    (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = .none)
+    (hcode : msg.code.toList = officialFullCreateInput)
+    (hgas : officialCreateMessageGasAccounting ≤ msg.gas)
+    (hmax : 4282 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (hpauseCold : (msg.currentTarget, pauseDurationSlot) ∉
+      msg.accessedStorageKeys)
+    (hpauseOriginal :
+      (msg.benv.stat.origState.get msg.currentTarget).stor.get
+        pauseDurationSlot = 0)
+    (hheartbeatCold : (msg.currentTarget, heartbeatIntervalSlot) ∉
+      msg.accessedStorageKeys)
+    (hheartbeatOriginal :
+      (msg.benv.stat.origState.get msg.currentTarget).stor.get
+        heartbeatIntervalSlot = 0)
+    (hstatic : msg.isStatic = false) :
+    ∃ post, OfficialCreateMessageResult msg.currentTarget msg post :=
+  processCreateMessage_establishes_officialRegistryStable msg hvalue
+    hcodeAddress hcode hgas hmax hpauseCold hpauseOriginal hheartbeatCold
+    hheartbeatOriginal hstatic
+
+example (ca : Adr) (msg : Msg)
+    (htarget : msg.currentTarget = ca)
+    (htargetNone : msg.target = none)
+    (hnoCodeOrNonce : accountHasCodeOrNonce msg.benv.state ca = false)
+    (hnoStorage : accountHasStorage msg.benv.state ca = false)
+    (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = .none)
+    (hcode : msg.code.toList = officialFullCreateInput)
+    (hgas : officialCreateMessageGasAccounting ≤ msg.gas)
+    (hmax : 4282 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (hpauseCold : (msg.currentTarget, pauseDurationSlot) ∉
+      msg.accessedStorageKeys)
+    (hpauseOriginal :
+      (msg.benv.stat.origState.get msg.currentTarget).stor.get
+        pauseDurationSlot = 0)
+    (hheartbeatCold : (msg.currentTarget, heartbeatIntervalSlot) ∉
+      msg.accessedStorageKeys)
+    (hheartbeatOriginal :
+      (msg.benv.stat.origState.get msg.currentTarget).stor.get
+        heartbeatIntervalSlot = 0)
+    (hstatic : msg.isStatic = false) :
+    ∃ post out, OfficialConstructorMessageResult ca msg post out :=
+  processMessageCall_establishes_officialRegistryStable ca msg htarget
+    htargetNone hnoCodeOrNonce hnoStorage hvalue hcodeAddress hcode hgas hmax
+    hpauseCold hpauseOriginal hheartbeatCold hheartbeatOriginal hstatic
+
+example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca)
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
+    ∃ post bout,
+      OfficialDeploymentTransactionResult chainId ca ctx post bout :=
+  canonicalDeploymentTransaction_succeeds chainId base cb tx sender ca
+    hbase henv ctx
+
+example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (tx : Tx) (sender ca : Adr)
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (post : State) (bout : BlockOutput)
+    (htx : OfficialDeploymentTransactionResult chainId ca ctx post bout) :
+    Nonempty (OfficialDeploymentSuffixResult chainId ca ctx post bout) :=
+  canonicalDeploymentSuffix_succeeds chainId base cb tx sender ca ctx post
+    bout htx
+
+example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (txBytes : Bytes) (tx : Tx) (sender ca : Adr)
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca)
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (post : State) (bout : BlockOutput)
+    (htx : OfficialDeploymentTransactionResult chainId ca ctx post bout)
+    (hsuffix : OfficialDeploymentSuffixResult chainId ca ctx post bout) :
+    applyBody (initBenv pragueRules base cb.block.header)
+      cb.block.txs cb.block.wds = .ok (post, bout) :=
+  canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
+    henv ctx post bout htx hsuffix
+
+/-! S9 direct-deployment root pins. The constructor pin freezes every public
+field of the root package; the theorem and seven method pins freeze the exact
+premise and consequence surfaces rather than merely checking that the names
+still resolve. -/
+
+example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
+    (execution : ∃ (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx)
+        (sender : Adr)
+        (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+        (post : State) (bout : BlockOutput),
+      CanonicalDeploymentBase chainId base sender ca ∧
+      CanonicalOfficialDeploymentBlock chainId base cb txBytes tx sender ca ∧
+      OfficialDeploymentTransactionResult chainId ca ctx post bout ∧
+      Nonempty (OfficialDeploymentSuffixResult chainId ca ctx post bout) ∧
+      stateTransitionUsing (ChainConfig.pragueOnly chainId)
+        base cb.block = .ok deployed ∧
+      applyBody (initBenv pragueRules base cb.block.header)
+        cb.block.txs cb.block.wds = .ok (post, bout) ∧
+      post = deployed.state)
+    (target_ne_zero : ca ≠ 0)
+    (target_not_precompile : ¬ pragueRules.isPrecomp ca)
+    (installed : some (deployed.state.getCode ca).toList =
+      Prog.compile (runtime officialParams))
+    (pauseDuration : (deployed.state.getStor ca).get pauseDurationSlot =
+      officialConstructorArgs.initialPauseDuration)
+    (heartbeatInterval :
+      (deployed.state.getStor ca).get heartbeatIntervalSlot =
+        officialConstructorArgs.initialHeartbeatInterval)
+    (emptyRegistry : RegistryWitness
+      (logicalStorageOfStor (deployed.state.getStor ca)) [])
+    (stable : RegistryStable officialParams ca deployed.state)
+    (deployed_validContext : deployed.ValidContext)
+    (deployed_chainId : chainId = deployed.chainId) :
+    DeploymentRoot chainId base deployed ca :=
+  { execution := execution
+    target_ne_zero := target_ne_zero
+    target_not_precompile := target_not_precompile
+    installed := installed
+    pauseDuration := pauseDuration
+    heartbeatInterval := heartbeatInterval
+    emptyRegistry := emptyRegistry
+    stable := stable
+    deployed_validContext := deployed_validContext
+    deployed_chainId := deployed_chainId }
+
+example (chainId : UInt64) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca)
+    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
+      base cb.block = .ok deployed) :
+    DeploymentRoot chainId base deployed ca :=
+  canonicalDeploymentStep_establishes_root chainId base deployed cb txBytes
+    tx sender ca hbase henv hstep
+
+example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot chainId base deployed ca) :
+    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed deployed :=
+  DeploymentRoot.reflReach hroot
+
+example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot chainId base deployed ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    RegistryStable officialParams ca future.state :=
+  DeploymentRoot.reachable_registryStable hroot hreach
+
+example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot chainId base deployed ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    some (future.state.getCode ca).toList =
+      Prog.compile (runtime officialParams) :=
+  DeploymentRoot.reachable_code hroot hreach
+
+example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot chainId base deployed ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    (future.state.getCode ca).toList =
+      lidoCircuitBreakerCode officialParams :=
+  DeploymentRoot.reachable_installedCode hroot hreach
+
+example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot chainId base deployed ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries :=
+  DeploymentRoot.reachable_witness hroot hreach
+
+example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot chainId base deployed ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      ((future.state.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (future.state.getStor ca).get (assignmentSlot target) = pauser ∧
+        (future.state.getStor ca).get (indexSlot target) =
+          Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index :=
+  DeploymentRoot.reachable_membership hroot hreach htarget
+
+example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot chainId base deployed ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (future.state.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (countSlot pauser)).toNat) =
+          entries.length :=
+  DeploymentRoot.reachable_countConservation hroot hreach
 
 end LidoCircuitBreaker
 

@@ -109,8 +109,16 @@ minimum/maximum heartbeat interval, initial pause duration, and initial heartbea
 interval.  It rejects malformed/noncanonical inputs, nonzero creation value, zero
 admin, and invalid bounds in source order; it performs two configuration writes
 and emits `CircuitBreakerInitialized`, `PauseDurationUpdated`, then
-`HeartbeatIntervalUpdated`. Constructor evidence is finite execution evidence,
-not a Jaune deployment theorem.
+`HeartbeatIntervalUpdated`. Constructor agreement with Solidity in the
+compatibility campaign is finite execution evidence. Separately, Blanc's
+kernel-checked deployment-root family executes the frozen official constructor
+success path through one strict direct Prague deployment using Jaune semantics.
+It derives the body-pinned validation checkpoints and skipped error-arm layout,
+two configuration writes, three logs, returned official Blanc runtime, settled
+creation message, successful receipt, and configured root. Rejected constructor
+inputs remain finite Solidity/Blanc comparison rows; the Lean result does not
+universally execute every rejection. Neither channel proves the deployed
+Solidity bytecode.
 
 ## Cross-cutting boundary
 
@@ -119,6 +127,24 @@ not a Jaune deployment theorem.
 
 Unknown/empty calldata, selector-matched short heads, trailing calldata, and
 nonzero runtime value are explicit comparison cases; no fallback behavior is inferred.
+
+### official direct deployment root
+
+The Lean root covers the fixed official full CREATE input, zero value, and one
+direct collision-free creation in a strict singleton type-2 Prague block. Its
+public inputs state valid-base, sender-recovery/checking, funding, gas/size,
+system-predeploy, nonce/address, and strict-envelope facts; collision freedom
+is derived at the prepared post-prefix, post-nonce, post-fee-debit message
+state. The root theorem takes the successful configured
+`stateTransitionUsing` equation as a premise, then reconstructs the constructor,
+body, poststate, successful receipt, three logs, empty requests, exact code and
+configuration, empty Registry witness, deployed validity, and all configured
+reachable-future Registry consequences.
+
+It does not construct a signing key or signature, prove propagation or
+historical mainnet inclusion, or cover arbitrary parameters, co-blocks,
+nonzero endowment, forks, clones, factories, proxies, or CREATE2. The temporary
+pinned-EELS/Jaune singleton replay is finite corroboration and no Lean premise.
 
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT registry-histories -->
 ### registry-histories
@@ -177,7 +203,8 @@ successful tail.
 The transient lock is addressed by the current CircuitBreaker account and lock
 key. It excludes descendant `pause` on that exact instance; a clone has a
 different storage namespace, and `CALLCODE`, `DELEGATECALL`, or foreign
-installed code is not silently identified with the locked instance.
+installed code is not silently identified with the locked instance. The finite
+clone namespace is not a clone deployment root.
 
 Finite hostile callback rows cover same/different target and caught/bubbled
 cases. An authorized admin callback may reassign Registry state while pause is
@@ -236,9 +263,12 @@ registered as a behavioral deviation, or satisfy the optimization goal's exact
 independent `.branch`-architecture evidence rule; aggregate savings cannot hide
 it.
 
-Differential agreement is only for manifest-listed worlds/channels. The
-separate Lean Registry family is universal over its explicit successful-kernel,
-target-zero, continuation, frame-settlement, and arbitrary-finite enumeration
-domains; neither evidence layer is deployed-bytecode verification, an
-unbounded-resource execution claim, a hostile-world callback theorem, or a
-deployment/history theorem.
+Three channels stay distinct. The 175-row/464-boundary Solidity-versus-Blanc
+differential covers only manifest-listed worlds and observations. One temporary
+strict singleton replay checks matching projections through pinned EELS and
+Jaune evaluators. Lean's universal claims range only over their explicit
+domains: Registry kernels and enumeration, the conditional arbitrary-history
+family, and one exact official direct root with its configured reachable
+futures. None is deployed-bytecode verification, an unbounded-resource or
+universal-gas claim, target-truth or delivery/finality evidence, a settled
+callback-time count/expiry theorem, or an arbitrary-deployment theorem.

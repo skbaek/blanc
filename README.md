@@ -161,18 +161,18 @@ This repo contains the following files:
   at the configured-chain and the Prague rung alike.
   `emptyRegistryWorld_registryStable` exhibits a state satisfying the
   checkpoint, so none of this is vacuously true; that state is synthetic, built
-  by hand rather than reached, and it is not a deployment.
+  by hand rather than reached, and it is not a deployment. The general history
+  theorem itself remains conditional on such a checkpoint. The exact official
+  direct-deployment family below now supplies one non-synthetic checkpoint and
+  then applies these same arbitrary-future consequences from it.
 
-  Read the boundary as closely as the statement. The checkpoint is a
-  *hypothesis*: there is no constructor or deployment-root result here, nothing
-  shows that any deployment establishes it, and the satisfiability exhibit above
-  is not a substitute for one. Because the invariant is existential, nothing
-  says a transaction returns the entry list it began with, and nothing produces
-  a source-level history trace. Nothing states that the pauser count and the
-  recorded expiry are coherent at callback time — the source has a real
-  mid-pause state with a zero assignment count and a still-live old expiry — and
-  nothing composes the public `pause` entry through `setPauser`. One limit sits
-  in the reachability relation rather than in the Registry:
+  Read the remaining boundary as closely as the statement. Because the
+  invariant is existential, nothing says a transaction returns the entry list
+  it began with, and nothing produces a source-level history trace. Nothing
+  states that the pauser count and the recorded expiry are coherent at callback
+  time — the source has a real mid-pause state with a zero assignment count and
+  a still-live old expiry — and nothing composes the public `pause` entry through
+  `setPauser`. One limit sits in the reachability relation rather than in the Registry:
   `BlockChain.ReachUsing.step` and `BlockChain.Reach.step`
   ([Ladder.lean](Blanc/Ladder.lean)) admit a block only when the world's total
   wei balance plus that block's withdrawals stays below `2 ^ 256`, so "every
@@ -184,6 +184,43 @@ This repo contains the following files:
   owns, supported separately by the pinned differential campaign.
   `scripts/check-lido-circuit-breaker-history.sh` is the family's assurance
   gate, and its own summary line is the authority on which owners are live.
+- [LidoCircuitBreakerDeploymentInput.lean](Blanc/LidoCircuitBreakerDeploymentInput.lean),
+  [LidoCircuitBreakerDeploymentLayout.lean](Blanc/LidoCircuitBreakerDeploymentLayout.lean),
+  [LidoCircuitBreakerDeploymentTrace.lean](Blanc/LidoCircuitBreakerDeploymentTrace.lean),
+  [LidoCircuitBreakerDeploymentMessage.lean](Blanc/LidoCircuitBreakerDeploymentMessage.lean),
+  [LidoCircuitBreakerDeploymentTransaction.lean](Blanc/LidoCircuitBreakerDeploymentTransaction.lean),
+  [LidoCircuitBreakerDeploymentBlock.lean](Blanc/LidoCircuitBreakerDeploymentBlock.lean),
+  [LidoCircuitBreakerDeploymentRoot.lean](Blanc/LidoCircuitBreakerDeploymentRoot.lean),
+  [DeploymentCompiled.lean](Blanc/DeploymentCompiled.lean), and
+  [DeploymentMessage.lean](Blanc/DeploymentMessage.lean): the exact official
+  direct-deployment ladder. From a valid base world and a strict singleton
+  type-2 Prague block envelope, its only named-chain premise is the configured
+  `stateTransitionUsing` equation. The ladder derives the sender and CREATE
+  address, runs the frozen 5,122-byte official creation input through the actual
+  constructor and creation-message machinery, proves the collision check,
+  transaction settlement, successful receipt, request-empty system suffix, and
+  deployed valid context, and reconstructs the resulting root. That root pins
+  the 4,282-byte official runtime, the two official configuration values, the
+  empty Registry witness, three ordered constructor logs, successful receipt,
+  empty requests, and `RegistryStable`; its methods then carry code, witness,
+  membership, and count conservation through every configured reachable future.
+
+  The public base and envelope predicates explicitly carry valid-context,
+  sender-recovery and transaction-checking, funding, gas/code-size, system-
+  predeploy, nonce/address, and strict block-shape facts. Collision freedom is
+  reconstructed at the prepared post-prefix, post-nonce, post-fee-debit message
+  state. No execution result, poststate, receipt, installed-code fact, or
+  `RegistryStable` result is smuggled into those inputs.
+
+  This is one exact direct, zero-endowment, singleton-block deployment of the
+  Blanc port. It is not a claim about the deployed Solidity bytes or historical
+  mainnet inclusion, and it does not cover arbitrary constructor parameters,
+  factory/proxy/clone/CREATE2 creation, nonzero endowment, or arbitrary block
+  shapes. The finite clone namespace remains differential evidence for distinct
+  storage owners, not a second deployment root. A temporary strict singleton
+  replay against the pinned EELS and Jaune evaluators is a separate finite
+  channel and no Lean premise. The assurance gate is
+  `scripts/check-lido-circuit-breaker-deployment.sh`.
 - [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
   and the first place in this repository where a contract call is proved to
   **succeed**. `fmint_totalSupply_succeeds` drives `func_run` over `fmint`'s
@@ -567,8 +604,10 @@ row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
 exact statements of the WETH10 flagship set and the protected Lido Registry
-mutation, enumeration, view-coherence, and observability boundaries; the axiom audit itself pins dependency
-closures, not theorem statements. The families follow. Seven are WETH's
+mutation, enumeration, view-coherence, observability, exact official
+constructor/message/transaction/block, direct-root, and rooted-future
+boundaries; the axiom audit itself pins dependency closures, not theorem
+statements. The families follow. Seven are WETH's
 headline solvency theorems:
 
 - `Blanc.weth_preserves_solvent`

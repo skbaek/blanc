@@ -586,12 +586,12 @@
         <div class="term" style="margin-top:16px"><span class="p">$</span> scripts/check-layering.sh
 <span class="ok">OK — layering: 3 contract(s) are siblings; 95 module(s) classified, 93 non-root checked, no cross-contract or inverted import</span>
 <span class="p">$</span> scripts/check-claims.sh
-<span class="ok">OK — WETH10 claim statements: 188 definitions/statements and exact
+<span class="ok">OK — common/WETH10/Lido claim statements: 263 definitions/statements and exact
      record constructors pinned by Lean</span>
 <span class="p">$</span> scripts/check-weth.sh --no-build &amp;&amp; scripts/check-fmint.sh --no-build
 <span class="ok">OK — weth fixtures: 11/11 PASS</span>
 <span class="ok">OK — fmint fixtures: 11/11 PASS, manifest cross-check clean</span></div>
-        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery, verbatim (2026-08-12). The
+        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery, verbatim (2026-08-24). The
           full ordered set — layering, trust surface, reference lock, differential, redemption,
           deployment, axiom audit, statement pins, elaboration budget, fixtures, coverage — is
           catalogued with scales and pass criteria in
@@ -1273,7 +1273,9 @@
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
-          the WETH10 flagship set and protected Lido Registry mutation, enumeration, and local-observability boundaries, so a weakened conclusion
+          the WETH10 flagship set and protected Lido Registry mutation,
+          enumeration, local-observability, exact constructor/message/transaction/block,
+          direct-root, and rooted-future boundaries, so a weakened conclusion
           fails as loudly as a broken proof.
           Both projects open with <span class="mono">lake exe cache get</span>; skipping it means
           compiling mathlib from source — hours instead of minutes.

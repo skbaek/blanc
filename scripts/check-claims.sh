@@ -11,4 +11,11 @@ if ! (cd "$ROOT" && lake env lean scripts/ClaimCheck.lean); then
   exit 1
 fi
 
-echo "OK — common/WETH10/Lido claim statements: 237 definitions/statements and exact record constructors pinned by Lean"
+claim_count="$(grep -Ec '^[[:space:]]*(example|#check)([[:space:]]|$)' \
+  "$ROOT/scripts/ClaimCheck.lean")"
+if [[ "$claim_count" -ne 263 ]]; then
+  echo "REGRESSION — common/WETH10/Lido claim inventory: expected 263 pins, found $claim_count"
+  exit 1
+fi
+
+echo "OK — common/WETH10/Lido claim statements: $claim_count definitions/statements and exact record constructors pinned by Lean"
