@@ -47,6 +47,7 @@ import Blanc.LidoCircuitBreakerSuccess
 import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.LidoCircuitBreakerDeploymentLayout
+import Blanc.LidoCircuitBreakerDeploymentRoot
 import Blanc.LidoCircuitBreakerHistory
 import Blanc.LidoCircuitBreakerHistoryEndpoints
 import Blanc.LidoCircuitBreakerHistoryChain

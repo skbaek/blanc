@@ -83,7 +83,7 @@ theorem officialConstructorEventScratch_eq :
   decide
 
 /-- Heartbeat initialization through the constructor return, named at the
-shape layer so every later execution proof shares one opaque tail. -/
+shape layer so every later execution proof shares one sealed tail. -/
 def officialConstructorHeartbeatSuffix : Func :=
   pushB256 0 :::
   storeByteOffset officialConstructorEventScratch +++
@@ -1503,7 +1503,7 @@ theorem constructorArgumentSstorePrefix_runCompiled
 
 /-- Execute the deployment's 64-byte, one-topic event opcode from named
 memory-read and continuation certificates. The concrete memory image and event
-payload remain opaque at applications of this theorem. -/
+payload remain abstract at applications of this theorem. -/
 theorem constructorEventLog1Opcode_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {topic : B256} {data : Bytes} {memory : Mem}
@@ -1601,7 +1601,7 @@ theorem constructorEventLog1Prefix_runCompiled
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsBlocksMemory.lean`. -/
 
 /-- Load one constructor argument and store it at a fixed two-byte memory
-coordinate. Read, write, and expansion behavior are supplied as opaque
+coordinate. Read, write, and expansion behavior are supplied as abstract
 certificates, so the theorem never normalizes a concrete deployment image. -/
 theorem constructorArgumentMstorePrefix_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -1764,7 +1764,7 @@ theorem constructorZeroMstorePrefix_runCompiled
 
 /-- Execute the deployment's 128-byte, two-topic initialized event from named
 memory-read and continuation certificates. The concrete memory image and event
-payload remain opaque at applications of this theorem. -/
+payload remain abstract at applications of this theorem. -/
 theorem constructorEventLog2Opcode_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {topic0 topic1 : B256} {data : Bytes} {memory : Mem}
