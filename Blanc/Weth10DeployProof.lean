@@ -10,6 +10,7 @@
 
 import Blanc.Weth10Backed
 import Blanc.Weth10DeployExec
+import Blanc.DeploymentMessage
 
 namespace Blanc
 
@@ -26,18 +27,6 @@ theorem freshDeployParams_runtime_compile
     Prog.compile (weth10 (freshDeployParams chainId contractAddress)) =
       some (weth10Code (freshDeployParams chainId contractAddress)) :=
   weth10Code_compile _
-
-/-- Jaune's generic creation preparation clears the new account's storage
-before incrementing its nonce.  This theorem is about that generic preparation
-step, independently of which initcode the resulting frame executes. -/
-theorem processCreateMessage_msg_getStor_currentTarget (msg : Msg) :
-    (processCreateMessage.msg msg).benv.state.getStor msg.currentTarget =
-      Stor.empty := by
-  change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
-    msg.currentTarget).get msg.currentTarget).stor = .empty
-  rw [State.incrNonce_get_stor]
-  unfold State.setStor
-  rw [State.get_set_self]
 
 /-- The storage seeded by Jaune's generic creation preparation establishes
 WETH10's exact backing invariant when its logical callvalue and ETH-balance
@@ -397,22 +386,6 @@ private theorem weth10Code_cons (dp : DeployParams) :
   change weth10Code dp = Jinst.jumpdest.toUInt8 :: (cp ++ ct)
   exact hbytes
 
-private theorem benvAfterTransfer_exists_zero
-    {msg : Msg} (h_value : msg.value = 0) :
-    ∃ benv, msg.benvAfterTransfer = .ok benv := by
-  have hnot : ¬ msg.benv.state.bal msg.caller < (0 : B256) := by
-    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero]
-    omega
-  unfold Msg.benvAfterTransfer
-  rw [h_value]
-  by_cases h_stv : msg.shouldTransferValue = true
-  · rw [if_pos h_stv]
-    unfold Benv.subBal State.subBal
-    rw [if_neg hnot]
-    exact ⟨_, rfl⟩
-  · rw [if_neg h_stv]
-    exact ⟨_, rfl⟩
-
 private theorem benvAfterTransfer_getStor
     {msg : Msg} {benv' : Benv}
     (h : msg.benvAfterTransfer = .ok benv') (a : Adr) :
@@ -420,15 +393,6 @@ private theorem benvAfterTransfer_getStor
   by_cases h_stv : msg.shouldTransferValue = true
   · obtain ⟨st_mid, h_sub, rfl⟩ := of_benvAfterTransfer h_stv h
     exact (of_state_transfer_fields h_sub).1 a
-  · rw [of_benvAfterTransfer_no h_stv h]
-
-private theorem benvAfterTransfer_stat
-    {msg : Msg} {benv' : Benv}
-    (h : msg.benvAfterTransfer = .ok benv') :
-    benv'.stat = msg.benv.stat := by
-  by_cases h_stv : msg.shouldTransferValue = true
-  · obtain ⟨st_mid, h_sub, rfl⟩ := of_benvAfterTransfer h_stv h
-    rfl
   · rw [of_benvAfterTransfer_no h_stv h]
 
 private theorem initEvm_exec_weth10_zero
@@ -440,22 +404,6 @@ private theorem initEvm_exec_weth10_zero
       .ok (weth10InitPost (initSevm msg) (initDevm msg) msg.gas) :=
   weth10Init_exec_zero (sevm := initSevm msg) (base := initDevm msg)
     (g := msg.gas) h_value h_gas h_code
-
-private theorem processMessage_ok_of_exec
-    {msg : Msg} {benv : Benv} {post : Devm}
-    (h_transfer : msg.benvAfterTransfer = .ok benv)
-    (h_codeAddress : msg.codeAddress = .none)
-    (h_exec : exec (initEvm (msg.withBenv benv)) = .ok post)
-    (h_error : post.error = .none) :
-    processMessage msg = .ok post := by
-  unfold processMessage runFrame Frame.enter Frame.ofCall
-  rw [h_transfer]
-  unfold executeCode.enter
-  simp only [Msg.withBenv, h_codeAddress]
-  unfold Frame.settle Frame.settleMsg
-  simp only [Msg.withBenv, h_codeAddress] at h_exec
-  rw [h_exec]
-  simp [executeCode.handleError, processMessage.settle, h_error]
 
 private theorem chargeCodeGas_weth10_output
     {rules : ForkRules} {d : Devm} (dp : DeployParams)
@@ -605,20 +553,6 @@ private theorem processMessage_weth10_checkpoint
       (sevm := initSevm seeded) (base := initDevm seeded) (g := msg.gas)
       h_seed_value h_gas).2
 
-private theorem processCreateMessage_weth10_settle_checkpoint
-    (msg : Msg) {initPost charged : Devm}
-    (h_pm :
-      processMessage (processCreateMessage.msg msg) = .ok initPost)
-    (h_error : initPost.error = .none)
-    (h_charge :
-      processCreateMessage.chargeCodeGas msg.benv.stat.rules initPost =
-        .ok charged) :
-    processCreateMessage msg =
-      .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩) := by
-  rw [processCreateMessage_eq, h_pm]
-  unfold processCreateMessage.settle
-  simp [h_error, h_charge]
-
 private structure Weth10ChargeCheckpoint
     (msg : Msg) (dp : DeployParams) (charged : Devm) : Prop where
   process :
@@ -651,7 +585,7 @@ private theorem processCreateMessage_weth10_charge_checkpoint
         msg.benv.stat.chainId.toB256 msg.currentTarget)
       init.output h_deposit h_max
   refine ⟨charged, {
-    process := processCreateMessage_weth10_settle_checkpoint msg
+    process := processCreateMessage_ok_of_processMessage_and_charge msg
       init.process init.error checkpoint.charge
     output := checkpoint.output
     stor := ?_
