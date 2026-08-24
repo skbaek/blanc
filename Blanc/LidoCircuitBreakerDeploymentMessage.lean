@@ -5,7 +5,7 @@
 -- consumes its named post-frame projections through an import boundary before
 -- crossing Jaune's creation-message code-deposit path.
 
-import Blanc.LidoCircuitBreakerDeploymentTrace
+import Blanc.LidoCircuitBreakerDeploymentInput
 import Blanc.LidoCircuitBreakerHistoryChain
 import Blanc.DeploymentMessage
 
@@ -378,7 +378,7 @@ theorem officialConstructorPost_registryCoherent
         sevm.currentTarget) :=
   ⟨[], officialConstructorPost_emptyRegistryWitness sevm base G hempty⟩
 
-/-! ## Direct creation-message gas and runtime certificates -/
+/-! ## Direct creation-message runtime certificates -/
 
 /-- The official runtime has the exact length returned by the constructor.
 This derives the length from the already certified memory read instead of
@@ -401,26 +401,6 @@ theorem lidoCircuitBreakerCode_official_cons :
     ⟨compiledMain, compiledAux, _hmain, _haux, hbytes⟩
   refine ⟨compiledMain ++ compiledAux, ?_⟩
   exact hbytes
-
-/-- Gas charged when the 4,282-byte official runtime is installed. -/
-def officialCodeDepositGas : Nat :=
-  (lidoCircuitBreakerCode officialParams).length * gasCodeDeposit
-
-theorem officialCodeDepositGas_eq : officialCodeDepositGas = 856400 := by
-  unfold officialCodeDepositGas
-  rw [lidoCircuitBreakerCode_official_length]
-  rfl
-
-/-- Exact successful-path charge inside the direct creation message: compiled
-constructor execution plus runtime code deposit. -/
-def officialCreateMessageGasAccounting : Nat :=
-  officialConstructorRequiredGas + officialCodeDepositGas
-
-theorem officialCreateMessageGasAccounting_eq :
-    officialCreateMessageGasAccounting = 906729 := by
-  unfold officialCreateMessageGasAccounting
-  rw [officialCodeDepositGas_eq]
-  rfl
 
 private theorem officialCreateMessageGas_sub_certificate
     (gas : Nat) (hgas : officialCreateMessageGasAccounting ≤ gas) :
