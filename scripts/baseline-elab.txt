@@ -683,6 +683,105 @@
 # `--rebase` was NOT run, and `--force` was not used. Neither is a way to make
 # a red gate green, and a --force run may not be rebased.
 #
+# Calibration control — scripts/check-elab.sh --calibrate
+#
+# Regression detection and calibration are different jobs. The content and
+# import-closure fingerprint has already established that every undrawn
+# module cannot have moved, so an undrawn file is not a coverage gap; the
+# sample only establishes that this host was behaving normally while the
+# mandatory rows below were measured.
+#
+# Seed domain blanc-elab-calibration-v1, candidate commit
+#   c2072f946b19180c037e6c5261f57d06bee6af03
+# seed sha256(domain|commit)
+#   154ccd1cba5a5eb437e772497c2e9e59317cd82faafffbc98b07d688dacfbd07
+# baseline sha256
+#   6e72712a9005ee7c1dcc67d9de293f077f6438c6f35eee6b398f92ad1eac2d0a
+# source-set sha256 (every discovered path and its content)
+#   28adf8c5dfe702062cc8bdea902e1eee842826e68c3298615fdb18c3098d87e7
+#
+# Drawn from the 63 of 140 baseline rows that this run's content and
+# import-closure fingerprint proves unaffected; within a band, the first
+# k paths ordered by sha256(seed|path). Boundaries are fixed; membership
+# is recomputed from the baseline current at this commit.
+#
+# The remaining 77 row(s) were not drawn because this run measured and
+# compared them outright:
+#     Blanc.lean
+#     Blanc/LidoCircuitBreakerAbsentRegistration.lean
+#     Blanc/LidoCircuitBreakerAccess.lean
+#     Blanc/LidoCircuitBreakerAttainment.lean
+#     Blanc/LidoCircuitBreakerAuthority.lean
+#     Blanc/LidoCircuitBreakerCallBoundary.lean
+#     Blanc/LidoCircuitBreakerDeploy.lean
+#     Blanc/LidoCircuitBreakerFreshRegistration.lean
+#     Blanc/LidoCircuitBreakerHistory.lean
+#     Blanc/LidoCircuitBreakerHistoryChain.lean
+#     Blanc/LidoCircuitBreakerHistoryEndpoints.lean
+#     Blanc/LidoCircuitBreakerObservation.lean
+#     ... and 65 more
+#
+#   band            population  drawn
+#   [0, 1.5)                19      4
+#   [1.5, 3)                21      4
+#   [3, 10)                 13      2
+#   [10, inf)               10      2
+#
+#   mandatory (measured, never sampled)                     seconds
+#   Blanc/DeploymentCompiled.lean                            1.174
+#   Blanc/DeploymentMessage.lean                             1.243
+#   Blanc/LidoCircuitBreakerDeploymentBlock.lean             1.364
+#   Blanc/LidoCircuitBreakerDeploymentInput.lean            12.023
+#   Blanc/LidoCircuitBreakerDeploymentLayout.lean           53.318
+#   Blanc/LidoCircuitBreakerDeploymentMessage.lean         216.135
+#   Blanc/LidoCircuitBreakerDeploymentRoot.lean              1.272
+#   Blanc/LidoCircuitBreakerDeploymentTrace.lean            90.719
+#   Blanc/LidoCircuitBreakerDeploymentTransaction.lean       2.227
+#
+#   control                                              measured  baseline  ratio
+#   Blanc/BalanceAlgebra.lean                                1.155     1.150   1.00
+#   Blanc/CycleWriteFree.lean                                1.275     1.289   0.99
+#   Blanc/FlashSpec.lean                                     1.869     1.891   0.99
+#   Blanc/FmintReverts.lean                                  5.526     5.266   1.05
+#   Blanc/LidoCircuitBreaker.lean                           15.650    15.805   0.99
+#   Blanc/LidoCircuitBreakerRegistry.lean                   70.318    67.133   1.05
+#   Blanc/LidoCircuitBreakerRegistryModel.lean               1.766     1.180   1.50
+#   Blanc/RevertPayload.lean                                 1.801     1.630   1.10
+#   Blanc/SourceAttainment.lean                              1.607     1.553   1.03
+#   Blanc/Weth10FlashFunctional.lean                         2.479     2.350   1.05
+#   Blanc/Weth10Sound.lean                                   1.267     1.239   1.02
+#   Blanc/WethGas.lean                                       9.096     7.978   1.14
+#
+# 12 controls, median ratio 1.047, spread 0.99x-1.50x.
+# A control refuses the run at 2.00x and is annotated at 1.50x,
+# each also requiring the same 1.0s absolute excess the gate applies to
+# the rows themselves.
+# No control reached 1.50x.
+#
+# 2026-08-24. ~/plans/lido-circuit-breaker-deployment-root-goal.md
+# (DR11) admitted exactly two contract-neutral deployment owners and seven
+# Lido-local deployment owners. These are additions for new content, never
+# relaxations of a failing row. Three sequential calibration runs at the
+# candidate above measured the identical 98-file set with the identical 12
+# controls and finished green in 928.8s, 936.8s, and 958.2s.
+#
+#   owner                                                     pass 1    pass 2    pass 3    median
+#   Blanc/DeploymentCompiled.lean                              1.226     1.258     1.174     1.226
+#   Blanc/DeploymentMessage.lean                               1.288     1.313     1.243     1.288
+#   Blanc/LidoCircuitBreakerDeploymentBlock.lean               1.239     1.230     1.364     1.239
+#   Blanc/LidoCircuitBreakerDeploymentInput.lean              11.624    11.641    12.023    11.641
+#   Blanc/LidoCircuitBreakerDeploymentLayout.lean             51.374    51.141    53.318    51.374
+#   Blanc/LidoCircuitBreakerDeploymentMessage.lean           213.683   210.244   216.135   213.683
+#   Blanc/LidoCircuitBreakerDeploymentRoot.lean                1.233     1.222     1.272     1.233
+#   Blanc/LidoCircuitBreakerDeploymentTrace.lean              91.131    91.456    90.719    91.131
+#   Blanc/LidoCircuitBreakerDeploymentTransaction.lean         2.292     2.183     2.227     2.227
+#
+# Every one of the 140 pre-existing rows stayed green and is retained
+# byte-for-byte. `--rebase`, `--full`, `--list`, `--force`, and cache seeding
+# were not used. The calibration mode wrote neither the baseline nor its
+# local cache; the nine rows below are deliberate additions using the
+# three-run medians.
+#
 OK	1.241	Blanc.lean
 OK	1.150	Blanc/BalanceAlgebra.lean
 OK	1.233	Blanc/Basic.lean
@@ -691,6 +790,8 @@ OK	6.143	Blanc/CommonProofs.lean
 OK	1.786	Blanc/Compiled.lean
 OK	2.178	Blanc/Conserved.lean
 OK	1.289	Blanc/CycleWriteFree.lean
+OK	1.226	Blanc/DeploymentCompiled.lean
+OK	1.288	Blanc/DeploymentMessage.lean
 OK	2.184	Blanc/ExecDeterminism.lean
 OK	6.583	Blanc/ExecutionOccurrence.lean
 OK	1.347	Blanc/ExecutionSettlement.lean
@@ -713,6 +814,13 @@ OK	3.164	Blanc/LidoCircuitBreakerCallBoundary.lean
 OK	1.341	Blanc/LidoCircuitBreakerCode.lean
 OK	1.230	Blanc/LidoCircuitBreakerCore.lean
 OK	7.130	Blanc/LidoCircuitBreakerDeploy.lean
+OK	1.239	Blanc/LidoCircuitBreakerDeploymentBlock.lean
+OK	11.641	Blanc/LidoCircuitBreakerDeploymentInput.lean
+OK	51.374	Blanc/LidoCircuitBreakerDeploymentLayout.lean
+OK	213.683	Blanc/LidoCircuitBreakerDeploymentMessage.lean
+OK	1.233	Blanc/LidoCircuitBreakerDeploymentRoot.lean
+OK	91.131	Blanc/LidoCircuitBreakerDeploymentTrace.lean
+OK	2.227	Blanc/LidoCircuitBreakerDeploymentTransaction.lean
 OK	40.326	Blanc/LidoCircuitBreakerEnumeration.lean
 OK	17.604	Blanc/LidoCircuitBreakerFreshRegistration.lean
 OK	1.244	Blanc/LidoCircuitBreakerHistory.lean
