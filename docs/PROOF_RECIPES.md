@@ -96,6 +96,28 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/ForwardCall.lean`, `declaration:Func.ExecSat`, `declaration:Prog.ExecSat`, `declaration:Func.ExecWitness`, `declaration:Prog.ExecWitness`
 - Review: `proof-infrastructure` on `2026-08-20`
 
+## `devm-projection-bridge`
+
+- Status: `active`
+- Triggers: `goal-shape:devm-update-projection`
+- Preferred path: Rewrite with the matching Jaune update-first projection lemma, named `Devm.<update>_<projection>`, for the column in the goal. Never bridge a concrete effect tower or compiled artifact through `withOutput`, `setMach`, `setMeta`, `setWorld`, or another `with*` update using bare `change`, `show`, `rfl`, or `exact`.
+- Boundary: This does not cover a succeeding concrete-walk unfold, for which no remedy is registered, and does not reopen `successor-projection-normalization`: that measured refutation attacked `setMach` chains in an owner dominated by unrelated kernel checks, while the cheap control for this update-projection mechanism existed in the same deployment cluster. Resource ceilings neither detect nor bound this kernel-side class. The matcher needs an explicit `Devm` update head in the target; when a local definition hides the chain, unfold only that binding and invoke `blanc_suggest` again.
+- Owner module: [Blanc/LidoCircuitBreakerDeploymentMessage.lean](../Blanc/LidoCircuitBreakerDeploymentMessage.lean)
+- Canonical example: [Blanc/LidoCircuitBreakerDeploymentMessage.lean](../Blanc/LidoCircuitBreakerDeploymentMessage.lean) — `officialConstructorPost_refundCounter`
+- Registered symbols: `declaration:LidoCircuitBreaker.officialConstructorPost_refundCounter`
+- Review: `proof-infrastructure` on `2026-08-25`
+
+## `bytesize-composition`
+
+- Status: `active`
+- Triggers: `goal-shape:compileshape-bytesize`
+- Preferred path: Prove one small `decide +kernel` fact per leaf, then derive internal `compileShape.byteSize` facts arithmetically through `dispatchNode_size`-style composition. `dispatchCae9_size` is the canonical example: with its children available, its composition closes in 0.004 s.
+- Boundary: The measured law is approximately 2.6 ms per compiled byte of the addressed object; byte-range width predicts nothing because `byteAtByShape` is lazy. A module without child `_size` lemmas, such as `Weth10DeployDomainSlices`, needs new leaf facts before composition and is a proof-design packet rather than a local rewrite. `weth10MainEmit_drop_3950` costs approximately 0.011 s and should remain unchanged. This recipe records the route; executing the broader retrofit belongs to cure 2.
+- Owner module: [Blanc/Weth10Deploy.lean](../Blanc/Weth10Deploy.lean)
+- Canonical example: [Blanc/Weth10Deploy.lean](../Blanc/Weth10Deploy.lean) — `dispatchCae9_size`
+- Registered symbols: `declaration:Weth10.dispatchCae9_size`
+- Review: `proof-infrastructure` on `2026-08-25`
+
 ## `successor-projection-normalization`
 
 - Status: `partial`
@@ -135,7 +157,7 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Status: `partial`
 - Triggers: `goal-shape:fixed-byte-offset`
 - Preferred path: Use the existing `Mem.Wf` and `Mem.Reads` APIs; I8 proposes the missing `writeAt`/`sliceD` extension. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost.
-- Boundary: The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained. A later pilot promoted the whole local parameterized tail proof to a top-level private theorem: the owner median moved only from 48.11 to 46.85 s (-2.62%) and the same dominant 46.568 s kernel check remained. Both pilots were exactly reverted. Reopen only for a representation that removes or materially shrinks that kernel check, not for another naming or step-factorization variant.
+- Boundary: The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained. A later pilot promoted the whole local parameterized tail proof to a top-level private theorem: the owner median moved only from 48.11 to 46.85 s (-2.62%) and the same dominant 46.568 s kernel check remained. Both pilots were exactly reverted, and their profiler-independent owner medians remain the verdicts. Reopen only for a change whose serialized owner median improves by the licensed win rule; persistence of the trailing kernel row is not a mechanism criterion.
 - Owner module: [Blanc/CommonCore.lean](../Blanc/CommonCore.lean)
 - Canonical example: [Blanc/Weth10HolderFlowCompiled.lean](../Blanc/Weth10HolderFlowCompiled.lean) — `exists_acceptedValueCallTrace_same_slot`
 - Registered symbols: `declaration:Mem.Wf`, `declaration:Mem.Reads`

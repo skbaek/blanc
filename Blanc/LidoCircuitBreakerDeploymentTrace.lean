@@ -2074,7 +2074,7 @@ theorem officialConstructorPost_logs
     (officialConstructorPost sevm base G).logs =
       base.logs ++ officialConstructorLogs sevm.currentTarget := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).logs = _
+  rw [Devm.withOutput_logs, Devm.setMach_logs]
   exact officialConstructorEffectBase_logs sevm base
 
 /-- The successful constructor returns with an empty stack. -/
@@ -2084,22 +2084,12 @@ theorem officialConstructorPost_stack
   rw [officialConstructorPost_eq]
   rfl
 
-private theorem withOutput_setMach_memory
-    (base : Devm) (stack : List B256) (memory : Mem) (gas : Nat)
-    (output : Bytes) :
-    ((base.setMach ⟨stack, memory, gas⟩).withOutput output).memory =
-      memory := by
-  rfl
-
 /-- The successful constructor retains the exact named final memory. -/
 theorem officialConstructorPost_memory
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (officialConstructorPost sevm base G).memory =
       officialConstructorFinalMemory := by
-  rw [officialConstructorPost_eq]
-  exact withOutput_setMach_memory
-    (officialConstructorEffectBase sevm base) []
-    officialConstructorFinalMemory G (lidoCircuitBreakerCode officialParams)
+  rw [officialConstructorPost_eq, Devm.withOutput_memory, Devm.setMach_memory]
 
 /-- `G` is the exact residual gas after the 50,329-gas compiled run. -/
 theorem officialConstructorPost_gasLeft
@@ -2108,17 +2098,12 @@ theorem officialConstructorPost_gasLeft
   rw [officialConstructorPost_eq]
   rfl
 
-private theorem withOutput_output (base : Devm) (output : Bytes) :
-    (base.withOutput output).output = output := by
-  rfl
-
 /-- The constructor's terminal output is the exact official runtime artifact. -/
 theorem officialConstructorPost_output
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (officialConstructorPost sevm base G).output =
       lidoCircuitBreakerCode officialParams := by
-  rw [officialConstructorPost_eq]
-  exact withOutput_output _ _
+  rw [officialConstructorPost_eq, Devm.withOutput_output]
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsHeartbeatSstore.lean`. -/
 

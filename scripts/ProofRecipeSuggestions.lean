@@ -46,6 +46,54 @@ example (devm : Devm) (mach : Mach) (address : Adr) (key : B256) :
   blanc_suggest
   rfl
 
+-- EXPECT: devm-projection-bridge
+example (devm : Devm) (mach : Mach) :
+    (devm.setMach mach).refundCounter = devm.refundCounter := by
+  blanc_suggest
+  rfl
+
+-- EXPECT: devm-projection-bridge
+example (devm : Devm) (mach : Mach) : (devm.setMach mach).mach = mach := by
+  blanc_suggest
+  rfl
+
+-- EXPECT: devm-projection-bridge
+example (devm : Devm) (output : Bytes) :
+    (devm.withOutput output).refundCounter = devm.refundCounter := by
+  blanc_suggest
+  rfl
+
+-- EXPECT: bytesize-composition
+example : Func.stop.compileShape.byteSize = 1 := by
+  blanc_suggest
+  decide
+
+-- EXPECT: bytesize-composition
+example : Func.stop.compileShape.byteSize ≠ 0 := by
+  blanc_suggest
+  decide
+
+-- EXPECT: bytesize-composition
+example : Func.stop.compileShape.byteSize ≤ 1 := by
+  blanc_suggest
+  decide
+
+-- EXPECT: bytesize-composition
+example : Func.stop.compileShape.byteSize < 2 := by
+  blanc_suggest
+  decide
+
+-- EXPECT-NO-MATCH
+example (f : Func) : f.compileShape.byteSize = f.compileShape.byteSize := by
+  blanc_suggest
+  rfl
+
+-- EXPECT-NO-MATCH
+example (devm : Devm) (output : Bytes) :
+    (devm.withOutput output).pop = (devm.withOutput output).pop := by
+  blanc_suggest
+  rfl
+
 -- EXPECT-NO-MATCH
 example (proposition : Prop) (proof : proposition) : proposition := by
   blanc_suggest

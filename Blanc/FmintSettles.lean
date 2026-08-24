@@ -43,34 +43,6 @@ open Jaune
 
 set_option maxRecDepth 40000
 
-/-- `Devm.logs` through `setMach`, the log-list analogue of
-`Blanc/Forward.lean`'s `Devm.stack_setMach`.  Local to this module: the walk is
-the only consumer, and the fact is one `rfl`. -/
-lemma Devm.logs_setMach {devm : Devm} {m : Mach} :
-    (devm.setMach m).logs = devm.logs := rfl
-
-/-- The accessed storage keys through `setMach`, on the same footing. -/
-lemma Devm.accessedStorageKeys_setMach {devm : Devm} {m : Mach} :
-    (devm.setMach m).accessedStorageKeys = devm.accessedStorageKeys := rfl
-
-/-- The settled-error field through `setMach`, on the same footing.  This is
-the field the *frame* altitude reads: `processMessage.settle` decides between
-`out.error = none` and a rollback by looking at it, so a frame-level statement
-about a successful outcome needs it carried the whole way down the walk. -/
-lemma Devm.error_setMach {devm : Devm} {m : Mach} :
-    (devm.setMach m).error = devm.error := rfl
-
-/-- The same field through the two operations the `.ok` terminal performs:
-`RETURN` reads its window (which may extend memory) and installs the output. -/
-lemma Devm.error_withOutput {devm : Devm} {out : Bytes} :
-    (devm.withOutput out).error = devm.error := rfl
-
-lemma Devm.error_memRead_snd {devm : Devm} {i sz : Nat} :
-    ((devm.memRead i sz).2).error = devm.error := rfl
-
-lemma Devm.error_addLog {devm : Devm} {l : Log} :
-    (devm.addLog l).error = devm.error := rfl
-
 /-- `Sevm.argWord` at its own definition, as a rewrite in the direction the walk
 produces.  `arg k` compiles to `CALLDATALOAD (32 * k + 4)`, so a walk's stack
 carries `Sevm.dataWord` where a statement carries `Sevm.argWord`; the two are
@@ -380,20 +352,20 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
   rw [h_arg0, h_arg2]
   refine h_cont b₄ G₄ h_rcv h_sup (fun a k h_ne_r h_ne_s => ?_) ?_ ?_
     (fun p hp => ?_)
-    (by simp only [hlog₄, Devm.logs_setMach, hlog₃, hlog₂, hlog₁])
+    (by simp only [hlog₄, Devm.setMach_logs, hlog₃, hlog₂, hlog₁])
     (by omega) (by omega)
   · have h_nr : (a, k) ≠ (sevm.currentTarget, Sevm.dataWord sevm (32 * 0 + 4)) := by
       rw [h_d0]; exact h_ne_r
     simp only [hoth₄ _ _ h_ne_s, Devm.getStorVal_setMach, hoth₃ _ _ h_nr,
       hstor₂, hstor₁]
   · rw [hacc₄, ← h_d0]
-    simp only [Devm.accessedStorageKeys_setMach, hacc₃]
+    simp only [Devm.setMach_accessedStorageKeys, hacc₃]
     exact hw₂
   · rw [hacc₄]
-    simp only [Devm.accessedStorageKeys_setMach]
+    simp only [Devm.setMach_accessedStorageKeys]
     exact hws₃
   · rw [hacc₄]
-    simp only [Devm.accessedStorageKeys_setMach, hacc₃]
+    simp only [Devm.setMach_accessedStorageKeys, hacc₃]
     exact hacc₂ _ (hacc₁ _ hp)
 
 /-! ## What the frame holds when the callback is about to run
@@ -674,7 +646,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   · rw [haccb]; exact hw_s
   · intro p hp; rw [haccb]; exact hw_mono p hp
   · rw [hlogb]
-    simp only [Devm.logs_setMach, h_log, flashLoanMintLog]
+    simp only [Devm.setMach_logs, h_log, flashLoanMintLog]
   · simp only [flashLoanPreCallGas, flashLoanMintGas_eq, flashLoanLogGas,
       flashLoanCallbackGas, gVerylow, gBase, gMemory, gLog, gLogdata,
       gLogtopic] at *
@@ -832,21 +804,21 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   rw [h_arg0, h_arg2]
   refine h_cont b₄ G₄ h_rcv h_sup (fun a k h_ne_r h_ne_s => ?_) ?_ ?_
     (fun p hp => ?_)
-    (by simp only [hlog₄, Devm.logs_setMach, hlog₃, hlog₂, hlog₁])
-    (by simp only [herr₄, Devm.error_setMach, herr₃, herr₂, herr₁])
+    (by simp only [hlog₄, Devm.setMach_logs, hlog₃, hlog₂, hlog₁])
+    (by simp only [herr₄, Devm.setMach_error, herr₃, herr₂, herr₁])
     (by omega) (by omega)
   · have h_nr : (a, k) ≠ (sevm.currentTarget, Sevm.dataWord sevm (32 * 0 + 4)) := by
       rw [h_d0]; exact h_ne_r
     simp only [hoth₄ _ _ h_ne_s, Devm.getStorVal_setMach, hoth₃ _ _ h_nr,
       hstor₂, hstor₁]
   · rw [hacc₄, ← h_d0]
-    simp only [Devm.accessedStorageKeys_setMach, hacc₃]
+    simp only [Devm.setMach_accessedStorageKeys, hacc₃]
     exact hw₂
   · rw [hacc₄]
-    simp only [Devm.accessedStorageKeys_setMach]
+    simp only [Devm.setMach_accessedStorageKeys]
     exact hws₃
   · rw [hacc₄]
-    simp only [Devm.accessedStorageKeys_setMach, hacc₃]
+    simp only [Devm.setMach_accessedStorageKeys, hacc₃]
     exact hacc₂ _ (hacc₁ _ hp)
 
 /-- `flashLoan_runCompiledTo_call`, existential in the outcome: the exact state
@@ -1067,9 +1039,9 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   · rw [haccb]; exact hw_s
   · intro p hp; rw [haccb]; exact hw_mono p hp
   · rw [hlogb]
-    simp only [Devm.logs_setMach, h_log, flashLoanMintLog]
+    simp only [Devm.setMach_logs, h_log, flashLoanMintLog]
   · rw [herrb]
-    simp only [Devm.error_setMach]
+    simp only [Devm.setMach_error]
     exact h_err
   · simp only [flashLoanPreCallGas, flashLoanMintGas_eq, flashLoanLogGas,
       flashLoanCallbackGas, gVerylow, gBase, gMemory, gLog, gLogdata,
@@ -1207,7 +1179,7 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
   have hd1e : d1.error = pre.error := by
     rw [accessDelegation_error hdel]
     show st.error = pre.error
-    simp only [hst, Devm.error_setMach]
+    simp only [hst, Devm.setMach_error]
     exact h_err
   have hd1s' : d1.stack = [amount, receiver] := hd1s
   have hd1m' : d1.memory = flashLoanCallMem sevm amount data := hd1m
@@ -1738,7 +1710,7 @@ lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
       exact hex
     · intro a k
       exact h_stor a k
-    · simpa only [Devm.error_setMach] using h_er
+    · simpa only [Devm.setMach_error] using h_er
 
 /-- **Through the finite-allowance arm.**  The allowance covers the amount
 owed: it is decremented and written back — the one `SSTORE` of the arm, warm
@@ -1803,7 +1775,7 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
           rw [hoth a k hne]
           exact h_stor a k
         · rw [her2]
-          simpa only [Devm.error_setMach] using h_er
+          simpa only [Devm.setMach_error] using h_er
 
 /-- **The balance-low leaf.**  The receiver's balance cannot cover the burn:
 `burnAndReturn` deliberately reverts before writing anything. -/
@@ -1965,8 +1937,8 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
                         omega))
                       (Nat.add_zero _).symm rfl
                 · refine hP _ ?_
-                  simp only [Devm.error_addLog, Devm.error_setMach,
-                    Devm.error_withOutput, Devm.error_memRead_snd,
+                  simp only [Devm.addLog_error, Devm.setMach_error,
+                    Devm.withOutput_error, Devm.memRead_error,
                     her4, h_er3, her2, h_er]
 
 /-! ## The continuation bound
@@ -2084,8 +2056,8 @@ needs and cannot recover afterwards: `processMessage.settle` decides between
 `out.error = none` and a rollback by reading that field, and no lemma in the
 repository transports it across an arbitrary `Exec`.  So it is threaded down
 the walk instead, one handed-back equation per continuation-passing step, and
-discharged at the `.ok` terminal by `rfl` (see `Devm.error_setMach` and its
-three siblings at the head of this module).
+discharged at the `.ok` terminal through Jaune's matching update-first
+projection lemmas.
 
 It says nothing new about the borrower: the field is untouched by
 `incorporateChildOnSuccess`/`OnError`, so a callback cannot write it. -/

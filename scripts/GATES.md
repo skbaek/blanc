@@ -178,6 +178,12 @@ No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
 sequential elaboration gate is the longest at roughly ten minutes; every gate
 still runs inline.
 
+The first module of a sequential elaboration pass is systematically inflated
+on a Lean-cold host even when the gate runs its `lake build` precondition. Do
+not treat that first row as a regression until the module has been re-elaborated
+alone on the now-warm host; the cold-first-row effect was measured in both
+Blanc and Jaune.
+
 ### The Python behind the shell
 
 The helpers below do the actual work and are not gates in their own right — they are

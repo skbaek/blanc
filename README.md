@@ -385,9 +385,9 @@ Before beginning a manual multi-step walk or inversion, consult the generated
 both generated from `scripts/proof-recipes.toml`; edit that registry and
 regenerate the surfaces rather than editing either generated file by hand.
 
-## Proof-performance conventions: defeq, wide-recursion state towers, and walk term size
+## Proof-performance conventions: defeq, wide-record updates, state towers, and walk term size
 
-Three elaboration-cost bombs have been measured in this repository — two
+Four elaboration-cost bombs have been measured in this repository — three
 definitional-equality bombs and one term-size bomb in forward walks — and the
 conventions below are the working rules for avoiding them. They apply to all
 Blanc proof work, whatever the contract and whatever agent or editor is
@@ -488,6 +488,32 @@ cross the breaker on the closure that owns the walk, not on a target-only
 profile. The exact dispositions and non-applicability boundaries remain in the
 `runcompiled-construction` proof-recipe entry.
 
+**The fourth bomb: changed-field projections through wide record updates.**
+For an N-field record, `{r with f := v}` is a fresh N-argument constructor
+application. Projecting the changed field across that update can therefore
+leave the checker comparing two applications of the same constructor head. It
+tries congruence first and must evaluate the concrete payload before it can
+discover that congruence fails; projections of unchanged slots through other
+update layers stay syntactic and cheap. This is why the shape is deceptive:
+the expensive line can be a bare `change`, `show`, `rfl`, or `exact` after the
+real effect tower was already constructed elsewhere.
+
+The elaborator's `isSimple` guard skips this walk for projection chains, while
+the kernel applies the congruence-first heuristic without that guard and
+ignores `maxHeartbeats`. This class can therefore cost tens of seconds with
+**zero raised ceilings**. Route it through Jaune's update-first projection kit,
+whose lemmas are named `Devm.<update>_<projection>` (for example,
+`Devm.withOutput_refundCounter`) and are proved over an abstract base; do not
+bridge a concrete update tower by definitional equality. In the measured pilot,
+the `officialConstructorPost_refundCounter` bridge fell from 30.232 s to below
+a 100 ms profiler threshold, a speedup of at least 302x.
+
+The same trap remains armed in `withError`, `withReturnData`,
+`withAccountsToDelete`, and every other wrapper that rebuilds `Meta` through
+`setMeta`. Succeeding concrete walks are a different mechanism with no
+registered cure, and `setMach`-chain normalization remains governed by the
+measured refutation in `successor-projection-normalization`.
+
 **Why budgets do not save you.** Inside `simp`'s defeq discharging the work is
 not heartbeat-metered, and the kernel's certificate check ignores
 `maxHeartbeats` entirely — a generous budget that has "never fired" is not
@@ -495,6 +521,10 @@ evidence of health. Language-server diagnostics are equally unable to detect
 this class: on a file whose elaboration outruns the client's inactivity
 window, an empty diagnostics list with a failed completion flag is a timeout,
 not a verdict.
+
+A raised ceiling with no measured need is itself a finding: the proof-debt gate
+inventories that ceiling-only offender class, while deletion campaigns belong
+to their own goal.
 
 **The measurement method that works.** Compile a file prefix once into an
 importable `.olean` (stripping `private` so probe segments can reference it),
@@ -512,10 +542,28 @@ the module. Ask *which declaration* first:
 lake env lean -Dtrace.profiler=true -Dtrace.profiler.threshold=2000 Blanc/<Module>.lean
 ```
 
-Its `[Elab.async]` lines name the declaration being elaborated and its total
-time, so one run ranks every proof in the module. Prefer this to
+Read `[Elab.definition.value]` and `[Elab.command]` alongside `[Elab.async]`:
+the corpus contains 341 rows in the first two classes against 327 async rows,
+so an async-only view misses the majority. These attributed lines name their
+declarations, so one run ranks the proofs in a module. Prefer this to
 `-Dprofiler=true`, whose output is a flat list of tactic durations with no
 attribution — useful only once you already know where you are.
+
+A `[Kernel]` row attached to a `structure` or `inductive` is a synchronous join
+barrier charged for draining the preceding asynchronous queue, never that
+declaration's own cost. The arithmetic matched barrier time to the sum of its
+siblings within 4.2 ms and a removal edit moved the barrier to 3.0 ms. The
+decisive control on `LidoCircuitBreakerDeploymentInput` preserved the two
+theorem kernel rows at 5.490 s and 5.301 s under `-DElab.async=false`, while
+the approximately 10.678 s structure row fell below the 2 s reporting
+threshold. The barrier interpretation is therefore control-confirmed.
+
+To recognize a serialized cumulative cohort, sort rows in source order and
+count adjacent inversions: zero inversions across at least eight rows means to
+read staircase deltas, not the cumulative values. Also compare the sum of
+`[Kernel]` rows divided by available cores with module wall time; an impossible
+sum exposes overlapping waits. Per-declaration profiler figures are ordinal
+evidence and must never be summed as cardinal seconds.
 
 Read the per-tactic view by name, not by duration alone. `exact`, `assumption`,
 `rfl`, `apply` and `change` perform no search, so a multi-second entry naming
@@ -534,7 +582,10 @@ two proofs out of ninety-six held sixty percent of the elaboration time.
 `all_goals` charge full elaboration for every alternative that is *attempted*,
 not merely the one that succeeds. That is harmless when the alternatives fail
 cheaply and ruinous when failing requires an expensive unification. The
-measured instance: four memory-extension goals discharged by
+same charging can occur inside the unifier's own strategy ladder —
+`isDefEq.delta` tries congruence before unfolding — even when no alternative
+combinator appears in source. The measured instance: four memory-extension
+goals discharged by
 
 ```
 all_goals first

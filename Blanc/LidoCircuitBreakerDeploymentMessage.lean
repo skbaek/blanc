@@ -27,7 +27,7 @@ theorem officialConstructorPost_state
           sevm.currentTarget heartbeatIntervalSlot
           officialConstructorArgs.initialHeartbeatInterval := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).state = _
+  rw [Devm.withOutput_state, Devm.setMach_state]
   exact officialConstructorEffectBase_state sevm base
 
 theorem officialConstructorPost_refundCounter
@@ -35,21 +35,21 @@ theorem officialConstructorPost_refundCounter
     (officialConstructorPost sevm base G).refundCounter =
       base.refundCounter := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).refundCounter = _
+  rw [Devm.withOutput_refundCounter, Devm.setMach_refundCounter]
   exact officialConstructorEffectBase_refundCounter sevm base
 
 theorem officialConstructorPost_returnData
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (officialConstructorPost sevm base G).returnData = base.returnData := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).returnData = _
+  rw [Devm.withOutput_returnData, Devm.setMach_returnData]
   exact officialConstructorEffectBase_returnData sevm base
 
 theorem officialConstructorPost_error
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (officialConstructorPost sevm base G).error = base.error := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).error = _
+  rw [Devm.withOutput_error, Devm.setMach_error]
   exact officialConstructorEffectBase_error sevm base
 
 theorem officialConstructorPost_accountsToDelete
@@ -57,7 +57,7 @@ theorem officialConstructorPost_accountsToDelete
     (officialConstructorPost sevm base G).accountsToDelete =
       base.accountsToDelete := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).accountsToDelete = _
+  rw [Devm.withOutput_accountsToDelete, Devm.setMach_accountsToDelete]
   exact officialConstructorEffectBase_accountsToDelete sevm base
 
 theorem officialConstructorPost_createdAccounts
@@ -65,7 +65,7 @@ theorem officialConstructorPost_createdAccounts
     (officialConstructorPost sevm base G).createdAccounts =
       base.createdAccounts := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).createdAccounts = _
+  rw [Devm.withOutput_createdAccounts, Devm.setMach_createdAccounts]
   exact officialConstructorEffectBase_createdAccounts sevm base
 
 theorem officialConstructorPost_accessedAddresses
@@ -73,7 +73,7 @@ theorem officialConstructorPost_accessedAddresses
     (officialConstructorPost sevm base G).accessedAddresses =
       base.accessedAddresses := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).accessedAddresses = _
+  rw [Devm.withOutput_accessedAddresses, Devm.setMach_accessedAddresses]
   exact officialConstructorEffectBase_accessedAddresses sevm base
 
 theorem officialConstructorPost_accessedStorageKeys
@@ -83,7 +83,7 @@ theorem officialConstructorPost_accessedStorageKeys
         (sevm.currentTarget, pauseDurationSlot)).insert
           (sevm.currentTarget, heartbeatIntervalSlot) := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).accessedStorageKeys = _
+  rw [Devm.withOutput_accessedStorageKeys, Devm.setMach_accessedStorageKeys]
   exact officialConstructorEffectBase_accessedStorageKeys sevm base
 
 theorem officialConstructorPost_transientStorage
@@ -91,7 +91,7 @@ theorem officialConstructorPost_transientStorage
     (officialConstructorPost sevm base G).transientStorage =
       base.transientStorage := by
   rw [officialConstructorPost_eq]
-  change (officialConstructorEffectBase sevm base).transientStorage = _
+  rw [Devm.withOutput_transientStorage, Devm.setMach_transientStorage]
   exact officialConstructorEffectBase_transientStorage sevm base
 
 /-- Body-pinned successful effect and return checkpoints for the exact

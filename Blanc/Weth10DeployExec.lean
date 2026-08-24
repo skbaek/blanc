@@ -339,53 +339,8 @@ theorem weth10InitMemory_read_runtime {sevm : Sevm}
   rw [hsep2, Bytes.sliceD_zero_length h5]
   rfl
 
-private theorem setMach_state_eq (d : Devm) (m : Mach) :
-    (d.setMach m).state = d.state := rfl
-
-private theorem setMach_memory_eq (d : Devm) (m : Mach) :
-    (d.setMach m).memory = m.memory := rfl
-
-private theorem setMach_logs_eq (d : Devm) (m : Mach) :
-    (d.setMach m).logs = d.logs := rfl
-
-private theorem setMach_error_eq (d : Devm) (m : Mach) :
-    (d.setMach m).error = d.error := rfl
-
-private theorem setMach_output_eq (d : Devm) (m : Mach) :
-    (d.setMach m).output = d.output := rfl
-
-private theorem withOutput_output_eq (d : Devm) (out : Bytes) :
-    (d.withOutput out).output = out := rfl
-
-private theorem withOutput_state_eq (d : Devm) (out : Bytes) :
-    (d.withOutput out).state = d.state := rfl
-
-private theorem withOutput_logs_eq (d : Devm) (out : Bytes) :
-    (d.withOutput out).logs = d.logs := rfl
-
-private theorem withOutput_error_eq (d : Devm) (out : Bytes) :
-    (d.withOutput out).error = d.error := rfl
-
-private theorem withOutput_refundCounter_eq (d : Devm) (out : Bytes) :
-    (d.withOutput out).refundCounter = d.refundCounter := rfl
-
-private theorem withOutput_accountsToDelete_eq (d : Devm) (out : Bytes) :
-    (d.withOutput out).accountsToDelete = d.accountsToDelete := rfl
-
-private theorem withOutput_createdAccounts_eq (d : Devm) (out : Bytes) :
-    (d.withOutput out).createdAccounts = d.createdAccounts := rfl
-
 private theorem memRead_fst_eq (d : Devm) (index size : Nat) :
     (d.memRead index size).1 = (d.memory.read index size).1 := rfl
-
-private theorem memRead_snd_state_eq (d : Devm) (index size : Nat) :
-    (d.memRead index size).2.state = d.state := rfl
-
-private theorem memRead_snd_logs_eq (d : Devm) (index size : Nat) :
-    (d.memRead index size).2.logs = d.logs := rfl
-
-private theorem memRead_snd_error_eq (d : Devm) (index size : Nat) :
-    (d.memRead index size).2.error = d.error := rfl
 
 private def weth10InitReturnPre
     (base : Devm) (M : Mem) (g : Nat) : Devm :=
@@ -1027,7 +982,7 @@ theorem weth10InitPost_output {sevm : Sevm} {base : Devm} {g : Nat}
       weth10PatchedRuntime sevm.benvStat.chainId.toB256
         (deploymentDomainSeparator
           sevm.benvStat.chainId.toB256 sevm.currentTarget) := by
-  rw [weth10InitPost_eq, withOutput_output_eq,
+  rw [weth10InitPost_eq, Devm.withOutput_output,
     weth10InitReturnRead_fst]
   exact weth10InitMemory_read_runtime h_code
 
@@ -1048,11 +1003,11 @@ theorem weth10InitPost_preserves_frame {sevm : Sevm} {base : Devm} {g : Nat} :
     (weth10InitPost sevm base g).logs = base.logs ∧
     (weth10InitPost sevm base g).error = base.error := by
   refine ⟨?_, ?_, ?_⟩
-  · rw [weth10InitPost_eq, withOutput_state_eq]
+  · rw [weth10InitPost_eq, Devm.withOutput_state]
     exact weth10InitReturnRead_state base (weth10InitMemory sevm) g
-  · rw [weth10InitPost_eq, withOutput_logs_eq]
+  · rw [weth10InitPost_eq, Devm.withOutput_logs]
     exact weth10InitReturnRead_logs base (weth10InitMemory sevm) g
-  · rw [weth10InitPost_eq, withOutput_error_eq]
+  · rw [weth10InitPost_eq, Devm.withOutput_error]
     exact weth10InitReturnRead_error base (weth10InitMemory sevm) g
 
 /-- Constructor execution also preserves the transaction-settlement metadata
@@ -1063,11 +1018,11 @@ theorem weth10InitPost_preserves_transaction_meta
     (weth10InitPost sevm base g).accountsToDelete = base.accountsToDelete ∧
     (weth10InitPost sevm base g).createdAccounts = base.createdAccounts := by
   refine ⟨?_, ?_, ?_⟩
-  · rw [weth10InitPost_eq, withOutput_refundCounter_eq]
+  · rw [weth10InitPost_eq, Devm.withOutput_refundCounter]
     exact weth10InitReturnRead_refundCounter base (weth10InitMemory sevm) g
-  · rw [weth10InitPost_eq, withOutput_accountsToDelete_eq]
+  · rw [weth10InitPost_eq, Devm.withOutput_accountsToDelete]
     exact weth10InitReturnRead_accountsToDelete base (weth10InitMemory sevm) g
-  · rw [weth10InitPost_eq, withOutput_createdAccounts_eq]
+  · rw [weth10InitPost_eq, Devm.withOutput_createdAccounts]
     exact weth10InitReturnRead_createdAccounts base (weth10InitMemory sevm) g
 
 /-- The actual hand-emitted initcode, including its inert runtime-data suffix,

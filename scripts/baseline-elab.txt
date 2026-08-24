@@ -5,11 +5,11 @@
 # alive. A file fails the gate above both 2.0x its time here and that time
 # plus 1.0s. Rewrite with: scripts/check-elab.sh --rebase
 #
-# 2026-08-25 R7 shrink-only reconciliation, explicitly authorized by
-# the project owner after a 149-module `check-elab.sh --rebase` pass:
-# each row is min(committed row, measured row). The pass measured
-# 1198.614 s total; 55 reductions are recorded, 94 lower committed
-# rows are preserved, no row rises, and this ratchet totals 1161.025 s.
+# 2026-08-25 elab-cure-1 shrink-only reconciliation after an authorized
+# 149-module `check-elab.sh --rebase` pass: each row is min(committed row,
+# measured row). The pass measured 989.4 s total; 4 reductions are recorded,
+# 145 lower committed rows are preserved, no row rises, and this ratchet totals
+# 924.523 s.
 OK	1.167	Blanc.lean
 OK	1.150	Blanc/BalanceAlgebra.lean
 OK	1.231	Blanc/Basic.lean
@@ -45,9 +45,9 @@ OK	7.130	Blanc/LidoCircuitBreakerDeploy.lean
 OK	1.239	Blanc/LidoCircuitBreakerDeploymentBlock.lean
 OK	11.640	Blanc/LidoCircuitBreakerDeploymentInput.lean
 OK	51.374	Blanc/LidoCircuitBreakerDeploymentLayout.lean
-OK	211.587	Blanc/LidoCircuitBreakerDeploymentMessage.lean
+OK	1.697	Blanc/LidoCircuitBreakerDeploymentMessage.lean
 OK	1.206	Blanc/LidoCircuitBreakerDeploymentRoot.lean
-OK	89.131	Blanc/LidoCircuitBreakerDeploymentTrace.lean
+OK	62.782	Blanc/LidoCircuitBreakerDeploymentTrace.lean
 OK	2.121	Blanc/LidoCircuitBreakerDeploymentTransaction.lean
 OK	40.326	Blanc/LidoCircuitBreakerEnumeration.lean
 OK	17.331	Blanc/LidoCircuitBreakerFreshRegistration.lean
@@ -73,13 +73,13 @@ OK	2.475	Blanc/LidoCircuitBreakerRegistrationWorld.lean
 OK	67.133	Blanc/LidoCircuitBreakerRegistry.lean
 OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean
 OK	17.513	Blanc/LidoCircuitBreakerRegistrySubstrate.lean
-OK	2.486	Blanc/LidoCircuitBreakerReplacementRegistration.lean
+OK	2.369	Blanc/LidoCircuitBreakerReplacementRegistration.lean
 OK	2.232	Blanc/LidoCircuitBreakerReplacementWorld.lean
 OK	1.261	Blanc/LidoCircuitBreakerRetainedAuthority.lean
 OK	16.620	Blanc/LidoCircuitBreakerSites.lean
 OK	1.586	Blanc/LidoCircuitBreakerSuccess.lean
 OK	1.269	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
-OK	5.286	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
+OK	5.140	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
 OK	0.594	Blanc/ProofRecipesGenerated.lean
 OK	1.630	Blanc/RevertPayload.lean

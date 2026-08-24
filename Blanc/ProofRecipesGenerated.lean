@@ -74,6 +74,20 @@ def recipes : List Recipe := [
     boundary := "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone."
   },
   {
+    id := "devm-projection-bridge"
+    status := "active"
+    triggers := ["goal-shape:devm-update-projection"]
+    preferredPath := "Rewrite with the matching Jaune update-first projection lemma, named `Devm.<update>_<projection>`, for the column in the goal. Never bridge a concrete effect tower or compiled artifact through `withOutput`, `setMach`, `setMeta`, `setWorld`, or another `with*` update using bare `change`, `show`, `rfl`, or `exact`."
+    boundary := "This does not cover a succeeding concrete-walk unfold, for which no remedy is registered, and does not reopen `successor-projection-normalization`: that measured refutation attacked `setMach` chains in an owner dominated by unrelated kernel checks, while the cheap control for this update-projection mechanism existed in the same deployment cluster. Resource ceilings neither detect nor bound this kernel-side class. The matcher needs an explicit `Devm` update head in the target; when a local definition hides the chain, unfold only that binding and invoke `blanc_suggest` again."
+  },
+  {
+    id := "bytesize-composition"
+    status := "active"
+    triggers := ["goal-shape:compileshape-bytesize"]
+    preferredPath := "Prove one small `decide +kernel` fact per leaf, then derive internal `compileShape.byteSize` facts arithmetically through `dispatchNode_size`-style composition. `dispatchCae9_size` is the canonical example: with its children available, its composition closes in 0.004 s."
+    boundary := "The measured law is approximately 2.6 ms per compiled byte of the addressed object; byte-range width predicts nothing because `byteAtByShape` is lazy. A module without child `_size` lemmas, such as `Weth10DeployDomainSlices`, needs new leaf facts before composition and is a proof-design packet rather than a local rewrite. `weth10MainEmit_drop_3950` costs approximately 0.011 s and should remain unchanged. This recipe records the route; executing the broader retrofit belongs to cure 2."
+  },
+  {
     id := "successor-projection-normalization"
     status := "partial"
     triggers := ["goal-shape:successor-projection"]
@@ -99,7 +113,7 @@ def recipes : List Recipe := [
     status := "partial"
     triggers := ["goal-shape:fixed-byte-offset"]
     preferredPath := "Use the existing `Mem.Wf` and `Mem.Reads` APIs; I8 proposes the missing `writeAt`/`sliceD` extension. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost."
-    boundary := "The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained. A later pilot promoted the whole local parameterized tail proof to a top-level private theorem: the owner median moved only from 48.11 to 46.85 s (-2.62%) and the same dominant 46.568 s kernel check remained. Both pilots were exactly reverted. Reopen only for a representation that removes or materially shrinks that kernel check, not for another naming or step-factorization variant."
+    boundary := "The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained. A later pilot promoted the whole local parameterized tail proof to a top-level private theorem: the owner median moved only from 48.11 to 46.85 s (-2.62%) and the same dominant 46.568 s kernel check remained. Both pilots were exactly reverted, and their profiler-independent owner medians remain the verdicts. Reopen only for a change whose serialized owner median improves by the licensed win rule; persistence of the trailing kernel row is not a mechanism criterion."
   },
 ]
 

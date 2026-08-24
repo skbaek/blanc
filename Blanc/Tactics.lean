@@ -44,6 +44,112 @@ def proofRecipeContainsName (needle : Lean.Name) : Lean.Expr → Bool
         proofRecipeContainsName needle body
   | .mdata _ expr | .proj _ _ expr => proofRecipeContainsName needle expr
 
+def proofRecipeExprHasFVarOrMVar : Lean.Expr → Bool
+  | .fvar _ | .mvar _ => true
+  | .bvar _ | .sort _ | .const _ _ | .lit _ => false
+  | .app fn arg =>
+      proofRecipeExprHasFVarOrMVar fn || proofRecipeExprHasFVarOrMVar arg
+  | .lam _ type body _ | .forallE _ type body _ =>
+      proofRecipeExprHasFVarOrMVar type || proofRecipeExprHasFVarOrMVar body
+  | .letE _ type value body _ =>
+      proofRecipeExprHasFVarOrMVar type ||
+        proofRecipeExprHasFVarOrMVar value ||
+        proofRecipeExprHasFVarOrMVar body
+  | .mdata _ expr | .proj _ _ expr => proofRecipeExprHasFVarOrMVar expr
+
+def proofRecipeIsDevmWithUpdaterName : Lean.Name → Bool
+  | .str pre suffix =>
+      pre == `Jaune.Devm && suffix.startsWith "with"
+  | _ => false
+
+def proofRecipeContainsDevmUpdater : Lean.Expr → Bool
+  | .bvar _ | .fvar _ | .mvar _ | .sort _ | .lit _ => false
+  | .const name _ =>
+      name == `Jaune.Devm.setMach ||
+        name == `Jaune.Devm.setMeta ||
+        name == `Jaune.Devm.setWorld ||
+        proofRecipeIsDevmWithUpdaterName name
+  | .app fn arg =>
+      proofRecipeContainsDevmUpdater fn || proofRecipeContainsDevmUpdater arg
+  | .lam _ type body _ | .forallE _ type body _ =>
+      proofRecipeContainsDevmUpdater type || proofRecipeContainsDevmUpdater body
+  | .letE _ type value body _ =>
+      proofRecipeContainsDevmUpdater type ||
+        proofRecipeContainsDevmUpdater value ||
+        proofRecipeContainsDevmUpdater body
+  | .mdata _ expr | .proj _ _ expr => proofRecipeContainsDevmUpdater expr
+
+def proofRecipeEqLhs? : Lean.Expr → Option Lean.Expr
+  | .app (.app (.app (.const name _) _) lhs) _ =>
+      if name == `Eq then some lhs else none
+  | .mdata _ expr => proofRecipeEqLhs? expr
+  | _ => none
+
+def proofRecipeIsDirectDevmProjectionName (name : Lean.Name) : Bool :=
+  name == `Jaune.Devm.mach ||
+    name == `Jaune.Devm.meta ||
+    name == `Jaune.Devm.world ||
+    name == `Jaune.Devm.stack ||
+    name == `Jaune.Devm.memory ||
+    name == `Jaune.Devm.gasLeft ||
+    name == `Jaune.Devm.logs ||
+    name == `Jaune.Devm.refundCounter ||
+    name == `Jaune.Devm.output ||
+    name == `Jaune.Devm.accountsToDelete ||
+    name == `Jaune.Devm.returnData ||
+    name == `Jaune.Devm.error ||
+    name == `Jaune.Devm.accessedAddresses ||
+    name == `Jaune.Devm.accessedStorageKeys ||
+    name == `Jaune.Devm.createdAccounts ||
+    name == `Jaune.Devm.state ||
+    name == `Jaune.Devm.transientStorage
+
+def proofRecipeDirectDevmProjectionSource? : Lean.Expr → Option Lean.Expr
+  | .proj typeName _ source =>
+      if typeName == `Jaune.Devm then some source else none
+  | .app (.const name _) source =>
+      if proofRecipeIsDirectDevmProjectionName name then some source else none
+  | .mdata _ expr => proofRecipeDirectDevmProjectionSource? expr
+  | _ => none
+
+def proofRecipeIsDevmProjectionBridge (target : Lean.Expr) : Bool :=
+  match proofRecipeEqLhs? target with
+  | some lhs =>
+      match proofRecipeDirectDevmProjectionSource? lhs with
+      | some source => proofRecipeContainsDevmUpdater source
+      | none => false
+  | none => false
+
+def proofRecipeContainsClosedCompileShapeByteSize : Lean.Expr → Bool
+  | .bvar _ | .fvar _ | .mvar _ | .sort _ | .const _ _ | .lit _ => false
+  | .app fn arg =>
+      match fn, arg with
+      | .const byteSizeName _, .app (.const compileShapeName _) func =>
+          if byteSizeName == `Blanc.Func.CompileShape.byteSize &&
+              compileShapeName == `Blanc.Func.compileShape then
+            !proofRecipeExprHasFVarOrMVar func
+          else
+            proofRecipeContainsClosedCompileShapeByteSize fn ||
+              proofRecipeContainsClosedCompileShapeByteSize arg
+      | _, _ =>
+          proofRecipeContainsClosedCompileShapeByteSize fn ||
+            proofRecipeContainsClosedCompileShapeByteSize arg
+  | .lam _ type body _ | .forallE _ type body _ =>
+      proofRecipeContainsClosedCompileShapeByteSize type ||
+        proofRecipeContainsClosedCompileShapeByteSize body
+  | .letE _ type value body _ =>
+      proofRecipeContainsClosedCompileShapeByteSize type ||
+        proofRecipeContainsClosedCompileShapeByteSize value ||
+        proofRecipeContainsClosedCompileShapeByteSize body
+  | .mdata _ expr | .proj _ _ expr =>
+      proofRecipeContainsClosedCompileShapeByteSize expr
+
+def proofRecipeIsByteSizeComposition (target : Lean.Expr) : Bool :=
+  let head := proofRecipeHeadName? target
+  (head == some `Eq || head == some `Ne ||
+    head == some `LE.le || head == some `LT.lt) &&
+    proofRecipeContainsClosedCompileShapeByteSize target
+
 def proofRecipeHasPremiseHead (needle : Lean.Name) : Lean.Expr → Bool
   | .forallE _ domain body _ =>
       proofRecipeHeadName? domain == some needle ||
@@ -84,9 +190,14 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.Line.Run target
   | "context-shape:intermediate-devm" =>
       return (← proofRecipeLocalTypeCount `Jaune.Devm) > 2
+  | "goal-shape:devm-update-projection" =>
+      return proofRecipeIsDevmProjectionBridge target
   | "goal-shape:successor-projection" =>
       return head == some `Eq &&
-        proofRecipeContainsName `Jaune.Devm.setMach target
+        proofRecipeContainsName `Jaune.Devm.setMach target &&
+        !proofRecipeIsDevmProjectionBridge target
+  | "goal-shape:compileshape-bytesize" =>
+      return proofRecipeIsByteSizeComposition target
   | "goal-shape:selector-separation" =>
       return proofRecipeContainsName `Blanc.selector target
   | "goal-shape:fixed-byte-offset" =>
