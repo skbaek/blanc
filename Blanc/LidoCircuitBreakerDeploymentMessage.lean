@@ -6,6 +6,7 @@
 -- crossing Jaune's creation-message code-deposit path.
 
 import Blanc.LidoCircuitBreakerDeploymentTrace
+import Blanc.LidoCircuitBreakerHistoryChain
 
 namespace Blanc
 
@@ -157,6 +158,48 @@ theorem officialConstructorPost_effectCheckpoints
     persistentInventory := rfl
     transientInventory := rfl
     externalCallInventory := rfl }
+
+/-! ## Empty Registry seed from the executed configuration writes -/
+
+/-- Starting from the creation frame's actual empty target storage, the two
+constructor configuration writes leave every Registry region witnessed by the
+empty entry list. -/
+theorem officialConstructorPost_emptyRegistryWitness
+    (sevm : Sevm) (base : Devm) (G : Nat)
+    (hempty : Devm.getStor base sevm.currentTarget = Stor.empty) :
+    RegistryWitness
+      (logicalStorageOfStor
+        (Devm.getStor (officialConstructorPost sevm base G)
+          sevm.currentTarget)) [] := by
+  rw [officialConstructorPost_getStor, hempty]
+  change RegistryWitness
+    (logicalStorageOfStor
+      ((Stor.empty.set (slot configRegion 0)
+          officialConstructorArgs.initialPauseDuration).set
+        (slot configRegion 1)
+        officialConstructorArgs.initialHeartbeatInterval)) []
+  have hbase : RegistryWitness (logicalStorageOfStor Stor.empty) [] := by
+    change RegistryWitness ({ read := fun _ => 0 } : LogicalStorage) []
+    exact emptyWitness
+  simpa only [pauseDurationSlot, heartbeatIntervalSlot] using
+    ((hbase.config_set
+      (payload := (0 : B256))
+      (value := officialConstructorArgs.initialPauseDuration)
+      (by simpa only [B256.toNat_zero] using
+        (show 0 < 2 ^ 252 by norm_num))).config_set
+        (payload := (1 : B256))
+        (value := officialConstructorArgs.initialHeartbeatInterval)
+        (by change 1 < 2 ^ 252; norm_num))
+
+/-- The same execution-derived empty witness, existentially packaged as the
+landed Registry coherence invariant. -/
+theorem officialConstructorPost_registryCoherent
+    (sevm : Sevm) (base : Devm) (G : Nat)
+    (hempty : Devm.getStor base sevm.currentTarget = Stor.empty) :
+    RegistryCoherent
+      (Devm.getStor (officialConstructorPost sevm base G)
+        sevm.currentTarget) :=
+  ⟨[], officialConstructorPost_emptyRegistryWitness sevm base G hempty⟩
 
 end LidoCircuitBreaker
 
