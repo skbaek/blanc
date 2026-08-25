@@ -871,7 +871,7 @@ private theorem unregWorld_warmCost {base : Devm} {key : B256}
     rw [h]
     exact hk
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 5844 in
 /-- The chronology's body reserve at this world is the closed numeral the
 message carries. -/
 theorem unregWorld_bodyGasEq :
@@ -921,8 +921,6 @@ theorem unregWorld_swapPop :
 
 /-! ## The payoff -/
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- A fully inhabited production-runtime **unregistration**.  The admin of
 `officialParams` calls `registerPauser(7, 0)` on a CircuitBreaker deployed at
 address `100` whose Registry holds exactly the entry `(7, 9)`, with exactly
@@ -1017,8 +1015,7 @@ theorem unregisterWorld_run :
   exact ⟨post, hrun, hcompile⟩
 
 
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 2400000 in
+set_option maxRecDepth 29423 in
 /-- Message-altitude settlement at this world.
 
 The chronology exposes the raw poststate's gas, storage and logs but says

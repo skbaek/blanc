@@ -81,8 +81,6 @@ theorem freshRegistration_sourceTrace_witness
   · dsimp only [trace, writes]
     exact hw.applyFreshWrites htarget hnew hfind
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem registerAfterSet_freshNonzero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -178,8 +176,6 @@ private theorem registerAfterSet_freshNonzero_runCompiled
     rw [logs_setMach, logs_addLog, temporalSstorePost_logs,
       temporalSloadBase_logs]
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem finishSetPauser_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -264,8 +260,6 @@ private theorem finishSetPauser_freshNonzero_runCompiled
     rw [heventLogs] at hlogs
     simpa [eventLog, List.append_assoc] using hlogs
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem afterOldPauser_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -943,8 +937,6 @@ def freshSetPauserKernelGas (sevm : Sevm) (base : Devm) (M : Mem)
         arrayLengthSlot next)
       (countSlot newPauser) + countCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-kernel success for a fresh target assigned to a nonzero
 pauser.  The source trace and refined Registry projection are derived from the
 entry witness; all concrete storage/access/value-cost facts used by the
@@ -1536,8 +1528,6 @@ theorem registerPauser_body_freshNonzero_runCompiled
     omega
   · exact hstage
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for a fresh nonzero registration. -/
 theorem registerPauser_runCompiledTo_freshNonzero
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
@@ -1653,8 +1643,6 @@ theorem registerPauser_runCompiledTo_freshNonzero
   exact ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas,
     hstoreExpiry, hlogs, hcompile⟩
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact clean direct-message effects for a fresh nonzero registration,
 derived from the generated-runtime execution rather than supplied as facts
 about the raw result. -/
