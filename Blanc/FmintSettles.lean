@@ -41,8 +41,6 @@ namespace Fmint
 
 open Jaune
 
-set_option maxRecDepth 40000
-
 /-- `Sevm.argWord` at its own definition, as a rewrite in the direction the walk
 produces.  `arg k` compiles to `CALLDATALOAD (32 * k + 4)`, so a walk's stack
 carries `Sevm.dataWord` where a statement carries `Sevm.argWord`; the two are
@@ -221,6 +219,7 @@ What the continuation is handed, and why each clause is there:
 There is no premise about the frame's accessed set and none about the `SSTORE`
 value cases; both are bounded inside. -/
 
+set_option maxRecDepth 733 in
 /-- **`fmint`'s `flashLoan` reaches its callback's argument build**, on a call
 whose three guards pass, with the mint pair written and priced at worst case.
 
@@ -452,6 +451,7 @@ The conclusion is the exact state the crossing starts from: the seven `CALL`
 operands with `gw` the frame's own remaining gas, the memory image as a named
 chain, the mint pair, the log, and a two-sided gas account. -/
 
+set_option maxRecDepth 796 in
 /-- **`fmint`'s `flashLoan` reaches its `CALL`**, on a call whose three guards
 pass.
 
@@ -671,6 +671,7 @@ the `execSat_*` siblings.  The fixed-outcome forms stay: they are checkpoint
 2b's landed surface, and their exact-state conclusions are what a *known*
 outcome composes against. -/
 
+set_option maxRecDepth 736 in
 /-- `flashLoan_runCompiledTo_mint`, existential in the outcome. -/
 theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     {receiver token amount : B256} {data : Bytes} {P : Execution → Prop}
@@ -821,6 +822,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     simp only [Devm.setMach_accessedStorageKeys, hacc₃]
     exact hacc₂ _ (hacc₁ _ hp)
 
+set_option maxRecDepth 799 in
 /-- `flashLoan_runCompiledTo_call`, existential in the outcome: the exact state
 at the `CALL`, handed to a continuation that will decide the outcome by case
 analysis on the callback's settle. -/
@@ -1366,6 +1368,7 @@ def flashLoanRetdataHead (d : Devm) (M : Mem) : B256 :=
     (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32) (0 : UInt8))).read
       ((0 * 32 : B256)).toNat 32).1.toB256
 
+set_option maxRecDepth 608 in
 /-- **The magic-mismatch leaf.**  The callback settled clean with a full word
 of returndata, but the head word is not `erc3156Magic`: `flashLoan` reads the
 word back through `retdatacopy`/`mload` and deliberately reverts. -/
@@ -1449,6 +1452,7 @@ lemma flashLoanRetdataImage_size {d : Devm} {M : Mem} (h_msz : 64 ≤ M.size) :
     show ((0 * 32 : B256)).toNat + B256.toNat 32 = 32 from by decide]
   omega
 
+set_option maxRecDepth 605 in
 /-- **Into the repayment.**  The flag is `1` and both returndata checks pass:
 the walk crosses `retdataShorterThan 32` and `checkRetdataHead erc3156Magic 0`
 and hands the continuation the state entering `spendAllowanceThenBurn` — the
@@ -1812,6 +1816,7 @@ lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
             omega)
     · exact hP _
 
+set_option maxRecDepth 629 in
 /-- **The success leaf.**  The balance covers the burn: the pair is written —
 each `SSTORE` warm behind its own `SLOAD` (F28), each clearing the EIP-2200
 sentry because `gasStorageSet ≤ gasLeft` subsumes it — the burn `Transfer` is
@@ -2299,6 +2304,7 @@ def receiverNotAddressGas : Nat :=
 
 theorem receiverNotAddressGas_eq : receiverNotAddressGas = 167 := by decide
 
+set_option maxRecDepth 674 in
 /-- A `flashLoan` call whose `token` is fmint but whose `receiver` word is not
 address-shaped has a gas-exact walk that reverts, with empty revert data. -/
 theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
@@ -2396,6 +2402,7 @@ def amountOverBoundGas : Nat :=
 /-- 2 300 gas: 200 of walking and one cold `SLOAD`. -/
 theorem amountOverBoundGas_eq : amountOverBoundGas = 2300 := by decide
 
+set_option maxRecDepth 672 in
 /-- A `flashLoan` call past the first two guards whose `amount` exceeds
 `maxFlashLoan = 2^256 - 1 - totalSupply` reverts, with empty revert data. -/
 theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}

@@ -82,16 +82,103 @@
       "anchor": "Blanc.Fmint.fmint_fallback_is_rev"
     },
     {
-      "id": "Blanc/FmintSettles.lean::$ambient#0::ambient_command::Blanc.Fmint.Sevm.argWord_eq_dataWord::maxRecDepth#1",
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.execSat_burnOk_leaf#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/FmintSettles.lean",
-      "declaration": null,
-      "declaration_ordinal": null,
-      "scope_kind": "ambient_command",
+      "declaration": "Blanc.Fmint.execSat_burnOk_leaf",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 40000,
-      "ceiling": 40000,
-      "anchor": "Blanc.Fmint.Sevm.argWord_eq_dataWord"
+      "value": 629,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.execSat_magicMismatch_leaf#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintSettles.lean",
+      "declaration": "Blanc.Fmint.execSat_magicMismatch_leaf",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 608,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.execSat_spend_step#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintSettles.lean",
+      "declaration": "Blanc.Fmint.execSat_spend_step",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 605,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.flashLoan_execSat_call#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintSettles.lean",
+      "declaration": "Blanc.Fmint.flashLoan_execSat_call",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 799,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.flashLoan_execSat_mint#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintSettles.lean",
+      "declaration": "Blanc.Fmint.flashLoan_execSat_mint",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 736,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.flashLoan_runCompiledTo_call#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintSettles.lean",
+      "declaration": "Blanc.Fmint.flashLoan_runCompiledTo_call",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 796,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.flashLoan_runCompiledTo_mint#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintSettles.lean",
+      "declaration": "Blanc.Fmint.flashLoan_runCompiledTo_mint",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 733,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.fmint_amount_over_bound_reverts#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintSettles.lean",
+      "declaration": "Blanc.Fmint.fmint_amount_over_bound_reverts",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 672,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintSettles.lean::Blanc.Fmint.receiverNotAddress_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintSettles.lean",
+      "declaration": "Blanc.Fmint.receiverNotAddress_runCompiledTo",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 674,
+      "ceiling": null
     },
     {
       "id": "Blanc/LidoCircuitBreaker.lean::Blanc.LidoCircuitBreaker.runtimeEntryShapes_eq#1::command_scoped::-::maxHeartbeats#1",
