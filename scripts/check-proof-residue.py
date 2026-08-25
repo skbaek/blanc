@@ -190,21 +190,47 @@ def baseline_document(registry_sha: str, counts: dict[str, int]) -> dict:
     return doc
 
 
-def write_baseline(root: pathlib.Path, predicates: list[Predicate], registry_sha: str, hits: dict[str, list[str]], quiet: bool = False) -> int:
+def write_baseline(
+    root: pathlib.Path,
+    predicates: list[Predicate],
+    registry_sha: str,
+    hits: dict[str, list[str]],
+    quiet: bool = False,
+    admit_new: tuple[str, ...] = (),
+) -> int:
     counts = {p.id: len(hits[p.id]) for p in predicates}
     path = root / BASELINE
     old = load_baseline(root) if path.exists() else None
+    if len(admit_new) != len(set(admit_new)):
+        raise GateError(f"writer refuses duplicate admission id: {list(admit_new)}")
+    admitted = set(admit_new)
     if old:
         old_counts = old["predicates"]
         missing = set(old_counts) - set(counts)
         if missing: raise GateError(f"writer refuses predicate removal: {sorted(missing)}")
         rises = {k: (old_counts[k], v) for k, v in counts.items() if k in old_counts and v > old_counts[k]}
         if rises: raise GateError(f"writer refuses count rise: {rises}")
+        unknown = admitted - set(counts)
+        if unknown: raise GateError(f"writer refuses unknown admission id: {sorted(unknown)}")
+        existing = admitted & set(old_counts)
+        if existing: raise GateError(f"writer refuses existing predicate admission: {sorted(existing)}")
         new_nonzero = {k: v for k, v in counts.items() if k not in old_counts and v != 0}
-        if new_nonzero: raise GateError(f"writer refuses nonzero new predicate admission: {new_nonzero}")
+        non_nonzero = admitted - set(new_nonzero)
+        if non_nonzero:
+            raise GateError(
+                "writer refuses zero-count/non-nonzero admission id: "
+                f"{sorted(non_nonzero)}"
+            )
+        unnamed = {k: v for k, v in new_nonzero.items() if k not in admitted}
+        if unnamed: raise GateError(f"writer refuses unnamed nonzero new predicate admission: {unnamed}")
         changed = old.get("registry_sha256") != registry_sha
         if changed and not quiet:
             print("NOTICE — residue baseline: existing predicate pattern/digest changed under explicit shrink-only write")
+        if admitted and not quiet:
+            observed = {k: counts[k] for k in sorted(admitted)}
+            print(f"NOTICE — residue baseline: exact new predicate admission: {observed}")
+    elif admitted:
+        raise GateError("writer refuses new predicate admission without an existing baseline")
     doc = baseline_document(registry_sha, counts)
     (root / BASELINE).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     if not quiet:
@@ -212,14 +238,19 @@ def write_baseline(root: pathlib.Path, predicates: list[Predicate], registry_sha
     return 0
 
 
-def run(root: pathlib.Path, write: bool = False) -> int:
+def run(root: pathlib.Path, write: bool = False, admit_new: tuple[str, ...] = ()) -> int:
+    if admit_new and not write:
+        raise GateError("--admit-new is illegal without --write-baseline")
     predicates, registry_sha = load_registry(root)
     hits, inspected, total = inventory(root, predicates)
     print(f"residue scan: {inspected} source file(s), {len(predicates)} predicate(s), {total} hit(s)")
     for pred in predicates:
         print(f"  {pred.id}: {len(hits[pred.id])} hit(s)")
         for hit in hits[pred.id]: print(f"    HIT {hit}")
-    if write: return write_baseline(root, predicates, registry_sha, hits)
+    if write:
+        return write_baseline(
+            root, predicates, registry_sha, hits, admit_new=admit_new,
+        )
     base = load_baseline(root)
     if base["registry_sha256"] != registry_sha: raise GateError("baseline registry/digest mismatch")
     if set(base["predicates"]) != {p.id for p in predicates}: raise GateError("baseline predicate membership mismatch")
@@ -307,6 +338,20 @@ def self_test() -> int:
         else: raise GateError("self-test writer rise passed")
         write_registry(root, base_predicates + [predicate("new-zero", r"^\s*never_matches\b")])
         preds, sha = load_registry(root); hits, _, _ = inventory(root, preds); write_baseline(root, preds, sha, hits, quiet=True)
+        write_registry(root, base_predicates + [
+            predicate("new-zero", r"^\s*never_matches\b"),
+            predicate("admit-zero", r"^\s*also_never_matches\b"),
+        ])
+        zero_preds, zero_sha = load_registry(root)
+        zero_hits, _, _ = inventory(root, zero_preds)
+        try:
+            write_baseline(
+                root, zero_preds, zero_sha, zero_hits, quiet=True,
+                admit_new=("admit-zero",),
+            )
+        except GateError as e:
+            if "zero-count/non-nonzero admission id" not in str(e): raise
+        else: raise GateError("self-test named zero-count admission passed")
         # A new nonzero predicate is debt admission, not a shrink-only refresh.
         write_registry(root, base_predicates + [
             predicate("new-zero", r"^\s*never_matches\b"),
@@ -315,8 +360,62 @@ def self_test() -> int:
         preds, sha = load_registry(root); hits, _, _ = inventory(root, preds)
         try: write_baseline(root, preds, sha, hits, quiet=True)
         except GateError as e:
-            if "nonzero new predicate" not in str(e): raise
+            if "unnamed nonzero new predicate" not in str(e): raise
         else: raise GateError("self-test nonzero new predicate admission passed")
+        # The writer may admit exactly the observed count of an explicitly
+        # named new registry predicate.
+        write_baseline(
+            root, preds, sha, hits, quiet=True, admit_new=("new-live",),
+        )
+        admitted_baseline = load_baseline(root)
+        if admitted_baseline["predicates"].get("new-live") != 1:
+            raise GateError("self-test exact new predicate admission count drifted")
+        # Admission IDs must be unique, registered, and absent from the old
+        # baseline.  The option is writer-only.
+        try: run(root, admit_new=("new-live",))
+        except GateError as e:
+            if "illegal without --write-baseline" not in str(e): raise
+        else: raise GateError("self-test reader admission passed")
+        for bad_ids, needle in (
+            (("missing",), "unknown admission id"),
+            (("new-live", "new-live"), "duplicate admission id"),
+            (("fixture",), "existing predicate admission"),
+        ):
+            try:
+                write_baseline(
+                    root, preds, sha, hits, quiet=True, admit_new=bad_ids,
+                )
+            except GateError as e:
+                if needle not in str(e): raise
+            else: raise GateError("self-test invalid admission id passed")
+        write_registry(root, [
+            predicate("new-zero", r"^\s*never_matches\b"),
+            predicate("new-live", r"^theorem\s+clean\b"),
+        ])
+        reduced_preds, reduced_sha = load_registry(root)
+        reduced_hits, _, _ = inventory(root, reduced_preds)
+        try:
+            write_baseline(
+                root, reduced_preds, reduced_sha, reduced_hits, quiet=True,
+                admit_new=("fixture",),
+            )
+        except GateError as e:
+            if "predicate removal" not in str(e): raise
+        else: raise GateError("self-test named predicate removal passed")
+        write_registry(root, base_predicates + [
+            predicate("new-zero", r"^\s*never_matches\b"),
+            predicate("new-live", r"^theorem\s+clean\b"),
+        ])
+        # Naming an existing predicate cannot waive the shrink-only count
+        # rule: the rise is rejected before existing-ID validation.
+        hits["fixture"] = ["Blanc/Fixture.lean:1"]
+        try:
+            write_baseline(
+                root, preds, sha, hits, quiet=True, admit_new=("fixture",),
+            )
+        except GateError as e:
+            if "count rise" not in str(e): raise
+        else: raise GateError("self-test named existing rise passed")
         # Resolving a registered path through a symlink may not escape root.
         outside = pathlib.Path(d).parent / f"{root.name}-outside.lean"
         try:
@@ -334,16 +433,19 @@ def self_test() -> int:
             else: raise GateError("self-test escaping symlink passed")
         finally:
             outside.unlink(missing_ok=True)
-    print("OK — proof residue self-test: 15 green/seed/lexical/query/path/digest/writer controls live")
+    print("OK — proof residue self-test: 20 green/seed/lexical/query/path/digest/writer/admission controls live")
     return 0
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(); ap.add_argument("--root", type=pathlib.Path, default=pathlib.Path(__file__).resolve().parent.parent); ap.add_argument("--write-baseline", action="store_true"); ap.add_argument("--self-test", action="store_true")
+    ap = argparse.ArgumentParser(); ap.add_argument("--root", type=pathlib.Path, default=pathlib.Path(__file__).resolve().parent.parent); ap.add_argument("--write-baseline", action="store_true"); ap.add_argument("--admit-new", action="append", default=[], metavar="ID"); ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
     try:
+        if args.admit_new and not args.write_baseline:
+            raise GateError("--admit-new is illegal without --write-baseline")
         if args.self_test: return self_test()
-        root = args.root.resolve(); return run(root, args.write_baseline)
+        root = args.root.resolve()
+        return run(root, args.write_baseline, tuple(args.admit_new))
     except GateError as e:
         print(f"REGRESSION — proof residue: {e}")
         return 1
