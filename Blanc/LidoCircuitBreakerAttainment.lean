@@ -883,7 +883,6 @@ theorem RuntimePersistentWrite.sourceSite?_official {dp : DeployParams}
   unfold RuntimePersistentWrite.sourceSite? at found ⊢
   rwa [runtimePersistentSourceSites_eq_official dp] at found
 
-set_option maxRecDepth 20000 in
 /-- Only inventory index `3` — `.setPauserAssignment` — nominates a site whose
 source path is `setPauserAssignmentPath`. -/
 theorem setPauserAssignment_index_pin :
@@ -1600,7 +1599,6 @@ theorem RuntimePersistentWrite.eq_of_path
         omega)) mapped
   exact RuntimePersistentWrite.index_injective indexEq
 
-set_option maxRecDepth 20000 in
 /-- Inventory indices `5`, `6` and `7` — `.appendArrayEntry`,
 `.appendReverseIndex` and `.appendArrayLength` — are the only ones nominating
 the three `appendTarget` paths.  One kernel evaluation settles all three. -/
@@ -1883,7 +1881,6 @@ theorem runtimeMain_routeTo_afterOldNewCount {devm post : Devm}
       tagTop]
   exact pathEq ▸ routeTo_head write afterOldNewCountPath
 
-set_option maxRecDepth 20000 in
 /-- Inventory index `8` -- `.afterOldNewCount` -- is the only one nominating
 `afterOldNewCountPath`. -/
 theorem afterOldNewCount_index_pin :
@@ -2094,7 +2091,6 @@ theorem runtimeMain_routeTo_registerFreshArmExpiry {devm post : Devm}
       registerFreshArmExpiryPrefix, loadWord, mstoreAt, tagTop]
   exact pathEq ▸ routeTo_head write registerFreshArmExpiryPath
 
-set_option maxRecDepth 20000 in
 /-- Inventory index `17` is the only one nominating
 `registerFreshArmExpiryPath`. -/
 theorem registerFreshArmExpiry_index_pin :
@@ -2711,7 +2707,6 @@ theorem runtimeMain_routeTo_setPauseDurationConfig (dp : DeployParams)
 
 /-! ### Pinning the row, and the witness -/
 
-set_option maxRecDepth 20000 in
 /-- Only inventory index `0` — `.setPauseDurationConfig` — nominates a site
 whose source path is `setPauseDurationConfigPath`. -/
 theorem setPauseDurationConfig_index_pin :
@@ -3032,7 +3027,6 @@ theorem runtimeMain_routeTo_setHeartbeatIntervalConfig (dp : DeployParams)
 
 /-! ### Pinning the row, and the witness -/
 
-set_option maxRecDepth 20000 in
 /-- Only inventory index `1` — `.setHeartbeatIntervalConfig` — nominates a site
 whose source path is `setHeartbeatIntervalConfigPath`. -/
 theorem setHeartbeatIntervalConfig_index_pin :
@@ -3473,7 +3467,6 @@ theorem runtimeMain_routeTo_heartbeatExpiry
 
 /-! ### Pinning the row, and the witness -/
 
-set_option maxRecDepth 20000 in
 /-- Only inventory index `2` — `.heartbeatExpiry` — nominates a site whose
 source path is `heartbeatExpiryPath`. -/
 theorem heartbeatExpiry_index_pin :
@@ -4418,7 +4411,6 @@ theorem runtimeMain_routeTo_registerOldLastNewExpiry {devm post : Devm}
 
 /-! ### Pinning the three rows, and the witnesses -/
 
-set_option maxRecDepth 20000 in
 /-- Inventory indices `14`, `15` and `16` are the only ones nominating the
 three replacement-arm paths.  One kernel evaluation settles all three, as for
 the `appendTarget` rows. -/

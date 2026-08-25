@@ -567,28 +567,6 @@
       "ceiling": 16384
     },
     {
-      "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.afterOldNewCount_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.afterOldNewCount_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.append_index_pins#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.append_index_pins",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.arithmeticPanic_revertsWithin#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerAttainment.lean",
       "declaration": "Blanc.LidoCircuitBreaker.arithmeticPanic_revertsWithin",
@@ -611,28 +589,6 @@
       "ceiling": 16384
     },
     {
-      "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.heartbeatExpiry_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.heartbeatExpiry_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.registerFreshArmExpiry_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.registerFreshArmExpiry_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.registerPauser_routeTo_setPauserCall#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerAttainment.lean",
       "declaration": "Blanc.LidoCircuitBreaker.registerPauser_routeTo_setPauserCall",
@@ -642,17 +598,6 @@
       "option": "maxRecDepth",
       "value": 8192,
       "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.registerReplacementArm_index_pins#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.registerReplacementArm_index_pins",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
     },
     {
       "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.runtimeMain_routeTo_afterOldCall#1::command_scoped::-::maxRecDepth#1",
@@ -787,28 +732,6 @@
       "ceiling": 16384
     },
     {
-      "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.setHeartbeatIntervalConfig_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setHeartbeatIntervalConfig_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.setPauseDurationConfig_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setPauseDurationConfig_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.setPauseDuration_body_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerAttainment.lean",
       "declaration": "Blanc.LidoCircuitBreaker.setPauseDuration_body_runCompiledTo",
@@ -829,17 +752,6 @@
       "option": "maxRecDepth",
       "value": 16384,
       "ceiling": 16384
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerAttainment.lean::Blanc.LidoCircuitBreaker.setPauserAssignment_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setPauserAssignment_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploy.lean::Blanc.LidoCircuitBreaker.constructor_program_site_counts_exact#1::command_scoped::-::maxHeartbeats#1",
