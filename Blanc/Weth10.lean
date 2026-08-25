@@ -722,10 +722,39 @@ private theorem dispatchWith_compileShape_eq
           have hw := leftmostFsig_eq_of_dispatchCompileShape h.2
           simp [dispatchWith, Func.compileShape, hw, ihl h.1, ihr h.2]
 
+private theorem pushDeployWord_size (w : B256) :
+    (pushDeployWord w).size = 33 := by
+  simp [pushDeployWord, Ninst.size, B256.length_toBytes]
+
+private theorem domainSeparator_compileShape_eq (dp : DeployParams) :
+    (nonpayable (domainSeparator dp)).compileShape =
+      (nonpayable
+        (domainSeparator (⟨0, 0⟩ : DeployParams))).compileShape := by
+  simp [nonpayable, domainSeparator, Func.compileShape,
+    pushDeployWord_size, returnDeployWord]
+
+private theorem deploymentChainId_compileShape_eq (dp : DeployParams) :
+    (nonpayable (deploymentChainId dp)).compileShape =
+      (nonpayable
+        (deploymentChainId (⟨0, 0⟩ : DeployParams))).compileShape := by
+  simp [nonpayable, deploymentChainId, returnDeployWord, Func.compileShape,
+    pushDeployWord_size]
+
+private theorem permit_compileShape_eq (dp : DeployParams) :
+    (nonpayable (permit dp)).compileShape =
+      (nonpayable (permit (⟨0, 0⟩ : DeployParams))).compileShape := by
+  simp [nonpayable, permit, Func.compileShape, arg, addressArg,
+    normalizeAddress, tagNonceKey, mstoreAt, argCopy, pushList,
+    calculateDomainSeparator, cdl, cdc, pushAddressMask, prepend,
+    pushDeployWord_size]
+
 private theorem weth10EntryShapes_eq (dp : DeployParams) :
     dispatchEntryShapes (weth10Funcs dp) =
       dispatchEntryShapes (weth10Funcs ⟨0, 0⟩) := by
-  rfl
+  simp only [dispatchEntryShapes, weth10Funcs, List.map,
+    domainSeparator_compileShape_eq dp,
+    deploymentChainId_compileShape_eq dp,
+    permit_compileShape_eq dp]
 
 private theorem weth10Tree_compileShape_eq (dp : DeployParams) :
     dispatchCompileShape (weth10Tree dp) =

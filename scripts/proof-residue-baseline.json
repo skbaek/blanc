@@ -10,8 +10,8 @@
     "selector-decide-kernel": 0,
     "sites-direct-let": 1,
     "weth10-deploy-inline-size-decision": 0,
-    "weth10-entry-shapes-rfl": 1
+    "weth10-entry-shapes-rfl": 0
   },
-  "total": 3,
-  "digest": "2bf5713edb23ee2f6f26706e4ac232e6c3316a2690ece0a7654820e40a6ab6ad"
+  "total": 2,
+  "digest": "65199b441f7f6797d573dd69f657eb6d2b7b22e7f73aedf96f5e9d02d2f19c14"
 }
