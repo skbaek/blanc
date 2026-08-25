@@ -2518,61 +2518,6 @@
       "ceiling": 800000
     },
     {
-      "id": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean::Blanc.LidoCircuitBreaker.attainable_adminRegistry_of_route#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.attainable_adminRegistry_of_route",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean::Blanc.LidoCircuitBreaker.registerStaging_windows#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.registerStaging_windows",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean::Blanc.LidoCircuitBreaker.runtimeMain_routeTo_unregisterKernel#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeMain_routeTo_unregisterKernel",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean::Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_oldCountArm_ok#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_oldCountArm_ok",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean::Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_removeTarget_ok#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_removeTarget_ok",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerUnregisterRegistration.lean::Blanc.LidoCircuitBreaker.registerAfterSet_retainedOldZero_runCompiled#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
       "declaration": "Blanc.LidoCircuitBreaker.registerAfterSet_retainedOldZero_runCompiled",

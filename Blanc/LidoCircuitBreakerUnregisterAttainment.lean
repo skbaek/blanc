@@ -39,7 +39,6 @@ statement for `registerPauser`'s, which stages the call's *second* argument at
 `newPauserWord` rather than a literal zero -- so the zero the kernel branches
 on is an antecedent here (`hnew`) rather than a fact about the line. -/
 
-set_option maxRecDepth 8192 in
 /-- `registerPauser`'s staging line leaves the call's target argument at
 `targetWord` and its new-pauser argument at `newPauserWord`.  At an
 unregistering call the latter is zero, which is what routes the shared kernel
@@ -103,7 +102,6 @@ in place of `call_namedError_refuted`.  Everything after the first branch is
 shared: `pauseKernel_previousPauserNonzero` is outcome-generic, and so are all
 five `removeTarget_routeTo_*` lemmas. -/
 
-set_option maxRecDepth 8192 in
 /-- From `setPauserKernel`'s entry to the old-count arm, on a successful walk:
 the target-zero test (free, its other arm is `PausableZero`, which cannot end
 `.ok`) and the previous-pauser test (paid for out of the entry storage). -/
@@ -175,7 +173,6 @@ theorem setPauserKernel_routeTo_oldCount_ok (dp : DeployParams)
         (fun _writeState _writeRun write =>
           routeTo_head write setPauserOldCountPath))
 
-set_option maxRecDepth 8192 in
 /-- From `setPauserKernel`'s entry to `removeTarget`'s entry, on a successful
 walk.  `afterOldPauser`'s test is memory-valued, and the window it reads is the
 staged zero the unregistering call put there. -/
@@ -217,7 +214,6 @@ theorem setPauserKernel_routeTo_removeTarget_ok (dp : DeployParams)
 
 /-! ## The whole route, at the unregistration world -/
 
-set_option maxRecDepth 16384 in
 /-- Program entry to `setPauserKernel`'s own root at the unregistration world.
 Twelve branches: six selector comparisons decided on the concrete calldata
 selector, and six settled by certified-reverting siblings under the successful
@@ -274,7 +270,6 @@ the `.adminRegistry` disjunct is closed because a pause caller is not the
 admin; here the `.pauseRegistry` disjunct is closed because the target's
 recorded pauser is not the caller -- the admin is not pauser `9`. -/
 
-set_option maxRecDepth 16384 in
 /-- Any route from the runtime's entry to a persistent-write site attains, at
 the admin unregistration world, the row that owns that site -- with the
 `.adminRegistry` role. -/
