@@ -480,7 +480,7 @@ difference from the taken arm's `14`; `12` for the `.call` burn and `17` for
 `reentrantCallError`'s `revSelectorCost` against empty memory. -/
 def pauseReentrantGas : Nat := 202
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 556 in
 /-- A `pause` entered with the reentrancy lock already set takes the lock
 guard's refusal arm and reverts with `ReentrantCall`'s own four-byte payload,
 leaving storage, transient storage and the log list untouched. -/

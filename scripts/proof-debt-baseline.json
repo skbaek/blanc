@@ -1162,8 +1162,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
+      "value": 556,
+      "ceiling": 556
     },
     {
       "id": "Blanc/LidoCircuitBreakerRegistry.lean::Blanc.LidoCircuitBreaker.afterOldPauser_pause_runCompiledTo#1::command_scoped::-::maxHeartbeats#1",
