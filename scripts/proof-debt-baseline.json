@@ -10,8 +10,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 100000,
-      "ceiling": 100000
+      "value": 803,
+      "ceiling": 803
     },
     {
       "id": "Blanc/FmintGas.lean::Blanc.Fmint.dcSel_ne_tsSel#1::command_scoped::-::maxRecDepth#1",
@@ -22,7 +22,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 589,
-      "ceiling": null
+      "ceiling": 589
     },
     {
       "id": "Blanc/FmintGas.lean::Blanc.Fmint.decimals_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -33,7 +33,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/FmintGas.lean::Blanc.Fmint.totalSupply_gas_exact#1::command_scoped::-::maxRecDepth#1",
@@ -44,7 +44,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/FmintGas.lean::Blanc.Fmint.totalSupply_warm_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -55,7 +55,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/FmintLive.lean::Blanc.Fmint.totalSupply_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -66,7 +66,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/FmintReverts.lean::Blanc.Fmint.tokenNeSelf_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
@@ -77,7 +77,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/FmintReverts.lean::Blanc.Fmint.unknownSelector_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
@@ -88,7 +88,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.execSat_burnOk_leaf#1::command_scoped::-::maxRecDepth#1",
@@ -99,7 +99,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 629,
-      "ceiling": null
+      "ceiling": 629
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.execSat_magicMismatch_leaf#1::command_scoped::-::maxRecDepth#1",
@@ -110,7 +110,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 608,
-      "ceiling": null
+      "ceiling": 608
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.execSat_spend_step#1::command_scoped::-::maxRecDepth#1",
@@ -121,7 +121,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 605,
-      "ceiling": null
+      "ceiling": 605
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.flashLoan_execSat_call#1::command_scoped::-::maxRecDepth#1",
@@ -132,7 +132,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 799,
-      "ceiling": null
+      "ceiling": 799
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.flashLoan_execSat_mint#1::command_scoped::-::maxRecDepth#1",
@@ -143,7 +143,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 736,
-      "ceiling": null
+      "ceiling": 736
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.flashLoan_runCompiledTo_call#1::command_scoped::-::maxRecDepth#1",
@@ -154,7 +154,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 796,
-      "ceiling": null
+      "ceiling": 796
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.flashLoan_runCompiledTo_mint#1::command_scoped::-::maxRecDepth#1",
@@ -165,7 +165,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 733,
-      "ceiling": null
+      "ceiling": 733
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.fmint_amount_over_bound_reverts#1::command_scoped::-::maxRecDepth#1",
@@ -176,7 +176,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 672,
-      "ceiling": null
+      "ceiling": 672
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.receiverNotAddress_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
@@ -187,7 +187,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/LidoCircuitBreaker.lean::Blanc.LidoCircuitBreaker.runtimeEntryShapes_eq#1::command_scoped::-::maxHeartbeats#1",
@@ -495,7 +495,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 100000,
-      "ceiling": null
+      "ceiling": 100000
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorAdminNonzeroStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -506,7 +506,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorCanonicalAdminStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -517,7 +517,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorHeartbeatBoundsStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -528,7 +528,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorInitialHeartbeatMaxStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -539,7 +539,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorInitialHeartbeatMinStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -550,7 +550,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorInitialPauseMaxStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -561,7 +561,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorInitialPauseMinStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -572,7 +572,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorMinHeartbeatNonzeroStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -583,7 +583,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorMinPauseNonzeroStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -594,7 +594,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorPauseBoundsStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -605,7 +605,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorValidationFinish_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -616,7 +616,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 1001,
-      "ceiling": null
+      "ceiling": 1001
     },
     {
       "id": "Blanc/LidoCircuitBreakerEnumeration.lean::Blanc.LidoCircuitBreaker.getPausableCount_body_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -627,7 +627,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 742,
-      "ceiling": null
+      "ceiling": 742
     },
     {
       "id": "Blanc/LidoCircuitBreakerEnumeration.lean::Blanc.LidoCircuitBreaker.getPausables_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -638,7 +638,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 675,
-      "ceiling": null
+      "ceiling": 675
     },
     {
       "id": "Blanc/LidoCircuitBreakerEnumeration.lean::Blanc.LidoCircuitBreaker.getPauser_body_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -649,7 +649,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 742,
-      "ceiling": null
+      "ceiling": 742
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.pauseCalldata_selector#1::command_scoped::-::maxRecDepth#1",
@@ -957,7 +957,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 621,
-      "ceiling": null
+      "ceiling": 621
     },
     {
       "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_progExecSat#1::command_scoped::-::maxRecDepth#1",
@@ -968,7 +968,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 568,
-      "ceiling": null
+      "ceiling": 568
     },
     {
       "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_runCompiledTo_callPrefix#1::command_scoped::-::maxRecDepth#1",
@@ -979,7 +979,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 607,
-      "ceiling": null
+      "ceiling": 607
     },
     {
       "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdraw_execSat#1::command_scoped::-::maxRecDepth#1",
@@ -990,7 +990,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 621,
-      "ceiling": null
+      "ceiling": 621
     },
     {
       "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdraw_progExecSat#1::command_scoped::-::maxRecDepth#1",
@@ -1001,7 +1001,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 568,
-      "ceiling": null
+      "ceiling": 568
     },
     {
       "id": "Blanc/WethGas.lean::Blanc.dcSel_ne_boSel#1::command_scoped::-::maxRecDepth#1",
@@ -1012,7 +1012,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 612,
-      "ceiling": null
+      "ceiling": 612
     },
     {
       "id": "Blanc/WethGas.lean::Blanc.weth_balanceOf_gas_exact#1::command_scoped::-::maxRecDepth#1",
@@ -1023,7 +1023,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/WethGas.lean::Blanc.weth_balanceOf_warm_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -1034,7 +1034,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/WethGas.lean::Blanc.weth_decimals_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -1045,7 +1045,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     },
     {
       "id": "Blanc/WethLive.lean::Blanc.weth_balanceOf_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -1056,7 +1056,7 @@
       "scope_ordinal": 1,
       "option": "maxRecDepth",
       "value": 674,
-      "ceiling": null
+      "ceiling": 674
     }
   ]
 }
