@@ -184,8 +184,13 @@ running one is always a fresh run — which is also why CI needs nothing from th
 machinery and continues to invoke those commands in a clean environment where no
 cache exists.
 
-Deleting `.lake/gate-cache.json` costs time and cannot cost correctness. Do not
-commit it, hand-seed it, or edit it.
+Deleting `.lake/gate-cache.json` costs time and cannot cost correctness. What
+the runner enforces is *shape*: a foreign schema, a malformed table, a record
+with no fingerprint or one claiming a failing verdict are all treated as an
+empty cache, and an empty cache runs everything. It does not tell an earned
+record from a well-formed one somebody wrote by hand, and it is not trying to —
+the file is local, gitignored and read only by this runner. So the rule is that
+nothing but the runner writes it. Do not commit it, hand-seed it, or edit it.
 
 ## Catalogue
 

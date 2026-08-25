@@ -1279,6 +1279,46 @@ def control_non_zero_expected_exit_is_refused() -> None:
         raise ControlFailure("a non-zero expected exit must be refused")
 
 
+def control_traversable_population_refuses_what_a_copy_cannot_read() -> None:
+    """The hazard, not the corpus.
+
+    An ordinary added file must not invalidate -- that was the cost of both
+    earlier attempts. A dangling symlink or an unreadable file must refuse --
+    that is the case both earlier attempts missed, membership included, because
+    a dangling symlink is not `is_file()`.
+    """
+
+    with scratch() as s:
+        (s.root / "tree").mkdir()
+        (s.root / "tree/a.txt").write_text("one\n", encoding="utf-8")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate(
+            "g", [command],
+            {"populations": [{"root": "tree", "pattern": "**/*", "mode": "traversable"}]},
+            "^OK — g.sh: ")])
+        s.run()
+        require(s.disposition("g") == "reused", "a readable tree should reuse")
+
+        (s.root / "tree/b.txt").write_text("two\n", encoding="utf-8")
+        require(s.disposition("g") == "reused",
+                "an ordinary added file must not invalidate this mode")
+        (s.root / "tree/b.txt").write_text("changed\n", encoding="utf-8")
+        require(s.disposition("g") == "reused",
+                "nor must an ordinary edit")
+
+        (s.root / "tree/dangling").symlink_to(s.root / "nowhere")
+        require(s.disposition("g") == "fresh",
+                "a dangling symlink makes the tree uncopyable, so it must refuse")
+        (s.root / "tree/dangling").unlink()
+        require(s.disposition("g") == "reused", "and reuse again once it is gone")
+
+        (s.root / "tree/b.txt").chmod(0o000)
+        try:
+            require(s.disposition("g") == "fresh", "an unreadable file must refuse")
+        finally:
+            (s.root / "tree/b.txt").chmod(0o644)
+
+
 # --- negative controls ------------------------------------------------------
 #
 # Each one breaks the engine in the exact way a careless change would and
@@ -1492,6 +1532,7 @@ CONTROLS = (
     control_named_root_follows_its_override,
     control_environment_value_cannot_imitate_absence,
     control_symlinked_directory_refuses_rather_than_hides_files,
+    control_traversable_population_refuses_what_a_copy_cannot_read,
     control_non_zero_expected_exit_is_refused,
 ) + NEGATIVE_CONTROLS
 

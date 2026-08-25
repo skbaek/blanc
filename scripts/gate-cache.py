@@ -456,6 +456,39 @@ def glob_population(root: Path, spec: dict[str, Any]) -> list[str]:
     return sorted(found)
 
 
+def traversable_population(root: Path, spec: dict[str, Any]) -> None:
+    """Refuse a population containing something a tree walk cannot read.
+
+    One gate's verdict depends on the whole worktree being *copyable*: its
+    negative controls `shutil.copytree` the tree six times, unguarded, so a
+    dangling symlink or an unreadable file anywhere makes it fail.  Neither of
+    the two obvious declarations catches that.  Content hashing the tree
+    invalidates the gate on every unrelated edit; membership invalidates it on
+    every unrelated *addition* and still misses the case entirely, because a
+    dangling symlink is not `is_file()` and never enters the digest -- measured,
+    not assumed.
+
+    So this mode declares the hazard rather than a corpus: it enumerates, raises
+    on anything it cannot read, and contributes a constant to the fingerprint.
+    Fail-closed where it matters, invisible where it does not.
+    """
+
+    base = spec.get("root", ".")
+    directory = resolve_path(root, base)
+    if not directory.is_dir():
+        raise Unresolvable(f"population root is not a directory: {base}")
+    excludes = spec.get("exclude", [])
+    prefix = "" if base in (".", "") else base.rstrip("/") + "/"
+    for path in directory.glob(spec["pattern"]):
+        name = prefix + path.relative_to(directory).as_posix()
+        if any(fnmatch.fnmatch(name, exclude) for exclude in excludes):
+            continue
+        if not path.exists():
+            raise Unresolvable(f"{name} is a dangling symlink; the tree cannot be copied")
+        if path.is_file() and not os.access(path, os.R_OK):
+            raise Unresolvable(f"{name} is unreadable; the tree cannot be copied")
+
+
 def component_populations(
     root: Path, specs: list[dict[str, Any]]
 ) -> tuple[str, dict[str, str]]:
@@ -470,8 +503,12 @@ def component_populations(
     detail: dict[str, str] = {}
     for spec in specs:
         mode = spec.get("mode", "content")
-        if mode not in ("content", "membership"):
+        if mode not in ("content", "membership", "traversable"):
             raise GateCacheError(f"unknown population mode: {mode!r}")
+        if mode == "traversable":
+            traversable_population(root, spec)
+            detail["traversable\x00" + spec.get("root", ".") + "/" + spec["pattern"]] = "<ok>"
+            continue
         for name in glob_population(root, spec):
             # Namespaced by mode, so a path declared under both a content and a
             # membership population cannot have one reading silently overwrite
@@ -1529,7 +1566,10 @@ def render_inventory(root: Path) -> str:
                     excluded = spec.get("exclude", [])
                     suffix = f" excluding {', '.join(excluded)}" if excluded else ""
                     mode = spec.get("mode", "content")
-                    where = "membership only" if mode == "membership" else "path and content"
+                    where = {
+                        "membership": "membership only",
+                        "traversable": "readable, contributes no digest",
+                    }.get(mode, "path and content")
                     lines.append(
                         f"- population: `{spec.get('root', '.')}/{spec['pattern']}`"
                         f"{suffix} ({where})"

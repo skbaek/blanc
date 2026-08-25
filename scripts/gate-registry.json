@@ -260,20 +260,17 @@
             "root": "Blanc"
           },
           {
-            "mode": "membership",
+            "mode": "traversable",
             "pattern": "*",
             "root": "."
           },
           {
-            "mode": "membership",
+            "mode": "traversable",
             "pattern": "**/*",
             "root": "docs"
           },
           {
-            "exclude": [
-              "scripts/fixtures/*"
-            ],
-            "mode": "membership",
+            "mode": "traversable",
             "pattern": "**/*",
             "root": "scripts"
           }
@@ -283,7 +280,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The wrapper always passes --negative-controls, which copies the whole tree six times, and that copy is not guarded: a dangling symlink or an unreadable file anywhere outside .git/.lake/build makes it raise and the gate fail. Membership of the copied tree is therefore declared, so an added entry invalidates. Fixtures are excluded because they are added and removed constantly and are readable by construction; an earlier attempt that included them reran this gate whenever any fixture appeared. Residue: chmod-ing an existing file unreadable changes no membership and would be credited until the next fresh run.",
+      "note": "The wrapper always passes --negative-controls, which copies the whole tree six times through an unguarded shutil.copytree: a dangling symlink or an unreadable file anywhere outside .git/.lake/build makes it raise and the gate fail. Two earlier declarations of that were both wrong. Content hashing the tree reran the gate on every unrelated edit; membership reran it on every unrelated addition and still missed the case, because a dangling symlink is not is_file() and never entered the digest. The traversable mode declares the hazard instead of a corpus \u2014 it refuses to fingerprint a tree it cannot read and contributes nothing otherwise. Residue: chmod-ing an already-present file unreadable is caught, but a file made unreadable and readable again between two runs is not observed.",
       "order": 8,
       "verdict": {
         "expect_exit": 0,
