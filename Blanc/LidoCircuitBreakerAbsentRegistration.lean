@@ -120,7 +120,6 @@ private theorem registerAfterSet_absentZero_runCompiled
     rw [hpreviousMemory, hnewMemory]
     exact Func.RunCompiled.last rfl
 
-set_option maxRecDepth 16384 in
 private theorem finishSetPauser_absentZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes) (target carry : B256) (G : Nat)
@@ -155,8 +154,6 @@ private theorem finishSetPauser_absentZero_runCompiled
   rw [hg] at h
   exact h
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem afterOldPauser_absentZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -327,8 +324,6 @@ private theorem afterOldPauser_absentZero_runCompiled
   rw [hg] at h
   exact h
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 1200000 in
 private theorem appendTarget_then_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes) (target length next : B256)
@@ -689,8 +684,6 @@ private theorem appendTarget_then_runCompiled
     rw [hg]
     exact hload
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 1200000 in
 private theorem appendTarget_absentZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes) (target oldLength next : B256)
@@ -990,8 +983,6 @@ def absentZeroSetPauserKernelGas (sevm : Sevm) (base : Devm)
     arrayCost + indexCost + lengthCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-kernel success for an absent target assigned the zero
 pauser.  The emitted assignment no-op, append, and removal chronology derives
 the unchanged Registry trace/witness, lone `PauserSet`, and preservation of
@@ -1563,8 +1554,6 @@ theorem registerPauser_body_absentZero_runCompiled
     omega
   · exact hstage
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for absent-target/zero-pauser
 registration. -/
 theorem registerPauser_runCompiledTo_absentZero
@@ -1671,8 +1660,6 @@ theorem registerPauser_runCompiledTo_absentZero
   exact ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas, hlogs,
     hexpiries, hcompile⟩
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact clean direct-message effects for absent-target/zero-pauser
 registration, derived from the generated-runtime execution. -/
 theorem registerPauser_absentZero_success_settled_effects

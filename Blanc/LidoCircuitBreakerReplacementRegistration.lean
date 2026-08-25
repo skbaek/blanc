@@ -113,8 +113,6 @@ theorem foundNonzeroReplacement_sourceTrace_witness
   exact hw.applyFoundNonzeroWrites htarget hnew hfind
 
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Exact `registerAfterSet` walk for a replacement that leaves the previous
 pauser holding **no** further assignment: the previous pauser is nonzero, its
 remaining count is zero and the new pauser is nonzero.  The walk clears the old
@@ -239,8 +237,6 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
   rw [hg] at h
   exact h
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The same walk lifted through `finishSetPauser`: the `PauserSet(target,
 oldPauser, newPauser)` record is emitted first, then the old-last replacement
 `registerAfterSet` arm runs.  1935 gas of shared `finishSetPauser` glue above
@@ -353,8 +349,6 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
 
 /-! ## Retained replacement -/
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Generic **retained** arm of `registerAfterSet`: the previous pauser is
 nonzero and its remaining assignment count is nonzero, so the walk touches no
 storage at all before reaching the shared new-pauser suffix, which is taken as a
@@ -468,8 +462,6 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
       (base.setMach ⟨stack, M, G + 128⟩) oldBranch post
     exact holdTail
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Exact `registerAfterSet` walk for a replacement that leaves the previous
 pauser holding a **further** assignment: the previous pauser is nonzero, its
 remaining count is nonzero and the new pauser is nonzero.  The walk reads the
@@ -548,8 +540,6 @@ theorem registerAfterSet_retainedNonzero_runCompiled
   rw [hg] at h
   exact h
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The retained replacement walk lifted through `finishSetPauser`: the
 `PauserSet(target, oldPauser, newPauser)` record is emitted first, then the
 retained `registerAfterSet` arm runs.  1935 gas of shared `finishSetPauser` glue
@@ -674,8 +664,6 @@ def replacementRetainedSetPauserKernelGas (sevm : Sevm) (base : Devm)
     foundSetPauserKernelPrefixGas sevm base target newPauser oldPauser
       assignmentCost countCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Complete generated-kernel walk for a **retained** replacement: the target is
 recorded to a nonzero `oldPauser`, the new pauser is nonzero, and the old
 pauser's count after the decrement is still nonzero, so `registerAfterSet` moves
@@ -1235,8 +1223,6 @@ theorem registerPauser_body_retainedNonzero_runCompiled
         (expirySlot pauser) (pairNe hold.1),
       temporalSloadBase_getStorVal]
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for a **retained** replacement: the
 dispatcher's own reserve above `registerPauser_body_retainedNonzero_runCompiled`,
 with the same effects, the expiry noninterference clause included. -/
@@ -1343,8 +1329,6 @@ theorem registerPauser_runCompiledTo_retainedNonzero
     ⟨hrun, hcompile⟩
   exact ⟨post, hrun, hgas, hstore, hlogs, hexpiries, hcompile⟩
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact clean direct-message effects for a **retained** replacement, derived
 from the generated-runtime execution: the admin reassigns an already-registered
 target from a nonzero `oldPauser` to a nonzero `newPauser`, and `oldPauser`
@@ -1555,8 +1539,6 @@ def replacementOldLastSetPauserKernelGas (sevm : Sevm) (base : Devm)
     foundSetPauserKernelPrefixGas sevm base target newPauser oldPauser
       assignmentCost countCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Complete generated-kernel walk for an **old-last** replacement: the target
 is recorded to a nonzero `oldPauser`, the new pauser is nonzero, and the old
 pauser's count after the decrement is zero, so `registerAfterSet` clears the old
@@ -2003,8 +1985,6 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
         (expirySlot pauser) (pairNe hold.1),
       temporalSloadBase_getStorVal]
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for an **old-last** replacement: the
 dispatcher's own reserve above `registerPauser_body_oldLastNonzero_runCompiled`,
 with the same effects, the retired pauser's expiry cell and the expiry
@@ -2131,8 +2111,6 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
   exact ⟨post, hrun, hgas, hstore, hlogs, holdExpiryPost, hexpiries,
     hcompile⟩
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact clean direct-message effects for an **old-last** replacement, derived
 from the generated-runtime execution: the admin reassigns an already-registered
 target from a nonzero `oldPauser` to a nonzero `newPauser`, and `oldPauser` is
