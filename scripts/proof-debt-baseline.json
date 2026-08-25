@@ -70,16 +70,26 @@
       "anchor": "Blanc.Fmint.totalSupplyGas"
     },
     {
-      "id": "Blanc/FmintReverts.lean::$ambient#0::ambient_command::Blanc.Fmint.fmint_fallback_is_rev::maxRecDepth#1",
+      "id": "Blanc/FmintReverts.lean::Blanc.Fmint.tokenNeSelf_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/FmintReverts.lean",
-      "declaration": null,
-      "declaration_ordinal": null,
-      "scope_kind": "ambient_command",
+      "declaration": "Blanc.Fmint.tokenNeSelf_runCompiledTo",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 8000,
-      "ceiling": 8000,
-      "anchor": "Blanc.Fmint.fmint_fallback_is_rev"
+      "value": 674,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintReverts.lean::Blanc.Fmint.unknownSelector_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintReverts.lean",
+      "declaration": "Blanc.Fmint.unknownSelector_runCompiledTo",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 674,
+      "ceiling": null
     },
     {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.execSat_burnOk_leaf#1::command_scoped::-::maxRecDepth#1",
