@@ -14,16 +14,48 @@
       "ceiling": 100000
     },
     {
-      "id": "Blanc/FmintGas.lean::$ambient#0::ambient_command::Blanc.Fmint.Devm.gasLeft_withOutput::maxRecDepth#1",
+      "id": "Blanc/FmintGas.lean::Blanc.Fmint.dcSel_ne_tsSel#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/FmintGas.lean",
-      "declaration": null,
-      "declaration_ordinal": null,
-      "scope_kind": "ambient_command",
+      "declaration": "Blanc.Fmint.dcSel_ne_tsSel",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 8000,
-      "ceiling": 8000,
-      "anchor": "Blanc.Fmint.Devm.gasLeft_withOutput"
+      "value": 589,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintGas.lean::Blanc.Fmint.decimals_runCompiled#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintGas.lean",
+      "declaration": "Blanc.Fmint.decimals_runCompiled",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 674,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintGas.lean::Blanc.Fmint.totalSupply_gas_exact#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintGas.lean",
+      "declaration": "Blanc.Fmint.totalSupply_gas_exact",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 674,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/FmintGas.lean::Blanc.Fmint.totalSupply_warm_runCompiled#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/FmintGas.lean",
+      "declaration": "Blanc.Fmint.totalSupply_warm_runCompiled",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 674,
+      "ceiling": null
     },
     {
       "id": "Blanc/FmintLive.lean::$ambient#0::ambient_command::Blanc.Fmint.totalSupplyGas::maxRecDepth#1",
@@ -1090,17 +1122,6 @@
       "ceiling": 4096
     },
     {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.attainable_pauseRegistry_of_route#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.attainable_pauseRegistry_of_route",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.pauseCalldata_selector#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
       "declaration": "Blanc.LidoCircuitBreaker.pauseCalldata_selector",
@@ -1108,228 +1129,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.removeArrayHole_pause_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeArrayHole_pause_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.removeArrayLength_pause_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeArrayLength_pause_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.removeClearTail_pause_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeClearTail_pause_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.removeClearTargetIndex_pause_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeClearTargetIndex_pause_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.removeMovedIndex_pause_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeMovedIndex_pause_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.runtimeMain_routeTo_pauseAssignment#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeMain_routeTo_pauseAssignment",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.runtimeMain_routeTo_pauseKernel#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeMain_routeTo_pauseKernel",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.setPauserAssignment_pause_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setPauserAssignment_pause_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseAttainment.lean::Blanc.LidoCircuitBreaker.setPauserOldCount_pause_index_pin#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseAttainment.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setPauserOldCount_pause_index_pin",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 20000,
-      "ceiling": 20000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.MemWordAt.acrossOldCountPrefix#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.MemWordAt.acrossOldCountPrefix",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.pauseKernel_previousPauserNonzero#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseKernel_previousPauserNonzero",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.pauseStaging_windows#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseStaging_windows",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.pause_routeTo_setPauserCall#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pause_routeTo_setPauserCall",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.removeTarget_routeTo_arrayHole#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeTarget_routeTo_arrayHole",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.removeTarget_routeTo_arrayLength#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeTarget_routeTo_arrayLength",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.removeTarget_routeTo_clearTail#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeTarget_routeTo_clearTail",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.removeTarget_routeTo_clearTargetIndex#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeTarget_routeTo_clearTargetIndex",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.removeTarget_routeTo_movedIndex#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.removeTarget_routeTo_movedIndex",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_oldCountArm#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_oldCountArm",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseGuards.lean::Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_removeTarget#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseGuards.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_removeTarget",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
+      "value": 1021,
+      "ceiling": 1021
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseOkRoute.lean::Blanc.LidoCircuitBreaker.MemWordAt.acrossRemoveTargetPrefix#1::command_scoped::-::maxRecDepth#1",

@@ -51,7 +51,6 @@ def pauseStagingLine : Line :=
   [Ninst.pushB256 0] ++ mstoreAt previousPauserWord ++
   [Ninst.pushB256 1] ++ mstoreAt continuationWord
 
-set_option maxRecDepth 8192 in
 /-- From `pause`'s entry to its `.call setPauserSlot`, on a walk whose raw
 revert carries no payload.
 
@@ -145,7 +144,6 @@ read have to be built where the staging line writes them and carried across the
 three later writes.  Byte offsets 512 (`targetWord`) and 544
 (`newPauserWord`); the later writes land at 576, 608 and 736 and miss both. -/
 
-set_option maxRecDepth 8192 in
 /-- `pause`'s staging line leaves the call's target argument at `targetWord`
 and a zero at `newPauserWord`.  The zero is what routes the shared kernel into
 `removeTarget` rather than the count-increment arm. -/
@@ -230,7 +228,6 @@ def setPauserOldCountPath : Prog.SourcePath :=
   ⟨setPauserSlot,
     kernelOldCountSteps ++ List.replicate oldCountPrefix.length .rest⟩
 
-set_option maxRecDepth 8192 in
 /-- The kernel's second branch word at a world whose target is already
 assigned: the previous pauser is nonzero, so its `iszero` is zero and the
 fall-through old-count arm is taken.  The `newPauserWord` window survives the
@@ -307,7 +304,6 @@ theorem pauseKernel_previousPauserNonzero {sevm : Sevm} {devm devm' : Devm}
       q15).acrossNinst q16
 
 
-set_option maxRecDepth 8192 in
 /-- From `setPauserKernel`'s entry to the old-count arm: the target-zero test
 (free, its other arm is `PausableZero`) and the previous-pauser test (paid for
 with the one storage word on this route). -/
@@ -390,7 +386,6 @@ theorem setPauserKernel_routeTo_oldCount (dp : DeployParams)
 sends the walk into `removeTarget`, which has no branch at all: its five
 persistent writes are five split points of one straight line. -/
 
-set_option maxRecDepth 8192 in
 /-- Cross `oldCountPrefix` keeping the `newPauserWord` window.  The line
 contains two `MLOAD`s, which only extend memory, so `line_inv` cannot cross it
 in one step. -/
@@ -416,7 +411,6 @@ theorem MemWordAt.acrossOldCountPrefix {e : Sevm} {a b : Devm} {offset : Nat}
     q7).acrossNinst q8).acrossNinst q9).acrossMload q10).acrossNinst
     q11).acrossNinst q12
 
-set_option maxRecDepth 8192 in
 /-- From `setPauserKernel`'s entry to `removeTarget`'s entry. -/
 theorem setPauserKernel_routeTo_removeTarget (dp : DeployParams)
     {sevm : Sevm} {devm raw : Devm} {target : B256}
@@ -503,7 +497,6 @@ def removeArrayLengthPath : Prog.SourcePath :=
 def removeClearTargetIndexPath : Prog.SourcePath :=
   ⟨removeTargetSlot, List.replicate removeClearTargetIndexPrefix.length .rest⟩
 
-set_option maxRecDepth 8192 in
 theorem removeTarget_routeTo_arrayHole {fs : List Func} {sevm : Sevm}
     {devm : Devm} {out : Execution}
     (h : Func.RunCompiledTo fs sevm devm removeTarget out) :
@@ -512,7 +505,6 @@ theorem removeTarget_routeTo_arrayHole {fs : List Func} {sevm : Sevm}
   routeTo_line removeArrayHolePrefix h
     (fun _writeState _writeRun write => routeTo_head write removeArrayHolePath)
 
-set_option maxRecDepth 8192 in
 theorem removeTarget_routeTo_movedIndex {fs : List Func} {sevm : Sevm}
     {devm : Devm} {out : Execution}
     (h : Func.RunCompiledTo fs sevm devm removeTarget out) :
@@ -522,7 +514,6 @@ theorem removeTarget_routeTo_movedIndex {fs : List Func} {sevm : Sevm}
     (fun _writeState _writeRun write =>
       routeTo_head write removeMovedIndexPath)
 
-set_option maxRecDepth 8192 in
 theorem removeTarget_routeTo_clearTail {fs : List Func} {sevm : Sevm}
     {devm : Devm} {out : Execution}
     (h : Func.RunCompiledTo fs sevm devm removeTarget out) :
@@ -531,7 +522,6 @@ theorem removeTarget_routeTo_clearTail {fs : List Func} {sevm : Sevm}
   routeTo_line removeClearTailPrefix h
     (fun _writeState _writeRun write => routeTo_head write removeClearTailPath)
 
-set_option maxRecDepth 8192 in
 theorem removeTarget_routeTo_arrayLength {fs : List Func} {sevm : Sevm}
     {devm : Devm} {out : Execution}
     (h : Func.RunCompiledTo fs sevm devm removeTarget out) :
@@ -541,7 +531,6 @@ theorem removeTarget_routeTo_arrayLength {fs : List Func} {sevm : Sevm}
     (fun _writeState _writeRun write =>
       routeTo_head write removeArrayLengthPath)
 
-set_option maxRecDepth 8192 in
 theorem removeTarget_routeTo_clearTargetIndex {fs : List Func} {sevm : Sevm}
     {devm : Devm} {out : Execution}
     (h : Func.RunCompiledTo fs sevm devm removeTarget out) :

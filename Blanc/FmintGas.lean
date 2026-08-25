@@ -5,7 +5,6 @@ namespace Fmint
 
 open Jaune
 
-set_option maxRecDepth 8000
 
 /-! # What fmint's `totalSupply()` call *costs*
 
@@ -83,6 +82,7 @@ def decimalsGas : Nat :=
 under WETH's `decimals()`, which takes one more fork arm. -/
 theorem decimalsGas_eq : decimalsGas = 138 := by decide
 
+set_option maxRecDepth 674 in
 /-- A `decimals()` call on `fmint` has a gas-exact run; it costs exactly
 `decimalsGas` and returns `0x12`.
 
@@ -171,6 +171,7 @@ theorem decimals_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
   subst h_eq
   omega
 
+set_option maxRecDepth 674 in
 /-- **`fmint`'s `totalSupply()` call costs exactly `totalSupplyGas`.**
 
 The exactness theorem at the `exec` altitude, by the same route as
@@ -271,6 +272,7 @@ def totalSupplyGasWarm : Nat :=
 not change when a key warms. -/
 theorem totalSupplyGasWarm_eq : totalSupplyGasWarm = 218 := by decide
 
+set_option maxRecDepth 674 in
 /-- A `totalSupply()` call on `fmint` whose `supplySlot` is **already warm** has
 a gas-exact run; it costs exactly `totalSupplyGasWarm` and returns the supply.
 
@@ -403,6 +405,7 @@ theorem fmintGas_eq_with :
     fmintGas = fmintGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
       gasWarmAccess := rfl
 
+set_option maxRecDepth 589 in
 /-- The two priced entrypoints are distinct, which is what makes
 `fmintGasWith`'s second branch reachable. Proved once: deciding it forces both
 `String.keccak` calls behind the selectors. -/

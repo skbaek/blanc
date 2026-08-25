@@ -24,7 +24,6 @@ namespace Blanc.LidoCircuitBreaker
 
 open Jaune
 
-set_option maxRecDepth 16384 in
 /-- The complete pause route: `runtimeMain`'s entry guard, the three
 `hybridDispatchWith` selector crossings, `pause`'s five guards, and the
 `.call setPauserSlot` leg into the shared Registry kernel, ending at the
@@ -83,7 +82,7 @@ theorem pauseCalldata_facts {sevm : Sevm} {target : B256}
     · rw [hd]
       rfl
 
-set_option maxRecDepth 8192 in
+set_option maxRecDepth 1021 in
 /-- The dispatcher's selector, at the control world's own calldata.  Stated at
 the concrete target because `Sevm.dataWord` reads a whole word: the selector
 occupies the first four bytes and the argument the next twenty-eight of the
@@ -153,7 +152,6 @@ theorem canonicalArg_word {sevm : Sevm}
   exact hiff.mpr hvalid
 
 
-set_option maxRecDepth 16384 in
 /-- The whole pause route down to `setPauserKernel`'s entry, with the two
 memory windows the kernel reads and the storage relation its second branch
 needs.  Every row past the assignment write is reached through this. -/
@@ -223,7 +221,6 @@ with the world's storage (`assignment[target] ≠ caller`); here the natural
 discriminator is the caller itself, since a `pause` invocation is by
 construction not an admin one. -/
 
-set_option maxRecDepth 16384 in
 /-- Any route from the runtime's entry to a persistent-write site attains, at
 the published codeless-target pause world, the row that owns that site -- with
 the `.pauseRegistry` role. -/
@@ -327,7 +324,6 @@ theorem attainable_pauseRegistry_of_route {row : RuntimePersistentWrite}
 
 /-! ## The witnesses -/
 
-set_option maxRecDepth 20000 in
 /-- Only inventory index `3` nominates the `setPauser.assignment` path. -/
 theorem setPauserAssignment_pause_index_pin :
     ∀ index ∈ List.range 20,
@@ -374,7 +370,6 @@ private theorem pauseWorld_assigned {sevm : Sevm} {mid kernelStart : Devm}
     hassigned]
   decide
 
-set_option maxRecDepth 20000 in
 theorem setPauserOldCount_pause_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
@@ -382,7 +377,6 @@ theorem setPauserOldCount_pause_index_pin :
         index = RuntimePersistentWrite.setPauserOldCount.index := by
   decide +kernel
 
-set_option maxRecDepth 20000 in
 theorem removeArrayHole_pause_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
@@ -390,7 +384,6 @@ theorem removeArrayHole_pause_index_pin :
         index = RuntimePersistentWrite.removeArrayHole.index := by
   decide +kernel
 
-set_option maxRecDepth 20000 in
 theorem removeMovedIndex_pause_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
@@ -398,7 +391,6 @@ theorem removeMovedIndex_pause_index_pin :
         index = RuntimePersistentWrite.removeMovedIndex.index := by
   decide +kernel
 
-set_option maxRecDepth 20000 in
 theorem removeClearTail_pause_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
@@ -406,7 +398,6 @@ theorem removeClearTail_pause_index_pin :
         index = RuntimePersistentWrite.removeClearTail.index := by
   decide +kernel
 
-set_option maxRecDepth 20000 in
 theorem removeArrayLength_pause_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
@@ -414,7 +405,6 @@ theorem removeArrayLength_pause_index_pin :
         index = RuntimePersistentWrite.removeArrayLength.index := by
   decide +kernel
 
-set_option maxRecDepth 20000 in
 theorem removeClearTargetIndex_pause_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
