@@ -404,7 +404,7 @@ private lemma responder_statcall_crossing
 Both `pauseSuccess` arms end in `pauseExpiryFinish` and differ only in the
 word they carry into it. -/
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 615 in
 /-- `pauseExpiryFinish` from the carried expiry word: writes the word into the
 caller's expiry cell (`SSTORE` charge supplied in the register-side
 `sstoreValueCost` style), emits `HeartbeatUpdated(caller)` with the word as
@@ -550,7 +550,7 @@ private theorem temporalSloadBase_accessedStorageKeys_addLog
       (base.addLog l).accessedStorageKeys from h), if_neg h]
     rfl
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 604 in
 /-- The zero-count arm of `pauseSuccess`: the caller's post-callback assignment
 count reads zero, so the walk stores expiry `0`.  Charge `3322` plus the count
 `SLOAD` and the expiry `SSTORE`, both hypothesis-supplied: `1791` to the count
@@ -726,7 +726,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     rw [hg]
     exact Func.RunCompiled.next hsload harm
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 604 in
 /-- The checked-count arm of `pauseSuccess`: the caller's post-callback
 assignment count reads nonzero and the checked heartbeat sum does not wrap, so
 the walk stores expiry `interval + timestamp`.  Charge `3351` plus the count
@@ -990,7 +990,7 @@ zero. -/
 def pauseDecodedMemory (M : Mem) (duration : B256) : Mem :=
   (pauseStagedMemory M duration).write 0 (1 : B256).toBytes
 
-set_option maxRecDepth 32768 in
+set_option maxRecDepth 680 in
 /-- `pauseAfterSet` from its entry to the `pauseSuccess` boundary, `.ok`
 flavour: through the target-code guard (charge hypothesis-supplied, warmth
 being a frame fact), the `pauseFor(uint256)` `CALL` and the `isPaused()`

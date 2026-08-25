@@ -5,7 +5,6 @@ namespace Blanc
 
 open Jaune
 
-set_option maxRecDepth 8000
 
 /-! # WETH's `balanceOf(address)` call succeeds
 
@@ -90,6 +89,7 @@ Everything else is derived, including the `CALLDATALOAD` that reads the argument
 its value is `Sevm.dataWord sevm 4` by definition rather than by computation, so
 it consumes no hint. -/
 
+set_option maxRecDepth 674 in
 /-- A `balanceOf(guy)` call on `weth` has a gas-exact run, and it returns
 `guy`'s balance slot.
 

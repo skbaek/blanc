@@ -1537,8 +1537,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 32768,
-      "ceiling": 32768
+      "value": 680,
+      "ceiling": 680
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean::Blanc.LidoCircuitBreaker.pauseExpiryFinish_ok_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -1548,8 +1548,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
+      "value": 615,
+      "ceiling": 615
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean::Blanc.LidoCircuitBreaker.pauseSuccess_checkedCount_ok_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -1559,8 +1559,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
+      "value": 604,
+      "ceiling": 604
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean::Blanc.LidoCircuitBreaker.pauseSuccess_zeroCount_ok_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -1570,8 +1570,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
+      "value": 604,
+      "ceiling": 604
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseWalk.lean::Blanc.LidoCircuitBreaker.finishSetPauser_pauseAfterSet_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -3345,16 +3345,15 @@
       "ceiling": null
     },
     {
-      "id": "Blanc/WethLive.lean::$ambient#0::ambient_command::Blanc.balanceOfGas::maxRecDepth#1",
+      "id": "Blanc/WethLive.lean::Blanc.weth_balanceOf_runCompiled#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/WethLive.lean",
-      "declaration": null,
-      "declaration_ordinal": null,
-      "scope_kind": "ambient_command",
+      "declaration": "Blanc.weth_balanceOf_runCompiled",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 8000,
-      "ceiling": 8000,
-      "anchor": "Blanc.balanceOfGas"
+      "value": 674,
+      "ceiling": null
     }
   ]
 }
