@@ -138,7 +138,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 proof-debt \\(report-only\\): "
+          "^OK \u2014 proof-debt: "
         ]
       }
     },
