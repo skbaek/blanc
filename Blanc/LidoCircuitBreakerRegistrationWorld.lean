@@ -232,7 +232,6 @@ private theorem freshWorldGas_split :
     freshWorldGas = registerPauserDispatchGas + freshWorldBodyGas := by
   norm_num [freshWorldGas, freshWorldBodyGas, registerPauserDispatchGas]
 
-set_option maxRecDepth 40000 in
 /-- The staged registration image extends memory by one word beyond the
 scratch frame: six gas. -/
 private theorem freshWorld_memoryCost :
@@ -720,8 +719,6 @@ theorem freshWorld_dataFacts :
 
 /-! ## The payoff -/
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- A fully inhabited production-runtime fresh registration.  The admin of
 `officialParams` calls `registerPauser(7, 9)` on a CircuitBreaker deployed at
 address `100` whose Registry is empty and whose configured heartbeat interval
@@ -787,7 +784,6 @@ theorem freshRegistrationWorld_run :
     (exec_iff_exec_eq 0 freshWorldSevm freshWorldPre (.ok post)).mpr hexec,
     hgas, hexpiry, hlogs, hcompile⟩
 
-set_option maxHeartbeats 800000 in
 /-- Message-altitude settlement at this world.
 
 The chronology exposes the raw poststate's gas, storage and logs but says

@@ -698,7 +698,6 @@ theorem replRetained_bodyGasEq :
   norm_num [replRetainedWorldBodyGas, replWorldResetCost, gasStorageSet,
     gasWarmAccess, gasStorageUpdate, gasColdSload]
 
-set_option maxHeartbeats 800000 in
 /-- A fully inhabited production-runtime **retained** replacement.  The admin
 of `officialParams` calls `registerPauser(7, 11)` on a CircuitBreaker deployed
 at address `100` whose target `7` is recorded to pauser `9` with two
@@ -860,7 +859,6 @@ theorem replOldLast_bodyGasEq :
   norm_num [replOldLastWorldBodyGas, replWorldResetCost, gasStorageSet,
     gasWarmAccess, gasStorageUpdate, gasColdSload]
 
-set_option maxHeartbeats 800000 in
 /-- A fully inhabited production-runtime **old-last** replacement.  The admin
 of `officialParams` calls `registerPauser(7, 11)` on a CircuitBreaker deployed
 at address `100` whose target `7` is recorded to pauser `9` with its only
