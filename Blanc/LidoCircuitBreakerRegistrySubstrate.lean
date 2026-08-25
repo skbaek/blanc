@@ -223,7 +223,6 @@ theorem temporalSstorePost_logs
     (temporalSstorePost sevm base key value).logs = base.logs := rfl
 
 set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Generic `finishSetPauser` walk, chronology-independent: reads the three
 scratch words (`target`, `previousPauser`, `newPauser` — unconstrained), emits
 the `LOG3` whose topics are exactly those words, reads the continuation word
@@ -368,8 +367,6 @@ theorem finishSetPauser_registerAfterSet_runCompiled
     rw [show ((0 : B256) * 32).toNat = 0 by decide, hreadZero]
     exact hcontinuationRun
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Generic zero arm of `afterOldPauser`: the new-pauser scratch word is `0`,
 so the walk branches to `removeTarget`, taken as a hypothesis.  Glue cost
 35 gas: 9 for the memory read and `iszero`, 14 for the branch pop, 12 for the
@@ -438,8 +435,6 @@ theorem afterOldPauser_removeTarget_runCompiled
     rw [hg]
     exact hbranch
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Generic nonzero arm of `afterOldPauser`: the new-pauser scratch word is
 nonzero, so the walk loads the new count, increments and stores it, and calls
 `finishSetPauser`, taken as a hypothesis from the count-updated state.  Glue
@@ -625,8 +620,6 @@ theorem afterOldPauser_finishSetPauser_runCompiled
     rw [hg]
     exact hbranch
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 def arrayLengthMemoryCost (M : Mem) : Nat :=
   calculateMemoryGasCost
       (memExtSize M.size (arrayLengthWord * 32).toNat 32) -
@@ -735,7 +728,6 @@ theorem previousCountKey_prepend_runCompiled
     (simp only [Devm.stack_setMach, List.length_cons]; omega)
 
 set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Generic **old-last** arm of `registerAfterSet`: the previous pauser is
 nonzero and its remaining assignment count is zero, so the walk clears that
 pauser's heartbeat expiry to `0`, writes `0` into the event scratch word, and
@@ -1067,8 +1059,6 @@ private theorem registerAfterSet_expiryStoreLogTail_runCompiled
       rfl
   exact Func.RunCompiled.next hsstore htail
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Generic **nonzero-new-pauser** suffix of `registerAfterSet`: the shared
 subterm all three arms reach after the previous pauser has been disposed of.  The
 new-pauser scratch word is nonzero, so the walk computes the checked heartbeat
@@ -1220,8 +1210,6 @@ def appendSetPauserKernelPrefixGas (sevm : Sevm) (base : Devm)
     (target : B256) (assignmentCost : Nat) : Nat :=
   90 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Generated-kernel walk for a target whose recorded pauser is zero: the
 outer nonzero guard passes, the zero previous pauser is saved to memory, the
 assignment is overwritten with `newPauser`, and the `iszero` branch selects
@@ -1556,8 +1544,6 @@ def foundSetPauserKernelPrefixGas (sevm : Sevm) (base : Devm)
     temporalSloadCost sevm (assignmentPost sevm base target newPauser)
       (countSlot oldPauser) + countCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Generated-kernel walk for a target whose recorded pauser is nonzero: the
 assignment is overwritten with `newPauser`, the old pauser is saved to memory,
 and its assignment count is decremented before control reaches
@@ -1995,8 +1981,6 @@ def foundKernelPost (sevm : Sevm) (base : Devm)
       (countSlot oldPauser))
     (countSlot oldPauser) (oldCount - 1)
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Complete Registry walk for the found-target arm with a **nonzero** new
 pauser — the replacement chronology's three writes.  The kernel prefix replaces
 the assignment and decrements the old pauser's count, then `afterOldPauser`
@@ -2121,7 +2105,6 @@ def registerImage (target newPauser : B256) : Bytes :=
       (previousPauserWord * 32).toNat (0 : B256).toBytes)
     (continuationWord * 32).toNat (0 : B256).toBytes
 
-set_option maxRecDepth 4096 in
 theorem registerMemory_spec (target newPauser : B256) :
     let M := registerMemory target newPauser
     let img := registerImage target newPauser
@@ -3134,8 +3117,6 @@ private theorem removeTarget_storePrefix_runCompiled
   simpa only [lastTargetIndexKey, prepend_append, fs,
     arrayKey, indexKey, holePost, movedPost, tailPost] using hholePrefix
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The degenerate `removeTarget` walk with an arbitrary `finishSetPauser`
 continuation.  `removeTarget_runCompiled` below is the instance whose
 continuation only appends the `PauserSet` record; a chronology whose
@@ -3704,8 +3685,6 @@ theorem removeTarget_toFinish_runCompiled
   simp only [removeTarget]
   simpa only [fs, MLast] using hindexPrefix
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The degenerate `removeTarget` walk whose `finishSetPauser` continuation
 only appends the `PauserSet` record: the removed target is already the array's
 last entry, so the hole write, the moved entry's reverse-index repair and the
@@ -3842,8 +3821,6 @@ theorem swapPopClearPost_logs
     (sevm : Sevm) (base : Devm) (lastTarget idx len : B256) :
     (swapPopClearPost sevm base lastTarget idx len).logs = base.logs := rfl
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The five stores of a general swap-pop, from the scratch words already
 holding the removed index, the array length and the moved target. -/
 private theorem removeTarget_swapPop_storePrefix_runCompiled
@@ -4356,8 +4333,6 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
     holeKey, movedKey, tailKey, indexKey, holePost, movedPost,
     tailPost] using hholePrefix
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The general swap-and-pop `removeTarget` walk: the removed target's index is
 `idx`, the array's last entry is `lastTarget` at `len`, and `idx ≠ len` with
 `lastTarget ≠ target`, so the hole write, the moved entry's reverse-index
@@ -4946,8 +4921,6 @@ theorem removeTarget_swapPop_toFinish_runCompiled
   simp only [removeTarget]
   simpa only [fs, MLast] using hindexPrefix
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The general swap-and-pop `removeTarget` walk whose `finishSetPauser`
 continuation only appends the `PauserSet` record.  An instance of
 `removeTarget_swapPop_toFinish_runCompiled`. -/
@@ -5127,8 +5100,6 @@ private theorem appendTarget_absentZero_registry_cells_restored
       temporalSstorePost_self]
     exact hlength.symm
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- The four scratch writes `registerPauser`'s body performs before entering
 the kernel: the two decoded arguments and the two zero words.
 
