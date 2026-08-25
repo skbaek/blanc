@@ -2091,7 +2091,6 @@ private theorem lastMem_dur8 :
 
 /-! ## The composed run -/
 
-set_option maxRecDepth 40000 in
 /-- The row-19 master composition: the boundary walk with its dichotomy
 interface facts, and the complete message run with its settled effects. -/
 private theorem pauseLastWorld_master :
@@ -4152,7 +4151,6 @@ private theorem ret_nof :
   unfold B256.Nof pauseWorldTime pauseWorldInterval
   decide
 
-set_option maxRecDepth 40000 in
 private theorem pauseRetainedWorld_master :
     ∃ mid post : Devm,
       Func.RunCompiledTo

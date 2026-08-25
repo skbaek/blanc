@@ -257,7 +257,6 @@ private lemma step_mstore_cont {pc : Nat} {sevm : Sevm} {devm : Devm}
     rfl
   exact ⟨_, hstep, rfl, rfl⟩
 
-set_option maxRecDepth 8192 in
 /-- The responder cannot settle on a budget below its exact charge: a message
 installing `calleeCode` with gas under `17` executes to a raw `.error` — it
 halts out of gas at whichever of its six charged instructions the budget dies
@@ -963,7 +962,6 @@ private theorem memImage_extend {a b : Devm} {img : Bytes} {i n : Nat}
     MemImage b img :=
   ⟨by rw [h]; exact image.1.extend i n, by rw [h]; exact image.2.extend i n⟩
 
-set_option maxRecDepth 8192 in
 /-- The caller's count cell across `removeTarget`'s whole span, at any state
 whose Registry cells are pinned: every one of the five `SSTORE` keys is named
 by the entry cells, and each misses the count slot by hypothesis. -/
@@ -1351,7 +1349,6 @@ The `:330-337` template of `Blanc/LidoCircuitBreakerPauseAttainment.lean`,
 instantiated at the two expiry paths: one kernel evaluation per row pins the
 routed path to its inventory index. -/
 
-set_option maxRecDepth 20000 in
 /-- Only inventory index `19` — `.pauseLastTargetExpiry` — nominates the
 count-zero arm's expiry path. -/
 theorem pauseLastExpiry_index_pin :
@@ -1361,7 +1358,6 @@ theorem pauseLastExpiry_index_pin :
         index = RuntimePersistentWrite.pauseLastTargetExpiry.index := by
   decide +kernel
 
-set_option maxRecDepth 20000 in
 /-- Only inventory index `18` — `.pauseRetainedTargetExpiry` — nominates the
 checked arm's expiry path. -/
 theorem pauseRetainedExpiry_index_pin :
@@ -1377,7 +1373,6 @@ theorem pauseRetainedExpiry_index_pin :
 private theorem pauseWorld_callee_toAdr :
     (pauseWorldCallee.toB256).toAdr = pauseWorldCallee := by decide
 
-set_option maxRecDepth 4096 in
 /-- **J1.**  The `.pauseLastTargetExpiry` row — inventory index 19, the
 count-zero arm's expiry `SSTORE` — is attained with the `.pauseExpiry` role,
 at the row-19 pause witness world. -/
@@ -1479,7 +1474,6 @@ theorem attainable_pauseLastTargetExpiry_pauseExpiry :
 
 /-! ## J2: row 18 attained with the `.pauseExpiry` role -/
 
-set_option maxRecDepth 4096 in
 /-- **J2.**  The `.pauseRetainedTargetExpiry` row — inventory index 18, the
 checked arm's expiry `SSTORE` — is attained with the `.pauseExpiry` role, at
 the row-18 pause witness world. -/
