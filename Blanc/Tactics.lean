@@ -168,7 +168,7 @@ def proofRecipeLocalTypeCount (needle : Lean.Name) : TacticM Nat := do
         count := count + 1
   return count
 
-partial def proofRecipeBVarOccurrenceCount (needle : Nat) : Lean.Expr → Nat
+def proofRecipeBVarOccurrenceCount (needle : Nat) : Lean.Expr → Nat
   | .bvar index => if index == needle then 1 else 0
   | .app fn arg =>
       proofRecipeBVarOccurrenceCount needle fn +
@@ -184,7 +184,7 @@ partial def proofRecipeBVarOccurrenceCount (needle : Nat) : Lean.Expr → Nat
       proofRecipeBVarOccurrenceCount needle expr
   | _ => 0
 
-partial def proofRecipeHasRepeatedClosedLetSubject : Lean.Expr → Bool
+def proofRecipeHasRepeatedClosedLetSubject : Lean.Expr → Bool
   | .app fn arg =>
       proofRecipeHasRepeatedClosedLetSubject fn ||
         proofRecipeHasRepeatedClosedLetSubject arg
