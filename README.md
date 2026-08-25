@@ -541,9 +541,39 @@ this class: on a file whose elaboration outruns the client's inactivity
 window, an empty diagnostics list with a failed completion flag is a timeout,
 not a verdict.
 
-A raised ceiling with no measured need is itself a finding: the proof-debt gate
-inventories that ceiling-only offender class, while deletion campaigns belong
-to their own goal.
+**Class 9: an unmeasured resource ceiling.** A raised limit can cost no
+time itself while hiding the next regression inside a declaration whose need
+was never measured; timing instruments cannot identify that ceiling-only
+offender. The two resources are asymmetric. `maxRecDepth` is a shape budget and
+costs nothing when unused. A necessary `maxHeartbeats` raise is evidence of a
+lower bound on elaborator work, but heartbeats cannot be converted to seconds,
+and the kernel ignores them entirely.
+
+Treat an existing ceiling as a hypothesis. Read its source history, establish a
+biting anti-vacuity control for the family, and run deletion probes in an
+isolated worktree with a cloned cache. Probe depth and heartbeats separately,
+restore exact values after a failing arm, and confirm a passing heartbeat
+deletion twice. Language-server checks on exact source prefixes are useful for
+fast midpoint search, but the final source owns the verdict: where an exact
+minimum is claimed, its immediate predecessor is red and the value itself is
+green on the complete real file. Record every deletion, narrowing,
+right-sizing, or named load-bearing restore with its reopen condition.
+
+The ceiling-debt campaign confirmed that provenance is not necessity: copied
+per-genre depth budgets and heartbeat values tuned per declaration both
+contained deletable scopes. Of 415 launch scopes, 350 deleted, nine ambient
+scopes narrowed to 40 measured command owners, 16 right-sized, and 40 were
+retained after a named failure; zero ambient scopes remain.
+
+New ceilings are never ambient, file-wide, namespace-wide, unlimited,
+unexplained, or “just in case.” Use the smallest measured finite value on the
+exact command or tactic-local owner and record the probe, justification, and
+reopen condition with the raise. The proof-debt gate blocks every unexcepted
+new or increased ceiling. Its permanent writer admission names an exact stable
+ID and is limited to a reviewed new/null command- or tactic-local scope at its
+observed value. A temporary need or an increase of an existing finite ceiling
+uses an exact owned, evidence-bearing, expiring exception with a removal
+condition; no ambient or wildcard exception is accepted.
 
 **The measurement method that works.** Compile a file prefix once into an
 importable `.olean` (stripping `private` so probe segments can reference it),
