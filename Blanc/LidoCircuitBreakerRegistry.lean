@@ -1828,7 +1828,6 @@ private theorem setPauser_run_extracts_old_count_write
   exact ⟨postOld, hstackPost, hwfPost, hrPost, hstorPost, hcodePost,
     hresidual⟩
 
-set_option maxRecDepth 2048 in
 private theorem appendTarget_run_extracts_writes
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {img : Bytes} {entryStor : Stor} {entries : List Entry}
@@ -2197,7 +2196,6 @@ private theorem afterOldPauser_run_split_new_assignment
               (getCode_of_state_eq hburn.state))),
         hbody⟩
 
-set_option maxRecDepth 2048 in
 private theorem afterOldPauser_run_extracts_new_count_write
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {img : Bytes} {newPauser : B256} {countBefore : Nat}
@@ -2327,7 +2325,6 @@ private theorem afterOldPauser_run_extracts_new_count_write
   exact ⟨postRegistry, hstackPost, hwfPost, hrPost, hstorPost, hcodePost,
     hbody⟩
 
-set_option maxRecDepth 4096 in
 private theorem removeTarget_run_extracts_writes
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {img : Bytes} {currentStor : Stor}
@@ -2905,7 +2902,6 @@ private theorem reassignedRegistryStorage_newCount
     norm_num at hlength ⊢
     omega
 
-set_option maxRecDepth 2048 in
 private theorem foundRemovalStorage_reads
     {s : Stor} {entries : List Entry}
     {target oldPauser : B256} {index : Nat}
@@ -3508,8 +3504,6 @@ theorem RegistryWitness.applySetPauserSourceTrace
           cases htrace
           exact hw.applyFoundNonzeroWrites htargetValid hnewValid hfind
 
-set_option maxHeartbeats 800000 in
-set_option maxRecDepth 4096 in
 /-- A successful source run reaches the boundary immediately after its final
 Registry SSTORE with exactly the model trace's chronological writes applied. -/
 theorem setPauser_run_extracts_sourceTrace
@@ -4029,7 +4023,6 @@ theorem setPauser_run_extracts_sourceTrace
           exact hw.applySetPauserSourceTrace
             htargetCanonical hnewCanonical htrace
 
-set_option maxRecDepth 2048 in
 /-- The common event suffix preserves Registry storage and selects exactly one
 caller continuation from the saved continuation word. -/
 theorem finishSetPauser_run_split_continuation
@@ -7845,7 +7838,6 @@ private def removeTargetFinalPauseCost (pre : Devm) (target : B256) : Nat :=
 /- The final `removeTarget` reverse-index clear enters `finishSetPauser`
 directly.  The warm store and internal call are constructed from exact machine
 premises; no execution of the suffix is assumed. -/
-set_option maxRecDepth 2048 in
 private theorem removeTarget_final_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -8034,7 +8026,6 @@ private def removeTargetLengthPauseCost (pre : Devm) (target : B256) : Nat :=
 /- The array-length decrement is the immediately preceding `removeTarget`
 write.  Its arithmetic and warm store are constructed directly, then the
 already-proved final reverse-index suffix is used as the continuation. -/
-set_option maxRecDepth 2048 in
 private theorem removeTarget_length_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -8267,7 +8258,6 @@ private def removeTargetTailClearPauseCost
 
 /- Clear exactly the saved old tail entry, then continue with the proved
 array-length decrement suffix. -/
-set_option maxRecDepth 2048 in
 private theorem removeTarget_tail_clear_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -8478,7 +8468,6 @@ private def removeTargetMovedIndexPauseCost
 
 /- Repair exactly the saved last target's reverse index, then continue with
 the proved old-tail clear. -/
-set_option maxRecDepth 2048 in
 private theorem removeTarget_moved_index_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -8734,7 +8723,6 @@ private def removeTargetHolePauseCost
 
 /- Overwrite exactly the saved removed slot with the saved last target, then
 continue with the proved reverse-index repair. -/
-set_option maxRecDepth 2048 in
 private theorem removeTarget_hole_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -9003,8 +8991,6 @@ private def removeTargetLastSavePauseCost
 
 /- Read the last array entry and save it in `lastTargetWord`, then continue
 with the proved hole-overwrite removal suffix. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem removeTarget_last_save_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -9348,8 +9334,6 @@ private def removeTargetLengthSavePauseCost
 
 /- Load the concrete array length and save it in `arrayLengthWord`, then
 continue with the proved last-target read/save suffix. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem removeTarget_length_save_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -9677,8 +9661,6 @@ private def removeTargetPauseCost
 
 /- Execute the exact `removeTarget` source body into its proved direct-pause
 continuation. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem removeTarget_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -10014,8 +9996,6 @@ private def afterOldPauserPauseCost
 
 /- The saved zero new-pauser selects the textual removal branch and enters the
 exact `removeTarget` body through its internal call. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem afterOldPauser_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -10199,8 +10179,6 @@ private def previousCountDecrementPauseCost
 
 /- Decrement the saved previous pauser's count and enter the exact
 zero-new-pauser `afterOldPauser` path. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem previousCount_decrement_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -10645,8 +10623,6 @@ private def postAssignmentDecrementPauseCost
 
 /- A nonzero saved previous pauser maps through `iszero` to zero and therefore
 takes the textual count-decrement successor of the append branch. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem postAssignment_decrement_pause_branch_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -10799,8 +10775,6 @@ private def assignmentZeroPauseCost
 
 /- Load the saved zero pauser, derive the target assignment key, perform the
 distinguished assignment clear, and enter the exact nonzero-old-pauser branch. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem assignment_zero_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -11116,8 +11090,6 @@ private def previousAssignmentSavePauseCost
 
 /- Read the target's current assignment, duplicate and save it in scratch
 memory, and retain one copy for the exact zero-assignment suffix. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem previousAssignment_save_pause_suffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -11501,8 +11473,6 @@ private def setPauserKernelSingletonRemovalPauseCost
 /- The nonzero target guard selects the textual Registry body and executes the
 complete singleton-removal direct-pause path.  The untaken error call needs no
 lookup premise. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem setPauserKernel_singletonRemoval_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -11661,8 +11631,6 @@ private theorem setPauserKernel_singletonRemoval_pause_runCompiledTo
 
 /- Exact internal call into the singleton-removal Registry kernel, preserving
 the marked assignment-write path certificate. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem setPauserKernel_call_singletonRemoval_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre kernelPre : Devm}
     {img : Bytes} {stack : List B256}
@@ -11764,8 +11732,6 @@ private def continuationSaveKernelCallPauseCost
       previousPauser removedIndex arrayLength lastTarget
 
 /- Save continuation selector one, then enter the exact Registry kernel call. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem continuation_save_setPauserKernel_call_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -11985,8 +11951,6 @@ private def previousZeroContinuationKernelCallPauseCost
 
 /- Zero the previous-pauser scratch word, then execute the exact continuation
 save and Registry kernel call. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem previous_zero_continuation_kernel_call_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -12186,8 +12150,6 @@ private def newZeroPreviousContinuationKernelCallPauseCost
 
 /- Zero the new-pauser scratch word, then execute the exact previous-zero,
 continuation-save, and Registry-call suffix. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem new_zero_previous_continuation_kernel_call_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -12434,8 +12396,6 @@ private def targetArgSavePauseCost
 
 /- Load ABI argument zero, save it as the target scratch word, and execute the
 exact zero-new-pauser Registry removal suffix. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem target_arg_save_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -12628,8 +12588,6 @@ private def pauseDurationSavePauseCost
 
 /- Read the concrete pause duration, save it in scratch memory, and execute
 the complete target-argument singleton-removal suffix. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem pauseDuration_save_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -12951,8 +12909,6 @@ private def liveExpiryPauseCost
 
 /- The concrete caller's live expiry selects the textual success branch of
 the pause guard.  The untaken expired-error call needs no table premise. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem liveExpiry_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -13294,8 +13250,6 @@ private def authorizedLiveExpiryPauseCost
 /- The concrete assignment authorizes the concrete caller, so equality yields
 one and selects the textual live-expiry branch.  The untaken sender error needs
 no lookup premise. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem authorized_liveExpiry_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -13767,8 +13721,6 @@ private theorem authorizedLiveExpiryPauseCost_eq_of_memory_accessed
 
 /- Set the transient pause lock and execute the authorized live-expiry path.
 Only transient storage changes before the persistent Registry path begins. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem lock_write_authorized_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -13984,8 +13936,6 @@ private def unlockedGuardPauseCost
 
 /- A zero transient lock maps through `ISZERO` to one and selects the textual
 lock-write branch.  The untaken reentrant error needs no lookup premise. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem unlocked_guard_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -14287,8 +14237,6 @@ private def canonicalUnlockedPauseCost
 
 /- The canonical target has no high bits, so `canonicalAddressArg 0` selects
 its textual body.  The untaken empty-revert call needs no lookup premise. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem canonical_unlocked_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -14493,8 +14441,6 @@ private def exactPauseCost
 /- Exact forward construction of the complete `pause` source on the direct
 singleton-removal path.  Exact one-word calldata makes the short-data LT zero,
 so the untaken generic revert needs no execution premise. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem exact_pause_runCompiledTo
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {img : Bytes} {stack : List B256}
@@ -14722,8 +14668,6 @@ private def thirdGroupPauseDispatchCost
 
 /- The exact pause selector matches the first entry in the third linear group.
 The unmatched remainder and fallback are not executed and need no lookup. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem third_group_pause_dispatch_runCompiledTo
     (dp : DeployParams)
     {fs : List Func} {sevm : Sevm} {pre : Devm}
@@ -14938,7 +14882,6 @@ private def hybridPauseDispatchCost
 fourth-group pivot is greater than the pause selector and takes the textual
 third group.  Neither unselected half is executed. -/
 set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem hybrid_pause_dispatch_runCompiledTo
     (dp : DeployParams)
     {fs : List Func} {sevm : Sevm} {pre : Devm}
@@ -15334,8 +15277,6 @@ private def fsigHybridPauseDispatchCost
 
 /- Selector extraction produces the pause selector, after which the two
 selected hybrid pivots reach the exact pause endpoint. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem fsig_hybrid_pause_dispatch_runCompiledTo
     (dp : DeployParams)
     {fs : List Func} {sevm : Sevm} {pre : Devm}
@@ -15485,8 +15426,6 @@ private def runtimeMainPauseCost
 
 /- Exact execution of `runtimeMain` when value is zero and one ABI word is
 present.  Both guard values are zero, so the revert arm is not executed. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem runtimeMain_pause_runCompiledTo
     (dp : DeployParams)
     {fs : List Func} {sevm : Sevm} {pre : Devm}
@@ -15730,8 +15669,6 @@ def runtimePauseCost
 
 /- Enter the compiled runtime at its leading `JUMPDEST`, retaining the exact
 main-function derivation that carries the direct-pause path certificate. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem runtime_pause_runCompiledTo
     (dp : DeployParams)
     {sevm : Sevm} {pre : Devm}
@@ -15912,8 +15849,6 @@ private theorem directPausePath_exec_of_program_main
 
 /- The exact runtime construction yields both the pc-1 main execution and the
 pc-0 program execution, while retaining the source-path witness on `mainRun`. -/
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 private theorem runtime_pause_exec
     (dp : DeployParams)
     {sevm : Sevm} {pre : Devm}
@@ -16037,8 +15972,6 @@ private theorem runtime_pause_exec
   exact ⟨raw, mid, mainRun, programRun, entryBurn, hmid, rawOutput,
     mainExec, rootExec, rootPath, write, owner, key, value⟩
 
-set_option maxRecDepth 2048 in
-set_option maxHeartbeats 800000 in
 /-- An exact direct `pause` message whose post-write code-size check observes
 an empty target reaches the constructed raw revert, settles it as an error,
 and restores the Registry witness from message entry.  The occurrence claims
@@ -16272,7 +16205,6 @@ private theorem targetWord_mul_32_ne_zero :
     targetWord * 32 ≠ (0 : B256) := by
   decide
 
-set_option maxRecDepth 2048 in
 /-- Forward construction of the exact target-zero source path together with
 its path certificate. -/
 private theorem setPauser_zero_runCompiledTo_source
@@ -16896,8 +16828,6 @@ private theorem directPauseControl_zeroCode :
   · rfl
   · decide
 
-set_option maxRecDepth 4096 in
-set_option maxHeartbeats 800000 in
 private theorem directPauseControl_run :
     ∃ raw,
       Prog.RunCompiledTo directPauseControlSevm directPauseControlPre
@@ -16994,8 +16924,6 @@ private theorem directPauseControl_run :
     hwarmMovedIndex hroom hstatic hempty hpause hfinish hremove hafter
     hsetPauser (by simpa using directPauseControl_gas)
 
-set_option maxRecDepth 4096 in
-set_option maxHeartbeats 800000 in
 /-- A fully inhabited production-runtime control for direct `pause`: target
 `7` is assigned to the live caller `9` in a singleton Registry owned by
 address `100`, while the target account has empty code.  The actual root
@@ -17177,7 +17105,6 @@ theorem setPauserKernel_run_of_exec
   exact correct_core (runtime dp).main (runtime dp).aux
     pk setPauserKernel hcompiled hsub
 
-set_option maxRecDepth 4096 in
 /-- Every successful execution at the exact production kernel slice exposes
 the source trace's post-Registry boundary before the continuation suffix. -/
 private theorem setPauserKernel_exec_extracts_sourceTrace_of_trace
@@ -17237,7 +17164,6 @@ private theorem setPauserKernel_exec_extracts_sourceTrace_of_trace
   exact ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost, hnewPost,
     hpreviousPost, hcontinuationPost, hstorPost, hwPost, hfinishRun⟩
 
-set_option maxRecDepth 4096 in
 /-- Every successful execution at the exact production kernel slice chooses
 the model/source trace forced by the nonzero-target guard and exposes its
 post-Registry boundary before the continuation suffix. -/
@@ -17307,7 +17233,6 @@ theorem setPauserKernel_exec_extracts_sourceTrace
     htargetPost, hnewPost, hpreviousPost, hcontinuationPost, hstorPost,
     hwPost, hfinish⟩
 
-set_option maxRecDepth 4096 in
 /-- A successful exact kernel execution entered from `registerPauser` reaches
 the zero continuation and preserves the Registry witness through the complete
 `registerAfterSet` continuation. -/
@@ -17364,7 +17289,6 @@ theorem registerPauser_kernel_exec_preserves_registry
       hpanicLookup hregisterRun
   · exact (hpause.1 rfl).elim
 
-set_option maxRecDepth 4096 in
 /-- A successful exact kernel execution entered with a zero new pauser and a
 nonzero continuation reaches the `pauseAfterSet` pre-yield boundary.  The
 Registry removal is already stable there; no claim is made about the terminal
@@ -17548,7 +17472,6 @@ theorem membershipEquivalence_registerPauser
         rw [htargetAt] at hotherIndex
         omega
 
-set_option maxRecDepth 2048 in
 /-- Setting a nonzero canonical target's pauser to zero clears both lookup
 slots and the dead array tail, and repairs the moved target's index unless the
 removed target was itself the tail. -/
