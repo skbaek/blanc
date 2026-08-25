@@ -245,7 +245,6 @@ private theorem loadWord_logs_eq {e : Sevm} {s s' : Devm} {k : B256}
   exact (of_run_pushB256 qpush).logs.trans
     (((p1.logs.trans hb.logs).trans rfl).trans hp.logs)
 
-set_option maxRecDepth 4096 in
 /-- **D1: the exact `PauseTriggered` prefix, for an arbitrary entry.**
 
 The only value premises are the two frame-local memory windows.  The theorem
@@ -767,7 +766,6 @@ private lemma success_not_nof_of_lt {timestamp interval : B256}
     B256.toNat_add_eq_of_nof _ _ hnof'] at wrap
   omega
 
-set_option maxRecDepth 4096 in
 /-- Read the complete source control flow backwards.  The successful side
 retains the exact count arm, finishing trace, and value relation; the failure
 side retains the actual call into the arithmetic-panic slot. -/
@@ -1340,7 +1338,6 @@ private theorem pauseSuccessEvent_target_survives
     hmstore).acrossLine (by line_inv) hcaller).acrossLoadWord htarget).acrossLine
       (by line_inv) hevent).acrossLogWith hlog
 
-set_option maxRecDepth 4096 in
 /-- **D1–D6: every reached `pauseSuccess` either commits its exact result or
 enters the production arithmetic-panic body.**
 
@@ -2041,7 +2038,6 @@ def PauseAfterSetCommittedOutcomes
                 PauseObservationCommittedOutcomes fs sevm entry statPost
                   target duration ex)))))
 
-set_option maxRecDepth 4096 in
 /-- **D8: `pauseAfterSet`'s seven outcomes with the accepting arm completed.**
 
 The two frame-local words are transported from `entry` through staging, both

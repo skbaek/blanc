@@ -2519,50 +2519,6 @@
       "ceiling": 10000
     },
     {
-      "id": "Blanc/LidoCircuitBreakerSuccess.lean::Blanc.LidoCircuitBreaker.pauseAfterSet_committed_outcomes#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerSuccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseAfterSet_committed_outcomes",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 4096,
-      "ceiling": null
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSuccess.lean::Blanc.LidoCircuitBreaker.pauseSuccess_outcome#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerSuccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseSuccess_outcome",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 4096,
-      "ceiling": null
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSuccess.lean::Blanc.LidoCircuitBreaker.pauseSuccess_pauseTriggered_prefix#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerSuccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseSuccess_pauseTriggered_prefix",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 4096,
-      "ceiling": null
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSuccess.lean::Blanc.LidoCircuitBreaker.pauseSuccess_trace_dichotomy#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerSuccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseSuccess_trace_dichotomy",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 4096,
-      "ceiling": null
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean::Blanc.LidoCircuitBreaker.attainable_adminRegistry_of_route#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
       "declaration": "Blanc.LidoCircuitBreaker.attainable_adminRegistry_of_route",
