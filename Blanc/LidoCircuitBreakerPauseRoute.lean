@@ -271,7 +271,7 @@ theorem getCode_of_state {a b : Devm} (h : a.state = b.state) :
     Devm.getCode a = Devm.getCode b := by
   funext x; simp only [Devm.getCode, Devm.getAcct]; rw [h]
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 617 in
 /-- The three selector crossings of `hybridDispatchWith` on a walk whose
 calldata selects `pause`: the outer pivot taken *fall-through* (the selector
 equals the pivot, so `gt` yields zero), the third/fourth pivot taken jumped,

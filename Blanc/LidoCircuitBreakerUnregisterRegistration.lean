@@ -108,8 +108,7 @@ theorem foundZeroRetainedRegistration_sourceTrace_witness
   refine ⟨_, htrace, rfl, rfl, ?_⟩
   exact hw.applyFoundZeroWrites htarget hfind
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
+set_option maxRecDepth 601 in
 private theorem registerAfterSet_retainedOldZero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes) (oldPauser remaining : B256)
@@ -222,8 +221,6 @@ private theorem registerAfterSet_retainedOldZero_runCompiled
       (base.setMach ⟨stack, M, G⟩)
     exact holdTail
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- Exact `registerAfterSet` suffix for unregistering the old pauser's **last**
 assignment: the previous pauser is nonzero, its remaining count is zero and the
 new pauser is zero, so the walk clears the old pauser's heartbeat expiry, emits
@@ -328,8 +325,6 @@ theorem registerAfterSet_oldLastZero_runCompiled
   rw [hg] at h
   exact h
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem finishSetPauser_retainedOldZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -382,8 +377,6 @@ private theorem finishSetPauser_retainedOldZero_runCompiled
   rw [hg] at h
   exact h
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem removeTarget_foundZeroRetained_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -724,8 +717,6 @@ private def foundZeroRetainedLastSetPauserKernelGas (sevm : Sevm) (base : Devm)
       (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-kernel success for unregistering a recorded target, under
 the two restrictions the removal machinery currently supports.  First, the
 removed target is **already the last array element** (`index + 1 =
@@ -1382,8 +1373,6 @@ theorem registerPauser_body_foundZeroRetainedLast_runCompiled
   rw [hg]
   exact hbody
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for unregistering a recorded target under
 the two restrictions the removal machinery supports: the removed target is
 already the array's last entry (`index + 1 = entries.length`), and the old
@@ -1492,8 +1481,6 @@ theorem registerPauser_runCompiledTo_foundZeroRetainedLast
   exact ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas, hlogs,
     hexpiries, hcompile⟩
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact clean direct-message effects for unregistering a recorded target,
 derived from the generated-runtime execution.  Both restrictions of the
 removal chronology are inherited: the removed target is already the array's
@@ -1654,8 +1641,6 @@ target is **not** the array's last entry, so the general swap-and-pop walk
 `removeTarget_swapPop_runCompiled` moves the last entry into the hole and
 repairs its reverse index.  The old pauser is still retained. -/
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The general swap-and-pop removal at the found-target/zero-pauser leaf: the
 removed target sits at `idx`, the array's last entry is `lastTarget` at `len`,
 and the old pauser is retained, so `finishSetPauser` stops without touching any
@@ -2046,8 +2031,6 @@ private def foundZeroRetainedSwapPopSetPauserKernelGas (sevm : Sevm)
       (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-kernel success for unregistering a recorded target that is
 **not** the array's last entry, with the old pauser retained.  This is the
 consumer of the general swap-and-pop removal walk: the last array entry
@@ -2591,8 +2574,6 @@ theorem registerPauser_body_foundZeroRetainedSwapPop_runCompiled
   rw [hg]
   exact hbody
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for unregistering a recorded target that is
 **not** the array's last entry, with the old pauser retained. -/
 theorem registerPauser_runCompiledTo_foundZeroRetainedSwapPop
@@ -2709,8 +2690,6 @@ theorem registerPauser_runCompiledTo_foundZeroRetainedSwapPop
   exact ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas, hlogs,
     hexpiries, hcompile⟩
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact clean direct-message effects for unregistering a recorded target that
 is **not** the array's last entry (`index + 1 < entries.length`), with the old
 pauser retained (`oldCount - 1 ≠ 0`), derived from the generated-runtime
@@ -2888,8 +2867,6 @@ zero-payload `HeartbeatUpdated(oldPauser)` before stopping.  The `PauserSet`
 record still comes first.  The expiry/event suffix is the same one the
 replacement chronology reaches with a nonzero new pauser. -/
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- `finishSetPauser` for the old-last unregistration arm: the `PauserSet` record
 is emitted, then `registerAfterSet` clears the retired pauser's expiry and emits
 its zero-payload `HeartbeatUpdated`.  1935 gas of `finishSetPauser` glue above
@@ -2956,8 +2933,6 @@ private theorem finishSetPauser_oldLastZero_runCompiled
   rw [hg] at h
   exact h
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The degenerate removal walk at the found-target/zero-pauser leaf with the
 old pauser **retired**: its decremented count is already zero, so the removal
 walk's `finishSetPauser` continuation clears the old pauser's expiry and emits
@@ -3214,8 +3189,6 @@ private theorem removeTarget_foundZeroOldLast_runCompiled
   simpa only [MIndex, MLength, MLast, tailPost, removePost, eventLog,
     heartbeatLog] using hrun
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The `afterOldPauser` glue above the old-last removal walk: the new-pauser
 scratch word is zero, so the walk branches straight to `removeTarget` for 35
 gas. -/
@@ -3362,8 +3335,6 @@ private def foundZeroOldLastSetPauserKernelGas (sevm : Sevm) (base : Devm)
       (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost + clearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-kernel success for unregistering a recorded target that is
 already the array's last entry, where the old pauser holds **no** further
 assignment afterwards (`oldCount - 1 = 0`).  `registerAfterSet` takes the
@@ -3864,8 +3835,6 @@ theorem registerPauser_body_foundZeroOldLast_runCompiled
   rw [hg]
   exact hbody
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for unregistering a recorded target that is
 already the array's last entry, retiring the old pauser. -/
 theorem registerPauser_runCompiledTo_foundZeroOldLast
@@ -3983,8 +3952,6 @@ theorem registerPauser_runCompiledTo_foundZeroOldLast
   exact ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas, hlogs,
     holdExpiryPost, hexpiries, hcompile⟩
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact clean direct-message effects for unregistering a recorded target that
 is already the array's last entry (`index + 1 = entries.length`) and retires the
 old pauser (`oldCount - 1 = 0`), derived from the generated-runtime execution.
@@ -4163,8 +4130,6 @@ lifted at once.  The removed target is not the array's last entry, so the
 general swap-and-pop walk runs, and the old pauser's decremented count reaches
 zero, so `registerAfterSet` clears its expiry and emits the second record. -/
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The general swap-and-pop removal walk with the old pauser **retired**: both
 the retired pauser's count and its expiry cell are carried past all five
 array-region writes, and the removal walk's `finishSetPauser` continuation
@@ -4453,8 +4418,6 @@ private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
   simpa only [MIndex, MLength, MLast, tailPost, removePost, eventLog,
     heartbeatLog] using hrun
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- The `afterOldPauser` glue above the general swap-and-pop removal walk that
 retires the old pauser: 35 gas for the zero new-pauser branch. -/
 private theorem afterOldPauser_swapPop_foundZeroOldLast_runCompiled
@@ -4622,8 +4585,6 @@ private def foundZeroOldLastSwapPopSetPauserKernelGas (sevm : Sevm)
       (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost + clearCost
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-kernel success for the last combination of the chronology:
 the removed target is **not** the array's last entry, so the general
 swap-and-pop walk moves `sourceLastTarget entries` into the hole at `index + 1`
@@ -5214,8 +5175,6 @@ theorem registerPauser_body_foundZeroOldLastSwapPop_runCompiled
   rw [hg]
   exact hbody
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact generated-runtime success for the last combination: an interior
 removal that retires the old pauser. -/
 theorem registerPauser_runCompiledTo_foundZeroOldLastSwapPop
@@ -5342,8 +5301,6 @@ theorem registerPauser_runCompiledTo_foundZeroOldLastSwapPop
   exact ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas, hlogs,
     holdExpiryPost, hexpiries, hcompile⟩
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 2400000 in
 /-- Exact clean direct-message effects for the last combination of the
 chronology, derived from the generated-runtime execution: the removed target is
 not the array's last entry (`index + 1 < entries.length`) and the old pauser is
