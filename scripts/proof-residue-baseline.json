@@ -6,10 +6,10 @@
     "enum-loop-memory-cursor-rfl": 1,
     "registration-inline-staging": 0,
     "run-core-pc-irrel-depth": 1,
-    "selector-decide-kernel": 28,
+    "selector-decide-kernel": 0,
     "sites-direct-let": 1,
-    "weth10-entry-shapes-rfl": 1
+    "weth10-entry-shapes-rfl": 0
   },
-  "total": 32,
-  "digest": "67202e9f68832b91b2054be511818af0cac51085a344695b611f6dc5e6a00704"
+  "total": 3,
+  "digest": "fa02578a84f5aa39b0ff3cf9713886a18ed7b21635d1e7f9b6304fa72163ab6c"
 }

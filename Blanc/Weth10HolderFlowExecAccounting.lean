@@ -3623,9 +3623,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_name
     exact List.mem_cons.mpr (Or.inl rfl)
   · exact nameSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans nameSelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, nameSelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, nameSelector_word_eq]
     decide +kernel
 
 private def returnWordLine (w : B256) : Line :=
@@ -3654,9 +3654,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permitTypehash
       returnWord_childlessTerminal PERMIT_TYPEHASH
   · exact permitTypehashSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans permitTypehashSelector_word_eq_local)
-  · rw [hselector]
+  · rw [hselector, permitTypehashSelector_word_eq_local]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, permitTypehashSelector_word_eq_local]
     decide +kernel
 
 /-- Exact proof-indexed accounting for the childless `decimals` view. -/
@@ -3676,9 +3676,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_decimals
         mstoreAt, pushList]⟩
   · exact decimalsSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans decimalsSelector_word_eq_local)
-  · rw [hselector]
+  · rw [hselector, decimalsSelector_word_eq_local]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, decimalsSelector_word_eq_local]
     decide +kernel
 
 /-- Exact proof-indexed accounting for the childless `CALLBACK_SUCCESS` view. -/
@@ -3698,9 +3698,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_callbackSuccess
       returnWord_childlessTerminal CALLBACK_SUCCESS
   · exact callbackSuccessSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans callbackSuccessSelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, callbackSuccessSelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, callbackSuccessSelector_word_eq]
     decide +kernel
 
 private def totalSupplyLine : Line :=
@@ -3784,9 +3784,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_totalSupply
     aesop
   · exact totalSupplySelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans totalSupplySelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, totalSupplySelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, totalSupplySelector_word_eq]
     decide +kernel
 
 /-- Exact proof-indexed accounting for the childless `balanceOf` view. -/
@@ -3805,9 +3805,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_balanceOf
     aesop
   · exact balanceOfSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans balanceOfSelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, balanceOfSelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, balanceOfSelector_word_eq]
     decide +kernel
 
 /-- Exact proof-indexed accounting for the childless `nonces` view. -/
@@ -3824,9 +3824,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_nonces
     aesop
   · exact noncesSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans noncesSelector_word_eq_local)
-  · rw [hselector]
+  · rw [hselector, noncesSelector_word_eq_local]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, noncesSelector_word_eq_local]
     decide +kernel
 
 /-- Exact proof-indexed accounting for the childless `flashMinted` view. -/
@@ -3844,9 +3844,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashMinted
     aesop
   · exact flashMintedSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans flashMintedSelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, flashMintedSelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, flashMintedSelector_word_eq]
     decide +kernel
 
 /-- Exact proof-indexed accounting for the childless `symbol` view. -/
@@ -3863,9 +3863,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_symbol
     aesop
   · exact symbolSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans symbolSelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, symbolSelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, symbolSelector_word_eq]
     decide +kernel
 
 /-- Exact proof-indexed accounting for the childless deployment-chain view. -/
@@ -3884,9 +3884,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deploymentChainId
     aesop
   · exact deploymentChainIdSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans deploymentChainIdSelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, deploymentChainIdSelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, deploymentChainIdSelector_word_eq]
     decide +kernel
 
 /-- Exact proof-indexed accounting for the childless `allowance` view. -/
@@ -3905,9 +3905,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowance
     aesop
   · exact allowanceSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans allowanceSelector_word_eq_local)
-  · rw [hselector]
+  · rw [hselector, allowanceSelector_word_eq_local]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, allowanceSelector_word_eq_local]
     decide +kernel
 
 private def domainSelectLine (dp : DeployParams) : Line :=
@@ -3971,9 +3971,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_domainSeparator
     hnonempty hmember
   · exact domainSeparatorSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans domainSeparatorSelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, domainSeparatorSelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, domainSeparatorSelector_word_eq]
     decide +kernel
   · exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator (frame := frame)
       context hselector hnonempty
@@ -4036,9 +4036,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_maxFlashLoan
     hnonempty hmember
   · exact maxFlashLoanSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans maxFlashLoanSelector_word_eq)
-  · rw [hselector]
+  · rw [hselector, maxFlashLoanSelector_word_eq]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, maxFlashLoanSelector_word_eq]
     decide +kernel
   · exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan (frame := frame)
       context hselector hnonempty
@@ -4110,9 +4110,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashFee
     hnonempty hmember
   · exact flashFeeSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans flashFeeSelector_word_eq_local)
-  · rw [hselector]
+  · rw [hselector, flashFeeSelector_word_eq_local]
     decide +kernel
-  · rw [hselector]
+  · rw [hselector, flashFeeSelector_word_eq_local]
     decide +kernel
   · exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_flashFee (frame := frame)
       context hselector hnonempty
