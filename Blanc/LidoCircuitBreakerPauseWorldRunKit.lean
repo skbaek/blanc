@@ -803,8 +803,6 @@ temporal convention: the three charges are hypothesis-supplied
 successors, and the store suffix runs at the threaded state, where all three
 keys are warm.  Fixed charge `139 = 439 - 300`. -/
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 theorem removeTarget_toFinish_coldEntry_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -1561,7 +1559,6 @@ private theorem not_mem_temporalSloadBase {sevm : Sevm} {base : Devm}
   · exact h
   · exact not_mem_hashSet_insert h hne
 
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 1600000 in
 theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
