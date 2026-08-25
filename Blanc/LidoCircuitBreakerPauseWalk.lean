@@ -545,8 +545,154 @@ def pauseKernelBase (sevm : Sevm) (base : Devm) (target pauser : B256) :
   temporalSloadBase sevm (pauseDurationBase sevm base target pauser)
     pauseDurationSlot
 
-set_option maxRecDepth 32768 in
-set_option maxHeartbeats 3200000 in
+private theorem pausePushNotZero_prepend_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {base : Devm}
+    {G : Nat} {tail : Func} {post : Devm} {target : B256}
+    (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G⟩) tail post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨target :: [], Mem.empty, G + 5⟩)
+      ([pushB256 0, not] +++ tail) post := by
+  func_run (2) [~~~(0 : B256)]
+  case a =>
+    change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G⟩) tail post
+    exact htail
+
+private theorem pauseShiftAddressMask_prepend_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {base : Devm}
+    {G : Nat} {tail : Func} {post : Devm} {target : B256}
+    (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach
+        ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
+          Mem.empty, G⟩) tail post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 6⟩)
+      ([pushB256 (Nat.toB256 160), shl] +++ tail) post := by
+  func_run (2)
+    [((~~~(0 : B256)) <<< (Nat.toB256 160).toNat)]
+  case a =>
+    change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach
+        ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
+          Mem.empty, G⟩) tail post
+    exact htail
+
+private theorem pauseCanonicalBranch_success_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {base : Devm}
+    {G : Nat} {body : Func} {post : Devm} {target : B256}
+    (hmask : addressMask &&& target = 0)
+    (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨addressMask :: target :: [], Mem.empty, G + 16⟩)
+      ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
+  func_run (2) [0]
+  case h_arm =>
+    have hg : G + 16 - 16 = G := by omega
+    simpa only [hg] using hbody
+
+private theorem pauseCheckNonAddress_success_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {base : Devm}
+    {G : Nat} {body : Func} {post : Devm} {target : B256}
+    (hmask : addressMask &&& target = 0)
+    (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨target :: [], Mem.empty, G + 27⟩)
+      (checkNonAddress +++ ((.call emptyRevertSlot) <?> body)) post := by
+  have hbranch := pauseCanonicalBranch_success_runCompiled hmask hbody
+  have hshiftRaw :
+      Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+        (base.setMach
+          ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
+            Mem.empty, G + 16⟩)
+        ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
+    rw [← addressMask_eq_shl]
+    exact hbranch
+  have hshift := pauseShiftAddressMask_prepend_runCompiled hshiftRaw
+  have hnot := pausePushNotZero_prepend_runCompiled hshift
+  have hg : G + 16 + 6 + 5 = G + 27 := by omega
+  have hsplit :
+      checkNonAddress +++ ((.call emptyRevertSlot) <?> body) =
+        [pushB256 0, not] +++
+          ([pushB256 (Nat.toB256 160), shl] +++
+            ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body))) := by
+    rfl
+  rw [← hg, hsplit]
+  exact hnot
+
+private theorem pauseCanonicalAddressArg0_success_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {base : Devm}
+    {G : Nat} {body : Func} {post : Devm} {target : B256}
+    (harg : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (hmask : addressMask &&& target = 0)
+    (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G + 33⟩)
+      (canonicalAddressArg 0 body) post := by
+  have hcheck := pauseCheckNonAddress_success_runCompiled hmask hbody
+  have hargRun : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G + 27 + 6⟩)
+      (arg 0 +++ checkNonAddress +++
+        ((.call emptyRevertSlot) <?> body)) post := by
+    unfold arg cdl
+    func_run (2)
+    case a => rw [harg]; exact hcheck
+  have hg : G + 27 + 6 = G + 33 := by omega
+  have hsplit :
+      canonicalAddressArg 0 body =
+        arg 0 +++ checkNonAddress +++
+          ((.call emptyRevertSlot) <?> body) := by
+    rfl
+  rw [← hg, hsplit]
+  exact hargRun
+
+private theorem pauseRequireStaticArgs1_success_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {base : Devm}
+    {G : Nat} {body : Func} {post : Devm}
+    (hdata : sevm.data.length.toB256 <? 36 = 0)
+    (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G + 21⟩)
+      (requireStaticArgs 1 body) post := by
+  unfold requireStaticArgs
+  func_run (4) [0]
+  case h_arm =>
+    have hg : G + 21 - 21 = G := by omega
+    rw [hg]
+    exact hbody
+
+private theorem pauseAssignmentSlotArg0_prepend_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {base : Devm}
+    {G : Nat} {tail : Func} {post : Devm} {target : B256}
+    (harg : Sevm.dataWord sevm (32 * 0 + 4) = target)
+    (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[assignmentSlot target], Mem.empty, G⟩) tail post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G + 12⟩)
+      (arg 0 +++ tagTop assignmentRegion +++ tail) post := by
+  unfold arg cdl
+  func_run (4) [assignmentSlot target]
+  case h_val => rw [harg]; rfl
+  case a => exact htail
+
+private theorem pauseExpirySlotCaller_prepend_runCompiled
+    {dp : DeployParams} {sevm : Sevm} {base : Devm}
+    {G : Nat} {tail : Func} {post : Devm} {pauser : B256}
+    (hcaller : sevm.caller.toB256 = pauser)
+    (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[expirySlot pauser], Mem.empty, G⟩) tail post) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨[], Mem.empty, G + 8⟩)
+      (caller ::: tagTop expiryRegion +++ tail) post := by
+  func_run (3) [expirySlot pauser]
+  case h_val => rw [hcaller]; rfl
+  case a => exact htail
+
+set_option maxRecDepth 1150 in
 /-- `pause`'s complete body, from the endpoint's entry to the internal
 `.call setPauserSlot` burn.  The walk crosses all five guards on their taken
 arms — the one-word calldata test, the canonical-address decoder, the
@@ -605,25 +751,24 @@ theorem pause_body_runCompiled
       (base.setMach ⟨[], Mem.empty,
         kernelGas + (469 + assignmentCost + expiryCost + durationCost)⟩)
       pause post := by
-  unfold pause requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask
-  func_run (12) [0, ~~~(0 : B256), addressMask, 0]
-  case h_val =>
+  unfold pause
+  set total :=
+    kernelGas + (469 + assignmentCost + expiryCost + durationCost)
+    with htotal
+  have hdata : sevm.data.length.toB256 <? 36 = 0 := by
     rw [hdataLength]
     decide +kernel
-  case h_val =>
+  have hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target := by
     rw [show (32 * 0 + 4 : B256) = 4 by decide +kernel, hdataTarget]
-    exact hmask
-  case h_arm =>
-    have hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target := by
-      rw [show (32 * 0 + 4 : B256) = 4 by decide +kernel]
-      exact hdataTarget
-    func_run (1)
-    set total :=
-      kernelGas + (469 + assignmentCost + expiryCost + durationCost)
-      with htotal
+  have hgas : (total - 54 + 33) + 21 = total := by
+    dsimp only [total]
+    omega
+  rw [← hgas]
+  refine pauseRequireStaticArgs1_success_runCompiled hdata ?_
+  refine pauseCanonicalAddressArg0_success_runCompiled hargTarget hmask ?_
+  func_run (1)
     -- The reentrancy lock reads zero.
-    have htload : Ninst.RunCompiled sevm
+  have htload : Ninst.RunCompiled sevm
         (base.setMach ⟨[lockKey], Mem.empty, total - 57⟩) Ninst.tload
         (base.setMach ⟨[0], Mem.empty, total - 57 - 100⟩) := by
       have h := runCompiled_tload_of (sevm := sevm)
@@ -633,90 +778,94 @@ theorem pause_body_runCompiled
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
         (by simp)
       simpa only [Devm.memory_setMach, Devm.setMach_setMach] using h
-    refine Func.RunCompiled.next htload ?_
-    func_run (2) [1]
-    func_run (2)
-    -- The lock is taken; only transient storage changes.
-    have htstore : Ninst.RunCompiled sevm
-        (base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123⟩)
-        Ninst.tstore
-        ((pauseLockPost sevm base).setMach
-          ⟨[], Mem.empty, total - 57 - 223⟩) := by
-      have h := runCompiled_tstore_of (sevm := sevm)
-        (pre := base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123⟩)
-        (key := lockKey) (value := 1) (stack := [])
-        (G := total - 57 - 223) rfl hstatic
-        (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
-      simpa only [Devm.memory_setMach, Devm.setMach_setMach,
-        setTransVal_setMach, pauseLockPost] using h
-    refine Func.RunCompiled.next htstore ?_
-    func_run (4) [assignmentSlot target]
-    case h_val =>
-      rw [hargTarget]
-      rfl
-    -- The target's assignment names the caller.
-    have hassignSload : Ninst.RunCompiled sevm
-        ((pauseLockPost sevm base).setMach
-          ⟨[assignmentSlot target], Mem.empty, total - 57 - 235⟩)
-        Ninst.sload
-        ((pauseExpiryBase sevm base target).setMach
-          ⟨[pauser], Mem.empty, total - 57 - 235 - assignmentCost⟩) := by
-      have h := temporal_sload_runCompiled (sevm := sevm)
-        (base := pauseLockPost sevm base) (key := assignmentSlot target)
-        (value := pauser) (stack := []) (M := Mem.empty)
-        (G := total - 57 - 235 - assignmentCost)
-        hauthorizationStorage (by simp)
-      rw [hassignmentCost,
-        show total - 57 - 235 - assignmentCost + assignmentCost =
-          total - 57 - 235 by omega] at h
-      exact h
-    refine Func.RunCompiled.next hassignSload ?_
-    func_run (3) [1]
-    case h_val => simp [B256.eqCheck, hcaller]
-    func_run (3) [expirySlot pauser]
-    case h_val =>
-      rw [hcaller]
-      rfl
-    -- The caller's heartbeat has not expired.
-    have hexpirySload : Ninst.RunCompiled sevm
-        ((pauseExpiryBase sevm base target).setMach
-          ⟨[expirySlot pauser], Mem.empty,
-            total - 57 - 235 - assignmentCost - 27⟩)
-        Ninst.sload
-        ((pauseDurationBase sevm base target pauser).setMach
-          ⟨[expiry], Mem.empty,
-            total - 57 - 235 - assignmentCost - 27 - expiryCost⟩) := by
-      have h := temporal_sload_runCompiled (sevm := sevm)
-        (base := pauseExpiryBase sevm base target) (key := expirySlot pauser)
-        (value := expiry) (stack := []) (M := Mem.empty)
-        (G := total - 57 - 235 - assignmentCost - 27 - expiryCost)
-        hexpiryStorage (by simp)
-      rw [hexpiryCost,
-        show total - 57 - 235 - assignmentCost - 27 - expiryCost +
-          expiryCost = total - 57 - 235 - assignmentCost - 27 by omega] at h
-      exact h
-    refine Func.RunCompiled.next hexpirySload ?_
-    func_run (3) [1]
-    case h_val => simp [B256.ltCheck, hlive]
-    func_run (1)
-    -- The configured pause duration is staged with the rest of the image.
-    have hdurationSload : Ninst.RunCompiled sevm
-        ((pauseDurationBase sevm base target pauser).setMach
-          ⟨[pauseDurationSlot], Mem.empty,
-            total - 57 - 235 - assignmentCost - 27 - expiryCost - 22⟩)
-        Ninst.sload
-        ((pauseKernelBase sevm base target pauser).setMach
-          ⟨[duration], Mem.empty, kernelGas + 128⟩) := by
-      have h := temporal_sload_runCompiled (sevm := sevm)
-        (base := pauseDurationBase sevm base target pauser)
-        (key := pauseDurationSlot) (value := duration) (stack := [])
-        (M := Mem.empty) (G := kernelGas + 128) hdurationStorage (by simp)
-      rw [hdurationCost] at h
-      rw [show total - 57 - 235 - assignmentCost - 27 - expiryCost - 22 =
-        kernelGas + 128 + durationCost by omega]
-      exact h
-    refine Func.RunCompiled.next hdurationSload ?_
-    exact pause_stageArgs_runCompiled dp sevm
+  refine Func.RunCompiled.next htload ?_
+  func_run (2) [1]
+  func_run (2)
+  -- The lock is taken; only transient storage changes.
+  have htstore : Ninst.RunCompiled sevm
+      (base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123⟩)
+      Ninst.tstore
+      ((pauseLockPost sevm base).setMach
+        ⟨[], Mem.empty, total - 57 - 223⟩) := by
+    have h := runCompiled_tstore_of (sevm := sevm)
+      (pre := base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123⟩)
+      (key := lockKey) (value := 1) (stack := [])
+      (G := total - 57 - 223) rfl hstatic
+      (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
+    simpa only [Devm.memory_setMach, Devm.setMach_setMach,
+      setTransVal_setMach, pauseLockPost] using h
+  refine Func.RunCompiled.next htstore ?_
+  have hassignmentGas : total - 57 - 223 = total - 57 - 235 + 12 := by
+    dsimp only [total]
+    omega
+  rw [hassignmentGas]
+  refine pauseAssignmentSlotArg0_prepend_runCompiled hargTarget ?_
+  -- The target's assignment names the caller.
+  have hassignSload : Ninst.RunCompiled sevm
+      ((pauseLockPost sevm base).setMach
+        ⟨[assignmentSlot target], Mem.empty, total - 57 - 235⟩)
+      Ninst.sload
+      ((pauseExpiryBase sevm base target).setMach
+        ⟨[pauser], Mem.empty, total - 57 - 235 - assignmentCost⟩) := by
+    have h := temporal_sload_runCompiled (sevm := sevm)
+      (base := pauseLockPost sevm base) (key := assignmentSlot target)
+      (value := pauser) (stack := []) (M := Mem.empty)
+      (G := total - 57 - 235 - assignmentCost)
+      hauthorizationStorage (by simp)
+    rw [hassignmentCost,
+      show total - 57 - 235 - assignmentCost + assignmentCost =
+        total - 57 - 235 by omega] at h
+    exact h
+  refine Func.RunCompiled.next hassignSload ?_
+  func_run (3) [1]
+  case h_val => simp [B256.eqCheck, hcaller]
+  have hexpiryGas :
+      total - 57 - 235 - assignmentCost - 19 =
+        total - 57 - 235 - assignmentCost - 27 + 8 := by
+    dsimp only [total]
+    omega
+  rw [hexpiryGas]
+  refine pauseExpirySlotCaller_prepend_runCompiled hcaller ?_
+  -- The caller's heartbeat has not expired.
+  have hexpirySload : Ninst.RunCompiled sevm
+      ((pauseExpiryBase sevm base target).setMach
+        ⟨[expirySlot pauser], Mem.empty,
+          total - 57 - 235 - assignmentCost - 27⟩)
+      Ninst.sload
+      ((pauseDurationBase sevm base target pauser).setMach
+        ⟨[expiry], Mem.empty,
+          total - 57 - 235 - assignmentCost - 27 - expiryCost⟩) := by
+    have h := temporal_sload_runCompiled (sevm := sevm)
+      (base := pauseExpiryBase sevm base target) (key := expirySlot pauser)
+      (value := expiry) (stack := []) (M := Mem.empty)
+      (G := total - 57 - 235 - assignmentCost - 27 - expiryCost)
+      hexpiryStorage (by simp)
+    rw [hexpiryCost,
+      show total - 57 - 235 - assignmentCost - 27 - expiryCost +
+        expiryCost = total - 57 - 235 - assignmentCost - 27 by omega] at h
+    exact h
+  refine Func.RunCompiled.next hexpirySload ?_
+  func_run (3) [1]
+  case h_val => simp [B256.ltCheck, hlive]
+  func_run (1)
+  -- The configured pause duration is staged with the rest of the image.
+  have hdurationSload : Ninst.RunCompiled sevm
+      ((pauseDurationBase sevm base target pauser).setMach
+        ⟨[pauseDurationSlot], Mem.empty,
+          total - 57 - 235 - assignmentCost - 27 - expiryCost - 22⟩)
+      Ninst.sload
+      ((pauseKernelBase sevm base target pauser).setMach
+        ⟨[duration], Mem.empty, kernelGas + 128⟩) := by
+    have h := temporal_sload_runCompiled (sevm := sevm)
+      (base := pauseDurationBase sevm base target pauser)
+      (key := pauseDurationSlot) (value := duration) (stack := [])
+      (M := Mem.empty) (G := kernelGas + 128) hdurationStorage (by simp)
+    rw [hdurationCost] at h
+    rw [show total - 57 - 235 - assignmentCost - 27 - expiryCost - 22 =
+      kernelGas + 128 + durationCost by omega]
+    exact h
+  refine Func.RunCompiled.next hdurationSload ?_
+  exact pause_stageArgs_runCompiled dp sevm
       (pauseKernelBase sevm base target pauser) target duration kernelGas post
       hargTarget hkernel
 
