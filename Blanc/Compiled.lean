@@ -400,12 +400,12 @@ lemma Devm.pushRun_exact {x : B256} {pre inter : Devm} {cost : Nat}
 counter, which `Step.Run` discards, and `Xinst.step` never receives it at all.
 So on a pc-free instruction the strong form is free from the weak one. -/
 
-set_option maxRecDepth 100000 in
 /-- Every register instruction but `PC` ignores the program counter. -/
 lemma Rinst.runCore_pc_irrel {devm : Devm} {sevm : Sevm} {r : Rinst}
     (h : r ≠ .pc) (pc pc' : Nat) :
     Rinst.runCore pc devm sevm r = Rinst.runCore pc' devm sevm r := by
-  cases r <;> first | rfl | exact absurd rfl h
+  cases r <;> simp only [Rinst.runCore]
+  all_goals exact absurd rfl h
 
 lemma Ninst.stepRun_pc_irrel {n : Ninst} (h : Ninst.pcFree n = true)
     {sevm : Sevm} {devm : Devm} {xl : Xlot} {ex : Execution} {pc pc' : Nat}

@@ -24,12 +24,12 @@
     },
     {
       "id": "sites-direct-let",
-      "description": "Official runtime external-call theorem directly opens its sites let",
+      "description": "Official runtime external-call theorem directly kernel-computes its sites inventory",
       "owner": "sites-a1-fold",
-      "reopen": "The official runtime external-call theorem again computes sites in its own body",
-      "boundary": "Named-declaration adjacent-line textual check; not a semantic proof check",
+      "reopen": "The official runtime external-call theorem again closes its own inventory with decide +kernel",
+      "boundary": "Named declaration bounded by the next top-level declaration; not a semantic proof check",
       "include": ["Blanc/LidoCircuitBreakerSites.lean"],
-      "pattern": "(?m)^theorem\\s+runtimeExternalCallInstructions_official\\b[^\\n]*\\n\\s*let\\s+sites\\s*:="
+      "pattern": "(?ms)^theorem\\s+runtimeExternalCallInstructions_official\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s*\\n\\s*decide\\s+\\+kernel\\b"
     },
     {
       "id": "weth10-entry-shapes-rfl",
