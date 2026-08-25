@@ -2434,8 +2434,6 @@ def indexClearPost (sevm : Sevm) (base : Devm)
     (lengthWritePost sevm base oldLength)
     (indexSlot target) 0
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem removeTarget_restoreTail_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -2662,8 +2660,6 @@ theorem indexClearPost_logs
     (sevm : Sevm) (base : Devm) (target oldLength : B256) :
     (indexClearPost sevm base target oldLength).logs = base.logs := rfl
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem removeTarget_storePrefix_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)

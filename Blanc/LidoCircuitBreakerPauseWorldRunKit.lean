@@ -106,8 +106,6 @@ private theorem pushZero_targetIndexKey_prepend_runCompiled
   · exact hload'
 
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem removeTarget_restoreTail_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -276,11 +274,8 @@ private theorem removeTarget_restoreTail_runCompiled
     rw [hsub]
     have hg : G + finishGas + 44 + indexClearCost + lengthRestoreCost - 18 =
         G + finishGas + 26 + indexClearCost + lengthRestoreCost := by omega
-    rw [hg]
-    exact hstoreLength
+    simpa only [hg] using hstoreLength
 
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 private theorem removeTarget_storePrefix_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -751,8 +746,7 @@ private theorem removeTarget_storePrefix_runCompiled
       movedIndexCost + holeCost =
       G + finishGas + 94 + holeCost + movedIndexCost + tailClearCost +
         lengthRestoreCost + indexClearCost := by omega
-  rw [hg] at hholePrefix
-  simpa only [lastTargetIndexKey, prepend_append, fs,
+  simpa only [hg, lastTargetIndexKey, prepend_append, fs,
     arrayKey, indexKey, holePost, movedPost, tailPost] using hholePrefix
 
 
