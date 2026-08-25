@@ -3,6 +3,17 @@
   "scan_root": "Blanc",
   "entries": [
     {
+      "id": "Blanc/Compiled.lean::Blanc.Rinst.runCore_pc_irrel#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/Compiled.lean",
+      "declaration": "Blanc.Rinst.runCore_pc_irrel",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 100000,
+      "ceiling": 100000
+    },
+    {
       "id": "Blanc/FmintGas.lean::$ambient#0::ambient_command::Blanc.Fmint.Devm.gasLeft_withOutput::maxRecDepth#1",
       "file": "Blanc/FmintGas.lean",
       "declaration": null,
