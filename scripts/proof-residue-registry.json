@@ -41,6 +41,15 @@
       "pattern": "(?ms)^\\s*have\\s+h(?:on|core)Size\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s*\\n\\s*decide\\s+\\+kernel\\b"
     },
     {
+      "id": "weth10-domain-slice-full-leaf-size-decision",
+      "description": "The 33-byte decimals dispatch leaf is sized by a direct whole-leaf kernel walk",
+      "owner": "weth10-bytesize-composition",
+      "reopen": "dispatch22_7_1_size returns to a direct decide +kernel proof",
+      "boundary": "Named declaration body only; kernel facts for the smaller selector and endpoint-body children remain permitted",
+      "include": ["Blanc/Weth10DeployDomainSlices.lean"],
+      "pattern": "(?ms)^private\\s+theorem\\s+dispatch22_7_1_size\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b|:=\\s*by).)*?:=\\s*by\\s*\\n\\s*decide\\s+\\+kernel\\b"
+    },
+    {
       "id": "sites-direct-let",
       "description": "Official runtime external-call theorem directly kernel-computes its sites inventory",
       "owner": "sites-a1-fold",
