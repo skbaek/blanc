@@ -178,6 +178,20 @@ not recorded, and a credited row whose inputs moved reddens the whole run.
 Nothing on this path can turn a failure, a refusal, a missing terminal summary
 or a doubled one into a pass.
 
+**The declarations are measured, not just reviewed.**
+`scripts/gate-read-audit.py` runs every cacheable gate once under a Python
+audit hook that records each file its whole process tree opens, then reports
+any read the gate's registry entry does not fingerprint. It is an instrument,
+not a gate: it is not in the ordered set above, it seeds no cache record, and
+it costs a fresh full set because it executes every gate body. Run it after
+changing a gate's implementation or its registry entry.
+
+It cannot see reads by non-Python processes — `grep` and `sed` in the wrappers,
+and everything `lake env lean` touches, the latter being covered by `depHash`
+instead. A clean result means "no undeclared read on the path this gate
+actually took", which is stronger than "nobody spotted one" and weaker than
+"there is none".
+
 **There is no `--force`.** `--fresh` adds execution; nothing removes it. Direct
 gate commands remain exactly as documented above and never consult the cache, so
 running one is always a fresh run — which is also why CI needs nothing from this

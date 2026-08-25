@@ -352,12 +352,19 @@
           "@weth10ref/inputs/source/drift-provenance.json",
           "@weth10doc"
         ],
+        "populations": [
+          {
+            "mode": "traversable",
+            "pattern": "**/*",
+            "root": "@weth10ref"
+          }
+        ],
         "tools": [
           "python3"
         ]
       },
       "kind": "cacheable",
-      "note": "The falsifier harness copies the whole scripts/reference/weth10 tree per coordinated case, but only the input files named here are ever loaded back out of the copy. The four WETH10_REFERENCE_*/WETH10_COMPATIBILITY_DOC overrides repoint the lock, the vendored input tree and the compatibility document, so they are inputs even though they are normally unset. Its reference tree and lock are declared through the same environment overrides the gate itself resolves, so a run held at a redirected location fingerprints the tree it actually read rather than the default one it did not.",
+      "note": "The falsifier harness copies the whole scripts/reference/weth10 tree per coordinated case, but only the input files named here are ever loaded back out of the copy. The four WETH10_REFERENCE_*/WETH10_COMPATIBILITY_DOC overrides repoint the lock, the vendored input tree and the compatibility document, so they are inputs even though they are normally unset. Its reference tree and lock are declared through the same environment overrides the gate itself resolves, so a run held at a redirected location fingerprints the tree it actually read rather than the default one it did not. Its falsifier harness copytrees the whole reference directory, so every file there \u2014 README.md included \u2014 must be readable for the gate to run at all, while only the twelve declared inputs can change its verdict. The traversable population states exactly that. Found by scripts/gate-read-audit.py, not by reading.",
       "order": 10,
       "verdict": {
         "expect_exit": 0,
