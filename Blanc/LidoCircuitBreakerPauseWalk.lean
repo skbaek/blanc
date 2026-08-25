@@ -48,7 +48,6 @@ def pauseImage (target duration : B256) : Bytes :=
       (previousPauserWord * 32).toNat (0 : B256).toBytes)
     (continuationWord * 32).toNat (1 : B256).toBytes
 
-set_option maxRecDepth 4096 in
 /-- Everything a consumer of the staged pause image needs: well-formedness, the
 image it reads, its exact size, and the five staged words.  The size is `768`
 rather than the register side's `640` because `durationWord` sits two words
@@ -263,7 +262,7 @@ pivots, `25` for the group's first — and matching — comparison and its `POP`
 plus the program's entry `JUMPDEST`. -/
 def pauseDispatchGas : Nat := 108
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 670 in
 theorem pause_dispatch_runCompiledTo
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (bodyGas G : Nat) (out : Execution)
@@ -871,7 +870,7 @@ theorem pause_body_runCompiled
 
 /-! ## The `finishSetPauser` pause arm -/
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 7629 in
 /-- `finishSetPauser`'s pause arm: the sibling of
 `finishSetPauser_registerAfterSet_runCompiled` in which the continuation word
 is `1` rather than `0`, so `ISZERO` produces zero and the conditional takes its

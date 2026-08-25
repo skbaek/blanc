@@ -1581,19 +1581,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseWalk.lean::Blanc.LidoCircuitBreaker.pauseMemory_spec#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseWalk.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseMemory_spec",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 4096,
-      "ceiling": 4096
+      "value": 7629,
+      "ceiling": 7629
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseWalk.lean::Blanc.LidoCircuitBreaker.pause_body_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -1614,8 +1603,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
+      "value": 670,
+      "ceiling": 670
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseWorld.lean::Blanc.LidoCircuitBreaker.calleeMain_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
@@ -3312,16 +3301,48 @@
       "ceiling": null
     },
     {
-      "id": "Blanc/WethGas.lean::$ambient#0::ambient_command::Blanc.Devm.gasLeft_withOutput::maxRecDepth#1",
+      "id": "Blanc/WethGas.lean::Blanc.dcSel_ne_boSel#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/WethGas.lean",
-      "declaration": null,
-      "declaration_ordinal": null,
-      "scope_kind": "ambient_command",
+      "declaration": "Blanc.dcSel_ne_boSel",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 8000,
-      "ceiling": 8000,
-      "anchor": "Blanc.Devm.gasLeft_withOutput"
+      "value": 612,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/WethGas.lean::Blanc.weth_balanceOf_gas_exact#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/WethGas.lean",
+      "declaration": "Blanc.weth_balanceOf_gas_exact",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 674,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/WethGas.lean::Blanc.weth_balanceOf_warm_runCompiled#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/WethGas.lean",
+      "declaration": "Blanc.weth_balanceOf_warm_runCompiled",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 674,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/WethGas.lean::Blanc.weth_decimals_runCompiled#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/WethGas.lean",
+      "declaration": "Blanc.weth_decimals_runCompiled",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 674,
+      "ceiling": null
     },
     {
       "id": "Blanc/WethLive.lean::$ambient#0::ambient_command::Blanc.balanceOfGas::maxRecDepth#1",

@@ -4,7 +4,6 @@ namespace Blanc
 
 open Jaune
 
-set_option maxRecDepth 8000
 
 /-! # What WETH's `balanceOf(address)` call *costs*
 
@@ -103,6 +102,7 @@ def decimalsGas : Nat :=
 cheaper than `balanceOfGas`, and the ratio is the storage read. -/
 theorem decimalsGas_eq : decimalsGas = 158 := by decide
 
+set_option maxRecDepth 674 in
 /-- A `decimals()` call on `weth` has a gas-exact run; it costs exactly
 `decimalsGas` and returns `0x12`.
 
@@ -210,6 +210,7 @@ theorem weth_decimals_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
   subst h_eq
   omega
 
+set_option maxRecDepth 674 in
 /-- **`weth`'s `balanceOf(address)` call costs exactly `balanceOfGas`.**
 
 The exactness theorem at the `exec` altitude. `exec` is a *function*, so its
@@ -339,6 +340,7 @@ def balanceOfGasWarm : Nat :=
 `gasColdSload - gasWarmAccess` and nothing else. -/
 theorem balanceOfGasWarm_eq : balanceOfGasWarm = 260 := by decide
 
+set_option maxRecDepth 674 in
 /-- A `balanceOf(address)` call on `weth` whose key is **already warm** has a
 gas-exact run; it costs exactly `balanceOfGasWarm` and returns the slot.
 
@@ -516,6 +518,7 @@ theorem wethGas_eq_with :
     wethGas = wethGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
       gasWarmAccess := rfl
 
+set_option maxRecDepth 612 in
 /-- The two entrypoints are distinct, which is what makes `wethGasWith`'s
 second branch reachable. Proved once here rather than at each use: deciding it
 forces both `String.keccak` calls behind the selectors. -/
