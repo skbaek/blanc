@@ -891,7 +891,9 @@ def explain_row(cache: dict[str, Any], row: dict[str, Any]) -> list[str]:
     """Name what moved, at component and then at path granularity."""
 
     lines: list[str] = []
-    if row["disposition"] == "reused":
+    if row["disposition"] == "reused" or row["kind"] != "cacheable":
+        # A composition or always-fresh row has no fingerprint to diff; its
+        # reason has already been printed and repeating it reads as a finding.
         return lines
     if row["components"] is None:
         lines.append(f"    {row['reason']}")
@@ -1255,14 +1257,33 @@ def catalogue_commands(root: Path) -> list[list[str]]:
     return commands
 
 
-CI_COMMAND = re.compile(r"^\s*run:\s*(scripts/check-[\w.-]+\.sh.*)$", re.MULTILINE)
-
-
 def ci_commands(root: Path) -> list[list[str]]:
+    """Every gate command CI invokes, whatever YAML shape it is written in.
+
+    Deliberately not a single `run:` regex.  The first version here matched
+    only `run: scripts/check-x.sh` at the start of a line, so `- run: ...` and
+    anything inside a `run: |` block would have slipped past the audit
+    unregistered -- and an unregistered CI command is exactly the case this
+    audit exists to catch.  Peeling the list dash and the `run:` key and then
+    asking whether what remains *is* a gate command covers all three shapes,
+    and errs toward finding more rather than fewer.
+    """
+
     path = root / ".github/workflows/ci.yml"
     if not path.is_file():
         raise GateCacheError("no CI workflow to audit")
-    return [line.strip().split() for line in CI_COMMAND.findall(path.read_text(encoding="utf-8"))]
+    commands: list[list[str]] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("#"):
+            continue
+        if line.startswith("- "):
+            line = line[2:].strip()
+        if line.startswith("run:"):
+            line = line[4:].strip()
+        if line.startswith("scripts/check-") and ".sh" in line:
+            commands.append(line.split())
+    return commands
 
 
 def audit(root: Path) -> int:
@@ -1286,6 +1307,14 @@ def audit(root: Path) -> int:
             problems.append(f"registry entry is not in the catalogue: {' '.join(command)}")
     for command in sorted(set(ci) - set(registered)):
         problems.append(f"CI runs an unregistered command: {' '.join(command)}")
+
+    inventory = root / INVENTORY_RELATIVE
+    current = inventory.read_text(encoding="utf-8") if inventory.is_file() else None
+    if current != render_inventory(root):
+        problems.append(
+            f"{INVENTORY_RELATIVE} is not what its generator produces; "
+            f"run scripts/check-gates.sh --inventory"
+        )
 
     duplicates = [
         " ".join(command)
@@ -1336,8 +1365,13 @@ def show_plan(root: Path, arguments: argparse.Namespace) -> int:
     return 0
 
 
-def show_inventory(root: Path, arguments: argparse.Namespace) -> int:
-    """Human-readable generated inventory of every gate's declared inputs."""
+def render_inventory(root: Path) -> str:
+    """Human-readable generated inventory of every gate's declared inputs.
+
+    A function of the registry alone, never of the current tree, so the audit
+    can hold the committed copy to its generator the way rule 5 holds every
+    other generated artifact.
+    """
 
     registry = load_registry(registry_path(root))
     lines = [
@@ -1367,13 +1401,11 @@ def show_inventory(root: Path, arguments: argparse.Namespace) -> int:
                 for spec in value:
                     excluded = spec.get("exclude", [])
                     suffix = f" excluding {', '.join(excluded)}" if excluded else ""
-                    try:
-                        count = len(glob_population(root, spec))
-                        size = f" ({count} files now)"
-                    except Unresolvable:
-                        size = " (root absent)"
+                    mode = spec.get("mode", "content")
+                    where = "membership only" if mode == "membership" else "path and content"
                     lines.append(
-                        f"- population: `{spec.get('root', '.')}/{spec['pattern']}`{suffix}{size}"
+                        f"- population: `{spec.get('root', '.')}/{spec['pattern']}`"
+                        f"{suffix} ({where})"
                     )
             elif kind == "external":
                 for spec in value:
@@ -1387,9 +1419,16 @@ def show_inventory(root: Path, arguments: argparse.Namespace) -> int:
             else:
                 lines.append(f"- {kind}: " + ", ".join(f"`{item}`" for item in value))
         lines.append("")
-    text = "\n".join(lines)
+    return "\n".join(lines)
+
+
+INVENTORY_RELATIVE = "docs/GATE_INPUTS.md"
+
+
+def show_inventory(root: Path, arguments: argparse.Namespace) -> int:
+    text = render_inventory(root)
     if arguments.output:
-        atomic_write(Path(arguments.output), text)
+        atomic_write(root / arguments.output, text)
         print(f"wrote {arguments.output}")
     else:
         sys.stdout.write(text)

@@ -116,7 +116,76 @@ represents and baseline-checks every module,
 so checkpoint or merge-candidate status alone is not a reason to discard valid
 evidence and add `--full`. Missing, corrupt, or incompatible cache state
 automatically falls back to a full measurement; do not hand-edit or manufacture
-`.lake/check-elab-state.json`. Every other row in the full set runs every time.
+`.lake/check-elab-state.json`.
+
+## Selective execution — `scripts/check-gates.sh`
+
+The block above is the population. `scripts/check-gates.sh` is the canonical way
+to *run* it: it evaluates every row in catalogue order, executes the rows whose
+declared inputs have moved, and credits the rest from an earlier successful
+execution whose inputs hash identically.
+
+```
+scripts/check-gates.sh                # the checkpoint: execute what moved, reuse what did not
+scripts/check-gates.sh --fresh        # execute every row and refresh its evidence
+scripts/check-gates.sh --plan         # what would run, without running it
+scripts/check-gates.sh --explain      # ... and exactly which input moved
+scripts/check-gates.sh --audit        # registry against this file and against CI
+scripts/check-gates.sh --self-test    # the fail-closed control suite
+scripts/check-gates.sh --inventory    # regenerate docs/GATE_INPUTS.md
+```
+
+Each run writes `.lake/gate-report.md` and `.lake/gate-manifest.json`: every row
+with its disposition, its fingerprint, its exact terminal summary, and — for a
+credited row — the commit and time of the execution that produced it. A credited
+row says *reused successful evidence*, never that the gate ran here. Both files
+are disposable local state under `.lake/`, like the elaboration cache.
+
+**What makes a verdict reusable.** `scripts/gate-registry.json` records, per
+command instance, every mutable input that gate actually consumes: exact files,
+globbed populations (path *and* content, so a rename counts), direct Lean roots,
+resolved Git refs, pinned external checkouts, environment variables, tool
+identities, and — where an exception expires — the current date. A verdict is
+credited only when all of them hash to what they hashed during a successful,
+non-drifting execution. `docs/GATE_INPUTS.md` is the readable form, generated
+from the registry.
+
+**Lean dependencies are Lake's job.** For a gate that elaborates Lean, the
+registry names only direct roots. `lake build` runs first, at every invocation,
+and each module's Lake trace then supplies a `depHash` covering that module's
+source, the Lean version and options, and every transitive imported artifact
+including Jaune. There is no second, hand-maintained import graph here. An
+evaluator under `scripts/` that Lake has no target for is identified by its own
+source plus the `depHash` of each module it imports.
+
+One consequence is worth knowing, because it is measured rather than assumed: a
+comment-only edit to a Lean module moves that module's own `depHash`, since its
+source is one of Lake's recorded inputs — but it leaves the module's `.olean`
+byte-identical, so no dependent is rebuilt and no dependent's `depHash` moves.
+Gates that elaborate against those artifacts are therefore correctly reused;
+only a change that moves the artifact reaches them.
+
+A gate that reads `.lean` files as *text* — proof debt, module size,
+duplication, residue, layering, trust surface — fingerprints that text instead.
+An `.olean` cannot witness a source-level property, so those gates keep the
+representation their claims require, and a comment-only edit does rerun them.
+
+**Fail closed.** A missing or malformed trace, an unresolvable ref, a dirty or
+absent external checkout, an unreadable file, an unknown input kind, an
+undeclared catalogued command, or a corrupt cache all cause execution. So does a
+gate whose declared inputs move while the set is running: that run's evidence is
+not recorded, and a credited row whose inputs moved reddens the whole run.
+Nothing on this path can turn a failure, a refusal, a missing terminal summary
+or a doubled one into a pass.
+
+**There is no `--force`.** `--fresh` adds execution; nothing removes it. Direct
+gate commands remain exactly as documented above and never consult the cache, so
+running one is always a fresh run — which is also why CI needs nothing from this
+machinery and continues to invoke those commands in a clean environment where no
+cache exists.
+
+Deleting `.lake/gate-cache.json` costs time and cannot cost correctness. Do not
+commit it, hand-seed it, or edit it.
 
 ## Catalogue
 
@@ -428,8 +497,15 @@ worker that has been opening files. A `--force` run may not be rebased.
    the cache and cannot be rebased. The exclusive locks cannot be bypassed.
 3. **Report the exact command and its verdict line**, not a paraphrase. "Gates
    green" is not a verification record.
-4. **A gate's verdict is inherited only by commit identity.** Re-run rather than
-   assume when the tree has moved.
+4. **A gate's verdict is inherited by gate-relevant content, not by commit
+   identity.** `scripts/check-gates.sh` credits a row only when every mutable
+   input that gate consumes hashes to what it hashed during a successful,
+   non-drifting execution; the commit and timestamp are provenance, and are
+   validity inputs only for a gate that semantically consumes one, such as
+   `--base main`. A moved commit is therefore not evidence that a verdict is
+   stale, and a matching commit is not evidence that it is valid — the
+   fingerprint is. Outside that runner, re-run rather than assume: no direct
+   gate command consults the cache.
 5. **Generated artifacts come from their generators**, never from hand editing:
    `docs/PROOF_RECIPES.md` and `Blanc/ProofRecipesGenerated.lean` from
    `scripts/generate-proof-recipes.py --write`;

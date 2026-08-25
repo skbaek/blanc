@@ -936,6 +936,102 @@ def control_report_and_manifest_are_self_contained() -> None:
                 .split("\n")[-1], "dispositions must not be conflated")
 
 
+# --- controls: the population audit ------------------------------------------
+
+
+def audit_scratch(s: "Scratch", commands: list[str], gates: list[dict], ci: list[str]) -> int:
+    """Wire a scratch repository with a catalogue, a CI workflow and a registry."""
+
+    block = "\n".join(commands)
+    s.write(
+        "scripts/GATES.md",
+        "# Verification gates\n\n"
+        "**The full set, in order.** This is what a checkpoint runs:\n\n"
+        f"```\n{block}\n```\n",
+    )
+    s.write(
+        ".github/workflows/ci.yml",
+        "jobs:\n  gates:\n    steps:\n"
+        + "".join(f"      - run: {command}\n" for command in ci),
+    )
+    s.registry(gates)
+    gc.atomic_write(s.root / gc.INVENTORY_RELATIVE, gc.render_inventory(s.root))
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = gc.audit(s.root)
+    s.output = out.getvalue() + err.getvalue()
+    return code
+
+
+def audit_gate(identifier: str, command: list[str], order: int) -> dict[str, Any]:
+    return simple_gate(identifier, command, {"files": ["scripts/x.txt"]},
+                       "^OK — " + identifier, order=order)
+
+
+def control_audit_accepts_a_reconciled_registry() -> None:
+    with scratch() as s:
+        code = audit_scratch(
+            s,
+            ["scripts/check-a.sh", "scripts/check-b.sh --no-build"],
+            [audit_gate("a", ["scripts/check-a.sh"], 1),
+             audit_gate("b", ["scripts/check-b.sh", "--no-build"], 2)],
+            ["scripts/check-a.sh"],
+        )
+        require(code == 0, f"a reconciled registry must pass:\n{s.output}")
+
+
+def control_audit_fails_on_catalogue_drift() -> None:
+    """Adding, deleting, renaming or re-arguing a catalogued command must fail
+    the audit until the registry is reconciled -- otherwise the registry is its
+    own authority for what exists, which is no authority at all."""
+
+    base = ["scripts/check-a.sh", "scripts/check-b.sh --no-build"]
+    gates = [audit_gate("a", ["scripts/check-a.sh"], 1),
+             audit_gate("b", ["scripts/check-b.sh", "--no-build"], 2)]
+    cases = {
+        "command added to the catalogue":
+            (base + ["scripts/check-c.sh"], gates, ["scripts/check-a.sh"]),
+        "command removed from the catalogue":
+            (base[:1], gates, ["scripts/check-a.sh"]),
+        "command renamed in the catalogue":
+            (["scripts/check-renamed.sh", base[1]], gates, ["scripts/check-a.sh"]),
+        "command arguments changed":
+            ([base[0], "scripts/check-b.sh --full"], gates, ["scripts/check-a.sh"]),
+        "commands reordered":
+            (list(reversed(base)), gates, ["scripts/check-a.sh"]),
+        "CI runs an unregistered command":
+            (base, gates, ["scripts/check-a.sh", "scripts/check-z.sh"]),
+    }
+    for label, (commands, entries, ci) in cases.items():
+        with scratch() as s:
+            code = audit_scratch(s, commands, [dict(g) for g in entries], ci)
+            require(code != 0, f"audit accepted {label}:\n{s.output}")
+
+
+def control_audit_fails_on_a_stale_generated_inventory() -> None:
+    with scratch() as s:
+        commands = ["scripts/check-a.sh"]
+        gates = [audit_gate("a", ["scripts/check-a.sh"], 1)]
+        require(audit_scratch(s, commands, gates, []) == 0, "baseline audit should pass")
+        (s.root / gc.INVENTORY_RELATIVE).write_text("hand edited\n", encoding="utf-8")
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = gc.audit(s.root)
+        require(code != 0, "a hand-edited inventory must fail the audit")
+
+
+def control_audit_needs_a_catalogue_block() -> None:
+    with scratch() as s:
+        s.write("scripts/GATES.md", "# Verification gates\n\nno block here\n")
+        s.write(".github/workflows/ci.yml", "jobs: {}\n")
+        s.registry([audit_gate("a", ["scripts/check-a.sh"], 1)])
+        try:
+            gc.audit(s.root)
+        except gc.GateCacheError:
+            return
+        raise ControlFailure("a catalogue with no ordered block must be a fault")
+
+
 # --- negative controls ------------------------------------------------------
 #
 # Each one breaks the engine in the exact way a careless change would and
@@ -1104,6 +1200,10 @@ CONTROLS = (
     control_fresh_mode_adds_work_and_refreshes,
     control_always_fresh_rows_never_reuse,
     control_report_and_manifest_are_self_contained,
+    control_audit_accepts_a_reconciled_registry,
+    control_audit_fails_on_catalogue_drift,
+    control_audit_fails_on_a_stale_generated_inventory,
+    control_audit_needs_a_catalogue_block,
 ) + NEGATIVE_CONTROLS
 
 
