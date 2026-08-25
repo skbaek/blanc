@@ -6,8 +6,6 @@ namespace Fmint
 
 open Jaune
 
-set_option maxRecDepth 8000
-
 /-- Every gas constant the `totalSupply()` derivation charges, in the order it
 charges them: the program's entry `JUMPDEST`; `fsig`'s four instructions; three
 dispatch forks, two taken by the `.succ` arm and one falling through; the leaf's
@@ -61,6 +59,7 @@ it.  The two obligations the walk hands back are the justification for that `3`
 and the terminal `RETURN`, which ends the frame and so has no successor for a
 walk to name. -/
 
+set_option maxRecDepth 674 in
 /-- A `totalSupply()` call on `fmint` has a gas-exact run, and it returns the
 supply slot.
 

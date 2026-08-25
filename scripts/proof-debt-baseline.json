@@ -58,16 +58,15 @@
       "ceiling": null
     },
     {
-      "id": "Blanc/FmintLive.lean::$ambient#0::ambient_command::Blanc.Fmint.totalSupplyGas::maxRecDepth#1",
+      "id": "Blanc/FmintLive.lean::Blanc.Fmint.totalSupply_runCompiled#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/FmintLive.lean",
-      "declaration": null,
-      "declaration_ordinal": null,
-      "scope_kind": "ambient_command",
+      "declaration": "Blanc.Fmint.totalSupply_runCompiled",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 8000,
-      "ceiling": 8000,
-      "anchor": "Blanc.Fmint.totalSupplyGas"
+      "value": 674,
+      "ceiling": null
     },
     {
       "id": "Blanc/FmintReverts.lean::Blanc.Fmint.tokenNeSelf_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
