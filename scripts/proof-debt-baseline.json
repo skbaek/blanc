@@ -1133,17 +1133,6 @@
       "ceiling": 670
     },
     {
-      "id": "Blanc/LidoCircuitBreakerPauseWorld.lean::Blanc.LidoCircuitBreaker.calleeMain_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseWorld.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.calleeMain_runCompiledTo",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 16384,
-      "ceiling": 16384
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerPauseWorld.lean::Blanc.LidoCircuitBreaker.pauseWorld_selector#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerPauseWorld.lean",
       "declaration": "Blanc.LidoCircuitBreaker.pauseWorld_selector",
@@ -1151,30 +1140,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 8192,
-      "ceiling": 8192
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseWorld.lean::Blanc.LidoCircuitBreaker.runCompiled_call_zero_value_responder#1::command_scoped::-::maxHeartbeats#1",
-      "file": "Blanc/LidoCircuitBreakerPauseWorld.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runCompiled_call_zero_value_responder",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxHeartbeats",
-      "value": 1000000,
-      "ceiling": 1000000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseWorld.lean::Blanc.LidoCircuitBreaker.runCompiled_statcall_responder#1::command_scoped::-::maxHeartbeats#1",
-      "file": "Blanc/LidoCircuitBreakerPauseWorld.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runCompiled_statcall_responder",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxHeartbeats",
-      "value": 1000000,
-      "ceiling": 1000000
+      "value": 1021,
+      "ceiling": 1021
     },
     {
       "id": "Blanc/LidoCircuitBreakerPauseWorldRunKit.lean::Blanc.LidoCircuitBreaker.removeTarget_swapPop_toFinish_coldEntry_runCompiled#1::command_scoped::-::maxHeartbeats#1",

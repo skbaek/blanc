@@ -67,7 +67,6 @@ theorem calleeProg_compile :
 
 /-! ## The callee's execution, evaluated through its own walk -/
 
-set_option maxRecDepth 16384 in
 /-- The callee body from any base state: exact charge `18`, output the 32-byte
 canonical word `1`, world untouched, no error introduced, and every
 child-incorporated meta field — logs, refund counter, accounts to delete, both
@@ -180,7 +179,6 @@ private lemma memWrite_memory (d : Devm) (i : Nat) (v : Bytes) :
 private lemma memWrite_gasLeft (d : Devm) (i : Nat) (v : Bytes) :
     (d.memWrite i v).gasLeft = d.gasLeft := rfl
 
-set_option maxHeartbeats 1000000 in
 /-- The `value = 0` `CALL` crossing with the responder callee entered.  The
 child spends exactly `17` of its `mcs` and answers the canonical word `1`, so
 the parent resumes with flag `1`, the child's word as returndata, its own
@@ -353,7 +351,6 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
       congrArg World.state hworld]
     rfl
 
-set_option maxHeartbeats 1000000 in
 /-- The `STATICCALL` sibling.  Same six stack operands as the value-zero part
 of `CALL` minus the value word, same `callSpawnParent`, same `.call` resume
 tag, and the same responder child — entered static, which costs it nothing
@@ -1533,7 +1530,7 @@ theorem pauseWorld_dataWord_target (stor : Stor) (gas : Nat) :
   rw [Sevm.argWord] at h
   rwa [show 32 * (0 : B256) + 4 = 4 from by decide] at h
 
-set_option maxRecDepth 8192 in
+set_option maxRecDepth 1021 in
 /-- The dispatcher's selector at this world's calldata.  Stated at the
 concrete target because `Sevm.dataWord` reads a whole word: the selector
 occupies the first four bytes and the argument the next twenty-eight of the
