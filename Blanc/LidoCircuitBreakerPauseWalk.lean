@@ -723,7 +723,6 @@ theorem pause_body_runCompiled
 /-! ## The `finishSetPauser` pause arm -/
 
 set_option maxRecDepth 16384 in
-set_option maxHeartbeats 800000 in
 /-- `finishSetPauser`'s pause arm: the sibling of
 `finishSetPauser_registerAfterSet_runCompiled` in which the continuation word
 is `1` rather than `0`, so `ISZERO` produces zero and the conditional takes its
