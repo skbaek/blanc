@@ -8,8 +8,8 @@
     "run-core-pc-irrel-depth": 1,
     "selector-decide-kernel": 0,
     "sites-direct-let": 1,
-    "weth10-entry-shapes-rfl": 0
+    "weth10-entry-shapes-rfl": 1
   },
-  "total": 3,
-  "digest": "fa02578a84f5aa39b0ff3cf9713886a18ed7b21635d1e7f9b6304fa72163ab6c"
+  "total": 4,
+  "digest": "b6aab73ea1c25956123e584af44452cc39824802d6f95a2bff0033abc9d3d58b"
 }

@@ -725,8 +725,7 @@ private theorem dispatchWith_compileShape_eq
 private theorem weth10EntryShapes_eq (dp : DeployParams) :
     dispatchEntryShapes (weth10Funcs dp) =
       dispatchEntryShapes (weth10Funcs ⟨0, 0⟩) := by
-  simp only [dispatchEntryShapes, weth10Funcs, List.map]
-  congr 1
+  rfl
 
 private theorem weth10Tree_compileShape_eq (dp : DeployParams) :
     dispatchCompileShape (weth10Tree dp) =
