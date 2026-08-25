@@ -146,7 +146,6 @@ value stored is the configured duration read out of the contract's own
 storage — named here as `Devm.getStorVal stage sevm.currentTarget
 pauseDurationSlot` rather than left an unconstrained variable. -/
 
-set_option maxRecDepth 8192 in
 /-- `pause`'s staging line leaves the configured pause duration at
 `durationWord`, the call's target argument at `targetWord`, a zero at
 `newPauserWord`, and a one at `continuationWord`. -/
@@ -260,7 +259,6 @@ so a successful walk cannot have taken it.  No calldata hypothesis survives
 into this statement, which is why the revert flavour's `argsPresent` and
 `targetCanonical` premises have no `.ok` counterparts. -/
 
-set_option maxRecDepth 8192 in
 /-- From `pause`'s entry to its `.call setPauserSlot`, on a successful walk:
 all five guards settled by certified-reverting siblings. -/
 theorem pause_routeTo_setPauserCall_ok (dp : DeployParams)
@@ -346,7 +344,6 @@ theorem pause_routeTo_setPauserCall_ok (dp : DeployParams)
     ((Line.of_inv Devm.getCode (by unfold pauseStagingLine; line_inv)
       r10).symm.trans d9) r10 tail10
 
-set_option maxRecDepth 16384 in
 /-- The whole pause route down to `setPauserKernel`'s entry on a successful
 walk, with the four staged memory windows and the storage relation the
 kernel's second branch needs.  The `.ok` sibling of
@@ -435,7 +432,6 @@ theorem MemWordAt.acrossLoadTag {e : Sevm} {a b : Devm} {offset : Nat}
   rcases of_run_append (loadWord k) run with ⟨_s1, r1, run⟩
   exact (window.acrossLoadWord r1).acrossLine (by line_inv) run
 
-set_option maxRecDepth 8192 in
 /-- Cross `removeTarget`'s whole straight line up to its last `SSTORE`.  The
 line's three memory writes land at `removedIndexWord`, `arrayLengthWord` and
 `lastTargetWord`; a window that misses all three survives. -/
@@ -501,7 +497,6 @@ theorem MemWordAt.acrossRemoveTargetPrefix {e : Sevm} {a b : Devm}
   unfold targetIndexKey at run
   exact (windowD.acrossLine (by line_inv) m1).acrossLoadTag run
 
-set_option maxRecDepth 8192 in
 /-- The kernel's second branch word at a target whose recorded pauser is the
 caller, with all four pause windows carried across the crossing, plus the
 two facts the count thread needs: the crossing's own `MSTORE` leaves the
@@ -635,7 +630,6 @@ theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
     rw [← hstor16, hset, Stor.get_set_ne _ hkey, hstor14]
     rfl
 
-set_option maxRecDepth 8192 in
 /-- `oldCountPrefix` on the pause path: the staged previous pauser is the
 caller, so the prefix reads the *caller's* count cell, decrements it, and
 rebuilds the same key — leaving `countSlot caller :: (c - 1)` on the stack
@@ -726,7 +720,6 @@ theorem pause_continuationWord {sevm : Sevm} {devm devm' : Devm}
   rw [memoryZeroCheck_word window5 run w rest hstack]
   decide
 
-set_option maxRecDepth 8192 in
 /-- From `setPauserKernel`'s entry to `pauseAfterSet`'s entry, on a successful
 walk at a target whose recorded pauser is the caller, with the pause staging
 in memory: the old-count arm, the `removeTarget` leg, and `finishSetPauser`'s
@@ -1183,7 +1176,6 @@ theorem pauseCount_word {sevm : Sevm} {s s' : Devm} {count : B256}
   intro w rest hstack
   rw [head_of_stack_prefix (prefix_of_iszero q5 p4) hstack, hveq]
 
-set_option maxRecDepth 16384 in
 /-- From `pauseAfterSet`'s entry to `pauseSuccess`'s count branch, on a
 successful walk.  Ten crossings: the code guard, the two `bubbleRevert`
 flag tests, and the three decode tests are settled by certified-reverting
@@ -1422,7 +1414,6 @@ private there and re-minted here) and `decide` refuses an expected type with
 a free deployment parameter; the zero arm is pinned too so the pair share
 their premises verbatim. -/
 
-set_option maxRecDepth 100000 in
 /-- `checkedHeartbeatExpiry`'s overflow arm certificate; see the module
 docstring of the original for why this one certificate is `decide +kernel`
 where every other reverting sibling certifies `by rfl`. -/
@@ -1431,7 +1422,6 @@ private theorem arithmeticPanic_revertsWithinOk :
       ((runtime officialParams).main :: (runtime officialParams).aux)
       (Func.call arithmeticPanicSlot) = true := by decide +kernel
 
-set_option maxRecDepth 16384 in
 /-- Program entry to the count-zero arm's expiry `SSTORE` — inventory index
 19, `.pauseLastTargetExpiry` — on a successful pause walk.  Execution
 premises: the calldata selector and target, the entry Registry assignment
@@ -1565,7 +1555,6 @@ theorem runtimeMain_routeTo_pauseLastExpiry
     armTail (fun _s'' _r write => ?_)
   exact routeTo_head write pauseLastExpiryPath
 
-set_option maxRecDepth 16384 in
 /-- Program entry to the checked arm's expiry `SSTORE` — inventory index 18,
 `.pauseRetainedTargetExpiry` — on a successful pause walk.  Same premises as
 the zero arm except the count word: the caller's count cell reads nonzero
