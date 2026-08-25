@@ -23,6 +23,24 @@
       "pattern": "(?m)^\\s*(?:·\\s*)?rw\\s+\\[hselector\\]\\s*$\\n\\s*(?:·\\s*)?decide\\s+\\+kernel\\b"
     },
     {
+      "id": "approve-local-selector-separations",
+      "description": "Approve accounting manually kernel-computes selector separations instead of using the childless sibling path",
+      "owner": "exec-accounting-selector-retrofit",
+      "reopen": "The approve accounting theorem regains a local selector-string inequality closed by decide +kernel",
+      "boundary": "Named declaration body only; numeral-bridged sibling-path exclusions are outside the predicate",
+      "include": ["Blanc/Weth10HolderFlowExecAccounting.lean"],
+      "pattern": "(?ms)^theorem\\s+Exec\\.Frame\\.hasProofIndexedStorageAccounting_of_approve\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?^\\s*have\\s+hne\\w*\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?selector\\s+\"approve\"(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s+decide\\s+\\+kernel\\b"
+    },
+    {
+      "id": "weth10-deploy-inline-size-decision",
+      "description": "WETH10 deployment byteAt proofs kernel-decide a local compileShape size obligation",
+      "owner": "weth10-bytesize-composition",
+      "reopen": "A deployment byteAt proof regains an inline honSize or hcoreSize decide +kernel obligation",
+      "boundary": "Local have-bindings named honSize/hcoreSize; the one shared permitCoreX_size fact and unrelated instruction-size decisions are outside the predicate",
+      "include": ["Blanc/Weth10Deploy.lean"],
+      "pattern": "(?ms)^\\s*have\\s+h(?:on|core)Size\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s*\\n\\s*decide\\s+\\+kernel\\b"
+    },
+    {
       "id": "sites-direct-let",
       "description": "Official runtime external-call theorem directly kernel-computes its sites inventory",
       "owner": "sites-a1-fold",

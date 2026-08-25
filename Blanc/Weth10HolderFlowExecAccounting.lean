@@ -3610,6 +3610,12 @@ private theorem name_childlessTerminal : ChildlessTerminal name := by
     simp [nameLine, NinstIsChildless, Ninst.pushB256,
       pushList, mstoreAt]⟩
 
+private theorem approve_childlessTerminal : ChildlessTerminal approve := by
+  exact ⟨approveLine, .ret, rfl, by
+    simp [approveLine, approvePrefix, returnTrueLine,
+      argCopy, cdc, arg, cdl, allowanceKeyFromMemory, Blanc.logApprove,
+      NinstIsChildless, Ninst.pushB256, mstoreAt, logWith, pushList]⟩
+
 /-- Exact proof-indexed accounting for the childless `name` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_name
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -5229,59 +5235,18 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approve
       selector "approve" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
-  have hneDeposit : selector "approve" [.address, .uint256] ≠
-      depositSelector := by decide +kernel
-  have hneDepositTo : selector "approve" [.address, .uint256] ≠
-      depositToSelector := by decide +kernel
-  have hneDepositCall : selector "approve" [.address, .uint256] ≠
-      depositToAndCallSelector := by decide +kernel
-  have hneTransfer : selector "approve" [.address, .uint256] ≠
-      transferSelector := by decide +kernel
-  have hneTransferCall : selector "approve" [.address, .uint256] ≠
-      transferAndCallSelector := by decide +kernel
-  have hneTransferFrom : selector "approve" [.address, .uint256] ≠
-      transferFromSelector := by decide +kernel
-  have hneWithdraw : selector "approve" [.address, .uint256] ≠
-      withdrawSelector := by decide +kernel
-  have hneWithdrawTo : selector "approve" [.address, .uint256] ≠
-      withdrawToSelector := by decide +kernel
-  have hneWithdrawFrom : selector "approve" [.address, .uint256] ≠
-      withdrawFromSelector := by decide +kernel
-  have hneFlash : selector "approve" [.address, .uint256] ≠
-      flashLoanSelector := by decide +kernel
-  have hprimary : primaryFlowAtom frame.sevm = none := by
-    simp [primaryFlowAtom, hnonempty, hselector, hneDeposit,
-      hneDepositTo, hneDepositCall, hneTransfer, hneTransferCall,
-      hneTransferFrom, hneWithdraw, hneWithdrawTo, hneWithdrawFrom,
-      hneFlash]
-  have hnone : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
-    simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, hprimary]
-  have chronology := Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_approve (frame := frame)
-    context hselector hnonempty
-  rcases frame with ⟨pc, e, pre, out, run, committed⟩
-  cases out with
-  | error err => simp [Execution.commits] at committed
-  | ok post =>
-      have hpc : pc = 0 := context.root.1
-      subst pc
-      have heffect := approve_exec_effect dp context.memory_wf
-        context.memory_reads_empty run context.invocation.2.2.2 hselector
-        hnonempty
-      have hsilentCurrent : Stor.Weth10Silent
-          (Devm.getStor pre e.currentTarget)
-          (Devm.getStor post e.currentTarget) := by
-        rw [heffect.2.1]
-        unfold approveRuntimeKey
-        exact Stor.Weth10Silent.set
-          (runtimeAllowanceKey_not_valid _)
-          (runtimeAllowanceKey_ne_flash _)
-      have htarget : e.currentTarget = ca := context.invocation.2.1
-      have hsilent : Stor.Weth10Silent
-          (Devm.getStor pre ca) (Devm.getStor post ca) := by
-        simpa only [htarget] using hsilentCurrent
-      exact .noFlow
-        ⟨context, hnone, .approve hselector hsilentCurrent⟩
-        (.silent hsilent chronology)
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow
+    (frame := frame) context
+  refine ⟨approve, hnonempty, ?_, approve_childlessTerminal, ?_, ?_, ?_⟩
+  · rw [hselector]
+    simp only [weth10Funcs, List.mem_cons]
+    exact Or.inr (Or.inl True.intro)
+  · exact approveSelector_noPrimaryFlow.selectsNoPrimaryFlow
+      (hselector.trans approveSelector_word_eq)
+  · rw [hselector, approveSelector_word_eq, approveAndCallSelector_word_eq]
+    decide +kernel
+  · rw [hselector, approveSelector_word_eq, permitSelector_word_eq]
+    decide +kernel
 
 private theorem rest_set_callerAllowanceRuntimeKey_accounting
     (e : Sevm) (s : Stor) (v : B256) :
