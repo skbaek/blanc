@@ -253,21 +253,6 @@
           {
             "pattern": "**/*.lean",
             "root": "Blanc"
-          },
-          {
-            "mode": "membership",
-            "pattern": "*",
-            "root": "."
-          },
-          {
-            "mode": "membership",
-            "pattern": "**/*",
-            "root": "docs"
-          },
-          {
-            "mode": "membership",
-            "pattern": "**/*",
-            "root": "scripts"
           }
         ],
         "tools": [
@@ -275,7 +260,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The wrapper always passes --negative-controls, which copies the whole tree six times. Only the manifest and the Blanc corpus can change the verdict; the tree copy is declared membership-only so an added or removed file still invalidates.",
+      "note": "The wrapper always passes --negative-controls, which copies the whole tree six times. Only the lift manifest and the Blanc corpus can change the verdict; the copy reads every other file but cannot draw a conclusion from one. A whole-tree membership population was tried here and removed: the failure it was meant to catch is a file becoming unreadable, which changes no membership, so it bought no soundness and invalidated the gate whenever any unrelated file was added. A copy that fails exits nonzero, and a nonzero run is never cached.",
       "order": 8,
       "verdict": {
         "expect_exit": 0,
