@@ -168,6 +168,39 @@ def proofRecipeLocalTypeCount (needle : Lean.Name) : TacticM Nat := do
         count := count + 1
   return count
 
+partial def proofRecipeBVarOccurrenceCount (needle : Nat) : Lean.Expr → Nat
+  | .bvar index => if index == needle then 1 else 0
+  | .app fn arg =>
+      proofRecipeBVarOccurrenceCount needle fn +
+        proofRecipeBVarOccurrenceCount needle arg
+  | .lam _ type body _ | .forallE _ type body _ =>
+      proofRecipeBVarOccurrenceCount needle type +
+        proofRecipeBVarOccurrenceCount (needle + 1) body
+  | .letE _ type value body _ =>
+      proofRecipeBVarOccurrenceCount needle type +
+        proofRecipeBVarOccurrenceCount needle value +
+        proofRecipeBVarOccurrenceCount (needle + 1) body
+  | .mdata _ expr | .proj _ _ expr =>
+      proofRecipeBVarOccurrenceCount needle expr
+  | _ => 0
+
+partial def proofRecipeHasRepeatedClosedLetSubject : Lean.Expr → Bool
+  | .app fn arg =>
+      proofRecipeHasRepeatedClosedLetSubject fn ||
+        proofRecipeHasRepeatedClosedLetSubject arg
+  | .lam _ type body _ | .forallE _ type body _ =>
+      proofRecipeHasRepeatedClosedLetSubject type ||
+        proofRecipeHasRepeatedClosedLetSubject body
+  | .letE _ type value body _ =>
+      (!proofRecipeExprHasFVarOrMVar value &&
+          proofRecipeBVarOccurrenceCount 0 body > 1) ||
+        proofRecipeHasRepeatedClosedLetSubject type ||
+        proofRecipeHasRepeatedClosedLetSubject value ||
+        proofRecipeHasRepeatedClosedLetSubject body
+  | .mdata _ expr | .proj _ _ expr =>
+      proofRecipeHasRepeatedClosedLetSubject expr
+  | _ => false
+
 def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
   let head := proofRecipeHeadName? target
   match trigger with
@@ -205,6 +238,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
   | "goal-shape:runcompiled-family-compression" =>
       return head == some `Blanc.Func.RunCompiled ||
         head == some `Blanc.Func.RunCompiledTo
+  | "goal-shape:shared-subject-kernel-decision" =>
+      return proofRecipeHasRepeatedClosedLetSubject target
   | _ => return false
 
 def proofRecipeMatches (target : Lean.Expr)

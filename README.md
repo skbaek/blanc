@@ -514,6 +514,25 @@ The same trap remains armed in `withError`, `withReturnData`,
 registered cure, and `setMach`-chain normalization remains governed by the
 measured refutation in `successor-projection-normalization`.
 
+**The fifth bomb: repeated kernel decisions over one closed subject.** A closed
+compiler artifact, structural site inventory, or similar subject is expensive
+when normalization must traverse a large recursive value before exposing the
+small observation in the proposition. If several decisions inspect that same
+subject, bind it once and decide a tuple or conjunction of observations, then
+project the results; when one exact normalized equality already exists, derive
+the other views with `congrArg`. The discriminator is shared normalization:
+unlike a term-size bomb, no growing proof state is threaded through a walk, and
+unlike a defeq bomb, the proposition may be syntactically exact before the
+kernel evaluates it.
+
+This rule is subject-specific, not a license to combine unrelated facts. An
+authoritative owner-row measurement decides whether the subjects were truly
+shared: the Attainment pilot's six bundled pins cost the sum rather than the
+maximum and was reverted. Ceiling counts cannot find this class. The point of
+`decide +kernel` is to move evaluation outside the elaborator, where heartbeat
+budgets do not apply, so a zero-ceiling proof can still repeat seconds of
+kernel normalization.
+
 **Why budgets do not save you.** Inside `simp`'s defeq discharging the work is
 not heartbeat-metered, and the kernel's certificate check ignores
 `maxHeartbeats` entirely — a generous budget that has "never fired" is not

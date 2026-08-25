@@ -88,6 +88,13 @@ example (f : Func) : f.compileShape.byteSize = f.compileShape.byteSize := by
   blanc_suggest
   rfl
 
+-- EXPECT: shared-subject-kernel-decision
+example :
+    let subject := ([1, 2, 3] : List Nat)
+    (subject.length, subject.reverse.length) = (3, 3) := by
+  blanc_suggest
+  decide
+
 -- EXPECT-NO-MATCH
 example (devm : Devm) (output : Bytes) :
     (devm.withOutput output).pop = (devm.withOutput output).pop := by
