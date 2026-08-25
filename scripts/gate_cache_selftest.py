@@ -338,6 +338,36 @@ def control_registry_declaration_invalidates() -> None:
         require(s.disposition("g") == "fresh", "a widened declaration must force execution")
 
 
+def control_unparsable_import_cannot_hide_a_dependency() -> None:
+    """An import the parser does not understand must raise, not be dropped.
+
+    The hole this closes is narrow and entirely silent.  An entry file's own
+    source is always digested, so any edit to it invalidates the gate anyway --
+    which is why a control that merely edits the file proves nothing.  The real
+    exposure is a *stable* entry carrying an import the parser skips: the
+    imported module's depHash then never reaches the fingerprint, and the gate
+    is reused for ever afterwards no matter how that module moves.
+    """
+
+    with scratch() as s:
+        s.trace("Blanc.A", "aaaa000000000000")
+        s.trace("Blanc.B", "bbbb000000000000")
+        s.write("scripts/Eval.lean",
+                "import Blanc.A\nimport Blanc.B -- a trailing comment\n"
+                "example : True := trivial\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate(
+            "g", [command], {"lean_entries": ["scripts/Eval.lean"]}, "^OK — g.sh: ")])
+        s.run()
+        # The entry file itself never changes from here on.
+        s.trace("Blanc.B", "cccc111111111111")
+        require(
+            s.disposition("g") == "fresh",
+            "a module imported on an unparsed line must not become invisible to "
+            "the fingerprint",
+        )
+
+
 # --- controls: the Lake boundary --------------------------------------------
 
 
@@ -418,6 +448,7 @@ def control_lean_entry_source_and_imports_invalidate() -> None:
             s.disposition("g") == "fresh",
             "an import with no trace must force execution rather than be skipped",
         )
+
 
 
 def control_transitive_edit_reaches_the_gate() -> None:
@@ -1150,6 +1181,24 @@ def control_negative_ignoring_population_membership() -> None:
         must_fail(control_population_membership_invalidates, "membership dropped from the digest")
 
 
+def control_negative_lenient_import_parser() -> None:
+    """If the import parser skipped what it could not parse -- the obvious,
+    tolerant-looking choice -- a module imported on an unrecognised line would
+    become permanently invisible to the fingerprint."""
+
+    def lenient(path: Path) -> list[str]:
+        modules: list[str] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            match = gc.IMPORT_LINE.match(line)
+            if match:
+                modules.extend(match.group(1).split())
+        return modules
+
+    with patched(gc, "imports_of", lenient):
+        must_fail(control_unparsable_import_cannot_hide_a_dependency,
+                  "unparsable imports silently skipped")
+
+
 NEGATIVE_CONTROLS = (
     control_negative_laundering_unknown_into_unchanged,
     control_negative_dropping_the_post_execution_drift_check,
@@ -1157,6 +1206,7 @@ NEGATIVE_CONTROLS = (
     control_negative_accepting_a_damaged_cache,
     control_negative_last_record_only_lookup,
     control_negative_ignoring_population_membership,
+    control_negative_lenient_import_parser,
 )
 
 CONTROLS = (
@@ -1173,6 +1223,7 @@ CONTROLS = (
     control_malformed_trace_forces_execution,
     control_lean_entry_source_and_imports_invalidate,
     control_transitive_edit_reaches_the_gate,
+    control_unparsable_import_cannot_hide_a_dependency,
     control_git_ref_movement_invalidates,
     control_unresolvable_ref_forces_execution,
     control_external_checkout_identity,

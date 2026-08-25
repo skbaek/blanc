@@ -420,9 +420,13 @@ def component_populations(
         if mode not in ("content", "membership"):
             raise GateCacheError(f"unknown population mode: {mode!r}")
         for name in glob_population(root, spec):
-            detail[name] = (
-                file_digest(resolve_path(root, name)) if mode == "content" else "<member>"
-            )
+            # Namespaced by mode, so a path declared under both a content and a
+            # membership population cannot have one reading silently overwrite
+            # the other depending on declaration order.
+            if mode == "content":
+                detail[name] = file_digest(resolve_path(root, name))
+            else:
+                detail[f"membership:{name}"] = "<member>"
     return digest_of(detail), detail
 
 
@@ -467,10 +471,18 @@ def imports_of(path: Path) -> list[str]:
     except (OSError, UnicodeError) as error:
         raise Unresolvable(f"cannot read Lean entry {path}: {error}") from error
     modules: list[str] = []
-    for line in text.splitlines():
+    for number, line in enumerate(text.splitlines(), start=1):
         match = IMPORT_LINE.match(line)
         if match:
             modules.extend(match.group(1).split())
+        elif line.lstrip().startswith(("import ", "import\t", "public import")):
+            # A line that is plainly an import but does not fit the shape this
+            # parser understands -- a trailing comment, an unusual spelling --
+            # would otherwise drop that module's depHash from the fingerprint
+            # silently, which is the exact shape of an unsound skip.
+            raise Unresolvable(
+                f"unparsable import at {path}:{number}: {line.strip()!r}"
+            )
     return modules
 
 
