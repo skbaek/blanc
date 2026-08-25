@@ -177,10 +177,14 @@ def file_digest(path: Path) -> str:
     return digest
 
 
+_TOOL_MEMO: dict[str, str] = {}
+
+
 def forget_digests() -> None:
-    """Drop the memo so a post-execution fingerprint really re-reads."""
+    """Drop the memos so a post-execution fingerprint really re-reads."""
 
     _DIGEST_MEMO.clear()
+    _TOOL_MEMO.clear()
 
 
 def canonical(value: Any) -> bytes:
@@ -335,14 +339,32 @@ def command_text(gate: dict[str, Any]) -> str:
 # `plan --explain` name the file that moved rather than only the component.
 
 
-def resolve_path(root: Path, given: str) -> Path:
-    """Repository-relative by default; `~` and absolute paths kept as given.
+# Roots the gates themselves resolve from the environment.  Declaring a path
+# as `@eels/...` makes the registry resolve it the same way the gate does, so a
+# run with `EELS_ROOT` pointed elsewhere fingerprints the checkout it actually
+# used rather than the default one it did not.
+NAMED_ROOTS = {
+    "eels": ("EELS_ROOT", "~/execution-specs"),
+}
 
-    Two real inputs live outside the tree: the pinned EELS checkout's venv and
-    the EEST fixture template a WETH10 generator reads from `~`.  Pretending
-    they are repository paths would silently fingerprint nothing.
+
+def resolve_path(root: Path, given: str) -> Path:
+    """Repository-relative by default; `@name/`, `~` and absolute kept as given.
+
+    Real inputs live outside the tree: the pinned EELS checkout's virtualenv,
+    which is gitignored inside that checkout and so is invisible to its commit
+    identity, and an EEST fixture template a WETH10 generator reads from `~`.
+    Pretending either is a repository path would silently fingerprint nothing.
     """
 
+    if given.startswith("@"):
+        name, _, rest = given[1:].partition("/")
+        entry = NAMED_ROOTS.get(name)
+        if entry is None:
+            raise GateCacheError(f"unknown named root: @{name}")
+        variable, default = entry
+        base = Path(os.path.expanduser(os.environ.get(variable) or default))
+        return base / rest if rest else base
     expanded = Path(os.path.expanduser(given))
     return expanded if expanded.is_absolute() else root / given
 
@@ -363,17 +385,21 @@ def glob_population(root: Path, spec: dict[str, Any]) -> list[str]:
     excludes = spec.get("exclude", [])
     if not isinstance(excludes, list) or not all(isinstance(e, str) for e in excludes):
         raise GateCacheError(f"malformed population exclusions: {spec!r}")
-    directory = root / base
+    directory = resolve_path(root, base)
     if not directory.is_dir():
         raise Unresolvable(f"population root is not a directory: {base}")
+    prefix = "" if base in (".", "") else base.rstrip("/") + "/"
     found: list[str] = []
     for path in directory.glob(pattern):
         if not path.is_file():
             continue
-        relative = path.relative_to(root).as_posix()
-        if any(fnmatch.fnmatch(relative, exclude) for exclude in excludes):
+        # Keyed relative to the declared root, so a population outside the
+        # repository — the pinned EELS venv, an external fixture tree — names
+        # itself the same way a repository one does.
+        name = prefix + path.relative_to(directory).as_posix()
+        if any(fnmatch.fnmatch(name, exclude) for exclude in excludes):
             continue
-        found.append(relative)
+        found.append(name)
     return sorted(found)
 
 
@@ -393,9 +419,9 @@ def component_populations(
         mode = spec.get("mode", "content")
         if mode not in ("content", "membership"):
             raise GateCacheError(f"unknown population mode: {mode!r}")
-        for relative in glob_population(root, spec):
-            detail[relative] = (
-                file_digest(root / relative) if mode == "content" else "<member>"
+        for name in glob_population(root, spec):
+            detail[name] = (
+                file_digest(resolve_path(root, name)) if mode == "content" else "<member>"
             )
     return digest_of(detail), detail
 
@@ -538,12 +564,19 @@ def component_tools(root: Path, tools: list[str]) -> tuple[str, dict[str, str]]:
         arguments = TOOL_COMMANDS.get(tool)
         if arguments is None:
             raise GateCacheError(f"unknown tool identity requested: {tool}")
-        result = subprocess.run(
-            arguments, cwd=root, capture_output=True, text=True, check=False
-        )
-        if result.returncode != 0:
-            raise Unresolvable(f"cannot identify tool {tool}")
-        detail[tool] = (result.stdout + result.stderr).strip()
+        memo = _TOOL_MEMO.get(tool)
+        if memo is None:
+            # `lake env lean --version` costs about half a second and twenty
+            # gates declare it.  Asking once per run rather than once per gate
+            # is the difference between planning in seconds and in tens of them.
+            result = subprocess.run(
+                arguments, cwd=root, capture_output=True, text=True, check=False
+            )
+            if result.returncode != 0:
+                raise Unresolvable(f"cannot identify tool {tool}")
+            memo = (result.stdout + result.stderr).strip()
+            _TOOL_MEMO[tool] = memo
+        detail[tool] = memo
     return digest_of(detail), detail
 
 
@@ -586,11 +619,13 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         "digest": digest_of({"kind": gate["kind"], "inputs": inputs, "verdict": gate.get("verdict")}),
         "detail": None,
     }
+    here = Path(__file__).resolve().parent
     components["runner"] = {
         "digest": digest_of(
             {
                 "schema": SCHEMA_VERSION,
-                "gate-cache.py": file_digest(Path(__file__).resolve()),
+                "gate-cache.py": file_digest(here / "gate-cache.py"),
+                "check-gates.sh": file_digest(here / "check-gates.sh"),
             }
         ),
         "detail": None,

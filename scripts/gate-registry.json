@@ -1,0 +1,1475 @@
+{
+  "gates": [
+    {
+      "command": [
+        "scripts/check-doc-counts.sh"
+      ],
+      "id": "doc-counts",
+      "inputs": {
+        "files": [
+          "scripts/check-doc-counts.sh",
+          "scripts/check-doc-counts.py",
+          "scripts/AxiomCheck.lean",
+          "README.md",
+          "scripts/GATES.md",
+          "docs/index.html"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The catalogue is one of this gate's own consumers, so editing scripts/GATES.md reddens the gate that documents it.",
+      "order": 1,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 doc-counts: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-layering.sh"
+      ],
+      "id": "layering",
+      "inputs": {
+        "files": [
+          "scripts/check-layering.sh",
+          "scripts/check-layering.py",
+          "Blanc.lean",
+          "Main.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "order": 2,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 layering: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-proof-recipes.sh",
+        "--base",
+        "main"
+      ],
+      "id": "proof-recipes",
+      "inputs": {
+        "clock": "utc-date",
+        "files": [
+          "scripts/check-proof-recipes.sh",
+          "scripts/check-proof-recipes.py",
+          "scripts/generate-proof-recipes.py",
+          "scripts/proof-recipes.toml",
+          "scripts/proof-recipe-exceptions.json",
+          "docs/PROOF_RECIPES.md",
+          "Blanc/ProofRecipesGenerated.lean",
+          "Blanc/Tactics.lean",
+          "Blanc.lean",
+          ".gitignore",
+          ".git/info/exclude"
+        ],
+        "git_refs": [
+          "main"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3",
+          "git"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Diff-scoped: its findings are relative to the resolved base ref, so `main` moving is a real input even when no file changed. `.gitignore` and `.git/info/exclude` decide which untracked modules it treats as changed.",
+      "order": 3,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 proof recipes: ",
+          "^OK \u2014 proof-recipe gate \\(report-only\\): "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-proof-debt.sh"
+      ],
+      "id": "proof-debt",
+      "inputs": {
+        "clock": "utc-date",
+        "files": [
+          "scripts/check-proof-debt.sh",
+          "scripts/check-proof-debt.py",
+          "scripts/proof-debt-baseline.json",
+          "scripts/proof-debt-exceptions.json"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "order": 4,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 proof-debt \\(report-only\\): "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-proof-module-size.sh"
+      ],
+      "id": "proof-module-size",
+      "inputs": {
+        "clock": "utc-date",
+        "files": [
+          "scripts/check-proof-module-size.sh",
+          "scripts/check-proof-module-size.py",
+          "scripts/proof-module-size-baseline.json",
+          "scripts/proof-module-size-exceptions.json"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "order": 5,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 proof module size \\(report-only\\): "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-proof-duplication.sh"
+      ],
+      "id": "proof-duplication",
+      "inputs": {
+        "clock": "utc-date",
+        "files": [
+          "scripts/check-proof-duplication.sh",
+          "scripts/check-proof-recipes.py",
+          "scripts/proof-duplication-baseline.json",
+          "scripts/proof-duplication-exceptions.json"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Shares check-proof-recipes.py with gate 3 but runs its --duplication branch, which returns before the generator check; the recipe registry and generated surfaces are NOT its inputs.",
+      "order": 6,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 proof duplication ratchet: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-proof-residue.sh"
+      ],
+      "id": "proof-residue",
+      "inputs": {
+        "files": [
+          "scripts/check-proof-residue.sh",
+          "scripts/check-proof-residue.py",
+          "scripts/proof-residue-registry.json",
+          "scripts/proof-residue-baseline.json"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The baseline seals sha256 of the registry file's bytes, so any byte change to proof-residue-registry.json reddens the gate until --write-baseline.",
+      "order": 7,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 proof residue: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-extraction-ownership.sh"
+      ],
+      "id": "extraction-ownership",
+      "inputs": {
+        "files": [
+          "scripts/check-extraction-ownership.sh",
+          "scripts/check-extraction-ownership.py",
+          "scripts/execution-settlement-lift-manifest.json",
+          "Blanc/ExecutionSettlement.lean",
+          "Blanc/Weth10HolderFlow.lean",
+          "Blanc/LidoCircuitBreakerCore.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          },
+          {
+            "mode": "membership",
+            "pattern": "*",
+            "root": "."
+          },
+          {
+            "mode": "membership",
+            "pattern": "**/*",
+            "root": "docs"
+          },
+          {
+            "mode": "membership",
+            "pattern": "**/*",
+            "root": "scripts"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The wrapper always passes --negative-controls, which copies the whole tree six times. Only the manifest and the Blanc corpus can change the verdict; the tree copy is declared membership-only so an added or removed file still invalidates.",
+      "order": 8,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 extraction ownership: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-trust-surface.sh"
+      ],
+      "id": "trust-surface",
+      "inputs": {
+        "files": [
+          "scripts/check-trust-surface.sh",
+          "scripts/check-trust-surface.py",
+          "scripts/trust-surface-allow.txt",
+          "Blanc.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "order": 9,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 trust surface: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-weth10-reference.sh"
+      ],
+      "id": "weth10-reference",
+      "inputs": {
+        "env": [
+          "WETH10_COMPATIBILITY_DOC",
+          "WETH10_REFERENCE_DIR",
+          "WETH10_REFERENCE_LOCK"
+        ],
+        "files": [
+          "scripts/check-weth10-reference.sh",
+          "scripts/weth10_reference_schema.py",
+          "scripts/weth10-reference.py",
+          "scripts/test-weth10-reference-falsifiers.py",
+          "scripts/weth10-compatibility.py",
+          "scripts/weth10-reference.json",
+          "scripts/reference/weth10/inputs/deployment-artifact.json",
+          "scripts/reference/weth10/inputs/solc-input.json",
+          "scripts/reference/weth10/inputs/solc-output.json",
+          "scripts/reference/weth10/inputs/solc-emscripten-wasm32-list.json",
+          "scripts/reference/weth10/inputs/git-provenance.json",
+          "scripts/reference/weth10/inputs/rpc-publicnode.json",
+          "scripts/reference/weth10/inputs/rpc-drpc.json",
+          "scripts/reference/weth10/inputs/source/deployed-WETH10.sol",
+          "scripts/reference/weth10/inputs/source/current-main-WETH10.sol",
+          "scripts/reference/weth10/inputs/source/current-main.diff",
+          "scripts/reference/weth10/inputs/source/comment-only-34d2712.diff",
+          "scripts/reference/weth10/inputs/source/drift-provenance.json",
+          "WETH10_COMPATIBILITY.md"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The falsifier harness copies the whole scripts/reference/weth10 tree per coordinated case, but only the input files named here are ever loaded back out of the copy. The four WETH10_REFERENCE_*/WETH10_COMPATIBILITY_DOC overrides repoint the lock, the vendored input tree and the compatibility document, so they are inputs even though they are normally unset.",
+      "order": 10,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 WETH10 reference: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-reference.sh"
+      ],
+      "id": "lido-reference",
+      "inputs": {
+        "env": [
+          "LIDO_CIRCUIT_BREAKER_REFERENCE_DIR",
+          "LIDO_CIRCUIT_BREAKER_REFERENCE_LOCK"
+        ],
+        "files": [
+          "scripts/check-lido-circuit-breaker-reference.sh",
+          "scripts/lido_circuit_breaker_reference_schema.py",
+          "scripts/lido-circuit-breaker-reference.py",
+          "scripts/test-lido-circuit-breaker-reference-falsifiers.py",
+          "scripts/lido-circuit-breaker-compatibility.py",
+          "scripts/lido-circuit-breaker-reference.json",
+          "scripts/fixtures/lido-circuit-breaker/manifest.json",
+          "LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md",
+          "LIDO_CIRCUIT_BREAKER_DEVIATIONS.md"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*",
+            "root": "scripts/reference/lido-circuit-breaker"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The pinned input tree is membership-sensitive: the generator requires its sorted relative-path list to equal its own table, so adding or removing a file under scripts/reference/lido-circuit-breaker fails the gate. The two REFERENCE_* variables redirect the tree and the lock, so they are declared; a run held at such an override reads files this entry does not fingerprint.",
+      "order": 11,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 Lido CircuitBreaker reference: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "lake",
+        "build"
+      ],
+      "id": "lake-build",
+      "inputs": {},
+      "kind": "composition",
+      "order": 12,
+      "prerequisite": true,
+      "reason": "Lake's own incremental build already selects exactly the modules whose inputs moved, and it is what makes every depHash this registry reads current. It is executed before planning, at every run, and is never credited from a record.",
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": []
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-artifact-profile.sh"
+      ],
+      "id": "lido-artifact-profile",
+      "inputs": {
+        "files": [
+          "scripts/check-lido-circuit-breaker-artifact-profile.sh",
+          "scripts/profile-lido-circuit-breaker-artifacts.py",
+          "scripts/lido_circuit_breaker_artifact_profile_schema.py",
+          "scripts/test-lido-circuit-breaker-artifact-profile-falsifiers.py",
+          "scripts/lido-circuit-breaker-reference.json",
+          "scripts/fixtures/lido-circuit-breaker/artifact-profile-baseline.json",
+          "scripts/fixtures/lido-circuit-breaker/artifact-profile-optimized.json",
+          "scripts/reference/lido-circuit-breaker/inputs/std-json-output.json",
+          "scripts/reference/lido-circuit-breaker/inputs/std-json-input.json"
+        ],
+        "lean_entries": [
+          "scripts/eval-lido-circuit-breaker-artifacts.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "std-json-input.json is assembled inline from the repository root rather than from a module constant, so it is the easiest read in the profiler to miss. The baseline ledger is sha256-pinned inside the schema module and has no write mode.",
+      "order": 13,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 Lido artifact profiles: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-constructor.sh"
+      ],
+      "id": "lido-constructor",
+      "inputs": {
+        "files": [
+          "scripts/check-lido-circuit-breaker-constructor.sh",
+          "scripts/lido_circuit_breaker_constructor_schema.py",
+          "scripts/test-lido-circuit-breaker-constructor-falsifiers.py",
+          "scripts/lido-circuit-breaker-reference.json"
+        ],
+        "lean_entries": [
+          "scripts/eval-lido-circuit-breaker-artifacts.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "order": 14,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 Lido constructor byte gate: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-runtime-errors.sh"
+      ],
+      "id": "lido-runtime-errors",
+      "inputs": {
+        "files": [
+          "scripts/check-lido-circuit-breaker-runtime-errors.sh",
+          "scripts/lido_circuit_breaker_runtime_error_schema.py",
+          "scripts/test-lido-circuit-breaker-runtime-error-falsifiers.py",
+          "scripts/lido-circuit-breaker-reference.json"
+        ],
+        "lean_entries": [
+          "scripts/eval-lido-circuit-breaker-artifacts.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "order": 15,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 Lido runtime error byte gate: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-registry.sh"
+      ],
+      "id": "lido-registry",
+      "inputs": {
+        "files": [
+          "scripts/check-lido-circuit-breaker-registry.sh",
+          "scripts/check-lido-circuit-breaker-registry.py"
+        ],
+        "lean_entries": [
+          "scripts/LidoCircuitBreakerRegistrySuccess.lean",
+          "scripts/LidoCircuitBreakerRegistryRegression.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          },
+          {
+            "pattern": "**/*.lean",
+            "root": "scripts"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The shadow scan indexes every .lean file under Blanc/ and scripts/, not merely the imports today's fixtures choose, so a new first-party Lean file anywhere in either tree can change the verdict.",
+      "order": 16,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 Lido CircuitBreaker Registry RI7: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-enumeration.sh"
+      ],
+      "id": "lido-enumeration",
+      "inputs": {
+        "files": [
+          "scripts/check-lido-circuit-breaker-enumeration.sh",
+          "scripts/check-lido-circuit-breaker-enumeration.py",
+          "Blanc/LidoCircuitBreakerEnumeration.lean"
+        ],
+        "lean_entries": [
+          "scripts/LidoCircuitBreakerEnumerationControls.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The gate refuses to start unless the owner's .olean is already built; the fixture entry's Lake depHash witnesses that artifact, so no build path is declared separately. The owner is also read as text for its header pins.",
+      "order": 17,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 S3 enumeration assurance: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-access.sh"
+      ],
+      "id": "lido-access",
+      "inputs": {
+        "files": [
+          "scripts/check-lido-circuit-breaker-access.sh",
+          "scripts/check-lido-circuit-breaker-access.py",
+          "Blanc/LidoCircuitBreakerSites.lean",
+          "Blanc/LidoCircuitBreakerAccess.lean",
+          "Blanc/LidoCircuitBreakerAuthority.lean",
+          "Blanc/LidoCircuitBreakerOwnerClosure.lean",
+          "Blanc/LidoCircuitBreakerRetainedAuthority.lean",
+          "Blanc/LidoCircuitBreakerDeploy.lean",
+          "Blanc/LidoCircuitBreakerRegistrySubstrate.lean",
+          "Blanc/LidoCircuitBreakerFreshRegistration.lean",
+          "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
+          "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
+          "Blanc/LidoCircuitBreakerReplacementRegistration.lean",
+          "Blanc/LidoCircuitBreakerPauseSuffix.lean",
+          "Blanc/SourceAttainment.lean",
+          "Blanc/LidoCircuitBreakerAttainment.lean",
+          "Blanc/LidoCircuitBreakerRegistrationWorld.lean",
+          "Blanc/LidoCircuitBreakerReplacementWorld.lean",
+          "Blanc/LidoCircuitBreakerPauseAttainment.lean",
+          "Blanc/LidoCircuitBreakerUnregisterWorld.lean",
+          "Blanc/LidoCircuitBreakerUnregisterAttainment.lean",
+          "Blanc/LidoCircuitBreakerPauseWalk.lean",
+          "Blanc/LidoCircuitBreakerPauseWorld.lean",
+          "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean",
+          "Blanc/LidoCircuitBreakerPauseWorldRunKit.lean",
+          "Blanc/LidoCircuitBreakerPauseWorldRun.lean",
+          "Blanc/LidoCircuitBreakerPauseOkRoute.lean",
+          "Blanc/LidoCircuitBreakerPauseJoin.lean",
+          "Blanc/LidoCircuitBreakerPauseSettlement.lean",
+          "Blanc/LidoCircuitBreakerPreControl.lean",
+          "Blanc/LidoCircuitBreakerCallBoundary.lean",
+          "Blanc/LidoCircuitBreakerObservation.lean",
+          "Blanc/LidoCircuitBreakerSuccess.lean"
+        ],
+        "lean_entries": [
+          "scripts/LidoCircuitBreakerAccessControls.lean"
+        ],
+        "lean_modules": [
+          "Blanc.LidoCircuitBreakerSites",
+          "Blanc.LidoCircuitBreakerAccess",
+          "Blanc.LidoCircuitBreakerAuthority",
+          "Blanc.LidoCircuitBreakerOwnerClosure",
+          "Blanc.LidoCircuitBreakerRetainedAuthority",
+          "Blanc.LidoCircuitBreakerDeploy",
+          "Blanc.LidoCircuitBreakerRegistrySubstrate",
+          "Blanc.LidoCircuitBreakerFreshRegistration",
+          "Blanc.LidoCircuitBreakerAbsentRegistration",
+          "Blanc.LidoCircuitBreakerUnregisterRegistration",
+          "Blanc.LidoCircuitBreakerReplacementRegistration",
+          "Blanc.LidoCircuitBreakerPauseSuffix",
+          "Blanc.SourceAttainment",
+          "Blanc.LidoCircuitBreakerAttainment",
+          "Blanc.LidoCircuitBreakerRegistrationWorld",
+          "Blanc.LidoCircuitBreakerReplacementWorld",
+          "Blanc.LidoCircuitBreakerPauseAttainment",
+          "Blanc.LidoCircuitBreakerUnregisterWorld",
+          "Blanc.LidoCircuitBreakerUnregisterAttainment",
+          "Blanc.LidoCircuitBreakerPauseWalk",
+          "Blanc.LidoCircuitBreakerPauseWorld",
+          "Blanc.LidoCircuitBreakerPauseSuffixWalk",
+          "Blanc.LidoCircuitBreakerPauseWorldRunKit",
+          "Blanc.LidoCircuitBreakerPauseWorldRun",
+          "Blanc.LidoCircuitBreakerPauseOkRoute",
+          "Blanc.LidoCircuitBreakerPauseJoin",
+          "Blanc.LidoCircuitBreakerPauseSettlement",
+          "Blanc.LidoCircuitBreakerPreControl",
+          "Blanc.LidoCircuitBreakerCallBoundary",
+          "Blanc.LidoCircuitBreakerObservation",
+          "Blanc.LidoCircuitBreakerSuccess"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The axiom probe imports all thirty-one owner modules, four of which (absent, unregister, unregisterWorld, unregisterAttainment) are outside the fixture's import closure, so the modules are declared alongside the fixture entry. The same thirty-one files are read as text for their header pins.",
+      "order": 18,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 S5 access assurance: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-history.sh"
+      ],
+      "id": "lido-history",
+      "inputs": {
+        "files": [
+          "scripts/check-lido-circuit-breaker-history.sh",
+          "scripts/check-lido-circuit-breaker-history.py",
+          "Blanc/LidoCircuitBreakerHistory.lean",
+          "Blanc/LidoCircuitBreakerHistoryEndpoints.lean",
+          "Blanc/LidoCircuitBreakerHistoryChain.lean",
+          "Blanc/LidoCircuitBreaker.lean",
+          "Blanc/LidoCircuitBreakerRegistryModel.lean",
+          "Blanc/Ladder.lean"
+        ],
+        "lean_modules": [
+          "Blanc.LidoCircuitBreakerHistory",
+          "Blanc.LidoCircuitBreakerHistoryEndpoints",
+          "Blanc.LidoCircuitBreakerHistoryChain"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "With the Chain owner ACTIVE the gate reads the working Chain source and never shells out to git; git is reachable only on --chain-dry-run, which this command does not pass. Blanc/LidoCircuitBreaker.lean is read but never pinned \u2014 the dispatcher inventory is derived from it, so its bytes still decide the verdict.",
+      "order": 19,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 S7 Registry-history assurance: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-deployment.sh"
+      ],
+      "id": "lido-deployment",
+      "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-lido-circuit-breaker-deployment.sh",
+          "scripts/gen-lido-circuit-breaker-deployment-fixture.py",
+          "scripts/gen-weth-fixtures.py",
+          "scripts/check-lido-circuit-breaker-deployment.py",
+          "scripts/test-lido-circuit-breaker-deployment-falsifiers.py",
+          "scripts/check.sh",
+          "Blanc/LidoCircuitBreakerDeploy.lean",
+          "Blanc/DeploymentCompiled.lean",
+          "Blanc/DeploymentMessage.lean",
+          "Blanc/LidoCircuitBreakerDeploymentLayout.lean",
+          "Blanc/LidoCircuitBreakerDeploymentTrace.lean",
+          "Blanc/LidoCircuitBreakerDeploymentInput.lean",
+          "Blanc/LidoCircuitBreakerDeploymentMessage.lean",
+          "Blanc/LidoCircuitBreakerDeploymentTransaction.lean",
+          "Blanc/LidoCircuitBreakerDeploymentBlock.lean",
+          "Blanc/LidoCircuitBreakerDeploymentRoot.lean",
+          ".lake/packages/jaune/.lake/build/bin/jaune",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python"
+        ],
+        "lean_entries": [
+          "scripts/eval-lido-circuit-breaker-deployment.lean",
+          "scripts/AxiomCheck.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "python*/site-packages/*.dist-info/METADATA",
+            "root": "@eels/venv/lib"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3",
+          "git",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The fixture generator importlib-loads gen-weth-fixtures.py for its EEST helpers; it never calls build_fixture, so the EEST template that file names is not read and is not declared. AxiomCheck.lean is elaborated by check.sh and separately read as text by both check.sh and the deployment checker, and the Lean entry already covers its bytes. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed package's METADATA are fingerprinted directly, through the same EELS_ROOT the gate itself resolves.",
+      "order": 20,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 Lido CircuitBreaker direct deployment root \\("
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-execution-settlement.sh"
+      ],
+      "id": "execution-settlement",
+      "inputs": {
+        "files": [
+          "scripts/check-execution-settlement.sh",
+          "scripts/check-execution-settlement.py",
+          "scripts/check-extraction-ownership.py"
+        ],
+        "lean_entries": [
+          "scripts/ExecutionSettlementRegression.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "check-extraction-ownership.py is importlib-loaded for its declaration parser alone, so editing that parser flips this verdict with nothing else moving. The gate pins exact Lean diagnostic text, which is why the toolchain is a declared input rather than only a build dependency; the raw-commit mutants are derived from the fixture at run time and are outputs.",
+      "order": 21,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 execution settlement: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-execution-occurrence.sh"
+      ],
+      "id": "execution-occurrence",
+      "inputs": {
+        "files": [
+          "scripts/check-execution-occurrence.sh",
+          "scripts/check-execution-occurrence.py",
+          "scripts/check-execution-raw-attribution-ownership.py",
+          "scripts/check-execution-settlement.py",
+          "scripts/check-extraction-ownership.py",
+          "scripts/execution-occurrence-lift-manifest.json",
+          "scripts/execution-raw-attribution-owner-manifest.json",
+          "Blanc.lean"
+        ],
+        "lean_entries": [
+          "scripts/ExecutionOccurrenceRegression.lean",
+          "scripts/ExecutionOccurrenceControls.lean",
+          "scripts/ExecutionSettlementRegression.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "This gate runs check-execution-settlement.py and check-execution-raw-attribution-ownership.py as subprocesses and asserts on their verdict prefixes, so gate 21's whole closure is a subset of this one's; both nested OK lines are captured rather than printed, so only the occurrence verdict reaches stdout. Its sole-owner scan walks Blanc/**/*.lean and its manifest globs Blanc/Weth10*.lean and Blanc/Lido*.lean, so membership of the Blanc corpus is load-bearing and the recursive population covers all of it.",
+      "order": 22,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 execution occurrence: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-cycle-write-free.sh"
+      ],
+      "id": "cycle-write-free",
+      "inputs": {
+        "files": [
+          "scripts/check-cycle-write-free.sh",
+          "scripts/check-cycle-write-free.py",
+          "scripts/check-layering.py",
+          "scripts/cycle-write-free-owner-manifest.json",
+          "Blanc.lean"
+        ],
+        "lean_entries": [
+          "scripts/CycleWriteFreeRegression.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "check-layering.py is importlib-loaded for its CONTRACTS literal, which decides which contract modules this gate audits \u2014 gate 24 regex-scrapes the same file as text, so the two couple to it by different mechanisms and a formatting change breaks only one of them. The mutant and deletion fixtures are generated from CycleWriteFreeRegression.lean at run time and need no declaration of their own.",
+      "order": 23,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 cycle write free: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-transient-settlement.sh"
+      ],
+      "id": "transient-settlement",
+      "inputs": {
+        "files": [
+          "scripts/check-transient-settlement.sh",
+          "scripts/check-transient-settlement.py",
+          "scripts/check-layering.py",
+          "scripts/transient-settlement-owner-manifest.json",
+          "scripts/check-execution-settlement.py",
+          "scripts/execution-settlement-lift-manifest.json",
+          "scripts/ExecutionSettlementRegression.lean",
+          "scripts/check-execution-occurrence.py",
+          "scripts/execution-occurrence-lift-manifest.json",
+          "scripts/ExecutionOccurrenceRegression.lean",
+          "scripts/ExecutionOccurrenceControls.lean",
+          "scripts/check-execution-raw-attribution-ownership.py",
+          "scripts/execution-raw-attribution-owner-manifest.json",
+          "scripts/check-cycle-write-free.py",
+          "scripts/cycle-write-free-owner-manifest.json",
+          "scripts/CycleWriteFreeRegression.lean",
+          "Blanc/ExecutionSettlement.lean",
+          "Blanc/ExecutionOccurrence.lean",
+          "Blanc/CycleWriteFree.lean",
+          "Blanc/TransientSettlement.lean",
+          "Blanc/Weth10StaticSilence.lean",
+          "Blanc/Weth10AllowanceArmsPermit.lean",
+          "Blanc.lean",
+          "lakefile.lean",
+          "lake-manifest.json"
+        ],
+        "lean_entries": [
+          "scripts/TransientSettlementRegression.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of gates 21, 22 and 23 plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate \u2014 the recursive Blanc population is what preserves that membership sensitivity.",
+      "order": 24,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 transient-settlement: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-weth10-differential.sh"
+      ],
+      "id": "weth10-differential",
+      "inputs": {
+        "env": [
+          "EELS_ROOT"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-weth10-differential.sh",
+          "scripts/gen-weth10-differential.py",
+          "scripts/check-runtime-bytes.py",
+          "scripts/weth10-reference.json",
+          "scripts/fixtures/weth10/manifest.json",
+          "Blanc/Weth10Code.lean",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python"
+        ],
+        "lean_entries": [
+          "scripts/eval-weth10-differential-code.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "python*/site-packages/*.dist-info/METADATA",
+            "root": "@eels/venv/lib"
+          }
+        ],
+        "tools": [
+          "lean",
+          "git"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The oracle is the pinned EELS checkout's own Prague interpreter, run under that checkout's venv python rather than the system python3; the external pin covers the checkout and refuses a dirty one. Blanc/Weth10Code.lean is read as text for the committed-literal comparison, a claim no .olean can witness, so it is fingerprinted separately from the evaluator's import closure. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed package's METADATA are fingerprinted directly, through the same EELS_ROOT the gate itself resolves.",
+      "order": 25,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 WETH10 differential: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-dispatchers.sh"
+      ],
+      "id": "lido-dispatchers",
+      "inputs": {
+        "env": [
+          "LIDO_DISPATCHER_SELECTION_STAGE",
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-lido-circuit-breaker-dispatchers.sh",
+          "scripts/check-lido-circuit-breaker-dispatchers.py",
+          "scripts/gen-lido-circuit-breaker-differential.py",
+          "scripts/lido_circuit_breaker_ac5_shape_schema.py",
+          "scripts/lido-circuit-breaker-reference.json",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python"
+        ],
+        "lean_entries": [
+          "scripts/eval-lido-circuit-breaker-artifacts.lean",
+          "scripts/eval-lido-circuit-breaker-dispatchers.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "python*/site-packages/*.dist-info/METADATA",
+            "root": "@eels/venv/lib"
+          }
+        ],
+        "tools": [
+          "lean",
+          "git"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The checker importlib-loads gen-lido-circuit-breaker-differential.py, so that generator and the AC5 shape schema it imports are this gate's implementation even though the wrapper never names them. LIDO_DISPATCHER_SELECTION_STAGE decides the mode and is cross-checked against the checker's own constant, so it is a verdict input. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed package's METADATA are fingerprinted directly, through the same EELS_ROOT the gate itself resolves.",
+      "order": 26,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 Lido CircuitBreaker dispatcher: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-differential.sh"
+      ],
+      "id": "lido-differential",
+      "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-lido-circuit-breaker-differential.sh",
+          "scripts/gen-lido-circuit-breaker-differential.py",
+          "scripts/lido_circuit_breaker_ac5_shape_schema.py",
+          "scripts/lido_circuit_breaker_resource_schema.py",
+          "scripts/test-lido-circuit-breaker-resource-falsifiers.py",
+          "scripts/check-lido-circuit-breaker-dispatchers.py",
+          "scripts/lido-circuit-breaker-reference.json",
+          "scripts/fixtures/lido-circuit-breaker/manifest.json",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python"
+        ],
+        "lean_entries": [
+          "scripts/eval-lido-circuit-breaker-artifacts.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "python*/site-packages/*.dist-info/METADATA",
+            "root": "@eels/venv/lib"
+          }
+        ],
+        "tools": [
+          "lean",
+          "git"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The generator importlib-loads check-lido-circuit-breaker-dispatchers.py for its completion-threshold cross-check, so the dispatcher gate's source is an input here as well \u2014 the two gates load each other. The wrapper's inline required-tag digest, the resource schema's canonical-JSON demand and the falsifier baseline all read the same manifest, so one byte moving there reddens four independent checks. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed package's METADATA are fingerprinted directly, through the same EELS_ROOT the gate itself resolves.",
+      "order": 27,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 Lido CircuitBreaker differential: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-weth10-redemption.sh",
+        "--no-build"
+      ],
+      "id": "weth10-redemption",
+      "inputs": {
+        "env": [
+          "EELS_ROOT"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-weth10-redemption.sh",
+          "scripts/gen-weth10-redemption-fixtures.py",
+          "scripts/gen-weth-fixtures.py",
+          "scripts/check-runtime-bytes.py",
+          "scripts/fixtures/weth10-redemption/manifest.json",
+          "Blanc/Weth10Code.lean",
+          ".lake/packages/jaune/.lake/build/bin/jaune",
+          "~/eest-mainnet-v20.0.1/fixtures/blockchain_tests/for_prague/constantinople/eip1052_extcodehash/extcodehash/extcodehash_of_empty.json",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python"
+        ],
+        "populations": [
+          {
+            "pattern": "*.json",
+            "root": "scripts/fixtures/weth10-redemption"
+          },
+          {
+            "pattern": "python*/site-packages/*.dist-info/METADATA",
+            "root": "@eels/venv/lib"
+          }
+        ],
+        "tools": [
+          "python3",
+          "git",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is what produces PASS/FAIL and is fingerprinted directly, and no Blanc module is elaborated at all. The EEST blockchain-test template under ~ supplies the Prague predeploy code and the genesis header, yet is hardcoded, unpinned and unguarded, so it is declared as an exact file outside the repository. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed package's METADATA are fingerprinted directly, through the same EELS_ROOT the gate itself resolves.",
+      "order": 28,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 WETH10 redemption fixtures: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-weth10-deployment.sh"
+      ],
+      "id": "weth10-deployment",
+      "inputs": {
+        "env": [
+          "EELS_ROOT"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-weth10-deployment.sh",
+          "scripts/check-weth10-deployment.py",
+          "scripts/gen-weth10-redemption-fixtures.py",
+          "scripts/gen-weth-fixtures.py",
+          "scripts/check-runtime-bytes.py",
+          ".lake/packages/jaune/.lake/build/bin/jaune",
+          "~/eest-mainnet-v20.0.1/fixtures/blockchain_tests/for_prague/constantinople/eip1052_extcodehash/extcodehash/extcodehash_of_empty.json",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python"
+        ],
+        "lean_entries": [
+          "scripts/eval-weth10-deployment-code.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "python*/site-packages/*.dist-info/METADATA",
+            "root": "@eels/venv/lib"
+          }
+        ],
+        "tools": [
+          "lean",
+          "git"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "check-weth10-deployment.py importlib-loads gen-weth10-redemption-fixtures.py, which loads gen-weth-fixtures.py and check-runtime-bytes.py at its own import time; the whole three-deep chain is declared, and through build_fixture it reaches the same unpinned ~/eest-\u2026 template as gate 28. Blanc/Weth10Code.lean is deliberately absent: the literal parse in the loaded module lives in a main() that never runs on this path. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed package's METADATA are fingerprinted directly, through the same EELS_ROOT the gate itself resolves.",
+      "order": 29,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 WETH10 deployment: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-error-data.sh"
+      ],
+      "id": "error-data",
+      "inputs": {
+        "files": [
+          "scripts/check-error-data.sh",
+          "scripts/check-error-data.py",
+          "scripts/weth10-reference.py",
+          "scripts/weth10_reference_schema.py",
+          "scripts/weth10-reference.json"
+        ],
+        "lean_entries": [
+          "scripts/eval-error-data.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "weth10-reference.py is importlib-loaded only for its Keccak and drags weth10_reference_schema.py in with it; the WETH10_REFERENCE_* overrides those two read at import cannot move this gate's lock, which comes from its own constant, so they are not declared here. The harness is run with `lake env lean --run`, unlike the #eval evaluators elsewhere in this family.",
+      "order": 30,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 error data: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check.sh",
+        "--no-build"
+      ],
+      "id": "axiom-audit",
+      "inputs": {
+        "files": [
+          "scripts/check.sh"
+        ],
+        "lean_entries": [
+          "scripts/AxiomCheck.lean"
+        ],
+        "tools": [
+          "lean",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The 606-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
+      "order": 31,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 axiom audit: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-claims.sh"
+      ],
+      "id": "claims",
+      "inputs": {
+        "files": [
+          "scripts/check-claims.sh"
+        ],
+        "lean_entries": [
+          "scripts/ClaimCheck.lean"
+        ],
+        "tools": [
+          "lean"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The pinned inventory count lives in the wrapper, so its bytes are an input.",
+      "order": 32,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 common/WETH10/Lido claim statements: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-elab.sh"
+      ],
+      "id": "elab",
+      "inputs": {
+        "files": [
+          "scripts/check-elab.sh",
+          "scripts/check-elab-selection.py",
+          "scripts/baseline-elab.txt",
+          "scripts/gate-lock.sh",
+          "lean-toolchain",
+          "lakefile.lean",
+          "lakefile.toml",
+          "lake-manifest.json",
+          "Blanc.lean",
+          "Main.lean"
+        ],
+        "lean_modules": [
+          "Blanc",
+          "Main"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes \u2014 the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its baseline, and its own implementation. A reused row therefore means the selector would itself have measured nothing.",
+      "order": 33,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 elab: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-fmint.sh",
+        "--no-build"
+      ],
+      "id": "fmint-fixtures",
+      "inputs": {
+        "files": [
+          "scripts/check-fmint.sh",
+          "scripts/check-fmint-borrower-source.py",
+          "scripts/check-runtime-bytes.py",
+          "scripts/weth10-reference.py",
+          "scripts/weth10_reference_schema.py",
+          "scripts/fmint-borrower-solc.json",
+          "scripts/fmint-borrower-solc.sol",
+          "scripts/fixtures/fmint/manifest.json",
+          "Blanc/FmintCode.lean",
+          ".lake/packages/jaune/.lake/build/bin/jaune"
+        ],
+        "populations": [
+          {
+            "pattern": "*.json",
+            "root": "scripts/fixtures/fmint"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is the thing that produces PASS/FAIL and is fingerprinted directly. weth10-reference.py and weth10_reference_schema.py are in the closure only because the borrower checker importlib-loads the former for its keccak256.",
+      "order": 34,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 fmint fixtures: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-weth.sh",
+        "--no-build"
+      ],
+      "id": "weth-fixtures",
+      "inputs": {
+        "files": [
+          "scripts/check-weth.sh",
+          "scripts/check-runtime-bytes.py",
+          "Blanc/WethCode.lean",
+          ".lake/packages/jaune/.lake/build/bin/jaune"
+        ],
+        "populations": [
+          {
+            "pattern": "*.json",
+            "root": "scripts/fixtures/weth"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "This suite has no manifest, so its fixture-directory membership is its only population guard; declaring the population here restores that guard for reuse decisions.",
+      "order": 35,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 weth fixtures: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-fmint-coverage.sh"
+      ],
+      "id": "fmint-coverage",
+      "inputs": {
+        "files": [
+          "scripts/check-fmint-coverage.sh",
+          "scripts/check-fmint-coverage.py",
+          "scripts/check-runtime-bytes.py",
+          "scripts/fmint-selectors.json",
+          "scripts/fmint-coverage-budget.txt",
+          "Blanc/FmintCode.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "*.json",
+            "root": "scripts/fixtures/fmint"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "order": 36,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 fmint coverage: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-weth-coverage.sh"
+      ],
+      "id": "weth-coverage",
+      "inputs": {
+        "files": [
+          "scripts/check-weth-coverage.sh",
+          "scripts/check-weth-coverage.py",
+          "scripts/check-runtime-bytes.py",
+          "scripts/weth-selectors.json",
+          "scripts/weth-coverage-budget.txt",
+          "Blanc/WethCode.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "*.json",
+            "root": "scripts/fixtures/weth"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "order": 37,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 weth coverage: "
+        ]
+      }
+    }
+  ],
+  "schema": 1
+}
