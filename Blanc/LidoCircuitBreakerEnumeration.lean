@@ -785,8 +785,8 @@ theorem enumLoop_pre_stack_height (base : Devm) (entries done rest : List Entry)
 theorem enumLoop_pre_memory_independent_of_cursor (base : Devm)
     (entries done : List Entry) (cursor cursor' G : Nat) :
     (base.setMach ⟨[Nat.toB256 cursor], enumPrefixMemory entries done, G⟩).memory =
-      (base.setMach ⟨[Nat.toB256 cursor'], enumPrefixMemory entries done, G⟩).memory :=
-  rfl
+      (base.setMach ⟨[Nat.toB256 cursor'], enumPrefixMemory entries done, G⟩).memory := by
+  rw [Devm.setMach_memory, Devm.setMach_memory]
 
 private theorem enumLoop_done_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry) (G : Nat)
