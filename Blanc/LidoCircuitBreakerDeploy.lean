@@ -447,8 +447,7 @@ private theorem constructorProgramEffectCounts_eq (program : Prog) :
     constructorFuncEffectCounts_eq, constructorEffectCountsSum_eq,
     programSiteCount]
 
-set_option maxHeartbeats 3000000 in
-set_option maxRecDepth 100000 in
+set_option maxRecDepth 628 in
 theorem constructor_program_site_counts_exact :
     constructorProgramSiteCounts = (2, 0, 0) := by
   unfold constructorProgramSiteCounts
