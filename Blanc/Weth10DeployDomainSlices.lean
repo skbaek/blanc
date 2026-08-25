@@ -647,19 +647,7 @@ private theorem dispatchNode_size (s : B256) (off on : Func)
 private theorem dispatch22_7_1_size :
     (dispatch22_7_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
       33 := by
-  rw [show dispatch22_7_1 (⟨0, 0⟩ : DeployParams) =
-      Ninst.pushB256 (selector "decimals" []) ::: Ninst.eq :::
-        ((nonpayable Weth10.decimals) <?> .call fallbackSlot) by
-    simp [dispatch22_7_1, treeSlice, weth10Funcs, DispatchTree.build,
-      dispatchWith]]
-  have hpush :
-      (Ninst.toBytes (Ninst.pushB256 (selector "decimals" []))).length = 5 := by
-    decide +kernel
-  have heq : (Ninst.toBytes Ninst.eq).length = 1 := rfl
-  have hbody : compsize (nonpayable Weth10.decimals) = 18 := by
-    decide +kernel
-  simp only [Func.CompileShape.byteSize_compileShape, compsize, hpush, heq]
-  omega
+  decide +kernel
 
 private theorem dispatch22_8_1_size :
     (dispatch22_8_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
