@@ -1530,28 +1530,6 @@
       "ceiling": 617
     },
     {
-      "id": "Blanc/LidoCircuitBreakerPauseSuffix.lean::Blanc.LidoCircuitBreaker.pauseSuccess_checkedArm#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseSuffix.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseSuccess_checkedArm",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 4096,
-      "ceiling": 4096
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPauseSuffix.lean::Blanc.LidoCircuitBreaker.pauseSuccess_expiryWrite_dichotomy#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPauseSuffix.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pauseSuccess_expiryWrite_dichotomy",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 4096,
-      "ceiling": 4096
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean::Blanc.LidoCircuitBreaker.pauseAfterSet_toSuccess_runCompiled#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean",
       "declaration": "Blanc.LidoCircuitBreaker.pauseAfterSet_toSuccess_runCompiled",
@@ -3279,16 +3257,59 @@
       "ceiling": 2048
     },
     {
-      "id": "Blanc/Weth10Redeemable.lean::$ambient#0::ambient_command::Blanc.Weth10.pinnedJauneListCompare_eq_compareLex::maxRecDepth#1",
+      "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_execSat#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/Weth10Redeemable.lean",
-      "declaration": null,
-      "declaration_ordinal": null,
-      "scope_kind": "ambient_command",
+      "declaration": "Blanc.Weth10.withdrawTo_execSat",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 8000,
-      "ceiling": 8000,
-      "anchor": "Blanc.Weth10.pinnedJauneListCompare_eq_compareLex"
+      "value": 621,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_progExecSat#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/Weth10Redeemable.lean",
+      "declaration": "Blanc.Weth10.withdrawTo_progExecSat",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 568,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_runCompiledTo_callPrefix#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/Weth10Redeemable.lean",
+      "declaration": "Blanc.Weth10.withdrawTo_runCompiledTo_callPrefix",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 607,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdraw_execSat#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/Weth10Redeemable.lean",
+      "declaration": "Blanc.Weth10.withdraw_execSat",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 621,
+      "ceiling": null
+    },
+    {
+      "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdraw_progExecSat#1::command_scoped::-::maxRecDepth#1",
+      "file": "Blanc/Weth10Redeemable.lean",
+      "declaration": "Blanc.Weth10.withdraw_progExecSat",
+      "declaration_ordinal": 1,
+      "scope_kind": "command_scoped",
+      "scope_ordinal": 1,
+      "option": "maxRecDepth",
+      "value": 568,
+      "ceiling": null
     },
     {
       "id": "Blanc/WethGas.lean::$ambient#0::ambient_command::Blanc.Devm.gasLeft_withOutput::maxRecDepth#1",

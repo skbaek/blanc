@@ -320,7 +320,6 @@ private lemma pauseSuccess_zeroCountArm
   · rw [hmid, ← congrFun hstor' sevm.currentTarget]
   · rw [heffect, ← congrFun hstor' sevm.currentTarget]
 
-set_option maxRecDepth 4096 in
 private lemma pauseSuccess_checkedArm
     {fs : List Func} {sevm : Sevm} {pre s : Devm} {out : Execution}
     {interval : B256}
@@ -413,7 +412,6 @@ private lemma pauseSuccess_checkedArm
 /-! ## The reached suffix write -/
 
 
-set_option maxRecDepth 4096 in
 /-- Everything an actually reached post-callback `pauseSuccess` walk settles
 about its expiry `SSTORE`.
 
