@@ -186,9 +186,25 @@ finally:
 with external_dirt(Path("/Users/agent/execution-specs"), ".gate-cache-precision-control"):
     control("M8 dirty pinned EELS checkout", EELS, fresh_set(), ALL - EELS)
 
-# M8 -- the elaboration gate's own baseline.
+# M9 -- the elaboration gate's own baseline.
 with edited("scripts/baseline-elab.txt", append("\n")):
     control("M9 elaboration baseline", {"elab"}, fresh_set(), ALL - {"elab"})
+
+# M10 -- the pinned Jaune revision.  A real pin move also rebuilds every module
+# and moves every depHash with it, which M6 demonstrates as a channel; this
+# control isolates the manifest itself.
+with edited("lake-manifest.json", append("\n")):
+    control("M10 pinned dependency manifest", {"elab"}, fresh_set(), ALL - {"elab"})
+
+# M11 -- the anti-vacuity direction as its own row: a file no gate reads
+# invalidates nothing at all.  A selector that rebuilt the world on every commit
+# would pass every control above and fail this one.
+unrelated = ROOT / "docs/precision-control.md"
+try:
+    unrelated.write_text("unrelated\n", encoding="utf-8")
+    control("M11 unrelated new file", set(), fresh_set(), ALL)
+finally:
+    unrelated.unlink(missing_ok=True)
 
 leftover = dirty()
 print()
