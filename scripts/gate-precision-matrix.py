@@ -190,11 +190,27 @@ with external_dirt(Path("/Users/agent/execution-specs"), ".gate-cache-precision-
 with edited("scripts/baseline-elab.txt", append("\n")):
     control("M9 elaboration baseline", {"elab"}, fresh_set(), ALL - {"elab"})
 
-# M10 -- the pinned Jaune revision.  A real pin move also rebuilds every module
-# and moves every depHash with it, which M6 demonstrates as a channel; this
-# control isolates the manifest itself.
+# M10 -- the pinned Jaune revision.  Two gates read the manifest directly: the
+# elaboration gate treats it as shared Lean/Lake configuration, and the
+# transient-settlement owner manifest SHA-256-pins it under jaunePinFiles.  A
+# real pin move additionally rebuilds every module and moves every depHash with
+# it, which M6 demonstrates as a channel; this row isolates the manifest itself.
+PIN_READERS = {"elab", "transient-settlement"}
 with edited("lake-manifest.json", append("\n")):
-    control("M10 pinned dependency manifest", {"elab"}, fresh_set(), ALL - {"elab"})
+    control("M10 pinned dependency manifest", PIN_READERS, fresh_set(), ALL - PIN_READERS)
+
+# M12 -- a helper shared by seven gates and named by almost none of their
+# wrappers.  scripts/check-runtime-bytes.py parses the compiled-bytes literal
+# for both fixture suites and both coverage gates directly, and reaches the
+# three WETH10 gates through generators that importlib-load it by path
+# (gen-weth10-redemption-fixtures.py:56, gen-weth10-differential.py:950, and
+# the deployment gate via the former).  Editing a checker is editing the claim,
+# and it must reach every one of its consumers.
+BYTES_READERS = {"fmint-fixtures", "weth-fixtures", "fmint-coverage", "weth-coverage",
+                 "weth10-differential", "weth10-redemption", "weth10-deployment"}
+with edited("scripts/check-runtime-bytes.py", append("\n# precision control\n")):
+    control("M12 shared helper implementation", BYTES_READERS, fresh_set(),
+            ALL - BYTES_READERS)
 
 # M11 -- the anti-vacuity direction as its own row: a file no gate reads
 # invalidates nothing at all.  A selector that rebuilt the world on every commit
