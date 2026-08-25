@@ -675,8 +675,6 @@ theorem runtimePersistentSourceSites_eq_official (dp : DeployParams) :
       rw [persistentProgramSourceSites_eq]
     _ = _ := filterPersistent_nonPush _
 
-set_option maxHeartbeats 3000000 in
-set_option maxRecDepth 10000 in
 theorem runtimeSourceEffectPcs_official :
     let sites :=
       (persistentProgramShape (runtime officialParams)).sourceSites
@@ -897,8 +895,6 @@ def runtimeExternalCallSourceSites (dp : DeployParams) :
   (runtime dp).sourceSites.filter fun site =>
     isExternalCallInstruction site.instruction
 
-set_option maxHeartbeats 1200000 in
-set_option maxRecDepth 10000 in
 theorem runtimeTransientSourceSites_pcs (dp : DeployParams) :
     (runtimeTransientSourceSites dp).map (fun site => site.pc) =
       [853, 3985, 4105] := by
@@ -908,8 +904,6 @@ theorem runtimeTransientSourceSites_pcs (dp : DeployParams) :
   simpa using congrArg (fun inventory => inventory.1.2)
     runtimeSourceEffectPcs_official
 
-set_option maxHeartbeats 1200000 in
-set_option maxRecDepth 10000 in
 theorem runtimeExternalCallSourceSites_pcs (dp : DeployParams) :
     (runtimeExternalCallSourceSites dp).map (fun site => site.pc) =
       [3679, 3707] := by
@@ -919,8 +913,6 @@ theorem runtimeExternalCallSourceSites_pcs (dp : DeployParams) :
   simpa using congrArg (fun inventory => inventory.2)
     runtimeSourceEffectPcs_official
 
-set_option maxHeartbeats 1200000 in
-set_option maxRecDepth 10000 in
 theorem runtimeExternalCallInstructions_official :
     let sites :=
       (persistentProgramShape (runtime officialParams)).sourceSites

@@ -2420,50 +2420,6 @@
       "ceiling": 16384
     },
     {
-      "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimeExternalCallInstructions_official#1::command_scoped::-::maxHeartbeats#1",
-      "file": "Blanc/LidoCircuitBreakerSites.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeExternalCallInstructions_official",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxHeartbeats",
-      "value": 1200000,
-      "ceiling": 1200000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimeExternalCallInstructions_official#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerSites.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeExternalCallInstructions_official",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 10000,
-      "ceiling": 10000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimeExternalCallSourceSites_pcs#1::command_scoped::-::maxHeartbeats#1",
-      "file": "Blanc/LidoCircuitBreakerSites.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeExternalCallSourceSites_pcs",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxHeartbeats",
-      "value": 1200000,
-      "ceiling": 1200000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimeExternalCallSourceSites_pcs#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerSites.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeExternalCallSourceSites_pcs",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 10000,
-      "ceiling": 10000
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimePersistentEntryShapes_eq#1::command_scoped::-::maxHeartbeats#1",
       "file": "Blanc/LidoCircuitBreakerSites.lean",
       "declaration": "Blanc.LidoCircuitBreaker.runtimePersistentEntryShapes_eq",
@@ -2473,50 +2429,6 @@
       "option": "maxHeartbeats",
       "value": 800000,
       "ceiling": 800000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimeSourceEffectPcs_official#1::command_scoped::-::maxHeartbeats#1",
-      "file": "Blanc/LidoCircuitBreakerSites.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeSourceEffectPcs_official",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxHeartbeats",
-      "value": 3000000,
-      "ceiling": 3000000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimeSourceEffectPcs_official#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerSites.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeSourceEffectPcs_official",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 10000,
-      "ceiling": 10000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimeTransientSourceSites_pcs#1::command_scoped::-::maxHeartbeats#1",
-      "file": "Blanc/LidoCircuitBreakerSites.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeTransientSourceSites_pcs",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxHeartbeats",
-      "value": 1200000,
-      "ceiling": 1200000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerSites.lean::Blanc.LidoCircuitBreaker.runtimeTransientSourceSites_pcs#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerSites.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.runtimeTransientSourceSites_pcs",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 10000,
-      "ceiling": 10000
     },
     {
       "id": "Blanc/LidoCircuitBreakerUnregisterAttainment.lean::Blanc.LidoCircuitBreaker.attainable_adminRegistry_of_route#1::command_scoped::-::maxRecDepth#1",
