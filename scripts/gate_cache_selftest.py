@@ -113,8 +113,37 @@ class Scratch:
         path.write_text(json.dumps({"depHash": dep_hash}), encoding="utf-8")
         return path
 
-    def registry(self, gates: list[dict[str, Any]]) -> None:
+    def registry(self, gates: list[dict[str, Any]], catalogue: bool = True) -> None:
+        """Write the registry and, by default, a catalogue that reconciles.
+
+        `run()` reconciles the registry against the catalogue before planning,
+        so a scratch repository needs both.  Passing `catalogue=False` writes
+        only the registry, which is how a control creates the drift that
+        reconciliation is supposed to catch.
+        """
+
         gc.atomic_json(gc.registry_path(self.root), {"schema": 1, "gates": gates})
+        if not catalogue:
+            return
+        self.catalogue([" ".join(g["command"]) for g in gates], [])
+        try:
+            gc.atomic_write(self.root / gc.INVENTORY_RELATIVE, gc.render_inventory(self.root))
+        except gc.GateCacheError:
+            pass          # a deliberately malformed registry has no inventory
+
+    def catalogue(self, commands: list[str], ci: list[str]) -> None:
+        block = "\n".join(commands)
+        self.write(
+            "scripts/GATES.md",
+            "# Verification gates\n\n"
+            "**The full set, in order.** This is what a checkpoint runs:\n\n"
+            f"```\n{block}\n```\n",
+        )
+        self.write(
+            ".github/workflows/ci.yml",
+            "jobs:\n  gates:\n    steps:\n"
+            + "".join(f"      - run: {command}\n" for command in ci),
+        )
 
     def load(self) -> dict[str, Any]:
         return gc.load_registry(gc.registry_path(self.root))
@@ -880,12 +909,36 @@ def control_lock_refuses_a_second_run() -> None:
 
 
 def control_stale_lock_is_reclaimed_and_announced() -> None:
+    """Reclaimed *and* announced. A guard that cleans up quietly stops being
+    evidence, which is the reason gate-lock.sh's own header gives."""
+
     with scratch() as s:
         path = gc.lock_path(s.root)
         path.mkdir(parents=True)
         (path / "pid").write_text("999999999\n", encoding="utf-8")
-        require(gc.acquire_lock(path), "a lock held by a dead process must be reclaimed")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            taken = gc.acquire_lock(path)
+        require(taken, "a lock held by a dead process must be reclaimed")
+        require("reclaim" in err.getvalue() and "999999999" in err.getvalue(),
+                f"the reclaim must name the dead owner, got {err.getvalue()!r}")
         gc.release_lock(path)
+
+
+def control_lock_without_an_owner_says_how_to_clear_it() -> None:
+    """mkdir and the pid stamp are two steps. A run killed between them leaves
+    a directory nothing can attribute, and refusing every future run in silence
+    is worse than the contention it was guarding against."""
+
+    with scratch() as s:
+        path = gc.lock_path(s.root)
+        path.mkdir(parents=True)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            taken = gc.acquire_lock(path)
+        require(not taken, "an unattributable lock must still refuse")
+        require("by hand" in err.getvalue(),
+                f"and must say how to clear it, got {err.getvalue()!r}")
 
 
 def control_atomic_write_leaves_no_debris() -> None:
@@ -961,10 +1014,16 @@ def control_report_and_manifest_are_self_contained() -> None:
                 "a reused row must name the execution it is credited from")
         require(row["verdict"]["summary"], "a reused row must retain the original verdict")
         report = gc.report_path(s.root).read_text(encoding="utf-8")
-        require("reused successful evidence" in report,
-                "the report must not imply a reused gate's body ran")
-        require("executed now" not in report.split("| reused successful evidence |")[0]
-                .split("\n")[-1], "dispositions must not be conflated")
+        rows = [line for line in report.splitlines() if line.startswith("| 1 |")]
+        require(len(rows) == 1, f"expected exactly one row line, got {rows}")
+        require("reused successful evidence" in rows[0],
+                "a credited row must say so in the report")
+        require("executed now" not in rows[0],
+                "and must not also claim it executed here")
+        require(row["verdict"]["summary"][0] in rows[0],
+                "the report must carry the original verdict verbatim")
+        require(row["evidence_from"]["recorded_utc"] in rows[0],
+                "and must name when that evidence was produced")
 
 
 # --- controls: the population audit ------------------------------------------
@@ -973,19 +1032,8 @@ def control_report_and_manifest_are_self_contained() -> None:
 def audit_scratch(s: "Scratch", commands: list[str], gates: list[dict], ci: list[str]) -> int:
     """Wire a scratch repository with a catalogue, a CI workflow and a registry."""
 
-    block = "\n".join(commands)
-    s.write(
-        "scripts/GATES.md",
-        "# Verification gates\n\n"
-        "**The full set, in order.** This is what a checkpoint runs:\n\n"
-        f"```\n{block}\n```\n",
-    )
-    s.write(
-        ".github/workflows/ci.yml",
-        "jobs:\n  gates:\n    steps:\n"
-        + "".join(f"      - run: {command}\n" for command in ci),
-    )
-    s.registry(gates)
+    s.registry(gates, catalogue=False)
+    s.catalogue(commands, ci)
     gc.atomic_write(s.root / gc.INVENTORY_RELATIVE, gc.render_inventory(s.root))
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -1055,12 +1103,180 @@ def control_audit_needs_a_catalogue_block() -> None:
     with scratch() as s:
         s.write("scripts/GATES.md", "# Verification gates\n\nno block here\n")
         s.write(".github/workflows/ci.yml", "jobs: {}\n")
-        s.registry([audit_gate("a", ["scripts/check-a.sh"], 1)])
+        s.registry([audit_gate("a", ["scripts/check-a.sh"], 1)], catalogue=False)
+        s.write("scripts/GATES.md", "# Verification gates\n\nno block here\n")
         try:
             gc.audit(s.root)
         except gc.GateCacheError:
             return
         raise ControlFailure("a catalogue with no ordered block must be a fault")
+
+
+# --- controls: findings from adversarial review ------------------------------
+
+
+def control_every_import_spelling_is_parsed_or_refused() -> None:
+    """Lean's import grammar, not three literal prefixes.
+
+    The first guard here enumerated `import `, `import\t` and `public import`.
+    This toolchain's own packages carry 734 `public meta import`, 10
+    `meta import` and 64 `import all` lines, so a modifier the enumeration
+    missed would have dropped that module's depHash silently -- and silence is
+    the whole failure mode.
+    """
+
+    understood = (
+        "import Blanc.A",
+        "public import Blanc.A",
+        "private import Blanc.A",
+        "meta import Blanc.A",
+        "public meta import Blanc.A",
+        "import all Blanc.A",
+    )
+    for line in understood:
+        with scratch() as s:
+            s.trace("Blanc.A", "aaaa000000000000")
+            s.write("scripts/Eval.lean", line + "\nexample : True := trivial\n")
+            command = s.passing_gate("g.sh", "ran.txt")
+            s.registry([simple_gate(
+                "g", [command], {"lean_entries": ["scripts/Eval.lean"]}, "^OK — g.sh: ")])
+            s.run()
+            require(s.disposition("g") == "reused",
+                    f"{line!r} should parse and reuse while unchanged")
+            s.trace("Blanc.A", "bbbb111111111111")
+            require(s.disposition("g") == "fresh",
+                    f"{line!r} must expose Blanc.A to the fingerprint")
+
+    for line in ("import Blanc.A -- trailing", "public meta import Blanc.A;"):
+        with scratch() as s:
+            s.trace("Blanc.A", "aaaa000000000000")
+            s.write("scripts/Eval.lean", line + "\nexample : True := trivial\n")
+            command = s.passing_gate("g.sh", "ran.txt")
+            s.registry([simple_gate(
+                "g", [command], {"lean_entries": ["scripts/Eval.lean"]}, "^OK — g.sh: ")])
+            s.run()
+            require(s.disposition("g") == "fresh",
+                    f"{line!r} is import-like and unparsed, so it must refuse to reuse")
+
+
+def control_run_refuses_a_registry_that_lost_a_gate() -> None:
+    """Deleting a registry entry must not silently shrink the audited set.
+
+    This is the cheapest attack on the whole design: it forges no fingerprint
+    and needs no timing.  Without the run-time reconciliation the checkpoint
+    simply reports one row fewer, every remaining row green, and the gate that
+    vanished is indistinguishable from one that passed.
+    """
+
+    with scratch() as s:
+        first = s.passing_gate("check-a.sh", "a.txt")
+        second = s.passing_gate("check-b.sh", "b.txt")
+        s.write("scripts/x.txt", "one\n")
+        gates = [simple_gate("a", [first], {"files": ["scripts/x.txt"]},
+                             "^OK — check-a.sh: ", order=1),
+                 simple_gate("b", [second], {"files": ["scripts/x.txt"]},
+                             "^OK — check-b.sh: ", order=2)]
+        require(audit_scratch(s, [first, second], gates, []) == 0, "baseline audit")
+        require(s.run() == 0, f"seed run should be green:\n{s.output}")
+        require(s.ran("a.txt") == 1 and s.ran("b.txt") == 1, "both bodies ran")
+
+        s.registry(gates[:1], catalogue=False)
+        require(s.run() != 0, f"a shrunken registry must refuse to run:\n{s.output}")
+        require("--audit" in s.output, "and must say how to diagnose it")
+        require(s.ran("b.txt") == 1, "the dropped gate's body must not have run either")
+
+
+def control_local_date_is_the_clock_the_gates_read() -> None:
+    with scratch() as s:
+        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"clock": "local-date"},
+                                "^OK — g.sh: ")])
+        s.run()
+        require(s.disposition("g") == "reused", "the same local day should reuse")
+        original = time.strftime
+
+        def shifted(fmt, *rest):
+            return "1970-01-01" if fmt == "%Y-%m-%d" and not rest else original(fmt, *rest)
+
+        time.strftime = shifted
+        try:
+            require(s.disposition("g") == "fresh",
+                    "a different local date must force execution")
+        finally:
+            time.strftime = original
+
+
+def control_named_root_follows_its_override() -> None:
+    """A variable that repoints what a gate reads must repoint what is hashed.
+
+    Declaring the variable under `env` catches it *changing*.  It does not help
+    at all when the variable is held at a non-default value across two runs: the
+    declared paths were the wrong ones both times.
+    """
+
+    with scratch() as s, scratch() as elsewhere:
+        (elsewhere.root / "venv/bin").mkdir(parents=True)
+        (elsewhere.root / "venv/bin/python").write_text("#!/bin/sh\n", encoding="utf-8")
+        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
+        s.registry([simple_gate(
+            "g", ["scripts/g.sh"], {"files": ["@eels/venv/bin/python"]}, "^OK — g.sh: ")])
+        os.environ["EELS_ROOT"] = str(elsewhere.root)
+        try:
+            s.run()
+            require(s.disposition("g") == "reused", "unchanged redirected tree should reuse")
+            (elsewhere.root / "venv/bin/python").write_text("#!/bin/bash\n", encoding="utf-8")
+            require(s.disposition("g") == "fresh",
+                    "editing the redirected tree must force execution")
+        finally:
+            os.environ.pop("EELS_ROOT", None)
+
+
+def control_environment_value_cannot_imitate_absence() -> None:
+    with scratch() as s:
+        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
+        s.registry([simple_gate(
+            "g", ["scripts/g.sh"], {"env": ["GATE_CACHE_CONTROL"]}, "^OK — g.sh: ")])
+        os.environ.pop("GATE_CACHE_CONTROL", None)
+        s.run()
+        os.environ["GATE_CACHE_CONTROL"] = "<unset>"
+        try:
+            require(s.disposition("g") == "fresh",
+                    "a variable set to the string meaning absence is not absent")
+        finally:
+            os.environ.pop("GATE_CACHE_CONTROL", None)
+
+
+def control_symlinked_directory_refuses_rather_than_hides_files() -> None:
+    with scratch() as s:
+        (s.root / "corpus/real").mkdir(parents=True)
+        (s.root / "corpus/real/a.lean").write_text("one\n", encoding="utf-8")
+        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
+        s.registry([simple_gate(
+            "g", ["scripts/g.sh"],
+            {"populations": [{"root": "corpus", "pattern": "**/*.lean"}]}, "^OK — g.sh: ")])
+        s.run()
+        require(s.disposition("g") == "reused", "an ordinary corpus should reuse")
+        (s.root / "corpus/link").symlink_to(s.root / "corpus/real")
+        require(s.disposition("g") == "fresh",
+                "a symlinked directory hides files from the glob, so it must refuse")
+
+
+def control_non_zero_expected_exit_is_refused() -> None:
+    """A gate registered to expect a non-zero exit would store a legal record
+    that `read_cache` then treats as corruption, emptying the whole cache on
+    every subsequent read -- silent, total loss of reuse with no diagnosis."""
+
+    with scratch() as s:
+        s.registry([{
+            "id": "g", "order": 1, "command": ["scripts/g.sh"], "kind": "cacheable",
+            "inputs": {"files": ["scripts/x.txt"]},
+            "verdict": {"expect_exit": 1, "summary_patterns": ["^OK"]},
+        }])
+        try:
+            s.load()
+        except gc.GateCacheError:
+            return
+        raise ControlFailure("a non-zero expected exit must be refused")
 
 
 # --- negative controls ------------------------------------------------------
@@ -1199,6 +1415,19 @@ def control_negative_lenient_import_parser() -> None:
                   "unparsable imports silently skipped")
 
 
+def control_negative_trusting_the_registry_at_run_time() -> None:
+    """Without the run-time reconciliation, the registry is its own authority
+    for what exists -- and an audit nobody is required to run is no authority
+    at all."""
+
+    def unchecked(root: Path, quiet: bool = False) -> int:
+        return 0
+
+    with patched(gc, "audit", unchecked):
+        must_fail(control_run_refuses_a_registry_that_lost_a_gate,
+                  "run-time registry reconciliation removed")
+
+
 NEGATIVE_CONTROLS = (
     control_negative_laundering_unknown_into_unchanged,
     control_negative_dropping_the_post_execution_drift_check,
@@ -1207,6 +1436,7 @@ NEGATIVE_CONTROLS = (
     control_negative_last_record_only_lookup,
     control_negative_ignoring_population_membership,
     control_negative_lenient_import_parser,
+    control_negative_trusting_the_registry_at_run_time,
 )
 
 CONTROLS = (
@@ -1246,6 +1476,7 @@ CONTROLS = (
     control_registry_schema_version_is_enforced,
     control_lock_refuses_a_second_run,
     control_stale_lock_is_reclaimed_and_announced,
+    control_lock_without_an_owner_says_how_to_clear_it,
     control_atomic_write_leaves_no_debris,
     control_there_is_no_force,
     control_fresh_mode_adds_work_and_refreshes,
@@ -1255,6 +1486,13 @@ CONTROLS = (
     control_audit_fails_on_catalogue_drift,
     control_audit_fails_on_a_stale_generated_inventory,
     control_audit_needs_a_catalogue_block,
+    control_every_import_spelling_is_parsed_or_refused,
+    control_run_refuses_a_registry_that_lost_a_gate,
+    control_local_date_is_the_clock_the_gates_read,
+    control_named_root_follows_its_override,
+    control_environment_value_cannot_imitate_absence,
+    control_symlinked_directory_refuses_rather_than_hides_files,
+    control_non_zero_expected_exit_is_refused,
 ) + NEGATIVE_CONTROLS
 
 

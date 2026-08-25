@@ -45,6 +45,15 @@ nothing removes it.
 
 Cache state lives under `.lake/`, is disposable, is never committed, and may
 be deleted at any time: deleting it costs time and cannot cost correctness.
+
+What the cache validation does and does not do.  `read_cache` rejects any state
+whose *shape* is wrong -- a foreign schema, a malformed table, a record with no
+fingerprint, a record claiming a failing verdict -- and an empty cache costs a
+run.  It does not distinguish an earned record from a well-formed one somebody
+wrote by hand, and it is not trying to: signing the cache against its own
+author is out of scope here, and the file is local, gitignored, and read only
+by this runner.  The rule is therefore that nothing but this runner may write
+it -- not that a forgery would be detected.
 """
 
 from __future__ import annotations
@@ -105,10 +114,20 @@ LEAN_TRACE_ROOTS = (
     ".lake/packages/jaune/.lake/build/lib/lean",
 )
 
+# Lean 4.32 spells an import with any run of modifiers before the keyword and
+# an optional `all` after it.  In this toolchain's own packages there are
+# 25,377 `public import`, 734 `public meta import`, 10 `meta import` and 64
+# `import all` lines, so "public or nothing" is not the grammar.
+IMPORT_MODIFIERS = r"(?:(?:public|private|protected|meta)[ \t]+)*"
 IMPORT_LINE = re.compile(
-    r"^(?:public[ \t]+)?import[ \t]+"
+    rf"^{IMPORT_MODIFIERS}import[ \t]+(?:all[ \t]+)?"
     r"([A-Za-z0-9_'.]+(?:[ \t]+[A-Za-z0-9_'.]+)*)[ \t]*$"
 )
+# Deliberately broader than the parser: anything that is *plainly* an import
+# must be understood or refused.  A guard that enumerates spellings is one
+# toolchain idiom away from silently dropping a dependency, which is the whole
+# failure this raises on.
+IMPORT_LIKE = re.compile(rf"^[ \t]*{IMPORT_MODIFIERS}import\b")
 
 INPUT_KINDS = (
     "files",
@@ -323,6 +342,16 @@ def load_registry(path: Path) -> dict[str, Any]:
                 raise GateCacheError(
                     f"cacheable gate {identifier} declares no terminal summary pattern"
                 )
+            if verdict.get("expect_exit", 0) != 0:
+                # `read_cache` treats any stored record with a non-zero exit as
+                # cache corruption, so a gate registered to expect one would
+                # store a legal record that empties the whole cache on the next
+                # read -- silent, total loss of reuse with no diagnosis. The
+                # catalogue's own pass criteria say `OK — …` and exit zero are
+                # the only passing verdict, so refuse the declaration instead.
+                raise GateCacheError(
+                    f"gate {identifier} expects a non-zero exit; only exit 0 passes"
+                )
 
     gates.sort(key=lambda gate: gate["order"])
     return registry
@@ -345,6 +374,13 @@ def command_text(gate: dict[str, Any]) -> str:
 # used rather than the default one it did not.
 NAMED_ROOTS = {
     "eels": ("EELS_ROOT", "~/execution-specs"),
+    "weth10ref": ("WETH10_REFERENCE_DIR", "scripts/reference/weth10"),
+    "weth10lock": ("WETH10_REFERENCE_LOCK", "scripts/weth10-reference.json"),
+    "weth10doc": ("WETH10_COMPATIBILITY_DOC", "WETH10_COMPATIBILITY.md"),
+    "lidoref": ("LIDO_CIRCUIT_BREAKER_REFERENCE_DIR",
+                "scripts/reference/lido-circuit-breaker"),
+    "lidolock": ("LIDO_CIRCUIT_BREAKER_REFERENCE_LOCK",
+                 "scripts/lido-circuit-breaker-reference.json"),
 }
 
 
@@ -364,6 +400,11 @@ def resolve_path(root: Path, given: str) -> Path:
             raise GateCacheError(f"unknown named root: @{name}")
         variable, default = entry
         base = Path(os.path.expanduser(os.environ.get(variable) or default))
+        if not base.is_absolute():
+            # A relative override would otherwise resolve against the process's
+            # working directory, which is not the repository and which nothing
+            # in this runner sets.
+            base = root / base
         return base / rest if rest else base
     expanded = Path(os.path.expanduser(given))
     return expanded if expanded.is_absolute() else root / given
@@ -388,6 +429,18 @@ def glob_population(root: Path, spec: dict[str, Any]) -> list[str]:
     directory = resolve_path(root, base)
     if not directory.is_dir():
         raise Unresolvable(f"population root is not a directory: {base}")
+    if "**" in pattern:
+        # `Path.glob` does not descend into symlinked directories, so a file
+        # reachable only through one would be elaborated by Lean and read by
+        # the gate while staying invisible to this population. Refuse rather
+        # than fingerprint a corpus that is quietly smaller than the gate's.
+        for parent, directories, _ in os.walk(directory, followlinks=False):
+            for name in directories:
+                if Path(parent, name).is_symlink():
+                    raise Unresolvable(
+                        f"population root {base} contains a symlinked directory "
+                        f"({Path(parent, name)}); its contents cannot be enumerated"
+                    )
     prefix = "" if base in (".", "") else base.rstrip("/") + "/"
     found: list[str] = []
     for path in directory.glob(pattern):
@@ -423,10 +476,13 @@ def component_populations(
             # Namespaced by mode, so a path declared under both a content and a
             # membership population cannot have one reading silently overwrite
             # the other depending on declaration order.
+            # NUL separates the mode from the path because it is the one byte
+            # a POSIX filename cannot contain; a `membership:` prefix would be
+            # imitable by a file actually named `membership:foo`.
             if mode == "content":
                 detail[name] = file_digest(resolve_path(root, name))
             else:
-                detail[f"membership:{name}"] = "<member>"
+                detail["membership\x00" + name] = "<member>"
     return digest_of(detail), detail
 
 
@@ -475,7 +531,7 @@ def imports_of(path: Path) -> list[str]:
         match = IMPORT_LINE.match(line)
         if match:
             modules.extend(match.group(1).split())
-        elif line.lstrip().startswith(("import ", "import\t", "public import")):
+        elif IMPORT_LIKE.match(line):
             # A line that is plainly an import but does not fit the shape this
             # parser understands -- a trailing comment, an unusual spelling --
             # would otherwise drop that module's depHash from the fingerprint
@@ -566,7 +622,13 @@ def component_external(root: Path, specs: list[dict[str, Any]]) -> tuple[str, di
 
 
 def component_env(names: list[str]) -> tuple[str, dict[str, str]]:
-    detail = {name: os.environ.get(name, "<unset>") for name in sorted(set(names))}
+    """Presence encoded apart from value, so a variable cannot be *set* to the
+    string that means unset."""
+
+    detail: dict[str, str] = {}
+    for name in sorted(set(names)):
+        value = os.environ.get(name)
+        detail[name] = "<unset>" if value is None else "set\x00" + value
     return digest_of(detail), detail
 
 
@@ -598,11 +660,21 @@ def component_clock(kind: str) -> tuple[str, dict[str, str]]:
     A gate holding an exception that expires on a date reads the clock whether
     it says so or not, so its verdict can change with no file changing at all.
     Declaring the clock makes yesterday's pass stop counting tomorrow.
+
+    Which clock matters.  Blanc's four expiry gates compare against
+    `datetime.date.today()`, which is the *local* civil date.  Fingerprinting
+    UTC instead would leave a window every day, as wide as the offset, in which
+    the local date has rolled over and the UTC date has not: on this UTC+9 host
+    a gate that started failing at 00:00 KST would be credited its previous
+    pass until 09:00. `local-date` is therefore not a stylistic choice.
     """
 
-    if kind != "utc-date":
+    if kind == "local-date":
+        detail = {"local-date": time.strftime("%Y-%m-%d")}
+    elif kind == "utc-date":
+        detail = {"utc-date": time.strftime("%Y-%m-%d", time.gmtime())}
+    else:
         raise GateCacheError(f"unknown clock kind: {kind}")
-    detail = {"utc-date": time.strftime("%Y-%m-%d", time.gmtime())}
     return digest_of(detail), detail
 
 
@@ -628,7 +700,16 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         "detail": {"argv": " ".join(gate["command"])},
     }
     components["registry"] = {
-        "digest": digest_of({"kind": gate["kind"], "inputs": inputs, "verdict": gate.get("verdict")}),
+        "digest": digest_of(
+            {
+                "kind": gate["kind"],
+                "inputs": inputs,
+                "verdict": gate.get("verdict"),
+                "order": gate["order"],
+                "prerequisite": bool(gate.get("prerequisite")),
+                "ci_only": bool(gate.get("ci_only")),
+            }
+        ),
         "detail": None,
     }
     here = Path(__file__).resolve().parent
@@ -795,16 +876,28 @@ def prune_details(cache: dict[str, Any]) -> None:
 # queued.
 
 
+def read_lock_pid(owner: Path) -> int | None:
+    try:
+        return int(owner.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+
+
 def acquire_lock(path: Path) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         path.mkdir()
     except FileExistsError:
         owner = path / "pid"
-        try:
-            pid = int(owner.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
-            pid = None
+        pid = read_lock_pid(owner)
+        if pid is None:
+            # `mkdir` and the pid stamp are two steps, so a run killed between
+            # them leaves a directory nothing can attribute. Wait one second in
+            # case the stamp is merely in flight -- the same grace gate-lock.sh
+            # gives -- and if it never arrives, say how to clear it rather than
+            # refusing every future run in silence.
+            time.sleep(1)
+            pid = read_lock_pid(owner)
         if pid is not None:
             try:
                 os.kill(pid, 0)
@@ -820,7 +913,11 @@ def acquire_lock(path: Path) -> bool:
                 file=sys.stderr,
             )
             return False
-        print(f"REFUSED: another selective gate run holds {path}", file=sys.stderr)
+        print(
+            f"REFUSED: {path} exists but carries no owner. If no selective gate "
+            f"run is in progress, remove that directory by hand.",
+            file=sys.stderr,
+        )
         return False
     (path / "pid").write_text(f"{os.getpid()}\n", encoding="utf-8")
     return True
@@ -983,6 +1080,21 @@ def execute(root: Path, gate: dict[str, Any], echo: bool) -> tuple[dict[str, Any
 
 
 def run(root: Path, arguments: argparse.Namespace) -> int:
+    # Reconcile the registry against the catalogue *before* planning anything.
+    # Without this, deleting a registry entry silently shrinks the audited
+    # population: the run reports a smaller row count, every remaining row is
+    # green, and the gate that vanished is indistinguishable from one that
+    # passed. That is the cheapest possible attack on this design -- it needs
+    # no forged fingerprint -- and an audit nobody is required to run is no
+    # defence at all.
+    if audit(root, quiet=True) != 0:
+        print(
+            "check-gates: the registry does not reconcile with the catalogue; "
+            "run scripts/check-gates.sh --audit",
+            file=sys.stderr,
+        )
+        return 2
+
     registry = load_registry(registry_path(root))
     cache, cache_reason = read_cache(cache_path(root))
     if cache_reason:
@@ -1298,7 +1410,7 @@ def ci_commands(root: Path) -> list[list[str]]:
     return commands
 
 
-def audit(root: Path) -> int:
+def audit(root: Path, quiet: bool = False) -> int:
     registry = load_registry(registry_path(root))
     registered = {tuple(gate["command"]): gate for gate in registry["gates"]}
     catalogue = [tuple(command) for command in catalogue_commands(root)]
@@ -1336,21 +1448,24 @@ def audit(root: Path) -> int:
     for duplicate in sorted(duplicates):
         problems.append(f"catalogue lists a command instance twice: {duplicate}")
 
-    print(f"gate registry audit: {len(catalogue)} catalogued command instances, "
-          f"{len(registry['gates'])} registry entries, {len(set(ci))} CI commands")
-    kinds: dict[str, int] = {}
-    for gate in registry["gates"]:
-        kinds[gate["kind"]] = kinds.get(gate["kind"], 0) + 1
-    print("  dispositions: " + ", ".join(f"{k}={v}" for k, v in sorted(kinds.items())))
-    for gate in registry["gates"]:
-        if gate["kind"] != "cacheable":
-            print(f"  always fresh: {command_text(gate)} — {gate['reason']}")
+    if not quiet:
+        print(f"gate registry audit: {len(catalogue)} catalogued command instances, "
+              f"{len(registry['gates'])} registry entries, {len(set(ci))} CI commands")
+        kinds: dict[str, int] = {}
+        for gate in registry["gates"]:
+            kinds[gate["kind"]] = kinds.get(gate["kind"], 0) + 1
+        print("  dispositions: " + ", ".join(f"{k}={v}" for k, v in sorted(kinds.items())))
+        for gate in registry["gates"]:
+            if gate["kind"] != "cacheable":
+                print(f"  always fresh: {command_text(gate)} — {gate['reason']}")
     if problems:
         for problem in problems:
             print(f"  MISMATCH: {problem}", file=sys.stderr)
         print(f"REGISTRY AUDIT FAILED: {len(problems)} mismatches", file=sys.stderr)
         return 1
-    print("REGISTRY AUDIT OK: every catalogued and CI command instance is registered exactly once")
+    if not quiet:
+        print("REGISTRY AUDIT OK: every catalogued and CI command instance "
+              "is registered exactly once")
     return 0
 
 
