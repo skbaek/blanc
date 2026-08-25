@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Inventory and downward-ratchet Blanc's local Lean resource overrides.
+"""Block and downward-ratchet Blanc's local Lean resource overrides.
 
-Ordinary mode never writes. New scopes and increases are findings but remain
-report-only; malformed syntax, stale downward baselines, invalid exceptions,
-and baseline-integrity failures are regressions. ``--write-baseline`` refreshes
-the observed inventory and lowers ceilings, but can never raise one.
+Ordinary mode never writes and fails on every unexcepted new or increased
+ceiling. Exact active exceptions remain green. ``--write-baseline`` refreshes
+the observed inventory and lowers ceilings without admitting debt; a reviewed
+new nonambient finite ceiling is admitted only when its exact stable scope ID
+is also named with ``--admit-new-ceiling``.
 """
 
 from __future__ import annotations
 
 import argparse
 import bisect
+import contextlib
 import datetime as dt
+import io
 import json
 import os
 import pathlib
@@ -721,16 +724,73 @@ def compare(scopes: Sequence[Scope], baseline: Dict[str, BaselineEntry]) -> Tupl
     return findings, regressions
 
 
+def validate_new_ceiling_admissions(
+    requested: Sequence[str],
+    scopes: Sequence[Scope],
+    old: Dict[str, BaselineEntry],
+    findings: Sequence[Finding],
+    exceptions: Dict[str, dict],
+) -> Dict[str, int]:
+    if len(requested) != len(set(requested)):
+        raise GateError(
+            f"duplicate --admit-new-ceiling ID: {list(requested)}"
+        )
+    scope_map = {scope.scope_id: scope for scope in scopes}
+    finding_map = {finding.scope.scope_id: finding for finding in findings}
+    admitted: Dict[str, int] = {}
+    for scope_id in requested:
+        scope = scope_map.get(scope_id)
+        if scope is None:
+            raise GateError(f"unknown --admit-new-ceiling ID: {scope_id}")
+        finding = finding_map.get(scope_id)
+        if finding is None:
+            raise GateError(
+                f"--admit-new-ceiling ID is not a current finding: {scope_id}"
+            )
+        prior = old.get(scope_id)
+        if prior is not None and prior.ceiling is not None:
+            raise GateError(
+                "--admit-new-ceiling cannot admit an existing finite increase: "
+                f"{scope_id} ({prior.ceiling} -> {scope.value})"
+            )
+        if finding.ceiling is not None:
+            raise GateError(
+                f"--admit-new-ceiling requires an absent/null prior ceiling: {scope_id}"
+            )
+        if scope.scope_kind == "ambient_command":
+            raise GateError(
+                f"--admit-new-ceiling forbids ambient scope: {scope_id}"
+            )
+        if scope.scope_kind not in {"command_scoped", "local_scoped"}:
+            raise GateError(
+                f"--admit-new-ceiling requires command/local scope: {scope_id}"
+            )
+        if scope.value == 0:
+            raise GateError(
+                f"--admit-new-ceiling requires a finite nonzero value: {scope_id}"
+            )
+        if scope_id in exceptions:
+            raise GateError(
+                f"--admit-new-ceiling overlaps an active exception: {scope_id}"
+            )
+        admitted[scope_id] = scope.value
+    return admitted
+
+
 def baseline_document(
     scopes: Sequence[Scope],
     old: Optional[Dict[str, BaselineEntry]],
     bootstrap: bool,
+    admit_new: Sequence[str] = (),
 ) -> dict:
+    admitted = set(admit_new)
     entries = []
     for scope in sorted(scopes, key=lambda item: item.scope_id):
         prior = old.get(scope.scope_id) if old is not None else None
         if bootstrap:
             ceiling: Optional[int] = scope.value
+        elif scope.scope_id in admitted:
+            ceiling = scope.value
         elif prior is None:
             ceiling = None
         elif prior.ceiling is None:
@@ -779,16 +839,28 @@ def validate_monotone_against_base(
     candidate: Dict[str, BaselineEntry],
     base: Dict[str, BaselineEntry],
 ) -> None:
+    def valid_admission(entry: BaselineEntry) -> bool:
+        return (
+            entry.ceiling is not None
+            and entry.ceiling == entry.value
+            and entry.value != 0
+            and entry.scope_kind in {"command_scoped", "local_scoped"}
+        )
+
     failures = []
     for scope_id, entry in candidate.items():
         old = base.get(scope_id)
         if old is None:
-            if entry.ceiling is not None:
-                failures.append(f"new baseline scope has non-null ceiling: {scope_id}")
+            if entry.ceiling is not None and not valid_admission(entry):
+                failures.append(
+                    f"invalid absent-to-finite admission for {scope_id}"
+                )
             continue
         if old.ceiling is None:
-            if entry.ceiling is not None:
-                failures.append(f"null ceiling was raised for {scope_id}")
+            if entry.ceiling is not None and not valid_admission(entry):
+                failures.append(
+                    f"invalid null-to-finite admission for {scope_id}"
+                )
         elif entry.ceiling is not None and effective(entry.ceiling) > effective(old.ceiling):
             failures.append(
                 f"ceiling raised {old.ceiling} -> {entry.ceiling} for {scope_id}"
@@ -1043,14 +1115,265 @@ end Fixture
         else:
             raise AssertionError("ambient exception accepted")
 
-    print("OK — proof-debt self-test: 12/12 parser, ratchet, and exception controls passed")
+    controls = 12
+    with tempfile.TemporaryDirectory(prefix="proof-debt-e2e-") as temp:
+        root = pathlib.Path(temp)
+        (root / "Blanc").mkdir()
+        (root / "scripts").mkdir()
+        source_path = root / "Blanc" / "Fixture.lean"
+        baseline_path = root / BASELINE_REL
+        exception_path = root / EXCEPTIONS_REL
+        base_source = (
+            "set_option maxRecDepth 4096 in\n"
+            "theorem base : True := by trivial\n"
+        )
+        new_source = base_source + (
+            "set_option maxHeartbeats 1000 in\n"
+            "theorem added : True := by trivial\n"
+        )
+        local_source = base_source + (
+            "theorem addedLocal : True := by\n"
+            "  set_option maxHeartbeats 1000 in\n"
+            "    trivial\n"
+        )
+        ambient_source = base_source + "set_option maxRecDepth 8000\n"
+        zero_source = base_source + (
+            "set_option maxHeartbeats 0 in\n"
+            "theorem unlimitedAdded : True := by trivial\n"
+        )
+        base_scopes_e2e = scan_source(base_source, "Blanc/Fixture.lean")
+        base_document_e2e = baseline_document(
+            base_scopes_e2e, None, bootstrap=True,
+        )
+
+        def reset(source: str) -> None:
+            source_path.write_text(source, encoding="utf-8")
+            write_json_atomic(baseline_path, base_document_e2e)
+            _write_exception_file(exception_path, [])
+
+        def invoke(extra: Sequence[str]) -> Tuple[str, Optional[str]]:
+            output = io.StringIO()
+            error_text: Optional[str] = None
+            try:
+                with contextlib.redirect_stdout(output):
+                    main(["--root", str(root), *extra])
+            except GateError as error:
+                error_text = str(error)
+            return output.getvalue(), error_text
+
+        def current_scope(source: str, kind: str) -> Scope:
+            return next(
+                scope for scope in scan_source(source, "Blanc/Fixture.lean")
+                if scope.scope_kind == kind
+                and scope.scope_id not in {
+                    item.scope_id for item in base_scopes_e2e
+                }
+            )
+
+        def expect_atomic_failure(
+            extra: Sequence[str], needle: str,
+        ) -> str:
+            before = baseline_path.read_bytes()
+            output, error_text = invoke(extra)
+            assert error_text is not None and needle in error_text
+            assert baseline_path.read_bytes() == before
+            return output
+
+        # Ordinary findings print their exact row, never print OK, and block.
+        reset(new_source)
+        new_scope = current_scope(new_source, "command_scoped")
+        output, error_text = invoke([])
+        assert error_text is not None and "1 unexcepted" in error_text
+        assert "FINDING new:" in output and "OK — proof-debt" not in output
+        controls += 1
+
+        # An exact active exception remains green and is printed as EXCEPTED.
+        _write_exception_file(
+            exception_path,
+            [_valid_exception(new_scope, dt.date.today() + dt.timedelta(days=1))],
+        )
+        output, error_text = invoke([])
+        assert error_text is None
+        assert "EXCEPTED new:" in output and "OK — proof-debt:" in output
+        controls += 1
+
+        # Admission is writer-only.
+        reset(new_source)
+        expect_atomic_failure(
+            ["--admit-new-ceiling", new_scope.scope_id],
+            "illegal without --write-baseline",
+        )
+        controls += 1
+
+        # A reviewed command-scoped finding is admitted at exactly its value.
+        output, error_text = invoke([
+            "--write-baseline", "--admit-new-ceiling", new_scope.scope_id,
+        ])
+        assert error_text is None
+        assert (
+            f"ADMITTED: {new_scope.scope_id} ceiling={new_scope.value}" in output
+            and "OK — proof-debt:" in output
+        )
+        admitted = load_baseline(baseline_path)[new_scope.scope_id]
+        assert admitted.ceiling == admitted.value == new_scope.value
+        output, error_text = invoke([])
+        assert error_text is None and "OK — proof-debt:" in output
+        controls += 1
+
+        # Local-scoped findings use the same exact-ID admission path.
+        reset(local_source)
+        local_scope = current_scope(local_source, "local_scoped")
+        output, error_text = invoke([
+            "--write-baseline", "--admit-new-ceiling", local_scope.scope_id,
+        ])
+        assert error_text is None and "ADMITTED:" in output
+        local_entry = load_baseline(baseline_path)[local_scope.scope_id]
+        assert local_entry.ceiling == local_entry.value == local_scope.value
+        controls += 1
+
+        # An ordinary writer refresh leaves a new ceiling null and blocking.
+        reset(new_source)
+        output, error_text = invoke(["--write-baseline"])
+        assert error_text is not None and "1 unexcepted" in error_text
+        assert "FINDING increase:" in output and "OK — proof-debt" not in output
+        assert load_baseline(baseline_path)[new_scope.scope_id].ceiling is None
+        controls += 1
+
+        # Duplicate, unknown, and non-finding IDs fail before the atomic write.
+        reset(new_source)
+        expect_atomic_failure([
+            "--write-baseline",
+            "--admit-new-ceiling", new_scope.scope_id,
+            "--admit-new-ceiling", new_scope.scope_id,
+        ], "duplicate --admit-new-ceiling")
+        controls += 1
+        unknown_id = (
+            "Blanc/Missing.lean::Missing#1::command_scoped::-::"
+            "maxRecDepth#1"
+        )
+        expect_atomic_failure([
+            "--write-baseline", "--admit-new-ceiling", unknown_id,
+        ], "unknown --admit-new-ceiling")
+        controls += 1
+        reset(base_source)
+        base_scope = base_scopes_e2e[0]
+        expect_atomic_failure([
+            "--write-baseline", "--admit-new-ceiling", base_scope.scope_id,
+        ], "not a current finding")
+        controls += 1
+
+        # Ambient and unlimited findings can never be admitted.
+        reset(ambient_source)
+        ambient_scope_e2e = current_scope(ambient_source, "ambient_command")
+        expect_atomic_failure([
+            "--write-baseline", "--admit-new-ceiling",
+            ambient_scope_e2e.scope_id,
+        ], "forbids ambient scope")
+        controls += 1
+        reset(zero_source)
+        zero_scope = current_scope(zero_source, "command_scoped")
+        expect_atomic_failure([
+            "--write-baseline", "--admit-new-ceiling", zero_scope.scope_id,
+        ], "finite nonzero value")
+        controls += 1
+
+        # A finite existing ceiling increase is never an admission candidate.
+        increased_source = base_source.replace("4096", "8192")
+        reset(increased_source)
+        expect_atomic_failure([
+            "--write-baseline", "--admit-new-ceiling", base_scope.scope_id,
+        ], "existing finite increase")
+        controls += 1
+
+        # Admission and an active exception may not overlap.
+        reset(new_source)
+        _write_exception_file(
+            exception_path,
+            [_valid_exception(new_scope, dt.date.today() + dt.timedelta(days=1))],
+        )
+        expect_atomic_failure([
+            "--write-baseline", "--admit-new-ceiling", new_scope.scope_id,
+        ], "overlaps an active exception")
+        controls += 1
+
+        # Cross-base validation accepts exact finite nonambient promotions from
+        # absent and null, including the writer-produced documents.
+        added_scopes = scan_source(new_source, "Blanc/Fixture.lean")
+        absent_admitted_doc = baseline_document(
+            added_scopes, base, bootstrap=False,
+            admit_new=(new_scope.scope_id,),
+        )
+        absent_admitted = load_baseline_text(
+            json.dumps(absent_admitted_doc), "absent admission",
+        )
+        validate_monotone_against_base(absent_admitted, base)
+        null_doc = baseline_document(added_scopes, base, bootstrap=False)
+        null_base = load_baseline_text(json.dumps(null_doc), "null base")
+        null_admitted_doc = baseline_document(
+            added_scopes, null_base, bootstrap=False,
+            admit_new=(new_scope.scope_id,),
+        )
+        null_admitted = load_baseline_text(
+            json.dumps(null_admitted_doc), "null admission",
+        )
+        validate_monotone_against_base(null_admitted, null_base)
+        controls += 1
+
+        # Ambient, zero, mismatched value/ceiling promotions and finite raises
+        # remain cross-base regressions.
+        invalid_documents = []
+        for source, kind in (
+            (ambient_source, "ambient_command"),
+            (zero_source, "command_scoped"),
+        ):
+            candidate_scopes = scan_source(source, "Blanc/Fixture.lean")
+            candidate_scope = current_scope(source, kind)
+            invalid_documents.append(baseline_document(
+                candidate_scopes, base, bootstrap=False,
+                admit_new=(candidate_scope.scope_id,),
+            ))
+        mismatched = json.loads(json.dumps(absent_admitted_doc))
+        for row in mismatched["entries"]:
+            if row["id"] == new_scope.scope_id:
+                row["ceiling"] = new_scope.value - 1
+        invalid_documents.append(mismatched)
+        finite_raise = json.loads(json.dumps(base_doc))
+        finite_raise["entries"][0]["value"] = 8192
+        finite_raise["entries"][0]["ceiling"] = 8192
+        invalid_documents.append(finite_raise)
+        for index, document in enumerate(invalid_documents):
+            candidate = load_baseline_text(
+                json.dumps(document), f"invalid promotion {index}",
+            )
+            try:
+                validate_monotone_against_base(candidate, base)
+            except GateError as error:
+                assert "downward-monotone" in str(error)
+            else:
+                raise AssertionError("invalid cross-base promotion accepted")
+        controls += 1
+
+    print(
+        f"OK — proof-debt self-test: {controls}/{controls} parser, ratchet, "
+        "blocking, exception, admission, and cross-base controls passed"
+    )
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=pathlib.Path, default=None)
     parser.add_argument("--base", default=None, help="base revision for monotone-ceiling validation")
-    parser.add_argument("--write-baseline", action="store_true", help="refresh observations and lower ceilings")
+    parser.add_argument(
+        "--write-baseline", action="store_true",
+        help="refresh observations and lower ceilings without admitting new debt",
+    )
+    parser.add_argument(
+        "--admit-new-ceiling", action="append", default=[], metavar="SCOPE_ID",
+        help=(
+            "with --write-baseline, admit this exact reviewed new/null "
+            "nonambient finite scope ID at its current value (repeatable)"
+        ),
+    )
     parser.add_argument(
         "--bootstrap-baseline", action="store_true",
         help="one-time creation of the initial grandfathered baseline",
@@ -1058,6 +1381,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
 
+    if args.admit_new_ceiling and not args.write_baseline:
+        raise GateError("--admit-new-ceiling is illegal without --write-baseline")
     if args.self_test:
         self_test()
         return 0
@@ -1069,6 +1394,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     baseline_path = root / BASELINE_REL
     exceptions_path = root / EXCEPTIONS_REL
     scopes = scan_tree(root)
+    admitted_values: Dict[str, int] = {}
 
     if args.bootstrap_baseline:
         if baseline_path.exists():
@@ -1078,7 +1404,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"wrote initial grandfathered baseline: {len(scopes)} scopes")
     elif args.write_baseline:
         old = load_baseline(baseline_path)
-        document = baseline_document(scopes, old, bootstrap=False)
+        if args.admit_new_ceiling:
+            pre_findings, _pre_regressions = compare(scopes, old)
+            pre_exceptions = validate_exceptions(
+                exceptions_path, pre_findings, scopes,
+            )
+            admitted_values = validate_new_ceiling_admissions(
+                args.admit_new_ceiling,
+                scopes,
+                old,
+                pre_findings,
+                pre_exceptions,
+            )
+        document = baseline_document(
+            scopes,
+            old,
+            bootstrap=False,
+            admit_new=tuple(admitted_values),
+        )
+        document_rows = {row["id"]: row for row in document["entries"]}
+        for scope_id, value in admitted_values.items():
+            row = document_rows.get(scope_id)
+            if row is None or row["ceiling"] != value or row["value"] != value:
+                raise GateError(
+                    "internal admission document mismatch for "
+                    f"{scope_id}: expected ceiling=value={value}"
+                )
         write_json_atomic(baseline_path, document)
         print(f"ratcheted baseline inventory: {len(scopes)} scopes")
 
@@ -1099,6 +1450,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         f"inventory: {len(scopes)} scopes in {files} files "
         f"({heartbeat_count} maxHeartbeats, {recdepth_count} maxRecDepth)"
     )
+    for scope_id, value in admitted_values.items():
+        print(f"  ADMITTED: {scope_id} ceiling={value}")
     for finding in findings:
         if finding.scope.scope_id in exceptions:
             print(
@@ -1114,9 +1467,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"{finding.scope.value} (ceiling {old})"
         )
     unexcepted = sum(finding.scope.scope_id not in exceptions for finding in findings)
+    if unexcepted:
+        sys.stdout.flush()
+        raise GateError(
+            f"{unexcepted} unexcepted new/increased ceiling finding(s)"
+        )
     print(
-        f"OK — proof-debt (report-only): {len(scopes)} scopes inventoried; "
-        f"{unexcepted} unexcepted new/increased finding(s)"
+        f"OK — proof-debt: {len(scopes)} scopes inventoried; "
+        "zero unexcepted new/increased findings"
     )
     return 0
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Report-only proof-resource debt gate. Structural/parser/baseline failures are
-# still regressions; only unexcepted new or increased debt is report-only.
+# Blocking proof-resource debt gate. Every unexcepted new or increased ceiling
+# is a regression; reviewed permanent admissions use the Python writer's exact
+# stable-ID path, while temporary exceptions remain bounded and expiring.
 
 set -u
 
