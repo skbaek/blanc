@@ -398,8 +398,6 @@ theorem targetAt_append_cons_length (done rest : List Entry) (entry : Entry) :
       simp only [List.cons_append, List.length_cons, targetAt]
       exact ih
 
-set_option maxHeartbeats 400000
-
 theorem enumPrefixMemory_read_length_fst (entries done : List Entry) :
     ((enumPrefixMemory entries done).read 32 32).1 =
       (Nat.toB256 entries.length).toBytes := by
@@ -489,8 +487,6 @@ theorem enumPrefixDevm_memRead_full (base : Devm) (entries : List Entry)
 
 attribute [simp] enumPrefixMemory_read_length_fst
   enumPrefixMemory_read_length_snd
-
-set_option maxHeartbeats 200000
 
 /-- Ordered storage reads of `getPausables`: length first, then one target slot per entry. -/
 def enumerationEntryKeysFrom : Nat → List Entry → List B256
@@ -774,8 +770,6 @@ theorem preparedEnumerationState_getStor (sevm : Sevm) (base : Devm)
     Devm.getStor (preparedEnumerationState sevm base entries) address =
       Devm.getStor base address :=
   (preparedEnumerationState_worldEq sevm base entries).getStor address |>.symm
-
-set_option maxRecDepth 4096
 
 theorem enumLoop_pre_stack_height (base : Devm) (entries done rest : List Entry)
     (G : Nat) :
@@ -1080,6 +1074,7 @@ theorem enumerationRuntimeResources_prepared (sevm : Sevm) (base : Devm)
   intro key hkey
   exact prepareEnumerationStorage_warm sevm base entries hkey
 
+set_option maxRecDepth 675 in
 /-- A well-formed direct `getPausables()` call through the exact parameterized
 runtime reaches the verified body, returns the complete ordered ABI image, and
 uses the concrete current target as both code and storage owner.  The code
@@ -1271,6 +1266,7 @@ private theorem registryScalarReturn_runCompiled
     (Devm.extCost_word_word Mem.size_write_word) rfl hread
   · exact ⟨rfl, rfl⟩
 
+set_option maxRecDepth 742 in
 /-- Exact compiled-body result for the assignment view on a canonical ABI
 address word and the same concrete Registry owner used by enumeration. -/
 theorem getPauser_body_runCompiled
@@ -1318,6 +1314,7 @@ theorem getPauser_body_runCompiled
       Devm.getStorVal_setMach, hstorage, hgasFinal]
     exact hreturn }
 
+set_option maxRecDepth 742 in
 /-- Exact compiled-body result for the per-pauser multiplicity view on a
 canonical ABI address word and the same concrete Registry owner. -/
 theorem getPausableCount_body_runCompiled
@@ -1970,7 +1967,6 @@ theorem finishSetPauser_run_extracts_event
       (hstorTarget.trans (hstorEvent.trans hstorLog)))).symm,
     htail⟩
 
-set_option maxRecDepth 4096 in
 /-- An exact successful emitted-kernel execution exposes the stable S2
 Registry poststate before appending the sole production `PauserSet` log, then
 selects exactly the saved register or pre-yield pause continuation. -/
@@ -2111,7 +2107,6 @@ private theorem registerContinuation_logsAppend
       rw [hfinal, ← hburn.logs, ← hbranchBurn.logs, ← hpop.logs,
         ← hlogsFlag, ← hlogsContinuation]
 
-set_option maxRecDepth 4096 in
 /-- A successful exact direct-register continuation retains the `PauserSet`
 event in the terminal raw frame and reaches the same Registry snapshot as the
 source transition.  Optional heartbeat records form only a later suffix. -/
@@ -2173,7 +2168,6 @@ theorem pauserSet_register_success
   refine ⟨trace, postRegistry, suffix, hmodel, hwFinal, ?_⟩
   rw [hfinalLogs, hlogs, List.append_assoc]
 
-set_option maxRecDepth 4096 in
 /-- Clean settlement of an exact direct `registerPauser` message retains the
 raw successful event and its matching terminal Registry snapshot.  The filled
 slot names EO4's explicit kernel boundary; settlement contributes no new
@@ -2273,7 +2267,6 @@ theorem pauserSet_target_zero_no_success
   rw [setPauserSourceTrace_target_zero] at htrace
   cases htrace
 
-set_option maxRecDepth 4096 in
 /-- The exact forward-constructed target-zero revert reaches no Registry
 write occurrence and preserves the entry log list, so it cannot expose a
 `PauserSet` record. -/
@@ -2355,7 +2348,6 @@ theorem pauserSet_settled_error_not_observable
       htargetOwner howner hcodeAddress hcode hvalue hpause htarget
       hentry hprocess hpostError
 
-set_option maxRecDepth 4096 in
 /-- A monitor observation derived from this exact successful local site agrees
 with the stable post-Registry snapshot: the event records the pre-assignment
 and requested pauser, while the poststate satisfies the same coherence facts
@@ -2453,7 +2445,6 @@ theorem registryObservation_raw_sound
   exact ⟨trace, postRegistry, logged, viewBase, hmodel, hwPost, hlogs,
     hstorLogged, rfl, hviewStor, hviewLogs, hviews⟩
 
-set_option maxRecDepth 4096 in
 /-- A committed direct-register event and exact re-reads of the three Registry
 views agree on one clean settled snapshot.  The theorem is local to the named
 message and snapshot; it makes no history, delivery, reorg, or availability
@@ -2555,7 +2546,5 @@ theorem registryObservation_sound
     hpauserWarm hcountWarm hfs
   exact ⟨trace, postRegistry, suffix, viewBase, hmodel, hwSettled, hlogs,
     rfl, hviewStor, hviewLogs, hviews⟩
-
-set_option maxRecDepth 1000
 
 end Blanc.LidoCircuitBreaker
