@@ -5,11 +5,11 @@
 # alive. A file fails the gate above both 2.0x its time here and that time
 # plus 1.0s. Rewrite with: scripts/check-elab.sh --rebase
 #
-# 2026-08-25 elab-cure-1 shrink-only reconciliation after an authorized
+# 2026-08-25 elab-cure-2 shrink-only reconciliation after the one authorized
 # 149-module `check-elab.sh --rebase` pass: each row is min(committed row,
-# measured row). The pass measured 989.4 s total; 4 reductions are recorded,
-# 145 lower committed rows are preserved, no row rises, and this ratchet totals
-# 924.523 s.
+# measured row). The pass measured 937.1 s total; 8 reductions are recorded,
+# 141 lower committed rows are preserved, no row rises, and this ratchet totals
+# 845.462 s.
 OK	1.167	Blanc.lean
 OK	1.150	Blanc/BalanceAlgebra.lean
 OK	1.231	Blanc/Basic.lean
@@ -34,7 +34,7 @@ OK	11.154	Blanc/Forward.lean
 OK	1.743	Blanc/ForwardCall.lean
 OK	3.121	Blanc/Ladder.lean
 OK	15.805	Blanc/LidoCircuitBreaker.lean
-OK	15.033	Blanc/LidoCircuitBreakerAbsentRegistration.lean
+OK	3.336	Blanc/LidoCircuitBreakerAbsentRegistration.lean
 OK	34.643	Blanc/LidoCircuitBreakerAccess.lean
 OK	32.134	Blanc/LidoCircuitBreakerAttainment.lean
 OK	9.360	Blanc/LidoCircuitBreakerAuthority.lean
@@ -45,12 +45,12 @@ OK	7.130	Blanc/LidoCircuitBreakerDeploy.lean
 OK	1.239	Blanc/LidoCircuitBreakerDeploymentBlock.lean
 OK	11.640	Blanc/LidoCircuitBreakerDeploymentInput.lean
 OK	51.374	Blanc/LidoCircuitBreakerDeploymentLayout.lean
-OK	1.697	Blanc/LidoCircuitBreakerDeploymentMessage.lean
+OK	1.428	Blanc/LidoCircuitBreakerDeploymentMessage.lean
 OK	1.206	Blanc/LidoCircuitBreakerDeploymentRoot.lean
-OK	62.782	Blanc/LidoCircuitBreakerDeploymentTrace.lean
+OK	62.173	Blanc/LidoCircuitBreakerDeploymentTrace.lean
 OK	2.121	Blanc/LidoCircuitBreakerDeploymentTransaction.lean
-OK	40.326	Blanc/LidoCircuitBreakerEnumeration.lean
-OK	17.331	Blanc/LidoCircuitBreakerFreshRegistration.lean
+OK	6.776	Blanc/LidoCircuitBreakerEnumeration.lean
+OK	4.261	Blanc/LidoCircuitBreakerFreshRegistration.lean
 OK	1.225	Blanc/LidoCircuitBreakerHistory.lean
 OK	1.466	Blanc/LidoCircuitBreakerHistoryChain.lean
 OK	1.375	Blanc/LidoCircuitBreakerHistoryEndpoints.lean
@@ -91,7 +91,7 @@ OK	1.999	Blanc/Tactics.lean
 OK	1.208	Blanc/TransientInvariance.lean
 OK	1.269	Blanc/TransientSettlement.lean
 OK	2.356	Blanc/Weth.lean
-OK	20.615	Blanc/Weth10.lean
+OK	17.235	Blanc/Weth10.lean
 OK	1.546	Blanc/Weth10AllowanceAccounting.lean
 OK	1.436	Blanc/Weth10AllowanceArms.lean
 OK	1.766	Blanc/Weth10AllowanceArmsBalance.lean
@@ -111,7 +111,7 @@ OK	1.467	Blanc/Weth10AttributionChronology.lean
 OK	2.353	Blanc/Weth10Backed.lean
 OK	12.823	Blanc/Weth10Code.lean
 OK	1.230	Blanc/Weth10Core.lean
-OK	43.283	Blanc/Weth10Deploy.lean
+OK	29.861	Blanc/Weth10Deploy.lean
 OK	16.628	Blanc/Weth10DeployDomainSlices.lean
 OK	1.949	Blanc/Weth10DeployExec.lean
 OK	2.760	Blanc/Weth10DeployProof.lean
@@ -132,7 +132,7 @@ OK	1.247	Blanc/Weth10HolderFlowConservation.lean
 OK	1.310	Blanc/Weth10HolderFlowDeterminism.lean
 OK	2.421	Blanc/Weth10HolderFlowEth.lean
 OK	8.338	Blanc/Weth10HolderFlowEthExec.lean
-OK	17.056	Blanc/Weth10HolderFlowExecAccounting.lean
+OK	13.992	Blanc/Weth10HolderFlowExecAccounting.lean
 OK	2.428	Blanc/Weth10HolderFlowFlashChronology.lean
 OK	1.334	Blanc/Weth10HolderFlowLocal.lean
 OK	1.724	Blanc/Weth10HolderFlowPermitChronology.lean
