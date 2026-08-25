@@ -4,12 +4,12 @@
   "registry_sha256": "eeccb64da4ee6ba664722a524f599b280a67e3e39160c901fd8d94c2f687b798",
   "predicates": {
     "enum-loop-memory-cursor-rfl": 1,
-    "registration-inline-staging": 1,
+    "registration-inline-staging": 0,
     "run-core-pc-irrel-depth": 1,
     "selector-decide-kernel": 28,
     "sites-direct-let": 1,
     "weth10-entry-shapes-rfl": 1
   },
-  "total": 33,
-  "digest": "ac8f00e9d0155483e6c22ccd0dd0ae491fe5054a6fe17fcc06a633552cfc4888"
+  "total": 32,
+  "digest": "f8445ee14519a8b5847836e53161f1456e9f81d8700292a638d45adc91d8831d"
 }
