@@ -26,6 +26,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
+      - name: Registered proof residue ratchet
+        run: scripts/check-proof-residue.sh
       # Ahead of the toolchain deliberately: this gate reads .lean files only,
       # so it needs no Lean, no build and no network, and fails in under a
       # second when a contract reaches into another contract's modules.

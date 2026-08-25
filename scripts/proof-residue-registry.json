@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "predicates": [
+    {
+      "id": "registration-inline-staging",
+      "description": "Inline registration-leaf staging size and hstage walk",
+      "owner": "registration-leaf-ports",
+      "reopen": "Any registration leaf regains the private staging block",
+      "boundary": "Textual declaration-body check; does not inspect elaborated terms",
+      "include": [
+        "Blanc/LidoCircuitBreakerFreshRegistration.lean",
+        "Blanc/LidoCircuitBreakerAbsentRegistration.lean"
+      ],
+      "pattern": "(?ms)^\\s*have\\s+hM1Size\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?^\\s*have\\s+hstage\\b"
+    },
+    {
+      "id": "selector-decide-kernel",
+      "description": "Selector rewrite immediately followed by a kernel decision",
+      "owner": "exec-accounting-selector-retrofit",
+      "reopen": "A selector accounting site again carries rw [hselector] followed by decide +kernel",
+      "boundary": "Textual adjacent-line check; ignores comments and string literals",
+      "include": ["Blanc/Weth10HolderFlowExecAccounting.lean"],
+      "pattern": "(?m)^\\s*(?:·\\s*)?rw\\s+\\[hselector\\]\\s*$\\n\\s*(?:·\\s*)?decide\\s+\\+kernel\\b"
+    },
+    {
+      "id": "sites-direct-let",
+      "description": "Official runtime external-call theorem directly opens its sites let",
+      "owner": "sites-a1-fold",
+      "reopen": "The official runtime external-call theorem again computes sites in its own body",
+      "boundary": "Named-declaration adjacent-line textual check; not a semantic proof check",
+      "include": ["Blanc/LidoCircuitBreakerSites.lean"],
+      "pattern": "(?m)^theorem\\s+runtimeExternalCallInstructions_official\\b[^\\n]*\\n\\s*let\\s+sites\\s*:="
+    },
+    {
+      "id": "weth10-entry-shapes-rfl",
+      "description": "weth10EntryShapes_eq retains a bare rfl proof",
+      "owner": "weth10-layer-naming",
+      "reopen": "The entry-shapes equality returns to a bare rfl body",
+      "boundary": "Named declaration bounded by the next top-level declaration",
+      "include": ["Blanc/Weth10.lean"],
+      "pattern": "(?ms)^private\\s+theorem\\s+weth10EntryShapes_eq\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s*\\n\\s*rfl\\s*$"
+    },
+    {
+      "id": "run-core-pc-irrel-depth",
+      "description": "runCore_pc_irrel carries the 100000 recursion-depth scope",
+      "owner": "compiled-tag-dispatch",
+      "reopen": "The runCore_pc_irrel declaration is again scoped at maxRecDepth 100000",
+      "boundary": "Exact option-to-named-declaration textual check; does not prove the option is necessary",
+      "include": ["Blanc/Compiled.lean"],
+      "pattern": "(?m)^set_option\\s+maxRecDepth\\s+100000\\s+in\\s*\\n(?:[ \\t]*\\n)*lemma\\s+Rinst\\.runCore_pc_irrel\\b"
+    },
+    {
+      "id": "enum-loop-memory-cursor-rfl",
+      "description": "Enumeration cursor-independent memory theorem retains bare rfl",
+      "owner": "enumeration-kit-reach",
+      "reopen": "The enumLoop_pre_memory_independent_of_cursor theorem again closes by rfl",
+      "boundary": "Named declaration bounded by the next top-level declaration",
+      "include": ["Blanc/LidoCircuitBreakerEnumeration.lean"],
+      "pattern": "(?ms)^theorem\\s+enumLoop_pre_memory_independent_of_cursor\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?\\n\\s*rfl\\s*$"
+    }
+  ]
+}
