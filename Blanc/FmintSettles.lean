@@ -671,63 +671,6 @@ the `execSat_*` siblings.  The fixed-outcome forms stay: they are checkpoint
 2b's landed surface, and their exact-state conclusions are what a *known*
 outcome composes against. -/
 
-private def flashLoanFromSupplyLoad : Func :=
-  Ninst.sload :::
-  Ninst.not :::
-  Ninst.lt :::
-  .rev <?>
-    (Ninst.dup 1 :::
-      Ninst.sload :::
-      Ninst.dup 1 :::
-      Ninst.add :::
-      Ninst.dup 2 :::
-      Ninst.sstore :::
-      pushSupplySlot +++
-      Ninst.sload :::
-      Ninst.dup 1 :::
-      Ninst.add :::
-      pushSupplySlot +++
-      Ninst.sstore :::
-      flashLoanFromMintLog)
-
-private theorem flashLoan_execSat_to_supplyLoad {sevm : Sevm} {pre : Devm}
-    {receiver token amount : B256} {data : Bytes} {M : Mem} {g : Nat}
-    {P : Execution → Prop}
-    (h_sel : Sevm.selector sevm = flashLoanSelector)
-    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
-      [receiver, token, amount] data)
-    (h_token : token = sevm.currentTarget.toB256)
-    (h_addr : ValidAdr receiver)
-    (h_gas : 176 ≤ g)
-    (h_cont : Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (pre.setMach
-        ⟨[supplySlot, Sevm.dataWord sevm (32 * 2 + 4),
-          Sevm.dataWord sevm (32 * 2 + 4), Sevm.dataWord sevm (32 * 0 + 4)],
-          M, g - 176⟩)
-      flashLoanFromSupplyLoad P) :
-    Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (pre.setMach ⟨[], M, g - 1⟩) fmint.main P := by
-  have h_arg0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
-  refine Func.execSat_segment
-    (devm' := pre.setMach
-      ⟨[supplySlot, Sevm.dataWord sevm (32 * 2 + 4),
-        Sevm.dataWord sevm (32 * 2 + 4), Sevm.dataWord sevm (32 * 0 + 4)],
-        M, g - 176⟩)
-    (f' := flashLoanFromSupplyLoad) ?_ h_cont
-  intro ex hex
-  func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
-    ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
-  · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
-    rw [argWord_one_of_decodes h_dec, h_token]
-    show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
-      then (1 : B256) else 0) = 1
-    rw [if_pos rfl]
-  · show ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
-      (Sevm.argWord sevm 0) = 0
-    rw [h_arg0, ← addressMask_eq_shl]
-    exact validAdr_iff.mp h_addr
-  exact hex
-
 /-- `flashLoan_runCompiledTo_mint`, existential in the outcome. -/
 theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     {receiver token amount : B256} {data : Bytes} {P : Execution → Prop}
@@ -771,7 +714,20 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     (by simp only [gJumpdest]; omega)
     (by rw [h_stack, h_mem])
     ?_
-  refine flashLoan_execSat_to_supplyLoad h_sel h_dec h_token h_addr (by omega) ?_
+  apply Func.execSat_segment
+  · intro ex hex
+    func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
+      ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
+    · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
+      rw [argWord_one_of_decodes h_dec, h_token]
+      show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
+        then (1 : B256) else 0) = 1
+      rw [if_pos rfl]
+    · show ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
+        (Sevm.argWord sevm 0) = 0
+      rw [h_arg0, ← addressMask_eq_shl]
+      exact validAdr_iff.mp h_addr
+    exact hex
   refine Func.execSat_sload_step rfl (by simp)
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl
     (M := Mem.empty) rfl
@@ -2466,7 +2422,20 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
   refine Prog.execSat_intro (G := g - 1)
     (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
     (by simp only [gJumpdest]; omega) (by rw [h_stack]) ?_
-  refine flashLoan_execSat_to_supplyLoad h_sel h_dec h_token h_addr (by omega) ?_
+  apply Func.execSat_segment
+  · intro ex hex
+    func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
+      ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
+    · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
+      rw [argWord_one_of_decodes h_dec, h_token]
+      show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
+        then (1 : B256) else 0) = 1
+      rw [if_pos rfl]
+    · show ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
+        (Sevm.argWord sevm 0) = 0
+      rw [h_arg0, ← addressMask_eq_shl]
+      exact validAdr_iff.mp h_addr
+    exact hex
   refine Func.execSat_sload_step
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl (by simp)
     rfl (M := pre.memory) rfl

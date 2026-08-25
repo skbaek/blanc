@@ -23,24 +23,6 @@
       "pattern": "(?m)^\\s*(?:·\\s*)?rw\\s+\\[hselector\\]\\s*$\\n\\s*(?:·\\s*)?decide\\s+\\+kernel\\b"
     },
     {
-      "id": "fmint-duplicate-flashloan-prefix",
-      "description": "Public flash-loan ExecSat theorems repeat the 39-node prefix walk instead of using the shared carrier",
-      "owner": "fmint-shared-prefix-hoist",
-      "reopen": "Either public ExecSat theorem regains a direct 39-node func_run prefix",
-      "boundary": "Named declaration bodies only; the central carrier and the excluded RunCompiledTo walks remain outside the predicate",
-      "include": ["Blanc/FmintSettles.lean"],
-      "pattern": "(?ms)^theorem\\s+(?:flashLoan_execSat_mint|fmint_amount_over_bound_reverts)\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?^\\s*func_run\\s+\\(39\\)\\b"
-    },
-    {
-      "id": "attainment-unbundled-index-pin",
-      "description": "Attainment index-pin families independently kernel-decide the shared closed inventory",
-      "owner": "attainment-index-pin-bundling",
-      "reopen": "One of the six retrofitted public index-pin theorems regains a direct decide +kernel body",
-      "boundary": "Six named declaration bodies; the two pre-existing bundle controls and the private shared bundle are outside the predicate",
-      "include": ["Blanc/LidoCircuitBreakerAttainment.lean"],
-      "pattern": "(?ms)^theorem\\s+(?:setPauserAssignment_index_pin|afterOldNewCount_index_pin|registerFreshArmExpiry_index_pin|setPauseDurationConfig_index_pin|setHeartbeatIntervalConfig_index_pin|heartbeatExpiry_index_pin)\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?^\\s*decide\\s+\\+kernel\\b"
-    },
-    {
       "id": "sites-direct-let",
       "description": "Official runtime external-call theorem directly kernel-computes its sites inventory",
       "owner": "sites-a1-fold",

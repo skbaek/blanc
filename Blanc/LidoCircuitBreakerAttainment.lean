@@ -883,92 +883,14 @@ theorem RuntimePersistentWrite.sourceSite?_official {dp : DeployParams}
   unfold RuntimePersistentWrite.sourceSite? at found ⊢
   rwa [runtimePersistentSourceSites_eq_official dp] at found
 
-private def attainment_setPauserAssignmentPath : Prog.SourcePath :=
-  ⟨setPauserSlot,
-    List.replicate 3 .rest ++ [.branchLeft] ++ List.replicate 14 .rest⟩
-
-private def attainment_afterOldNewCountPath : Prog.SourcePath :=
-  ⟨afterOldPauserSlot,
-    List.replicate 3 .rest ++ [.branchLeft] ++ List.replicate 11 .rest⟩
-
-private def attainment_registerFreshArmExpiryPath : Prog.SourcePath :=
-  ⟨registerAfterSetSlot,
-    List.replicate 3 .rest ++ [.branchRight] ++ List.replicate 3 .rest ++
-      [.branchLeft] ++ List.replicate 8 .rest ++ [.branchLeft] ++
-      List.replicate 7 .rest⟩
-
-private def attainment_setPauseDurationConfigPath : Prog.SourcePath :=
-  ⟨0,
-    List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 7 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchRight] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchRight] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 15 .rest⟩
-
-private def attainment_setHeartbeatIntervalConfigPath : Prog.SourcePath :=
-  ⟨0,
-    List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 7 .rest ++ [.branchRight] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 2 .rest ++ [.branchRight] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchRight] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 15 .rest⟩
-
-private def attainment_heartbeatExpiryPath : Prog.SourcePath :=
-  ⟨0,
-    List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 7 .rest ++ [.branchRight] ++
-      List.replicate 3 .rest ++ [.branchRight] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 2 .rest ++ [.branchRight] ++
-      List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 6 .rest ++ [.branchRight] ++
-      List.replicate 8 .rest ++ [.branchLeft] ++
-      List.replicate 6 .rest⟩
-
-private theorem attainment_index_pin_bundle :
-    (∀ index ∈ List.range 20,
-        ((runtimePersistentSourceSites officialParams)[index]?.map
-          (fun s => s.path) = some attainment_setPauserAssignmentPath) → index = 3) ∧
-      (∀ index ∈ List.range 20,
-        ((runtimePersistentSourceSites officialParams)[index]?.map
-          (fun s => s.path) = some attainment_afterOldNewCountPath) → index = 8) ∧
-      (∀ index ∈ List.range 20,
-        ((runtimePersistentSourceSites officialParams)[index]?.map
-          (fun s => s.path) = some attainment_registerFreshArmExpiryPath) → index = 17) ∧
-      (∀ index ∈ List.range 20,
-        ((runtimePersistentSourceSites officialParams)[index]?.map
-          (fun s => s.path) = some attainment_setPauseDurationConfigPath) → index = 0) ∧
-      (∀ index ∈ List.range 20,
-        ((runtimePersistentSourceSites officialParams)[index]?.map
-          (fun s => s.path) = some attainment_setHeartbeatIntervalConfigPath) → index = 1) ∧
-      (∀ index ∈ List.range 20,
-        ((runtimePersistentSourceSites officialParams)[index]?.map
-          (fun s => s.path) = some attainment_heartbeatExpiryPath) → index = 2) := by
-  decide +kernel
-
+set_option maxRecDepth 20000 in
 /-- Only inventory index `3` — `.setPauserAssignment` — nominates a site whose
 source path is `setPauserAssignmentPath`. -/
 theorem setPauserAssignment_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
           (fun s => s.path) = some setPauserAssignmentPath) → index = 3 := by
-  exact attainment_index_pin_bundle.1
+  decide +kernel
 
 /-- A row whose nominated site sits at `setPauserAssignmentPath` is exactly
 `.setPauserAssignment`. -/
@@ -1961,13 +1883,14 @@ theorem runtimeMain_routeTo_afterOldNewCount {devm post : Devm}
       tagTop]
   exact pathEq ▸ routeTo_head write afterOldNewCountPath
 
+set_option maxRecDepth 20000 in
 /-- Inventory index `8` -- `.afterOldNewCount` -- is the only one nominating
 `afterOldNewCountPath`. -/
 theorem afterOldNewCount_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
           (fun s => s.path) = some afterOldNewCountPath) → index = 8 := by
-  exact attainment_index_pin_bundle.2.1
+  decide +kernel
 
 /-- The `afterOld.newCount` row is attained with the `.adminRegistry` role. -/
 theorem attainable_afterOldNewCount_adminRegistry :
@@ -2171,13 +2094,14 @@ theorem runtimeMain_routeTo_registerFreshArmExpiry {devm post : Devm}
       registerFreshArmExpiryPrefix, loadWord, mstoreAt, tagTop]
   exact pathEq ▸ routeTo_head write registerFreshArmExpiryPath
 
+set_option maxRecDepth 20000 in
 /-- Inventory index `17` is the only one nominating
 `registerFreshArmExpiryPath`. -/
 theorem registerFreshArmExpiry_index_pin :
     ∀ index ∈ List.range 20,
       ((runtimePersistentSourceSites officialParams)[index]?.map
           (fun s => s.path) = some registerFreshArmExpiryPath) → index = 17 := by
-  exact attainment_index_pin_bundle.2.2.1
+  decide +kernel
 
 /-- The inventory row at index `17`, `.registerFreshExpiry` — the expiry write
 on `registerAfterSet`'s fresh arm — is attained with the `.adminExpiry` role.
@@ -2787,6 +2711,7 @@ theorem runtimeMain_routeTo_setPauseDurationConfig (dp : DeployParams)
 
 /-! ### Pinning the row, and the witness -/
 
+set_option maxRecDepth 20000 in
 /-- Only inventory index `0` — `.setPauseDurationConfig` — nominates a site
 whose source path is `setPauseDurationConfigPath`. -/
 theorem setPauseDurationConfig_index_pin :
@@ -2794,7 +2719,7 @@ theorem setPauseDurationConfig_index_pin :
       ((runtimePersistentSourceSites officialParams)[index]?.map
           (fun s => s.path) = some setPauseDurationConfigPath) →
         index = 0 := by
-  exact attainment_index_pin_bundle.2.2.2.1
+  decide +kernel
 
 /-- The `setPauseDuration.config` row is attained with the
 `.adminConfiguration` role.
@@ -3107,6 +3032,7 @@ theorem runtimeMain_routeTo_setHeartbeatIntervalConfig (dp : DeployParams)
 
 /-! ### Pinning the row, and the witness -/
 
+set_option maxRecDepth 20000 in
 /-- Only inventory index `1` — `.setHeartbeatIntervalConfig` — nominates a site
 whose source path is `setHeartbeatIntervalConfigPath`. -/
 theorem setHeartbeatIntervalConfig_index_pin :
@@ -3114,7 +3040,7 @@ theorem setHeartbeatIntervalConfig_index_pin :
       ((runtimePersistentSourceSites officialParams)[index]?.map
           (fun s => s.path) = some setHeartbeatIntervalConfigPath) →
         index = 1 := by
-  exact attainment_index_pin_bundle.2.2.2.2.1
+  decide +kernel
 
 /-- The `setHeartbeatInterval.config` row is attained with the
 `.adminConfiguration` role.
@@ -3547,6 +3473,7 @@ theorem runtimeMain_routeTo_heartbeatExpiry
 
 /-! ### Pinning the row, and the witness -/
 
+set_option maxRecDepth 20000 in
 /-- Only inventory index `2` — `.heartbeatExpiry` — nominates a site whose
 source path is `heartbeatExpiryPath`. -/
 theorem heartbeatExpiry_index_pin :
@@ -3554,7 +3481,7 @@ theorem heartbeatExpiry_index_pin :
       ((runtimePersistentSourceSites officialParams)[index]?.map
           (fun s => s.path) = some heartbeatExpiryPath) →
         index = 2 := by
-  exact attainment_index_pin_bundle.2.2.2.2.2
+  decide +kernel
 
 /-- The `heartbeat.expiry` row is attained with the `.heartbeatExpiry` role.
 
