@@ -753,7 +753,6 @@ def registerStagingLine : Line :=
    Ninst.pushB256 0, Ninst.pushB256 (previousPauserWord * 32), Ninst.mstore,
    Ninst.pushB256 0, Ninst.pushB256 (continuationWord * 32), Ninst.mstore]
 
-set_option maxRecDepth 8192 in
 /-- From `registerPauser`'s entry to its `.call setPauserSlot`: the static
 argument-length guard, two canonical-address guards and the admin guard,
 crossed on the strength of the successful outcome alone.
@@ -848,7 +847,6 @@ theorem call_setPauserSlot_routeTo_assignment_ok (dp : DeployParams)
   routeTo_call h (by rfl) fun _kernelStart _burn tail =>
     setPauserKernel_routeTo_assignment_ok dp tail
 
-set_option maxRecDepth 16384 in
 /-- The complete route: program entry to the `setPauser.assignment` `SSTORE`,
 across all twelve branches.  Only the calldata selector is an execution
 premise; the successful outcome discharges the other six branch words. -/
@@ -1454,7 +1452,6 @@ theorem call_setPauserSlot_routeTo_appendCall {devm post : Devm}
       ((getStor_of_state burn.state).symm.trans hstor)
       (EntryWindows.of_memory_eq burn.memory.symm windows) callRoute
 
-set_option maxRecDepth 16384 in
 /-- The complete route from program entry to `appendTarget`'s own root, at the
 fresh registration world.  Thirteen branches: six selector comparisons decided
 on the concrete calldata selector, six settled by certified-reverting siblings,
@@ -1771,7 +1768,6 @@ theorem KernelWindows.acrossNewCountPrefix {e : Sevm} {a b : Devm}
     windows.1.2.acrossNewCountPrefix run⟩,
     windows.2.acrossNewCountPrefix run⟩
 
-set_option maxRecDepth 16384 in
 /-- From program entry to `afterOldPauser`'s own root: the three
 `appendTarget` writes crossed, then its tail call.  Both rows past
 `appendTarget` start here. -/
@@ -1852,7 +1848,6 @@ theorem afterOldPauser_routeTo_newCountArm {devm post : Devm}
     (KernelWindows.of_memory_eq hpop.memory.symm
       (windows.acrossMemoryZeroCheck r5)) arm
 
-set_option maxRecDepth 16384 in
 /-- The complete route from program entry to the `afterOld.newCount` `SSTORE`:
 `runtimeMain_routeTo_afterOldCall`, then the tail call into `afterOldPauser`
 and its memory-valued entry test. -/
@@ -1936,7 +1931,6 @@ These two names were **transposed** until they were exchanged: index 14 carried
 reverse.  Nothing ever depended on them — every row is pinned by `sourceSite?`
 — but reports and commits written before the exchange use the old pairing. -/
 
-set_option maxRecDepth 100000 in
 /-- `arithmeticPanic` is `Func.revData` of a `Panic(0x11)` payload, so
 `checkedHeartbeatExpiry`'s overflow arm is certified-reverting and its branch
 costs no word.
@@ -2028,7 +2022,6 @@ def registerFreshArmExpiryPath : Prog.SourcePath :=
       [.branchLeft] ++ List.replicate 8 .rest ++ [.branchLeft] ++
       List.replicate 7 .rest⟩
 
-set_option maxRecDepth 16384 in
 /-- The complete route from program entry to the `register.retainedOldNewExpiry`
 `SSTORE`: seventeen branches, of which exactly four are paid for — the
 dispatcher's six selector comparisons are decided on the calldata selector,
@@ -4121,7 +4114,6 @@ the old pauser's entry count and in the message gas.  Each row's own route adds
 four more crossings past `registerAfterSet`'s root, of which the arm-selecting
 two — the staged previous pauser and the decremented count — are priced. -/
 
-set_option maxRecDepth 16384 in
 theorem runtimeMain_routeTo_replacementRegisterAfterSetCall
     {oldCount : B256} {gas : Nat} {devm post : Devm}
     {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
@@ -4228,7 +4220,6 @@ def registerOldLastNewExpiryPath : Prog.SourcePath :=
       [.branchRight] ++ List.replicate 18 .rest ++ [.branchLeft] ++
       List.replicate 8 .rest ++ [.branchLeft] ++ List.replicate 7 .rest⟩
 
-set_option maxRecDepth 16384 in
 /-- The complete route to the retained arm's expiry `SSTORE`.  Past
 `registerAfterSet`'s root: the previous-pauser test takes the replacement arm,
 the old-count test finds `2 - 1` and takes the retained arm, and the tail is
@@ -4292,7 +4283,6 @@ theorem runtimeMain_routeTo_registerRetainedArmExpiry {devm post : Devm}
       previousCountKey, loadWord, mstoreAt, tagTop]
   exact pathEq ▸ routeTo_head write registerRetainedArmExpiryPath
 
-set_option maxRecDepth 16384 in
 /-- The complete route to the retiring pauser's expiry clear: the same leg,
 with the old-count test finding `1 - 1` and taking the old-last arm. -/
 theorem runtimeMain_routeTo_registerOldLastClear {devm post : Devm}
@@ -4337,7 +4327,6 @@ theorem runtimeMain_routeTo_registerOldLastClear {devm post : Devm}
       registerOldLastClearPrefix, previousCountKey, loadWord, tagTop]
   exact pathEq ▸ routeTo_head write registerOldLastClearPath
 
-set_option maxRecDepth 16384 in
 /-- The complete route to the new pauser's expiry write on the old-last arm:
 the clear crossed, the zero-payload record emitted, and then the same
 new-pauser test, overflow check and write line the other two expiry rows
