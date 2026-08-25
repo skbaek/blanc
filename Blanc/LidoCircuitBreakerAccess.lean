@@ -196,7 +196,6 @@ private lemma heartbeat_addAccessedStorageKey_setMach_setMach
     (addAccessedStorageKey (base.setMach m) target key).setMach m' =
       (addAccessedStorageKey base target key).setMach m' := rfl
 
-set_option maxRecDepth 4096 in
 /-- Exact first heartbeat chunk: caller tagging and the count SLOAD map an
 arbitrary warm/cold entry base to `heartbeatAfterCountLoad`, charging the
 actual access-list cost and otherwise preserving the base world and logs. -/
@@ -232,7 +231,6 @@ private theorem heartbeat_countLoad_runCompiled
       simp [Linst.Run, Linst.run, Devm.getStorVal_setMach, hcount,
         gasColdSload, heartbeat_addAccessedStorageKey_setMach_setMach]
 
-set_option maxRecDepth 4096 in
 /-- Continue from the exact count-load chunk without changing its source
 association or replaying its warm/cold execution proof. -/
 private theorem heartbeat_countLoad_runCompiled_then
@@ -265,7 +263,6 @@ private theorem heartbeat_countLoad_runCompiled_then
             subst_vars
             exact .next hcaller (.next hpush (.next hor (.next hsload htail)))
 
-set_option maxRecDepth 4096 in
 /-- A nonzero loaded count takes the successful side of heartbeat's first
 guard, consumes the count word, and leaves the sequential SLOAD base ready for
 the expiry load. -/
@@ -309,7 +306,6 @@ def heartbeatAfterExpiryLoad (sevm : Sevm) (base : Devm) : Devm :=
   heartbeatSloadBase sevm (heartbeatAfterCountLoad sevm base)
     (expirySlot sevm.caller.toB256)
 
-set_option maxRecDepth 4096 in
 /-- Exact second heartbeat chunk: the expiry SLOAD advances the sequential
 access-list state from `heartbeatAfterCountLoad` to `heartbeatAfterExpiryLoad`
 and charges its actual warm/cold cost. -/
@@ -347,7 +343,6 @@ private theorem heartbeat_expiryLoad_runCompiled
         heartbeatAfterCountLoad, holdExpiry, gasColdSload,
         heartbeat_addAccessedStorageKey_setMach_setMach]
 
-set_option maxRecDepth 4096 in
 /-- Continue from the exact expiry-load chunk without changing its source
 association or replaying its warm/cold execution proof. -/
 private theorem heartbeat_expiryLoad_runCompiled_then
@@ -382,7 +377,6 @@ private theorem heartbeat_expiryLoad_runCompiled_then
             subst_vars
             exact .next hcaller (.next hpush (.next hor (.next hsload htail)))
 
-set_option maxRecDepth 4096 in
 /-- Strict liveness takes heartbeat's successful expiry-guard arm.  The
 strict premise deliberately excludes equality, which remains expired. -/
 private theorem heartbeat_liveGuard_runCompiled_then
@@ -429,7 +423,6 @@ def heartbeatAfterIntervalLoad (sevm : Sevm) (base : Devm) : Devm :=
   heartbeatSloadBase sevm (heartbeatAfterExpiryLoad sevm base)
     heartbeatIntervalSlot
 
-set_option maxRecDepth 4096 in
 /-- Exact third heartbeat chunk: pushing and loading the interval advances the
 sequential access-list state to `heartbeatAfterIntervalLoad` while preserving
 the previously loaded expiry below the interval word. -/
@@ -497,7 +490,6 @@ private theorem heartbeat_intervalLoad_runCompiled_then
         subst_vars
         exact .next hpush (.next hsload htail)
 
-set_option maxRecDepth 4096 in
 set_option maxHeartbeats 800000 in
 /-- Exact successful checked-heartbeat-expiry computation with the interval
 SLOAD charged at its actual sequential warm/cold cost. -/
@@ -741,7 +733,6 @@ private theorem heartbeat_storeLogTail_runCompiled_other
         show ((1 : B256) * 32).toNat = 32 by decide]
       rw [Mem.read_write_word]
 
-set_option maxRecDepth 8192 in
 private theorem heartbeat_storeLogTail_runCompiled_partition
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (timestamp originalExpiry oldExpiry expiry : B256) (G : Nat)
@@ -779,8 +770,6 @@ private theorem heartbeat_storeLogTail_runCompiled_partition
     refine ⟨post, hrun, ?_, hstore, hlogs⟩
     simpa [hother, gasStorageUpdate, gasColdSload, gasWarmAccess] using hgas
 
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 800000 in
 /-- Generic successful heartbeat body over the actual sequential warm/cold
 SLOAD costs and the exhaustive successful SSTORE value-cost partition. -/
 private theorem heartbeat_body_runCompiled_generic
@@ -1578,7 +1567,6 @@ private def setHeartbeatIntervalLoadCost
     (sevm : Sevm) (base : Devm) : Nat :=
   heartbeatSloadCost sevm base heartbeatIntervalSlot
 
-set_option maxRecDepth 4096 in
 /-- Exact setter interval-load chunk.  It leaves the old word on the stack for
 `mstoreAt 0`, preserves empty event-preparation memory, and records a cold
 entry key as warm for the later SSTORE. -/
@@ -1685,7 +1673,6 @@ private theorem setHeartbeatIntervalEventData
   rw [List.drop_zero, List.takeD_eq_self 0 (by
     simp [B256.length_toBytes])]
 
-set_option maxRecDepth 4096 in
 /-- Exact final store suffix of the successful heartbeat-interval setter.
 The suffix starts after the event has been emitted, so it preserves that log
 list while changing only the named configuration key. -/
@@ -1740,7 +1727,6 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled
       (expirySlot_ne_heartbeatIntervalSlot pauser hpauser).symm, harg]
     rfl
 
-set_option maxRecDepth 4096 in
 /-- Exact warm zero-to-nonzero storage-price companion. -/
 private theorem setHeartbeatIntervalStoreTail_runCompiled_zero
     (fs : List Func) (sevm : Sevm) (base : Devm) (memory : Mem)
@@ -1792,7 +1778,6 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_zero
         (expirySlot_ne_heartbeatIntervalSlot pauser hpauser).symm, harg]
       rfl
 
-set_option maxRecDepth 4096 in
 /-- No-op storage-price companion to the changed-value suffix.  The caller
 supplies the same 2909-unit suffix budget, so the exact 109-unit warm no-op
 store leaves 2800 additional gas. -/
@@ -1844,7 +1829,6 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_noop
         (expirySlot_ne_heartbeatIntervalSlot pauser hpauser).symm, harg]
       rfl
 
-set_option maxRecDepth 4096 in
 /-- Generic exact final store suffix under the worst successful SSTORE
 envelope.  The interval key is already warm, while the value charge remains
 open over all EIP-2200 original/current/new states. -/
@@ -2365,7 +2349,6 @@ private theorem setHeartbeatIntervalEventTail_runCompiled_generic
     rw [hexpiries pauser hpauser]
     rfl
 
-set_option maxRecDepth 16384 in
 /-- Exact old/new memory staging from the modeled post-load state into the
 generic event-before-store suffix. -/
 private theorem setHeartbeatIntervalMemoryStage_runCompiled_generic
@@ -2424,7 +2407,6 @@ private theorem setHeartbeatIntervalMemoryStage_runCompiled_generic
     rw [hexpiries pauser hpauser]
     simp [setHeartbeatIntervalAfterLoad]
 
-set_option maxRecDepth 16384 in
 /-- Generic exact production update tail.  The initial interval read carries
 its actual warm/cold cost; the post-read memory/event/store continuation is
 shared and the later SSTORE is warm. -/
@@ -3061,7 +3043,6 @@ theorem setHeartbeatInterval_dispatch_runCompiledTo
         linearDispatchWith] using hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
-set_option maxRecDepth 16384 in
 /-- Exact generated-runtime inclusive setter success over the actual initial
 SLOAD cost and every EIP-2200 original/current/new value state. -/
 theorem setHeartbeatInterval_runCompiledTo_of_inclusive_generic
@@ -3337,7 +3318,6 @@ theorem setHeartbeatInterval_runCompiledTo_error_of_above_max
       hcode hbody with ⟨hrun, hcompile⟩
   exact ⟨post, hrun, houtput, hlogs, hstorage, hcompile⟩
 
-set_option maxRecDepth 16384 in
 /-- Exact successful generated-runtime setter execution can occur only for the
 admin and an argument in the inclusive configured range.  Each rejected case
 is ruled out by the corresponding source-exact compiled error execution from
@@ -3498,7 +3478,6 @@ theorem setHeartbeatInterval_success_settles_cleanly
   rw [if_neg hnotError] at hsettle
   exact Except.ok.inj hsettle
 
-set_option maxRecDepth 16384 in
 /-- Exact clean direct-message setter effects, derived from generated runtime
 execution rather than supplied as facts about the raw result.
 
@@ -3832,7 +3811,6 @@ theorem heartbeat_dispatch_runCompiledTo
           linearDispatchWith] using hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
-set_option maxRecDepth 16384 in
 /-- Exact generated-runtime heartbeat success over the actual sequential
 warm/cold SLOAD costs and exhaustive successful SSTORE value-cost partition. -/
 theorem heartbeat_runCompiledTo_of_checkedExtension_generic
@@ -4153,7 +4131,6 @@ theorem heartbeat_success_settles_cleanly
   rw [if_neg hnotError] at hsettle
   exact Except.ok.inj hsettle
 
-set_option maxRecDepth 16384 in
 /-- Exact clean direct-message heartbeat effects, derived from generated
 runtime execution rather than supplied as facts about the raw result.
 
