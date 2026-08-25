@@ -677,27 +677,6 @@ theorem runtimePersistentSourceSites_eq_official (dp : DeployParams) :
 
 set_option maxHeartbeats 3000000 in
 set_option maxRecDepth 10000 in
-private theorem runtimeSourceEffectInventory_official :
-    let sites :=
-      (persistentProgramShape (runtime officialParams)).sourceSites
-    (((sites.filter fun site =>
-          isPersistentWriteInstruction site.instruction).map
-            (fun site => site.pc),
-       (sites.filter fun site =>
-          isTransientWriteInstruction site.instruction).map
-            (fun site => site.pc)),
-      (sites.filter fun site =>
-        isExternalCallInstruction site.instruction).map
-          (fun site => (site.pc,
-            externalInstruction? site.instruction))) =
-    (([413, 1333, 1745, 2287, 2374, 2474, 2517, 2555, 2650, 2827,
-       2870, 2910, 2952, 2992, 3212, 3302, 3441, 3586, 3912, 4032],
-      [853, 3985, 4105]),
-     [(3679, some .call), (3707, some .statcall)]) := by
-  decide +kernel
-
-set_option maxHeartbeats 3000000 in
-set_option maxRecDepth 10000 in
 theorem runtimeSourceEffectPcs_official :
     let sites :=
       (persistentProgramShape (runtime officialParams)).sourceSites
@@ -714,9 +693,7 @@ theorem runtimeSourceEffectPcs_official :
        2870, 2910, 2952, 2992, 3212, 3302, 3441, 3586, 3912, 4032],
       [853, 3985, 4105]),
      [3679, 3707]) := by
-  simpa only [List.map_map, Function.comp_def, List.map] using congrArg (fun inventory =>
-    (inventory.1, inventory.2.map Prod.fst))
-    runtimeSourceEffectInventory_official
+  decide +kernel
 
 /-- Exact compiled PCs of the twenty structural runtime SSTORE sites, in
 source/compiler order. -/
@@ -951,9 +928,7 @@ theorem runtimeExternalCallInstructions_official :
         isExternalCallInstruction site.instruction).map
           (fun site => externalInstruction? site.instruction) =
       [some .call, some .statcall] := by
-  simpa only [List.map_map, Function.comp_def, List.map] using congrArg
-    (fun inventory => inventory.2.map Prod.snd)
-    runtimeSourceEffectInventory_official
+  decide +kernel
 
 /-- Exact execution opcodes of the two structural runtime external-call sites,
 in source/compiler order. -/
