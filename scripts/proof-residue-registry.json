@@ -60,12 +60,12 @@
     },
     {
       "id": "run-core-pc-irrel-depth",
-      "description": "runCore_pc_irrel carries the 100000 recursion-depth scope",
+      "description": "runCore_pc_irrel carries the 803 recursion-depth scope",
       "owner": "compiled-tag-dispatch",
-      "reopen": "The runCore_pc_irrel declaration is again scoped at maxRecDepth 100000",
+      "reopen": "The runCore_pc_irrel declaration is no longer scoped at the measured maxRecDepth 803 boundary",
       "boundary": "Exact option-to-named-declaration textual check; does not prove the option is necessary",
       "include": ["Blanc/Compiled.lean"],
-      "pattern": "(?m)^set_option\\s+maxRecDepth\\s+100000\\s+in\\s*\\n(?:[ \\t]*\\n)*lemma\\s+Rinst\\.runCore_pc_irrel\\b"
+      "pattern": "(?m)^set_option\\s+maxRecDepth\\s+803\\s+in\\s*\\n(?:[ \\t]*\\n)*lemma\\s+Rinst\\.runCore_pc_irrel\\b"
     },
     {
       "id": "enum-loop-memory-cursor-rfl",
@@ -75,6 +75,83 @@
       "boundary": "Named declaration bounded by the next top-level declaration",
       "include": ["Blanc/LidoCircuitBreakerEnumeration.lean"],
       "pattern": "(?ms)^theorem\\s+enumLoop_pre_memory_independent_of_cursor\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?\\n\\s*rfl\\s*$"
+    },
+    {
+      "id": "ceiling-debt-ambient",
+      "description": "Production ambient maxHeartbeats and maxRecDepth scopes remaining after the ceiling-debt campaign",
+      "owner": "elab-cure-3-ceiling-debt",
+      "reopen": "Any production maxHeartbeats or maxRecDepth option is introduced without a trailing in command scope",
+      "boundary": "Exact non-in set_option lines in production Lean sources after comments and string literals are masked",
+      "include": ["Blanc/**/*.lean"],
+      "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)[ \\t\\r\\n]+(?:0|[1-9][0-9]*)(?![ \\t\\r\\n]+in\\b)[ \\t]*(?:\\r?\\n|$)"
+    },
+    {
+      "id": "ceiling-debt-registration",
+      "description": "Production maxHeartbeats and maxRecDepth scopes in the treated registration family",
+      "owner": "elab-cure-3-ceiling-debt-registration",
+      "reopen": "The registration-family ceiling count rises above its final campaign value",
+      "boundary": "Exact set_option lines in the seven treated registration modules after comments and string literals are masked",
+      "include": [
+        "Blanc/LidoCircuitBreakerRegistrationWorld.lean",
+        "Blanc/LidoCircuitBreakerFreshRegistration.lean",
+        "Blanc/LidoCircuitBreakerUnregisterWorld.lean",
+        "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
+        "Blanc/LidoCircuitBreakerReplacementRegistration.lean",
+        "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
+        "Blanc/LidoCircuitBreakerReplacementWorld.lean"
+      ],
+      "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)\\b"
+    },
+    {
+      "id": "ceiling-debt-pause",
+      "description": "Production maxHeartbeats and maxRecDepth scopes in the treated pause family",
+      "owner": "elab-cure-3-ceiling-debt-pause",
+      "reopen": "The pause-family ceiling count rises above its final campaign value",
+      "boundary": "Exact set_option lines in the complete LidoCircuitBreakerPause*.lean production family after comments and string literals are masked",
+      "include": ["Blanc/LidoCircuitBreakerPause*.lean"],
+      "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)\\b"
+    },
+    {
+      "id": "ceiling-debt-lido-core",
+      "description": "Production maxHeartbeats and maxRecDepth scopes in the treated Lido core family",
+      "owner": "elab-cure-3-ceiling-debt-lido-core",
+      "reopen": "The Lido-core ceiling count rises above its final campaign value",
+      "boundary": "Exact set_option lines in the thirteen treated Lido core modules after comments and string literals are masked",
+      "include": [
+        "Blanc/LidoCircuitBreaker.lean",
+        "Blanc/LidoCircuitBreakerAccess.lean",
+        "Blanc/LidoCircuitBreakerAttainment.lean",
+        "Blanc/LidoCircuitBreakerDeploy.lean",
+        "Blanc/LidoCircuitBreakerDeploymentLayout.lean",
+        "Blanc/LidoCircuitBreakerDeploymentTrace.lean",
+        "Blanc/LidoCircuitBreakerEnumeration.lean",
+        "Blanc/LidoCircuitBreakerPreControl.lean",
+        "Blanc/LidoCircuitBreakerRegistry.lean",
+        "Blanc/LidoCircuitBreakerRegistrySubstrate.lean",
+        "Blanc/LidoCircuitBreakerSites.lean",
+        "Blanc/LidoCircuitBreakerSuccess.lean",
+        "Blanc/LidoCircuitBreakerUnregisterAttainment.lean"
+      ],
+      "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)\\b"
+    },
+    {
+      "id": "ceiling-debt-pre-lido",
+      "description": "Production maxHeartbeats and maxRecDepth scopes in the treated pre-Lido family",
+      "owner": "elab-cure-3-ceiling-debt-pre-lido",
+      "reopen": "The pre-Lido ceiling count rises above its final campaign value",
+      "boundary": "Exact set_option lines in the nine treated pre-Lido modules after comments and string literals are masked",
+      "include": [
+        "Blanc/Compiled.lean",
+        "Blanc/FmintGas.lean",
+        "Blanc/FmintLive.lean",
+        "Blanc/FmintReverts.lean",
+        "Blanc/FmintSettles.lean",
+        "Blanc/Weth10DeploymentRoot.lean",
+        "Blanc/Weth10Redeemable.lean",
+        "Blanc/WethGas.lean",
+        "Blanc/WethLive.lean"
+      ],
+      "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)\\b"
     }
   ]
 }
