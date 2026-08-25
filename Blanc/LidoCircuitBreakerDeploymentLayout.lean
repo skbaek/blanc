@@ -102,7 +102,6 @@ def patchRuntimeLineForProof_eq (runtimeBase : Nat) :
       immutableParameters.flatMap (patchFieldLineForProof runtimeBase) := by
   rfl
 
-set_option maxRecDepth 100000 in
 def constructorBodyForProof_eq
     (runtimeOffset argsOffset runtimeLength : Nat) :
     constructorBodyForProof runtimeOffset argsOffset runtimeLength =
@@ -184,7 +183,6 @@ def constructorBodyForProof_eq
                                                   Func.ret)))))))))))))))))))))) := by
   rfl
 
-set_option maxRecDepth 100000 in
 def constructorProgramForProof_eq
     (runtimeOffset argsOffset runtimeLength : Nat) :
     constructorProgramForProof runtimeOffset argsOffset runtimeLength =
@@ -311,7 +309,6 @@ private theorem runtimeTemplateCode_immutable_slices_zero :
     (runtimeTemplateCode.drop 1178).take 32 = (0 : B256).toBytes := by
   decide +kernel
 
-set_option maxHeartbeats 3000000 in
 private theorem immutableMarkerPrograms_compile :
     Prog.compile (runtime (immutableMarkerParams .admin)) =
         some (patchAtOffsets runtimeTemplateCode B256.max
@@ -582,7 +579,6 @@ private def fourWordSegments
     (bs.drop (third + 32)).take (fourth - (third + 32)) ++
     word.toBytes ++ bs.drop (fourth + 32)
 
-set_option maxHeartbeats 3000000 in
 private theorem adminMarkerProgram_compile_segments :
     Prog.compile (runtime (immutableMarkerParams .admin)) =
       some (fourWordSegments runtimeTemplateCode 174 1094 1833 1920
@@ -715,7 +711,6 @@ theorem constructor_immutable_word_offsets_exact :
 
 /-! ## Constructor compiler and creation-layout identities -/
 
-set_option maxHeartbeats 3000000 in
 private theorem provisionalConstructorProgram_compiles :
     Prog.compiles (constructorProgramForProof 0 0 4282) = true := by
   rcases constructor_immutable_word_offsets_exact with
@@ -730,7 +725,6 @@ private theorem provisionalConstructorProgram_compiles :
     hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat]
   decide +kernel
 
-set_option maxHeartbeats 3000000 in
 /-- The first compiler pass has the same 616-byte shape as the final
 constructor. -/
 theorem provisionalConstructorPrefix_length_exact :
@@ -752,7 +746,6 @@ theorem provisionalConstructorPrefix_length_exact :
     hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat]
   decide +kernel
 
-set_option maxHeartbeats 3000000 in
 private theorem finalConstructorProgram_compiles :
     Prog.compiles (constructorProgramForProof 616 4898 4282) = true := by
   rcases constructor_immutable_word_offsets_exact with
@@ -780,7 +773,6 @@ theorem lidoCircuitBreakerConstructorProgram_compile :
   norm_num
   exact finalConstructorProgram_compiles
 
-set_option maxHeartbeats 3000000 in
 /-- Exact constructor prefix length, hence exact runtime and ABI coordinates. -/
 theorem lidoCircuitBreakerInitPrefix_length_exact :
     lidoCircuitBreakerInitPrefix.length = 616 := by
@@ -801,7 +793,6 @@ theorem lidoCircuitBreakerInitPrefix_length_exact :
     hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat]
   decide +kernel
 
-set_option maxHeartbeats 3000000 in
 /-- The official twelve-write patch plan reconstructs the exact official
 runtime compiler artifact. -/
 theorem patchRuntimeTemplate_official :
