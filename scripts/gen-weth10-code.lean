@@ -78,14 +78,7 @@ private def renderModule (bs : Bytes) (chainOffsets separatorOffsets : List Nat)
     , "def weth10MainnetCode : Bytes :="
     , "  [" ++ (body.drop 3) ]
   ++ "]\n\n"
-  ++ String.intercalate "\n"
-    [ "/-- The committed literal is exactly the canonical member of the family. -/"
-    , "theorem weth10MainnetCode_eq :"
-    , "    weth10Code mainnetDeployParams = weth10MainnetCode := by"
-    , "  decide +kernel"
-    , ""
-    , "end Blanc.Weth10"
-    , "" ]
+  ++ "end Blanc.Weth10\n"
 
 private def outPath : System.FilePath := "Blanc" / "Weth10Code.lean"
 

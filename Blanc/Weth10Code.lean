@@ -561,9 +561,4 @@ def weth10MainnetCode : Bytes :=
    0x5f, 0xa3, 0x00, 0x5b, 0x61, 0x13, 0x2f, 0x56, 0x5b, 0x61, 0x13, 0x2f,
    0x56]
 
-/-- The committed literal is exactly the canonical member of the family. -/
-theorem weth10MainnetCode_eq :
-    weth10Code mainnetDeployParams = weth10MainnetCode := by
-  decide +kernel
-
 end Blanc.Weth10

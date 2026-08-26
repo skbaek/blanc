@@ -62,7 +62,7 @@ CONTRACTS = {
     "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",
                "Weth10Sound", "Weth10StateSound", "Weth10Code",
                "Weth10DeployDomainSlices", "Weth10DeployUpperSlices",
-               "Weth10Deploy", "Weth10DeployExec",
+               "Weth10Deploy", "Weth10MainnetCodeEq", "Weth10DeployExec",
                "Weth10DeployProof", "Weth10Stable", "Weth10DeploymentRoot",
                "Weth10Errors", "Weth10Functional",
                "Weth10FlashFunctional", "Weth10Live",
