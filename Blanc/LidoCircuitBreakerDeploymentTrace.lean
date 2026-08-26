@@ -1203,7 +1203,7 @@ def officialConstructorColdStore
   (((addAccessedStorageKey base sevm.currentTarget key).withRefundCounter
     base.refundCounter).setStorVal sevm.currentTarget key value)
 
-theorem officialConstructorColdStore_getStor
+private theorem officialConstructorColdStore_getStor
     (sevm : Sevm) (base : Devm) (key value : B256) :
     Devm.getStor (officialConstructorColdStore sevm base key value)
         sevm.currentTarget =
