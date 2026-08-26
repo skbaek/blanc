@@ -505,8 +505,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorCanonicalAdminStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -516,8 +516,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorHeartbeatBoundsStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -527,8 +527,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorInitialHeartbeatMaxStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -538,8 +538,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorInitialHeartbeatMinStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -549,8 +549,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorInitialPauseMaxStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -560,8 +560,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorInitialPauseMinStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -571,8 +571,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorMinHeartbeatNonzeroStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -582,8 +582,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorMinPauseNonzeroStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -593,8 +593,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorPauseBoundsStage_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -604,8 +604,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 930,
+      "ceiling": 930
     },
     {
       "id": "Blanc/LidoCircuitBreakerDeploymentTrace.lean::Blanc.LidoCircuitBreaker.officialConstructorValidationFinish_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -615,8 +615,8 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1001,
-      "ceiling": 1001
+      "value": 929,
+      "ceiling": 929
     },
     {
       "id": "Blanc/LidoCircuitBreakerEnumeration.lean::Blanc.LidoCircuitBreaker.getPausableCount_body_runCompiled#1::command_scoped::-::maxRecDepth#1",
@@ -925,28 +925,6 @@
       "option": "maxRecDepth",
       "value": 29423,
       "ceiling": 29423
-    },
-    {
-      "id": "Blanc/Weth10DeploymentRoot.lean::Blanc.Weth10.canonicalDeploymentTransaction_succeeds#1::command_scoped::-::maxHeartbeats#1",
-      "file": "Blanc/Weth10DeploymentRoot.lean",
-      "declaration": "Blanc.Weth10.canonicalDeploymentTransaction_succeeds",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxHeartbeats",
-      "value": 800000,
-      "ceiling": 800000
-    },
-    {
-      "id": "Blanc/Weth10DeploymentRoot.lean::Blanc.Weth10.canonicalDeploymentTransaction_succeeds#1::local_scoped::-::maxRecDepth#1",
-      "file": "Blanc/Weth10DeploymentRoot.lean",
-      "declaration": "Blanc.Weth10.canonicalDeploymentTransaction_succeeds",
-      "declaration_ordinal": 1,
-      "scope_kind": "local_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 2048,
-      "ceiling": 2048
     },
     {
       "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_execSat#1::command_scoped::-::maxRecDepth#1",

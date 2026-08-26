@@ -619,7 +619,6 @@ structure CanonicalDeploymentTransactionResult
     (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
       (fun entry => entry.2.succeeded) = some true
 
-set_option maxHeartbeats 800000 in
 /-- The message theorem is threaded through the linearized real transaction
 pipeline, including validation, checking, upfront debit, refund/tip settlement,
 receipt insertion, and the final stable state. -/
@@ -688,7 +687,7 @@ theorem canonicalDeploymentTransaction_succeeds
     simp only [hmessage.run]
     rw [hrefund]
     simp only [hdelete, List.foldl_nil]
-    set_option maxRecDepth 2048 in rfl
+    rfl
   have hsum : SumNof post.bal := by
     have hle := processTransaction_sum_le hrun
     have hinput : ctx.txInput.state.bal = base.state.bal := by

@@ -3123,7 +3123,7 @@ private theorem officialConstructorValidationBody_eq_staged :
     officialConstructorValidationFinish
   rfl
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 929 in
 private theorem officialConstructorValidationFinish_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3141,7 +3141,7 @@ private theorem officialConstructorValidationFinish_runCompiled
   func_run (3)
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3185,7 +3185,7 @@ private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3229,7 +3229,7 @@ private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorInitialPauseMaxStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3273,7 +3273,7 @@ private theorem officialConstructorInitialPauseMaxStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorInitialPauseMinStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3317,7 +3317,7 @@ private theorem officialConstructorInitialPauseMinStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorHeartbeatBoundsStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3361,7 +3361,7 @@ private theorem officialConstructorHeartbeatBoundsStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3390,7 +3390,7 @@ private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorPauseBoundsStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3434,7 +3434,7 @@ private theorem officialConstructorPauseBoundsStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorMinPauseNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3463,7 +3463,7 @@ private theorem officialConstructorMinPauseNonzeroStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorAdminNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3492,7 +3492,7 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
   func_run (2) [0]
   exact hrest
 
-set_option maxRecDepth 1001 in
+set_option maxRecDepth 930 in
 private theorem officialConstructorCanonicalAdminStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
