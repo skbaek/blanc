@@ -1203,19 +1203,14 @@ def officialConstructorColdStore
   (((addAccessedStorageKey base sevm.currentTarget key).withRefundCounter
     base.refundCounter).setStorVal sevm.currentTarget key value)
 
-/-- The non-machine constructor effects after the three logs and the two cold
-zero-to-nonzero configuration writes, in exact source order. -/
-def officialConstructorEffectBase (sevm : Sevm) (base : Devm) : Devm :=
-  let initialized :=
-    base.addLog (officialConstructorInitializedLog sevm.currentTarget)
-  let pauseLogged :=
-    initialized.addLog (officialConstructorPauseLog sevm.currentTarget)
-  let pauseStored := officialConstructorColdStore sevm pauseLogged
-    pauseDurationSlot officialConstructorArgs.initialPauseDuration
-  let heartbeatLogged :=
-    pauseStored.addLog (officialConstructorHeartbeatLog sevm.currentTarget)
-  officialConstructorColdStore sevm heartbeatLogged heartbeatIntervalSlot
-    officialConstructorArgs.initialHeartbeatInterval
+theorem officialConstructorColdStore_getStor
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    Devm.getStor (officialConstructorColdStore sevm base key value)
+        sevm.currentTarget =
+      (Devm.getStor base sevm.currentTarget).set key value := by
+  unfold officialConstructorColdStore
+  rw [setStorVal_getStor_self, Blanc.Devm.withRefundCounter_getStor,
+    addAccessedStorageKey_getStor]
 
 theorem officialConstructorColdStore_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -1272,6 +1267,13 @@ def officialConstructorHeartbeatLoggedBase
   (officialConstructorPauseStoredBase sevm base).addLog
     (officialConstructorHeartbeatLog sevm.currentTarget)
 
+/-- The non-machine constructor effects after the three logs and the two cold
+zero-to-nonzero configuration writes, in exact source order. -/
+def officialConstructorEffectBase (sevm : Sevm) (base : Devm) : Devm :=
+  officialConstructorColdStore sevm
+    (officialConstructorHeartbeatLoggedBase sevm base)
+    heartbeatIntervalSlot officialConstructorArgs.initialHeartbeatInterval
+
 theorem officialConstructorHeartbeatLoggedBase_getStor
     (sevm : Sevm) (base : Devm) :
     Devm.getStor (officialConstructorHeartbeatLoggedBase sevm base)
@@ -1279,23 +1281,10 @@ theorem officialConstructorHeartbeatLoggedBase_getStor
       (Devm.getStor base sevm.currentTarget).set pauseDurationSlot
         officialConstructorArgs.initialPauseDuration := by
   unfold officialConstructorHeartbeatLoggedBase
-    officialConstructorPauseStoredBase officialConstructorColdStore
-  change Devm.getStor
-      (((addAccessedStorageKey
-          (officialConstructorPauseLoggedBase sevm base)
-          sevm.currentTarget pauseDurationSlot).withRefundCounter _).setStorVal
-        sevm.currentTarget pauseDurationSlot
-          officialConstructorArgs.initialPauseDuration)
-        sevm.currentTarget = _
-  rw [setStorVal_getStor_self]
-  apply congrArg (fun s : Stor =>
-    s.set pauseDurationSlot officialConstructorArgs.initialPauseDuration)
-  change Devm.getStor
-      (addAccessedStorageKey (officialConstructorPauseLoggedBase sevm base)
-        sevm.currentTarget pauseDurationSlot)
-        sevm.currentTarget = Devm.getStor base sevm.currentTarget
-  rw [addAccessedStorageKey_getStor]
-  rfl
+    officialConstructorPauseStoredBase
+  rw [Blanc.Devm.addLog_getStor, officialConstructorColdStore_getStor]
+  unfold officialConstructorPauseLoggedBase officialConstructorInitializedBase
+  rw [Blanc.Devm.addLog_getStor, Blanc.Devm.addLog_getStor]
 
 theorem officialConstructorPauseLoggedBase_accessedStorageKeys
     (sevm : Sevm) (base : Devm) :
@@ -1334,24 +1323,9 @@ theorem officialConstructorEffectBase_getStor
         officialConstructorArgs.initialPauseDuration).set
           heartbeatIntervalSlot
           officialConstructorArgs.initialHeartbeatInterval := by
-  change Devm.getStor
-      (officialConstructorColdStore sevm
-        (officialConstructorHeartbeatLoggedBase sevm base)
-        heartbeatIntervalSlot
-        officialConstructorArgs.initialHeartbeatInterval)
-      sevm.currentTarget = _
-  unfold officialConstructorColdStore
-  rw [setStorVal_getStor_self]
-  apply congrArg (fun s : Stor =>
-    s.set heartbeatIntervalSlot
-      officialConstructorArgs.initialHeartbeatInterval)
-  change Devm.getStor
-      (addAccessedStorageKey
-        (officialConstructorHeartbeatLoggedBase sevm base)
-        sevm.currentTarget heartbeatIntervalSlot)
-      sevm.currentTarget = _
-  rw [addAccessedStorageKey_getStor]
-  exact officialConstructorHeartbeatLoggedBase_getStor sevm base
+  unfold officialConstructorEffectBase
+  rw [officialConstructorColdStore_getStor,
+    officialConstructorHeartbeatLoggedBase_getStor]
 
 /-- The terminal return preserves the exact two-write storage effect. -/
 
@@ -1377,7 +1351,9 @@ theorem officialConstructorEffectBase_logs
     (sevm : Sevm) (base : Devm) :
     (officialConstructorEffectBase sevm base).logs =
       base.logs ++ officialConstructorLogs sevm.currentTarget := by
-  unfold officialConstructorEffectBase
+  unfold officialConstructorEffectBase officialConstructorHeartbeatLoggedBase
+    officialConstructorPauseStoredBase officialConstructorPauseLoggedBase
+    officialConstructorInitializedBase
   simp only [constructorAddLog_logs, officialConstructorColdStore_logs,
     officialConstructorLogs_eq_named, List.append_assoc]
   rfl

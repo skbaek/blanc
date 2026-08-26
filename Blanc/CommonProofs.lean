@@ -609,6 +609,14 @@ lemma Devm.popToNat_getBal_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n,
 def Devm.getStor (devm : Devm) (adr : Adr) : Stor :=
   (devm.getAcct adr).stor
 
+lemma Devm.withRefundCounter_getStor (devm : Devm) (refundCounter : Int) :
+    Devm.getStor (devm.withRefundCounter refundCounter) = Devm.getStor devm := by
+  rfl
+
+lemma Devm.addLog_getStor (devm : Devm) (log : Log) :
+    Devm.getStor (devm.addLog log) = Devm.getStor devm := by
+  rfl
+
 lemma Devm.WorldEq.getStor {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
     Devm.getStor d a = Devm.getStor d' a := by
   unfold Devm.getStor Devm.getAcct
