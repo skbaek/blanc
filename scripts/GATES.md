@@ -463,8 +463,11 @@ owner and a removal condition — never a rewritten baseline.
 
 `check-elab.sh` takes an exclusive lock through `scripts/gate-lock.sh` and a
 second concurrent run is **REFUSED** immediately, with the holder named. It does
-not queue and does not fall back. This also serializes atomic updates of its
-local `.lake/check-elab-state.json` cache.
+not queue and does not fall back. The heavy-gate lock is host-global — it lives
+at `~/.codex/locks/gate-heavy.lock` and is shared across both this repository
+and Jaune, and across every checkout or worktree of either, because they all
+contend for the same cores: one host, one heavy gate. This also serializes
+atomic updates of its local `.lake/check-elab-state.json` cache.
 
 If a timing run is red, the cache update remains fail-closed but does not throw
 away unrelated work: files that elaborated successfully and stayed within
@@ -480,7 +483,11 @@ and produced thousands of phantom classification changes against an untouched
 baseline. Both runs were in fact green.
 
 A REFUSED verdict mid-arc is a **scheduling defect to fix, not a transient to
-retry around** — it means two agents were competing for this host.
+retry around** — it means two agents were competing for this host. Before
+running a timing-authoritative gate, a session must already hold the
+cross-session hard semaphore (`codex-host-semaphore hard-acquire`; see
+`~/elanc/AGENTS.md` and `~/plans/guide/lead.md` for the protocol) — the gate
+lock is the last line of defense, not the coordination mechanism.
 
 | gate | report lock | heavy lock |
 |---|---|---|
