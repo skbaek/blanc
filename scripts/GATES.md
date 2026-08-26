@@ -7,7 +7,8 @@ reports should link here rather than restate it.
 
 Audience is anyone driving these gates, human or agent, regardless of tool.
 
-**All commands are run from `~/blanc`.**
+**All commands are run from the root of the Blanc checkout under test — the
+goal's worktree during goal work, `~/blanc` otherwise.**
 
 **Jaune's gates are catalogued separately, in `~/jaune/scripts/GATES.md`.**
 The split follows
@@ -484,8 +485,10 @@ baseline. Both runs were in fact green.
 
 A REFUSED verdict mid-arc is a **scheduling defect to fix, not a transient to
 retry around** — it means two agents were competing for this host. Before
-running a timing-authoritative gate, a session must already hold the
-cross-session hard semaphore (`codex-host-semaphore hard-acquire`; see
+running a timing-authoritative gate — or a mutation campaign, which the
+cross-session class mapping runs under the same hard hold — a session must
+already hold the cross-session hard semaphore (`codex-host-semaphore
+hard-acquire`; see
 `~/elanc/AGENTS.md` and `~/plans/guide/lead.md` for the protocol) — the gate
 lock is the last line of defense, not the coordination mechanism.
 
@@ -512,8 +515,9 @@ servers are the normal steady state. One that has opened no file sits near
 legitimate run and train everyone to reach for `--force`, which would hollow the
 gate out entirely.
 
-In practice, before a timing run, check `pgrep -f "lean --server"` and stop any
-worker that has been opening files. A `--force` run may not be rebased.
+In practice, before a timing run, reclaim idle servers with
+`~/.codex/bin/codex-reclaim-lean` (`--dry-run` to preview); never a bare
+kill. A `--force` run may not be rebased.
 
 ## Rules
 
