@@ -21,9 +21,6 @@ S3-opaque Blanc/Weth10DeployDomainSlices.lean off-path subtrees opaque. -/ ## co
 # Compile-witness docstrings explicitly distinguish kernel evaluation from the
 # forbidden native evaluator.
 S6-native-decide Blanc/FmintCode.lean *not* `native_decide`). -/ ## comment-only trust explanation
-S6-native-decide Blanc/LidoCircuitBreakerPinnedTargetControl.lean native_decide ## closed compiled-stub byte facts and executable semantic controls
-S6-native-decide Blanc/LidoCircuitBreakerPinnedTargetComposition.lean native_decide ## closed compiled-stub byte facts used by the occurrence bridge
-S6-native-decide Blanc/LidoCircuitBreakerPinnedTargetCompositionControl.lean native_decide ## closed total-exec production-world control
 S6-native-decide Blanc/WethCode.lean trusted base (in particular this is *not* `native_decide`). -/ ## comment-only trust explanation
 
 # Terminating-by-construction metaprograms and tactics. These declarations

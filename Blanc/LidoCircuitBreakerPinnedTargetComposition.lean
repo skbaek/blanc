@@ -465,15 +465,15 @@ private theorem stepStatcall_spawn_resume
 
 private theorem stubCode_nonempty :
     PinnedTargetControl.stubCode ≠ .empty := by
-  native_decide
+  decide +kernel
 
 private theorem stubCode_not_delegation :
     ¬ isValidDelegation PinnedTargetControl.stubCode := by
-  native_decide
+  decide +kernel
 
 private theorem stubCode_toList_nonempty :
     PinnedTargetControl.stubCode.toList ≠ [] := by
-  native_decide
+  decide +kernel
 
 /-- An actual non-precompile spawn from a state with the stub installed
 carries a retained compiled-stub execution in its own slot. -/
@@ -565,7 +565,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
       PinnedTargetControl.stubProgram duration (.ok final) := by
   have codeNonzero : (entry.getCode target).size.toB256 ≠ 0 := by
     rw [installed]
-    native_decide
+    decide +kernel
   rw [pauseAfterSet_eq_afterCall] at run
   obtain ⟨guardTestPost, guardRun, guardBranch⟩ :=
     runCompiledTo_prepend_inv run

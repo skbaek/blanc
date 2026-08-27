@@ -85,14 +85,6 @@ private structure StubFrame (target : Adr) (calldata : Bytes)
   currentTarget : sevm.currentTarget = target
   data : sevm.data = calldata
 
-private theorem stubProtectedSelector_ne_pauseForSelector :
-    stubProtectedSelector ≠ pauseForSelector := by
-  native_decide
-
-private theorem stubProtectedSelector_ne_isPausedSelector :
-    stubProtectedSelector ≠ isPausedSelector := by
-  native_decide
-
 private lemma shiftRight224_of_take4_eq_protected (x : B256)
     (h : x.toBytes.take 4 = [0x3d, 0x7b, 0x36, 0x9a]) :
     x >>> 224 = (0x3d7b369a : B256) := by
@@ -107,13 +99,40 @@ private lemma shiftRight224_of_take4_eq_protected (x : B256)
   congr 3
   change x3 >>> (32 : UInt64) = (1031485082 : UInt64)
   rcases h with ⟨h0, h1, h2, h3⟩
-  bv_decide
+  have h1' :
+      ((x3 >>> 32).toUInt32 >>> 16).toUInt16.toUInt8 = 123 := by
+    simpa using h1
+  have h2' :
+      ((x3 >>> 32).toUInt32.toUInt16 >>> 8).toUInt8 = 54 := by
+    simpa using h2
+  have h3' : (x3 >>> 32).toUInt32.toUInt16.toUInt8 = 154 := by
+    simpa using h3
+  have hbytes :
+      (x3 >>> 32).toUInt32.toBytes = [61, 123, 54, 154] := by
+    simp only [UInt32.toBytes, UInt16.toBytes]
+    rw [h0, h1', h2', h3']
+    rfl
+  have hy32 : (x3 >>> 32).toUInt32 = (1031485082 : UInt32) := by
+    have converted := congrArg Bytes.toUInt32 hbytes
+    rw [toUInt32_toBytes] at converted
+    exact converted
+  have hlt : (x3 >>> 32).toNat < 4294967296 := by
+    rw [UInt64.toNat_shiftRight]
+    change x3.toNat >>> 32 < 4294967296
+    rw [Nat.shiftRight_eq_div_pow]
+    norm_num
+    have hx := UInt64.toNat_lt x3
+    omega
+  rw [← UInt64.toNat_inj]
+  have hyNat := congrArg UInt32.toNat hy32
+  simp only [UInt64.toUInt32_toNat, Nat.mod_eq_of_lt hlt] at hyNat
+  exact hyNat.trans rfl
 
 private theorem selector_eq_protected_of_data {sevm : Sevm} {tail : Bytes}
     (hdata : sevm.data = abiSelectorBytes stubProtectedSelector ++ tail) :
     Sevm.selector sevm = stubProtectedSelector := by
   have protectedEq : stubProtectedSelector = (0x3d7b369a : B256) := by
-    native_decide
+    decide +kernel
   have protectedBytes :
       abiSelectorBytes (0x3d7b369a : B256) =
         [0x3d, 0x7b, 0x36, 0x9a] := rfl
@@ -840,6 +859,36 @@ theorem stub_lidoPinnedPauseTarget
       exact (not_stubMain_run_of_protected selectorEq mainRun).elim
     · exact childRevert
 
+/-! ## Source-semantic successful composition -/
+
+/-- An actual clean settled `pauseFor` message execution leaves the stub
+paused and discharges both CircuitBreaker-cell noninterference obligations.
+This is the account/message-level successor of the original toy composition
+control: execution is an explicit semantic witness, never evaluator-provided
+theorem evidence. -/
+theorem stub_successful_pause_composition
+    {circuitBreaker pauser target : Adr} {msg : Msg} {xl : Xlot}
+    {post : Devm} {duration : B256}
+    (different : target ≠ circuitBreaker)
+    (exactCall : ExactTargetCall circuitBreaker target
+      (pauseForCalldata duration) false msg)
+    (executes : MessageExecutesProgram msg xl stubProgram)
+    (process : ProcessMessage msg xl (.ok post))
+    (clean : post.error.isSome = false)
+    (strictGrowth : msg.benv.stat.time < msg.benv.stat.time + duration) :
+    PausedAt pausedUntil post.state target msg.benv.stat.time ∧
+      ∀ key ∈ [countSlot pauser.toB256, heartbeatIntervalSlot],
+        TargetInvocationNoRetainedWriteTo xl circuitBreaker key := by
+  have bundle := stub_lidoPinnedPauseTarget circuitBreaker pauser target
+    different
+  constructor
+  · unfold PausedAt
+    rw [bundle.pauseFor_effect exactCall executes process clean]
+    exact strictGrowth
+  · intro key member
+    exact bundle.circuitBreaker_noninterference
+      (Or.inl ⟨duration, exactCall⟩) executes process key member
+
 /-! ## One benign outbound CALL
 
 This second control is deliberately below the source-program protocol.  It is
@@ -878,7 +927,7 @@ def benignCallPre : Devm :=
 
 private def benignCallEvm : Evm := ⟨1, benignCallSevm, benignCallPre⟩
 
-private structure BenignCallFixture where
+structure BenignCallFixture where
   nextPc : Nat
   resumed : Devm
   frame : Jaune.Frame
@@ -913,7 +962,7 @@ private def BenignCallFixture.childRoot
   ⟨w.childEvm.pc, w.childEvm.sta, w.childEvm.dyna,
     w.childOut, w.childRun⟩
 
-private def benignCallFixture? : Option BenignCallFixture :=
+def benignCallFixture? : Option BenignCallFixture :=
   match hstep : benignCallEvm.step with
   | .spawn frame resume nextPc =>
       match henter : frame.enter with
@@ -948,14 +997,6 @@ private def benignCallFixture? : Option BenignCallFixture :=
       | .done _ => none
   | _ => none
 
-private theorem benignCallFixture_nonempty :
-    Nonempty BenignCallFixture := by
-  have available : benignCallFixture?.isSome = true := by
-    native_decide
-  cases fixture : benignCallFixture? with
-  | none => simp [fixture] at available
-  | some witness => exact ⟨witness⟩
-
 private theorem BenignCallFixture.rawFrameRoots_eq
     (w : BenignCallFixture) :
     Exec.rawFrameRoots w.run = [w.root, w.childRoot] := by
@@ -970,16 +1011,16 @@ private theorem BenignCallFixture.has_descendant
   simp [BenignCallFixture.run, BenignCallFixture.childRun,
     BenignCallFixture.nextRun, Exec.rawFrameDescendants]
 
-/-- A concrete ordinary-CALL execution has a nonempty descendant-frame tree
-and still cannot retain a write to any CircuitBreaker cell.  The proof uses
-frame storage owners, not childlessness or delegatecall reasoning. -/
-theorem benignCall_nonchildless_noninterference :
+/-- Any measured benign fixture carries a concrete ordinary-CALL execution
+with a nonempty descendant-frame tree and no retained write to any
+CircuitBreaker cell.  Executable fixture availability is checked outside the
+imported theorem layer. -/
+theorem benignCall_nonchildless_noninterference (w : BenignCallFixture) :
     ∃ (out : Execution)
         (run : Exec benignCallEvm.pc benignCallSevm benignCallPre out),
       some benignCallSevm.code.toList = Prog.compile benignCallProgram ∧
       Exec.rawFrameDescendants run ≠ [] ∧
       ∀ key, Exec.NoRetainedWriteTo run benignCircuitBreaker key := by
-  rcases benignCallFixture_nonempty with ⟨w⟩
   refine ⟨w.out, w.run, ?_, w.has_descendant, ?_⟩
   · rw [benignCallProgram_compile]
     simp [benignCallSevm, benignCallParentCode, benignCallBytes,
@@ -1054,7 +1095,7 @@ def wrongBoolMsg : Msg :=
     isStatic := true
     disablePrecompiles := true }
 
-private structure WrongBoolFixture where
+structure WrongBoolFixture where
   evm : Evm
   rawPost : Devm
   child : Devm
@@ -1064,7 +1105,7 @@ private structure WrongBoolFixture where
   clean : child.error = none
   output : child.output = (2 : B256).toBytes
 
-private def wrongBoolFixture? : Option WrongBoolFixture :=
+def wrongBoolFixture? : Option WrongBoolFixture :=
   match enter : (Frame.ofCall wrongBoolMsg).enter with
   | .run evm =>
       match rawExec : exec evm with
@@ -1088,13 +1129,6 @@ private def wrongBoolFixture? : Option WrongBoolFixture :=
       | .error _ => none
   | .done _ => none
 
-private theorem wrongBoolFixture_nonempty : Nonempty WrongBoolFixture := by
-  have available : wrongBoolFixture?.isSome = true := by
-    native_decide
-  cases fixture : wrongBoolFixture? with
-  | none => simp [fixture] at available
-  | some witness => exact ⟨witness⟩
-
 private noncomputable def WrongBoolFixture.run (w : WrongBoolFixture) :
     Exec w.evm.pc w.evm.sta w.evm.dyna (.ok w.rawPost) :=
   Classical.choice ((exec_iff_exec_eq _ _ _ _).mpr w.rawExec)
@@ -1116,11 +1150,11 @@ private theorem wrongBoolMessagePaused :
       wrongBoolMsg.benv.stat.time := by
   simp [PausedAt, pausedUntil, wrongBoolMsg, wrongBoolState, wrongBoolStor,
     State.getStor, State.get_set_self, Stor.set]
-  native_decide
+  decide +kernel
 
 /-- The compiled wrong-return program has a complete clean message execution
 in a paused exact query world, but its settled word is not canonical true. -/
-theorem wrongBool_paused_query_execution :
+theorem wrongBool_paused_query_execution (w : WrongBoolFixture) :
     ∃ (xl : Xlot) (child : Devm),
       ExactTargetCall wrongBoolCircuitBreaker wrongBoolTarget
         isPausedCalldata true wrongBoolMsg ∧
@@ -1130,7 +1164,6 @@ theorem wrongBool_paused_query_execution :
       PausedAt pausedUntil wrongBoolMsg.benv.state wrongBoolTarget
         wrongBoolMsg.benv.stat.time ∧
       ¬ AcceptedBoolExecution (.ok child) 1 := by
-  rcases wrongBoolFixture_nonempty with ⟨w⟩
   let xl : Xlot := .some ⟨w.evm, .ok w.rawPost⟩
   have process : ProcessMessage wrongBoolMsg xl (.ok w.child) := by
     have runFrame := RunFrame.of_run (f := Frame.ofCall wrongBoolMsg)
@@ -1154,11 +1187,11 @@ theorem wrongBool_paused_query_execution :
 
 /-- Clause (ii) rejects the compiled wrong-return variant on its actual clean
 paused query execution. -/
-theorem wrongBoolProgram_truthfulness_falsifier :
+theorem wrongBoolProgram_truthfulness_falsifier (w : WrongBoolFixture) :
     ¬ LidoPinnedPauseTarget wrongBoolCircuitBreaker wrongBoolPauser
       wrongBoolTarget wrongBoolProgram pausedUntil [] := by
   intro bundle
-  rcases wrongBool_paused_query_execution with
+  rcases wrongBool_paused_query_execution w with
     ⟨xl, child, exactCall, executes, process, clean, paused, notAccepted⟩
   have truthful := bundle.isPaused_truthful exactCall executes process
     child rfl clean
@@ -1268,7 +1301,7 @@ def retainedWriteMsg : Msg :=
     isStatic := false
     disablePrecompiles := true }
 
-private structure RetainedWriteFixture where
+structure RetainedWriteFixture where
   rootEvm : Evm
   rootPost : Devm
   settled : Devm
@@ -1284,7 +1317,7 @@ private structure RetainedWriteFixture where
   settle : (Frame.ofCall retainedWriteMsg).settle (.ok rootPost) = .ok settled
   settledClean : settled.error = none
 
-private def retainedWriteFixture? : Option RetainedWriteFixture :=
+def retainedWriteFixture? : Option RetainedWriteFixture :=
   match enter : (Frame.ofCall retainedWriteMsg).enter with
   | .run rootEvm =>
       match rawExec : exec rootEvm with
@@ -1319,14 +1352,6 @@ private def retainedWriteFixture? : Option RetainedWriteFixture :=
           else none
       | .error _ => none
   | .done _ => none
-
-private theorem retainedWriteFixture_nonempty :
-    Nonempty RetainedWriteFixture := by
-  have available : retainedWriteFixture?.isSome = true := by
-    native_decide
-  cases fixture : retainedWriteFixture? with
-  | none => simp [fixture] at available
-  | some witness => exact ⟨witness⟩
 
 private noncomputable def RetainedWriteFixture.run
     (w : RetainedWriteFixture) :
@@ -1386,7 +1411,8 @@ private theorem RetainedWriteFixture.hasDescendant
 /-- The distinct target's compiled CALL enters a descendant CircuitBreaker
 frame.  Its actual retained closure contains a last successful write to the
 protected CircuitBreaker cell, so semantic noninterference is false. -/
-theorem retainedWrite_distinctTarget_descendant_falsifier :
+theorem retainedWrite_distinctTarget_descendant_falsifier
+    (w : RetainedWriteFixture) :
     ∃ (rootEvm : Evm) (rootPost settled : Devm)
         (run : Exec rootEvm.pc rootEvm.sta rootEvm.dyna (.ok rootPost)),
       retainedWriteTarget ≠ retainedWriteCircuitBreaker ∧
@@ -1406,7 +1432,6 @@ theorem retainedWrite_distinctTarget_descendant_falsifier :
         write.storageOwner = retainedWriteCircuitBreaker ∧
         write.key = retainedWriteKey ∧
         write.IsLastRetained := by
-  rcases retainedWriteFixture_nonempty with ⟨w⟩
   have committed : Execution.commits (.ok w.rootPost) = true := by
     simp [Execution.commits, w.rootClean]
   have changed :
@@ -1434,11 +1459,11 @@ theorem retainedWrite_distinctTarget_descendant_falsifier :
 
 /-- Clause (iii) rejects the compiled distinct target because the exact
 pause-shaped message's retained slot contains the descendant write above. -/
-theorem retainedWriteProgram_noninterference_falsifier :
+theorem retainedWriteProgram_noninterference_falsifier
+    (w : RetainedWriteFixture) :
     ¬ LidoPinnedPauseTarget retainedWriteCircuitBreaker retainedWritePauser
       retainedWriteTarget retainedWriteProgram pausedUntil [] := by
   intro bundle
-  rcases retainedWriteFixture_nonempty with ⟨w⟩
   let xl : Xlot := .some ⟨w.rootEvm, .ok w.rootPost⟩
   have executes : MessageExecutesProgram retainedWriteMsg xl
       retainedWriteProgram := by
