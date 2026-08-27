@@ -44,6 +44,8 @@ import Blanc.LidoCircuitBreakerPreControl
 import Blanc.LidoCircuitBreakerCallBoundary
 import Blanc.LidoCircuitBreakerObservation
 import Blanc.LidoCircuitBreakerSuccess
+import Blanc.LidoCircuitBreakerPublicPause
+import Blanc.LidoCircuitBreakerPublicPauseControl
 import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.LidoCircuitBreakerDeploymentLayout

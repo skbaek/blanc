@@ -1498,6 +1498,25 @@ private theorem MemWordAt.acrossPauseStatStaging
       (by unfold pushList; simp only [List.map]; line_inv) hargs).acrossLoadWord
         htarget).acrossLine (by line_inv) hgas
 
+/-- Public successor for carrying a high memory word through CALL staging. -/
+theorem MemWordAt.acrossPauseCallStagingBoundary
+    {sevm : Sevm} {pre post : Devm} {offset : Nat} {word : B256}
+    (hpast : 320 ≤ offset)
+    (window : MemWordAt pre offset word)
+    (run : Line.Run sevm pre pauseCallStaging post) :
+    MemWordAt post offset word :=
+  MemWordAt.acrossPauseCallStaging hpast window run
+
+/-- Public successor for carrying a high memory word through STATICCALL
+staging. -/
+theorem MemWordAt.acrossPauseStatStagingBoundary
+    {sevm : Sevm} {pre post : Devm} {offset : Nat} {word : B256}
+    (hpast : 288 ≤ offset)
+    (window : MemWordAt pre offset word)
+    (run : Line.Run sevm pre pauseStatStaging post) :
+    MemWordAt post offset word :=
+  MemWordAt.acrossPauseStatStaging hpast window run
+
 /-- Contract-local value-carrying `EXTCODESIZE` inversion used by the
 strengthened code-guard handoff. -/
 private lemma success_of_extcodesize_val
@@ -1678,6 +1697,50 @@ private theorem pauseAfterCall_arms_words
       apply hwordNonzero
       simpa [hchild] using hflag.symm
     · rfl
+
+/-- Public window-carrying code-guard decomposition used by public-entry
+composition.  It exposes no new premise and preserves both terminal polarities. -/
+theorem pauseAfterSet_codeGuard_arms_windows
+    {fs : List Func} {sevm : Sevm} {entry : Devm} {target : Adr}
+    {duration : B256} {ex : Execution}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
+    (hDuration : MemWordAt entry (durationWord * 32).toNat duration)
+    (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
+    ((entry.getCode target).size.toB256 = 0 ∧
+        ∃ post, ex = .error (.revert, post) ∧ post.output = []) ∨
+      ((entry.getCode target).size.toB256 ≠ 0 ∧
+        ∃ guardPost : Devm,
+          MemWordAt guardPost (targetWord * 32).toNat target.toB256 ∧
+          MemWordAt guardPost (durationWord * 32).toNat duration ∧
+          Func.RunCompiledTo fs sevm guardPost
+            (pauseCallStaging +++
+              (Ninst.call ::: pauseAfterCallBranch)) ex) :=
+  pauseAfterSet_codeGuard_arms_words h_empty hTarget hDuration run
+
+/-- Public window-carrying post-CALL decomposition used to attach the actual
+CALL boundary to the settled outcome family. -/
+theorem pauseAfterCall_arms_windows
+    {fs : List Func} {sevm : Sevm} {target : Adr} {duration : B256}
+    {callPre callPost : Devm} {ex : Execution} {next : Func}
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (targetWindow : MemWordAt callPost
+      (targetWord * 32).toNat target.toB256)
+    (durationWindow : MemWordAt callPost
+      (durationWord * 32).toNat duration)
+    (run : Func.RunCompiledTo fs sevm callPost
+      (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> next)) ex) :
+    ∃ child armPre : Devm,
+      callPost.returnData = child.output ∧
+      armPre.returnData = child.output ∧
+      MemWordAt armPre (targetWord * 32).toNat target.toB256 ∧
+      MemWordAt armPre (durationWord * 32).toNat duration ∧
+      ((child.error.isSome = true ∧
+          Func.RunCompiledTo fs sevm armPre
+            (Func.call bubbleRevertSlot) ex) ∨
+        (child.error.isSome = false ∧
+          Func.RunCompiledTo fs sevm armPre next ex)) :=
+  pauseAfterCall_arms_words boundary targetWindow durationWindow run
 
 /-- The post-observation branch, carrying both staged words into the bubble or
 decode arm selected by the child's actual status. -/

@@ -1612,6 +1612,36 @@ private lemma pauseStatStaging_operands {sevm : Sevm} {armPre statPre : Devm}
   obtain ⟨rest, hrest⟩ := prefix_of_push pbg q4
   exact ⟨gw, rest, hrest, wy4.acrossNinst qg⟩
 
+/-- Public successor for the CALL staging operand extractor.  This is the
+exact premise `pauseCall_boundary` consumes. -/
+theorem pauseCallStaging_boundary_operands
+    {sevm : Sevm} {entry callPre : Devm} {target : B256}
+    (hword : MemWordAt entry (targetWord * 32).toNat target)
+    (hstaging : Line.Run sevm entry pauseCallStaging callPre) :
+    ∃ (gasWord : B256) (rest : List B256),
+      callPre.stack =
+        gasWord :: target :: 0 :: 0x11c :: 36 :: 0 :: 0 :: rest ∧
+      MemWordAt callPre (targetWord * 32).toNat target :=
+  pauseCallStaging_operands hword hstaging
+
+/-- Public successor for the STATICCALL staging operand extractor. -/
+theorem pauseStatStaging_boundary_operands
+    {sevm : Sevm} {armPre statPre : Devm} {target : B256}
+    (hword : MemWordAt armPre (targetWord * 32).toNat target)
+    (hstaging : Line.Run sevm armPre pauseStatStaging statPre) :
+    ∃ (gasWord : B256) (rest : List B256),
+      statPre.stack = gasWord :: target :: 0x11c :: 4 :: 0 :: 32 :: rest ∧
+      MemWordAt statPre (targetWord * 32).toNat target :=
+  pauseStatStaging_operands hword hstaging
+
+/-- Public successor for the STATICCALL staging calldata extractor. -/
+theorem pauseStatStaging_boundary_calldata
+    {sevm : Sevm} {armPre statPre : Devm}
+    (himage : ∃ img : Bytes, MemImage armPre img)
+    (hstaging : Line.Run sevm armPre pauseStatStaging statPre) :
+    (statPre.memory.read 0x11c 4).1 = isPausedCalldata :=
+  pauseStatStaging_calldata himage hstaging
+
 /-- **The pause's external boundary, joined.**  From the two staged words and
 the two crossings: the CALL is `PauseCallBoundary`'s message to `target`, the
 staged target word is still the CircuitBreaker's when the observation is
