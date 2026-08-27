@@ -11,11 +11,13 @@ implementation correct.
 
 `PublicPausePinnedTargetStatement` is the frozen entry-3 theorem *shape*.
 It starts before T2, from the public entry premises and actual production run,
-then consumes the protocol and actual-invocation code hook opaquely.  Its
-conclusion records the T2 family derived with target noninterference, the
-actual target boundary, and the paused final account state.  A proxy revisit
-reuses the same statement by replacing only the bundle and hook
-instantiations.
+then consumes the protocol and the combined trace-and-program-occurrence
+witness opaquely.  That witness deliberately carries both the parent trace
+joins and the two exact child-program occurrences; only the latter two
+conjuncts are the target adapter seam.  Its conclusion records the T2 family
+derived with target noninterference, the actual target boundary, and the
+paused final account state.  A proxy revisit reuses the same statement by
+replacing only the bundle and those program-occurrence conjuncts.
 -/
 
 namespace Blanc.LidoCircuitBreaker
@@ -69,10 +71,12 @@ def PinnedStatBoundaryExecutesProgram
     statPost.state = child.state ∧
     statPost.returnData = child.output
 
-/-- Program-entry evidence on the successful codeful trace of one exact
-`pauseAfterSet` occurrence.  The guard and post-CALL branch joins connect its
-boundary states to `entry` and to each other; no arbitrary boundary-shaped
-message is quantified. -/
+/-- Combined trace-and-program-occurrence evidence on the successful codeful
+trace of one exact `pauseAfterSet` occurrence.  The guard and post-CALL branch
+joins connect its boundary states to `entry` and to each other; no arbitrary
+boundary-shaped message is quantified.  Of this predicate's conjuncts, only
+the two `Pinned*BoundaryExecutesProgram` occurrences are target adapter seams;
+the remaining conjuncts are the production parent-trace witness. -/
 def LidoPinnedBoundaryExecutions
     (fs : List Func) (sevm : Sevm) (entry : Devm)
     (target : Adr) (program : Prog) (duration : B256)
@@ -139,8 +143,10 @@ def PublicPausePinnedTargetConclusion (sevm : Sevm) (pre : Devm)
       PausedAt pausedUntil final.state target.toAdr sevm.benvStat.time
 
 /-- Frozen entry-3 statement shape.  The bundle is consumed whole: none of
-its four clauses is unfolded here.  The actual-invocation hook is requested
-only for the exact `pauseAfterSet` entry extracted from this public run. -/
+its four clauses is unfolded here.  The combined trace-and-program-occurrence
+witness is requested only for the exact `pauseAfterSet` entry extracted from
+this public run; its target-specific adapter seam is exactly the pair of
+`MessageExecutesProgram` occurrences described above. -/
 def PublicPausePinnedTargetStatement
     (sevm : Sevm) (pre : Devm) (owner : Adr)
     (target duration idx0 len0 last0 : B256)
