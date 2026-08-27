@@ -317,7 +317,7 @@ footer a:hover{color:var(--ink)}
 }
 
 /* ────────────────────────────────────────────────────────────────
-   implementation cards (§3 and the contract pages' cross-links)
+   implementation cards (§6 and the contract pages' cross-links)
    ──────────────────────────────────────────────────────────────── */
 .subhead{font-variant-caps:small-caps;letter-spacing:.2em;font-size:.95rem;font-weight:600;
   color:var(--ink-2);margin:40px 0 4px;display:flex;align-items:center;gap:14px}

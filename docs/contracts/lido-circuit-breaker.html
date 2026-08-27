@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CircuitBreaker — a Blanc port of Lido’s guardian</title>
+<meta name="description" content="Blanc’s Lido CircuitBreaker: a 4,282-byte port of the deployed CircuitBreaker with a 175-row differential matrix, Registry integrity proved as one combined invariant whose corollaries close the three obligations an industrial campaign left open, an official-parameters deployment root through a real Prague block, integrity preserved at every reachable future over arbitrary hostile callees, zero accepted deviations, and a 69-row machine-checked assurance register.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">ports</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>CircuitBreaker.</h1>
+        <p class="lede" style="margin-top:20px">
+          The newest port: the
+          <a href="https://etherscan.io/address/0x6019CB557978296BA3C08a7B73225C0975DFB2F7#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">CircuitBreaker</a>
+          Lido deployed at <span class="mono">0x6019…B2F7</span> — an emergency brake in which an
+          admin grants pauser addresses time-limited authority over registered protocol contracts,
+          and a pause <em>spends</em> the authorization before the target ever gains control. In
+          April 2026 an industrial verification campaign on the same Registry source closed 38 of
+          41 properties and reported three coupled preservation obligations unresolved. Blanc’s
+          port proves one combined Registry invariant, designed together with the representation,
+          from which all three obligation shapes fall out as corollaries — then roots it in a
+          proved official-parameters deployment and carries it to every reachable future.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          A port never claims byte identity —
+          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
+          governs what is claimed and what never is. What makes this port distinctive is the
+          <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>:
+          69 rows mapping every quotable claim onto the exact declarations that carry it, the
+          premises they require, the axioms they depend on, the gate that owns them — and, in
+          every row without exception, what the row does <em>not</em> claim.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-lido-circuit-breaker-differential.sh
+<span class="ok">OK — Lido CircuitBreaker differential: 175/175 rows agree; 17/17 selectors + constructor; 144 causal history transactions; 464 resource boundaries …</span>
+<span class="p">$</span> scripts/check-lido-circuit-breaker-assurance.sh
+<span class="ok">OK — lido-circuit-breaker-assurance: 69 rows across 10 pillars … 142 axiom
+     expectations matched … 13/13 non-claim phrases present</span></div>
+        <p class="cap"><b>Fig. 1</b> — two CircuitBreaker gates, verbatim (2026-08-27), ellipses
+          marking elision: the differential matrix beside the locked Solidity reference, and the
+          register verifier that fails if any cited declaration, axiom set, or non-claim phrase
+          drifts from the tree it describes. The differential line continues “… 82 Solidity
+          CALL/STATICCALL traces; 15 positive artifact checks + 1 runtime corruption; 16 live
+          channel/projection/identity/manifest falsifiers.”</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>4,282 B runtime — vs 4,584 deployed</span>
+          <span class="pill"><span class="d"></span>69-row assurance register</span>
+          <span class="pill"><span class="d"></span>0 accepted deviations</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it is the CircuitBreaker</p>
+    <h2 style="max-width:30ch">A claim map, and evidence that answers to it.</h2>
+    <p class="lede" style="margin-top:18px">
+      “Right” was written down before it was argued:
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md</a>
+      freezes the reference’s public conformance boundary endpoint by endpoint, and the
+      assurance register maps every claim onto its evidence — with the axiom column checked
+      transitively against Lean and every load-bearing non-claim pinned, so a quoted sentence
+      that outruns its theorem fails a gate rather than surviving as prose. Two layers
+      discharge the claims — open the one you want to audit.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">175 rows vs the locked Solidity v1.0.0 · six channels · 464 resource boundaries</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-lido-circuit-breaker-differential.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-lido-circuit-breaker-differential.sh</span></a>
+          executes the exact compiler-derived Blanc artifact beside the independently locked
+          Solidity v1.0.0 reference in a pinned EELS Prague interpreter — 175 rows, agreeing on
+          all six credited channels: status, exact returndata, logical projected state, ETH,
+          ordered logs, and retained call traces. The rows are not gentle: constructor errors
+          and precedence, Registry mutation histories seeded by 144 causal transactions,
+          time and overflow edges, nested same-target and different-target reentry,
+          callback interference, and 82 live CALL/STATICCALL traces retained across rollback —
+          including the mid-call coordinate where an unregistered address still reports live,
+          pinned as real source behaviour rather than papered over.
+        </p>
+        <p class="dim">
+          A separate gate executes what the deployment theorem then quantifies:
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-lido-circuit-breaker-deployment.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-lido-circuit-breaker-deployment.sh</span></a>
+          carries one strict singleton type-2 Prague creation block through pinned EELS, with 18
+          positive assertions and 26 live finite mutants — feasibility and cross-evaluator
+          evidence only, never a Lean premise.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          The register stays modest on purpose: finite rows on chosen inputs, message calls
+          rather than blocks — the campaign builds no block and no receipt — and none of it is
+          ever called a proof. This layer’s job is to keep the theorems honest about
+          <em>which</em> contract they are theorems about.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">one combined Registry invariant · a derived deployment root · open-contract histories</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          Where the matrix samples, the theorems quantify — over storages, entry lists,
+          callees, and valid chain histories, always about the exact compiled bytes:
+          <span class="mono">lidoCircuitBreakerCode_compile</span> exposes the exact-bytes
+          equation for arbitrary deployment parameters, and every statement below hypothesises
+          those bytes in so many words.
+        </p>
+        <div class="listing tight" style="margin:14px 0">
+          <div class="bar"><span>Blanc/LidoCircuitBreaker*.lean</span><span class="tag">the theorem stack, by family</span></div>
+<pre>RegistryWitness + three corollaries  <span class="c">-- membership ⇔ index ⇔ array occurrence; clean</span>
+                                     <span class="c">   state after swap-and-pop removal; global</span>
+                                     <span class="c">   count conservation</span>
+registration · pause · heartbeat     <span class="c">-- every raw SSTORE classified to one of 20</span>
+                                     <span class="c">   frozen sites with role + guard; expiring</span>
+                                     <span class="c">   authority; the reentrancy lock; rollback</span>
+canonicalDeploymentStep_
+  establishes_root                   <span class="c">-- the official input through message, tx, and</span>
+                                     <span class="c">   Prague block → DeploymentRoot</span>
+chainUsing_preserves_registryStable  <span class="c">-- coherence at every reachable future, with no</span>
+                                     <span class="c">   premise about any other contract</span></pre>
+        </div>
+        <p class="dim">
+          The deployment root deserves its sentence: it is <em>derived, not axiomatized</em> —
+          from exactly three premises, the last of them one successful configured Prague-only
+          transition over the strict official envelope, the proof reconstructs the creation
+          message, receipt success, the exact installed runtime, the frozen official
+          constructor arguments, and an empty Registry witness. Every configured reachable
+          future of that root keeps the exact runtime, admits a coherent witness, and conserves
+          the global count.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          In the history family, what is <em>absent</em> is the claim: no premise about the
+          bytecode at any other address, no non-reentrancy condition, no direct-call-only
+          restriction, no honesty asked of the contracts it pauses, and no noninterference
+          assumption — its gate probes all 104 public theorems for exactly the three standard
+          axioms and admits no exception table. The family’s 198 audited theorems sit in the
+          repository-wide axiom audit, and <span class="mono">check-claims.sh</span> pins the
+          exact <em>statements</em> of the protected Registry-mutation, enumeration,
+          observability, and deployment boundaries.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:26ch">Zero accepted — and what that does and doesn’t mean.</h2>
+    <p class="lede" style="margin-top:18px">
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_CIRCUIT_BREAKER_DEVIATIONS.md</a>
+      accepts <b>no behavioral deviations</b>: zero accepted rows, zero pending, and no
+      unknown-mismatch allowlist. Agreement on the finite matrix is recorded as evidence, not
+      inflated into a proof that no mismatch exists, and the registry’s standing rule does the
+      real work: a future mismatch in the frozen surface is a defect or a new explicit
+      conformance decision — it may not be silently moved into an “accepted” section. Silence
+      is the one prohibited move.
+    </p>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">accepted low-level freedoms — not deviations</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The registry distinguishes behavior from implementation. Blanc keeps its freedom in:
+          runtime and initcode bytes, code hash, dispatcher shape, and instruction sequence —
+          never citable as Solidity-byte equality; raw persistent and transient storage keys
+          and layout, since the comparison projects both worlds to logical Registry, expiry,
+          and pause state; exact gas and out-of-gas thresholds, under the declared adequate
+          envelope; and private helper factoring — so long as declared status, returndata,
+          projected state, ETH, ordered logs, and call traces remain compatible.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">the boundary’s third register</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The explicit exclusions are load-bearing: no operational event delivery, reorg, or
+          finality claim; no callback-time count/expiry coherence, no target truth, and no
+          composition of the full public <span class="mono">pause</span> result; no deployment
+          shapes beyond the one official direct creation; and no verification of deployed
+          Solidity. The normative target is locked by
+          <span class="mono">scripts/lido-circuit-breaker-reference.json</span> — the vendored
+          v1.0.0 source under content-addressed digests — so “compared against what, exactly”
+          always has a one-line answer.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:26ch">Size, and gas — measured, and bounded honestly.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">measured — committed manifest, pinned oracle</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size</td><td class="num">4,282 B</td><td class="dim">compiler-derived, digest-pinned</td></tr>
+            <tr><td>deployed CircuitBreaker runtime</td><td class="num">4,584 B</td><td class="dim">locked reference — the oracle anchor</td></tr>
+            <tr><td>full CREATE input</td><td class="num">5,122 B</td><td class="dim">vs 5,638 for the reference</td></tr>
+            <tr><td>successful construction gas</td><td class="num">906,729</td><td class="dim">vs 967,777, measured in pinned EELS</td></tr>
+            <tr><td>adequate resource boundaries</td><td class="num">462 / 464</td><td class="dim">strictly cheaper; the 2 declared OOG controls equal, none dearer</td></tr>
+            <tr><td>completion thresholds</td><td class="num">33 / 33</td><td class="dim">exact minimum-gas searches, none above Solidity’s</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <span class="tick">what is deliberately not claimed</span>
+        <p class="dim" style="font-size:.94rem">
+          The port does not claim universal gas dominance, and the registry says why in so many
+          words: Blanc’s mandatory structured dispatch may carry a small intrinsic overhead
+          relative to a direct-jump implementation, so a universal claim would be false rather
+          than merely unproved. What is committed is the finite vector above — every boundary
+          digest-pinned, with falsifiers that must keep failing — and exact gas parity with the
+          deployed original is a declared freedom, not a goal.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          Unlike the WETH10 page’s closed-form gas equations, these figures are measurements
+          against the pinned oracle, and the page labels them as such rather than promoting
+          them. The executable evidence is specifically under the pinned Prague EELS; nothing
+          here implies deployability or cost on any other fork.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the build taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">the one assumption, kept loud</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The exact final state of one successful pause rests on
+          <span class="mono">PauseSuccessNoninterference</span>, a premise whose own docstring
+          opens “Assumed, not derived”: the callee, handed control mid-pause, did not move the
+          caller’s count or the heartbeat interval. Two differential rows —
+          <span class="mono">overflow-pause-post-callback-count-positive</span> and
+          <span class="mono">overflow-pause-post-callback-interval-change</span> — measure that
+          arbitrary callee code <em>can</em> falsify either equality, so the assumption is
+          demonstrably non-idle, cited in the theorem, the module header, and the register
+          alike. The history family carries no such premise, and its gate’s pin discipline
+          keeps it from ever acquiring one silently.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">an industrial campaign, answered on its own terms</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The April 2026 campaign reported circular inductive dependencies, four mutation
+          modes, and swap-and-pop as the difficulty in its three open
+          <span class="mono">registerPauser</span> obligations. Blanc’s answer was structural:
+          design the invariant and the storage representation together, so membership
+          equivalence, clean removal, and global count conservation are corollaries of one
+          <span class="mono">RegistryWitness</span> rather than three separately maintained
+          facts. That is a fact about Blanc’s own port — not “the deployed contract is only
+          38/41 verified,” and not “their prover cannot do this”: a tool given a different
+          problem — recovering properties from an existing artifact rather than designing
+          property and representation together — is not a tool that failed. The cross-revision
+          source-blob identity the comparison rests on is a named gap, taken from the cited
+          report rather than witnessed by any gate here.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Boundary, restated: nothing on this page verifies the Solidity artifact deployed at
+      <span class="mono">0x6019…B2F7</span> — its address, transaction, and block are
+      provenance identifiers only. No liveness is claimed: nothing here says the contract can
+      be paused, only what happens when it is. And a target’s canonical <span class="mono">true</span>
+      is evidence the target <em>reported</em> success, never that it is really paused. The
+      full boundary — thirteen pinned non-claim phrases — lives in the
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>,
+      in the honest register.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— CircuitBreaker, the Lido port</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, registry rows, gate summaries, and
+        the assurance register; where evidence ends, the page says so.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="weth10.html">the flagship port: WETH10 →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" target="_blank" rel="noopener">assurance register →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md" target="_blank" rel="noopener">frozen boundary →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>

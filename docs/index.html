@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blanc — keep every freedom, except one</title>
-<meta name="description" content="Keep every freedom, except one: theorems about the exact deployed bytes with no compiler in the trust base; proofs a small kernel re-checks under three classical axioms and nothing else; an executable EVM semantics passing the ecosystem’s own fixture corpus; custom hand-optimized bytecode, jumps alone compiler-placed; and a property ceiling rarely available at any price. The bill is one line: a new, deliberately bare language. Three contracts in: a WETH, a flash-mint token, a full 27-selector WETH10.">
+<meta name="description" content="Keep every freedom, except one: theorems about the exact deployed bytes with no compiler in the trust base; proofs a small kernel re-checks under three classical axioms and nothing else; an executable EVM semantics passing the ecosystem’s own fixture corpus; custom hand-optimized bytecode, jumps alone compiler-placed; and a property ceiling rarely available at any price. The bill is one line: a new, deliberately bare language. Four contracts in: a WETH, a flash-mint token, a full 27-selector WETH10, and Lido’s CircuitBreaker.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="site.css">
 <script>document.documentElement.classList.add('js');</script>
@@ -70,7 +70,7 @@
 <span class="ok">OK — axiom audit: 607/607 audited theorems depend on exactly their pinned axiom sets</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
-        <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (latest run 2026-08-23): the
+        <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (latest run 2026-08-27): the
           axiom audit that pins every audited theorem to its exact axiom set, and the differential
           gate executing Blanc’s WETH10 beside the deployed original’s runtime, byte for byte, in a
           pinned oracle.<sup class="fn"><a href="#fn3">3</a></sup></p>
@@ -92,13 +92,16 @@
       is pinned to Lean’s three canonical axioms; the semantics underneath is executable and
       exercised by the ecosystem’s own fixture corpus; and the implementation surface, from
       storage scheme to error genre, stays the author’s. Programs, semantics, compiler, and proofs
-      are one Lean&nbsp;4 artifact — roughly 149,000 lines — built on Jaune’s executable EVM
-      semantics at a pinned commit. Three contracts are in: a WETH at less than a third of the
+      are one Lean&nbsp;4 artifact — roughly 251,000 lines — built on Jaune’s executable EVM
+      semantics at a pinned commit. Four contracts are in: a WETH at less than a third of the
       deployed WETH9’s code size, its solvency proved over every reachable state of a configured
       chain, with no hash-collision clause anywhere in the statement; an ERC-3156 flash-mint token
-      whose supply conservation survives arbitrary reentrant borrower code; and a full 27-selector
+      whose supply conservation survives arbitrary reentrant borrower code; a full 27-selector
       WETH10, taken from zero contract code to a verified drop-in — every verification goal in its
-      charter met — by one developer with one laptop and an agent in the loop. Its flagship theorem is of a kind rarely purchasable at any
+      charter met — by one developer with one laptop and an agent in the loop; and Lido’s
+      CircuitBreaker, ported with zero accepted deviations, its Registry invariant closing — as
+      corollaries — the three obligations a named industrial campaign left open, rooted in a
+      proved official-parameters deployment through a real Prague block. WETH10’s flagship theorem is of a kind rarely purchasable at any
       price: from a proved deployment onward, every holder’s booked balance stays exactly conserved
       at every reachable future, and every wei of it is redemption-enabled through canonical
       <span class="mono">withdraw</span> and <span class="mono">withdrawTo</span> at both message and
@@ -122,8 +125,8 @@
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
       <div class="fact"><span class="n">607<span class="dimmer" style="font-size:1.05rem">/607</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
-      <div class="fact"><span class="n">3</span>
-        <span class="l">contracts in — a WETH, a flash-mint token, a full 27-selector WETH10 — one dev, one laptop, an agent in the loop</span></div>
+      <div class="fact"><span class="n">4</span>
+        <span class="l">contracts in — a WETH, a flash-mint token, a 27-selector WETH10, Lido’s CircuitBreaker — one dev, one laptop, an agent in the loop</span></div>
       <div class="fact"><span class="n">147<span class="dimmer" style="font-size:1.05rem">/147</span></span>
         <span class="l">differential rows agreeing with the deployed WETH10 — all 27 selectors + receive, zero mismatches</span></div>
     </div>
@@ -274,7 +277,8 @@
           it can be tested like an implementation: at the pinned commit it passes the ecosystem’s
           full fixture corpus — 5,100/5,100 files — and Blanc’s differential gates run each
           contract beside EELS, Ethereum’s canonical executable specification, in a pinned oracle:
-          147/147 WETH10 rows, 11/11 and 11/11 contract fixture suites. The definitions the corpus
+          147/147 WETH10 rows, 175/175 CircuitBreaker rows, 11/11 and 11/11 contract fixture
+          suites. The definitions the corpus
           exercises are the definitions the theorems quantify over — one set, no shadow model.
         </p>
       </div>
@@ -365,7 +369,7 @@
     <h2 style="max-width:22ch">Keep the ceiling.</h2>
     <p class="lede" style="margin-top:18px">
       Because contracts, compiler, and chain semantics are one mathematical object, statements
-      of a kind rarely available at any price are ordinary here. Six kinds have landed so
+      of a kind rarely available at any price are ordinary here. Seven kinds have landed so
       far, each with an instance you can open.
     </p>
 
@@ -461,7 +465,7 @@
       </div>
     </div>
 
-    <h3 class="subhead" style="margin-top:48px">Five more kinds <i>— still uncommon</i></h3>
+    <h3 class="subhead" style="margin-top:48px">Six more kinds <i>— still uncommon</i></h3>
     <div class="grid3" style="margin-top:16px">
       <div class="panel">
         <span class="tick">adversarial settlement</span>
@@ -508,6 +512,18 @@
         </p>
       </div>
       <div class="panel">
+        <span class="tick">open-contract histories</span>
+        <h3>Integrity with no premise about anyone else</h3>
+        <p class="dim" style="font-size:.93rem">
+          <span class="mono">chainUsing_preserves_registryStable</span>: from a checkpoint with
+          the CircuitBreaker’s exact runtime installed and coherent storage, every reachable
+          state stays coherent — with no premise about the bytecode at any other address, no
+          non-reentrancy condition, and no honesty asked of the contracts it pauses. The
+          checkpoint hypothesis is discharged by a proved official-parameters deployment, so
+          the family stands on a real Prague block rather than a supposition.
+        </p>
+      </div>
+      <div class="panel">
         <span class="tick">error genre</span>
         <h3>Reverts, constructed exactly</h3>
         <p class="dim" style="font-size:.93rem">
@@ -536,7 +552,7 @@
     <h2 style="max-width:24ch">Keep the receipts.</h2>
     <p class="lede" style="margin-top:18px">
       The freedoms above are not a prospectus. Every contract theorem, differential row, and
-      measured byte in §&nbsp;1–5 comes from one of three contracts already in — built and
+      measured byte in §&nbsp;1–5 comes from one of four contracts already in — built and
       proved by one developer, with one laptop and an agent in the loop. Each contract raised
       the bar for the next, and each has a page of its own: how we know it is the contract it
       names, the deviation registry, the measured deltas, and what the build taught. Two kinds
@@ -575,6 +591,22 @@
           <span class="chip"><b>6,313 B</b> vs 9,975 deployed</span>
           <span class="chip">147/147 differential rows</span>
           <span class="chip">28/28 entry families proved</span>
+        </span>
+        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
+      </a>
+      <a class="card" href="contracts/lido-circuit-breaker.html">
+        <span class="cardhead">
+          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 3.5 27 16 16 28.5 5 16Z"/><path d="M13.5 12v8M18.5 12v8"/></svg></span>
+          <span class="cardtitle"><b>CircuitBreaker</b><i>Lido’s emergency pause guardian · after the deployed CircuitBreaker</i></span>
+        </span>
+        <p class="carddesc">The newest port: Registry integrity as one combined invariant — its
+          corollaries close the three obligations an industrial campaign left open — rooted in a
+          proved official-parameters deployment through a real Prague block, and preserved at
+          every reachable future over arbitrary hostile callees.</p>
+        <span class="cardfacts">
+          <span class="chip"><b>4,282 B</b> vs 4,584 deployed</span>
+          <span class="chip">175/175 differential rows</span>
+          <span class="chip">0 accepted deviations</span>
         </span>
         <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
       </a>
@@ -625,14 +657,14 @@
         </div>
       <div>
         <div class="term"><span class="p">$</span> scripts/check-layering.sh
-<span class="ok">OK — layering: 3 contract(s) are siblings; 95 module(s) classified, 93 non-root checked, no cross-contract or inverted import</span>
+<span class="ok">OK — layering: 4 contract(s) are siblings; 150 module(s) classified, 148 non-root checked, no cross-contract or inverted import</span>
 <span class="p">$</span> scripts/check-claims.sh
-<span class="ok">OK — common/WETH10/Lido claim statements: 263 definitions/statements and exact
+<span class="ok">OK — common/WETH10/Lido claim statements: 268 definitions/statements and exact
      record constructors pinned by Lean</span>
 <span class="p">$</span> scripts/check-weth.sh --no-build &amp;&amp; scripts/check-fmint.sh --no-build
 <span class="ok">OK — weth fixtures: 11/11 PASS</span>
 <span class="ok">OK — fmint fixtures: 11/11 PASS, manifest cross-check clean</span></div>
-        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery, verbatim (2026-08-24). The
+        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery, verbatim (2026-08-27). The
           full ordered set — layering, trust surface, reference lock, differential, redemption,
           deployment, axiom audit, statement pins, elaboration budget, fixtures, coverage — is
           catalogued with scales and pass criteria in
@@ -778,7 +810,7 @@
         </li>
         <li>
           <div>Batteries
-            <span class="why">not included: the standard library is what three contracts have needed so far — what your contract needs beyond it, you write, and then you prove</span></div>
+            <span class="why">not included: the standard library is what four contracts have needed so far — what your contract needs beyond it, you write, and then you prove</span></div>
           <span class="verdict">not included</span>
         </li>
         <li>
@@ -788,7 +820,7 @@
         </li>
         <li>
           <div>Proof effort that rounds to zero
-            <span class="why">the theorems above took ~149,000 lines of Lean for three contracts; interactive proof is real engineering, even with the shared ladder doing the heavy lifting</span></div>
+            <span class="why">the theorems above took ~251,000 lines of Lean for four contracts; interactive proof is real engineering, even with the shared ladder doing the heavy lifting</span></div>
           <span class="verdict">real cost</span>
         </li>
         <li>
@@ -817,7 +849,8 @@
     <h2 style="max-width:26ch">What a port claims — and how we earn it.</h2>
     <p class="lede" style="margin-top:18px">
       The portfolio of §&nbsp;6 is staged on contracts you already know — a WETH, a flash-mint
-      token, a full 27-selector WETH10 — rebuilt in a language you have never heard of. Which
+      token, a full 27-selector WETH10, Lido’s CircuitBreaker — rebuilt in a language you have
+      never heard of. Which
       invites a fair suspicion: <em>is this claiming to be WETH10 — to the byte? And if not,
       what kind of win is being advertised?</em>
     </p>
@@ -919,6 +952,7 @@
       <span class="chip"><b>WETH_DEVIATIONS.md</b> — 5 rows, 2 now agreements</span>
       <span class="chip"><b>FMINT_DEVIATIONS.md</b> — vs. OpenZeppelin</span>
       <span class="chip"><b>WETH10_DEVIATIONS.md</b> — zero accepted deviations</span>
+      <span class="chip"><b>LIDO_CIRCUIT_BREAKER_DEVIATIONS.md</b> — zero accepted deviations</span>
       <span class="chip"><b>WETH10_COMPATIBILITY.md</b> — the frozen boundary</span>
     </div>
 
@@ -1185,14 +1219,14 @@
         <p>You maintain a wrapper, a vault, a bridge component — something whose entire job is a
           property you can say in one sentence. Blanc’s worked examples are exactly that shape.
           Bring the sentence; the ladder from “compiled bytes” to “every reachable chain state” is
-          already built — §&nbsp;6 shows it climbed, three contracts over.</p>
+          already built — §&nbsp;6 shows it climbed, four contracts over.</p>
         <div class="hook">start: WETH10_COMPATIBILITY.md — a behavior, frozen<br>then: Blanc/Weth10FutureRedeemable.lean — the redeemability guarantee, end to end</div>
       </div>
       <div class="aud">
         <h3>Proof engineers &amp; PL researchers</h3>
         <p>A live laboratory for proof-cost economics: which abstractions let the fourth contract
           cost less than the third, where callback-crossing machinery generalises, what a
-          dispatcher-combinator layer owes its clients. ~149,000 lines of worked answers, with the
+          dispatcher-combinator layer owes its clients. ~251,000 lines of worked answers, with the
           open questions in the goal ledgers.</p>
         <div class="hook">start: Blanc/Semantics.lean — the four constructors<br>then: Blanc/Ladder.lean · Blanc/Forward.lean — the reusable spine</div>
       </div>
@@ -1253,6 +1287,7 @@
           <div class="kv"><dt>the map</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/README.md" style="text-decoration:underline;text-underline-offset:3px">README.md</a> — every module, every theorem family, the assurance boundary</dd></div>
           <div class="kv"><dt>the gates</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md" style="text-decoration:underline;text-underline-offset:3px">scripts/GATES.md</a> — each gate’s command, scale, runtime, and pass criterion</dd></div>
           <div class="kv"><dt>the showcase</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/Blanc/Weth10FutureRedeemable.lean" style="text-decoration:underline;text-underline-offset:3px">Blanc/Weth10FutureRedeemable.lean</a> — read the statement, then its docstring’s scope notes</dd></div>
+          <div class="kv"><dt>the claim map</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_CIRCUIT_BREAKER_ASSURANCE.md</a> — every CircuitBreaker claim, mapped to the theorem that carries it, non-claims included</dd></div>
           <div class="kv"><dt>the semantics</dt><dd><a href="https://skbaek.github.io/jaune/" style="text-decoration:underline;text-underline-offset:3px">Jaune</a> — the machine under all of it, with its own evidence page</dd></div>
         </dl>
       </div>
@@ -1273,10 +1308,10 @@
           page</a> for its conformance evidence.</li>
         <li id="fn3">Every figure about this repository on this page is drawn from a committed
           report, registry, gate summary, or theorem in the repository; the snapshot is current
-          as of 2026-08-13. §&nbsp;11’s landscape table is the one deliberate exception — it
+          as of 2026-08-27. §&nbsp;11’s landscape table is the one deliberate exception — it
           describes other people’s projects, on the terms its own disclaimer states. Gate
-          lines shown are verbatim output — Fig.&nbsp;1 from a 2026-08-23 run, Fig.&nbsp;2 from
-          2026-08-12 — except that one long line is wrapped and ellipses mark elision; the
+          lines shown are verbatim output — Fig.&nbsp;1 and Fig.&nbsp;2 from 2026-08-27
+          runs — except that one long line is wrapped and ellipses mark elision; the
           differential line continues “… 7 state-mutating reentrancy rows, 26
           STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</li>
         <li id="fn4">Spelled out, because the boundary rewards precision: when a Blanc contract
