@@ -746,9 +746,9 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 ## Pillar — Hostile-world results (Stage 6)
 
 Reentrancy refusal is PAU-2 and rollback is PAU-3; they are not restated here. These
-three rows carry what is specific to the hostile-world closure: how universality is
-kept falsifiable, where the one assumption sits, and which uncomfortable state is
-deliberately permitted.
+five rows carry what is specific to the hostile-world closure: how universality is
+kept falsifiable, where the one assumption sits, which uncomfortable state is
+deliberately permitted, and how the same family lifts to the public pause entry.
 
 #### HOSTILE-1 — Universality over callee bytecode is made failable, not merely asserted, by dedicated controls verified non-vacuous under live mutation
 
@@ -779,6 +779,26 @@ deliberately permitted.
 - **Differential channel:** `callback-midcall-liveness`, `callback-heartbeat`
 - **Non-claims:** this is real source behaviour at an internal state, pinned as a live differential coordinate. It is **why** no callback-time count/expiry coherence is claimed anywhere in this register, and why a settled-boundary invariant — which could hold — is recorded as a successor rather than asserted here.
 - **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreaker.lean:176`
+
+#### HOSTILE-4 — A production public `pause(address)` execution reaches the exact Stage 6 `pauseAfterSet` state at every terminal polarity
+
+- **Declarations:** `Blanc.LidoCircuitBreaker.publicPause_reaches_pauseAfterSet`
+- **Premises:** `PublicPauseEntryPremises` states the production runtime bytes, owner/code-address agreement, zero value, dynamic non-root frame, exact pause calldata and selector, canonical nonzero target and caller, unlocked entry, installed target code, live assignment, the duration/index/length/last registry reads, every named storage-key separation, the count-preservation kernel, and a memory image; plus the actual `Prog.RunCompiledTo` execution. None of these premises states or selects the terminal result.
+- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
+- **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
+- **Differential channel:** the public pause success/failure family exercises the same production selector and registry preconditions finitely
+- **Non-claims:** this row strengthens altitude only. It chooses no terminal polarity, constrains no arbitrary target behaviour beyond the separately named installed bytes, and says neither that the target reports `true` nor that it is really paused.
+- **Source:** `Blanc/LidoCircuitBreakerPublicPause.lean`; `Blanc/LidoCircuitBreakerPublicPauseControl.lean`
+
+#### HOSTILE-5 — The CALL and STATICCALL boundaries and complete settled Stage 6 outcome family hold from the public pause entry
+
+- **Declarations:** `Blanc.LidoCircuitBreaker.pauseAfterSet_boundary_committed_outcomes`, `Blanc.LidoCircuitBreaker.publicPause_committed_outcomes`
+- **Premises:** at the reached state, the four exact function-table slots, the transported target and duration words, non-root dynamic frame facts, the actual `pauseAfterSet` continuation, and `PauseSuccessNoninterference` only for successful pre-states that reach `pauseSuccess`; at public altitude, the full HOSTILE-4 entry premises and execution plus that same named noninterference condition scoped to the exact extracted state. No result-equivalent premise appears.
+- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
+- **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
+- **Differential channel:** the pause success/failure family, including target revert, query revert, short return, canonical false, non-canonical word, canonical true, and the two post-callback overflow rows
+- **Non-claims:** **accepting a canonical `1` is evidence only that the target reported success — never that the target is really paused.** Arbitrary target code can still re-enter and falsify `PauseSuccessNoninterference`; the public theorem assumes that named premise exactly where the reached-state family does and does not derive it for arbitrary targets. No liveness, universal-gas, target-honesty, or end-to-end paused-state claim is made.
+- **Source:** `Blanc/LidoCircuitBreakerPublicPause.lean`; `Blanc/LidoCircuitBreakerSuccess.lean`
 
 ---
 

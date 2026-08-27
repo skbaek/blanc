@@ -192,7 +192,7 @@ EXPECTED_ROWS_PER_PILLAR = {
     "Temporal authority": 10,
     "Single-use pause": 5,
     "External-call honesty": 4,
-    "Hostile-world results (Stage 6)": 3,
+    "Hostile-world results (Stage 6)": 5,
     "Deployment and history": 13,
     "Artifact conformance and cost": 4,
 }
@@ -201,7 +201,7 @@ EXPECTED_ROWS_PER_PILLAR = {
 # from it. Deriving it would let a single edit move a row between pillars and a
 # matching edit here keep the gate green with no total to disagree with; two
 # independent pins have to be falsified together.
-EXPECTED_TOTAL_ROWS = 69
+EXPECTED_TOTAL_ROWS = 71
 
 # Rows whose Declarations field is the gate-owned literal. Pinned so the
 # escape hatch cannot widen quietly: convert one normal row and this fails.

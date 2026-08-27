@@ -53,7 +53,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
           "BalanceAlgebra", "Compiled", "DeploymentCompiled", "DeploymentMessage", "Forward", "Reverts", "ForwardCall",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
           "ExecutionOccurrence", "CycleWriteFree", "TransientSettlement",
-          "SourceAttainment", "TransientInvariance"]
+          "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
 
 CONTRACTS = {
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
@@ -121,6 +121,8 @@ CONTRACTS = {
                              "LidoCircuitBreakerSuccess",
                              "LidoCircuitBreakerPublicPause",
                              "LidoCircuitBreakerPublicPauseControl",
+                             "LidoCircuitBreakerPinnedTarget",
+                             "LidoCircuitBreakerPinnedTargetControl",
                              "LidoCircuitBreakerCode",
                              "LidoCircuitBreakerDeploy",
                              "LidoCircuitBreakerDeploymentLayout",
