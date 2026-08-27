@@ -1968,6 +1968,30 @@ theorem Exec.noRetainedWriteTo_of_no_execOccurrence
   rw [sameFrame.sevm_eq] at ownerEq
   exact differentOwner ownerEq
 
+/-- If every actually entered code frame owns storage at an address different
+from the selected owner, then no retained write in the complete invocation
+tree can target that owner's cell.  Unlike the childless sufficient route,
+this theorem directly admits ordinary CALL trees whose callees have distinct
+storage owners. -/
+theorem Exec.noRetainedWriteTo_of_frame_owners_ne
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (owner : Adr) (key : B256)
+    (different : ∀ frameRoot ∈ Exec.rawFrameRoots run,
+      frameRoot.sevm.currentTarget ≠ owner) :
+    Exec.NoRetainedWriteTo run owner key := by
+  intro event member matchEq
+  rcases Exec.exists_successfulSstore_of_mem_retainedStorageWrites
+      (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))
+      (event := event) member with ⟨write, -, writeEq⟩
+  subst event
+  rcases (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix run
+      write.occurrence.node).mp write.occurrence.reached with
+    ⟨frameRoot, frameMember, sameFrame⟩
+  have ownerEq := (Exec.StorageWrite.matches_eq_true.mp matchEq).1
+  change write.occurrence.node.sevm.currentTarget = owner at ownerEq
+  rw [sameFrame.sevm_eq] at ownerEq
+  exact different frameRoot frameMember ownerEq
+
 /-- Under a committing root, retained-node membership is exactly membership in
 the root frame's same-frame prefix or in one of its landed descendant frames. -/
 private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix

@@ -528,4 +528,234 @@ theorem stub_lidoPinnedPauseTarget
       uses selector member paused run
     simp at member
 
+/-! ## One benign outbound CALL
+
+This second control is deliberately below the source-program protocol.  It is
+one concrete driver execution whose parent performs an ordinary CALL to an
+inert STOP account and then stops.  It exists only to show that semantic
+noninterference admits a genuinely non-childless frame tree. -/
+
+def benignCallTarget : Adr := 0x100
+
+def benignCircuitBreaker : Adr := 0x200
+
+def benignCallParentCode : ByteArray := ByteArray.mk #[0xf1, 0x00]
+
+def benignCallChildCode : ByteArray := ByteArray.mk #[0x00]
+
+def benignCallSevm : Sevm :=
+  { (default : Sevm) with code := benignCallParentCode }
+
+def benignCallPre : Devm :=
+  let pre := ((default : Devm).withGasLeft 100000).withStack
+    [10000, benignCallTarget.toB256, 0, 0, 0, 0, 0]
+  pre.withState (pre.state.setCode benignCallTarget benignCallChildCode)
+
+private def benignCallEvm : Evm := ⟨0, benignCallSevm, benignCallPre⟩
+
+private structure BenignCallFixture where
+  nextPc : Nat
+  resumed : Devm
+  frame : Jaune.Frame
+  resume : Resume
+  childEvm : Evm
+  childOut : Execution
+  out : Execution
+  hstep : benignCallEvm.step = .spawn frame resume nextPc
+  henter : frame.enter = .run childEvm
+  childStep : childEvm.step = .halt childOut
+  hresume : resume.run (frame.settle childOut) = .ok resumed
+  nextStep : (⟨nextPc, benignCallSevm, resumed⟩ : Evm).step = .halt out
+  childTarget : childEvm.sta.currentTarget = benignCallTarget
+
+private def BenignCallFixture.childRun (w : BenignCallFixture) :
+    Exec w.childEvm.pc w.childEvm.sta w.childEvm.dyna w.childOut :=
+  .halt w.childStep
+
+private def BenignCallFixture.nextRun (w : BenignCallFixture) :
+    Exec w.nextPc benignCallSevm w.resumed w.out :=
+  .halt w.nextStep
+
+private def BenignCallFixture.run (w : BenignCallFixture) :
+    Exec 0 benignCallSevm benignCallPre w.out :=
+  .runOk w.hstep w.henter w.childRun w.hresume w.nextRun
+
+private def BenignCallFixture.root (w : BenignCallFixture) : Exec.Deriv :=
+  ⟨0, benignCallSevm, benignCallPre, w.out, w.run⟩
+
+private def BenignCallFixture.childRoot
+    (w : BenignCallFixture) : Exec.Deriv :=
+  ⟨w.childEvm.pc, w.childEvm.sta, w.childEvm.dyna,
+    w.childOut, w.childRun⟩
+
+private def benignCallFixture? : Option BenignCallFixture :=
+  match hstep : benignCallEvm.step with
+  | .spawn frame resume nextPc =>
+      match henter : frame.enter with
+      | .run childEvm =>
+          match childStep : childEvm.step with
+          | .halt childOut =>
+              match hresume : resume.run (frame.settle childOut) with
+              | .ok resumed =>
+                  match nextStep :
+                      (⟨nextPc, benignCallSevm, resumed⟩ : Evm).step with
+                  | .halt out =>
+                      if childTarget :
+                          childEvm.sta.currentTarget = benignCallTarget then
+                        some {
+                          nextPc := nextPc
+                          resumed := resumed
+                          frame := frame
+                          resume := resume
+                          childEvm := childEvm
+                          childOut := childOut
+                          out := out
+                          hstep := hstep
+                          henter := henter
+                          childStep := childStep
+                          hresume := hresume
+                          nextStep := nextStep
+                          childTarget := childTarget }
+                      else none
+                  | _ => none
+              | .error _ => none
+          | _ => none
+      | .done _ => none
+  | _ => none
+
+private theorem benignCallFixture_nonempty :
+    Nonempty BenignCallFixture := by
+  have available : benignCallFixture?.isSome = true := by
+    native_decide
+  cases fixture : benignCallFixture? with
+  | none => simp [fixture] at available
+  | some witness => exact ⟨witness⟩
+
+private theorem BenignCallFixture.rawFrameRoots_eq
+    (w : BenignCallFixture) :
+    Exec.rawFrameRoots w.run = [w.root, w.childRoot] := by
+  simp [BenignCallFixture.run, BenignCallFixture.root,
+    BenignCallFixture.childRoot, BenignCallFixture.childRun,
+    BenignCallFixture.nextRun, Exec.rawFrameRoots,
+    Exec.rawFrameDescendants]
+
+private theorem BenignCallFixture.has_descendant
+    (w : BenignCallFixture) :
+    Exec.rawFrameDescendants w.run ≠ [] := by
+  simp [BenignCallFixture.run, BenignCallFixture.childRun,
+    BenignCallFixture.nextRun, Exec.rawFrameDescendants]
+
+/-- A concrete ordinary-CALL execution has a nonempty descendant-frame tree
+and still cannot retain a write to any CircuitBreaker cell.  The proof uses
+frame storage owners, not childlessness or delegatecall reasoning. -/
+theorem benignCall_nonchildless_noninterference :
+    ∃ (out : Execution)
+        (run : Exec 0 benignCallSevm benignCallPre out),
+      Exec.rawFrameDescendants run ≠ [] ∧
+      ∀ key, Exec.NoRetainedWriteTo run benignCircuitBreaker key := by
+  rcases benignCallFixture_nonempty with ⟨w⟩
+  refine ⟨w.out, w.run, w.has_descendant, ?_⟩
+  intro key
+  apply Exec.noRetainedWriteTo_of_frame_owners_ne
+  intro frameRoot member
+  rw [w.rawFrameRoots_eq] at member
+  simp at member
+  rcases member with rfl | rfl
+  · change benignCallSevm.currentTarget ≠ benignCircuitBreaker
+    decide
+  · change w.childEvm.sta.currentTarget ≠ benignCircuitBreaker
+    rw [w.childTarget]
+    decide
+
+/-! ## Falsifiers -/
+
+/-- A deliberately bad query body returns the non-boolean word `2`. -/
+def wrongBoolQuery : Func :=
+  Ninst.pushB256 2 ::: returnWord
+
+def wrongBoolProgram : Prog :=
+  ⟨stubDispatchLine +++ (stubPause <?> wrongBoolQuery), []⟩
+
+/-- The exact acceptance rule rejects the wrong-return variant's word.  This
+control also pins that trailing-byte tolerance does not enlarge the accepted
+first-word set beyond canonical zero and one. -/
+theorem wrongBoolReturnShape_falsifier :
+    BoolQueryFailure
+      ((default : Devm).withOutput ((2 : B256).toBytes)) := by
+  unfold BoolQueryFailure
+  constructor
+  · rw [acceptedBoolWord_iff (word := (2 : B256))
+      (result := (0 : B256)) (by rfl) (by rfl)]
+    decide
+  · rw [acceptedBoolWord_iff (word := (2 : B256))
+      (result := (1 : B256)) (by rfl) (by rfl)]
+    decide
+
+/-- If the pause stub is installed at the CircuitBreaker storage owner, its
+successful write changes the selected cell whenever the old word differs from
+the computed expiry.  Semantic noninterference therefore measurably fails. -/
+theorem sameOwner_pause_noninterference_falsifier
+    {owner : Adr} {sevm : Sevm} {pre post : Devm} {duration : B256}
+    (frame : ExactTargetFrame owner owner (pauseForCalldata duration)
+      false sevm)
+    (uses : FrameUsesProgram sevm stubProgram)
+    (run : Exec 0 sevm pre (.ok post))
+    (committed : Execution.commits (.ok post) = true)
+    (changed : pausedUntil pre owner ≠ sevm.benvStat.time + duration) :
+    ¬ Exec.NoRetainedWriteTo run owner pausedUntilSlot := by
+  intro noWrite
+  have preserved : pausedUntil post owner = pausedUntil pre owner := by
+    simpa [pausedUntil, Devm.getStorVal, Devm.getStor,
+      Execution.committedPost] using
+      (Exec.committedCell_eq_of_noRetainedWriteTo run committed owner
+        pausedUntilSlot noWrite)
+  have effect : pausedUntil post owner =
+      sevm.benvStat.time + duration :=
+    stub_pauseFor_effect frame uses run
+  exact changed (preserved.symm.trans effect)
+
+/-! ## Toy successful composition -/
+
+/-- The successful exact pause leg of the toy choreography leaves the stub
+paused at its committed target boundary and discharges the CircuitBreaker's
+two-cell noninterference premise from the call-free compiled source.  The
+strict-growth premise is the honest modular-arithmetic condition that excludes
+timestamp-plus-duration wraparound; neither conclusion is assumed. -/
+theorem stub_successful_pause_composition
+    {circuitBreaker pauser target : Adr}
+    {parentSevm targetSevm : Sevm} {pre post : Devm}
+    {duration : B256}
+    (different : target ≠ circuitBreaker)
+    (parentOwner : parentSevm.currentTarget = circuitBreaker)
+    (parentCaller : parentSevm.caller = pauser)
+    (frame : ExactTargetFrame circuitBreaker target
+      (pauseForCalldata duration) false targetSevm)
+    (uses : FrameUsesProgram targetSevm stubProgram)
+    (run : Exec 0 targetSevm pre (.ok post))
+    (committed : Execution.commits (.ok post) = true)
+    (strictGrowth : targetSevm.benvStat.time <
+      targetSevm.benvStat.time + duration) :
+    PausedAt pausedUntil post target targetSevm.benvStat.time ∧
+      PauseSuccessNoninterference parentSevm pre post := by
+  have invocation :
+      (⟨0, targetSevm, pre, .ok post, run⟩ : Exec.Deriv).exactInvocation
+        stubProgram target target :=
+    ⟨rfl, frame.currentTarget, frame.codeAddress, uses⟩
+  have preserved (key : B256) :
+      post.getStorVal circuitBreaker key =
+        pre.getStorVal circuitBreaker key := by
+    have noWrite := Exec.noRetainedWriteTo_of_sourceSites_no_exec run key
+      invocation different stubProgram_sourceSites_no_exec
+    simpa [Devm.getStorVal, Devm.getStor, Execution.committedPost] using
+      (Exec.committedCell_eq_of_noRetainedWriteTo run committed
+        circuitBreaker key noWrite)
+  constructor
+  · unfold PausedAt
+    rw [stub_pauseFor_effect frame uses run]
+    exact strictGrowth
+  · unfold PauseSuccessNoninterference
+    rw [parentOwner, parentCaller]
+    exact ⟨preserved (countSlot pauser.toB256),
+      preserved heartbeatIntervalSlot⟩
+
 end Blanc.LidoCircuitBreaker.PinnedTargetControl
