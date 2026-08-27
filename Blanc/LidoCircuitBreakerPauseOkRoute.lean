@@ -765,7 +765,55 @@ theorem pause_routeTo_setPauserCall_any (dp : DeployParams)
     ((Line.of_inv Devm.getCode (by unfold pauseStagingLine; line_inv)
       r10).symm.trans d9) r10 tail10
 
-set_option maxRecDepth 617 in
+private theorem pauseEqCheck_ne_zero :
+    selector "pause" [.address] =? selector "pause" [.address] ≠ 0 := by
+  decide +kernel
+
+private theorem pauseGtPause_eq_zero :
+    selector "pause" [.address] >? selector "pause" [.address] = 0 := by
+  decide +kernel
+
+private theorem minHeartbeatGtPause_ne_zero :
+    selector "MIN_HEARTBEAT_INTERVAL" [] >? selector "pause" [.address] ≠ 0 := by
+  decide +kernel
+
+private theorem pauseLinearDispatch_to_pause_transient (dp : DeployParams)
+    {P : Prop} {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {out : Execution} {xs : List B256}
+    (h : Func.RunCompiledTo fs sevm devm
+      (linearDispatchWith fallbackSlot (List.take 4 (List.drop 9 (funcs dp))))
+      out)
+    (stackPrefix : selector "pause" [.address] :: xs <<+ devm.stack)
+    (bodyResult : ∀ (devm' : Devm),
+      Devm.getStor devm' = Devm.getStor devm →
+      devm'.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
+      devm'.transientStorage = devm.transientStorage →
+      ∀ _tail : Func.RunCompiledTo fs sevm devm' pause out, P) : P := by
+  refine runToLineResult (linearTest (selector "pause" [.address])) h
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_linearTest stackPrefix run1
+  have g1 := (Line.of_inv Devm.getStor (by line_inv) run1).symm
+  have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm
+  have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm
+  have t1 := (Line.of_inv Devm.transientStorage (by line_inv) run1).symm
+  refine runToBranchRightResult tail1
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p1 hs]
+      exact pauseEqCheck_ne_zero)
+    (fun _s2 _w2 hpop2 tail2 => ?_)
+  have g2 := (getStor_of_state hpop2.state).symm.trans g1
+  have m2 := hpop2.memory.symm.trans m1
+  have d2 := (getCode_of_state hpop2.state).symm.trans d1
+  have t2 := (Devm.PopBurn.of_popBurnBy hpop2).transientStorage_eq.trans t1
+  refine runToLineResult [Ninst.pop] tail2 (fun _s3 run3 tail3 => ?_)
+  exact bodyResult _
+    ((Line.of_inv Devm.getStor (by line_inv) run3).symm.trans g2)
+    ((Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2)
+    ((Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2)
+    ((Line.of_inv Devm.transientStorage (by line_inv) run3).symm.trans t2)
+    tail3
+
 /-- Continuation form of the transient-preserving pause dispatcher. -/
 theorem dispatch_to_pause_transient (dp : DeployParams) {P : Prop}
     {fs : List Func} {sevm : Sevm} {devm : Devm} {out : Execution}
@@ -797,7 +845,9 @@ theorem dispatch_to_pause_transient (dp : DeployParams) {P : Prop}
   have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm.trans d0
   have t1 := (Line.of_inv Devm.transientStorage (by line_inv) run1).symm.trans t0
   refine runToBranchLeftResult tail1
-    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p1 hs]
+      exact pauseGtPause_eq_zero)
     (fun _s2 hpop2 tail2 => ?_)
   have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
   have g2 := (getStor_of_state hpop2.state).symm.trans g1
@@ -812,36 +862,61 @@ theorem dispatch_to_pause_transient (dp : DeployParams) {P : Prop}
   have d3 := (Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2
   have t3 := (Line.of_inv Devm.transientStorage (by line_inv) run3).symm.trans t2
   refine runToBranchRightResult tail3
-    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p3 hs]
+      exact minHeartbeatGtPause_ne_zero)
     (fun _s4 _w4 hpop4 tail4 => ?_)
   have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
   have g4 := (getStor_of_state hpop4.state).symm.trans g3
   have m4 := hpop4.memory.symm.trans m3
   have d4 := (getCode_of_state hpop4.state).symm.trans d3
   have t4 := (Devm.PopBurn.of_popBurnBy hpop4).transientStorage_eq.trans t3
-  refine runToLineResult (linearTest (selector "pause" [.address])) tail4
-    (fun _s5 run5 tail5 => ?_)
-  have p5 := prefix_of_linearTest p4 run5
-  have g5 := (Line.of_inv Devm.getStor (by line_inv) run5).symm.trans g4
-  have m5 := (Line.of_inv Devm.memory (by line_inv) run5).symm.trans m4
-  have d5 := (Line.of_inv Devm.getCode (by line_inv) run5).symm.trans d4
-  have t5 := (Line.of_inv Devm.transientStorage (by line_inv) run5).symm.trans t4
-  refine runToBranchRightResult tail5
-    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
-    (fun _s6 _w6 hpop6 tail6 => ?_)
-  have g6 := (getStor_of_state hpop6.state).symm.trans g5
-  have m6 := hpop6.memory.symm.trans m5
-  have d6 := (getCode_of_state hpop6.state).symm.trans d5
-  have t6 := (Devm.PopBurn.of_popBurnBy hpop6).transientStorage_eq.trans t5
-  refine runToLineResult [Ninst.pop] tail6 (fun _s7 run7 tail7 => ?_)
-  exact bodyResult _
-    ((Line.of_inv Devm.getStor (by line_inv) run7).symm.trans g6)
-    ((Line.of_inv Devm.memory (by line_inv) run7).symm.trans m6)
-    ((Line.of_inv Devm.getCode (by line_inv) run7).symm.trans d6)
-    ((Line.of_inv Devm.transientStorage (by line_inv) run7).symm.trans t6)
-    tail7
+  exact pauseLinearDispatch_to_pause_transient dp tail4 p4
+    (fun devm' hstor hmem hcode htrans bodyTail =>
+      bodyResult devm'
+        (hstor.trans g4) (hmem.trans m4) (hcode.trans d4)
+        (htrans.trans t4) bodyTail)
 
-set_option maxRecDepth 617 in
+private theorem pauseLinearDispatch_routeTo_pause_transient (dp : DeployParams)
+    {fs : List Func} {sevm : Sevm} {devm : Devm} {out : Execution}
+    {xs : List B256} {targetPath : Prog.SourcePath}
+    {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo fs sevm devm
+      (linearDispatchWith fallbackSlot (List.take 4 (List.drop 9 (funcs dp))))
+      out)
+    (stackPrefix : selector "pause" [.address] :: xs <<+ devm.stack)
+    (bodyRoute : ∀ (current : Prog.SourcePath) (devm' : Devm),
+      Devm.getStor devm' = Devm.getStor devm →
+      devm'.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
+      devm'.transientStorage = devm.transientStorage →
+      ∀ tail : Func.RunCompiledTo fs sevm devm' pause out,
+        Func.RunCompiledTo.RouteTo current tail targetPath targetInstruction) :
+    Func.RunCompiledTo.RouteTo current h targetPath targetInstruction := by
+  refine routeTo_line (linearTest (selector "pause" [.address])) h
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_linearTest stackPrefix run1
+  have g1 := (Line.of_inv Devm.getStor (by line_inv) run1).symm
+  have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm
+  have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm
+  have t1 := (Line.of_inv Devm.transientStorage (by line_inv) run1).symm
+  refine routeTo_branchRight_frame tail1
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p1 hs]
+      exact pauseEqCheck_ne_zero)
+    (fun _s2 _w2 hpop2 tail2 => ?_)
+  have g2 := (getStor_of_state hpop2.state).symm.trans g1
+  have m2 := hpop2.memory.symm.trans m1
+  have d2 := (getCode_of_state hpop2.state).symm.trans d1
+  have t2 := (Devm.PopBurn.of_popBurnBy hpop2).transientStorage_eq.trans t1
+  refine routeTo_line [Ninst.pop] tail2 (fun _s3 run3 tail3 => ?_)
+  exact bodyRoute _ _
+    ((Line.of_inv Devm.getStor (by line_inv) run3).symm.trans g2)
+    ((Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2)
+    ((Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2)
+    ((Line.of_inv Devm.transientStorage (by line_inv) run3).symm.trans t2)
+    tail3
+
 /-- Dispatcher route that also carries the transient-storage image needed
 by the outcome-generic pause guard proof. -/
 theorem dispatch_routeTo_pause_transient (dp : DeployParams)
@@ -879,7 +954,9 @@ theorem dispatch_routeTo_pause_transient (dp : DeployParams)
   have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm.trans d0
   have t1 := (Line.of_inv Devm.transientStorage (by line_inv) run1).symm.trans t0
   refine routeTo_branchLeft_frame tail1
-    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p1 hs]
+      exact pauseGtPause_eq_zero)
     (fun _s2 hpop2 tail2 => ?_)
   have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
   have g2 := (getStor_of_state hpop2.state).symm.trans g1
@@ -894,34 +971,20 @@ theorem dispatch_routeTo_pause_transient (dp : DeployParams)
   have d3 := (Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2
   have t3 := (Line.of_inv Devm.transientStorage (by line_inv) run3).symm.trans t2
   refine routeTo_branchRight_frame tail3
-    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p3 hs]
+      exact minHeartbeatGtPause_ne_zero)
     (fun _s4 _w4 hpop4 tail4 => ?_)
   have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
   have g4 := (getStor_of_state hpop4.state).symm.trans g3
   have m4 := hpop4.memory.symm.trans m3
   have d4 := (getCode_of_state hpop4.state).symm.trans d3
   have t4 := (Devm.PopBurn.of_popBurnBy hpop4).transientStorage_eq.trans t3
-  refine routeTo_line (linearTest (selector "pause" [.address])) tail4
-    (fun _s5 run5 tail5 => ?_)
-  have p5 := prefix_of_linearTest p4 run5
-  have g5 := (Line.of_inv Devm.getStor (by line_inv) run5).symm.trans g4
-  have m5 := (Line.of_inv Devm.memory (by line_inv) run5).symm.trans m4
-  have d5 := (Line.of_inv Devm.getCode (by line_inv) run5).symm.trans d4
-  have t5 := (Line.of_inv Devm.transientStorage (by line_inv) run5).symm.trans t4
-  refine routeTo_branchRight_frame tail5
-    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
-    (fun _s6 _w6 hpop6 tail6 => ?_)
-  have g6 := (getStor_of_state hpop6.state).symm.trans g5
-  have m6 := hpop6.memory.symm.trans m5
-  have d6 := (getCode_of_state hpop6.state).symm.trans d5
-  have t6 := (Devm.PopBurn.of_popBurnBy hpop6).transientStorage_eq.trans t5
-  refine routeTo_line [Ninst.pop] tail6 (fun _s7 run7 tail7 => ?_)
-  exact bodyRoute _ _
-    ((Line.of_inv Devm.getStor (by line_inv) run7).symm.trans g6)
-    ((Line.of_inv Devm.memory (by line_inv) run7).symm.trans m6)
-    ((Line.of_inv Devm.getCode (by line_inv) run7).symm.trans d6)
-    ((Line.of_inv Devm.transientStorage (by line_inv) run7).symm.trans t6)
-    tail7
+  exact pauseLinearDispatch_routeTo_pause_transient dp tail4 p4
+    (fun current devm' hstor hmem hcode htrans bodyTail =>
+      bodyRoute current devm'
+        (hstor.trans g4) (hmem.trans m4) (hcode.trans d4)
+        (htrans.trans t4) bodyTail)
 
 /-- The whole pause route down to `setPauserKernel`'s entry on a successful
 walk, with the four staged memory windows and the storage relation the
