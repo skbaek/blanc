@@ -6,11 +6,10 @@ import Blanc.ExecutionOccurrence
 This shared module describes observable account behaviour, not a particular
 contract family.  The `program` parameter is deliberately only an index of the
 bundle.  `ProgramInstalledAt` records direct installation, while
-`ExactPinnedInboundExecutesProgram` is the detachable hook that connects the
-actual settled message invocation to that index.  A direct account can derive
-the hook from installed bytecode and non-precompile entry; a later proxy
-composition can instead establish it through proxy/implementation
-correspondence.
+`MessageExecutesProgram` records code identity on one actual retained message
+invocation.  The Lido specialization supplies a detachable boundary-scoped
+hook connecting those two levels; a later proxy composition can establish the
+same hook through proxy/implementation correspondence.
 
 The storage-safety field is semantic.  It excludes retained successful writes
 to selected owner/key pairs throughout the invocation frame closure; it does
@@ -103,18 +102,6 @@ def ExactPinnedInbound (circuitBreaker target : Adr)
   (∃ duration,
       ExactTargetCall circuitBreaker target (pauseCalldata duration) false msg) ∨
     ExactTargetCall circuitBreaker target queryCalldata true msg
-
-/-- The one detachable actual-invocation code hook.  It is stronger than a
-state-level installation equation: every exact inbound message that settles
-must have entered a retained frame carrying the indexed program. -/
-def ExactPinnedInboundExecutesProgram
-    (circuitBreaker target : Adr) (program : Prog)
-    (pauseCalldata : B256 → Bytes) (queryCalldata : Bytes) : Prop :=
-  ∀ {msg : Msg} {xl : Xlot} {ex : TargetMessageResult},
-    ExactPinnedInbound circuitBreaker target pauseCalldata queryCalldata msg →
-    Xlot.Filled xl →
-    ProcessMessage msg xl ex →
-    MessageExecutesProgram msg xl program
 
 /-- No retained successful write in an actual message slot targets one
 selected account cell.  A no-frame slot contributes no code-frame write. -/

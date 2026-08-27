@@ -32,12 +32,55 @@ abbrev LidoPinnedPauseTarget
     isPausedCalldata pausedUntil
     [countSlot pauser.toB256, heartbeatIntervalSlot] protectedSurface
 
-/-- The detachable actual-invocation hook specialized to the two production
-CircuitBreaker messages. -/
-abbrev LidoPinnedInboundExecutesProgram
-    (circuitBreaker target : Adr) (program : Prog) : Prop :=
-  ExactPinnedInboundExecutesProgram circuitBreaker target program
-    pauseForCalldata isPausedCalldata
+/-- Program-entry evidence for the actual pause CALL boundary.  The message is
+tied to the parent instruction's concrete spawn, so an arbitrary exact-shape
+message with unrelated code cannot discharge this predicate. -/
+def PinnedPauseBoundaryExecutesProgram
+    (sevm : Sevm) (target : Adr) (program : Prog) (duration : B256)
+    (callPre callPost : Devm) : Prop :=
+  ∃ (msg : Msg) (xl : Xlot) (child : Devm)
+      (pc nextPc : Nat) (resume : Resume),
+    ExactTargetCall sevm.currentTarget target (pauseForCalldata duration)
+      false msg ∧
+    MessageExecutesProgram msg xl program ∧
+    msg.benv.stat.time = sevm.benvStat.time ∧
+    Ninst.step ⟨pc, sevm, callPre⟩ Ninst.call =
+      .spawn (Jaune.Frame.ofCall msg) resume nextPc ∧
+    Xlot.Filled xl ∧
+    ProcessMessage msg xl (.ok child) ∧
+    Ninst.StepRun pc sevm callPre Ninst.call xl (.ok callPost) ∧
+    callPost.state = child.state ∧
+    callPost.returnData = child.output
+
+/-- Program-entry evidence for the actual query STATICCALL boundary. -/
+def PinnedStatBoundaryExecutesProgram
+    (sevm : Sevm) (target : Adr) (program : Prog)
+    (statPre statPost : Devm) : Prop :=
+  ∃ (msg : Msg) (xl : Xlot) (child : Devm)
+      (pc nextPc : Nat) (resume : Resume),
+    ExactTargetCall sevm.currentTarget target isPausedCalldata true msg ∧
+    MessageExecutesProgram msg xl program ∧
+    msg.benv.stat.time = sevm.benvStat.time ∧
+    Ninst.step ⟨pc, sevm, statPre⟩ Ninst.statcall =
+      .spawn (Jaune.Frame.ofCall msg) resume nextPc ∧
+    Xlot.Filled xl ∧
+    ProcessMessage msg xl (.ok child) ∧
+    Ninst.StepRun pc sevm statPre Ninst.statcall xl (.ok statPost) ∧
+    statPost.state = child.state ∧
+    statPost.returnData = child.output
+
+/-- The detachable code-identity hook is scoped to the two actual production
+boundaries.  Direct installation plus non-precompile entry can discharge it;
+the proxy revisit supplies the same evidence through pair correspondence. -/
+def LidoPinnedInboundExecutesProgram
+    (sevm : Sevm) (target : Adr) (program : Prog) (duration : B256) : Prop :=
+  (∀ {callPre callPost : Devm},
+    PauseCallBoundary sevm target duration callPre callPost →
+      PinnedPauseBoundaryExecutesProgram sevm target program duration
+        callPre callPost) ∧
+  (∀ {statPre statPost : Devm},
+    PauseStatBoundary sevm target statPre statPost →
+      PinnedStatBoundaryExecutesProgram sevm target program statPre statPost)
 
 /-- One settled successful target CALL tied to the actual parent spawn.  The
 spawn equation prevents an unrelated message with the same terminal child
@@ -57,6 +100,8 @@ def PinnedTargetPauseWitness (sevm : Sevm) (target : Adr) (program : Prog)
       .spawn (Jaune.Frame.ofCall msg) resume nextPc ∧
     ProcessMessage msg xl (.ok child) ∧
     Ninst.StepRun pc sevm callPre Ninst.call xl (.ok callPost) ∧
+    callPost.state = child.state ∧
+    callPost.returnData = child.output ∧
     child.error.isSome = false ∧
     pausedUntil target (child.state.getStor target) =
       sevm.benvStat.time + duration ∧
@@ -88,10 +133,11 @@ def PublicPausePinnedTargetStatement
     (protectedSurface : List B256) (ex : Execution) : Prop :=
   PublicPauseEntryPremises sevm pre owner target duration idx0 len0 last0 img
       targetCode →
+    target.toAdr ≠ sevm.currentTarget →
     Prog.RunCompiledTo sevm pre (runtime officialParams) ex →
     LidoPinnedPauseTarget sevm.currentTarget sevm.caller target.toAdr program
       pausedUntil protectedSurface →
-    LidoPinnedInboundExecutesProgram sevm.currentTarget target.toAdr program →
+    LidoPinnedInboundExecutesProgram sevm target.toAdr program duration →
     ∀ final, ex = .ok final →
       PublicPausePinnedTargetConclusion sevm pre target duration targetCode
         program pausedUntil ex final
