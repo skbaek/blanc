@@ -287,6 +287,48 @@ theorem control_delcall_inherits_caller_and_value
         = true :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
+/-! ## The child *observes* the outer frame's caller and value
+
+The `directDelcall_spawn` clauses above are about `Msg` fields. This one is
+about what the child's own code actually sees: `initSevm` carries those fields
+into the child `Sevm`, and the `CALLER` and `CALLVALUE` opcodes read them
+(`Jaune/Machine.lean:2802-2803`). So a contract running behind a proxy observes
+the proxy's caller and the proxy's value, not the proxy's address and zero —
+which is the property that makes a forwarding proxy transparent to
+`msg.sender` and `msg.value`.
+
+The `CALL` control is stated in the same theorem so the two cannot drift. -/
+
+theorem delcall_child_observes_outer_caller_and_value
+    (sevm : Sevm) (p : Devm) (mcs : Nat) (codeAdr : Adr) (ii is : Nat)
+    (code : ByteArray) (dp : Bool) (d : Devm) (pc : Nat)
+    (h_room : d.stack.length < 1024) (h_gas : gBase ≤ d.gasLeft) :
+    ∃ dc dv cc cv,
+      -- under DELEGATECALL the child sees the *outer* frame's caller and value
+      Rinst.run ⟨pc, initSevm (delcallSpawnMsg sevm p mcs codeAdr ii is code dp),
+        d⟩ .caller = .ok dc ∧ dc.stack = sevm.caller.toB256 :: d.stack ∧
+      Rinst.run ⟨pc, initSevm (delcallSpawnMsg sevm p mcs codeAdr ii is code dp),
+        d⟩ .callvalue = .ok dv ∧ dv.stack = sevm.value :: d.stack ∧
+      -- under CALL it sees the caller's own address and the opcode's zero
+      Rinst.run ⟨pc, initSevm (callSpawnMsg sevm p mcs codeAdr ii is code dp),
+        d⟩ .caller = .ok cc ∧ cc.stack = sevm.currentTarget.toB256 :: d.stack ∧
+      Rinst.run ⟨pc, initSevm (callSpawnMsg sevm p mcs codeAdr ii is code dp),
+        d⟩ .callvalue = .ok cv ∧ cv.stack = (0 : B256) :: d.stack := by
+  have step : ∀ (w : B256),
+      ∃ d', pushItem w gBase d = .ok d' ∧ d'.stack = w :: d.stack := by
+    intro w
+    rw [pushItem_def, chargeGas_eq_ok h_gas]
+    simp only [bind, Except.bind]
+    rw [Devm.push_eq_ok
+      (devm := d.setMach ⟨d.stack, d.memory, d.gasLeft - gBase⟩)
+      (by show d.stack.length < 1024; exact h_room)]
+    exact ⟨_, rfl, rfl⟩
+  obtain ⟨dc, hdc, hdcs⟩ := step sevm.caller.toB256
+  obtain ⟨dv, hdv, hdvs⟩ := step sevm.value
+  obtain ⟨cc, hcc, hccs⟩ := step sevm.currentTarget.toB256
+  obtain ⟨cv, hcv, hcvs⟩ := step (0 : B256)
+  exact ⟨dc, dv, cc, cv, hdc, hdcs, hdv, hdvs, hcc, hccs, hcv, hcvs⟩
+
 /-! ## Axiom audit -/
 
 #print axioms Xinst.step_delcall
@@ -295,5 +337,6 @@ theorem control_delcall_inherits_caller_and_value
 #print axioms Ninst.runCompiled_delcall_doneFrame
 #print axioms control_delcall_separates_call_fuses
 #print axioms control_delcall_inherits_caller_and_value
+#print axioms delcall_child_observes_outer_caller_and_value
 
 end Blanc.ProxySpike
