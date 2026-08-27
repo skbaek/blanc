@@ -1,4 +1,5 @@
 import Blanc.Weth10Redeemable
+import Blanc.Weth10MainnetCodeEq
 import Blanc.Weth10DeploymentRoot
 import Blanc.Weth10HolderFlowDeterminism
 import Blanc.Weth10HolderFlowResult
@@ -60,6 +61,10 @@ namespace Weth10
 example (dp : DeployParams) :
     Prog.compile (weth10 dp) = some (weth10Code dp) :=
   weth10Code_compile dp
+
+example :
+    weth10Code mainnetDeployParams = weth10MainnetCode :=
+  weth10MainnetCode_eq
 
 example (dp : DeployParams) (ca : Adr) (depth : Nat) :
     FlashExactDepth dp ca depth :=

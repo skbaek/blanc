@@ -30,6 +30,7 @@ import Blanc.Weth10Permit
 import Blanc.Weth10Errors
 import Blanc.Weth10DeployProof
 import Blanc.Weth10Stable
+import Blanc.Weth10MainnetCodeEq
 import Blanc.Weth10DeploymentRoot
 import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowDeterminism
@@ -82,6 +83,7 @@ import Blanc.LidoCircuitBreakerDeploymentRoot
 #print axioms Blanc.fmintCode_compile
 #print axioms Blanc.Weth10.weth10_compiles
 #print axioms Blanc.Weth10.weth10Code_compile
+#print axioms Blanc.Weth10.weth10MainnetCode_eq
 #print axioms Blanc.Func.compile_eq_emitUnchecked
 #print axioms Blanc.Table.compile_eq_emitUnchecked
 #print axioms Blanc.Prog.compile_eq_emitUnchecked

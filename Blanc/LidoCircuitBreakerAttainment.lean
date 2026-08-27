@@ -1740,9 +1740,12 @@ def afterOldNewCountPrefix : Line :=
   newCountKey ++ [Ninst.sload, Ninst.pushB256 1, Ninst.add] ++ newCountKey
 
 /-- Structural source position of the `afterOld.newCount` `SSTORE`. -/
+private def sourceRests (n : Nat) : List Prog.SourceStep :=
+  List.replicate n .rest
+
 def afterOldNewCountPath : Prog.SourcePath :=
   ⟨afterOldPauserSlot,
-    List.replicate 3 .rest ++ [.branchLeft] ++ List.replicate 11 .rest⟩
+    sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++ sourceRests 11⟩
 
 theorem MemWordAt.acrossNewCountKey {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a newCountKey b)
@@ -1872,8 +1875,8 @@ theorem runtimeMain_routeTo_afterOldNewCount {devm post : Devm}
             [Prog.SourceStep.branchLeft]) ++
           List.replicate afterOldNewCountPrefix.length Prog.SourceStep.rest) =
         afterOldNewCountPath.steps := by
-    simp [afterOldNewCountPath, afterOldNewCountPrefix, loadWord, newCountKey,
-      tagTop]
+    simp [afterOldNewCountPath, sourceRests, afterOldNewCountPrefix, loadWord,
+      newCountKey, tagTop]
   exact pathEq ▸ routeTo_head write afterOldNewCountPath
 
 /-- Inventory index `8` -- `.afterOldNewCount` -- is the only one nominating
@@ -2601,23 +2604,22 @@ def setPauseDurationConfigPrefix : Line :=
   [Ninst.pushB256 pauseDurationSlot, Ninst.sload] ++ mstoreAt 0 ++ arg 0 ++
     mstoreAt 1 ++ [Ninst.pushB256 pauseDurationUpdatedEvent] ++
     logWith 0 0 2 ++ arg 0 ++ [Ninst.pushB256 pauseDurationSlot]
-private def sourceRests (n : Nat) : List Prog.SourceStep := List.replicate n .rest
 /-- Structural source position of the `setPauseDuration.config` `SSTORE`:
 inventory index `0`, source function `0`, sixty-four steps.  Unlike every other
 path in this module it is not rooted at an auxiliary table slot, because no
 `.call` intervenes between the program entry and this write. -/
 def setPauseDurationConfigPath : Prog.SourcePath :=
   ⟨0,
-    sourceRests 5 ++ [.branchLeft] ++
-      sourceRests 7 ++ [.branchLeft] ++
-      sourceRests 3 ++ [.branchLeft] ++
-      sourceRests 3 ++ [.branchLeft] ++
-      sourceRests 3 ++ [.branchLeft] ++
-      sourceRests 3 ++ [.branchRight] ++
-      sourceRests 4 ++ [.branchLeft] ++
-      sourceRests 3 ++ [.branchRight] ++
-      sourceRests 4 ++ [.branchLeft] ++
-      sourceRests 4 ++ [.branchLeft] ++
+    sourceRests 5 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 7 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
       sourceRests 15⟩
 
 set_option maxRecDepth 16384 in
@@ -2921,18 +2923,18 @@ pause-duration path despite one fewer instruction in the entry line, because
 the second chain sits one pivot deeper than the fourth. -/
 def setHeartbeatIntervalConfigPath : Prog.SourcePath :=
   ⟨0,
-    List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 7 .rest ++ [.branchRight] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 2 .rest ++ [.branchRight] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchRight] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 15 .rest⟩
+    sourceRests 5 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 7 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 2 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 15⟩
 
 set_option maxRecDepth 16384 in
 /-- The complete route from program entry to the `setHeartbeatInterval.config`
@@ -3350,18 +3352,18 @@ def heartbeatExpiryStorePrefix : Line :=
 index `2`, source function `0`, sixty-five steps. -/
 def heartbeatExpiryPath : Prog.SourcePath :=
   ⟨0,
-    List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 7 .rest ++ [.branchRight] ++
-      List.replicate 3 .rest ++ [.branchRight] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 2 .rest ++ [.branchRight] ++
-      List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 6 .rest ++ [.branchRight] ++
-      List.replicate 8 .rest ++ [.branchLeft] ++
-      List.replicate 6 .rest⟩
+    sourceRests 5 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 7 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 2 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 5 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 6 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 8 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 6⟩
 
 set_option maxRecDepth 16384 in
 /-- The complete route from program entry to the `heartbeat.expiry` `SSTORE`,
@@ -4201,9 +4203,10 @@ theorem runtimeMain_routeTo_replacementRegisterAfterSetCall
 retained arm: inventory index `14`. -/
 def registerRetainedArmExpiryPath : Prog.SourcePath :=
   ⟨registerAfterSetSlot,
-    List.replicate 3 .rest ++ [.branchLeft] ++ List.replicate 6 .rest ++
-      [.branchLeft] ++ List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 8 .rest ++ [.branchLeft] ++ List.replicate 7 .rest⟩
+    sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++ sourceRests 6 ++
+      [Prog.SourceStep.branchLeft] ++ sourceRests 3 ++
+      [Prog.SourceStep.branchLeft] ++ sourceRests 8 ++
+      [Prog.SourceStep.branchLeft] ++ sourceRests 7⟩
 
 /-- Structural source position of the retiring pauser's expiry clear:
 inventory index `15`. -/
@@ -4278,8 +4281,8 @@ theorem runtimeMain_routeTo_registerRetainedArmExpiry {devm post : Devm}
           [Prog.SourceStep.branchLeft]) ++
         List.replicate registerFreshArmExpiryPrefix.length
           Prog.SourceStep.rest) = registerRetainedArmExpiryPath.steps := by
-    simp [registerRetainedArmExpiryPath, memoryZeroCheck, checkedExpiryPrefix,
-      registerFreshArmExpiryPrefix, registerPreviousCountCheck,
+    simp [registerRetainedArmExpiryPath, sourceRests, memoryZeroCheck,
+      checkedExpiryPrefix, registerFreshArmExpiryPrefix, registerPreviousCountCheck,
       previousCountKey, loadWord, mstoreAt, tagTop]
   exact pathEq ▸ routeTo_head write registerRetainedArmExpiryPath
 

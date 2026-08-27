@@ -343,6 +343,7 @@ Blanc.wethCode_compile|$STANDARD
 Blanc.fmintCode_compile|$STANDARD
 Blanc.Weth10.weth10_compiles|$STANDARD
 Blanc.Weth10.weth10Code_compile|$STANDARD
+Blanc.Weth10.weth10MainnetCode_eq|$STANDARD
 Blanc.Func.compile_eq_emitUnchecked|$STANDARD
 Blanc.Table.compile_eq_emitUnchecked|$STANDARD
 Blanc.Prog.compile_eq_emitUnchecked|$STANDARD

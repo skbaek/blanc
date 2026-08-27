@@ -1287,7 +1287,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The 606-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
+      "note": "The 607-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
       "order": 31,
       "verdict": {
         "expect_exit": 0,

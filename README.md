@@ -514,9 +514,26 @@ a 100 ms profiler threshold, a speedup of at least 302x.
 
 The same trap remains armed in `withError`, `withReturnData`,
 `withAccountsToDelete`, and every other wrapper that rebuilds `Meta` through
-`setMeta`. Succeeding concrete walks are a different mechanism with no
-registered cure, and `setMach`-chain normalization remains governed by the
-measured refutation in `successor-projection-normalization`.
+`setMeta`. A succeeding concrete `getStor` walk can expose the same projection
+mechanism after the effect tower has already been built. Route it through an
+early semantic cut such as `Devm.withRefundCounter_getStor` or
+`Devm.addLog_getStor`; when the warm/cold storage branch itself carries the
+concrete tower, isolate that branch behind a narrow module-private boundary.
+That route moved `LidoCircuitBreakerDeploymentTrace` from 62.173 to 17.050
+seconds. `setMach`-chain normalization remains governed by the measured
+refutation in `successor-projection-normalization`.
+
+**Typed route data before proof search.** A long `Prog.SourceStep` append chain
+can spend most of a module repeatedly postponing `.rest` and branch constructors
+against an unassigned element type. Give `List.replicate n .rest` a helper whose
+result is `List Prog.SourceStep`, spell branch constructors with their full
+`Prog.SourceStep` name, and measure the owning module. The final census review
+moved `LidoCircuitBreakerPauseOkRoute` from 10.22 to 2.56 user seconds and the
+remaining `LidoCircuitBreakerAttainment` paths from 38.12 to 30.15. This is a
+profile-triggered repair, not a tree-wide formatting rule. The
+`runcompiled-construction` recipe records the proof-boundary interaction and
+the owner-measurement requirement; this section is the definition-level
+trigger, because no proof goal exists while a `SourcePath` value elaborates.
 
 **The fifth bomb: repeated kernel decisions over one closed subject.** A closed
 compiler artifact, structural site inventory, or similar subject is expensive
@@ -565,8 +582,8 @@ right-sizing, or named load-bearing restore with its reopen condition.
 
 The ceiling-debt campaign confirmed that provenance is not necessity: copied
 per-genre depth budgets and heartbeat values tuned per declaration both
-contained deletable scopes. Of 415 launch scopes, 350 deleted, nine ambient
-scopes narrowed to 40 measured command owners, 16 right-sized, and 40 were
+contained deletable scopes. Of 415 launch scopes, 352 deleted, nine ambient
+scopes narrowed to 40 measured command owners, 16 right-sized, and 38 were
 retained after a named failure; zero ambient scopes remain.
 
 New ceilings are never ambient, file-wide, namespace-wide, unlimited,
@@ -728,9 +745,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 606 named results and
+   current source inventory pins the exact axiom set of 607 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `606/606` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `607/607` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -758,7 +775,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **606** top theorems. `scripts/check.sh`'s
+current source inventory contains **607** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the

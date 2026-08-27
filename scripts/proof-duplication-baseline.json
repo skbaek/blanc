@@ -4,9 +4,9 @@
   "scan_root": "Blanc",
   "min_copy_bytes": 160,
   "min_copy_lines": 5,
-  "families": 54,
-  "sites": 118,
-  "restated_lines": 64,
+  "families": 52,
+  "sites": 114,
+  "restated_lines": 62,
   "unparsable_modules": [],
   "entries": [
     {
@@ -165,11 +165,6 @@
       "sites": 2
     },
     {
-      "id": "8a8c55b0e4019ac2",
-      "normalized_sha256": "8a8c55b0e4019ac26a610e2a58380c4c7f3b039d3f10940ab48601a8126f4904",
-      "sites": 2
-    },
-    {
       "id": "99194b48feec22d8",
       "normalized_sha256": "99194b48feec22d85defccacbaf93bb3459d8689edb85c3ea583e36de5243989",
       "sites": 3
@@ -235,11 +230,6 @@
       "sites": 2
     },
     {
-      "id": "c3ae8784194d7542",
-      "normalized_sha256": "c3ae8784194d75427db3f42da84301688174cb9cb35ab44de97a5e6e6d71ad67",
-      "sites": 2
-    },
-    {
       "id": "c6b6f59f2e3006f1",
       "normalized_sha256": "c6b6f59f2e3006f1d7c435e4a34735c31edb0a6855c6c18a4a9cae1d28851a1a",
       "sites": 2
@@ -280,5 +270,5 @@
       "sites": 2
     }
   ],
-  "digest": "f9401b363530ea09819901147e3c6bfd8ded17b70059afa87e8086261d2391dc"
+  "digest": "ca5f1cd12ea7830a960157a6616d11fadfca0d7f7ce36e0fe1700ac84a1e9521"
 }
