@@ -56,6 +56,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
           "SourceAttainment", "TransientInvariance"]
 
 CONTRACTS = {
+    "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
