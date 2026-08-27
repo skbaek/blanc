@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerPauseOkRoute
+import Blanc.LidoCircuitBreakerPauseJoin
 import Blanc.LidoCircuitBreakerSuccess
 
 /-!
@@ -58,21 +59,39 @@ structure PublicPauseEntryPremises (sevm : Sevm) (pre : Devm)
   assignmentIndexNe : assignmentSlot target ≠ indexSlot target
   assignmentLengthNe : assignmentSlot target ≠ arrayLengthSlot
   assignmentEntryNe : assignmentSlot target ≠ arrayEntrySlot len0
+  countRemovedEntryNe :
+    countSlot sevm.caller.toB256 ≠ arrayEntrySlot idx0
+  countMovedIndexNe :
+    countSlot sevm.caller.toB256 ≠ indexSlot last0
   countIndexNe : countSlot sevm.caller.toB256 ≠ indexSlot target
   countLengthNe : countSlot sevm.caller.toB256 ≠ arrayLengthSlot
   countEntryNe :
     countSlot sevm.caller.toB256 ≠ arrayEntrySlot len0
-  removePreservesCount : ∀ (a b postW : Devm),
-    MemWordAt a (targetWord * 32).toNat target →
-    a.getStorVal sevm.currentTarget (indexSlot target) = idx0 →
-    a.getStorVal sevm.currentTarget arrayLengthSlot = len0 →
-    a.getStorVal sevm.currentTarget (arrayEntrySlot len0) = last0 →
-    Line.Run sevm a removeClearTargetIndexPrefix b →
-    Ninst.RunCompiled sevm b Ninst.sstore postW →
+
+/-- The removal span preserves the caller's count cell.  This is derived from
+the entry's five key-separation facts rather than assumed as a transition
+postcondition. -/
+theorem PublicPauseEntryPremises.removePreservesCount
+    (premises : PublicPauseEntryPremises sevm pre owner target duration
+      idx0 len0 last0 img targetCode)
+    (a b postW : Devm)
+    (targetWindow : MemWordAt a (targetWord * 32).toNat target)
+    (indexRead :
+      a.getStorVal sevm.currentTarget (indexSlot target) = idx0)
+    (lengthRead : a.getStorVal sevm.currentTarget arrayLengthSlot = len0)
+    (lastRead :
+      a.getStorVal sevm.currentTarget (arrayEntrySlot len0) = last0)
+    (lineRun : Line.Run sevm a removeClearTargetIndexPrefix b)
+    (storeRun : Ninst.RunCompiled sevm b Ninst.sstore postW) :
     postW.getStorVal sevm.currentTarget
         (countSlot sevm.caller.toB256) =
       a.getStorVal sevm.currentTarget
-        (countSlot sevm.caller.toB256)
+        (countSlot sevm.caller.toB256) := by
+  exact removeSpan_countPreserved
+    premises.countRemovedEntryNe.symm premises.countMovedIndexNe.symm
+    premises.countEntryNe.symm premises.countLengthNe.symm
+    premises.countIndexNe.symm targetWindow indexRead lengthRead lastRead
+    lineRun storeRun
 
 /-- The exact `pauseAfterSet` entry reached by a public production walk.
 

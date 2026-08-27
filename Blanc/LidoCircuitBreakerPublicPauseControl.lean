@@ -45,10 +45,11 @@ theorem pauseLastWorld_publicPausePremises :
     assignmentIndexNe := pauseWorld_assignCallee_ne_indexCallee
     assignmentLengthNe := pauseWorld_length_ne_assignCallee.symm
     assignmentEntryNe := pauseWorld_entryOne_ne_assignCallee.symm
+    countRemovedEntryNe := ?_
+    countMovedIndexNe := ?_
     countIndexNe := ?_
     countLengthNe := ?_
     countEntryNe := ?_
-    removePreservesCount := ?_
   }
   · simp only [pauseLastSevm]
     rw [pauseWorld_depth]
@@ -88,6 +89,12 @@ theorem pauseLastWorld_publicPausePremises :
     exact pauseWorld_assignCallee_ne_count
   · simp only [pauseLastSevm]
     rw [pauseWorld_callerWord]
+    exact pauseWorld_entryOne_ne_count.symm
+  · simp only [pauseLastSevm]
+    rw [pauseWorld_callerWord]
+    exact pauseWorld_indexCallee_ne_count.symm
+  · simp only [pauseLastSevm]
+    rw [pauseWorld_callerWord]
     exact pauseWorld_indexCallee_ne_count.symm
   · simp only [pauseLastSevm]
     rw [pauseWorld_callerWord]
@@ -95,24 +102,6 @@ theorem pauseLastWorld_publicPausePremises :
   · simp only [pauseLastSevm]
     rw [pauseWorld_callerWord]
     exact pauseWorld_entryOne_ne_count.symm
-  · intro a b postW targetWindow indexRead lengthRead lastRead lineRun storeRun
-    refine removeSpan_countPreserved ?_ ?_ ?_ ?_ ?_ targetWindow indexRead
-      lengthRead lastRead lineRun storeRun
-    · simp only [pauseLastSevm]
-      rw [pauseWorld_callerWord]
-      exact pauseWorld_entryOne_ne_count
-    · simp only [pauseLastSevm]
-      rw [pauseWorld_callerWord]
-      exact pauseWorld_indexCallee_ne_count
-    · simp only [pauseLastSevm]
-      rw [pauseWorld_callerWord]
-      exact pauseWorld_entryOne_ne_count
-    · simp only [pauseLastSevm]
-      rw [pauseWorld_callerWord]
-      exact pauseWorld_length_ne_count
-    · simp only [pauseLastSevm]
-      rw [pauseWorld_callerWord]
-      exact pauseWorld_indexCallee_ne_count
 
 /-- Anti-vacuity: the public-entry reached-state theorem is inhabited by the
 existing complete row-19 production run. -/
