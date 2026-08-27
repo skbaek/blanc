@@ -79,6 +79,13 @@ def AcceptedBoolExecution (ex : TargetMessageResult) (word : B256) : Prop :=
 def BoolQueryExecutionFailure (ex : TargetMessageResult) : Prop :=
   ¬ AcceptedBoolExecution ex 0 ∧ ¬ AcceptedBoolExecution ex 1
 
+/-- A settled code result that was not cut short by an exceptional halt.  The
+two cases deliberately leave ordinary clean completion open; a protected-
+surface safety law may then rule that case out without promising enough gas to
+reach `REVERT`. -/
+def SettledNormallyOrReverted (child : Devm) : Prop :=
+  child.error = none ∨ child.error = some .revert
+
 /-- The account is paused exactly when the entry timestamp precedes its
 storage-local paused-until projection. -/
 def PausedAt (pausedUntil : Adr → Stor → B256)
@@ -142,21 +149,23 @@ structure PinnedPauseTarget
     pausedUntil target (post.state.getStor target) =
       msg.benv.stat.time + duration
 
-  /-- An exact static query accepts canonical true iff the account was paused
-  at query entry.  When it was not paused, canonical false or a rejected
-  answer/error are the only admitted observations. -/
+  /-- Partial correctness for an exact static query.  Every clean settled
+  result preserves the projection and accepts canonical true iff the account
+  was paused at query entry.  When it was not paused, canonical false or a
+  rejected answer are the only clean observations.  Exceptional/OOG outcomes
+  carry no liveness obligation. -/
   isPaused_truthful : ∀ {msg : Msg} {xl : Xlot}
       {ex : TargetMessageResult},
     ExactTargetCall circuitBreaker target queryCalldata true msg →
     MessageExecutesProgram msg xl program →
     ProcessMessage msg xl ex →
-    (∀ post, ex = .ok post → post.error.isSome = false →
+    ∀ post, ex = .ok post → post.error.isSome = false →
       pausedUntil target (post.state.getStor target) =
-        pausedUntil target (msg.benv.state.getStor target)) ∧
-    (AcceptedBoolExecution ex 1 ↔
-      PausedAt pausedUntil msg.benv.state target msg.benv.stat.time) ∧
-    (¬ PausedAt pausedUntil msg.benv.state target msg.benv.stat.time →
-      AcceptedBoolExecution ex 0 ∨ BoolQueryExecutionFailure ex)
+        pausedUntil target (msg.benv.state.getStor target) ∧
+      (AcceptedBoolExecution ex 1 ↔
+        PausedAt pausedUntil msg.benv.state target msg.benv.stat.time) ∧
+      (¬ PausedAt pausedUntil msg.benv.state target msg.benv.stat.time →
+        AcceptedBoolExecution ex 0 ∨ BoolQueryExecutionFailure ex)
 
   /-- No retained successful SSTORE anywhere in either exact target
   invocation's frame closure targets a named CircuitBreaker cell. -/
@@ -168,10 +177,12 @@ structure PinnedPauseTarget
     ∀ key ∈ circuitBreakerCells,
       TargetInvocationNoRetainedWriteTo xl circuitBreaker key
 
-  /-- Future target goals choose a protected selector surface and prove that
-  every such account call reverts while the entry projection is paused. -/
+  /-- Future target goals choose a protected selector surface and prove the
+  safety claim that every nonexceptional settled call reverts while the entry
+  projection is paused.  An exceptional/OOG halt remains admitted; this field
+  does not assert resource sufficiency or handler reachability. -/
   protectedSurface_reverts : ∀ {msg : Msg} {xl : Xlot}
-      {ex : TargetMessageResult} {selected : B256},
+      {child : Devm} {selected : B256},
     msg.currentTarget = target →
     msg.target = some target →
     msg.codeAddress = some target →
@@ -179,7 +190,8 @@ structure PinnedPauseTarget
     HasSelector msg selected →
     selected ∈ protectedSurface →
     PausedAt pausedUntil msg.benv.state target msg.benv.stat.time →
-    ProcessMessage msg xl ex →
-    ∃ child, ex = .ok child ∧ child.error = some .revert
+    ProcessMessage msg xl (.ok child) →
+    SettledNormallyOrReverted child →
+    child.error = some .revert
 
 end Blanc
