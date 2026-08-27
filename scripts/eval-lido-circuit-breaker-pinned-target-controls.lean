@@ -5,8 +5,11 @@
 --
 --   lake env lean --run scripts/eval-lido-circuit-breaker-pinned-target-controls.lean
 --
--- Each Option constructor checks its control's complete witness: the benign
--- child-call choreography, the wrong returned Boolean, or the retained write
+-- Each Option constructor checks its control's complete witness.  In
+-- particular, the benign Option starts at exact message entry, follows the
+-- compiled parent's staged CALL through its inert child and root settlement,
+-- and records the frame-owner equalities used by the account-level theorem.
+-- The other Options check the wrong returned Boolean and the retained write
 -- to the protected CircuitBreaker cell.  A missing witness exits nonzero.
 
 import Blanc.LidoCircuitBreakerPinnedTargetControl

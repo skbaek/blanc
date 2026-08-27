@@ -891,17 +891,28 @@ theorem stub_successful_pause_composition
 
 /-! ## One benign outbound CALL
 
-This second control is deliberately below the source-program protocol.  It is
-one concrete driver execution whose parent performs an ordinary CALL to an
-inert STOP account and then stops.  It exists only to show that semantic
-noninterference admits a genuinely non-childless frame tree. -/
+This closed-world control is deliberately not another universal bundle.  It
+is one exact pause-shaped account message whose compiled parent stages and
+performs an ordinary CALL to an inert STOP account before stopping.  The
+theorem below presents the exact clause-(iii) antecedents and semantic
+conclusion at the same retained message slot, while that slot's frame tree is
+provably non-childless. -/
 
 def benignCallTarget : Adr := 0x100
 
 def benignCircuitBreaker : Adr := 0x200
 
+def benignCallPauser : Adr := 0x201
+
+def benignCallParentTarget : Adr := 0x300
+
+def benignCallStaging : Line :=
+  [Ninst.pushB256 0, Ninst.pushB256 0, Ninst.pushB256 0,
+    Ninst.pushB256 0, Ninst.pushB256 0,
+    Ninst.pushB256 benignCallTarget.toB256, Ninst.pushB256 10000]
+
 def benignCallProgram : Prog :=
-  ⟨Ninst.call ::: Func.stop, []⟩
+  ⟨benignCallStaging +++ (Ninst.call ::: Func.stop), []⟩
 
 def benignCallBytes : Bytes := (Prog.compile benignCallProgram).getD []
 
@@ -917,29 +928,113 @@ theorem benignCallProgram_compile :
 
 def benignCallChildCode : ByteArray := ByteArray.mk #[0x00]
 
-def benignCallSevm : Sevm :=
-  { (default : Sevm) with code := benignCallParentCode }
+def benignCallState : State :=
+  State.set
+    (State.set .empty benignCallParentTarget
+      { Acct.nil with code := benignCallParentCode })
+    benignCallTarget
+    { Acct.nil with code := benignCallChildCode }
 
-def benignCallPre : Devm :=
-  let pre := ((default : Devm).withGasLeft 100000).withStack
-    [10000, benignCallTarget.toB256, 0, 0, 0, 0, 0]
-  pre.withState (pre.state.setCode benignCallTarget benignCallChildCode)
+/-- A concrete exact pause-shaped call into the compiled benign parent. -/
+def benignCallMsg : Msg :=
+  { (default : Msg) with
+    benv :=
+      { (default : Benv) with
+        state := benignCallState
+        stat :=
+          { (default : BenvStat) with
+            origState := benignCallState
+            time := 10 } }
+    caller := benignCircuitBreaker
+    target := some benignCallParentTarget
+    currentTarget := benignCallParentTarget
+    gas := 200000
+    value := 0
+    data := pauseForCalldata 1
+    codeAddress := some benignCallParentTarget
+    code := benignCallParentCode
+    shouldTransferValue := true
+    isStatic := false
+    disablePrecompiles := true }
 
-private def benignCallEvm : Evm := ⟨1, benignCallSevm, benignCallPre⟩
+/-- Same-frame continuation steps from message entry to the CALL opcode. -/
+inductive BenignCallContPrefix : Evm → Evm → Type
+  | refl (evm : Evm) : BenignCallContPrefix evm evm
+  | step {source : Evm} {nextPc : Nat} {next : Devm} {target : Evm}
+      (head : source.step = .cont nextPc next)
+      (tail : BenignCallContPrefix ⟨nextPc, source.sta, next⟩ target) :
+      BenignCallContPrefix source target
 
-structure BenignCallFixture where
-  nextPc : Nat
-  resumed : Devm
+private def BenignCallContPrefix.run
+    {source target : Evm} (trace : BenignCallContPrefix source target)
+    {out : Execution} (tail : Exec target.pc target.sta target.dyna out) :
+    Exec source.pc source.sta source.dyna out :=
+  match trace with
+  | .refl _ => tail
+  | .step head rest => .cont head (rest.run tail)
+
+private theorem BenignCallContPrefix.rawFrameDescendants_run
+    {source target : Evm} (trace : BenignCallContPrefix source target)
+    {out : Execution} (tail : Exec target.pc target.sta target.dyna out) :
+    Exec.rawFrameDescendants (trace.run tail) =
+      Exec.rawFrameDescendants tail := by
+  induction trace with
+  | refl => rfl
+  | step head rest ih =>
+      simpa [BenignCallContPrefix.run, Exec.rawFrameDescendants] using ih tail
+
+/-- The first spawned frame reached from one concrete message entry. -/
+structure BenignCallSpawn (entry : Evm) where
+  callEvm : Evm
+  trace : BenignCallContPrefix entry callEvm
   frame : Jaune.Frame
   resume : Resume
+  nextPc : Nat
+  hstep : callEvm.step = .spawn frame resume nextPc
+
+private def benignCallSpawn? : (fuel : Nat) → (entry : Evm) →
+    Option (BenignCallSpawn entry)
+  | 0, _ => none
+  | fuel + 1, entry =>
+      match hstep : entry.step with
+      | .halt _ => none
+      | .spawn frame resume nextPc =>
+          some {
+            callEvm := entry
+            trace := .refl entry
+            frame := frame
+            resume := resume
+            nextPc := nextPc
+            hstep := hstep }
+      | .cont nextPc next =>
+          match benignCallSpawn? fuel ⟨nextPc, entry.sta, next⟩ with
+          | none => none
+          | some found =>
+              some {
+                callEvm := found.callEvm
+                trace := .step hstep found.trace
+                frame := found.frame
+                resume := found.resume
+                nextPc := found.nextPc
+                hstep := found.hstep }
+
+structure BenignCallFixture where
+  rootEvm : Evm
+  spawn : BenignCallSpawn rootEvm
+  resumed : Devm
   childEvm : Evm
   childOut : Execution
   out : Execution
-  hstep : benignCallEvm.step = .spawn frame resume nextPc
-  henter : frame.enter = .run childEvm
+  settled : Devm
+  rootEnter : (Jaune.Frame.ofCall benignCallMsg).enter = .run rootEvm
+  henter : spawn.frame.enter = .run childEvm
   childStep : childEvm.step = .halt childOut
-  hresume : resume.run (frame.settle childOut) = .ok resumed
-  nextStep : (⟨nextPc, benignCallSevm, resumed⟩ : Evm).step = .halt out
+  hresume : spawn.resume.run (spawn.frame.settle childOut) = .ok resumed
+  nextStep :
+    (⟨spawn.nextPc, spawn.callEvm.sta, resumed⟩ : Evm).step = .halt out
+  rootSettle :
+    (Jaune.Frame.ofCall benignCallMsg).settle out = .ok settled
+  rootTarget : rootEvm.sta.currentTarget = benignCallParentTarget
   childTarget : childEvm.sta.currentTarget = benignCallTarget
 
 private def BenignCallFixture.childRun (w : BenignCallFixture) :
@@ -947,15 +1042,23 @@ private def BenignCallFixture.childRun (w : BenignCallFixture) :
   .halt w.childStep
 
 private def BenignCallFixture.nextRun (w : BenignCallFixture) :
-    Exec w.nextPc benignCallSevm w.resumed w.out :=
+    Exec w.spawn.nextPc w.spawn.callEvm.sta w.resumed w.out :=
   .halt w.nextStep
 
+private def BenignCallFixture.tailRun (w : BenignCallFixture) :
+    Exec w.spawn.callEvm.pc w.spawn.callEvm.sta
+      w.spawn.callEvm.dyna w.out :=
+  .runOk w.spawn.hstep w.henter w.childRun w.hresume w.nextRun
+
 private def BenignCallFixture.run (w : BenignCallFixture) :
-    Exec benignCallEvm.pc benignCallSevm benignCallPre w.out :=
-  .runOk w.hstep w.henter w.childRun w.hresume w.nextRun
+    Exec w.rootEvm.pc w.rootEvm.sta w.rootEvm.dyna w.out :=
+  w.spawn.trace.run w.tailRun
+
+def BenignCallFixture.slot (w : BenignCallFixture) : Xlot :=
+  .some ⟨w.rootEvm, w.out⟩
 
 private def BenignCallFixture.root (w : BenignCallFixture) : Exec.Deriv :=
-  ⟨benignCallEvm.pc, benignCallSevm, benignCallPre, w.out, w.run⟩
+  ⟨w.rootEvm.pc, w.rootEvm.sta, w.rootEvm.dyna, w.out, w.run⟩
 
 private def BenignCallFixture.childRoot
     (w : BenignCallFixture) : Exec.Deriv :=
@@ -963,79 +1066,150 @@ private def BenignCallFixture.childRoot
     w.childOut, w.childRun⟩
 
 def benignCallFixture? : Option BenignCallFixture :=
-  match hstep : benignCallEvm.step with
-  | .spawn frame resume nextPc =>
-      match henter : frame.enter with
-      | .run childEvm =>
-          match childStep : childEvm.step with
-          | .halt childOut =>
-              match hresume : resume.run (frame.settle childOut) with
-              | .ok resumed =>
-                  match nextStep :
-                      (⟨nextPc, benignCallSevm, resumed⟩ : Evm).step with
-                  | .halt out =>
-                      if childTarget :
-                          childEvm.sta.currentTarget = benignCallTarget then
-                        some {
-                          nextPc := nextPc
-                          resumed := resumed
-                          frame := frame
-                          resume := resume
-                          childEvm := childEvm
-                          childOut := childOut
-                          out := out
-                          hstep := hstep
-                          henter := henter
-                          childStep := childStep
-                          hresume := hresume
-                          nextStep := nextStep
-                          childTarget := childTarget }
-                      else none
-                  | _ => none
-              | .error _ => none
-          | _ => none
-      | .done _ => none
-  | _ => none
+  match rootEnter : (Jaune.Frame.ofCall benignCallMsg).enter with
+  | .run rootEvm =>
+      match benignCallSpawn? 16 rootEvm with
+      | some spawn =>
+          match henter : spawn.frame.enter with
+          | .run childEvm =>
+              match childStep : childEvm.step with
+              | .halt childOut =>
+                  match hresume :
+                      spawn.resume.run (spawn.frame.settle childOut) with
+                  | .ok resumed =>
+                      match nextStep :
+                          (⟨spawn.nextPc, spawn.callEvm.sta, resumed⟩ : Evm).step with
+                      | .halt out =>
+                          match rootSettle :
+                              (Jaune.Frame.ofCall benignCallMsg).settle out with
+                          | .ok settled =>
+                              if rootTarget : rootEvm.sta.currentTarget =
+                                  benignCallParentTarget then
+                                if childTarget : childEvm.sta.currentTarget =
+                                    benignCallTarget then
+                                  some {
+                                    rootEvm := rootEvm
+                                    spawn := spawn
+                                    resumed := resumed
+                                    childEvm := childEvm
+                                    childOut := childOut
+                                    out := out
+                                    settled := settled
+                                    rootEnter := rootEnter
+                                    henter := henter
+                                    childStep := childStep
+                                    hresume := hresume
+                                    nextStep := nextStep
+                                    rootSettle := rootSettle
+                                    rootTarget := rootTarget
+                                    childTarget := childTarget }
+                                else none
+                              else none
+                          | .error _ => none
+                      | _ => none
+                  | .error _ => none
+              | _ => none
+          | .done _ => none
+      | none => none
+  | .done _ => none
 
 private theorem BenignCallFixture.rawFrameRoots_eq
     (w : BenignCallFixture) :
     Exec.rawFrameRoots w.run = [w.root, w.childRoot] := by
-  simp [BenignCallFixture.run, BenignCallFixture.root,
-    BenignCallFixture.childRoot, BenignCallFixture.childRun,
-    BenignCallFixture.nextRun, Exec.rawFrameRoots,
+  unfold Exec.rawFrameRoots BenignCallFixture.run
+  rw [BenignCallContPrefix.rawFrameDescendants_run]
+  simp [BenignCallFixture.root, BenignCallFixture.childRoot,
+    BenignCallFixture.tailRun, BenignCallFixture.childRun,
+    BenignCallFixture.nextRun, BenignCallFixture.run,
     Exec.rawFrameDescendants]
 
 private theorem BenignCallFixture.has_descendant
     (w : BenignCallFixture) :
     Exec.rawFrameDescendants w.run ≠ [] := by
-  simp [BenignCallFixture.run, BenignCallFixture.childRun,
+  unfold BenignCallFixture.run
+  rw [BenignCallContPrefix.rawFrameDescendants_run]
+  simp [BenignCallFixture.tailRun, BenignCallFixture.childRun,
     BenignCallFixture.nextRun, Exec.rawFrameDescendants]
 
-/-- Any measured benign fixture carries a concrete ordinary-CALL execution
-with a nonempty descendant-frame tree and no retained write to any
-CircuitBreaker cell.  Executable fixture availability is checked outside the
-imported theorem layer. -/
-theorem benignCall_nonchildless_noninterference (w : BenignCallFixture) :
-    ∃ (out : Execution)
-        (run : Exec benignCallEvm.pc benignCallSevm benignCallPre out),
-      some benignCallSevm.code.toList = Prog.compile benignCallProgram ∧
-      Exec.rawFrameDescendants run ≠ [] ∧
-      ∀ key, Exec.NoRetainedWriteTo run benignCircuitBreaker key := by
-  refine ⟨w.out, w.run, ?_, w.has_descendant, ?_⟩
-  · rw [benignCallProgram_compile]
-    simp [benignCallSevm, benignCallParentCode, benignCallBytes,
-      ByteArray.toList_eq_toList_data]
-  intro key
+private theorem benignCallExactCall :
+    ExactTargetCall benignCircuitBreaker benignCallParentTarget
+      (pauseForCalldata 1) false benignCallMsg := by
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+private theorem benignCallExactInbound :
+    ExactPinnedInbound benignCircuitBreaker benignCallParentTarget
+      pauseForCalldata isPausedCalldata benignCallMsg :=
+  Or.inl ⟨1, benignCallExactCall⟩
+
+private theorem benignCallMessageUsesProgram :
+    MessageUsesProgram benignCallMsg benignCallProgram := by
+  unfold MessageUsesProgram
+  rw [benignCallProgram_compile]
+  simp [benignCallMsg, benignCallParentCode, benignCallBytes,
+    ByteArray.toList_eq_toList_data]
+
+private theorem BenignCallFixture.executes (w : BenignCallFixture) :
+    MessageExecutesProgram benignCallMsg w.slot benignCallProgram := by
+  exact ⟨benignCallMessageUsesProgram, w.rootEvm, w.out, rfl, ⟨w.run⟩⟩
+
+private theorem BenignCallFixture.process (w : BenignCallFixture) :
+    ProcessMessage benignCallMsg w.slot (.ok w.settled) := by
+  have runFrame := RunFrame.of_run
+    (f := Jaune.Frame.ofCall benignCallMsg) (raw := w.out) w.rootEnter
+  rw [w.rootSettle] at runFrame
+  exact runFrame
+
+/-- The retained slot contains at least one actually entered child frame. -/
+def TargetInvocationHasDescendant (xl : Xlot) : Prop :=
+  match xl with
+  | .none => False
+  | .some ⟨evm, raw⟩ =>
+      ∃ run : Exec evm.pc evm.sta evm.dyna raw,
+        Exec.rawFrameDescendants run ≠ []
+
+private theorem BenignCallFixture.slot_has_descendant
+    (w : BenignCallFixture) :
+    TargetInvocationHasDescendant w.slot := by
+  exact ⟨w.run, w.has_descendant⟩
+
+private theorem BenignCallFixture.noRetainedWriteTo
+    (w : BenignCallFixture) (key : B256) :
+    TargetInvocationNoRetainedWriteTo
+      w.slot benignCircuitBreaker key := by
+  intro actualRun
+  have runEq : actualRun = w.run := Exec.unique _ _
+  subst actualRun
   apply Exec.noRetainedWriteTo_of_frame_owners_ne
   intro frameRoot member
   rw [w.rawFrameRoots_eq] at member
   simp at member
   rcases member with rfl | rfl
-  · change benignCallSevm.currentTarget ≠ benignCircuitBreaker
+  · change w.rootEvm.sta.currentTarget ≠ benignCircuitBreaker
+    rw [w.rootTarget]
     decide
   · change w.childEvm.sta.currentTarget ≠ benignCircuitBreaker
     rw [w.childTarget]
     decide
+
+/-- One evaluator-supplied fixture yields the complete account/message-level
+clause-(iii) control at one slot: exact inbound shape, compiled-program
+identity, settlement, a nonempty descendant tree, and semantic protection of
+both named CircuitBreaker cells.  This is a closed-world control, not a
+universal bundle over arbitrary account states. -/
+theorem benignCall_nonchildless_noninterference (w : BenignCallFixture) :
+    ExactPinnedInbound benignCircuitBreaker benignCallParentTarget
+        pauseForCalldata isPausedCalldata benignCallMsg ∧
+      MessageExecutesProgram benignCallMsg w.slot benignCallProgram ∧
+      ProcessMessage benignCallMsg w.slot (.ok w.settled) ∧
+      TargetInvocationHasDescendant w.slot ∧
+      ∀ key ∈
+          [countSlot benignCallPauser.toB256, heartbeatIntervalSlot],
+        TargetInvocationNoRetainedWriteTo
+          w.slot benignCircuitBreaker key := by
+  refine ⟨benignCallExactInbound, w.executes, w.process,
+    w.slot_has_descendant, ?_⟩
+  intro key _member
+  exact w.noRetainedWriteTo key
 
 /-! ## Falsifiers -/
 
