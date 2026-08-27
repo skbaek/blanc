@@ -139,14 +139,16 @@ structure PinnedPauseTarget
   /-- An exact static query accepts canonical true iff the account was paused
   at query entry.  When it was not paused, canonical false or a rejected
   answer/error are the only admitted observations. -/
-  isPaused_truthful : ∀ {sevm : Sevm} {pre : Devm} {ex : Execution},
+  isPaused_truthful : ∀ {sevm : Sevm} {pre post : Devm},
     ExactTargetFrame circuitBreaker target queryCalldata true sevm →
     FrameUsesProgram sevm program →
-    Exec 0 sevm pre ex →
-    (AcceptedBoolExecution ex 1 ↔
+    Mem.Wf pre.memory →
+    pre.error = none →
+    Exec 0 sevm pre (.ok post) →
+    (AcceptedBoolWord post 1 ↔
       PausedAt pausedUntil pre target sevm.benvStat.time) ∧
     (¬ PausedAt pausedUntil pre target sevm.benvStat.time →
-      AcceptedBoolExecution ex 0 ∨ BoolQueryExecutionFailure ex)
+      AcceptedBoolWord post 0 ∨ BoolQueryFailure post)
 
   /-- No retained successful SSTORE anywhere in either exact target
   invocation's frame closure targets a named CircuitBreaker cell. -/
