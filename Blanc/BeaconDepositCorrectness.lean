@@ -123,6 +123,33 @@ theorem rootAt_short (H : Bytes → B256) (d : Nat) (ls : List B256)
   simp only [rootAt]
   rw [List.take_of_length_le h, List.drop_eq_nil_of_le h, rootAt_nil]
 
+/-- Evaluation-oriented derived form of `rootAt`: identical except that an
+empty subtree short-circuits to its zero hash instead of recursing both
+halves (the primary spec's double recursion is exponential to *evaluate*
+on empty subtrees; it is the clean statement, this is the runnable one).
+Proved equal below; the vector-check evaluator uses this form. -/
+def rootAtE (H : Bytes → B256) : Nat → List B256 → B256
+  | 0, ls => ls.headD 0
+  | d + 1, ls =>
+      if ls.isEmpty then zeroHash H (d + 1)
+      else hashPair H (rootAtE H d (ls.take (2 ^ d))) (rootAtE H d (ls.drop (2 ^ d)))
+
+/-- The derived evaluator computes exactly the reference root. -/
+theorem rootAtE_eq (H : Bytes → B256) : ∀ (d : Nat) (ls : List B256),
+    rootAtE H d ls = rootAt H d ls := by
+  intro d
+  induction d with
+  | zero => intro ls; rfl
+  | succ d ih =>
+      intro ls
+      rcases ls with - | ⟨x, xs⟩
+      · show zeroHash H (d + 1) = rootAt H (d + 1) []
+        rw [rootAt_nil]
+      · show hashPair H (rootAtE H d ((x :: xs).take (2 ^ d)))
+            (rootAtE H d ((x :: xs).drop (2 ^ d))) = rootAt H (d + 1) (x :: xs)
+        rw [ih, ih]
+        simp only [rootAt]
+
 /-- An exact left half splits the reference root. -/
 theorem rootAt_append (H : Bytes → B256) (d : Nat) (xs ys : List B256)
     (h : xs.length = 2 ^ d) :

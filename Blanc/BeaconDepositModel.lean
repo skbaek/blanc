@@ -47,7 +47,7 @@ namespace Blanc.BeaconDeposit
 open Jaune
 
 /-- `sha256(abi.encodePacked(a, b))` for two `bytes32` words — the tree
-combine used throughout the source (lines 77, 85, 87, 130, 134). -/
+combine used throughout the source (lines 77, 85, 87, 130, 134, 153). -/
 def hashPair (H : Bytes → B256) (a b : B256) : B256 :=
   H (a.toBytes ++ b.toBytes)
 
@@ -57,7 +57,7 @@ H (zeroHash H h ‖ zeroHash H h)` — the constructor loop, source lines 74–7
 which materializes indices `0..31`. -/
 def zeroHash (H : Bytes → B256) : Nat → B256
   | 0 => 0
-  | h + 1 => hashPair H (zeroHash H h) (zeroHash H h)
+  | h + 1 => let z := zeroHash H h; hashPair H z z
 
 /-- Reference specification (not from the source): the depth-`d` zero-padded
 Merkle root of a leaf list. `rootAt H 0 ls` is the single leaf (or the zero
