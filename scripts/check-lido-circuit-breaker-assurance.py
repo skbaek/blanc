@@ -231,6 +231,26 @@ EXPECTED_MULTI_GATE_ROWS = 4
 # the file is not a failure. Each phrase is chosen to carry the substance of
 # its non-claim rather than a heading, so a narrowing edit cannot delete the
 # claim's limit and accidentally leave the phrase behind.
+# Clauses of the registration-chronology shared-shape paragraph.
+#
+# That paragraph is the ONLY statement of six rows' common premises: each of
+# those rows says "the shared registration shape above, plus ..." and lists only
+# what it adds. So the paragraph carries more weight than any single row, and
+# its three counts -- all six, five of six, four of six -- are exactly the kind
+# of fact that goes stale silently when a seventh chronology lands or an
+# existing one gains a premise. Nothing else in this gate would notice.
+#
+# Pinned here for the same reason the non-claim phrases below are pinned: a
+# statement that six rows depend on must not be one edit away from being lost.
+# Adding a chronology means updating the counts here in the same commit as the
+# row, which is the deliberate act; editing them to clear a red gate is Rule 1.
+SHARED_SHAPE_CLAUSES = [
+    "**All six** take the exact message target",
+    "**Five of six** — all but the fresh-registration chronology",
+    "**Four of six** — all but the two *replacement* chronologies",
+    "**All six** additionally take **warm**-slot premises",
+]
+
 NONCLAIM_PHRASES = [
     # No deployed-bytecode claim: the mainnet address is provenance only.
     "0x6019CB557978296BA3C08a7B73225C0975DFB2F7",
@@ -1519,6 +1539,19 @@ def main() -> int:
 
     flat_register = squeeze(register_text).lower()
     phrases_present = 0
+    shape_present = 0
+    for clause in SHARED_SHAPE_CLAUSES:
+        if squeeze(clause).lower() in flat_register:
+            shape_present += 1
+        else:
+            failures.append(
+                f"{REGISTER_RELATIVE}: pinned shared-shape clause is gone — {clause!r}. "
+                "Six rows state their premises as additions to that paragraph, so a "
+                "clause that stops being written silently removes premises from all "
+                "six; restore it, or re-pin here deliberately in the same commit as "
+                "the row that changed the shape"
+            )
+
     for phrase in NONCLAIM_PHRASES:
         if squeeze(phrase).lower() in flat_register:
             phrases_present += 1
@@ -1588,7 +1621,8 @@ def main() -> int:
         + (f" ({breakdown})" if breakdown else "")
         + f", {expectations_matched} axiom expectations matched, "
         f"{gates_checked} gate paths registered, "
-        f"{phrases_present}/{len(NONCLAIM_PHRASES)} non-claim phrases present"
+        f"{phrases_present}/{len(NONCLAIM_PHRASES)} non-claim phrases present, "
+        f"{shape_present}/{len(SHARED_SHAPE_CLAUSES)} shared-shape clauses present"
     )
     if args.probe:
         summary += f", {probed} declarations probed against Lean"

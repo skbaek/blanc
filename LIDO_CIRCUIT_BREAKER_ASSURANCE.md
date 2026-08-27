@@ -569,22 +569,24 @@ Every registration chronology below shares a settlement shape that each row's ow
 
 **Four of six** — all but the two *replacement* chronologies, which reach their state through the retained-assignment kernel instead — additionally take the entry `RegistryWitness` together with the found-or-not-found path selector that picks the chronology.
 
+**All six** additionally take **warm**-slot premises: positive `accessedStorageKeys` membership on the cells that chronology writes, between one and six of them each, eighteen in total across the family. Every one of these theorems is therefore unavailable at a state where its own cells are still cold. Each row below names its warm cells. Separately and in the **opposite** direction, three of the six also take **cold** premises — *negative* membership, requiring a named cell to be **absent** from `accessedStorageKeys` — and those are named per row too. The two polarities are different conditions and neither implies the other.
+
 A row's own **Premises** field names what that row adds to this shape. Reading a field without this paragraph understates the hypotheses; reading this paragraph as uniform overstates them.
 
 #### TMP-4 — Admin re-registration may revive an expired pauser: the replacement chronology takes the new pauser's entry expiry as an arbitrary word and overwrites it, with no liveness premise
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_retainedNonzero_success_settled_effects`
-- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the new pauser, the checked-extension fact, and — load-bearing in the *opposite* direction from a warm premise — a **cold**-slot premise requiring the heartbeat-interval cell to be **absent** from `accessedStorageKeys`. The new pauser's entry expiry is bound to a free variable, so it may be any word including a past one. **No prior-liveness premise:** nothing asks whether that expiry had passed, and that absence is the claim.
+- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the **new** pauser and on the **old** pauser; the checked-extension fact; a **warm** premise on the new pauser's expiry cell; a **cold** premise requiring the heartbeat-interval cell to be **absent** from `accessedStorageKeys`; and — the row's real scope — that the old pauser **retains at least one other assignment**. That last premise is the discriminator against TMP-6's last-assignment chronology, which writes the same fresh expiry by a different route, so this row does **not** cover the last-assignment replacement. The new pauser's entry expiry is bound to a free variable, so it may be any word including a past one. **No prior-liveness premise:** nothing asks whether that expiry had passed, and that absence is the claim.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `register-distinct-pauser#2:action`; admin-driven revival in the heartbeat family
 - **Non-claims:** this is the **replacement** chronology specifically — the target is already registered to another pauser. It is not a general theorem over all registration paths, and the sibling chronologies below cannot carry it: the fresh path requires the expiry cell to be zero, and the absent path writes no expiry at all.
 - **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerReplacementRegistration.lean:1358`
 
-#### TMP-5 — A first registration writes a checked expiry into a cell proved zero on entry
+#### TMP-5 — A first registration writes a checked expiry into a cell required to be zero on entry
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_freshNonzero_success_settled_effects`
-- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the new pauser, the checked-extension fact, that the new pauser's expiry cell **and** its original-storage value are both **zero** at entry, and **two cold-slot premises** requiring the new pauser's count cell and the heartbeat-interval cell to be absent from `accessedStorageKeys`.
+- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the new pauser; the checked-extension fact; that the new pauser's expiry cell **and** its original-storage value are both **zero** at entry; that the checked expiry it writes is itself **nonzero**, which excludes the degenerate world where timestamp and interval are both zero; the array-length and count non-wrap word equations; **warm** premises on the array, index, and new-pauser expiry cells; and **two cold** premises requiring the new pauser's count cell and the heartbeat-interval cell to be absent from `accessedStorageKeys`.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `register-fresh#1:action`
@@ -594,7 +596,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 #### TMP-6 — When an assignment change leaves the old pauser with no assignments its expiry cell is cleared — unless the old and new pauser are the same address, in which case it carries the fresh expiry — and every other canonical pauser's is preserved
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_oldLastNonzero_success_settled_effects`, `Blanc.LidoCircuitBreaker.registerPauser_foundZeroOldLast_success_settled_effects`, `Blanc.LidoCircuitBreaker.registerPauser_foundZeroOldLastSwapPop_success_settled_effects`
-- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the old pauser and the original-storage expiry reads. The first declaration is a **replacement** and additionally takes a nonzero new pauser and a cold heartbeat-interval premise; the other two are **removals**.
+- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the old pauser and the original-storage expiry reads. The first declaration is a **replacement**, and additionally takes a nonzero new pauser, **warm** premises on the old- and new-pauser expiry cells, and a **cold** heartbeat-interval premise. The other two are **removals**, distinguished by the mechanism the Cyfrin comparison turns on: one is the remove-the-tail case, taking a last-position premise, with **warm** premises on the array, index, length, and expiry cells; the other is the **swap-and-pop** case, taking a not-last premise, with six warm premises covering the vacated hole, the moved element's index, the dead tail, the target's index, the array length, and the expiry cell.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the old- and new-pauser last-assignment expiry-cleanup rows; `register-same-pauser#2:action`; unregister first, middle, and last
@@ -604,7 +606,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 #### TMP-7 — The absent-target, zero-pauser registration is a no-op on every expiry cell
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_absentZero_success_settled_effects`
-- **Premises:** the shared registration shape above. It takes **no** timestamp, interval, expiry variable, or checked-extension fact, because it writes no expiry.
+- **Premises:** the shared registration shape above, plus **warm** premises on the array and index cells. It takes **no** timestamp, interval, expiry variable, or checked-extension fact, because it writes no expiry — but that negative list is about the expiry machinery only, and is not an exhaustive premise list.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `register-absent-to-zero#1:action`
