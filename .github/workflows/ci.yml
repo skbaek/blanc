@@ -26,6 +26,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
+      # Static and fail-closed: it reads committed files only, so it needs no
+      # Lean toolchain, no build and no network, and fails in well under a
+      # second when the assurance register stops describing the tree.
+      - name: Lido CircuitBreaker assurance register
+        run: scripts/check-lido-circuit-breaker-assurance.sh
       - name: Registered proof residue ratchet
         run: scripts/check-proof-residue.sh
       # Ahead of the toolchain deliberately: this gate reads .lean files only,
