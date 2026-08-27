@@ -137,6 +137,15 @@ REQUIRED = (
     "constructor_domain_separate_control",
     # AT5 raw-authority controls.
     "permitted_role_widening_rejected",
+    # Role determinacy within the two deconflated pairs.  The exclusivity
+    # theorems it applies are pinned above, but a pin is change-detection
+    # and stops mattering the moment someone re-takes the digest in good
+    # faith.  This control is the half that survives that: narrowing either
+    # exclusivity result stops it elaborating, and a build failure has no
+    # digest to re-take.  Its name living HERE, in the gate's own source
+    # rather than in the tree the gate reads, is what makes deleting it
+    # fail too.
+    "deconflated_role_determinacy_control",
     # Within-role guard strength, which no header pin can reach: the pause
     # arm's strict entry liveness and its assignment conjunct are extracted
     # from an arbitrary actual authority, so weakening either stops the
@@ -346,6 +355,22 @@ ROLES = {
         "Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot":
             "e755bf90f38ef62672e6dd79df675b41027cf702678c8bf73882bced5d546bb2",
         # Settlement-altitude storage bridge; deliberately not a log claim.
+        # Role exclusivity at a single write.  These two are the artifact of
+        # the deconflation fix: .adminRegistry/.adminExpiry and
+        # .pauseRegistry/.pauseExpiry once had literally identical premises --
+        # same endpoint, same guard, same caller equality -- so a witness for
+        # either repacked into the other and any role-swap mutant across those
+        # pairs typechecked.  The access claim is that every raw write carries
+        # AN EXACT role, which is only meaningful if two roles cannot hold at
+        # one write, so these state the property that claim rests on.  Pinned
+        # here because header pinning cannot reach inside RuntimeWriteAuthority's
+        # constructor payloads: the exclusivity is proved from the disjoint
+        # source-function index sets those payloads carry, and nothing else in
+        # this gate would notice if it were weakened back to a label comparison.
+        "RuntimeWriteAuthority.adminRegistry_not_adminExpiry":
+            "85eac3f8638b59ac303c09ec87798ade4d981e8dc48efd853f94dcd1a0deb101",
+        "RuntimeWriteAuthority.pauseRegistry_not_pauseExpiry":
+            "fb6d38950e205d47eff2c69b2c654da977e3e436094d7ecf8c9b31b27c9af14d",
         "ProcessMessage.runtimeOwnerStorage_eq_committedPost":
             "cd2eeef907ec3f7af5ec7baac493cc3f8310d72c14d9f3926af36e2fc9c7a586",
     },
