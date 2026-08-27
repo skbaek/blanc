@@ -561,37 +561,67 @@ into a neighbour's.
 - **Non-claims:** it does not claim overflow is **reachable** in any deployed configuration. The panic body's byte identity is a separate fact owned by `scripts/check-lido-circuit-breaker-runtime-errors.sh`, not by this theorem.
 - **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAccess.lean`
 
-#### TMP-4 — Admin registration may revive an expired pauser: the success path carries no prior-liveness premise at all
+Every registration chronology below shares a settlement shape that each row's own field does not repeat, and the shape is **not uniform** — where a premise is carried by some chronologies and not others, that is said here rather than glossed.
 
-- **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_freshNonzero_success_settled_effects`, `Blanc.LidoCircuitBreaker.registerPauser_absentZero_success_settled_effects`, `Blanc.LidoCircuitBreaker.registerPauser_retainedNonzero_success_settled_effects`
-- **Premises:** the exact message target, owner, code address, code, zero value, and register calldata; an exact entry-gas equation; that the caller **is the admin**; warm-slot premises on the cells the path touches; and checked addition. **No prior-liveness premise anywhere** — an expired pauser is revivable because nothing in the statement asks whether it was live, and that absence is the claim.
+**All six** take the exact message target, owner, code address, production code, zero value, and register calldata; an exact entry-gas equation; an **admin** caller; a **non-static** frame; `nonzeroCanonicalAddress` on the target; and the settlement triple — a successful `ProcessMessage`, a filled execution slot, and a clean error field as an antecedent rather than a discharged fact.
+
+**Five of six** — all but the fresh-registration chronology — additionally take a residual-gas stipend inequality.
+
+**Four of six** — all but the two *replacement* chronologies, which reach their state through the retained-assignment kernel instead — additionally take the entry `RegistryWitness` together with the found-or-not-found path selector that picks the chronology.
+
+A row's own **Premises** field names what that row adds to this shape. Reading a field without this paragraph understates the hypotheses; reading this paragraph as uniform overstates them.
+
+#### TMP-4 — Admin re-registration may revive an expired pauser: the replacement chronology takes the new pauser's entry expiry as an arbitrary word and overwrites it, with no liveness premise
+
+- **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_retainedNonzero_success_settled_effects`
+- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the new pauser, the checked-extension fact, and — load-bearing in the *opposite* direction from a warm premise — a **cold**-slot premise requiring the heartbeat-interval cell to be **absent** from `accessedStorageKeys`. The new pauser's entry expiry is bound to a free variable, so it may be any word including a past one. **No prior-liveness premise:** nothing asks whether that expiry had passed, and that absence is the claim.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
-- **Differential channel:** the Registry family's fresh-register and replace rows; admin-driven revival in the heartbeat family
-- **Non-claims:** these are the settled effects of **named registration chronologies**, one per source path, not a single general theorem over all registrations. The differential rows corroborate; they are never a premise.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerFreshRegistration.lean:1649`, `Blanc/LidoCircuitBreakerAbsentRegistration.lean:1665`, `Blanc/LidoCircuitBreakerReplacementRegistration.lean:1358`
+- **Differential channel:** `register-distinct-pauser#2:action`; admin-driven revival in the heartbeat family
+- **Non-claims:** this is the **replacement** chronology specifically — the target is already registered to another pauser. It is not a general theorem over all registration paths, and the sibling chronologies below cannot carry it: the fresh path requires the expiry cell to be zero, and the absent path writes no expiry at all.
+- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerReplacementRegistration.lean:1358`
 
-#### TMP-5 — When a removal was the old pauser's last assignment, that pauser's expiry cell is cleared and every other canonical pauser's is preserved
+#### TMP-5 — A first registration writes a checked expiry into a cell proved zero on entry
+
+- **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_freshNonzero_success_settled_effects`
+- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the new pauser, the checked-extension fact, that the new pauser's expiry cell **and** its original-storage value are both **zero** at entry, and **two cold-slot premises** requiring the new pauser's count cell and the heartbeat-interval cell to be absent from `accessedStorageKeys`.
+- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
+- **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
+- **Differential channel:** `register-fresh#1:action`
+- **Non-claims:** because the entry cell is pinned to zero, this row says nothing about revival — there is nothing to revive. Revival is TMP-4.
+- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerFreshRegistration.lean:1649`
+
+#### TMP-6 — When an assignment change leaves the old pauser with no assignments its expiry cell is cleared — unless the old and new pauser are the same address, in which case it carries the fresh expiry — and every other canonical pauser's is preserved
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_oldLastNonzero_success_settled_effects`, `Blanc.LidoCircuitBreaker.registerPauser_foundZeroOldLast_success_settled_effects`, `Blanc.LidoCircuitBreaker.registerPauser_foundZeroOldLastSwapPop_success_settled_effects`
-- **Premises:** the exact message shape and gas equation, the admin caller, `nonzeroCanonicalAddress` on the old pauser, warm-slot premises including the old pauser's expiry cell, and the original-storage expiry reads.
+- **Premises:** the shared registration shape above, plus `nonzeroCanonicalAddress` on the old pauser and the original-storage expiry reads. The first declaration is a **replacement** and additionally takes a nonzero new pauser and a cold heartbeat-interval premise; the other two are **removals**.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
-- **Differential channel:** the old- and new-pauser last-assignment expiry-cleanup rows; unregister first, middle, and last
-- **Non-claims:** the cleanup is proved on the **named last-assignment chronologies**, each with its own swap-and-pop shape. It is not a general statement over arbitrary removals, and it says nothing about callback-time coherence.
+- **Differential channel:** the old- and new-pauser last-assignment expiry-cleanup rows; `register-same-pauser#2:action`; unregister first, middle, and last
+- **Non-claims:** **the clearing is conditional on the replacement path.** Re-registering the *same* pauser leaves that cell holding the fresh expiry rather than zero — the replacement chronology's conclusion is literally `if oldPauser = newPauser then expiry else 0`, and `register-same-pauser#2:action` is exactly that measured coordinate. The two removal chronologies clear unconditionally. This is proved on named chronologies, not over arbitrary removals, and it says nothing about callback-time coherence.
 - **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerReplacementRegistration.lean:2143`, `Blanc/LidoCircuitBreakerUnregisterRegistration.lean:3963,5310`
 
-#### TMP-6 — One fully concrete unregistration world settles end to end, exhibiting the whole path rather than quantifying over it
+#### TMP-7 — The absent-target, zero-pauser registration is a no-op on every expiry cell
+
+- **Declarations:** `Blanc.LidoCircuitBreaker.registerPauser_absentZero_success_settled_effects`
+- **Premises:** the shared registration shape above. It takes **no** timestamp, interval, expiry variable, or checked-extension fact, because it writes no expiry.
+- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
+- **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
+- **Differential channel:** `register-absent-to-zero#1:action`
+- **Non-claims:** a preservation result — every canonical pauser's expiry cell equals its entry value, and one `PauserSet` log is emitted. It is the negation in direction of a revival fact and must never be cited for one.
+- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAbsentRegistration.lean:1665`
+
+#### TMP-8 — One fully concrete unregistration world settles end to end, exhibiting the whole path rather than quantifying over it
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.unregisterWorld_settles`
 - **Premises:** **none.** The theorem takes no hypotheses at all: it is a closed statement about one hard-coded world.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the unregister rows of the Registry family
-- **Non-claims:** **this is one concrete world**, with a single-entry registry, a fixed target address and a fixed pauser address. Nothing is quantified over targets, pausers, entry lists, gas, or worlds, and no genesis reachability is claimed. It exhibits that the unregistration path really settles; the general statements are TMP-4 and TMP-5, and this row must never be read as one of them.
+- **Non-claims:** **this is one concrete world**, with a single-entry registry, a fixed target address and a fixed pauser address. Nothing is quantified over targets, pausers, entry lists, gas, or worlds, and no genesis reachability is claimed. It exhibits that the unregistration path really settles; the general statements are TMP-4 through TMP-7, and this row must never be read as one of them.
 - **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerUnregisterWorld.lean:1038`
 
-#### TMP-7 — An interval update moves no existing expiry: every canonical pauser's expiry cell is byte-identical afterwards, and the new interval governs only the next successful registration or heartbeat
+#### TMP-9 — An interval update moves no existing expiry: every canonical pauser's expiry cell is byte-identical afterwards, and the new interval governs only the next successful registration or heartbeat
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.setHeartbeatInterval_success_settled_effects`
 - **Premises:** the exact message target, owner, code address, code, zero value, and interval calldata; an **exact entry-gas equation**; that the caller **is the admin**; that the new interval lies within the configured minimum and maximum; that the frame is **not static**; and a filled execution slot, with a clean error field as an antecedent rather than a discharged fact.
@@ -601,10 +631,10 @@ into a neighbour's.
 - **Non-claims:** the log list is pinned **exactly** as the entry list extended, not as a containment. Nothing here is stated at transaction altitude.
 - **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAccess.lean`
 
-#### TMP-8 — Emitted record order is pinned exactly, not as a containment
+#### TMP-10 — Emitted record order is pinned exactly, not as a containment
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.heartbeat_success_settled_effects`
-- **Premises:** **not TMP-7's**, and the difference is the point: the interval setter requires the caller to be the **admin**, while this one requires the caller to be a **registered, strictly live pauser** — a nonzero entry count, a strictly future prior expiry, and the checked-extension fact — on top of the exact message shape, gas equation, and warm-slot premises.
+- **Premises:** **not TMP-9's**, and the difference is the point: the interval setter requires the caller to be the **admin**, while this one requires the caller to be a **registered, strictly live pauser** — a nonzero entry count, a strictly future prior expiry, and the checked-extension fact — on top of the exact message shape, an exact entry-gas equation, a non-static frame, and the settlement triple. **No warm-slot premise:** unlike TMP-3's raw-run forms, this settled result carries no access-list hypothesis at all, and its gas conclusion is stated on the **cold**-`SLOAD` schedule.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the ordered-log rows pinning `PauserSet`, `PauseTriggered`, and `HeartbeatUpdated`
