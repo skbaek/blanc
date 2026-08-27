@@ -92,6 +92,8 @@ import Blanc.FmintGas
 import Blanc.WethGas
 import Blanc.Weth10AnyOrder
 import Blanc.Weth10Dormant
+import Blanc.BeaconDepositModel
+import Blanc.BeaconDepositCorrectness
 
 namespace Blanc
 

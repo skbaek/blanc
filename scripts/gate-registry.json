@@ -1302,6 +1302,38 @@
     },
     {
       "command": [
+        "scripts/check-beacon-deposit-model.sh"
+      ],
+      "id": "beacon-deposit-model",
+      "inputs": {
+        "files": [
+          "scripts/check-beacon-deposit-model.sh",
+          "scripts/check-beacon-deposit-model.py",
+          "scripts/gen-beacon-deposit-vectors.py",
+          "scripts/reference/beacon-deposit/vectors.json",
+          "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
+          "scripts/reference/beacon-deposit/inputs/tests_deposit_contract.t.sol"
+        ],
+        "lean_entries": [
+          "scripts/eval-beacon-deposit-model.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Comparison gate for the BeaconDeposit pure model: oracle vectors regenerated via --check, Lean evaluator under the keccak-256 instantiation, fail-closed line comparison. --falsify is a mutation campaign (hard hold) and is not part of this cacheable default invocation.",
+      "order": 32,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 beacon-deposit model vs oracle: "
+        ]
+      }
+    },
+    {
+      "command": [
         "scripts/check.sh",
         "--no-build"
       ],
@@ -1320,7 +1352,7 @@
       },
       "kind": "cacheable",
       "note": "The 607-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
-      "order": 32,
+      "order": 33,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1346,7 +1378,7 @@
       },
       "kind": "cacheable",
       "note": "The pinned inventory count lives in the wrapper, so its bytes are an input.",
-      "order": 33,
+      "order": 34,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1394,7 +1426,7 @@
       },
       "kind": "cacheable",
       "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes \u2014 the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its baseline, and its own implementation. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see \u2014 a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
-      "order": 34,
+      "order": 35,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1433,7 +1465,7 @@
       },
       "kind": "cacheable",
       "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is the thing that produces PASS/FAIL and is fingerprinted directly. weth10-reference.py and weth10_reference_schema.py are in the closure only because the borrower checker importlib-loads the former for its keccak256.",
-      "order": 35,
+      "order": 36,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1466,7 +1498,7 @@
       },
       "kind": "cacheable",
       "note": "This suite has no manifest, so its fixture-directory membership is its only population guard; declaring the population here restores that guard for reuse decisions.",
-      "order": 36,
+      "order": 37,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1499,7 +1531,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 37,
+      "order": 38,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1532,7 +1564,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 38,
+      "order": 39,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [

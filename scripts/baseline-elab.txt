@@ -11,9 +11,19 @@
 # 75 reductions are recorded, 71 lower committed rows are preserved, 4 rows
 # are unchanged, no row rises, and this ratchet totals 725.163 s. The two
 # typed-source-route owners account for 25.505 s of the 31.058 s reduction.
+#
+# 2026-08-28 additions-only admission of the two BeaconDeposit pure-model
+# rows, measured by `check-elab.sh --calibrate` at candidate 901596ef
+# (seed domain blanc-elab-calibration-v1; evidence in
+# scripts/report-elab-calibration.txt at that commit): the cache-invalid
+# fallback measured all 152 modules outright in 791.0 s vs the 725.163 s
+# committed total, so the run is its own host control; no existing row is
+# touched.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
+OK	2.447	Blanc/BeaconDepositCorrectness.lean
+OK	1.193	Blanc/BeaconDepositModel.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
 OK	1.717	Blanc/Compiled.lean
