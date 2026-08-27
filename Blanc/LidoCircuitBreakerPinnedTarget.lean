@@ -10,9 +10,12 @@ CircuitBreaker calldata and the two cells named by
 implementation correct.
 
 `PublicPausePinnedTargetStatement` is the frozen entry-3 theorem *shape*.
-It takes the T2 outcome family and the protocol as opaque propositions.  The
-future target goal proves that statement after target selection; a proxy
-revisit reuses the same statement by replacing only the bundle instantiation.
+It starts before T2, from the public entry premises and actual production run,
+then consumes the protocol and actual-invocation code hook opaquely.  Its
+conclusion records the T2 family derived with target noninterference, the
+actual target boundary, and the paused final account state.  A proxy revisit
+reuses the same statement by replacing only the bundle and hook
+instantiations.
 -/
 
 namespace Blanc.LidoCircuitBreaker
@@ -23,59 +26,74 @@ open Jaune
 fixed outbound ABI and the two success-classification storage cells. -/
 abbrev LidoPinnedPauseTarget
     (circuitBreaker pauser target : Adr) (program : Prog)
-    (pausedUntil : Devm → Adr → B256)
+    (pausedUntil : Adr → Stor → B256)
     (protectedSurface : List B256) : Prop :=
   PinnedPauseTarget circuitBreaker target program pauseForCalldata
     isPausedCalldata pausedUntil
     [countSlot pauser.toB256, heartbeatIntervalSlot] protectedSurface
 
-/-- One settled successful target CALL, tied to the same parent CALL step and
-carrying the account-level paused effect and truth at that boundary. -/
+/-- The detachable actual-invocation hook specialized to the two production
+CircuitBreaker messages. -/
+abbrev LidoPinnedInboundExecutesProgram
+    (circuitBreaker target : Adr) (program : Prog) : Prop :=
+  ExactPinnedInboundExecutesProgram circuitBreaker target program
+    pauseForCalldata isPausedCalldata
+
+/-- One settled successful target CALL tied to the actual parent spawn.  The
+spawn equation prevents an unrelated message with the same terminal child
+shape from serving as the target witness.  The final projection equality is
+conclusion evidence, not a premise of the entry-3 statement. -/
 def PinnedTargetPauseWitness (sevm : Sevm) (target : Adr) (program : Prog)
-    (duration : B256) (pausedUntil : Devm → Adr → B256)
-    (callPre callPost : Devm) : Prop :=
-  ∃ (msg : Msg) (xl : Xlot) (child : Devm),
+    (duration : B256) (pausedUntil : Adr → Stor → B256)
+    (callPre callPost final : Devm) : Prop :=
+  PauseCallBoundary sevm target duration callPre callPost ∧
+  ∃ (msg : Msg) (xl : Xlot) (child : Devm)
+      (pc nextPc : Nat) (resume : Resume),
     ExactTargetCall sevm.currentTarget target (pauseForCalldata duration)
       false msg ∧
-    MessageUsesProgram msg program ∧
+    MessageExecutesProgram msg xl program ∧
     msg.benv.stat.time = sevm.benvStat.time ∧
-    Xlot.Filled xl ∧
+    Ninst.step ⟨pc, sevm, callPre⟩ Ninst.call =
+      .spawn (Jaune.Frame.ofCall msg) resume nextPc ∧
     ProcessMessage msg xl (.ok child) ∧
+    Ninst.StepRun pc sevm callPre Ninst.call xl (.ok callPost) ∧
     child.error.isSome = false ∧
-    (∀ pc, Ninst.StepRun pc sevm callPre (.exec .call) xl (.ok callPost)) ∧
-    pausedUntil child target = sevm.benvStat.time + duration ∧
-    PausedAt pausedUntil child target sevm.benvStat.time
+    pausedUntil target (child.state.getStor target) =
+      sevm.benvStat.time + duration ∧
+    pausedUntil target (final.state.getStor target) =
+      pausedUntil target (child.state.getStor target)
 
-/-- The successful end-to-end conclusion expected from entry 3.  It retains
-the exact T2 reached state and CALL boundary rather than naming an unrelated
-target invocation. -/
+/-- The successful end-to-end conclusion expected from entry 3.  It records
+that T2's committed family was derived, exposes the actual target invocation,
+and states pausedness on the same successful final state named by `ex`. -/
 def PublicPausePinnedTargetConclusion (sevm : Sevm) (pre : Devm)
     (target duration : B256) (targetCode : ByteArray)
-    (program : Prog) (pausedUntil : Devm → Adr → B256)
-    (ex : Execution) : Prop :=
-  ∃ entry : Devm,
-    PublicPauseAfterSetAt
-      ((runtime officialParams).main :: (runtime officialParams).aux)
-      sevm pre target duration targetCode ex entry ∧
+    (program : Prog) (pausedUntil : Adr → Stor → B256)
+    (ex : Execution) (final : Devm) : Prop :=
+  PublicPauseCommittedOutcomes sevm pre target duration targetCode ex ∧
     ∃ callPre callPost : Devm,
-      PauseCallBoundary sevm target.toAdr duration callPre callPost ∧
       PinnedTargetPauseWitness sevm target.toAdr program duration pausedUntil
-        callPre callPost
+        callPre callPost final ∧
+      PausedAt pausedUntil final.state target.toAdr sevm.benvStat.time
 
 /-- Frozen entry-3 statement shape.  The bundle is consumed whole: none of
-its four clauses is unfolded here.  `ProgramInstalledAt` is the one detachable
-direct-code premise. -/
+its four clauses is unfolded here.  The actual-invocation hook is likewise
+opaque.  A future direct target derives it from installed code and
+non-precompile entry; a proxy revisit derives it from pair correspondence. -/
 def PublicPausePinnedTargetStatement
-    (sevm : Sevm) (pre : Devm) (target duration : B256)
-    (targetCode : ByteArray) (program : Prog)
-    (pausedUntil : Devm → Adr → B256)
+    (sevm : Sevm) (pre : Devm) (owner : Adr)
+    (target duration idx0 len0 last0 : B256)
+    (img : Bytes) (targetCode : ByteArray) (program : Prog)
+    (pausedUntil : Adr → Stor → B256)
     (protectedSurface : List B256) (ex : Execution) : Prop :=
-  LidoPinnedPauseTarget sevm.currentTarget sevm.caller target.toAdr program
+  PublicPauseEntryPremises sevm pre owner target duration idx0 len0 last0 img
+      targetCode →
+    Prog.RunCompiledTo sevm pre (runtime officialParams) ex →
+    LidoPinnedPauseTarget sevm.currentTarget sevm.caller target.toAdr program
       pausedUntil protectedSurface →
-    ProgramInstalledAt pre target.toAdr program →
-    PublicPauseCommittedOutcomes sevm pre target duration targetCode ex →
-    (∀ final, ex = .ok final →
+    LidoPinnedInboundExecutesProgram sevm.currentTarget target.toAdr program →
+    ∀ final, ex = .ok final →
       PublicPausePinnedTargetConclusion sevm pre target duration targetCode
-        program pausedUntil ex)
+        program pausedUntil ex final
 
 end Blanc.LidoCircuitBreaker

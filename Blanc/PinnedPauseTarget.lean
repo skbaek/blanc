@@ -5,10 +5,12 @@ import Blanc.ExecutionOccurrence
 
 This shared module describes observable account behaviour, not a particular
 contract family.  The `program` parameter is deliberately only an index of the
-bundle: `ProgramInstalledAt` is the single detachable code-identity premise.
-A direct account can discharge it from installed bytecode; a later proxy
-composition can instead establish the same indexed behaviour through its
-proxy/implementation correspondence.
+bundle.  `ProgramInstalledAt` records direct installation, while
+`ExactPinnedInboundExecutesProgram` is the detachable hook that connects the
+actual settled message invocation to that index.  A direct account can derive
+the hook from installed bytecode and non-precompile entry; a later proxy
+composition can instead establish it through proxy/implementation
+correspondence.
 
 The storage-safety field is semantic.  It excludes retained successful writes
 to selected owner/key pairs throughout the invocation frame closure; it does
@@ -37,31 +39,24 @@ structure ExactTargetCall (caller target : Adr) (calldata : Bytes)
   staticFlag : msg.isStatic = static
   data : msg.data = calldata
 
-/-- A single detachable direct-installation fact.  It is intentionally not a
-field of `PinnedPauseTarget`. -/
-def ProgramInstalledAt (pre : Devm) (target : Adr) (program : Prog) : Prop :=
-  some (pre.getCode target).toList = Prog.compile program
+/-- A single detachable direct-installation fact.  By itself it does not say
+that a later message actually executed the installed code. -/
+def ProgramInstalledAt (state : State) (target : Adr) (program : Prog) : Prop :=
+  some (state.getCode target).toList = Prog.compile program
 
-/-- The invocation frame is executing the indexed program.  Composition
-derives this named fact from `ProgramInstalledAt` (or from a proxy pair); it is
-kept separate from every observable call-shape predicate. -/
+/-- The message carries the bundle's indexed code. -/
 def MessageUsesProgram (msg : Msg) (program : Prog) : Prop :=
   some msg.code.toList = Prog.compile program
 
-/-- The exact account-level code frame opened by one zero-value inbound call. -/
-structure ExactTargetFrame (caller target : Adr) (calldata : Bytes)
-    (static : Bool) (sevm : Sevm) : Prop where
-  currentTarget : sevm.currentTarget = target
-  targetAddress : sevm.target = some target
-  codeAddress : sevm.codeAddress = some target
-  callerAddress : sevm.caller = caller
-  valueZero : sevm.value = 0
-  staticFlag : sevm.isStatic = static
-  data : sevm.data = calldata
-
-/-- The account code frame is executing the bundle's indexed program. -/
-def FrameUsesProgram (sevm : Sevm) (program : Prog) : Prop :=
-  some sevm.code.toList = Prog.compile program
+/-- The settled message really entered a retained code frame carrying the
+indexed program.  The explicit nonempty slot excludes the precompile/no-frame
+path, on which `Xlot.Filled .none` alone would be vacuous. -/
+def MessageExecutesProgram
+    (msg : Msg) (xl : Xlot) (program : Prog) : Prop :=
+  MessageUsesProgram msg program ∧
+    ∃ (evm : Evm) (raw : Execution),
+      xl = .some ⟨evm, raw⟩ ∧
+      Nonempty (Exec evm.pc evm.sta evm.dyna raw)
 
 /-- The ABI acceptance rule used by the CircuitBreaker: at least one full
 word, with trailing bytes ignored. -/
@@ -76,19 +71,19 @@ non-boolean first word. -/
 def BoolQueryFailure (child : Devm) : Prop :=
   ¬ AcceptedBoolWord child 0 ∧ ¬ AcceptedBoolWord child 1
 
-/-- A whole code-frame execution returned an accepted boolean word. -/
-def AcceptedBoolExecution (ex : Execution) (word : B256) : Prop :=
+/-- A whole settled account invocation returned an accepted boolean word. -/
+def AcceptedBoolExecution (ex : TargetMessageResult) (word : B256) : Prop :=
   ∃ child, ex = .ok child ∧ AcceptedBoolWord child word
 
-/-- A whole code-frame execution returned neither accepted boolean word. -/
-def BoolQueryExecutionFailure (ex : Execution) : Prop :=
+/-- A whole settled account invocation returned neither accepted boolean word. -/
+def BoolQueryExecutionFailure (ex : TargetMessageResult) : Prop :=
   ¬ AcceptedBoolExecution ex 0 ∧ ¬ AcceptedBoolExecution ex 1
 
 /-- The account is paused exactly when the entry timestamp precedes its
-abstract paused-until projection. -/
-def PausedAt (pausedUntil : Devm → Adr → B256)
-    (entry : Devm) (target : Adr) (timestamp : B256) : Prop :=
-  timestamp < pausedUntil entry target
+storage-local paused-until projection. -/
+def PausedAt (pausedUntil : Adr → Stor → B256)
+    (state : State) (target : Adr) (timestamp : B256) : Prop :=
+  timestamp < pausedUntil target (state.getStor target)
 
 /-- Calldata has the selected ABI function selector and an arbitrary tail. -/
 def HasSelector (msg : Msg) (selected : B256) : Prop :=
@@ -102,76 +97,89 @@ def ExactPinnedInbound (circuitBreaker target : Adr)
       ExactTargetCall circuitBreaker target (pauseCalldata duration) false msg) ∨
     ExactTargetCall circuitBreaker target queryCalldata true msg
 
-/-- Code-frame counterpart of `ExactPinnedInbound`. -/
-def ExactPinnedFrameInbound (circuitBreaker target : Adr)
-    (pauseCalldata : B256 → Bytes) (queryCalldata : Bytes)
-    (sevm : Sevm) : Prop :=
-  (∃ duration,
-      ExactTargetFrame circuitBreaker target (pauseCalldata duration) false
-        sevm) ∨
-    ExactTargetFrame circuitBreaker target queryCalldata true sevm
+/-- The one detachable actual-invocation code hook.  It is stronger than a
+state-level installation equation: every exact inbound message that settles
+must have entered a retained frame carrying the indexed program. -/
+def ExactPinnedInboundExecutesProgram
+    (circuitBreaker target : Adr) (program : Prog)
+    (pauseCalldata : B256 → Bytes) (queryCalldata : Bytes) : Prop :=
+  ∀ {msg : Msg} {xl : Xlot} {ex : TargetMessageResult},
+    ExactPinnedInbound circuitBreaker target pauseCalldata queryCalldata msg →
+    Xlot.Filled xl →
+    ProcessMessage msg xl ex →
+    MessageExecutesProgram msg xl program
 
-/-- A code frame's calldata has the selected ABI function selector. -/
-def FrameHasSelector (sevm : Sevm) (selected : B256) : Prop :=
-  ∃ tail, sevm.data = abiSelectorBytes selected ++ tail
+/-- No retained successful write in an actual message slot targets one
+selected account cell.  A no-frame slot contributes no code-frame write. -/
+def TargetInvocationNoRetainedWriteTo
+    (xl : Xlot) (owner : Adr) (key : B256) : Prop :=
+  match xl with
+  | .none => True
+  | .some ⟨evm, raw⟩ =>
+      ∀ run : Exec evm.pc evm.sta evm.dyna raw,
+        Exec.NoRetainedWriteTo run owner key
 
 /-- A target-agnostic account protocol for pause composition.
 
-The fields say only what the account at `target` does on exact inbound
-messages.  They do not expose or unfold `program`, and code identity remains
-the separate `ProgramInstalledAt` premise above. -/
+The fields say only what the account at `target` does on exact settled inbound
+messages.  They do not expose or unfold `program`.  The paused projection is
+intrinsically local to one account's `Stor`, so unrelated account changes
+cannot alter its observation. -/
 structure PinnedPauseTarget
     (circuitBreaker target : Adr) (program : Prog)
     (pauseCalldata : B256 → Bytes) (queryCalldata : Bytes)
-    (pausedUntil : Devm → Adr → B256)
+    (pausedUntil : Adr → Stor → B256)
     (circuitBreakerCells : List B256)
     (protectedSurface : List B256) : Prop where
   /-- A successful exact `pauseFor(duration)` call stores precisely the
   entry timestamp plus the requested duration in the abstract projection. -/
-  pauseFor_effect : ∀ {sevm : Sevm} {pre post : Devm}
+  pauseFor_effect : ∀ {msg : Msg} {xl : Xlot} {post : Devm}
       {duration : B256},
-    ExactTargetFrame circuitBreaker target (pauseCalldata duration) false
-      sevm →
-    FrameUsesProgram sevm program →
-    Exec 0 sevm pre (.ok post) →
-    pausedUntil post target = sevm.benvStat.time + duration
+    ExactTargetCall circuitBreaker target (pauseCalldata duration) false msg →
+    MessageExecutesProgram msg xl program →
+    ProcessMessage msg xl (.ok post) →
+    post.error.isSome = false →
+    pausedUntil target (post.state.getStor target) =
+      msg.benv.stat.time + duration
 
   /-- An exact static query accepts canonical true iff the account was paused
   at query entry.  When it was not paused, canonical false or a rejected
   answer/error are the only admitted observations. -/
-  isPaused_truthful : ∀ {sevm : Sevm} {pre post : Devm},
-    ExactTargetFrame circuitBreaker target queryCalldata true sevm →
-    FrameUsesProgram sevm program →
-    Mem.Wf pre.memory →
-    pre.error = none →
-    Exec 0 sevm pre (.ok post) →
-    (AcceptedBoolWord post 1 ↔
-      PausedAt pausedUntil pre target sevm.benvStat.time) ∧
-    (¬ PausedAt pausedUntil pre target sevm.benvStat.time →
-      AcceptedBoolWord post 0 ∨ BoolQueryFailure post)
+  isPaused_truthful : ∀ {msg : Msg} {xl : Xlot}
+      {ex : TargetMessageResult},
+    ExactTargetCall circuitBreaker target queryCalldata true msg →
+    MessageExecutesProgram msg xl program →
+    ProcessMessage msg xl ex →
+    (∀ post, ex = .ok post → post.error.isSome = false →
+      pausedUntil target (post.state.getStor target) =
+        pausedUntil target (msg.benv.state.getStor target)) ∧
+    (AcceptedBoolExecution ex 1 ↔
+      PausedAt pausedUntil msg.benv.state target msg.benv.stat.time) ∧
+    (¬ PausedAt pausedUntil msg.benv.state target msg.benv.stat.time →
+      AcceptedBoolExecution ex 0 ∨ BoolQueryExecutionFailure ex)
 
   /-- No retained successful SSTORE anywhere in either exact target
   invocation's frame closure targets a named CircuitBreaker cell. -/
-  circuitBreaker_noninterference : ∀ {sevm : Sevm} {pre : Devm}
-      {ex : Execution} (run : Exec 0 sevm pre ex),
-    ExactPinnedFrameInbound circuitBreaker target pauseCalldata queryCalldata
-      sevm →
-    FrameUsesProgram sevm program →
+  circuitBreaker_noninterference : ∀ {msg : Msg} {xl : Xlot}
+      {ex : TargetMessageResult},
+    ExactPinnedInbound circuitBreaker target pauseCalldata queryCalldata msg →
+    MessageExecutesProgram msg xl program →
+    ProcessMessage msg xl ex →
     ∀ key ∈ circuitBreakerCells,
-      Exec.NoRetainedWriteTo run circuitBreaker key
+      TargetInvocationNoRetainedWriteTo xl circuitBreaker key
 
   /-- Future target goals choose a protected selector surface and prove that
   every such account call reverts while the entry projection is paused. -/
-  protectedSurface_reverts : ∀ {sevm : Sevm} {pre : Devm}
-      {ex : Execution} {selected : B256},
-    sevm.currentTarget = target →
-    sevm.target = some target →
-    sevm.codeAddress = some target →
-    FrameUsesProgram sevm program →
-    FrameHasSelector sevm selected →
+  protectedSurface_reverts : ∀ {msg : Msg} {xl : Xlot}
+      {ex : TargetMessageResult} {selected : B256},
+    msg.currentTarget = target →
+    msg.target = some target →
+    msg.codeAddress = some target →
+    MessageExecutesProgram msg xl program →
+    HasSelector msg selected →
     selected ∈ protectedSurface →
-    PausedAt pausedUntil pre target sevm.benvStat.time →
-    Exec 0 sevm pre ex →
-    ∃ child, ex = .error (.revert, child)
+    PausedAt pausedUntil msg.benv.state target msg.benv.stat.time →
+    ProcessMessage msg xl ex →
+    ∃ child, ex = .ok child ∧ child.error = some .revert
 
 end Blanc
