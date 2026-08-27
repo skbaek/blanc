@@ -391,11 +391,16 @@ regenerate the surfaces rather than editing either generated file by hand.
 
 ## Proof-performance conventions: defeq, wide-record updates, state towers, and walk term size
 
-Four elaboration-cost bombs have been measured in this repository — three
-definitional-equality bombs and one term-size bomb in forward walks — and the
-conventions below are the working rules for avoiding them. They apply to all
-Blanc proof work, whatever the contract and whatever agent or editor is
+Several elaboration-cost bombs have been measured in this repository,
+including definitional-equality bombs and term-size growth in forward walks.
+The conventions below are the working rules for avoiding them. They apply to
+all Blanc proof work, whatever the contract and whatever agent or editor is
 driving it.
+
+Before commissioning a new whole-tree offender census, start from the
+[post-cure offender catalogue](docs/offender-catalogue.md). It records the
+committed-budget comparison and current ceiling population, the terminal scope
+of prior routes, and the protocol for freezing a new independent census.
 
 **The predictor.** Call a definition a *wide-recursion state constructor* when
 its right-hand side uses its own state/accumulator argument more than once
@@ -585,6 +590,10 @@ per-genre depth budgets and heartbeat values tuned per declaration both
 contained deletable scopes. Of 415 launch scopes, 352 deleted, nine ambient
 scopes narrowed to 40 measured command owners, 16 right-sized, and 38 were
 retained after a named failure; zero ambient scopes remain.
+
+The linked catalogue joins that historical disposition evidence to all 94
+current scope identities and distinguishes exact adjacent boundaries from the
+weaker retained-justified and reopen-triggered cases.
 
 New ceilings are never ambient, file-wide, namespace-wide, unlimited,
 unexplained, or “just in case.” Use the smallest measured finite value on the

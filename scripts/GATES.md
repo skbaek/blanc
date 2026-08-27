@@ -60,6 +60,12 @@ Choose the gate by what you changed, cheapest falsifier first:
 | a fixture, a fixture generator, or a borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
 | the pinned Jaune revision (`lakefile.lean` + `lake-manifest.json`) | `lake build` | the **full set**, in the order below |
 
+A deliberate whole-tree offender census is different from routine regression
+checking. Follow the [offender catalogue](../docs/offender-catalogue.md): freeze
+a new population and evidence identity first. Use `scripts/check-elab.sh --full`
+without rebasing, inventory proof debt separately, and run Jaune by the
+sequential protocol in Jaune's own gate catalogue.
+
 **No gate here takes `--jobs`.** Blanc's gates run from sub-second to roughly
 nine minutes in the cache-cold/full case and need no parallel mode, so the
 `--jobs` contract in Jaune's catalogue does not apply to this repository.
