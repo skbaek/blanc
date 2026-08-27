@@ -123,6 +123,8 @@ CONTRACTS = {
                              "LidoCircuitBreakerPublicPauseControl",
                              "LidoCircuitBreakerPinnedTarget",
                              "LidoCircuitBreakerPinnedTargetControl",
+                             "LidoCircuitBreakerPinnedTargetComposition",
+                             "LidoCircuitBreakerPinnedTargetCompositionControl",
                              "LidoCircuitBreakerCode",
                              "LidoCircuitBreakerDeploy",
                              "LidoCircuitBreakerDeploymentLayout",

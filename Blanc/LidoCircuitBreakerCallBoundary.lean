@@ -222,6 +222,56 @@ def PauseStatBoundary (sevm : Sevm) (target : Adr)
     statPost.stack =
       (if child.error.isSome then 0 else 1) :: parent.stack
 
+/-- The actual spawned CALL occurrence retained by the boundary constructor.
+This is the execution-shaped sibling of `PauseCallBoundary`: it exposes the
+same message, slot and settled child already present in that proof together
+with the exact parent spawn. -/
+def PauseCallExecutionWitness (sevm : Sevm) (target : Adr)
+    (duration : B256) (callPre callPost : Devm) : Prop :=
+  ∃ (msg : Msg) (xl : Xlot) (child : Devm)
+      (pc nextPc : Nat) (resume : Resume),
+    msg.currentTarget = target ∧
+    msg.target = some target ∧
+    msg.codeAddress = some target ∧
+    msg.caller = sevm.currentTarget ∧
+    msg.value = 0 ∧
+    msg.shouldTransferValue = true ∧
+    msg.isStatic = false ∧
+    msg.data = pauseForCalldata duration ∧
+    msg.benv.stat.time = sevm.benvStat.time ∧
+    msg.benv.stat.rules = sevm.benvStat.rules ∧
+    Ninst.step ⟨pc, sevm, callPre⟩ Ninst.call =
+      .spawn (Jaune.Frame.ofCall msg) resume nextPc ∧
+    Xlot.Filled xl ∧
+    ProcessMessage msg xl (.ok child) ∧
+    Ninst.StepRun pc sevm callPre Ninst.call xl (.ok callPost) ∧
+    callPost.state = child.state ∧
+    callPost.returnData = child.output
+
+/-- The actual spawned STATICCALL occurrence retained by the boundary
+constructor. -/
+def PauseStatExecutionWitness (sevm : Sevm) (target : Adr)
+    (statPre statPost : Devm) : Prop :=
+  ∃ (msg : Msg) (xl : Xlot) (child : Devm)
+      (pc nextPc : Nat) (resume : Resume),
+    msg.currentTarget = target ∧
+    msg.target = some target ∧
+    msg.codeAddress = some target ∧
+    msg.caller = sevm.currentTarget ∧
+    msg.value = 0 ∧
+    msg.shouldTransferValue = true ∧
+    msg.isStatic = true ∧
+    msg.data = isPausedCalldata ∧
+    msg.benv.stat.time = sevm.benvStat.time ∧
+    msg.benv.stat.rules = sevm.benvStat.rules ∧
+    Ninst.step ⟨pc, sevm, statPre⟩ Ninst.statcall =
+      .spawn (Jaune.Frame.ofCall msg) resume nextPc ∧
+    Xlot.Filled xl ∧
+    ProcessMessage msg xl (.ok child) ∧
+    Ninst.StepRun pc sevm statPre Ninst.statcall xl (.ok statPost) ∧
+    statPost.state = child.state ∧
+    statPost.returnData = child.output
+
 /-! ## The universality hinge
 
 `PauseStatBoundary` is stated at a state that sits **downstream of arbitrary
@@ -419,7 +469,8 @@ before it ever reaches `pauseAfterSet`, and `tstore` carries Jaune's
 upstream fact is the same `sevm.isStatic` this premise names.  Discharging it
 here rather than carrying it would mean composing the whole `pause`-to-CALL
 prefix into this statement, which this cut deliberately does not do. -/
-theorem pauseCall_boundary {sevm : Sevm} {callPre callPost : Devm}
+theorem pauseCall_boundary_with_execution
+    {sevm : Sevm} {callPre callPost : Devm}
     {gasWord duration : B256} {target : Adr} {rest : List B256}
     (h_stk : callPre.stack =
       gasWord :: target.toB256 :: 0 :: 0x11c :: 36 :: 0 :: 0 :: rest)
@@ -427,7 +478,8 @@ theorem pauseCall_boundary {sevm : Sevm} {callPre callPost : Devm}
     (h_depth : sevm.depth ≠ 0)
     (h_dynamic : sevm.isStatic = false)
     (run : Ninst.RunCompiled sevm callPre (.exec .call) callPost) :
-    PauseCallBoundary sevm target duration callPre callPost := by
+    PauseCallBoundary sevm target duration callPre callPost ∧
+      PauseCallExecutionWitness sevm target duration callPre callPost := by
   obtain ⟨xl, hfill, hrun⟩ := run
   have hx := hrun 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
@@ -521,25 +573,41 @@ theorem pauseCall_boundary {sevm : Sevm} {callPre callPost : Devm}
     rw [hmsgeq] at hframe
     have hres' : (Resume.call parent 0 0).run (.ok child) = .ok callPost :=
       hres.symm
-    refine ⟨parent, child,
-      callMsg sevm parent mcs 0 sevm.currentTarget target target true false
-        (pauseForCalldata duration) code dp,
-      xl, dp, code, gasWord, mcs,
-      by rw [hpstk]; exact h_stk, h_window, hpmem, hpstate, hpca, hptra, hplogs,
-      hprd, h_depth, hdisj, rfl, rfl, rfl, rfl, rfl, ?_, rfl, hptra, hfill,
-      hframe, hrun, hres', Resume.call_memory hres',
-      Resume.call_returnData hres', Resume.call_stack_flag hres'⟩
-    -- The one open conjunct.  `callMsg` sets `isStatic := isStaticcall ||
-    -- sevm.isStatic` and a `CALL` passes `isStaticcall = false`, so this goal
-    -- is definitionally `sevm.isStatic = false`: a property of the *caller's*
-    -- frame, not of the message the CircuitBreaker builds and not of the
-    -- callee.  A zero-value `CALL` is legal inside a static context — the
-    -- static-context assertion in `Xinst.step`'s `.call` arm is discharged by
-    -- `value = 0` — so nothing at this edge decides it.  It is the honest
-    -- enclosing-frame premise `h_dynamic`; see the theorem's docstring for why
-    -- a real pause always satisfies it.
+    let msg := callMsg sevm parent mcs 0 sevm.currentTarget target target
+      true false (pauseForCalldata duration) code dp
+    have hspawn : Ninst.step ⟨0, sevm, callPre⟩ Ninst.call =
+        .spawn (Jaune.Frame.ofCall msg) (.call parent 0 0) 1 := by
+      simp only [Ninst.call, Ninst.step_exec]
+      change XStep.toStep 1 (Xinst.step sevm callPre .call) = _
+      rw [hstep, hmsgeq]
+      rfl
+    have boundary : PauseCallBoundary sevm target duration callPre callPost := by
+      refine ⟨parent, child, msg, xl, dp, code, gasWord, mcs,
+        by rw [hpstk]; exact h_stk, h_window, hpmem, hpstate, hpca, hptra,
+        hplogs, hprd, h_depth, hdisj, rfl, rfl, rfl, rfl, rfl, ?_, rfl,
+        hptra, hfill, hframe, hrun, hres', Resume.call_memory hres',
+        Resume.call_returnData hres', Resume.call_stack_flag hres'⟩
+      -- `callMsg` leaves the caller's frame-static bit in the CALL message.
+      show sevm.isStatic = false
+      exact h_dynamic
+    refine ⟨boundary, msg, xl, child, 0, 1, .call parent 0 0,
+      rfl, rfl, rfl, rfl, rfl, rfl, ?_, rfl, rfl, rfl, hspawn, hfill, hframe,
+      hrun 0, Resume.call_state hres', Resume.call_returnData hres'⟩
     show sevm.isStatic = false
     exact h_dynamic
+
+/-- The established CALL boundary, retained as the compatibility projection
+of the execution-shaped constructor. -/
+theorem pauseCall_boundary {sevm : Sevm} {callPre callPost : Devm}
+    {gasWord duration : B256} {target : Adr} {rest : List B256}
+    (h_stk : callPre.stack =
+      gasWord :: target.toB256 :: 0 :: 0x11c :: 36 :: 0 :: 0 :: rest)
+    (h_window : (callPre.memory.read 0x11c 36).1 = pauseForCalldata duration)
+    (h_depth : sevm.depth ≠ 0)
+    (h_dynamic : sevm.isStatic = false)
+    (run : Ninst.RunCompiled sevm callPre (.exec .call) callPost) :
+    PauseCallBoundary sevm target duration callPre callPost :=
+  (pauseCall_boundary_with_execution h_stk h_window h_depth h_dynamic run).1
 
 /-! ## The STATICCALL edge, inverted
 
@@ -650,14 +718,16 @@ As on the CALL edge, the operand is `target.toB256` rather than an arbitrary
 word because `PauseStatBoundary` pins the canonical encoding of its `Adr`
 argument; `B256.toAdr` truncates, so at a stack word with high bits set the
 relation is false rather than merely unproved. -/
-theorem pauseStat_boundary {sevm : Sevm} {statPre statPost : Devm}
+theorem pauseStat_boundary_with_execution
+    {sevm : Sevm} {statPre statPost : Devm}
     {gasWord : B256} {target : Adr} {rest : List B256}
     (h_stk : statPre.stack =
       gasWord :: target.toB256 :: 0x11c :: 4 :: 0 :: 32 :: rest)
     (h_window : (statPre.memory.read 0x11c 4).1 = isPausedCalldata)
     (h_depth : sevm.depth ≠ 0)
     (run : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
-    PauseStatBoundary sevm target statPre statPost := by
+    PauseStatBoundary sevm target statPre statPost ∧
+      PauseStatExecutionWitness sevm target statPre statPost := by
   obtain ⟨xl, hfill, hrun⟩ := run
   have hx := hrun 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
@@ -752,14 +822,35 @@ theorem pauseStat_boundary {sevm : Sevm} {statPre statPost : Devm}
     rw [hmsgeq] at hframe
     have hres' : (Resume.call parent 0 32).run (.ok child) = .ok statPost :=
       hres.symm
-    exact ⟨parent, child,
-      callMsg sevm parent mcs 0 sevm.currentTarget target target true true
-        isPausedCalldata code dp,
-      xl, dp, code, gasWord, mcs,
-      by rw [hpstk]; exact h_stk, h_window, hpmem, hpstate, hpca, hptra, hplogs,
-      hprd, h_depth, hdisj, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hptra, hfill,
-      hframe, hrun, hres', Resume.call_memory hres',
-      Resume.call_returnData hres', Resume.call_stack_flag hres'⟩
+    let msg := callMsg sevm parent mcs 0 sevm.currentTarget target target
+      true true isPausedCalldata code dp
+    have hspawn : Ninst.step ⟨0, sevm, statPre⟩ Ninst.statcall =
+        .spawn (Jaune.Frame.ofCall msg) (.call parent 0 32) 1 := by
+      simp only [Ninst.statcall, Ninst.step_exec]
+      change XStep.toStep 1 (Xinst.step sevm statPre .statcall) = _
+      rw [hstep, hmsgeq]
+      rfl
+    have boundary : PauseStatBoundary sevm target statPre statPost := by
+      exact ⟨parent, child, msg, xl, dp, code, gasWord, mcs,
+        by rw [hpstk]; exact h_stk, h_window, hpmem, hpstate, hpca, hptra,
+        hplogs, hprd, h_depth, hdisj, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+        hptra, hfill, hframe, hrun, hres', Resume.call_memory hres',
+        Resume.call_returnData hres', Resume.call_stack_flag hres'⟩
+    exact ⟨boundary, msg, xl, child, 0, 1, .call parent 0 32,
+      rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hspawn, hfill, hframe,
+      hrun 0, Resume.call_state hres', Resume.call_returnData hres'⟩
+
+/-- The established STATICCALL boundary, retained as the compatibility
+projection of the execution-shaped constructor. -/
+theorem pauseStat_boundary {sevm : Sevm} {statPre statPost : Devm}
+    {gasWord : B256} {target : Adr} {rest : List B256}
+    (h_stk : statPre.stack =
+      gasWord :: target.toB256 :: 0x11c :: 4 :: 0 :: 32 :: rest)
+    (h_window : (statPre.memory.read 0x11c 4).1 = isPausedCalldata)
+    (h_depth : sevm.depth ≠ 0)
+    (run : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
+    PauseStatBoundary sevm target statPre statPost :=
+  (pauseStat_boundary_with_execution h_stk h_window h_depth run).1
 
 /-! ## The pause's post-CALL branch
 
