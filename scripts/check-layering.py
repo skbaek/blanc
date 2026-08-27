@@ -52,7 +52,7 @@ import sys
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "Compiled", "DeploymentCompiled", "DeploymentMessage", "Forward", "Reverts", "ForwardCall",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
-          "ExecutionOccurrence", "CycleWriteFree", "TransientSettlement",
+          "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
           "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
 
 CONTRACTS = {

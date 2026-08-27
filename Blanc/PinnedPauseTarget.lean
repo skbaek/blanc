@@ -1,4 +1,4 @@
-import Blanc.ExecutionOccurrence
+import Blanc.ExecutionNoninterference
 
 /-!
 # Account-level protocol for a pinned pause target

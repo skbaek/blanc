@@ -4,6 +4,7 @@ import Blanc.Ladder
 import Blanc.BalanceAlgebra
 import Blanc.ExecutionSettlement
 import Blanc.ExecutionOccurrence
+import Blanc.ExecutionNoninterference
 import Blanc.CycleWriteFree
 import Blanc.TransientSettlement
 import Blanc.TransientInvariance
