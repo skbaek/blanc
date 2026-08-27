@@ -125,7 +125,17 @@ theorem beaconSlot_ne_adminSlot : beaconSlot ≠ adminSlot :=
 The spike's implementation contract writes small, explicitly enumerated slots.
 This is that region, written out rather than described. -/
 
-def spikeImplRegion : List B256 := [0, 1, 2, 3]
+/-- The storage word the spike's implementation programs actually write.
+
+Mirrors `implSlot` in `scripts/ProxySpikeExec.lean` and
+`scripts/ProxySpikeProxy.lean` character for character; `scripts/` files cannot
+import one another, so the value is restated rather than shared.  An earlier
+draft of this file separated the three ERC-1967 slots from a region of
+`[0, 1, 2, 3]` that the spike pair does not in fact use — a true statement
+about the wrong region.  This name exists so that cannot recur. -/
+def spikeImplSlot : B256 := 7
+
+def spikeImplRegion : List B256 := [0, 1, 2, 3, spikeImplSlot]
 
 /-! Membership in `spikeImplRegion` is decidable — `B256` derives
 `DecidableEq` — so one `∉` theorem per slot discharges all four combinations
@@ -153,6 +163,14 @@ theorem ne_of_mem_spikeImplRegion {k : B256} (h : k ∈ spikeImplRegion) :
   ⟨fun e => implementationSlot_notMem_spikeImplRegion (e ▸ h),
    fun e => adminSlot_notMem_spikeImplRegion (e ▸ h),
    fun e => beaconSlot_notMem_spikeImplRegion (e ▸ h)⟩
+
+/-- The three slots are distinct from the word the spike implementation writes.
+This is the separation row P5 actually asks for; the region form above
+generalises it. -/
+theorem slots_ne_spikeImplSlot :
+    implementationSlot ≠ spikeImplSlot ∧ adminSlot ≠ spikeImplSlot ∧
+      beaconSlot ≠ spikeImplSlot :=
+  ne_of_mem_spikeImplRegion (by decide)
 
 /-! ## Nonzero
 
@@ -187,6 +205,7 @@ Every theorem stated above, in order.  A subset of
 #print axioms adminSlot_notMem_spikeImplRegion
 #print axioms beaconSlot_notMem_spikeImplRegion
 #print axioms ne_of_mem_spikeImplRegion
+#print axioms slots_ne_spikeImplSlot
 #print axioms implementationSlot_ne_zero
 #print axioms adminSlot_ne_zero
 #print axioms beaconSlot_ne_zero

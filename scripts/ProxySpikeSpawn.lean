@@ -153,6 +153,47 @@ lemma Xinst.step_delcall_spawn {sevm : Sevm} {devm : Devm}
     genericCall.step_spawn h_depth]
   rfl
 
+/-- **The crossing that a real proxy actually uses.**
+
+`Ninst.runCompiled_delcall_doneFrame` above covers the arm where the frame
+settles without entering — a precompile code address, or an entry failure.
+The arm a forwarding proxy takes is the other one: the implementation's frame
+*enters* and runs. This is its mirror of `Blanc.Ninst.runCompiled_call_zero_value`.
+
+Count the premises about the callee: there are none. The child's derivation is
+the total term `exec cevm`, supplied by `Xlot.filled_exec`, exactly as for
+`CALL`. `h_enter` is a fact about the message the *parent* built. -/
+lemma Ninst.runCompiled_delcall {sevm : Sevm} {devm : Devm}
+    {gw cw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat} {cevm : Evm} {devm' : Devm}
+    (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
+    (h_enter : (Frame.ofCall (delcallSpawnMsg sevm
+      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs dadr iiw.toNat isw.toNat code dp)).enter = .run cevm)
+    (h_res : Resume.run
+      (.call (callSpawnParent d1 (mcc + ext)
+        iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat)
+      ((Frame.ofCall (delcallSpawnMsg sevm
+        (callSpawnParent d1 (mcc + ext)
+          iiw.toNat isw.toNat oiw.toNat osw.toNat)
+        mcs dadr iiw.toNat isw.toNat code dp)).settle (exec cevm))
+        = .ok devm') :
+    Ninst.RunCompiled sevm devm (.exec .delcall) devm' :=
+  Ninst.runCompiled_exec_run
+    (Xinst.step_delcall_spawn h_stk h_ext h_del h_acc h_split h_gas h_depth)
+    h_enter h_res
+
 /-! ## The ownership conclusions
 
 The mirror of `Blanc.directStatcall_spawn`. This is the statement the spike
@@ -335,6 +376,7 @@ theorem delcall_child_observes_outer_caller_and_value
 #print axioms Xinst.step_delcall_spawn
 #print axioms directDelcall_spawn
 #print axioms Ninst.runCompiled_delcall_doneFrame
+#print axioms Ninst.runCompiled_delcall
 #print axioms control_delcall_separates_call_fuses
 #print axioms control_delcall_inherits_caller_and_value
 #print axioms delcall_child_observes_outer_caller_and_value

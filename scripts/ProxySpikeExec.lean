@@ -1149,4 +1149,38 @@ theorem fresh_delcall_revert_restores_proxy_storage (G : Nat) :
 #print axioms fresh_delcall_and_call_write_different_transient_accounts
 #print axioms fresh_delcall_revert_restores_proxy_storage
 
+
+/-! ### The private helpers, audited too
+
+An earlier draft printed axioms only for the public theorems.  A private lemma
+reachable from nothing would have been invisible to that audit, so every
+declaration this file states is listed. -/
+
+#print axioms retPost_world
+#print axioms getStorVal_congr
+#print axioms retPost_getStorVal
+#print axioms retPost_transientStorage
+#print axioms getStorVal_setStorVal_self
+#print axioms getStorVal_setStorVal_ne
+#print axioms sstoreBase_getStorVal
+#print axioms sstoreBase_transientStorage
+#print axioms sstoreBase_logs
+#print axioms sstoreBase_error
+#print axioms implAdr_key_ne_proxy
+#print axioms proxyAdr_key_ne_impl
+#print axioms tra_getD_set_self
+#print axioms tra_get_set_self
+#print axioms tra_get_set_same_address
+#print axioms tra_get_set_other_address
+#print axioms getTransVal_setTransVal_self
+#print axioms getTransVal_setTransVal_ne
+#print axioms getTransVal_setMach
+#print axioms setTransVal_state
+#print axioms setTransVal_logs
+#print axioms setTransVal_error
+#print axioms retPost_getTransVal
+#print axioms retPost_state
+#print axioms runCompiled_tstore_of
+#print axioms withOutput_setMach_getStorVal
+
 end Blanc.ProxySpikeExec
