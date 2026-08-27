@@ -603,6 +603,15 @@ def Exec.StorageWrite.matches
       write.owner = owner ∧ write.key = key := by
   simp [Exec.StorageWrite.matches]
 
+/-- No settlement-retained successful SSTORE in the selected invocation's
+frame closure targets one exact persistent-storage cell.  The owner projection
+keeps this semantic under ordinary CALL, proxy, and callback compositions. -/
+def Exec.NoRetainedWriteTo
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (owner : Adr) (key : B256) : Prop :=
+  ∀ write ∈ Exec.retainedStorageWrites run,
+    write.matches owner key ≠ true
+
 /-- Replay the selected storage word through chronological successful writes. -/
 def Exec.StorageWrite.replayCell
     (owner : Adr) (key : B256) (initial : B256) :
@@ -1534,6 +1543,19 @@ theorem Exec.storageReplay_committedPost
           Exec.retainedNodesOfCommits,
           Exec.Deriv.successfulSstore?]
 
+/-- Absence of a retained successful write to one cell preserves that cell in
+every committing outcome of the invocation frame closure. -/
+theorem Exec.committedCell_eq_of_noRetainedWriteTo
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    (owner : Adr) (key : B256)
+    (noWrite : Exec.NoRetainedWriteTo run owner key) :
+    (Devm.getStor (Execution.committedPost out committed) owner).get key =
+      (Devm.getStor pre owner).get key := by
+  rw [Exec.storageReplay_committedPost run committed owner key]
+  exact Exec.StorageWrite.foldlCell_eq_of_none _ noWrite
+
 /-- Any committed persistent-storage change has an exact last retained
 successful SSTORE witness at the same owner and raw key, recording the final
 word.  Later no-op writes are included and therefore supersede earlier writes. -/
@@ -1622,6 +1644,20 @@ inductive Exec.Deriv.ParentPrefix : Exec.Deriv → Exec.Deriv → Prop
       (head : Exec.Deriv.ParentStep next root)
       (rest : Exec.Deriv.ParentPrefix next tail) :
       Exec.Deriv.ParentPrefix root tail
+
+/-- Same-frame continuation never changes the static execution environment. -/
+theorem Exec.Deriv.ParentStep.sevm_eq
+    {root next : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next root) : next.sevm = root.sevm := by
+  cases edge <;> rfl
+
+/-- Every endpoint of a same-frame prefix has the root's static environment. -/
+theorem Exec.Deriv.ParentPrefix.sevm_eq
+    {root tail : Exec.Deriv}
+    (chain : Exec.Deriv.ParentPrefix root tail) : tail.sevm = root.sevm := by
+  induction chain with
+  | refl => rfl
+  | step head rest ih => exact ih.trans head.sevm_eq
 
 /-- Append one same-frame continuation edge. -/
 theorem Exec.Deriv.ParentPrefix.snoc
@@ -1904,6 +1940,33 @@ theorem Exec.Deriv.parentPrefix_of_mem_rawNodes_of_rawFrameDescendants_eq_nil
       reached with ⟨root, member, hprefix⟩
   rw [Exec.rawFrameRoots, childless, List.mem_singleton] at member
   exact member ▸ hprefix
+
+/-- A direct invocation that enters no child frame cannot write somebody
+else's storage.  This is a sufficient route to the semantic predicate above,
+not its converse: an invocation may enter benign children and still satisfy
+`NoRetainedWriteTo`. -/
+theorem Exec.noRetainedWriteTo_of_no_execOccurrence
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (owner : Adr) (key : B256)
+    (differentOwner : sevm.currentTarget ≠ owner)
+    (childless : ∀ occurrence : Exec.NinstOccurrence
+        (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
+      ∀ x : Xinst, occurrence.instruction ≠ .exec x) :
+    Exec.NoRetainedWriteTo run owner key := by
+  intro event member hmatch
+  rcases Exec.exists_successfulSstore_of_mem_retainedStorageWrites
+      (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))
+      (event := event) member with ⟨write, -, writeEq⟩
+  subst event
+  have noDescendants :=
+    Exec.rawFrameDescendants_eq_nil_of_no_execOccurrence run childless
+  have sameFrame :=
+    Exec.Deriv.parentPrefix_of_mem_rawNodes_of_rawFrameDescendants_eq_nil
+      noDescendants write.occurrence.reached
+  have ownerEq := (Exec.StorageWrite.matches_eq_true.mp hmatch).1
+  change write.occurrence.node.sevm.currentTarget = owner at ownerEq
+  rw [sameFrame.sevm_eq] at ownerEq
+  exact differentOwner ownerEq
 
 /-- Under a committing root, retained-node membership is exactly membership in
 the root frame's same-frame prefix or in one of its landed descendant frames. -/
@@ -3018,6 +3081,48 @@ theorem Exec.Deriv.nonPush_sourceSite
   rcases Exec.Deriv.SourceCursor.mainToward invocation sameFrame instructionAt with
     ⟨mainCursor, compilerPrefix, reached⟩
   exact mainCursor.sourceSite invocation.2.2.2 reached nonPush instructionAt
+
+/-- A source-level absence of executable instructions is a named sufficient
+route from exact compiled invocation identity to semantic storage
+noninterference.  This theorem is intentionally one-way: source programs with
+benign calls can establish `NoRetainedWriteTo` by other means. -/
+theorem Exec.noRetainedWriteTo_of_sourceSites_no_exec
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) {program : Prog}
+    {storageTarget codeAddress owner : Adr} (key : B256)
+    (invocation :
+      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+        program storageTarget codeAddress)
+    (differentOwner : storageTarget ≠ owner)
+    (sourceNoExec : ∀ site ∈ program.sourceSites, ∀ x : Xinst,
+      site.instruction ≠ .exec x) :
+    Exec.NoRetainedWriteTo run owner key := by
+  let root : Exec.Deriv := ⟨pc, sevm, pre, out, run⟩
+  have noSameFrame : ∀ node : Exec.Deriv,
+      Exec.Deriv.ParentPrefix root node →
+      ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x) := by
+    intro node sameFrame x instructionAt
+    rcases root.nonPush_sourceSite invocation sameFrame (by trivial)
+        instructionAt with ⟨site, member, -, instructionEq⟩
+    exact sourceNoExec site member x instructionEq
+  have noDescendants : Exec.rawFrameDescendants run = [] :=
+    Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt run noSameFrame
+  have childless : ∀ occurrence : Exec.NinstOccurrence root,
+      ∀ x : Xinst, occurrence.instruction ≠ .exec x := by
+    intro occurrence x instructionEq
+    have sameFrame :=
+      Exec.Deriv.parentPrefix_of_mem_rawNodes_of_rawFrameDescendants_eq_nil
+        noDescendants occurrence.reached
+    have nonPush : NinstNonPush occurrence.instruction := by
+      rw [instructionEq]
+      trivial
+    rcases root.nonPush_sourceSite invocation sameFrame nonPush
+        occurrence.decoded with ⟨site, member, -, sourceEq⟩
+    exact sourceNoExec site member x (sourceEq.trans instructionEq)
+  apply Exec.noRetainedWriteTo_of_no_execOccurrence run owner key
+  · rw [invocation.2.1]
+    exact differentOwner
+  · exact childless
 
 /-- Exact-invocation completeness for every actually reached same-frame
 SSTORE, with no outcome or commitment premise. -/
