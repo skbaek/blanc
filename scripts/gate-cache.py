@@ -21,7 +21,7 @@ semantically consumes them (`--base main`, an expiring exception).
 WHAT MAKES IT SOUND
 -------------------
 
-*Lean closure is delegated, not duplicated.*  Blanc has 149 modules and no
+*Lean closure is delegated, not duplicated.*  Blanc has 150 modules and no
 hand-maintained import graph could be trusted to stay right.  After `lake
 build` brings a target current, Lake's own trace records a `depHash` covering
 that module's source, the Lean version and options, and every transitive

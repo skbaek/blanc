@@ -999,32 +999,35 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
 
 /-! ## The two expiry paths -/
 
+private def sourceRests (n : Nat) : List Prog.SourceStep :=
+  List.replicate n .rest
+
 /-- Structural source position of the count-zero arm's expiry `SSTORE`:
 inventory index `19`. -/
 def pauseLastExpiryPath : Prog.SourcePath :=
   ⟨pauseAfterSetSlot,
-    List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 18 .rest ++ [.branchLeft] ++
-      List.replicate 12 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 2 .rest ++ [.branchRight] ++
-      List.replicate 16 .rest ++ [.branchRight] ++
-      List.replicate 7 .rest⟩
+    sourceRests 5 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 18 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 12 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 2 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 16 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 7⟩
 
 /-- Structural source position of the checked arm's expiry `SSTORE`:
 inventory index `18`. -/
 def pauseRetainedExpiryPath : Prog.SourcePath :=
   ⟨pauseAfterSetSlot,
-    List.replicate 5 .rest ++ [.branchLeft] ++
-      List.replicate 18 .rest ++ [.branchLeft] ++
-      List.replicate 12 .rest ++ [.branchLeft] ++
-      List.replicate 3 .rest ++ [.branchLeft] ++
-      List.replicate 4 .rest ++ [.branchLeft] ++
-      List.replicate 2 .rest ++ [.branchRight] ++
-      List.replicate 16 .rest ++ [.branchLeft] ++
-      List.replicate 8 .rest ++ [.branchLeft] ++
-      List.replicate 6 .rest⟩
+    sourceRests 5 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 18 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 12 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 2 ++ [Prog.SourceStep.branchRight] ++
+      sourceRests 16 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 8 ++ [Prog.SourceStep.branchLeft] ++
+      sourceRests 6⟩
 
 /-!
 Index pairing, verified by `#eval` against
@@ -1129,13 +1132,13 @@ theorem pauseSuccessEvent_storInv :
 /-- The source position of `pauseSuccess`'s count branch, from
 `pauseAfterSet`'s root. -/
 def pauseCountBranchSteps : List Prog.SourceStep :=
-  List.replicate 5 .rest ++ [.branchLeft] ++
-    List.replicate 18 .rest ++ [.branchLeft] ++
-    List.replicate 12 .rest ++ [.branchLeft] ++
-    List.replicate 3 .rest ++ [.branchLeft] ++
-    List.replicate 4 .rest ++ [.branchLeft] ++
-    List.replicate 2 .rest ++ [.branchRight] ++
-    List.replicate 16 .rest
+  sourceRests 5 ++ [Prog.SourceStep.branchLeft] ++
+    sourceRests 18 ++ [Prog.SourceStep.branchLeft] ++
+    sourceRests 12 ++ [Prog.SourceStep.branchLeft] ++
+    sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++
+    sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
+    sourceRests 2 ++ [Prog.SourceStep.branchRight] ++
+    sourceRests 16
 
 /-- The count branch's word from a storage fact about the state entering the
 count test: `iszero` of the caller's count cell.  This is the lemma a witness

@@ -7,7 +7,7 @@
     "ceiling-debt-ambient": 0,
     "ceiling-debt-lido-core": 53,
     "ceiling-debt-pause": 11,
-    "ceiling-debt-pre-lido": 29,
+    "ceiling-debt-pre-lido": 27,
     "ceiling-debt-registration": 3,
     "enum-loop-memory-cursor-rfl": 0,
     "registration-inline-staging": 0,
@@ -17,6 +17,6 @@
     "weth10-deploy-inline-size-decision": 0,
     "weth10-entry-shapes-rfl": 0
   },
-  "total": 98,
-  "digest": "38d50025a84525a99bace3cc8643db888e5fc1b35fbf63264f6b2e298259063e"
+  "total": 96,
+  "digest": "38a65e7ede1b4621593cbb0115cd55f9812da3e3d19a2868ae0ba5d467c27878"
 }
