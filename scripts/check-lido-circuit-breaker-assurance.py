@@ -205,7 +205,7 @@ EXPECTED_TOTAL_ROWS = 69
 
 # Rows whose Declarations field is the gate-owned literal. Pinned so the
 # escape hatch cannot widen quietly: convert one normal row and this fails.
-EXPECTED_GATE_OWNED_ROWS = 9
+EXPECTED_GATE_OWNED_ROWS = 8
 
 # Rows whose Gate field names more than one gate.
 #

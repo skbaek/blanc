@@ -2084,4 +2084,43 @@ theorem success_commit_arbitrary_target_control
           other, output⟩⟩
     · exact ⟨successPre, hsuccess, hni, panic.1, Or.inr panic⟩
 
+/-- Role determinacy within each deconflated pair, which is the property
+`runtimeWriteAuthority_of_rawFrameRoot`'s "carries a permitted invocation role"
+language rests on: if the role at a write were not determined, "the role" would
+name nothing and a role-swap mutant would typecheck. That was a real defect --
+the four constructors once had literally identical premises, so a witness for
+either member of a pair repacked into the other -- and the two exclusivity
+results are the artifact of its fix.
+
+This composes them into a consequence neither states alone, and it is the
+re-pin-proof half of their wiring. A header pin catches a narrowing only until
+someone re-takes the digest in good faith; narrowing either exclusivity theorem,
+by adding a premise or restricting it to particular deployment parameters, stops
+the applications below elaborating, and a build failure is not a recorded string
+a re-pin can reach.
+
+Non-vacuous by the attainment family: `attainable_setPauserAssignment_adminRegistry`
+and `attainable_setPauserAssignment_pauseRegistry` exhibit actual authorities at
+both leading roles. -/
+theorem deconflated_role_determinacy_control
+    {dp : DeployParams} {frameRoot write : Exec.Deriv}
+    {r r' : InvocationRole}
+    (hr : RuntimeWriteAuthority dp frameRoot write r)
+    (hr' : RuntimeWriteAuthority dp frameRoot write r') :
+    ((r = .adminRegistry ∨ r = .adminExpiry) →
+        (r' = .adminRegistry ∨ r' = .adminExpiry) → r = r') ∧
+      ((r = .pauseRegistry ∨ r = .pauseExpiry) →
+        (r' = .pauseRegistry ∨ r' = .pauseExpiry) → r = r') := by
+  constructor
+  · rintro (rfl | rfl) (rfl | rfl)
+    · rfl
+    · exact absurd hr' (RuntimeWriteAuthority.adminRegistry_not_adminExpiry hr)
+    · exact absurd hr (RuntimeWriteAuthority.adminRegistry_not_adminExpiry hr')
+    · rfl
+  · rintro (rfl | rfl) (rfl | rfl)
+    · rfl
+    · exact absurd hr' (RuntimeWriteAuthority.pauseRegistry_not_pauseExpiry hr)
+    · exact absurd hr (RuntimeWriteAuthority.pauseRegistry_not_pauseExpiry hr')
+    · rfl
+
 end Blanc.LidoCircuitBreaker.AccessControls

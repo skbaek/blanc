@@ -517,15 +517,15 @@ into a neighbour's.
 - **Non-claims:** attainability is a **raw-occurrence** predicate. The `.pauseRegistry` witnesses live in worlds that **revert**, and none of them may be paraphrased as "a pause can persist a Registry change". No witness's entry state is exhibited as reachable from genesis. The remaining three of the thirty are neither attainable nor refutable at this altitude — a stated model boundary, not unfinished work. The three refutations are of pairs the table does **not** permit, which is why 27 inhabited plus 3 unsettleable accounts for the permitted set exactly; a two-role row remains an upper bound however many witnesses land.
 - **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`, `reports/lido-circuit-breaker-pause-join-completion.md`; `Blanc/LidoCircuitBreakerAttainment.lean`, `Blanc/LidoCircuitBreakerPauseAttainment.lean`, `Blanc/LidoCircuitBreakerPauseJoin.lean`
 
-#### ACC-7 — Two role pairs that a permitted-role widening could conflate are held apart, and the widening is rejected by executed control rather than by assertion
+#### ACC-7 — Two role pairs that a permitted-role widening could conflate are provably distinct at a single write
 
-- **Declarations:** no audited declaration — gate-owned row
-- **Premises:** the gate's own executed controls, in particular the permitted-role widening rejection and the within-role guard-strength control, which extracts the pause arm's strict entry liveness from an *arbitrary* actual authority and is verified non-vacuous. Two role-distinctness theorems do exist in the tree — `RuntimeWriteAuthority.adminRegistry_not_adminExpiry` and `RuntimeWriteAuthority.pauseRegistry_not_pauseExpiry`, at `Blanc/LidoCircuitBreakerAuthority.lean:318,342` — but they are pinned by **no** gate and audited by **no** axiom authority, so this register does not cite them as evidence. That is recorded here rather than quietly relied upon.
-- **Axioms:** not applicable
+- **Declarations:** `Blanc.LidoCircuitBreaker.RuntimeWriteAuthority.adminRegistry_not_adminExpiry`, `Blanc.LidoCircuitBreaker.RuntimeWriteAuthority.pauseRegistry_not_pauseExpiry`
+- **Premises:** an arbitrary actual write authority at an arbitrary frame root and write. Nothing else — no deployment, execution, or reachability hypothesis. The exclusivity is derived from the disjoint source-function index sets the role constructors carry, which is why it is a theorem rather than a comparison of labels.
+- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** no direct oracle channel
-- **Non-claims:** the mechanism **cannot separate two roles living in the same compiled function** — the configuration and heartbeat-expiry roles, both in the main function, are not told apart by it. Separating them would need a path-step pin. Header pinning also cannot reach inside the authority record's constructor payloads, which is exactly why the guard-strength control exists.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `scripts/check-lido-circuit-breaker-access.py`
+- **Non-claims:** exclusivity **within** the two named pairs only. The mechanism **cannot separate two roles living in the same compiled function** — the configuration and heartbeat-expiry roles, both in the main function, are not told apart by it, and separating them would need a path-step pin. Header pinning also cannot reach inside the authority record's constructor payloads, so a guard weakened *within* a role changes no pinned header; that separate blind spot is closed by the gate's own within-role guard-strength control, not by these theorems.
+- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAuthority.lean:318,342`
 
 ---
 
