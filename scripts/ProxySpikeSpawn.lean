@@ -276,6 +276,73 @@ lemma Ninst.runCompiled_delcall_doneFrame {sevm : Sevm} {devm : Devm}
     (Xinst.step_delcall_spawn h_stk h_ext h_del h_acc h_split h_gas h_depth)
     h_enter h_res
 
+/-! ## The chain, joined
+
+An adversarial review pointed out that the edge lemmas above and the
+executed-child probes in `scripts/ProxySpikeExec.lean` were two links joined
+only in prose: between `Xinst.step … .delcall = .spawn …` and
+`exec (initEvm child)` sits `Frame.enter`, which nothing discharged. This
+closes that link, generically — for any parent frame, not for one fixture.
+
+Two things make it cheap for `DELEGATECALL` specifically. The value transfer is
+provably the identity, because `shouldTransferValue = false` makes
+`Msg.benvAfterTransfer` short-circuit; so the `benv` the child enters with is
+the one the parent handed it, and no affordability premise is needed. What does
+remain a premise is the precompile test, because `Frame.enter` consults
+`benv.stat.rules.isPrecomp` at the *code* address — and under `DELEGATECALL`
+that is the implementation's address, not the storage owner's.
+
+The second conjunct is the point of the whole spike, now stated about the frame
+that actually runs rather than about the message that describes it: **the entered
+child's storage owner is the parent's own account.** -/
+
+theorem delcall_enters_with_parent_as_storage_owner {sevm : Sevm} {devm : Devm}
+    {gw cw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
+    (h_nonprecompile :
+      sevm.benvStat.rules.isPrecomp dadr = false) :
+    let parent := callSpawnParent d1 (mcc + ext)
+      iiw.toNat isw.toNat oiw.toNat osw.toNat
+    let child := delcallSpawnMsg sevm parent mcs dadr
+      iiw.toNat isw.toNat code dp
+    (Frame.ofCall child).enter = .run (initEvm child) ∧
+      (initEvm child).sta.currentTarget = sevm.currentTarget ∧
+      (initEvm child).sta.codeAddress = some dadr ∧
+      (initEvm child).sta.caller = sevm.caller ∧
+      (initEvm child).sta.value = sevm.value ∧
+      ∀ devm', Resume.run
+          (.call parent oiw.toNat osw.toNat)
+          ((Frame.ofCall child).settle (exec (initEvm child))) = .ok devm' →
+        Ninst.RunCompiled sevm devm (.exec .delcall) devm' := by
+  dsimp only
+  have h_bt : (delcallSpawnMsg sevm
+      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs dadr iiw.toNat isw.toNat code dp).benvAfterTransfer
+      = .ok (delcallSpawnMsg sevm
+        (callSpawnParent d1 (mcc + ext)
+          iiw.toNat isw.toNat oiw.toNat osw.toNat)
+        mcs dadr iiw.toNat isw.toNat code dp).benv := rfl
+  have h_enter := Frame.enter_run_of_nonprecompile
+    (f := Frame.ofCall (delcallSpawnMsg sevm
+      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs dadr iiw.toNat isw.toNat code dp))
+    (adr := dadr) h_bt rfl h_nonprecompile
+  refine ⟨h_enter, rfl, rfl, rfl, rfl, fun devm' h_res => ?_⟩
+  exact Ninst.runCompiled_delcall h_stk h_ext h_del h_acc h_split h_gas h_depth
+    h_enter h_res
+
 /-! ## Anti-vacuity control
 
 A statement about `DELEGATECALL` ownership is worthless unless the same shape
@@ -377,6 +444,7 @@ theorem delcall_child_observes_outer_caller_and_value
 #print axioms directDelcall_spawn
 #print axioms Ninst.runCompiled_delcall_doneFrame
 #print axioms Ninst.runCompiled_delcall
+#print axioms delcall_enters_with_parent_as_storage_owner
 #print axioms control_delcall_separates_call_fuses
 #print axioms control_delcall_inherits_caller_and_value
 #print axioms delcall_child_observes_outer_caller_and_value
