@@ -69,18 +69,35 @@ def PinnedStatBoundaryExecutesProgram
     statPost.state = child.state ∧
     statPost.returnData = child.output
 
-/-- The detachable code-identity hook is scoped to the two actual production
-boundaries.  Direct installation plus non-precompile entry can discharge it;
-the proxy revisit supplies the same evidence through pair correspondence. -/
-def LidoPinnedInboundExecutesProgram
-    (sevm : Sevm) (target : Adr) (program : Prog) (duration : B256) : Prop :=
-  (∀ {callPre callPost : Devm},
-    PauseCallBoundary sevm target duration callPre callPost →
+/-- Program-entry evidence on the successful codeful trace of one exact
+`pauseAfterSet` occurrence.  The guard and post-CALL branch joins connect its
+boundary states to `entry` and to each other; no arbitrary boundary-shaped
+message is quantified. -/
+def LidoPinnedBoundaryExecutions
+    (fs : List Func) (sevm : Sevm) (entry : Devm)
+    (target : Adr) (program : Prog) (duration : B256)
+    (ex : Execution) : Prop :=
+  (entry.getCode target).size.toB256 ≠ 0 ∧
+    ∃ guardTestPost guardPost callPre callPost branchTestPost
+        armPre statPre statPost : Devm,
+      Line.Run sevm entry pauseCodeGuard guardTestPost ∧
+      Devm.PopBurnBy [0] (gVerylow + gHigh) guardTestPost guardPost ∧
+      Line.Run sevm guardPost pauseCallStaging callPre ∧
+      Ninst.RunCompiled sevm callPre (.exec .call) callPost ∧
+      PauseCallBoundary sevm target duration callPre callPost ∧
       PinnedPauseBoundaryExecutesProgram sevm target program duration
-        callPre callPost) ∧
-  (∀ {statPre statPost : Devm},
-    PauseStatBoundary sevm target statPre statPost →
-      PinnedStatBoundaryExecutesProgram sevm target program statPre statPost)
+        callPre callPost ∧
+      Func.RunCompiledTo fs sevm callPost pauseAfterCallBranch ex ∧
+      Ninst.RunCompiled sevm callPost Ninst.iszero branchTestPost ∧
+      Devm.PopBurnBy [0] (gVerylow + gHigh) branchTestPost armPre ∧
+      Line.Run sevm armPre pauseStatStaging statPre ∧
+      Ninst.RunCompiled sevm statPre (.exec .statcall) statPost ∧
+      PauseStatBoundary sevm target statPre statPost ∧
+      PinnedStatBoundaryExecutesProgram sevm target program
+        statPre statPost ∧
+      Func.RunCompiledTo fs sevm statPost
+        (Ninst.iszero :::
+          ((Func.call bubbleRevertSlot) <?> decodePausedResult)) ex
 
 /-- One settled successful target CALL tied to the actual parent spawn.  The
 spawn equation prevents an unrelated message with the same terminal child
@@ -122,9 +139,8 @@ def PublicPausePinnedTargetConclusion (sevm : Sevm) (pre : Devm)
       PausedAt pausedUntil final.state target.toAdr sevm.benvStat.time
 
 /-- Frozen entry-3 statement shape.  The bundle is consumed whole: none of
-its four clauses is unfolded here.  The actual-invocation hook is likewise
-opaque.  A future direct target derives it from installed code and
-non-precompile entry; a proxy revisit derives it from pair correspondence. -/
+its four clauses is unfolded here.  The actual-invocation hook is requested
+only for the exact `pauseAfterSet` entry extracted from this public run. -/
 def PublicPausePinnedTargetStatement
     (sevm : Sevm) (pre : Devm) (owner : Adr)
     (target duration idx0 len0 last0 : B256)
@@ -137,9 +153,15 @@ def PublicPausePinnedTargetStatement
     Prog.RunCompiledTo sevm pre (runtime officialParams) ex →
     LidoPinnedPauseTarget sevm.currentTarget sevm.caller target.toAdr program
       pausedUntil protectedSurface →
-    LidoPinnedInboundExecutesProgram sevm target.toAdr program duration →
-    ∀ final, ex = .ok final →
-      PublicPausePinnedTargetConclusion sevm pre target duration targetCode
-        program pausedUntil ex final
+    ∀ entry,
+      PublicPauseAfterSetAt
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          sevm pre target duration targetCode ex entry →
+      LidoPinnedBoundaryExecutions
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          sevm entry target.toAdr program duration ex →
+      ∀ final, ex = .ok final →
+        PublicPausePinnedTargetConclusion sevm pre target duration targetCode
+          program pausedUntil ex final
 
 end Blanc.LidoCircuitBreaker
