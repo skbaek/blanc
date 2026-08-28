@@ -117,6 +117,8 @@ import Blanc.ProrataConsistency
 import Blanc.ProrataCompiledEffects
 import Blanc.ProrataInvariant
 import Blanc.ProrataPreservation
+import Blanc.ProrataAttackModel
+import Blanc.ProrataAttackPath
 
 namespace Blanc
 

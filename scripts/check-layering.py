@@ -62,7 +62,7 @@ CONTRACTS = {
                 "ProrataFunctional",
                 "ProrataDeposit", "ProrataRead", "ProrataWithdraw",
                 "ProrataConsistency", "ProrataCompiledEffects", "ProrataInvariant",
-                "ProrataPreservation"],
+                "ProrataPreservation", "ProrataAttackModel", "ProrataAttackPath"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
