@@ -145,9 +145,9 @@ def ForwardBudget (messageGas : Nat) : Prop :=
   ∃ atCallGas callCost childGas,
     ForwardBudgetWitness messageGas atCallGas callCost childGas
 
-/-- The exact budget used by the installed-pair fixtures. -/
-theorem forwardBudget_27224 : ForwardBudget 27224 := by
-  refine ⟨25095, 24744, 22144, ?_⟩
+/-- The exact split and tail allowances used by the installed-pair fixtures. -/
+theorem forwardBudgetWitness_27224 :
+    ForwardBudgetWitness 27224 25095 24744 22144 := by
   exact {
     messageGasEq := by decide
     gasWordRoundTrip := by decide
@@ -165,6 +165,10 @@ theorem forwardBudget_27224 : ForwardBudget 27224 := by
       rw [implGuardedRevertEntryGas_eq]
       decide
     haltTailEnough := by decide }
+
+/-- The exact budget used by the installed-pair fixtures. -/
+theorem forwardBudget_27224 : ForwardBudget 27224 :=
+  ⟨25095, 24744, 22144, forwardBudgetWitness_27224⟩
 
 /-- Runtime premises are separate from the three actual installation facts
 taken by the public theorem. -/
@@ -212,19 +216,25 @@ def RespectsSettledObservableAt (target : Adr)
 
 /-! ## Biting controls for the directional relation -/
 
-theorem settledObservable_rejects_direct_clean_proxy_revert
+theorem settledObservable_rejects_direct_clean_proxy_error
     {target : Adr} {direct proxied : Devm}
     (hdirect : direct.error = none)
-    (hproxied : proxied.error = some .revert) :
+    (hproxied : proxied.error ≠ none) :
     ¬ SettledObservableAt target (.ok direct) (.ok proxied) := by
-  simp [SettledObservableAt, SettledStatusRelated, hdirect, hproxied]
+  rintro ⟨hrel, _⟩
+  rcases hrel with heq | ⟨_, hhalt, _⟩
+  · exact hproxied (heq.symm.trans hdirect)
+  · simp [hdirect] at hhalt
 
-theorem settledObservable_rejects_direct_revert_proxy_clean
+theorem settledObservable_rejects_direct_error_proxy_clean
     {target : Adr} {direct proxied : Devm}
-    (hdirect : direct.error = some .revert)
+    (hdirect : direct.error ≠ none)
     (hproxied : proxied.error = none) :
     ¬ SettledObservableAt target (.ok direct) (.ok proxied) := by
-  simp [SettledObservableAt, SettledStatusRelated, hdirect, hproxied]
+  rintro ⟨hrel, _⟩
+  rcases hrel with heq | ⟨_, _, hrevert⟩
+  · exact hdirect (heq.trans hproxied)
+  · simp [hproxied] at hrevert
 
 theorem settledObservable_rejects_output_mismatch
     {target : Adr} {direct proxied : Devm}
