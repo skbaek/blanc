@@ -11,7 +11,7 @@
 # as a REGRESSION. The evaluator takes a few minutes.
 #
 # Falsifier modes:
-#   --falsify-dry  Verify the three mutant patches apply cleanly to
+#   --falsify-dry  Verify the four mutant patches apply cleanly to
 #                  temporary copies of the two Blanc modules. No build.
 #   --falsify      Full mutation campaign: per mutant, a temporary git
 #                  worktree of HEAD with an APFS-cloned .lake, a `lake
