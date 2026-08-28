@@ -36,8 +36,10 @@ zero_hashes[h]= 0x300 + h,  0 <= h < 32
 
 This is deliberately not Solidity's raw layout.  `accOfStor` is a total
 projection from every concrete store: its branch function reads the first
-region and its count is the `toNat` image of slot `0x200`.  It carries no
-count bound, invariant, outside-region-zero premise, or constructor premise.
+region for heights below 32 and canonically returns zero outside that model
+region, while its count is the `toNat` image of slot `0x200`.  The latter is
+part of the projection definition, not an outside-region-zero premise.  It
+carries no count bound, invariant, or constructor premise.
 A separate `ZeroHashesCorrect` predicate fixes
 `zero_hashes[h] = zeroHash Bytes.sha256 h` for `h < 32`; the model-root view
 is a corollary of the more general concrete-storage view under that named

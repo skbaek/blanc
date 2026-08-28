@@ -30,8 +30,22 @@ def zeroHashSlot (height : Nat) : B256 :=
 Constructor correctness, the count bound, the model invariant, and the
 zero-hash region are deliberately separate predicates. -/
 def accOfStor (stor : Stor) : Acc :=
-  { branch := fun height => stor.get (branchSlot height)
+  { branch := fun height =>
+      if height < 32 then stor.get (branchSlot height) else 0
     count := (stor.get depositCountSlot).toNat }
+
+@[simp] theorem accOfStor_branch_of_lt (stor : Stor) (height : Nat)
+    (h : height < 32) :
+    (accOfStor stor).branch height = stor.get (branchSlot height) := by
+  simp [accOfStor, h]
+
+@[simp] theorem accOfStor_branch_of_ge (stor : Stor) (height : Nat)
+    (h : 32 ≤ height) :
+    (accOfStor stor).branch height = 0 := by
+  simp [accOfStor, Nat.not_lt.mpr h]
+
+@[simp] theorem accOfStor_count (stor : Stor) :
+    (accOfStor stor).count = (stor.get depositCountSlot).toNat := rfl
 
 /-- The constructor-owned zero-hash region is canonical through depth 31. -/
 def ZeroHashesCorrect (stor : Stor) : Prop :=
