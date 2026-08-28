@@ -507,7 +507,7 @@ private lemma step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
       d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     let preAccessCost := accessCost callee d.accessedAddresses
     let d := addAccessedAddress d callee
-    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
       accessDelegation d callee
     let accessCost := preAccessCost + delegatedAccessGasCost
     let createCost :=
@@ -527,8 +527,8 @@ private lemma step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
         (.ok ((d.withReturnData []).withGasLeft (d.gasLeft + msgCallStipend)))
     else
       return genericCall.step
-        sevm d msgCallStipend value sevm.currentTarget callee callee
-        true false inputIndex inputSize outputIndex outputSize
+        sevm d msgCallStipend value sevm.currentTarget callee
+        newCodeAddress true false inputIndex inputSize outputIndex outputSize
         code disablePrecompiles) = _
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
@@ -592,7 +592,7 @@ private lemma step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
       d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     let preAccessCost := accessCost target d.accessedAddresses
     let d := addAccessedAddress d target
-    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
       accessDelegation d target
     let accessCost := preAccessCost + delegatedAccessGasCost
     let ⟨msgCallCost, msgCallStipend⟩ :=
@@ -601,8 +601,8 @@ private lemma step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
     let d :=
       d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     return genericCall.step
-      sevm d msgCallStipend 0 sevm.currentTarget target target true true
-      inputIndex inputSize outputIndex outputSize code
+      sevm d msgCallStipend 0 sevm.currentTarget target newCodeAddress
+      true true inputIndex inputSize outputIndex outputSize code
       disablePrecompiles) = _
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]

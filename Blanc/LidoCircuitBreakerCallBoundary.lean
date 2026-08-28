@@ -358,7 +358,7 @@ private lemma callEdge_step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
       d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     let preAccessCost := accessCost callee d.accessedAddresses
     let d := addAccessedAddress d callee
-    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
       accessDelegation d callee
     let accessCost := preAccessCost + delegatedAccessGasCost
     let createCost :=
@@ -378,8 +378,8 @@ private lemma callEdge_step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
         (.ok ((d.withReturnData []).withGasLeft (d.gasLeft + msgCallStipend)))
     else
       return genericCall.step
-        sevm d msgCallStipend value sevm.currentTarget callee callee
-        true false inputIndex inputSize outputIndex outputSize
+        sevm d msgCallStipend value sevm.currentTarget callee
+        newCodeAddress true false inputIndex inputSize outputIndex outputSize
         code disablePrecompiles) = _
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
@@ -549,11 +549,11 @@ theorem pauseCall_boundary_with_execution
     have hdata : parent.memory.data.sliceD ((284 : B256).toNat)
         ((36 : B256).toNat) 0 = pauseForCalldata duration := by
       rw [hpmem]; exact h_window
-    have hmsgeq : callSpawnMsg sevm parent mcs target ((284 : B256).toNat)
-        ((36 : B256).toNat) code dp =
-        callMsg sevm parent mcs 0 sevm.currentTarget target target true false
+    have hmsgeq : callSpawnMsg sevm parent mcs target dadr
+        ((284 : B256).toNat) ((36 : B256).toNat) code dp =
+        callMsg sevm parent mcs 0 sevm.currentTarget target dadr true false
           (pauseForCalldata duration) code dp := by
-      show callMsg sevm parent mcs 0 sevm.currentTarget target target true false
+      show callMsg sevm parent mcs 0 sevm.currentTarget target dadr true false
         (parent.memory.data.sliceD ((284 : B256).toNat) ((36 : B256).toNat) 0)
         code dp = _
       rw [hdata]
@@ -573,7 +573,7 @@ theorem pauseCall_boundary_with_execution
     rw [hmsgeq] at hframe
     have hres' : (Resume.call parent 0 0).run (.ok child) = .ok callPost :=
       hres.symm
-    let msg := callMsg sevm parent mcs 0 sevm.currentTarget target target
+    let msg := callMsg sevm parent mcs 0 sevm.currentTarget target dadr
       true false (pauseForCalldata duration) code dp
     have hspawn : Ninst.step ⟨0, sevm, callPre⟩ Ninst.call =
         .spawn (Jaune.Frame.ofCall msg) (.call parent 0 0) 1 := by
@@ -649,7 +649,7 @@ private lemma statEdge_step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
       d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     let preAccessCost := accessCost target d.accessedAddresses
     let d := addAccessedAddress d target
-    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
       accessDelegation d target
     let accessCost := preAccessCost + delegatedAccessGasCost
     let ⟨msgCallCost, msgCallStipend⟩ :=
@@ -658,8 +658,8 @@ private lemma statEdge_step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
     let d :=
       d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     return genericCall.step
-      sevm d msgCallStipend 0 sevm.currentTarget target target true true
-      inputIndex inputSize outputIndex outputSize code
+      sevm d msgCallStipend 0 sevm.currentTarget target newCodeAddress
+      true true inputIndex inputSize outputIndex outputSize code
       disablePrecompiles) = _
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
@@ -798,11 +798,11 @@ theorem pauseStat_boundary_with_execution
     have hdata : parent.memory.data.sliceD ((284 : B256).toNat)
         ((4 : B256).toNat) 0 = isPausedCalldata := by
       rw [hpmem]; exact h_window
-    have hmsgeq : statcallSpawnMsg sevm parent mcs target ((284 : B256).toNat)
-        ((4 : B256).toNat) code dp =
-        callMsg sevm parent mcs 0 sevm.currentTarget target target true true
+    have hmsgeq : statcallSpawnMsg sevm parent mcs target dadr
+        ((284 : B256).toNat) ((4 : B256).toNat) code dp =
+        callMsg sevm parent mcs 0 sevm.currentTarget target dadr true true
           isPausedCalldata code dp := by
-      show callMsg sevm parent mcs 0 sevm.currentTarget target target true true
+      show callMsg sevm parent mcs 0 sevm.currentTarget target dadr true true
         (parent.memory.data.sliceD ((284 : B256).toNat) ((4 : B256).toNat) 0)
         code dp = _
       rw [hdata]
@@ -822,7 +822,7 @@ theorem pauseStat_boundary_with_execution
     rw [hmsgeq] at hframe
     have hres' : (Resume.call parent 0 32).run (.ok child) = .ok statPost :=
       hres.symm
-    let msg := callMsg sevm parent mcs 0 sevm.currentTarget target target
+    let msg := callMsg sevm parent mcs 0 sevm.currentTarget target dadr
       true true isPausedCalldata code dp
     have hspawn : Ninst.step ⟨0, sevm, statPre⟩ Ninst.statcall =
         .spawn (Jaune.Frame.ofCall msg) (.call parent 0 32) 1 := by

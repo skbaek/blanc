@@ -3352,16 +3352,28 @@ lemma Xinst.step_spawn_getCode {sevm : Sevm} {devm : Devm} {x : Xinst}
   · rw [(genericCreate.step_spawn_frame hs).1 a, hf.getCode a]
   · rw [(genericCall.step_spawn_frame hs).1 a, hf.getCode a]
 
+/-- Delegation resolution is the identity on an address whose code carries no
+EIP-7702 designator, so the resolved code address is the queried address. -/
+private lemma accessDelegation_codeAddress_of_none {d : Devm} {adr : Adr}
+    (h : getDelegatedCodeAddress (d.getCode adr) = none) :
+    (accessDelegation d adr).2.1 = adr := by
+  dsimp only [accessDelegation]
+  rw [show getDelegatedCodeAddress (d.state.getCode adr) = none from h]
+
 /-- An actual call-type spawn aimed away from the current account and at an
 already-code-bearing account is a direct CALL/STATICCALL child. CREATE and
 CREATE2 are excluded by freshness, while CALLCODE and DELEGATECALL retain the
-parent's target. -/
+parent's target. The CALL/STATICCALL arms additionally need the callee to carry
+no EIP-7702 delegation designator: a designator would resolve the child's code
+address to the delegate rather than to the callee. -/
 theorem Xinst.step_spawn_codeAddress_eq_currentTarget
     {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume}
     (hs : Xinst.step sevm devm x = .spawn f rsm)
     (hne : sevm.currentTarget ≠ f.inner.currentTarget)
-    (hcode : devm.getCode f.inner.currentTarget ≠ .empty) :
+    (hcode : devm.getCode f.inner.currentTarget ≠ .empty)
+    (hnodel :
+      getDelegatedCodeAddress (devm.getCode f.inner.currentTarget) = none) :
     f.inner.codeAddress = some f.inner.currentTarget := by
   have horig := hs
   cases x with
@@ -3397,6 +3409,36 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
             _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
   | call =>
       simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hs
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vgas hgas
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vcallee hcallee
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vval hval
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vii hii
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vis his
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ voi hoi
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vos hos
+      -- The delegation lookup runs on the popped-and-recorded machine, so the
+      -- premise's code fact has to travel down the operand pops first.
+      have hgc : ∀ a : Adr,
+          (addAccessedAddress vos.2 vcallee.1).getCode a = devm.getCode a := by
+        intro a
+        rw [addAccessedAddress_getCode, Devm.popToNat_getCode hos,
+          Devm.popToNat_getCode hoi, Devm.popToNat_getCode his,
+          Devm.popToNat_getCode hii, Devm.pop_getCode hval,
+          Devm.popToAdr_getCode hcallee, Devm.pop_getCode hgas]
       repeat' split at hs
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
       all_goals first
@@ -3407,7 +3449,10 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
           all_goals
             simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
           all_goals obtain ⟨rfl, rfl⟩ := hs
-          all_goals rfl
+          all_goals
+            refine congrArg some (accessDelegation_codeAddress_of_none ?_)
+            rw [hgc]
+            exact hnodel
   | callcode =>
       simp only [Xinst.step, Bind.bind, Except.bind] at hs
       repeat' split at hs
@@ -3426,6 +3471,31 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
           exact False.elim (hne htgt.symm)
   | statcall =>
       simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vgas hgas
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vtgt htgt
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vii hii
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vis his
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ voi hoi
+      split at hs
+      · simp only [XStep.ofExcept, reduceCtorEq] at hs
+      rename_i _ vos hos
+      have hgc : ∀ a : Adr,
+          (addAccessedAddress vos.2 vtgt.1).getCode a = devm.getCode a := by
+        intro a
+        rw [addAccessedAddress_getCode, Devm.popToNat_getCode hos,
+          Devm.popToNat_getCode hoi, Devm.popToNat_getCode his,
+          Devm.popToNat_getCode hii, Devm.popToAdr_getCode htgt,
+          Devm.pop_getCode hgas]
       repeat' split at hs
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
       all_goals first
@@ -3436,7 +3506,10 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
           all_goals
             simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
           all_goals obtain ⟨rfl, rfl⟩ := hs
-          all_goals rfl
+          all_goals
+            refine congrArg some (accessDelegation_codeAddress_of_none ?_)
+            rw [hgc]
+            exact hnodel
 
 /-- Where a spawned child's code comes from.  Create frames enter fresh code at
 an address that had none; `CALLCODE`/`DELEGATECALL` keep the parent's target;

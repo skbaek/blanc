@@ -732,7 +732,7 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
       genericCall.step sevm
         ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
-        mcs 0 sevm.currentTarget cw.toAdr cw.toAdr true false
+        mcs 0 sevm.currentTarget cw.toAdr dadr true false
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
   subst h_ext; subst h_acc
   show XStep.ofExcept (do
@@ -747,7 +747,7 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
       d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     let preAccessCost := accessCost callee d.accessedAddresses
     let d := addAccessedAddress d callee
-    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
       accessDelegation d callee
     let accessCost := preAccessCost + delegatedAccessGasCost
     let createCost :=
@@ -767,8 +767,8 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
         (.ok ((d.withReturnData []).withGasLeft (d.gasLeft + msgCallStipend)))
     else
       return genericCall.step
-        sevm d msgCallStipend value sevm.currentTarget callee callee
-        true false inputIndex inputSize outputIndex outputSize
+        sevm d msgCallStipend value sevm.currentTarget callee
+        newCodeAddress true false inputIndex inputSize outputIndex outputSize
         code disablePrecompiles) = _
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
@@ -844,7 +844,7 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
       genericCall.step sevm
         ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
-        mcs vw sevm.currentTarget cw.toAdr cw.toAdr true false
+        mcs vw sevm.currentTarget cw.toAdr dadr true false
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
   subst h_ext
   subst h_acc
@@ -860,7 +860,7 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
       d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     let preAccessCost := accessCost callee d.accessedAddresses
     let d := addAccessedAddress d callee
-    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
       accessDelegation d callee
     let accessCost := preAccessCost + delegatedAccessGasCost
     let createCost :=
@@ -882,8 +882,8 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
           (d.gasLeft + msgCallStipend)))
     else
       return genericCall.step
-        sevm d msgCallStipend value sevm.currentTarget callee callee
-        true false inputIndex inputSize outputIndex outputSize
+        sevm d msgCallStipend value sevm.currentTarget callee
+        newCodeAddress true false inputIndex inputSize outputIndex outputSize
         code disablePrecompiles) = _
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
@@ -990,7 +990,7 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
       d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     let preAccessCost := accessCost callee d.accessedAddresses
     let d := addAccessedAddress d callee
-    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
       accessDelegation d callee
     let accessCost := preAccessCost + delegatedAccessGasCost
     let createCost :=
@@ -1012,8 +1012,8 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
           (d.gasLeft + msgCallStipend)))
     else
       return genericCall.step
-        sevm d msgCallStipend value sevm.currentTarget callee callee
-        true false inputIndex inputSize outputIndex outputSize
+        sevm d msgCallStipend value sevm.currentTarget callee
+        newCodeAddress true false inputIndex inputSize outputIndex outputSize
         code disablePrecompiles) = .done (.ok post) ∧
       post.stack = 0 :: s ∧
       post.state = devm.state ∧
@@ -1120,7 +1120,7 @@ lemma Xinst.step_statcall {sevm : Sevm} {devm : Devm}
       genericCall.step sevm
         ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
-        mcs 0 sevm.currentTarget tw.toAdr tw.toAdr true true
+        mcs 0 sevm.currentTarget tw.toAdr dadr true true
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
   subst h_ext
   subst h_acc
@@ -1135,7 +1135,7 @@ lemma Xinst.step_statcall {sevm : Sevm} {devm : Devm}
       d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     let preAccessCost := accessCost target d.accessedAddresses
     let d := addAccessedAddress d target
-    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
       accessDelegation d target
     let accessCost := preAccessCost + delegatedAccessGasCost
     let ⟨msgCallCost, msgCallStipend⟩ :=
@@ -1144,8 +1144,9 @@ lemma Xinst.step_statcall {sevm : Sevm} {devm : Devm}
     let d :=
       d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
     return genericCall.step
-      sevm d msgCallStipend 0 sevm.currentTarget target target true true
-      inputIndex inputSize outputIndex outputSize code disablePrecompiles) = _
+      sevm d msgCallStipend 0 sevm.currentTarget target newCodeAddress
+      true true inputIndex inputSize outputIndex outputSize code
+      disablePrecompiles) = _
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToAdr_eq_ok
@@ -1186,28 +1187,35 @@ def callSpawnParent (d1 : Devm) (charge ii is oi os : Nat) : Devm :=
   ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - charge⟩).memExtends
     [⟨ii, is⟩, ⟨oi, os⟩]).withReturnData []
 
-/-- The message a `value = 0` `CALL` builds: the callee is both target and
-code address, the value is zero, and the calldata is the input window read out
-of the parent's own memory. -/
-def callSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (callee : Adr)
+/-- The message a `value = 0` `CALL` builds: the callee owns the storage, the
+separately supplied `cadr` is the account whose code runs, the value is zero,
+and the calldata is the input window read out of the parent's own memory.
+
+The two address roles are distinct parameters because EIP-7702 makes them
+distinct facts: when the callee carries a delegation designator, the code that
+runs is the delegation target's.  A caller with no delegation in play passes
+the callee for both. -/
+def callSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (callee cadr : Adr)
     (ii is : Nat) (code : ByteArray) (dp : Bool) : Msg :=
-  callMsg sevm p mcs 0 sevm.currentTarget callee callee true false
+  callMsg sevm p mcs 0 sevm.currentTarget callee cadr true false
     (p.memory.data.sliceD ii is 0) code dp
 
 /-- The message built by a nonzero-value `CALL`.  The stipend-bearing child gas
 is the `mcs` produced by `calculateMsgCallGas`; it is not charged a second time
 to the parent. -/
 def valueCallSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat)
-    (value : B256) (callee : Adr) (ii is : Nat)
+    (value : B256) (callee cadr : Adr) (ii is : Nat)
     (code : ByteArray) (dp : Bool) : Msg :=
-  callMsg sevm p mcs value sevm.currentTarget callee callee true false
+  callMsg sevm p mcs value sevm.currentTarget callee cadr true false
     (p.memory.data.sliceD ii is 0) code dp
 
 /-- The message a `STATICCALL` builds.  It shares `callSpawnParent` with a
-zero-value `CALL`, but the child message is static. -/
-def statcallSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (target : Adr)
+zero-value `CALL`, but the child message is static.  `target` owns the storage
+and `cadr` is the account whose code runs; see `callSpawnMsg` on why they are
+separate parameters. -/
+def statcallSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (target cadr : Adr)
     (ii is : Nat) (code : ByteArray) (dp : Bool) : Msg :=
-  callMsg sevm p mcs 0 sevm.currentTarget target target true true
+  callMsg sevm p mcs 0 sevm.currentTarget target cadr true true
     (p.memory.data.sliceD ii is 0) code dp
 
 /-- The affordable nonzero-value `.call` arm all the way to its spawned child
@@ -1241,7 +1249,7 @@ lemma Xinst.step_call_nonzero_spawn {sevm : Sevm} {devm : Devm}
         (Frame.ofCall (valueCallSpawnMsg sevm
           (callSpawnParent d1 (mcc + ext)
             iiw.toNat isw.toNat oiw.toNat osw.toNat)
-          mcs vw cw.toAdr iiw.toNat isw.toNat code dp))
+          mcs vw cw.toAdr dadr iiw.toNat isw.toNat code dp))
         (.call (callSpawnParent d1 (mcc + ext)
           iiw.toNat isw.toNat oiw.toNat osw.toNat)
           oiw.toNat osw.toNat) := by
@@ -1271,7 +1279,7 @@ lemma Xinst.step_call_zero_value_spawn {sevm : Sevm} {devm : Devm}
         (Frame.ofCall (callSpawnMsg sevm
           (callSpawnParent d1 (mcc + ext)
             iiw.toNat isw.toNat oiw.toNat osw.toNat)
-          mcs cw.toAdr iiw.toNat isw.toNat code dp))
+          mcs cw.toAdr dadr iiw.toNat isw.toNat code dp))
         (.call (callSpawnParent d1 (mcc + ext)
           iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat) := by
   rw [Xinst.step_call_zero_value h_stk h_ext h_del h_acc h_split h_gas,
@@ -1299,7 +1307,7 @@ lemma Xinst.step_statcall_spawn {sevm : Sevm} {devm : Devm}
         (Frame.ofCall (statcallSpawnMsg sevm
           (callSpawnParent d1 (mcc + ext)
             iiw.toNat isw.toNat oiw.toNat osw.toNat)
-          mcs tw.toAdr iiw.toNat isw.toNat code dp))
+          mcs tw.toAdr dadr iiw.toNat isw.toNat code dp))
         (.call (callSpawnParent d1 (mcc + ext)
           iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat) := by
   rw [Xinst.step_statcall h_stk h_ext h_del h_acc h_split h_gas,
@@ -1333,14 +1341,14 @@ lemma Ninst.runCompiled_call_zero_value {sevm : Sevm} {devm : Devm}
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
     (h_enter : (Frame.ofCall (callSpawnMsg sevm
       (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
-      mcs cw.toAdr iiw.toNat isw.toNat code dp)).enter = .run cevm)
+      mcs cw.toAdr dadr iiw.toNat isw.toNat code dp)).enter = .run cevm)
     (h_res : Resume.run
       (.call (callSpawnParent d1 (mcc + ext)
         iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat)
       ((Frame.ofCall (callSpawnMsg sevm
         (callSpawnParent d1 (mcc + ext)
           iiw.toNat isw.toNat oiw.toNat osw.toNat)
-        mcs cw.toAdr iiw.toNat isw.toNat code dp)).settle (exec cevm))
+        mcs cw.toAdr dadr iiw.toNat isw.toNat code dp)).settle (exec cevm))
         = .ok devm') :
     Ninst.RunCompiled sevm devm (.exec .call) devm' :=
   Ninst.runCompiled_exec_run
@@ -1377,14 +1385,14 @@ lemma Ninst.runCompiled_call_nonzero {sevm : Sevm} {devm : Devm}
     (h_enter : (Frame.ofCall (valueCallSpawnMsg sevm
       (callSpawnParent d1 (mcc + ext)
         iiw.toNat isw.toNat oiw.toNat osw.toNat)
-      mcs vw cw.toAdr iiw.toNat isw.toNat code dp)).enter = .run cevm)
+      mcs vw cw.toAdr dadr iiw.toNat isw.toNat code dp)).enter = .run cevm)
     (h_res : Resume.run
       (.call (callSpawnParent d1 (mcc + ext)
         iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat)
       ((Frame.ofCall (valueCallSpawnMsg sevm
         (callSpawnParent d1 (mcc + ext)
           iiw.toNat isw.toNat oiw.toNat osw.toNat)
-        mcs vw cw.toAdr iiw.toNat isw.toNat code dp)).settle (exec cevm)) =
+        mcs vw cw.toAdr dadr iiw.toNat isw.toNat code dp)).settle (exec cevm)) =
           .ok devm') :
     Ninst.RunCompiled sevm devm (.exec .call) devm' :=
   Ninst.runCompiled_exec_run
@@ -1463,7 +1471,7 @@ lemma Ninst.runCompiled_statcall_doneFrame {sevm : Sevm} {devm : Devm}
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
     (h_enter : (Frame.ofCall (statcallSpawnMsg sevm
       (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
-      mcs tw.toAdr iiw.toNat isw.toNat code dp)).enter = .done r)
+      mcs tw.toAdr dadr iiw.toNat isw.toNat code dp)).enter = .done r)
     (h_res : Resume.run
       (.call (callSpawnParent d1 (mcc + ext)
         iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat)
@@ -2395,7 +2403,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     (h_dynamic : sevm.isStatic = false)
     (h_sender : ¬ (d1.getAcct sevm.currentTarget).bal < vw)
     (h_depth : sevm.depth ≠ 0)
-    (h_nonprecompile : sevm.benvStat.rules.isPrecomp cw.toAdr = false)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
     (h_code : code.size = 0) (h_room : s.length < 1024) :
     ∃ post,
       Ninst.RunCompiled sevm devm (.exec .call) post ∧
@@ -2412,7 +2420,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
         post.state = stmid.addBal cw.toAdr vw := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := valueCallSpawnMsg sevm p mcs vw cw.toAdr
+  let msg := valueCallSpawnMsg sevm p mcs vw cw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < vw
@@ -2424,7 +2432,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
-    · change sevm.benvStat.rules.isPrecomp cw.toAdr = false
+    · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
   have h_child_code : child.sta.code.size = 0 := by
     change code.size = 0
@@ -2549,7 +2557,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
     (h_depth : sevm.depth ≠ 0)
-    (h_nonprecompile : sevm.benvStat.rules.isPrecomp cw.toAdr = false)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
     (h_code : code.size = 0) (h_room : s.length < 1024) :
     ∃ post,
       Ninst.RunCompiled sevm devm (.exec .call) post ∧
@@ -2566,7 +2574,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
         post.state = stmid.addBal cw.toAdr 0 := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := callSpawnMsg sevm p mcs cw.toAdr
+  let msg := callSpawnMsg sevm p mcs cw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < 0
@@ -2579,7 +2587,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
-    · change sevm.benvStat.rules.isPrecomp cw.toAdr = false
+    · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
   have h_child_code : child.sta.code.size = 0 := by
     change code.size = 0

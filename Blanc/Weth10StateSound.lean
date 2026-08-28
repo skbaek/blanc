@@ -1368,7 +1368,7 @@ theorem backedPost_of_value_call
     (backedSpec weth10 dp).Post ca sevm sf := by
   rcases of_run_call_val_with_depth hp h_run with
     ⟨_, h_world⟩ |
-      ⟨parent, child, xl, delegated, code, avail, h_depth,
+      ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
         h_fill, h_pm, h_child_clean, h_resume, h_sf_state,
         h_returnData, h_memory, h_sf_stack⟩
@@ -1390,7 +1390,7 @@ theorem backedPost_of_value_call
       callMsg sevm parent
         (min g.toNat (except64th avail) +
           (if v.toNat = 0 then 0 else gCallStipend))
-        v sevm.currentTarget c.toAdr c.toAdr true false
+        v sevm.currentTarget c.toAdr na true false
         ((s.memory.read ii.toNat is.toNat).1) code delegated
     change ProcessMessage childMsg xl (.ok child) at h_pm
     have hc_state : childMsg.benv.state = s.state := by
@@ -1402,7 +1402,7 @@ theorem backedPost_of_value_call
       exact h_target
     have hc_value : childMsg.value = v := rfl
     have hc_target : childMsg.currentTarget = c.toAdr := rfl
-    have hc_codeAddress : childMsg.codeAddress = some c.toAdr := rfl
+    have hc_codeAddress : childMsg.codeAddress = some na := rfl
     obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
     unfold FrameBody at hbody
     rcases h_bt : childMsg.benvAfterTransfer with e | benv <;>
@@ -1441,7 +1441,7 @@ theorem backedPost_of_value_call
     have h_child_post : (backedSpec weth10 dp).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
       have hc_codeAddress' :
-          (childMsg.withBenv benv).codeAddress = some c.toAdr :=
+          (childMsg.withBenv benv).codeAddress = some na :=
         hc_codeAddress
       rcases of_executeCode_someCode hc_codeAddress' h_exec with
         ⟨h_precompile, h_xl_none, h_handle⟩ |
@@ -1466,8 +1466,8 @@ theorem backedPost_of_value_call
             hc_target.symm.trans h_child_target
           change some code.toList = Prog.compile (weth10 dp)
           rcases h_delegation with
-            ⟨h_none, h_code_self, h_not_delegated⟩ |
-            ⟨d, h_some, h_code_delegated, h_delegated⟩
+            ⟨h_none, _, h_code_self, h_not_delegated⟩ |
+            ⟨d, h_some, _, h_code_delegated, h_delegated⟩
           · rw [h_code_self, h_to_ca]
             exact h_code
           · exfalso
@@ -1515,7 +1515,7 @@ theorem value_le_balance_of_run_call_success_guard
     v ≤ s.getBal sevm.currentTarget := by
   rcases of_run_call_val_with_depth hp hcall with
     ⟨hp0, h_world⟩ |
-      ⟨parent, child, xl, delegated, code, avail, h_depth,
+      ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
         h_fill, h_pm, h_child_clean, h_resume, h_sc_state,
         h_returnData, h_memory, h_sc_stack⟩
@@ -1531,7 +1531,7 @@ theorem value_le_balance_of_run_call_success_guard
       callMsg sevm parent
         (min g.toNat (except64th avail) +
           (if v.toNat = 0 then 0 else gCallStipend))
-        v sevm.currentTarget c.toAdr c.toAdr true false
+        v sevm.currentTarget c.toAdr na true false
         ((s.memory.read ii.toNat is.toNat).1) code delegated
     change ProcessMessage childMsg xl (.ok child) at h_pm
     obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
@@ -3656,7 +3656,7 @@ theorem flashFloorPost_of_value_call
     (flashFloorSpec dp floor).Post ca sevm sf := by
   rcases of_run_call_val_with_depth hp h_run with
     ⟨_, h_world⟩ |
-      ⟨parent, child, xl, delegated, code, avail, h_depth,
+      ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
         h_fill, h_pm, h_child_clean, h_resume, h_sf_state,
         h_returnData, h_memory, h_sf_stack⟩
@@ -3668,7 +3668,7 @@ theorem flashFloorPost_of_value_call
       callMsg sevm parent
         (min g.toNat (except64th avail) +
           (if v.toNat = 0 then 0 else gCallStipend))
-        v sevm.currentTarget c.toAdr c.toAdr true false
+        v sevm.currentTarget c.toAdr na true false
         ((s.memory.read ii.toNat is.toNat).1) code delegated
     change ProcessMessage childMsg xl (.ok child) at h_pm
     have hc_state : childMsg.benv.state = s.state := by
@@ -3680,7 +3680,7 @@ theorem flashFloorPost_of_value_call
       exact h_target
     have hc_value : childMsg.value = v := rfl
     have hc_target : childMsg.currentTarget = c.toAdr := rfl
-    have hc_codeAddress : childMsg.codeAddress = some c.toAdr := rfl
+    have hc_codeAddress : childMsg.codeAddress = some na := rfl
     obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
     unfold FrameBody at hbody
     rcases h_bt : childMsg.benvAfterTransfer with e | benv <;>
@@ -3733,7 +3733,7 @@ theorem flashFloorPost_of_value_call
     have h_child_post : (flashFloorSpec dp floor).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
       have hc_codeAddress' :
-          (childMsg.withBenv benv).codeAddress = some c.toAdr :=
+          (childMsg.withBenv benv).codeAddress = some na :=
         hc_codeAddress
       rcases of_executeCode_someCode hc_codeAddress' h_exec with
         ⟨h_precompile, h_xl_none, h_handle⟩ |
@@ -3757,8 +3757,8 @@ theorem flashFloorPost_of_value_call
             hc_target.symm.trans h_child_target
           change some code.toList = Prog.compile (weth10 dp)
           rcases h_delegation with
-            ⟨h_none, h_code_self, h_not_delegated⟩ |
-            ⟨d, h_some, h_code_delegated, h_delegated⟩
+            ⟨h_none, _, h_code_self, h_not_delegated⟩ |
+            ⟨d, h_some, _, h_code_delegated, h_delegated⟩
           · rw [h_code_self, h_to_ca]
             exact h_code
           · exfalso
@@ -6959,7 +6959,7 @@ theorem flashFloorPostStack_of_value_call
   refine ⟨h_post, ?_⟩
   rcases of_run_call_val_with_depth hp h_run with
     ⟨hstack, hworld⟩ |
-    ⟨parent, child, xl, delegated, code, avail, hdepth,
+    ⟨parent, child, xl, delegated, na, code, avail, hdepth,
       hstack, hstate, hmemory, hdelegation, hfill, hpm,
       hclean, hresume, hsfstate, hret, hmem, hsfstack⟩
   · exact ⟨0, hstack⟩
@@ -7365,7 +7365,7 @@ theorem flashExactRel_of_value_call
     FlashExactRel dp ca sevm s sf := by
   rcases of_run_call_val_with_depth hp h_run with
     ⟨_, h_world⟩ |
-      ⟨parent, child, xl, delegated, code, avail, h_depth,
+      ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
         h_fill, h_pm, h_child_clean, h_resume, h_sf_state,
         h_returnData, h_memory, h_sf_stack⟩
@@ -7375,7 +7375,7 @@ theorem flashExactRel_of_value_call
       callMsg sevm parent
         (min g.toNat (except64th avail) +
           (if v.toNat = 0 then 0 else gCallStipend))
-        v sevm.currentTarget c.toAdr c.toAdr true false
+        v sevm.currentTarget c.toAdr na true false
         ((s.memory.read ii.toNat is.toNat).1) code delegated
     change ProcessMessage childMsg xl (.ok child) at h_pm
     have hc_state : childMsg.benv.state = s.state := by
@@ -7387,7 +7387,7 @@ theorem flashExactRel_of_value_call
       exact h_target
     have hc_value : childMsg.value = v := rfl
     have hc_target : childMsg.currentTarget = c.toAdr := rfl
-    have hc_codeAddress : childMsg.codeAddress = some c.toAdr := rfl
+    have hc_codeAddress : childMsg.codeAddress = some na := rfl
     obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
     unfold FrameBody at hbody
     rcases h_bt : childMsg.benvAfterTransfer with e | benv <;>
@@ -7424,7 +7424,7 @@ theorem flashExactRel_of_value_call
         FlashExactRel dp ca (initSevm (childMsg.withBenv benv))
           (initDevm (childMsg.withBenv benv)) child := by
       have hc_codeAddress' :
-          (childMsg.withBenv benv).codeAddress = some c.toAdr :=
+          (childMsg.withBenv benv).codeAddress = some na :=
         hc_codeAddress
       rcases of_executeCode_someCode hc_codeAddress' h_exec with
         ⟨h_precompile, h_xl_none, h_handle⟩ |
@@ -7457,8 +7457,8 @@ theorem flashExactRel_of_value_call
               hc_target.symm.trans h_child_target
             change some code.toList = Prog.compile (weth10 dp)
             rcases h_delegation with
-              ⟨h_none, h_code_self, h_not_delegated⟩ |
-              ⟨d, h_some, h_code_delegated, h_delegated⟩
+              ⟨h_none, _, h_code_self, h_not_delegated⟩ |
+              ⟨d, h_some, _, h_code_delegated, h_delegated⟩
             · rw [h_code_self, h_to_ca]
               exact h_code
             · exfalso
@@ -7505,7 +7505,7 @@ theorem backedPost_of_static_call
     (backedSpec weth10 dp).Post ca sevm sf := by
   rcases of_run_statcall_val_with_depth hp h_run with
       ⟨_, h_world, _⟩ |
-      ⟨parent, child, xl, delegated, code, avail, h_depth,
+      ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
         h_fill, h_pm, h_child_clean, h_resume, h_sf_state,
         h_returnData, h_memory, h_sf_stack⟩
@@ -7513,7 +7513,7 @@ theorem backedPost_of_static_call
       (h_pre.state_eq h_world.1.symm)
   · let childMsg :=
       callMsg sevm parent (min g.toNat (except64th avail)) 0
-        sevm.currentTarget t.toAdr t.toAdr true true
+        sevm.currentTarget t.toAdr na true true
         ((s.memory.read ii.toNat is.toNat).1) code delegated
     change ProcessMessage childMsg xl (.ok child) at h_pm
     have hc_state : childMsg.benv.state = s.state := by
@@ -7525,7 +7525,7 @@ theorem backedPost_of_static_call
       exact h_target
     have hc_value : childMsg.value = 0 := rfl
     have hc_target : childMsg.currentTarget = t.toAdr := rfl
-    have hc_codeAddress : childMsg.codeAddress = some t.toAdr := rfl
+    have hc_codeAddress : childMsg.codeAddress = some na := rfl
     obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
     unfold FrameBody at hbody
     rcases h_bt : childMsg.benvAfterTransfer with e | benv <;>
@@ -7573,7 +7573,7 @@ theorem backedPost_of_static_call
     have h_child_post : (backedSpec weth10 dp).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
       have hc_codeAddress' :
-          (childMsg.withBenv benv).codeAddress = some t.toAdr :=
+          (childMsg.withBenv benv).codeAddress = some na :=
         hc_codeAddress
       rcases of_executeCode_someCode hc_codeAddress' h_exec with
         ⟨h_precompile, h_xl_none, h_handle⟩ |
@@ -7597,8 +7597,8 @@ theorem backedPost_of_static_call
             hc_target.symm.trans h_child_target
           change some code.toList = Prog.compile (weth10 dp)
           rcases h_delegation with
-            ⟨h_none, h_code_self, h_not_delegated⟩ |
-            ⟨d, h_some, h_code_delegated, h_delegated⟩
+            ⟨h_none, _, h_code_self, h_not_delegated⟩ |
+            ⟨d, h_some, _, h_code_delegated, h_delegated⟩
           · rw [h_code_self, h_to_ca]
             exact h_pre.code
           · exfalso
@@ -7650,7 +7650,7 @@ theorem flashExactRel_of_static_call
     FlashExactRel dp ca sevm s sf := by
   rcases of_run_statcall_val_with_depth hp h_run with
       ⟨_, h_world, _⟩ |
-      ⟨parent, child, xl, delegated, code, avail, h_depth,
+      ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
         h_fill, h_pm, h_child_clean, h_resume, h_sf_state,
         h_returnData, h_memory, h_sf_stack⟩
@@ -7658,7 +7658,7 @@ theorem flashExactRel_of_static_call
     rw [← h_world.getStor ca]
   · let childMsg :=
       callMsg sevm parent (min g.toNat (except64th avail)) 0
-        sevm.currentTarget t.toAdr t.toAdr true true
+        sevm.currentTarget t.toAdr na true true
         ((s.memory.read ii.toNat is.toNat).1) code delegated
     change ProcessMessage childMsg xl (.ok child) at h_pm
     have hc_state : childMsg.benv.state = s.state := by
@@ -7670,7 +7670,7 @@ theorem flashExactRel_of_static_call
       exact h_target
     have hc_value : childMsg.value = 0 := rfl
     have hc_target : childMsg.currentTarget = t.toAdr := rfl
-    have hc_codeAddress : childMsg.codeAddress = some t.toAdr := rfl
+    have hc_codeAddress : childMsg.codeAddress = some na := rfl
     obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
     unfold FrameBody at hbody
     rcases h_bt : childMsg.benvAfterTransfer with e | benv <;>
@@ -7707,7 +7707,7 @@ theorem flashExactRel_of_static_call
         FlashExactRel dp ca (initSevm (childMsg.withBenv benv))
           (initDevm (childMsg.withBenv benv)) child := by
       have hc_codeAddress' :
-          (childMsg.withBenv benv).codeAddress = some t.toAdr :=
+          (childMsg.withBenv benv).codeAddress = some na :=
         hc_codeAddress
       rcases of_executeCode_someCode hc_codeAddress' h_exec with
         ⟨h_precompile, h_xl_none, h_handle⟩ |
@@ -7740,8 +7740,8 @@ theorem flashExactRel_of_static_call
               hc_target.symm.trans h_child_target
             change some code.toList = Prog.compile (weth10 dp)
             rcases h_delegation with
-              ⟨h_none, h_code_self, h_not_delegated⟩ |
-              ⟨d, h_some, h_code_delegated, h_delegated⟩
+              ⟨h_none, _, h_code_self, h_not_delegated⟩ |
+              ⟨d, h_some, _, h_code_delegated, h_delegated⟩
             · rw [h_code_self, h_to_ca]
               exact h_code
             · exfalso

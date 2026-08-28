@@ -1419,11 +1419,12 @@ theorem of_recoverPermitSigner
       rcases hcause with hout | hchild
       · exact hout
       · rcases hchild with
-          ⟨parent, child, xl, dp, code, avail,
+          ⟨parent, child, xl, dp, na, code, avail,
             hdepth, hstack, hstate, hmemory, hdel, hfill,
             hpm, herr, houtChild⟩
-        rcases hdel with ⟨hnd, hcode, hdp⟩ | ⟨d, hsome, hcode, hdp⟩
+        rcases hdel with ⟨hnd, hna, hcode, hdp⟩ | ⟨d, hsome, _, hcode, hdp⟩
         · subst dp
+          subst hna
           change ProcessMessage
             (callMsg sevm parent (min g.toNat (except64th avail)) 0
               sevm.currentTarget 1 1 true true
@@ -1455,11 +1456,12 @@ theorem of_recoverPermitSigner
     rw [hout]
     rfl
   · rcases hsuccess with
-      ⟨parent, child, xl, dp, code, avail,
+      ⟨parent, child, xl, dp, na, code, avail,
         hdepth, hstack, hstate, hmemory, hparentLogs, hparentOutput,
         hdel, hfill, hpm, hclean, hresume, hstateU, hret, hmem, hstackU⟩
-    rcases hdel with ⟨hnd, hcode, hdp⟩ | ⟨d, hsome, hcode, hdp⟩
+    rcases hdel with ⟨hnd, hna, hcode, hdp⟩ | ⟨d, hsome, _, hcode, hdp⟩
     · subst dp
+      subst hna
       change ProcessMessage
         (callMsg sevm parent (min g.toNat (except64th avail)) 0
           sevm.currentTarget 1 1 true true

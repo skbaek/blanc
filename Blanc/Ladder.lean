@@ -1681,8 +1681,8 @@ lemma of_run_call_val_with_depth_frame
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_run : Ninst.Run sevm s Ninst.call sf) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
-      (avail pc : Nat),
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail pc : Nat),
       Ninst.StepRun pc sevm s Ninst.call xl (.ok sf) ∧
       0 < sevm.depth ∧
       s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
@@ -1692,15 +1692,15 @@ lemma of_run_call_val_with_depth_frame
       parent.logs = s.logs ∧
       parent.output = s.output ∧
       ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
-          code = s.getCode c.toAdr ∧ dp = false) ∨
+          na = c.toAdr ∧ code = s.getCode c.toAdr ∧ dp = false) ∨
         (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
-          code = s.getCode d ∧ dp = true)) ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
       Xlot.Filled xl ∧
       ProcessMessage
         (callMsg sevm parent
           (min g.toNat (except64th avail)
             + (if v.toNat = 0 then 0 else gCallStipend))
-          v sevm.currentTarget c.toAdr c.toAdr true false
+          v sevm.currentTarget c.toAdr na true false
           ((s.memory.read ii.toNat is.toNat).1) code dp)
         xl (.ok child) ∧
       child.error.isSome = false ∧
@@ -1856,17 +1856,17 @@ lemma of_run_call_val_with_depth_frame
     rfl
   have h_del :
       (getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
-        code0 = s.getCode c.toAdr ∧ dp = false) ∨
+        na = c.toAdr ∧ code0 = s.getCode c.toAdr ∧ dp = false) ∨
       (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
-        code0 = s.getCode d ∧ dp = true) := by
+        na = d ∧ code0 = s.getCode d ∧ dp = true) := by
     have h_acc := hp11
     dsimp only [accessDelegation] at h_acc
     rw [h_gc7] at h_acc
     rcases hdel : getDelegatedCodeAddress (s.getCode c.toAdr) with _ | d <;>
       rw [hdel] at h_acc <;>
       simp only [Prod.mk.injEq] at h_acc
-    · exact Or.inl ⟨rfl, h_acc.2.2.1.symm, h_acc.1.symm⟩
-    · refine Or.inr ⟨d, rfl, ?_, h_acc.1.symm⟩
+    · exact Or.inl ⟨rfl, h_acc.2.1.symm, h_acc.2.2.1.symm, h_acc.1.symm⟩
+    · refine Or.inr ⟨d, rfl, h_acc.2.1.symm, ?_, h_acc.1.symm⟩
       rw [← h_acc.2.2.1]
       show (addAccessedAddress devm7 c.toAdr).state.getCode d = s.getCode d
       show devm7.state.getCode d = s.getCode d
@@ -2039,7 +2039,7 @@ lemma of_run_call_val_with_depth_frame
         rw [h_cd] at run_pm₀
         refine ⟨(devm10.memExtends
             [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
-          child, xl, dp, code0, avail, pc, h_step,
+          child, xl, dp, na, code0, avail, pc, h_step,
           by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
           h_logs_par, h_output_par, h_del, h_fill,
           run_pm₀, by simpa using herr, h_split.symm,
@@ -2056,23 +2056,23 @@ lemma of_run_call_val_with_depth
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_run : Ninst.Run sevm s Ninst.call sf) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
-      (avail : Nat),
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail : Nat),
       0 < sevm.depth ∧
       s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
       parent.state = s.state ∧
       parent.memory
         = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
       ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
-          code = s.getCode c.toAdr ∧ dp = false) ∨
+          na = c.toAdr ∧ code = s.getCode c.toAdr ∧ dp = false) ∨
         (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
-          code = s.getCode d ∧ dp = true)) ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
       Xlot.Filled xl ∧
       ProcessMessage
         (callMsg sevm parent
           (min g.toNat (except64th avail)
             + (if v.toNat = 0 then 0 else gCallStipend))
-          v sevm.currentTarget c.toAdr c.toAdr true false
+          v sevm.currentTarget c.toAdr na true false
           ((s.memory.read ii.toNat is.toNat).1) code dp)
         xl (.ok child) ∧
       child.error.isSome = false ∧
@@ -2084,9 +2084,9 @@ lemma of_run_call_val_with_depth
   rcases of_run_call_val_with_depth_frame hp h_run with hfail | hsuccess
   · exact Or.inl hfail
   · rcases hsuccess with
-      ⟨parent, child, xl, dp, code, avail, _pc, _hstep,
+      ⟨parent, child, xl, dp, na, code, avail, _pc, _hstep,
         hdepth, hstack, hstate, hmemory, hlogs, houtput, hrest⟩
-    exact Or.inr ⟨parent, child, xl, dp, code, avail,
+    exact Or.inr ⟨parent, child, xl, dp, na, code, avail,
       hdepth, hstack, hstate, hmemory, hrest⟩
 
 /-- Compatibility projection of `of_run_call_val_with_depth`.  Existing
@@ -2096,22 +2096,22 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_run : Ninst.Run sevm s Ninst.call sf) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
-      (avail : Nat),
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail : Nat),
       s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
       parent.state = s.state ∧
       parent.memory
         = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
       ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
-          code = s.getCode c.toAdr ∧ dp = false) ∨
+          na = c.toAdr ∧ code = s.getCode c.toAdr ∧ dp = false) ∨
         (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
-          code = s.getCode d ∧ dp = true)) ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
       Xlot.Filled xl ∧
       ProcessMessage
         (callMsg sevm parent
           (min g.toNat (except64th avail)
             + (if v.toNat = 0 then 0 else gCallStipend))
-          v sevm.currentTarget c.toAdr c.toAdr true false
+          v sevm.currentTarget c.toAdr na true false
           ((s.memory.read ii.toNat is.toNat).1) code dp)
         xl (.ok child) ∧
       child.error.isSome = false ∧
@@ -2122,8 +2122,9 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
       sf.stack = (1 : B256) :: parent.stack := by
   rcases of_run_call_val_with_depth hp h_run with h_fail | h_enter
   · exact Or.inl h_fail
-  · rcases h_enter with ⟨parent, child, xl, dp, code, avail, _, h_enter⟩
-    exact Or.inr ⟨parent, child, xl, dp, code, avail, h_enter⟩
+  · rcases h_enter with
+      ⟨parent, child, xl, dp, na, code, avail, _, h_enter⟩
+    exact Or.inr ⟨parent, child, xl, dp, na, code, avail, h_enter⟩
 
 /-- Why a value-carrying `STATICCALL` returned its failure flag.  The depth
 case has no child and therefore empty returndata.  The other case records the
@@ -2131,21 +2132,21 @@ exact errored child message, including delegation resolution and calldata. -/
 def StatcallFailureCause (sevm : Sevm) (s : Devm)
     (g t ii is oi os : B256) (out : Bytes) : Prop :=
   out = [] ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
-      (avail : Nat),
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail : Nat),
       0 < sevm.depth ∧
       s.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
       parent.state = s.state ∧
       parent.memory
         = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
       ((getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
-          code = s.getCode t.toAdr ∧ dp = false) ∨
+          na = t.toAdr ∧ code = s.getCode t.toAdr ∧ dp = false) ∨
         (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
-          code = s.getCode d ∧ dp = true)) ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
       Xlot.Filled xl ∧
       ProcessMessage
         (callMsg sevm parent (min g.toNat (except64th avail)) 0
-          sevm.currentTarget t.toAdr t.toAdr true true
+          sevm.currentTarget t.toAdr na true true
           ((s.memory.read ii.toNat is.toNat).1) code dp)
         xl (.ok child) ∧
       child.error.isSome = true ∧
@@ -2171,8 +2172,8 @@ lemma of_run_statcall_val_with_depth_cause
           [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
             oi.toNat (out.take os.toNat) ∧
         StatcallFailureCause sevm s g t ii is oi os out) ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
-      (avail : Nat),
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail : Nat),
       0 < sevm.depth ∧
       s.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
       parent.state = s.state ∧
@@ -2181,13 +2182,13 @@ lemma of_run_statcall_val_with_depth_cause
       parent.logs = s.logs ∧
       parent.output = s.output ∧
       ((getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
-          code = s.getCode t.toAdr ∧ dp = false) ∨
+          na = t.toAdr ∧ code = s.getCode t.toAdr ∧ dp = false) ∨
         (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
-          code = s.getCode d ∧ dp = true)) ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
       Xlot.Filled xl ∧
       ProcessMessage
         (callMsg sevm parent (min g.toNat (except64th avail)) 0
-          sevm.currentTarget t.toAdr t.toAdr true true
+          sevm.currentTarget t.toAdr na true true
           ((s.memory.read ii.toNat is.toNat).1) code dp)
         xl (.ok child) ∧
       child.error.isSome = false ∧
@@ -2328,17 +2329,17 @@ lemma of_run_statcall_val_with_depth_cause
     rfl
   have h_del :
       (getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
-        code0 = s.getCode t.toAdr ∧ dp = false) ∨
+        na = t.toAdr ∧ code0 = s.getCode t.toAdr ∧ dp = false) ∨
       (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
-        code0 = s.getCode d ∧ dp = true) := by
+        na = d ∧ code0 = s.getCode d ∧ dp = true) := by
     have h_acc := hp10
     dsimp only [accessDelegation] at h_acc
     rw [h_gc6] at h_acc
     rcases hdel : getDelegatedCodeAddress (s.getCode t.toAdr) with _ | d <;>
       rw [hdel] at h_acc <;>
       simp only [Prod.mk.injEq] at h_acc
-    · exact Or.inl ⟨rfl, h_acc.2.2.1.symm, h_acc.1.symm⟩
-    · refine Or.inr ⟨d, rfl, ?_, h_acc.1.symm⟩
+    · exact Or.inl ⟨rfl, h_acc.2.1.symm, h_acc.2.2.1.symm, h_acc.1.symm⟩
+    · refine Or.inr ⟨d, rfl, h_acc.2.1.symm, ?_, h_acc.1.symm⟩
       rw [← h_acc.2.2.1]
       show (addAccessedAddress devm6 t.toAdr).state.getCode d = s.getCode d
       show devm6.state.getCode d = s.getCode d
@@ -2481,14 +2482,14 @@ lemma of_run_statcall_val_with_depth_cause
         · refine ⟨
             (devm9.memExtends
               [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
-            child, xl, dp, code0, avail,
+            child, xl, dp, na, code0, avail,
             by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
             h_del, h_fill, ?_, by simpa using herr, rfl⟩
           simpa [ProcessMessage] using run_pm₀
     · right
       refine ⟨(devm9.memExtends
           [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
-        child, xl, dp, code0, avail,
+        child, xl, dp, na, code0, avail,
         by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
         h_logs_par, h_output_par, h_del,
         h_fill, ?_, by simpa using herr, h_split.symm,
@@ -2510,21 +2511,21 @@ lemma of_run_statcall_val_with_depth
         sf.memory = (s.memory.extends
           [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
             oi.toNat (out.take os.toNat)) ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
-      (avail : Nat),
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail : Nat),
       0 < sevm.depth ∧
       s.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
       parent.state = s.state ∧
       parent.memory
         = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
       ((getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
-          code = s.getCode t.toAdr ∧ dp = false) ∨
+          na = t.toAdr ∧ code = s.getCode t.toAdr ∧ dp = false) ∨
         (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
-          code = s.getCode d ∧ dp = true)) ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
       Xlot.Filled xl ∧
       ProcessMessage
         (callMsg sevm parent (min g.toNat (except64th avail)) 0
-          sevm.currentTarget t.toAdr t.toAdr true true
+          sevm.currentTarget t.toAdr na true true
           ((s.memory.read ii.toNat is.toNat).1) code dp)
         xl (.ok child) ∧
       child.error.isSome = false ∧
@@ -2537,9 +2538,9 @@ lemma of_run_statcall_val_with_depth
   · rcases hfail with ⟨hstack, hworld, out, hret, hmem, hcause⟩
     exact Or.inl ⟨hstack, hworld, out, hret, hmem⟩
   · rcases hsuccess with
-      ⟨parent, child, xl, dp, code, avail,
+      ⟨parent, child, xl, dp, na, code, avail,
         hdepth, hstack, hstate, hmemory, hlogs, houtput, hrest⟩
-    exact Or.inr ⟨parent, child, xl, dp, code, avail,
+    exact Or.inr ⟨parent, child, xl, dp, na, code, avail,
       hdepth, hstack, hstate, hmemory, hrest⟩
 
 /-- The deeper-frame induction hypothesis, as the ladder's consumers use it:

@@ -1148,7 +1148,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
           ∃ m : Msg, ProcessMessage m xl ex' ∧
             m.shouldTransferValue = true ∧ m.benv.state = s₁.state ∧
             m.caller = sevm.currentTarget ∧ m.value = wad ∧
-            m.currentTarget = sevm.caller ∧ m.codeAddress = some sevm.caller ∧
+            m.currentTarget = sevm.caller ∧ m.codeAddress = some na ∧
             m.code = code0 ∧ m.depth = sevm.depth - 1 :=
         ⟨_, run_pm₀, rfl, h_st11, rfl, rfl, rfl, rfl, rfl, rfl⟩
       clear run_pm₀
@@ -1185,7 +1185,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
       -- sub-message succeeded
       have h_if' := h_if.symm
       subst h_if'
-      have h_wb_ca : (childMsg.withBenv benv').codeAddress = some sevm.caller := hc_ca
+      have h_wb_ca : (childMsg.withBenv benv').codeAddress = some na := hc_ca
       rcases of_executeCode_someCode h_wb_ca run_ec with
         ⟨h_prec, h_xl_none, h_he⟩ | ⟨h_prec, ex''', h_xl_some, h_he⟩
       · -- callee is a precompile : no sub-execution, only the transfer

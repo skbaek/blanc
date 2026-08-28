@@ -199,12 +199,12 @@ theorem directCall_nonzero_spawn
     (h_depth : sevm.depth ≠ 0) :
     let parent := callSpawnParent d1 (mcc + ext)
       iiw.toNat isw.toNat oiw.toNat osw.toNat
-    let child := valueCallSpawnMsg sevm parent mcs vw cw.toAdr
+    let child := valueCallSpawnMsg sevm parent mcs vw cw.toAdr dadr
       iiw.toNat isw.toNat code dp
     Xinst.step sevm devm .call =
         .spawn (Frame.ofCall child) (.call parent oiw.toNat osw.toNat) ∧
       child.currentTarget = cw.toAdr ∧
-      child.codeAddress = some cw.toAdr ∧
+      child.codeAddress = some dadr ∧
       child.caller = sevm.currentTarget ∧
       child.value = vw ∧ child.shouldTransferValue = true ∧
       child.isStatic = sevm.isStatic ∧
@@ -239,12 +239,12 @@ theorem directCall_zero_spawn
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
     let parent := callSpawnParent d1 (mcc + ext)
       iiw.toNat isw.toNat oiw.toNat osw.toNat
-    let child := callSpawnMsg sevm parent mcs cw.toAdr
+    let child := callSpawnMsg sevm parent mcs cw.toAdr dadr
       iiw.toNat isw.toNat code dp
     Xinst.step sevm devm .call =
         .spawn (Frame.ofCall child) (.call parent oiw.toNat osw.toNat) ∧
       child.currentTarget = cw.toAdr ∧
-      child.codeAddress = some cw.toAdr ∧
+      child.codeAddress = some dadr ∧
       child.caller = sevm.currentTarget ∧
       child.value = 0 ∧ child.shouldTransferValue = true ∧
       child.isStatic = sevm.isStatic ∧
@@ -277,12 +277,12 @@ theorem directStatcall_spawn
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
     let parent := callSpawnParent d1 (mcc + ext)
       iiw.toNat isw.toNat oiw.toNat osw.toNat
-    let child := statcallSpawnMsg sevm parent mcs tw.toAdr
+    let child := statcallSpawnMsg sevm parent mcs tw.toAdr dadr
       iiw.toNat isw.toNat code dp
     Xinst.step sevm devm .statcall =
         .spawn (Frame.ofCall child) (.call parent oiw.toNat osw.toNat) ∧
       child.currentTarget = tw.toAdr ∧
-      child.codeAddress = some tw.toAdr ∧
+      child.codeAddress = some dadr ∧
       child.caller = sevm.currentTarget ∧
       child.value = 0 ∧ child.shouldTransferValue = true ∧
       child.isStatic = true ∧

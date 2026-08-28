@@ -1337,7 +1337,7 @@ lemma conserved_of_call {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {
           ∃ m : Msg, ProcessMessage m xl ex' ∧
             m.shouldTransferValue = true ∧ m.benv.state = s.state ∧
             m.caller = sevm.currentTarget ∧ m.value = value ∧
-            m.currentTarget = callee ∧ m.codeAddress = some callee ∧
+            m.currentTarget = callee ∧ m.codeAddress = some na ∧
             m.code = code0 ∧ m.depth = sevm.depth - 1 :=
         ⟨_, run_pm₀, rfl, h_st11, rfl, rfl, rfl, rfl, rfl, rfl⟩
       clear run_pm₀
@@ -1385,7 +1385,7 @@ lemma conserved_of_call {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {
       -- sub-message succeeded
       have h_if' := h_if.symm
       subst h_if'
-      have h_wb_ca : (childMsg.withBenv benv').codeAddress = some callee := hc_ca
+      have h_wb_ca : (childMsg.withBenv benv').codeAddress = some na := hc_ca
       rcases of_executeCode_someCode h_wb_ca run_ec with
         ⟨h_prec, h_xl_none, h_he⟩ | ⟨h_prec, ex''', h_xl_some, h_he⟩
       · -- callee is a precompile : no sub-execution, only the transfer
