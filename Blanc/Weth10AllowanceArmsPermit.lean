@@ -154,7 +154,9 @@ private def StatcallSpawnFacts
     (sevm : Sevm) (pre : Devm) (frame : Frame) : Prop :=
   ∃ msg : Msg,
     frame = Frame.ofCall msg ∧
-    msg.codeAddress = some (1 : B256).toAdr ∧
+    msg.codeAddress =
+      some ((getDelegatedCodeAddress
+        (pre.getCode (1 : B256).toAdr)).getD (1 : B256).toAdr) ∧
     msg.benv.stat = sevm.benvStat ∧
     ((getDelegatedCodeAddress (pre.getCode (1 : B256).toAdr) = none ∧
         msg.code = pre.getCode (1 : B256).toAdr ∧
@@ -250,12 +252,26 @@ private theorem Xinst.step_statcall_spawn_facts
         devm.state.getCode target
       show d6.state.getCode target = devm.state.getCode target
       rw [← hpre6]
+  have hresolvedAddress :
+      delegatedAddress =
+        (getDelegatedCodeAddress
+          (devm.getCode (1 : B256).toAdr)).getD (1 : B256).toAdr := by
+    have haccess := hdelegation
+    dsimp only [accessDelegation] at haccess
+    rw [hcodeAt] at haccess
+    rcases hdelegate :
+        getDelegatedCodeAddress (devm.getCode (1 : B256).toAdr) with
+          _ | tgt <;>
+      rw [hdelegate] at haccess <;>
+      simp only [Prod.mk.injEq] at haccess <;>
+      exact haccess.2.1.symm
   split at hspawn
   · cases hspawn
   rename_i d9 hcharge
   have hframe := (genericCall_step_spawn_exact hspawn).1
   subst frame
-  exact ⟨_, rfl, rfl, rfl, by simpa only [callMsg] using hresolution⟩
+  exact ⟨_, rfl, congrArg some hresolvedAddress, rfl,
+    by simpa only [callMsg] using hresolution⟩
 
 private theorem Ninst.step_statcall_spawn_facts
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
@@ -299,6 +315,7 @@ private theorem not_run_of_statcallSpawnFacts
     (hfacts : StatcallSpawnFacts sevm pre f)
     (henter : f.enter = .run childEvm) : False := by
   rcases hfacts with ⟨msg, rfl, hca, hstat, hres⟩
+  rw [hnodeleg] at hca
   have hdisable : msg.disablePrecompiles = false := by
     rcases hres with ⟨-, -, hdisable⟩ | ⟨d, hd, -, -⟩
     · exact hdisable
@@ -555,7 +572,8 @@ private def StatcallSpawnMessage
   ∃ (msg : Msg) (target : Adr) (delegated : Bool),
     frame = Frame.ofCall msg ∧
     msg.currentTarget = target ∧
-    msg.codeAddress = some target ∧
+    msg.codeAddress =
+      some ((getDelegatedCodeAddress (pre.getCode target)).getD target) ∧
     msg.benv.state = pre.state ∧
     msg.depth < sevm.depth ∧
     ((getDelegatedCodeAddress (pre.getCode target) = none ∧
@@ -651,6 +669,17 @@ private theorem Xinst.step_statcall_spawn_message
       · rw [← haccess.2.2.2.2]
         show d6.state = devm.state
         rw [← hpre6]
+  have hresolvedAddress :
+      delegatedAddress =
+        (getDelegatedCodeAddress (devm.getCode target)).getD target := by
+    have haccess := hdelegation
+    dsimp only [accessDelegation] at haccess
+    rw [hcodeAt] at haccess
+    rcases hdelegate : getDelegatedCodeAddress (devm.getCode target) with
+        _ | tgt <;>
+      rw [hdelegate] at haccess <;>
+      simp only [Prod.mk.injEq] at haccess <;>
+      exact haccess.2.1.symm
   split at hspawn
   · cases hspawn
   rename_i d9 hcharge
@@ -659,7 +688,8 @@ private theorem Xinst.step_statcall_spawn_message
   have hdepth := genericCall.step_spawn_depth_pos hspawn
   have hframe := (genericCall_step_spawn_exact hspawn).1
   subst frame
-  refine ⟨_, target, delegated, rfl, rfl, rfl, ?_, ?_, ?_⟩
+  refine ⟨_, target, delegated, rfl, rfl, ?_, ?_, ?_, ?_⟩
+  · exact congrArg some hresolvedAddress
   · show ((d9.memExtends _).withReturnData []).state = devm.state
     exact hd9
   · show sevm.depth - 1 < sevm.depth
@@ -726,7 +756,15 @@ private theorem entryReadSound_statcallCrossing
           (fun hct =>
             callbackCode_eq_compiled_of_target_eq installed
               (hcurrent.symm.trans hct) hres)
-          (fun hct => by rw [hcodeAddress, ← hcurrent, hct])
+          (fun hct => by
+            have htargetCa : target = ca := hcurrent.symm.trans hct
+            have hnone :
+                getDelegatedCodeAddress (pre.getCode target) = none := by
+              rw [htargetCa]
+              dsimp only [getDelegatedCodeAddress]
+              rw [if_neg (not_delegation_of_compile installed)]
+            rw [hcodeAddress, hnone, htargetCa]
+            rfl)
           hdeeper
       exact hchild.entryRead
   · rw [dif_neg hcommit]
@@ -1263,9 +1301,10 @@ private theorem permitStatcallRegionSilent_of_forallDeeperAt
   rcases of_run_statcall_val_with_depth hoperands hrun with hfail | hsuccess
   · rw [← getStor_eq_of_state_eq hfail.2.1.1 ca]
   · rcases hsuccess with
-      ⟨parent, child, xl, dpFlag, code, avail, hdepthPos, _hstack,
-        hparentState, _hparentMemory, hdelegation, hfilled, hprocess,
-        _herr, _hresume, hstateV, _hreturnData, _hmemory, _hstackV⟩
+      ⟨parent, child, xl, dpFlag, resolvedCallee, code, avail, hdepthPos,
+        _hstack, hparentState, _hparentMemory, hdelegation, hfilled,
+        hprocess, _herr, _hresume, hstateV, _hreturnData, _hmemory,
+        _hstackV⟩
     obtain ⟨retained⟩ := exists_retainedXlot_of_filled hfilled
     have hfree : WriteFreeLedger (retained.attributionStream dp ca) := by
       cases retained with
@@ -1275,6 +1314,27 @@ private theorem permitStatcallRegionSilent_of_forallDeeperAt
           have hstatic := Blanc.Frame.enter_run_isStatic (RunFrame.some_inv
             hprocess).1
           simpa only [Jaune.Frame.ofCall, callMsg, Bool.true_or] using hstatic
+    have hdelegation' :
+        (getDelegatedCodeAddress (u.getCode (1 : B256).toAdr) = none ∧
+            code = u.getCode (1 : B256).toAdr ∧ dpFlag = false) ∨
+        (∃ delegatedTarget,
+          getDelegatedCodeAddress (u.getCode (1 : B256).toAdr) =
+            some delegatedTarget ∧
+          code = u.getCode delegatedTarget ∧ dpFlag = true) := by
+      rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
+        ⟨delegatedTarget, hsome, _, hcode, hdel⟩
+      · exact Or.inl ⟨hnone, hcode, hdel⟩
+      · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
+    have hresolved : (1 : B256).toAdr = ca → resolvedCallee = ca := by
+      intro htargetCa
+      have hnone :
+          getDelegatedCodeAddress (u.getCode (1 : B256).toAdr) = none := by
+        rw [htargetCa]
+        dsimp only [getDelegatedCodeAddress]
+        rw [if_neg (not_delegation_of_compile hcodeAt)]
+      rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
+      · exact hna.trans htargetCa
+      · simp [hnone] at hsome
     have hchild := ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
       (dp := dp) (ca := ca) (depth := e.depth) (parent := u)
       ⟨xl, retained, hprocess⟩
@@ -1286,12 +1346,12 @@ private theorem permitStatcallRegionSilent_of_forallDeeperAt
         have htargetCa : (1 : B256).toAdr = ca := by
           simpa only [callMsg] using hct
         exact callbackCode_eq_compiled_of_target_eq hcodeAt htargetCa
-          hdelegation)
+          hdelegation')
       (by
         intro hct
         have htargetCa : (1 : B256).toAdr = ca := by
           simpa only [callMsg] using hct
-        simp only [callMsg, htargetCa])
+        simp only [callMsg, htargetCa, hresolved htargetCa])
       hdeeper
     have hstor := hchild.storage key hkey
     rw [applyAllowanceLedger_writeFree _ key hfree] at hstor

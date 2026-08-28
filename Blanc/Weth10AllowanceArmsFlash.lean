@@ -542,8 +542,8 @@ private theorem RawFlashCallbackStepBoundary.exists_step
     ∃ (xl : Xlot) (pc : Nat), Xlot.Filled xl ∧
       Ninst.StepRun pc sevm pre Ninst.call xl (.ok mid) := by
   rcases h with
-    ⟨_parent, _child, xl, _delegated, _code, _gasWord, _avail, pc, hstep,
-      _hdepth, _hstack, _hpref, _hparentState, _hparentMemory,
+    ⟨_parent, _child, xl, _delegated, _na, _code, _gasWord, _avail, pc,
+      hstep, _hdepth, _hstack, _hpref, _hparentState, _hparentMemory,
       _hparentLogs, _hparentOutput, _hdelegation, hfilled, _hprocess,
       _hclean, _hlength, _hmagic, _hresume, _hmidState, _hreturnData,
       _hmidStack, _hmidLogs, _hmidOutput⟩
@@ -566,36 +566,57 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffect
     AllowanceRegionEffect ca pre mid
       (retained.attributionStream dp ca) := by
   rcases boundary with
-    ⟨parent, child, xlRaw, delegated, code, gasWord, avail, pcRaw, hrawStep,
-      hdepth, _hstack, _hpref, hparentState, _hparentMemory, _hparentLogs,
-      _hparentOutput, hdelegation, hrawFilled, hprocess, _hclean, _hlength,
-      _hmagic, _hresume, hmidState, _hreturnData, _hmidStack, _hmidLogs,
-      _hmidOutput⟩
+    ⟨parent, child, xlRaw, delegated, na, code, gasWord, avail, pcRaw,
+      hrawStep, hdepth, _hstack, _hpref, hparentState, _hparentMemory,
+      _hparentLogs, _hparentOutput, hdelegation, hrawFilled, hprocess,
+      _hclean, _hlength, _hmagic, _hresume, hmidState, _hreturnData,
+      _hmidStack, _hmidLogs, _hmidOutput⟩
   have halign := Ninst.StepRun.unique_exec_of_filled hfilled hrawFilled
     hstep hrawStep
   cases halign.1
   let msg : Msg :=
     callMsg sevm parent (min gasWord.toNat (except64th avail)) 0
-      sevm.currentTarget receiver receiver true false callbackInput code
+      sevm.currentTarget receiver na true false callbackInput code
       delegated
   have hparent : pre.state = msg.benv.state := by
     simpa only [msg, callMsg] using hparentState.symm
   have hmsgDepth : msg.depth < sevm.depth := by
     dsimp only [msg, callMsg]
     omega
+  have hdelegation' :
+      (getDelegatedCodeAddress (pre.getCode receiver) = none ∧
+          code = pre.getCode receiver ∧ delegated = false) ∨
+      (∃ delegatedTarget,
+        getDelegatedCodeAddress (pre.getCode receiver) =
+          some delegatedTarget ∧
+        code = pre.getCode delegatedTarget ∧ delegated = true) := by
+    rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
+      ⟨delegatedTarget, hsome, _, hcode, hdel⟩
+    · exact Or.inl ⟨hnone, hcode, hdel⟩
+    · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
+  have hresolved : receiver = ca → na = ca := by
+    intro hreceiver
+    have hnone :
+        getDelegatedCodeAddress (pre.getCode receiver) = none := by
+      rw [hreceiver]
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile installed)]
+    rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
+    · exact hna.trans hreceiver
+    · simp [hnone] at hsome
   have htargetCode : msg.currentTarget = ca →
       some msg.code.toList = Prog.compile (weth10 dp) := by
     intro hct
     have htargetCa : receiver = ca := by
       simpa only [msg, callMsg] using hct
     exact callbackCode_eq_compiled_of_target_eq installed htargetCa
-      hdelegation
+      hdelegation'
   have htargetDirect :
       msg.currentTarget = ca → msg.codeAddress = some ca := by
     intro hct
     have htargetCa : receiver = ca := by
       simpa only [msg, callMsg] using hct
-    simp only [msg, callMsg, htargetCa]
+    simp only [msg, callMsg, hresolved htargetCa]
   have hchild :=
     ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
       (dp := dp) (ca := ca) (depth := sevm.depth) (parent := pre)
@@ -957,36 +978,57 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffectSound
     AllowanceRegionEffectSound ca pre mid
       (retained.attributionStream dp ca) := by
   rcases boundary with
-    ⟨parent, child, xlRaw, delegated, code, gasWord, avail, pcRaw, hrawStep,
-      hdepth, _hstack, _hpref, hparentState, _hparentMemory, _hparentLogs,
-      _hparentOutput, hdelegation, hrawFilled, hprocess, _hclean, _hlength,
-      _hmagic, _hresume, hmidState, _hreturnData, _hmidStack, _hmidLogs,
-      _hmidOutput⟩
+    ⟨parent, child, xlRaw, delegated, na, code, gasWord, avail, pcRaw,
+      hrawStep, hdepth, _hstack, _hpref, hparentState, _hparentMemory,
+      _hparentLogs, _hparentOutput, hdelegation, hrawFilled, hprocess,
+      _hclean, _hlength, _hmagic, _hresume, hmidState, _hreturnData,
+      _hmidStack, _hmidLogs, _hmidOutput⟩
   have halign := Ninst.StepRun.unique_exec_of_filled hfilled hrawFilled
     hstep hrawStep
   cases halign.1
   let msg : Msg :=
     callMsg sevm parent (min gasWord.toNat (except64th avail)) 0
-      sevm.currentTarget receiver receiver true false callbackInput code
+      sevm.currentTarget receiver na true false callbackInput code
       delegated
   have hparent : pre.state = msg.benv.state := by
     simpa only [msg, callMsg] using hparentState.symm
   have hmsgDepth : msg.depth < sevm.depth := by
     dsimp only [msg, callMsg]
     omega
+  have hdelegation' :
+      (getDelegatedCodeAddress (pre.getCode receiver) = none ∧
+          code = pre.getCode receiver ∧ delegated = false) ∨
+      (∃ delegatedTarget,
+        getDelegatedCodeAddress (pre.getCode receiver) =
+          some delegatedTarget ∧
+        code = pre.getCode delegatedTarget ∧ delegated = true) := by
+    rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
+      ⟨delegatedTarget, hsome, _, hcode, hdel⟩
+    · exact Or.inl ⟨hnone, hcode, hdel⟩
+    · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
+  have hresolved : receiver = ca → na = ca := by
+    intro hreceiver
+    have hnone :
+        getDelegatedCodeAddress (pre.getCode receiver) = none := by
+      rw [hreceiver]
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile installed)]
+    rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
+    · exact hna.trans hreceiver
+    · simp [hnone] at hsome
   have htargetCode : msg.currentTarget = ca →
       some msg.code.toList = Prog.compile (weth10 dp) := by
     intro hct
     have htargetCa : receiver = ca := by
       simpa only [msg, callMsg] using hct
     exact callbackCode_eq_compiled_of_target_eq installed htargetCa
-      hdelegation
+      hdelegation'
   have htargetDirect :
       msg.currentTarget = ca → msg.codeAddress = some ca := by
     intro hct
     have htargetCa : receiver = ca := by
       simpa only [msg, callMsg] using hct
-    simp only [msg, callMsg, htargetCa]
+    simp only [msg, callMsg, hresolved htargetCa]
   have hchild :=
     ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
       (dp := dp) (ca := ca) (depth := sevm.depth) (parent := pre)
