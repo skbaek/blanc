@@ -75,7 +75,7 @@
     "lakefile.lean": "1e183fa01ba53015be897721557b8e9733e4f3075e54c866e45e093aa86017ec",
     "lake-manifest.json": "87378886d42253ce75ab0b4b1b5d1774684c10f8118d611f4978d8aca49fad91"
   },
-  "wethPublicHeaderAggregate": "d681311a1bc77467fb1cdd978ff666b9aacbc371b720f32a14d82d9fcbdee752",
+  "wethPublicHeaderAggregate": "52619f58d434919e86537a5de8876cd824d27b823b44c51e1857d7f93550f48f",
   "requiredSharedClassification": "TransientSettlement",
   "forbiddenTraceFamily": [
     "ProcessMessageTrace",

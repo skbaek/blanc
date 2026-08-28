@@ -89,7 +89,10 @@ structure PermitStaticcallMessageTrace
   benvState : msg.benv.state = parent.state
   depth : msg.depth < sevm.depth
   target : msg.currentTarget = (1 : B256).toAdr
-  codeAddress : msg.codeAddress = some (1 : B256).toAdr
+  codeAddress :
+    msg.codeAddress =
+      some ((getDelegatedCodeAddress
+        (callPre.getCode (1 : B256).toAdr)).getD (1 : B256).toAdr)
   delegationResolution :
     (getDelegatedCodeAddress (callPre.getCode (1 : B256).toAdr) = none ∧
         msg.code = callPre.getCode (1 : B256).toAdr ∧
@@ -153,7 +156,9 @@ private def StaticcallSpawnData
   msg.benv.state = parent.state ∧
   msg.depth < sevm.depth ∧
   msg.currentTarget = (1 : B256).toAdr ∧
-  msg.codeAddress = some (1 : B256).toAdr ∧
+  msg.codeAddress =
+    some ((getDelegatedCodeAddress
+      (pre.getCode (1 : B256).toAdr)).getD (1 : B256).toAdr) ∧
   ((getDelegatedCodeAddress (pre.getCode (1 : B256).toAdr) = none ∧
         msg.code = pre.getCode (1 : B256).toAdr ∧
         msg.disablePrecompiles = false) ∨
@@ -258,6 +263,19 @@ private theorem Xinst.step_statcall_spawn_data
         devm.state.getCode target
       show d6.state.getCode target = devm.state.getCode target
       rw [← hpre6]
+  have hresolvedAddress :
+      delegatedAddress =
+        (getDelegatedCodeAddress
+          (devm.getCode (1 : B256).toAdr)).getD (1 : B256).toAdr := by
+    have haccess := hdelegation
+    dsimp only [accessDelegation] at haccess
+    rw [hcodeAt] at haccess
+    rcases hdelegate :
+        getDelegatedCodeAddress (devm.getCode (1 : B256).toAdr) with
+          _ | target <;>
+      rw [hdelegate] at haccess <;>
+      simp only [Prod.mk.injEq] at haccess <;>
+      exact haccess.2.1.symm
   split at hspawn
   · cases hspawn
   rename_i d9 hcharge
@@ -266,13 +284,14 @@ private theorem Xinst.step_statcall_spawn_data
     ⟨hframe, hresume⟩
   subst frame
   subst resume
-  refine ⟨_, _, _, _, rfl, rfl, ?_, rfl, ?_, rfl, rfl, ?_,
+  refine ⟨_, _, _, _, rfl, rfl, ?_, rfl, ?_, rfl, ?_, ?_,
     rfl, rfl, rfl⟩
   · exact f9.1.symm.trans (f8.1.symm.trans
       (f6.1.symm.trans (f5.1.symm.trans (f4.1.symm.trans
         (f3.1.symm.trans (f2.state.symm.trans f1.state.symm))))))
   · have hdepth := genericCall.step_spawn_depth hspawn
     simpa only [Frame.ofCall, callMsg] using hdepth
+  · exact congrArg some hresolvedAddress
   · simpa only [callMsg] using hresolution
 
 private theorem Ninst.step_statcall_spawn_data
