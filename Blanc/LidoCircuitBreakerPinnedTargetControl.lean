@@ -1113,6 +1113,355 @@ def benignCallFixture? : Option BenignCallFixture :=
       | none => none
   | .done _ => none
 
+/-! The kernel certificate below follows the same concrete execution as the
+external evaluator, but names every semantic boundary directly.  In
+particular, none of these declarations reflects `benignCallFixture?`. -/
+
+private theorem benignCallCallerBalance :
+    benignCallMsg.benv.state.bal benignCallMsg.caller = 0 := by
+  change (State.get benignCallState benignCircuitBreaker).bal = 0
+  let parentAcct : Acct :=
+    { Acct.nil with code := benignCallParentCode }
+  let childAcct : Acct :=
+    { Acct.nil with code := benignCallChildCode }
+  have htarget : State.get benignCallState benignCircuitBreaker =
+      State.get (State.set (.empty : State) benignCallParentTarget parentAcct)
+        benignCircuitBreaker := by
+    unfold benignCallState
+    exact State.get_set_ne
+      (w := State.set (.empty : State) benignCallParentTarget parentAcct)
+      (a := benignCallTarget) (b := benignCircuitBreaker)
+      (by decide +kernel) childAcct
+  rw [htarget]
+  have hparent :
+      State.get (State.set (.empty : State) benignCallParentTarget parentAcct)
+          benignCircuitBreaker =
+        State.get (.empty : State) benignCircuitBreaker := by
+    exact State.get_set_ne (w := (.empty : State))
+      (a := benignCallParentTarget) (b := benignCircuitBreaker)
+      (by decide +kernel) parentAcct
+  rw [hparent]
+  rfl
+
+private def benignCallEntryMid : State :=
+  benignCallMsg.benv.state.setBal benignCallMsg.caller
+    (benignCallMsg.benv.state.bal benignCallMsg.caller -
+      benignCallMsg.value)
+
+private def benignCallEntryBenv : Benv :=
+  (benignCallMsg.benv.withState benignCallEntryMid).addBal
+    benignCallMsg.currentTarget benignCallMsg.value
+
+private def benignCallEntryEvm : Evm :=
+  initEvm (benignCallMsg.withBenv benignCallEntryBenv)
+
+private theorem benignCallRootEnter :
+    (Jaune.Frame.ofCall benignCallMsg).enter = .run benignCallEntryEvm := by
+  obtain ⟨stmid, hsub, hbt⟩ :=
+    Msg.benvAfterTransfer_of_affordable benignCallMsg rfl (by
+      rw [benignCallCallerBalance]
+      decide +kernel)
+  have expectedSub :
+      benignCallMsg.benv.state.subBal benignCallMsg.caller
+          benignCallMsg.value =
+        some benignCallEntryMid := by
+    unfold State.subBal benignCallEntryMid
+    rw [benignCallCallerBalance]
+    rw [show benignCallMsg.value = 0 by rfl]
+    simp only [if_neg (by decide +kernel : ¬ (0 : B256) < 0)]
+  rw [expectedSub] at hsub
+  cases hsub
+  unfold Jaune.Frame.enter Jaune.Frame.ofCall
+  simp only
+  rw [hbt]
+  rfl
+
+private def benignCallContSuccess (evm : Evm) : Bool :=
+  match evm.step with
+  | .cont _ _ => true
+  | _ => false
+
+private def benignCallTakeCont (evm : Evm) : Evm :=
+  match evm.step with
+  | .cont pc next => ⟨pc, evm.sta, next⟩
+  | _ => default
+
+private theorem benignCallStep_takeCont (evm : Evm)
+    (success : benignCallContSuccess evm = true) :
+    evm.step = .cont (benignCallTakeCont evm).pc
+      (benignCallTakeCont evm).dyna := by
+  cases h : evm.step with
+  | halt _ => simp [benignCallContSuccess, h] at success
+  | spawn _ _ _ => simp [benignCallContSuccess, h] at success
+  | cont _ _ => simp [benignCallTakeCont, h]
+
+private def benignCallEvm1 := benignCallTakeCont benignCallEntryEvm
+private def benignCallEvm2 := benignCallTakeCont benignCallEvm1
+private def benignCallEvm3 := benignCallTakeCont benignCallEvm2
+private def benignCallEvm4 := benignCallTakeCont benignCallEvm3
+private def benignCallEvm5 := benignCallTakeCont benignCallEvm4
+private def benignCallEvm6 := benignCallTakeCont benignCallEvm5
+private def benignCallEvm7 := benignCallTakeCont benignCallEvm6
+private def benignCallEvm8 := benignCallTakeCont benignCallEvm7
+
+private def benignCallEntryTrace :
+    BenignCallContPrefix benignCallEntryEvm benignCallEvm8 := by
+  exact .step (benignCallStep_takeCont benignCallEntryEvm (by decide +kernel))
+    (.step (benignCallStep_takeCont benignCallEvm1 (by decide +kernel))
+    (.step (benignCallStep_takeCont benignCallEvm2 (by decide +kernel))
+    (.step (benignCallStep_takeCont benignCallEvm3 (by decide +kernel))
+    (.step (benignCallStep_takeCont benignCallEvm4 (by decide +kernel))
+    (.step (benignCallStep_takeCont benignCallEvm5 (by decide +kernel))
+    (.step (benignCallStep_takeCont benignCallEvm6 (by decide +kernel))
+    (.step (benignCallStep_takeCont benignCallEvm7 (by decide +kernel))
+      (.refl benignCallEvm8))))))))
+
+private theorem benignCallState_childCode :
+    benignCallState.getCode benignCallTarget = benignCallChildCode := by
+  change (State.get benignCallState benignCallTarget).code = _
+  unfold benignCallState
+  rw [State.get_set_self]
+
+private theorem benignCallEntry_childCode :
+    benignCallEntryEvm.dyna.getCode benignCallTarget =
+      benignCallChildCode := by
+  change benignCallEntryBenv.state.getCode benignCallTarget = _
+  unfold benignCallEntryBenv Benv.addBal Benv.withState benignCallEntryMid
+  rw [State.addBal_getCode, State.setBal_getCode]
+  exact benignCallState_childCode
+
+private theorem benignCallEvm8_childCode :
+    benignCallEvm8.dyna.getCode benignCallTarget =
+      benignCallChildCode := by
+  change benignCallEntryEvm.dyna.getCode benignCallTarget = _
+  exact benignCallEntry_childCode
+
+private def benignCallBase : Devm :=
+  benignCallEvm8.dyna.setMach
+    ⟨[], benignCallEvm8.dyna.memory, benignCallEvm8.dyna.gasLeft⟩
+
+private def benignCallDelegated : Devm :=
+  addAccessedAddress benignCallBase benignCallTarget
+
+private def benignCallExtCost : Nat :=
+  benignCallBase.extCost [⟨0, 0⟩, ⟨0, 0⟩]
+
+private def benignCallAccessCost : Nat :=
+  accessCost benignCallTarget benignCallBase.accessedAddresses
+
+private def benignCallGasSplit : Nat × Nat :=
+  calculateMsgCallGas 0 10000 benignCallDelegated.gasLeft
+    benignCallExtCost benignCallAccessCost
+
+private def benignCallMsgCallCost : Nat := benignCallGasSplit.1
+private def benignCallMsgCallStipend : Nat := benignCallGasSplit.2
+
+private def benignCallSuspendedParent : Devm :=
+  callSpawnParent benignCallDelegated
+    (benignCallMsgCallCost + benignCallExtCost) 0 0 0 0
+
+private def benignCallChildMsg : Msg :=
+  callSpawnMsg benignCallEvm8.sta benignCallSuspendedParent
+    benignCallMsgCallStipend benignCallTarget 0 0
+    benignCallChildCode false
+
+private def benignCallChildFrame : Jaune.Frame :=
+  Jaune.Frame.ofCall benignCallChildMsg
+
+private def benignCallResume : Resume :=
+  .call benignCallSuspendedParent 0 0
+
+private theorem benignCallAccessCost_eq : benignCallAccessCost = 2600 := by
+  unfold benignCallAccessCost accessCost
+  rw [if_neg (show benignCallTarget ∉
+      benignCallBase.accessedAddresses by
+    rw [show benignCallBase.accessedAddresses =
+        Std.HashSet.emptyWithCapacity by rfl]
+    simp)]
+  rfl
+
+private theorem benignCallDelegated_gasLeft :
+    benignCallDelegated.gasLeft = 199983 := by
+  change benignCallEvm8.dyna.gasLeft = 199983
+  rfl
+
+private theorem benignCallExtCost_eq : benignCallExtCost = 0 := by rfl
+
+private theorem benignCallMsgCallCost_eq :
+    benignCallMsgCallCost = 12600 := by
+  unfold benignCallMsgCallCost benignCallGasSplit
+  rw [benignCallAccessCost_eq, benignCallExtCost_eq,
+    benignCallDelegated_gasLeft]
+  rfl
+
+private theorem benignCallCharge_affordable :
+    benignCallMsgCallCost + benignCallExtCost ≤
+      benignCallDelegated.gasLeft := by
+  rw [benignCallMsgCallCost_eq, benignCallExtCost_eq,
+    benignCallDelegated_gasLeft]
+  decide +kernel
+
+private theorem benignCallDelegated_childCode :
+    benignCallDelegated.getCode benignCallTarget =
+      benignCallChildCode := by
+  unfold benignCallDelegated benignCallBase
+  rw [addAccessedAddress_getCode, Devm.getCode_setMach]
+  exact benignCallEvm8_childCode
+
+private theorem benignCallDelegation :
+    accessDelegation benignCallDelegated benignCallTarget =
+      ⟨false, benignCallTarget, benignCallChildCode, 0,
+        benignCallDelegated⟩ := by
+  have hnot :
+      ¬ isValidDelegation
+          (benignCallDelegated.getCode benignCallTarget) := by
+    rw [benignCallDelegated_childCode]
+    decide +kernel
+  simpa [benignCallDelegated_childCode] using
+    (accessDelegation_of_not_delegation
+      (d := benignCallDelegated) (adr := benignCallTarget) hnot)
+
+private theorem benignCallXstep :
+    Xinst.step benignCallEvm8.sta benignCallEvm8.dyna .call =
+      .spawn benignCallChildFrame benignCallResume := by
+  apply Xinst.step_call_zero_value_spawn
+      (gw := 10000) (cw := benignCallTarget.toB256)
+      (iiw := 0) (isw := 0) (oiw := 0) (osw := 0) (s := [])
+      (ext := benignCallExtCost) (acc := benignCallAccessCost)
+      (mcc := benignCallMsgCallCost)
+      (mcs := benignCallMsgCallStipend)
+      (dp := false) (dadr := benignCallTarget)
+      (code := benignCallChildCode) (dgc := 0)
+      (d1 := benignCallDelegated)
+  · rfl
+  · rfl
+  · exact benignCallDelegation
+  · rfl
+  · rfl
+  · exact benignCallCharge_affordable
+  · decide +kernel
+
+private theorem benignCallSpawnStep :
+    benignCallEvm8.step =
+      .spawn benignCallChildFrame benignCallResume 13 := by
+  unfold Evm.step
+  rw [show benignCallEvm8.getInst =
+      some (.next (.exec .call)) by rfl]
+  simp only
+  unfold Ninst.step
+  change XStep.toStep
+      (benignCallEvm8.pc + (Ninst.exec Xinst.call).size)
+      (Xinst.step benignCallEvm8.sta benignCallEvm8.dyna .call) = _
+  rw [benignCallXstep]
+  rfl
+
+private def benignCallSpawn : BenignCallSpawn benignCallEntryEvm :=
+  { callEvm := benignCallEvm8
+    trace := benignCallEntryTrace
+    frame := benignCallChildFrame
+    resume := benignCallResume
+    nextPc := 13
+    hstep := benignCallSpawnStep }
+
+private def benignCallChildMid : State :=
+  benignCallChildMsg.benv.state.setBal benignCallChildMsg.caller
+    (benignCallChildMsg.benv.state.bal benignCallChildMsg.caller -
+      benignCallChildMsg.value)
+
+private def benignCallChildBenv : Benv :=
+  (benignCallChildMsg.benv.withState benignCallChildMid).addBal
+    benignCallChildMsg.currentTarget benignCallChildMsg.value
+
+private def benignCallChildEvm : Evm :=
+  initEvm (benignCallChildMsg.withBenv benignCallChildBenv)
+
+private def benignCallChildOut : Execution :=
+  .ok benignCallChildEvm.dyna
+
+private theorem benignCallNot_lt_zero (x : B256) : ¬ x < 0 := by
+  intro h
+  have hn := B256.toNat_lt_toNat h
+  rw [B256.toNat_zero] at hn
+  exact Nat.not_lt_zero _ hn
+
+private theorem benignCallChildEnter :
+    benignCallChildFrame.enter = .run benignCallChildEvm := by
+  obtain ⟨stmid, hsub, hbt⟩ :=
+    Msg.benvAfterTransfer_of_affordable benignCallChildMsg rfl (by
+      rw [show benignCallChildMsg.value = 0 by rfl]
+      exact benignCallNot_lt_zero _)
+  have expectedSub :
+      benignCallChildMsg.benv.state.subBal benignCallChildMsg.caller
+          benignCallChildMsg.value =
+        some benignCallChildMid := by
+    unfold State.subBal benignCallChildMid
+    rw [show benignCallChildMsg.value = 0 by rfl]
+    rw [if_neg (benignCallNot_lt_zero _)]
+  rw [expectedSub] at hsub
+  cases hsub
+  unfold benignCallChildFrame Jaune.Frame.enter Jaune.Frame.ofCall
+  simp only
+  rw [hbt]
+  rfl
+
+private theorem benignCallChildStep :
+    benignCallChildEvm.step = .halt benignCallChildOut := by
+  rfl
+
+private def benignCallResumed : Devm :=
+  match benignCallResume.run
+      (benignCallChildFrame.settle benignCallChildOut) with
+  | .ok resumed => resumed
+  | .error _ => default
+
+private theorem benignCallResumeRun :
+    benignCallResume.run
+        (benignCallChildFrame.settle benignCallChildOut) =
+      .ok benignCallResumed := by
+  rfl
+
+private def benignCallParentAfter : Evm :=
+  ⟨13, benignCallEvm8.sta, benignCallResumed⟩
+
+private def benignCallOut : Execution :=
+  .ok benignCallParentAfter.dyna
+
+private theorem benignCallParentStop :
+    benignCallParentAfter.step = .halt benignCallOut := by
+  rfl
+
+private def benignCallSettled : Devm :=
+  match (Jaune.Frame.ofCall benignCallMsg).settle benignCallOut with
+  | .ok settled => settled
+  | .error _ => default
+
+private theorem benignCallRootSettle :
+    (Jaune.Frame.ofCall benignCallMsg).settle benignCallOut =
+      .ok benignCallSettled := by
+  rfl
+
+private def benignCallFixture : BenignCallFixture :=
+  { rootEvm := benignCallEntryEvm
+    spawn := benignCallSpawn
+    resumed := benignCallResumed
+    childEvm := benignCallChildEvm
+    childOut := benignCallChildOut
+    out := benignCallOut
+    settled := benignCallSettled
+    rootEnter := benignCallRootEnter
+    henter := benignCallChildEnter
+    childStep := benignCallChildStep
+    hresume := benignCallResumeRun
+    nextStep := benignCallParentStop
+    rootSettle := benignCallRootSettle
+    rootTarget := by rfl
+    childTarget := by rfl }
+
+/-- The closed-world benign outbound-CALL execution is inhabited by a
+kernel-checked parent/child/resume certificate; no evaluator result is used. -/
+theorem benignCallFixture_nonempty : Nonempty BenignCallFixture :=
+  ⟨benignCallFixture⟩
+
 private theorem BenignCallFixture.rawFrameRoots_eq
     (w : BenignCallFixture) :
     Exec.rawFrameRoots w.run = [w.root, w.childRoot] := by
@@ -1191,7 +1540,7 @@ private theorem BenignCallFixture.noRetainedWriteTo
     rw [w.childTarget]
     decide
 
-/-- One evaluator-supplied fixture yields the complete account/message-level
+/-- One certified fixture yields the complete account/message-level
 clause-(iii) control at one slot: exact inbound shape, compiled-program
 identity, settlement, a nonempty descendant tree, and semantic protection of
 both named CircuitBreaker cells.  This is a closed-world control, not a
@@ -1210,6 +1559,23 @@ theorem benignCall_nonchildless_noninterference (w : BenignCallFixture) :
     w.slot_has_descendant, ?_⟩
   intro key _member
   exact w.noRetainedWriteTo key
+
+/-- Closed standard-axiom evidence for the full non-childless clause-(iii)
+control.  The witness is the concrete kernel certificate above, not the
+external evaluator. -/
+theorem benignCall_nonchildless_noninterference_closed :
+    ∃ w : BenignCallFixture,
+      ExactPinnedInbound benignCircuitBreaker benignCallParentTarget
+          pauseForCalldata isPausedCalldata benignCallMsg ∧
+        MessageExecutesProgram benignCallMsg w.slot benignCallProgram ∧
+        ProcessMessage benignCallMsg w.slot (.ok w.settled) ∧
+        TargetInvocationHasDescendant w.slot ∧
+        ∀ key ∈
+            [countSlot benignCallPauser.toB256, heartbeatIntervalSlot],
+          TargetInvocationNoRetainedWriteTo
+            w.slot benignCircuitBreaker key := by
+  obtain ⟨w⟩ := benignCallFixture_nonempty
+  exact ⟨w, benignCall_nonchildless_noninterference w⟩
 
 /-! ## Falsifiers -/
 
@@ -1302,6 +1668,101 @@ def wrongBoolFixture? : Option WrongBoolFixture :=
           | .error _ => none
       | .error _ => none
   | .done _ => none
+
+private theorem wrongBoolCallerBalance :
+    wrongBoolMsg.benv.state.bal wrongBoolMsg.caller = 0 := by
+  change (State.get wrongBoolState wrongBoolCircuitBreaker).bal = 0
+  have hget : State.get wrongBoolState wrongBoolCircuitBreaker =
+      State.get (.empty : State) wrongBoolCircuitBreaker := by
+    unfold wrongBoolState
+    exact State.get_set_ne (w := (.empty : State))
+      (a := wrongBoolTarget) (b := wrongBoolCircuitBreaker)
+      (by decide +kernel) _
+  rw [hget]
+  rfl
+
+private def wrongBoolEntryMid : State :=
+  wrongBoolMsg.benv.state.setBal wrongBoolMsg.caller
+    (wrongBoolMsg.benv.state.bal wrongBoolMsg.caller - wrongBoolMsg.value)
+
+private def wrongBoolEntryBenv : Benv :=
+  (wrongBoolMsg.benv.withState wrongBoolEntryMid).addBal
+    wrongBoolMsg.currentTarget wrongBoolMsg.value
+
+private def wrongBoolEntryEvm : Evm :=
+  initEvm (wrongBoolMsg.withBenv wrongBoolEntryBenv)
+
+private theorem wrongBoolEntry :
+    (Frame.ofCall wrongBoolMsg).enter = .run wrongBoolEntryEvm := by
+  obtain ⟨stmid, hsub, hbt⟩ :=
+    Msg.benvAfterTransfer_of_affordable wrongBoolMsg rfl (by
+      rw [wrongBoolCallerBalance]
+      decide +kernel)
+  have expectedSub :
+      wrongBoolMsg.benv.state.subBal wrongBoolMsg.caller wrongBoolMsg.value =
+        some wrongBoolEntryMid := by
+    unfold State.subBal wrongBoolEntryMid
+    rw [wrongBoolCallerBalance]
+    rw [show wrongBoolMsg.value = 0 by rfl]
+    simp only [if_neg (by decide +kernel : ¬ (0 : B256) < 0)]
+  rw [expectedSub] at hsub
+  cases hsub
+  unfold Frame.enter Frame.ofCall
+  simp only
+  rw [hbt]
+  rfl
+
+private def wrongBoolRawPost : Devm :=
+  match exec wrongBoolEntryEvm with
+  | .ok post => post
+  | .error _ => default
+
+private theorem wrongBoolExec :
+    exec wrongBoolEntryEvm = .ok wrongBoolRawPost := by
+  have success : (match exec wrongBoolEntryEvm with
+      | .ok _ => true | .error _ => false) = true := by
+    decide +kernel
+  cases h : exec wrongBoolEntryEvm with
+  | error _ =>
+      rw [h] at success
+      contradiction
+  | ok _ =>
+      unfold wrongBoolRawPost
+      rw [h]
+
+private def wrongBoolChild : Devm :=
+  match (Frame.ofCall wrongBoolMsg).settle (.ok wrongBoolRawPost) with
+  | .ok child => child
+  | .error _ => default
+
+private theorem wrongBoolSettle :
+    (Frame.ofCall wrongBoolMsg).settle (.ok wrongBoolRawPost) =
+      .ok wrongBoolChild := by
+  have success :
+      (match (Frame.ofCall wrongBoolMsg).settle (.ok wrongBoolRawPost) with
+        | .ok _ => true | .error _ => false) = true := by
+    decide +kernel
+  cases h : (Frame.ofCall wrongBoolMsg).settle (.ok wrongBoolRawPost) with
+  | error _ =>
+      rw [h] at success
+      contradiction
+  | ok _ =>
+      unfold wrongBoolChild
+      rw [h]
+
+/-- The compiled wrong-return control has a closed standard-axiom witness.
+The separate executable Option remains a regression check, not theorem
+evidence. -/
+theorem wrongBoolFixture_nonempty : Nonempty WrongBoolFixture := by
+  exact ⟨{
+    evm := wrongBoolEntryEvm
+    rawPost := wrongBoolRawPost
+    child := wrongBoolChild
+    enter := wrongBoolEntry
+    rawExec := wrongBoolExec
+    settle := wrongBoolSettle
+    clean := by decide +kernel
+    output := by decide +kernel }⟩
 
 private noncomputable def WrongBoolFixture.run (w : WrongBoolFixture) :
     Exec w.evm.pc w.evm.sta w.evm.dyna (.ok w.rawPost) :=

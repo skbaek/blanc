@@ -783,7 +783,7 @@ deliberately permitted, and how the same family lifts to the public pause entry.
 #### HOSTILE-4 — A production public `pause(address)` execution reaches the exact Stage 6 `pauseAfterSet` state at every terminal polarity
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.publicPause_reaches_pauseAfterSet`
-- **Premises:** `PublicPauseEntryPremises` states the production runtime bytes, owner/code-address agreement, zero value, dynamic non-root frame, exact pause calldata and selector, canonical nonzero target and caller, unlocked entry, installed target code, live assignment, the duration/index/length/last registry reads, every named storage-key separation, the count-preservation kernel, and a memory image; plus the actual `Prog.RunCompiledTo` execution. None of these premises states or selects the terminal result.
+- **Premises:** `PublicPauseEntryPremises` states the production runtime bytes, owner/code-address agreement, zero value, dynamic non-root frame, exact pause calldata and selector, canonical nonzero target and caller, unlocked entry, installed target code, live assignment, the duration/index/length/last registry reads, every named storage-key separation, and a memory image; plus the actual `Prog.RunCompiledTo` execution. Count preservation across removal is derived from those separations by `PublicPauseEntryPremises.removePreservesCount`; it is not an entry premise. None of these premises states or selects the terminal result.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the public pause success/failure family exercises the same production selector and registry preconditions finitely

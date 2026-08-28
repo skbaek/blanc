@@ -51,6 +51,9 @@ import Blanc.PinnedPauseTarget
 import Blanc.LidoCircuitBreakerPinnedTarget
 import Blanc.LidoCircuitBreakerPinnedTargetControl
 import Blanc.LidoCircuitBreakerPinnedTargetComposition
+import Blanc.LidoCircuitBreakerPinnedTargetStubWalk
+import Blanc.LidoCircuitBreakerPinnedTargetStubCrossing
+import Blanc.LidoCircuitBreakerPinnedTargetCompositionControl
 import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.LidoCircuitBreakerDeploymentLayout

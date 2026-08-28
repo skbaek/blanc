@@ -1015,8 +1015,9 @@ theorem publicPause_pinnedTarget
   exact ⟨committed, witness⟩
 
 /-- The compiled test stub specializes the generic composition without leaving
-any account-behaviour clause as a premise.  The remaining hook is precisely
-the two actual program-entry occurrences extracted from this public run. -/
+any account-behaviour clause as a premise.  The remaining argument is the
+combined parent-trace and program-occurrence witness extracted from this public
+run; only its two `MessageExecutesProgram` components are target-specific. -/
 theorem publicPause_stubPinnedTarget
     {sevm : Sevm} {pre : Devm} {owner : Adr}
     {target duration idx0 len0 last0 : B256}
