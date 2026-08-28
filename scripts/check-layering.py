@@ -57,6 +57,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],
+    "proxy-pair": ["ProxyPairSlots"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
