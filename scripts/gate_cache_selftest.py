@@ -33,6 +33,7 @@ control suite can rot into a set of assertions that hold vacuously.
 from __future__ import annotations
 
 import contextlib
+import copy
 import io
 import json
 import os
@@ -545,6 +546,19 @@ def control_external_checkout_identity() -> None:
         s.run()
         require(s.disposition("g") == "reused", "a clean pinned checkout should reuse")
 
+        spec_short = dict(spec, pin=head[:1])
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"external": [spec_short]},
+                                "^OK — g.sh: ")])
+        try:
+            s.load()
+        except gc.GateCacheError:
+            pass
+        else:
+            raise ControlFailure("an abbreviated external pin must be refused")
+
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"external": [spec]},
+                                "^OK — g.sh: ")])
+
         outside.write("payload.txt", "dirty\n")
         require(s.disposition("g") == "fresh", "a dirty external checkout must force execution")
 
@@ -560,6 +574,117 @@ def control_external_checkout_identity() -> None:
         s.registry([simple_gate("g", ["scripts/g.sh"], {"external": [spec_absent]},
                                 "^OK — g.sh: ")])
         require(s.disposition("g") == "fresh", "an absent checkout must force execution")
+
+
+def control_oracle_lanes_are_disjoint_and_exact() -> None:
+    """The historical Prague and current-mainnet roots cannot be cross-wired."""
+
+    with scratch() as s:
+        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
+
+        def gate(inputs: dict[str, Any]) -> dict[str, Any]:
+            return simple_gate("g", ["scripts/g.sh"], inputs, "^OK — g.sh: ")
+
+        legacy_external = {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": gc.LEGACY_EELS_PIN,
+        }
+        current_external = {
+            "id": "t8n_target",
+            "path": "~/execution-specs-t8n-amsterdam",
+            "path_env": "JAUNE_T8N_TARGET",
+            "pin": gc.CURRENT_T8N_PIN,
+        }
+        shared_files = [
+            "scripts/current-mainnet-target.json",
+            "scripts/current_mainnet.py",
+        ]
+        for path in shared_files:
+            s.write(path, "fixture\n")
+
+        valid_legacy = {
+            "env": ["EELS_ROOT", "HOME"],
+            "external": [legacy_external],
+            "files": ["@eels/venv/bin/python"],
+        }
+        s.registry([gate(valid_legacy)])
+        s.load()
+
+        valid_current = {
+            "env": ["JAUNE_T8N_TARGET", "HOME"],
+            "external": [current_external],
+            "files": shared_files + ["@t8n_target/.venv/bin/python"],
+        }
+        s.registry([gate(valid_current)])
+        s.load()
+
+        mutants = []
+        changed = copy.deepcopy(valid_legacy)
+        changed["external"] = [current_external]
+        mutants.append(("legacy repointed", changed))
+        changed = copy.deepcopy(valid_current)
+        changed["external"][0]["pin"] = gc.LEGACY_EELS_PIN
+        mutants.append(("pins swapped", changed))
+        changed = copy.deepcopy(valid_current)
+        changed["env"].append("EELS_ROOT")
+        mutants.append(("shared environment", changed))
+        changed = copy.deepcopy(valid_current)
+        changed["external"][0]["pin"] = gc.CURRENT_T8N_PIN[:1]
+        mutants.append(("short pin", changed))
+        changed = copy.deepcopy(valid_current)
+        changed["files"].remove("scripts/current_mainnet.py")
+        mutants.append(("helper omitted", changed))
+
+        for label, inputs in mutants:
+            s.registry([gate(inputs)])
+            try:
+                s.load()
+            except gc.GateCacheError:
+                continue
+            raise ControlFailure(f"{label} oracle-lane mutant was accepted")
+
+
+def control_symlink_file_target_invalidates() -> None:
+    """A file symlink's selector is identity, not only its target bytes."""
+
+    with scratch() as s:
+        first = s.write("runtime/a", "same\n")
+        second = s.write("runtime/b", "same\n")
+        link = s.root / "runtime/python"
+        link.symlink_to(first)
+        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
+        s.registry([simple_gate(
+            "g", ["scripts/g.sh"], {"files": ["runtime/python"]}, "^OK — g.sh: ")])
+        s.run()
+        require(s.disposition("g") == "reused", "unchanged file symlink should reuse")
+        link.unlink()
+        link.symlink_to(second)
+        require(
+            s.disposition("g") == "fresh",
+            "retargeting a file symlink must invalidate even with equal target bytes",
+        )
+
+
+def control_symlink_directory_selector_invalidates() -> None:
+    """A stable runtime alias is identity even when contents are separate."""
+
+    with scratch() as s:
+        first = s.root / "runtime/a"
+        second = s.root / "runtime/b"
+        first.mkdir(parents=True)
+        second.mkdir(parents=True)
+        alias = s.root / "runtime/current"
+        alias.symlink_to(first, target_is_directory=True)
+        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
+        s.registry([simple_gate(
+            "g", ["scripts/g.sh"], {"files": ["runtime/current"]}, "^OK — g.sh: ")])
+        s.run()
+        require(s.disposition("g") == "reused", "unchanged directory alias should reuse")
+        alias.unlink()
+        alias.symlink_to(second, target_is_directory=True)
+        require(s.disposition("g") == "fresh", "retargeting a directory alias must invalidate")
 
 
 def control_environment_variable_invalidates() -> None:
@@ -1219,8 +1344,9 @@ def control_named_root_follows_its_override() -> None:
         (elsewhere.root / "venv/bin/python").write_text("#!/bin/sh\n", encoding="utf-8")
         s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
         s.registry([simple_gate(
-            "g", ["scripts/g.sh"], {"files": ["@eels/venv/bin/python"]}, "^OK — g.sh: ")])
-        os.environ["EELS_ROOT"] = str(elsewhere.root)
+            "g", ["scripts/g.sh"], {"files": ["@weth10ref/venv/bin/python"]},
+            "^OK — g.sh: ")])
+        os.environ["WETH10_REFERENCE_DIR"] = str(elsewhere.root)
         try:
             s.run()
             require(s.disposition("g") == "reused", "unchanged redirected tree should reuse")
@@ -1228,7 +1354,7 @@ def control_named_root_follows_its_override() -> None:
             require(s.disposition("g") == "fresh",
                     "editing the redirected tree must force execution")
         finally:
-            os.environ.pop("EELS_ROOT", None)
+            os.environ.pop("WETH10_REFERENCE_DIR", None)
 
 
 def control_environment_value_cannot_imitate_absence() -> None:
@@ -1497,6 +1623,9 @@ CONTROLS = (
     control_git_ref_movement_invalidates,
     control_unresolvable_ref_forces_execution,
     control_external_checkout_identity,
+    control_oracle_lanes_are_disjoint_and_exact,
+    control_symlink_file_target_invalidates,
+    control_symlink_directory_selector_invalidates,
     control_environment_variable_invalidates,
     control_clock_rollover_invalidates,
     control_tool_identity_invalidates,
