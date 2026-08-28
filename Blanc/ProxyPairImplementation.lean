@@ -440,4 +440,212 @@ theorem implGuarded_static_sstore_halt
   exact (exec_iff_exec_eq pc sevm d
     (.error ⟨.halt (.writeInStaticContext .none), post⟩)).mp hexec
 
+theorem implGuarded_static_halt_exec
+    (sevm : Sevm) (base : Devm) (G : Nat)
+    (h_code : sevm.code = implGuardedCode)
+    (h_static : sevm.isStatic = true)
+    (h_cold :
+      (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
+        base.accessedStorageKeys)
+    (h_orig :
+      getOrigStorVal sevm sevm.currentTarget implSlot = 0)
+    (h_cur :
+      base.getStorVal sevm.currentTarget implSlot = 0)
+    (h_data : Sevm.dataWord sevm 0 ≠ 0) :
+    ∃ post,
+      Nonempty (Exec 0 sevm
+        (base.setMach ⟨[], Mem.empty,
+          G + implGuardedSuccessEntryGas⟩)
+        (.error ⟨.halt (.writeInStaticContext .none), post⟩)) ∧
+      exec ⟨0, sevm,
+        (base.setMach ⟨[], Mem.empty,
+          G + implGuardedSuccessEntryGas⟩)⟩ =
+        .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
+      post.state = base.state ∧
+      post.transientStorage = base.transientStorage ∧
+      post.logs = base.logs := by
+  let dEntry := base.setMach
+    ⟨[], Mem.empty, G + implGuardedSuccessEntryGas⟩
+  let d0 := dEntry.setMach
+    {dEntry.mach with gasLeft := dEntry.gasLeft - gJumpdest}
+  let d1 := d0.setMach
+    ⟨[0], Mem.empty, G + 22141⟩
+  let d2 := d1.setMach
+    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 22138⟩
+  let d3 := d2.setMach
+    ⟨[0], Mem.empty, G + 22135⟩
+  let d4 := d3
+  let d8 := d4.setMach
+    ⟨[], Mem.empty, G + implBodyGas⟩
+  let d10 := d8.setMach
+    ⟨[1], Mem.empty, G + 22119⟩
+  let d12 := d10.setMach
+    ⟨[implSlot, 1], Mem.empty, G + 22116⟩
+  have hentry : Jinst.At sevm.code 0 .jumpdest := by
+    rw [h_code]
+    exact Jinst.at_of_slice (show List.Slice implGuardedCode.toList 0
+      [Jinst.toUInt8 .jumpdest] from ⟨1, by decide +kernel⟩)
+  have hpush0 : Ninst.At sevm.code 1 (Ninst.pushB256 0) := by
+    rw [h_code]
+    apply Ninst.at_of_slice
+    show List.Slice implGuardedCode.toList 1
+      (Ninst.toBytes (Ninst.pushB256 0))
+    refine ⟨1, ?_⟩
+    decide +kernel
+  have hload : Ninst.At sevm.code 2 Ninst.calldataload := by
+    rw [h_code]
+    apply Ninst.at_of_slice
+    show List.Slice implGuardedCode.toList 2
+      (Ninst.toBytes Ninst.calldataload)
+    refine ⟨1, ?_⟩
+    decide +kernel
+  have hiszero : Ninst.At sevm.code 3 Ninst.iszero := by
+    rw [h_code]
+    apply Ninst.at_of_slice
+    show List.Slice implGuardedCode.toList 3
+      (Ninst.toBytes Ninst.iszero)
+    refine ⟨1, ?_⟩
+    decide +kernel
+  have hbranchPush :
+      Ninst.At sevm.code 4
+        (.push [((21 : Nat) >>> 8).toUInt8, (21 : Nat).toUInt8] two_le_32) := by
+    rw [h_code]
+    apply Ninst.at_of_slice
+    show List.Slice implGuardedCode.toList 4
+      (Ninst.toBytes (.push
+        [((21 : Nat) >>> 8).toUInt8, (21 : Nat).toUInt8] two_le_32))
+    refine ⟨3, ?_⟩
+    decide +kernel
+  have hjumpi : Jinst.At sevm.code 7 .jumpi := by
+    rw [h_code]
+    apply Jinst.at_of_slice
+    exact show List.Slice implGuardedCode.toList 7
+      [Jinst.toUInt8 .jumpi] from ⟨1, by decide +kernel⟩
+  have hpush1 : Ninst.At sevm.code 8 (Ninst.pushB256 1) := by
+    rw [h_code]
+    apply Ninst.at_of_slice
+    show List.Slice implGuardedCode.toList 8
+      (Ninst.toBytes (Ninst.pushB256 1))
+    refine ⟨2, ?_⟩
+    decide +kernel
+  have hpushSlot :
+      Ninst.At sevm.code 10 (Ninst.pushB256 implSlot) := by
+    rw [h_code]
+    apply Ninst.at_of_slice
+    show List.Slice implGuardedCode.toList 10
+      (Ninst.toBytes (Ninst.pushB256 implSlot))
+    refine ⟨2, ?_⟩
+    decide +kernel
+  have hsstore :
+      Ninst.At sevm.code 12 (.reg .sstore) := by
+    rw [h_code]
+    apply Ninst.at_of_slice
+    show List.Slice implGuardedCode.toList 12
+      (Ninst.toBytes (.reg .sstore))
+    refine ⟨1, ?_⟩
+    decide +kernel
+  have hEntryBurn : Devm.BurnBy gJumpdest dEntry d0 := by
+    have hg : gJumpdest ≤ dEntry.gasLeft := by
+      simp [dEntry, implGuardedSuccessEntryGas_eq, gJumpdest]
+    have h := Devm.burnBy_setMach
+      (devm := dEntry) (cost := gJumpdest) hg
+    exact h
+  have hEntryStep :
+      Evm.step ⟨0, sevm, dEntry⟩ = .cont 1 d0 :=
+    Evm.jumpdest_cont hentry hEntryBurn
+  have rpush0 :=
+    Ninst.runCompiled_pushB256
+      (sevm := sevm) (devm := d0)
+      (w := 0) (c := gBase) (G := G + 22141)
+      pushCost_zero
+      (by simp [d0, dEntry, implGuardedSuccessEntryGas_eq,
+        gJumpdest, gBase])
+      (by change ([] : List B256).length < 1024; decide)
+  have rload :=
+    Ninst.runCompiled_calldataload
+      (sevm := sevm) (devm := d1)
+      (x := 0) (v := Sevm.dataWord sevm 0) (s := [])
+      (G := G + 22138)
+      (by rfl) (by rfl)
+      (by simp [d1, d0, dEntry, gVerylow, gJumpdest,
+        implGuardedSuccessEntryGas_eq])
+      (by decide)
+  have riszero :=
+    Ninst.runCompiled_unary
+      (sevm := sevm) (devm := d2)
+      (r := .iszero) (f := (B256.eqCheck · 0))
+      (x := Sevm.dataWord sevm 0) (v := 0) (s := [])
+      (cost := gVerylow) (G := G + 22135)
+      (by rintro ⟨⟩) (by rfl) (by rfl)
+      (by simp [B256.eqCheck, h_data])
+      (by simp [d2, gVerylow]) (by decide)
+  have rpush1 :=
+    Ninst.runCompiled_pushB256
+      (sevm := sevm) (devm := d8)
+      (w := 1) (c := gVerylow) (G := G + 22119)
+      (pushCost_of_ne_zero (by decide))
+      (by simp [d8, implBodyGas_eq, gVerylow])
+      (by change ([] : List B256).length < 1024; decide)
+  have rpushSlot :=
+    Ninst.runCompiled_pushB256
+      (sevm := sevm) (devm := d10)
+      (w := implSlot) (c := gVerylow) (G := G + 22116)
+      (pushCost_of_ne_zero (by decide))
+      (by simp [d10, gVerylow])
+      (by change ([1] : List B256).length < 1024; decide)
+  have hpop :=
+    Devm.popBurnBy_setMach
+      (devm := d4) (x := 0) (s := [])
+      (cost := gVerylow + gHigh) (G := G + implBodyGas)
+      (by rfl)
+      (by simp [d4, d3, d2, d1, d0, dEntry,
+        implBodyGas_eq, gVerylow, gHigh, gJumpdest,
+        implGuardedSuccessEntryGas_eq])
+  rcases Evm.branch_zero_steps
+      (pc := 4) (loc := 21)
+      hbranchPush hjumpi (by decide)
+      (by change ([0] : List B256).length < 1024; decide) hpop with
+    ⟨hBranchPushStep, hJumpiStep⟩
+  rcases rpush0 with ⟨xl0, hfill0, hstep0⟩
+  rcases rload with ⟨xl1, hfill1, hstep1⟩
+  rcases riszero with ⟨xl2, hfill2, hstep2⟩
+  rcases rpush1 with ⟨xl3, hfill3, hstep3⟩
+  rcases rpushSlot with ⟨xl4, hfill4, hstep4⟩
+  obtain ⟨post, h12, h12exec, hstate, htrans, hlogs⟩ :=
+    implGuarded_static_sstore_halt
+      12 sevm d12 hsstore h_static
+      (by rfl)
+      (by simp [d12, gCallStipend])
+      (by simp [d12, gasColdSload, gasStorageSet])
+      (by simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
+        Devm.setMach_accessedStorageKeys] using h_cold)
+      (by simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry] using h_orig)
+      (by simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
+        Devm.getStorVal_setMach] using h_cur)
+  obtain ⟨e12⟩ := h12
+  obtain ⟨e10⟩ :=
+    Ninst.exec_of_stepRun hpushSlot hfill4 (hstep4 10) ⟨e12⟩
+  obtain ⟨e8⟩ :=
+    Ninst.exec_of_stepRun hpush1 hfill3 (hstep3 8) ⟨e10⟩
+  let finalEx : Execution :=
+    .error ⟨.halt (.writeInStaticContext .none), post⟩
+  have e4 : Exec 4 sevm d4 finalEx :=
+    Exec.cont hBranchPushStep (Exec.cont hJumpiStep e8)
+  obtain ⟨e3⟩ :=
+    Ninst.exec_of_stepRun hiszero hfill2 (hstep2 3) ⟨e4⟩
+  obtain ⟨e2⟩ :=
+    Ninst.exec_of_stepRun hload hfill1 (hstep1 2) ⟨e3⟩
+  obtain ⟨e1⟩ :=
+    Ninst.exec_of_stepRun hpush0 hfill0 (hstep0 1) ⟨e2⟩
+  have hexec : Nonempty (Exec 0 sevm dEntry finalEx) :=
+    ⟨Exec.cont hEntryStep e1⟩
+  refine ⟨post, hexec, ?_, ?_, ?_, ?_⟩
+  · exact (exec_iff_exec_eq 0 sevm dEntry finalEx).mp hexec
+  · simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
+      Devm.setMach_state] using hstate
+  · simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
+      Devm.setMach_transientStorage] using htrans
+  · simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
+      Devm.setMach_logs] using hlogs
+
 end Blanc.ProxyPair
