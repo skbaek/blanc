@@ -1085,9 +1085,11 @@ def main() -> int:
             "    {f : Frame} {rsm : Resume}\n"
             "    (hs : Xinst.step sevm devm x = .spawn f rsm)\n"
             "    (hne : sevm.currentTarget ≠ f.inner.currentTarget)\n"
-            "    (hcode : devm.getCode f.inner.currentTarget ≠ .empty) :\n"
+            "    (hcode : devm.getCode f.inner.currentTarget ≠ .empty)\n"
+            "    (hnodel : getDelegatedCodeAddress\n"
+            "      (devm.getCode f.inner.currentTarget) = none) :\n"
             "    f.inner.codeAddress = some f.inner.currentTarget :=\n"
-            f"  {CANONICAL_DIRECT_CODE} hs hne hcode\n"
+            f"  {CANONICAL_DIRECT_CODE} hs hne hcode hnodel\n"
             "end Blanc.LidoCircuitBreaker\n",
             encoding="utf-8",
         )

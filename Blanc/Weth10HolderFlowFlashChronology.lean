@@ -22,7 +22,14 @@ open Jaune
 namespace Weth10
 
 /-- The raw flash callback boundary with its parent, child, recursive slot,
-and parent program counter exposed as indices. -/
+and parent program counter exposed as indices.
+
+EIP-7702 resolution is a function of the callee's stored code, so the message
+the borrower `CALL` sends carries the resolved code address
+`(getDelegatedCodeAddress (pre.getCode receiver)).getD receiver` rather than
+the popped callee.  Spelling it in closed form keeps the delegation disjunct
+free of a resolved-address binder, which preserves this relation's existential
+arity for the accounting consumers that destructure it positionally. -/
 def RawFlashCallbackIndexedStepBoundary
     (sevm : Sevm) (self receiver : Adr) (amount inputSize : B256)
     (callbackInput : Bytes) (pre mid parent child : Devm)
@@ -47,7 +54,9 @@ def RawFlashCallbackIndexedStepBoundary
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg sevm parent (min gasWord.toNat (except64th avail)) 0
-        self receiver receiver true false callbackInput code delegated)
+        self receiver
+        ((getDelegatedCodeAddress (pre.getCode receiver)).getD receiver)
+        true false callbackInput code delegated)
       xl (.ok child) ∧
     child.error.isSome = false ∧
     32 ≤ child.output.length ∧
@@ -73,10 +82,15 @@ theorem RawFlashCallbackIndexedStepBoundary.toStepBoundary
       hstate, hmemory, hlogs, houtput, hdelegation, hfilled, hprocess,
       hclean, hlength, hmagic, hresume, hmidState, hreturndata,
       hmidStack, hmidLogs, hmidOutput⟩
-  exact ⟨parent, child, xl, delegated, code, gasWord, avail, pc, hstep,
-    hdepth, hstack, hpref, hstate, hmemory, hlogs, houtput, hdelegation,
-    hfilled, hprocess, hclean, hlength, hmagic, hresume, hmidState,
-    hreturndata, hmidStack, hmidLogs, hmidOutput⟩
+  refine ⟨parent, child, xl, delegated,
+    (getDelegatedCodeAddress (pre.getCode receiver)).getD receiver, code,
+    gasWord, avail, pc, hstep, hdepth, hstack, hpref, hstate, hmemory,
+    hlogs, houtput, ?_, hfilled, hprocess, hclean, hlength, hmagic,
+    hresume, hmidState, hreturndata, hmidStack, hmidLogs, hmidOutput⟩
+  rcases hdelegation with ⟨hnone, hcode, hdel⟩ |
+    ⟨target, hsome, hcode, hdel⟩
+  · exact Or.inl ⟨hnone, by simp [hnone], hcode, hdel⟩
+  · exact Or.inr ⟨target, hsome, by simp [hsome], hcode, hdel⟩
 
 /-- A source-level internal jump cannot return when its selected auxiliary
 body cannot return. -/
@@ -1506,11 +1520,25 @@ theorem Exec.Frame.CompiledCursor.compiledFlashLoanChronology
       hlogs, houtput, hwfSettle, hreadsSettleEx, hsettle⟩ :=
     of_rawFlashLoanSuccessTail_step dp hstack hwf hreads hwindow hrun
   rcases hcallback with
-    ⟨parent, child, xl, delegated, code, callbackGas, avail, pc, hstep,
-      hdepth, hcallbackStack, hparentStack, hparentState,
+    ⟨parent, child, xl, delegated, na, code, callbackGas, avail, pc,
+      hstep, hdepth, hcallbackStack, hparentStack, hparentState,
       hparentMemory, hparentLogs, hparentOutput, hdelegation, hfilled,
       hprocess, hclean, hlength, hmagic, hresume, hmidState,
       hreturnData, hmidStack, hmidLogs, hmidOutput⟩
+  obtain ⟨hresolved, hdirect⟩ :
+      na = (getDelegatedCodeAddress (cursor.pre.getCode receiver)).getD
+          receiver ∧
+        ((getDelegatedCodeAddress (cursor.pre.getCode receiver) = none ∧
+            code = cursor.pre.getCode receiver ∧ delegated = false) ∨
+          (∃ target,
+            getDelegatedCodeAddress (cursor.pre.getCode receiver) =
+              some target ∧
+            code = cursor.pre.getCode target ∧ delegated = true)) := by
+    rcases hdelegation with ⟨hnone, hna, hcode, hdel⟩ |
+      ⟨target, hsome, hna, hcode, hdel⟩
+    · exact ⟨by simp [hna, hnone], Or.inl ⟨hnone, hcode, hdel⟩⟩
+    · exact ⟨by simp [hna, hsome], Or.inr ⟨target, hsome, hcode, hdel⟩⟩
+  rw [hresolved] at hprocess
   let indexed : RawFlashCallbackIndexedStepBoundary frame.sevm
       frame.sevm.currentTarget receiver amount
       (flashCallbackRuntimeSize frame.sevm)
@@ -1518,7 +1546,7 @@ theorem Exec.Frame.CompiledCursor.compiledFlashLoanChronology
       cursor.pre callbackPost parent child xl pc :=
     ⟨delegated, code, callbackGas, avail, hstep, hdepth,
       hcallbackStack, hparentStack, hparentState, hparentMemory,
-      hparentLogs, hparentOutput, hdelegation, hfilled, hprocess, hclean,
+      hparentLogs, hparentOutput, hdirect, hfilled, hprocess, hclean,
       hlength, hmagic, hresume, hmidState, hreturnData, hmidStack,
       hmidLogs, hmidOutput⟩
   obtain ⟨retained⟩ := exists_retainedXlot_of_filled hfilled

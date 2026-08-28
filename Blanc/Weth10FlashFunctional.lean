@@ -240,7 +240,7 @@ def RawFlashCallbackBoundary (sevm : Sevm) (self receiver : Adr)
     (amount inputSize : B256) (callbackInput : Bytes)
     (pre mid : Devm) : Prop :=
   ∃ (parent child : Devm) (xl : Xlot) (delegated : Bool)
-    (code : ByteArray) (gasWord : B256) (avail : Nat),
+    (na : Adr) (code : ByteArray) (gasWord : B256) (avail : Nat),
     0 < sevm.depth ∧
     pre.stack =
       gasWord :: receiver.toB256 :: (0 : B256) :: callbackArgsOffset ::
@@ -252,14 +252,14 @@ def RawFlashCallbackBoundary (sevm : Sevm) (self receiver : Adr)
     parent.logs = pre.logs ∧
     parent.output = pre.output ∧
     ((getDelegatedCodeAddress (pre.getCode receiver) = none ∧
-        code = pre.getCode receiver ∧ delegated = false) ∨
+        na = receiver ∧ code = pre.getCode receiver ∧ delegated = false) ∨
       (∃ target,
         getDelegatedCodeAddress (pre.getCode receiver) = some target ∧
-        code = pre.getCode target ∧ delegated = true)) ∧
+        na = target ∧ code = pre.getCode target ∧ delegated = true)) ∧
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg sevm parent (min gasWord.toNat (except64th avail)) 0
-        self receiver receiver true false callbackInput code delegated)
+        self receiver na true false callbackInput code delegated)
       xl (.ok child) ∧
     child.error.isSome = false ∧
     32 ≤ child.output.length ∧
@@ -277,7 +277,7 @@ def RawFlashCallbackStepBoundary (sevm : Sevm) (self receiver : Adr)
     (amount inputSize : B256) (callbackInput : Bytes)
     (pre mid : Devm) : Prop :=
   ∃ (parent child : Devm) (xl : Xlot) (delegated : Bool)
-    (code : ByteArray) (gasWord : B256) (avail pc : Nat),
+    (na : Adr) (code : ByteArray) (gasWord : B256) (avail pc : Nat),
     Ninst.StepRun pc sevm pre call xl (.ok mid) ∧
     0 < sevm.depth ∧
     pre.stack =
@@ -290,14 +290,14 @@ def RawFlashCallbackStepBoundary (sevm : Sevm) (self receiver : Adr)
     parent.logs = pre.logs ∧
     parent.output = pre.output ∧
     ((getDelegatedCodeAddress (pre.getCode receiver) = none ∧
-        code = pre.getCode receiver ∧ delegated = false) ∨
+        na = receiver ∧ code = pre.getCode receiver ∧ delegated = false) ∨
       (∃ target,
         getDelegatedCodeAddress (pre.getCode receiver) = some target ∧
-        code = pre.getCode target ∧ delegated = true)) ∧
+        na = target ∧ code = pre.getCode target ∧ delegated = true)) ∧
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg sevm parent (min gasWord.toNat (except64th avail)) 0
-        self receiver receiver true false callbackInput code delegated)
+        self receiver na true false callbackInput code delegated)
       xl (.ok child) ∧
     child.error.isSome = false ∧
     32 ≤ child.output.length ∧
@@ -318,11 +318,11 @@ theorem RawFlashCallbackStepBoundary.toRaw
     RawFlashCallbackBoundary sevm self receiver amount inputSize
       callbackInput pre mid := by
   rcases h with
-    ⟨parent, child, xl, delegated, code, gasWord, avail, pc, _hstep,
+    ⟨parent, child, xl, delegated, na, code, gasWord, avail, pc, _hstep,
       hdepth, hstack, hpref, hstate, hmemory, hlogs, houtput,
       hdelegation, hfilled, hprocess, hclean, hlength, hmagic, hresume,
       hmidState, hreturndata, hmidStack, hmidLogs, hmidOutput⟩
-  exact ⟨parent, child, xl, delegated, code, gasWord, avail, hdepth,
+  exact ⟨parent, child, xl, delegated, na, code, gasWord, avail, hdepth,
     hstack, hpref, hstate, hmemory, hlogs, houtput, hdelegation, hfilled,
     hprocess, hclean, hlength, hmagic, hresume, hmidState, hreturndata,
     hmidStack, hmidLogs, hmidOutput⟩
@@ -335,7 +335,7 @@ lemma RawFlashCallbackBoundary.exists_log_segment
     (h : RawFlashCallbackBoundary sevm self receiver amount inputSize
       callbackInput pre mid) :
     ∃ callbackLogs : List Log, mid.logs = pre.logs ++ callbackLogs := by
-  rcases h with ⟨parent, child, xl, delegated, code, gasWord, avail,
+  rcases h with ⟨parent, child, xl, delegated, na, code, gasWord, avail,
     hdepth, hstack, hpref, hstate, hmemory, hparentLogs, hparentOutput,
     hdelegation, hfilled, hprocess, hclean, hlength, hmagic, hresume,
     hmidState, hreturndata, hmidStack, hmidLogs, hmidOutput⟩
@@ -359,7 +359,7 @@ segment between the outer mint and repayment logs. -/
 def FlashCallbackBoundary (sevm : Sevm) (self receiver : Adr)
     (amount : B256) (data : Bytes) (pre mid : Devm) : Prop :=
   ∃ (parent child : Devm) (xl : Xlot) (delegated : Bool)
-    (code : ByteArray) (gasWord : B256) (avail : Nat),
+    (na : Adr) (code : ByteArray) (gasWord : B256) (avail : Nat),
     0 < sevm.depth ∧
     pre.stack =
       gasWord :: receiver.toB256 :: (0 : B256) :: callbackArgsOffset ::
@@ -371,14 +371,14 @@ def FlashCallbackBoundary (sevm : Sevm) (self receiver : Adr)
     parent.logs = pre.logs ∧
     parent.output = pre.output ∧
     ((getDelegatedCodeAddress (pre.getCode receiver) = none ∧
-        code = pre.getCode receiver ∧ delegated = false) ∨
+        na = receiver ∧ code = pre.getCode receiver ∧ delegated = false) ∨
       (∃ target,
         getDelegatedCodeAddress (pre.getCode receiver) = some target ∧
-        code = pre.getCode target ∧ delegated = true)) ∧
+        na = target ∧ code = pre.getCode target ∧ delegated = true)) ∧
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg sevm parent (min gasWord.toNat (except64th avail)) 0
-        self receiver receiver true false
+        self receiver na true false
         (abiCallWithTail onFlashLoanSelector
           [sevm.caller.toB256, self.toB256, amount, 0] data)
         code delegated)
@@ -612,7 +612,7 @@ theorem of_rawFlashLoanSuccessTail_step
     rw [show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]] at h01
     exact B256.zero_ne_one h01.symm
   · rcases h_ok with
-      ⟨parent, child, xl, delegated, code, avail, pc, hstep,
+      ⟨parent, child, xl, delegated, na, code, avail, pc, hstep,
         hdepth, hstk_eq, hst_par, hmem_par, hlogs_par, houtput_par,
         h_del, h_fill, run_pm, hclean, h_resume, h_mid_state, h_mid_rd,
         h_mid_mem, h_mid_stack⟩
@@ -776,7 +776,7 @@ theorem of_rawFlashLoanSuccessTail_step
       exact ⟨_, h_rd5⟩
     refine ⟨mid, settle, ?_, hstor, hbal, hcode, hlogs.symm,
       houtput.symm, hwfSettle, hreadsSettle, hsettle⟩
-    refine ⟨parent, child, xl, delegated, code, gasWord, avail, pc,
+    refine ⟨parent, child, xl, delegated, na, code, gasWord, avail, pc,
       hstep, hdepth, hstk_eq, hp_par, hst_par, ?_, hlogs_par, houtput_par, h_del, h_fill,
       ?_, hclean, hlen, hmagicChild, h_resume, h_mid_state, h_mid_rd,
       h_mid_stack, h_mid_logs, h_mid_output⟩
@@ -868,11 +868,11 @@ theorem of_flashLoanSuccessTail
     hwf, hreads, hsettle⟩
   unfold RawFlashCallbackBoundary at hraw
   unfold FlashCallbackBoundary
-  rcases hraw with ⟨parent, child, xl, delegated, code, gasWord', avail,
+  rcases hraw with ⟨parent, child, xl, delegated, na, code, gasWord', avail,
     hdepth, hstack, -, hstate, hmemory, hlogs', houtput', hdelegated,
     hfilled, hprocess, hclean, hlength, hmagic, hresume, hmidState,
     hreturndata, hmidStack, hmidLogs, hmidOutput⟩
-  refine ⟨parent, child, xl, delegated, code, gasWord', avail,
+  refine ⟨parent, child, xl, delegated, na, code, gasWord', avail,
     hdepth, hstack, hstate, ?_, hlogs', houtput', hdelegated, hfilled,
     hprocess, hclean, hlength, hmagic, hresume, hmidState,
     hreturndata, hmidStack, hmidLogs, hmidOutput⟩

@@ -950,6 +950,9 @@ theorem Exec.CoreAllowanceSound.nextSome
                 have hcodeAddress :=
                   Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
                     hs hparentNe hnonempty
+                    (by rw [hinnerTarget]
+                        dsimp only [getDelegatedCodeAddress]
+                        rw [if_neg (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
                 dsimp [initEvm, initSevm, Msg.withBenv] at hcodeAddressInit
@@ -1751,6 +1754,9 @@ theorem Exec.CoreAllowanceReadSound.nextSome
                 have hcodeAddress :=
                   Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
                     hs hparentNe hnonempty
+                    (by rw [hinnerTarget]
+                        dsimp only [getDelegatedCodeAddress]
+                        rw [if_neg (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
                 dsimp [initEvm, initSevm, Msg.withBenv] at hcodeAddressInit

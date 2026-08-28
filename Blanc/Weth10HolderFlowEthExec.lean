@@ -729,14 +729,14 @@ theorem RawFlashCallbackStepBoundary.zeroValueCallEthSegment
     (hsum : sum pre.state.bal < 2 ^ 256) :
     Nonempty (ZeroValueCallEthSegment dp ca e pre post) := by
   rcases callback with
-    ⟨parent, child, xl, delegated, code, gasWord, avail, pc,
+    ⟨parent, child, xl, delegated, na, code, gasWord, avail, pc,
       hstep, hdepth, _hstack, _hpref, hparentState, _hmemory,
       _hlogs, _houtput, hresolution, hfilled, hprocess, hclean,
       _hlength, _hmagic, _hresume, hpostState, _hreturnData,
       _hpostStack, _hpostLogs, _hpostOutput⟩
   let msg :=
     callMsg e parent (min gasWord.toNat (except64th avail)) 0
-      self receiver receiver true false input code delegated
+      self receiver na true false input code delegated
   rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
@@ -745,6 +745,27 @@ theorem RawFlashCallbackStepBoundary.zeroValueCallEthSegment
   have hmsgDepth : msg.depth < e.depth := by
     simp only [msg, callMsg]
     omega
+  have hresolution' :
+      (getDelegatedCodeAddress (pre.getCode receiver) = none ∧
+          code = pre.getCode receiver ∧ delegated = false) ∨
+      (∃ delegatedTarget,
+        getDelegatedCodeAddress (pre.getCode receiver) =
+          some delegatedTarget ∧
+        code = pre.getCode delegatedTarget ∧ delegated = true) := by
+    rcases hresolution with ⟨hnone, _, hcode, hdel⟩ |
+      ⟨delegatedTarget, hsome, _, hcode, hdel⟩
+    · exact Or.inl ⟨hnone, hcode, hdel⟩
+    · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
+  have hresolved : receiver = ca → na = ca := by
+    intro hreceiver
+    have hnone :
+        getDelegatedCodeAddress (pre.getCode receiver) = none := by
+      rw [hreceiver]
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hinstalled)]
+    rcases hresolution with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
+    · exact hna.trans hreceiver
+    · simp [hnone] at hsome
   have htargetCode : msg.currentTarget = ca →
       some msg.code.toList = Prog.compile (weth10 dp) := by
     intro htarget
@@ -752,13 +773,13 @@ theorem RawFlashCallbackStepBoundary.zeroValueCallEthSegment
       simpa only [msg, callMsg] using htarget
     simpa only [msg, callMsg] using
       resolvedCallCode_eq_installed_of_target_eq
-        hinstalled hresolution hreceiver
+        hinstalled hresolution' hreceiver
   have htargetAddress : msg.currentTarget = ca →
       msg.codeAddress = some ca := by
     intro htarget
     have hreceiver : receiver = ca := by
       simpa only [msg, callMsg] using htarget
-    simp only [msg, callMsg, hreceiver]
+    simp only [msg, callMsg, hresolved hreceiver]
   have hzero : msg.value = 0 := by
     simp only [msg, callMsg]
   have hbound := trace.ethBound_of_zeroDeeper hparent hmsgDepth
@@ -815,7 +836,9 @@ theorem RawFlashCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
       _hpostOutput⟩
   let msg :=
     callMsg e parent (min gasWord.toNat (except64th avail)) 0
-      self receiver receiver true false input code delegated
+      self receiver
+      ((getDelegatedCodeAddress (pre.getCode receiver)).getD receiver)
+      true false input code delegated
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
   have hparent : pre.state = msg.benv.state := by
@@ -836,7 +859,10 @@ theorem RawFlashCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
     intro htarget
     have hreceiver : receiver = ca := by
       simpa only [msg, callMsg] using htarget
-    simp only [msg, callMsg, hreceiver]
+    have hnodel : getDelegatedCodeAddress (pre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hinstalled)]
+    simp only [msg, callMsg, hreceiver, hnodel, Option.getD_none]
   have hzero : msg.value = 0 := by
     simp only [msg, callMsg]
   have hbound := trace.ethBound_of_zeroDeeper hparent hmsgDepth
@@ -876,7 +902,9 @@ theorem RawTokenCallbackStepBoundary.zeroValueCallbackEthSegment
       _hcallPostStack, hbool⟩
   let msg :=
     callMsg e parent (min gasWord.toNat (except64th avail)) 0
-      self target target true false input code delegated
+      self target
+      ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+      true false input code delegated
   rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
@@ -902,7 +930,10 @@ theorem RawTokenCallbackStepBoundary.zeroValueCallbackEthSegment
     intro htarget
     have htarget' : target = ca := by
       simpa only [msg, callMsg] using htarget
-    simp only [msg, callMsg, htarget']
+    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hinstalledCall)]
+    simp only [msg, callMsg, htarget', hnodel, Option.getD_none]
   have hzero : msg.value = 0 := by
     simp only [msg, callMsg]
   have hsumCall : sum callPre.state.bal < 2 ^ 256 := by
@@ -953,7 +984,9 @@ theorem RawTokenCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
       _hcallPostStack, hbool⟩
   let msg :=
     callMsg e parent (min gasWord.toNat (except64th avail)) 0
-      self target target true false input code delegated
+      self target
+      ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+      true false input code delegated
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
   have hinstalledCall : some (callPre.getCode ca).toList =
@@ -978,7 +1011,10 @@ theorem RawTokenCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
     intro htarget
     have htarget' : target = ca := by
       simpa only [msg, callMsg] using htarget
-    simp only [msg, callMsg, htarget']
+    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hinstalledCall)]
+    simp only [msg, callMsg, htarget', hnodel, Option.getD_none]
   have hzero : msg.value = 0 := by
     simp only [msg, callMsg]
   have hsumCall : sum callPre.state.bal < 2 ^ 256 := by
@@ -1076,7 +1112,10 @@ theorem AcceptedValueCallTrace.redemptionMessageFacts
     rw [trace.childMessage_eq] at htarget ⊢
     have htarget' : target.toAdr = ca := by
       simpa only [callMsg] using htarget
-    simp only [callMsg, htarget']
+    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hinstalled)]
+    simp only [callMsg, htarget', hnodel, Option.getD_none]
   · rw [trace.childMessage_eq]
     rfl
   · rw [trace.childMessage_eq]
@@ -3658,7 +3697,11 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_permit
         intro hmsgTarget
         have htargetCa : (1 : B256).toAdr = ca :=
           trace.target.symm.trans hmsgTarget
-        exact trace.codeAddress.trans (congrArg some htargetCa)
+        have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+          dsimp only [getDelegatedCodeAddress]
+          rw [if_neg (not_delegation_of_compile installedCall)]
+        simp only [trace.codeAddress, htargetCa, hnodel,
+          Option.getD_none]
       have rawBound := childTrace.ethBound_of_zeroDeeper hparent
         trace.depth installedCall htargetCode htargetDirect trace.value
           hdeeper hsumCall
@@ -4071,6 +4114,9 @@ theorem Exec.CoreEthSound.nextSome
                 have hcadr :=
                   Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
                     hs hparentNe hnonempty
+                    (by rw [hinnerTarget]
+                        dsimp only [getDelegatedCodeAddress]
+                        rw [if_neg (not_delegation_of_compile hatp.1)])
                 rcases Frame.enter_run_inv henter with
                   ⟨benv, htransfer, hinit⟩
                 have hcadrInit :=

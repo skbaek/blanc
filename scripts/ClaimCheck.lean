@@ -33,9 +33,11 @@ example {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume}
     (hs : Xinst.step sevm devm x = .spawn f rsm)
     (hne : sevm.currentTarget ≠ f.inner.currentTarget)
-    (hcode : devm.getCode f.inner.currentTarget ≠ .empty) :
+    (hcode : devm.getCode f.inner.currentTarget ≠ .empty)
+    (hnodel :
+      getDelegatedCodeAddress (devm.getCode f.inner.currentTarget) = none) :
     f.inner.codeAddress = some f.inner.currentTarget :=
-  Xinst.step_spawn_codeAddress_eq_currentTarget hs hne hcode
+  Xinst.step_spawn_codeAddress_eq_currentTarget hs hne hcode hnodel
 
 example {root target : Exec.Deriv} {program : Prog}
     {path : Prog.SourcePath} {source : Func} {instruction : Ninst}

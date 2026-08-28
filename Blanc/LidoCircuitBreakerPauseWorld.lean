@@ -200,7 +200,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
     (h_depth : sevm.depth ≠ 0)
-    (h_nonprecompile : sevm.benvStat.rules.isPrecomp cw.toAdr = false)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
     (h_code : code = calleeCode)
     (h_mcs : 17 ≤ mcs)
     (h_room : s.length < 1024) :
@@ -224,7 +224,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
         post.state = stmid.addBal cw.toAdr 0 := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := callSpawnMsg sevm p mcs cw.toAdr
+  let msg := callSpawnMsg sevm p mcs cw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < 0
@@ -237,7 +237,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
-    · change sevm.benvStat.rules.isPrecomp cw.toAdr = false
+    · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
   obtain ⟨out, hexec, herr, hout, hgasOut, hworld, hlogsOut, hrefundOut,
     hatdOut, haaOut, haskOut⟩ :=
@@ -371,7 +371,7 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
     (h_depth : sevm.depth ≠ 0)
-    (h_nonprecompile : sevm.benvStat.rules.isPrecomp tw.toAdr = false)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
     (h_code : code = calleeCode)
     (h_mcs : 17 ≤ mcs)
     (h_room : s.length < 1024) :
@@ -395,7 +395,7 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
         post.state = stmid.addBal tw.toAdr 0 := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := statcallSpawnMsg sevm p mcs tw.toAdr
+  let msg := statcallSpawnMsg sevm p mcs tw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < 0
@@ -408,7 +408,7 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
-    · change sevm.benvStat.rules.isPrecomp tw.toAdr = false
+    · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
   obtain ⟨out, hexec, herr, hout, hgasOut, hworld, hlogsOut, hrefundOut,
     hatdOut, haaOut, haskOut⟩ :=

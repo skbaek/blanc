@@ -487,7 +487,7 @@ HEADER_PINS = {
         "code_of_ninst": "d2223c28b97a7c0065ded9a7199503aed5682db64f31b588ed9aa2c451e48f97",
         "coherent_decodePausedResult": "a86b5eae04d4ea1ee7fa2f9248cff86e2ff2e50e022bd34cf212ec7aba1b6b96",
         "coherent_of_call": "65c1bb0a008188b7f6ca7530bab5fd7034ec587b3847a061151a750555e49c77",
-        "coherent_of_childFrame": "3c66c3cbb5072d6a97364391dff57f663c02dd8b59f116bdc2b4f7c50ca59a3b",
+        "coherent_of_childFrame": "10e33b5e8f7b139c1537ce7df69d07c144e4f42b9015375b78834a4a7fa8aa98",
         "coherent_of_pauseKernelRun": "05586b650f7988578c3a7a6300ac20e7c08bb6b8aa6117af516dfb82733015e2",
         "coherent_of_statcall": "8419a5a1efc954bb60e35f6c0e463978f61d1df2600edac30eeeec4e2b110c58",
         "coherent_of_stor_eq": "551252a0eb60d8b475dfcac896f1925944c673ae5727e4b27de9e18f8ed81747",
@@ -1021,12 +1021,12 @@ ADMISSIBLE_HYPOTHESES = (
     ("return slot filled", r"Xlot\.Filled xl", False),
     ("the machine's own code-selection disjunct",
      r"\(getDelegatedCodeAddress \(s\.getCode target\) = none ∧ "
-     r"code = s\.getCode target ∧ del = false\) ∨ "
+     r"cadr = target ∧ code = s\.getCode target ∧ del = false\) ∨ "
      r"\(∃ d, getDelegatedCodeAddress \(s\.getCode target\) = some d ∧ "
-     r"code = s\.getCode d ∧ del = true\)", False),
+     r"cadr = d ∧ code = s\.getCode d ∧ del = true\)", False),
     ("the child frame's own message",
      r"ProcessMessage \(callMsg sevm parent gas value sevm\.currentTarget "
-     r"target target true isStatic cd code del\) xl \(\.ok child\)", False),
+     r"target cadr true isStatic cd code del\) xl \(\.ok child\)", False),
     # ---- the generic ladder's own premises ----
     ("message run", r"processMessageCall msg = \.ok ⟨st', out⟩", True),
     ("transaction run",

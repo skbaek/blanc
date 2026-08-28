@@ -118,6 +118,7 @@ theorem call_direct_codeAddress_control :
   refine ⟨call_spawn, by dca_kernel_decide, by dca_kernel_decide, ?_⟩
   exact Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
     call_spawn (by dca_kernel_decide) (by dca_kernel_decide)
+    (by dca_kernel_decide)
 
 private theorem statcall_spawn :
     Xinst.step dynamicSevm directStatcallPre .statcall =
@@ -134,6 +135,7 @@ theorem statcall_direct_codeAddress_control :
   refine ⟨statcall_spawn, by dca_kernel_decide, by dca_kernel_decide, ?_⟩
   exact Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
     statcall_spawn (by dca_kernel_decide) (by dca_kernel_decide)
+    (by dca_kernel_decide)
 
 /-- Every actual CREATE spawn has empty installed target code and no direct
 code address. This kernel proof avoids evaluating the CREATE address hash. -/

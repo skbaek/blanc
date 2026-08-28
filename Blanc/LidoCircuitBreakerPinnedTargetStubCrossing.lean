@@ -73,7 +73,7 @@ private lemma runCompiled_call_zero_value_stubPause
       ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
     (h_depth : sevm.depth ≠ 0)
-    (h_nonprecompile : sevm.benvStat.rules.isPrecomp cw.toAdr = false)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
     (h_code : code = stubCode)
     (h_mcs : 22166 ≤ mcs)
     (h_data : ((d1.memory.extends
@@ -111,7 +111,7 @@ private lemma runCompiled_call_zero_value_stubPause
           pausedUntilSlot (sevm.benvStat.time + duration) := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := callSpawnMsg sevm p mcs cw.toAdr
+  let msg := callSpawnMsg sevm p mcs cw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < 0
@@ -124,7 +124,7 @@ private lemma runCompiled_call_zero_value_stubPause
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
-    · change sevm.benvStat.rules.isPrecomp cw.toAdr = false
+    · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
   have hchildData : (msg.withBenv benv').data =
       pauseForCalldata duration := by
@@ -504,7 +504,7 @@ private lemma runCompiled_statcall_stubQuery
       ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
     (h_depth : sevm.depth ≠ 0)
-    (h_nonprecompile : sevm.benvStat.rules.isPrecomp tw.toAdr = false)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
     (h_code : code = stubCode)
     (h_mcs : 172 ≤ mcs)
     (h_data : ((d1.memory.extends
@@ -535,7 +535,7 @@ private lemma runCompiled_statcall_stubQuery
         post.state = stmid.addBal tw.toAdr 0 := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := statcallSpawnMsg sevm p mcs tw.toAdr
+  let msg := statcallSpawnMsg sevm p mcs tw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < 0
@@ -548,7 +548,7 @@ private lemma runCompiled_statcall_stubQuery
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
-    · change sevm.benvStat.rules.isPrecomp tw.toAdr = false
+    · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
   have hchildData : (msg.withBenv benv').data = isPausedCalldata := by
     change (p.memory.read iiw.toNat isw.toNat).1 = _

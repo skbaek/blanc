@@ -198,7 +198,11 @@ private def delegatedDirectCallControl : Bool :=
   | .spawn frame _ =>
       let child := frame.inner
       child.currentTarget == addressB &&
-      child.codeAddress == some addressB &&
+      -- EIP-7702: the storage owner stays the popped callee, while the code
+      -- address is the account its designator names.  Before the conformance
+      -- fix this read `some addressB`, fusing the two roles.
+      child.codeAddress == some delegateAddress &&
+      child.currentTarget != child.codeAddress.getD addressB &&
       child.code == delegatedBody && child.code != delegationCode
   | _ => false
 

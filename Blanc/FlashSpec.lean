@@ -975,12 +975,13 @@ Clause by clause:
 * **the operands** — the stack equation records gas `gw`, the callee word
   `receiver.toB256`, value `0`, fmint's fixed `[0x1c, 0x1c + argsSize)`
   argument window and the empty return window;
-* **the callee** — `callMsg`'s `currentTarget` and `codeAddress` are
-  `receiver`, entered from `caller = fa`.  The code the child ran is the
-  receiver's own *unless* the receiver is an EIP-7702 delegation designator,
-  in which case it is the designated account's — the delegation case is
-  **covered as an explicit disjunct**, not excluded, because the callee is
-  arbitrary borrower code and nothing rules a designator out;
+* **the callee** — `callMsg`'s `currentTarget` is `receiver`, entered from
+  `caller = fa`; its `codeAddress` is the *resolved* address `na`.  The code
+  the child ran is the receiver's own, and `na` the receiver itself, *unless*
+  the receiver is an EIP-7702 delegation designator, in which case both are
+  the designated account's — the delegation case is **covered as an explicit
+  disjunct**, not excluded, because the callee is arbitrary borrower code and
+  nothing rules a designator out;
 * **the calldata** — the canonical ABI encoding of
   `onFlashLoan(sevm.caller, fa, amount, 0, data)`, and the value is `0`;
 * **the gas** — EIP-150's grant, `min` of the request and the 63/64
@@ -1000,20 +1001,20 @@ precompile or from executing the resolved code is made explicit by
 never asserts that any `flashLoan` succeeds. -/
 def CallbackBoundary (sevm : Sevm) (fa receiver : Adr) (amount : B256)
     (data : Bytes) (pre mid : Devm) : Prop :=
-  ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
-    (gw : B256) (avail : Nat),
+  ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+    (code : ByteArray) (gw : B256) (avail : Nat),
     pre.stack = gw :: receiver.toB256 :: (0 : B256) :: callbackArgsOffset ::
       Nat.toB256 (196 + ceil32 data.length) :: (0 : B256) :: (0 : B256) ::
       parent.stack ∧
     parent.state = pre.state ∧
     ((getDelegatedCodeAddress (pre.getCode receiver) = none ∧
-        code = pre.getCode receiver ∧ dp = false) ∨
+        na = receiver ∧ code = pre.getCode receiver ∧ dp = false) ∨
       (∃ d, getDelegatedCodeAddress (pre.getCode receiver) = some d ∧
-        code = pre.getCode d ∧ dp = true)) ∧
+        na = d ∧ code = pre.getCode d ∧ dp = true)) ∧
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg sevm parent (min gw.toNat (except64th avail)) 0 fa receiver
-        receiver true false
+        na true false
         (abiCallWithTail onFlashLoanSelector
           [sevm.caller.toB256, fa.toB256, amount, 0] data)
         code dp)
@@ -1049,13 +1050,13 @@ lemma CallbackBoundary.entry_modes {sevm : Sevm} {fa receiver : Adr}
       evm.sta.value = 0 ∧
       evm.sta.data = abiCallWithTail onFlashLoanSelector
         [sevm.caller.toB256, fa.toB256, amount, 0] data) := by
-  obtain ⟨parent, child, xl, dp, code, gw, avail, -, -, h_del, h_fill,
+  obtain ⟨parent, child, xl, dp, na, code, gw, avail, -, -, h_del, h_fill,
     run_pm, -, -, -, -, -, -, -⟩ := h
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp run_pm
   unfold FrameBody at hbody
   rcases eq_bt : Msg.benvAfterTransfer
       (callMsg sevm parent (min gw.toNat (except64th avail)) 0 fa receiver
-        receiver true false
+        na true false
         (abiCallWithTail onFlashLoanSelector
           [sevm.caller.toB256, fa.toB256, amount, 0] data)
         code dp) with e | benv' <;>
@@ -1063,7 +1064,7 @@ lemma CallbackBoundary.entry_modes {sevm : Sevm} {fa receiver : Adr}
   · rw [hbody.2, processMessage.settle_error] at hset
     cases hset
   have run_ec : ExecuteCode _ xl r0 := hbody
-  rcases of_executeCode_someCode (adr := receiver) rfl run_ec with
+  rcases of_executeCode_someCode (adr := na) rfl run_ec with
     ⟨h_prec, h_xl_none, -⟩ | ⟨-, ex', h_xl_some, -⟩
   · -- answered by a precompile
     left
@@ -1072,23 +1073,23 @@ lemma CallbackBoundary.entry_modes {sevm : Sevm} {fa receiver : Adr}
     have hstat : benv'.stat = sevm.benvStat := by
       rw [hB]
       rfl
-    constructor
-    · have := of_decide_eq_true hpre
+    rcases h_del with ⟨hnone, hna, -, -⟩ | ⟨d, -, -, -, hdp_true⟩
+    · refine ⟨?_, hnone⟩
+      have := of_decide_eq_true hpre
       rw [show ((callMsg sevm parent (min gw.toNat (except64th avail)) 0 fa
-          receiver receiver true false
+          receiver na true false
           (abiCallWithTail onFlashLoanSelector
             [sevm.caller.toB256, fa.toB256, amount, 0] data)
           code dp).withBenv benv').benv = benv' from rfl, hstat] at this
+      rw [← hna]
       exact this
-    · rcases h_del with ⟨hnone, -, -⟩ | ⟨d, -, -, hdp_true⟩
-      · exact hnone
-      · rw [show ((callMsg sevm parent (min gw.toNat (except64th avail)) 0 fa
-            receiver receiver true false
-            (abiCallWithTail onFlashLoanSelector
-              [sevm.caller.toB256, fa.toB256, amount, 0] data)
-            code dp).withBenv benv').disablePrecompiles = dp from rfl,
-          hdp_true] at hdp
-        cases hdp
+    · rw [show ((callMsg sevm parent (min gw.toNat (except64th avail)) 0 fa
+          receiver na true false
+          (abiCallWithTail onFlashLoanSelector
+            [sevm.caller.toB256, fa.toB256, amount, 0] data)
+          code dp).withBenv benv').disablePrecompiles = dp from rfl,
+        hdp_true] at hdp
+      cases hdp
   · -- answered by an actual sub-execution of the resolved code
     right
     rw [h_xl_some] at h_fill
@@ -1145,7 +1146,7 @@ theorem rollback_of_callback_failure {sevm : Sevm} {sc mid : Devm}
   · exact h_fail.2
   · -- the clean-child branch pushes `1`, which `h_flag` refutes
     exfalso
-    obtain ⟨parent, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -,
+    obtain ⟨parent, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -,
       h_mid_stack⟩ := h_ok
     rw [h_mid_stack] at h_flag
     exact B256.zero_ne_one
@@ -1195,7 +1196,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
       pref_head_unique hp1 (pref_append [(0 : B256)] s2.stack)
     rw [show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]] at h01
     exact B256.zero_ne_one h01.symm
-  · rcases h_ok with ⟨parent, child, xl, dp, code, avail, hstk_eq, hst_par,
+  · rcases h_ok with ⟨parent, child, xl, dp, na, code, avail, hstk_eq, hst_par,
       hmem_par, h_del, h_fill, run_pm, herr, h_resume, h_mid_state, h_mid_rd,
       h_mid_mem, h_mid_stack⟩
     rw [toAdr_toB256] at h_del run_pm
@@ -1327,7 +1328,8 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
       rw [show (((0 : B256)) * 32).toNat = 0 from rfl] at h_rd5
       exact h_rd5
     exact ⟨mid, s7,
-      ⟨parent, child, xl, dp, code, g, avail, hstk_eq, hst_par, h_del, h_fill,
+      ⟨parent, child, xl, dp, na, code, g, avail, hstk_eq, hst_par, h_del,
+        h_fill,
         run_pm, herr, hlen, h_magic', h_resume, h_mid_state, h_mid_rd,
         h_mid_stack⟩,
       hg, hgc, hp7, h_wf7, h_rd7, h_run⟩
@@ -2624,7 +2626,7 @@ lemma CallbackBoundary.answer {sevm : Sevm} {fa receiver : Adr} {amount : B256}
     (h : CallbackBoundary sevm fa receiver amount data pre mid) :
     32 ≤ mid.returnData.length ∧
       Bytes.toB256 (mid.returnData.sliceD 0 32 0) = erc3156Magic := by
-  obtain ⟨_, child, _, _, _, _, _, -, -, -, -, -, -, hlen, hmagic, -, -, hrd, -⟩ := h
+  obtain ⟨_, child, _, _, _, _, _, _, -, -, -, -, -, -, hlen, hmagic, -, -, hrd, -⟩ := h
   rw [hrd]; exact ⟨hlen, hmagic⟩
 
 /-- **Wrong magic word ⇒ no success.**  A contrapositive of the headline: if no

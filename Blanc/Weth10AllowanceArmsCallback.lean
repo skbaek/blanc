@@ -414,7 +414,9 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffect
       hcallPostState, _hreturnData, _hcallPostMemory, _hcallPostStack,
       hcontinuation⟩
   let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
-    self target target true false input code delegated
+    self target
+    ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+    true false input code delegated
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
   have hcallPreCode : some (callPre.getCode ca).toList =
@@ -438,7 +440,10 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffect
     intro htarget
     have htargetCa : target = ca := by
       simpa only [msg, callMsg] using htarget
-    simp [msg, callMsg, htargetCa]
+    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hcallPreCode)]
+    simp only [msg, callMsg, htargetCa, hnodel, Option.getD_none]
   have childEffect := trace.allowanceRegionDelta_of_forallDeeperAt hparent
     hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper
   have hprefix := AllowanceRegionEffect.of_getStorCode_eq
@@ -1258,7 +1263,9 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffectSound
       hcallPostState, _hreturnData, _hcallPostMemory, _hcallPostStack,
       hcontinuation⟩
   let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
-    self target target true false input code delegated
+    self target
+    ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+    true false input code delegated
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
   have hcallPreCode : some (callPre.getCode ca).toList =
@@ -1282,7 +1289,10 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffectSound
     intro htarget
     have htargetCa : target = ca := by
       simpa only [msg, callMsg] using htarget
-    simp [msg, callMsg, htargetCa]
+    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hcallPreCode)]
+    simp only [msg, callMsg, htargetCa, hnodel, Option.getD_none]
   have childEffect := trace.allowanceRegionDeltaSound_of_forallDeeperAt hparent
     hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper
   have hprefix := AllowanceRegionEffectSound.of_getStorCode_eq
