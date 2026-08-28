@@ -2442,7 +2442,9 @@ theorem RawTokenCallbackStepBoundary.storageSegmentEffect
       hcallPostStack, hcontinuation⟩
   obtain ⟨retained⟩ := exists_retainedXlot_of_filled hfilled
   let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
-    self target target true false input code delegated
+    self target
+    ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+    true false input code delegated
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
   have hcallPreCode : some (callPre.getCode ca).toList =
@@ -2466,7 +2468,10 @@ theorem RawTokenCallbackStepBoundary.storageSegmentEffect
     intro htarget
     have htargetCa : target = ca := by
       simpa only [msg, callMsg] using htarget
-    simp [msg, callMsg, htargetCa]
+    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hcallPreCode)]
+    simp [msg, callMsg, htargetCa, hnodel]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
       hcallPreCode htargetCode htargetDirect hdeeper with ⟨childEffect⟩
   have hprefix := StorageSegmentEffect.of_getStorCode_eq
@@ -2514,7 +2519,9 @@ theorem RawTokenCallbackIndexedStepBoundary.storageSegmentEffect
       hcallPostState, _hreturnData, _hcallPostMemory, _hcallPostStack,
       hcontinuation⟩
   let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
-    self target target true false input code delegated
+    self target
+    ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+    true false input code delegated
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
   have hcallPreCode : some (callPre.getCode ca).toList =
@@ -2538,7 +2545,10 @@ theorem RawTokenCallbackIndexedStepBoundary.storageSegmentEffect
     intro htarget
     have htargetCa : target = ca := by
       simpa only [msg, callMsg] using htarget
-    simp [msg, callMsg, htargetCa]
+    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile hcallPreCode)]
+    simp [msg, callMsg, htargetCa, hnodel]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
       hcallPreCode htargetCode htargetDirect hdeeper with ⟨childEffect⟩
   have hprefix := StorageSegmentEffect.of_getStorCode_eq
@@ -2576,14 +2586,14 @@ theorem RawFlashCallbackStepBoundary.storageSegmentEffect
       Nonempty (StorageSegmentEffect ca pre mid
         (retained.flowActions dp ca)) := by
   rcases callback with
-    ⟨parent, child, xl, delegated, code, gasWord, avail, pc, hstep,
+    ⟨parent, child, xl, delegated, na, code, gasWord, avail, pc, hstep,
       hdepth, hstack, hpref, hparentState, hparentMemory, hparentLogs,
       hparentOutput, hdelegation, hfilled, hprocess, hclean, hlength,
       hmagic, hresume, hmidState, hreturnData, hmidStack, hmidLogs,
       hmidOutput⟩
   obtain ⟨retained⟩ := exists_retainedXlot_of_filled hfilled
   let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
-    self receiver receiver true false callbackInput code delegated
+    self receiver na true false callbackInput code delegated
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
   have hparent : pre.state = msg.benv.state := by
@@ -2591,19 +2601,39 @@ theorem RawFlashCallbackStepBoundary.storageSegmentEffect
   have hmsgDepth : msg.depth < e.depth := by
     dsimp only [msg, callMsg]
     omega
+  have hdelegation' :
+      (getDelegatedCodeAddress (pre.getCode receiver) = none ∧
+          code = pre.getCode receiver ∧ delegated = false) ∨
+      (∃ delegatedTarget,
+        getDelegatedCodeAddress (pre.getCode receiver) =
+          some delegatedTarget ∧
+        code = pre.getCode delegatedTarget ∧ delegated = true) := by
+    rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
+      ⟨delegatedTarget, hsome, _, hcode, hdel⟩
+    · exact Or.inl ⟨hnone, hcode, hdel⟩
+    · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
+  have hresolved : receiver = ca → na = ca := by
+    intro hreceiver
+    have hnone : getDelegatedCodeAddress (pre.getCode receiver) = none := by
+      rw [hreceiver]
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile installed)]
+    rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
+    · exact hna.trans hreceiver
+    · simp [hnone] at hsome
   have htargetCode : msg.currentTarget = ca →
       some msg.code.toList = Prog.compile (weth10 dp) := by
     intro htarget
     have hreceiver : receiver = ca := by
       simpa only [msg, callMsg] using htarget
     exact callbackCode_eq_compiled_of_target_eq installed hreceiver
-      hdelegation
+      hdelegation'
   have htargetDirect : msg.currentTarget = ca →
       msg.codeAddress = some ca := by
     intro htarget
     have hreceiver : receiver = ca := by
       simpa only [msg, callMsg] using htarget
-    simp [msg, callMsg, hreceiver]
+    simp [msg, callMsg, hresolved hreceiver]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
       installed htargetCode htargetDirect hdeeper with ⟨childEffect⟩
   have hchildToMid := StorageSegmentEffect.of_getStorCode_eq
@@ -2638,7 +2668,9 @@ theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
       _hresume, hmidState, _hreturnData, _hmidStack, _hmidLogs,
       _hmidOutput⟩
   let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
-    self receiver receiver true false callbackInput code delegated
+    self receiver
+    ((getDelegatedCodeAddress (pre.getCode receiver)).getD receiver)
+    true false callbackInput code delegated
   let trace : ProcessMessageTrace msg (.ok child) :=
     ⟨xl, retained, by simpa only [msg] using hprocess⟩
   have hparent : pre.state = msg.benv.state := by
@@ -2658,7 +2690,10 @@ theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
     intro htarget
     have hreceiver : receiver = ca := by
       simpa only [msg, callMsg] using htarget
-    simp [msg, callMsg, hreceiver]
+    have hnodel : getDelegatedCodeAddress (pre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile installed)]
+    simp [msg, callMsg, hreceiver, hnodel]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
       installed htargetCode htargetDirect hdeeper with ⟨childEffect⟩
   have hchildToMid := StorageSegmentEffect.of_getStorCode_eq
@@ -2702,7 +2737,7 @@ theorem BurnCallPrefix.storageSegmentEffect
       simp [B256.eqCheck]] at hzero
     exact B256.zero_ne_one hzero.symm
   · rcases hsuccess with
-      ⟨parent, child, xl, delegated, code, availableGas, pc, hstep,
+      ⟨parent, child, xl, delegated, na, code, availableGas, pc, hstep,
         hdepth, hcallStack, hparentState, hparentMemory, hparentLogs,
         hparentOutput, hdelegation, hfilled, hprocess, hclean,
         hresume, hcallPostState, hreturnData, hcallPostMemory,
@@ -2711,7 +2746,7 @@ theorem BurnCallPrefix.storageSegmentEffect
     let msg := callMsg e parent
       (min gasWord.toNat (except64th availableGas) +
         (if amount.toNat = 0 then 0 else gCallStipend))
-      amount e.currentTarget target.toAdr target.toAdr true false
+      amount e.currentTarget target.toAdr na true false
       ((callPre.memory.read (0 : B256).toNat (0 : B256).toNat).1)
       code delegated
     let trace : ProcessMessageTrace msg (.ok child) :=
@@ -2721,19 +2756,40 @@ theorem BurnCallPrefix.storageSegmentEffect
     have hmsgDepth : msg.depth < e.depth := by
       dsimp only [msg, callMsg]
       omega
+    have hdelegation' :
+        (getDelegatedCodeAddress (callPre.getCode target.toAdr) = none ∧
+            code = callPre.getCode target.toAdr ∧ delegated = false) ∨
+        (∃ delegatedTarget,
+          getDelegatedCodeAddress (callPre.getCode target.toAdr) =
+            some delegatedTarget ∧
+          code = callPre.getCode delegatedTarget ∧ delegated = true) := by
+      rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
+        ⟨delegatedTarget, hsome, _, hcode, hdel⟩
+      · exact Or.inl ⟨hnone, hcode, hdel⟩
+      · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
+    have hresolved : target.toAdr = ca → na = ca := by
+      intro htargetCa
+      have hnone :
+          getDelegatedCodeAddress (callPre.getCode target.toAdr) = none := by
+        rw [htargetCa]
+        dsimp only [getDelegatedCodeAddress]
+        rw [if_neg (not_delegation_of_compile installed)]
+      rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
+      · exact hna.trans htargetCa
+      · simp [hnone] at hsome
     have htargetCode : msg.currentTarget = ca →
         some msg.code.toList = Prog.compile (weth10 dp) := by
       intro htarget
       have htargetCa : target.toAdr = ca := by
         simpa only [msg, callMsg] using htarget
       exact callbackCode_eq_compiled_of_target_eq installed htargetCa
-        hdelegation
+        hdelegation'
     have htargetDirect : msg.currentTarget = ca →
         msg.codeAddress = some ca := by
       intro htarget
       have htargetCa : target.toAdr = ca := by
         simpa only [msg, callMsg] using htarget
-      simp [msg, callMsg, htargetCa]
+      simp [msg, callMsg, hresolved htargetCa]
     rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
         installed htargetCode htargetDirect hdeeper with ⟨childEffect⟩
     have hguardState : guardPost.state = child.state := by
@@ -2788,7 +2844,10 @@ theorem AcceptedValueCallTrace.storageSegmentEffect
     rw [trace.childMessage_eq] at htarget ⊢
     have htarget' : target.toAdr = ca := by
       simpa only [callMsg] using htarget
-    simp only [callMsg, htarget']
+    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg (not_delegation_of_compile installed)]
+    simp only [callMsg, htarget', hnodel, Option.getD_none]
   rcases trace.retained.storageSegmentDelta_of_forallDeeperAt hparent
       hmsgDepth installed htargetCode htargetDirect hdeeper with
     ⟨childEffect⟩
@@ -5109,7 +5168,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
         intro hmsgTarget
         have htargetCa : (1 : B256).toAdr = ca :=
           trace.target.symm.trans hmsgTarget
-        exact trace.codeAddress.trans (congrArg some htargetCa)
+        have hnodel :
+            getDelegatedCodeAddress (callPre.getCode ca) = none := by
+          dsimp only [getDelegatedCodeAddress]
+          rw [if_neg (not_delegation_of_compile installedCall)]
+        simp only [trace.codeAddress, htargetCa, hnodel, Option.getD_none]
       rcases childTrace.storageSegmentDelta_of_forallDeeperAt hparent
           trace.depth installedCall htargetCode htargetDirect hdeeper with
         ⟨childEffect⟩
@@ -6085,6 +6148,9 @@ theorem Exec.CoreStorageSound.nextSome
                 have hcodeAddress :=
                   Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
                     hs hparentNe hnonempty
+                    (by rw [hinnerTarget]
+                        dsimp only [getDelegatedCodeAddress]
+                        rw [if_neg (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
                 dsimp [initEvm, initSevm, Msg.withBenv] at hcodeAddressInit
