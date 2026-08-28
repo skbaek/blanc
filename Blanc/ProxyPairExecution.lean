@@ -136,4 +136,533 @@ theorem proxyMsgSuccess_caller : proxyMsgSuccess.caller = callerAdr := rfl
 
 theorem proxyMsgRevert_caller : proxyMsgRevert.caller = callerAdr := rfl
 
+/-! The continuation after the actual delegatecall.  Keeping this as a local
+function lets the prefix walk be checked independently of the child resume. -/
+def proxySuccessTail : Func :=
+  retdatasize ::: dup 0 ::: pushB256 0 ::: pushB256 0 ::: retdatacopy :::
+  swap 0 :::
+  Func.branch
+    (pushB256 0 ::: Func.last .rev)
+    (pushB256 0 ::: Func.last .ret)
+
+theorem proxyFallback_eq_prefix :
+    proxyFallback =
+      (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
+        pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
+        pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+        proxySuccessTail) := by
+  rfl
+
+private lemma proxy_empty_extCost (S : List B256) (G : Nat) :
+    ((initDevm proxyMsgSuccess).setMach
+      ⟨S, (initDevm proxyMsgSuccess).memory, G⟩).extCost [⟨0, 32⟩] = gMemory := by
+  rw [show (initDevm proxyMsgSuccess).memory = Mem.empty by rfl]
+  simpa [initDevm, proxyMsgSuccess] using
+    (Devm.extCost_empty_word (devm := initDevm proxyMsgSuccess) (S := S) (G := G))
+
+private lemma proxy_copy_cost (S : List B256) (G : Nat) :
+    gVerylow + gasCopy * ceilDiv 32 32 +
+      ((initDevm proxyMsgSuccess).setMach
+        ⟨S, (initDevm proxyMsgSuccess).memory, G⟩).extCost [⟨0, 32⟩] = 9 := by
+  rw [proxy_empty_extCost]
+  decide
+
+private lemma proxy_empty_extCost' (S : List B256) (G : Nat) :
+    ((initDevm proxyMsgSuccess).setMach
+      ⟨S, Mem.empty, G⟩).extCost [⟨0, 32⟩] = gMemory := by
+  exact Devm.extCost_empty_word
+
+private def proxyCallPreSuccess : Devm :=
+  let mem := (initDevm proxyMsgSuccess).memory.write (B256.toNat 0)
+    ((initSevm proxyMsgSuccess).data.sliceD (B256.toNat 0)
+      (Nat.toB256 (List.length (initSevm proxyMsgSuccess).data)).toNat 0)
+  let entry := (initDevm proxyMsgSuccess).setMach ⟨[], Mem.empty, 27223⟩
+  let beforeSload := entry.setMach
+    ⟨[implementationSlotLit, 0,
+        Nat.toB256 (List.length (initSevm proxyMsgSuccess).data), 0, 0], mem,
+      27197⟩
+  let afterSload :=
+    (addAccessedStorageKey beforeSload
+      (initSevm proxyMsgSuccess).currentTarget implementationSlotLit).setMach
+      ⟨[beforeSload.getStorVal
+          (initSevm proxyMsgSuccess).currentTarget implementationSlotLit,
+        0, Nat.toB256 (List.length (initSevm proxyMsgSuccess).data), 0, 0], mem,
+        27197 - gasColdSload⟩
+  afterSload.setMach
+      ⟨[Nat.toB256 25095,
+        implAdr.toB256,
+        0, Nat.toB256 (List.length (initSevm proxyMsgSuccess).data), 0, 0], mem,
+      25095⟩
+
+private def proxyCallBaseSuccess : Devm :=
+  proxyCallPreSuccess.setMach
+    ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft⟩
+
+private def proxySuccessD1 : Devm :=
+  addAccessedAddress proxyCallBaseSuccess implAdr
+
+private def proxySuccessParent : Devm :=
+  callSpawnParent proxySuccessD1 24744 0 32 0 0
+
+private def proxySuccessChild : Msg :=
+  delcallSpawnMsg (initSevm proxyMsgSuccess) proxySuccessParent 22144
+    implAdr 0 32 implGuardedCode false
+
+private theorem proxy_success_child_enters :
+    (Frame.ofCall proxySuccessChild).enter = .run (initEvm proxySuccessChild) := by
+  apply Frame.enter_run_of_nonprecompile
+    (f := Frame.ofCall proxySuccessChild) (adr := implAdr)
+  · rfl
+  · rfl
+  · change pairBenv.stat.rules.isPrecomp implAdr = false
+    exact pairBenv_impl_not_precompile
+
+private theorem proxy_success_child_run :
+    ∃ post,
+      Prog.RunCompiledTo (initSevm proxySuccessChild)
+        (initDevm proxySuccessChild) implGuardedProg (.ok post) ∧
+      post.error = (initDevm proxySuccessChild).error ∧
+      post.output = implReturnWord.toBytes ∧ post.gasLeft = 0 ∧
+      post.state = pairState.setStorVal proxyAdr implSlot 1 ∧
+      post.transientStorage = (initDevm proxySuccessChild).transientStorage ∧
+      post.logs = (initDevm proxySuccessChild).logs := by
+  have h_cold :
+      (⟨(initSevm proxySuccessChild).currentTarget, implSlot⟩ : Adr × B256) ∉
+        (initDevm proxySuccessChild).accessedStorageKeys := by
+    change ((proxyAdr, implSlot) : Adr × B256) ∉
+      (Std.HashSet.emptyWithCapacity : KeySet).insert
+        (proxyAdr, implementationSlotLit)
+    simpa [implementationSlotLit_eq_slot] using
+      implSlot_ne_implementationSlot.symm
+  have h_orig :
+      getOrigStorVal (initSevm proxySuccessChild)
+        (initSevm proxySuccessChild).currentTarget implSlot = 0 := by
+    change (pairState.get proxyAdr).stor.get implSlot = 0
+    exact pairState_proxyImplSlot_zero
+  have h_cur :
+      (initDevm proxySuccessChild).getStorVal
+        (initSevm proxySuccessChild).currentTarget implSlot = 0 := by
+    change (pairState.get proxyAdr).stor.get implSlot = 0
+    exact pairState_proxyImplSlot_zero
+  have h_data : Sevm.dataWord (initSevm proxySuccessChild) 0 ≠ 0 := by
+    change Bytes.toB256 successData ≠ 0
+    rw [show successData = (1 : B256).toBytes by rfl,
+      B256.toB256_toBytes]
+    decide
+  obtain ⟨post, hrun, herr, hout, hgas, hstate, _, htra, hlogs⟩ :=
+    implGuarded_runCompiledTo_nonzero [implGuarded]
+      (initSevm proxySuccessChild) (initDevm proxySuccessChild) 0
+      (by rfl) h_cold h_orig h_cur h_data
+  refine ⟨post, ?_, herr, hout, hgas, hstate, htra, hlogs⟩
+  refine Prog.runCompiledTo_intro (G := 22143)
+    (mid := (initDevm proxySuccessChild).setMach
+      ⟨(initDevm proxySuccessChild).stack,
+        (initDevm proxySuccessChild).memory, 22143⟩) ?_ rfl hrun
+  decide
+
+private theorem proxy_success_child_exec :
+    ∃ post,
+      exec (initEvm proxySuccessChild) = .ok post ∧
+      post.error = (initDevm proxySuccessChild).error ∧
+      post.output = implReturnWord.toBytes ∧ post.gasLeft = 0 ∧
+      post.state = pairState.setStorVal proxyAdr implSlot 1 ∧
+      post.transientStorage = (initDevm proxySuccessChild).transientStorage ∧
+      post.logs = (initDevm proxySuccessChild).logs := by
+  obtain ⟨post, hrun, herr, hout, hgas, hstate, htra, hlogs⟩ :=
+    proxy_success_child_run
+  have h_code : some (initSevm proxySuccessChild).code.toList =
+      Prog.compile implGuardedProg := by
+    rw [show (initSevm proxySuccessChild).code = implGuardedCode by rfl]
+    rw [show implGuardedCode.toList = implGuardedBytes by
+      simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
+    exact implGuardedProg_compile.symm
+  refine ⟨post, Prog.exec_of_runCompiledTo hrun h_code, herr, hout, hgas,
+    hstate, htra, hlogs⟩
+
+def proxySuccessChildMsg : Msg := proxySuccessChild
+
+theorem proxySuccessChildMsg_exec :
+    ∃ post,
+      exec (initEvm proxySuccessChildMsg) = .ok post ∧
+      Nonempty (Exec 0 (initSevm proxySuccessChildMsg)
+        (initDevm proxySuccessChildMsg) (.ok post)) ∧
+      post.error = (initDevm proxySuccessChildMsg).error ∧
+      post.output = implReturnWord.toBytes ∧ post.gasLeft = 0 ∧
+      post.state = pairState.setStorVal proxyAdr implSlot 1 ∧
+      post.transientStorage = (initDevm proxySuccessChildMsg).transientStorage ∧
+      post.logs = (initDevm proxySuccessChildMsg).logs := by
+  obtain ⟨post, h_exec, herr, hout, hgas, hstate, htra, hlogs⟩ :=
+    proxy_success_child_exec
+  have hexec :
+      exec ⟨0, initSevm proxySuccessChildMsg, initDevm proxySuccessChildMsg⟩ =
+        .ok post := by
+    simpa [proxySuccessChildMsg, initEvm] using h_exec
+  have hderiv :
+      Nonempty (Exec 0 (initSevm proxySuccessChildMsg)
+        (initDevm proxySuccessChildMsg) (.ok post)) :=
+    (exec_iff_exec_eq _ _ _ _).mpr hexec
+  refine ⟨post, hexec, hderiv, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simpa [proxySuccessChildMsg] using herr
+  · exact hout
+  · exact hgas
+  · exact hstate
+  · simpa [proxySuccessChildMsg] using htra
+  · simpa [proxySuccessChildMsg] using hlogs
+
+private theorem proxy_success_h_ext :
+    (proxyCallBaseSuccess.setMach
+      ⟨[], proxyCallBaseSuccess.memory, proxyCallBaseSuccess.gasLeft⟩).extCost
+      [⟨0, 32⟩, ⟨0, 0⟩] = 0 := by
+  apply Devm.extCost_covered
+  decide
+
+private theorem proxy_success_h_del :
+    accessDelegation
+      (addAccessedAddress
+        (proxyCallPreSuccess.setMach
+          ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft⟩)
+        implAdr) implAdr =
+      ⟨false, implAdr, implGuardedCode, 0, proxySuccessD1⟩ := by
+  change accessDelegation (addAccessedAddress proxyCallBaseSuccess implAdr) implAdr = _
+  have hcode :
+      (addAccessedAddress proxyCallBaseSuccess implAdr).state.getCode implAdr =
+        implGuardedCode := by
+    change (pairState.get implAdr).code = implGuardedCode
+    exact pairState_implCode
+  unfold accessDelegation
+  simp only [hcode, implGuardedCode_notDelegation]
+  rfl
+
+private theorem proxy_success_h_acc :
+    accessCost implAdr proxyCallBaseSuccess.accessedAddresses + 0 =
+      gasColdAccountAccess := by
+  have h : proxyCallBaseSuccess.accessedAddresses =
+      (Std.HashSet.emptyWithCapacity : AdrSet) := by rfl
+  rw [h]
+  unfold accessCost
+  simp
+
+private theorem proxy_success_h_gas : 24744 + 0 ≤ proxySuccessD1.gasLeft := by
+  decide
+
+private theorem proxy_success_h_depth :
+    (initSevm proxyMsgSuccess).depth ≠ 0 := by
+  decide
+
+private theorem proxy_success_delcall :
+    ∃ childPost post,
+      childPost.output = implReturnWord.toBytes ∧
+      childPost.gasLeft = 0 ∧
+      childPost.state = pairState.setStorVal proxyAdr implSlot 1 ∧
+      childPost.transientStorage = proxyCallPreSuccess.transientStorage ∧
+      childPost.logs = proxyCallPreSuccess.logs ∧
+      Ninst.RunCompiled (initSevm proxyMsgSuccess) proxyCallPreSuccess
+        (.exec .delcall) post ∧
+      post = (((incorporateChildOnSuccess proxySuccessParent childPost
+        childPost.output).setMach
+          ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory,
+            proxySuccessParent.gasLeft + childPost.gasLeft⟩).memWrite
+        0 (childPost.output.take 0)) ∧
+      post.stack = [1] ∧
+      post.memory = proxyCallPreSuccess.memory ∧
+      post.gasLeft = 351 ∧
+      post.returnData = implReturnWord.toBytes := by
+  have h_stk : proxyCallPreSuccess.stack =
+      25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
+    simp only [proxyCallPreSuccess, Devm.setMach_stack]
+    decide
+  have h_del :
+      accessDelegation
+        (addAccessedAddress
+          (proxyCallPreSuccess.setMach
+            ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft⟩)
+          implAdr) implAdr =
+        ⟨false, implAdr, implGuardedCode, 0, proxySuccessD1⟩ :=
+    proxy_success_h_del
+  obtain ⟨childPost, hchild, herr, hout, hgas, hstate, htra, hlogs⟩ :=
+    proxy_success_child_exec
+  have h_ok : childPost.error.isSome = false := by
+    rw [herr]
+    rfl
+  have hsettle :
+      (Frame.ofCall proxySuccessChild).settle
+        (exec (initEvm proxySuccessChild)) = .ok childPost := by
+    rw [hchild]
+    simp [Frame.ofCall, Frame.settle, Frame.settleMsg, processMessage.settle,
+      executeCode.handleError, h_ok]
+  let post := (((incorporateChildOnSuccess proxySuccessParent childPost
+      childPost.output).setMach
+        ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory,
+          proxySuccessParent.gasLeft + childPost.gasLeft⟩).memWrite 0
+      (childPost.output.take 0))
+  have hres :
+      Resume.run (.call proxySuccessParent 0 0)
+        ((Frame.ofCall proxySuccessChild).settle
+          (exec (initEvm proxySuccessChild))) = .ok post := by
+    have hpstack : proxySuccessParent.stack.length < 1024 := by
+      change [].length < 1024
+      decide
+    rw [hsettle, Resume.run_call_ok h_ok hpstack]
+  refine ⟨childPost, post, ?_⟩
+  constructor
+  · exact hout
+  · constructor
+    · exact hgas
+    · constructor
+      · exact hstate
+      · constructor
+        · exact htra
+        · constructor
+          · unfold proxyCallPreSuccess
+            simp only [Devm.setMach_logs]
+            rw [hlogs]
+            rfl
+          · constructor
+            · apply Ninst.runCompiled_delcall h_stk
+              · exact proxy_success_h_ext
+              · exact h_del
+              · exact proxy_success_h_acc
+              · change calculateMsgCallGas 0 25095 25095 0 gasColdAccountAccess =
+                  (24744, 22144)
+                exact proxy_call_gas_split
+              · exact proxy_success_h_gas
+              · exact proxy_success_h_depth
+              · change (Frame.ofCall proxySuccessChild).enter = .run (initEvm proxySuccessChild)
+                exact proxy_success_child_enters
+              · have h0 : (0 : B256).toNat = 0 := by decide
+                have h32 : (32 : B256).toNat = 32 := by decide
+                simpa [post, proxySuccessParent, proxySuccessChild, h0, h32] using hres
+            · constructor
+              · dsimp only [post]
+              · constructor
+                · dsimp only [post]
+                  rfl
+                · constructor
+                  · dsimp only [post]
+                    change proxySuccessParent.memory = proxyCallPreSuccess.memory
+                    change proxyCallBaseSuccess.memory.extends
+                        [⟨0, 32⟩, ⟨0, 0⟩] = proxyCallPreSuccess.memory
+                    rw [Mem.extends_covered (by decide)]
+                    rfl
+                  · constructor
+                    · dsimp only [post]
+                      rw [hgas]
+                      change proxySuccessParent.gasLeft + 0 = 351
+                      decide
+                    · dsimp only [post]
+                      change childPost.output = implReturnWord.toBytes
+                      exact hout
+
+private lemma proxy_memWrite_memory (d : Devm) (i : Nat) (v : Bytes) :
+    (d.memWrite i v).memory = d.memory.write i v := rfl
+
+private lemma proxy_memWrite_gasLeft (d : Devm) (i : Nat) (v : Bytes) :
+    (d.memWrite i v).gasLeft = d.gasLeft := rfl
+
+private lemma proxy_memWrite_stack (d : Devm) (i : Nat) (v : Bytes) :
+    (d.memWrite i v).stack = d.stack := rfl
+
+private lemma proxy_addAccessedStorageKey_setMach_setMach {base : Devm}
+    {m m' : Mach} {target : Adr} {key : B256} :
+    (addAccessedStorageKey (base.setMach m) target key).setMach m' =
+      (addAccessedStorageKey base target key).setMach m' := rfl
+
+private theorem proxy_success_tail (childPost : Devm)
+    (hout : childPost.output = implReturnWord.toBytes)
+    (hstate : childPost.state = pairState.setStorVal proxyAdr implSlot 1)
+    (htra : childPost.transientStorage = proxyCallPreSuccess.transientStorage)
+    (hlogs : childPost.logs = proxyCallPreSuccess.logs) :
+    ∃ final,
+      Func.RunCompiledTo (proxyFallback :: [])
+        (initSevm proxyMsgSuccess)
+        (((incorporateChildOnSuccess proxySuccessParent childPost childPost.output).setMach
+          ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory, 351⟩).memWrite
+            0 (childPost.output.take 0))
+        proxySuccessTail (.ok final) ∧
+      final.output = implReturnWord.toBytes ∧
+      final.gasLeft = 317 ∧
+      final.state = pairState.setStorVal proxyAdr implSlot 1 ∧
+      final.transientStorage = proxyCallPreSuccess.transientStorage ∧
+      final.logs = proxyCallPreSuccess.logs := by
+  have hbound : (0 : Nat) + 32 ≤ implReturnWord.toBytes.length := by
+    simp [B256.length_toBytes]
+  let base := incorporateChildOnSuccess proxySuccessParent childPost childPost.output
+  let final :=
+    (((base.setMach ⟨[], proxySuccessParent.memory.write 0
+        implReturnWord.toBytes, 317⟩).memRead 0 32).2.withOutput
+      implReturnWord.toBytes)
+  refine ⟨final, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · have hstart :
+        (((incorporateChildOnSuccess proxySuccessParent childPost childPost.output).setMach
+            ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory, 351⟩).memWrite
+          0 (childPost.output.take 0)) =
+        base.setMach ⟨[1], proxySuccessParent.memory, 351⟩ := by
+      simp [base, Devm.memWrite, Mach.memWrite, liftMachPure,
+        Mem.write, hout]
+      rw [Devm.setMach_setMach]
+      rfl
+    rw [hstart]
+    have hbase_returnData : base.returnData = implReturnWord.toBytes := by
+      dsimp [base]
+      rw [incorporateChildOnSuccess_returnData, hout]
+    have hpmem : proxySuccessParent.memory.size = 32 := by
+      decide
+    have hext :
+        (base.setMach ⟨[0, 0, 32, 32, 1], proxySuccessParent.memory, 342⟩).extCost
+          [⟨0, 32⟩] = 0 := by
+      apply Devm.extCost_covered
+      rw [hpmem]
+      decide
+    have hslice :
+        List.sliceD implReturnWord.toBytes 0 32 0 = implReturnWord.toBytes := by
+      decide +kernel
+    func_run [6]
+    all_goals simp_all [Devm.returnData_setMach, B256.length_toBytes]
+    all_goals try decide
+    case h_cost =>
+      simp only [show Nat.toB256 32 = (32 : B256) by decide,
+        show (B256.toNat (32 : B256)) = 32 by decide,
+        show ((0 : B256).toNat) = 0 by decide]
+      rw [hext]
+      decide
+    case a =>
+      dsimp [final]
+      rw [show Nat.toB256 32 = (32 : B256) by decide,
+        show (B256.toNat (0 : B256)) = 0 by decide,
+        show (B256.toNat (32 : B256)) = 32 by decide,
+        show (OfNat.ofNat 0 : UInt8) = 0 by decide,
+        hslice]
+      have hne : implReturnWord.toBytes ≠ [] := by
+        intro h
+        have := B256.length_toBytes implReturnWord
+        rw [h] at this
+        simp at this
+      have hread :
+          ((proxySuccessParent.memory.write 0 implReturnWord.toBytes).read 0 32).1 =
+            implReturnWord.toBytes := by
+        simpa only [B256.length_toBytes] using
+          (Mem.read_write_zero proxySuccessParent.memory hne)
+      have hfinalext :
+          (base.setMach ⟨[0, 32], proxySuccessParent.memory.write 0
+            implReturnWord.toBytes, 317⟩).extCost [⟨0, 32⟩] = 0 := by
+        apply Devm.extCost_covered
+        have hm : (proxySuccessParent.memory.write 0 implReturnWord.toBytes).size = 32 := by
+          decide
+        rw [hm]
+        decide
+      have hrun := Func.runCompiledTo_ret_word
+        (fs := [proxyFallback]) (sevm := initSevm proxyMsgSuccess)
+        (devm := base.setMach ⟨[0, 32], proxySuccessParent.memory.write 0
+          implReturnWord.toBytes, 317⟩)
+        (i := 0) (sz := 32) (s := []) (e := 0) (G := 317)
+        (out := implReturnWord.toBytes) rfl hfinalext rfl hread
+      simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+        Devm.gasLeft_setMach,
+        show (B256.toNat (0 : B256)) = 0 by decide,
+        show (B256.toNat (32 : B256)) = 32 by decide] using hrun
+  · rfl
+  · rfl
+  · simp only [final, Devm.withOutput_state, Devm.memRead_state,
+      Devm.setMach_state]
+    change childPost.state = pairState.setStorVal proxyAdr implSlot 1
+    exact hstate
+  · simp only [final, Devm.withOutput_transientStorage]
+    change childPost.transientStorage = proxyCallPreSuccess.transientStorage
+    exact htra
+  · simp only [final, Devm.withOutput_logs, Devm.memRead_logs,
+      Devm.setMach_logs]
+    unfold base incorporateChildOnSuccess
+    simp only [Devm.setWorld_logs, Devm.setMeta_logs, Devm.setMach_logs]
+    rw [hlogs]
+    rfl
+
+private theorem proxy_success_func_run :
+  ∃ final,
+      Func.RunCompiledTo [proxyFallback] (initSevm proxyMsgSuccess)
+        ((initDevm proxyMsgSuccess).setMach
+          ⟨[], Mem.empty, 27223⟩) proxyFallback (.ok final) ∧
+      final.output = implReturnWord.toBytes ∧
+      final.gasLeft = 317 ∧
+      final.state = pairState.setStorVal proxyAdr implSlot 1 ∧
+      final.transientStorage = proxyCallPreSuccess.transientStorage ∧
+      final.logs = proxyCallPreSuccess.logs := by
+  obtain ⟨childPost, post, hout, hgas, hstate, htra, hlogs, hcall, hpost,
+      _hstack, _hmemory, _hcallgas, _hreturnData⟩ := proxy_success_delcall
+  obtain ⟨final, htail, hfout, hfgas, hfstate, hftra, hflogs⟩ :=
+    proxy_success_tail childPost hout hstate htra hlogs
+  rw [hpost] at hcall
+  refine ⟨final, ?_, hfout, hfgas, hfstate, hftra, hflogs⟩
+  change Func.RunCompiledTo [proxyFallback] (initSevm proxyMsgSuccess)
+    ((initDevm proxyMsgSuccess).setMach ⟨[], Mem.empty, 27223⟩)
+    (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
+      pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
+      pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+      proxySuccessTail) (.ok final)
+  func_run [9]
+  all_goals simp_all
+  all_goals try decide
+  case h_cold =>
+    change ((proxyAdr, implementationSlotLit) : Adr × B256) ∉
+      (Std.HashSet.emptyWithCapacity : KeySet)
+    simp
+  case a =>
+    have h_stk : proxyCallPreSuccess.stack =
+        25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
+      simp only [proxyCallPreSuccess, Devm.setMach_stack]
+      decide
+    have hslot :
+        (initDevm proxyMsgSuccess).getStorVal
+            (initSevm proxyMsgSuccess).currentTarget implementationSlotLit =
+          implAdr.toB256 := by
+      change (pairState.get proxyAdr).stor.get implementationSlotLit = implAdr.toB256
+      rw [implementationSlotLit_eq_slot, pairState_proxySlot]
+    have hmem : (initDevm proxyMsgSuccess).memory = Mem.empty := by rfl
+    simpa only [proxyCallPreSuccess, Devm.setMach_setMach,
+      proxy_addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
+      Devm.memory_setMach, h_stk, hslot, hmem] using (Func.RunCompiledTo.next hcall htail)
+
+theorem proxyProg_success_runCompiledTo :
+    ∃ final,
+      Prog.RunCompiledTo (initSevm proxyMsgSuccess)
+        (initDevm proxyMsgSuccess) proxyProg (.ok final) ∧
+      exec ⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess⟩ =
+        .ok final ∧
+      Nonempty (Exec 0 (initSevm proxyMsgSuccess)
+        (initDevm proxyMsgSuccess) (.ok final)) ∧
+      final.output = implReturnWord.toBytes ∧
+      final.gasLeft = 317 ∧
+      final.state = pairState.setStorVal proxyAdr implSlot 1 ∧
+      final.transientStorage = (initDevm proxyMsgSuccess).transientStorage ∧
+      final.logs = (initDevm proxyMsgSuccess).logs := by
+  obtain ⟨final, hrun, hout, hgas, hstate, hftra, hflogs⟩ :=
+    proxy_success_func_run
+  have hprog :
+      Prog.RunCompiledTo (initSevm proxyMsgSuccess)
+        (initDevm proxyMsgSuccess) proxyProg (.ok final) := by
+    refine Prog.runCompiledTo_intro (G := 27223)
+      (mid := (initDevm proxyMsgSuccess).setMach
+        ⟨[], Mem.empty, 27223⟩) ?_ rfl hrun
+    decide
+  have hcode :
+      some (initSevm proxyMsgSuccess).code.toList = Prog.compile proxyProg := by
+    rw [show (initSevm proxyMsgSuccess).code = proxyCode by rfl]
+    rw [show proxyCode.toList = proxyBytes by
+      simp [proxyCode, proxyBytes, ByteArray.toList_eq_toList_data]]
+    exact proxyProg_compile
+  have htra0 :
+      proxyCallPreSuccess.transientStorage =
+        (initDevm proxyMsgSuccess).transientStorage := by rfl
+  have hlogs0 :
+      proxyCallPreSuccess.logs = (initDevm proxyMsgSuccess).logs := by rfl
+  have hexec :
+      exec ⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess⟩ =
+        .ok final := Prog.exec_of_runCompiledTo hprog hcode
+  have hderiv :
+      Nonempty (Exec 0 (initSevm proxyMsgSuccess)
+        (initDevm proxyMsgSuccess) (.ok final)) :=
+    (exec_iff_exec_eq _ _ _ _).mpr hexec
+  refine ⟨final, hprog, hexec, hderiv, hout, hgas, hstate, ?_, ?_⟩
+  · exact hftra.trans htra0
+  · exact hflogs.trans hlogs0
+
 end Blanc.ProxyPair
