@@ -36,10 +36,30 @@
 # spread 0.99x-1.24x, none reaching the 1.50x annotate tier. The run
 # measured 134 modules in 715.4 s against the 755.6 s committed total, so
 # it is its own host control. No existing row is touched.
+#
+# 2026-08-29 additions-only BeaconDeposit compiled-port admission, measured
+# by `scripts/check-elab.sh --calibrate` from candidate commit
+# 36ab5057d5d68e18779a54c47e9787314a3d200b with source-set SHA-256
+# 3dcea0779881a86994e672195993ad4040c751a8b98c4978e7ca6ad3942fbe04.
+# Seed domain blanc-elab-calibration-v1 produced seed
+# 6ea6bb839ed140eb83e25623abdabded133b76a79e40265f195aedaaae5d49bc
+# against baseline SHA-256
+# 7949f5758b4c2a317d7a34947bb634762759cc31356fcd00cfab192c06693596.
+# All 9 mandatory absent rows were measured with 12 commit-seeded controls:
+# control median 1.196x, spread 1.16x-1.37x, none at the 1.50x annotation
+# tier. The run measured 21 modules in 150.2 s; exact mandatory and control
+# evidence is preserved in scripts/report-elab-calibration.txt. No existing
+# row is touched.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
+OK	1.925	Blanc/BeaconDeposit.lean
+OK	37.506	Blanc/BeaconDepositCode.lean
+OK	1.354	Blanc/BeaconDepositCore.lean
 OK	2.447	Blanc/BeaconDepositCorrectness.lean
+OK	25.590	Blanc/BeaconDepositDeploy.lean
+OK	2.311	Blanc/BeaconDepositEffects.lean
+OK	3.276	Blanc/BeaconDepositEncoding.lean
 OK	1.193	Blanc/BeaconDepositModel.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
@@ -48,6 +68,7 @@ OK	2.076	Blanc/Conserved.lean
 OK	1.248	Blanc/CycleWriteFree.lean
 OK	1.136	Blanc/DeploymentCompiled.lean
 OK	1.205	Blanc/DeploymentMessage.lean
+OK	1.397	Blanc/DeploymentOccurrence.lean
 OK	2.175	Blanc/ExecDeterminism.lean
 OK	1.107	Blanc/ExecutionNoninterference.lean
 OK	6.426	Blanc/ExecutionOccurrence.lean
@@ -61,6 +82,8 @@ OK	5.199	Blanc/FmintReverts.lean
 OK	26.091	Blanc/FmintSettles.lean
 OK	11.154	Blanc/Forward.lean
 OK	1.743	Blanc/ForwardCall.lean
+OK	1.338	Blanc/ForwardMstore8.lean
+OK	1.383	Blanc/ForwardNoRawSstore.lean
 OK	3.121	Blanc/Ladder.lean
 OK	15.804	Blanc/LidoCircuitBreaker.lean
 OK	3.123	Blanc/LidoCircuitBreakerAbsentRegistration.lean

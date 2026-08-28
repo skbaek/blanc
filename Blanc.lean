@@ -89,6 +89,7 @@ import Blanc.Compiled
 import Blanc.DeploymentCompiled
 import Blanc.DeploymentMessage
 import Blanc.Forward
+import Blanc.ForwardMstore8
 import Blanc.Reverts
 import Blanc.RevertPayload
 import Blanc.ForwardCall
@@ -111,6 +112,7 @@ import Blanc.BeaconDepositEncoding
 import Blanc.BeaconDeposit
 import Blanc.BeaconDepositCode
 import Blanc.BeaconDepositDeploy
+import Blanc.BeaconDepositEffects
 import Blanc.ProxyPairSlots
 
 namespace Blanc
