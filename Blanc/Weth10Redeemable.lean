@@ -1358,6 +1358,16 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     rw [hcodeeq]
     change (b.getCode recipient).size = 0
     exact h_code
+  have hdadr : dadr = recipient := by
+    have hnone :
+        getDelegatedCodeAddress (d0.state.getCode recipient) = none := by
+      dsimp only [getDelegatedCodeAddress]
+      rw [if_neg hnotdel]
+    have hd : (accessDelegation d0 recipient).2.1 = recipient := by
+      dsimp only [accessDelegation]
+      rw [hnone]
+    rw [hdel] at hd
+    exact hd
   have hext :
       (d.setMach ⟨[], d.memory, d.gasLeft⟩).extCost
         [⟨(0 : B256).toNat, (0 : B256).toNat⟩,
@@ -1405,7 +1415,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
         (ext := 0) (acc := acc) (mcc := mcc) (mcs := mcs)
         rfl hext hdel' (by simpa only [toAdr_toB256] using hacc.symm)
         hsplit hcost h_depth
-        (by simpa only [toAdr_toB256] using h_nonprecompile) hcode0
+        (by rw [hdadr]; exact h_nonprecompile) hcode0
         (by decide) with
           ⟨post, hrun, hstack, _hmem, hpostgas, herr, hout, hreturn,
             hlogs, hrefund, hdelete, debit, hsub, hstate⟩
@@ -1477,7 +1487,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
         rfl hv hext hdel' (by simpa only [toAdr_toB256] using hacc.symm)
         (by simpa only [toAdr_toB256] using hcreate) hsplit hcost
         h_static h_sender' h_depth
-        (by simpa only [toAdr_toB256] using h_nonprecompile) hcode0 (by decide)
+        (by rw [hdadr]; exact h_nonprecompile) hcode0 (by decide)
         with ⟨post, hrun, hstack, _hmem, hpostgas, herr, hout, hreturn,
           hlogs, hrefund, hdelete, debit, hsub, hstate⟩
     refine ⟨post, hrun, hstack, ?_, ?_⟩

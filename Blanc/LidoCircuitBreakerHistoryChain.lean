@@ -89,7 +89,7 @@ and `isStatic := false`, `STATICCALL` with `value := 0` and
 `isStatic := true`. -/
 private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
     {s parent child : Devm} {xl : Xlot} {gas : Nat} {value : B256}
-    {target : Adr} {del isStatic : Bool} {code : ByteArray} {cd : Bytes}
+    {target cadr : Adr} {del isStatic : Bool} {code : ByteArray} {cd : Bytes}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
       ((registrySpec dp).PreWf sevm.currentTarget)
       ((registrySpec dp).Post sevm.currentTarget))
@@ -99,12 +99,12 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
     (h_coh : RegistryCoherent (Devm.getStor s sevm.currentTarget))
     (h_sel :
       (getDelegatedCodeAddress (s.getCode target) = none ∧
-        code = s.getCode target ∧ del = false) ∨
+        cadr = target ∧ code = s.getCode target ∧ del = false) ∨
       (∃ d, getDelegatedCodeAddress (s.getCode target) = some d ∧
-        code = s.getCode d ∧ del = true))
+        cadr = d ∧ code = s.getCode d ∧ del = true))
     (h_fill : Xlot.Filled xl)
     (h_pm : ProcessMessage
-      (callMsg sevm parent gas value sevm.currentTarget target target true isStatic cd code del)
+      (callMsg sevm parent gas value sevm.currentTarget target cadr true isStatic cd code del)
       xl (.ok child)) :
     RegistryCoherent (Devm.getStor child sevm.currentTarget) := by
   -- name the child message and keep only the projections the walk needs
@@ -115,7 +115,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
         m.caller = sevm.currentTarget ∧
         m.value = value ∧
         m.currentTarget = target ∧
-        m.codeAddress = some target ∧
+        m.codeAddress = some cadr ∧
         m.code = code ∧
         m.depth = sevm.depth - 1 ∧
         m.shouldTransferValue = true :=
@@ -145,7 +145,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
   · -- the sub-message succeeded
     have h_if' := h_if.symm
     subst h_if'
-    have h_wb_ca : (childMsg.withBenv benv').codeAddress = some target := hc_ca
+    have h_wb_ca : (childMsg.withBenv benv').codeAddress = some cadr := hc_ca
     rcases of_executeCode_someCode h_wb_ca run_ec with
       ⟨-, -, h_he⟩ | ⟨-, ex3, h_xl_some, h_he⟩
     · -- the callee is a precompile : no sub-execution, only the transfer
@@ -196,7 +196,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
         have h_code_c : (initSevm (childMsg.withBenv benv')).code = code := hc_code
         have h_tc : s.getCode target = s.getCode sevm.currentTarget := by rw [h_eq_ct]
         rw [h_code_c]
-        rcases h_sel with ⟨-, h_ce, -⟩ | ⟨d, h_some, -, -⟩
+        rcases h_sel with ⟨-, -, h_ce, -⟩ | ⟨d, h_some, -, -, -⟩
         · rw [h_ce, h_tc]; exact h_code
         · rw [h_tc, getDelegatedCodeAddress_of_compile h_code] at h_some
           cases h_some
@@ -251,8 +251,8 @@ theorem coherent_of_call {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
     refine ⟨?_, 0, h_stk⟩
     rw [← h_world.getStor sevm.currentTarget]
     exact h_coh
-  · obtain ⟨parent, child, xl, del, code, avail, pc, -, h_dep, h_sstk, h_pst,
-      -, -, -, h_sel, h_fill, h_pm, -, -, h_sfst, -, -, h_sfstk⟩ := h_enter
+  · obtain ⟨parent, child, xl, del, na, code, avail, pc, -, h_dep, h_sstk,
+      h_pst, -, -, -, h_sel, h_fill, h_pm, -, -, h_sfst, -, -, h_sfstk⟩ := h_enter
     rw [h_sstk] at hp
     replace hp := cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
       (cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
@@ -283,7 +283,7 @@ theorem coherent_of_statcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
   · refine ⟨?_, 0, h_stk⟩
     rw [← h_world.getStor sevm.currentTarget]
     exact h_coh
-  · obtain ⟨parent, child, xl, del, code, avail, h_dep, h_sstk, h_pst, -,
+  · obtain ⟨parent, child, xl, del, na, code, avail, h_dep, h_sstk, h_pst, -,
       h_sel, h_fill, h_pm, -, -, h_sfst, -, -, h_sfstk⟩ := h_enter
     rw [h_sstk] at hp
     replace hp := cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv

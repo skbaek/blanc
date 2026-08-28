@@ -1262,7 +1262,7 @@ private def benignCallSuspendedParent : Devm :=
 
 private def benignCallChildMsg : Msg :=
   callSpawnMsg benignCallEvm8.sta benignCallSuspendedParent
-    benignCallMsgCallStipend benignCallTarget 0 0
+    benignCallMsgCallStipend benignCallTarget benignCallTarget 0 0
     benignCallChildCode false
 
 private def benignCallChildFrame : Jaune.Frame :=

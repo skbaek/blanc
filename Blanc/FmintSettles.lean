@@ -412,11 +412,11 @@ by fixing the four operands the trunk determines: `argsOffset = 0x1c`,
 
 What they do **not** fix is what the crossing itself produces — the
 delegation-resolved parent `d1`, the forwarded stipend `mcs`, the callee's code
-and the delegation flag — because those are functions of the *world*, not of
-`flashLoan`'s construction. That is the honest boundary: A5 requires the success
-form's callback premises to be stated over named definitions rather than an
-existential, and these are the names; the arguments they still take are the ones
-a caller has to bind anyway. -/
+and code address, and the delegation flag — because those are functions of the
+*world*, not of `flashLoan`'s construction. That is the honest boundary: A5
+requires the success form's callback premises to be stated over named
+definitions rather than an existential, and these are the names; the arguments
+they still take are the ones a caller has to bind anyway. -/
 
 /-- The parent state fmint's callback `CALL` suspends on. -/
 def flashLoanSpawnParent (d1 : Devm) (charge dataLen : Nat) : Devm :=
@@ -424,10 +424,13 @@ def flashLoanSpawnParent (d1 : Devm) (charge dataLen : Nat) : Devm :=
     (flashLoanArgsSize dataLen).toNat 0 0
 
 /-- The message fmint's callback `CALL` builds: `onFlashLoan(...)` read out of
-the parent's own memory, sent to `receiver` with no value. -/
+the parent's own memory, sent to `receiver` with no value.  `receiver` owns the
+storage and `cadr` is the account whose code runs; they differ exactly when the
+borrower carries a delegation designator, so `cadr` joins `code` and `dp` among
+the operands the world supplies rather than `flashLoan`'s construction. -/
 def flashLoanSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (receiver : B256)
-    (dataLen : Nat) (code : ByteArray) (dp : Bool) : Msg :=
-  callSpawnMsg sevm p mcs receiver.toAdr callbackArgsOffset.toNat
+    (cadr : Adr) (dataLen : Nat) (code : ByteArray) (dp : Bool) : Msg :=
+  callSpawnMsg sevm p mcs receiver.toAdr cadr callbackArgsOffset.toNat
     (flashLoanArgsSize dataLen).toNat code dp
 
 /-! ## The trunk, all the way to the `CALL`
@@ -1226,8 +1229,9 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
     set P' := callSpawnParent d1 (mcs + acc + 0) callbackArgsOffset.toNat
       (flashLoanArgsSize data.length).toNat (0 : B256).toNat (0 : B256).toNat
       with hP'
-    set msg' := callSpawnMsg sevm P' mcs receiver.toAdr callbackArgsOffset.toNat
-      (flashLoanArgsSize data.length).toNat dcode dp with hmsg'
+    set msg' := callSpawnMsg sevm P' mcs receiver.toAdr dadr
+      callbackArgsOffset.toNat (flashLoanArgsSize data.length).toNat dcode dp
+      with hmsg'
     have hP's : P'.stack = [amount, receiver] := by
       rw [hP', callSpawnParent_stack, hd1s']
     have hP'm : P'.memory = flashLoanCallMem sevm amount data := by

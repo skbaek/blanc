@@ -1157,6 +1157,29 @@ the three endpoint prefixes around it. -/
 
 /-! ## Successful callback boundary -/
 
+/-- Ladder's `CALL` inversion carries the resolved code address as its own
+existential `na`, pinned by the delegation disjunct.  EIP-7702 resolution is a
+function of the callee's stored code, so that address is exactly
+`(getDelegatedCodeAddress (s.getCode a)).getD a`: the callee itself where the
+account holds no designator, and the designated account where it does.  The
+callback relations below therefore spell the code address in closed form and
+keep the `na`-free disjunct, which preserves their existential arity for
+consumers that destructure them positionally. -/
+private lemma resolvedCodeAddress_of_callDelegation
+    {s : Devm} {a na : Adr} {dp : Bool} {code : ByteArray}
+    (h : (getDelegatedCodeAddress (s.getCode a) = none ∧
+          na = a ∧ code = s.getCode a ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode a) = some d ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) :
+    na = (getDelegatedCodeAddress (s.getCode a)).getD a ∧
+      ((getDelegatedCodeAddress (s.getCode a) = none ∧
+          code = s.getCode a ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode a) = some d ∧
+          code = s.getCode d ∧ dp = true)) := by
+  rcases h with ⟨hnone, hna, hcode, hdp⟩ | ⟨d, hsome, hna, hcode, hdp⟩
+  · exact ⟨by rw [hna, hnone]; rfl, Or.inl ⟨hnone, hcode, hdp⟩⟩
+  · exact ⟨by rw [hna, hsome]; rfl, Or.inr ⟨d, hsome, hcode, hdp⟩⟩
+
 /-- A successful ERC-677 callback boundary stated directly in terms of the
 words and memory window consumed by `CALL`.  Unlike `TokenCallbackBoundary`,
 this relation does not assume that the enclosing calldata has a canonical ABI
@@ -1199,7 +1222,9 @@ def RawTokenCallbackBoundary (dp : DeployParams) (e : Sevm)
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg e parent (min gasWord.toNat (except64th avail)) 0
-        self target target true false input code delegated)
+        self target
+        ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+        true false input code delegated)
       xl (.ok child) ∧
     child.error.isSome = false ∧
     (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
@@ -1252,7 +1277,9 @@ def RawTokenCallbackStepBoundary (dp : DeployParams) (e : Sevm)
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg e parent (min gasWord.toNat (except64th avail)) 0
-        self target target true false input code delegated)
+        self target
+        ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+        true false input code delegated)
       xl (.ok child) ∧
     child.error.isSome = false ∧
     (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
@@ -1304,7 +1331,9 @@ def RawTokenCallbackIndexedStepBoundary (dp : DeployParams) (e : Sevm)
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg e parent (min gasWord.toNat (except64th avail)) 0
-        self target target true false input code delegated)
+        self target
+        ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+        true false input code delegated)
       xl (.ok child) ∧
     child.error.isSome = false ∧
     (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
@@ -1398,7 +1427,9 @@ def TokenCallbackBoundary (e : Sevm) (self target : Adr)
     Xlot.Filled xl ∧
     ProcessMessage
       (callMsg e parent (min gasWord.toNat (except64th avail)) 0
-        self target target true false
+        self target
+        ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
+        true false
         (abiCallWithTail sel [e.caller.toB256, value] data)
         code delegated)
       xl (.ok child) ∧
@@ -1489,16 +1520,19 @@ theorem rawTokenCallbackIndexedStepBoundary_of_prefix
   · exact absurd hbool
       (not_run_call_boolReturn_of_zero dp hfailed.1)
   · rcases hsuccess with
-      ⟨parent, child, xl, delegated, code, avail, pc, hstep,
+      ⟨parent, child, xl, delegated, na, code, avail, pc, hstep,
         hdepth, hstackEq, hparentState, hparentMemory, hparentLogs,
         hparentOutput, hdelegated, hfilled, hmessage, hclean, hresume,
         hpostState, hpostReturnData, hpostMemory, hpostStack⟩
+    obtain ⟨hna, hdelegation⟩ :=
+      resolvedCodeAddress_of_callDelegation hdelegated
+    rw [hna] at hmessage
     refine ⟨inputSize, input, parent, child, xl, pc, ?_⟩
     unfold RawTokenCallbackIndexedStepBoundary
     refine ⟨rfl, hsize, delegated, code, gasWord, avail, hstep,
       hdepth, hstackEq, rfl, ⟨img, hreads⟩, hstor, hbal, hcode,
       hlogs, houtput, hparentState, ?_, hparentLogs, hparentOutput,
-      hdelegated, hfilled, ?_, hclean, hresume, hpostState,
+      hdelegation, hfilled, ?_, hclean, hresume, hpostState,
       hpostReturnData, ?_, hpostStack, hbool⟩
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
         hparentMemory
@@ -1546,16 +1580,19 @@ theorem callBoolCallback_rawStepBoundary
   · exact absurd h_bool_call
       (not_run_call_boolReturn_of_zero dp h_failed.1)
   · rcases h_success with
-      ⟨parent, child, xl, delegated, code, avail, pc, hstep,
+      ⟨parent, child, xl, delegated, na, code, avail, pc, hstep,
         h_depth, h_stack_eq, h_parent_state, h_parent_memory,
         h_parent_logs, h_parent_output, h_delegated, h_filled,
         h_message, h_child_clean, h_resume, h_post_state,
         h_post_returnData, h_post_memory, h_post_stack⟩
+    obtain ⟨h_na, h_delegation⟩ :=
+      resolvedCodeAddress_of_callDelegation h_delegated
+    rw [h_na] at h_message
     refine ⟨callPre, callPost, parent, child, xl, delegated, code,
       gasWord, avail, pc, hstep, h_depth, h_stack_eq, rfl,
       ⟨img, h_reads_call⟩, h_stor_pre, h_bal_pre, h_code_pre,
       h_logs_pre, h_output_pre, h_parent_state, ?_, h_parent_logs,
-      h_parent_output, h_delegated, h_filled, ?_, h_child_clean,
+      h_parent_output, h_delegation, h_filled, ?_, h_child_clean,
       h_resume, h_post_state, h_post_returnData, ?_, h_post_stack,
       h_bool_call⟩
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
@@ -1607,15 +1644,18 @@ theorem callBoolCallback_rawBoundary
   · exact absurd h_bool_call
       (not_run_call_boolReturn_of_zero dp h_failed.1)
   · rcases h_success with
-      ⟨parent, child, xl, delegated, code, avail, _pc, _hstep,
+      ⟨parent, child, xl, delegated, na, code, avail, _pc, _hstep,
         h_depth, h_stack_eq, h_parent_state, h_parent_memory,
         h_parent_logs, h_parent_output, h_delegated, h_filled,
         h_message, h_child_clean, h_resume, h_post_state,
         h_post_returnData, h_post_memory, h_post_stack⟩
+    obtain ⟨h_na, h_delegation⟩ :=
+      resolvedCodeAddress_of_callDelegation h_delegated
+    rw [h_na] at h_message
     refine ⟨callPre, callPost, parent, child, xl, delegated, code,
       gasWord, avail, h_depth, h_stack_eq, rfl, ⟨img, h_reads_call⟩,
       h_stor_pre, h_bal_pre, h_code_pre, h_logs_pre, h_output_pre,
-      h_parent_state, ?_, h_parent_logs, h_parent_output, h_delegated,
+      h_parent_state, ?_, h_parent_logs, h_parent_output, h_delegation,
       h_filled, ?_, h_child_clean, h_resume, h_post_state,
       h_post_returnData, ?_, h_post_stack, h_bool_call⟩
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
@@ -1689,13 +1729,16 @@ theorem callBoolCallback_successEffect
   · exact absurd h_bool_call
       (not_run_call_boolReturn_of_zero dp h_failed.1)
   · rcases h_success with
-      ⟨parent, child, xl, delegated, code, avail, _pc, _hstep,
+      ⟨parent, child, xl, delegated, na, code, avail, _pc, _hstep,
         h_depth, h_stack_eq, h_parent_state, h_parent_memory,
         h_parent_logs, h_parent_output, h_delegated, h_filled,
         h_message, h_child_clean, h_resume, h_post_state,
         h_post_returnData, h_post_memory, h_post_stack⟩
     rw [toAdr_toB256] at h_delegated h_message
     rw [h_window] at h_message
+    obtain ⟨h_na, h_delegation⟩ :=
+      resolvedCodeAddress_of_callDelegation h_delegated
+    rw [h_na] at h_message
     rcases of_run_call h_bool_call with
       ⟨f, decode, h_get, h_burn, h_bool⟩
     have h_bool_lookup :
@@ -1782,7 +1825,7 @@ theorem callBoolCallback_successEffect
     refine ⟨callPre, parent, child, callPost, xl, delegated, code,
       gasWord, avail, h_depth, h_stack_eq, h_stor_pre, h_bal_pre,
       h_code_pre, h_logs_pre, h_output_pre, h_parent_state, ?_, ?_, ?_,
-      h_delegated, h_filled, ?_, h_child_clean, h_child_len, h_resume,
+      h_delegation, h_filled, ?_, h_child_clean, h_child_len, h_resume,
       h_post_state, h_post_returnData, h_post_stack, h_mid_logs,
       h_mid_output, h_final_stor, h_final_bal, h_final_code,
       h_final_logs, h_final_word⟩
