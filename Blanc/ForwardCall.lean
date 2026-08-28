@@ -473,6 +473,114 @@ lemma Mem.size_read_snd_of_le {N : Mem} {i sz : Nat} (h32 : N.size % 32 = 0)
     (hw : i + sz ≤ N.size) : ((N.read i sz).2).size = N.size := by
   rw [Mem.read_snd_eq_self (memExtSize_of_le h32 hw)]
 
+/-- The length of a `sliceD` is the width asked for, whatever the source: a
+short source is padded with the default rather than truncating the result.
+This is what lets a copy instruction's payload be keyed on its *length* when
+its head cannot be matched. -/
+lemma _root_.List.length_sliceD {ξ : Type u} (xs : List ξ) (m n : Nat) (d : ξ) :
+    (xs.sliceD m n d).length = n := List.takeD_length _ _ _
+
+/-- Expansion preserves word alignment: a window opened over an aligned image
+leaves an aligned image.  The neighbouring lemmas all *consume* an
+`N.size % 32 = 0` premise and none of them produces one, so a walk that crosses
+two windows had no way to carry alignment past the first. -/
+lemma memExtSize_mod_32 {n i sz : Nat} (h32 : n % 32 = 0) :
+    memExtSize n i sz % 32 = 0 := by
+  simp only [memExtSize]
+  split_ifs with h
+  · exact h32
+  · omega
+
+/-- The other half of `memExtSize_of_le`: a window that does not fit rounds the
+image up to `ceil32` of its far edge — the very rounding `Mem.write` applies
+when it grows.  Together with `memExtSize_of_le` this pins `memExtSize`
+completely, and it is what lets a `Mem.write` size law be stated in the
+`memExtSize` vocabulary the charge is computed in.
+
+Alignment of `n` is deliberately *not* a premise: in the `sz ≠ 0` branch the
+value is `32 * max (ceilDiv n 32) (ceilDiv (i + sz) 32)` and `ceilDiv · 32` is
+monotone, so `n ≤ i + sz` alone forces the max.  `0 < sz` is not decoration: at
+`sz = 0` the expansion is the identity whatever `i` is, so `n = 0, i = 1`
+refutes the conclusion. -/
+lemma memExtSize_eq_ceil32_of_le {n i sz : Nat}
+    (hsz : 0 < sz) (h : n ≤ i + sz) : memExtSize n i sz = ceil32 (i + sz) := by
+  have hne : ¬ sz = 0 := by omega
+  simp only [memExtSize, if_neg hne]
+  have hmax : max (ceilDiv n 32) (ceilDiv (i + sz) 32) = ceilDiv (i + sz) 32 := by
+    refine Nat.max_eq_right ?_
+    simp only [ceilDiv]
+    split_ifs <;> omega
+  rw [hmax]
+  unfold ceil32 ceilDiv
+  split <;> split <;> omega
+
+/-- `Mem.size_write_cons` keyed on the payload's **length** rather than on its
+head.  This is the member of the family a forwarding walk actually needs:
+`Mem.size_write_word_at` fixes the payload at one word; `Mem.size_write_cons` is
+variable-length but demands the payload be *syntactically* `x :: xs`, and a
+payload arriving as `List.sliceD _ _ len _` has no head to match on;
+`Mem.size_write_of_le` accepts any payload but answers only on the branch where
+the window already fits. -/
+lemma Mem.size_write_of_length {N : Mem} {n len : Nat} {bs : Bytes}
+    (hlen : bs.length = len) (hpos : 0 < len) :
+    (N.write n bs).size =
+      if n + len ≤ N.size then N.size else ceil32 (n + len) := by
+  rcases bs with _ | ⟨x, xs⟩
+  · exact absurd hpos (by rw [← hlen]; simp)
+  · subst hlen
+    exact Mem.size_write_cons
+
+/-- **The variable-length write size law**, in the vocabulary the *charge* is
+computed in.
+
+Keyed on the payload's length rather than its head, so a `sliceD` payload
+applies; and keyed on the image's size as a *parameter* rather than as a
+projection in the conclusion.  That second choice is this file's own idiom
+(see `Devm.extCost_of_size`): a walk's window index arrives as
+`(k * 32 : B256).toNat` rather than a literal, which unifies but does not
+match, so a conclusion mentioning `N.size` would force the caller to rewrite a
+projection out of a term it cannot name.  With `n` a parameter the caller
+supplies `hN` however it likes and the conclusion is already in the charge's
+vocabulary. -/
+lemma Mem.size_write_of_size {N : Mem} {bs : Bytes} {i n len : Nat}
+    (hN : N.size = n) (h32 : n % 32 = 0) (hlen : bs.length = len) :
+    (N.write i bs).size = memExtSize n i len := by
+  subst hN
+  rcases bs with _ | ⟨x, xs⟩
+  · have hzero : len = 0 := hlen.symm
+    subst hzero
+    rfl
+  · have hpos : 0 < len := by rw [← hlen]; simp
+    rw [Mem.size_write_of_length hlen hpos]
+    by_cases hfit : i + len ≤ N.size
+    · rw [if_pos hfit, memExtSize_of_le h32 hfit]
+    · rw [if_neg hfit, memExtSize_eq_ceil32_of_le (by omega) (by omega)]
+
+/-- **Control** — the memory-size premise the spike's proxy walk carried as a
+*hypothesis* is now derivable.  This is the two-window shape: the image is
+already the result of one window (`memExtSize 0 0 cds`) and a second copy writes
+over it, so the conclusion nests.  Nesting is instantiation, not a new law —
+`Mem.size_write_of_size` concludes `= memExtSize n i len` and `n` is
+instantiated to the inner window.  What the walk could *not* previously supply
+is the alignment of that inner image: every other member of this family
+consumes a `% 32 = 0` premise and none produces one, which is why
+`memExtSize_mod_32` is the ingredient that completes the family rather than
+duplicating it. -/
+theorem control_two_window_memory_premise_derivable
+    {N : Mem} {cs : Bytes} {cds rds : Nat}
+    (hN : N.size = memExtSize 0 0 cds) (hc : cs.length = rds) :
+    (N.write 0 cs).size = memExtSize (memExtSize 0 0 cds) 0 rds :=
+  Mem.size_write_of_size hN (memExtSize_mod_32 (Nat.zero_mod 32)) hc
+
+/-- **Control** — a copy opcode's `sliceD` payload meets the law's length
+hypothesis with no premise about the source at all, which is the whole point of
+keying the law on the payload's length rather than on its head: a payload
+arriving as `List.sliceD _ _ len _` has no head to `rcases` on. -/
+theorem control_sliceD_payload_size {N : Mem} {src : Bytes} {i off len n : Nat}
+    (hN : N.size = n) (h32 : n % 32 = 0) :
+    (N.write i (src.sliceD off len 0)).size = memExtSize n i len :=
+  Mem.size_write_of_size hN h32 (List.length_sliceD _ _ _ _)
+
 /-- `setMach` moves no return data. -/
 lemma Devm.returnData_setMach {devm : Devm} {m : Mach} :
     (devm.setMach m).returnData = devm.returnData := rfl

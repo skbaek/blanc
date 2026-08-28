@@ -149,6 +149,8 @@ import Blanc.LidoCircuitBreakerPinnedTargetCompositionControl
 #print axioms Blanc.control_delcall_separates_call_fuses
 #print axioms Blanc.control_delcall_inherits_caller_and_value
 #print axioms Blanc.delcall_child_observes_outer_caller_and_value
+#print axioms Blanc.control_two_window_memory_premise_derivable
+#print axioms Blanc.control_sliceD_payload_size
 #print axioms Blanc.caughtCall_childSettlement
 #print axioms Blanc.cleanCall_childSettlement
 #print axioms Blanc.preparedTransactionMessage_exists

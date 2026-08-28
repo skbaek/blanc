@@ -397,6 +397,8 @@ Blanc.delcall_enters_with_parent_as_storage_owner|$STANDARD
 Blanc.control_delcall_separates_call_fuses|$STANDARD
 Blanc.control_delcall_inherits_caller_and_value|$STANDARD
 Blanc.delcall_child_observes_outer_caller_and_value|$STANDARD
+Blanc.control_two_window_memory_premise_derivable|$STANDARD
+Blanc.control_sliceD_payload_size|$STANDARD
 Blanc.caughtCall_childSettlement|$STANDARD
 Blanc.cleanCall_childSettlement|$STANDARD
 Blanc.preparedTransactionMessage_exists|$STANDARD
