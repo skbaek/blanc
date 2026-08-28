@@ -139,11 +139,11 @@ theorem proxyMsgRevert_caller : proxyMsgRevert.caller = callerAdr := rfl
 /-! The continuation after the actual delegatecall.  Keeping this as a local
 function lets the prefix walk be checked independently of the child resume. -/
 def proxySuccessTail : Func :=
-  retdatasize ::: dup 0 ::: pushB256 0 ::: pushB256 0 ::: retdatacopy :::
-  swap 0 :::
+  pushB256 0 ::: retdatasize ::: pushB256 0 ::: pushB256 0 :::
+  retdatacopy ::: retdatasize ::: swap 1 :::
   Func.branch
-    (pushB256 0 ::: Func.last .rev)
-    (pushB256 0 ::: Func.last .ret)
+    (Func.last .rev)
+    (Func.last .ret)
 
 theorem proxyFallback_eq_prefix :
     proxyFallback =
@@ -480,7 +480,7 @@ private theorem proxy_success_tail (childPost : Devm)
             0 (childPost.output.take 0))
         proxySuccessTail (.ok final) ∧
       final.output = implReturnWord.toBytes ∧
-      final.gasLeft = 317 ∧
+      final.gasLeft = 318 ∧
       final.state = pairState.setStorVal proxyAdr implSlot 1 ∧
       final.transientStorage = proxyCallPreSuccess.transientStorage ∧
       final.logs = proxyCallPreSuccess.logs := by
@@ -489,7 +489,7 @@ private theorem proxy_success_tail (childPost : Devm)
   let base := incorporateChildOnSuccess proxySuccessParent childPost childPost.output
   let final :=
     (((base.setMach ⟨[], proxySuccessParent.memory.write 0
-        implReturnWord.toBytes, 317⟩).memRead 0 32).2.withOutput
+        implReturnWord.toBytes, 318⟩).memRead 0 32).2.withOutput
       implReturnWord.toBytes)
   refine ⟨final, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have hstart :
@@ -508,7 +508,7 @@ private theorem proxy_success_tail (childPost : Devm)
     have hpmem : proxySuccessParent.memory.size = 32 := by
       decide
     have hext :
-        (base.setMach ⟨[0, 0, 32, 32, 1], proxySuccessParent.memory, 342⟩).extCost
+        (base.setMach ⟨[0, 0, 32, 0, 1], proxySuccessParent.memory, 343⟩).extCost
           [⟨0, 32⟩] = 0 := by
       apply Devm.extCost_covered
       rw [hpmem]
@@ -525,7 +525,7 @@ private theorem proxy_success_tail (childPost : Devm)
         show ((0 : B256).toNat) = 0 by decide]
       rw [hext]
       decide
-    case a =>
+    case h_arm =>
       dsimp [final]
       rw [show Nat.toB256 32 = (32 : B256) by decide,
         show (B256.toNat (0 : B256)) = 0 by decide,
@@ -544,7 +544,7 @@ private theorem proxy_success_tail (childPost : Devm)
           (Mem.read_write_zero proxySuccessParent.memory hne)
       have hfinalext :
           (base.setMach ⟨[0, 32], proxySuccessParent.memory.write 0
-            implReturnWord.toBytes, 317⟩).extCost [⟨0, 32⟩] = 0 := by
+            implReturnWord.toBytes, 318⟩).extCost [⟨0, 32⟩] = 0 := by
         apply Devm.extCost_covered
         have hm : (proxySuccessParent.memory.write 0 implReturnWord.toBytes).size = 32 := by
           decide
@@ -553,8 +553,8 @@ private theorem proxy_success_tail (childPost : Devm)
       have hrun := Func.runCompiledTo_ret_word
         (fs := [proxyFallback]) (sevm := initSevm proxyMsgSuccess)
         (devm := base.setMach ⟨[0, 32], proxySuccessParent.memory.write 0
-          implReturnWord.toBytes, 317⟩)
-        (i := 0) (sz := 32) (s := []) (e := 0) (G := 317)
+          implReturnWord.toBytes, 318⟩)
+        (i := 0) (sz := 32) (s := []) (e := 0) (G := 318)
         (out := implReturnWord.toBytes) rfl hfinalext rfl hread
       simpa only [Devm.setMach_setMach, Devm.memory_setMach,
         Devm.gasLeft_setMach,
@@ -582,7 +582,7 @@ private theorem proxy_success_func_run :
         ((initDevm proxyMsgSuccess).setMach
           ⟨[], Mem.empty, 27223⟩) proxyFallback (.ok final) ∧
       final.output = implReturnWord.toBytes ∧
-      final.gasLeft = 317 ∧
+      final.gasLeft = 318 ∧
       final.state = pairState.setStorVal proxyAdr implSlot 1 ∧
       final.transientStorage = proxyCallPreSuccess.transientStorage ∧
       final.logs = proxyCallPreSuccess.logs := by
@@ -630,7 +630,7 @@ theorem proxyProg_success_runCompiledTo :
       Nonempty (Exec 0 (initSevm proxyMsgSuccess)
         (initDevm proxyMsgSuccess) (.ok final)) ∧
       final.output = implReturnWord.toBytes ∧
-      final.gasLeft = 317 ∧
+      final.gasLeft = 318 ∧
       final.state = pairState.setStorVal proxyAdr implSlot 1 ∧
       final.transientStorage = (initDevm proxyMsgSuccess).transientStorage ∧
       final.logs = (initDevm proxyMsgSuccess).logs := by
@@ -989,12 +989,12 @@ private theorem proxy_revert_tail (childPost : Devm)
             0 (childPost.output.take 0))
         proxySuccessTail (.error (.revert, final)) ∧
       final.output = [] ∧
-      final.gasLeft = 22438 ∧
+      final.gasLeft = 22439 ∧
       final.state = pairState ∧
       final.transientStorage = proxyCallPreRevert.transientStorage ∧
       final.logs = proxyCallPreRevert.logs := by
   let base := incorporateChildOnError proxyRevertParent childPost childPost.output
-  let final := (base.setMach ⟨[], proxyRevertParent.memory, 22438⟩).withOutput []
+  let final := (base.setMach ⟨[], proxyRevertParent.memory, 22439⟩).withOutput []
   refine ⟨final, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have hstart :
         (((incorporateChildOnError proxyRevertParent childPost childPost.output).setMach
@@ -1015,16 +1015,16 @@ private theorem proxy_revert_tail (childPost : Devm)
       simp only [show (Nat.toB256 0).toNat = 0 by decide]
       rw [Devm.extCost_empty_window]
       decide
-    case a =>
+    case h_arm =>
       dsimp [final]
       have hrun := Func.runCompiledTo_rev
         (fs := [proxyFallback]) (sevm := initSevm proxyMsgRevert)
-        (devm := base.setMach ⟨[0, 0], proxyRevertParent.memory, 22438⟩)
-        (i := 0) (sz := 0) (s := []) (out := []) (G := 22438)
-        (d' := base.setMach ⟨[], proxyRevertParent.memory, 22438⟩)
+        (devm := base.setMach ⟨[0, 0], proxyRevertParent.memory, 22439⟩)
+        (i := 0) (sz := 0) (s := []) (out := []) (G := 22439)
+        (d' := base.setMach ⟨[], proxyRevertParent.memory, 22439⟩)
         (by rfl) (by
-          change (22438 : Nat) = 22438 +
-            (base.setMach ⟨[0, 0], proxyRevertParent.memory, 22438⟩).extCost
+          change (22439 : Nat) = 22439 +
+            (base.setMach ⟨[0, 0], proxyRevertParent.memory, 22439⟩).extCost
               [⟨0, 0⟩]
           rw [Devm.extCost_empty_window]) (by exact Devm.memRead_zero)
       have hslice :
@@ -1059,7 +1059,7 @@ private theorem proxy_revert_func_run :
           ⟨[], Mem.empty, 27223⟩) proxyFallback
           (.error (.revert, final)) ∧
       final.output = [] ∧
-      final.gasLeft = 22438 ∧
+      final.gasLeft = 22439 ∧
       final.state = pairState ∧
       final.transientStorage = proxyCallPreRevert.transientStorage ∧
       final.logs = proxyCallPreRevert.logs := by
@@ -1109,7 +1109,7 @@ theorem proxyProg_revert_runCompiledTo :
       Nonempty (Exec 0 (initSevm proxyMsgRevert)
         (initDevm proxyMsgRevert) (.error (.revert, final))) ∧
       final.output = [] ∧
-      final.gasLeft = 22438 ∧
+      final.gasLeft = 22439 ∧
       final.state = pairState ∧
       final.transientStorage = (initDevm proxyMsgRevert).transientStorage ∧
       final.logs = (initDevm proxyMsgRevert).logs := by
