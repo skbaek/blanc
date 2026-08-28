@@ -1922,7 +1922,7 @@ theorem processMessage_static_halt_to_revert :
 
 /-- A downstream account-level property states explicitly that it respects
 the one-way proxy observable before it may be transported. -/
-def RespectsSettledObservableAt (target : Adr)
+def PreservedByProxying (target : Adr)
     (P : Msg → TargetMessageResult → Prop) : Prop :=
   ∀ m direct proxied,
     SettledObservableAt target direct proxied →
@@ -1933,7 +1933,7 @@ settled observable transports from the direct implementation execution to the
 proxy execution. -/
 theorem processMessage_property_transport
     (P : Msg → TargetMessageResult → Prop)
-    (respects : RespectsSettledObservableAt proxyAdr P)
+    (respects : PreservedByProxying proxyAdr P)
     (m : Msg)
     (proxyInstalled :
       (m.benv.state.get proxyAdr).code = proxyCode)

@@ -1,5 +1,6 @@
 import Blanc.ProxyPairProgram
 import Blanc.ProxyPairImplementation
+import Blanc.ExecutionOccurrence
 
 /-!
 # A concrete installed proxy/implementation pair
@@ -14,6 +15,336 @@ namespace Blanc.ProxyPair
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
+/-! ## Contract-local frame-root carrying bridge
+
+The shared compiled-walk bridge deliberately returns only an `Exec` witness.
+For the concrete authority theorem below we also retain the raw child roots
+chosen by each filled execution slot.  This local strengthening follows the
+same five constructors and adds no reusable execution API.
+-/
+
+private def rawFrameRootsSatisfy
+    (P : Exec.Deriv → Prop) : Xlot → Prop
+  | .none => True
+  | .some ⟨evm, out⟩ =>
+      ∀ run : Exec evm.pc evm.sta evm.dyna out,
+        ∀ root ∈ Exec.rawFrameRoots run, P root
+
+private def ninstAllChildRoots
+    (P : Exec.Deriv → Prop) {sevm : Sevm} {devm : Devm}
+    {n : Ninst} {devm' : Devm} : Prop :=
+  ∀ (xl : Xlot) (_filled : xl.Filled),
+    (∀ pc, Ninst.StepRun pc sevm devm n xl (.ok devm')) →
+      rawFrameRootsSatisfy P xl
+
+private inductive rootedRunCompiledTo (P : Exec.Deriv → Prop) :
+    {FS : List Func} → {sevm : Sevm} → {devm : Devm} →
+      {f : Func} → {ex : Execution} →
+      (run : Func.RunCompiledTo FS sevm devm f ex) → Prop
+  | zero {FS : List Func} {sevm : Sevm} {devm devm' : Devm}
+      {f g : Func} {ex : Execution}
+      {room : devm.stack.length < 1024}
+      {pop : Devm.PopBurnBy [0] (gVerylow + gHigh) devm devm'}
+      {tail : Func.RunCompiledTo FS sevm devm' f ex} :
+      rootedRunCompiledTo P tail →
+        rootedRunCompiledTo P (.zero room pop tail)
+  | succ {FS : List Func} {sevm : Sevm} {devm devm' : Devm}
+      {w : B256} {f g : Func} {ex : Execution}
+      {hne : w ≠ 0} {room : devm.stack.length < 1024}
+      {pop : Devm.PopBurnBy [w] (gVerylow + gHigh + gJumpdest) devm devm'}
+      {tail : Func.RunCompiledTo FS sevm devm' g ex} :
+      rootedRunCompiledTo P tail →
+        rootedRunCompiledTo P (.succ hne room pop tail)
+  | last {FS : List Func} {sevm : Sevm} {devm : Devm}
+      {i : Linst} {ex : Execution} {run : Linst.Run sevm devm i ex} :
+      rootedRunCompiledTo P (.last run)
+  | next {FS : List Func} {sevm : Sevm} {devm devm' : Devm}
+      {i : Ninst} {f : Func} {ex : Execution}
+      {step : Ninst.RunCompiled sevm devm i devm'}
+      {tail : Func.RunCompiledTo FS sevm devm' f ex} :
+      ninstAllChildRoots P
+        (sevm := sevm) (devm := devm) (n := i) (devm' := devm') →
+      rootedRunCompiledTo P tail →
+        rootedRunCompiledTo P (.next step tail)
+  | call {FS : List Func} {sevm : Sevm} {devm devm' : Devm}
+      {k : Nat} {f : Func} {ex : Execution}
+      {found : FS[k]? = some f}
+      {room : devm.stack.length < 1024}
+      {burn : Devm.BurnBy (gVerylow + gMid + gJumpdest) devm devm'}
+      {tail : Func.RunCompiledTo FS sevm devm' f ex} :
+      rootedRunCompiledTo P tail →
+        rootedRunCompiledTo P (.call found room burn tail)
+
+private theorem ninstAllChildRoots_of_not_exec
+    {P : Exec.Deriv → Prop} {sevm : Sevm} {devm devm' : Devm}
+    {n : Ninst} (notExec : ∀ x : Xinst, n ≠ .exec x) :
+    ninstAllChildRoots P
+      (sevm := sevm) (devm := devm) (n := n) (devm' := devm') := by
+  intro slot _filled stepRun
+  cases slot with
+  | none => trivial
+  | some child =>
+      have step := stepRun 0
+      cases n with
+      | reg r =>
+          simp only [Ninst.StepRun, Ninst.step_reg,
+            Step.run_ofExecution] at step
+          cases step.1
+      | push xs le =>
+          simp only [Ninst.StepRun, Ninst.step_push,
+            Step.run_ofExecution] at step
+          cases step.1
+      | exec x =>
+          exact (notExec x rfl).elim
+
+/-- Structural execution-freedom for a function body, including the absence
+of internal `.call` edges. -/
+private def funcExecFree : Func → Prop
+  | .branch f g => funcExecFree f ∧ funcExecFree g
+  | .last _ => True
+  | .next (.exec _) _ => False
+  | .next _ f => funcExecFree f
+  | .call _ => False
+
+/-- An execution-free compiled walk cannot add a child frame, so it can carry
+any already-selected frame-root predicate. -/
+private theorem rootedRunCompiledTo_of_execFree
+    {P : Exec.Deriv → Prop}
+    {FS : List Func} {sevm : Sevm} {devm : Devm}
+    {f : Func} {ex : Execution}
+    {run : Func.RunCompiledTo FS sevm devm f ex}
+    (free : funcExecFree f) :
+    rootedRunCompiledTo P run := by
+  induction run with
+  | zero room pop tail ih =>
+      rename_i _ _ _ other _
+      exact rootedRunCompiledTo.zero
+        (g := other) (room := room) (pop := pop) (tail := tail) (ih free.1)
+  | succ hne room pop tail ih =>
+      rename_i _ _ _ other _ _
+      exact rootedRunCompiledTo.succ
+        (f := other) (hne := hne) (room := room) (pop := pop) (tail := tail)
+        (ih free.2)
+  | last lastRun =>
+      exact rootedRunCompiledTo.last (FS := FS) (run := lastRun)
+  | next step tail ih =>
+      rename_i _ instruction _ _ _
+      cases instruction with
+      | reg r =>
+          refine rootedRunCompiledTo.next (step := step) (tail := tail)
+            (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
+          · intro x h
+            cases h
+          · simpa [funcExecFree] using free
+      | push bytes size =>
+          refine rootedRunCompiledTo.next (step := step) (tail := tail)
+            (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
+          · intro x h
+            cases h
+          · simpa [funcExecFree] using free
+      | exec x =>
+          simp [funcExecFree] at free
+  | call found room burn tail ih =>
+      simp [funcExecFree] at free
+
+private theorem ninstAllChildRoots_of_exec_spawn
+    {P : Exec.Deriv → Prop} {sevm : Sevm} {devm devm' : Devm}
+    {x : Xinst} {frame : Frame} {resume : Resume} {childEvm : Evm}
+    (spawn : Xinst.step sevm devm x = .spawn frame resume)
+    (enters : frame.enter = .run childEvm)
+    (childRoots :
+      ∀ {raw : Execution}
+        (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw),
+        ∀ root ∈ Exec.rawFrameRoots child, P root) :
+    ninstAllChildRoots P
+      (sevm := sevm) (devm := devm) (n := .exec x) (devm' := devm') := by
+  intro slot _filled stepRun
+  have step := stepRun 0
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, spawn] at step
+  rcases step with ⟨result, frameRun, _⟩
+  unfold RunFrame at frameRun
+  rw [enters] at frameRun
+  rcases frameRun with ⟨raw, slotEq, _⟩
+  subst slot
+  exact childRoots
+
+private theorem Ninst.exec_of_stepRun_with_frameRoots
+    {P : Exec.Deriv → Prop}
+    {pc : Nat} {sevm : Sevm} {devm devmMid : Devm}
+    {n : Ninst} {xl : Xlot} {exn : Execution}
+    (h_at : Ninst.At sevm.code pc n)
+    (h_filled : xl.Filled)
+    (h_roots : rawFrameRootsSatisfy P xl)
+    (h_step : Ninst.StepRun pc sevm devm n xl (.ok devmMid))
+    (h_next :
+      ∃ next : Exec (pc + n.size) sevm devmMid exn,
+        ∀ root ∈ Exec.rawFrameDescendants next, P root) :
+    ∃ run : Exec pc sevm devm exn,
+      ∀ root ∈ Exec.rawFrameDescendants run, P root := by
+  rcases h_next with ⟨next, nextRoots⟩
+  have hstep : Evm.step ⟨pc, sevm, devm⟩ =
+      Ninst.step ⟨pc, sevm, devm⟩ n :=
+    Evm.step_next h_at
+  cases n with
+  | reg r =>
+      rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_step
+      refine ⟨Exec.cont ?_ next, ?_⟩
+      · rw [hstep, Ninst.step_reg, ← h_step.2]
+        rfl
+      · simpa [Exec.rawFrameDescendants] using nextRoots
+  | push xs le =>
+      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_step
+      refine ⟨Exec.cont ?_ next, ?_⟩
+      · rw [hstep, Ninst.step_push, ← h_step.2]
+        rfl
+      · simpa [Exec.rawFrameDescendants] using nextRoots
+  | exec x =>
+      rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at h_step
+      cases hx : Xinst.step sevm devm x with
+      | done e =>
+          rw [hx] at h_step
+          simp only [XStep.Run] at h_step
+          refine ⟨Exec.cont ?_ next, ?_⟩
+          · rw [hstep, Ninst.step_exec, hx, ← h_step.2]
+            rfl
+          · simpa [Exec.rawFrameDescendants] using nextRoots
+      | spawn frame resume =>
+          rw [hx] at h_step
+          rcases h_step with ⟨result, frameRun, resultEq⟩
+          have hspawn : Evm.step ⟨pc, sevm, devm⟩ =
+              .spawn frame resume (pc + 1) := by
+            rw [hstep, Ninst.step_exec, hx]
+            rfl
+          unfold RunFrame at frameRun
+          rcases henter : frame.enter with done | childEvm <;>
+              simp only [henter] at frameRun
+          · refine ⟨Exec.doneOk hspawn henter (frameRun.2 ▸ resultEq.symm)
+                next, ?_⟩
+            simpa only [Exec.rawFrameDescendants]
+          · rcases frameRun with ⟨raw, slotEq, settleEq⟩
+            subst slotEq
+            obtain ⟨child⟩ :
+                Nonempty (Exec childEvm.pc childEvm.sta childEvm.dyna raw) :=
+              h_filled
+            have resumeOk :
+                resume.run (frame.settle raw) = .ok devmMid := by
+              rw [← settleEq]
+              exact resultEq.symm
+            let run : Exec pc sevm devm exn :=
+              Exec.runOk hspawn henter child resumeOk next
+            refine ⟨run, ?_⟩
+            intro root member
+            simp only [run, Exec.rawFrameDescendants, List.mem_cons,
+              List.mem_append] at member
+            rcases member with rfl | member
+            · exact h_roots child _ (Exec.mem_rawFrameRoots_self child)
+            · rcases member with childMember | nextMember
+              · exact h_roots child root (by
+                  simp only [Exec.rawFrameRoots, List.mem_cons]
+                  exact Or.inr childMember)
+              · exact nextRoots root nextMember
+
+private theorem Func.exec_of_rootedRunCompiledTo_core
+    {P : Exec.Deriv → Prop}
+    {f₀ : Func} {fs' : List Func} {sevm : Sevm} {FS : List Func}
+    {devm : Devm} {p : Func} {ex : Execution}
+    {run : Func.RunCompiledTo FS sevm devm p ex}
+    (rooted : rootedRunCompiledTo P run)
+    (compiled : some sevm.code.toList = Prog.compile ⟨f₀, fs'⟩)
+    (hFS : FS = f₀ :: fs')
+    (pc : Nat)
+    (sub : subcode sevm.code.toList pc
+      (Func.compile (table 0 (f₀ :: fs')) pc p))
+    (boundary : noPushBefore sevm.code pc 32 = true) :
+    ∃ execution : Exec pc sevm devm ex,
+      ∀ root ∈ Exec.rawFrameDescendants execution, P root := by
+  induction rooted generalizing f₀ fs' pc with
+  | zero tailRooted ih =>
+      rename_i _ _ _ _ _ _ _ _ hroom hpop _
+      rcases subcode_compile_branch_jumpable sub boundary with
+        ⟨loc, _, hloc, hpush, hjumpi, hsubp, hbp, _, _, _, _⟩
+      rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
+        ⟨step₁, step₂⟩
+      obtain ⟨tailExec, tailRoots⟩ :=
+        ih compiled hFS (pc + 4) hsubp hbp
+      refine ⟨Exec.cont step₁ (Exec.cont step₂ tailExec), ?_⟩
+      simpa [Exec.rawFrameDescendants] using tailRoots
+  | succ tailRooted ih =>
+      rename_i _ _ _ _ _ _ _ _ _ hne hroom hpop _
+      rcases subcode_compile_branch_jumpable sub boundary with
+        ⟨loc, _, hloc, hpush, hjumpi, _, _, hjumpdest, hjumpable,
+          hsubq, hbq⟩
+      rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable hloc
+          hne hroom hpop with ⟨step₁, step₂, step₃⟩
+      obtain ⟨tailExec, tailRoots⟩ :=
+        ih compiled hFS (loc + 1) hsubq hbq
+      refine ⟨Exec.cont step₁ (Exec.cont step₂
+        (Exec.cont step₃ tailExec)), ?_⟩
+      simpa [Exec.rawFrameDescendants] using tailRoots
+  | last =>
+      rename_i _ _ _ _ _ _ hlast
+      refine ⟨Exec.halt ?_, ?_⟩
+      · rw [Evm.step_last (Linst.at_of_slice sub)]
+        exact congrArg Step.halt hlast
+      · simp [Exec.rawFrameDescendants]
+  | next stepRoots tailRooted ih =>
+      rename_i _ _ _ _ _ _ _ hstep _
+      rcases Func.noPushBefore_next sub boundary with ⟨boundary', sub'⟩
+      rcases of_subcode sub with ⟨code, compiledHead, slice⟩
+      rcases of_bind_eq_some compiledHead with
+        ⟨tailCode, compiledTail, headEq⟩
+      simp [pure] at headEq
+      rw [← headEq] at slice
+      rcases hstep with ⟨slot, filled, stepRun⟩
+      exact Ninst.exec_of_stepRun_with_frameRoots
+        (Ninst.at_of_slice (List.slice_prefix slice))
+        filled (stepRoots slot filled stepRun) (stepRun pc)
+        (ih compiled hFS _ sub' boundary')
+  | call tailRooted ih =>
+      rename_i _ _ _ _ _ _ _ hfound hroom hburn _
+      subst hFS
+      rcases subcode_compile_call sub with
+        ⟨loc, body, htable, hloc, hpushAt, hjump⟩
+      have bodyEq := (Prog.get?_table (m := 0)).symm.trans
+        (congrArg (Prod.snd <$> ·) htable)
+      rw [hfound] at bodyEq
+      simp only [Option.map_eq_map, Option.map_some,
+        Option.some.injEq] at bodyEq
+      subst bodyEq
+      rcases subcode_of_get?_eq_some compiled htable with
+        ⟨hjumpdest, hsubbody⟩
+      have hjumpable := Prog.jumpable_of_get?_table compiled htable
+      rcases hpushAt with ⟨le, hpush⟩
+      rcases Evm.call_steps (le := le) hpush hjump hjumpdest
+          hjumpable.1 hloc hroom hburn with ⟨step₁, step₂, step₃⟩
+      obtain ⟨bodyExec, bodyRoots⟩ :=
+        ih compiled rfl (loc + 1) hsubbody hjumpable.2
+      refine ⟨Exec.cont step₁ (Exec.cont step₂
+        (Exec.cont step₃ bodyExec)), ?_⟩
+      simpa [Exec.rawFrameDescendants] using bodyRoots
+
+private theorem Prog.exec_of_rootedRunCompiledTo
+    {P : Exec.Deriv → Prop} {sevm : Sevm} {pre mid : Devm}
+    {p : Prog} {ex : Execution}
+    {run : Func.RunCompiledTo (p.main :: p.aux) sevm mid p.main ex}
+    (burn : Devm.BurnBy gJumpdest pre mid)
+    (rooted : rootedRunCompiledTo P run)
+    (compiled : some sevm.code.toList = p.compile) :
+    ∃ execution : Exec 0 sevm pre ex,
+      ∀ root ∈ Exec.rawFrameDescendants execution, P root := by
+  have compiled' :
+      some sevm.code.toList = Prog.compile ⟨p.main, p.aux⟩ := compiled
+  have entry : (table 0 (p.main :: p.aux))[0]? = some (0, p.main) := rfl
+  rcases subcode_of_get?_eq_some compiled' entry with ⟨jumpdest, sub⟩
+  have boundary : noPushBefore sevm.code 1 32 = true :=
+    (Prog.jumpable_of_get?_table compiled' entry).2
+  have first : Evm.step ⟨0, sevm, pre⟩ = .cont 1 mid :=
+    Evm.jumpdest_cont jumpdest burn
+  obtain ⟨body, bodyRoots⟩ :=
+    Func.exec_of_rootedRunCompiledTo_core rooted compiled' rfl 1 sub boundary
+  refine ⟨Exec.cont first body, ?_⟩
+  simpa [Exec.rawFrameDescendants] using bodyRoots
+
 /-! ## Installed pair -/
 
 def proxyAdr : Adr := 0x00000000000000000000000000000000000a0001
@@ -21,6 +352,129 @@ def proxyAdr : Adr := 0x00000000000000000000000000000000000a0001
 def implAdr : Adr := 0x00000000000000000000000000000000000b0002
 
 def callerAdr : Adr := 0x00000000000000000000000000000000000c0003
+
+private class NonExecInstruction (instruction : Ninst) : Prop where
+  notExec : ∀ x : Xinst, instruction ≠ .exec x
+
+private instance (instruction : Rinst) :
+    NonExecInstruction (.reg instruction) :=
+  ⟨by intro x h; cases h⟩
+
+private instance (word : B256) : NonExecInstruction (pushB256 word) :=
+  ⟨by
+    intro x h
+    simp only [Ninst.pushB256] at h
+    cases h⟩
+
+/-- Five-argument wrapper used only by the local forward walk below. -/
+private def proxyRootedRun
+    (FS : List Func) (sevm : Sevm) (devm : Devm)
+    (f : Func) (ex : Execution) : Prop :=
+  ∃ run : Func.RunCompiledTo FS sevm devm f ex,
+    rootedRunCompiledTo
+      (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr) run
+
+private theorem proxyRootedRun_next
+    {FS : List Func} {sevm : Sevm} {devm : Devm}
+    {instruction : Ninst} {devm' : Devm} {f : Func} {ex : Execution}
+    (step : Ninst.RunCompiled sevm devm instruction devm')
+    (tail : proxyRootedRun FS sevm devm' f ex)
+    [nonExec : NonExecInstruction instruction] :
+    proxyRootedRun FS sevm devm (.next instruction f) ex := by
+  rcases tail with ⟨tailRun, tailRooted⟩
+  let run : Func.RunCompiledTo FS sevm devm (.next instruction f) ex :=
+    .next step tailRun
+  refine ⟨run, ?_⟩
+  exact rootedRunCompiledTo.next (step := step) (tail := tailRun)
+    (ninstAllChildRoots_of_not_exec nonExec.notExec) tailRooted
+
+private theorem proxyRootedRun_branch_zero
+    {FS : List Func} {sevm : Sevm} {devm : Devm}
+    {f g : Func} {ex : Execution} {stack : List B256} {gas : Nat}
+    (stackEq : devm.stack = 0 :: stack)
+    (room : devm.stack.length < 1024)
+    (gasEq : devm.gasLeft = gas + (gVerylow + gHigh))
+    (arm : proxyRootedRun FS sevm
+      (devm.setMach ⟨stack, devm.memory, gas⟩) f ex) :
+    proxyRootedRun FS sevm devm (.branch f g) ex := by
+  rcases arm with ⟨armRun, armRooted⟩
+  let pop := Devm.popBurnBy_setMach stackEq gasEq
+  let run : Func.RunCompiledTo FS sevm devm (.branch f g) ex :=
+    .zero room pop armRun
+  refine ⟨run, ?_⟩
+  exact rootedRunCompiledTo.zero (g := g) (room := room)
+    (pop := pop) (tail := armRun) armRooted
+
+private theorem proxyRootedRun_branch_succ
+    {FS : List Func} {sevm : Sevm} {devm : Devm}
+    {f g : Func} {ex : Execution} {word : B256}
+    {stack : List B256} {gas : Nat}
+    (nonzero : word ≠ 0)
+    (stackEq : devm.stack = word :: stack)
+    (room : devm.stack.length < 1024)
+    (gasEq : devm.gasLeft = gas + (gVerylow + gHigh + gJumpdest))
+    (arm : proxyRootedRun FS sevm
+      (devm.setMach ⟨stack, devm.memory, gas⟩) g ex) :
+    proxyRootedRun FS sevm devm (.branch f g) ex := by
+  rcases arm with ⟨armRun, armRooted⟩
+  let pop := Devm.popBurnBy_setMach stackEq gasEq
+  let run : Func.RunCompiledTo FS sevm devm (.branch f g) ex :=
+    .succ nonzero room pop armRun
+  refine ⟨run, ?_⟩
+  exact rootedRunCompiledTo.succ (f := f) (hne := nonzero)
+    (room := room) (pop := pop) (tail := armRun) armRooted
+
+private theorem proxyRootedRun_call
+    {FS : List Func} {sevm : Sevm} {devm : Devm}
+    {index : Nat} {f : Func} {ex : Execution} {gas : Nat}
+    (found : FS[index]? = some f)
+    (room : devm.stack.length < 1024)
+    (gasEq : devm.gasLeft = gas + (gVerylow + gMid + gJumpdest))
+    (body : proxyRootedRun FS sevm
+      (devm.setMach ⟨devm.stack, devm.memory, gas⟩) f ex) :
+    proxyRootedRun FS sevm devm (.call index) ex := by
+  rcases body with ⟨bodyRun, bodyRooted⟩
+  let burn := Devm.burnBy_setMach_gas gasEq
+  let run : Func.RunCompiledTo FS sevm devm (.call index) ex :=
+    .call found room burn bodyRun
+  refine ⟨run, ?_⟩
+  exact rootedRunCompiledTo.call (found := found) (room := room)
+    (burn := burn) (tail := bodyRun) bodyRooted
+
+private def proxyRootedRunSpec : Blanc.Forward.RelSpec where
+  head := ``proxyRootedRun
+  next := ``proxyRootedRun_next
+  branchZero := ``proxyRootedRun_branch_zero
+  branchSucc := ``proxyRootedRun_branch_succ
+  call := ``proxyRootedRun_call
+
+local syntax (name := proxyRootedFuncRun) "proxy_rooted_run"
+  (ppSpace "[" term,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| proxy_rooted_run $[[$hints,*]]?) => do
+      let goal ← Lean.Elab.Tactic.getMainGoal
+      let (_, context) ← (Blanc.Forward.funcWalk goal).run
+        { rel := proxyRootedRunSpec
+          hints := match hints with
+            | some terms => terms.getElems.toList
+            | none => []
+          side := #[]
+          step := 0
+          budget := none }
+      let proof ← Lean.instantiateMVars (Lean.mkMVar goal)
+      for mvarId in ← Lean.Meta.getMVars proof do
+        unless ← mvarId.isAssigned do
+          let type ← mvarId.getType
+          if (← Lean.Meta.isClass? type).isSome then
+            mvarId.withContext do
+              mvarId.assign (← Lean.Meta.synthInstance type)
+      Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+      if context.step == 0 then
+        throwError "proxy_rooted_run: applied no rule"
+      unless context.hints.isEmpty do
+        throwError "proxy_rooted_run: unused hints"
+      Lean.Elab.Tactic.replaceMainGoal context.side.toList
 
 theorem proxyAdr_ne_implAdr : proxyAdr ≠ implAdr := by decide
 
@@ -279,6 +733,42 @@ private theorem proxy_success_child_exec :
   refine ⟨post, Prog.exec_of_runCompiledTo hrun h_code, herr, hout, hgas,
     hstate, htra, hlogs⟩
 
+private theorem proxy_success_child_frame_roots
+    {raw : Execution}
+    (child : Exec (initEvm proxySuccessChild).pc
+      (initEvm proxySuccessChild).sta
+      (initEvm proxySuccessChild).dyna raw) :
+    ∀ root ∈ Exec.rawFrameRoots child,
+      root.exactInvocation implGuardedProg proxyAdr implAdr := by
+  let childRoot : Exec.Deriv :=
+    ⟨(initEvm proxySuccessChild).pc,
+      (initEvm proxySuccessChild).sta,
+      (initEvm proxySuccessChild).dyna, raw, child⟩
+  have invocation :
+      childRoot.exactInvocation implGuardedProg proxyAdr implAdr := by
+    refine ⟨rfl, rfl, rfl, ?_⟩
+    change some implGuardedCode.toList = Prog.compile implGuardedProg
+    rw [show implGuardedCode.toList = implGuardedBytes by
+      simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
+    exact implGuardedProg_compile.symm
+  have noExecSource :
+      ∀ site ∈ implGuardedProg.sourceSites, ∀ x : Xinst,
+        site.instruction ≠ .exec x := by
+    intro site member x
+    simp [implGuardedProg, implGuarded, implSuccess, implRevert,
+      Prog.sourceSites, table, cdl, mstoreAt, prepend,
+      Func.sourceSites] at member
+    aesop (add simp [Ninst.pushB256])
+  have childless : Exec.rawFrameDescendants child = [] := by
+    apply Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt child
+    intro node sameFrame x instructionAt
+    rcases childRoot.nonPush_sourceSite invocation sameFrame (by trivial)
+        instructionAt with ⟨site, member, _, instructionEq⟩
+    exact noExecSource site member x instructionEq
+  intro root member
+  rw [Exec.rawFrameRoots, childless, List.mem_singleton] at member
+  exact member ▸ invocation
+
 def proxySuccessChildMsg : Msg := proxySuccessChild
 
 theorem proxySuccessChildMsg_exec :
@@ -348,6 +838,37 @@ private theorem proxy_success_h_gas : 24744 + 0 ≤ proxySuccessD1.gasLeft := by
 private theorem proxy_success_h_depth :
     (initSevm proxyMsgSuccess).depth ≠ 0 := by
   decide
+
+private theorem proxy_success_delcall_spawn :
+    Xinst.step (initSevm proxyMsgSuccess) proxyCallPreSuccess .delcall =
+      .spawn (Frame.ofCall proxySuccessChild)
+        (.call proxySuccessParent 0 0) := by
+  have h_stk : proxyCallPreSuccess.stack =
+      25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
+    simp only [proxyCallPreSuccess, Devm.setMach_stack]
+    decide
+  have h_split :
+      calculateMsgCallGas 0 25095 proxySuccessD1.gasLeft 0
+          gasColdAccountAccess = (24744, 22144) := by
+    change calculateMsgCallGas 0 25095 25095 0 gasColdAccountAccess =
+      (24744, 22144)
+    exact proxy_call_gas_split
+  simpa [proxySuccessParent, proxySuccessChild,
+    show (0 : B256).toNat = 0 by decide,
+    show (32 : B256).toNat = 32 by decide] using
+    (Xinst.step_delcall_spawn h_stk proxy_success_h_ext
+      proxy_success_h_del proxy_success_h_acc h_split
+      proxy_success_h_gas proxy_success_h_depth)
+
+private theorem proxy_success_delcall_allChildRoots {post : Devm} :
+    ninstAllChildRoots
+      (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
+      (sevm := initSevm proxyMsgSuccess) (devm := proxyCallPreSuccess)
+      (n := .exec .delcall) (devm' := post) := by
+  exact ninstAllChildRoots_of_exec_spawn proxy_success_delcall_spawn
+    proxy_success_child_enters (by
+      intro raw child
+      exact proxy_success_child_frame_roots child)
 
 private theorem proxy_success_delcall :
     ∃ childPost post,
@@ -578,7 +1099,7 @@ private theorem proxy_success_tail (childPost : Devm)
 
 private theorem proxy_success_func_run :
   ∃ final,
-      Func.RunCompiledTo [proxyFallback] (initSevm proxyMsgSuccess)
+      proxyRootedRun [proxyFallback] (initSevm proxyMsgSuccess)
         ((initDevm proxyMsgSuccess).setMach
           ⟨[], Mem.empty, 27223⟩) proxyFallback (.ok final) ∧
       final.output = implReturnWord.toBytes ∧
@@ -591,50 +1112,67 @@ private theorem proxy_success_func_run :
   obtain ⟨final, htail, hfout, hfgas, hfstate, hftra, hflogs⟩ :=
     proxy_success_tail childPost hout hstate htra hlogs
   rw [hpost] at hcall
-  refine ⟨final, ?_, hfout, hfgas, hfstate, hftra, hflogs⟩
-  change Func.RunCompiledTo [proxyFallback] (initSevm proxyMsgSuccess)
-    ((initDevm proxyMsgSuccess).setMach ⟨[], Mem.empty, 27223⟩)
-    (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
-      pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
-      pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
-      proxySuccessTail) (.ok final)
-  func_run [9]
-  all_goals simp_all
-  all_goals try decide
-  case h_cold =>
-    change ((proxyAdr, implementationSlotLit) : Adr × B256) ∉
-      (Std.HashSet.emptyWithCapacity : KeySet)
-    simp
-  case a =>
-    have h_stk : proxyCallPreSuccess.stack =
-        25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
-      simp only [proxyCallPreSuccess, Devm.setMach_stack]
-      decide
-    have hslot :
-        (initDevm proxyMsgSuccess).getStorVal
-            (initSevm proxyMsgSuccess).currentTarget implementationSlotLit =
-          implAdr.toB256 := by
-      change (pairState.get proxyAdr).stor.get implementationSlotLit = implAdr.toB256
-      rw [implementationSlotLit_eq_slot, pairState_proxySlot]
-    have hmem : (initDevm proxyMsgSuccess).memory = Mem.empty := by rfl
-    simpa only [proxyCallPreSuccess, Devm.setMach_setMach,
-      proxy_addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
-      Devm.memory_setMach, h_stk, hslot, hmem] using (Func.RunCompiledTo.next hcall htail)
+  have rooted : proxyRootedRun [proxyFallback] (initSevm proxyMsgSuccess)
+      ((initDevm proxyMsgSuccess).setMach ⟨[], Mem.empty, 27223⟩)
+      proxyFallback (.ok final) := by
+    change proxyRootedRun [proxyFallback] (initSevm proxyMsgSuccess)
+      ((initDevm proxyMsgSuccess).setMach ⟨[], Mem.empty, 27223⟩)
+      (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
+        pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
+        pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+        proxySuccessTail) (.ok final)
+    proxy_rooted_run [9]
+    all_goals simp_all
+    all_goals try decide
+    case h_cold =>
+      change ((proxyAdr, implementationSlotLit) : Adr × B256) ∉
+        (Std.HashSet.emptyWithCapacity : KeySet)
+      simp
+    case tail =>
+      have h_stk : proxyCallPreSuccess.stack =
+          25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
+        simp only [proxyCallPreSuccess, Devm.setMach_stack]
+        decide
+      have hslot :
+          (initDevm proxyMsgSuccess).getStorVal
+              (initSevm proxyMsgSuccess).currentTarget implementationSlotLit =
+            implAdr.toB256 := by
+        change (pairState.get proxyAdr).stor.get implementationSlotLit = implAdr.toB256
+        rw [implementationSlotLit_eq_slot, pairState_proxySlot]
+      have hmem : (initDevm proxyMsgSuccess).memory = Mem.empty := by rfl
+      have tailRooted : rootedRunCompiledTo
+          (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
+          htail :=
+        rootedRunCompiledTo_of_execFree (run := htail) (by
+          simp [proxySuccessTail, funcExecFree, Ninst.pushB256])
+      have known : proxyRootedRun [proxyFallback]
+          (initSevm proxyMsgSuccess) proxyCallPreSuccess
+          (delcall ::: proxySuccessTail) (.ok final) := by
+        refine ⟨Func.RunCompiledTo.next hcall htail, ?_⟩
+        exact rootedRunCompiledTo.next (step := hcall) (tail := htail)
+          proxy_success_delcall_allChildRoots tailRooted
+      simpa only [proxyCallPreSuccess, Devm.setMach_setMach,
+        proxy_addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
+        Devm.memory_setMach, h_stk, hslot, hmem] using known
+  exact ⟨final, rooted, hfout, hfgas, hfstate, hftra, hflogs⟩
 
 theorem proxyProg_success_runCompiledTo :
-    ∃ final,
+    ∃ (final : Devm) (outer : Exec 0 (initSevm proxyMsgSuccess)
+        (initDevm proxyMsgSuccess) (.ok final)),
       Prog.RunCompiledTo (initSevm proxyMsgSuccess)
         (initDevm proxyMsgSuccess) proxyProg (.ok final) ∧
       exec ⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess⟩ =
         .ok final ∧
-      Nonempty (Exec 0 (initSevm proxyMsgSuccess)
-        (initDevm proxyMsgSuccess) (.ok final)) ∧
+      (∀ root ∈ Exec.rawFrameRoots outer,
+        root = (⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess,
+          .ok final, outer⟩ : Exec.Deriv) ∨
+        root.exactInvocation implGuardedProg proxyAdr implAdr) ∧
       final.output = implReturnWord.toBytes ∧
       final.gasLeft = 318 ∧
       final.state = pairState.setStorVal proxyAdr implSlot 1 ∧
       final.transientStorage = (initDevm proxyMsgSuccess).transientStorage ∧
       final.logs = (initDevm proxyMsgSuccess).logs := by
-  obtain ⟨final, hrun, hout, hgas, hstate, hftra, hflogs⟩ :=
+  obtain ⟨final, ⟨hrun, rooted⟩, hout, hgas, hstate, hftra, hflogs⟩ :=
     proxy_success_func_run
   have hprog :
       Prog.RunCompiledTo (initSevm proxyMsgSuccess)
@@ -654,14 +1192,28 @@ theorem proxyProg_success_runCompiledTo :
         (initDevm proxyMsgSuccess).transientStorage := by rfl
   have hlogs0 :
       proxyCallPreSuccess.logs = (initDevm proxyMsgSuccess).logs := by rfl
+  have hburn : Devm.BurnBy gJumpdest (initDevm proxyMsgSuccess)
+      ((initDevm proxyMsgSuccess).setMach
+        ⟨[], Mem.empty, 27223⟩) := by
+    apply Devm.burnBy_setMach_gas
+    decide
+  obtain ⟨outer, descendantRoots⟩ :=
+    Prog.exec_of_rootedRunCompiledTo hburn rooted hcode
   have hexec :
       exec ⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess⟩ =
-        .ok final := Prog.exec_of_runCompiledTo hprog hcode
-  have hderiv :
-      Nonempty (Exec 0 (initSevm proxyMsgSuccess)
-        (initDevm proxyMsgSuccess) (.ok final)) :=
-    (exec_iff_exec_eq _ _ _ _).mpr hexec
-  refine ⟨final, hprog, hexec, hderiv, hout, hgas, hstate, ?_, ?_⟩
+        .ok final :=
+    (exec_iff_exec_eq _ _ _ _).mp ⟨outer⟩
+  have rootCases :
+      ∀ root ∈ Exec.rawFrameRoots outer,
+        root = (⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess,
+          .ok final, outer⟩ : Exec.Deriv) ∨
+        root.exactInvocation implGuardedProg proxyAdr implAdr := by
+    intro root member
+    simp only [Exec.rawFrameRoots, List.mem_cons] at member
+    rcases member with rfl | member
+    · exact Or.inl rfl
+    · exact Or.inr (descendantRoots root member)
+  refine ⟨final, outer, hprog, hexec, rootCases, hout, hgas, hstate, ?_, ?_⟩
   · exact hftra.trans htra0
   · exact hflogs.trans hlogs0
 
@@ -765,6 +1317,42 @@ private theorem proxy_revert_child_exec :
   refine ⟨raw, ?_, herr, hout, hgas, hstate, htra, hlogs⟩
   simpa [initEvm] using Prog.exec_of_runCompiledTo hrun h_code
 
+private theorem proxy_revert_child_frame_roots
+    {raw : Execution}
+    (child : Exec (initEvm proxyRevertChild).pc
+      (initEvm proxyRevertChild).sta
+      (initEvm proxyRevertChild).dyna raw) :
+    ∀ root ∈ Exec.rawFrameRoots child,
+      root.exactInvocation implGuardedProg proxyAdr implAdr := by
+  let childRoot : Exec.Deriv :=
+    ⟨(initEvm proxyRevertChild).pc,
+      (initEvm proxyRevertChild).sta,
+      (initEvm proxyRevertChild).dyna, raw, child⟩
+  have invocation :
+      childRoot.exactInvocation implGuardedProg proxyAdr implAdr := by
+    refine ⟨rfl, rfl, rfl, ?_⟩
+    change some implGuardedCode.toList = Prog.compile implGuardedProg
+    rw [show implGuardedCode.toList = implGuardedBytes by
+      simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
+    exact implGuardedProg_compile.symm
+  have noExecSource :
+      ∀ site ∈ implGuardedProg.sourceSites, ∀ x : Xinst,
+        site.instruction ≠ .exec x := by
+    intro site member x
+    simp [implGuardedProg, implGuarded, implSuccess, implRevert,
+      Prog.sourceSites, table, cdl, mstoreAt, prepend,
+      Func.sourceSites] at member
+    aesop (add simp [Ninst.pushB256])
+  have childless : Exec.rawFrameDescendants child = [] := by
+    apply Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt child
+    intro node sameFrame x instructionAt
+    rcases childRoot.nonPush_sourceSite invocation sameFrame (by trivial)
+        instructionAt with ⟨site, member, _, instructionEq⟩
+    exact noExecSource site member x instructionEq
+  intro root member
+  rw [Exec.rawFrameRoots, childless, List.mem_singleton] at member
+  exact member ▸ invocation
+
 def proxyRevertChildMsg : Msg := proxyRevertChild
 
 theorem proxyRevertChildMsg_exec :
@@ -849,6 +1437,37 @@ private theorem proxy_revert_h_gas :
 private theorem proxy_revert_h_depth :
     (initSevm proxyMsgRevert).depth ≠ 0 := by
   decide
+
+private theorem proxy_revert_delcall_spawn :
+    Xinst.step (initSevm proxyMsgRevert) proxyCallPreRevert .delcall =
+      .spawn (Frame.ofCall proxyRevertChild)
+        (.call proxyRevertParent 0 0) := by
+  have h_stk : proxyCallPreRevert.stack =
+      25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
+    simp only [proxyCallPreRevert, Devm.setMach_stack]
+    decide
+  have h_split :
+      calculateMsgCallGas 0 25095 proxyRevertD1.gasLeft 0
+          gasColdAccountAccess = (24744, 22144) := by
+    change calculateMsgCallGas 0 25095 25095 0 gasColdAccountAccess =
+      (24744, 22144)
+    exact proxy_call_gas_split
+  simpa [proxyRevertParent, proxyRevertChild,
+    show (0 : B256).toNat = 0 by decide,
+    show (32 : B256).toNat = 32 by decide] using
+    (Xinst.step_delcall_spawn h_stk proxy_revert_h_ext
+      proxy_revert_h_del proxy_revert_h_acc h_split
+      proxy_revert_h_gas proxy_revert_h_depth)
+
+private theorem proxy_revert_delcall_allChildRoots {post : Devm} :
+    ninstAllChildRoots
+      (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
+      (sevm := initSevm proxyMsgRevert) (devm := proxyCallPreRevert)
+      (n := .exec .delcall) (devm' := post) := by
+  exact ninstAllChildRoots_of_exec_spawn proxy_revert_delcall_spawn
+    proxy_revert_child_enters (by
+      intro raw child
+      exact proxy_revert_child_frame_roots child)
 
 private theorem proxy_revert_delcall :
     ∃ childPost post,
@@ -1054,7 +1673,7 @@ private theorem proxy_revert_tail (childPost : Devm)
 
 private theorem proxy_revert_func_run :
     ∃ final,
-      Func.RunCompiledTo [proxyFallback] (initSevm proxyMsgRevert)
+      proxyRootedRun [proxyFallback] (initSevm proxyMsgRevert)
         ((initDevm proxyMsgRevert).setMach
           ⟨[], Mem.empty, 27223⟩) proxyFallback
           (.error (.revert, final)) ∧
@@ -1068,52 +1687,68 @@ private theorem proxy_revert_func_run :
   obtain ⟨final, htail, hfout, hfgas, hfstate, hftra, hflogs⟩ :=
     proxy_revert_tail childPost hout hstate htra
   rw [hpost] at hcall
-  refine ⟨final, ?_, hfout, hfgas, hfstate, hftra, hflogs⟩
-  change Func.RunCompiledTo [proxyFallback] (initSevm proxyMsgRevert)
-    ((initDevm proxyMsgRevert).setMach ⟨[], Mem.empty, 27223⟩)
-    (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
-      pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
-      pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
-      proxySuccessTail) (.error (.revert, final))
-  func_run [9]
-  all_goals simp_all
-  all_goals try decide
-  case h_cold =>
-    change ((proxyAdr, implementationSlotLit) : Adr × B256) ∉
-      (Std.HashSet.emptyWithCapacity : KeySet)
-    simp
-  case a =>
-    have h_stk : proxyCallPreRevert.stack =
-        25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
-      simp only [proxyCallPreRevert, Devm.setMach_stack]
-      decide
-    have hslot :
-        (initDevm proxyMsgRevert).getStorVal
-            (initSevm proxyMsgRevert).currentTarget implementationSlotLit =
-          implAdr.toB256 := by
-      change (pairState.get proxyAdr).stor.get implementationSlotLit = implAdr.toB256
-      rw [implementationSlotLit_eq_slot, pairState_proxySlot]
-    have hmem : (initDevm proxyMsgRevert).memory = Mem.empty := by rfl
-    simpa only [proxyCallPreRevert, Devm.setMach_setMach,
-      proxy_addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
-      Devm.memory_setMach, h_stk, hslot, hmem] using
-      (Func.RunCompiledTo.next hcall htail)
+  have rooted : proxyRootedRun [proxyFallback] (initSevm proxyMsgRevert)
+      ((initDevm proxyMsgRevert).setMach ⟨[], Mem.empty, 27223⟩)
+      proxyFallback (.error (.revert, final)) := by
+    change proxyRootedRun [proxyFallback] (initSevm proxyMsgRevert)
+      ((initDevm proxyMsgRevert).setMach ⟨[], Mem.empty, 27223⟩)
+      (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
+        pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
+        pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+        proxySuccessTail) (.error (.revert, final))
+    proxy_rooted_run [9]
+    all_goals simp_all
+    all_goals try decide
+    case h_cold =>
+      change ((proxyAdr, implementationSlotLit) : Adr × B256) ∉
+        (Std.HashSet.emptyWithCapacity : KeySet)
+      simp
+    case tail =>
+      have h_stk : proxyCallPreRevert.stack =
+          25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
+        simp only [proxyCallPreRevert, Devm.setMach_stack]
+        decide
+      have hslot :
+          (initDevm proxyMsgRevert).getStorVal
+              (initSevm proxyMsgRevert).currentTarget implementationSlotLit =
+            implAdr.toB256 := by
+        change (pairState.get proxyAdr).stor.get implementationSlotLit = implAdr.toB256
+        rw [implementationSlotLit_eq_slot, pairState_proxySlot]
+      have hmem : (initDevm proxyMsgRevert).memory = Mem.empty := by rfl
+      have tailRooted : rootedRunCompiledTo
+          (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
+          htail :=
+        rootedRunCompiledTo_of_execFree (run := htail) (by
+          simp [proxySuccessTail, funcExecFree, Ninst.pushB256])
+      have known : proxyRootedRun [proxyFallback]
+          (initSevm proxyMsgRevert) proxyCallPreRevert
+          (delcall ::: proxySuccessTail) (.error (.revert, final)) := by
+        refine ⟨Func.RunCompiledTo.next hcall htail, ?_⟩
+        exact rootedRunCompiledTo.next (step := hcall) (tail := htail)
+          proxy_revert_delcall_allChildRoots tailRooted
+      simpa only [proxyCallPreRevert, Devm.setMach_setMach,
+        proxy_addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
+        Devm.memory_setMach, h_stk, hslot, hmem] using known
+  exact ⟨final, rooted, hfout, hfgas, hfstate, hftra, hflogs⟩
 
 theorem proxyProg_revert_runCompiledTo :
-    ∃ final,
+    ∃ (final : Devm) (outer : Exec 0 (initSevm proxyMsgRevert)
+        (initDevm proxyMsgRevert) (.error (.revert, final))),
       Prog.RunCompiledTo (initSevm proxyMsgRevert)
         (initDevm proxyMsgRevert) proxyProg
           (.error (.revert, final)) ∧
       exec ⟨0, initSevm proxyMsgRevert, initDevm proxyMsgRevert⟩ =
         .error (.revert, final) ∧
-      Nonempty (Exec 0 (initSevm proxyMsgRevert)
-        (initDevm proxyMsgRevert) (.error (.revert, final))) ∧
+      (∀ root ∈ Exec.rawFrameRoots outer,
+        root = (⟨0, initSevm proxyMsgRevert, initDevm proxyMsgRevert,
+          .error (.revert, final), outer⟩ : Exec.Deriv) ∨
+        root.exactInvocation implGuardedProg proxyAdr implAdr) ∧
       final.output = [] ∧
       final.gasLeft = 22439 ∧
       final.state = pairState ∧
       final.transientStorage = (initDevm proxyMsgRevert).transientStorage ∧
       final.logs = (initDevm proxyMsgRevert).logs := by
-  obtain ⟨final, hrun, hout, hgas, hstate, hftra, hflogs⟩ :=
+  obtain ⟨final, ⟨hrun, rooted⟩, hout, hgas, hstate, hftra, hflogs⟩ :=
     proxy_revert_func_run
   have hprog :
       Prog.RunCompiledTo (initSevm proxyMsgRevert)
@@ -1128,14 +1763,28 @@ theorem proxyProg_revert_runCompiledTo :
     rw [show proxyCode.toList = proxyBytes by
       simp [proxyCode, proxyBytes, ByteArray.toList_eq_toList_data]]
     exact proxyProg_compile
+  have hburn : Devm.BurnBy gJumpdest (initDevm proxyMsgRevert)
+      ((initDevm proxyMsgRevert).setMach
+        ⟨[], Mem.empty, 27223⟩) := by
+    apply Devm.burnBy_setMach_gas
+    decide
+  obtain ⟨outer, descendantRoots⟩ :=
+    Prog.exec_of_rootedRunCompiledTo hburn rooted hcode
   have hexec :
       exec ⟨0, initSevm proxyMsgRevert, initDevm proxyMsgRevert⟩ =
-        .error (.revert, final) := Prog.exec_of_runCompiledTo hprog hcode
-  have hderiv :
-      Nonempty (Exec 0 (initSevm proxyMsgRevert)
-        (initDevm proxyMsgRevert) (.error (.revert, final))) :=
-    (exec_iff_exec_eq _ _ _ _).mpr hexec
-  refine ⟨final, hprog, hexec, hderiv, hout, hgas, hstate, ?_, ?_⟩
+        .error (.revert, final) :=
+    (exec_iff_exec_eq _ _ _ _).mp ⟨outer⟩
+  have rootCases :
+      ∀ root ∈ Exec.rawFrameRoots outer,
+        root = (⟨0, initSevm proxyMsgRevert, initDevm proxyMsgRevert,
+          .error (.revert, final), outer⟩ : Exec.Deriv) ∨
+        root.exactInvocation implGuardedProg proxyAdr implAdr := by
+    intro root member
+    simp only [Exec.rawFrameRoots, List.mem_cons] at member
+    rcases member with rfl | member
+    · exact Or.inl rfl
+    · exact Or.inr (descendantRoots root member)
+  refine ⟨final, outer, hprog, hexec, rootCases, hout, hgas, hstate, ?_, ?_⟩
   · exact hftra
   · exact hflogs
 

@@ -105,6 +105,11 @@ import Blanc.Weth10Dormant
 import Blanc.BeaconDepositModel
 import Blanc.BeaconDepositCorrectness
 import Blanc.ProxyPairSlots
+import Blanc.ProxyPairProgram
+import Blanc.ProxyPairImplementation
+import Blanc.ProxyPairExecution
+import Blanc.ProxyPairCorrespondence
+import Blanc.ProxyPairAuthority
 
 namespace Blanc
 

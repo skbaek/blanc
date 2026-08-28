@@ -43,6 +43,8 @@ import Blanc.Weth10AllowanceDispatch
 import Blanc.Weth10Hardened
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
+import Blanc.ProxyPairCorrespondence
+import Blanc.ProxyPairAuthority
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
@@ -777,3 +779,72 @@ import Blanc.LidoCircuitBreakerPinnedTargetCompositionControl
 #print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_closedPublicPause
 #print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCallFixture_nonempty
 #print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCall_nonchildless_noninterference_closed
+#print axioms Blanc.ProxyPair.implementationSlotLit_eq_slot
+#print axioms Blanc.ProxyPair.proxyProg_compiles
+#print axioms Blanc.ProxyPair.proxyProg_compile
+#print axioms Blanc.ProxyPair.proxyBytes_length
+#print axioms Blanc.ProxyPair.proxyCode_notDelegation
+#print axioms Blanc.ProxyPair.implGuardedProg_compiles
+#print axioms Blanc.ProxyPair.implGuardedProg_compile
+#print axioms Blanc.ProxyPair.implGuardedBytes_length
+#print axioms Blanc.ProxyPair.implGuardedCode_notDelegation
+#print axioms Blanc.ProxyPair.implSlot_ne_implementationSlot
+#print axioms Blanc.ProxyPair.implSlot_ne_adminSlot
+#print axioms Blanc.ProxyPair.implSlot_ne_beaconSlot
+#print axioms Blanc.ProxyPair.implementationSlot_ne_implSlot
+#print axioms Blanc.ProxyPair.adminSlot_ne_implSlot
+#print axioms Blanc.ProxyPair.beaconSlot_ne_implSlot
+#print axioms Blanc.ProxyPair.implBodyGas_eq
+#print axioms Blanc.ProxyPair.implGuardedSuccessGas_eq
+#print axioms Blanc.ProxyPair.implGuardedRevertGas_eq
+#print axioms Blanc.ProxyPair.implGuardedSuccessEntryGas_eq
+#print axioms Blanc.ProxyPair.implGuardedRevertEntryGas_eq
+#print axioms Blanc.ProxyPair.implSuccess_runCompiledTo
+#print axioms Blanc.ProxyPair.implGuarded_runCompiledTo_nonzero
+#print axioms Blanc.ProxyPair.implGuarded_runCompiledTo_zero
+#print axioms Blanc.ProxyPair.implGuarded_static_sstore_halt
+#print axioms Blanc.ProxyPair.implGuarded_static_halt_exec
+#print axioms Blanc.ProxyPair.proxyAdr_ne_implAdr
+#print axioms Blanc.ProxyPair.pairState_proxyAcct
+#print axioms Blanc.ProxyPair.pairState_implAcct
+#print axioms Blanc.ProxyPair.pairState_proxyCode
+#print axioms Blanc.ProxyPair.pairState_implCode
+#print axioms Blanc.ProxyPair.pairState_proxySlot
+#print axioms Blanc.ProxyPair.pairState_implSlot_zero
+#print axioms Blanc.ProxyPair.pairState_proxyImplSlot_zero
+#print axioms Blanc.ProxyPair.successData_length
+#print axioms Blanc.ProxyPair.revertData_length
+#print axioms Blanc.ProxyPair.proxy_call_gas_split
+#print axioms Blanc.ProxyPair.pairBenv_impl_not_precompile
+#print axioms Blanc.ProxyPair.proxyMsgSuccess_code
+#print axioms Blanc.ProxyPair.proxyMsgRevert_code
+#print axioms Blanc.ProxyPair.proxyMsgSuccess_data
+#print axioms Blanc.ProxyPair.proxyMsgRevert_data
+#print axioms Blanc.ProxyPair.proxyMsgSuccess_gas
+#print axioms Blanc.ProxyPair.proxyMsgRevert_gas
+#print axioms Blanc.ProxyPair.proxyMsgSuccess_target
+#print axioms Blanc.ProxyPair.proxyMsgRevert_target
+#print axioms Blanc.ProxyPair.proxyMsgSuccess_caller
+#print axioms Blanc.ProxyPair.proxyMsgRevert_caller
+#print axioms Blanc.ProxyPair.proxyFallback_eq_prefix
+#print axioms Blanc.ProxyPair.proxySuccessChildMsg_exec
+#print axioms Blanc.ProxyPair.proxyProg_success_runCompiledTo
+#print axioms Blanc.ProxyPair.proxyRevertChildMsg_exec
+#print axioms Blanc.ProxyPair.proxyProg_revert_runCompiledTo
+#print axioms Blanc.ProxyPair.forwardBudgetWitness_27224
+#print axioms Blanc.ProxyPair.forwardBudget_27224
+#print axioms Blanc.ProxyPair.proxyCorrespondenceMsg_premises
+#print axioms Blanc.ProxyPair.processMessage_correspondence_premises_satisfiable
+#print axioms Blanc.ProxyPair.processMessage_correspondence
+#print axioms Blanc.ProxyPair.processMessage_static_halt_to_revert
+#print axioms Blanc.ProxyPair.processMessage_property_transport
+#print axioms Blanc.ProxyPair.settledObservable_rejects_direct_clean_proxy_error
+#print axioms Blanc.ProxyPair.settledObservable_rejects_direct_error_proxy_clean
+#print axioms Blanc.ProxyPair.settledObservable_rejects_output_mismatch
+#print axioms Blanc.ProxyPair.settledObservable_rejects_outer_ok_error
+#print axioms Blanc.ProxyPair.settledObservable_rejects_outer_error_ok
+#print axioms Blanc.ProxyPair.settledObservable_rejects_reverse_revert_halt
+#print axioms Blanc.ProxyPair.proxy_entrySstoreFree
+#print axioms Blanc.ProxyPair.implGuarded_entrySstoreFree_rejected
+#print axioms Blanc.ProxyPair.proxyProg_success_successfulSstore_sourceSite
+#print axioms Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite
