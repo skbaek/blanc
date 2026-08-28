@@ -52,8 +52,8 @@ import sys
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "Compiled", "DeploymentCompiled", "DeploymentMessage", "Forward", "Reverts", "ForwardCall",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
-          "ExecutionOccurrence", "CycleWriteFree", "TransientSettlement",
-          "SourceAttainment", "TransientInvariance"]
+          "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
+          "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],
@@ -120,6 +120,14 @@ CONTRACTS = {
                              "LidoCircuitBreakerCallBoundary",
                              "LidoCircuitBreakerObservation",
                              "LidoCircuitBreakerSuccess",
+                             "LidoCircuitBreakerPublicPause",
+                             "LidoCircuitBreakerPublicPauseControl",
+                             "LidoCircuitBreakerPinnedTarget",
+                             "LidoCircuitBreakerPinnedTargetControl",
+                             "LidoCircuitBreakerPinnedTargetComposition",
+                             "LidoCircuitBreakerPinnedTargetStubWalk",
+                             "LidoCircuitBreakerPinnedTargetStubCrossing",
+                             "LidoCircuitBreakerPinnedTargetCompositionControl",
                              "LidoCircuitBreakerCode",
                              "LidoCircuitBreakerDeploy",
                              "LidoCircuitBreakerDeploymentLayout",

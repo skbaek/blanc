@@ -83,6 +83,12 @@ OWNERS = {
     "callBoundary": ROOT / "Blanc/LidoCircuitBreakerCallBoundary.lean",
     "observation": ROOT / "Blanc/LidoCircuitBreakerObservation.lean",
     "success": ROOT / "Blanc/LidoCircuitBreakerSuccess.lean",
+    # Stage 6 lifted to the public pause entry, plus its concrete non-vacuity
+    # world.  These are additive altitude owners of the same hostile-world
+    # family, not a new target-honesty claim.
+    "publicPause": ROOT / "Blanc/LidoCircuitBreakerPublicPause.lean",
+    "publicPauseControl":
+        ROOT / "Blanc/LidoCircuitBreakerPublicPauseControl.lean",
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
@@ -119,6 +125,8 @@ MODULES = {
     "callBoundary": "Blanc.LidoCircuitBreakerCallBoundary",
     "observation": "Blanc.LidoCircuitBreakerObservation",
     "success": "Blanc.LidoCircuitBreakerSuccess",
+    "publicPause": "Blanc.LidoCircuitBreakerPublicPause",
+    "publicPauseControl": "Blanc.LidoCircuitBreakerPublicPauseControl",
 }
 
 REQUIRED = (
@@ -1038,6 +1046,22 @@ ROLES = {
             "e20a928c42aee513bd2e5b7acc1238ecc37bcd7a1c79742b782ea038640eb9b9",
         "PauseSuccessInputs.of_noninterference":
             "4ed80d8e7d93fd675e24c28a6ee37b60e3f5b8240672c9a48a2cc980b7c191bf",
+    },
+    # Public-entry altitude for the same Stage 6 family.  The concrete control
+    # owner below proves the entry premises and reached-state route inhabited.
+    "publicPause": {
+        "publicPause_reaches_pauseAfterSet":
+            "ba22f7371cffca7434090f1f898c2b42d2c6eeb2565d035f344fffbbcb56a133",
+        "pauseAfterSet_boundary_committed_outcomes":
+            "cfe3f72ee55de188ac5d47f5bec3fffb0fc8c2439b103d55d93a268a7ea4798c",
+        "publicPause_committed_outcomes":
+            "334ec0f7a5514ab18f27564be749c76faecfb1434b12b20aa7ba8b68f6941394",
+    },
+    "publicPauseControl": {
+        "pauseLastWorld_publicPausePremises":
+            "caae996d781a7d7b90b7c93198c87e1923888454d0c101fb75d9785717116aa7",
+        "pauseLastWorld_publicPauseReach":
+            "17e9968b398367207a98acc20f4fb46ea1c6da0867581fdeb03eac3d4dc9e840",
     },
 }
 

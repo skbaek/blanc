@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerPauseAttainment
+import Blanc.TransientInvariance
 
 /-!
 # The pause `.ok` routes to the expiry `SSTORE`
@@ -248,6 +249,156 @@ theorem pauseStaging_windows3 {sevm : Sevm} {stage devm' : Devm} {img : Bytes}
       ((MemWordAt.writeMiss hmemPrev (by decide) windowD9).acrossLine
         (by line_inv) rPush1)⟩
 
+/-! ## Outcome-generic public guard words -/
+
+private theorem of_run_tload_guard {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s Ninst.tload s') :
+    ∃ x, Stack.Diff [x] [s.getTransVal e.currentTarget x]
+      s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, hpop, hpush⟩
+  have pop := Devm.pop_of_pop hpop
+  have push := Devm.pushBurn_of_pushItem hpush
+  refine ⟨key, s₁.stack, pop.stack, ?_⟩
+  have hvalue : s₁.getTransVal e.currentTarget key =
+      s.getTransVal e.currentTarget key := by
+    unfold Devm.getTransVal
+    rw [pop.transientStorage]
+  rw [← hvalue]
+  exact push.stack
+
+private theorem prefix_of_tload_guard {e : Sevm} {x : B256} {xs : Stack}
+    {s s' : Devm} (run : Ninst.Run e s Ninst.tload s')
+    (hp : x :: xs <<+ s.stack) :
+    s.getTransVal e.currentTarget x :: xs <<+ s'.stack := by
+  rcases of_run_tload_guard run with ⟨x', tail, popped, pushed⟩
+  have hx : x = x' :=
+    (List.of_cons_pref_of_cons_pref hp (pref_of_split popped)).left
+  subst x'
+  exact append_pref pushed (of_append_pref popped hp)
+
+private theorem prefix_of_timestamp_guard {e : Sevm} {s s' : Devm}
+    {xs : Stack} (hp : xs <<+ s.stack)
+    (run : Ninst.Run e s Ninst.timestamp s') :
+    e.benvStat.time :: xs <<+ s'.stack := by
+  change Ninst.Run e s (.reg .timestamp) s' at run
+  rcases of_run_reg run with ⟨pc, instructionRun⟩
+  simp only [Rinst.run, Rinst.runCore] at instructionRun
+  exact prefix_of_push (Devm.pushBurn_of_pushItem instructionRun) hp
+
+/-- The reentrancy guard's taken-arm word, derived from the entry transient
+cell rather than from the terminal outcome. -/
+theorem pauseLockTest_word {sevm : Sevm} {start finish : Devm}
+    (unlocked : start.getTransVal sevm.currentTarget lockKey = 0)
+    (run : Line.Run sevm start pauseLockTest finish) :
+    ∀ w rest, finish.stack = w :: rest → w ≠ 0 := by
+  intro w rest hstack
+  unfold pauseLockTest at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, hnil⟩
+  cases hnil
+  have p1 := prefix_of_push (of_run_pushB256 q1) nil_pref
+  have p2 := prefix_of_tload_guard q2 p1
+  have p3 := prefix_of_iszero q3 p2
+  have hunlocked1 : s1.getTransVal sevm.currentTarget lockKey = 0 := by
+    unfold Devm.getTransVal at unlocked ⊢
+    rw [← (of_run_pushB256 q1).transientStorage]
+    exact unlocked
+  rw [head_of_stack_prefix p3 hstack, hunlocked1]
+  exact fun h => B256.zero_ne_one h.symm
+
+/-- The assignment guard's taken-arm word, derived from the persistent
+assignment cell at the pause body's entry. -/
+theorem pauseAssignedTest_word {sevm : Sevm} {entry start finish : Devm}
+    (storage : Devm.getStor start = Devm.getStor entry)
+    (assigned : entry.getStorVal sevm.currentTarget
+      (assignmentSlot (Sevm.argWord sevm 0)) = sevm.caller.toB256)
+    (run : Line.Run sevm start pauseAssignedTest finish) :
+    ∀ w rest, finish.stack = w :: rest → w ≠ 0 := by
+  intro w rest hstack
+  unfold pauseAssignedTest at run
+  rcases of_run_append [Ninst.pushB256 1, Ninst.pushB256 lockKey,
+      Ninst.tstore] run with ⟨s0, r0, run⟩
+  rcases of_run_append (arg 0) run with ⟨s1, r1, run⟩
+  rcases of_run_append (tagTop assignmentRegion) run with ⟨s2, r2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
+  rcases Line.of_run_cons run with ⟨s4, q4, run⟩
+  rcases Line.of_run_cons run with ⟨s5, q5, hnil⟩
+  cases hnil
+  have p1 := prefix_of_arg nil_pref r1
+  unfold tagTop at r2
+  rcases Line.of_run_cons r2 with ⟨t1, q21, r2⟩
+  rcases Line.of_run_cons r2 with ⟨t2, q22, hnil2⟩
+  cases hnil2
+  have p2 := prefix_of_or q22
+    (prefix_of_push (of_run_pushB256 q21) p1)
+  obtain ⟨value, p3, hvalue⟩ := prefix_of_sload q3 p2
+  have p4 := prefix_of_push (of_run_caller q4) p3
+  have p5 := prefix_of_eq q5 p4
+  have hstorage : Devm.getStor s2 = Devm.getStor entry :=
+    (Ninst.Hinv.inv (f := Devm.getStor) q22).symm.trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) q21).symm.trans
+        ((Line.of_inv Devm.getStor (by line_inv) r1).symm.trans
+          ((Line.of_inv Devm.getStor (by line_inv) r0).symm.trans storage)))
+  have hvalue' : value = sevm.caller.toB256 := by
+    rw [hvalue]
+    change s2.getStorVal sevm.currentTarget
+        (assignmentSlot (Sevm.argWord sevm 0)) = _
+    rw [show s2.getStorVal sevm.currentTarget
+        (assignmentSlot (Sevm.argWord sevm 0)) =
+          entry.getStorVal sevm.currentTarget
+            (assignmentSlot (Sevm.argWord sevm 0)) from
+      congrArg (fun stor : Adr → Stor =>
+        (stor sevm.currentTarget).get
+          (assignmentSlot (Sevm.argWord sevm 0))) hstorage]
+    exact assigned
+  rw [head_of_stack_prefix p5 hstack, hvalue']
+  rw [B256.eqCheck, if_pos rfl]
+  exact fun h => B256.zero_ne_one h.symm
+
+/-- The liveness guard's taken-arm word, derived from the caller's expiry cell
+and the entry timestamp. -/
+theorem pauseLiveTest_word {sevm : Sevm} {entry start finish : Devm}
+    (storage : Devm.getStor start = Devm.getStor entry)
+    (live : sevm.benvStat.time < entry.getStorVal sevm.currentTarget
+      (expirySlot sevm.caller.toB256))
+    (run : Line.Run sevm start pauseLiveTest finish) :
+    ∀ w rest, finish.stack = w :: rest → w ≠ 0 := by
+  intro w rest hstack
+  unfold pauseLiveTest at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  rcases of_run_append (tagTop expiryRegion) run with ⟨s2, r2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
+  rcases Line.of_run_cons run with ⟨s4, q4, run⟩
+  rcases Line.of_run_cons run with ⟨s5, q5, hnil⟩
+  cases hnil
+  have p1 := prefix_of_push (of_run_caller q1) nil_pref
+  unfold tagTop at r2
+  rcases Line.of_run_cons r2 with ⟨t1, q21, r2⟩
+  rcases Line.of_run_cons r2 with ⟨t2, q22, hnil2⟩
+  cases hnil2
+  have p2 := prefix_of_or q22
+    (prefix_of_push (of_run_pushB256 q21) p1)
+  obtain ⟨expiry, p3, hexpiry⟩ := prefix_of_sload q3 p2
+  have p4 := prefix_of_timestamp_guard p3 q4
+  have p5 := prefix_of_lt q5 p4
+  have hstorage : Devm.getStor s2 = Devm.getStor entry :=
+    (Ninst.Hinv.inv (f := Devm.getStor) q22).symm.trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) q21).symm.trans
+        ((Ninst.Hinv.inv (f := Devm.getStor) q1).symm.trans storage))
+  have hexpiry' : expiry = entry.getStorVal sevm.currentTarget
+      (expirySlot sevm.caller.toB256) := by
+    rw [hexpiry]
+    change s2.getStorVal sevm.currentTarget
+        (expirySlot sevm.caller.toB256) = _
+    exact congrArg (fun stor : Adr → Stor =>
+      (stor sevm.currentTarget).get (expirySlot sevm.caller.toB256)) hstorage
+  rw [head_of_stack_prefix p5 hstack, hexpiry']
+  rw [B256.ltCheck, if_pos live]
+  exact fun h => B256.zero_ne_one h.symm
+
 /-! ## The pause body, on a successful outcome
 
 The revert flavour (`pause_routeTo_setPauserCall`) pays for the two calldata
@@ -344,6 +495,497 @@ theorem pause_routeTo_setPauserCall_ok (dp : DeployParams)
     ((Line.of_inv Devm.getCode (by unfold pauseStagingLine; line_inv)
       r10).symm.trans d9) r10 tail10
 
+private theorem runToNextResult {P : Prop} {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {instruction : Ninst} {body : Func} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (.next instruction body) ex)
+    (tailResult : ∀ devm' : Devm,
+      Ninst.RunCompiled sevm devm instruction devm' →
+      Func.RunCompiledTo fs sevm devm' body ex → P) : P := by
+  cases h with
+  | next instructionRun tail => exact tailResult _ instructionRun tail
+
+private theorem runToLineResult {P : Prop} {fs : List Func} {sevm : Sevm}
+    {body : Func} {ex : Execution} :
+    ∀ (line : Line) {devm : Devm}
+      (_h : Func.RunCompiledTo fs sevm devm (line +++ body) ex),
+      (∀ devm' : Devm, Line.Run sevm devm line devm' →
+        Func.RunCompiledTo fs sevm devm' body ex → P) → P
+  | [], devm, h, bodyResult => bodyResult devm .nil h
+  | instruction :: line, devm, h, bodyResult => by
+      exact runToNextResult h (fun devm' instructionRun tail =>
+        runToLineResult line tail (fun devm'' lineRun tailBody =>
+          bodyResult devm''
+            (.cons (Ninst.Run.of_runCompiled instructionRun) lineRun)
+            tailBody))
+
+private theorem runToCallResult {P : Prop} {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {index : Nat} {body : Func} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (.call index) ex)
+    (lookup : fs[index]? = some body)
+    (bodyResult : ∀ devm' : Devm,
+      Devm.BurnBy (gVerylow + gMid + gJumpdest) devm devm' →
+      Func.RunCompiledTo fs sevm devm' body ex → P) : P := by
+  cases h with
+  | call lookup' room burn tail =>
+      have bodyEq : body = _ := Option.some.inj (lookup.symm.trans lookup')
+      subst bodyEq
+      exact bodyResult _ burn tail
+
+private theorem runToBranchLeftResult {P : Prop} {fs : List Func}
+    {sevm : Sevm} {devm : Devm} {left right : Func} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) ex)
+    (branchWord : ∀ w : B256, ∀ rest : Stack,
+      devm.stack = w :: rest → w = 0)
+    (armResult : ∀ devm' : Devm,
+      Devm.PopBurnBy [0] (gVerylow + gHigh) devm devm' →
+      Func.RunCompiledTo fs sevm devm' left ex → P) : P := by
+  cases h with
+  | zero room pop tail => exact armResult _ pop tail
+  | succ nonzero room pop tail =>
+      exact absurd (branchWord _ _ pop.stack) nonzero
+
+private theorem runToBranchRightResult {P : Prop} {fs : List Func}
+    {sevm : Sevm} {devm : Devm} {left right : Func} {ex : Execution}
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) ex)
+    (branchWord : ∀ w : B256, ∀ rest : Stack,
+      devm.stack = w :: rest → w ≠ 0)
+    (armResult : ∀ (devm' : Devm) (word : B256),
+      Devm.PopBurnBy [word] (gVerylow + gHigh + gJumpdest) devm devm' →
+      Func.RunCompiledTo fs sevm devm' right ex → P) : P := by
+  cases h with
+  | zero room pop tail => exact absurd rfl (branchWord _ _ pop.stack)
+  | succ nonzero room pop tail => exact armResult _ _ pop tail
+
+/-- Continuation form of the outcome-generic pause-body walk. -/
+theorem pause_to_setPauserCall_any (dp : DeployParams) {P : Prop}
+    {sevm : Sevm} {devm : Devm} {ex : Execution}
+    (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
+      pause ex)
+    (dataLength : sevm.data.length = 36)
+    (targetCanonical : ValidAdr (Sevm.argWord sevm 0))
+    (unlocked : devm.getTransVal sevm.currentTarget lockKey = 0)
+    (assigned : devm.getStorVal sevm.currentTarget
+      (assignmentSlot (Sevm.argWord sevm 0)) = sevm.caller.toB256)
+    (live : sevm.benvStat.time < devm.getStorVal sevm.currentTarget
+      (expirySlot sevm.caller.toB256))
+    (callResult : ∀ (stage devm' : Devm),
+      Devm.getStor devm' = Devm.getStor devm →
+      stage.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
+      Line.Run sevm stage pauseStagingLine devm' →
+      ∀ _tail : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+        sevm devm' (Func.call setPauserSlot) ex, P) : P := by
+  refine runToLineResult pauseStaticArgsTest h (fun s0 r0 tail0 => ?_)
+  have g0 : Devm.getStor s0 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor (by unfold pauseStaticArgsTest; line_inv)
+      r0).symm
+  have m0 : s0.memory = devm.memory :=
+    (Line.of_inv Devm.memory (by unfold pauseStaticArgsTest; line_inv) r0).symm
+  have d0 : Devm.getCode s0 = Devm.getCode devm :=
+    (Line.of_inv Devm.getCode (by unfold pauseStaticArgsTest; line_inv)
+      r0).symm
+  have t0 : s0.transientStorage = devm.transientStorage :=
+    (Line.of_inv Devm.transientStorage
+      (by unfold pauseStaticArgsTest; line_inv) r0).symm
+  refine runToBranchLeftResult tail0 (staticArgs_word dataLength devm s0 r0)
+    (fun s1 hpop1 tail1 => ?_)
+  have g1 := (getStor_of_state hpop1.state).symm.trans g0
+  have m1 := hpop1.memory.symm.trans m0
+  have d1 := (getCode_of_state hpop1.state).symm.trans d0
+  have t1 := (Devm.PopBurn.of_popBurnBy hpop1).transientStorage_eq.trans t0
+  refine runToLineResult (arg 0 ++ checkNonAddress) tail1
+    (fun s2 r2 tail2 => ?_)
+  have g2 := (Line.of_inv Devm.getStor (by line_inv) r2).symm.trans g1
+  have m2 := (Line.of_inv Devm.memory (by line_inv) r2).symm.trans m1
+  have d2 := (Line.of_inv Devm.getCode (by line_inv) r2).symm.trans d1
+  have t2 : s2.transientStorage = devm.transientStorage :=
+    (Line.of_inv Devm.transientStorage (by line_inv) r2).symm.trans t1
+  refine runToBranchLeftResult tail2
+    (canonicalArg_word targetCanonical s1 s2 r2)
+    (fun s3 hpop3 tail3 => ?_)
+  have g3 := (getStor_of_state hpop3.state).symm.trans g2
+  have m3 := hpop3.memory.symm.trans m2
+  have d3 := (getCode_of_state hpop3.state).symm.trans d2
+  have t3 := (Devm.PopBurn.of_popBurnBy hpop3).transientStorage_eq.trans t2
+  have unlocked3 : s3.getTransVal sevm.currentTarget lockKey = 0 := by
+    unfold Devm.getTransVal at unlocked ⊢
+    rw [t3]
+    exact unlocked
+  refine runToLineResult pauseLockTest tail3 (fun _s4 r4 tail4 => ?_)
+  have g4 := (Line.of_inv Devm.getStor (by unfold pauseLockTest; line_inv)
+    r4).symm.trans g3
+  have m4 := (Line.of_inv Devm.memory (by unfold pauseLockTest; line_inv)
+    r4).symm.trans m3
+  have d4 := (Line.of_inv Devm.getCode (by unfold pauseLockTest; line_inv)
+    r4).symm.trans d3
+  refine runToBranchRightResult tail4
+    (pauseLockTest_word unlocked3 r4)
+    (fun _s5 _w5 hpop5 tail5 => ?_)
+  have g5 := (getStor_of_state hpop5.state).symm.trans g4
+  have m5 := hpop5.memory.symm.trans m4
+  have d5 := (getCode_of_state hpop5.state).symm.trans d4
+  refine runToLineResult pauseAssignedTest tail5 (fun _s6 r6 tail6 => ?_)
+  have g6 := (Line.of_inv Devm.getStor
+    (by unfold pauseAssignedTest; line_inv) r6).symm.trans g5
+  have m6 := (Line.of_inv Devm.memory
+    (by unfold pauseAssignedTest; line_inv) r6).symm.trans m5
+  have d6 := (Line.of_inv Devm.getCode
+    (by unfold pauseAssignedTest; line_inv) r6).symm.trans d5
+  refine runToBranchRightResult tail6
+    (pauseAssignedTest_word g5 assigned r6)
+    (fun _s7 _w7 hpop7 tail7 => ?_)
+  have g7 := (getStor_of_state hpop7.state).symm.trans g6
+  have m7 := hpop7.memory.symm.trans m6
+  have d7 := (getCode_of_state hpop7.state).symm.trans d6
+  refine runToLineResult pauseLiveTest tail7 (fun _s8 r8 tail8 => ?_)
+  have g8 := (Line.of_inv Devm.getStor
+    (by unfold pauseLiveTest; line_inv) r8).symm.trans g7
+  have m8 := (Line.of_inv Devm.memory
+    (by unfold pauseLiveTest; line_inv) r8).symm.trans m7
+  have d8 := (Line.of_inv Devm.getCode
+    (by unfold pauseLiveTest; line_inv) r8).symm.trans d7
+  refine runToBranchRightResult tail8
+    (pauseLiveTest_word g7 live r8)
+    (fun _s9 _w9 hpop9 tail9 => ?_)
+  have g9 := (getStor_of_state hpop9.state).symm.trans g8
+  have m9 := hpop9.memory.symm.trans m8
+  have d9 := (getCode_of_state hpop9.state).symm.trans d8
+  refine runToLineResult pauseStagingLine tail9 (fun _s10 r10 tail10 => ?_)
+  exact callResult _ _
+    ((Line.of_inv Devm.getStor (by unfold pauseStagingLine; line_inv)
+      r10).symm.trans g9) m9
+    ((Line.of_inv Devm.getCode (by unfold pauseStagingLine; line_inv)
+      r10).symm.trans d9) r10 tail10
+
+/-- Outcome-generic route from the public pause body to its shared kernel
+call.  All five guards are computed from calldata and entry-state facts; no
+terminal outcome is used to refute an untaken arm. -/
+theorem pause_routeTo_setPauserCall_any (dp : DeployParams)
+    {sevm : Sevm} {devm : Devm} {ex : Execution}
+    {functionIndex : Nat} {steps : List Prog.SourceStep}
+    {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
+      pause ex)
+    (dataLength : sevm.data.length = 36)
+    (targetCanonical : ValidAdr (Sevm.argWord sevm 0))
+    (unlocked : devm.getTransVal sevm.currentTarget lockKey = 0)
+    (assigned : devm.getStorVal sevm.currentTarget
+      (assignmentSlot (Sevm.argWord sevm 0)) = sevm.caller.toB256)
+    (live : sevm.benvStat.time < devm.getStorVal sevm.currentTarget
+      (expirySlot sevm.caller.toB256))
+    (callRoute : ∀ (current : Prog.SourcePath) (stage devm' : Devm),
+      Devm.getStor devm' = Devm.getStor devm →
+      stage.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
+      Line.Run sevm stage pauseStagingLine devm' →
+      ∀ tail : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+        sevm devm' (Func.call setPauserSlot) ex,
+        Func.RunCompiledTo.RouteTo current tail targetPath targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h targetPath
+      targetInstruction := by
+  refine routeTo_line pauseStaticArgsTest h (fun s0 r0 tail0 => ?_)
+  have g0 : Devm.getStor s0 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor (by unfold pauseStaticArgsTest; line_inv)
+      r0).symm
+  have m0 : s0.memory = devm.memory :=
+    (Line.of_inv Devm.memory (by unfold pauseStaticArgsTest; line_inv) r0).symm
+  have d0 : Devm.getCode s0 = Devm.getCode devm :=
+    (Line.of_inv Devm.getCode (by unfold pauseStaticArgsTest; line_inv)
+      r0).symm
+  have t0 : s0.transientStorage = devm.transientStorage :=
+    (Line.of_inv Devm.transientStorage
+      (by unfold pauseStaticArgsTest; line_inv) r0).symm
+  refine routeTo_branchLeft_frame tail0 (staticArgs_word dataLength devm s0 r0)
+    (fun s1 hpop1 tail1 => ?_)
+  have g1 := (getStor_of_state hpop1.state).symm.trans g0
+  have m1 := hpop1.memory.symm.trans m0
+  have d1 := (getCode_of_state hpop1.state).symm.trans d0
+  have t1 := (Devm.PopBurn.of_popBurnBy hpop1).transientStorage_eq.trans t0
+  refine routeTo_line (arg 0 ++ checkNonAddress) tail1
+    (fun s2 r2 tail2 => ?_)
+  have g2 := (Line.of_inv Devm.getStor (by line_inv) r2).symm.trans g1
+  have m2 := (Line.of_inv Devm.memory (by line_inv) r2).symm.trans m1
+  have d2 := (Line.of_inv Devm.getCode (by line_inv) r2).symm.trans d1
+  have t2 : s2.transientStorage = devm.transientStorage :=
+    (Line.of_inv Devm.transientStorage (by line_inv) r2).symm.trans t1
+  refine routeTo_branchLeft_frame tail2
+    (canonicalArg_word targetCanonical s1 s2 r2)
+    (fun s3 hpop3 tail3 => ?_)
+  have g3 := (getStor_of_state hpop3.state).symm.trans g2
+  have m3 := hpop3.memory.symm.trans m2
+  have d3 := (getCode_of_state hpop3.state).symm.trans d2
+  have t3 := (Devm.PopBurn.of_popBurnBy hpop3).transientStorage_eq.trans t2
+  have unlocked3 : s3.getTransVal sevm.currentTarget lockKey = 0 := by
+    unfold Devm.getTransVal at unlocked ⊢
+    rw [t3]
+    exact unlocked
+  refine routeTo_line pauseLockTest tail3 (fun _s4 r4 tail4 => ?_)
+  have g4 := (Line.of_inv Devm.getStor (by unfold pauseLockTest; line_inv)
+    r4).symm.trans g3
+  have m4 := (Line.of_inv Devm.memory (by unfold pauseLockTest; line_inv)
+    r4).symm.trans m3
+  have d4 := (Line.of_inv Devm.getCode (by unfold pauseLockTest; line_inv)
+    r4).symm.trans d3
+  refine routeTo_branchRight_frame tail4
+    (pauseLockTest_word unlocked3 r4)
+    (fun _s5 _w5 hpop5 tail5 => ?_)
+  have g5 := (getStor_of_state hpop5.state).symm.trans g4
+  have m5 := hpop5.memory.symm.trans m4
+  have d5 := (getCode_of_state hpop5.state).symm.trans d4
+  refine routeTo_line pauseAssignedTest tail5 (fun _s6 r6 tail6 => ?_)
+  have g6 := (Line.of_inv Devm.getStor
+    (by unfold pauseAssignedTest; line_inv) r6).symm.trans g5
+  have m6 := (Line.of_inv Devm.memory
+    (by unfold pauseAssignedTest; line_inv) r6).symm.trans m5
+  have d6 := (Line.of_inv Devm.getCode
+    (by unfold pauseAssignedTest; line_inv) r6).symm.trans d5
+  refine routeTo_branchRight_frame tail6
+    (pauseAssignedTest_word g5 assigned r6)
+    (fun _s7 _w7 hpop7 tail7 => ?_)
+  have g7 := (getStor_of_state hpop7.state).symm.trans g6
+  have m7 := hpop7.memory.symm.trans m6
+  have d7 := (getCode_of_state hpop7.state).symm.trans d6
+  refine routeTo_line pauseLiveTest tail7 (fun _s8 r8 tail8 => ?_)
+  have g8 := (Line.of_inv Devm.getStor
+    (by unfold pauseLiveTest; line_inv) r8).symm.trans g7
+  have m8 := (Line.of_inv Devm.memory
+    (by unfold pauseLiveTest; line_inv) r8).symm.trans m7
+  have d8 := (Line.of_inv Devm.getCode
+    (by unfold pauseLiveTest; line_inv) r8).symm.trans d7
+  refine routeTo_branchRight_frame tail8
+    (pauseLiveTest_word g7 live r8)
+    (fun _s9 _w9 hpop9 tail9 => ?_)
+  have g9 := (getStor_of_state hpop9.state).symm.trans g8
+  have m9 := hpop9.memory.symm.trans m8
+  have d9 := (getCode_of_state hpop9.state).symm.trans d8
+  refine routeTo_line pauseStagingLine tail9 (fun _s10 r10 tail10 => ?_)
+  exact callRoute _ _ _
+    ((Line.of_inv Devm.getStor (by unfold pauseStagingLine; line_inv)
+      r10).symm.trans g9) m9
+    ((Line.of_inv Devm.getCode (by unfold pauseStagingLine; line_inv)
+      r10).symm.trans d9) r10 tail10
+
+private theorem pauseEqCheck_ne_zero :
+    selector "pause" [.address] =? selector "pause" [.address] ≠ 0 := by
+  decide +kernel
+
+private theorem pauseGtPause_eq_zero :
+    selector "pause" [.address] >? selector "pause" [.address] = 0 := by
+  decide +kernel
+
+private theorem minHeartbeatGtPause_ne_zero :
+    selector "MIN_HEARTBEAT_INTERVAL" [] >? selector "pause" [.address] ≠ 0 := by
+  decide +kernel
+
+private theorem pauseLinearDispatch_to_pause_transient (dp : DeployParams)
+    {P : Prop} {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {out : Execution} {xs : List B256}
+    (h : Func.RunCompiledTo fs sevm devm
+      (linearDispatchWith fallbackSlot (List.take 4 (List.drop 9 (funcs dp))))
+      out)
+    (stackPrefix : selector "pause" [.address] :: xs <<+ devm.stack)
+    (bodyResult : ∀ (devm' : Devm),
+      Devm.getStor devm' = Devm.getStor devm →
+      devm'.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
+      devm'.transientStorage = devm.transientStorage →
+      ∀ _tail : Func.RunCompiledTo fs sevm devm' pause out, P) : P := by
+  refine runToLineResult (linearTest (selector "pause" [.address])) h
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_linearTest stackPrefix run1
+  have g1 := (Line.of_inv Devm.getStor (by line_inv) run1).symm
+  have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm
+  have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm
+  have t1 := (Line.of_inv Devm.transientStorage (by line_inv) run1).symm
+  refine runToBranchRightResult tail1
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p1 hs]
+      exact pauseEqCheck_ne_zero)
+    (fun _s2 _w2 hpop2 tail2 => ?_)
+  have g2 := (getStor_of_state hpop2.state).symm.trans g1
+  have m2 := hpop2.memory.symm.trans m1
+  have d2 := (getCode_of_state hpop2.state).symm.trans d1
+  have t2 := (Devm.PopBurn.of_popBurnBy hpop2).transientStorage_eq.trans t1
+  refine runToLineResult [Ninst.pop] tail2 (fun _s3 run3 tail3 => ?_)
+  exact bodyResult _
+    ((Line.of_inv Devm.getStor (by line_inv) run3).symm.trans g2)
+    ((Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2)
+    ((Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2)
+    ((Line.of_inv Devm.transientStorage (by line_inv) run3).symm.trans t2)
+    tail3
+
+/-- Continuation form of the transient-preserving pause dispatcher. -/
+theorem dispatch_to_pause_transient (dp : DeployParams) {P : Prop}
+    {fs : List Func} {sevm : Sevm} {devm : Devm} {out : Execution}
+    (h : Func.RunCompiledTo fs sevm devm
+      (fsig +++ hybridDispatchWith fallbackSlot (funcs dp)) out)
+    (selectorEq : Sevm.selector sevm = selector "pause" [.address])
+    (bodyResult : ∀ (devm' : Devm),
+      Devm.getStor devm' = Devm.getStor devm →
+      devm'.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
+      devm'.transientStorage = devm.transientStorage →
+      ∀ _tail : Func.RunCompiledTo fs sevm devm' pause out, P) : P := by
+  refine runToLineResult fsig h (fun s0 run0 tail0 => ?_)
+  have p0 : Sevm.selector sevm :: [] <<+ s0.stack := prefix_of_fsig nil_pref run0
+  rw [selectorEq] at p0
+  have g0 : Devm.getStor s0 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor (by line_inv) run0).symm
+  have m0 : s0.memory = devm.memory :=
+    (Line.of_inv Devm.memory (by line_inv) run0).symm
+  have d0 : Devm.getCode s0 = Devm.getCode devm :=
+    (Line.of_inv Devm.getCode (by line_inv) run0).symm
+  have t0 : s0.transientStorage = devm.transientStorage :=
+    (Line.of_inv Devm.transientStorage (by line_inv) run0).symm
+  refine runToLineResult (splitTest (selector "pause" [.address])) tail0
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_splitTest p0 run1
+  have g1 := (Line.of_inv Devm.getStor (by line_inv) run1).symm.trans g0
+  have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm.trans m0
+  have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm.trans d0
+  have t1 := (Line.of_inv Devm.transientStorage (by line_inv) run1).symm.trans t0
+  refine runToBranchLeftResult tail1
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p1 hs]
+      exact pauseGtPause_eq_zero)
+    (fun _s2 hpop2 tail2 => ?_)
+  have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
+  have g2 := (getStor_of_state hpop2.state).symm.trans g1
+  have m2 := hpop2.memory.symm.trans m1
+  have d2 := (getCode_of_state hpop2.state).symm.trans d1
+  have t2 := (Devm.PopBurn.of_popBurnBy hpop2).transientStorage_eq.trans t1
+  refine runToLineResult (splitTest (selector "MIN_HEARTBEAT_INTERVAL" [])) tail2
+    (fun _s3 run3 tail3 => ?_)
+  have p3 := prefix_of_splitTest p2 run3
+  have g3 := (Line.of_inv Devm.getStor (by line_inv) run3).symm.trans g2
+  have m3 := (Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2
+  have d3 := (Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2
+  have t3 := (Line.of_inv Devm.transientStorage (by line_inv) run3).symm.trans t2
+  refine runToBranchRightResult tail3
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p3 hs]
+      exact minHeartbeatGtPause_ne_zero)
+    (fun _s4 _w4 hpop4 tail4 => ?_)
+  have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
+  have g4 := (getStor_of_state hpop4.state).symm.trans g3
+  have m4 := hpop4.memory.symm.trans m3
+  have d4 := (getCode_of_state hpop4.state).symm.trans d3
+  have t4 := (Devm.PopBurn.of_popBurnBy hpop4).transientStorage_eq.trans t3
+  exact pauseLinearDispatch_to_pause_transient dp tail4 p4
+    (fun devm' hstor hmem hcode htrans bodyTail =>
+      bodyResult devm'
+        (hstor.trans g4) (hmem.trans m4) (hcode.trans d4)
+        (htrans.trans t4) bodyTail)
+
+private theorem pauseLinearDispatch_routeTo_pause_transient (dp : DeployParams)
+    {fs : List Func} {sevm : Sevm} {devm : Devm} {out : Execution}
+    {xs : List B256} {targetPath : Prog.SourcePath}
+    {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo fs sevm devm
+      (linearDispatchWith fallbackSlot (List.take 4 (List.drop 9 (funcs dp))))
+      out)
+    (stackPrefix : selector "pause" [.address] :: xs <<+ devm.stack)
+    (bodyRoute : ∀ (current : Prog.SourcePath) (devm' : Devm),
+      Devm.getStor devm' = Devm.getStor devm →
+      devm'.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
+      devm'.transientStorage = devm.transientStorage →
+      ∀ tail : Func.RunCompiledTo fs sevm devm' pause out,
+        Func.RunCompiledTo.RouteTo current tail targetPath targetInstruction) :
+    Func.RunCompiledTo.RouteTo current h targetPath targetInstruction := by
+  refine routeTo_line (linearTest (selector "pause" [.address])) h
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_linearTest stackPrefix run1
+  have g1 := (Line.of_inv Devm.getStor (by line_inv) run1).symm
+  have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm
+  have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm
+  have t1 := (Line.of_inv Devm.transientStorage (by line_inv) run1).symm
+  refine routeTo_branchRight_frame tail1
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p1 hs]
+      exact pauseEqCheck_ne_zero)
+    (fun _s2 _w2 hpop2 tail2 => ?_)
+  have g2 := (getStor_of_state hpop2.state).symm.trans g1
+  have m2 := hpop2.memory.symm.trans m1
+  have d2 := (getCode_of_state hpop2.state).symm.trans d1
+  have t2 := (Devm.PopBurn.of_popBurnBy hpop2).transientStorage_eq.trans t1
+  refine routeTo_line [Ninst.pop] tail2 (fun _s3 run3 tail3 => ?_)
+  exact bodyRoute _ _
+    ((Line.of_inv Devm.getStor (by line_inv) run3).symm.trans g2)
+    ((Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2)
+    ((Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2)
+    ((Line.of_inv Devm.transientStorage (by line_inv) run3).symm.trans t2)
+    tail3
+
+/-- Dispatcher route that also carries the transient-storage image needed
+by the outcome-generic pause guard proof. -/
+theorem dispatch_routeTo_pause_transient (dp : DeployParams)
+    {fs : List Func} {sevm : Sevm} {devm : Devm} {out : Execution}
+    {functionIndex : Nat} {steps : List Prog.SourceStep}
+    {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo fs sevm devm
+      (fsig +++ hybridDispatchWith fallbackSlot (funcs dp)) out)
+    (selectorEq : Sevm.selector sevm = selector "pause" [.address])
+    (bodyRoute : ∀ (current : Prog.SourcePath) (devm' : Devm),
+      Devm.getStor devm' = Devm.getStor devm →
+      devm'.memory = devm.memory →
+      Devm.getCode devm' = Devm.getCode devm →
+      devm'.transientStorage = devm.transientStorage →
+      ∀ tail : Func.RunCompiledTo fs sevm devm' pause out,
+        Func.RunCompiledTo.RouteTo current tail targetPath targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨functionIndex, steps⟩ h targetPath
+      targetInstruction := by
+  refine routeTo_line fsig h (fun s0 run0 tail0 => ?_)
+  have p0 : Sevm.selector sevm :: [] <<+ s0.stack := prefix_of_fsig nil_pref run0
+  rw [selectorEq] at p0
+  have g0 : Devm.getStor s0 = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor (by line_inv) run0).symm
+  have m0 : s0.memory = devm.memory :=
+    (Line.of_inv Devm.memory (by line_inv) run0).symm
+  have d0 : Devm.getCode s0 = Devm.getCode devm :=
+    (Line.of_inv Devm.getCode (by line_inv) run0).symm
+  have t0 : s0.transientStorage = devm.transientStorage :=
+    (Line.of_inv Devm.transientStorage (by line_inv) run0).symm
+  refine routeTo_line (splitTest (selector "pause" [.address])) tail0
+    (fun _s1 run1 tail1 => ?_)
+  have p1 := prefix_of_splitTest p0 run1
+  have g1 := (Line.of_inv Devm.getStor (by line_inv) run1).symm.trans g0
+  have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm.trans m0
+  have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm.trans d0
+  have t1 := (Line.of_inv Devm.transientStorage (by line_inv) run1).symm.trans t0
+  refine routeTo_branchLeft_frame tail1
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p1 hs]
+      exact pauseGtPause_eq_zero)
+    (fun _s2 hpop2 tail2 => ?_)
+  have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
+  have g2 := (getStor_of_state hpop2.state).symm.trans g1
+  have m2 := hpop2.memory.symm.trans m1
+  have d2 := (getCode_of_state hpop2.state).symm.trans d1
+  have t2 := (Devm.PopBurn.of_popBurnBy hpop2).transientStorage_eq.trans t1
+  refine routeTo_line (splitTest (selector "MIN_HEARTBEAT_INTERVAL" [])) tail2
+    (fun _s3 run3 tail3 => ?_)
+  have p3 := prefix_of_splitTest p2 run3
+  have g3 := (Line.of_inv Devm.getStor (by line_inv) run3).symm.trans g2
+  have m3 := (Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2
+  have d3 := (Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2
+  have t3 := (Line.of_inv Devm.transientStorage (by line_inv) run3).symm.trans t2
+  refine routeTo_branchRight_frame tail3
+    (fun _w _rest hs => by
+      rw [head_of_stack_prefix p3 hs]
+      exact minHeartbeatGtPause_ne_zero)
+    (fun _s4 _w4 hpop4 tail4 => ?_)
+  have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
+  have g4 := (getStor_of_state hpop4.state).symm.trans g3
+  have m4 := hpop4.memory.symm.trans m3
+  have d4 := (getCode_of_state hpop4.state).symm.trans d3
+  have t4 := (Devm.PopBurn.of_popBurnBy hpop4).transientStorage_eq.trans t3
+  exact pauseLinearDispatch_routeTo_pause_transient dp tail4 p4
+    (fun current devm' hstor hmem hcode htrans bodyTail =>
+      bodyRoute current devm'
+        (hstor.trans g4) (hmem.trans m4) (hcode.trans d4)
+        (htrans.trans t4) bodyTail)
+
 /-- The whole pause route down to `setPauserKernel`'s entry on a successful
 walk, with the four staged memory windows and the storage relation the
 kernel's second branch needs.  The `.ok` sibling of
@@ -393,6 +1035,210 @@ theorem runtimeMain_routeTo_pauseKernel_ok (dp : DeployParams)
   refine dispatch_routeTo_pause dp arm selectorEq
     (fun _current pauseEntry hstor hmem hcode bodyTail => ?_)
   refine pause_routeTo_setPauserCall_ok dp bodyTail
+    (fun _c stageState callState hstor' hmem' hcode' staging callTail => ?_)
+  obtain ⟨wT, wN, wC, wD⟩ := pauseStaging_windows3
+    (MemImage.of_memory_eq (hmem'.trans (hmem.trans mb)) image) staging
+  have wD' : MemWordAt callState (durationWord * 32).toNat
+      (Devm.getStorVal devm sevm.currentTarget pauseDurationSlot) := by
+    rw [show Devm.getStorVal devm sevm.currentTarget pauseDurationSlot
+          = Devm.getStorVal stageState sevm.currentTarget pauseDurationSlot from
+        congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get pauseDurationSlot)
+          ((Line.of_inv Devm.getStor (by unfold pauseStagingLine; line_inv)
+            staging).trans (hstor'.trans (hstor.trans gb))).symm]
+    exact wD
+  refine routeTo_call (body := setPauserKernel) callTail
+    (by simp [runtime, aux, setPauserSlot]) (fun kernelStart kburn ktail => ?_)
+  exact kernelRoute kernelStart
+    (MemWordAt.of_memory_eq kburn.memory.symm wT)
+    (MemWordAt.of_memory_eq kburn.memory.symm wN)
+    (MemWordAt.of_memory_eq kburn.memory.symm wC)
+    (MemWordAt.of_memory_eq kburn.memory.symm wD')
+    ((getStor_of_state kburn.state).symm.trans
+      (hstor'.trans (hstor.trans gb)))
+    ((congrFun ((getCode_of_state kburn.state).symm.trans
+      (hcode'.trans (hcode.trans db))) (Sevm.argWord sevm 0).toAdr).trans
+      codeAt) ktail
+
+/-- Continuation form of the outcome-generic production-entry walk. -/
+theorem runtimeMain_to_pauseKernel_any (dp : DeployParams) {P : Prop}
+    {sevm : Sevm} {devm : Devm} {ex : Execution} {img : Bytes} {code : ByteArray}
+    (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
+      (runtime dp).main ex)
+    (image : MemImage devm img)
+    (codeAt : CodeAt devm (Sevm.argWord sevm 0).toAdr code)
+    (valueZero : sevm.value = 0)
+    (dataLength : sevm.data.length = 36)
+    (targetCanonical : ValidAdr (Sevm.argWord sevm 0))
+    (unlocked : devm.getTransVal sevm.currentTarget lockKey = 0)
+    (assigned : devm.getStorVal sevm.currentTarget
+      (assignmentSlot (Sevm.argWord sevm 0)) = sevm.caller.toB256)
+    (live : sevm.benvStat.time < devm.getStorVal sevm.currentTarget
+      (expirySlot sevm.caller.toB256))
+    (selectorEq : Sevm.selector sevm = selector "pause" [.address])
+    (kernelResult : ∀ kernelStart : Devm,
+      MemWordAt kernelStart (targetWord * 32).toNat (Sevm.argWord sevm 0) →
+      MemWordAt kernelStart (newPauserWord * 32).toNat 0 →
+      MemWordAt kernelStart (continuationWord * 32).toNat 1 →
+      MemWordAt kernelStart (durationWord * 32).toNat
+        (Devm.getStorVal devm sevm.currentTarget pauseDurationSlot) →
+      Devm.getStor kernelStart = Devm.getStor devm →
+      CodeAt kernelStart (Sevm.argWord sevm 0).toAdr code →
+      ∀ _tail : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
+        kernelStart setPauserKernel ex, P) : P := by
+  refine runToLineResult runtimeMainEntryPrefix h (fun entry lineRun tail => ?_)
+  have ge : Devm.getStor entry = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor (by unfold runtimeMainEntryPrefix; line_inv)
+      lineRun).symm
+  have me : entry.memory = devm.memory :=
+    (Line.of_inv Devm.memory (by unfold runtimeMainEntryPrefix; line_inv)
+      lineRun).symm
+  have de : Devm.getCode entry = Devm.getCode devm :=
+    (Line.of_inv Devm.getCode (by unfold runtimeMainEntryPrefix; line_inv)
+      lineRun).symm
+  have te : entry.transientStorage = devm.transientStorage :=
+    (Line.of_inv Devm.transientStorage
+      (by unfold runtimeMainEntryPrefix; line_inv) lineRun).symm
+  refine runToBranchLeftResult tail
+    (entryGuard_word (devm := devm) valueZero dataLength entry lineRun)
+    (fun body hpop arm => ?_)
+  have gb := (getStor_of_state hpop.state).symm.trans ge
+  have mb := hpop.memory.symm.trans me
+  have db := (getCode_of_state hpop.state).symm.trans de
+  have tb := (Devm.PopBurn.of_popBurnBy hpop).transientStorage_eq.trans te
+  refine dispatch_to_pause_transient dp arm selectorEq
+    (fun pauseEntry hstor hmem hcode htrans bodyTail => ?_)
+  have unlockedBody : pauseEntry.getTransVal sevm.currentTarget lockKey = 0 := by
+    unfold Devm.getTransVal at unlocked ⊢
+    rw [htrans.trans tb]
+    exact unlocked
+  have assignedBody : pauseEntry.getStorVal sevm.currentTarget
+      (assignmentSlot (Sevm.argWord sevm 0)) = sevm.caller.toB256 := by
+    rw [show pauseEntry.getStorVal sevm.currentTarget
+        (assignmentSlot (Sevm.argWord sevm 0)) =
+          devm.getStorVal sevm.currentTarget
+            (assignmentSlot (Sevm.argWord sevm 0)) from
+      congrArg (fun stor : Adr → Stor =>
+        (stor sevm.currentTarget).get
+          (assignmentSlot (Sevm.argWord sevm 0))) (hstor.trans gb)]
+    exact assigned
+  have liveBody : sevm.benvStat.time < pauseEntry.getStorVal
+      sevm.currentTarget (expirySlot sevm.caller.toB256) := by
+    rw [show pauseEntry.getStorVal sevm.currentTarget
+        (expirySlot sevm.caller.toB256) =
+          devm.getStorVal sevm.currentTarget
+            (expirySlot sevm.caller.toB256) from
+      congrArg (fun stor : Adr → Stor =>
+        (stor sevm.currentTarget).get (expirySlot sevm.caller.toB256))
+        (hstor.trans gb)]
+    exact live
+  refine pause_to_setPauserCall_any dp bodyTail dataLength
+    targetCanonical unlockedBody assignedBody liveBody
+    (fun stageState callState hstor' hmem' hcode' staging callTail => ?_)
+  obtain ⟨wT, wN, wC, wD⟩ := pauseStaging_windows3
+    (MemImage.of_memory_eq (hmem'.trans (hmem.trans mb)) image) staging
+  have wD' : MemWordAt callState (durationWord * 32).toNat
+      (Devm.getStorVal devm sevm.currentTarget pauseDurationSlot) := by
+    rw [show Devm.getStorVal devm sevm.currentTarget pauseDurationSlot
+          = Devm.getStorVal stageState sevm.currentTarget pauseDurationSlot from
+        congrArg (fun f : Adr → Stor =>
+          (f sevm.currentTarget).get pauseDurationSlot)
+          ((Line.of_inv Devm.getStor (by unfold pauseStagingLine; line_inv)
+            staging).trans (hstor'.trans (hstor.trans gb))).symm]
+    exact wD
+  refine runToCallResult (body := setPauserKernel) callTail
+    (by simp [runtime, aux, setPauserSlot]) (fun kernelStart kburn ktail => ?_)
+  exact kernelResult kernelStart
+    (MemWordAt.of_memory_eq kburn.memory.symm wT)
+    (MemWordAt.of_memory_eq kburn.memory.symm wN)
+    (MemWordAt.of_memory_eq kburn.memory.symm wC)
+    (MemWordAt.of_memory_eq kburn.memory.symm wD')
+    ((getStor_of_state kburn.state).symm.trans
+      (hstor'.trans (hstor.trans gb)))
+    ((congrFun ((getCode_of_state kburn.state).symm.trans
+      (hcode'.trans (hcode.trans db))) (Sevm.argWord sevm 0).toAdr).trans
+      codeAt) ktail
+
+/-- Outcome-generic route from the production runtime entry to the shared
+Registry kernel.  The public calldata and entry-world facts compute every
+pre-kernel branch; the terminal `Execution` remains arbitrary. -/
+theorem runtimeMain_routeTo_pauseKernel_any (dp : DeployParams)
+    {sevm : Sevm} {devm : Devm} {ex : Execution} {img : Bytes} {code : ByteArray}
+    {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
+      (runtime dp).main ex)
+    (image : MemImage devm img)
+    (codeAt : CodeAt devm (Sevm.argWord sevm 0).toAdr code)
+    (valueZero : sevm.value = 0)
+    (dataLength : sevm.data.length = 36)
+    (targetCanonical : ValidAdr (Sevm.argWord sevm 0))
+    (unlocked : devm.getTransVal sevm.currentTarget lockKey = 0)
+    (assigned : devm.getStorVal sevm.currentTarget
+      (assignmentSlot (Sevm.argWord sevm 0)) = sevm.caller.toB256)
+    (live : sevm.benvStat.time < devm.getStorVal sevm.currentTarget
+      (expirySlot sevm.caller.toB256))
+    (selectorEq : Sevm.selector sevm = selector "pause" [.address])
+    (kernelRoute : ∀ kernelStart : Devm,
+      MemWordAt kernelStart (targetWord * 32).toNat (Sevm.argWord sevm 0) →
+      MemWordAt kernelStart (newPauserWord * 32).toNat 0 →
+      MemWordAt kernelStart (continuationWord * 32).toNat 1 →
+      MemWordAt kernelStart (durationWord * 32).toNat
+        (Devm.getStorVal devm sevm.currentTarget pauseDurationSlot) →
+      Devm.getStor kernelStart = Devm.getStor devm →
+      CodeAt kernelStart (Sevm.argWord sevm 0).toAdr code →
+      ∀ tail : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
+        kernelStart setPauserKernel ex,
+        Func.RunCompiledTo.RouteTo ⟨setPauserSlot, []⟩ tail targetPath
+          targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨0, []⟩ h targetPath targetInstruction := by
+  refine routeTo_line runtimeMainEntryPrefix h (fun entry lineRun tail => ?_)
+  have ge : Devm.getStor entry = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor (by unfold runtimeMainEntryPrefix; line_inv)
+      lineRun).symm
+  have me : entry.memory = devm.memory :=
+    (Line.of_inv Devm.memory (by unfold runtimeMainEntryPrefix; line_inv)
+      lineRun).symm
+  have de : Devm.getCode entry = Devm.getCode devm :=
+    (Line.of_inv Devm.getCode (by unfold runtimeMainEntryPrefix; line_inv)
+      lineRun).symm
+  have te : entry.transientStorage = devm.transientStorage :=
+    (Line.of_inv Devm.transientStorage
+      (by unfold runtimeMainEntryPrefix; line_inv) lineRun).symm
+  refine routeTo_branchLeft_frame tail
+    (entryGuard_word (devm := devm) valueZero dataLength entry lineRun)
+    (fun body hpop arm => ?_)
+  have gb := (getStor_of_state hpop.state).symm.trans ge
+  have mb := hpop.memory.symm.trans me
+  have db := (getCode_of_state hpop.state).symm.trans de
+  have tb := (Devm.PopBurn.of_popBurnBy hpop).transientStorage_eq.trans te
+  refine dispatch_routeTo_pause_transient dp arm selectorEq
+    (fun _current pauseEntry hstor hmem hcode htrans bodyTail => ?_)
+  have unlockedBody : pauseEntry.getTransVal sevm.currentTarget lockKey = 0 := by
+    unfold Devm.getTransVal at unlocked ⊢
+    rw [htrans.trans tb]
+    exact unlocked
+  have assignedBody : pauseEntry.getStorVal sevm.currentTarget
+      (assignmentSlot (Sevm.argWord sevm 0)) = sevm.caller.toB256 := by
+    rw [show pauseEntry.getStorVal sevm.currentTarget
+        (assignmentSlot (Sevm.argWord sevm 0)) =
+          devm.getStorVal sevm.currentTarget
+            (assignmentSlot (Sevm.argWord sevm 0)) from
+      congrArg (fun stor : Adr → Stor =>
+        (stor sevm.currentTarget).get
+          (assignmentSlot (Sevm.argWord sevm 0))) (hstor.trans gb)]
+    exact assigned
+  have liveBody : sevm.benvStat.time < pauseEntry.getStorVal
+      sevm.currentTarget (expirySlot sevm.caller.toB256) := by
+    rw [show pauseEntry.getStorVal sevm.currentTarget
+        (expirySlot sevm.caller.toB256) =
+          devm.getStorVal sevm.currentTarget
+            (expirySlot sevm.caller.toB256) from
+      congrArg (fun stor : Adr → Stor =>
+        (stor sevm.currentTarget).get (expirySlot sevm.caller.toB256))
+        (hstor.trans gb)]
+    exact live
+  refine pause_routeTo_setPauserCall_any dp bodyTail dataLength
+    targetCanonical unlockedBody assignedBody liveBody
     (fun _c stageState callState hstor' hmem' hcode' staging callTail => ?_)
   obtain ⟨wT, wN, wC, wD⟩ := pauseStaging_windows3
     (MemImage.of_memory_eq (hmem'.trans (hmem.trans mb)) image) staging
@@ -820,6 +1666,533 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have cz := codeAt.acrossLine (by unfold setPauserKernelZeroCheck; line_inv)
     zrun
   refine routeTo_branchLeft_of_rightRevertsOk_frame tail (fuel := 8) (by rfl)
+    (fun a hpop arm => ?_)
+  have ga : Devm.getStor a = Devm.getStor devm :=
+    (getStor_of_state hpop.state).symm.trans gz
+  have wTa := MemWordAt.of_memory_eq hpop.memory.symm wTz
+  have wNa := MemWordAt.of_memory_eq hpop.memory.symm wNz
+  have wCa := MemWordAt.of_memory_eq hpop.memory.symm wCz
+  have wDa := MemWordAt.of_memory_eq hpop.memory.symm wDz
+  have ca := cz.ofState hpop.state
+  have arrA : Devm.getStorVal a sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal a sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    arrOf ga ⟨hidx0, hlen0, hlast0⟩
+  refine routeTo_line pauseKernelAppendPrefix arm (fun _b brun tail2 => ?_)
+  obtain ⟨branchWord, wTb, wNb, wCb, wDb, wPb, presB⟩ :=
+    pauseKernel_previousPauserNonzero3 wTa wNa wCa wDa
+      (by
+        rw [show Devm.getStorVal a sevm.currentTarget (assignmentSlot target)
+              = Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
+            from congrArg (fun f : Adr → Stor =>
+              (f sevm.currentTarget).get (assignmentSlot target)) ga]
+        exact hprev)
+      (by
+        rw [show Devm.getStorVal a sevm.currentTarget (assignmentSlot target)
+              = Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
+            from congrArg (fun f : Adr → Stor =>
+              (f sevm.currentTarget).get (assignmentSlot target)) ga]
+        exact assigned)
+      brun
+  have kb' : Devm.getStorVal _b sevm.currentTarget
+      (countSlot sevm.caller.toB256) =
+      Devm.getStorVal devm sevm.currentTarget
+        (countSlot sevm.caller.toB256) :=
+    (presB _ hneAC).trans (cellOf ga)
+  have arrB : Devm.getStorVal _b sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal _b sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal _b sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    ⟨(presB _ hneAI).trans arrA.1, (presB _ hneAL).trans arrA.2.1,
+      (presB _ hneAE).trans arrA.2.2⟩
+  have cb := ca.acrossLine
+    (by unfold pauseKernelAppendPrefix setPauserKernelAssignmentPrefix;
+        line_inv) brun
+  refine routeTo_branchLeft_frame tail2 branchWord (fun c hpopc tail3 => ?_)
+  have wTc := MemWordAt.of_memory_eq hpopc.memory.symm wTb
+  have wNc := MemWordAt.of_memory_eq hpopc.memory.symm wNb
+  have wCc := MemWordAt.of_memory_eq hpopc.memory.symm wCb
+  have wDc := MemWordAt.of_memory_eq hpopc.memory.symm wDb
+  have wPc := MemWordAt.of_memory_eq hpopc.memory.symm wPb
+  have cc := cb.ofState hpopc.state
+  have kc : Devm.getStorVal c sevm.currentTarget
+      (countSlot sevm.caller.toB256) =
+      Devm.getStorVal devm sevm.currentTarget
+        (countSlot sevm.caller.toB256) :=
+    (cellOf (getStor_of_state hpopc.state).symm).trans kb'
+  have arrC := arrOf (getStor_of_state hpopc.state).symm arrB
+  refine routeTo_line oldCountPrefix tail3 (fun d drun tail4 => ?_)
+  have wTd := wTc.acrossOldCountPrefix drun
+  have wNd := wNc.acrossOldCountPrefix drun
+  have wCd := wCc.acrossOldCountPrefix drun
+  have wDd := wDc.acrossOldCountPrefix drun
+  have cd := cc.acrossLine
+    (by unfold oldCountPrefix previousCountKey loadWord tagTop; line_inv) drun
+  have arrD := arrOf (Line.of_inv Devm.getStor
+    (by unfold oldCountPrefix previousCountKey loadWord tagTop; line_inv)
+    drun).symm arrC
+  have pd := pauseOldCount_stack wPc kc drun
+  refine routeTo_next tail4 (fun e erun tail5 => ?_)
+  have wTe := wTd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have wNe := wNd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have wCe := wCd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have wDe := wDd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have ce := cd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have hsetE := sstore_getStor_set (Ninst.Run.of_runCompiled erun) pd
+  have ke : Devm.getStorVal e sevm.currentTarget
+      (countSlot sevm.caller.toB256) =
+      Devm.getStorVal devm sevm.currentTarget
+        (countSlot sevm.caller.toB256) - 1 := by
+    show (Devm.getStor e sevm.currentTarget).get
+      (countSlot sevm.caller.toB256) = _
+    rw [hsetE, Stor.get_set_self]
+  have arrE : Devm.getStorVal e sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal e sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal e sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    ⟨by
+      show (Devm.getStor e sevm.currentTarget).get (indexSlot target) = _
+      rw [hsetE, Stor.get_set_ne _ hneCI]
+      exact arrD.1,
+     by
+      show (Devm.getStor e sevm.currentTarget).get arrayLengthSlot = _
+      rw [hsetE, Stor.get_set_ne _ hneCL]
+      exact arrD.2.1,
+     by
+      show (Devm.getStor e sevm.currentTarget).get (arrayEntrySlot len0) = _
+      rw [hsetE, Stor.get_set_ne _ hneCE]
+      exact arrD.2.2⟩
+  refine routeTo_call (body := afterOldPauser) tail5
+    (by simp [runtime, aux, afterOldPauserSlot]) (fun f fburn tail6 => ?_)
+  have wTf := MemWordAt.of_memory_eq fburn.memory.symm wTe
+  have wNf := MemWordAt.of_memory_eq fburn.memory.symm wNe
+  have wCf := MemWordAt.of_memory_eq fburn.memory.symm wCe
+  have wDf := MemWordAt.of_memory_eq fburn.memory.symm wDe
+  have cf := ce.ofState fburn.state
+  have kf := (cellOf (getStor_of_state fburn.state).symm).trans ke
+  have arrF := arrOf (getStor_of_state fburn.state).symm arrE
+  refine routeTo_line (memoryZeroCheck newPauserWord) tail6
+    (fun g grun tail7 => ?_)
+  have wTg := wTf.acrossMemoryZeroCheck (k := newPauserWord) grun
+  have wCg := wCf.acrossMemoryZeroCheck (k := newPauserWord) grun
+  have wDg := wDf.acrossMemoryZeroCheck (k := newPauserWord) grun
+  have cg := cf.acrossLine (by unfold memoryZeroCheck loadWord; line_inv) grun
+  have kg := (cellOf (Line.of_inv Devm.getStor
+    (by unfold memoryZeroCheck loadWord; line_inv) grun).symm).trans kf
+  have arrG := arrOf (Line.of_inv Devm.getStor
+    (by unfold memoryZeroCheck loadWord; line_inv) grun).symm arrF
+  refine routeTo_branchRight_frame tail7
+    (fun w rest hstack => by
+      rw [memoryZeroCheck_word (k := newPauserWord) wNf grun w rest hstack]
+      decide)
+    (fun i _wi hpopi arm2 => ?_)
+  have wTi := MemWordAt.of_memory_eq hpopi.memory.symm wTg
+  have wCi := MemWordAt.of_memory_eq hpopi.memory.symm wCg
+  have wDi := MemWordAt.of_memory_eq hpopi.memory.symm wDg
+  have ci := cg.ofState hpopi.state
+  have ki := (cellOf (getStor_of_state hpopi.state).symm).trans kg
+  have arrI := arrOf (getStor_of_state hpopi.state).symm arrG
+  refine routeTo_call (body := removeTarget) arm2
+    (by simp [runtime, aux, removeTargetSlot]) (fun j jburn tail8 => ?_)
+  have wTj := MemWordAt.of_memory_eq jburn.memory.symm wTi
+  have wCj := MemWordAt.of_memory_eq jburn.memory.symm wCi
+  have wDj := MemWordAt.of_memory_eq jburn.memory.symm wDi
+  have cj := ci.ofState jburn.state
+  have kj := (cellOf (getStor_of_state jburn.state).symm).trans ki
+  have arrJ := arrOf (getStor_of_state jburn.state).symm arrI
+  refine routeTo_line removeClearTargetIndexPrefix tail8
+    (fun k krun tail9 => ?_)
+  have wTk := wTj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
+    krun
+  have wCk := wCj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
+    krun
+  have wDk := wDj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
+    krun
+  have ck := cj.acrossLine (by line_inv) krun
+  refine routeTo_next tail9 (fun l lrun tail10 => ?_)
+  have wTl := wTk.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have wCl := wCk.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have wDl := wDk.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have cl := ck.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have kl := (hRemoveCount j k l wTj arrJ.1 arrJ.2.1 arrJ.2.2 krun
+    lrun).trans kj
+  refine routeTo_call (body := finishSetPauser) tail10
+    (by simp [runtime, aux, finishSetPauserSlot]) (fun m mburn tail11 => ?_)
+  have wTm := MemWordAt.of_memory_eq mburn.memory.symm wTl
+  have wCm := MemWordAt.of_memory_eq mburn.memory.symm wCl
+  have wDm := MemWordAt.of_memory_eq mburn.memory.symm wDl
+  have cm := cl.ofState mburn.state
+  have km := (cellOf (getStor_of_state mburn.state).symm).trans kl
+  refine routeTo_line finishSetPauserPrefix tail11 (fun n nrun tail12 => ?_)
+  have wTn := wTm.acrossFinishPrefix nrun
+  have wDn := wDm.acrossFinishPrefix nrun
+  have cn := cm.acrossLine (by unfold finishSetPauserPrefix; line_inv) nrun
+  have kn := (cellOf (Line.of_inv Devm.getStor finishSetPauserPrefix_storInv
+    nrun).symm).trans km
+  refine routeTo_branchLeft_frame tail12 (pause_continuationWord wCm nrun)
+    (fun o hpopo arm3 => ?_)
+  have wTo := MemWordAt.of_memory_eq hpopo.memory.symm wTn
+  have wDo := MemWordAt.of_memory_eq hpopo.memory.symm wDn
+  have co := cn.ofState hpopo.state
+  have ko := (cellOf (getStor_of_state hpopo.state).symm).trans kn
+  refine routeTo_call (body := pauseAfterSet) arm3
+    (by simp [runtime, aux, pauseAfterSetSlot]) (fun p pburn tail13 => ?_)
+  exact bodyRoute p (MemWordAt.of_memory_eq pburn.memory.symm wTo)
+    (MemWordAt.of_memory_eq pburn.memory.symm wDo)
+    (co.ofState pburn.state)
+    ((cellOf (getStor_of_state pburn.state).symm).trans ko) tail13
+
+/- Outcome-generic sibling of
+`setPauserKernel_routeTo_pauseAfterSetCall`.  The public pause premises make
+the staged target nonzero, so the first kernel guard is computed from the
+memory window; every later crossing is already driven by the walk's own
+staged or storage-derived word. -/
+/-- Continuation form of the outcome-generic kernel walk.  Unlike a source
+route, its result retains the target/duration windows and storage facts at the
+actual `pauseAfterSet` entry. -/
+theorem setPauserKernel_to_pauseAfterSet_any (dp : DeployParams) {P : Prop}
+    {sevm : Sevm} {devm : Devm} {ex : Execution} {target : B256} {code : ByteArray}
+    {idx0 len0 last0 : B256} {duration : B256}
+    (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
+      setPauserKernel ex)
+    (windowT : MemWordAt devm (targetWord * 32).toNat target)
+    (targetNonzero : target ≠ 0)
+    (windowN : MemWordAt devm (newPauserWord * 32).toNat 0)
+    (windowC : MemWordAt devm (continuationWord * 32).toNat 1)
+    (windowD : MemWordAt devm (durationWord * 32).toNat duration)
+    (codeAt : CodeAt devm target.toAdr code)
+    (assigned :
+      Devm.getStorVal devm sevm.currentTarget (assignmentSlot target) ≠ 0)
+    (hprev : Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
+      = sevm.caller.toB256)
+    (hidx0 : Devm.getStorVal devm sevm.currentTarget (indexSlot target)
+      = idx0)
+    (hlen0 : Devm.getStorVal devm sevm.currentTarget arrayLengthSlot = len0)
+    (hlast0 : Devm.getStorVal devm sevm.currentTarget (arrayEntrySlot len0)
+      = last0)
+    (hneAC : assignmentSlot target ≠ countSlot sevm.caller.toB256)
+    (hneAI : assignmentSlot target ≠ indexSlot target)
+    (hneAL : assignmentSlot target ≠ arrayLengthSlot)
+    (hneAE : assignmentSlot target ≠ arrayEntrySlot len0)
+    (hneCI : countSlot sevm.caller.toB256 ≠ indexSlot target)
+    (hneCL : countSlot sevm.caller.toB256 ≠ arrayLengthSlot)
+    (hneCE : countSlot sevm.caller.toB256 ≠ arrayEntrySlot len0)
+    (hRemoveCount : ∀ (a b postW : Devm),
+      MemWordAt a (targetWord * 32).toNat target →
+      Devm.getStorVal a sevm.currentTarget (indexSlot target) = idx0 →
+      Devm.getStorVal a sevm.currentTarget arrayLengthSlot = len0 →
+      Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 →
+      Line.Run sevm a removeClearTargetIndexPrefix b →
+      Ninst.RunCompiled sevm b Ninst.sstore postW →
+      Devm.getStorVal postW sevm.currentTarget
+          (countSlot sevm.caller.toB256) =
+        Devm.getStorVal a sevm.currentTarget
+          (countSlot sevm.caller.toB256))
+    (bodyResult : ∀ devm' : Devm,
+      MemWordAt devm' (targetWord * 32).toNat target →
+      MemWordAt devm' (durationWord * 32).toNat duration →
+      CodeAt devm' target.toAdr code →
+      Devm.getStorVal devm' sevm.currentTarget
+          (countSlot sevm.caller.toB256) =
+        Devm.getStorVal devm sevm.currentTarget
+          (countSlot sevm.caller.toB256) - 1 →
+      ∀ _tail : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
+        devm' pauseAfterSet ex, P) : P := by
+  have cellK : ∀ {x y : Devm} (key : B256), Devm.getStor x = Devm.getStor y →
+      Devm.getStorVal x sevm.currentTarget key =
+        Devm.getStorVal y sevm.currentTarget key :=
+    fun key heq => congrArg (fun f : Adr → Stor =>
+      (f sevm.currentTarget).get key) heq
+  have cellOf : ∀ {x y : Devm}, Devm.getStor x = Devm.getStor y →
+      Devm.getStorVal x sevm.currentTarget (countSlot sevm.caller.toB256) =
+        Devm.getStorVal y sevm.currentTarget
+          (countSlot sevm.caller.toB256) := fun heq => cellK _ heq
+  have arrOf : ∀ {x y : Devm}, Devm.getStor x = Devm.getStor y →
+      Devm.getStorVal y sevm.currentTarget (indexSlot target) = idx0 ∧
+        Devm.getStorVal y sevm.currentTarget arrayLengthSlot = len0 ∧
+        Devm.getStorVal y sevm.currentTarget (arrayEntrySlot len0) = last0 →
+      Devm.getStorVal x sevm.currentTarget (indexSlot target) = idx0 ∧
+        Devm.getStorVal x sevm.currentTarget arrayLengthSlot = len0 ∧
+        Devm.getStorVal x sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    fun heq hy => ⟨(cellK _ heq).trans hy.1, (cellK _ heq).trans hy.2.1,
+      (cellK _ heq).trans hy.2.2⟩
+  refine runToLineResult setPauserKernelZeroCheck h (fun z zrun tail => ?_)
+  have gz : Devm.getStor z = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor
+      (by unfold setPauserKernelZeroCheck; line_inv) zrun).symm
+  have wTz := windowT.acrossMemoryZeroCheck (k := targetWord) zrun
+  have wNz := windowN.acrossMemoryZeroCheck (k := targetWord) zrun
+  have wCz := windowC.acrossMemoryZeroCheck (k := targetWord) zrun
+  have wDz := windowD.acrossMemoryZeroCheck (k := targetWord) zrun
+  have cz := codeAt.acrossLine (by unfold setPauserKernelZeroCheck; line_inv)
+    zrun
+  refine runToBranchLeftResult tail
+    (fun w rest hstack => by
+      rw [memoryZeroCheck_word (k := targetWord) windowT zrun w rest hstack]
+      simp [B256.eqCheck, targetNonzero])
+    (fun a hpop arm => ?_)
+  have ga : Devm.getStor a = Devm.getStor devm :=
+    (getStor_of_state hpop.state).symm.trans gz
+  have wTa := MemWordAt.of_memory_eq hpop.memory.symm wTz
+  have wNa := MemWordAt.of_memory_eq hpop.memory.symm wNz
+  have wCa := MemWordAt.of_memory_eq hpop.memory.symm wCz
+  have wDa := MemWordAt.of_memory_eq hpop.memory.symm wDz
+  have ca := cz.ofState hpop.state
+  have arrA : Devm.getStorVal a sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal a sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    arrOf ga ⟨hidx0, hlen0, hlast0⟩
+  refine runToLineResult pauseKernelAppendPrefix arm (fun _b brun tail2 => ?_)
+  obtain ⟨branchWord, wTb, wNb, wCb, wDb, wPb, presB⟩ :=
+    pauseKernel_previousPauserNonzero3 wTa wNa wCa wDa
+      (by
+        rw [show Devm.getStorVal a sevm.currentTarget (assignmentSlot target)
+              = Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
+            from congrArg (fun f : Adr → Stor =>
+              (f sevm.currentTarget).get (assignmentSlot target)) ga]
+        exact hprev)
+      (by
+        rw [show Devm.getStorVal a sevm.currentTarget (assignmentSlot target)
+              = Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
+            from congrArg (fun f : Adr → Stor =>
+              (f sevm.currentTarget).get (assignmentSlot target)) ga]
+        exact assigned)
+      brun
+  have kb' : Devm.getStorVal _b sevm.currentTarget
+      (countSlot sevm.caller.toB256) =
+      Devm.getStorVal devm sevm.currentTarget
+        (countSlot sevm.caller.toB256) :=
+    (presB _ hneAC).trans (cellOf ga)
+  have arrB : Devm.getStorVal _b sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal _b sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal _b sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    ⟨(presB _ hneAI).trans arrA.1, (presB _ hneAL).trans arrA.2.1,
+      (presB _ hneAE).trans arrA.2.2⟩
+  have cb := ca.acrossLine
+    (by unfold pauseKernelAppendPrefix setPauserKernelAssignmentPrefix;
+        line_inv) brun
+  refine runToBranchLeftResult tail2 branchWord (fun c hpopc tail3 => ?_)
+  have wTc := MemWordAt.of_memory_eq hpopc.memory.symm wTb
+  have wNc := MemWordAt.of_memory_eq hpopc.memory.symm wNb
+  have wCc := MemWordAt.of_memory_eq hpopc.memory.symm wCb
+  have wDc := MemWordAt.of_memory_eq hpopc.memory.symm wDb
+  have wPc := MemWordAt.of_memory_eq hpopc.memory.symm wPb
+  have cc := cb.ofState hpopc.state
+  have kc : Devm.getStorVal c sevm.currentTarget
+      (countSlot sevm.caller.toB256) =
+      Devm.getStorVal devm sevm.currentTarget
+        (countSlot sevm.caller.toB256) :=
+    (cellOf (getStor_of_state hpopc.state).symm).trans kb'
+  have arrC := arrOf (getStor_of_state hpopc.state).symm arrB
+  refine runToLineResult oldCountPrefix tail3 (fun d drun tail4 => ?_)
+  have wTd := wTc.acrossOldCountPrefix drun
+  have wNd := wNc.acrossOldCountPrefix drun
+  have wCd := wCc.acrossOldCountPrefix drun
+  have wDd := wDc.acrossOldCountPrefix drun
+  have cd := cc.acrossLine
+    (by unfold oldCountPrefix previousCountKey loadWord tagTop; line_inv) drun
+  have arrD := arrOf (Line.of_inv Devm.getStor
+    (by unfold oldCountPrefix previousCountKey loadWord tagTop; line_inv)
+    drun).symm arrC
+  have pd := pauseOldCount_stack wPc kc drun
+  refine runToNextResult tail4 (fun e erun tail5 => ?_)
+  have wTe := wTd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have wNe := wNd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have wCe := wCd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have wDe := wDd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have ce := cd.acrossNinst (Ninst.Run.of_runCompiled erun)
+  have hsetE := sstore_getStor_set (Ninst.Run.of_runCompiled erun) pd
+  have ke : Devm.getStorVal e sevm.currentTarget
+      (countSlot sevm.caller.toB256) =
+      Devm.getStorVal devm sevm.currentTarget
+        (countSlot sevm.caller.toB256) - 1 := by
+    show (Devm.getStor e sevm.currentTarget).get
+      (countSlot sevm.caller.toB256) = _
+    rw [hsetE, Stor.get_set_self]
+  have arrE : Devm.getStorVal e sevm.currentTarget (indexSlot target)
+        = idx0 ∧
+      Devm.getStorVal e sevm.currentTarget arrayLengthSlot = len0 ∧
+      Devm.getStorVal e sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    ⟨by
+      show (Devm.getStor e sevm.currentTarget).get (indexSlot target) = _
+      rw [hsetE, Stor.get_set_ne _ hneCI]
+      exact arrD.1,
+     by
+      show (Devm.getStor e sevm.currentTarget).get arrayLengthSlot = _
+      rw [hsetE, Stor.get_set_ne _ hneCL]
+      exact arrD.2.1,
+     by
+      show (Devm.getStor e sevm.currentTarget).get (arrayEntrySlot len0) = _
+      rw [hsetE, Stor.get_set_ne _ hneCE]
+      exact arrD.2.2⟩
+  refine runToCallResult (body := afterOldPauser) tail5
+    (by simp [runtime, aux, afterOldPauserSlot]) (fun f fburn tail6 => ?_)
+  have wTf := MemWordAt.of_memory_eq fburn.memory.symm wTe
+  have wNf := MemWordAt.of_memory_eq fburn.memory.symm wNe
+  have wCf := MemWordAt.of_memory_eq fburn.memory.symm wCe
+  have wDf := MemWordAt.of_memory_eq fburn.memory.symm wDe
+  have cf := ce.ofState fburn.state
+  have kf := (cellOf (getStor_of_state fburn.state).symm).trans ke
+  have arrF := arrOf (getStor_of_state fburn.state).symm arrE
+  refine runToLineResult (memoryZeroCheck newPauserWord) tail6
+    (fun g grun tail7 => ?_)
+  have wTg := wTf.acrossMemoryZeroCheck (k := newPauserWord) grun
+  have wCg := wCf.acrossMemoryZeroCheck (k := newPauserWord) grun
+  have wDg := wDf.acrossMemoryZeroCheck (k := newPauserWord) grun
+  have cg := cf.acrossLine (by unfold memoryZeroCheck loadWord; line_inv) grun
+  have kg := (cellOf (Line.of_inv Devm.getStor
+    (by unfold memoryZeroCheck loadWord; line_inv) grun).symm).trans kf
+  have arrG := arrOf (Line.of_inv Devm.getStor
+    (by unfold memoryZeroCheck loadWord; line_inv) grun).symm arrF
+  refine runToBranchRightResult tail7
+    (fun w rest hstack => by
+      rw [memoryZeroCheck_word (k := newPauserWord) wNf grun w rest hstack]
+      decide)
+    (fun i _wi hpopi arm2 => ?_)
+  have wTi := MemWordAt.of_memory_eq hpopi.memory.symm wTg
+  have wCi := MemWordAt.of_memory_eq hpopi.memory.symm wCg
+  have wDi := MemWordAt.of_memory_eq hpopi.memory.symm wDg
+  have ci := cg.ofState hpopi.state
+  have ki := (cellOf (getStor_of_state hpopi.state).symm).trans kg
+  have arrI := arrOf (getStor_of_state hpopi.state).symm arrG
+  refine runToCallResult (body := removeTarget) arm2
+    (by simp [runtime, aux, removeTargetSlot]) (fun j jburn tail8 => ?_)
+  have wTj := MemWordAt.of_memory_eq jburn.memory.symm wTi
+  have wCj := MemWordAt.of_memory_eq jburn.memory.symm wCi
+  have wDj := MemWordAt.of_memory_eq jburn.memory.symm wDi
+  have cj := ci.ofState jburn.state
+  have kj := (cellOf (getStor_of_state jburn.state).symm).trans ki
+  have arrJ := arrOf (getStor_of_state jburn.state).symm arrI
+  refine runToLineResult removeClearTargetIndexPrefix tail8
+    (fun k krun tail9 => ?_)
+  have wTk := wTj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
+    krun
+  have wCk := wCj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
+    krun
+  have wDk := wDj.acrossRemoveTargetPrefix (by decide) (by decide) (by decide)
+    krun
+  have ck := cj.acrossLine (by line_inv) krun
+  refine runToNextResult tail9 (fun l lrun tail10 => ?_)
+  have wTl := wTk.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have wCl := wCk.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have wDl := wDk.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have cl := ck.acrossNinst (Ninst.Run.of_runCompiled lrun)
+  have kl := (hRemoveCount j k l wTj arrJ.1 arrJ.2.1 arrJ.2.2 krun
+    lrun).trans kj
+  refine runToCallResult (body := finishSetPauser) tail10
+    (by simp [runtime, aux, finishSetPauserSlot]) (fun m mburn tail11 => ?_)
+  have wTm := MemWordAt.of_memory_eq mburn.memory.symm wTl
+  have wCm := MemWordAt.of_memory_eq mburn.memory.symm wCl
+  have wDm := MemWordAt.of_memory_eq mburn.memory.symm wDl
+  have cm := cl.ofState mburn.state
+  have km := (cellOf (getStor_of_state mburn.state).symm).trans kl
+  refine runToLineResult finishSetPauserPrefix tail11 (fun n nrun tail12 => ?_)
+  have wTn := wTm.acrossFinishPrefix nrun
+  have wDn := wDm.acrossFinishPrefix nrun
+  have cn := cm.acrossLine (by unfold finishSetPauserPrefix; line_inv) nrun
+  have kn := (cellOf (Line.of_inv Devm.getStor finishSetPauserPrefix_storInv
+    nrun).symm).trans km
+  refine runToBranchLeftResult tail12 (pause_continuationWord wCm nrun)
+    (fun o hpopo arm3 => ?_)
+  have wTo := MemWordAt.of_memory_eq hpopo.memory.symm wTn
+  have wDo := MemWordAt.of_memory_eq hpopo.memory.symm wDn
+  have co := cn.ofState hpopo.state
+  have ko := (cellOf (getStor_of_state hpopo.state).symm).trans kn
+  refine runToCallResult (body := pauseAfterSet) arm3
+    (by simp [runtime, aux, pauseAfterSetSlot]) (fun p pburn tail13 => ?_)
+  exact bodyResult p (MemWordAt.of_memory_eq pburn.memory.symm wTo)
+    (MemWordAt.of_memory_eq pburn.memory.symm wDo)
+    (co.ofState pburn.state)
+    ((cellOf (getStor_of_state pburn.state).symm).trans ko) tail13
+
+theorem setPauserKernel_routeTo_pauseAfterSetCall_any (dp : DeployParams)
+    {sevm : Sevm} {devm : Devm} {ex : Execution} {target : B256} {code : ByteArray}
+    {idx0 len0 last0 : B256} {duration : B256}
+    {targetPath : Prog.SourcePath} {targetInstruction : Ninst}
+    (h : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm devm
+      setPauserKernel ex)
+    (windowT : MemWordAt devm (targetWord * 32).toNat target)
+    (targetNonzero : target ≠ 0)
+    (windowN : MemWordAt devm (newPauserWord * 32).toNat 0)
+    (windowC : MemWordAt devm (continuationWord * 32).toNat 1)
+    (windowD : MemWordAt devm (durationWord * 32).toNat duration)
+    (codeAt : CodeAt devm target.toAdr code)
+    (assigned :
+      Devm.getStorVal devm sevm.currentTarget (assignmentSlot target) ≠ 0)
+    (hprev : Devm.getStorVal devm sevm.currentTarget (assignmentSlot target)
+      = sevm.caller.toB256)
+    (hidx0 : Devm.getStorVal devm sevm.currentTarget (indexSlot target)
+      = idx0)
+    (hlen0 : Devm.getStorVal devm sevm.currentTarget arrayLengthSlot = len0)
+    (hlast0 : Devm.getStorVal devm sevm.currentTarget (arrayEntrySlot len0)
+      = last0)
+    (hneAC : assignmentSlot target ≠ countSlot sevm.caller.toB256)
+    (hneAI : assignmentSlot target ≠ indexSlot target)
+    (hneAL : assignmentSlot target ≠ arrayLengthSlot)
+    (hneAE : assignmentSlot target ≠ arrayEntrySlot len0)
+    (hneCI : countSlot sevm.caller.toB256 ≠ indexSlot target)
+    (hneCL : countSlot sevm.caller.toB256 ≠ arrayLengthSlot)
+    (hneCE : countSlot sevm.caller.toB256 ≠ arrayEntrySlot len0)
+    (hRemoveCount : ∀ (a b postW : Devm),
+      MemWordAt a (targetWord * 32).toNat target →
+      Devm.getStorVal a sevm.currentTarget (indexSlot target) = idx0 →
+      Devm.getStorVal a sevm.currentTarget arrayLengthSlot = len0 →
+      Devm.getStorVal a sevm.currentTarget (arrayEntrySlot len0) = last0 →
+      Line.Run sevm a removeClearTargetIndexPrefix b →
+      Ninst.RunCompiled sevm b Ninst.sstore postW →
+      Devm.getStorVal postW sevm.currentTarget
+          (countSlot sevm.caller.toB256) =
+        Devm.getStorVal a sevm.currentTarget
+          (countSlot sevm.caller.toB256))
+    (bodyRoute : ∀ devm' : Devm,
+      MemWordAt devm' (targetWord * 32).toNat target →
+      MemWordAt devm' (durationWord * 32).toNat duration →
+      CodeAt devm' target.toAdr code →
+      Devm.getStorVal devm' sevm.currentTarget
+          (countSlot sevm.caller.toB256) =
+        Devm.getStorVal devm sevm.currentTarget
+          (countSlot sevm.caller.toB256) - 1 →
+      ∀ tail : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
+        devm' pauseAfterSet ex,
+        Func.RunCompiledTo.RouteTo ⟨pauseAfterSetSlot, []⟩ tail targetPath
+          targetInstruction) :
+    Func.RunCompiledTo.RouteTo ⟨setPauserSlot, []⟩ h targetPath
+      targetInstruction := by
+  have cellK : ∀ {x y : Devm} (key : B256), Devm.getStor x = Devm.getStor y →
+      Devm.getStorVal x sevm.currentTarget key =
+        Devm.getStorVal y sevm.currentTarget key :=
+    fun key heq => congrArg (fun f : Adr → Stor =>
+      (f sevm.currentTarget).get key) heq
+  have cellOf : ∀ {x y : Devm}, Devm.getStor x = Devm.getStor y →
+      Devm.getStorVal x sevm.currentTarget (countSlot sevm.caller.toB256) =
+        Devm.getStorVal y sevm.currentTarget
+          (countSlot sevm.caller.toB256) := fun heq => cellK _ heq
+  have arrOf : ∀ {x y : Devm}, Devm.getStor x = Devm.getStor y →
+      Devm.getStorVal y sevm.currentTarget (indexSlot target) = idx0 ∧
+        Devm.getStorVal y sevm.currentTarget arrayLengthSlot = len0 ∧
+        Devm.getStorVal y sevm.currentTarget (arrayEntrySlot len0) = last0 →
+      Devm.getStorVal x sevm.currentTarget (indexSlot target) = idx0 ∧
+        Devm.getStorVal x sevm.currentTarget arrayLengthSlot = len0 ∧
+        Devm.getStorVal x sevm.currentTarget (arrayEntrySlot len0) = last0 :=
+    fun heq hy => ⟨(cellK _ heq).trans hy.1, (cellK _ heq).trans hy.2.1,
+      (cellK _ heq).trans hy.2.2⟩
+  refine routeTo_line setPauserKernelZeroCheck h (fun z zrun tail => ?_)
+  have gz : Devm.getStor z = Devm.getStor devm :=
+    (Line.of_inv Devm.getStor
+      (by unfold setPauserKernelZeroCheck; line_inv) zrun).symm
+  have wTz := windowT.acrossMemoryZeroCheck (k := targetWord) zrun
+  have wNz := windowN.acrossMemoryZeroCheck (k := targetWord) zrun
+  have wCz := windowC.acrossMemoryZeroCheck (k := targetWord) zrun
+  have wDz := windowD.acrossMemoryZeroCheck (k := targetWord) zrun
+  have cz := codeAt.acrossLine (by unfold setPauserKernelZeroCheck; line_inv)
+    zrun
+  refine routeTo_branchLeft_frame tail
+    (fun w rest hstack => by
+      rw [memoryZeroCheck_word (k := targetWord) windowT zrun w rest hstack]
+      simp [B256.eqCheck, targetNonzero])
     (fun a hpop arm => ?_)
   have ga : Devm.getStor a = Devm.getStor devm :=
     (getStor_of_state hpop.state).symm.trans gz

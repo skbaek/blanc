@@ -240,6 +240,34 @@ inductive Func.RunCompiledTo.RouteTo :
       Func.RunCompiledTo.RouteTo current (.call lookup room burn tail)
         target targetInstruction
 
+/-- A route whose target lies in a different function exposes the complete
+entry tail of that called function.  This is outcome-generic: the recovered
+tail has exactly the enclosing walk's `Execution`. -/
+theorem Func.RunCompiledTo.RouteTo.enteredFunction_of_ne
+    {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {rootBody targetBody : Func} {ex : Execution}
+    {current target : Prog.SourcePath} {instruction : Ninst}
+    {run : Func.RunCompiledTo fs sevm pre rootBody ex}
+    (route : Func.RunCompiledTo.RouteTo
+      current run target instruction)
+    (hne : current.functionIndex ≠ target.functionIndex)
+    (targetLookup : fs[target.functionIndex]? = some targetBody) :
+    ∃ entry, Func.RunCompiledTo fs sevm entry targetBody ex := by
+  induction route with
+  | head => exact (hne rfl).elim
+  | rest _ ih => exact ih hne targetLookup
+  | branchLeft _ ih => exact ih hne targetLookup
+  | branchRight _ ih => exact ih hne targetLookup
+  | @call pre' post index body out current target targetInstruction
+      callLookup room burn tail bodyRoute ih =>
+      by_cases hindex : index = target.functionIndex
+      · subst index
+        have hbody : body = targetBody :=
+          Option.some.inj (callLookup.symm.trans targetLookup)
+        subst body
+        exact ⟨post, tail⟩
+      · exact ih hindex targetLookup
+
 /-! ## The route-construction kit
 
 **The constructors above cannot be used with `apply` or `refine`.**
@@ -278,6 +306,70 @@ is a convenience, not a workaround. -/
 section RouteKit
 
 variable {fs : List Func} {sevm : Sevm} {out : Execution}
+
+/-! The same derivation eliminations as the route kit, but with an arbitrary
+propositional continuation.  These retain facts discovered at a called
+function's entry instead of erasing them into a source route. -/
+
+theorem runCompiledTo_next_elim {P : Prop} {devm : Devm}
+    {instruction : Ninst} {body : Func}
+    (h : Func.RunCompiledTo fs sevm devm (.next instruction body) out)
+    (tailResult : ∀ devm' : Devm,
+      Ninst.RunCompiled sevm devm instruction devm' →
+      Func.RunCompiledTo fs sevm devm' body out → P) : P := by
+  cases h with
+  | next instructionRun tail => exact tailResult _ instructionRun tail
+
+theorem runCompiledTo_line_elim {P : Prop} {body : Func} :
+    ∀ (line : Line) {devm : Devm}
+      (_h : Func.RunCompiledTo fs sevm devm (line +++ body) out),
+      (∀ devm' : Devm, Line.Run sevm devm line devm' →
+        Func.RunCompiledTo fs sevm devm' body out → P) → P
+  | [], devm, h, bodyResult => bodyResult devm .nil h
+  | instruction :: line, devm, h, bodyResult => by
+      exact runCompiledTo_next_elim h (fun devm' instructionRun tail =>
+        runCompiledTo_line_elim line tail (fun devm'' lineRun tailBody =>
+          bodyResult devm''
+            (.cons (Ninst.Run.of_runCompiled instructionRun) lineRun)
+            tailBody))
+
+theorem runCompiledTo_call_elim {P : Prop} {devm : Devm} {index : Nat}
+    {body : Func}
+    (h : Func.RunCompiledTo fs sevm devm (.call index) out)
+    (lookup : fs[index]? = some body)
+    (bodyResult : ∀ devm' : Devm,
+      Devm.BurnBy (gVerylow + gMid + gJumpdest) devm devm' →
+      Func.RunCompiledTo fs sevm devm' body out → P) : P := by
+  cases h with
+  | call lookup' room burn tail =>
+      have bodyEq : body = _ := Option.some.inj (lookup.symm.trans lookup')
+      subst bodyEq
+      exact bodyResult _ burn tail
+
+theorem runCompiledTo_branchLeft_frame_elim {P : Prop} {devm : Devm}
+    {left right : Func}
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
+    (branchWord : ∀ w : B256, ∀ rest : Stack,
+      devm.stack = w :: rest → w = 0)
+    (armResult : ∀ devm' : Devm,
+      Devm.PopBurnBy [0] (gVerylow + gHigh) devm devm' →
+      Func.RunCompiledTo fs sevm devm' left out → P) : P := by
+  cases h with
+  | zero room pop tail => exact armResult _ pop tail
+  | succ nonzero room pop tail =>
+      exact absurd (branchWord _ _ pop.stack) nonzero
+
+theorem runCompiledTo_branchRight_frame_elim {P : Prop} {devm : Devm}
+    {left right : Func}
+    (h : Func.RunCompiledTo fs sevm devm (.branch left right) out)
+    (branchWord : ∀ w : B256, ∀ rest : Stack,
+      devm.stack = w :: rest → w ≠ 0)
+    (armResult : ∀ (devm' : Devm) (word : B256),
+      Devm.PopBurnBy [word] (gVerylow + gHigh + gJumpdest) devm devm' →
+      Func.RunCompiledTo fs sevm devm' right out → P) : P := by
+  cases h with
+  | zero room pop tail => exact absurd rfl (branchWord _ _ pop.stack)
+  | succ nonzero room pop tail => exact armResult _ _ pop tail
 
 /-- Designate the current `.next` head as the route's target. -/
 theorem routeTo_head {devm : Devm} {instruction : Ninst} {body : Func}

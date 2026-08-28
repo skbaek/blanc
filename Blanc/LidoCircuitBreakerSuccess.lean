@@ -903,6 +903,222 @@ private theorem pauseSuccess_trace_dichotomy
       exact ⟨zeroPre, hcountStack, hcountPop, hpushZero⟩
     · exact ⟨fun _ => rfl, fun hcontra => absurd hcountZero hcontra⟩
 
+private theorem prependStoresRev_not_ok
+    {fs : List Func} {sevm : Sevm} {rest : Func}
+    (terminal : ∀ {pre post : Devm},
+      Func.RunCompiledTo fs sevm pre rest (.ok post) → False)
+    (iws : List (B256 × Nat)) :
+    ∀ {pre post : Devm},
+      Func.RunCompiledTo fs sevm pre (prependStoresRev iws rest) (.ok post) →
+        False := by
+  induction iws generalizing rest with
+  | nil =>
+      intro pre post run
+      exact terminal (by simpa [prependStoresRev] using run)
+  | cons iw iws ih =>
+      intro pre post run
+      apply ih (rest := prependStore iw.1 iw.2 rest)
+      · intro innerPre innerPost innerRun
+        unfold prependStore at innerRun
+        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+        exact terminal innerRun
+      · simpa [prependStoresRev] using run
+
+private theorem revData_not_ok
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {blob : Bytes}
+    (run : Func.RunCompiledTo fs sevm pre (Func.revData blob) (.ok post)) :
+    False := by
+  unfold Func.revData at run
+  apply prependStoresRev_not_ok (iws := (bytesWords blob).zipIdx) ?_ run
+  intro innerPre innerPost innerRun
+  obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+  obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+  exact Linst.not_run_rev_ok (runCompiledTo_last_inv innerRun)
+
+/-- A successful `pauseSuccess` changes no persistent-storage cell other than
+the caller's expiry slot at the CircuitBreaker account.  The theorem is
+pointwise over both the account and key so composition proofs can frame the
+two protocol cells without reconstructing the success trace. -/
+theorem pauseSuccess_ok_getStorVal_eq_of_ne
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {owner : Adr} {key : B256}
+    (hpanic : fs[arithmeticPanicSlot]? =
+      some (Func.revData heartbeatArithmeticPanicData))
+    (different : (owner, key) ≠
+      (sevm.currentTarget, expirySlot sevm.caller.toB256))
+    (run : Func.RunCompiledTo fs sevm pre pauseSuccess (.ok post)) :
+    post.getStorVal owner key = pre.getStorVal owner key := by
+  have hshape : pauseSuccess =
+      pauseSuccessEventLine +++
+        (heartbeatCountTest +++
+          ((Ninst.pushB256 0 ::: pauseExpiryFinish) <?>
+            (checkedHeartbeatExpiry <| pauseExpiryFinish))) := rfl
+  rw [hshape] at run
+  obtain ⟨eventPost, hevent, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨countPost, hcount, hbranch⟩ :=
+    runCompiledTo_prepend_inv run
+  have hstorEvent : Devm.getStor pre = Devm.getStor eventPost :=
+    Line.of_inv Devm.getStor pauseSuccessEvent_storInv hevent
+  have hstorCount : Devm.getStor eventPost = Devm.getStor countPost :=
+    Line.of_inv Devm.getStor
+      (by unfold heartbeatCountTest tagTop; line_inv) hcount
+  have finishCell : ∀ {finishPre : Devm},
+      Devm.getStor pre = Devm.getStor finishPre →
+      Func.RunCompiledTo fs sevm finishPre pauseExpiryFinish (.ok post) →
+      post.getStorVal owner key = pre.getStorVal owner key := by
+    intro finishPre hprefix hfinish
+    have hdup := hfinish
+    rw [show pauseExpiryFinish =
+      storeHeartbeatExpiryFromStack +++
+        (Ninst.pushB256 0 ::: Ninst.pushB256 lockKey :::
+          Ninst.tstore ::: Func.stop) from rfl] at hdup
+    obtain ⟨_, hstore, -⟩ := runCompiledTo_prepend_inv hdup
+    unfold storeHeartbeatExpiryFromStack at hstore
+    simp only [List.append_assoc] at hstore
+    obtain ⟨_, hdup, -⟩ := of_run_append [Ninst.dup 0] hstore
+    rcases Line.of_run_cons hdup with ⟨_, hdup, hnil⟩
+    cases hnil
+    obtain ⟨value, hhead, -⟩ := of_run_dup hdup
+    cases hstack : finishPre.stack with
+    | nil => simp [hstack] at hhead
+    | cons head tail =>
+      simp [hstack] at hhead
+      subst head
+      have hvalue : value :: ([] : List B256) <<+ finishPre.stack := by
+        exact ⟨tail, by unfold Split; simp [hstack]⟩
+      obtain ⟨_, hex, trace⟩ := pauseExpiryFinish_trace hvalue hfinish
+      cases Except.ok.inj hex
+      have hstor := (PauseSuccessFinishTrace.result trace).2.1 owner
+      change (Devm.getStor post owner).get key =
+        (Devm.getStor pre owner).get key
+      rw [hstor]
+      by_cases howner : owner = sevm.currentTarget
+      · rw [if_pos howner]
+        apply (Stor.get_set_ne _ ?_ _).trans
+          (congrArg (fun stor => (stor owner).get key) hprefix).symm
+        intro hkey
+        apply different
+        exact Prod.ext howner hkey.symm
+      · rw [if_neg howner]
+        exact (congrArg (fun stor => (stor owner).get key) hprefix).symm
+  rcases runCompiledTo_branch_inv hbranch with
+    ⟨checkedPre, -, hcountPop, hcheckedArm⟩ |
+      ⟨_, zeroPre, -, -, hcountPop, hzeroArm⟩
+  · have hcheckedShape : checkedHeartbeatExpiry pauseExpiryFinish =
+        checkedHeartbeatExpiryTest +++
+          Func.branch pauseExpiryFinish
+            (Func.call arithmeticPanicSlot) := rfl
+    rw [hcheckedShape] at hcheckedArm
+    obtain ⟨checkedPost, hchecked, hcheckedBranch⟩ :=
+      runCompiledTo_prepend_inv hcheckedArm
+    rcases runCompiledTo_branch_inv hcheckedBranch with
+      ⟨finishPre, -, hcheckedPop, hfinish⟩ |
+        ⟨_, panicPre, -, -, -, hpanicRun⟩
+    · apply finishCell
+      · exact hstorEvent.trans (hstorCount.trans
+          ((PopBurn.Inv.inv (Devm.PopBurn.of_popBurnBy hcountPop)).trans
+            ((Line.of_inv Devm.getStor
+              (by unfold checkedHeartbeatExpiryTest; line_inv) hchecked).trans
+              (PopBurn.Inv.inv
+                (Devm.PopBurn.of_popBurnBy hcheckedPop)))))
+      · exact hfinish
+    · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv hpanic hpanicRun
+      exact (revData_not_ok hbody).elim
+  · obtain ⟨finishPre, hpush, hfinish⟩ :=
+      runCompiledTo_next_inv hzeroArm
+    apply finishCell
+    · exact hstorEvent.trans (hstorCount.trans
+        ((PopBurn.Inv.inv (Devm.PopBurn.of_popBurnBy hcountPop)).trans
+          (Ninst.Hinv.inv (f := Devm.getStor)
+            (Ninst.Run.of_runCompiled hpush))))
+    · exact hfinish
+
+/-- A successful `pauseSuccess` preserves the complete persistent-storage map
+of every account other than the CircuitBreaker itself. -/
+theorem pauseSuccess_ok_getStor_eq_of_owner_ne
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {owner : Adr}
+    (hpanic : fs[arithmeticPanicSlot]? =
+      some (Func.revData heartbeatArithmeticPanicData))
+    (ownerNe : owner ≠ sevm.currentTarget)
+    (run : Func.RunCompiledTo fs sevm pre pauseSuccess (.ok post)) :
+    Devm.getStor post owner = Devm.getStor pre owner := by
+  have hshape : pauseSuccess =
+      pauseSuccessEventLine +++
+        (heartbeatCountTest +++
+          ((Ninst.pushB256 0 ::: pauseExpiryFinish) <?>
+            (checkedHeartbeatExpiry <| pauseExpiryFinish))) := rfl
+  rw [hshape] at run
+  obtain ⟨eventPost, hevent, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨countPost, hcount, hbranch⟩ :=
+    runCompiledTo_prepend_inv run
+  have hstorEvent : Devm.getStor pre = Devm.getStor eventPost :=
+    Line.of_inv Devm.getStor pauseSuccessEvent_storInv hevent
+  have hstorCount : Devm.getStor eventPost = Devm.getStor countPost :=
+    Line.of_inv Devm.getStor
+      (by unfold heartbeatCountTest tagTop; line_inv) hcount
+  have finishStor : ∀ {finishPre : Devm},
+      Devm.getStor pre = Devm.getStor finishPre →
+      Func.RunCompiledTo fs sevm finishPre pauseExpiryFinish (.ok post) →
+      Devm.getStor post owner = Devm.getStor pre owner := by
+    intro finishPre hprefix hfinish
+    have hdup := hfinish
+    rw [show pauseExpiryFinish =
+      storeHeartbeatExpiryFromStack +++
+        (Ninst.pushB256 0 ::: Ninst.pushB256 lockKey :::
+          Ninst.tstore ::: Func.stop) from rfl] at hdup
+    obtain ⟨_, hstore, -⟩ := runCompiledTo_prepend_inv hdup
+    unfold storeHeartbeatExpiryFromStack at hstore
+    simp only [List.append_assoc] at hstore
+    obtain ⟨_, hdup, -⟩ := of_run_append [Ninst.dup 0] hstore
+    rcases Line.of_run_cons hdup with ⟨_, hdup, hnil⟩
+    cases hnil
+    obtain ⟨value, hhead, -⟩ := of_run_dup hdup
+    cases hstack : finishPre.stack with
+    | nil => simp [hstack] at hhead
+    | cons head tail =>
+      simp [hstack] at hhead
+      subst head
+      have hvalue : value :: ([] : List B256) <<+ finishPre.stack := by
+        exact ⟨tail, by unfold Split; simp [hstack]⟩
+      obtain ⟨_, hex, trace⟩ := pauseExpiryFinish_trace hvalue hfinish
+      cases Except.ok.inj hex
+      have hstor := (PauseSuccessFinishTrace.result trace).2.1 owner
+      rw [if_neg ownerNe] at hstor
+      exact hstor.trans (congrFun hprefix owner).symm
+  rcases runCompiledTo_branch_inv hbranch with
+    ⟨checkedPre, -, hcountPop, hcheckedArm⟩ |
+      ⟨_, zeroPre, -, -, hcountPop, hzeroArm⟩
+  · have hcheckedShape : checkedHeartbeatExpiry pauseExpiryFinish =
+        checkedHeartbeatExpiryTest +++
+          Func.branch pauseExpiryFinish
+            (Func.call arithmeticPanicSlot) := rfl
+    rw [hcheckedShape] at hcheckedArm
+    obtain ⟨checkedPost, hchecked, hcheckedBranch⟩ :=
+      runCompiledTo_prepend_inv hcheckedArm
+    rcases runCompiledTo_branch_inv hcheckedBranch with
+      ⟨finishPre, -, hcheckedPop, hfinish⟩ |
+        ⟨_, panicPre, -, -, -, hpanicRun⟩
+    · apply finishStor
+      · exact hstorEvent.trans (hstorCount.trans
+          ((PopBurn.Inv.inv (Devm.PopBurn.of_popBurnBy hcountPop)).trans
+            ((Line.of_inv Devm.getStor
+              (by unfold checkedHeartbeatExpiryTest; line_inv) hchecked).trans
+              (PopBurn.Inv.inv
+                (Devm.PopBurn.of_popBurnBy hcheckedPop)))))
+      · exact hfinish
+    · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv hpanic hpanicRun
+      exact (revData_not_ok hbody).elim
+  · obtain ⟨finishPre, hpush, hfinish⟩ :=
+      runCompiledTo_next_inv hzeroArm
+    apply finishStor
+    · exact hstorEvent.trans (hstorCount.trans
+        ((PopBurn.Inv.inv (Devm.PopBurn.of_popBurnBy hcountPop)).trans
+          (Ninst.Hinv.inv (f := Devm.getStor)
+            (Ninst.Run.of_runCompiled hpush))))
+    · exact hfinish
+
 /-- The source branch relation determines its carried value. -/
 private theorem PauseExpiryValue.unique
     {timestamp interval count left right : B256}
@@ -1498,6 +1714,25 @@ private theorem MemWordAt.acrossPauseStatStaging
       (by unfold pushList; simp only [List.map]; line_inv) hargs).acrossLoadWord
         htarget).acrossLine (by line_inv) hgas
 
+/-- Public successor for carrying a high memory word through CALL staging. -/
+theorem MemWordAt.acrossPauseCallStagingBoundary
+    {sevm : Sevm} {pre post : Devm} {offset : Nat} {word : B256}
+    (hpast : 320 ≤ offset)
+    (window : MemWordAt pre offset word)
+    (run : Line.Run sevm pre pauseCallStaging post) :
+    MemWordAt post offset word :=
+  MemWordAt.acrossPauseCallStaging hpast window run
+
+/-- Public successor for carrying a high memory word through STATICCALL
+staging. -/
+theorem MemWordAt.acrossPauseStatStagingBoundary
+    {sevm : Sevm} {pre post : Devm} {offset : Nat} {word : B256}
+    (hpast : 288 ≤ offset)
+    (window : MemWordAt pre offset word)
+    (run : Line.Run sevm pre pauseStatStaging post) :
+    MemWordAt post offset word :=
+  MemWordAt.acrossPauseStatStaging hpast window run
+
 /-- Contract-local value-carrying `EXTCODESIZE` inversion used by the
 strengthened code-guard handoff. -/
 private lemma success_of_extcodesize_val
@@ -1678,6 +1913,50 @@ private theorem pauseAfterCall_arms_words
       apply hwordNonzero
       simpa [hchild] using hflag.symm
     · rfl
+
+/-- Public window-carrying code-guard decomposition used by public-entry
+composition.  It exposes no new premise and preserves both terminal polarities. -/
+theorem pauseAfterSet_codeGuard_arms_windows
+    {fs : List Func} {sevm : Sevm} {entry : Devm} {target : Adr}
+    {duration : B256} {ex : Execution}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
+    (hDuration : MemWordAt entry (durationWord * 32).toNat duration)
+    (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
+    ((entry.getCode target).size.toB256 = 0 ∧
+        ∃ post, ex = .error (.revert, post) ∧ post.output = []) ∨
+      ((entry.getCode target).size.toB256 ≠ 0 ∧
+        ∃ guardPost : Devm,
+          MemWordAt guardPost (targetWord * 32).toNat target.toB256 ∧
+          MemWordAt guardPost (durationWord * 32).toNat duration ∧
+          Func.RunCompiledTo fs sevm guardPost
+            (pauseCallStaging +++
+              (Ninst.call ::: pauseAfterCallBranch)) ex) :=
+  pauseAfterSet_codeGuard_arms_words h_empty hTarget hDuration run
+
+/-- Public window-carrying post-CALL decomposition used to attach the actual
+CALL boundary to the settled outcome family. -/
+theorem pauseAfterCall_arms_windows
+    {fs : List Func} {sevm : Sevm} {target : Adr} {duration : B256}
+    {callPre callPost : Devm} {ex : Execution} {next : Func}
+    (boundary : PauseCallBoundary sevm target duration callPre callPost)
+    (targetWindow : MemWordAt callPost
+      (targetWord * 32).toNat target.toB256)
+    (durationWindow : MemWordAt callPost
+      (durationWord * 32).toNat duration)
+    (run : Func.RunCompiledTo fs sevm callPost
+      (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> next)) ex) :
+    ∃ child armPre : Devm,
+      callPost.returnData = child.output ∧
+      armPre.returnData = child.output ∧
+      MemWordAt armPre (targetWord * 32).toNat target.toB256 ∧
+      MemWordAt armPre (durationWord * 32).toNat duration ∧
+      ((child.error.isSome = true ∧
+          Func.RunCompiledTo fs sevm armPre
+            (Func.call bubbleRevertSlot) ex) ∨
+        (child.error.isSome = false ∧
+          Func.RunCompiledTo fs sevm armPre next ex)) :=
+  pauseAfterCall_arms_words boundary targetWindow durationWindow run
 
 /-- The post-observation branch, carrying both staged words into the bubble or
 decode arm selected by the child's actual status. -/
