@@ -7,7 +7,7 @@
 #
 # --no-build requires the Jaune fixture runner already built at this exact
 # source state.  Exit zero only when the manifest, vector, runtime-byte, and
-# every Prague fixture leg pass.
+# every BPO2 fixture leg pass.
 
 set -u
 
@@ -16,7 +16,7 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 FIXTURES_DIR="$ROOT/scripts/fixtures/prorata"
 MANIFEST="$FIXTURES_DIR/manifest.json"
 BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
-NETWORK="Prague"
+NETWORK="BPO2"
 BUILD=1
 SELF_TEST=0
 

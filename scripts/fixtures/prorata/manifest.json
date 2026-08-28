@@ -2,71 +2,71 @@
   {
     "name": "01-genesis-deposit",
     "outcome": "success",
-    "assertions": 8
+    "assertions": 9
   },
   {
     "name": "02-donation-price-shift",
     "outcome": "success",
-    "assertions": 10
+    "assertions": 13
   },
   {
     "name": "03-withdraw-full-exit",
     "outcome": "success",
-    "assertions": 9
+    "assertions": 11
   },
   {
     "name": "04-views",
     "outcome": "success",
-    "assertions": 6
+    "assertions": 7
   },
   {
     "name": "05a-deposit-value-guard",
     "outcome": "revert",
-    "assertions": 6
+    "assertions": 8
   },
   {
     "name": "05b-balance-guards",
     "outcome": "revert",
-    "assertions": 8
+    "assertions": 12
   },
   {
     "name": "05c-supply-guard",
     "outcome": "revert",
-    "assertions": 6
+    "assertions": 8
   },
   {
     "name": "05d-view-share-guard",
     "outcome": "revert",
-    "assertions": 5
+    "assertions": 6
   },
   {
     "name": "05e-withdraw-ledger-guard",
     "outcome": "revert",
-    "assertions": 5
+    "assertions": 6
   },
   {
     "name": "05f-nonpayable-guards",
     "outcome": "revert",
-    "assertions": 9
+    "assertions": 12
   },
   {
     "name": "06-unknown-selector",
     "outcome": "revert",
-    "assertions": 5
+    "assertions": 6
   },
   {
     "name": "07-withdraw-reentrant-receiver",
     "outcome": "success",
-    "assertions": 6
+    "assertions": 7
   },
   {
     "name": "08-withdraw-rejected-payout",
     "outcome": "outer-success-inner-withdraw-revert",
-    "assertions": 8
+    "assertions": 9
   },
   {
     "name": "09-g6-real-offset-attack",
     "outcome": "success",
-    "assertions": 12
+    "assertions": 17
   }
 ]

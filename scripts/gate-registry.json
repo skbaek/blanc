@@ -1334,6 +1334,142 @@
     },
     {
       "command": [
+        "scripts/check-current-mainnet.sh"
+      ],
+      "id": "current-mainnet",
+      "inputs": {
+        "env": [
+          "JAUNE_T8N_TARGET",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "t8n_target",
+            "path": "~/execution-specs-t8n-amsterdam",
+            "path_env": "JAUNE_T8N_TARGET",
+            "pin": "827a1cad9c9c8528512f90a06888c8bd9171d9ae"
+          }
+        ],
+        "files": [
+          "scripts/check-current-mainnet.sh",
+          "scripts/current-mainnet-target.json",
+          "scripts/current_mainnet.py",
+          "@t8n_target/.git/config",
+          "@t8n_target/.venv/pyvenv.cfg",
+          "@t8n_target/.venv/bin/python",
+          "@t8n_target/.venv/bin/ethereum-spec-evm",
+          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
+          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "/bin/bash",
+          "/usr/bin/env",
+          "/usr/bin/git"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@t8n_target/.venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+          }
+        ],
+        "tools": [
+          "git",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. Cache identity includes the checkout configuration, venv selector/interpreter/entrypoint, complete site-packages, and selected CPython 3.11.9 standard library.",
+      "order": 33,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — current-mainnet lane: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-prorata-current-mainnet.sh"
+      ],
+      "id": "prorata-current-mainnet",
+      "inputs": {
+        "env": [
+          "JAUNE_T8N_TARGET",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "t8n_target",
+            "path": "~/execution-specs-t8n-amsterdam",
+            "path_env": "JAUNE_T8N_TARGET",
+            "pin": "827a1cad9c9c8528512f90a06888c8bd9171d9ae"
+          }
+        ],
+        "files": [
+          "scripts/check-prorata-current-mainnet.sh",
+          "scripts/gen-prorata-fixtures.py",
+          "scripts/check-current-mainnet.sh",
+          "scripts/current-mainnet-target.json",
+          "scripts/current_mainnet.py",
+          "scripts/check-runtime-bytes.py",
+          "scripts/prorata_oracle.py",
+          "scripts/fixtures/prorata/manifest.json",
+          "Blanc/ProrataCode.lean",
+          "@t8n_target/.git/config",
+          "@t8n_target/.venv/pyvenv.cfg",
+          "@t8n_target/.venv/bin/python",
+          "@t8n_target/.venv/bin/ethereum-spec-evm",
+          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
+          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "/bin/bash",
+          "/usr/bin/env",
+          "/usr/bin/git"
+        ],
+        "populations": [
+          {
+            "pattern": "*.json",
+            "root": "scripts/fixtures/prorata"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@t8n_target/.venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+          }
+        ],
+        "tools": [
+          "git",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "PRORATA's read-only BPO2 consumer of the contract-neutral current-mainnet API. It reconstructs canonical system preallocation and block envelopes from the pinned target, executes all fourteen scenarios with explicit block semantics, checks receipt/no-log and exact integer-model postconditions, and byte-compares the complete generated fixture population. The ordinary fixture gate independently replays those committed blocks through Jaune and remains CI-safe without the external checkout.",
+      "order": 34,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — prorata current-mainnet: "
+        ]
+      }
+    },
+    {
+      "command": [
         "scripts/check.sh",
         "--no-build"
       ],
@@ -1352,7 +1488,7 @@
       },
       "kind": "cacheable",
       "note": "The 607-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
-      "order": 33,
+      "order": 35,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1378,7 +1514,7 @@
       },
       "kind": "cacheable",
       "note": "The pinned inventory count lives in the wrapper, so its bytes are an input.",
-      "order": 34,
+      "order": 36,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1426,7 +1562,7 @@
       },
       "kind": "cacheable",
       "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes \u2014 the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its baseline, and its own implementation. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see \u2014 a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
-      "order": 35,
+      "order": 37,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1465,7 +1601,7 @@
       },
       "kind": "cacheable",
       "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is the thing that produces PASS/FAIL and is fingerprinted directly. weth10-reference.py and weth10_reference_schema.py are in the closure only because the borrower checker importlib-loads the former for its keccak256.",
-      "order": 36,
+      "order": 38,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1498,7 +1634,7 @@
       },
       "kind": "cacheable",
       "note": "This suite has no manifest, so its fixture-directory membership is its only population guard; declaring the population here restores that guard for reuse decisions.",
-      "order": 37,
+      "order": 39,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1534,8 +1670,8 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The manifest is a bidirectional population guard, and the independent integer oracle vectors are regenerated only through a timing-free byte comparison. The EELS generator is intentionally outside this gate: fixture production requires the frozen runtime literal and is run before committing regenerated fixtures.",
-      "order": 38,
+      "note": "CI-safe replay of the committed BPO2 population through Jaune. The manifest is a bidirectional population guard, the independent integer oracle vectors are regenerated through a timing-free byte comparison, and every embedded PRORATA runtime is compared with the frozen literal. Exact-target regeneration belongs to the separate prorata-current-mainnet gate.",
+      "order": 40,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1568,7 +1704,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 39,
+      "order": 41,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1601,7 +1737,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 40,
+      "order": 42,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
