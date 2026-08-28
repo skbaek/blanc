@@ -2840,6 +2840,22 @@ private theorem Exec.Deriv.SourceCursor.Toward.sourceSite
   | branchRight cursor chronology arm compilerPrefix rest ih => exact ih
   | call cursor chronology lookup bodyCursor compilerPrefix rest ih => exact ih
 
+/-- Expose the source-site result of a completed target-directed route without
+exposing the traversal's private induction kernel. -/
+theorem Exec.Deriv.SourceCursor.Toward.sourceSiteResult
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {targetInstruction : Ninst}
+    {initial : Exec.Deriv.SourceCursor root program initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor) :
+    ∃ site : Prog.SourceSite,
+      site ∈ program.sourceSites ∧
+      site.pc = target.pc ∧
+      site.instruction = targetInstruction := by
+  exact route.sourceSite
+
 /-- The sole target-directed source traversal follows the finite execution
 proof, not the source call graph, and retains every intermediate cursor. -/
 private theorem Exec.Deriv.SourceCursor.toward_core :

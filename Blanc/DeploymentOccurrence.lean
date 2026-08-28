@@ -121,9 +121,9 @@ private theorem Exec.Deriv.ParentPrefix.trans_appended
     (left : Exec.Deriv.ParentPrefix root middle)
     (right : Exec.Deriv.ParentPrefix middle tail) :
     Exec.Deriv.ParentPrefix root tail := by
-  induction left with
-  | refl => exact right
-  | step head rest ih => exact .step head (ih right)
+  induction right generalizing root with
+  | refl => exact left
+  | step head rest ih => exact ih (left.snoc head)
 
 private theorem Exec.Deriv.ParentPrefix.advancePushToward_appended
     {start target : Exec.Deriv} {xs : Bytes} {targetInstruction : Ninst}
@@ -304,29 +304,6 @@ theorem Exec.Deriv.SourceCursor.callToward_appended
 
 /-! ## Finite appended-code source traversal -/
 
-private theorem Exec.Deriv.SourceCursor.Toward.sourceSite_appended
-    {root target : Exec.Deriv} {program : Prog}
-    {initialPath path : Prog.SourcePath} {initialSource source : Func}
-    {targetInstruction : Ninst}
-    {initial : Exec.Deriv.SourceCursor root program initialPath initialSource}
-    {cursor : Exec.Deriv.SourceCursor root program path source}
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target targetInstruction cursor) :
-    ∃ site : Prog.SourceSite,
-      site ∈ program.sourceSites ∧
-      site.pc = target.pc ∧
-      site.instruction = targetInstruction := by
-  induction route with
-  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
-      refine ⟨site, sourceMember, ?_, ?_⟩
-      · have pcEq := congrArg Exec.Deriv.pc targetEq
-        simpa [Exec.Deriv.SourceCursor.node, siteEq] using pcEq
-      · simpa [siteEq] using instructionEq
-  | next cursor chronology tailCursor edge rest ih => exact ih
-  | branchLeft cursor chronology arm compilerPrefix rest ih => exact ih
-  | branchRight cursor chronology arm compilerPrefix rest ih => exact ih
-  | call cursor chronology lookup bodyCursor compilerPrefix rest ih => exact ih
-
 /-- The target-directed source traversal for a program compiled as an exact
 prefix.  Recursion is over the finite execution proof, not the source call
 graph, so recursive constructor loops remain admissible. -/
@@ -477,7 +454,7 @@ theorem Exec.Deriv.SourceCursor.sourceSite_appended
       site ∈ program.sourceSites ∧
       site.pc = target.pc ∧
       site.instruction = instruction := by
-  exact (cursor.toward_appended compiled reached nonPush instructionAt).sourceSite_appended
+  exact (cursor.toward_appended compiled reached nonPush instructionAt).sourceSiteResult
 
 /-! ## Root specializations -/
 

@@ -400,4 +400,30 @@ theorem Prog.exists_exec_noRawSstore
   exact ⟨.cont entryStep mainExecution,
     .cont entrySafe mainExecutionSafe⟩
 
+/-- Raw-SSTORE freedom excludes every successful SSTORE occurrence in the
+same exact execution derivation. -/
+theorem Exec.NoRawSstore.no_successfulSstoreOccurrence
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {run : Exec pc sevm pre out}
+    (safe : Exec.NoRawSstore run) :
+    ¬ Nonempty (Exec.SuccessfulSstoreOccurrence
+      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)) := by
+  rintro ⟨write⟩
+  exact safe.instruction_ne_sstore
+    write.occurrence write.instruction_eq
+
+/-- In particular, a raw-SSTORE-free execution has an empty retained write
+chronology. -/
+theorem Exec.NoRawSstore.retainedStorageWrites_eq_nil
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {run : Exec pc sevm pre out}
+    (safe : Exec.NoRawSstore run) :
+    Exec.retainedStorageWrites run = [] := by
+  rw [List.eq_nil_iff_forall_not_mem]
+  intro event member
+  rcases Exec.exists_successfulSstore_of_mem_retainedStorageWrites
+      (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))
+      (event := event) member with ⟨write, -, -⟩
+  exact safe.no_successfulSstoreOccurrence ⟨write⟩
+
 end Blanc

@@ -50,6 +50,19 @@
 # tier. The run measured 21 modules in 150.2 s; exact mandatory and control
 # evidence is preserved in scripts/report-elab-calibration.txt. No existing
 # row is touched.
+#
+# 2026-08-29 additions-only admission of the split BeaconDeposit count and
+# memory proof units, measured by `scripts/check-elab.sh --calibrate` from
+# seeding commit d66669216ef0277153add6ddbc40c4da20fadbfb with source-set
+# SHA-256 bd5c96106385f76a239f9a2050781b607fdbf23bbf81aae04d4a19fac63c2c76.
+# Seed fa2a332b7dcab961d2d7aa16560dcc8ff3a473dff6a0ac20a0ff33c9b5ff3684
+# was derived against baseline SHA-256
+# 4b901efa9d728cac56d66d7a8893ee36d586e669e5e8b2cc4e6234a55ec0e0b0.
+# Both mandatory absent rows were measured with 12 commit-seeded controls:
+# control median 1.200x, spread 1.10x-1.30x, none at the 1.50x annotation
+# tier. The run measured 121 modules in 795.9 s; exact mandatory and control
+# evidence is preserved in scripts/report-elab-calibration.txt. No existing
+# row is touched.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
@@ -57,9 +70,11 @@ OK	1.925	Blanc/BeaconDeposit.lean
 OK	37.506	Blanc/BeaconDepositCode.lean
 OK	1.354	Blanc/BeaconDepositCore.lean
 OK	2.447	Blanc/BeaconDepositCorrectness.lean
+OK	1.999	Blanc/BeaconDepositCountEffects.lean
 OK	25.590	Blanc/BeaconDepositDeploy.lean
 OK	2.311	Blanc/BeaconDepositEffects.lean
 OK	3.276	Blanc/BeaconDepositEncoding.lean
+OK	2.441	Blanc/BeaconDepositMemory.lean
 OK	1.193	Blanc/BeaconDepositModel.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
