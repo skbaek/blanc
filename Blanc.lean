@@ -107,6 +107,14 @@ import Blanc.BeaconDepositCorrectness
 import Blanc.ProxyPairSlots
 import Blanc.Prorata
 import Blanc.ProrataCode
+import Blanc.ProrataArithmetic
+import Blanc.ProrataFunctional
+import Blanc.ProrataDeposit
+import Blanc.ProrataRead
+import Blanc.ProrataWithdraw
+import Blanc.ProrataConsistency
+import Blanc.ProrataCompiledEffects
+import Blanc.ProrataInvariant
 
 namespace Blanc
 

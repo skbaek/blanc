@@ -1,0 +1,167 @@
+-- ProrataCompiledEffects.lean : deployed-byte PRORATA body-effect lifts.
+
+import Blanc.ProrataCode
+import Blanc.ProrataConsistency
+
+namespace Blanc
+
+open Jaune
+
+namespace Prorata
+
+private theorem installed_prorata_compile {sevm : Sevm}
+    (h_code : sevm.code.toList = prorataCode) :
+    some sevm.code.toList = Prog.compile Prorata.prorata := by
+  calc
+    some sevm.code.toList = some prorataCode := congrArg some h_code
+    _ = Prog.compile Prorata.prorata := prorataCode_compile.symm
+
+theorem prorata_deposit_exec_effect
+    {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (h_code : sevm.code.toList = prorataCode)
+    (h_sel : Sevm.selector sevm = selector "deposit" [])
+    (h_nonempty : sevm.data.length.toB256 ≠ 0) :
+    DepositEffect sevm pre post := by
+  rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
+    h_sel h_nonempty (show (selector "deposit" [], deposit) ∈ prorataFuncs by
+      simp [prorataFuncs]) with
+    ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
+  have heffect := deposit_effect run
+  unfold DepositEffect at heffect ⊢
+  dsimp at heffect ⊢
+  rw [hstor, hbal, hcodeEntry, hlogs] at heffect
+  exact heffect
+
+theorem prorata_withdraw_exec_effect
+    {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (h_code : sevm.code.toList = prorataCode)
+    (h_sel : Sevm.selector sevm = selector "withdraw" [.uint256])
+    (h_nonempty : sevm.data.length.toB256 ≠ 0) :
+    WithdrawPaysExactly sevm pre post := by
+  rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
+    h_sel h_nonempty (show (selector "withdraw" [.uint256], withdraw) ∈ prorataFuncs by
+      simp [prorataFuncs]) with
+    ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
+  have heffect := withdraw_pays_exactly run
+  unfold WithdrawPaysExactly at heffect ⊢
+  dsimp at heffect ⊢
+  unfold WithdrawPreCallEffect at heffect ⊢
+  dsimp at heffect ⊢
+  rw [hstor, hbal, hcodeEntry, hmem, hlogs, hout] at heffect
+  exact heffect
+
+theorem prorata_convertToShares_exec_effect
+    {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (h_code : sevm.code.toList = prorataCode)
+    (h_sel : Sevm.selector sevm = selector "convertToShares" [.uint256])
+    (h_nonempty : sevm.data.length.toB256 ≠ 0) :
+    SharesViewEffect sevm pre post := by
+  rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
+    h_sel h_nonempty (show (selector "convertToShares" [.uint256], convertToShares) ∈ prorataFuncs by
+      simp [prorataFuncs]) with
+    ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
+  have heffect := convertToShares_effect run
+  unfold SharesViewEffect at heffect ⊢
+  dsimp at heffect ⊢
+  rw [hstor, hbal, hcodeEntry, hlogs] at heffect
+  exact heffect
+
+theorem prorata_convertToAssets_exec_effect
+    {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (h_code : sevm.code.toList = prorataCode)
+    (h_sel : Sevm.selector sevm = selector "convertToAssets" [.uint256])
+    (h_nonempty : sevm.data.length.toB256 ≠ 0) :
+    AssetsViewEffect sevm pre post := by
+  rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
+    h_sel h_nonempty (show (selector "convertToAssets" [.uint256], convertToAssets) ∈ prorataFuncs by
+      simp [prorataFuncs]) with
+    ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
+  have heffect := convertToAssets_effect run
+  unfold AssetsViewEffect at heffect ⊢
+  dsimp at heffect ⊢
+  rw [hstor, hbal, hcodeEntry, hlogs] at heffect
+  exact heffect
+
+/-- Deployed-byte, zero-tolerance preview/deposit agreement. -/
+theorem prorata_convertToShares_eq_deposit_mint
+    {view depositCall : Sevm} {viewPre viewPost depositPre depositPost : Devm}
+    (viewExec : Exec 0 view viewPre (.ok viewPost))
+    (depositExec : Exec 0 depositCall depositPre (.ok depositPost))
+    (hviewCode : view.code.toList = prorataCode)
+    (hdepositCode : depositCall.code.toList = prorataCode)
+    (hviewSel : Sevm.selector view = selector "convertToShares" [.uint256])
+    (hdepositSel : Sevm.selector depositCall = selector "deposit" [])
+    (hviewNonempty : view.data.length.toB256 ≠ 0)
+    (hdepositNonempty : depositCall.data.length.toB256 ≠ 0)
+    (hTarget : view.currentTarget = depositCall.currentTarget)
+    (hStor : Devm.getStor viewPre = Devm.getStor depositPre)
+    (hBal : Devm.getBal viewPre view.currentTarget =
+      Devm.getBal depositPre depositCall.currentTarget - depositCall.value)
+    (hArg : Sevm.argWord view 0 = depositCall.value) :
+    ∃ m, m = depositCall.value *
+        ((Devm.getStor depositPre depositCall.currentTarget).get supplySlot + offset) /
+          ((Devm.getBal depositPre depositCall.currentTarget - depositCall.value) + 1) ∧
+      ReturnsWord m viewPost ∧ ReturnsWord m depositPost := by
+  have hview := prorata_convertToShares_exec_effect viewExec hviewCode
+    hviewSel hviewNonempty
+  have hdeposit := prorata_deposit_exec_effect depositExec hdepositCode
+    hdepositSel hdepositNonempty
+  unfold SharesViewEffect at hview
+  unfold DepositEffect at hdeposit
+  dsimp at hview hdeposit
+  rcases hview with ⟨hv1, hv2, hv3, hviewWord, hv4, hv5, hv6, hv7⟩
+  rcases hdeposit with ⟨hd1, hd2, hd3, hd4, hd5, hd6, hd7, hdepositWord⟩
+  refine ⟨depositCall.value *
+      ((Devm.getStor depositPre depositCall.currentTarget).get supplySlot + offset) /
+        ((Devm.getBal depositPre depositCall.currentTarget - depositCall.value) + 1),
+    rfl, ?_, hdepositWord⟩
+  rw [hArg, hStor, hBal, hTarget] at hviewWord
+  exact hviewWord
+
+/-- Deployed-byte, zero-tolerance preview/withdrawal agreement.  The exact
+accepted payout package is retained; no callback-final storage equality is
+asserted. -/
+theorem prorata_convertToAssets_eq_withdraw_pay
+    {view withdrawal : Sevm} {viewPre viewPost withdrawPre withdrawPost : Devm}
+    (viewExec : Exec 0 view viewPre (.ok viewPost))
+    (withdrawExec : Exec 0 withdrawal withdrawPre (.ok withdrawPost))
+    (hviewCode : view.code.toList = prorataCode)
+    (hwithdrawCode : withdrawal.code.toList = prorataCode)
+    (hviewSel : Sevm.selector view = selector "convertToAssets" [.uint256])
+    (hwithdrawSel : Sevm.selector withdrawal = selector "withdraw" [.uint256])
+    (hviewNonempty : view.data.length.toB256 ≠ 0)
+    (hwithdrawNonempty : withdrawal.data.length.toB256 ≠ 0)
+    (hTarget : view.currentTarget = withdrawal.currentTarget)
+    (hStor : Devm.getStor viewPre = Devm.getStor withdrawPre)
+    (hBal : Devm.getBal viewPre view.currentTarget =
+      Devm.getBal withdrawPre withdrawal.currentTarget)
+    (hArg : Sevm.argWord view 0 = Sevm.argWord withdrawal 0) :
+    ∃ p, p = Sevm.argWord withdrawal 0 *
+        (Devm.getBal withdrawPre withdrawal.currentTarget + 1) /
+          ((Devm.getStor withdrawPre withdrawal.currentTarget).get supplySlot + offset) ∧
+      ReturnsWord p viewPost ∧ ReturnsWord p withdrawPost ∧
+      WithdrawPaysExactly withdrawal withdrawPre withdrawPost := by
+  have hview := prorata_convertToAssets_exec_effect viewExec hviewCode
+    hviewSel hviewNonempty
+  have hpay := prorata_withdraw_exec_effect withdrawExec hwithdrawCode
+    hwithdrawSel hwithdrawNonempty
+  unfold AssetsViewEffect at hview
+  unfold WithdrawPaysExactly at hpay
+  dsimp at hview hpay
+  rcases hview with ⟨hv1, hv2, hviewWord, hv3, hv4, hv5, hv6⟩
+  rcases hpay with ⟨callPre, callPost, guardPost, returnPre, hpre, hpayout, hwithdrawWord⟩
+  refine ⟨Sevm.argWord withdrawal 0 *
+      (Devm.getBal withdrawPre withdrawal.currentTarget + 1) /
+        ((Devm.getStor withdrawPre withdrawal.currentTarget).get supplySlot + offset),
+    rfl, ?_, hwithdrawWord, ?_⟩
+  · rw [hArg, hStor, hBal, hTarget] at hviewWord
+    exact hviewWord
+  · exact ⟨callPre, callPost, guardPost, returnPre, hpre, hpayout, hwithdrawWord⟩
+
+end Prorata
+
+end Blanc

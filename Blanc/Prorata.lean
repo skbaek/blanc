@@ -55,10 +55,18 @@ def maxBalance : B256 := Nat.toB256 (2 ^ 126 - 1)
 
 -- Total share supply lives at the all-ones slot, which is never
 -- address-shaped, so it cannot collide with any CALLER-keyed balance slot.
--- Pushed as NOT(0): two bytes instead of a 33-byte PUSH32.
+-- Materialized as NOT(0): two bytes instead of a 33-byte PUSH32.
 def supplySlot : B256 := B256.max
 
-def pushSupplySlot : Line := [pushB256 0, not]
+-- The bodies cache the all-ones word: besides naming `supplySlot` for SLOAD /
+-- SSTORE, shifting it right by 130 yields the common 2^126 - 1 magnitude cap.
+-- Shifting that retained cap right by 30 yields `maxValue = 2^96 - 1`.
+def pushMaxWord : Line := [pushB256 0, not]
+
+def pushMaxAndCap : Line :=
+  [pushB256 0, not, dup 0, pushB256 130, shr]
+
+def pushSupplySlot : Line := pushMaxWord
 
 -- deposit() — payable --
 
@@ -67,27 +75,30 @@ def pushSupplySlot : Line := [pushB256 0, not]
 -- pricing sees (the incoming value is already credited mid-call and must
 -- not price itself). Returns `m`.
 def deposit : Func :=
-  callvalue ::: pushB256 maxValue ::: lt ::: -- (maxValue <? a)
-  .rev <?> -- [deposit above maxValue: revert]
-  callvalue ::: selfbalance ::: sub ::: -- B₀
-  dup 0 ::: pushB256 maxBalance ::: lt ::: -- (maxBalance <? B₀) :: B₀
-  .rev <?> -- [pre-deposit balance above maxBalance: revert]
-           -- B₀
-  pushB256 1 ::: add ::: -- (B₀+1)
-  pushSupplySlot +++ sload ::: -- S :: (B₀+1)
-  dup 0 ::: pushB256 offset ::: add ::: -- (S+offset) :: S :: (B₀+1)
-  callvalue ::: mul ::: -- a·(S+offset) :: S :: (B₀+1)
-  dup 2 ::: swap 0 ::: div ::: -- m :: S :: (B₀+1)
-  dup 1 ::: dup 1 ::: add ::: -- (S+m) :: m :: S :: (B₀+1)
-  dup 0 ::: pushB256 maxSupply ::: lt ::: -- (maxSupply <? S+m) :: (S+m) :: m :: S :: (B₀+1)
+  pushMaxAndCap +++ -- M :: U, where M=maxBalance=maxSupply and U=supplySlot
+  callvalue ::: dup 1 ::: pushB256 30 ::: shr ::: lt :::
+    -- fₐ :: M :: U, where fₐ=(maxValue <? a)
+  callvalue ::: selfbalance ::: sub ::: -- B₀ :: fₐ :: M :: U
+  dup 0 ::: dup 3 ::: lt ::: dup 2 ::: add :::
+    -- (fₐ+fᴮ) :: B₀ :: fₐ :: M :: U, fᴮ=(M <? B₀)
+  .rev <?> -- [either pre-arithmetic magnitude guard failed: revert]
+           -- B₀ :: 0 :: M :: U
+  pushB256 1 ::: add ::: -- (B₀+1) :: 0 :: M :: U
+  dup 3 ::: sload ::: -- S :: (B₀+1) :: 0 :: M :: U
+  dup 0 ::: pushB256 offset ::: add :::
+    -- (S+offset) :: S :: (B₀+1) :: 0 :: M :: U
+  callvalue ::: mul ::: -- a·(S+offset) :: S :: (B₀+1) :: 0 :: M :: U
+  dup 2 ::: swap 0 ::: div ::: -- m :: S :: (B₀+1) :: 0 :: M :: U
+  dup 1 ::: dup 1 ::: add ::: -- (S+m) :: m :: S :: (B₀+1) :: 0 :: M :: U
+  dup 0 ::: dup 6 ::: lt ::: -- (M <? S+m) :: (S+m) :: m :: S :: (B₀+1) :: 0 :: M :: U
   .rev <?> -- [post-deposit supply above maxSupply: revert]
-           -- (S+m) :: m :: S :: (B₀+1)
-  pushSupplySlot +++ sstore ::: -- m :: S :: (B₀+1)
-                                -- [total supply is now up to date]
-  dup 0 ::: caller ::: sload ::: add ::: -- (bal+m) :: m :: S :: (B₀+1)
-  caller ::: sstore ::: -- m :: S :: (B₀+1)
+           -- (S+m) :: m :: S :: (B₀+1) :: 0 :: M :: U
+  dup 6 ::: sstore ::: -- m :: S :: (B₀+1) :: 0 :: M :: U
+                        -- [total supply is now up to date]
+  dup 0 ::: caller ::: sload ::: add ::: -- (bal+m) :: m :: S :: (B₀+1) :: 0 :: M :: U
+  caller ::: sstore ::: -- m :: S :: (B₀+1) :: 0 :: M :: U
                         -- [caller share balance is now up to date]
-  mstoreAt 0 +++ -- S :: (B₀+1) || m
+  mstoreAt 0 +++ -- S :: (B₀+1) :: 0 :: M :: U || m
   returnMemoryRange 0 32
 
 -- withdraw(uint256 s) — nonpayable --
@@ -107,27 +118,29 @@ def sendToCaller : Line :=
 -- `p ≤ B` structurally (`s ≤ S` and the virtual asset make it strictly
 -- under `B+1`), so the send cannot fail for insufficient balance.
 def withdraw : Func :=
-  arg 0 +++ dup 0 ::: caller ::: sload ::: -- bal :: s :: s
+  pushMaxWord +++ -- U=supplySlot
+  arg 0 +++ dup 0 ::: caller ::: sload ::: -- bal :: s :: s :: U
   dup 1 ::: dup 1 ::: lt ::: -- (bal <? s) :: bal :: s :: s
   .rev <?> -- [insufficient share balance: revert]
-           -- bal :: s :: s
-  sub ::: caller ::: sstore ::: -- s
+           -- bal :: s :: s :: U
+  sub ::: caller ::: sstore ::: -- s :: U
                                 -- [caller share balance is now up to date]
-  selfbalance ::: dup 0 ::: pushB256 maxBalance ::: lt ::: -- (maxBalance <? B) :: B :: s
+  selfbalance ::: dup 0 ::: dup 3 ::: pushB256 130 ::: shr ::: lt :::
+    -- (maxBalance <? B) :: B :: s :: U
   .rev <?> -- [balance above maxBalance: revert]
-           -- B :: s
-  pushB256 1 ::: add ::: -- (B+1) :: s
-  dup 1 ::: mul ::: -- s·(B+1) :: s
-  pushSupplySlot +++ sload ::: -- S :: s·(B+1) :: s
-  dup 0 ::: pushB256 offset ::: add ::: -- (S+offset) :: S :: s·(B+1) :: s
-  swap 1 ::: -- s·(B+1) :: S :: (S+offset) :: s
-  dup 2 ::: swap 0 ::: div ::: -- p :: S :: (S+offset) :: s
-  dup 3 ::: dup 2 ::: sub ::: -- (S−s) :: p :: S :: (S+offset) :: s
-  pushSupplySlot +++ sstore ::: -- p :: S :: (S+offset) :: s
-                                -- [total supply is now up to date;
-                                --  state fully settled before the send]
-  dup 0 ::: -- p :: p :: S :: (S+offset) :: s
-  sendToCaller +++ -- success? :: p :: S :: (S+offset) :: s
+           -- B :: s :: U
+  pushB256 1 ::: add ::: -- (B+1) :: s :: U
+  dup 1 ::: mul ::: -- s·(B+1) :: s :: U
+  dup 2 ::: sload ::: -- S :: s·(B+1) :: s :: U
+  dup 0 ::: pushB256 offset ::: add ::: -- (S+offset) :: S :: s·(B+1) :: s :: U
+  swap 1 ::: -- s·(B+1) :: S :: (S+offset) :: s :: U
+  dup 2 ::: swap 0 ::: div ::: -- p :: S :: (S+offset) :: s :: U
+  dup 3 ::: dup 2 ::: sub ::: -- (S−s) :: p :: S :: (S+offset) :: s :: U
+  dup 5 ::: sstore ::: -- p :: S :: (S+offset) :: s :: U
+                        -- [total supply is now up to date;
+                        --  state fully settled before the send]
+  dup 0 ::: -- p :: p :: S :: (S+offset) :: s :: U
+  sendToCaller +++ -- success? :: p :: S :: (S+offset) :: s :: U
   (mstoreAt 0 +++ returnMemoryRange 0 32) <?> .rev
   -- [revert if the send failed; otherwise return p]
 
@@ -137,21 +150,23 @@ def withdraw : Func :=
 -- flight), replicating deposit's arithmetic-guard revert region exactly,
 -- including the supply-cap check on the hypothetical mint.
 def convertToShares : Func :=
-  arg 0 +++ dup 0 ::: pushB256 maxValue ::: lt ::: -- (maxValue <? a) :: a
-  .rev <?> -- [amount above maxValue: revert]
-           -- a
-  selfbalance ::: dup 0 ::: pushB256 maxBalance ::: lt ::: -- (maxBalance <? B) :: B :: a
-  .rev <?> -- [balance above maxBalance: revert]
-           -- B :: a
-  pushB256 1 ::: add ::: -- (B+1) :: a
-  pushSupplySlot +++ sload ::: -- S :: (B+1) :: a
-  dup 0 ::: pushB256 offset ::: add ::: -- (S+offset) :: S :: (B+1) :: a
-  dup 3 ::: mul ::: -- a·(S+offset) :: S :: (B+1) :: a
-  dup 2 ::: swap 0 ::: div ::: -- m :: S :: (B+1) :: a
-  dup 1 ::: dup 1 ::: add ::: -- (S+m) :: m :: S :: (B+1) :: a
-  pushB256 maxSupply ::: lt ::: -- (maxSupply <? S+m) :: m :: S :: (B+1) :: a
+  pushMaxAndCap +++ -- M :: U
+  arg 0 +++ dup 0 ::: dup 2 ::: pushB256 30 ::: shr ::: lt :::
+    -- fₐ :: a :: M :: U, where fₐ=(maxValue <? a)
+  selfbalance ::: dup 0 ::: dup 4 ::: lt ::: dup 2 ::: add :::
+    -- (fₐ+fᴮ) :: B :: fₐ :: a :: M :: U, fᴮ=(M <? B)
+  .rev <?> -- [either pre-arithmetic magnitude guard failed: revert]
+           -- B :: 0 :: a :: M :: U
+  pushB256 1 ::: add ::: -- (B+1) :: 0 :: a :: M :: U
+  dup 4 ::: sload ::: -- S :: (B+1) :: 0 :: a :: M :: U
+  dup 0 ::: pushB256 offset ::: add :::
+    -- (S+offset) :: S :: (B+1) :: 0 :: a :: M :: U
+  dup 4 ::: mul ::: -- a·(S+offset) :: S :: (B+1) :: 0 :: a :: M :: U
+  dup 2 ::: swap 0 ::: div ::: -- m :: S :: (B+1) :: 0 :: a :: M :: U
+  dup 1 ::: dup 1 ::: add ::: -- (S+m) :: m :: S :: (B+1) :: 0 :: a :: M :: U
+  dup 6 ::: lt ::: -- (M <? S+m) :: m :: S :: (B+1) :: 0 :: a :: M :: U
   .rev <?> -- [hypothetical post-deposit supply above maxSupply: revert]
-           -- m :: S :: (B+1) :: a
+           -- m :: S :: (B+1) :: 0 :: a :: M :: U
   mstoreAt 0 +++ returnMemoryRange 0 32
 
 -- convertToAssets(uint256 s) — view --
@@ -161,17 +176,18 @@ def convertToShares : Func :=
 -- arithmetic and has no view analogue; the supply cap bounds the argument
 -- instead, which every share count a real withdraw can burn satisfies).
 def convertToAssets : Func :=
-  arg 0 +++ dup 0 ::: pushB256 maxSupply ::: lt ::: -- (maxSupply <? s) :: s
-  .rev <?> -- [share count above maxSupply: revert]
-           -- s
-  selfbalance ::: dup 0 ::: pushB256 maxBalance ::: lt ::: -- (maxBalance <? B) :: B :: s
-  .rev <?> -- [balance above maxBalance: revert]
-           -- B :: s
-  pushB256 1 ::: add ::: -- (B+1) :: s
-  dup 1 ::: mul ::: -- s·(B+1) :: s
-  pushSupplySlot +++ sload ::: -- S :: s·(B+1) :: s
-  pushB256 offset ::: add ::: -- (S+offset) :: s·(B+1) :: s
-  swap 0 ::: div ::: -- p :: s
+  pushMaxAndCap +++ -- M :: U
+  arg 0 +++ dup 0 ::: dup 2 ::: lt :::
+    -- fₛ :: s :: M :: U, where fₛ=(maxSupply <? s)
+  selfbalance ::: dup 0 ::: dup 4 ::: lt ::: dup 2 ::: add :::
+    -- (fₛ+fᴮ) :: B :: fₛ :: s :: M :: U, fᴮ=(M <? B)
+  .rev <?> -- [either pre-arithmetic magnitude guard failed: revert]
+           -- B :: 0 :: s :: M :: U
+  pushB256 1 ::: add ::: -- (B+1) :: 0 :: s :: M :: U
+  dup 2 ::: mul ::: -- s·(B+1) :: 0 :: s :: M :: U
+  dup 4 ::: sload ::: -- S :: s·(B+1) :: 0 :: s :: M :: U
+  pushB256 offset ::: add ::: -- (S+offset) :: s·(B+1) :: 0 :: s :: M :: U
+  swap 0 ::: div ::: -- p :: 0 :: s :: M :: U
   mstoreAt 0 +++ returnMemoryRange 0 32
 
 -- the donation lever --
@@ -184,24 +200,50 @@ def donate : Func :=
 
 -- main --
 
--- The four dispatched functions in ascending selector order. Everything
--- except `deposit` rejects nonzero call value; the payable surface is
--- exactly `deposit` and the empty-calldata donation path.
+-- The four public selector/body pairs in ascending selector order.  This
+-- remains the checked ABI catalogue used by property statements; the runtime
+-- below hand-shapes their ingress so the three nonpayable entries share one
+-- value split instead of carrying three identical wrappers.
 def prorataFuncs : List (B256 × Func) :=
-  [ (selector "convertToAssets" [.uint256], nonpayable convertToAssets), -- 0x07a2d13a
-    (selector "withdraw" [.uint256], nonpayable withdraw),               -- 0x2e1a7d4d
-    (selector "convertToShares" [.uint256], nonpayable convertToShares), -- 0xc6e6f592
-    (selector "deposit" [], deposit) ]                                   -- 0xd0e30db0
+  [ (selector "convertToAssets" [.uint256], convertToAssets), -- 0x07a2d13a
+    (selector "withdraw" [.uint256], withdraw),               -- 0x2e1a7d4d
+    (selector "convertToShares" [.uint256], convertToShares), -- 0xc6e6f592
+    (selector "deposit" [], deposit) ]                        -- 0xd0e30db0
 
--- `dispatchWith`'s ordering precondition, checked rather than commented
--- (the WETH precedent: a misordered entry would compile to an unreachable
--- function, and this line fails to elaborate instead).
+-- The catalogue order is checked rather than commented.  Besides preventing
+-- ABI drift, it retains the same machine-checked selector inventory consumed
+-- by the generic contract-family tooling.
 theorem prorataFuncs_sorted : DispatchTree.sorted prorataFuncs = true := by
   decide +kernel
 
-def prorataTree : DispatchTree := .ofSorted prorataFuncs
+-- Zero-value calls try the three nonpayable selectors in hot-path order:
+-- withdrawal first, then the share preview, then the asset preview.  Failed
+-- tests preserve the selector for the next comparison; successful tests POP
+-- that preserved word before entering the original body.  The final equality
+-- consumes it directly.  An unmatched selector reaches `donate`, whose
+-- calldata-size split rejects every nonempty miss and accepts only receive.
+def zeroValueDispatch : Func :=
+  dup 0 ::: pushB256 (selector "withdraw" [.uint256]) ::: eq :::
+  ((pop ::: withdraw) <?>
+  dup 0 ::: pushB256 (selector "convertToShares" [.uint256]) ::: eq :::
+  ((pop ::: convertToShares) <?>
+  pushB256 (selector "convertToAssets" [.uint256]) ::: eq :::
+  (convertToAssets <?> donate)))
 
-def prorata : Prog := ⟨Func.mainWith 1 prorataTree, [donate]⟩
+-- Deposit is tested first because it alone is selector-payable.  On a miss,
+-- raw CALLVALUE is the shared nonpayability split: zero proceeds to the three
+-- remaining selectors; nonzero discards the selector and reuses `donate`,
+-- which accepts precisely empty calldata and otherwise gives the same empty
+-- revert as the former per-entry guards.  Empty calldata is therefore payable
+-- at either value, while every recognized non-deposit selector remains
+-- nonpayable and every nonempty miss still reverts.
+def prorataMain : Func :=
+  fsig +++
+  dup 0 ::: pushB256 (selector "deposit" []) ::: eq :::
+  ((pop ::: deposit) <?>
+  callvalue ::: ((pop ::: donate) <?> zeroValueDispatch))
+
+def prorata : Prog := ⟨prorataMain, []⟩
 
 end Prorata
 

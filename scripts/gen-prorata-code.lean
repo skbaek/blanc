@@ -65,7 +65,7 @@ private def renderModule (bs : Bytes) : String :=
     , ""
     , "`decide +kernel` evaluates the compiler in the kernel — no elaboration option"
     , "is raised, and nothing is added to the trusted base (in particular this is"
-    , "*not* `native_decide`). -/"
+    , "not a native evaluation shortcut). -/"
     , "theorem prorataCode_compile : Prog.compile Prorata.prorata = some prorataCode := by"
     , "  decide +kernel"
     , ""
