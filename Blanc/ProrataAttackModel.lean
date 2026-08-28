@@ -552,6 +552,279 @@ theorem ceilDiv_balance_mul_le_offset
           Nat.mul_le_mul_left o (Nat.le_add_right balance 1)
     exact Nat.le_of_lt (hover.trans_le hsum)
 
+/-- After a victim fully exits at a no-lower price, the remaining coalition's
+claim is bounded by the balance excluding the victim's deposit. -/
+theorem victim_full_exit_claim_le
+    {o initialSupply initialBalance victim minted attacker balance paid : Nat}
+    (ho : 2 ≤ o) (hgenesis : initialSupply ≤ o * initialBalance)
+    (hminted : minted = mintN o victim initialSupply initialBalance)
+    (hprice : PriceLe o ⟨initialSupply, initialBalance⟩
+      ⟨attacker + minted, balance⟩)
+    (hpaid : paid = payN o minted (attacker + minted) balance) :
+    claimN o attacker attacker (balance - paid) ≤ balance - victim := by
+  subst minted
+  subst paid
+  have ho0 : o ≠ 0 := by omega
+  have hD0 : initialSupply + o ≠ 0 := by omega
+  have hX0 : initialBalance + 1 ≠ 0 := by omega
+  have hpaidBalance :
+      payN o (mintN o victim initialSupply initialBalance)
+          (attacker + mintN o victim initialSupply initialBalance) balance ≤
+        balance :=
+    payN_le_balance ho0 (by omega)
+  have holdPaidLe :
+      payN o (mintN o victim initialSupply initialBalance)
+          initialSupply initialBalance ≤
+        payN o (mintN o victim initialSupply initialBalance)
+          (attacker + mintN o victim initialSupply initialBalance) balance :=
+    payN_mono_price ho0 hprice
+  have holdLoss :
+      victim -
+          payN o (mintN o victim initialSupply initialBalance)
+            initialSupply initialBalance ≤
+        Jaune.ceilDiv initialBalance (initialSupply + o) := by
+    simpa only [mintN, payN, Nat.add_sub_cancel_right] using
+      (Jaune.Nat.sub_mul_div_mul_div_le hD0 hX0 victim)
+  have hloss :
+      victim -
+          payN o (mintN o victim initialSupply initialBalance)
+            (attacker + mintN o victim initialSupply initialBalance) balance ≤
+        Jaune.ceilDiv initialBalance (initialSupply + o) :=
+    (Nat.sub_le_sub_left holdPaidLe victim).trans holdLoss
+  have hmintLt :
+      victim * (initialSupply + o) <
+        (initialBalance + 1) *
+          (mintN o victim initialSupply initialBalance + 1) := by
+    simpa only [mintN] using
+      (Jaune.Nat.lt_mul_div_add_one hX0 victim (initialSupply + o))
+  have hmintOffset :
+      victim * (initialSupply + o) <
+        (initialBalance + 1) *
+          (mintN o victim initialSupply initialBalance + o) :=
+    hmintLt.trans_le
+      (Nat.mul_le_mul_left (initialBalance + 1) (by omega))
+  unfold PriceLe at hprice
+  have hsumLt :
+      attacker * (initialBalance + 1) +
+          victim * (initialSupply + o) <
+        (balance + 1) * (initialSupply + o) := by
+    calc
+      attacker * (initialBalance + 1) +
+            victim * (initialSupply + o) <
+          attacker * (initialBalance + 1) +
+            (initialBalance + 1) *
+              (mintN o victim initialSupply initialBalance + o) :=
+        Nat.add_lt_add_left hmintOffset _
+      _ = (initialBalance + 1) *
+            (attacker + mintN o victim initialSupply initialBalance + o) := by
+        rw [Nat.mul_add (initialBalance + 1)
+            (attacker + mintN o victim initialSupply initialBalance) o,
+          Nat.mul_add (initialBalance + 1) attacker
+            (mintN o victim initialSupply initialBalance),
+          Nat.mul_add (initialBalance + 1)
+            (mintN o victim initialSupply initialBalance) o]
+        ac_rfl
+      _ ≤ (balance + 1) * (initialSupply + o) := by
+        simpa only using hprice
+  have hvX : victim < balance + 1 := by
+    apply Nat.lt_of_mul_lt_mul_right
+    calc
+      victim * (initialSupply + o) ≤
+          attacker * (initialBalance + 1) +
+            victim * (initialSupply + o) :=
+        Nat.le_add_left _ _
+      _ < (balance + 1) * (initialSupply + o) := hsumLt
+  have hvBalance : victim ≤ balance := by omega
+  have hcoalition :
+      attacker * (initialBalance + 1) <
+        (balance + 1 - victim) * (initialSupply + o) := by
+    have hsplit :
+        (balance + 1 - victim) * (initialSupply + o) +
+            victim * (initialSupply + o) =
+          (balance + 1) * (initialSupply + o) := by
+      rw [← Nat.add_mul, Nat.sub_add_cancel (Nat.le_of_lt hvX)]
+    omega
+  have hceil :=
+    ceilDiv_balance_mul_le_offset ho hgenesis
+  have hreserve :
+      attacker *
+          (victim -
+            payN o (mintN o victim initialSupply initialBalance)
+              (attacker + mintN o victim initialSupply initialBalance)
+                balance) <
+        o * (balance + 1 - victim) := by
+    by_cases hlossZero :
+        victim -
+            payN o (mintN o victim initialSupply initialBalance)
+              (attacker + mintN o victim initialSupply initialBalance)
+                balance = 0
+    · rw [hlossZero, Nat.mul_zero]
+      exact Nat.mul_pos (by omega) (by omega)
+    · have hceilPos :
+          0 < Jaune.ceilDiv initialBalance (initialSupply + o) := by
+        omega
+      have hscaled :
+          (attacker *
+              Jaune.ceilDiv initialBalance (initialSupply + o)) *
+              (initialBalance + 1) <
+            (o * (balance + 1 - victim)) *
+              (initialBalance + 1) := by
+        calc
+          (attacker *
+                Jaune.ceilDiv initialBalance (initialSupply + o)) *
+                (initialBalance + 1) =
+              (attacker * (initialBalance + 1)) *
+                Jaune.ceilDiv initialBalance (initialSupply + o) := by
+            ac_rfl
+          _ < ((balance + 1 - victim) * (initialSupply + o)) *
+                Jaune.ceilDiv initialBalance (initialSupply + o) :=
+            Nat.mul_lt_mul_of_pos_right hcoalition hceilPos
+          _ = (Jaune.ceilDiv initialBalance (initialSupply + o) *
+                (initialSupply + o)) * (balance + 1 - victim) := by
+            ac_rfl
+          _ ≤ (o * (initialBalance + 1)) *
+                (balance + 1 - victim) :=
+            Nat.mul_le_mul_right (balance + 1 - victim) hceil
+          _ = (o * (balance + 1 - victim)) *
+                (initialBalance + 1) := by
+            ac_rfl
+      have hceilReserve :
+          attacker * Jaune.ceilDiv initialBalance (initialSupply + o) <
+            o * (balance + 1 - victim) :=
+        Nat.lt_of_mul_lt_mul_right hscaled
+      exact
+        (Nat.mul_le_mul_left attacker hloss).trans_lt hceilReserve
+  have hnum :
+      attacker *
+          (balance -
+              payN o (mintN o victim initialSupply initialBalance)
+                (attacker + mintN o victim initialSupply initialBalance)
+                  balance + 1) <
+        (balance - victim + 1) * (attacker + o) := by
+    by_cases hpaidVictim :
+        payN o (mintN o victim initialSupply initialBalance)
+            (attacker + mintN o victim initialSupply initialBalance)
+              balance ≤ victim
+    · have hsplit :
+          balance -
+                payN o (mintN o victim initialSupply initialBalance)
+                  (attacker + mintN o victim initialSupply initialBalance)
+                    balance + 1 =
+            (balance + 1 - victim) +
+              (victim -
+                payN o (mintN o victim initialSupply initialBalance)
+                  (attacker + mintN o victim initialSupply initialBalance)
+                    balance) := by
+        omega
+      have htarget : balance - victim + 1 = balance + 1 - victim := by
+        omega
+      calc
+        attacker *
+              (balance -
+                  payN o (mintN o victim initialSupply initialBalance)
+                    (attacker + mintN o victim initialSupply initialBalance)
+                      balance + 1) =
+            attacker * (balance + 1 - victim) +
+              attacker *
+                (victim -
+                  payN o (mintN o victim initialSupply initialBalance)
+                    (attacker + mintN o victim initialSupply initialBalance)
+                      balance) := by
+          rw [hsplit, Nat.mul_add]
+        _ < attacker * (balance + 1 - victim) +
+              o * (balance + 1 - victim) :=
+          Nat.add_lt_add_left hreserve _
+        _ = (balance - victim + 1) * (attacker + o) := by
+          rw [htarget,
+            Nat.mul_add (balance + 1 - victim) attacker o]
+          ac_rfl
+    · have hremaining :
+          balance -
+                payN o (mintN o victim initialSupply initialBalance)
+                  (attacker + mintN o victim initialSupply initialBalance)
+                    balance + 1 ≤
+            balance - victim + 1 := by
+        omega
+      calc
+        attacker *
+              (balance -
+                  payN o (mintN o victim initialSupply initialBalance)
+                    (attacker + mintN o victim initialSupply initialBalance)
+                      balance + 1) ≤
+            attacker * (balance - victim + 1) :=
+          Nat.mul_le_mul_left attacker hremaining
+        _ < (attacker + o) * (balance - victim + 1) :=
+          Nat.mul_lt_mul_of_pos_right (by omega) (by omega)
+        _ = (balance - victim + 1) * (attacker + o) :=
+          Nat.mul_comm _ _
+  unfold claimN payN
+  have hquot :
+      attacker *
+            (balance -
+                mintN o victim initialSupply initialBalance * (balance + 1) /
+                  (attacker + mintN o victim initialSupply initialBalance + o) +
+              1) /
+          (attacker + o) <
+        balance - victim + 1 := by
+    rw [Nat.div_lt_iff_lt_mul (by omega)]
+    simpa only [payN] using hnum
+  omega
+
+/-- A victim's full-exit loss at a no-lower post-deposit price is at most one
+old-price ceiling quantum. -/
+theorem victim_loss_le_ceil
+    {o initialSupply initialBalance victim minted
+      exitSupply exitBalance paid : Nat}
+    (ho : o ≠ 0)
+    (hminted : minted = mintN o victim initialSupply initialBalance)
+    (hprice : PriceLe o
+      ⟨initialSupply + minted, initialBalance + victim⟩
+      ⟨exitSupply, exitBalance⟩)
+    (hpaid : paid = payN o minted exitSupply exitBalance) :
+    victim - paid ≤
+      Jaune.ceilDiv initialBalance (initialSupply + o) := by
+  subst minted
+  subst paid
+  have hpayoutMono :
+      payN o (mintN o victim initialSupply initialBalance)
+          (initialSupply + mintN o victim initialSupply initialBalance)
+          (initialBalance + victim) ≤
+        payN o (mintN o victim initialSupply initialBalance)
+          exitSupply exitBalance :=
+    payN_mono_price ho hprice
+  have himmediate :=
+    immediate_roundtrip_loss_le
+      (o := o) (amount := victim) (supply := initialSupply)
+      (balance := initialBalance) ho
+  exact
+    (Nat.sub_le_sub_left hpayoutMono victim).trans
+      (by simpa only [Nat.add_sub_cancel_right] using himmediate)
+
+/-- The ceiling loss bound implies the looser division spelling used by the
+frozen security statement. -/
+theorem victim_loss_le_div_add_one
+    {o initialSupply initialBalance victim minted
+      exitSupply exitBalance paid : Nat}
+    (ho : o ≠ 0)
+    (hminted : minted = mintN o victim initialSupply initialBalance)
+    (hprice : PriceLe o
+      ⟨initialSupply + minted, initialBalance + victim⟩
+      ⟨exitSupply, exitBalance⟩)
+    (hpaid : paid = payN o minted exitSupply exitBalance) :
+    victim - paid ≤
+      Nat.div (initialBalance + 1) (initialSupply + o) + 1 := by
+  have hceil := victim_loss_le_ceil ho hminted hprice hpaid
+  apply hceil.trans
+  have hdiv :
+      Nat.div initialBalance (initialSupply + o) ≤
+        Nat.div (initialBalance + 1) (initialSupply + o) :=
+    Nat.div_le_div_right (Nat.le_add_right initialBalance 1)
+  rw [Jaune.ceilDiv_eq_div_add_ite]
+  split
+  · rw [Nat.add_zero]
+    exact hdiv.trans (Nat.le_add_right _ 1)
+  · exact Nat.add_le_add_right hdiv 1
+
 end Prorata
 
 end Blanc
