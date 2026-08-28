@@ -475,6 +475,18 @@ private theorem stubCode_toList_nonempty :
     PinnedTargetControl.stubCode.toList ≠ [] := by
   decide +kernel
 
+/-- The stub is not a delegation designator, so at a state with the stub
+installed at `target` the resolved code address a spawned call carries is
+`target` itself. -/
+private theorem resolvedCodeAddress_of_stub
+    {pre : Devm} {target : Adr}
+    (installed : pre.getCode target = PinnedTargetControl.stubCode) :
+    (getDelegatedCodeAddress (pre.getCode target)).getD target = target := by
+  rw [installed]
+  dsimp only [getDelegatedCodeAddress]
+  rw [if_neg stubCode_not_delegation]
+  rfl
+
 /-- An actual non-precompile spawn from a state with the stub installed
 carries a retained compiled-stub execution in its own slot. -/
 private theorem spawnedMessage_executes_stub
@@ -623,6 +635,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
         pauseTransfer, pauseStatic, pauseData, pauseTime, pauseRules,
         pauseSpawn, pauseFilled, pauseProcess, pauseStepRun, pauseState,
         pauseOutput⟩
+    rw [resolvedCodeAddress_of_stub callPreInstalled] at pauseCodeAddress
     have pauseXSpawn : Xinst.step sevm callPre .call =
         .spawn (Jaune.Frame.ofCall pauseMsg) pauseResume :=
       XStep.toStep_spawn (by
@@ -689,6 +702,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
           statTransfer, statStatic, statDataEq, statTime, statRules,
           statSpawn, statFilled, statProcess, statStepRun, statState,
           statOutput⟩
+      rw [resolvedCodeAddress_of_stub statPreInstalled] at statCodeAddress
       have statXSpawn : Xinst.step sevm statPre .statcall =
           .spawn (Jaune.Frame.ofCall statMsg) statResume :=
         XStep.toStep_spawn (by

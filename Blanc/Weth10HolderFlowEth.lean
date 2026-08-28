@@ -634,7 +634,10 @@ structure AcceptedValueCallTrace
     callMsg e parent
       (min gasWord.toNat (except64th availableGas) +
         (if value.toNat = 0 then 0 else gCallStipend))
-      value e.currentTarget target.toAdr target.toAdr true false
+      value e.currentTarget target.toAdr
+      ((getDelegatedCodeAddress (callPre.getCode target.toAdr)).getD
+        target.toAdr)
+      true false
       ((callPre.memory.read (0 : B256).toNat (0 : B256).toNat).1)
       code delegated
   retained : ProcessMessageTrace childMessage (.ok child)
@@ -661,15 +664,37 @@ theorem exists_acceptedValueCallTrace
       simp [B256.eqCheck]] at hzero
     exact B256.zero_ne_one hzero.symm
   · rcases hsuccess with
-      ⟨parent, child, slot, delegated, code, availableGas, pc, hstep,
+      ⟨parent, child, slot, delegated, na, code, availableGas, pc, hstep,
         hdepth, _, hparentState, _, _, _, hdelegation, hfilled, hmessage,
         hclean, hresume, hcallPostState, _, _, _⟩
     rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
+    have hresolution :
+        (getDelegatedCodeAddress (callPre.getCode target.toAdr) = none ∧
+            code = callPre.getCode target.toAdr ∧ delegated = false) ∨
+          (∃ delegatedTarget,
+            getDelegatedCodeAddress (callPre.getCode target.toAdr) =
+              some delegatedTarget ∧
+            code = callPre.getCode delegatedTarget ∧ delegated = true) := by
+      rcases hdelegation with
+        ⟨hnone, _, hcode, hdp⟩ | ⟨d, hsome, _, hcode, hdp⟩
+      · exact Or.inl ⟨hnone, hcode, hdp⟩
+      · exact Or.inr ⟨d, hsome, hcode, hdp⟩
+    have hna : na =
+        (getDelegatedCodeAddress (callPre.getCode target.toAdr)).getD
+          target.toAdr := by
+      rcases hdelegation with
+        ⟨hnone, heq, _, _⟩ | ⟨d, hsome, heq, _, _⟩
+      · rw [heq, hnone]; rfl
+      · rw [heq, hsome]; rfl
+    rw [hna] at hmessage
     let childMessage :=
       callMsg e parent
         (min g.toNat (except64th availableGas) +
           (if value.toNat = 0 then 0 else gCallStipend))
-        value e.currentTarget target.toAdr target.toAdr true false
+        value e.currentTarget target.toAdr
+        ((getDelegatedCodeAddress (callPre.getCode target.toAdr)).getD
+          target.toAdr)
+        true false
         ((callPre.memory.read (0 : B256).toNat (0 : B256).toNat).1)
         code delegated
     have hguardState : guardPost.state = child.state := by
@@ -680,7 +705,7 @@ theorem exists_acceptedValueCallTrace
         _ = child.state := hcallPostState
     exact ⟨⟨g, callPost, parent, child, slot, pc, hstep, hdepth,
       delegated, code, availableGas,
-      hparentState, hdelegation, childMessage, rfl,
+      hparentState, hresolution, childMessage, rfl,
       ⟨slot, retained, by simpa only [childMessage] using hmessage⟩,
       hclean, hguardState⟩⟩
 
