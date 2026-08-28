@@ -315,4 +315,128 @@ theorem implGuarded_runCompiledTo_zero
   · rw [Devm.withOutput_transientStorage, Devm.setMach_transientStorage]
   · rw [Devm.withOutput_logs, Devm.setMach_logs]
 
+private lemma static_sstore_run
+    (pc : Nat) (sevm : Sevm) (d : Devm)
+    (h_static : sevm.isStatic = true)
+    (h_stack : d.stack = implSlot :: 1 :: [])
+    (h_gas : gCallStipend + gasColdSload + gasStorageSet < d.gasLeft)
+    (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
+      d.accessedStorageKeys)
+    (h_orig : getOrigStorVal sevm sevm.currentTarget implSlot = 0)
+    (h_cur : Devm.getStorVal d sevm.currentTarget implSlot = 0) :
+    ∃ post,
+      Rinst.run ⟨pc, sevm, d⟩ .sstore =
+        .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
+      post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
+      post.logs = d.logs := by
+  show ∃ post,
+    (do
+      let ⟨key, d⟩ ← d.pop
+      let ⟨new_value, d⟩ ← d.pop
+      .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
+      let ct := sevm.currentTarget
+      let original_value := getOrigStorVal sevm ct key
+      let current_value := d.getStorVal ct key
+      let ⟨d, gasCost2⟩ ← .ok <|
+        if ((ct, key) : Adr × B256) ∉ d.accessedStorageKeys then
+          (⟨addAccessedStorageKey d ct key, gasColdSload⟩ : Devm × Nat)
+        else ⟨d, 0⟩
+      let gasCost3 ← .ok <|
+        if original_value = current_value ∧ current_value ≠ new_value then
+          if original_value = 0 then gasCost2 + gasStorageSet
+          else gasCost2 + (gasStorageUpdate - gasColdSload)
+        else gasCost2 + gasWarmAccess
+      let d ← .ok <| d.withRefundCounter
+        (sstoreNewRefundCounter new_value original_value current_value d.refundCounter)
+      let d ← chargeGas gasCost3 d
+      assertDynamic sevm d
+      .ok (d.setStorVal sevm.currentTarget key new_value)) =
+      .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
+      post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
+      post.logs = d.logs
+  have h_pop : (d.setMach ⟨[1], d.memory, d.gasLeft⟩).pop =
+      .ok ⟨1, d.setMach ⟨[], d.memory, d.gasLeft⟩⟩ := by rfl
+  have h_cost : gasColdSload + gasStorageSet ≤ d.gasLeft := by omega
+  have h_stipend : gCallStipend < d.gasLeft := by omega
+  have h_if : (if (0 : B256) = 1 then gasColdSload + gasWarmAccess
+      else gasColdSload + gasStorageSet) = gasColdSload + gasStorageSet := by
+    decide
+  let d0 := d.setMach ⟨[], d.memory, d.gasLeft⟩
+  let d1 := addAccessedStorageKey d0 sevm.currentTarget implSlot
+  let d2 := d1.withRefundCounter
+    (sstoreNewRefundCounter 1 0 0 d1.refundCounter)
+  have h_charge : chargeGas (gasColdSload + gasStorageSet) d2 =
+      .ok (d2.setMach ⟨d2.stack, d2.memory,
+        d.gasLeft - (gasColdSload + gasStorageSet)⟩) := by
+    exact chargeGas_eq_ok h_cost
+  have hd0 : Devm.WorldEq d d0 := Devm.worldEq_setMach d _
+  have hd1 : Devm.WorldEq d0 d1 :=
+    addAccessedStorageKey_worldEq d0 sevm.currentTarget implSlot
+  have hd2 : Devm.WorldEq d1 d2 := by
+    exact ⟨rfl, rfl⟩
+  have hworld : Devm.WorldEq d d2 :=
+    ⟨hd0.1.trans (hd1.1.trans hd2.1), hd0.2.trans (hd1.2.trans hd2.2)⟩
+  have hlogs0 : d0.logs = d.logs := Devm.setMach_logs d _
+  have hlogs1 : d1.logs = d0.logs := by rfl
+  have hlogs2 : d2.logs = d1.logs := by rfl
+  let post := d2.setMach ⟨d2.stack, d2.memory,
+    d.gasLeft - (gasColdSload + gasStorageSet)⟩
+  refine ⟨post, ?_, ?_, ?_, ?_⟩
+  rw [Devm.pop_eq_ok h_stack]
+  simp [h_pop, h_if, assertDynamic, Except.assert,
+    Devm.setMach_accessedStorageKeys, Devm.getStorVal_setMach,
+    h_static, h_stipend, h_cold, h_orig, h_cur, d0, d1, d2, h_charge, post]
+  · rw [Devm.setMach_state]
+    exact hworld.1.symm
+  · rw [Devm.setMach_transientStorage]
+    exact hworld.2.symm
+  · rw [Devm.setMach_logs]
+    exact hlogs2.trans (hlogs1.trans hlogs0)
+
+private lemma static_sstore_step
+    (pc : Nat) (sevm : Sevm) (d : Devm)
+    (h_static : sevm.isStatic = true)
+    (h_stack : d.stack = implSlot :: 1 :: [])
+    (h_gas : gCallStipend + gasColdSload + gasStorageSet < d.gasLeft)
+    (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
+      d.accessedStorageKeys)
+    (h_orig : getOrigStorVal sevm sevm.currentTarget implSlot = 0)
+    (h_cur : Devm.getStorVal d sevm.currentTarget implSlot = 0) :
+    ∃ post,
+      Ninst.StepRun pc sevm d (.reg .sstore) .none
+        (.error ⟨.halt (.writeInStaticContext .none), post⟩) ∧
+      post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
+      post.logs = d.logs := by
+  obtain ⟨post, hrun, hstate, htrans, hlogs⟩ :=
+    static_sstore_run pc sevm d h_static h_stack h_gas h_cold h_orig h_cur
+  refine ⟨post, ?_, hstate, htrans, hlogs⟩
+  rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution]
+  exact ⟨rfl, hrun.symm⟩
+
+theorem implGuarded_static_sstore_halt
+    (pc : Nat) (sevm : Sevm) (d : Devm)
+    (h_at : Ninst.At sevm.code pc (.reg .sstore))
+    (h_static : sevm.isStatic = true)
+    (h_stack : d.stack = implSlot :: 1 :: [])
+    (h_gas : gCallStipend + gasColdSload + gasStorageSet < d.gasLeft)
+    (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
+      d.accessedStorageKeys)
+    (h_orig : getOrigStorVal sevm sevm.currentTarget implSlot = 0)
+    (h_cur : Devm.getStorVal d sevm.currentTarget implSlot = 0) :
+    ∃ post,
+      Nonempty (Exec pc sevm d
+        (.error ⟨.halt (.writeInStaticContext .none), post⟩)) ∧
+      exec ⟨pc, sevm, d⟩ =
+        .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
+      post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
+      post.logs = d.logs := by
+  obtain ⟨post, hstep, hstate, htrans, hlogs⟩ :=
+    static_sstore_step pc sevm d h_static h_stack h_gas h_cold h_orig h_cur
+  have hexec : Nonempty (Exec pc sevm d
+      (.error ⟨.halt (.writeInStaticContext .none), post⟩)) :=
+    Ninst.exec_of_stepRun_error h_at (show Xlot.Filled .none from trivial) hstep
+  refine ⟨post, hexec, ?_, hstate, htrans, hlogs⟩
+  exact (exec_iff_exec_eq pc sevm d
+    (.error ⟨.halt (.writeInStaticContext .none), post⟩)).mp hexec
+
 end Blanc.ProxyPair
