@@ -196,6 +196,33 @@ def file_digest(path: Path) -> str:
     return digest
 
 
+def file_identity(path: Path) -> str:
+    """Fingerprint both a file's bytes and any symlink that selects them.
+
+    Virtual-environment interpreters are commonly absolute symlinks.  Hashing
+    only the dereferenced bytes would let a retargeted interpreter reuse prior
+    evidence whenever the replacement happened to have identical launcher
+    bytes.  The link text is therefore part of the identity, while ordinary
+    files retain their historical digest shape.
+    """
+
+    if path.is_symlink():
+        try:
+            target = os.readlink(path)
+        except OSError as error:
+            raise Unresolvable(f"cannot read symlink {path}: {error}") from error
+        if not path.exists():
+            raise Unresolvable(f"declared file is a dangling symlink: {path}")
+        if path.is_file():
+            return digest_of({"symlink": target, "content": file_digest(path)})
+        if path.is_dir():
+            # A separately declared population owns directory contents.  This
+            # row owns which directory the stable alias selects.
+            return digest_of({"symlink": target, "kind": "directory"})
+        raise Unresolvable(f"declared symlink has unsupported target type: {path}")
+    return file_digest(path)
+
+
 _TOOL_MEMO: dict[str, str] = {}
 
 
@@ -318,6 +345,18 @@ def load_registry(path: Path) -> dict[str, Any]:
             )
         if kind == "cacheable" and not inputs:
             raise GateCacheError(f"cacheable gate {identifier} declares no inputs")
+        external = inputs.get("external", [])
+        if not isinstance(external, list):
+            raise GateCacheError(f"gate {identifier} has malformed external inputs")
+        for spec in external:
+            if not isinstance(spec, dict):
+                raise GateCacheError(f"gate {identifier} has malformed external input")
+            pin = spec.get("pin")
+            if not isinstance(pin, str) or re.fullmatch(r"[0-9a-f]{40}", pin) is None:
+                raise GateCacheError(
+                    f"gate {identifier} external {spec.get('id', '?')} must carry an "
+                    "exact lowercase 40-hex pin"
+                )
 
         verdict = gate.get("verdict")
         if kind == "composition":
@@ -353,8 +392,108 @@ def load_registry(path: Path) -> dict[str, Any]:
                     f"gate {identifier} expects a non-zero exit; only exit 0 passes"
                 )
 
+    _validate_oracle_lanes(gates)
     gates.sort(key=lambda gate: gate["order"])
     return registry
+
+
+LEGACY_EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
+CURRENT_T8N_PIN = "827a1cad9c9c8528512f90a06888c8bd9171d9ae"
+
+
+def _input_strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [item for child in value for item in _input_strings(child)]
+    if isinstance(value, dict):
+        return [item for child in value.values() for item in _input_strings(child)]
+    return []
+
+
+def _validate_oracle_lanes(gates: list[dict[str, Any]]) -> None:
+    """Keep the frozen Prague oracle and current-mainnet target disjoint.
+
+    This is registry validation, not an optional audit, so planning and cached
+    reuse both refuse a gate whose root or pin was cross-wired.
+    """
+
+    for gate in gates:
+        identifier = gate["id"]
+        inputs = gate.get("inputs", {})
+        strings = _input_strings(inputs)
+        external = inputs.get("external", [])
+        external_ids = {
+            spec.get("id") for spec in external if isinstance(spec, dict)
+        }
+        legacy = (
+            "eels" in external_ids
+            or "EELS_ROOT" in strings
+            or any(value.startswith("@eels/") for value in strings)
+        )
+        current = (
+            "t8n_target" in external_ids
+            or "JAUNE_T8N_TARGET" in strings
+            or any(value.startswith("@t8n_target/") for value in strings)
+        )
+        if legacy and current:
+            raise GateCacheError(
+                f"gate {identifier} mixes the legacy EELS and current-mainnet roots"
+            )
+        if not legacy and not current:
+            continue
+
+        if legacy:
+            expected = {
+                "id": "eels",
+                "path": "~/execution-specs",
+                "path_env": "EELS_ROOT",
+                "pin": LEGACY_EELS_PIN,
+            }
+            matches = [spec for spec in external if spec == expected]
+            if len(matches) != 1 or len(external) != 1:
+                raise GateCacheError(
+                    f"legacy EELS gate {identifier} must use only the frozen "
+                    f"EELS_ROOT checkout at {LEGACY_EELS_PIN}"
+                )
+            env = inputs.get("env", [])
+            if "EELS_ROOT" not in env or "JAUNE_T8N_TARGET" in env:
+                raise GateCacheError(
+                    f"legacy EELS gate {identifier} has the wrong root environment"
+                )
+            if any(value.startswith("@t8n_target/") for value in strings):
+                raise GateCacheError(
+                    f"legacy EELS gate {identifier} reads the current-mainnet root"
+                )
+            continue
+
+        expected = {
+            "id": "t8n_target",
+            "path": "~/execution-specs-t8n-amsterdam",
+            "path_env": "JAUNE_T8N_TARGET",
+            "pin": CURRENT_T8N_PIN,
+        }
+        matches = [spec for spec in external if spec == expected]
+        if len(matches) != 1 or len(external) != 1:
+            raise GateCacheError(
+                f"current-mainnet gate {identifier} must use only the isolated "
+                f"JAUNE_T8N_TARGET checkout at {CURRENT_T8N_PIN}"
+            )
+        env = inputs.get("env", [])
+        if "JAUNE_T8N_TARGET" not in env or "EELS_ROOT" in env:
+            raise GateCacheError(
+                f"current-mainnet gate {identifier} has the wrong root environment"
+            )
+        if any(value.startswith("@eels/") for value in strings):
+            raise GateCacheError(
+                f"current-mainnet gate {identifier} reads the legacy EELS root"
+            )
+        required = {"scripts/current-mainnet-target.json", "scripts/current_mainnet.py"}
+        if not required.issubset(set(inputs.get("files", []))):
+            raise GateCacheError(
+                f"current-mainnet gate {identifier} does not fingerprint its shared "
+                "profile and helper"
+            )
 
 
 def command_text(gate: dict[str, Any]) -> str:
@@ -374,6 +513,7 @@ def command_text(gate: dict[str, Any]) -> str:
 # used rather than the default one it did not.
 NAMED_ROOTS = {
     "eels": ("EELS_ROOT", "~/execution-specs"),
+    "t8n_target": ("JAUNE_T8N_TARGET", "~/execution-specs-t8n-amsterdam"),
     "weth10ref": ("WETH10_REFERENCE_DIR", "scripts/reference/weth10"),
     "weth10lock": ("WETH10_REFERENCE_LOCK", "scripts/weth10-reference.json"),
     "weth10doc": ("WETH10_COMPATIBILITY_DOC", "WETH10_COMPATIBILITY.md"),
@@ -414,7 +554,7 @@ def component_files(root: Path, paths: list[str]) -> tuple[str, dict[str, str]]:
     detail: dict[str, str] = {}
     for given in sorted(set(paths)):
         path = resolve_path(root, given)
-        detail[given] = file_digest(path) if path.is_file() else "<absent>"
+        detail[given] = file_identity(path) if path.is_file() or path.is_symlink() else "<absent>"
     return digest_of(detail), detail
 
 
@@ -517,7 +657,7 @@ def component_populations(
             # a POSIX filename cannot contain; a `membership:` prefix would be
             # imitable by a file actually named `membership:foo`.
             if mode == "content":
-                detail[name] = file_digest(resolve_path(root, name))
+                detail[name] = file_identity(resolve_path(root, name))
             else:
                 detail["membership\x00" + name] = "<member>"
     return digest_of(detail), detail
@@ -650,7 +790,11 @@ def component_external(root: Path, specs: list[dict[str, Any]]) -> tuple[str, di
                 f"summarise its content"
             )
         pin = spec.get("pin")
-        if isinstance(pin, str) and pin and not head.startswith(pin) and not pin.startswith(head):
+        if not isinstance(pin, str) or re.fullmatch(r"[0-9a-f]{40}", pin) is None:
+            raise Unresolvable(
+                f"external checkout {identifier} has no exact lowercase 40-hex pin"
+            )
+        if head != pin:
             raise Unresolvable(
                 f"external checkout {identifier} is at {head}, not the pinned {pin}"
             )
