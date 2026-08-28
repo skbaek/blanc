@@ -125,10 +125,36 @@ private lemma retPost_getStorVal (d : Devm) (S : List B256) (G i sz : Nat)
   rw [show ((((d.setMach ⟨S, d.memory, G⟩).memRead i sz).2).withOutput out).state =
       d.state from congrArg World.state (retPost_world d S G i sz out)]
 
+private lemma retPost_transientStorage (d : Devm) (S : List B256) (G i sz : Nat)
+    (out : Bytes) :
+    ((((d.setMach ⟨S, d.memory, G⟩).memRead i sz).2).withOutput out).transientStorage =
+      d.transientStorage :=
+  congrArg World.transientStorage (retPost_world d S G i sz out)
+
 private lemma getStorVal_setStorVal_self (d : Devm) (a : Adr) (k v : B256) :
     (d.setStorVal a k v).getStorVal a k = v := by
   show (Devm.getStor (d.setStorVal a k v) a).get k = v
   rw [setStorVal_getStor_self, Stor.get_set_self]
+
+private lemma sstoreBase_state (d : Devm) (t : Adr) (key : B256)
+    (rc : Int) (v : B256) :
+    (((addAccessedStorageKey d t key).withRefundCounter rc).setStorVal t key
+      v).state = d.state.setStorVal t key v := rfl
+
+private lemma sstoreBase_error (d : Devm) (t : Adr) (key : B256)
+    (rc : Int) (v : B256) :
+    (((addAccessedStorageKey d t key).withRefundCounter rc).setStorVal t key
+      v).error = d.error := rfl
+
+private lemma sstoreBase_transientStorage (d : Devm) (t : Adr) (key : B256)
+    (rc : Int) (v : B256) :
+    (((addAccessedStorageKey d t key).withRefundCounter rc).setStorVal t key
+      v).transientStorage = d.transientStorage := rfl
+
+private lemma sstoreBase_logs (d : Devm) (t : Adr) (key : B256)
+    (rc : Int) (v : B256) :
+    (((addAccessedStorageKey d t key).withRefundCounter rc).setStorVal t key
+      v).logs = d.logs := rfl
 
 /-! ## The executed success arm
 
@@ -148,11 +174,15 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
       Func.RunCompiledTo fs sevm
           (base.setMach ⟨[], Mem.empty, G + implBodyGas⟩)
           implSuccess (.ok post) ∧
+      post.error = base.error ∧
       post.output = implReturnWord.toBytes ∧
       post.gasLeft = G ∧
-      Devm.getStorVal post sevm.currentTarget implSlot = 1 := by
+      post.state = base.state.setStorVal sevm.currentTarget implSlot 1 ∧
+      Devm.getStorVal post sevm.currentTarget implSlot = 1 ∧
+      post.transientStorage = base.transientStorage ∧
+      post.logs = base.logs := by
   apply Exists.intro
-  refine ⟨?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold implSuccess mstoreAt
     rw [implBodyGas_eq]
     func_run [22100, 3]
@@ -176,10 +206,18 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
           show ((32 : B256)).toNat = 32 by decide]
         exact Devm.memRead_word_fst
           (by rw [show ((0 : B256) * 32).toNat = 0 by decide]; rfl)
+  · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
+      Devm.setMach_error, sstoreBase_error, Devm.setMach_error]
   · rfl
   · rfl
+  · rw [Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state,
+      Devm.setMach_state, sstoreBase_state, Devm.setMach_state]
   · rw [retPost_getStorVal]
     rw [Devm.getStorVal_setMach, getStorVal_setStorVal_self]
+  · rw [retPost_transientStorage, Devm.setMach_transientStorage,
+      sstoreBase_transientStorage, Devm.setMach_transientStorage]
+  · rw [Devm.withOutput_logs, Devm.memRead_logs, Devm.setMach_logs,
+      Devm.setMach_logs, sstoreBase_logs, Devm.setMach_logs]
 
 /-! ## Guard selection
 
@@ -201,11 +239,15 @@ theorem implGuarded_runCompiledTo_nonzero
       Func.RunCompiledTo fs sevm
           (base.setMach ⟨[], Mem.empty, G + implGuardedSuccessGas⟩)
           implGuarded (.ok post) ∧
+      post.error = base.error ∧
       post.output = implReturnWord.toBytes ∧
       post.gasLeft = G ∧
-      Devm.getStorVal post sevm.currentTarget implSlot = 1 := by
+      post.state = base.state.setStorVal sevm.currentTarget implSlot 1 ∧
+      Devm.getStorVal post sevm.currentTarget implSlot = 1 ∧
+      post.transientStorage = base.transientStorage ∧
+      post.logs = base.logs := by
   apply Exists.intro
-  refine ⟨?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold implGuarded cdl
     rw [implGuardedSuccessGas_eq]
     func_run [0, 22100, 3]
@@ -228,10 +270,18 @@ theorem implGuarded_runCompiledTo_nonzero
           show ((32 : B256)).toNat = 32 by decide]
         exact Devm.memRead_word_fst
           (by rw [show ((0 : B256) * 32).toNat = 0 by decide]; rfl)
+  · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
+      Devm.setMach_error, sstoreBase_error, Devm.setMach_error]
   · rfl
   · rfl
+  · rw [Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state,
+      Devm.setMach_state, sstoreBase_state, Devm.setMach_state]
   · rw [retPost_getStorVal]
     rw [Devm.getStorVal_setMach, getStorVal_setStorVal_self]
+  · rw [retPost_transientStorage, Devm.setMach_transientStorage,
+      sstoreBase_transientStorage, Devm.setMach_transientStorage]
+  · rw [Devm.withOutput_logs, Devm.memRead_logs, Devm.setMach_logs,
+      Devm.setMach_logs, sstoreBase_logs, Devm.setMach_logs]
 
 theorem implGuarded_runCompiledTo_zero
     (fs : List Func) (sevm : Sevm) (base : Devm) (G : Nat)
@@ -240,19 +290,29 @@ theorem implGuarded_runCompiledTo_zero
       Func.RunCompiledTo fs sevm
           (base.setMach ⟨[], Mem.empty, G + implGuardedRevertGas⟩)
           implGuarded (.error (.revert, post)) ∧
-      post.output = [] := by
+      post.error = base.error ∧
+      post.output = [] ∧
+      post.gasLeft = G ∧
+      post.state = base.state ∧
+      post.transientStorage = base.transientStorage ∧
+      post.logs = base.logs := by
   let post := (base.setMach ⟨[], Mem.empty, G⟩).withOutput []
-  refine ⟨post, ?_, rfl⟩
-  unfold implGuarded cdl implRevert post
-  rw [implGuardedRevertGas_eq]
-  func_run [1]
-  all_goals try {simp [B256.eqCheck, h_data]}
-  simp only [Nat.add_sub_cancel]
-  apply Func.runCompiledTo_rev (G := G)
-  · rfl
-  · rw [show ((0 : B256)).toNat = 0 by decide,
-      Devm.extCost_empty_window]
-    simp only [Devm.gasLeft_setMach, Nat.add_zero]
-  · exact Devm.memRead_zero
+  refine ⟨post, ?_, ?_, rfl, ?_, ?_, ?_, ?_⟩
+  · unfold implGuarded cdl implRevert post
+    rw [implGuardedRevertGas_eq]
+    func_run [1]
+    all_goals try {simp [B256.eqCheck, h_data]}
+    simp only [Nat.add_sub_cancel]
+    apply Func.runCompiledTo_rev (G := G)
+    · rfl
+    · rw [show ((0 : B256)).toNat = 0 by decide,
+        Devm.extCost_empty_window]
+      simp only [Devm.gasLeft_setMach, Nat.add_zero]
+    · exact Devm.memRead_zero
+  · rw [Devm.withOutput_error, Devm.setMach_error]
+  · rw [Devm.withOutput_gasLeft, Devm.gasLeft_setMach]
+  · rw [Devm.withOutput_state, Devm.setMach_state]
+  · rw [Devm.withOutput_transientStorage, Devm.setMach_transientStorage]
+  · rw [Devm.withOutput_logs, Devm.setMach_logs]
 
 end Blanc.ProxyPair
