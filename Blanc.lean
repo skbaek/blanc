@@ -106,6 +106,7 @@ import Blanc.BeaconDepositModel
 import Blanc.BeaconDepositCorrectness
 import Blanc.ProxyPairSlots
 import Blanc.Prorata
+import Blanc.ProrataCode
 
 namespace Blanc
 

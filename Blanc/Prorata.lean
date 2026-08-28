@@ -22,7 +22,9 @@
 -- bound `B ≤ maxBalance` (and the supply cap `maxSupply` rides the ledger
 -- invariant) before computing `s·(B+1)`. A donation can push `B` above
 -- `maxBalance`; that halts withdrawals until balance falls — PRORATA makes
--- no liveness claim, and the griefing price is 2^126 wei.
+-- no liveness claim. From genesis, the least such credit is
+-- `maxBalance + 1 = 2^126` wei; from an arbitrary admissible state the exact
+-- threshold is `maxBalance + 1 - B`.
 
 import Blanc.CommonProofs
 
@@ -41,11 +43,11 @@ namespace Prorata
 -- it appears in code only as `S + offset`, never as a factor.
 def offset : B256 := 1000
 
--- Largest single deposit: 2^96 − 1 wei (≈ 7.9 · 10^10 ETH).
+-- Largest single deposit: exactly 2^96 − 1 wei.
 def maxValue : B256 := Nat.toB256 (2 ^ 96 - 1)
 
--- Share-supply cap. With the invariant `S ≤ offset · B` this supports
--- balances to ≈ 2^116 wei before deposits revert.
+-- Share-supply cap: exactly 2^126 − 1 shares. The invariant
+-- `S ≤ offset · B` is a safety statement, not a liveness or capacity claim.
 def maxSupply : B256 := Nat.toB256 (2 ^ 126 - 1)
 
 -- Balance ceiling for any operation that multiplies by `B + 1`.
