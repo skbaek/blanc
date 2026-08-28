@@ -1560,7 +1560,7 @@ theorem benignCall_nonchildless_noninterference (w : BenignCallFixture) :
   intro key _member
   exact w.noRetainedWriteTo key
 
-/-- Closed standard-axiom evidence for the full non-childless clause-(iii)
+/-- Closed standard-dependency evidence for the full non-childless clause-(iii)
 control.  The witness is the concrete kernel certificate above, not the
 external evaluator. -/
 theorem benignCall_nonchildless_noninterference_closed :
@@ -1750,7 +1750,7 @@ private theorem wrongBoolSettle :
       unfold wrongBoolChild
       rw [h]
 
-/-- The compiled wrong-return control has a closed standard-axiom witness.
+/-- The compiled wrong-return control has a closed standard-dependency witness.
 The separate executable Option remains a regression check, not theorem
 evidence. -/
 theorem wrongBoolFixture_nonempty : Nonempty WrongBoolFixture := by

@@ -34,10 +34,11 @@ private theorem Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo
   | nil => rfl
   | cons head tail ih =>
       simp only [List.foldl_cons]
-      rw [if_neg (none head (by simp))]
-      exact ih initial (by
-        intro write member
-        exact none write (by simp [member]))
+      simp only [if_neg (none head (by simp))]
+      apply ih initial
+      intro write member
+      exact none write (by
+        simp [member])
 
 /-- Absence of a retained successful write to one cell preserves that cell in
 every committing outcome of the invocation frame closure. -/

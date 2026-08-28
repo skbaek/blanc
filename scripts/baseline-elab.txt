@@ -11,6 +11,14 @@
 # 75 reductions are recorded, 71 lower committed rows are preserved, 4 rows
 # are unchanged, no row rises, and this ratchet totals 725.163 s. The two
 # typed-source-route owners account for 25.505 s of the 31.058 s reduction.
+#
+# 2026-08-28 lido-pinned-target-opening calibration at candidate commit
+# 7d49e34de116bc97c362c99edb9d0ac8e8734553. Three identical
+# `scripts/check-elab.sh --calibrate` runs (seed 845fc52c701e) measured
+# 572.3 s, 576.2 s and 569.9 s; every run selected the same 10 mandatory
+# rows and 12 controls, and no control reached 1.50x. Each new row below is
+# the median of that module's three mandatory measurements. The preserved
+# evidence is named in the goal completion report.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
@@ -22,6 +30,7 @@ OK	1.248	Blanc/CycleWriteFree.lean
 OK	1.136	Blanc/DeploymentCompiled.lean
 OK	1.205	Blanc/DeploymentMessage.lean
 OK	2.175	Blanc/ExecDeterminism.lean
+OK	1.107	Blanc/ExecutionNoninterference.lean
 OK	6.426	Blanc/ExecutionOccurrence.lean
 OK	1.346	Blanc/ExecutionSettlement.lean
 OK	1.834	Blanc/FlashSpec.lean
@@ -69,7 +78,15 @@ OK	9.595	Blanc/LidoCircuitBreakerPauseWalk.lean
 OK	2.256	Blanc/LidoCircuitBreakerPauseWorld.lean
 OK	8.715	Blanc/LidoCircuitBreakerPauseWorldRun.lean
 OK	14.508	Blanc/LidoCircuitBreakerPauseWorldRunKit.lean
+OK	1.132	Blanc/LidoCircuitBreakerPinnedTarget.lean
+OK	1.931	Blanc/LidoCircuitBreakerPinnedTargetComposition.lean
+OK	4.784	Blanc/LidoCircuitBreakerPinnedTargetCompositionControl.lean
+OK	4.508	Blanc/LidoCircuitBreakerPinnedTargetControl.lean
+OK	5.649	Blanc/LidoCircuitBreakerPinnedTargetStubCrossing.lean
+OK	4.313	Blanc/LidoCircuitBreakerPinnedTargetStubWalk.lean
 OK	1.717	Blanc/LidoCircuitBreakerPreControl.lean
+OK	1.160	Blanc/LidoCircuitBreakerPublicPause.lean
+OK	1.133	Blanc/LidoCircuitBreakerPublicPauseControl.lean
 OK	2.444	Blanc/LidoCircuitBreakerRegistrationWorld.lean
 OK	66.346	Blanc/LidoCircuitBreakerRegistry.lean
 OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean
@@ -82,6 +99,7 @@ OK	1.586	Blanc/LidoCircuitBreakerSuccess.lean
 OK	1.219	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
 OK	5.129	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
+OK	1.117	Blanc/PinnedPauseTarget.lean
 OK	0.594	Blanc/ProofRecipesGenerated.lean
 OK	1.630	Blanc/RevertPayload.lean
 OK	1.178	Blanc/Reverts.lean
