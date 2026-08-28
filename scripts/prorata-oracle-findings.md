@@ -7,9 +7,10 @@ brute-force harness for the PRORATA pro-rata share ledger.
 - Search / sweep harness: `scripts/prorata_bruteforce.py`
 - Machine-readable run dump (regenerable): `scripts/prorata-bruteforce-summary.json`
 
-Reproducibility: all randomized checks use fixed seed `20260828`; all sweeps
-are deterministic exhaustive enumerations. A full `python3 prorata_bruteforce.py`
-run took **151.8 s** wall (single process), well under the ~10 min budget. The
+Reproducibility: every randomized campaign uses the fixed seed stated in its
+section (`20260828`, `2026082804`, or `2026082806`); all sweeps are
+deterministic exhaustive enumerations. A full `python3 prorata_bruteforce.py`
+run took **290.4 s** wall (single process), under the 10 min budget. The
 harness inlines the model arithmetic for speed and then **re-runs every reported
 witness transcript through the reference `ProRata` model** (fidelity gate) — all
 witnesses below are fidelity-confirmed identical to the reference semantics.
@@ -26,8 +27,8 @@ O = 1**, where a 1-wei rounding leak exists.
 
 | product | worst case | bits | margin to 2²⁵⁶ | fits |
 |---|---|---|---|---|
-| deposit  `MAXA·(MAXS+O)` | 2²²²-ish | 222 | **34 bits** | yes |
-| withdraw `MAXS·(MAXB+1)` | 2²⁵²-ish | 252 | **4 bits** | yes |
+| deposit  `MAXA·(MAXS+O)` | 222-bit value | 222 | **34 bits** | yes |
+| withdraw `MAXS·(MAXB+1)` | 252-bit value | 252 | **4 bits** | yes |
 
 Both worst-case numerators are below 2²⁵⁶, so the on-chain 256-bit arithmetic
 cannot overflow within the guard caps. **Flag for the lead:** the withdraw
@@ -70,6 +71,18 @@ disagreements**. The ledger-sufficiency exclusion was verified structurally
 (12 checks, 0 violations): `convertToAssets(s)` returns a value even for
 `s > ledger[addr]`, i.e. the view does not see balances.
 
+The post-review **new-guard boundary sweep** uses `MAXA = 6`, `MAXS = 40`,
+`MAXB = 9`, depth 4, and O ∈ {1, 3}. It runs through the reference model and
+straddles every cap. In particular it confirms that deposit and
+`convertToShares` agree on the `B_pre > MAXB`/`B > MAXB` revert, and that
+`convertToAssets` reverts for hypothetical `s > MAXS` while retaining the
+ledger-sufficiency exclusion on its reachable withdraw domain. **0 violations**:
+
+| O | states | deposit/view-share checks | withdraw checks | asset-view checks | `B_pre > MAXB` deposit reverts | `s > MAXS` asset-view reverts |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 1 642 | 13 100 | 7 936 | 9 852 | 6 174 | 440 |
+| 3 | 5 269 | 26 160 | 27 474 | 31 614 | 8 946 | 2 630 |
+
 ## P3 — dust conservation (induction nucleus)
 
 Checked at every reachable state / transition:
@@ -81,6 +94,51 @@ Checked at every reachable state / transition:
   withdraw `s·(B+1) = p·(S+O) + r'`, `0 ≤ r' < S+O` — **0 violations**
 - (d) exact flow conservation (B by +a/−p/+a, S by +m/−s, Σledger == S) —
   **0 violations**; Σledger == S is a hard model assertion that never tripped
+
+---
+
+## SF arithmetic audit shapes
+
+### Immediate deposit then full-mint withdrawal
+
+At a pre-state put `D = S + O` and `X = B + 1`. For a deposit of `a` that
+mints `m`, followed immediately by withdrawal of all `m`, put
+`ρDeposit = a·D − m·X`, `D' = D + m`, `X' = X + a`, and
+`ρWithdraw = m·X' − p·D'`. The audited exact forms both held:
+
+`a·D' = p·D' + ρDeposit + ρWithdraw`
+
+`a − p ≤ ceilDiv(X − 1, D)`
+
+The small exhaustive campaign covers O ∈ {1, 2, 3, 10}, B ∈ `0..24`,
+S ∈ `0..min(24, O·B)`, and a ∈ `0..24`: **47 350 cases**, 0 identity
+violations, and 0 bound violations. The guarded-96-bit campaign uses seed
+`2026082806`, 1 000 cases for each O ∈ {2, 3, 10, 1000}, exact boundary
+values plus uniform values in `0..MAXA`, and reaches `MAXA` both as a deposit
+value and as a pre-balance in every O row: **4 000 cases**, 0 identity
+violations, and 0 bound violations.
+
+### Finite-trace telescoping with credit terms
+
+For every realized step, with `D = S + O` and `X = B + 1`, the oracle checks
+the exact step equality:
+
+`X_next·D = X·D_next + ρ + κ`.
+
+Deposits and withdrawals contribute their exact floor-division residue ρ;
+plain credits contribute `ρ = 0` and `κ = credit·D`. For a finite trace, it
+checks the Nat product telescoping equality whose weighted summands are
+`(ρᵢ + κᵢ) · ∏(j<i) Dⱼ · ∏(i+2≤j≤n) Dⱼ`.
+
+The exhaustive small trace alphabet uses O ∈ {1, 2, 3, 10}, depth 4,
+deposit and credit values in `0..3`, and withdrawal shares in
+`1..min(3, balance)`: **145 196 traces / 570 258 checked steps**, 0
+violations. The guarded-96-bit campaign uses the same seed, 100 traces of 64
+steps for every O ∈ {2, 3, 10, 1000}: **400 traces / 25 600 steps**, 0
+violations and 0 reverts. Every O row reaches `MAXA`; every trace is replayed
+through `run_transcript`. Its recorded O = 2 sample replay has 64 steps,
+final `S = 0`, final `B = 954442459937868784155983832298`, and an exact
+telescoping equality.
 
 ---
 
@@ -204,7 +262,69 @@ Lean fixture later.
 
 ---
 
-## Wide-range randomized P1–P3 (~2⁹⁶ magnitudes, seed 20260828)
+## Randomized P4 closed-group falsifier (seed 2026082804)
+
+The closed accounting statement is: for a designated group G, at every prefix,
+`group_out ≤ group_in`, where `group_in` is exactly G's deposits plus plain ETH
+credits and `group_out` is exactly G's withdrawals. The campaign sets
+`outsideSubsidy = 0`, makes exactly one V deposit in every sequence, and makes
+V's full redemption optional. It tests the exact C1 bound on every selected
+full redemption:
+
+`loss ≤ (B_dep + 1) // (S_dep + O) + 1`.
+
+All candidates execute through the reference `ProRata` model. Any positive
+prefix group excess or C1 failure constructs and replays its transcript through
+that model before stopping. The completed campaign uses 500 sequences for each
+of the 12 `(O, |G|)` configurations, O ∈ {2, 3, 10, 1000}, |G| ∈ {1, 2, 3},
+and 25 or 26 executed operations per sequence, exceeding exhaustive depth 7.
+The value generator cycles the exact boundary set
+`{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 40, 41, 65535, 4294967295,
+18446744073709551615, MAXA-1, MAXA}` and also samples uniformly from
+`0..MAXA`, where `MAXA = 79228162514264337593543950335`. Every configuration
+uses `MAXA`.
+
+| O | sequences | prefix checks | V full exits | group-excess violations | C1 violations |
+|---|---:|---:|---:|---:|---:|
+| 2 | 1 500 | 38 231 | 731 | 0 | 0 |
+| 3 | 1 500 | 38 259 | 759 | 0 | 0 |
+| 10 | 1 500 | 38 238 | 738 | 0 | 0 |
+| 1000 | 1 500 | 38 264 | 764 | 0 | 0 |
+| **total** | **6 000** | **152 992** | **2 992** | **0** | **0** |
+
+One complete 26-step O = 2, |G| = 1 trace was independently replayed through
+`fidelity_replay`; both executions agree on `group_in =
+311294356112428666244121469724`, `group_out =
+47176016142457031370150979274`, `final_S = 0`, and
+`final_B = 264556842232790191059797701806`.
+
+### Open-context third-party-subsidy control
+
+The closed statement does not license an open-context claim that omits credits
+provided by other participants. The following reference-model trace has
+O = 1000:
+
+```
+deposit G0 1        # G receives 1000 shares
+third-party donate 1000000
+deposit V 1000000   # V receives 1999 shares
+withdraw G0 1000    # G receives 500125
+withdraw V 1999     # V receives 999751
+```
+
+Here `group_in = 1`, `group_out = 500125`, and `group_excess = 500124`; the
+uncounted third-party credit is `outsideSubsidy = 1000000`. Thus the open
+accounting form must include the subsidy term:
+
+`group_out ≤ group_in + outsideSubsidy`.
+
+It holds in this trace (`500125 ≤ 1000001`). V's loss is 249 and C1 is 501.
+This is not a closed-group counterexample: the randomized closed campaign sets
+`outsideSubsidy = 0` and attributes every group plain credit to `group_in`.
+
+---
+
+## Wide-range randomized P1–P3 (2⁹⁶ magnitudes, seed 20260828)
 
 | O | sequences | ops | deposits | withdraws | donates | reverts | violations |
 |---|---|---|---|---|---|---|---|

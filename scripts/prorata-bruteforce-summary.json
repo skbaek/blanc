@@ -26,7 +26,7 @@
       },
       "violation_count": 0,
       "sample_violations": [],
-      "seconds": 0.11
+      "seconds": 0.21
     },
     {
       "O": 2,
@@ -43,7 +43,7 @@
       },
       "violation_count": 0,
       "sample_violations": [],
-      "seconds": 0.39
+      "seconds": 0.8
     },
     {
       "O": 3,
@@ -60,7 +60,7 @@
       },
       "violation_count": 0,
       "sample_violations": [],
-      "seconds": 0.27
+      "seconds": 0.56
     },
     {
       "O": 10,
@@ -77,7 +77,7 @@
       },
       "violation_count": 0,
       "sample_violations": [],
-      "seconds": 2.4
+      "seconds": 5.03
     }
   ],
   "P2_guards": {
@@ -95,6 +95,50 @@
     "ledger_excl_checks": 12,
     "ledger_excl_violations": []
   },
+  "new_guard_boundary": [
+    {
+      "O": 1,
+      "stats": {
+        "unique_states": 1642,
+        "deposit_checks": 13100,
+        "withdraw_checks": 7936,
+        "view_shares_checks": 13100,
+        "view_assets_checks": 9852,
+        "revert_dep_a>MAXA": 3930,
+        "revert_dep_Bpre>MAXB": 6174,
+        "revert_dep_S+m>MAXS": 0,
+        "revert_wd_ledger": 2620,
+        "revert_wd_B>MAXB": 3930,
+        "revert_view_assets_s>MAXS": 440,
+        "revert_view_assets_B>MAXB": 8532,
+        "successful_ops": 4382
+      },
+      "violation_count": 0,
+      "sample": [],
+      "seconds": 0.08
+    },
+    {
+      "O": 3,
+      "stats": {
+        "unique_states": 5269,
+        "deposit_checks": 26160,
+        "withdraw_checks": 27474,
+        "view_shares_checks": 26160,
+        "view_assets_checks": 31614,
+        "revert_dep_a>MAXA": 7848,
+        "revert_dep_Bpre>MAXB": 8946,
+        "revert_dep_S+m>MAXS": 106,
+        "revert_wd_ledger": 5230,
+        "revert_wd_B>MAXB": 12396,
+        "revert_view_assets_s>MAXS": 2630,
+        "revert_view_assets_B>MAXB": 23724,
+        "successful_ops": 19108
+      },
+      "violation_count": 0,
+      "sample": [],
+      "seconds": 0.22
+    }
+  ],
   "P4_i_ii": [
     {
       "O": 1,
@@ -247,7 +291,7 @@
           }
         ]
       },
-      "seconds": 1.47
+      "seconds": 2.89
     },
     {
       "O": 2,
@@ -375,7 +419,7 @@
           }
         ]
       },
-      "seconds": 2.53
+      "seconds": 4.88
     },
     {
       "O": 3,
@@ -503,7 +547,7 @@
           }
         ]
       },
-      "seconds": 3.95
+      "seconds": 7.52
     },
     {
       "O": 10,
@@ -630,7 +674,7 @@
           }
         ]
       },
-      "seconds": 28.69
+      "seconds": 58.92
     },
     {
       "O": 1,
@@ -794,7 +838,7 @@
           }
         ]
       },
-      "seconds": 7.03
+      "seconds": 14.63
     },
     {
       "O": 1,
@@ -948,7 +992,7 @@
           }
         ]
       },
-      "seconds": 0.96
+      "seconds": 1.96
     }
   ],
   "P4_bound_verdicts": {
@@ -1076,6 +1120,308 @@
       }
     }
   ],
+  "SF_roundtrip_identity": {
+    "seed": 2026082806,
+    "exact_identity": "a*D_prime = p*D_prime + rhoDeposit + rhoWithdraw",
+    "exact_bound": "a-p <= ceilDiv(X-1,D)",
+    "exhaustive_small": {
+      "O_values": [
+        1,
+        2,
+        3,
+        10
+      ],
+      "B_values": "0..24",
+      "S_values": "0..min(24,O*B)",
+      "a_values": "0..24",
+      "cases": 47350,
+      "identity_violations": 0,
+      "bound_violations": 0
+    },
+    "random_guarded_96": {
+      "cases_per_O": 1000,
+      "value_domain": "0..MAXA",
+      "rows": [
+        {
+          "O": 2,
+          "cases": 1000,
+          "identity_violations": 0,
+          "bound_violations": 0,
+          "max_a": 79228162514264337593543950335,
+          "max_B": 79228162514264337593543950335,
+          "max_S": 152856815624911154568089716761
+        },
+        {
+          "O": 3,
+          "cases": 1000,
+          "identity_violations": 0,
+          "bound_violations": 0,
+          "max_a": 79228162514264337593543950335,
+          "max_B": 79228162514264337593543950335,
+          "max_S": 227119665484124547668955042152
+        },
+        {
+          "O": 10,
+          "cases": 1000,
+          "identity_violations": 0,
+          "bound_violations": 0,
+          "max_a": 79228162514264337593543950335,
+          "max_B": 79228162514264337593543950335,
+          "max_S": 732945759171265267756313856903
+        },
+        {
+          "O": 1000,
+          "cases": 1000,
+          "identity_violations": 0,
+          "bound_violations": 0,
+          "max_a": 79228162514264337593543950335,
+          "max_B": 79228162514264337593543950335,
+          "max_S": 78261129573734726252619563829809
+        }
+      ]
+    },
+    "seconds": 0.11
+  },
+  "SF_trace_telescoping": {
+    "seed": 2026082806,
+    "exact_step": "X_next*D = X*D_next + rho + kappa",
+    "exact_telescoping": "X_n*prod(D_before) = X_0*prod(D_after) + weighted_sum(rho+kappa)",
+    "exhaustive_small": {
+      "O_values": [
+        1,
+        2,
+        3,
+        10
+      ],
+      "depth": 4,
+      "deposit_values": "0..3",
+      "credit_values": "0..3",
+      "withdrawal_shares": "1..min(3,balance)",
+      "traces": 145196,
+      "steps": 570258,
+      "violations": 0
+    },
+    "random_guarded_96": {
+      "traces_per_O": 100,
+      "trace_steps": 64,
+      "value_domain": "0..MAXA",
+      "rows": [
+        {
+          "O": 2,
+          "traces": 100,
+          "steps": 6400,
+          "violations": 0,
+          "reverts": 0,
+          "max_value": 79228162514264337593543950335
+        },
+        {
+          "O": 3,
+          "traces": 100,
+          "steps": 6400,
+          "violations": 0,
+          "reverts": 0,
+          "max_value": 79228162514264337593543950335
+        },
+        {
+          "O": 10,
+          "traces": 100,
+          "steps": 6400,
+          "violations": 0,
+          "reverts": 0,
+          "max_value": 79228162514264337593543950335
+        },
+        {
+          "O": 1000,
+          "traces": 100,
+          "steps": 6400,
+          "violations": 0,
+          "reverts": 0,
+          "max_value": 79228162514264337593543950335
+        }
+      ],
+      "fidelity_sample": {
+        "O": 2,
+        "steps": 64,
+        "final_S": 0,
+        "final_B": 954442459937868784155983832298,
+        "equality_holds": true
+      }
+    },
+    "seconds": 2.0
+  },
+  "P4_random_closed_group": {
+    "seed": 2026082804,
+    "O_values": [
+      2,
+      3,
+      10,
+      1000
+    ],
+    "group_member_counts": [
+      1,
+      2,
+      3
+    ],
+    "configurations": 12,
+    "sequences_per_config": 500,
+    "trace_steps": {
+      "minimum": 25,
+      "maximum": 26
+    },
+    "value_domain": {
+      "maximum": 79228162514264337593543950335,
+      "edge_values": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        40,
+        41,
+        65535,
+        4294967295,
+        18446744073709551615,
+        79228162514264337593543950334,
+        79228162514264337593543950335
+      ],
+      "random_uniform_inclusive": "0..MAXA"
+    },
+    "closed_strategy": {
+      "outsideSubsidy": 0,
+      "group_statement": "group_out <= group_in at every prefix",
+      "C1_statement": "loss <= (B_dep+1)//(S_dep+O)+1"
+    },
+    "totals": {
+      "sequences": 6000,
+      "prefix_checks": 152992,
+      "victim_deposits": 6000,
+      "victim_full_exits": 2992,
+      "group_excess_violations": 0,
+      "C1_violations": 0,
+      "reverts": 0,
+      "minimum_C1_slack": 0
+    },
+    "by_O": [
+      {
+        "O": 2,
+        "configurations": 3,
+        "sequences": 1500,
+        "prefix_checks": 38231,
+        "victim_deposits": 1500,
+        "victim_full_exits": 731,
+        "group_excess_violations": 0,
+        "C1_violations": 0,
+        "reverts": 0,
+        "minimum_C1_slack": 0
+      },
+      {
+        "O": 3,
+        "configurations": 3,
+        "sequences": 1500,
+        "prefix_checks": 38259,
+        "victim_deposits": 1500,
+        "victim_full_exits": 759,
+        "group_excess_violations": 0,
+        "C1_violations": 0,
+        "reverts": 0,
+        "minimum_C1_slack": 0
+      },
+      {
+        "O": 10,
+        "configurations": 3,
+        "sequences": 1500,
+        "prefix_checks": 38238,
+        "victim_deposits": 1500,
+        "victim_full_exits": 738,
+        "group_excess_violations": 0,
+        "C1_violations": 0,
+        "reverts": 0,
+        "minimum_C1_slack": 0
+      },
+      {
+        "O": 1000,
+        "configurations": 3,
+        "sequences": 1500,
+        "prefix_checks": 38264,
+        "victim_deposits": 1500,
+        "victim_full_exits": 764,
+        "group_excess_violations": 0,
+        "C1_violations": 0,
+        "reverts": 0,
+        "minimum_C1_slack": 0
+      }
+    ],
+    "fidelity_sample": {
+      "O": 2,
+      "group_members": 1,
+      "group_in": 311294356112428666244121469724,
+      "group_out": 47176016142457031370150979274,
+      "final_S": 0,
+      "final_B": 264556842232790191059797701806,
+      "victim_exited": true,
+      "fidelity_replay": {
+        "group_in": 311294356112428666244121469724,
+        "group_out": 47176016142457031370150979274,
+        "final_S": 0,
+        "final_B": 264556842232790191059797701806,
+        "flags": []
+      },
+      "trace_steps": 26
+    },
+    "seconds": 0.32
+  },
+  "P4_open_context_subsidy_control": {
+    "O": 1000,
+    "trace": [
+      [
+        "deposit",
+        "G0",
+        1,
+        1000
+      ],
+      [
+        "third_party_donate",
+        "T",
+        1000000
+      ],
+      [
+        "deposit",
+        "V",
+        1000000,
+        1999
+      ],
+      [
+        "withdraw",
+        "G0",
+        1000,
+        500125
+      ],
+      [
+        "withdraw",
+        "V",
+        1999,
+        999751
+      ]
+    ],
+    "group_in": 1,
+    "group_out": 500125,
+    "group_excess": 500124,
+    "outsideSubsidy": 1000000,
+    "open_context_bound": "group_out <= group_in + outsideSubsidy",
+    "open_context_bound_holds": true,
+    "victim_loss": 249,
+    "C1": 501,
+    "C1_holds": true,
+    "final_S": 0,
+    "final_B": 500125,
+    "reference_model_replay": true
+  },
   "P4_iii_disabled_attack": {
     "transcript": [
       [
@@ -1216,7 +1562,7 @@
       },
       "violation_count": 0,
       "sample": [],
-      "seconds": 0.19
+      "seconds": 0.35
     },
     {
       "O": 1,
@@ -1230,7 +1576,7 @@
       },
       "violation_count": 0,
       "sample": [],
-      "seconds": 0.09
+      "seconds": 0.17
     },
     {
       "O": 10,
@@ -1244,9 +1590,9 @@
       },
       "violation_count": 0,
       "sample": [],
-      "seconds": 0.09
+      "seconds": 0.16
     }
   ],
   "total_property_violations_excluding_P4i_openq": 0,
-  "total_seconds": 151.76
+  "total_seconds": 290.42
 }
