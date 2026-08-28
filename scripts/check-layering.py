@@ -58,7 +58,8 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],
     "proxy-pair": ["ProxyPairSlots"],
-    "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataFunctional",
+    "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",
+                "ProrataFunctional",
                 "ProrataDeposit", "ProrataRead", "ProrataWithdraw",
                 "ProrataConsistency", "ProrataCompiledEffects", "ProrataInvariant",
                 "ProrataPreservation"],
