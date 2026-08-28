@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WETH10 — Blanc's flagship port</title>
-<meta name="description" content="Blanc's WETH10: a 6,313-byte port of the deployed WETH10 — all 27 selectors plus receive, flash loans, ERC-677-style callbacks, EIP-2612 permit — with a 147-row differential suite, a proved deployment through the real block pipeline, zero accepted deviations, and the future-redeemability flagship theorem.">
+<title>WETH10 — a Blanc port of flash-minting wrapped ether</title>
+<meta name="description" content="Blanc's WETH10: a 6,313-byte port of the deployed WETH10 — all 27 selectors plus receive, flash loans, ERC-677-style callbacks, EIP-2612 permit — with a 147-row differential suite, a proved deployment through the real block pipeline, zero accepted deviations, and the future-redeemability theorem.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 <script>document.documentElement.classList.add('js');</script>
@@ -37,20 +37,20 @@
       <div>
         <h1>WETH10.</h1>
         <p class="lede" style="margin-top:20px">
-          The flagship port: the deployed
+          The port of the deployed
           <a href="https://etherscan.io/address/0xf4BB2e28688e89fCcE3c0580D37d36A7672E8A9F#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">WETH10</a>
           at <span class="mono">0xf4BB…8A9F</span> — all 27 selectors plus receive, flash loans,
           ERC-677-style callbacks, EIP-2612 permit — taken from zero contract code to a closed
           verification charter. On top of the endpoint families sits the
-          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">flagship theorem</a>:
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">headline theorem</a>:
           future redeemability, at every reachable future, after arbitrary other
           actors have done their worst.
         </p>
         <p class="lede" style="margin-top:14px">
           A port never claims byte identity —
           <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
-          governs what is claimed and what never is. What makes this port the fullest instance
-          of the method is that its behavior contract was <em>frozen first</em>, endpoint by
+          governs what is claimed and what never is. What makes this port distinctive is that
+          its behavior contract was <em>frozen first</em>, endpoint by
           endpoint, and every layer of evidence answers to that document.
         </p>
       </div>
@@ -84,8 +84,9 @@
       Behaving like WETH10 is the entry fee. The reason to rebuild a wrapper in a proof language is
       the promise no test suite can state: whatever happens after deployment — flash loans,
       reentrancy, hostile callbacks, arbitrary contracts doing arbitrary things — every holder can
-      still get the ether out. The flagship states that promise at <em>any</em> reachable future of
-      a proved deployment, and proves it constructively, execution by execution.
+      still get the ether out. The redeemability theorem states that promise at <em>any</em>
+      reachable future of a proved deployment, and proves it constructively, execution by
+      execution.
     </p>
 
     <div class="thm" style="margin-top:26px">
@@ -304,7 +305,7 @@ canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing 
           <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Weth10Live.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">Weth10Live.lean</span></a>.
           Every audited theorem sits in the repository-wide axiom audit, pinned to its exact
           axiom set in CI, and <span class="mono">check-claims.sh</span> additionally pins the
-          flagship set’s exact <em>statements</em>.
+          redeemability family’s exact <em>statements</em>.
         </p>
       </div>
     </details>
@@ -407,7 +408,7 @@ canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing 
           The 21-hour charter closed 13 of its 14 requirement rows. The fourteenth — a
           settlement theorem carried over from FMINT — turned out to be <em>false</em> of
           WETH10’s design, and was struck by explicit amendment: no replacement installed,
-          nothing nearby relabeled to fill the row. The redeemability flagship was a successor
+          nothing nearby relabeled to fill the row. The redeemability theorem was a successor
           program, landed over the following days by the same method. A project that never
           records a lost bet is not reporting, it is advertising.
         </p>
@@ -428,7 +429,7 @@ canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing 
     <p class="note" style="margin-top:26px">
       Boundary, restated: nothing on this page verifies the Solidity artifact deployed at
       <span class="mono">0xf4BB…8A9F</span> — it is the reference, never the subject. The
-      flagship’s own non-claims — attribution is not consent, signatures are inputs, inclusion
+      redeemability theorem’s own non-claims — attribution is not consent, signatures are inputs, inclusion
       and fee markets are out of frame — are listed beside it in the
       <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>
       and in the registries, in the honest register.
@@ -441,7 +442,7 @@ canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing 
 <footer>
   <div class="wrap footgrid">
     <div style="max-width:46ch">
-      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— WETH10, the flagship port</i></div>
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— WETH10, the 27-selector port</i></div>
       <p class="dimmer" style="font-size:.85rem;margin:0">
         Figures on this page trace to committed theorems, registry rows, gate summaries, and the
         goal ledger; where evidence ends, the page says so.
@@ -450,7 +451,7 @@ canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing 
     <div class="footlinks">
       <a href="../index.html#portfolio">all implementations →</a>
       <a href="lido-circuit-breaker.html">next port: CircuitBreaker →</a>
-      <a href="#results">the flagship theorem →</a>
+      <a href="#results">the redeemability theorem →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/WETH10_COMPATIBILITY.md" target="_blank" rel="noopener">frozen boundary →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/WETH10_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
       <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
