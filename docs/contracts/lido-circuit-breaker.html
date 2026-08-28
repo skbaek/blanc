@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CircuitBreaker — a Blanc port of Lido’s guardian</title>
-<meta name="description" content="Blanc’s Lido CircuitBreaker: a 4,282-byte port of the deployed CircuitBreaker with a 175-row differential matrix, Registry integrity proved as one combined invariant whose corollaries close the three obligations an industrial campaign left open, an official-parameters deployment root through a real Prague block, integrity preserved at every reachable future over arbitrary hostile callees, zero accepted deviations, and a 69-row machine-checked assurance register.">
+<meta name="description" content="Blanc’s Lido CircuitBreaker: a 4,282-byte port of the deployed CircuitBreaker with a 175-row differential matrix, Registry integrity proved as one combined invariant whose corollaries close the three obligations an industrial campaign left open, an official-parameters deployment root through a real Prague block, integrity preserved at every reachable future over arbitrary hostile callees, zero accepted deviations, and a 71-row machine-checked assurance register.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 <script>document.documentElement.classList.add('js');</script>
@@ -17,6 +17,7 @@
       <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
     </a>
     <nav class="navlinks">
+      <a href="#results">Results</a>
       <a href="#evidence">Evidence</a>
       <a href="#deviations">Deviations</a>
       <a href="#deltas">Deltas</a>
@@ -36,7 +37,7 @@
       <div>
         <h1>CircuitBreaker.</h1>
         <p class="lede" style="margin-top:20px">
-          The newest port: the
+          The port of the
           <a href="https://etherscan.io/address/0x6019CB557978296BA3C08a7B73225C0975DFB2F7#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">CircuitBreaker</a>
           that Lido deployed at <span class="mono">0x6019…B2F7</span> — an emergency brake in which an
           admin grants pauser addresses time-limited authority over registered protocol contracts,
@@ -52,7 +53,7 @@
           <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
           governs what is claimed and what never is. What makes this port distinctive is the
           <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>:
-          69 rows mapping every quotable claim onto the exact declarations that carry it, the
+          71 rows mapping every quotable claim onto the exact declarations that carry it, the
           premises they require, the axioms they depend on, the gate that owns them — and, in
           every row without exception, what the row does <em>not</em> claim.
         </p>
@@ -61,9 +62,9 @@
         <div class="term"><span class="p">$</span> scripts/check-lido-circuit-breaker-differential.sh
 <span class="ok">OK — Lido CircuitBreaker differential: 175/175 rows agree; 17/17 selectors + constructor; 144 causal history transactions; 464 resource boundaries …</span>
 <span class="p">$</span> scripts/check-lido-circuit-breaker-assurance.sh
-<span class="ok">OK — lido-circuit-breaker-assurance: 69 rows across 10 pillars … 142 axiom
+<span class="ok">OK — lido-circuit-breaker-assurance: 71 rows across 10 pillars … 145 axiom
      expectations matched … 13/13 non-claim phrases present</span></div>
-        <p class="cap"><b>Fig. 1</b> — two CircuitBreaker gates, verbatim (2026-08-27), ellipses
+        <p class="cap"><b>Fig. 1</b> — two CircuitBreaker gates, verbatim (2026-08-27 and 2026-08-28), ellipses
           marking elision: the differential matrix beside the locked Solidity reference, and the
           register verifier that fails if any cited declaration, axiom set, or non-claim phrase
           drifts from the tree it describes. The differential line continues “… 82 Solidity
@@ -71,11 +72,151 @@
           channel/projection/identity/manifest falsifiers.”</p>
         <div class="pills">
           <span class="pill"><span class="d"></span>4,282 B runtime — vs 4,584 deployed</span>
-          <span class="pill"><span class="d"></span>69-row assurance register</span>
+          <span class="pill"><span class="d"></span>71-row assurance register</span>
           <span class="pill"><span class="d"></span>0 accepted deviations</span>
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the port proves</p>
+    <h2 style="max-width:30ch">One invariant, carried to every reachable future.</h2>
+    <p class="lede" style="margin-top:18px">
+      In April 2026 an industrial verification campaign on the same Registry source closed 38 of
+      41 specified properties and reported three coupled <span class="mono">registerPauser</span>
+      preservation obligations unresolved — membership equivalence, clean state after removal,
+      global count conservation — naming circular inductive dependencies, four mutation modes, and
+      swap-and-pop as the difficulty. Blanc’s answer is structural: one combined Registry
+      invariant, designed together with the storage representation, from which all three
+      obligation shapes fall out as corollaries — then rooted in a proved official-parameters
+      deployment through a real Prague block, and carried to every reachable future with no
+      premise about anyone else on the chain.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">chainUsing_preserves_registryStable</span>, Blanc/LidoCircuitBreakerHistoryChain.lean).</div>
+      <p class="stmt">From a checkpoint whose state holds the exact compiled runtime with coherent
+        Registry storage, every state reachable along a configured valid chain is still stable —
+        whole blocks, every transaction anyone sent, arbitrary contracts doing arbitrary
+        things.</p>
+<pre><span class="k">theorem</span> <span class="d">chainUsing_preserves_registryStable</span> (dp : <span class="t">DeployParams</span>) (ca : <span class="t">Adr</span>)
+    (cfg : <span class="t">ChainConfig</span>) (checkpoint future : <span class="t">BlockChain</span>)
+    (reach : <span class="t">BlockChain.ReachUsing</span> cfg checkpoint future)
+    (stable : <span class="t">RegistryStable</span> dp ca checkpoint.state) :
+    <span class="t">RegistryStable</span> dp ca future.state</pre>
+    </div>
+    <p class="cap"><b>Read what is absent</b> — no premise about the bytecode at any other
+      address, no non-reentrancy condition, no direct-call-only restriction, no honesty asked of
+      the contracts it pauses, no noninterference assumption, and no identification of the
+      post-callback entry list with the checkpoint’s. The owning gate probes all 104 public
+      theorems of the family for exactly Lean’s three standard axioms and admits no exception
+      table. And the checkpoint hypothesis is not a supposition:
+      <span class="mono">DeploymentRoot</span> discharges it for the one official deployment
+      shape, and its projections carry exact code, a coherent witness, and global count
+      conservation to every reachable boundary.</p>
+
+    <div class="listing tight" style="margin:26px 0 0">
+      <div class="bar"><span>Blanc/LidoCircuitBreaker*.lean</span><span class="tag">the substantive stack</span></div>
+<pre>RegistryWitness                        <span class="c">-- one ordered entry list witnesses every</span>
+                                       <span class="c">   projected Registry region; raw slot equality and</span>
+                                       <span class="c">   global Keccak-injectivity intentionally absent</span>
+membershipEquivalence_registerPauser   <span class="c">-- assignment ≠ 0 ⇔ index ≠ 0 ⇔ array occurrence,</span>
+                                       <span class="c">   position unique — no execution premise</span>
+cleanStateAfterRemoval_registerPauser  <span class="c">-- swap-and-pop: both lookup slots zeroed, dead</span>
+                                       <span class="c">   tail cleared, moved element's index repaired</span>
+globalCountConservation_registerPauser <span class="c">-- Σ per-pauser counts = registry length</span>
+canonicalDeploymentStep_
+  establishes_root                     <span class="c">-- the official input through message, tx, and</span>
+                                       <span class="c">   Prague block → DeploymentRoot, empty witness</span>
+chainUsing_preserves_registryStable    <span class="c">-- the theorem above</span></pre>
+    </div>
+
+    <div class="grid3" style="margin-top:26px">
+      <div class="panel">
+        <span class="tick">authorization, spent before control moves</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          At the moment an arbitrary target first receives control, its own assignment cell is
+          already zero and the reentrancy lock is held, with nothing written between
+          <span class="mono">pauseAfterSet</span> entry and the <span class="mono">CALL</span> —
+          and no hypothesis constrains the target’s code. Re-entering
+          <span class="mono">pause</span> from that mid-call state takes the refusal arm: it
+          reverts with the reentrancy payload and writes nothing.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">authority that expires</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The liveness boundary is exactly <span class="mono">timestamp &lt; expiry</span>: a
+          zero-count caller errors <span class="mono">SenderNotPauser</span> before any liveness
+          test, an expired caller errors after it, and neither moves storage. A heartbeat
+          extension whose sum would wrap reverts with a source-exact
+          <span class="mono">Panic(0x11)</span>, restoring owner state.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">a root derived, not axiomatized</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          Exactly three premises — the pre-execution base, the strict official block envelope, and
+          one actual successful configured Prague-only transition — and from them the proof
+          reconstructs the creation message, receipt success, the exact installed runtime, the
+          frozen official constructor arguments, and an <em>empty</em> Registry witness. One
+          deployment shape only: no clone, factory, proxy, or CREATE2 path, and no claim about the
+          mainnet transaction it mirrors.
+        </p>
+      </div>
+    </div>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>So Blanc succeeded where an industrial prover failed?</h3><span class="devtag">pushback</span></div>
+      <p>No — and the register forbids that sentence. What may be said: a named campaign left
+        three coupled Registry preservation obligations open, on Registry source blob-identical
+        across the mitigation, deployment-source, and v1.0.0 revisions; Blanc closed those
+        <em>obligation shapes</em> for its own faithful port, by making all three corollaries of
+        one invariant designed together with the representation. A tool given a different
+        problem — recovering properties from an existing artifact rather than designing property
+        and representation together — is not a tool that failed. And one link in the comparison is
+        a named gap, not a verified fact: the cross-revision source-blob identity is taken from
+        the cited report, and no gate here witnesses it. A reader who needs it verified must check
+        the reference’s Git history directly.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>“Every reachable future” — including an admin interfering mid-callback?</h3><span class="devtag">pushback</span></div>
+      <p>Yes, by claiming exactly the right thing. The history witness is existential, not the
+        same list: an admin legitimately re-entering during a callback may register a pauser, so
+        the guarantee is that <em>some</em> coherent entry list describes the storage — never that
+        the checkpoint’s list survives. Mid-call, after unregistration and before the callback
+        returns, an unregistered address still reports live — real source behaviour, pinned in the
+        differential matrix, and the reason no callback-time count/expiry coherence is claimed
+        anywhere in the register. The one place an exact final state of one successful pause is
+        claimed rests on <span class="mono">PauseSuccessNoninterference</span>, a premise whose own
+        docstring opens “Assumed, not derived” — and two differential rows measure that arbitrary
+        callee code <em>can</em> falsify either of its equalities, so the assumption is
+        demonstrably non-idle. The history family carries no such premise, and the register
+        forbids generalising the assumption into one that does.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Does any of this say Lido’s protocol is safer?</h3><span class="devtag">pushback</span></div>
+      <p>The claims stop where the evidence stops. No liveness is claimed: nothing here says the
+        contract can be paused, only what happens when it is. A target’s canonical
+        <span class="mono">true</span> is evidence the target <em>reported</em> success, never
+        that it is really paused — end-to-end pause correctness would need a separately verified
+        target and a composition theorem, recorded as successor work rather than implied. And
+        nothing verifies the Solidity deployed at <span class="mono">0x6019…B2F7</span>: its
+        address, transaction, and block are provenance identifiers only.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      The 71-row assurance register maps every quotable claim above onto the exact declarations
+      that carry it, the premises they require, the axioms they depend on — and, in every row
+      without exception, what the row does <em>not</em> claim. Its thirteen load-bearing non-claim
+      phrases are pinned by the gate that verifies it, so a sentence that outruns its theorem
+      fails CI rather than surviving as prose.
+    </p>
   </div>
 </section>
 
@@ -126,7 +267,7 @@
     </details>
 
     <details class="fold">
-      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">one combined Registry invariant · a derived deployment root · open-contract histories</span></summary>
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">endpoint families · write authority · compile witness</span></summary>
       <div class="foldbody">
         <p class="dim">
           Where the matrix samples, the theorems quantify — over storages, entry lists,
@@ -136,37 +277,24 @@
           those bytes in so many words.
         </p>
         <div class="listing tight" style="margin:14px 0">
-          <div class="bar"><span>Blanc/LidoCircuitBreaker*.lean</span><span class="tag">the theorem stack, by family</span></div>
-<pre>RegistryWitness + three corollaries  <span class="c">-- membership ⇔ index ⇔ array occurrence; clean</span>
-                                     <span class="c">   state after swap-and-pop removal; global</span>
-                                     <span class="c">   count conservation</span>
-registration · pause · heartbeat     <span class="c">-- every raw SSTORE classified to one of 20</span>
-                                     <span class="c">   frozen sites with role + guard; expiring</span>
-                                     <span class="c">   authority; the reentrancy lock; rollback</span>
-canonicalDeploymentStep_
-  establishes_root                   <span class="c">-- the official input through message, tx, and</span>
-                                     <span class="c">   Prague block → DeploymentRoot</span>
-chainUsing_preserves_registryStable  <span class="c">-- coherence at every reachable future, with no</span>
-                                     <span class="c">   premise about any other contract</span></pre>
+          <div class="bar"><span>Blanc/LidoCircuitBreaker*.lean</span><span class="tag">the endpoint layer</span></div>
+<pre>registration · pause · heartbeat      <span class="c">-- typed endpoint families over the production</span>
+                                      <span class="c">   dispatch list: guards, effects, exact rollback</span>
+runtimeWriteAuthority_of_rawFrameRoot <span class="c">-- every raw SSTORE in an exactly-invoking frame</span>
+                                      <span class="c">   classified to one of 20 frozen source sites,</span>
+                                      <span class="c">   with role, guard, and entry fact — and no</span>
+                                      <span class="c">   success, commit, or settlement premise</span></pre>
         </div>
-        <p class="dim">
-          The deployment root deserves its sentence: it is <em>derived, not axiomatized</em> —
-          from exactly three premises, the last of them one successful configured Prague-only
-          transition over the strict official envelope, the proof reconstructs the creation
-          message, receipt success, the exact installed runtime, the frozen official
-          constructor arguments, and an empty Registry witness. Every configured reachable
-          future of that root keeps the exact runtime, admits a coherent witness, and conserves
-          the global count.
-        </p>
         <p class="dim" style="margin-bottom:6px">
-          In the history family, what is <em>absent</em> is the claim: no premise about the
-          bytecode at any other address, no non-reentrancy condition, no direct-call-only
-          restriction, no honesty asked of the contracts it pauses, and no noninterference
-          assumption — its gate probes all 104 public theorems for exactly the three standard
-          axioms and admits no exception table. The family’s 198 audited theorems sit in the
-          repository-wide axiom audit, and <span class="mono">check-claims.sh</span> pins the
-          exact <em>statements</em> of the protected Registry-mutation, enumeration,
-          observability, and deployment boundaries.
+          These families stop where conformance stops: they say the artifact dispatches, guards,
+          writes, calls out, and rolls back exactly as the frozen boundary says it must. The
+          Registry invariant, deployment root, and open-contract history family that stand
+          <em>on</em> them are stated in full in the
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>
+          at the top of this page. The port’s 198 audited theorems sit in the repository-wide
+          axiom audit, and <span class="mono">check-claims.sh</span> pins the exact
+          <em>statements</em> of the protected Registry-mutation, enumeration, observability, and
+          deployment boundaries.
         </p>
       </div>
     </details>
@@ -280,20 +408,18 @@ chainUsing_preserves_registryStable  <span class="c">-- coherence at every reach
         </p>
       </div>
       <div class="panel">
-        <span class="tick">an industrial campaign, answered on its own terms</span>
+        <span class="tick">representation is where the leverage was</span>
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          The April 2026 campaign reported circular inductive dependencies, four mutation
-          modes, and swap-and-pop as the difficulty in its three open
-          <span class="mono">registerPauser</span> obligations. Blanc’s answer was structural:
-          design the invariant and the storage representation together, so membership
-          equivalence, clean removal, and global count conservation are corollaries of one
-          <span class="mono">RegistryWitness</span> rather than three separately maintained
-          facts. That is a fact about Blanc’s own port — not “the deployed contract is only
-          38/41 verified,” and not “their prover cannot do this”: a tool given a different
-          problem — recovering properties from an existing artifact rather than designing
-          property and representation together — is not a tool that failed. The cross-revision
-          source-blob identity the comparison rests on is a named gap, taken from the cited
-          report rather than witnessed by any gate here.
+          The three open obligations were reported hard for a reason — circular inductive
+          dependencies, four mutation modes, swap-and-pop. Blanc’s move was not a stronger
+          prover but an earlier decision: design the invariant and the storage representation
+          together, so membership equivalence, clean removal, and global count conservation
+          become corollaries of one <span class="mono">RegistryWitness</span> rather than three
+          separately maintained facts. The lesson generalises: when a property is hard to
+          recover from a representation, the leverage is in choosing the representation — and a
+          port that owns its artifact gets to choose. What this does and does not claim about
+          the campaign itself is stated beside the theorem, in the
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>.
         </p>
       </div>
     </div>
@@ -323,7 +449,7 @@ chainUsing_preserves_registryStable  <span class="c">-- coherence at every reach
     </div>
     <div class="footlinks">
       <a href="../index.html#portfolio">all implementations →</a>
-      <a href="weth10.html">the flagship port: WETH10 →</a>
+      <a href="weth10.html">the WETH10 port →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" target="_blank" rel="noopener">assurance register →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md" target="_blank" rel="noopener">frozen boundary →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>

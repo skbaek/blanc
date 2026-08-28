@@ -98,10 +98,10 @@
       chain, with no hash-collision clause anywhere in the statement; an ERC-3156 flash-mint token
       whose supply conservation survives arbitrary reentrant borrower code; a full 27-selector
       WETH10, taken from zero contract code to a verified drop-in — every verification goal in its
-      charter met — by one developer with one laptop and an agent in the loop; and Lido’s
+      charter met; and Lido’s
       CircuitBreaker, ported with zero accepted deviations, its Registry invariant closing — as
       corollaries — the three obligations a named industrial campaign left open, rooted in a
-      proved official-parameters deployment through a real Prague block. WETH10’s flagship theorem is of a kind rarely purchasable at any
+      proved official-parameters deployment through a real Prague block. WETH10’s redeemability theorem is of a kind rarely purchasable at any
       price: from a proved deployment onward, every holder’s booked balance stays exactly conserved
       at every reachable future, and every wei of it is redemption-enabled through canonical
       <span class="mono">withdraw</span> and <span class="mono">withdrawTo</span> at both message and
@@ -126,7 +126,7 @@
       <div class="fact"><span class="n">708<span class="dimmer" style="font-size:1.05rem">/708</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
       <div class="fact"><span class="n">4</span>
-        <span class="l">contracts in — a WETH, a flash-mint token, a 27-selector WETH10, Lido’s CircuitBreaker — one dev, one laptop, an agent in the loop</span></div>
+        <span class="l">contracts in — a WETH, a flash-mint token, a 27-selector WETH10, Lido’s CircuitBreaker — each with a page of receipts</span></div>
       <div class="fact"><span class="n">147<span class="dimmer" style="font-size:1.05rem">/147</span></span>
         <span class="l">differential rows agreeing with the deployed WETH10 — all 27 selectors + receive, zero mismatches</span></div>
     </div>
@@ -240,7 +240,7 @@
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           <strong>A weakened conclusion fails as loudly as a broken proof.</strong> Proving
           <em>something</em> is cheap; the discipline is keeping the something fixed. A
-          statement-pin gate Lean-checks the exact wording of the flagship claims — 188
+          statement-pin gate Lean-checks the exact wording of the protected WETH10 claims — 188
           definitions, statements, and record constructors — so the theorem quoted on this page is
           character-for-character the theorem CI checks, and a quiet regression in what is
           <em>claimed</em> trips the same wire as a regression in whether it holds.
@@ -380,8 +380,8 @@
         “and it will actually give it back” is the other half. Small instances are routine
         here: <span class="mono">weth_balanceOf_succeeds</span> and its family build a
         successful execution instruction by instruction, exact gas in the statement. The
-        strongest landed instance is WETH10’s redeemability guarantee (2026-08-12), stated
-        where a holder’s risk actually lives: at <em>any</em> reachable future of a proved
+        kind is stated in full by WETH10’s redeemability guarantee (2026-08-12), where a
+        holder’s risk actually lives: at <em>any</em> reachable future of a proved
         deployment, <em>after</em> arbitrary other actors — flash loans, reentrancy, hostile
         callbacks — have done their worst.
       </p>
@@ -552,8 +552,7 @@
     <h2 style="max-width:24ch">Keep the receipts.</h2>
     <p class="lede" style="margin-top:18px">
       The freedoms above are not a prospectus. Every contract theorem, differential row, and
-      measured byte in §&nbsp;1–5 comes from one of four contracts already in — built and
-      proved by one developer, with one laptop and an agent in the loop. Each contract raised
+      measured byte in §&nbsp;1–5 comes from one of four contracts already in. Each contract raised
       the bar for the next, and each has a page of its own: how we know it is the contract it
       names, the deviation registry, the measured deltas, and what the build taught. Two kinds
       are kept distinct. <strong style="color:var(--ink)">Ports</strong> target a contract that
@@ -584,7 +583,7 @@
           <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 3.5 27 16 16 28.5 5 16Z"/><path d="M19 9l-6.5 8.5H18L12.5 24"/></svg></span>
           <span class="cardtitle"><b>WETH10</b><i>flash-minting wrapped ether · after the deployed WETH10</i></span>
         </span>
-        <p class="carddesc">The flagship port: all 27 selectors plus receive, flash loans,
+        <p class="carddesc">All 27 selectors plus receive, flash loans,
           ERC-677-style callbacks, EIP-2612 permit — zero contract code to a closed verification
           charter, and the future-redeemability theorem of §&nbsp;5 on top.</p>
         <span class="cardfacts">
@@ -599,7 +598,7 @@
           <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 3.5C16 3.5 7 13.8 7 19.5a9 9 0 0 0 18 0C25 13.8 16 3.5 16 3.5Z"/><path d="M13.5 16v7M18.5 16v7"/></svg></span>
           <span class="cardtitle"><b>CircuitBreaker</b><i>Lido’s emergency pause guardian · after the deployed CircuitBreaker</i></span>
         </span>
-        <p class="carddesc">The newest port: Registry integrity as one combined invariant — its
+        <p class="carddesc">Registry integrity as one combined invariant — its
           corollaries close the three obligations an industrial campaign left open — rooted in a
           proved official-parameters deployment through a real Prague block, and preserved at
           every reachable future over arbitrary hostile callees.</p>
@@ -870,7 +869,7 @@
       behavior — and how do we know the ports have it? A familiar name is not evidence, and a correct compiler is
       no defense if the program it faithfully compiles is the wrong program. So the answer is
       built in layers — each catching a different way the claim could fail, none asked to do
-      another’s job. WETH10, the fullest instance to date, answers like this:
+      another’s job. WETH10 answers like this:
     </p>
 
     <div class="ladder">
@@ -1269,7 +1268,7 @@
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
-          the WETH10 flagship set and protected Lido Registry mutation,
+          the protected WETH10 redeemability set and Lido Registry mutation,
           enumeration, local-observability, exact constructor/message/transaction/block,
           direct-root, and rooted-future boundaries, so a weakened conclusion
           fails as loudly as a broken proof.

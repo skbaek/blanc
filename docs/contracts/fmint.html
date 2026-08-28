@@ -17,6 +17,7 @@
       <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
     </a>
     <nav class="navlinks">
+      <a href="#results">Results</a>
       <a href="#evidence">Evidence</a>
       <a href="#deviations">Deviations</a>
       <a href="#deltas">Deltas</a>
@@ -67,6 +68,113 @@
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the étude proves</p>
+    <h2 style="max-width:30ch">Settlement against an arbitrary borrower.</h2>
+    <p class="lede" style="margin-top:18px">
+      Flash minting hands control to untrusted code in the middle of its own invariant’s
+      violation — that is the capability, and the étude’s two headline families quantify over
+      exactly that adversary: the books balance at every observable point, and a funded
+      <span class="mono">flashLoan</span> frame settles cleanly, with <em>no premise about the
+      borrower at all</em>.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">fmint_flashLoan_settles</span>, Blanc/FmintSettles.lean).</div>
+      <p class="stmt">A funded, non-static <span class="mono">flashLoan</span> frame over the exact
+        compiled bytes ends in success, a deliberate revert, or the non-consensus fault channel —
+        never a consensus exceptional halt — with the borrower’s code universally quantified: no
+        hypothesis below mentions it.</p>
+<pre><span class="k">theorem</span> <span class="d">fmint_flashLoan_settles</span> {sevm : <span class="t">Sevm</span>} {pre : <span class="t">Devm</span>}
+    {receiver token amount : <span class="t">B256</span>} {data : <span class="t">Bytes</span>}
+    (h_code : some sevm.code.toList = <span class="t">Prog</span>.compile fmint)
+    (h_sel : <span class="t">Sevm</span>.selector sevm = flashLoanSelector)
+    (h_static : sevm.isStatic = false)
+    (h_dec : <span class="t">Sevm</span>.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length &lt; 2 ^ 256)
+    (h_token : token = sevm.currentTarget.toB256)
+    (h_addr : <span class="t">ValidAdr</span> receiver)
+    (h_nof : <span class="t">B256</span>.Nof ((<span class="t">Devm</span>.getStor pre sevm.currentTarget).get supplySlot) amount)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = <span class="t">Mem</span>.empty)
+    (h_gas : flashLoanGas data.length ≤ pre.gasLeft) :
+    (∃ post, exec ⟨0, sevm, pre⟩ = .ok post) ∨
+    (∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post)) ∨
+    (∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) ∧ <span class="t">NonConsensus</span> e)</pre>
+    </div>
+    <p class="cap"><b>Read the premises</b> — every one is about the caller’s frame and the
+      calldata, never the borrower: the exact bytes, canonical ERC-3156 argument encoding, the
+      guards’ facts, a clean entry frame, and <span class="mono">flashLoanGas data.length</span> of
+      gas — 4,429,379 at empty data, EIP-150’s retained sixty-fourths inside the figure. Even
+      <span class="mono">h_static</span> is about the caller: a static caller halts at the mint’s
+      first <span class="mono">SSTORE</span> by its own doing. <span class="mono">NonConsensus</span>
+      names the channel outside every settleable halt — <span class="mono">crypto</span> and
+      <span class="mono">internal</span> — so a consensus exceptional halt,
+      <span class="mono">outOfGas</span> included, is unreachable however the callback burns. What
+      makes a borrower-free statement possible is that Jaune’s interpreter is <em>total</em>: the
+      hostile callee’s execution is supplied by totality, never assumed.</p>
+
+    <div class="listing tight" style="margin:26px 0 0">
+      <div class="bar"><span>Blanc/Conserved.lean</span><span class="tag">conservation — the same ladder as WETH’s solvency</span></div>
+<pre>fmint_preserves_conserved                <span class="c">-- one message frame, reentrancy included</span>
+stateTransition_preserves_conserved      <span class="c">-- one transaction</span>
+addBlockToChain_preserves_conserved      <span class="c">-- one block, from raw RLP</span>
+chain_preserves_conserved                <span class="c">-- every reachable state</span>
+stateTransitionUsing_preserves_conserved <span class="c">-- …and the same three again on a</span>
+addBlockToChainUsing_preserves_conserved <span class="c">   *configured* chain, across scheduled</span>
+chainUsing_preserves_conserved           <span class="c">   fork activations</span>
+Stor.Conserved.of_empty                  <span class="c">-- the base case: all-zero storage conserved</span></pre>
+    </div>
+
+    <div class="dev" style="margin-top:26px">
+      <div class="devhead"><h3>A trichotomy is not a success theorem. Does <span class="mono">flashLoan</span> ever succeed?</h3><span class="devtag">pushback</span></div>
+      <p>Deliberately unclaimed. The whole flash surface is partial correctness, never liveness —
+        nothing in the repository says a <span class="mono">flashLoan</span> call ever succeeds, and
+        no page of prose may imply one does. That is the honest shape, not a gap: a success theorem
+        for an entrypoint that calls out would carry the callee’s execution inside its own
+        witness — arbitrary code, and for a flash loan, adversarial by design. Where no call leaves
+        the frame the repository does construct success:
+        <span class="mono">fmint_totalSupply_succeeds</span>, at exactly 2,218 gas — the first
+        statement in the repository that a contract call <em>succeeds</em>.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Conserved — while the supply is deliberately unbacked?</h3><span class="devtag">pushback</span></div>
+      <p>Yes, and the two facts do not compete. <span class="mono">Stor.Conserved</span> is an
+        equality internal to storage — the supply word equals the sum of balances over <em>all</em>
+        2<sup>160</sup> address-shaped keys, with <span class="mono">supplySlot</span> excluding
+        itself by not being address-shaped — and it holds at every observable point, including
+        mid-callback, with the mint landed and the settlement burn still to come. It is not
+        solvency and not a stronger claim than WETH’s: during a loan the minted supply is unbacked
+        by construction — that is the design, not a gap. One corollary is worth naming: every
+        booked balance is bounded by the supply word, always.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Where does the invariant start? There is no constructor.</h3><span class="devtag">pushback</span></div>
+      <p><span class="mono">Stor.Conserved.of_empty</span> closes the genesis-installed case:
+        all-zero storage is conserved because both sides are zero. It closes exactly that gap and
+        leaves the other one open, in so many words: no initcode/<span class="mono">CREATE</span>
+        deployment theorem exists, and nothing says an FMINT deployed by a transaction starts
+        conserved — a declared non-claim, with a runnable source check in the README. The port that
+        closed this class of gap end to end is
+        <a href="weth10.html#results" style="text-decoration:underline;text-underline-offset:3px">WETH10</a>,
+        whose invariants stand on a derived deployment root.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      Claim class, stated: the flash families live at message-call altitude, one frame — never the
+      transaction; the constructed-revert rows pin <em>this</em> error and <em>no</em> data, while
+      the <span class="mono">settles_with_error</span> family names an error channel, deliberately
+      not a kind; and every statement is tied to the exact 1,257 bytes by
+      <span class="mono">fmintCode_compile</span> — kernel evaluation, nothing added to the trusted
+      base. The module docstrings are the authority on which claim is which.
+    </p>
   </div>
 </section>
 
@@ -122,48 +230,36 @@
     </details>
 
     <details class="fold">
-      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">conservation ladder · flashLoan spec · settlement trichotomy</span></summary>
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">flashLoan spec · rollback · error genre</span></summary>
       <div class="foldbody">
         <p class="dim">
-          Seven theorems carry conservation up the same ladder as WETH’s solvency — frame,
-          transaction, block, chain, and the configured-chain variants — in
-          <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Conserved.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">Blanc/Conserved.lean</span></a>.
-          It is a different <em>kind</em> of claim, not a stronger solvency: an equality internal
-          to storage, holding at every observable point even while flash-minted supply is,
-          by construction, momentarily unbacked.
+          The conservation ladder and the settlement trichotomy — the étude’s substantive apex —
+          are stated in full in the
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>
+          above. This layer is the endpoint specification beneath them: how a
+          <span class="mono">flashLoan</span> execution is shaped when it succeeds, and how it is
+          shaped when it does not.
         </p>
         <div class="listing tight" style="margin:14px 0">
-          <div class="bar"><span>Blanc/FlashSpec.lean · Blanc/FmintSettles.lean</span><span class="tag">the flash surface</span></div>
+          <div class="bar"><span>Blanc/FlashSpec.lean</span><span class="tag">the flash surface</span></div>
 <pre>fmint_flashLoan_spec            <span class="c">-- the headline: factors a given successful</span>
                                 <span class="c">   execution through the canonical callback window</span>
 no_success_of_*                 <span class="c">-- 7 corollaries ruling executions out</span>
 rollback_of_no_success (+10)    <span class="c">-- frame-level state restoration, 11 rows</span>
-settles_with_error_of_* (+6)    <span class="c">-- error genre: reverts constructed exactly, 13 rows</span>
-fmint_flashLoan_settles (+2)    <span class="c">-- the trichotomy: success, deliberate revert, or</span>
-                                <span class="c">   machine fault — NO premise about the borrower</span></pre>
+settles_with_error_of_* (+6)    <span class="c">-- error genre, 13 rows: 7 name the error channel,</span>
+                                <span class="c">   6 construct .revert with no data, exactly</span></pre>
         </div>
-        <p class="dim">
+        <p class="dim" style="margin-bottom:6px">
           The scope notes are part of the claim, and the module docstrings are their authority.
           The headline takes four premises — canonical calldata, a size bound, frame freshness,
-          and the selector. Two corollaries (<span class="mono">callback_never_magic</span>,
+          and the selector — so non-canonical encodings are out of scope, and the registry says so.
+          Two corollaries (<span class="mono">callback_never_magic</span>,
           <span class="mono">callback_never_returns_word</span>) quantify over the callback
           <em>boundaries</em> the headline could produce, not over the receiver’s code — the
-          weaker, honest form. And nothing anywhere in the repository says a
-          <span class="mono">flashLoan</span> call ever succeeds: the spec is partial
-          correctness, the trichotomy is a trichotomy, and the constructed-success rows are
-          views — <span class="mono">fmint_totalSupply_succeeds</span> at exactly 2,218 gas,
-          as a proved equation.
-        </p>
-        <p class="dim" style="margin-bottom:6px">
-          The settlement family is the étude’s reason to exist:
-          <span class="mono">fmint_flashLoan_settles</span> ends a funded, non-static
-          <span class="mono">flashLoan</span> frame in success, a deliberate revert, or the
-          non-consensus fault channel — never a consensus exceptional halt — with the borrower’s
-          code <em>universally quantified</em>. That is possible because Jaune’s interpreter is
-          total: the hostile callee’s execution comes from totality, not from an assumption
-          about the callee. The compile witness <span class="mono">fmintCode_compile</span>
-          (kernel evaluation, nothing added to the trusted base) ties all of it to the exact
-          1,257 bytes.
+          weaker, honest form, chosen because the boundary is pinned by equations rather than
+          proved unique. Every rollback claim names a frame, never a transaction. And the compile
+          witness <span class="mono">fmintCode_compile</span> (kernel evaluation, nothing added to
+          the trusted base) ties all of it to the exact 1,257 bytes.
         </p>
       </div>
     </details>
@@ -311,7 +407,7 @@ fmint_flashLoan_settles (+2)    <span class="c">-- the trichotomy: success, deli
     </div>
     <div class="footlinks">
       <a href="../index.html#portfolio">all implementations →</a>
-      <a href="weth10.html">the flagship port: WETH10 →</a>
+      <a href="weth10.html">the WETH10 port →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/FMINT_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" target="_blank" rel="noopener">porting policy →</a>
       <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
