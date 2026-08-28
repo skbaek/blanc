@@ -422,6 +422,155 @@ theorem victimConsistent {o : Nat} (ho : o ≠ 0)
   | silent =>
       exact hpre
 
+/-- Every actor-classified step preserves the coalition claim bound. -/
+theorem claimBound {o : Nat} (ho : 2 ≤ o)
+    {pre post : ProrataAttackState o} {kind : ProrataAttackKind}
+    (effect : ProrataAttackEffect o pre kind post)
+    (hpre : pre.Invariant) : post.ClaimBound := by
+  rcases hpre with ⟨hpart, hflow, hvictim, hclaim⟩
+  have ho0 : o ≠ 0 := by omega
+  cases effect with
+  | nonVictimDeposit attribution amount minted hminted =>
+      have hshares :
+          pre.nonVictimShares ≤ pre.accounting.supply := by
+        unfold ProrataAttackState.SharesPartition at hpart
+        omega
+      have hupdate :=
+        claimN_deposit_le ho0 hshares hminted
+      cases attribution <;>
+        simp only [ProrataAttackState.ClaimBound,
+          ProrataAttackState.totalIn, ProrataAttackState.totalOut,
+          ProrataAttackState.nonVictimClaim,
+          AttackAttribution.coalitionAmount,
+          AttackAttribution.outsideAmount] at hclaim ⊢ <;>
+        omega
+  | nonVictimWithdraw attribution shares paid hshares hpaid =>
+      have hnonVictimSupply :
+          pre.nonVictimShares ≤ pre.accounting.supply := by
+        unfold ProrataAttackState.SharesPartition at hpart
+        omega
+      have hupdate :=
+        claimN_withdraw_le ho0 hshares hnonVictimSupply hpaid
+      cases attribution <;>
+        simp only [ProrataAttackState.ClaimBound,
+          ProrataAttackState.totalIn, ProrataAttackState.totalOut,
+          ProrataAttackState.nonVictimClaim,
+          AttackAttribution.coalitionAmount,
+          AttackAttribution.outsideAmount] at hclaim ⊢ <;>
+        omega
+  | externalCredit attribution amount hpositive =>
+      have hshares :
+          pre.nonVictimShares ≤ pre.accounting.supply := by
+        unfold ProrataAttackState.SharesPartition at hpart
+        omega
+      have hupdate :=
+        claimN_externalCredit_le
+          (o := o) (shares := pre.nonVictimShares)
+          (supply := pre.accounting.supply)
+          (balance := pre.accounting.balance) (amount := amount)
+          ho0 hshares
+      cases attribution <;>
+        simp only [ProrataAttackState.ClaimBound,
+          ProrataAttackState.totalIn, ProrataAttackState.totalOut,
+          ProrataAttackState.nonVictimClaim,
+          AttackAttribution.coalitionAmount,
+          AttackAttribution.outsideAmount] at hclaim ⊢ <;>
+        omega
+  | victimDeposit amount minted hphase hminted hbacked =>
+      unfold ProrataAttackState.VictimConsistent at hvictim
+      simp only [hphase] at hvictim
+      unfold ProrataAttackState.SharesPartition at hpart
+      have hfullSupply :
+          pre.nonVictimShares = pre.accounting.supply := by
+        omega
+      have hpostClaim :
+          claimN o pre.nonVictimShares
+              (pre.accounting.supply + minted)
+              (pre.accounting.balance + amount) ≤
+            pre.accounting.balance := by
+        rw [hfullSupply]
+        exact fullSupply_claim_after_deposit_le ho0 hminted
+      unfold ProrataAttackState.FlowExact at hflow
+      simp only [ProrataAttackState.totalIn,
+        ProrataAttackState.totalOut, hphase, VictimPhase.input,
+        VictimPhase.output] at hflow
+      simp only [ProrataAttackState.ClaimBound,
+        ProrataAttackState.totalIn, ProrataAttackState.totalOut,
+        ProrataAttackState.nonVictimClaim]
+      omega
+  | victimExit deposit paid hphase hfull hpaid =>
+      unfold ProrataAttackState.VictimConsistent at hvictim
+      simp only [hphase] at hvictim
+      unfold ProrataAttackState.SharesPartition at hpart
+      have hsupply :
+          pre.accounting.supply =
+            pre.nonVictimShares + deposit.minted := by
+        omega
+      have hsupplyAfter :
+          pre.accounting.supply - deposit.minted =
+            pre.nonVictimShares := by
+        omega
+      have hdepositPrice :
+          PriceLe o deposit.pre deposit.post := by
+        simpa only [PriceLe, VictimDeposit.post, deposit.minted_eq] using
+          (deposit_price_nondecreasing o deposit.amount
+            deposit.pre.supply deposit.pre.balance)
+      have hcurrentPrice :
+          PriceLe o deposit.pre
+            ⟨pre.nonVictimShares + deposit.minted,
+              pre.accounting.balance⟩ := by
+        rw [← hsupply]
+        exact PriceLe.trans ho0 hdepositPrice hvictim.2
+      have hpaidCurrent :
+          paid = payN o deposit.minted
+            (pre.nonVictimShares + deposit.minted)
+              pre.accounting.balance := by
+        rw [← hsupply]
+        exact hpaid
+      have hpostClaim :
+          claimN o pre.nonVictimShares pre.nonVictimShares
+              (pre.accounting.balance - paid) ≤
+            pre.accounting.balance - deposit.amount :=
+        victim_full_exit_claim_le
+          (o := o) (initialSupply := deposit.pre.supply)
+          (initialBalance := deposit.pre.balance)
+          (victim := deposit.amount) (minted := deposit.minted)
+          (attacker := pre.nonVictimShares)
+          (balance := pre.accounting.balance) (paid := paid)
+          ho deposit.backed deposit.minted_eq hcurrentPrice hpaidCurrent
+      have hpostClaimActual :
+          claimN o pre.nonVictimShares
+              (pre.accounting.supply - deposit.minted)
+              (pre.accounting.balance - paid) ≤
+            pre.accounting.balance - deposit.amount := by
+        rw [hsupplyAfter]
+        exact hpostClaim
+      unfold ProrataAttackState.FlowExact at hflow
+      simp only [ProrataAttackState.totalIn,
+        ProrataAttackState.totalOut, hphase, VictimPhase.input,
+        VictimPhase.output] at hflow
+      simp only [ProrataAttackState.ClaimBound,
+        ProrataAttackState.totalIn, ProrataAttackState.totalOut,
+        ProrataAttackState.nonVictimClaim]
+      simp only [ProrataAttackState.ClaimBound,
+        ProrataAttackState.totalIn, ProrataAttackState.totalOut,
+        ProrataAttackState.nonVictimClaim] at hclaim
+      by_cases hvictimBalance :
+          deposit.amount ≤ pre.accounting.balance <;> omega
+  | silent =>
+      exact hclaim
+
+/-- Every actor-classified step preserves the full attack-state invariant. -/
+theorem invariant {o : Nat} (ho : 2 ≤ o)
+    {pre post : ProrataAttackState o} {kind : ProrataAttackKind}
+    (effect : ProrataAttackEffect o pre kind post)
+    (hpre : pre.Invariant) : post.Invariant := by
+  exact
+    ⟨effect.sharesPartition hpre.1,
+      effect.flowExact (by omega) hpre.1 hpre.2.1,
+      effect.victimConsistent (by omega) hpre.1 hpre.2.2.1,
+      effect.claimBound ho hpre⟩
+
 end ProrataAttackEffect
 
 /-- One exact actor-classified step with retained committed chronology. -/
