@@ -1,0 +1,1091 @@
+{
+  "artifacts": {
+    "blanc": {
+      "creation": {
+        "byteLength": 3037,
+        "sha256": "3f3af51d0674c1afb7679dbcc60720bbd3f3d61adc9bd319da025064c0521c59"
+      },
+      "runtime": {
+        "byteLength": 2891,
+        "sha256": "8f2474c60f85dce94e97403369d64d94d7cce4bbb44e620175bd43a5990f0c48"
+      },
+      "selectorsAscending": [
+        "01ffc9a7",
+        "22895118",
+        "621fd130",
+        "c5f2892f"
+      ]
+    },
+    "reference": {
+      "creation": {
+        "byteLength": 6633,
+        "sha256": "4ee0b7f9a82a4cc382cda436621e4253167b9475bb01d7c3ae1ac0eec44e5a47"
+      },
+      "runtime": {
+        "byteLength": 6358,
+        "sha256": "5aaa8327c5765ec883224895ca02cade2871e12dad0197bdc791efc91c7ef18d"
+      }
+    },
+    "sizeComparison": {
+      "blancCreationStrictlySmaller": true,
+      "blancMinusReferenceCreationBytes": -3596,
+      "blancMinusReferenceRuntimeBytes": -3467,
+      "blancRuntimeStrictlySmaller": true
+    }
+  },
+  "cacheInputs": {
+    "repositoryFiles": {
+      "BEACON_DEPOSIT_DEVIATIONS.md": "4a619e4236446c3a46274e48cc75dc3b2c599ed96a8b2a3fbef19b1c4a2c0d31",
+      "scripts/check-beacon-deposit-current-mainnet.sh": "5e0109deda67611e0758f712192620b7aa1687bcd872ea36bd87b4d276184af5",
+      "scripts/current-mainnet-target.json": "5e1901c2d36d768f10ef3633371a85d24e575d95783fa5b2aa5f52dbedc32ae0",
+      "scripts/current_mainnet.py": "be578f54159f2c472bb8c866a8008a3bbafca3159da901418924b30a6bfd938b",
+      "scripts/eval-beacon-deposit-differential-code.lean": "72794ddd1d076c6e0551169f4ef4df791ebdcb2521ad024147422136328da103",
+      "scripts/gen-beacon-deposit-current-mainnet.py": "ca4f5e6028ce263821cb7931a5f5936149b2164a08765df9e39aab888063f00e",
+      "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex": "867e261f9811c5227ff0e2ec5d7803156f1af3428e49d6ffc041102da3050432",
+      "scripts/reference/beacon-deposit/inputs/deposit_contract.json": "fbb573648e4fe96a6b731768cbf5165f5037d7bd29f43359c5316eeb9edc78e6",
+      "scripts/reference/beacon-deposit/inputs/deposit_contract.sol": "2a8db249155e8502e1132f14410b8d7b2a924512723ed07a08167477d8f8c073"
+    },
+    "sharedGateOwnership": "gate registry additionally fingerprints the exact checkout, complete selected site-packages population, and profile-pinned CPython 3.11.9 standard library; this manifest records the same consumer-facing roots",
+    "targetFiles": {
+      "pythonExecutable": {
+        "isSymlink": true,
+        "relativePath": ".venv/bin/python",
+        "sha256": "ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884",
+        "symlinkTarget": "/Users/agent/.local/share/uv/python/cpython-3.11-macos-aarch64-none/bin/python3.11"
+      },
+      "pyvenvConfig": {
+        "isSymlink": false,
+        "relativePath": ".venv/pyvenv.cfg",
+        "sha256": "09dc49b2a0fd58230a8fcae4870d8bbb4973e9ed03497c1b6e6a004020b13728"
+      },
+      "t8nEntrypoint": {
+        "isSymlink": false,
+        "relativePath": ".venv/bin/ethereum-spec-evm",
+        "sha256": "39df28ccc14f406f096a64642eaec679dce2063f92814c171c5189fe12770f46"
+      }
+    },
+    "targetSitePackages": {
+      "excludes": [
+        "**/__pycache__/**",
+        "**/*.pyc",
+        "**/*.pyo"
+      ],
+      "fileRecords": 3269,
+      "relativeRoot": ".venv/lib/python3.11/site-packages",
+      "sha256": "46cb9ec85254aefe093d4f50ef1501310781fb50f97f0f121f4de20b99aa59fb"
+    }
+  },
+  "channel": "finite-bpo2-execution-witness-not-a-lean-premise",
+  "counts": {
+    "apiBoundaryFalsifiers": 3,
+    "creationExecutions": 2,
+    "creditedChannels": 5,
+    "manifestChannelFalsifiers": 5,
+    "manifestFalsifiers": 12,
+    "rawChannelFalsifiers": 5,
+    "registryFalsifiers": 1,
+    "runtimeRows": 7,
+    "runtimeTransactionsPerSide": 7,
+    "runtimeTransactionsTotal": 14,
+    "staticInventoryFalsifiers": 4
+  },
+  "creation": {
+    "assertions": [
+      "freshTopLevelTransaction",
+      "successfulReceipt",
+      "exactCreateTarget",
+      "exactInstalledOwnRuntime",
+      "exactOwnLayoutStorage",
+      "zeroLogs",
+      "exactTargetBalanceNonce",
+      "eip170RuntimeLimit",
+      "eip3860InitcodeLimit",
+      "eip7825TransactionGasLimit",
+      "refundCounterNotExposed",
+      "calldataFloorNotBinding"
+    ],
+    "blanc": {
+      "gas": {
+        "baseGas": 21000,
+        "calldataFloorBinding": false,
+        "calldataFloorGas": 122530,
+        "calldataFloorSettlementExtraGas": 0,
+        "calldataTokens": 10153,
+        "codeDepositGas": 578200,
+        "constructorStaticBasis": {
+          "codecopySites": [
+            57
+          ],
+          "forbiddenExternalCreateDeleteSites": {
+            "CALL": [],
+            "CALLCODE": [],
+            "CREATE": [],
+            "CREATE2": [],
+            "DELEGATECALL": [],
+            "SELFDESTRUCT": []
+          },
+          "prefixBytes": 146,
+          "refundInferenceCredited": false,
+          "sstoreSites": [
+            137
+          ],
+          "staticcallSites": [
+            98
+          ]
+        },
+        "createSurchargeGas": 32000,
+        "decomposition": "transactionGasUsed = regularIntrinsicGas + codeDepositGas + netConstructorExecutionGasAfterRefund; the remainder is receipt-charged constructor execution after any transaction refund because this t8n result does not expose the refund counter; calldataFloorGas is a checked alternative floor, not an additive component",
+        "eip3860InitcodeWordGas": 190,
+        "netConstructorExecutionGasAfterRefund": 696072,
+        "nonzeroCalldataBytes": 2372,
+        "refundCounterExposedByT8n": false,
+        "regularIntrinsicGas": 93802,
+        "standardTokenGas": 40612,
+        "transactionGasUsed": 1368074,
+        "zeroCalldataBytes": 665
+      },
+      "limits": {
+        "eip170Limit": 24576,
+        "eip3860Limit": 49152,
+        "eip7825TransactionGasLimitCap": 16777216,
+        "initcodeBytes": 3037,
+        "initcodeWithinLimit": true,
+        "runtimeBytes": 2891,
+        "runtimeWithinLimit": true,
+        "transactionGasLimit": 16777216,
+        "transactionWithinLimit": true
+      },
+      "logicalState": {
+        "branch": [
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "count": "0x0",
+        "layoutQualified": true,
+        "zeroHashes": [
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+          "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+          "0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c",
+          "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
+          "0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30",
+          "0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1",
+          "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c",
+          "0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193",
+          "0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1",
+          "0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b",
+          "0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220",
+          "0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f",
+          "0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e",
+          "0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784",
+          "0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb",
+          "0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb",
+          "0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab",
+          "0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4",
+          "0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f",
+          "0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa",
+          "0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c",
+          "0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167",
+          "0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7",
+          "0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0",
+          "0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544",
+          "0x619e312724bb6d7c3153ed9de791d764a366b389af13c58bf8a8d90481a46765",
+          "0x7cdd2986268250628d0c10e385c58c6191e6fbe05191bcc04f133f2cea72c1c4",
+          "0x848930bd7ba8cac54661072113fb278869e07bb8587f91392933374d017bcbe1",
+          "0x8869ff2c22b28cc10510d9853292803328be4fb0e80495e8bb8d271f5b889636",
+          "0xb5fe28e79f1b850f8658246ce9b6a1e7b49fc06db7143e8fe0b4f2b0c5523a5c",
+          "0x985e929f70af28d0bdd1a90a808f977f597c7c778c489e98d3bd8910d31ac0f7"
+        ]
+      },
+      "logs": {
+        "count": 0,
+        "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+        "receiptBloom": "0x0"
+      },
+      "receiptSucceeded": true,
+      "sender": {
+        "address": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "balance": "0xc9f2c9cd04674edea3f2f3f9c",
+        "nonce": 1
+      },
+      "side": "blanc",
+      "target": {
+        "address": "0x6295ee1b4f6dd65047762f924ecd367c17eabf8f",
+        "balance": "0x0",
+        "code": {
+          "byteLength": 2891,
+          "sha256": "8f2474c60f85dce94e97403369d64d94d7cce4bbb44e620175bd43a5990f0c48"
+        },
+        "nonce": 1,
+        "storage": {
+          "0x301": "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+          "0x302": "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+          "0x303": "0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c",
+          "0x304": "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
+          "0x305": "0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30",
+          "0x306": "0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1",
+          "0x307": "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c",
+          "0x308": "0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193",
+          "0x309": "0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1",
+          "0x30a": "0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b",
+          "0x30b": "0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220",
+          "0x30c": "0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f",
+          "0x30d": "0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e",
+          "0x30e": "0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784",
+          "0x30f": "0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb",
+          "0x310": "0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb",
+          "0x311": "0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab",
+          "0x312": "0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4",
+          "0x313": "0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f",
+          "0x314": "0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa",
+          "0x315": "0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c",
+          "0x316": "0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167",
+          "0x317": "0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7",
+          "0x318": "0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0",
+          "0x319": "0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544",
+          "0x31a": "0x619e312724bb6d7c3153ed9de791d764a366b389af13c58bf8a8d90481a46765",
+          "0x31b": "0x7cdd2986268250628d0c10e385c58c6191e6fbe05191bcc04f133f2cea72c1c4",
+          "0x31c": "0x848930bd7ba8cac54661072113fb278869e07bb8587f91392933374d017bcbe1",
+          "0x31d": "0x8869ff2c22b28cc10510d9853292803328be4fb0e80495e8bb8d271f5b889636",
+          "0x31e": "0xb5fe28e79f1b850f8658246ce9b6a1e7b49fc06db7143e8fe0b4f2b0c5523a5c",
+          "0x31f": "0x985e929f70af28d0bdd1a90a808f977f597c7c778c489e98d3bd8910d31ac0f7"
+        }
+      },
+      "transaction": {
+        "chainId": 1,
+        "createTarget": "0x6295ee1b4f6dd65047762f924ecd367c17eabf8f",
+        "gasLimit": 16777216,
+        "gasPrice": 10,
+        "input": {
+          "byteLength": 3037,
+          "sha256": "3f3af51d0674c1afb7679dbcc60720bbd3f3d61adc9bd319da025064c0521c59"
+        },
+        "nonce": 0,
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "type": 0,
+        "value": "0x0"
+      }
+    },
+    "deltas": {
+      "netConstructorExecutionGasAfterRefund": -26172,
+      "transactionGasUsed": -778822
+    },
+    "dominance": {
+      "netConstructorExecutionGasAfterRefundNonPositive": true,
+      "requiredNonPositive": [
+        "transactionGasUsed",
+        "netConstructorExecutionGasAfterRefund"
+      ],
+      "satisfied": true,
+      "transactionGasUsedNonPositive": true
+    },
+    "executionCount": 2,
+    "freshWorldPerSide": true,
+    "projection": {
+      "installedRuntimeEqualityClaim": false,
+      "logicalStateAgreement": true,
+      "rawStorageEqualityClaim": false,
+      "sameCreateTarget": true
+    },
+    "reference": {
+      "gas": {
+        "baseGas": 21000,
+        "calldataFloorBinding": false,
+        "calldataFloorGas": 270090,
+        "calldataFloorSettlementExtraGas": 0,
+        "calldataTokens": 24909,
+        "codeDepositGas": 1271600,
+        "constructorStaticBasis": {
+          "codecopySites": [
+            270
+          ],
+          "forbiddenExternalCreateDeleteSites": {
+            "CALL": [],
+            "CALLCODE": [],
+            "CREATE": [],
+            "CREATE2": [],
+            "DELEGATECALL": [],
+            "SELFDESTRUCT": []
+          },
+          "prefixBytes": 275,
+          "refundInferenceCredited": false,
+          "sstoreSites": [
+            250
+          ],
+          "staticcallSites": [
+            192
+          ]
+        },
+        "createSurchargeGas": 32000,
+        "decomposition": "transactionGasUsed = regularIntrinsicGas + codeDepositGas + netConstructorExecutionGasAfterRefund; the remainder is receipt-charged constructor execution after any transaction refund because this t8n result does not expose the refund counter; calldataFloorGas is a checked alternative floor, not an additive component",
+        "eip3860InitcodeWordGas": 416,
+        "netConstructorExecutionGasAfterRefund": 722244,
+        "nonzeroCalldataBytes": 6092,
+        "refundCounterExposedByT8n": false,
+        "regularIntrinsicGas": 153052,
+        "standardTokenGas": 99636,
+        "transactionGasUsed": 2146896,
+        "zeroCalldataBytes": 541
+      },
+      "limits": {
+        "eip170Limit": 24576,
+        "eip3860Limit": 49152,
+        "eip7825TransactionGasLimitCap": 16777216,
+        "initcodeBytes": 6633,
+        "initcodeWithinLimit": true,
+        "runtimeBytes": 6358,
+        "runtimeWithinLimit": true,
+        "transactionGasLimit": 16777216,
+        "transactionWithinLimit": true
+      },
+      "logicalState": {
+        "branch": [
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "count": "0x0",
+        "layoutQualified": true,
+        "zeroHashes": [
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+          "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+          "0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c",
+          "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
+          "0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30",
+          "0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1",
+          "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c",
+          "0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193",
+          "0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1",
+          "0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b",
+          "0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220",
+          "0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f",
+          "0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e",
+          "0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784",
+          "0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb",
+          "0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb",
+          "0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab",
+          "0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4",
+          "0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f",
+          "0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa",
+          "0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c",
+          "0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167",
+          "0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7",
+          "0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0",
+          "0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544",
+          "0x619e312724bb6d7c3153ed9de791d764a366b389af13c58bf8a8d90481a46765",
+          "0x7cdd2986268250628d0c10e385c58c6191e6fbe05191bcc04f133f2cea72c1c4",
+          "0x848930bd7ba8cac54661072113fb278869e07bb8587f91392933374d017bcbe1",
+          "0x8869ff2c22b28cc10510d9853292803328be4fb0e80495e8bb8d271f5b889636",
+          "0xb5fe28e79f1b850f8658246ce9b6a1e7b49fc06db7143e8fe0b4f2b0c5523a5c",
+          "0x985e929f70af28d0bdd1a90a808f977f597c7c778c489e98d3bd8910d31ac0f7"
+        ]
+      },
+      "logs": {
+        "count": 0,
+        "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+        "receiptBloom": "0x0"
+      },
+      "receiptSucceeded": true,
+      "sender": {
+        "address": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "balance": "0xc9f2c9cd04674edea3eb868e0",
+        "nonce": 1
+      },
+      "side": "reference",
+      "target": {
+        "address": "0x6295ee1b4f6dd65047762f924ecd367c17eabf8f",
+        "balance": "0x0",
+        "code": {
+          "byteLength": 6358,
+          "sha256": "5aaa8327c5765ec883224895ca02cade2871e12dad0197bdc791efc91c7ef18d"
+        },
+        "nonce": 1,
+        "storage": {
+          "0x22": "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+          "0x23": "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+          "0x24": "0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c",
+          "0x25": "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
+          "0x26": "0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30",
+          "0x27": "0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1",
+          "0x28": "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c",
+          "0x29": "0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193",
+          "0x2a": "0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1",
+          "0x2b": "0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b",
+          "0x2c": "0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220",
+          "0x2d": "0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f",
+          "0x2e": "0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e",
+          "0x2f": "0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784",
+          "0x30": "0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb",
+          "0x31": "0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb",
+          "0x32": "0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab",
+          "0x33": "0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4",
+          "0x34": "0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f",
+          "0x35": "0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa",
+          "0x36": "0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c",
+          "0x37": "0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167",
+          "0x38": "0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7",
+          "0x39": "0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0",
+          "0x3a": "0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544",
+          "0x3b": "0x619e312724bb6d7c3153ed9de791d764a366b389af13c58bf8a8d90481a46765",
+          "0x3c": "0x7cdd2986268250628d0c10e385c58c6191e6fbe05191bcc04f133f2cea72c1c4",
+          "0x3d": "0x848930bd7ba8cac54661072113fb278869e07bb8587f91392933374d017bcbe1",
+          "0x3e": "0x8869ff2c22b28cc10510d9853292803328be4fb0e80495e8bb8d271f5b889636",
+          "0x3f": "0xb5fe28e79f1b850f8658246ce9b6a1e7b49fc06db7143e8fe0b4f2b0c5523a5c",
+          "0x40": "0x985e929f70af28d0bdd1a90a808f977f597c7c778c489e98d3bd8910d31ac0f7"
+        }
+      },
+      "transaction": {
+        "chainId": 1,
+        "createTarget": "0x6295ee1b4f6dd65047762f924ecd367c17eabf8f",
+        "gasLimit": 16777216,
+        "gasPrice": 10,
+        "input": {
+          "byteLength": 6633,
+          "sha256": "4ee0b7f9a82a4cc382cda436621e4253167b9475bb01d7c3ae1ac0eec44e5a47"
+        },
+        "nonce": 0,
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "type": 0,
+        "value": "0x0"
+      }
+    }
+  },
+  "executionBoundary": {
+    "allTransactionsWithinCap": true,
+    "constructorWorlds": "separate fresh state per side",
+    "eip7825TransactionGasLimitCap": 16777216,
+    "executionFork": "BPO2",
+    "forkCallerOverrideAvailable": false,
+    "glamsterdamBaseline": false,
+    "historicalPragueComplement": "BPO2 credits status/gas on every row and exact deposit log/storage/ETH; the preserved Prague differential exclusively owns exact returndata and its broader malformed/precompile/OOG corpus",
+    "runtimeStateTestMode": true,
+    "runtimeT8nExecutionsPerSide": 7,
+    "runtimeWorlds": "same ordered seven-transition BPO2 state chain per side",
+    "topLevelTransactions": true,
+    "transactionGasLimit": 16777216
+  },
+  "explicitLimits": [
+    "finite BPO2 transactions, not universal equivalence or liveness",
+    "reference bytecode is an executed oracle, not a verified program",
+    "view/support/no-match rows credit only receipt status and charged gas",
+    "exact returndata remains exclusively in the preserved Prague differential",
+    "raw storage equality is excluded; each layout is projected logically",
+    "constructor remainder is net receipt-charged execution after any refund; the t8n result does not expose its refund counter"
+  ],
+  "falsifiers": {
+    "apiBoundary": 3,
+    "channelClasses": [
+      "status",
+      "gas",
+      "deposit-log",
+      "deposit-storage",
+      "deposit-eth"
+    ],
+    "manifestChannelValidation": 5,
+    "manifestClasses": [
+      "row-inventory",
+      "credited-channel",
+      "profile",
+      "constructor-dominance",
+      "decomposition-basis",
+      "historical-boundary",
+      "artifact-size",
+      "cache-repository",
+      "cache-target-file",
+      "cache-site-tree",
+      "cache-ownership",
+      "gas-policy"
+    ],
+    "manifestOwnership": 12,
+    "rawChannelLiveness": 5,
+    "registryLiveness": 1,
+    "staticInventory": 4
+  },
+  "oracle": {
+    "artifactJsonSha256": "fbb573648e4fe96a6b731768cbf5165f5037d7bd29f43359c5316eeb9edc78e6",
+    "deployedRuntimeTextSha256": "867e261f9811c5227ff0e2ec5d7803156f1af3428e49d6ffc041102da3050432",
+    "referenceBytecodeVerifiedCorrect": false,
+    "sourceSha256": "2a8db249155e8502e1132f14410b8d7b2a924512723ed07a08167477d8f8c073"
+  },
+  "profile": {
+    "claims": [
+      "executionFork=BPO2",
+      "executionModule=ethereum.forks.bpo2",
+      "chainId=1",
+      "reward=-1",
+      "logicalCompilerFork=Osaka",
+      "testingBackend=cancun",
+      "externalSolcInvoked=false"
+    ],
+    "compiler": {
+      "artifactCompiler": "Blanc",
+      "externalSolcInvoked": false,
+      "logicalFork": "Osaka",
+      "testingBackend": "cancun"
+    },
+    "execution": {
+      "chainId": 1,
+      "fork": "BPO2",
+      "mainnetActivationTimestamp": 1767747671,
+      "module": "ethereum.forks.bpo2",
+      "reward": -1
+    },
+    "profileFile": "scripts/current-mainnet-target.json",
+    "profileSha256": "5e1901c2d36d768f10ef3633371a85d24e575d95783fa5b2aa5f52dbedc32ae0",
+    "target": {
+      "checkoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae",
+      "defaultRoot": "~/execution-specs-t8n-amsterdam",
+      "overlayDiffSha256": "fc0048871d3f0546d95401f1727e4828523ea46269cbea461ceefeaf13042ea8",
+      "overlayPaths": [
+        "packages/testing/src/execution_testing/client_clis/__init__.py",
+        "packages/testing/src/execution_testing/client_clis/clis/jaune.py",
+        "packages/testing/src/execution_testing/client_clis/tests/test_jaune.py",
+        "packages/testing/src/execution_testing/client_clis/transition_tool.py"
+      ],
+      "pythonIdentity": {
+        "basePrefix": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none",
+        "implementation": "CPython",
+        "version": "3.11.9"
+      },
+      "repository": "https://github.com/ethereum/execution-specs.git",
+      "rootEnv": "JAUNE_T8N_TARGET",
+      "upstreamCommit": "9d6e6f8352a0f76e7e8803722d1a2798fa4f0a96"
+    }
+  },
+  "runtime": {
+    "depositProjection": {
+      "blanc": {
+        "eth": {
+          "callerFinal": "0xc9f2c9cd038943736986fc3e6",
+          "callerInitial": "0xc9f2c9cd04674edea40000000",
+          "callerPrincipalDeltaExcludingFees": "0xde0b6b3a7640000",
+          "contractFinal": "0xde0b6b3a7640000",
+          "contractInitial": "0x0",
+          "fees": "0x2c3c1a",
+          "topLevelValue": "0xde0b6b3a7640000"
+        },
+        "installedRuntime": {
+          "byteLength": 2891,
+          "sha256": "8f2474c60f85dce94e97403369d64d94d7cce4bbb44e620175bd43a5990f0c48"
+        },
+        "log": {
+          "address": "0x00000000219ab540356cbb839cbe05303d7705fa",
+          "data": "0x00000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000180000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000309de01f579355cf1975339f1763e20d2063b1905910970313413e8756b744aa78b5b78b516ea2de24410753aee6814e600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000207cd04bd3c3837ef7c6c2885e30bb00ebba0ff13913d454460196f077a649910c000000000000000000000000000000000000000000000000000000000000000800ca9a3b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060592d00b520865e39ccfded24257b7c5a0880e97a021ec02444dd8cc657ece2143eb9f64f23f48dc0020cca7838a889a9db9a9ef920c38e5c581e5cbb220d2ab335048b3fc2dfbff0d6b748bff5b109bf096fa376a4bb6e9a9b614e0f4cae804f00000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000",
+          "topics": [
+            "0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5"
+          ]
+        },
+        "logCount": 1,
+        "logicalState": {
+          "branch": [
+            "0xe4c22ae5a93edbef65490f99de88e8c9c7686bf13fd3d94413065c69b63b8bc5",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+          ],
+          "count": "0x1",
+          "layoutQualified": true,
+          "zeroHashes": [
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+            "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+            "0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c",
+            "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
+            "0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30",
+            "0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1",
+            "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c",
+            "0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193",
+            "0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1",
+            "0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b",
+            "0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220",
+            "0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f",
+            "0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e",
+            "0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784",
+            "0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb",
+            "0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb",
+            "0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab",
+            "0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4",
+            "0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f",
+            "0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa",
+            "0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c",
+            "0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167",
+            "0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7",
+            "0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0",
+            "0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544",
+            "0x619e312724bb6d7c3153ed9de791d764a366b389af13c58bf8a8d90481a46765",
+            "0x7cdd2986268250628d0c10e385c58c6191e6fbe05191bcc04f133f2cea72c1c4",
+            "0x848930bd7ba8cac54661072113fb278869e07bb8587f91392933374d017bcbe1",
+            "0x8869ff2c22b28cc10510d9853292803328be4fb0e80495e8bb8d271f5b889636",
+            "0xb5fe28e79f1b850f8658246ce9b6a1e7b49fc06db7143e8fe0b4f2b0c5523a5c",
+            "0x985e929f70af28d0bdd1a90a808f977f597c7c778c489e98d3bd8910d31ac0f7"
+          ]
+        },
+        "logsHash": "0x2559fe18fe83985a3ed45be818c358f02ccaf560b4e5551973db0eff109bdb3d",
+        "rawStorage": {
+          "0x100": "0xe4c22ae5a93edbef65490f99de88e8c9c7686bf13fd3d94413065c69b63b8bc5",
+          "0x200": "0x1",
+          "0x301": "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+          "0x302": "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+          "0x303": "0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c",
+          "0x304": "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
+          "0x305": "0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30",
+          "0x306": "0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1",
+          "0x307": "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c",
+          "0x308": "0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193",
+          "0x309": "0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1",
+          "0x30a": "0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b",
+          "0x30b": "0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220",
+          "0x30c": "0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f",
+          "0x30d": "0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e",
+          "0x30e": "0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784",
+          "0x30f": "0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb",
+          "0x310": "0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb",
+          "0x311": "0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab",
+          "0x312": "0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4",
+          "0x313": "0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f",
+          "0x314": "0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa",
+          "0x315": "0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c",
+          "0x316": "0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167",
+          "0x317": "0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7",
+          "0x318": "0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0",
+          "0x319": "0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544",
+          "0x31a": "0x619e312724bb6d7c3153ed9de791d764a366b389af13c58bf8a8d90481a46765",
+          "0x31b": "0x7cdd2986268250628d0c10e385c58c6191e6fbe05191bcc04f133f2cea72c1c4",
+          "0x31c": "0x848930bd7ba8cac54661072113fb278869e07bb8587f91392933374d017bcbe1",
+          "0x31d": "0x8869ff2c22b28cc10510d9853292803328be4fb0e80495e8bb8d271f5b889636",
+          "0x31e": "0xb5fe28e79f1b850f8658246ce9b6a1e7b49fc06db7143e8fe0b4f2b0c5523a5c",
+          "0x31f": "0x985e929f70af28d0bdd1a90a808f977f597c7c778c489e98d3bd8910d31ac0f7"
+        },
+        "targetNonce": 1
+      },
+      "ethValueAgreementExcludingSideSpecificFees": true,
+      "exactLogTopicDataAgreement": true,
+      "logicalStateAgreement": true,
+      "rawStorageEqualityClaim": false,
+      "reference": {
+        "eth": {
+          "callerFinal": "0xc9f2c9cd038943736986bcb1a",
+          "callerInitial": "0xc9f2c9cd04674edea40000000",
+          "callerPrincipalDeltaExcludingFees": "0xde0b6b3a7640000",
+          "contractFinal": "0xde0b6b3a7640000",
+          "contractInitial": "0x0",
+          "fees": "0x3034e6",
+          "topLevelValue": "0xde0b6b3a7640000"
+        },
+        "installedRuntime": {
+          "byteLength": 6358,
+          "sha256": "5aaa8327c5765ec883224895ca02cade2871e12dad0197bdc791efc91c7ef18d"
+        },
+        "log": {
+          "address": "0x00000000219ab540356cbb839cbe05303d7705fa",
+          "data": "0x00000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000180000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000309de01f579355cf1975339f1763e20d2063b1905910970313413e8756b744aa78b5b78b516ea2de24410753aee6814e600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000207cd04bd3c3837ef7c6c2885e30bb00ebba0ff13913d454460196f077a649910c000000000000000000000000000000000000000000000000000000000000000800ca9a3b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060592d00b520865e39ccfded24257b7c5a0880e97a021ec02444dd8cc657ece2143eb9f64f23f48dc0020cca7838a889a9db9a9ef920c38e5c581e5cbb220d2ab335048b3fc2dfbff0d6b748bff5b109bf096fa376a4bb6e9a9b614e0f4cae804f00000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000",
+          "topics": [
+            "0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5"
+          ]
+        },
+        "logCount": 1,
+        "logicalState": {
+          "branch": [
+            "0xe4c22ae5a93edbef65490f99de88e8c9c7686bf13fd3d94413065c69b63b8bc5",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+          ],
+          "count": "0x1",
+          "layoutQualified": true,
+          "zeroHashes": [
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+            "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+            "0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c",
+            "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
+            "0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30",
+            "0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1",
+            "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c",
+            "0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193",
+            "0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1",
+            "0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b",
+            "0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220",
+            "0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f",
+            "0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e",
+            "0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784",
+            "0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb",
+            "0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb",
+            "0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab",
+            "0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4",
+            "0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f",
+            "0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa",
+            "0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c",
+            "0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167",
+            "0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7",
+            "0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0",
+            "0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544",
+            "0x619e312724bb6d7c3153ed9de791d764a366b389af13c58bf8a8d90481a46765",
+            "0x7cdd2986268250628d0c10e385c58c6191e6fbe05191bcc04f133f2cea72c1c4",
+            "0x848930bd7ba8cac54661072113fb278869e07bb8587f91392933374d017bcbe1",
+            "0x8869ff2c22b28cc10510d9853292803328be4fb0e80495e8bb8d271f5b889636",
+            "0xb5fe28e79f1b850f8658246ce9b6a1e7b49fc06db7143e8fe0b4f2b0c5523a5c",
+            "0x985e929f70af28d0bdd1a90a808f977f597c7c778c489e98d3bd8910d31ac0f7"
+          ]
+        },
+        "logsHash": "0x2559fe18fe83985a3ed45be818c358f02ccaf560b4e5551973db0eff109bdb3d",
+        "rawStorage": {
+          "0x0": "0xe4c22ae5a93edbef65490f99de88e8c9c7686bf13fd3d94413065c69b63b8bc5",
+          "0x20": "0x1",
+          "0x22": "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+          "0x23": "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+          "0x24": "0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c",
+          "0x25": "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
+          "0x26": "0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30",
+          "0x27": "0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1",
+          "0x28": "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c",
+          "0x29": "0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193",
+          "0x2a": "0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1",
+          "0x2b": "0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b",
+          "0x2c": "0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220",
+          "0x2d": "0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f",
+          "0x2e": "0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e",
+          "0x2f": "0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784",
+          "0x30": "0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb",
+          "0x31": "0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb",
+          "0x32": "0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab",
+          "0x33": "0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4",
+          "0x34": "0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f",
+          "0x35": "0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa",
+          "0x36": "0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c",
+          "0x37": "0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167",
+          "0x38": "0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7",
+          "0x39": "0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0",
+          "0x3a": "0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544",
+          "0x3b": "0x619e312724bb6d7c3153ed9de791d764a366b389af13c58bf8a8d90481a46765",
+          "0x3c": "0x7cdd2986268250628d0c10e385c58c6191e6fbe05191bcc04f133f2cea72c1c4",
+          "0x3d": "0x848930bd7ba8cac54661072113fb278869e07bb8587f91392933374d017bcbe1",
+          "0x3e": "0x8869ff2c22b28cc10510d9853292803328be4fb0e80495e8bb8d271f5b889636",
+          "0x3f": "0xb5fe28e79f1b850f8658246ce9b6a1e7b49fc06db7143e8fe0b4f2b0c5523a5c",
+          "0x40": "0x985e929f70af28d0bdd1a90a808f977f597c7c778c489e98d3bd8910d31ac0f7"
+        },
+        "targetNonce": 1
+      }
+    },
+    "gasPolicy": {
+      "allRowsRecorded": true,
+      "deviationMarkerVersion": "beacon-deposit-current-mainnet-gas-v1",
+      "obligation": "a positive Blanc delta fails before manifest acceptance unless one exact marker exists on a completed non-PENDING deviation table row; the generator never auto-admits or edits a deviation",
+      "positiveDeltas": [],
+      "registryFile": "BEACON_DEPOSIT_DEVIATIONS.md",
+      "registrySha256": "4a619e4236446c3a46274e48cc75dc3b2c599ed96a8b2a3fbef19b1c4a2c0d31"
+    },
+    "returndataBoundary": {
+      "creditedOnBpo2Rows": false,
+      "fork": "Prague",
+      "owner": "scripts/check-beacon-deposit-differential.sh",
+      "statement": "BPO2 credits status/gas on every row and exact deposit log/storage/ETH; the preserved Prague differential exclusively owns exact returndata and its broader malformed/precompile/OOG corpus"
+    },
+    "rows": [
+      {
+        "blanc": {
+          "gasUsed": 78033,
+          "receiptSucceeded": true
+        },
+        "blancMinusReferenceGas": -6801,
+        "completedDeviation": null,
+        "creditedChannels": [
+          "status",
+          "gas",
+          "deposit-log",
+          "deposit-storage",
+          "deposit-eth"
+        ],
+        "endpoint": "deposit(bytes,bytes,bytes,bytes32)",
+        "expectedReceiptSucceeded": true,
+        "input": {
+          "calldataBytes": 420,
+          "calldataSha256": "2dc15faedf341fda8a0749a4cf2687e9f9555cf2f9823fd919bb0222e47e9576",
+          "sameInputBothSides": true,
+          "value": "0xde0b6b3a7640000"
+        },
+        "name": "deposit-success",
+        "reference": {
+          "gasUsed": 84834,
+          "receiptSucceeded": true
+        },
+        "returndataCredited": false
+      },
+      {
+        "blanc": {
+          "gasUsed": 102597,
+          "receiptSucceeded": true
+        },
+        "blancMinusReferenceGas": -18072,
+        "completedDeviation": null,
+        "creditedChannels": [
+          "status",
+          "gas"
+        ],
+        "endpoint": "get_deposit_root()",
+        "expectedReceiptSucceeded": true,
+        "input": {
+          "calldataBytes": 4,
+          "calldataSha256": "4dfd35a99874d0f16c8d951591e4528787bd1e2ee0410ff48d1b02b88f09bfd3",
+          "sameInputBothSides": true,
+          "value": "0x0"
+        },
+        "name": "get-deposit-root",
+        "reference": {
+          "gasUsed": 120669,
+          "receiptSucceeded": true
+        },
+        "returndataCredited": false
+      },
+      {
+        "blanc": {
+          "gasUsed": 23447,
+          "receiptSucceeded": true
+        },
+        "blancMinusReferenceGas": -1131,
+        "completedDeviation": null,
+        "creditedChannels": [
+          "status",
+          "gas"
+        ],
+        "endpoint": "get_deposit_count()",
+        "expectedReceiptSucceeded": true,
+        "input": {
+          "calldataBytes": 4,
+          "calldataSha256": "f448223d30dbe15764e89545f4c760c988e45541cab95dbb8e51f6794f7e1e7b",
+          "sameInputBothSides": true,
+          "value": "0x0"
+        },
+        "name": "get-deposit-count",
+        "reference": {
+          "gasUsed": 24578,
+          "receiptSucceeded": true
+        },
+        "returndataCredited": false
+      },
+      {
+        "blanc": {
+          "gasUsed": 21600,
+          "receiptSucceeded": true
+        },
+        "blancMinusReferenceGas": 0,
+        "completedDeviation": null,
+        "creditedChannels": [
+          "status",
+          "gas"
+        ],
+        "endpoint": "supportsInterface(bytes4)",
+        "expectedReceiptSucceeded": true,
+        "input": {
+          "calldataBytes": 36,
+          "calldataSha256": "2a51c3088929f18fc10f6324a80927021dff2c9876a45ab8fb291f5788bde43d",
+          "sameInputBothSides": true,
+          "value": "0x0"
+        },
+        "name": "supports-erc165",
+        "reference": {
+          "gasUsed": 21600,
+          "receiptSucceeded": true
+        },
+        "returndataCredited": false
+      },
+      {
+        "blanc": {
+          "gasUsed": 21600,
+          "receiptSucceeded": true
+        },
+        "blancMinusReferenceGas": 0,
+        "completedDeviation": null,
+        "creditedChannels": [
+          "status",
+          "gas"
+        ],
+        "endpoint": "supportsInterface(bytes4)",
+        "expectedReceiptSucceeded": true,
+        "input": {
+          "calldataBytes": 36,
+          "calldataSha256": "7b0311df976372b0abe80ae124f66ce7dfcab2c2f7226c35ea088979994b522c",
+          "sameInputBothSides": true,
+          "value": "0x0"
+        },
+        "name": "supports-deposit",
+        "reference": {
+          "gasUsed": 21600,
+          "receiptSucceeded": true
+        },
+        "returndataCredited": false
+      },
+      {
+        "blanc": {
+          "gasUsed": 21600,
+          "receiptSucceeded": true
+        },
+        "blancMinusReferenceGas": 0,
+        "completedDeviation": null,
+        "creditedChannels": [
+          "status",
+          "gas"
+        ],
+        "endpoint": "supportsInterface(bytes4)",
+        "expectedReceiptSucceeded": true,
+        "input": {
+          "calldataBytes": 36,
+          "calldataSha256": "94964e5b230dea0926d047c2957762ca306a8e766b6a76326bf3e8b705140fc2",
+          "sameInputBothSides": true,
+          "value": "0x0"
+        },
+        "name": "supports-invalid",
+        "reference": {
+          "gasUsed": 21600,
+          "receiptSucceeded": true
+        },
+        "returndataCredited": false
+      },
+      {
+        "blanc": {
+          "gasUsed": 21020,
+          "receiptSucceeded": false
+        },
+        "blancMinusReferenceGas": -26,
+        "completedDeviation": null,
+        "creditedChannels": [
+          "status",
+          "gas"
+        ],
+        "endpoint": "no-match",
+        "expectedReceiptSucceeded": false,
+        "input": {
+          "calldataBytes": 0,
+          "calldataSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sameInputBothSides": true,
+          "value": "0x0"
+        },
+        "name": "no-match",
+        "reference": {
+          "gasUsed": 21046,
+          "receiptSucceeded": false
+        },
+        "returndataCredited": false
+      }
+    ],
+    "sameOrderedInputs": true,
+    "transactionCountPerSide": 7
+  },
+  "schema": 1
+}

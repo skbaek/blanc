@@ -4,9 +4,11 @@ import Blanc.BeaconDepositCode
 # Beacon deposit constructor and creation artifact
 
 The constructor materializes `zero_hashes[1..31]` through one tail-recursive
-SHA-256 site, then returns the appended compiled runtime.  Every constructor
-coordinate and length is a fixed-width `PUSH32`, so the provisional and final
-compiler passes have identical shape even though the runtime offset changes.
+SHA-256 site, then returns the appended compiled runtime.  Every current
+constructor coordinate and length fits in a fixed-width `PUSH2`; the exact
+full-width fallback keeps future growth non-truncating.  Both branches have a
+layout-independent width, so the provisional and final compiler passes retain
+the same shape even though the runtime offset changes.
 -/
 
 namespace Blanc.BeaconDeposit
@@ -23,9 +25,14 @@ def constructorZeroHashContinuationSlot : Nat := 4
 
 private def constructorNodeWord : B256 := 2
 
-/-- Constructor immediates are always encoded as `PUSH32`. -/
+/-- Use fixed-width `PUSH2` for current constructor coordinates without ever
+truncating a future value that outgrows two bytes. -/
 private def constructorPushWord (word : B256) : Ninst :=
-  Ninst.push word.toBytes (by rw [B256.length_toBytes])
+  let value := word.toNat
+  if value < 2 ^ 16 then
+    Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
+  else
+    Ninst.push word.toBytes (by rw [B256.length_toBytes])
 
 private def constructorPushWords : List B256 → Line :=
   List.map constructorPushWord
@@ -133,11 +140,11 @@ theorem constructorInitPrefix_compile :
   exact Prog.compile_eq_some_getD_of_compiles _ constructorProgram_compiles
 
 private theorem provisionalConstructorPrefix_length :
-    provisionalConstructorPrefix.length = 806 := by
+    provisionalConstructorPrefix.length = 146 := by
   decide +kernel
 
 theorem constructorRuntimeOffset_exact :
-    constructorRuntimeOffset = 806 := by
+    constructorRuntimeOffset = 146 := by
   simpa [constructorRuntimeOffset] using provisionalConstructorPrefix_length
 
 /-- Fixed-width immediates make the final prefix exactly as long as the
@@ -147,12 +154,12 @@ theorem constructorInitPrefix_length_eq_provisionalOffset :
   decide +kernel
 
 theorem constructorInitPrefix_length_exact :
-    constructorInitPrefix.length = 806 := by
+    constructorInitPrefix.length = 146 := by
   rw [constructorInitPrefix_length_eq_provisionalOffset,
     constructorRuntimeOffset_exact]
 
 theorem constructorAppendedRuntime_length_exact :
-    code.length = 2890 := by
+    code.length = 2891 := by
   simpa [codeSize] using codeSize_exact
 
 theorem creationCode_eq_prefix_append_runtime :
@@ -164,7 +171,7 @@ theorem constructorCreationCode_eq_creationCode :
   rfl
 
 theorem creationCode_length_exact :
-    creationCode.length = 3696 := by
+    creationCode.length = 3037 := by
   simp [creationCode, constructorInitPrefix_length_exact,
     constructorAppendedRuntime_length_exact]
 
@@ -225,17 +232,17 @@ def runtimeAndConstructorStaticcallSourceSites : List Prog.SourceSite :=
 
 private theorem constructorSourceSiteFacts :
     constructorSstoreSourceSites.length = 1 ∧
-    sourceSitePcs constructorSstoreSourceSites = [767] ∧
+    sourceSitePcs constructorSstoreSourceSites = [137] ∧
     constructorStaticcallSourceSites.length = 1 ∧
-    sourceSitePcs constructorStaticcallSourceSites = [638] ∧
+    sourceSitePcs constructorStaticcallSourceSites = [98] ∧
     constructorCodecopySourceSites.length = 1 ∧
-    sourceSitePcs constructorCodecopySourceSites = [267] ∧
+    sourceSitePcs constructorCodecopySourceSites = [57] ∧
     (constructorExternalExecutionSourceSites.all fun site =>
       match site.instruction with
       | .exec .statcall => true
       | _ => false) = true ∧
     constructorExternalExecutionSourceSites.length = 1 ∧
-    sourceSitePcs constructorExternalExecutionSourceSites = [638] := by
+    sourceSitePcs constructorExternalExecutionSourceSites = [98] := by
   decide +kernel
 
 theorem constructorSstoreSourceSites_length :
@@ -243,7 +250,7 @@ theorem constructorSstoreSourceSites_length :
   constructorSourceSiteFacts.1
 
 theorem constructorSstoreSourceSites_pcs :
-    sourceSitePcs constructorSstoreSourceSites = [767] :=
+    sourceSitePcs constructorSstoreSourceSites = [137] :=
   constructorSourceSiteFacts.2.1
 
 theorem constructorStaticcallSourceSites_length :
@@ -251,7 +258,7 @@ theorem constructorStaticcallSourceSites_length :
   constructorSourceSiteFacts.2.2.1
 
 theorem constructorStaticcallSourceSites_pcs :
-    sourceSitePcs constructorStaticcallSourceSites = [638] :=
+    sourceSitePcs constructorStaticcallSourceSites = [98] :=
   constructorSourceSiteFacts.2.2.2.1
 
 theorem constructorCodecopySourceSites_length :
@@ -259,7 +266,7 @@ theorem constructorCodecopySourceSites_length :
   constructorSourceSiteFacts.2.2.2.2.1
 
 theorem constructorCodecopySourceSites_pcs :
-    sourceSitePcs constructorCodecopySourceSites = [267] :=
+    sourceSitePcs constructorCodecopySourceSites = [57] :=
   constructorSourceSiteFacts.2.2.2.2.2.1
 
 theorem constructorExternalExecutionSourceSites_all_staticcall :
@@ -274,7 +281,7 @@ theorem constructorExternalExecutionSourceSites_length :
   constructorSourceSiteFacts.2.2.2.2.2.2.2.1
 
 theorem constructorExternalExecutionSourceSites_pcs :
-    sourceSitePcs constructorExternalExecutionSourceSites = [638] :=
+    sourceSitePcs constructorExternalExecutionSourceSites = [98] :=
   constructorSourceSiteFacts.2.2.2.2.2.2.2.2
 
 theorem runtimeAndConstructorStaticcallSourceSites_length :

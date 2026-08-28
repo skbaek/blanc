@@ -99,6 +99,51 @@ tails of 96, 64, 64, 128, and 64 bytes (416 bytes). The architecture memo's
 and Solidity source control the implementation and the byte-exact event
 predicate.
 
+## Early artifact and runtime-gas checkpoint
+
+Before compiled-effect proofs make the emitted program expensive to change,
+the exact compiler-owned artifact was compared with the pinned deployed
+referent. This checkpoint does not alter the loop-choice experiment above and
+does not claim byte or gas identity:
+
+| Artifact | Blanc | Referent | Blanc reduction |
+|---|---:|---:|---:|
+| runtime | 2,891 bytes | 6,358 bytes | 3,467 bytes (54.53%) |
+| creation | 3,037 bytes | 6,633 bytes | 3,596 bytes (54.21%) |
+
+The pinned Prague runtime matrix has 69 direct-message executions: 67 are
+strictly cheaper in Blanc, two shared-gas OOG thresholds are equal, and none
+is more expensive. The median Blanc-minus-reference delta is -1,131 gas and
+the largest saving is 18,090. The exact per-row values, artifact digests, and
+finite-evidence boundary are owned by the differential manifest and
+`BEACON_DEPOSIT_DEVIATIONS.md`.
+
+Constructor gas is deliberately measured separately as total direct creation-
+message gas, runtime code-deposit gas, and constructor-execution gas. Closure
+requires both the total and execution-only Blanc deltas to be non-positive, so
+the smaller runtime cannot hide a worse constructor. The optimized constructor
+uses 1,274,272 gas versus 1,993,844 for the referent (-719,572); after removing
+runtime code deposit, its own execution uses 696,072 versus 722,244 (-26,172).
+Thus the constructor wins independently of Blanc's smaller deposited runtime.
+
+The current-mainnet BPO2 lane independently confirms that conclusion at the
+top-level transaction boundary. In fresh creation state transitions, the
+referent uses 2,146,896 gas and Blanc 1,368,074 (-778,822). The side-specific
+regular intrinsic charges are 153,052 and 93,802, and code deposit is 1,271,600
+and 578,200. Subtracting those components leaves 722,244 versus 696,072
+(-26,172) of receipt-charged constructor execution after any transaction
+refund. The pinned t8n result does not expose the refund counter, so the BPO2
+evidence deliberately does not claim it is zero; the historical direct-message
+campaign owns that stronger observation.
+
+The BPO2 runtime state chain likewise has no regression: Blanc-minus-reference
+gas is -6,801 for deposit, -18,072 for root, -1,131 for count, zero for each of
+the three ERC-165 probes, and -26 for no-match. The exact target provenance,
+receipts, state, raw event bytes, and decomposition are committed in
+`scripts/fixtures/beacon-deposit-current-mainnet/manifest.json`; exact
+returndata and the broad malformed/precompile/OOG matrix remain with the
+historical Prague manifest.
+
 ## Final decision
 
 Use tail-recursive auxiliary slots at constant EVM stack height for all three

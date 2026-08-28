@@ -6,8 +6,9 @@ note is wrong. It describes Blanc's own artifact, not the deployed artifact.
 
 ## Program and storage
 
-The runtime has exactly four selector leaves, in ascending order, followed by
-one shared empty-revert no-match auxiliary:
+The runtime has exactly four selector leaves in ascending order. Empty
+calldata takes an inline empty revert before selector loading; every other
+no-match reaches the selected leaf's inline empty revert:
 
 | Selector | Endpoint | Payability |
 |---|---|---|
@@ -15,6 +16,15 @@ one shared empty-revert no-match auxiliary:
 | `22895118` | `deposit(bytes,bytes,bytes,bytes32)` | payable |
 | `621fd130` | `get_deposit_count()` | nonpayable |
 | `c5f2892f` | `get_deposit_root()` | nonpayable |
+
+The artifact-level gas checkpoint refroze three low-level routing choices
+without changing the interface: the dispatcher is right-skewed so the
+`supportsInterface` leaf is shallow; nonpayability branches directly on
+`CALLVALUE`; and the short-`supportsInterface` rejection is inline. The
+runtime tree's flattened leaves are definitionally tied to the checked
+`funcs` list. On the pinned 44-row / 69-transaction EELS matrix this shape has
+67 strict savings, two shared-OOG equalities, and no positive Blanc delta;
+the execution-derived manifest owns the exact gas values.
 
 Blanc uses three compact disjoint storage regions for reachable indices:
 
@@ -50,9 +60,10 @@ length < 2^32
 Offsets may be reordered or overlap; padding contents and trailing calldata
 are ignored. These checks model the pinned solc decoder's 32-bit offset/length
 boundary without defining decoding as “whatever this program reads.” Every
-structural failure uses the shared empty-data reverter. Only after all three
-tails are decodable does the body test, in source order, lengths 48/32/96,
-the three value guards, reconstructed root, and count cap.
+deposit-decoder structural failure uses the shared empty-data reverter; the
+independent short-`supportsInterface` ABI rejection is inline. Only after all
+three tails are decodable does the body test, in source order, lengths
+48/32/96, the three value guards, reconstructed root, and count cap.
 
 The statement layer distinguishes:
 
@@ -61,6 +72,14 @@ The statement layer distinguishes:
 - a proved implication from canonical encodings (under their explicit
   machine-width bound) to machine decodability;
 - an undecodable-calldata empty-revert theorem.
+
+The structural predicate deliberately does not add a total-calldata bound:
+trailing calldata is ignored by the decoder.  Compiled theorems separately
+assume `data.length < 2^256` when relating Lean's unbounded `Nat` length to the
+`B256` value produced by `CALLDATASIZE`; canonical calls derive that machine-
+representability premise from their stronger `< 2^32` encoding bound.  The
+undecodable-calldata theorem carries the same premise rather than treating an
+unrepresentably large mathematical byte list as a structural decoder failure.
 
 The differential campaign owns the exact noncanonical comparison boundary;
 any mismatch it discovers is a registry row, never an implicit exception.
@@ -115,7 +134,7 @@ digest directly to word `20`; its final mix-in uses words `0..1`.
 The runtime auxiliary table is append-only at these coordinates:
 
 ```text
-1  empty fallback / structural rejection
+1  deposit structural rejection / short successful SHA response
 2  full-returndata bubble
 3..10  eight Error(string) reason auxiliaries, in source order
 11 root loop

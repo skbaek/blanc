@@ -453,6 +453,15 @@ theorem abiDepositCall_length
   simp only [abiDepositCall, List.length_append, abiSelectorBytes_length,
     B256.length_toBytes, abiBytesTail_length]
 
+theorem canonicalDepositCalldata_dataBound
+    {data pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256}
+    (hcanonical : CanonicalDepositCalldata data pubkey
+      withdrawalCredentials signature depositDataRoot) :
+    data.length < 2 ^ 256 := by
+  rcases hcanonical with ⟨rfl, hbound⟩
+  omega
+
 theorem canonicalDepositCalldata_decodable
     {data pubkey withdrawalCredentials signature : Bytes}
     {depositDataRoot : B256}

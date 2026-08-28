@@ -135,7 +135,7 @@ def treeFullError : Func :=
 
 def supportsInterfaceEndpoint : Func :=
   pushB256 36 ::: calldatasize ::: lt :::
-  ((.call emptyRevertSlot) <?>
+  (Func.rev <?>
     (arg 0 +++ pushB256 224 ::: shr :::
       dup 0 ::: pushB256 erc165InterfaceId ::: eq ::: swap 0 :::
       pushB256 depositInterfaceId ::: eq ::: Ninst.or :::
@@ -306,16 +306,51 @@ def depositEndpoint : Func := validateDepositAbi depositBody
 
 /-! ## Complete four-selector runtime -/
 
+def nonpayableEndpoint (body : Func) : Func :=
+  callvalue ::: (Func.rev <?> body)
+
 def funcs : List (B256 × Func) :=
-  [ (supportsInterfaceSelector, nonpayable supportsInterfaceEndpoint),
+  [ (supportsInterfaceSelector, nonpayableEndpoint supportsInterfaceEndpoint),
     (depositSelector, depositEndpoint),
-    (getDepositCountSelector, nonpayable getDepositCountEndpoint),
-    (getDepositRootSelector, nonpayable getDepositRootEndpoint) ]
+    (getDepositCountSelector, nonpayableEndpoint getDepositCountEndpoint),
+    (getDepositRootSelector, nonpayableEndpoint getDepositRootEndpoint) ]
 
 theorem funcs_sorted : DispatchTree.sorted funcs = true := by
   decide +kernel
 
-def tree : DispatchTree := .ofSorted funcs
+def tree : DispatchTree :=
+  .fork
+    (.leaf supportsInterfaceSelector
+      (nonpayableEndpoint supportsInterfaceEndpoint))
+    (.fork
+      (.leaf depositSelector depositEndpoint)
+      (.fork
+        (.leaf getDepositCountSelector
+          (nonpayableEndpoint getDepositCountEndpoint))
+        (.leaf getDepositRootSelector
+          (nonpayableEndpoint getDepositRootEndpoint))))
+
+theorem tree_funcs_exact :
+    tree =
+      .fork
+        (.leaf supportsInterfaceSelector
+          (nonpayableEndpoint supportsInterfaceEndpoint))
+        (.fork
+          (.leaf depositSelector depositEndpoint)
+          (.fork
+            (.leaf getDepositCountSelector
+              (nonpayableEndpoint getDepositCountEndpoint))
+            (.leaf getDepositRootSelector
+              (nonpayableEndpoint getDepositRootEndpoint)))) ∧
+    funcs =
+      [ (supportsInterfaceSelector,
+          nonpayableEndpoint supportsInterfaceEndpoint),
+        (depositSelector, depositEndpoint),
+        (getDepositCountSelector,
+          nonpayableEndpoint getDepositCountEndpoint),
+        (getDepositRootSelector,
+          nonpayableEndpoint getDepositRootEndpoint) ] := by
+  exact ⟨rfl, rfl⟩
 
 def aux : List Func :=
   [ Func.rev,
@@ -334,6 +369,6 @@ def aux : List Func :=
     insertionContinuation ]
 
 def runtime : Prog :=
-  ⟨Func.mainWith emptyRevertSlot tree, aux⟩
+  ⟨calldatasize ::: (Func.main tree <?> Func.rev), aux⟩
 
 end Blanc.BeaconDeposit

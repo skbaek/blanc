@@ -11,12 +11,16 @@ fields, lowercase hexadecimal, no additional nonblank lines)::
     creation <decimal-byte-length> <hex>
     selectors 4 01ffc9a7,22895118,621fd130,c5f2892f
 
-Both runtimes execute in the clean pinned Prague execution-specs checkout.
+Both runtimes and both creation artifacts execute in the clean pinned Prague
+execution-specs checkout. Creation uses two fresh, otherwise identical direct
+creation-message worlds with every Prague precompile warm at message entry.
 Raw storage is intentionally *not* compared: Solidity slots and Blanc's
 contract-local regions are projected to the same branch/count/zero-hash
 image first.  Status, returndata, that projection, ETH balances, logs, and
 semantic STATICCALL-to-0x2 traces are byte-compared.  Gas is recorded for
-every path but is informational, never an equality channel.
+every runtime path but is informational, never an equality channel. Constructor
+execution and code-deposit gas are recorded separately; the execution-only and
+total create-message deltas must satisfy declared non-positive dominance checks.
 
 The committed manifest is execution-derived.  Consequently this program
 cannot create an honest manifest until the Blanc evaluator and artifact
@@ -49,9 +53,46 @@ DEPLOYED_RUNTIME = INPUT / "deployed-runtime.norm.hex"
 MANIFEST_PATH = REPO / "scripts" / "fixtures" / "beacon-deposit" / "manifest.json"
 REGISTRY_PATH = REPO / "BEACON_DEPOSIT_DEVIATIONS.md"
 
-MANIFEST_SCHEMA = 2
-MANIFEST_FALSIFIER_COUNT = 10
+MANIFEST_SCHEMA = 3
+MANIFEST_FALSIFIER_COUNT = 16
 STATIC_MATRIX_FALSIFIER_COUNT = 4
+CREATION_EXECUTION_COUNT = 2
+CODE_DEPOSIT_GAS_PER_BYTE = 200
+CREATION_ASSERTION_NAMES = (
+    "executionCount", "successfulExecutionCount", "shaCallsPerExecution",
+    "shaCallsTotal", "returnedRuntimeMatchesOwnArtifact",
+    "installedRuntimeMatchesOwnArtifact", "exactAccountPostState",
+    "exactRawStoragePostState", "exactLogicalPostState",
+    "settledCreatedAccountsEmpty", "refundCountersZero",
+)
+CREATION_COMPARISON_CHANNELS = (
+    "semanticShaTraceAgreement", "logicalPostStateAgreement", "ethAgreement",
+)
+CREATION_COMPARISON_CLAIM_KEYS = CREATION_COMPARISON_CHANNELS + (
+    "shaOutputOffsetEqualityClaim", "returnedRuntimeEqualityClaim",
+    "installedRuntimeEqualityClaim", "rawStorageEqualityClaim",
+)
+CREATION_GAS_KEYS = (
+    "createMessageGas", "codeDepositGas", "constructorExecutionGas",
+)
+CREATION_REQUIRED_DOMINANCE_KEYS = (
+    "createMessageGas", "constructorExecutionGas",
+)
+CREATION_MESSAGE_BASIS_KEYS = (
+    "entry", "target", "currentTarget", "caller", "callerNonce",
+    "callerBalance", "gasLimit", "value", "data", "codeAddress", "depth",
+    "shouldTransferValue", "isStatic", "disablePrecompiles",
+    "freshStatePerSide", "targetInitiallyAbsent",
+)
+CREATION_PREWARM_POLICY_KEYS = (
+    "transactionAccessListAddresses", "transactionAccessListStorageKeys",
+    "initialMessageAccessedAddresses", "initialMessageAccessedStorageKeys",
+    "praguePrecompileAddresses", "allPraguePrecompilesPrewarmed",
+    "coinbasePrewarmed",
+)
+CREATION_GAS_BOUNDARY_KEYS = (
+    "basis", "included", "excluded", "refundTreatment", "gasEqualityClaim",
+)
 
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 SOURCE_SHA256 = "2a8db249155e8502e1132f14410b8d7b2a924512723ed07a08167477d8f8c073"
@@ -83,6 +124,7 @@ SHA256_STUB = "0x" + "00" * 18 + "0200"
 EOA_DELEGATION_MARKER = bytes.fromhex("ef0100")
 
 DEPTH = 32
+CREATION_SHA_CALL_COUNT = DEPTH - 1
 CAP = 2**32 - 1
 GWEI = 10**9
 ETHER = 10**18
@@ -90,6 +132,9 @@ UINT64_MAX = 2**64 - 1
 UINT256_MAX = 2**256 - 1
 DEFAULT_GAS = 20_000_000
 ZERO32 = bytes(32)
+PRAGUE_PRECOMPILE_ADDRESSES = tuple(
+    "0x" + address.to_bytes(20, "big").hex() for address in range(1, 18)
+)
 
 REASONS = (
     "DepositContract: invalid pubkey length",
@@ -192,6 +237,67 @@ def address_bytes(address: str) -> bytes:
 
 def canonical_address(address: str) -> str:
     return "0x" + address_bytes(address).hex()
+
+
+def bytes_identity(value: bytes) -> Mapping[str, object]:
+    return {
+        "byteLength": len(value),
+        "sha256": hashlib.sha256(value).hexdigest(),
+    }
+
+
+def wrapper_contract_value(value: object) -> str:
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, list):
+        return "[" + "|".join(wrapper_contract_value(item) for item in value) + "]"
+    rendered = str(value)
+    if "," in rendered:
+        die("wrapper-owned contract value contains the list delimiter")
+    return rendered
+
+
+def wrapper_contract_items(document: Mapping[str, object],
+                           keys: Sequence[str]) -> Tuple[str, ...]:
+    if any(key not in document for key in keys):
+        die("wrapper-owned contract field is absent")
+    return tuple(
+        f"{key}={wrapper_contract_value(document[key])}" for key in keys
+    )
+
+
+def creation_assertions() -> Mapping[str, object]:
+    return {
+        "executionCount": CREATION_EXECUTION_COUNT,
+        "successfulExecutionCount": CREATION_EXECUTION_COUNT,
+        "shaCallsPerExecution": CREATION_SHA_CALL_COUNT,
+        "shaCallsTotal": CREATION_EXECUTION_COUNT * CREATION_SHA_CALL_COUNT,
+        "returnedRuntimeMatchesOwnArtifact": True,
+        "installedRuntimeMatchesOwnArtifact": True,
+        "exactAccountPostState": True,
+        "exactRawStoragePostState": True,
+        "exactLogicalPostState": True,
+        "settledCreatedAccountsEmpty": True,
+        "refundCountersZero": True,
+    }
+
+
+def creation_comparison(semantic_trace_agreement: bool,
+                        logical_agreement: bool,
+                        eth_agreement: bool) -> Mapping[str, object]:
+    return {
+        "semanticShaTraceAgreement": semantic_trace_agreement,
+        "logicalPostStateAgreement": logical_agreement,
+        "ethAgreement": eth_agreement,
+        "shaOutputOffsetEqualityClaim": False,
+        "returnedRuntimeEqualityClaim": False,
+        "installedRuntimeEqualityClaim": False,
+        "rawStorageEqualityClaim": False,
+    }
 
 
 def keccak(data: bytes) -> bytes:
@@ -910,6 +1016,51 @@ def validate_wrapper_contract(args: argparse.Namespace) -> None:
         die("shell/Python manifest-falsifier ownership differs")
     if args.wrapper_static_falsifiers != STATIC_MATRIX_FALSIFIER_COUNT:
         die("shell/Python static-falsifier ownership differs")
+    if args.wrapper_creation_executions != CREATION_EXECUTION_COUNT:
+        die("shell/Python creation-execution ownership differs")
+    if args.wrapper_creation_sha_calls != CREATION_SHA_CALL_COUNT:
+        die("shell/Python constructor-SHA ownership differs")
+    if args.wrapper_code_deposit_gas_per_byte != CODE_DEPOSIT_GAS_PER_BYTE:
+        die("shell/Python code-deposit gas ownership differs")
+    if args.wrapper_prague_precompile_count != len(PRAGUE_PRECOMPILE_ADDRESSES):
+        die("shell/Python Prague-precompile ownership differs")
+    assertions = creation_assertions()
+    if tuple(assertions) != CREATION_ASSERTION_NAMES \
+            or parse_wrapper_list(args.wrapper_creation_assertions) \
+            != CREATION_ASSERTION_NAMES \
+            or parse_wrapper_list(args.wrapper_creation_assertion_claims) \
+            != wrapper_contract_items(assertions, CREATION_ASSERTION_NAMES):
+        die("shell/Python creation-assertion ownership differs")
+    comparison = creation_comparison(True, True, True)
+    if tuple(comparison) != CREATION_COMPARISON_CLAIM_KEYS \
+            or parse_wrapper_list(args.wrapper_creation_comparison_channels) \
+            != CREATION_COMPARISON_CHANNELS \
+            or parse_wrapper_list(args.wrapper_creation_comparison_claims) \
+            != wrapper_contract_items(
+                comparison, CREATION_COMPARISON_CLAIM_KEYS):
+        die("shell/Python creation-comparison ownership differs")
+    if parse_wrapper_list(args.wrapper_creation_gas_keys) != CREATION_GAS_KEYS:
+        die("shell/Python creation-gas decomposition ownership differs")
+    if parse_wrapper_list(args.wrapper_creation_dominance_keys) \
+            != CREATION_REQUIRED_DOMINANCE_KEYS:
+        die("shell/Python creation-dominance ownership differs")
+
+    basis = creation_message_basis()
+    basis_keys = set(CREATION_MESSAGE_BASIS_KEYS) \
+        | set(CREATION_PREWARM_POLICY_KEYS)
+    if set(basis) != basis_keys \
+            or parse_wrapper_list(args.wrapper_creation_message_basis) \
+            != wrapper_contract_items(basis, CREATION_MESSAGE_BASIS_KEYS) \
+            or parse_wrapper_list(args.wrapper_creation_prewarm_policy) \
+            != wrapper_contract_items(basis, CREATION_PREWARM_POLICY_KEYS):
+        die("shell/Python creation prepared-message/warmth ownership differs")
+
+    boundary = creation_gas_boundary()
+    if set(boundary) != (
+            set(CREATION_GAS_BOUNDARY_KEYS) | {"codeDepositGasPerByte"}) \
+            or parse_wrapper_list(args.wrapper_creation_gas_boundary) \
+            != wrapper_contract_items(boundary, CREATION_GAS_BOUNDARY_KEYS):
+        die("shell/Python creation gas-boundary ownership differs")
 
 
 def parse_blanc_artifacts(text: str) -> Mapping[str, object]:
@@ -948,6 +1099,8 @@ def parse_blanc_artifacts(text: str) -> Mapping[str, object]:
         die("Blanc runtime exceeds EIP-170")
     if len(result["creation"]) > 49_152:
         die("Blanc creation exceeds EIP-3860")
+    if not result["creation"].endswith(result["runtime"]):
+        die("Blanc creation does not end in its emitted runtime")
     return result
 
 
@@ -1119,26 +1272,9 @@ def normalized_logs(logs) -> List[Mapping[str, object]]:
     } for log in logs]
 
 
-def execute_tx(state, txspec: Tx, gas: int) -> Mapping[str, object]:
-    from ethereum.prague.fork_types import Address
-    from ethereum.prague.state import get_account
-    from ethereum.prague.vm import Message
+def process_message_with_sha_trace(message, label: str):
     from ethereum.prague.vm.interpreter import process_message_call
     from ethereum.trace import OpEnd, OpException, OpStart, set_evm_trace
-    from ethereum_types.bytes import Bytes
-    from ethereum_types.numeric import U256, Uint
-
-    caller = Address(address_bytes(CALLER))
-    target = Address(address_bytes(CONTRACT))
-    block, txenv = environments(state, gas)
-    message = Message(
-        block_env=block, tx_env=txenv, caller=caller, target=target,
-        current_target=target, gas=Uint(gas), value=U256(txspec.value),
-        data=Bytes(txspec.calldata), code_address=target,
-        code=get_account(state, target).code, depth=Uint(0),
-        should_transfer_value=True, is_static=False,
-        accessed_addresses={caller, target}, accessed_storage_keys=set(),
-        disable_precompiles=False, parent_evm=None)
 
     trace: List[Dict[str, object]] = []
     pending: Dict[int, List[int]] = {}
@@ -1166,7 +1302,8 @@ def execute_tx(state, txspec: Tx, gas: int) -> Mapping[str, object]:
                 "opcode": "STATICCALL",
                 "target": canonical_address(SHA256_PRECOMPILE),
                 "inputSize": input_size,
-                "input": "0x" + memory_read(evm.memory, input_offset, input_size).hex(),
+                "input": "0x" + memory_read(
+                    evm.memory, input_offset, input_size).hex(),
                 "outputOffset": output_offset,
                 "outputSize": output_size,
             })
@@ -1190,7 +1327,30 @@ def execute_tx(state, txspec: Tx, gas: int) -> Mapping[str, object]:
     finally:
         set_evm_trace(previous)
     if any(pending.values()):
-        die(f"{txspec.name}: unmatched STATICCALL trace event")
+        die(f"{label}: unmatched STATICCALL trace event")
+    return output, trace
+
+
+def execute_tx(state, txspec: Tx, gas: int) -> Mapping[str, object]:
+    from ethereum.prague.fork_types import Address
+    from ethereum.prague.state import get_account
+    from ethereum.prague.vm import Message
+    from ethereum_types.bytes import Bytes
+    from ethereum_types.numeric import U256, Uint
+
+    caller = Address(address_bytes(CALLER))
+    target = Address(address_bytes(CONTRACT))
+    block, txenv = environments(state, gas)
+    message = Message(
+        block_env=block, tx_env=txenv, caller=caller, target=target,
+        current_target=target, gas=Uint(gas), value=U256(txspec.value),
+        data=Bytes(txspec.calldata), code_address=target,
+        code=get_account(state, target).code, depth=Uint(0),
+        should_transfer_value=True, is_static=False,
+        accessed_addresses={caller, target}, accessed_storage_keys=set(),
+        disable_precompiles=False, parent_evm=None)
+
+    output, trace = process_message_with_sha_trace(message, txspec.name)
     return {
         "status": status(output),
         "returndata": "0x" + bytes(output.return_data).hex(),
@@ -1227,6 +1387,218 @@ def project_state(state, side: str) -> Mapping[str, object]:
             for address in (CALLER, CONTRACT)
         },
     }
+
+
+def creation_message_basis() -> Mapping[str, object]:
+    accessed = sorted({
+        canonical_address(CALLER), canonical_address(COINBASE),
+        canonical_address(CONTRACT), *PRAGUE_PRECOMPILE_ADDRESSES,
+    })
+    return {
+        "entry": "direct process_message_call",
+        "target": "0x",
+        "currentTarget": canonical_address(CONTRACT),
+        "caller": canonical_address(CALLER),
+        "callerNonce": 1,
+        "callerBalance": hex(UINT256_MAX),
+        "gasLimit": DEFAULT_GAS,
+        "value": "0x0",
+        "data": "0x",
+        "codeAddress": None,
+        "depth": 0,
+        "shouldTransferValue": True,
+        "isStatic": False,
+        "disablePrecompiles": False,
+        "transactionAccessListAddresses": [],
+        "transactionAccessListStorageKeys": [],
+        "initialMessageAccessedAddresses": accessed,
+        "initialMessageAccessedStorageKeys": [],
+        "praguePrecompileAddresses": list(PRAGUE_PRECOMPILE_ADDRESSES),
+        "allPraguePrecompilesPrewarmed": True,
+        "coinbasePrewarmed": True,
+        "freshStatePerSide": True,
+        "targetInitiallyAbsent": True,
+    }
+
+
+def creation_gas_boundary() -> Mapping[str, object]:
+    return {
+        "basis": "gas supplied at the direct prepared creation-message boundary",
+        "included": [
+            "constructor EVM execution including 31 native SHA-256 child calls",
+            "successful runtime code-deposit charge",
+        ],
+        "excluded": [
+            "transaction intrinsic base and creation surcharge",
+            "transaction calldata zero/nonzero-byte charges",
+            "EIP-3860 initcode-word charge",
+            "transaction calldata-floor settlement",
+            "transaction refund application",
+        ],
+        "codeDepositGasPerByte": CODE_DEPOSIT_GAS_PER_BYTE,
+        "refundTreatment": (
+            "direct message gas is measured before transaction refund application; "
+            "both successful constructors must report refund counter zero"
+        ),
+        "gasEqualityClaim": False,
+    }
+
+
+def expected_creation_logical_state() -> Mapping[str, object]:
+    return {
+        "branch": ["0x" + ZERO32.hex()] * DEPTH,
+        "count": "0x0",
+        "zeroHashes": ["0x" + value.hex() for value in ZERO_HASHES],
+        "layoutQualified": True,
+    }
+
+
+def expected_creation_raw_storage(side: str) -> Mapping[str, str]:
+    return {
+        hex(layout_slot(side, "zero", height)): "0x" + ZERO_HASHES[height].hex()
+        for height in range(1, DEPTH)
+    }
+
+
+def expected_creation_sha_trace(output_offset: int = 0) \
+        -> List[Mapping[str, object]]:
+    return [{
+        "opcode": "STATICCALL",
+        "target": canonical_address(SHA256_PRECOMPILE),
+        "inputSize": 64,
+        "input": "0x" + (ZERO_HASHES[height] * 2).hex(),
+        "outputOffset": output_offset,
+        "outputSize": 32,
+        "success": "0x1",
+        "returndata": "0x" + ZERO_HASHES[height + 1].hex(),
+    } for height in range(CREATION_SHA_CALL_COUNT)]
+
+
+def semantic_creation_sha_trace(trace: Sequence[Mapping[str, object]]) \
+        -> List[Mapping[str, object]]:
+    return [{key: row[key] for key in (
+        "opcode", "target", "inputSize", "input", "outputSize", "success",
+        "returndata",
+    )} for row in trace]
+
+
+def raw_storage_document(state, target) -> Mapping[str, str]:
+    trie = state._storage_tries.get(target)
+    entries = [] if trie is None else [
+        (int.from_bytes(bytes(key), "big"), int(value))
+        for key, value in trie._data.items()
+    ]
+    return {
+        hex(slot): "0x" + h256(value).hex()
+        for slot, value in sorted(entries)
+    }
+
+
+def execute_creation(creation: bytes, runtime: bytes, side: str) \
+        -> Mapping[str, object]:
+    from ethereum.prague.fork_types import Address
+    from ethereum.prague.state import State, get_account, get_account_optional
+    from ethereum.prague.vm import Message
+    from ethereum.prague.vm.gas import GAS_CODE_DEPOSIT
+    from ethereum.prague.vm.precompiled_contracts.mapping import (
+        PRE_COMPILED_CONTRACTS,
+    )
+    from ethereum_types.bytes import Bytes, Bytes0
+    from ethereum_types.numeric import U256, Uint
+
+    if int(GAS_CODE_DEPOSIT) != CODE_DEPOSIT_GAS_PER_BYTE:
+        die("pinned Prague code-deposit gas constant differs")
+    observed_precompiles = tuple(sorted(
+        "0x" + bytes(address).hex() for address in PRE_COMPILED_CONTRACTS
+    ))
+    if observed_precompiles != PRAGUE_PRECOMPILE_ADDRESSES:
+        die("pinned Prague precompile-address inventory differs")
+
+    state = State()
+    install_account(state, CALLER, b"", UINT256_MAX)
+    caller = Address(address_bytes(CALLER))
+    coinbase = Address(address_bytes(COINBASE))
+    target = Address(address_bytes(CONTRACT))
+    if get_account_optional(state, target) is not None \
+            or target in state._storage_tries:
+        die(f"creation/{side}: target is not fresh")
+
+    block, txenv = environments(state, DEFAULT_GAS)
+    initial_accessed = {caller, coinbase, target, *PRE_COMPILED_CONTRACTS.keys()}
+    message = Message(
+        block_env=block, tx_env=txenv, caller=caller, target=Bytes0(b""),
+        current_target=target, gas=Uint(DEFAULT_GAS), value=U256(0),
+        data=Bytes(b""), code_address=None, code=Bytes(creation), depth=Uint(0),
+        should_transfer_value=True, is_static=False,
+        accessed_addresses=set(initial_accessed), accessed_storage_keys=set(),
+        disable_precompiles=False, parent_evm=None)
+    output, trace = process_message_with_sha_trace(message, f"creation/{side}")
+
+    if message.accessed_addresses != initial_accessed:
+        die(f"creation/{side}: constructor touched an undeclared address")
+    if state._snapshots or txenv.transient_storage._snapshots \
+            or txenv.transient_storage._tries:
+        die(f"creation/{side}: settled state retains transient bookkeeping")
+    if state.created_accounts:
+        die(f"creation/{side}: settled created-account bookkeeping is not empty")
+    if set(state._main_trie._data) != {caller, target}:
+        die(f"creation/{side}: poststate account inventory differs")
+
+    target_account = get_account(state, target)
+    caller_account = get_account(state, caller)
+    returned_runtime = bytes(output.return_data)
+    installed_runtime = bytes(target_account.code)
+    if returned_runtime != runtime or installed_runtime != runtime:
+        die(f"creation/{side}: returned/installed runtime differs byte-for-byte")
+    projection = project_state(state, side)
+    raw_storage = raw_storage_document(state, target)
+    create_message_gas = DEFAULT_GAS - int(output.gas_left)
+    code_deposit_gas = len(runtime) * CODE_DEPOSIT_GAS_PER_BYTE
+    if create_message_gas < code_deposit_gas:
+        die(f"creation/{side}: total gas is smaller than code-deposit gas")
+
+    result = {
+        "side": side,
+        "artifact": {
+            "creation": bytes_identity(creation),
+            "runtime": bytes_identity(runtime),
+        },
+        "status": status(output),
+        "gasLimit": DEFAULT_GAS,
+        "gas": {
+            "createMessageGas": create_message_gas,
+            "codeDepositGas": code_deposit_gas,
+            "constructorExecutionGas": create_message_gas - code_deposit_gas,
+        },
+        "refundCounter": int(output.refund_counter),
+        "returnedRuntime": bytes_identity(returned_runtime),
+        "installedRuntime": bytes_identity(installed_runtime),
+        "logs": normalized_logs(output.logs),
+        "accountsToDelete": sorted(
+            "0x" + bytes(address).hex() for address in output.accounts_to_delete),
+        "settledCreatedAccounts": sorted(
+            "0x" + bytes(address).hex() for address in state.created_accounts),
+        "accounts": {
+            canonical_address(CALLER): {
+                "nonce": int(caller_account.nonce),
+                "balance": hex(int(caller_account.balance)),
+                "code": bytes_identity(bytes(caller_account.code)),
+            },
+            canonical_address(CONTRACT): {
+                "nonce": int(target_account.nonce),
+                "balance": hex(int(target_account.balance)),
+                "code": bytes_identity(bytes(target_account.code)),
+            },
+        },
+        "rawStorage": raw_storage,
+        "logicalState": {
+            key: value for key, value in projection.items() if key != "eth"
+        },
+        "eth": projection["eth"],
+        "shaTrace": trace,
+    }
+    validate_creation_side(result, side, result["artifact"])
+    return result
 
 
 def run_fixed(case: Case, runtime: bytes, side: str,
@@ -1495,12 +1867,8 @@ def count_inventory(cases: Sequence[Case]) -> Mapping[str, Mapping[str, int]]:
 
 
 def artifact_identity(artifacts: Mapping[str, object]) -> Mapping[str, object]:
-    return {
-        label: {
-            "byteLength": len(artifacts[label]),
-            "sha256": hashlib.sha256(artifacts[label]).hexdigest(),
-        } for label in ("runtime", "creation")
-    }
+    return {label: bytes_identity(artifacts[label])
+            for label in ("runtime", "creation")}
 
 
 def result_gas(solidity: Mapping[str, object], blanc: Mapping[str, object]) -> Mapping[str, object]:
@@ -1553,6 +1921,231 @@ def logical_seed_document(case: Case) -> Mapping[str, object]:
 def canonical_json_sha256(document: Mapping[str, object]) -> str:
     encoded = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def expected_creation_accounts(runtime_identity: Mapping[str, object]) \
+        -> Mapping[str, object]:
+    return {
+        canonical_address(CALLER): {
+            "nonce": 1,
+            "balance": hex(UINT256_MAX),
+            "code": bytes_identity(b""),
+        },
+        canonical_address(CONTRACT): {
+            "nonce": 1,
+            "balance": "0x0",
+            "code": runtime_identity,
+        },
+    }
+
+
+def validate_creation_sha_trace(trace: object, side: str) -> None:
+    if not isinstance(trace, list) or len(trace) != CREATION_SHA_CALL_COUNT:
+        die(f"creation/{side}: expected exactly {CREATION_SHA_CALL_COUNT} SHA calls")
+    expected_keys = {
+        "opcode", "target", "inputSize", "input", "outputOffset", "outputSize",
+        "success", "returndata",
+    }
+    for row in trace:
+        if not isinstance(row, dict) or set(row) != expected_keys \
+                or not isinstance(row["outputOffset"], int) \
+                or row["outputOffset"] < 0:
+            die(f"creation/{side}: malformed SHA trace row")
+    expected = semantic_creation_sha_trace(expected_creation_sha_trace())
+    if semantic_creation_sha_trace(trace) != expected:
+        die(f"creation/{side}: constructor SHA chain differs")
+
+
+def validate_creation_side(result: Mapping[str, object], side: str,
+                           artifact: Mapping[str, object]) -> None:
+    expected_keys = {
+        "side", "artifact", "status", "gasLimit", "gas", "refundCounter",
+        "returnedRuntime", "installedRuntime", "logs", "accountsToDelete",
+        "settledCreatedAccounts", "accounts", "rawStorage", "logicalState",
+        "eth", "shaTrace",
+    }
+    if set(result) != expected_keys or result.get("side") != side \
+            or result.get("artifact") != artifact:
+        die(f"creation/{side}: side-result shape or artifact identity differs")
+    gas = result.get("gas")
+    if not isinstance(gas, dict) or set(gas) != set(CREATION_GAS_KEYS) \
+            or any(type(gas.get(key)) is not int for key in gas):
+        die(f"creation/{side}: gas decomposition shape differs")
+    expected_deposit = int(artifact["runtime"]["byteLength"]) \
+        * CODE_DEPOSIT_GAS_PER_BYTE
+    if result.get("gasLimit") != DEFAULT_GAS \
+            or gas["codeDepositGas"] != expected_deposit \
+            or gas["createMessageGas"] != (
+                gas["constructorExecutionGas"] + gas["codeDepositGas"]) \
+            or not 0 <= gas["createMessageGas"] <= DEFAULT_GAS \
+            or gas["constructorExecutionGas"] < 0:
+        die(f"creation/{side}: gas decomposition arithmetic differs")
+    runtime_identity = artifact["runtime"]
+    if result.get("status") != "success" or result.get("refundCounter") != 0 \
+            or result.get("returnedRuntime") != runtime_identity \
+            or result.get("installedRuntime") != runtime_identity \
+            or result.get("logs") != [] or result.get("accountsToDelete") != [] \
+            or result.get("settledCreatedAccounts") != []:
+        die(f"creation/{side}: completion/runtime/log/refund evidence differs")
+    if result.get("accounts") != expected_creation_accounts(runtime_identity):
+        die(f"creation/{side}: exact account poststate differs")
+    if result.get("rawStorage") != expected_creation_raw_storage(side):
+        die(f"creation/{side}: exact raw storage poststate differs")
+    if result.get("logicalState") != expected_creation_logical_state():
+        die(f"creation/{side}: logical constructor poststate differs")
+    expected_eth = {
+        canonical_address(CALLER): hex(UINT256_MAX),
+        canonical_address(CONTRACT): "0x0",
+    }
+    if result.get("eth") != expected_eth:
+        die(f"creation/{side}: constructor ETH poststate differs")
+    validate_creation_sha_trace(result.get("shaTrace"), side)
+
+
+def compose_creation_measurement(solidity: Mapping[str, object],
+                                 blanc: Mapping[str, object]) \
+        -> Mapping[str, object]:
+    validate_creation_side(solidity, "solidity", solidity["artifact"])
+    validate_creation_side(blanc, "blanc", blanc["artifact"])
+    deltas = {
+        key: int(blanc["gas"][key]) - int(solidity["gas"][key])
+        for key in CREATION_GAS_KEYS
+    }
+    total_ok = deltas["createMessageGas"] <= 0
+    execution_ok = deltas["constructorExecutionGas"] <= 0
+    if not total_ok or not execution_ok:
+        die("creation gas dominance failed: " + json.dumps(deltas, sort_keys=True))
+    semantic_trace_agreement = semantic_creation_sha_trace(
+        solidity["shaTrace"]) == semantic_creation_sha_trace(blanc["shaTrace"])
+    logical_agreement = solidity["logicalState"] == blanc["logicalState"]
+    eth_agreement = solidity["eth"] == blanc["eth"]
+    if not semantic_trace_agreement or not logical_agreement or not eth_agreement:
+        die("creation semantic poststate/SHA agreement differs")
+    return {
+        "owner": "GAS-P6",
+        "messageBasis": creation_message_basis(),
+        "gasBoundary": creation_gas_boundary(),
+        "assertions": creation_assertions(),
+        "comparison": creation_comparison(
+            semantic_trace_agreement, logical_agreement, eth_agreement),
+        "solidity": solidity,
+        "blanc": blanc,
+        "deltas": deltas,
+        "dominance": {
+            "requiredNonPositive": list(CREATION_REQUIRED_DOMINANCE_KEYS),
+            "createMessageGasNonPositive": total_ok,
+            "constructorExecutionGasNonPositive": execution_ok,
+            "satisfied": total_ok and execution_ok,
+        },
+    }
+
+
+def run_creation_measurement(reference: Mapping[str, object],
+                             artifacts: Mapping[str, object]) \
+        -> Mapping[str, object]:
+    solidity = execute_creation(
+        reference["creation"], reference["runtime"], "solidity")
+    blanc = execute_creation(
+        artifacts["creation"], artifacts["runtime"], "blanc")
+    return compose_creation_measurement(solidity, blanc)
+
+
+def synthetic_creation_side(creation: bytes, runtime: bytes,
+                            side: str) -> Mapping[str, object]:
+    artifact = {
+        "creation": bytes_identity(creation),
+        "runtime": bytes_identity(runtime),
+    }
+    deposit = len(runtime) * CODE_DEPOSIT_GAS_PER_BYTE
+    result = {
+        "side": side,
+        "artifact": artifact,
+        "status": "success",
+        "gasLimit": DEFAULT_GAS,
+        "gas": {
+            "createMessageGas": deposit,
+            "codeDepositGas": deposit,
+            "constructorExecutionGas": 0,
+        },
+        "refundCounter": 0,
+        "returnedRuntime": artifact["runtime"],
+        "installedRuntime": artifact["runtime"],
+        "logs": [],
+        "accountsToDelete": [],
+        "settledCreatedAccounts": [],
+        "accounts": expected_creation_accounts(artifact["runtime"]),
+        "rawStorage": expected_creation_raw_storage(side),
+        "logicalState": expected_creation_logical_state(),
+        "eth": {
+            canonical_address(CALLER): hex(UINT256_MAX),
+            canonical_address(CONTRACT): "0x0",
+        },
+        "shaTrace": expected_creation_sha_trace(),
+    }
+    validate_creation_side(result, side, artifact)
+    return result
+
+
+def synthetic_creation_measurement(reference: Mapping[str, object],
+                                   artifacts: Mapping[str, object]) \
+        -> Mapping[str, object]:
+    return compose_creation_measurement(
+        synthetic_creation_side(
+            reference["creation"], reference["runtime"], "solidity"),
+        synthetic_creation_side(
+            artifacts["creation"], artifacts["runtime"], "blanc"),
+    )
+
+
+def validate_creation_measurement(measurement: object,
+                                  solidity_artifact: Mapping[str, object],
+                                  blanc_artifact: Mapping[str, object]) -> None:
+    expected_keys = {
+        "owner", "messageBasis", "gasBoundary", "assertions", "comparison",
+        "solidity", "blanc", "deltas", "dominance",
+    }
+    if not isinstance(measurement, dict) or set(measurement) != expected_keys \
+            or measurement.get("owner") != "GAS-P6" \
+            or measurement.get("messageBasis") != creation_message_basis() \
+            or measurement.get("gasBoundary") != creation_gas_boundary():
+        die("creation measurement ownership/message/gas boundary differs")
+    assertions = creation_assertions()
+    if measurement.get("assertions") != assertions:
+        die("creation measurement assertion inventory differs")
+    validate_creation_side(
+        measurement["solidity"], "solidity", solidity_artifact)
+    validate_creation_side(measurement["blanc"], "blanc", blanc_artifact)
+    expected_deltas = {
+        key: int(measurement["blanc"]["gas"][key])
+        - int(measurement["solidity"]["gas"][key])
+        for key in CREATION_GAS_KEYS
+    }
+    if measurement.get("deltas") != expected_deltas:
+        die("creation measurement gas deltas differ")
+    total_ok = expected_deltas["createMessageGas"] <= 0
+    execution_ok = expected_deltas["constructorExecutionGas"] <= 0
+    expected_dominance = {
+        "requiredNonPositive": list(CREATION_REQUIRED_DOMINANCE_KEYS),
+        "createMessageGasNonPositive": total_ok,
+        "constructorExecutionGasNonPositive": execution_ok,
+        "satisfied": total_ok and execution_ok,
+    }
+    if measurement.get("dominance") != expected_dominance \
+            or not expected_dominance["satisfied"]:
+        die("creation measurement gas dominance differs or failed")
+    semantic_agreement = semantic_creation_sha_trace(
+        measurement["solidity"]["shaTrace"]) == semantic_creation_sha_trace(
+            measurement["blanc"]["shaTrace"])
+    expected_comparison = creation_comparison(
+        semantic_agreement,
+        measurement["solidity"]["logicalState"]
+        == measurement["blanc"]["logicalState"],
+        measurement["solidity"]["eth"] == measurement["blanc"]["eth"],
+    )
+    if measurement.get("comparison") != expected_comparison \
+            or not all(expected_comparison[key]
+                       for key in CREATION_COMPARISON_CHANNELS):
+        die("creation measurement semantic comparison differs")
 
 
 def trace_buffer_evidence(result: Mapping[str, object]) -> List[List[Mapping[str, object]]]:
@@ -1634,9 +2227,41 @@ def validate_positive_gas_registry(increases: Sequence[Mapping[str, object]]) ->
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def runtime_runner_document() -> Mapping[str, object]:
+    return {
+        "eelsCommit": EELS_PIN,
+        "fork": "Prague",
+        "network": False,
+        "messageBasis": {
+            "entry": "direct process_message_call",
+            "caller": canonical_address(CALLER),
+            "target": canonical_address(CONTRACT),
+            "currentTarget": canonical_address(CONTRACT),
+            "codeAddress": canonical_address(CONTRACT),
+            "depth": 0,
+            "shouldTransferValue": True,
+            "isStatic": False,
+        },
+        "warmthBasis": {
+            "transactionAccessListAddresses": [],
+            "transactionAccessListStorageKeys": [],
+            "initialMessageAccessedAddresses": [
+                canonical_address(CALLER), canonical_address(CONTRACT)],
+            "initialMessageAccessedStorageKeys": [],
+            "shaPrecompileExplicitlyPrewarmedByHarness": False,
+            "protocolPrecompileWarmth": "left to pinned EELS Prague semantics",
+        },
+        "rowSequencing": (
+            "State persists across transactions in one row; each transaction gets "
+            "a fresh block/transaction environment and fresh accessed sets"
+        ),
+    }
+
+
 def build_manifest(cases: Sequence[Case], artifacts: Mapping[str, object],
                    reference: Mapping[str, object],
                    results: Mapping[str, Tuple[Mapping[str, object], Mapping[str, object]]],
+                   creation_measurement: Mapping[str, object],
                    *, validate_registry: bool = True) \
         -> Mapping[str, object]:
     rows = [row_descriptor(case, result_gas(*results[case.name]),
@@ -1665,10 +2290,10 @@ def build_manifest(cases: Sequence[Case], artifacts: Mapping[str, object],
             "sourceSha256": SOURCE_SHA256,
             "artifactJsonSha256": ARTIFACT_SHA256,
             "creationByteLength": len(reference["creation"]),
-            "creationBytesSha256": CREATION_BYTES_SHA256,
+            "creationBytesSha256": hashlib.sha256(reference["creation"]).hexdigest(),
             "deployedRuntimeTextSha256": DEPLOYED_RUNTIME_TEXT_SHA256,
             "deployedRuntimeByteLength": len(reference["runtime"]),
-            "deployedRuntimeBytesSha256": DEPLOYED_RUNTIME_BYTES_SHA256,
+            "deployedRuntimeBytesSha256": hashlib.sha256(reference["runtime"]).hexdigest(),
         },
         "blanc": {
             "evaluator": "scripts/eval-beacon-deposit-differential-code.lean",
@@ -1677,31 +2302,7 @@ def build_manifest(cases: Sequence[Case], artifacts: Mapping[str, object],
             "selectorsAscending": list(artifacts["selectors"]),
             **artifact_identity(artifacts),
         },
-        "runner": {
-            "eelsCommit": EELS_PIN,
-            "fork": "Prague",
-            "network": False,
-            "messageBasis": {
-                "entry": "direct process_message_call",
-                "caller": canonical_address(CALLER),
-                "target": canonical_address(CONTRACT),
-                "currentTarget": canonical_address(CONTRACT),
-                "codeAddress": canonical_address(CONTRACT),
-                "depth": 0,
-                "shouldTransferValue": True,
-                "isStatic": False,
-            },
-            "warmthBasis": {
-                "transactionAccessListAddresses": [],
-                "transactionAccessListStorageKeys": [],
-                "initialMessageAccessedAddresses": [
-                    canonical_address(CALLER), canonical_address(CONTRACT)],
-                "initialMessageAccessedStorageKeys": [],
-                "shaPrecompileExplicitlyPrewarmedByHarness": False,
-                "protocolPrecompileWarmth": "left to pinned EELS Prague semantics",
-            },
-            "rowSequencing": "State persists across transactions in one row; each transaction gets a fresh block/transaction environment and fresh accessed sets",
-        },
+        "runner": runtime_runner_document(),
         "projection": {
             "solidity": {"branch": "slots 0..31", "count": "slot 32",
                          "zeroHashes": "slots 33..64"},
@@ -1729,6 +2330,11 @@ def build_manifest(cases: Sequence[Case], artifacts: Mapping[str, object],
         "counts": {
             "rows": len(rows),
             "transactions": sum(len(case.transactions) for case in cases),
+            "runtimeRows": len(rows),
+            "runtimeTransactions": sum(len(case.transactions) for case in cases),
+            "creationExecutions": CREATION_EXECUTION_COUNT,
+            "creationShaStaticcalls": (
+                CREATION_EXECUTION_COUNT * CREATION_SHA_CALL_COUNT),
             "selectors": len(EXPECTED_SELECTORS),
             "guards": len(REASONS),
             "comparisonChannelFalsifiers": len(REQUIRED_CHANNELS),
@@ -1743,6 +2349,7 @@ def build_manifest(cases: Sequence[Case], artifacts: Mapping[str, object],
             "registryProtocol": "one exact beacon-deposit-gas-v1 marker on one non-PENDING table row per positive delta; no stale markers",
             "registryObligation": "every positive public-path delta is linked to a completed BEACON_DEPOSIT_DEVIATIONS.md row",
         },
+        "creationMeasurement": creation_measurement,
         "rows": rows,
         "explicitLimits": [
             "finite stated corpus, never reference-runtime verification or liveness",
@@ -1750,15 +2357,17 @@ def build_manifest(cases: Sequence[Case], artifacts: Mapping[str, object],
             "gas is recorded but not an agreement channel",
             "raw SHA output-buffer offsets are recorded but not an agreement channel; output size is compared",
             "shared-gas boundary rows compare the declared zero- or one-completed-STATICCALL prefix and all ordinary outcome channels",
+            "creation gas starts at the prepared direct-message boundary and excludes transaction intrinsic/calldata/EIP-3860/refund settlement",
             "deployment-root and history/open-frame claims are outside this goal",
         ],
     }
 
 
-def validate_manifest(document: Mapping[str, object], expected: Mapping[str, object]) -> None:
+def validate_manifest_semantics(document: Mapping[str, object]) -> None:
     expected_top = {
         "schema", "oracle", "blanc", "runner", "projection", "coverage",
-        "seedContract", "counts", "gasEvidence", "rows", "explicitLimits",
+        "seedContract", "counts", "gasEvidence", "creationMeasurement", "rows",
+        "explicitLimits",
     }
     if set(document) != expected_top or document.get("schema") != MANIFEST_SCHEMA:
         die("differential manifest schema/top-level ownership differs")
@@ -1768,6 +2377,8 @@ def validate_manifest(document: Mapping[str, object], expected: Mapping[str, obj
     if not isinstance(coverage, dict) or not isinstance(counts, dict) \
             or not isinstance(rows, list):
         die("differential manifest coverage/count/row shape differs")
+    if document.get("runner") != runtime_runner_document():
+        die("manifest direct-message/warmth basis differs")
     if coverage.get("requiredFamilies") != list(REQUIRED_FAMILIES):
         die("manifest required-family ownership differs")
     if coverage.get("requiredTags") != list(REQUIRED_TAGS):
@@ -1776,6 +2387,15 @@ def validate_manifest(document: Mapping[str, object], expected: Mapping[str, obj
         die("manifest comparison-channel ownership differs")
     if counts.get("rows") != len(rows) or not rows:
         die("manifest row count is stale or empty")
+    if counts.get("runtimeRows") != len(rows) \
+            or counts.get("transactions") != counts.get("runtimeTransactions") \
+            or counts.get("runtimeTransactions") != sum(
+                len(row.get("transactions", [])) for row in rows
+                if isinstance(row, dict)) \
+            or counts.get("creationExecutions") != CREATION_EXECUTION_COUNT \
+            or counts.get("creationShaStaticcalls") != (
+                CREATION_EXECUTION_COUNT * CREATION_SHA_CALL_COUNT):
+        die("manifest runtime/creation summary counts differ")
     if len({row.get("name") for row in rows if isinstance(row, dict)}) != len(rows):
         die("manifest case names are malformed or duplicated")
     if any(not isinstance(row, dict) or row.get("owner") != "C7" for row in rows):
@@ -1790,7 +2410,23 @@ def validate_manifest(document: Mapping[str, object], expected: Mapping[str, obj
                 != canonical_json_sha256(logical_seed["document"]):
             die("manifest logical-seed document/digest differs")
     gas_evidence = document.get("gasEvidence")
-    if not isinstance(gas_evidence, dict):
+    if not isinstance(gas_evidence, dict) or set(gas_evidence) != {
+        "allTransactionsRecorded", "equalityClaim", "publicPathIncreases",
+        "registryFile", "registryFileSha256", "registryProtocol",
+        "registryObligation",
+    } or gas_evidence.get("allTransactionsRecorded") is not True \
+            or gas_evidence.get("equalityClaim") is not False \
+            or gas_evidence.get("registryFile") \
+            != "BEACON_DEPOSIT_DEVIATIONS.md" \
+            or not re.fullmatch(
+                r"[0-9a-f]{64}", str(gas_evidence.get("registryFileSha256", ""))) \
+            or gas_evidence.get("registryProtocol") != (
+                "one exact beacon-deposit-gas-v1 marker on one non-PENDING "
+                "table row per positive delta; no stale markers"
+            ) or gas_evidence.get("registryObligation") != (
+                "every positive public-path delta is linked to a completed "
+                "BEACON_DEPOSIT_DEVIATIONS.md row"
+            ):
         die("manifest gas-evidence shape differs")
     increases = gas_evidence.get("publicPathIncreases")
     if not isinstance(increases, list) or any(
@@ -1803,6 +2439,33 @@ def validate_manifest(document: Mapping[str, object], expected: Mapping[str, obj
     registry_ids = [row["registryId"] for row in increases]
     if len(registry_ids) != len(set(registry_ids)):
         die("manifest positive-gas registry ids are duplicated")
+    oracle = document.get("oracle")
+    blanc = document.get("blanc")
+    if not isinstance(oracle, dict) or not isinstance(blanc, dict) \
+            or not isinstance(blanc.get("creation"), dict) \
+            or not isinstance(blanc.get("runtime"), dict):
+        die("manifest artifact identity shape differs")
+    solidity_artifact = {
+        "creation": {
+            "byteLength": oracle.get("creationByteLength"),
+            "sha256": oracle.get("creationBytesSha256"),
+        },
+        "runtime": {
+            "byteLength": oracle.get("deployedRuntimeByteLength"),
+            "sha256": oracle.get("deployedRuntimeBytesSha256"),
+        },
+    }
+    blanc_artifact = {
+        "creation": blanc.get("creation"),
+        "runtime": blanc.get("runtime"),
+    }
+    validate_creation_measurement(
+        document.get("creationMeasurement"), solidity_artifact, blanc_artifact)
+
+
+def validate_manifest(document: Mapping[str, object],
+                      expected: Mapping[str, object]) -> None:
+    validate_manifest_semantics(document)
     if document != expected:
         die("manifest differs from the execution-derived identity/matrix/gas contract")
 
@@ -1840,9 +2503,58 @@ def manifest_falsifiers(expected: Mapping[str, object]) -> int:
     broken = copy.deepcopy(expected)
     broken["gasEvidence"]["registryProtocol"] = "unchecked"
     mutations.append(("gas-registry-protocol-corruption", broken))
+    broken = copy.deepcopy(expected)
+    del broken["creationMeasurement"]
+    mutations.append(("creation-measurement-deletion", broken))
+    broken = copy.deepcopy(expected)
+    broken["counts"]["creationExecutions"] = 1
+    mutations.append(("creation-count-corruption", broken))
+    broken = copy.deepcopy(expected)
+    broken["creationMeasurement"]["messageBasis"][
+        "praguePrecompileAddresses"] = list(PRAGUE_PRECOMPILE_ADDRESSES[1:])
+    mutations.append(("creation-precompile-warmth-corruption", broken))
+    broken = copy.deepcopy(expected)
+    broken["creationMeasurement"]["solidity"]["shaTrace"] = \
+        broken["creationMeasurement"]["solidity"]["shaTrace"][1:]
+    mutations.append(("creation-sha-trace-deletion", broken))
+    broken = copy.deepcopy(expected)
+    broken["creationMeasurement"]["blanc"]["gas"][
+        "constructorExecutionGas"] += 1
+    mutations.append(("creation-gas-decomposition-corruption", broken))
+    broken = copy.deepcopy(expected)
+    measurement = broken["creationMeasurement"]
+    solidity_gas = measurement["solidity"]["gas"]
+    blanc_gas = measurement["blanc"]["gas"]
+    blanc_gas["constructorExecutionGas"] = max(
+        int(solidity_gas["constructorExecutionGas"]) + 1,
+        int(solidity_gas["createMessageGas"]) + 1
+        - int(blanc_gas["codeDepositGas"]),
+    )
+    blanc_gas["createMessageGas"] = (
+        int(blanc_gas["constructorExecutionGas"])
+        + int(blanc_gas["codeDepositGas"])
+    )
+    measurement["deltas"] = {
+        key: int(blanc_gas[key]) - int(solidity_gas[key])
+        for key in CREATION_GAS_KEYS
+    }
+    measurement["dominance"] = {
+        "requiredNonPositive": list(CREATION_REQUIRED_DOMINANCE_KEYS),
+        "createMessageGasNonPositive": False,
+        "constructorExecutionGasNonPositive": False,
+        "satisfied": False,
+    }
+    if any(measurement["deltas"][key] <= 0
+           for key in CREATION_REQUIRED_DOMINANCE_KEYS) \
+            or blanc_gas["createMessageGas"] != (
+                blanc_gas["constructorExecutionGas"]
+                + blanc_gas["codeDepositGas"]) \
+            or blanc_gas["createMessageGas"] > measurement["blanc"]["gasLimit"]:
+        die("creation-dominance falsifier is not coherent and positive")
+    mutations.append(("creation-dominance-corruption", broken))
     for name, mutant in mutations:
         try:
-            validate_manifest(mutant, expected)
+            validate_manifest_semantics(mutant)
         except RuntimeError:
             continue
         die(f"live manifest falsifier survived: {name}")
@@ -1867,10 +2579,13 @@ def static_manifest_self_check(cases: Sequence[Case]) -> int:
             "eth": seed["balances"],
         }
         results[case.name] = (copy.deepcopy(synthetic), copy.deepcopy(synthetic))
+    artifacts = {
+        "runtime": b"\x00", "creation": b"\x00", "selectors": EXPECTED_SELECTORS,
+    }
+    reference = {"runtime": b"\x00", "creation": b"\x00"}
+    creation_measurement = synthetic_creation_measurement(reference, artifacts)
     expected = build_manifest(
-        cases,
-        {"runtime": b"\x00", "creation": b"\x00", "selectors": EXPECTED_SELECTORS},
-        {"runtime": b"\x00", "creation": b"\x00"}, results,
+        cases, artifacts, reference, results, creation_measurement,
         validate_registry=False)
     validate_manifest(expected, expected)
     return manifest_falsifiers(expected)
@@ -1918,6 +2633,32 @@ def main(argv: Sequence[str]) -> int:
                         help=argparse.SUPPRESS)
     parser.add_argument("--wrapper-static-falsifiers", type=int, required=True,
                         help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-executions", type=int, required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-sha-calls", type=int, required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-code-deposit-gas-per-byte", type=int,
+                        required=True, help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-prague-precompile-count", type=int,
+                        required=True, help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-assertions", required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-assertion-claims", required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-comparison-channels", required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-comparison-claims", required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-gas-keys", required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-dominance-keys", required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-message-basis", required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-prewarm-policy", required=True,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--wrapper-creation-gas-boundary", required=True,
+                        help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     validate_wrapper_contract(args)
 
@@ -1935,7 +2676,9 @@ def main(argv: Sequence[str]) -> int:
         print(f"STATIC OK — beacon-deposit differential: schema {MANIFEST_SCHEMA}, "
               f"{len(REQUIRED_CHANNELS)} channels, {len(REQUIRED_TAGS)} tags, "
               f"{static_checks} matrix falsifiers, {manifest_checks} "
-              f"manifest falsifiers, {len(cases)} rows")
+              f"manifest falsifiers, {len(cases)} runtime rows, "
+              f"{sum(len(case.transactions) for case in cases)} runtime transactions, "
+              f"{CREATION_EXECUTION_COUNT} owned creation executions")
         return 0
 
     if not args.blanc_artifacts:
@@ -1981,7 +2724,9 @@ def main(argv: Sequence[str]) -> int:
     if compare_row(sample_case, *sample_results):
         die("comparison-channel falsifiers lack an agreeing baseline")
     channel_checks = channel_falsifiers(sample_case, *sample_results)
-    expected_manifest = build_manifest(cases, artifacts, reference, results)
+    creation_measurement = run_creation_measurement(reference, artifacts)
+    expected_manifest = build_manifest(
+        cases, artifacts, reference, results, creation_measurement)
     require_manifest(expected_manifest, args.write_manifest)
 
     transactions = sum(len(case.transactions) for case in cases)
@@ -1989,12 +2734,17 @@ def main(argv: Sequence[str]) -> int:
                     for solidity, _ in results.values()
                     for tx_traces in solidity["shaTrace"])
     increases = len(expected_manifest["gasEvidence"]["publicPathIncreases"])
+    creation_deltas = expected_manifest["creationMeasurement"]["deltas"]
     print(f"OK — beacon-deposit differential: {len(cases)}/{len(cases)} rows, "
-          f"{transactions} transactions, 4/4 selectors + no-match, 8/8 guards, "
+          f"{transactions} runtime transactions, 2 creation executions, "
+          f"4/4 selectors + no-match, 8/8 guards, "
           f"{sha_calls} oracle SHA STATICCALLs, {channel_checks} comparison-channel "
           f"falsifiers and {MANIFEST_FALSIFIER_COUNT} manifest ownership falsifiers live; "
-          f"gas recorded on every "
-          f"path ({increases} positive Blanc deltas require registry evidence)")
+          f"gas recorded on every runtime path ({increases} positive Blanc deltas "
+          f"require registry evidence); constructor 31/31 SHA calls per side and "
+          f"Blanc-minus-reference total/execution gas "
+          f"{creation_deltas['createMessageGas']}/"
+          f"{creation_deltas['constructorExecutionGas']}")
     return 0
 
 

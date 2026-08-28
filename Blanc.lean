@@ -106,6 +106,9 @@ import Blanc.BeaconDepositModel
 import Blanc.BeaconDepositCorrectness
 import Blanc.BeaconDepositCore
 import Blanc.BeaconDepositEncoding
+import Blanc.BeaconDeposit
+import Blanc.BeaconDepositCode
+import Blanc.BeaconDepositDeploy
 import Blanc.ProxyPairSlots
 
 namespace Blanc
