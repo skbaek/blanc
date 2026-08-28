@@ -290,6 +290,33 @@ def genesis_header(alloc):
     }
 
 
+def transition_environment(alloc):
+    """Build the canonical first post-genesis BPO2 block environment."""
+    genesis = genesis_header(alloc)
+    _, genesis_hash = header(genesis)
+    environment = {
+        "currentCoinbase": COINBASE,
+        "currentGasLimit": genesis["gasLimit"],
+        "currentNumber": "0x1",
+        "currentTimestamp": q(MAINNET_BPO2_ACTIVATION_TIMESTAMP + 12),
+        "currentRandom": ZERO_HASH,
+        "parentHash": genesis_hash,
+        "parentTimestamp": genesis["timestamp"],
+        "parentDifficulty": "0x0",
+        "parentUncleHash": EMPTY_OMMER_HASH,
+        "parentGasLimit": genesis["gasLimit"],
+        "parentGasUsed": "0x0",
+        "parentBaseFee": genesis["baseFeePerGas"],
+        "parentBlobGasUsed": "0x0",
+        "parentExcessBlobGas": "0x0",
+        "parentBeaconBlockRoot": genesis["parentBeaconBlockRoot"],
+        "blockHashes": {"0": genesis_hash},
+        "ommers": [],
+        "withdrawals": [],
+    }
+    return genesis, genesis_hash, environment
+
+
 class Expectations:
     def __init__(self, name): self.name, self.count = name, 0
     def that(self, condition, message):
@@ -375,15 +402,8 @@ def make_fixture(name, runtime, extra, txs, check, outcome, *, root, profile,
                  receipt_succeeded=None):
     alloc = system_alloc()
     alloc.update(extra)
-    g = genesis_header(alloc)
-    gh, ghash = header(g)
-    env = {"currentCoinbase": COINBASE, "currentGasLimit": g["gasLimit"], "currentNumber": "0x1",
-        "currentTimestamp": q(MAINNET_BPO2_ACTIVATION_TIMESTAMP + 12),
-        "currentRandom": ZERO_HASH, "parentHash": ghash,
-        "parentTimestamp": g["timestamp"], "parentDifficulty": "0x0", "parentUncleHash": EMPTY_OMMER_HASH,
-        "parentGasLimit": g["gasLimit"], "parentGasUsed": "0x0", "parentBaseFee": g["baseFeePerGas"],
-        "parentBlobGasUsed": "0x0", "parentExcessBlobGas": "0x0",
-        "parentBeaconBlockRoot": g["parentBeaconBlockRoot"], "blockHashes": {"0": ghash}, "ommers": [], "withdrawals": []}
+    g, ghash, env = transition_environment(alloc)
+    gh, _ = header(g)
     outputs = run_t8n(
         alloc, env, txs, root=root, profile=profile,
         state_test=False, timeout=120,

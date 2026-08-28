@@ -1416,12 +1416,17 @@
         "files": [
           "scripts/check-prorata-current-mainnet.sh",
           "scripts/gen-prorata-fixtures.py",
+          "scripts/gen-prorata-benchmark.py",
           "scripts/check-current-mainnet.sh",
           "scripts/current-mainnet-target.json",
           "scripts/current_mainnet.py",
           "scripts/check-runtime-bytes.py",
           "scripts/prorata_oracle.py",
           "scripts/fixtures/prorata/manifest.json",
+          "scripts/reference/prorata/ProrataReference.sol",
+          "scripts/reference/prorata/ProrataReference.yul",
+          "scripts/reference/prorata/runtime-lock.json",
+          "scripts/reference/prorata/benchmark-results.json",
           "Blanc/ProrataCode.lean",
           "@t8n_target/.git/config",
           "@t8n_target/.venv/pyvenv.cfg",
@@ -1459,7 +1464,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "PRORATA's read-only BPO2 consumer of the contract-neutral current-mainnet API. It reconstructs canonical system preallocation and block envelopes from the pinned target, executes all fourteen scenarios with explicit block semantics, checks receipt/no-log and exact integer-model postconditions, and byte-compares the complete generated fixture population. The ordinary fixture gate independently replays those committed blocks through Jaune and remains CI-safe without the external checkout.",
+      "note": "PRORATA's read-only BPO2 consumer of the contract-neutral current-mainnet API. It reconstructs canonical system preallocation and block envelopes from the pinned target, executes all fourteen fixture scenarios with explicit block semantics, checks receipt/no-log and exact integer-model postconditions, and byte-compares the complete generated fixture population. It also validates the locked exact-surface Solidity/Yul referents, runs ten independent signed-transaction scenarios against all three runtimes with zero projected semantic mismatches, and byte-compares canonical receipt gas. The ordinary fixture gate independently replays committed PRORATA blocks through Jaune and remains CI-safe without the external checkout.",
       "order": 34,
       "verdict": {
         "expect_exit": 0,
