@@ -27,6 +27,15 @@
 # rows and 12 controls, and no control reached 1.50x. Each new row below is
 # the median of that module's three mandatory measurements. The preserved
 # evidence is named in the goal completion report.
+#
+# 2026-08-28 additions-only admission of the proxy-pair family seed row
+# Blanc/ProxyPairSlots.lean, measured by `scripts/check-elab.sh --calibrate`
+# at candidate commit 85cb6a12675ee3899fa82bdec8e8d617a9490271
+# (evidence in scripts/report-elab-calibration.txt at that commit): 1
+# mandatory row measured, 11 drawn controls with median ratio 1.021 and
+# spread 0.99x-1.24x, none reaching the 1.50x annotate tier. The run
+# measured 134 modules in 715.4 s against the 755.6 s committed total, so
+# it is its own host control. No existing row is touched.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
@@ -111,6 +120,7 @@ OK	5.129	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
 OK	1.117	Blanc/PinnedPauseTarget.lean
 OK	0.594	Blanc/ProofRecipesGenerated.lean
+OK	1.455	Blanc/ProxyPairSlots.lean
 OK	1.630	Blanc/RevertPayload.lean
 OK	1.178	Blanc/Reverts.lean
 OK	1.597	Blanc/Semantics.lean
