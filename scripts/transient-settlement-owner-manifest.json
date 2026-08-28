@@ -69,7 +69,7 @@
   },
   "touchedConsumerHashes": {
     "Blanc/Weth10StaticSilence.lean": "7d99de5ead573717042030decbcc18f341a7a3d7dcb68d15bf6334299ba5887a",
-    "Blanc/Weth10AllowanceArmsPermit.lean": "37c51c2936f461527d170a68371546da827cdbea2e3b1effc28d4de2d6bfe1d0"
+    "Blanc/Weth10AllowanceArmsPermit.lean": "9fa3a7e7121010bdc33c16ebd097e24ab0f447f0dedbd461f652c9c21491b44a"
   },
   "jaunePinFiles": {
     "lakefile.lean": "1e183fa01ba53015be897721557b8e9733e4f3075e54c866e45e093aa86017ec",
