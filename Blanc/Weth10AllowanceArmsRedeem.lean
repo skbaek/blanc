@@ -748,11 +748,11 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
               simp [B256.eqCheck]] at hzero
             exact B256.zero_ne_one hzero.symm
           · rcases hsuccess with
-              ⟨callParent, child, xlRaw, hasDelegation, code, availableGas,
-                rawPc, hrawStep, hdepthPos, _hcallStackEq, hparentState,
-                hparentMemory, _hparentLogs, _hparentOutput, hdelegation,
-                hrawFilled, hprocess, hclean, _hresume, hmidState,
-                _hreturnData, hmidMemory, hmidStack⟩
+              ⟨callParent, child, xlRaw, hasDelegation, resolvedCallee, code,
+                availableGas, rawPc, hrawStep, hdepthPos, _hcallStackEq,
+                hparentState, hparentMemory, _hparentLogs, _hparentOutput,
+                hdelegation, hrawFilled, hprocess, hclean, _hresume,
+                hmidState, _hreturnData, hmidMemory, hmidStack⟩
             have halign := Ninst.StepRun.unique_exec_of_filled ofilled
               hrawFilled hstepAt hrawStep
             cases halign.1
@@ -770,7 +770,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
                     (if (Sevm.argWord e amountArg).toNat = 0 then 0
                       else gCallStipend))
                   (Sevm.argWord e amountArg) e.currentTarget target.toAdr
-                  target.toAdr true false
+                  resolvedCallee true false
                   ((callCursor.pre.memory.read (0 : B256).toNat
                     (0 : B256).toNat).1) code hasDelegation).benv.state := by
               simpa only [callMsg] using hparentState.symm
@@ -780,19 +780,44 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
                     (if (Sevm.argWord e amountArg).toNat = 0 then 0
                       else gCallStipend))
                   (Sevm.argWord e amountArg) e.currentTarget target.toAdr
-                  target.toAdr true false
+                  resolvedCallee true false
                   ((callCursor.pre.memory.read (0 : B256).toNat
                     (0 : B256).toNat).1) code hasDelegation).depth <
                   e.depth := by
               dsimp only [callMsg]
               omega
+            have hdelegation' :
+                (getDelegatedCodeAddress
+                      (callCursor.pre.getCode target.toAdr) = none ∧
+                    code = callCursor.pre.getCode target.toAdr ∧
+                    hasDelegation = false) ∨
+                (∃ delegatedTarget,
+                  getDelegatedCodeAddress
+                      (callCursor.pre.getCode target.toAdr) =
+                    some delegatedTarget ∧
+                  code = callCursor.pre.getCode delegatedTarget ∧
+                  hasDelegation = true) := by
+              rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
+                ⟨delegatedTarget, hsome, _, hcode, hdel⟩
+              · exact Or.inl ⟨hnone, hcode, hdel⟩
+              · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
+            have hresolved : target.toAdr = ca → resolvedCallee = ca := by
+              intro htargetCa
+              have hnone : getDelegatedCodeAddress
+                  (callCursor.pre.getCode target.toAdr) = none := by
+                rw [htargetCa]
+                dsimp only [getDelegatedCodeAddress]
+                rw [if_neg (not_delegation_of_compile hcallCodeAt)]
+              rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
+              · exact hna.trans htargetCa
+              · simp [hnone] at hsome
             have htargetCode :
                 (callMsg e callParent
                   (min gasWord.toNat (except64th availableGas) +
                     (if (Sevm.argWord e amountArg).toNat = 0 then 0
                       else gCallStipend))
                   (Sevm.argWord e amountArg) e.currentTarget target.toAdr
-                  target.toAdr true false
+                  resolvedCallee true false
                   ((callCursor.pre.memory.read (0 : B256).toNat
                     (0 : B256).toNat).1) code hasDelegation).currentTarget =
                   ca →
@@ -801,7 +826,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
               have htargetCa : target.toAdr = ca := by
                 simpa only [callMsg] using hct
               exact callbackCode_eq_compiled_of_target_eq hcallCodeAt
-                htargetCa hdelegation
+                htargetCa hdelegation'
             have childEffect :=
               ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
                 (dp := dp) (ca := ca) (depth := e.depth)
@@ -812,7 +837,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
                   intro hct
                   have htargetCa : target.toAdr = ca := by
                     simpa only [callMsg] using hct
-                  simp only [callMsg, htargetCa])
+                  simp only [callMsg, htargetCa, hresolved htargetCa])
                 hdeeper
             -- the zero-length return window leaves the memory frame intact
             have hmidMemory' : midD.memory = callParent.memory := by
@@ -1748,11 +1773,11 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
               simp [B256.eqCheck]] at hzero
             exact B256.zero_ne_one hzero.symm
           · rcases hsuccess with
-              ⟨callParent, child, xlRaw, hasDelegation, code, availableGas,
-                rawPc, hrawStep, hdepthPos, _hcallStackEq, hparentState,
-                hparentMemory, _hparentLogs, _hparentOutput, hdelegation,
-                hrawFilled, hprocess, hclean, _hresume, hmidState,
-                _hreturnData, hmidMemory, hmidStack⟩
+              ⟨callParent, child, xlRaw, hasDelegation, resolvedCallee, code,
+                availableGas, rawPc, hrawStep, hdepthPos, _hcallStackEq,
+                hparentState, hparentMemory, _hparentLogs, _hparentOutput,
+                hdelegation, hrawFilled, hprocess, hclean, _hresume,
+                hmidState, _hreturnData, hmidMemory, hmidStack⟩
             have halign := Ninst.StepRun.unique_exec_of_filled ofilled
               hrawFilled hstepAt hrawStep
             cases halign.1
@@ -1770,7 +1795,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
                     (if (Sevm.argWord e amountArg).toNat = 0 then 0
                       else gCallStipend))
                   (Sevm.argWord e amountArg) e.currentTarget target.toAdr
-                  target.toAdr true false
+                  resolvedCallee true false
                   ((callCursor.pre.memory.read (0 : B256).toNat
                     (0 : B256).toNat).1) code hasDelegation).benv.state := by
               simpa only [callMsg] using hparentState.symm
@@ -1780,19 +1805,44 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
                     (if (Sevm.argWord e amountArg).toNat = 0 then 0
                       else gCallStipend))
                   (Sevm.argWord e amountArg) e.currentTarget target.toAdr
-                  target.toAdr true false
+                  resolvedCallee true false
                   ((callCursor.pre.memory.read (0 : B256).toNat
                     (0 : B256).toNat).1) code hasDelegation).depth <
                   e.depth := by
               dsimp only [callMsg]
               omega
+            have hdelegation' :
+                (getDelegatedCodeAddress
+                      (callCursor.pre.getCode target.toAdr) = none ∧
+                    code = callCursor.pre.getCode target.toAdr ∧
+                    hasDelegation = false) ∨
+                (∃ delegatedTarget,
+                  getDelegatedCodeAddress
+                      (callCursor.pre.getCode target.toAdr) =
+                    some delegatedTarget ∧
+                  code = callCursor.pre.getCode delegatedTarget ∧
+                  hasDelegation = true) := by
+              rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
+                ⟨delegatedTarget, hsome, _, hcode, hdel⟩
+              · exact Or.inl ⟨hnone, hcode, hdel⟩
+              · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
+            have hresolved : target.toAdr = ca → resolvedCallee = ca := by
+              intro htargetCa
+              have hnone : getDelegatedCodeAddress
+                  (callCursor.pre.getCode target.toAdr) = none := by
+                rw [htargetCa]
+                dsimp only [getDelegatedCodeAddress]
+                rw [if_neg (not_delegation_of_compile hcallCodeAt)]
+              rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
+              · exact hna.trans htargetCa
+              · simp [hnone] at hsome
             have htargetCode :
                 (callMsg e callParent
                   (min gasWord.toNat (except64th availableGas) +
                     (if (Sevm.argWord e amountArg).toNat = 0 then 0
                       else gCallStipend))
                   (Sevm.argWord e amountArg) e.currentTarget target.toAdr
-                  target.toAdr true false
+                  resolvedCallee true false
                   ((callCursor.pre.memory.read (0 : B256).toNat
                     (0 : B256).toNat).1) code hasDelegation).currentTarget =
                   ca →
@@ -1801,7 +1851,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
               have htargetCa : target.toAdr = ca := by
                 simpa only [callMsg] using hct
               exact callbackCode_eq_compiled_of_target_eq hcallCodeAt
-                htargetCa hdelegation
+                htargetCa hdelegation'
             have childEffect :=
               ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
                 (dp := dp) (ca := ca) (depth := e.depth)
@@ -1812,7 +1862,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
                   intro hct
                   have htargetCa : target.toAdr = ca := by
                     simpa only [callMsg] using hct
-                  simp only [callMsg, htargetCa])
+                  simp only [callMsg, htargetCa, hresolved htargetCa])
                 hdeeper
             -- the zero-length return window leaves the memory frame intact
             have hmidMemory' : midD.memory = callParent.memory := by
