@@ -71,7 +71,8 @@ any mismatch it discovers is a registry row, never an implicit exception.
 `649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5`.
 The program stages five head offsets (`160,256,320,384,512`) and tails for
 pubkey, withdrawal credentials, amount, signature, and old-count index. It
-explicitly zeroes both partial-word padding regions and emits one `LOG1` over
+explicitly zeroes all three partial-word padding regions (pubkey, amount, and
+index) and emits one `LOG1` over
 memory `[0,576)`. The event is staged after the first six guards and before
 root/cap validation. A later revert retains both the raw frame-local `LOG`
 occurrence and the reverted `Devm` log field.  It is not a retained occurrence,
@@ -91,9 +92,12 @@ output size 32. The program retains all twelve source-shaped sites:
 The proof boundary names the pinned fork's precompile selection and absence of
 an EIP-7702 delegation designator at address `0x2`; it proves the 64-byte child
 input and instantiates the result exactly as `Bytes.sha256 input`. These are
-explicit environment facts, not a hash axiom. A failed call takes the shared
-`Func.revReturnData` auxiliary and therefore bubbles the child returndata
-byte-for-byte (with empty returndata as the ordinary empty-revert subcase).
+explicit environment facts, not a hash axiom. A `STATICCALL` that returns
+status zero takes the shared `Func.revReturnData` auxiliary and therefore
+bubbles the child returndata byte-for-byte (with empty returndata as the
+ordinary empty-revert subcase). Caller-frame exceptional halt while paying
+for or entering the instruction precedes any returned status and is not
+described as a bubble.
 A successful child response shorter than 32 bytes instead takes the shared
 empty reverter; responses of at least 32 bytes use the first output word.
 These two arms match the pinned solc wrapper.
@@ -131,6 +135,9 @@ The root fold is exactly 32 iterations and the constructor exactly 31. The
 insertion loop has no compiled terminal `assert` arm: after the cap guard its
 incremented count is nonzero below `2^32`, so a set bit is found within 32
 shifts; `deposit_ne_assert_false` licenses this omission at the model bridge.
+The successful path writes the incremented count before entering the loop,
+then writes the branch node at the first live bit; dead steps hash
+`branch[h] ‖ node` before shifting the incremented size.
 The loop realization (tail-recursive auxiliary slots or unroll) remains
 pending the exclusive first-slice measurement recorded in
 `BEACON_DEPOSIT_COST.md`.
@@ -142,6 +149,9 @@ also proves `NoRawSstore`: every raw instruction occurrence differs from
 `SSTORE`. The success and constructor theorems compare the chronological
 `(owner,key,value)` projection of retained writes, so no-op `SSTORE`s still
 count and proof-node identity cannot obscure cardinality.
+
+`get_deposit_count()` returns exactly 96 bytes: the offset word `32`, the
+length word `8`, and `le64 count` followed by 24 zero padding bytes.
 
 ## Module boundary
 
