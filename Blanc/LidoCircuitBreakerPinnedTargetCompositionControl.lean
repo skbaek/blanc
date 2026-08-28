@@ -177,38 +177,33 @@ private theorem stubPauseWorld_target_not_precompile :
 Small `rfl`-or-split lemmas for reading fields through the tower layers the
 composition threads. -/
 
-private theorem temporalSloadBase_error (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).error = base.error := by
+/-- Both arms of `temporalSloadBase` return the base world with at most the
+accessed-key set changed, so the error, output, accessed-address and code
+fields all pass through; the named projections below read this one case
+split. -/
+private theorem temporalSloadBase_carriers (sevm : Sevm) (base : Devm)
+    (key : B256) :
+    (temporalSloadBase sevm base key).error = base.error ∧
+      (temporalSloadBase sevm base key).output = base.output ∧
+      (temporalSloadBase sevm base key).accessedAddresses =
+        base.accessedAddresses ∧
+      ∀ a : Adr, (temporalSloadBase sevm base key).getCode a =
+        base.getCode a := by
   unfold temporalSloadBase
-  split <;> rfl
+  split <;> exact ⟨rfl, rfl, rfl, fun _ => rfl⟩
+
+private theorem temporalSloadBase_error (sevm : Sevm) (base : Devm)
+    (key : B256) : (temporalSloadBase sevm base key).error = base.error :=
+  (temporalSloadBase_carriers sevm base key).1
 
 private theorem temporalSloadBase_output (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).output = base.output := by
-  unfold temporalSloadBase
-  split <;> rfl
-
-private theorem temporalSloadBase_transientStorage (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).transientStorage =
-      base.transientStorage := by
-  unfold temporalSloadBase
-  split <;> rfl
+    (key : B256) : (temporalSloadBase sevm base key).output = base.output :=
+  (temporalSloadBase_carriers sevm base key).2.1
 
 private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
     (key : B256) : (temporalSloadBase sevm base key).accessedAddresses =
-      base.accessedAddresses := by
-  unfold temporalSloadBase
-  split <;> rfl
-
-private theorem getTransVal_setTransVal_self (devm : Devm) (a : Adr)
-    (k : B256) : (devm.setTransVal a k 0).getTransVal a k = 0 := by
-  show ((devm.transientStorage.setStorVal a k 0).getD a .empty).get k = 0
-  unfold Tra.setStorVal
-  rw [Std.TreeMap.getD_eq_getD_getElem?, Tra.getElem?_set, if_pos rfl]
-  split
-  · show Stor.get .empty k = 0
-    simp [Stor.get, Stor.empty]
-  · show ((Option.getD (some _)) Stor.empty).get k = 0
-    exact Stor.get_set_self _ _ _
+      base.accessedAddresses :=
+  (temporalSloadBase_carriers sevm base key).2.2.1
 
 /-! ## Slot-pair inequalities lifted to accessed-key pairs -/
 
@@ -248,12 +243,6 @@ private theorem lengthWritePost_accessedAddresses (sevm : Sevm) (base : Devm)
     (ol : B256) : (lengthWritePost sevm base ol).accessedAddresses =
       base.accessedAddresses := rfl
 
-private theorem lengthWritePost_getStorVal_other (sevm : Sevm) (base : Devm)
-    (ol : B256) {a : Adr} {key : B256}
-    (h : (a, key) ≠ (sevm.currentTarget, arrayLengthSlot)) :
-    (lengthWritePost sevm base ol).getStorVal a key = base.getStorVal a key :=
-  temporalSstorePost_other sevm base arrayLengthSlot ol a key h
-
 private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k₁) :
     (a₁, k₁) ≠ (a₂, k₂) := fun hp => h (congrArg Prod.snd hp).symm
 
@@ -266,14 +255,21 @@ below read off; every non-membership is settled by slot separation, never by
 deciding a `HashSet`. -/
 
 
+private theorem temporalSloadBase_keys (sevm : Sevm) (base : Devm)
+    (key : B256) :
+    (temporalSloadBase sevm base key).accessedStorageKeys =
+      if (sevm.currentTarget, key) ∈ base.accessedStorageKeys
+        then base.accessedStorageKeys
+        else base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
+  unfold temporalSloadBase
+  split <;> rfl
+
 private theorem temporalSloadBase_cold_keys (sevm : Sevm) (base : Devm)
     (key : B256)
     (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
     (temporalSloadBase sevm base key).accessedStorageKeys =
       base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
-  unfold temporalSloadBase
-  rw [if_neg h]
-  rfl
+  rw [temporalSloadBase_keys, if_neg h]
 
 private theorem stubRunKeys_expiryBase :
     (pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre
@@ -1327,48 +1323,59 @@ the old pauser at `previousPauserWord`, and the removal walk writes its three
 scratch words above it.  Every write stays inside the `768`-byte image, so no
 extension is ever charged. -/
 
-/-! ## The staged memory and its image, through the walk's writes
-
-`pauseMemory`'s five scratch words are staged by the body; the kernel saves
-the old pauser at `previousPauserWord`, and the removal walk writes its three
-scratch words above it.  Every write stays inside the `768`-byte image, so no
-extension is ever charged. -/
-
 private theorem stubRunMem_wf1 : Mem.Wf ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) := by
   rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with ⟨hwf, -⟩
   exact hwf.write _ _
 
+/-- The stage-one facts of the kernel-saved memory, read off
+`pauseMemory_spec` in one destructuring: the written image, the unmoved `768`
+size, and the two staged words the kernel's write must not disturb.  The four
+named facts below are its projections. -/
+private theorem stubRunMem_stage1 :
+    Mem.Reads ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
+      (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) ∧
+    ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).size = 768 ∧
+    Bytes.toB256 ((Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).sliceD
+        (targetWord * 32).toNat 32 0) = pauseWorldCallee.toB256 ∧
+    Bytes.toB256 ((Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).sliceD
+        (newPauserWord * 32).toNat 32 0) = 0 := by
+  rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with
+    ⟨hwf, hreads, hsize, -, -, htarget, hnew, -⟩
+  refine ⟨Mem.Reads.write hwf hreads _ _, ?_, ?_, ?_⟩
+  · rw [Mem.size_write_of_le (by
+      rw [B256.length_toBytes, hsize]
+      decide)]
+    exact hsize
+  · rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    exact htarget
+  · rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    exact hnew
+
 private theorem stubRunMem_reads1 : Mem.Reads ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
-      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) := by
-  rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with ⟨hwf, hreads, -⟩
-  exact Mem.Reads.write hwf hreads _ _
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) :=
+  stubRunMem_stage1.1
 
 private theorem stubRunMem_size1 : ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
-      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).size = 768 := by
-  rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with ⟨-, -, hsize, -⟩
-  rw [Mem.size_write_of_le (by
-    rw [B256.length_toBytes, hsize]
-    decide)]
-  exact hsize
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).size = 768 :=
+  stubRunMem_stage1.2.1
 
 private theorem stubRunMem_target1 :
     Bytes.toB256 ((Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).sliceD (targetWord * 32).toNat 32 0) =
-      pauseWorldCallee.toB256 := by
-  rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with
-    ⟨-, -, -, -, -, htarget, -⟩
-  rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
-  exact htarget
+      pauseWorldCallee.toB256 :=
+  stubRunMem_stage1.2.2.1
 
 private theorem stubRunMem_new1 :
     Bytes.toB256 ((Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
-      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).sliceD (newPauserWord * 32).toNat 32 0) = 0 := by
-  rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with
-    ⟨-, -, -, -, -, -, hnew, -⟩
-  rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
-  exact hnew
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).sliceD (newPauserWord * 32).toNat 32 0) = 0 :=
+  stubRunMem_stage1.2.2.2
 
 private theorem stubRunMem_wfLast : Mem.Wf (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
@@ -1440,35 +1447,22 @@ private theorem stubRunMem_newLast :
     Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
   exact stubRunMem_new1
 
-private theorem stubRunMem_prevLast :
+/-- The three scratch words of the four-write image no later write disturbs,
+in one bundle: the saved pauser survives at its own offset below every later
+write, and the continuation and duration words sit above them all.  The three
+named facts below are its projections. -/
+private theorem stubRunMem_lastWords :
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
       (arrayLengthWord * 32).toNat (1 : B256).toBytes)
       (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes).sliceD (previousPauserWord * 32).toNat 32 0) =
-      pauseWorldPauser := by
-  rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
-    Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
-    Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
-    show 32 = pauseWorldPauser.toBytes.length by rw [B256.length_toBytes],
-    Bytes.sliceD_writeAt, B256.toB256_toBytes]
-
-private theorem stubRunMem_contLast :
+      pauseWorldPauser ∧
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
       (arrayLengthWord * 32).toNat (1 : B256).toBytes)
-      (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes).sliceD (continuationWord * 32).toNat 32 0) = 1 := by
-  rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with
-    ⟨-, -, -, -, -, -, -, -, hcont, -⟩
-  rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
-    Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
-    Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
-    Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; decide)]
-  exact hcont
-
-private theorem stubRunMem_durLast :
+      (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes).sliceD (continuationWord * 32).toNat 32 0) = 1 ∧
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
@@ -1476,16 +1470,54 @@ private theorem stubRunMem_durLast :
       (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes).sliceD (durationWord * 32).toNat 32 0) =
       pauseWorldDuration := by
   rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with
-    ⟨-, -, -, -, -, -, -, -, -, hdur⟩
-  rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; decide),
-    Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; decide),
-    Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; decide),
-    Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; decide)]
-  exact hdur
+    ⟨-, -, -, -, -, -, -, -, hcont, hdur⟩
+  refine ⟨?_, ?_, ?_⟩
+  · rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      show 32 = pauseWorldPauser.toBytes.length by rw [B256.length_toBytes],
+      Bytes.sliceD_writeAt, B256.toB256_toBytes]
+  · rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
+        rw [B256.length_toBytes]; decide)]
+    exact hcont
+  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
+        rw [B256.length_toBytes]; decide),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
+        rw [B256.length_toBytes]; decide),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
+        rw [B256.length_toBytes]; decide),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
+        rw [B256.length_toBytes]; decide)]
+    exact hdur
+
+private theorem stubRunMem_prevLast :
+    Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
+      (removedIndexWord * 32).toNat (1 : B256).toBytes)
+      (arrayLengthWord * 32).toNat (1 : B256).toBytes)
+      (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes).sliceD (previousPauserWord * 32).toNat 32 0) =
+      pauseWorldPauser :=
+  stubRunMem_lastWords.1
+
+private theorem stubRunMem_contLast :
+    Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
+      (removedIndexWord * 32).toNat (1 : B256).toBytes)
+      (arrayLengthWord * 32).toNat (1 : B256).toBytes)
+      (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes).sliceD (continuationWord * 32).toNat 32 0) = 1 :=
+  stubRunMem_lastWords.2.1
+
+private theorem stubRunMem_durLast :
+    Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
+      (removedIndexWord * 32).toNat (1 : B256).toBytes)
+      (arrayLengthWord * 32).toNat (1 : B256).toBytes)
+      (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes).sliceD (durationWord * 32).toNat 32 0) =
+      pauseWorldDuration :=
+  stubRunMem_lastWords.2.2
 
 /-! ## Value charges -/
 
@@ -1560,29 +1592,26 @@ writes -/
 
 /-! ## Account-set and code reads at the `pauseAfterSet` boundary -/
 
-private theorem setStorVal_getCode (devm : Devm) (adr : Adr) (k v : B256)
-    (a : Adr) : (devm.setStorVal adr k v).getCode a = devm.getCode a := by
-  show ((devm.state.setStorVal adr k v).get a).code =
-    ((devm.state.get a)).code
-  unfold State.setStorVal
-  by_cases h : adr = a
-  · subst h
-    rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
-
+/-- Neither the refund-counter update nor the storage-cell write inside
+`temporalSstorePost` touches any account's code, shown directly at the
+`State` level. -/
 private theorem temporalSstorePost_getCode (sevm : Sevm) (base : Devm)
     (k v : B256) (a : Adr) :
     (temporalSstorePost sevm base k v).getCode a = base.getCode a := by
-  show ((base.withRefundCounter _).setStorVal sevm.currentTarget k v).getCode
-    a = base.getCode a
-  rw [setStorVal_getCode]
-  rfl
+  show (((base.withRefundCounter _).state.setStorVal
+    sevm.currentTarget k v).get a).code = ((base.state.get a)).code
+  unfold State.setStorVal
+  by_cases h : sevm.currentTarget = a
+  · subst h
+    rw [State.get_set_self]
+    rfl
+  · rw [State.get_set_ne _ h]
+    rfl
 
 private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
     (key : B256) (a : Adr) :
-    (temporalSloadBase sevm base key).getCode a = base.getCode a := by
-  unfold temporalSloadBase
-  split <;> rfl
+    (temporalSloadBase sevm base key).getCode a = base.getCode a :=
+  (temporalSloadBase_carriers sevm base key).2.2.2 a
 
 
 private theorem addAccessedStorageKey_getCode (devm : Devm) (a : Adr)

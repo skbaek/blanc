@@ -15,17 +15,27 @@ open PinnedTargetControl
 
 /-! ## Parent/child boundary helpers -/
 
+/-- The delegation resolution returns the caller's world either unchanged or
+with exactly the delegated address recorded as accessed; the world-meta
+projection below reads off this one characterization. -/
+private lemma accessDelegation_devm {devm d1 : Devm} {a dadr : Adr}
+    {dp : Bool} {code : ByteArray} {dgc : Nat}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    d1 = devm ∨ d1 = addAccessedAddress devm dadr := by
+  unfold accessDelegation at h
+  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
+    simp only [hd] at h
+  · cases h
+    exact .inl rfl
+  · cases h
+    exact .inr rfl
+
 private lemma accessDelegation_worldMeta {devm d1 : Devm} {a dadr : Adr}
     {dp : Bool} {code : ByteArray} {dgc : Nat}
     (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
     d1.transientStorage = devm.transientStorage ∧
       d1.accessedStorageKeys = devm.accessedStorageKeys := by
-  unfold accessDelegation at h
-  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
-    simp only [hd] at h
-  · cases h
-    exact ⟨rfl, rfl⟩
-  · cases h
+  rcases accessDelegation_devm h with hd | hd <;> subst hd <;>
     exact ⟨rfl, rfl⟩
 
 private lemma memWrite_memory (d : Devm) (i : Nat) (v : Bytes) :
