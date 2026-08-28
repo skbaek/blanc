@@ -588,6 +588,65 @@ inductive ProrataAttackPath (o : Nat) : ProrataAttackState o → Prop where
       (path : ProrataAttackPath o step.pre) :
       ProrataAttackPath o step.post
 
+namespace ProrataAttackPath
+
+/-- Supply partition, exact flow, and victim chronology do not need the P4
+offset guard. -/
+theorem structuralInvariant {o : Nat} (ho : o ≠ 0)
+    {state : ProrataAttackState o} (path : ProrataAttackPath o state) :
+    state.SharesPartition ∧ state.FlowExact ∧ state.VictimConsistent := by
+  induction path with
+  | genesis =>
+      have h := ProrataAttackState.genesis_invariant o
+      exact ⟨h.1, h.2.1, h.2.2.1⟩
+  | snoc step path ih =>
+      exact
+        ⟨step.effect.sharesPartition ih.1,
+          step.effect.flowExact ho ih.1 ih.2.1,
+          step.effect.victimConsistent ho ih.1 ih.2.2⟩
+
+/-- The strong actor invariant holds at every boundary of a guarded path. -/
+theorem invariant {o : Nat} (ho : 2 ≤ o)
+    {state : ProrataAttackState o} (path : ProrataAttackPath o state) :
+    state.Invariant := by
+  induction path with
+  | genesis =>
+      exact ProrataAttackState.genesis_invariant o
+  | snoc step path ih =>
+      exact step.effect.invariant ho ih
+
+/-- Pure open-context payout bound; the realized-trace theorem later exposes
+the unsuffixed SF headline. -/
+theorem attacker_open_context_of_attackPath {o : Nat} (ho : 2 ≤ o)
+    {state : ProrataAttackState o} (path : ProrataAttackPath o state) :
+    state.outA ≤ state.inA + state.outsideSubsidy := by
+  have hclaim := (path.invariant ho).2.2.2
+  unfold ProrataAttackState.ClaimBound at hclaim
+  unfold ProrataAttackState.totalIn ProrataAttackState.totalOut at hclaim
+  omega
+
+/-- Pure closed-context no-profit bound. -/
+theorem attacker_no_profit_of_attackPath {o : Nat} (ho : 2 ≤ o)
+    {state : ProrataAttackState o} (path : ProrataAttackPath o state)
+    (hclosed : state.outsideSubsidy = 0) : state.outA ≤ state.inA := by
+  have hopen := path.attacker_open_context_of_attackPath ho
+  omega
+
+/-- Pure victim-loss bound, independent of the no-profit offset guard. -/
+theorem victim_loss_bound_of_attackPath {o : Nat} (ho : o ≠ 0)
+    {state : ProrataAttackState o} (path : ProrataAttackPath o state)
+    {deposit : VictimDeposit o} {exit : VictimExit o deposit}
+    (hphase : state.phase = .exited deposit exit) :
+    deposit.amount - exit.payout ≤
+      Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + o) + 1 := by
+  have hvictim := (path.structuralInvariant ho).2.2
+  unfold ProrataAttackState.VictimConsistent at hvictim
+  simp only [hphase] at hvictim
+  apply victim_loss_le_div_add_one ho deposit.minted_eq ?_ exit.payout_eq
+  simpa only [VictimDeposit.post] using hvictim.2
+
+end ProrataAttackPath
+
 end Prorata
 
 end Blanc
