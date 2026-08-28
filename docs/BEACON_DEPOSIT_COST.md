@@ -22,18 +22,31 @@ branch, two storage reads, an exact 64-byte SHA-256 precompile window, a
 
 Two disposable files under `/private/tmp` use the real Blanc compiler:
 
-- `BeaconDepositLoopTail.lean`: one recursive auxiliary-table slot, constant
-  EVM stack height, and one copy of the loop body;
-- `BeaconDepositLoopUnrolled.lean`: 32 source-generated copies of that body,
-  with the storage height specialized in each copy.
+- `BeaconDepositLoopTail.lean`: one recursive loop slot plus one shared
+  continuation slot, constant EVM stack height, and one copy of each distinct
+  live/dead SHA wrapper;
+- `BeaconDepositLoopUnrolled.lean`: 32 source-generated step slots plus a
+  finish slot, with the storage height specialized in each step and distinct
+  live/dead SHA wrappers in every copy.
 
 Both stage exactly 64 input bytes and issue `STATICCALL` to address `0x2` with
 a 32-byte output window. Both route call failure through
 `Func.revReturnData`, reject a successful response shorter than 32 bytes via
 the shared empty reverter, and otherwise consume the first output word,
-exactly as the pinned solc SHA wrapper does. They intentionally omit the final count mix-in,
+exactly as the pinned solc SHA wrapper does. The measured files have SHA-256
+digests
+`0588d1a4939317d1b06df5e34cf85b12913c39ad8882d1f89d4165eeadc9b9c5`
+and `f1da9cb24a6fa1210fa8d9997970a63ed40ab3430c13643454f6a9904aa6fde6`,
+respectively. They intentionally omit the final count mix-in,
 which is identical straight-line code in either realization and therefore
 cannot decide the comparison.
+
+These are compiler-shape probes, not executable root fixtures: their entry
+uses a zero placeholder size and their finish returns the intermediate word.
+The production endpoint must instead load `deposit_count`, retain its original
+value, and perform the count mix-in before returning. Keeping that common
+straight-line prefix/suffix out of both probes isolates the realization cost
+without licensing either placeholder in production.
 
 ## Measurement protocol
 
@@ -45,9 +58,28 @@ again after the unrolled prototype to expose gross order/cache effects. No
 language server or other elaboration-class job may be resident during this
 measurement.
 
-Candidate, commands, raw readings, and verdict will be inserted at the first
-exclusive measurement boundary. Until then no production loop realization is
-frozen.
+The exclusive measurement ran on candidate
+`b19f13887621253ecb389d11acc0b06d12f95ed3` under hard semaphore label
+`beacon-deposit-port-v1-loop-measure`. The valid readings were:
+
+| Run | Command | Compiled bytes | Real | User | System | Maximum RSS |
+|---|---|---:|---:|---:|---:|---:|
+| tail, first | `/usr/bin/time -l lake env lean /private/tmp/BeaconDepositLoopTail.lean` | 179 | 1.24 s | 0.67 s | 0.66 s | 1,511,686,144 B |
+| unrolled | `/usr/bin/time -l lake env lean /private/tmp/BeaconDepositLoopUnrolled.lean` | 4,195 | 1.21 s | 0.66 s | 0.64 s | 1,512,652,800 B |
+| tail, repeat | `/usr/bin/time -l lake env lean /private/tmp/BeaconDepositLoopTail.lean` | 179 | 1.22 s | 0.66 s | 0.65 s | 1,513,799,680 B |
+
+The first sandboxed timing attempt elaborated the tail prototype and printed
+179 bytes, but macOS denied `time -l` its `kern.clockrate` query and therefore
+did not produce the required memory record. It is excluded from the table; the
+same command was rerun with permission to read process statistics. Pre- and
+post-prototype telemetry both reported 75% system memory free, with no Lean
+process left resident after each compiler invocation.
+
+The unrolled prototype is 4,016 bytes larger, or about 23.4 times the tail
+prototype's byte length. Its wall time and maximum RSS are indistinguishable
+at this scale, including against the repeat tail control, so they provide no
+countervailing reason to carry 32 copies of each source-shaped SHA wrapper
+into the artifact and every downstream compiled walk.
 
 ## Proof-performance interpretation
 
@@ -69,4 +101,16 @@ predicate.
 
 ## Final decision
 
-Pending exclusive measurement.
+Use tail-recursive auxiliary slots at constant EVM stack height for all three
+production loops: the 32-step root fold, the at-most-32-step insertion walk,
+and the 31-step constructor zero-hash materialization. Each loop gets one
+shared continuation slot and one inductive invariant; the root loop retains
+distinct live/dead SHA sites, while insertion and construction each retain
+their one source-shaped site. No unrolled carrier abstraction and no resource
+ceiling is introduced.
+
+The measured decision is dominated by artifact and proof-shape cost: 179 bytes
+versus 4,195 bytes for the isolated slice, with effectively equal compilation
+time and memory. This freezes the executable realization; later proof work may
+split invariants across modules but may not silently replace the loops with an
+unroll.

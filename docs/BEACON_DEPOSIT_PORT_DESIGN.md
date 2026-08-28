@@ -138,9 +138,13 @@ shifts; `deposit_ne_assert_false` licenses this omission at the model bridge.
 The successful path writes the incremented count before entering the loop,
 then writes the branch node at the first live bit; dead steps hash
 `branch[h] ‖ node` before shifting the incremented size.
-The loop realization (tail-recursive auxiliary slots or unroll) remains
-pending the exclusive first-slice measurement recorded in
-`BEACON_DEPOSIT_COST.md`.
+All three loops use tail-recursive auxiliary slots at constant EVM stack
+height. The exclusive first-slice measurement in `BEACON_DEPOSIT_COST.md`
+found 179 compiled bytes for the tail shape versus 4,195 for the unroll, with
+indistinguishable elaboration time and maximum RSS. The root and insertion
+loops therefore use slots `11..14` as allocated above, and the constructor
+uses its independent slots `3..4`; no unrolled carrier abstraction or resource
+ceiling is admitted.
 
 Write statements distinguish raw from settled evidence. A reverting root has
 no retained storage writes by settlement alone, which does not prove that a
