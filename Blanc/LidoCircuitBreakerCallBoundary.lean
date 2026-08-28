@@ -152,13 +152,17 @@ def PauseCallBoundary (sevm : Sevm) (target : Adr) (duration : B256)
         getDelegatedCodeAddress (callPre.getCode target) =
           some delegatedTarget ∧
         code = callPre.getCode delegatedTarget ∧ delegated = true)) ∧
-    -- the message the CircuitBreaker builds
-    msg = callMsg sevm parent childGas 0 sevm.currentTarget target target
+    -- the message the CircuitBreaker builds.  `target` owns the storage; the
+    -- account whose code runs is the one its designator names, and is `target`
+    -- itself exactly when there is no designator.
+    msg = callMsg sevm parent childGas 0 sevm.currentTarget target
+      ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
       true false (pauseForCalldata duration) code delegated ∧
     -- ... stated again as claims, because `callMsg`'s twelve positional
     -- arguments do not read as one
     msg.currentTarget = target ∧
-    msg.codeAddress = some target ∧
+    msg.codeAddress =
+      some ((getDelegatedCodeAddress (callPre.getCode target)).getD target) ∧
     msg.caller = sevm.currentTarget ∧
     msg.value = 0 ∧
     msg.isStatic = false ∧
@@ -204,10 +208,12 @@ def PauseStatBoundary (sevm : Sevm) (target : Adr)
         getDelegatedCodeAddress (statPre.getCode target) =
           some delegatedTarget ∧
         code = statPre.getCode delegatedTarget ∧ delegated = true)) ∧
-    msg = callMsg sevm parent childGas 0 sevm.currentTarget target target
+    msg = callMsg sevm parent childGas 0 sevm.currentTarget target
+      ((getDelegatedCodeAddress (statPre.getCode target)).getD target)
       true true isPausedCalldata code delegated ∧
     msg.currentTarget = target ∧
-    msg.codeAddress = some target ∧
+    msg.codeAddress =
+      some ((getDelegatedCodeAddress (statPre.getCode target)).getD target) ∧
     msg.caller = sevm.currentTarget ∧
     msg.value = 0 ∧
     msg.isStatic = true ∧
@@ -232,7 +238,8 @@ def PauseCallExecutionWitness (sevm : Sevm) (target : Adr)
       (pc nextPc : Nat) (resume : Resume),
     msg.currentTarget = target ∧
     msg.target = some target ∧
-    msg.codeAddress = some target ∧
+    msg.codeAddress =
+      some ((getDelegatedCodeAddress (callPre.getCode target)).getD target) ∧
     msg.caller = sevm.currentTarget ∧
     msg.value = 0 ∧
     msg.shouldTransferValue = true ∧
@@ -256,7 +263,8 @@ def PauseStatExecutionWitness (sevm : Sevm) (target : Adr)
       (pc nextPc : Nat) (resume : Resume),
     msg.currentTarget = target ∧
     msg.target = some target ∧
-    msg.codeAddress = some target ∧
+    msg.codeAddress =
+      some ((getDelegatedCodeAddress (statPre.getCode target)).getD target) ∧
     msg.caller = sevm.currentTarget ∧
     msg.value = 0 ∧
     msg.shouldTransferValue = true ∧
@@ -434,6 +442,21 @@ private lemma accessDelegation_delegationCases {devm : Devm} {a dadr : Adr}
     exact Or.inr ⟨dt, hgd, (congrArg (fun x => x.2.2.1) h).symm,
       (congrArg (fun x => x.1) h).symm⟩
 
+/-- The address the same resolution hands `callMsg` as the child's **code**
+address: `a` itself where the account carries no designator, and the designated
+account where it does.  The storage owner stays `a` either way. -/
+private lemma accessDelegation_codeAddress {devm : Devm} {a dadr : Adr}
+    {dp : Bool} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    dadr = (getDelegatedCodeAddress (devm.getCode a)).getD a := by
+  unfold accessDelegation at h
+  show dadr = (getDelegatedCodeAddress (devm.state.getCode a)).getD a
+  rcases hgd : getDelegatedCodeAddress (devm.state.getCode a) with _ | dt
+  · simp only [hgd] at h
+    exact (congrArg (fun x => x.2.1) h).symm
+  · simp only [hgd] at h
+    exact (congrArg (fun x => x.2.1) h).symm
+
 /-- **The CALL edge, inverted.**  Any derivation that crosses the pause's
 `.call` instruction satisfies `PauseCallBoundary`: the seven operands, the
 argument window's bytes, the suspended parent frame, the spawned message and
@@ -565,6 +588,11 @@ theorem pauseCall_boundary_with_execution
           getDelegatedCodeAddress (callPre.getCode target) =
             some delegatedTarget ∧
           code = callPre.getCode delegatedTarget ∧ dp = true) := hdisj0
+    -- ... and the address that disjunct resolves to, which is what the child
+    -- message carries as its code address
+    have hdadr0 := accessDelegation_codeAddress hdel
+    have hdadr : dadr =
+        (getDelegatedCodeAddress (callPre.getCode target)).getD target := hdadr0
     rw [hstep] at hx
     obtain ⟨r, hframe, hres⟩ := hx
     rcases r with ⟨e, st, ca, tra⟩ | child
@@ -584,14 +612,16 @@ theorem pauseCall_boundary_with_execution
     have boundary : PauseCallBoundary sevm target duration callPre callPost := by
       refine ⟨parent, child, msg, xl, dp, code, gasWord, mcs,
         by rw [hpstk]; exact h_stk, h_window, hpmem, hpstate, hpca, hptra,
-        hplogs, hprd, h_depth, hdisj, rfl, rfl, rfl, rfl, rfl, ?_, rfl,
+        hplogs, hprd, h_depth, hdisj, (by rw [← hdadr]), rfl,
+        congrArg Option.some hdadr, rfl, rfl, ?_, rfl,
         hptra, hfill, hframe, hrun, hres', Resume.call_memory hres',
         Resume.call_returnData hres', Resume.call_stack_flag hres'⟩
       -- `callMsg` leaves the caller's frame-static bit in the CALL message.
       show sevm.isStatic = false
       exact h_dynamic
     refine ⟨boundary, msg, xl, child, 0, 1, .call parent 0 0,
-      rfl, rfl, rfl, rfl, rfl, rfl, ?_, rfl, rfl, rfl, hspawn, hfill, hframe,
+      rfl, rfl, congrArg Option.some hdadr, rfl, rfl, rfl, ?_, rfl, rfl, rfl,
+      hspawn, hfill, hframe,
       hrun 0, Resume.call_state hres', Resume.call_returnData hres'⟩
     show sevm.isStatic = false
     exact h_dynamic
@@ -814,6 +844,11 @@ theorem pauseStat_boundary_with_execution
           getDelegatedCodeAddress (statPre.getCode target) =
             some delegatedTarget ∧
           code = statPre.getCode delegatedTarget ∧ dp = true) := hdisj0
+    -- ... and the address that disjunct resolves to, which is what the child
+    -- message carries as its code address
+    have hdadr0 := accessDelegation_codeAddress hdel
+    have hdadr : dadr =
+        (getDelegatedCodeAddress (statPre.getCode target)).getD target := hdadr0
     rw [hstep] at hx
     obtain ⟨r, hframe, hres⟩ := hx
     rcases r with ⟨e, st, ca, tra⟩ | child
@@ -833,11 +868,13 @@ theorem pauseStat_boundary_with_execution
     have boundary : PauseStatBoundary sevm target statPre statPost := by
       exact ⟨parent, child, msg, xl, dp, code, gasWord, mcs,
         by rw [hpstk]; exact h_stk, h_window, hpmem, hpstate, hpca, hptra,
-        hplogs, hprd, h_depth, hdisj, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+        hplogs, hprd, h_depth, hdisj, (by rw [← hdadr]), rfl,
+        congrArg Option.some hdadr, rfl, rfl, rfl, rfl,
         hptra, hfill, hframe, hrun, hres', Resume.call_memory hres',
         Resume.call_returnData hres', Resume.call_stack_flag hres'⟩
     exact ⟨boundary, msg, xl, child, 0, 1, .call parent 0 32,
-      rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hspawn, hfill, hframe,
+      rfl, rfl, congrArg Option.some hdadr, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+      hspawn, hfill, hframe,
       hrun 0, Resume.call_state hres', Resume.call_returnData hres'⟩
 
 /-- The established STATICCALL boundary, retained as the compatibility

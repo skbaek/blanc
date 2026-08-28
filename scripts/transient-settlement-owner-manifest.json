@@ -23,9 +23,9 @@
     "tstore_run_cell": "6877e3c99880c1eec12c9d675bf123364d7f07fc18527de4f4de64b9bcc16db5",
     "tstore_run_zero": "1089beb9e6cdbef48a63c5bae7447b1638e40411969686992ea8fb4ec8fb673b",
     "tload_run_cell": "74852521f83dbb2f0fff4fa5bdcd0d39d637a9d5f56a3f2d50090f1acf0d43fc",
-    "directCall_nonzero_spawn": "80655801d226902fd38dde11bdce104f727485f0f067bda3a636b4dfbac20f40",
-    "directCall_zero_spawn": "7ec4b17ab39bbf7643d23a8d73f87ddeb24e07f159c35604af7e869c653735a7",
-    "directStatcall_spawn": "4f35c5c098562216509ed7adddca2cabddfb99bfc97845bca66028f61d4865c0",
+    "directCall_nonzero_spawn": "3145ede57457c8416943c29d2e46b1608818ee761e3986a141a692b8b919ba5a",
+    "directCall_zero_spawn": "06c51ce00f630b75244b9b8e09cfadeb63f93ee363f265d30a420927b90405a1",
+    "directStatcall_spawn": "597ad74b118c74a0551c5c6d2ca727370af1156c98636c1b98268566310ea57f",
     "caughtCall_childSettlement": "0e3051d226a55f24b232086be865c0abea4b561037cbebf181843465e7709738",
     "cleanCall_childSettlement": "6fad9951db50be664cf79858c4c8a5d8a2dfe7096bcc7a054de6dcf9f6c5f1b7",
     "PreparedTransactionMessage": "21d9776a54ebd7e58eb92f43f85f124401f6e1c120b3f816ec1898440f88786c",
@@ -72,8 +72,8 @@
     "Blanc/Weth10AllowanceArmsPermit.lean": "37c51c2936f461527d170a68371546da827cdbea2e3b1effc28d4de2d6bfe1d0"
   },
   "jaunePinFiles": {
-    "lakefile.lean": "6d94052de3af3340122bab3e4418b928937a1fdc5ad3f040f9293e49d1a84036",
-    "lake-manifest.json": "e83c20659669f66541df6435ff5273d68c779b6c10f76bdf1a12b8b53d6c770c"
+    "lakefile.lean": "1e183fa01ba53015be897721557b8e9733e4f3075e54c866e45e093aa86017ec",
+    "lake-manifest.json": "87378886d42253ce75ab0b4b1b5d1774684c10f8118d611f4978d8aca49fad91"
   },
   "wethPublicHeaderAggregate": "9efc35275ecdaeb7cefe203a474de60d51077eaeb7ee6a1442eb9a1b2ed9bbb9",
   "requiredSharedClassification": "TransientSettlement",
@@ -102,9 +102,9 @@
     "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",
     "scripts/execution-settlement-lift-manifest.json": "6d388528be7cfb64a324a8a3d1b9aaf9bf19d4f4525b02cd7f899f1a1bbcc9d7",
     "scripts/ExecutionOccurrenceRegression.lean": "be45f9c8da0c52dd74af7e8f1612f34dd973d3a435e7a41ea0fb889dda831ebe",
-    "scripts/check-execution-occurrence.py": "d7921978bbc5e0aaaddce4a0fd2d66184666c1b1803e94bb9fcd2da170ad30fb",
-    "scripts/execution-occurrence-lift-manifest.json": "0303d6b0b731cf454f0c85dbc0da441ccd0be3ac148a7719be671472d9f9daf7",
-    "scripts/ExecutionOccurrenceControls.lean": "e3585bfea7af26b79a6eb0c3503c767d653765e0d6c8aa93b0c9759ec1f4f793",
+    "scripts/check-execution-occurrence.py": "2bea2952a3e06b497b83657f8be4b15aa2c4f60d645e0297c501edf9831355fc",
+    "scripts/execution-occurrence-lift-manifest.json": "964155f6cf91d3529d920d6d274a82cae2fd02d12c6c980c6e838fc1c729fd0b",
+    "scripts/ExecutionOccurrenceControls.lean": "ac6514d9a410107e4d6b6ca7abc9443e9dc69e356033a2232ef465e85b9a16e8",
     "scripts/check-execution-raw-attribution-ownership.py": "581d80755ede30b6fe0a0c2115c347e6679a035d0a27275565bb82fe0e123a26",
     "scripts/execution-raw-attribution-owner-manifest.json": "13819a6d80e58af5d5333e41c07f61eb5c0e09765f628b28cb085e305a22e2b6",
     "scripts/CycleWriteFreeRegression.lean": "972fb8c3d780e281490b80bb38c32e4aae4702b49a7f016a3c9313cd8fc5db7e",

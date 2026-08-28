@@ -727,7 +727,7 @@ theorem of_recoverPermitSigner_raw
       funext a
       exact (getStor_eq_of_state_eq hworld.1 a).symm
     · rcases hsuccess with
-        ⟨parent, child, xl, dpFlag, code, avail,
+        ⟨parent, child, xl, dpFlag, na, code, avail,
           _, hstack, hstate, _, _, _, hdel, _, hpm, _, _, hstateU, _, _,
           hstackU⟩
       have hpParent : xs <<+ parent.stack := by
@@ -735,12 +735,13 @@ theorem of_recoverPermitSigner_raw
         exact cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
           (cons_pref_cons_inv (cons_pref_cons_inv
             (cons_pref_cons_inv hpq)))))
-      have hdpFalse : dpFlag = false := by
-        rcases hdel with ⟨_, _, hdp⟩ | ⟨d, hsome, _, _⟩
-        · exact hdp
+      obtain ⟨hna, hdpFalse⟩ : na = (1 : B256).toAdr ∧ dpFlag = false := by
+        rcases hdel with ⟨_, hna, _, hdp⟩ | ⟨d, hsome, _, _, _⟩
+        · exact ⟨hna, hdp⟩
         · change getDelegatedCodeAddress (q.getCode 1) = some d at hsome
           rw [hnodelegQ] at hsome
           cases hsome
+      subst hna
       subst dpFlag
       have hchild := stor_of_processMessage_staticPrecomp
         (target := 1) hpre hpm
@@ -991,7 +992,7 @@ theorem of_recoverPermitSigner_raw_region
     rcases of_run_statcall_val_with_depth hpq qstat with hfail | hsuccess
     · exact ⟨0, hfail.1⟩
     · rcases hsuccess with
-        ⟨parent, _child, _xl, _dpFlag, _code, _avail,
+        ⟨parent, _child, _xl, _dpFlag, _na, _code, _avail,
           _, hstack, _, _, _, _, _, _, _, _, _, _, hstackU⟩
       refine ⟨1, ?_⟩
       rw [hstackU]

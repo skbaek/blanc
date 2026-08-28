@@ -77,7 +77,7 @@
   "signaturePins": [
     {
       "declaration": "Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget",
-      "header": "theorem Xinst.step_spawn_codeAddress_eq_currentTarget {sevm : Sevm} {devm : Devm} {x : Xinst} {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) (hne : sevm.currentTarget ≠ f.inner.currentTarget) (hcode : devm.getCode f.inner.currentTarget ≠ .empty) : f.inner.codeAddress = some f.inner.currentTarget :="
+      "header": "theorem Xinst.step_spawn_codeAddress_eq_currentTarget {sevm : Sevm} {devm : Devm} {x : Xinst} {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) (hne : sevm.currentTarget ≠ f.inner.currentTarget) (hcode : devm.getCode f.inner.currentTarget ≠ .empty) (hnodel : getDelegatedCodeAddress (devm.getCode f.inner.currentTarget) = none) : f.inner.codeAddress = some f.inner.currentTarget :="
     }
   ],
   "controlSignaturePins": [
