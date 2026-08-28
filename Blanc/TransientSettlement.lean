@@ -296,6 +296,51 @@ theorem directStatcall_spawn
   rw [h_del] at hf
   exact hf.transientStorage.symm
 
+/-- A DELEGATECALL's exact child message, tied to the actual `.delcall` edge.
+Where the three siblings above put the popped operand in the storage-owner
+slot, this one puts `sevm.currentTarget`: the running account keeps its own
+storage while `dadr` supplies the code alone, and `caller`/`value` are the
+outer frame's rather than the parent's address and zero. As above, delegation
+may choose `code` from another account, so the code-address equality claims no
+byte or installation identity. -/
+theorem directDelcall_spawn
+    {sevm : Sevm} {devm : Devm}
+    {gw cw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
+    let parent := callSpawnParent d1 (mcc + ext)
+      iiw.toNat isw.toNat oiw.toNat osw.toNat
+    let child := delcallSpawnMsg sevm parent mcs dadr
+      iiw.toNat isw.toNat code dp
+    Xinst.step sevm devm .delcall =
+        .spawn (Frame.ofCall child) (.call parent oiw.toNat osw.toNat) ∧
+      child.currentTarget = sevm.currentTarget ∧
+      child.codeAddress = some dadr ∧
+      child.caller = sevm.caller ∧
+      child.value = sevm.value ∧ child.shouldTransferValue = false ∧
+      child.isStatic = sevm.isStatic ∧
+      child.tenv.transientStorage = devm.transientStorage := by
+  dsimp only
+  refine ⟨Xinst.step_delcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+    h_depth, rfl, rfl, rfl, rfl, rfl, ?_, ?_⟩
+  · exact Bool.false_or _
+  · have hf := accessDelegation_instructionFrame
+      (addAccessedAddress
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) cw.toAdr) cw.toAdr
+    rw [h_del] at hf
+    exact hf.transientStorage.symm
+
 /-! ## Frame-relative child settlement -/
 
 /-- A settled-with-error CALL child rolls back to its own message-entry world.

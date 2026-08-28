@@ -143,7 +143,12 @@ import Blanc.LidoCircuitBreakerPinnedTargetCompositionControl
 #print axioms Blanc.directCall_nonzero_spawn
 #print axioms Blanc.directCall_zero_spawn
 #print axioms Blanc.directStatcall_spawn
+#print axioms Blanc.directDelcall_spawn
 #print axioms Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
+#print axioms Blanc.delcall_enters_with_parent_as_storage_owner
+#print axioms Blanc.control_delcall_separates_call_fuses
+#print axioms Blanc.control_delcall_inherits_caller_and_value
+#print axioms Blanc.delcall_child_observes_outer_caller_and_value
 #print axioms Blanc.caughtCall_childSettlement
 #print axioms Blanc.cleanCall_childSettlement
 #print axioms Blanc.preparedTransactionMessage_exists
