@@ -58,8 +58,9 @@ Choose the gate by what you changed, cheapest falsifier first:
 | anything that could move elaboration cost | `scripts/check-elab.sh` | — |
 | a new module that must state its elaboration cost | `scripts/check-elab.sh --calibrate` | — |
 | the elaboration selector, cache contract, or timing-gate implementation | `scripts/check-elab.sh --self-test` | `scripts/check-elab.sh --full` |
-| a contract's compiled bytes | `scripts/check-fmint.sh --no-build` + `scripts/check-weth.sh --no-build` | both `scripts/check-*-coverage.sh` |
-| a fixture, a fixture generator, or a borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
+| FMINT or WETH compiled bytes | `scripts/check-fmint.sh --no-build` + `scripts/check-weth.sh --no-build` | both `scripts/check-*-coverage.sh` |
+| PRORATA compiled bytes or conformance artifacts | `scripts/check-prorata.sh --no-build` | — |
+| a FMINT or WETH fixture, fixture generator, or borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
 | the pinned Jaune revision (`lakefile.lean` + `lake-manifest.json`) | `lake build` | the **full set**, in the order below |
 
 A deliberate whole-tree offender census is different from routine regression
@@ -115,6 +116,7 @@ scripts/check-claims.sh
 scripts/check-elab.sh                 # only if a .lean file was touched
 scripts/check-fmint.sh --no-build
 scripts/check-weth.sh --no-build
+scripts/check-prorata.sh --no-build
 scripts/check-fmint-coverage.sh
 scripts/check-weth-coverage.sh
 ```
@@ -264,6 +266,7 @@ against the gate.
 | `scripts/check-beacon-deposit-model.sh` | re-pins the vendored deposit-contract source digest, re-derives the committed two-regime golden vectors through the independent oracle generator's `--check` byte-compare, evaluates the hash-parametric BeaconDeposit pure model under the keccak-256 instantiation (`lake env lean` on the `#eval` evaluator — compiler evaluation only, no kernel decision procedures; the gate runs no `lake build` of its own, so a stale tree surfaces as a REGRESSION), and compares every emitted line fail-closed against the vectors: the zero-hash chain, LE64 samples, incremental and naive roots and mixed roots per count plus the model-internal naive-vs-incremental assertion, full 32-slot branch states, chained deposit cases with inputs echoed and checked, the nine guard cases with reason tags in source order, the cap-boundary rows, and the ERC-165 probes. `--falsify-dry` verifies the three self-consistent mutant patches still apply (swapped hash-argument order; dropped count mix-in; cap off-by-one with `walk_none_at_cap`'s two boundary-instance occurrences protected); `--falsify` runs the campaign — per mutant an isolated `git worktree` of HEAD with an APFS-cloned `.lake`, a `lake build` that must SUCCEED (the mutants keep every proof elaborating; that asymmetry is the gate's point), and the requirement that the vector comparison catches it. The campaign is a mutation campaign and runs only under the host semaphore's exclusive hard hold | 238 compared lines: 33 zero-hash, 10 LE64, 29 counts × incremental+naive root series, 9 branch states, 6 chained deposit cases, 9 guard cases, 4 boundary rows, 4 ERC-165 probes; 3 falsifier mutants | ~50 s default, evaluator-dominated (first measurement ran beside another session's build); `--falsify` adds three incremental worktree builds |
 | `scripts/check-fmint.sh --no-build` | fmint fixture conformance, the manifest cross-check, independent source-hash verification for the Solidity borrower, and byte-equality of every fixture's fmint pre-state code against the committed `Blanc.fmintCode` literal | 11 fixtures, 188 assertions, 4617 source bytes, 1257 runtime bytes | sub-second |
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 988 bytes | sub-second |
+| `scripts/check-prorata.sh --no-build` | PRORATA fixture conformance, manifest cross-check, timing-free canonical oracle-vector byte comparison, and byte-equality of every fixture's PRORATA pre-state code against the frozen `Blanc.prorataCode` literal. `--self-test` proves the two anti-vacuity channels by requiring a deleted manifest expectation and a mutated canonical vector both to fail in isolated temporary copies | 14 fixtures, 103 generation-time assertions, 4 canonical oracle vectors; 2 self-test falsifiers | sub-second |
 | `scripts/check-fmint-coverage.sh` | selector reachability split into direct top-level entry, post-state-witnessed internal CALL, and uncredited embedding; five built-in callsite corruptions prove the evidence channel is live | 12 selectors: 2 direct + 7 witnessed internal, budget 3 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
 | `scripts/check-elab.sh --self-test` | fail-closed elaboration-selection behavior: cache-cold full selection, unchanged-tree reuse, exact leaf/upstream/import-edge propagation, global configuration invalidation, new/deleted modules, corrupt-cache fallback, failed-result non-persistence, independent-green-result retention, concurrent-source-drift rejection, stable/changed/missing Lake trace evidence, and missing/cyclic local-import rejection; and the calibration sampler: commit-seeded reproducible order-independent draw, per-band quotas drawn from inside their own boundaries, under-populated bands, band membership recomputed from the current baseline, at-most-one displacement when the library grows, mandatory candidates never sampled, possibly-affected and vanished files never drawn, withheld controls still drawn while changed ones stop being drawn, the refuse/annotate/floor tiers, fail-closed rejection of a control or admission candidate that was not re-measured, refusal of a cache write from a calibration run, and an end-to-end verdict whose evidence block records the seed, digests, boundaries and every ratio | 39 invalidation/cache/sampling controls | sub-second |
@@ -342,7 +345,9 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/eval-weth10-deployment-code.lean` | `check-weth10-deployment.sh` | emits the generic initcode, exact expected runtime-family members for both direct worlds and the independently derived fixture CREATE address, and the exact state-neutral system program; it owns no hand-written runtime golden |
 | `scripts/check-error-data.py` | `check-error-data.sh` | enumerates the lock's sourceBehavior guard reasons, evaluates `Blanc.errorData`, and independently rebuilds each ABI blob from the existing Keccak implementation |
 | `scripts/check-fmint-borrower-source.py` | `check-fmint.sh` | recomputes the checker-pinned Solidity borrower source's Keccak-256 independently of the fixture generator and compares it with the committed compiler artifact's provenance |
-| `scripts/check-runtime-bytes.py` | `check-fmint.sh`, `check-weth.sh`, `check-weth10-redemption.sh` | parses the committed Lean literal and compares it byte-for-byte against every fixture's pre-state code for that contract |
+| `scripts/gen-prorata-fixtures.py` | explicit PRORATA fixture regeneration | reads the separately frozen `prorataCode` literal, runs the pinned EELS Prague transition tool, checks each scenario against the integer model and scenario-specific assertions, then writes the fixtures and manifest |
+| `scripts/gen-prorata-oracle-vectors.py` | `check-prorata.sh` | deterministically regenerates the timing-free canonical integer vectors; `--check` byte-compares them with the committed JSON |
+| `scripts/check-runtime-bytes.py` | `check-fmint.sh`, `check-weth.sh`, `check-prorata.sh`, `check-weth10-redemption.sh` | parses the committed Lean literal and compares it byte-for-byte against every fixture's pre-state code for that contract |
 | `scripts/selector_coverage.py` | both coverage gates | conservatively recognizes straight-line internal CALL sites tied to changed post-state recorder slots, inventories uncredited selector embeddings, and runs five corruption falsifiers |
 | `scripts/check-fmint-coverage.py` | `check-fmint-coverage.sh` | accounts for direct, witnessed-internal, embedded-only, and unreached selectors; identifies fmint by byte-equality against the committed literal |
 | `scripts/check-weth-coverage.py` | `check-weth-coverage.sh` | the same accounting for WETH, plus the direct empty-calldata fallback |
@@ -556,7 +561,9 @@ kill. A `--force` run may not be rebased.
 5. **Generated artifacts come from their generators**, never from hand editing:
    `docs/PROOF_RECIPES.md` and `Blanc/ProofRecipesGenerated.lean` from
    `scripts/generate-proof-recipes.py --write`;
-   fixtures from `scripts/gen-*-fixtures.py`, borrower bytes from their
+   fixtures from `scripts/gen-*-fixtures.py` (including the PRORATA fixture
+   manifest from `scripts/gen-prorata-fixtures.py`), PRORATA's canonical
+   arithmetic vector from `scripts/gen-prorata-oracle-vectors.py`, borrower bytes from their
    committed artifact JSONs, `Blanc/FmintCode.lean` and `Blanc/WethCode.lean`
    from `scripts/gen-*-code.lean`, and the WETH10 differential manifest from
    `scripts/check-weth10-differential.sh --write-manifest --manifest-only`;
@@ -580,7 +587,7 @@ kill. A `--force` run may not be rebased.
    `check-lido-circuit-breaker-artifact-profile.sh`,
    `check-lido-circuit-breaker-constructor.sh`,
    `check-lido-circuit-breaker-runtime-errors.sh`, `check-error-data.sh`,
-   `check.sh --no-build`, `check-claims.sh`, both suites `--no-build`, and both
+   `check.sh --no-build`, `check-claims.sh`, all three fixture suites `--no-build`, and both
    coverage gates. Extending one of those scripts extends CI directly. CI
    provisions a clean execution-specs checkout and Python venv at commit
    `4198b9c5996713b268aed602739d5aa40e277694` only for the deployment-root

@@ -1508,6 +1508,43 @@
     },
     {
       "command": [
+        "scripts/check-prorata.sh",
+        "--no-build"
+      ],
+      "id": "prorata-fixtures",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata.sh",
+          "scripts/check-runtime-bytes.py",
+          "scripts/gen-prorata-oracle-vectors.py",
+          "scripts/prorata-oracle-vectors.json",
+          "scripts/prorata_oracle.py",
+          "scripts/fixtures/prorata/manifest.json",
+          "Blanc/ProrataCode.lean",
+          ".lake/packages/jaune/.lake/build/bin/jaune"
+        ],
+        "populations": [
+          {
+            "pattern": "*.json",
+            "root": "scripts/fixtures/prorata"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The manifest is a bidirectional population guard, and the independent integer oracle vectors are regenerated only through a timing-free byte comparison. The EELS generator is intentionally outside this gate: fixture production requires the frozen runtime literal and is run before committing regenerated fixtures.",
+      "order": 38,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 prorata fixtures: "
+        ]
+      }
+    },
+    {
+      "command": [
         "scripts/check-fmint-coverage.sh"
       ],
       "id": "fmint-coverage",
@@ -1531,7 +1568,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 38,
+      "order": 39,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1564,7 +1601,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 39,
+      "order": 40,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
