@@ -112,7 +112,7 @@ MUTANTS = [
         # elaborates and only the vector comparison catches the change.
         (CORR_REL, "(2 ^ 32 - 1) + 1", "@CAP_BOUNDARY_KEEP@", 2),
         (MODEL_REL, "2 ^ 32 - 1", "2 ^ 32 - 2", 2),
-        (CORR_REL, "2 ^ 32 - 1", "2 ^ 32 - 2", 10),
+        (CORR_REL, "2 ^ 32 - 1", "2 ^ 32 - 2", 11),
         (CORR_REL, "@CAP_BOUNDARY_KEEP@", "(2 ^ 32 - 1) + 1", 2),
     ], None),
     ("sha256-regime-uses-keccak", [
