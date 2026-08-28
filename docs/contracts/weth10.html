@@ -17,6 +17,7 @@
       <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
     </a>
     <nav class="navlinks">
+      <a href="#results">Results</a>
       <a href="#evidence">Evidence</a>
       <a href="#deviations">Deviations</a>
       <a href="#deltas">Deltas</a>
@@ -40,8 +41,8 @@
           <a href="https://etherscan.io/address/0xf4BB2e28688e89fCcE3c0580D37d36A7672E8A9F#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">WETH10</a>
           at <span class="mono">0xf4BB…8A9F</span> — all 27 selectors plus receive, flash loans,
           ERC-677-style callbacks, EIP-2612 permit — taken from zero contract code to a closed
-          verification charter by one developer, one laptop, and an agent in the loop. On top of the endpoint families sits the
-          <a href="../index.html#flagship" style="text-decoration:underline;text-underline-offset:3px">flagship theorem</a>:
+          verification charter. On top of the endpoint families sits the
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">flagship theorem</a>:
           future redeemability, at every reachable future, after arbitrary other
           actors have done their worst.
         </p>
@@ -71,6 +72,152 @@
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the port proves</p>
+    <h2 style="max-width:30ch">Redeemability, at every reachable future.</h2>
+    <p class="lede" style="margin-top:18px">
+      Behaving like WETH10 is the entry fee. The reason to rebuild a wrapper in a proof language is
+      the promise no test suite can state: whatever happens after deployment — flash loans,
+      reentrancy, hostile callbacks, arbitrary contracts doing arbitrary things — every holder can
+      still get the ether out. The flagship states that promise at <em>any</em> reachable future of
+      a proved deployment, and proves it constructively, execution by execution.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">deployment_reachable_future_dualSelector_redeemable</span>, Blanc/Weth10FutureRedeemable.lean).</div>
+      <p class="stmt">From a proved deployment of the exact compiled WETH10 runtime, any leg of valid
+        Prague blocks to a checkpoint, and any further leg to an arbitrary future snapshot, there is
+        an accounted history of the window carrying the dual-selector redemption guarantee below
+        for an arbitrary holder <span class="mono">u</span>.</p>
+<pre><span class="k">theorem</span> <span class="d">deployment_reachable_future_dualSelector_redeemable</span>
+    {chainId : <span class="t">UInt64</span>} {dp : <span class="t">DeployParams</span>} {ca u : <span class="t">Adr</span>}
+    {base deployed checkpoint future : <span class="t">BlockChain</span>}
+    (hroot : <span class="t">Weth10.DeploymentRoot</span> chainId base deployed dp ca)
+    (hcheckpoint : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId) deployed checkpoint)
+    (hfuture : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId) checkpoint future) :
+    ∃ history, <span class="t">FutureDualSelectorRedemptionGuarantee</span>
+      chainId dp ca u checkpoint future history</pre>
+    </div>
+    <p class="cap"><b>Read the quantifiers</b> — <span class="mono">u</span> is <em>every</em>
+      holder, not a specially chosen one. <span class="mono">ReachUsing</span> is Jaune’s
+      configured-chain reachability: whole valid blocks, every transaction anyone sent, under the
+      model’s one global side condition, that total ETH plus pending withdrawals stays below
+      2<sup>256</sup> wei. The history is <em>obtained from the reachability derivation</em>, not
+      reconstructed from the endpoints — a logical guarantee about the window, never a trace
+      extractor. And the all-holders sibling,
+      <span class="mono">deployment_reachable_future_redeemable_allHolders</span>, concludes
+      <span class="mono">∃&nbsp;history, ∀&nbsp;u</span> — one history carrying the guarantee for
+      every holder at once — not the weaker <span class="mono">∀&nbsp;u, ∃&nbsp;history</span>.</p>
+
+    <div class="grid3" style="margin-top:30px">
+      <div class="panel">
+        <span class="tick">books that balance in ℕ</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The gross ledger identity retains every flow —
+          <span class="mono">B₀ + ordinaryIn + selfTransfer + flashCredit = Bₜ + redeemed +
+          externalTransferredOut + selfTransfer + flashRepayment</span> — and flash credits and
+          repayments are proved to pair and cancel <em>exactly</em>, leaving
+          <span class="mono">B₀ + ordinaryIn = Bₜ + redeemed + externalTransferredOut</span> in ℕ:
+          committed credits proved not to wrap, no hidden modular slack. Hence the floor
+          <span class="mono">B₀ ≤ Bₜ + redeemed + externalTransferredOut</span> — whatever the
+          window did, it cannot dilute a holder below their residual.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">exits that provably open</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          For every amount within the residual, every admissible canonical
+          <span class="mono">withdraw</span> or <span class="mono">withdrawTo</span> at the future
+          snapshot <em>succeeds</em> — a constructed
+          <span class="mono">∃&nbsp;post,&nbsp;… = .ok&nbsp;…</span> with the exact effect, not the
+          absence of a counterexample — and so does the complete signed type-2 transaction,
+          intrinsic gas, validity checks, and settlement included. Rebased corollaries deliver the
+          same at the full booked balance.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">two corollaries downstream</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          <span class="mono">deployment_reachable_dormant_holder_balance_monotone</span>: a holder
+          who performed no effectful authorizing act — no debit as actual caller, no
+          <span class="mono">approve</span> write, no <span class="mono">permit</span> recovering to
+          it — cannot have lost a wei, and inert reads do not void the premise.
+          <span class="mono">deployment_reachable_redeemClaims_anyOrder</span>: the bank-run shape —
+          for any duplicate-free supplied holder list, <em>every permutation</em> of full-balance
+          claims succeeds, one canonical message at a time, with the aggregate effect on balances
+          and ETH exact. Overbooking is impossible by the shape of admissibility, not by a side
+          condition.
+        </p>
+      </div>
+    </div>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>“Redeemable” for whom, exactly? Holders are not all EOAs.</h3><span class="devtag">pushback</span></div>
+      <p>At transaction altitude the admissible senders are exactly the senders Ethereum’s modeled
+        rules admit: code-free accounts and valid EIP-7702-delegated ones. For a funded code-free
+        external holder with canonical nonce, fees, gas, and payload, the envelope discharges every
+        admission obligation except one — recovery of the holder’s own signature — and no theorem
+        forges it. A holder with non-delegation contract code that cannot call WETH10 keeps a
+        conserved balance but has no transaction-altitude exit of its own; WETH10 itself is an
+        example, since it can legally receive its own token. Direct
+        <span class="mono">withdraw</span> pays the sender and so retains the code-free-recipient
+        restriction; <span class="mono">withdrawTo</span> permits any nonzero, non-precompile,
+        code-free recipient.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Doesn’t attribution smuggle a hash assumption into redeemability?</h3><span class="devtag">pushback</span></div>
+      <p>The hypothesis exists, and it is quarantined. Unconditionally,
+        <span class="mono">hardenedOutflow ≤ permanentOutflow</span>. The equality — every nonzero
+        permanent outflow in the deployment window traces exactly to the holder’s own call, its
+        in-window <span class="mono">approve</span>, or its in-window
+        <span class="mono">permit</span> — takes exactly one hypothesis,
+        <span class="mono">NoAllowanceKeyCollision</span>: a decidable, trace-local property of the
+        finitely many <span class="mono">(owner,&nbsp;spender)</span> word pairs the history
+        actually touched, never a global injectivity assumption. It is consumed solely for
+        attribution — the conservation equation, the floor, and both enabledness families never
+        depend on it. And attribution names the account whose recorded act the runtime accepted,
+        not consent, intent, or awareness: a phished <span class="mono">approve</span> and a
+        relayed <span class="mono">permit</span> both attribute to the signing account.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>The deployment root — an axiom wearing a record type?</h3><span class="devtag">pushback</span></div>
+      <p>Derived, not axiomatized. The public inputs are deliberately pre-execution — a valid
+        configured base, strict canonical-block evidence, the closed type-2 envelope — plus one
+        actual <span class="mono">stateTransitionUsing</span> success. From those,
+        <span class="mono">canonicalDeploymentStep_establishes_root</span> reconstructs the prepared
+        post-system message rather than assuming it, and proves the collision branch, receipt
+        success, the exact installed runtime, empty storage, and the deployed valid context, with
+        the creation message’s 1,264,071-gas cost as a closed form. The result is deliberately
+        specific: one strict singleton Prague-only anchor — no factory, CREATE2, or co-block
+        shapes — and it does not turn the finite deployment fixture into a proof.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>And the everyone-out run — is that a real bank run?</h3><span class="devtag">pushback</span></div>
+      <p>It is a message-altitude theorem about a <em>supplied</em> list: every permutation of one
+        full-balance claim per listed holder succeeds, each envelope constructed by
+        <span class="mono">canonicalRedemptionMessage</span> from that step’s own state — nothing
+        about success is assumed along the way. What it is not: the list is input, not a state
+        enumeration; no block step, no transaction inclusion, no claim that any of these messages
+        was mined. Inclusion, propagation, key custody, and fee markets are out of frame here and
+        everywhere on this page.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      Boundary, stated early: every theorem above is about the exact compiled Blanc runtime on a
+      Prague-only configured chain, from its proved deployment root — never the Solidity artifact
+      at <span class="mono">0xf4BB…8A9F</span>, which nothing here verifies. The statements in
+      <span class="mono">Weth10*.lean</span> are the authority on their own premises, and the full
+      non-claim register — no semantic equivalence, no malformed-calldata closure, no key custody
+      or inclusion, no gas, storage, or codehash parity — lives in
+      <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
+      and the WETH10 registries, in the honest register.
+    </p>
   </div>
 </section>
 
@@ -122,7 +269,7 @@
     </details>
 
     <details class="fold">
-      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">28/28 entry families · proved deployment · the flagship</span></summary>
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">28/28 entry families · proved deployment · compile witness</span></summary>
       <div class="foldbody">
         <p class="dim">
           Where the corpus samples, the theorems quantify — over states, arguments, callbacks,
@@ -139,21 +286,15 @@
                                      <span class="c">   flash mint/repay/log order, exact</span>
                                      <span class="c">   rollback, error genres</span>
 processCreateMessage_weth10_success  <span class="c">-- creation through Jaune's real pipeline</span>
-canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing → DeploymentRoot</span>
-holder-flow conservation             <span class="c">-- B₀ + in = Bₜ + out, exactly, in ℕ</span>
-deployment_reachable_dormant_holder… <span class="c">-- did nothing, lost nothing</span>
-deployment_reachable_future_
-  dualSelector_redeemable            <span class="c">-- the flagship: § 5 of the front page</span>
-deployment_reachable_redeem…anyOrder <span class="c">-- the bank-run corollaries</span></pre>
+canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing → DeploymentRoot</span></pre>
         </div>
         <p class="dim">
-          The deployment root deserves its sentence: it is <em>derived, not axiomatized</em> —
-          from one successful strict singleton type-2 creation block through Jaune’s configured
-          Prague transition, the proof reconstructs receipt success, the exact installed
-          runtime, empty storage, and the crossed request-system calls, with the creation
-          message’s 1,264,071-gas cost as a closed form. The flagship then quantifies over every
-          ordinary reachable future of that root; the front page’s §&nbsp;5 states it in
-          full — the theorem, what the guarantee packages, and where it stops.
+          These families stop where conformance stops: they say the artifact deploys, dispatches,
+          reads, writes, calls back, rolls back, and errs exactly as the frozen boundary says it
+          must. The conservation, attribution, dormant-holder, and redeemability stack that stands
+          <em>on</em> them — the port’s reason to exist — is stated in full in the
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>
+          at the top of this page.
         </p>
         <p class="dim" style="margin-bottom:6px">
           Exact cold and warm gas for the required views — <span class="mono">flashFee</span>,
@@ -288,8 +429,8 @@ deployment_reachable_redeem…anyOrder <span class="c">-- the bank-run corollari
       Boundary, restated: nothing on this page verifies the Solidity artifact deployed at
       <span class="mono">0xf4BB…8A9F</span> — it is the reference, never the subject. The
       flagship’s own non-claims — attribution is not consent, signatures are inputs, inclusion
-      and fee markets are out of frame — are listed beside it on the
-      <a href="../index.html#flagship" style="text-decoration:underline;text-underline-offset:3px">front page</a>
+      and fee markets are out of frame — are listed beside it in the
+      <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>
       and in the registries, in the honest register.
     </p>
   </div>
@@ -309,7 +450,7 @@ deployment_reachable_redeem…anyOrder <span class="c">-- the bank-run corollari
     <div class="footlinks">
       <a href="../index.html#portfolio">all implementations →</a>
       <a href="lido-circuit-breaker.html">next port: CircuitBreaker →</a>
-      <a href="../index.html#flagship">the flagship theorem →</a>
+      <a href="#results">the flagship theorem →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/WETH10_COMPATIBILITY.md" target="_blank" rel="noopener">frozen boundary →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/WETH10_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
       <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
