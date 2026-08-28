@@ -4,7 +4,8 @@
 # Default mode: re-pins the fidelity target (SHA-256 of the committed
 # deposit_contract.sol), re-derives the committed golden vectors via
 # gen-beacon-deposit-vectors.py --check, runs the Lean evaluator
-# (scripts/eval-beacon-deposit-model.lean, keccak-256 instantiation) with
+# (scripts/eval-beacon-deposit-model.lean, keccak-256 and SHA-256
+# instantiations) with
 # `lake env lean`, and compares its output fail-closed against
 # scripts/reference/beacon-deposit/vectors.json. The gate does NOT run
 # `lake build`: a stale or missing build is the caller's error and surfaces
