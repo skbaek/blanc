@@ -319,7 +319,8 @@ private lemma static_sstore_run
     (pc : Nat) (sevm : Sevm) (d : Devm)
     (h_static : sevm.isStatic = true)
     (h_stack : d.stack = implSlot :: 1 :: [])
-    (h_gas : gCallStipend + gasColdSload + gasStorageSet < d.gasLeft)
+    (h_stipend : gCallStipend < d.gasLeft)
+    (h_cost : gasColdSload + gasStorageSet ≤ d.gasLeft)
     (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
       d.accessedStorageKeys)
     (h_orig : getOrigStorVal sevm sevm.currentTarget implSlot = 0)
@@ -356,8 +357,6 @@ private lemma static_sstore_run
       post.logs = d.logs
   have h_pop : (d.setMach ⟨[1], d.memory, d.gasLeft⟩).pop =
       .ok ⟨1, d.setMach ⟨[], d.memory, d.gasLeft⟩⟩ := by rfl
-  have h_cost : gasColdSload + gasStorageSet ≤ d.gasLeft := by omega
-  have h_stipend : gCallStipend < d.gasLeft := by omega
   have h_if : (if (0 : B256) = 1 then gasColdSload + gasWarmAccess
       else gasColdSload + gasStorageSet) = gasColdSload + gasStorageSet := by
     decide
@@ -397,7 +396,8 @@ private lemma static_sstore_step
     (pc : Nat) (sevm : Sevm) (d : Devm)
     (h_static : sevm.isStatic = true)
     (h_stack : d.stack = implSlot :: 1 :: [])
-    (h_gas : gCallStipend + gasColdSload + gasStorageSet < d.gasLeft)
+    (h_stipend : gCallStipend < d.gasLeft)
+    (h_cost : gasColdSload + gasStorageSet ≤ d.gasLeft)
     (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
       d.accessedStorageKeys)
     (h_orig : getOrigStorVal sevm sevm.currentTarget implSlot = 0)
@@ -408,7 +408,7 @@ private lemma static_sstore_step
       post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
       post.logs = d.logs := by
   obtain ⟨post, hrun, hstate, htrans, hlogs⟩ :=
-    static_sstore_run pc sevm d h_static h_stack h_gas h_cold h_orig h_cur
+    static_sstore_run pc sevm d h_static h_stack h_stipend h_cost h_cold h_orig h_cur
   refine ⟨post, ?_, hstate, htrans, hlogs⟩
   rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution]
   exact ⟨rfl, hrun.symm⟩
@@ -418,7 +418,8 @@ theorem implGuarded_static_sstore_halt
     (h_at : Ninst.At sevm.code pc (.reg .sstore))
     (h_static : sevm.isStatic = true)
     (h_stack : d.stack = implSlot :: 1 :: [])
-    (h_gas : gCallStipend + gasColdSload + gasStorageSet < d.gasLeft)
+    (h_stipend : gCallStipend < d.gasLeft)
+    (h_cost : gasColdSload + gasStorageSet ≤ d.gasLeft)
     (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
       d.accessedStorageKeys)
     (h_orig : getOrigStorVal sevm sevm.currentTarget implSlot = 0)
@@ -431,7 +432,7 @@ theorem implGuarded_static_sstore_halt
       post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
       post.logs = d.logs := by
   obtain ⟨post, hstep, hstate, htrans, hlogs⟩ :=
-    static_sstore_step pc sevm d h_static h_stack h_gas h_cold h_orig h_cur
+    static_sstore_step pc sevm d h_static h_stack h_stipend h_cost h_cold h_orig h_cur
   have hexec : Nonempty (Exec pc sevm d
       (.error ⟨.halt (.writeInStaticContext .none), post⟩)) :=
     Ninst.exec_of_stepRun_error h_at (show Xlot.Filled .none from trivial) hstep
