@@ -72,4 +72,36 @@ def sloadCostOfKeys (target : Adr) (keys : KeySet)
   unfold afterSload
   split <;> rfl
 
+/-- Neither the refund-counter update nor the storage-cell write touches any
+account's code, shown directly at the `State` level. -/
+private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
+    (key value : B256) (address : Adr) :
+    ((devm.withRefundCounter rc).setStorVal target key value).getCode
+      address = devm.getCode address := by
+  show (((devm.withRefundCounter rc).state.setStorVal target key value).get
+    address).code = ((devm.state.get address)).code
+  unfold State.setStorVal
+  by_cases h : target = address
+  · subst h
+    rw [State.get_set_self]
+    rfl
+  · rw [State.get_set_ne _ h]
+    rfl
+
+@[simp] theorem afterSstore_getCode
+    (sevm : Sevm) (base : Devm) (key value : B256) (address : Adr) :
+    (afterSstore sevm base key value).getCode address =
+      base.getCode address := by
+  unfold afterSstore
+  split
+  · exact sstoreCore_getCode base _ _ _ _ _
+  · exact sstoreCore_getCode _ _ _ _ _ _
+
+@[simp] theorem afterSstore_accessedAddresses
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstore sevm base key value).accessedAddresses =
+      base.accessedAddresses := by
+  unfold afterSstore
+  split <;> rfl
+
 end Blanc
