@@ -63,10 +63,27 @@
 # tier. The run measured 121 modules in 795.9 s; exact mandatory and control
 # evidence is preserved in scripts/report-elab-calibration.txt. No existing
 # row is touched.
+#
+# 2026-08-29 additions-only admission of 30 BeaconDeposit compiled-port and
+# contract-neutral support rows, measured by `scripts/check-elab.sh --calibrate`
+# from candidate commit 33ffe48b0ebe51e73100392f038b8d7aba97ea17.
+# Seed f089a213eb77c00129f9c7602571b273d6ced7c39aee5cea997dfd5d6949e124
+# was derived against baseline SHA-256
+# 7be7e2794141e5a0146e13eeb53ae8bac21db0b323c9f28a349673de8e46b4a5;
+# the measured source-set SHA-256 was
+# e2cf22d89c43ddd78fcb3f3bf2897f14ca3a861746c34158e772f89bb7f4b5c3.
+# All 30 mandatory absent rows were measured with 11 commit-seeded controls:
+# control median 1.181x, spread 1.14x-1.46x, none at the 1.50x annotation
+# tier. The run measured 172 modules in 965.4 s; exact mandatory and control
+# evidence is preserved in scripts/report-elab-calibration.txt. The source-set
+# digest pins the pending additive C9 register state present beside the seeding
+# commit. No existing row is touched.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
 OK	1.925	Blanc/BeaconDeposit.lean
+OK	3.831	Blanc/BeaconDepositAbi.lean
+OK	1.474	Blanc/BeaconDepositAbiMemory.lean
 OK	37.506	Blanc/BeaconDepositCode.lean
 OK	1.354	Blanc/BeaconDepositCore.lean
 OK	2.447	Blanc/BeaconDepositCorrectness.lean
@@ -74,8 +91,33 @@ OK	1.999	Blanc/BeaconDepositCountEffects.lean
 OK	25.590	Blanc/BeaconDepositDeploy.lean
 OK	2.311	Blanc/BeaconDepositEffects.lean
 OK	3.276	Blanc/BeaconDepositEncoding.lean
+OK	15.779	Blanc/BeaconDepositEvent.lean
+OK	1.872	Blanc/BeaconDepositEventMemory.lean
+OK	1.664	Blanc/BeaconDepositInsert.lean
+OK	1.257	Blanc/BeaconDepositInsertBridge.lean
+OK	1.252	Blanc/BeaconDepositInsertDead.lean
+OK	1.228	Blanc/BeaconDepositInsertFirstLiveCost.lean
+OK	1.242	Blanc/BeaconDepositInsertFirstLiveRun.lean
+OK	1.401	Blanc/BeaconDepositInsertFold.lean
+OK	1.250	Blanc/BeaconDepositInsertIterHeight.lean
+OK	1.251	Blanc/BeaconDepositInsertIterKey.lean
+OK	1.297	Blanc/BeaconDepositInsertIterKeys.lean
+OK	1.232	Blanc/BeaconDepositInsertIterNode.lean
+OK	1.226	Blanc/BeaconDepositInsertIterSize.lean
+OK	1.331	Blanc/BeaconDepositInsertMemory.lean
+OK	1.287	Blanc/BeaconDepositInsertNat.lean
+OK	1.228	Blanc/BeaconDepositInsertStateProjections.lean
 OK	2.441	Blanc/BeaconDepositMemory.lean
 OK	1.193	Blanc/BeaconDepositModel.lean
+OK	1.719	Blanc/BeaconDepositReconstruct.lean
+OK	1.702	Blanc/BeaconDepositReconstructMemory.lean
+OK	1.959	Blanc/BeaconDepositRoot.lean
+OK	1.993	Blanc/BeaconDepositRootEffects.lean
+OK	2.048	Blanc/BeaconDepositRootFold.lean
+OK	1.397	Blanc/BeaconDepositRootMemory.lean
+OK	1.393	Blanc/BeaconDepositRootPublic.lean
+OK	1.784	Blanc/BeaconDepositSha.lean
+OK	1.347	Blanc/BytesWrite.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
 OK	1.717	Blanc/Compiled.lean
@@ -99,6 +141,8 @@ OK	11.154	Blanc/Forward.lean
 OK	1.743	Blanc/ForwardCall.lean
 OK	1.338	Blanc/ForwardMstore8.lean
 OK	1.383	Blanc/ForwardNoRawSstore.lean
+OK	5.448	Blanc/ForwardSha256.lean
+OK	1.303	Blanc/ForwardStorageAccess.lean
 OK	3.121	Blanc/Ladder.lean
 OK	15.804	Blanc/LidoCircuitBreaker.lean
 OK	3.123	Blanc/LidoCircuitBreakerAbsentRegistration.lean
@@ -236,4 +280,5 @@ OK	1.720	Blanc/Weth10TransferFunctional.lean
 OK	3.653	Blanc/WethCode.lean
 OK	7.978	Blanc/WethGas.lean
 OK	5.383	Blanc/WethLive.lean
+OK	1.336	Blanc/WordArithmetic.lean
 OK	1.118	Main.lean
