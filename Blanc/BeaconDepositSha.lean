@@ -79,6 +79,9 @@ theorem sha64_success_prefix_runCompiledTo
         (Bytes.sha256
           (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes ∧
       (∀ a, Devm.getStor callPost a = Devm.getStor base a) ∧
+      (∀ a, callPost.getCode a = base.getCode a) ∧
+      callPost.accessedAddresses = base.accessedAddresses ∧
+      callPost.accessedStorageKeys = base.accessedStorageKeys ∧
       callPost.logs = base.logs ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
@@ -96,7 +99,8 @@ theorem sha64_success_prefix_runCompiledTo
       (outputWord * 32) :: (32 : B256) :: stack,
       base.memory, K + 221⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
-      hstorage, hlogs, houtput, herror, _stmid, _hsub, _hstate⟩ :=
+      hstorage, hcode, haddresses, hkeys,
+      hlogs, houtput, herror, _stmid, _hsub, _hstate⟩ :=
     Ninst.runCompiled_statcall_sha256_64_warm
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
@@ -126,6 +130,21 @@ theorem sha64_success_prefix_runCompiledTo
     calc
       Devm.getStor callPost a = Devm.getStor callPre a := hstorage a
       _ = Devm.getStor base a := by rfl
+  have hcode' : ∀ a, callPost.getCode a = base.getCode a := by
+    intro a
+    calc
+      callPost.getCode a = callPre.getCode a := hcode a
+      _ = base.getCode a := by rfl
+  have haddresses' :
+      callPost.accessedAddresses = base.accessedAddresses := by
+    calc
+      callPost.accessedAddresses = callPre.accessedAddresses := haddresses
+      _ = base.accessedAddresses := by rfl
+  have hkeys' :
+      callPost.accessedStorageKeys = base.accessedStorageKeys := by
+    calc
+      callPost.accessedStorageKeys = callPre.accessedStorageKeys := hkeys
+      _ = base.accessedStorageKeys := by rfl
   have hlogs' : callPost.logs = base.logs := by
     calc
       callPost.logs = callPre.logs := hlogs
@@ -139,7 +158,8 @@ theorem sha64_success_prefix_runCompiledTo
       callPost.error = callPre.error := herror
       _ = base.error := by rfl
   refine ⟨callPost, hstack, hmemory', hgas', hreturn',
-    hstorage', hlogs', houtput', herror', ?_⟩
+    hstorage', hcode', haddresses', hkeys',
+    hlogs', houtput', herror', ?_⟩
   intro ex htail
   have hge :
       (Nat.toB256 callPost.returnData.length <? (32 : B256)) = 0 := by

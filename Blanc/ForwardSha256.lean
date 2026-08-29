@@ -169,6 +169,118 @@ lemma State.subBal_addBal_get_stor
     unfold State.addBal
     rw [State.setBal_get_stor_direct, State.setBal_get_stor_direct]
 
+private lemma rawInsertIfNew_eq_self_of_contains
+    {α : Type} {β : α → Type} [BEq α] [Hashable α]
+    (m : Std.DHashMap.Internal.Raw₀ α β) (a : α) (b : β a)
+    (h : Std.DHashMap.Internal.Raw₀.contains m a = true) :
+    Std.DHashMap.Internal.Raw₀.insertIfNew m a b = m := by
+  rcases m with ⟨⟨size, buckets⟩, hm⟩
+  unfold Std.DHashMap.Internal.Raw₀.contains at h
+  unfold Std.DHashMap.Internal.Raw₀.insertIfNew
+  dsimp only at h ⊢
+  split
+  · rfl
+  · contradiction
+
+private lemma rawInsertListIfNew_eq_self_of_forall_contains
+    {α : Type} {β : α → Type} [BEq α] [Hashable α]
+    (m : Std.DHashMap.Internal.Raw₀ α β)
+    (l : List ((a : α) × β a))
+    (h : ∀ p ∈ l,
+      Std.DHashMap.Internal.Raw₀.contains m p.1 = true) :
+    Std.DHashMap.Internal.Raw₀.insertListIfNewₘ m l = m := by
+  induction l with
+  | nil => rfl
+  | cons hd tl ih =>
+      rw [Std.DHashMap.Internal.Raw₀.insertListIfNewₘ,
+        rawInsertIfNew_eq_self_of_contains m hd.1 hd.2
+          (h hd (by simp))]
+      exact ih (fun p hp => h p (by simp [hp]))
+
+private lemma rawUnion_self
+    {α : Type} {β : α → Type}
+    [BEq α] [Hashable α] [EquivBEq α] [LawfulHashable α]
+    (m : Std.DHashMap.Internal.Raw₀ α β)
+    (hwf : Std.DHashMap.Internal.Raw.WFImp m.1) :
+    Std.DHashMap.Internal.Raw₀.union m m = m := by
+  unfold Std.DHashMap.Internal.Raw₀.union
+  rw [if_pos (le_refl _)]
+  rw [Std.DHashMap.Internal.Raw₀.insertManyIfNew_eq_insertListIfNewₘ_toListModel]
+  apply rawInsertListIfNew_eq_self_of_forall_contains
+  intro p hp
+  rw [Std.DHashMap.Internal.Raw₀.contains_eq_containsKey hwf]
+  exact Std.Internal.List.containsKey_of_mem hp
+
+private lemma hashSet_union_self
+    {α : Type} [BEq α] [Hashable α] [EquivBEq α]
+    [LawfulHashable α] (m : Std.HashSet α) :
+    m.union m = m := by
+  rcases m with ⟨⟨⟨raw, wf⟩⟩⟩
+  have hu := congrArg Subtype.val
+    (rawUnion_self ⟨raw, wf.size_buckets_pos⟩
+      (Std.DHashMap.Internal.Raw.WF.out wf))
+  unfold Std.HashSet.union Std.HashMap.union Std.DHashMap.union
+  congr 3
+
+private lemma hashSet_insert_eq_self_of_mem
+    {α : Type} [BEq α] [Hashable α]
+    (m : Std.HashSet α) (a : α) (h : a ∈ m) :
+    m.insert a = m := by
+  rcases m with ⟨⟨⟨raw, wf⟩⟩⟩
+  change Std.DHashMap.Internal.Raw₀.contains
+    ⟨raw, wf.size_buckets_pos⟩ a = true at h
+  have hi := congrArg Subtype.val
+    (rawInsertIfNew_eq_self_of_contains
+      ⟨raw, wf.size_buckets_pos⟩ a () h)
+  simp only [Std.HashSet.insert, Std.HashMap.insertIfNew,
+    Std.DHashMap.insertIfNew]
+  congr 3
+
+private lemma addAccessedAddress_accessedAddresses_eq_of_mem
+    {d : Devm} {a : Adr} (h : a ∈ d.accessedAddresses) :
+    (addAccessedAddress d a).accessedAddresses =
+      d.accessedAddresses := by
+  change d.accessedAddresses.insert a = d.accessedAddresses
+  exact hashSet_insert_eq_self_of_mem _ _ h
+
+/-- A call's zero-value debit/credit preparation preserves all code. -/
+lemma State.subBal_addBal_getCode
+    {st mid : State} {src dst a : Adr} {value : B256}
+    (hsub : st.subBal src value = some mid) :
+    (mid.addBal dst value).getCode a = st.getCode a := by
+  rw [State.addBal_getCode, State.subBal_getCode hsub]
+
+private lemma successfulCallPost_accessedAddresses
+    {parent child : Devm} {returnData bytes : Bytes}
+    {mach : Mach} {offset : Nat}
+    (h : child.accessedAddresses = parent.accessedAddresses) :
+    (((incorporateChildOnSuccess parent child returnData).setMach mach).memWrite
+      offset bytes).accessedAddresses = parent.accessedAddresses := by
+  change parent.accessedAddresses.union child.accessedAddresses =
+    parent.accessedAddresses
+  rw [h, hashSet_union_self]
+
+private lemma successfulCallPost_accessedStorageKeys
+    {parent child : Devm} {returnData bytes : Bytes}
+    {mach : Mach} {offset : Nat}
+    (h : child.accessedStorageKeys = parent.accessedStorageKeys) :
+    (((incorporateChildOnSuccess parent child returnData).setMach mach).memWrite
+      offset bytes).accessedStorageKeys = parent.accessedStorageKeys := by
+  change parent.accessedStorageKeys.union child.accessedStorageKeys =
+    parent.accessedStorageKeys
+  rw [h, hashSet_union_self]
+
+private lemma successfulCallPost_getCode
+    {pre parent child : Devm} {returnData bytes : Bytes}
+    {mach : Mach} {offset : Nat}
+    (h : ∀ a, child.getCode a = pre.getCode a) :
+    ∀ a,
+      (((incorporateChildOnSuccess parent child returnData).setMach mach).memWrite
+        offset bytes).getCode a = pre.getCode a := by
+  intro a
+  change child.getCode a = pre.getCode a
+  exact h a
+
 /-- A warm, undelegated address-two call over already-covered 64-byte input
 and 32-byte output windows succeeds with the exact SHA-256 image.  The net
 instruction cost is 184 gas: 100 for the warm account access and 84 for the
@@ -200,6 +312,9 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
         (Bytes.sha256
           (devm.memory.data.sliceD iiw.toNat 64 0)).toBytes ∧
       (∀ a, Devm.getStor post a = Devm.getStor devm a) ∧
+      (∀ a, post.getCode a = devm.getCode a) ∧
+      post.accessedAddresses = devm.accessedAddresses ∧
+      post.accessedStorageKeys = devm.accessedStorageKeys ∧
       post.logs = devm.logs ∧
       post.output = devm.output ∧
       post.error = devm.error ∧
@@ -356,6 +471,47 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
     change (child.state.get a).stor = (devm.state.get a).stor
     rw [hchildState]
     exact State.subBal_addBal_get_stor hsub'
+  have hchildCode : ∀ a, child.getCode a = devm.getCode a := by
+    intro a
+    change (stmid.addBal 2 0).getCode a = devm.state.getCode a
+    exact State.subBal_addBal_getCode hsub'
+  have hcode : ∀ a, post.getCode a = devm.getCode a := by
+    simpa only [post] using
+      (successfulCallPost_getCode
+        (parent := p) (child := child)
+        (returnData := child.output)
+        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩)
+        (offset := oiw.toNat) (bytes := child.output.take 32) hchildCode)
+  have hpAddresses : p.accessedAddresses = devm.accessedAddresses := by
+    change d0.accessedAddresses = devm.accessedAddresses
+    calc
+      d0.accessedAddresses = base.accessedAddresses := by
+        apply addAccessedAddress_accessedAddresses_eq_of_mem
+        change (2 : Adr) ∈ devm.accessedAddresses
+        exact hwarm
+      _ = devm.accessedAddresses := rfl
+  have hchildAddresses : child.accessedAddresses = p.accessedAddresses := rfl
+  have hpostParentAddresses :
+      post.accessedAddresses = p.accessedAddresses := by
+    simpa only [post] using
+      (successfulCallPost_accessedAddresses
+        (parent := p) (child := child) (returnData := child.output)
+        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩)
+        (offset := oiw.toNat) (bytes := child.output.take 32)
+        hchildAddresses)
+  have haddresses : post.accessedAddresses = devm.accessedAddresses :=
+    hpostParentAddresses.trans hpAddresses
+  have hpKeys : p.accessedStorageKeys = devm.accessedStorageKeys := rfl
+  have hchildKeys : child.accessedStorageKeys = p.accessedStorageKeys := rfl
+  have hpostParentKeys :
+      post.accessedStorageKeys = p.accessedStorageKeys := by
+    simpa only [post] using
+      (successfulCallPost_accessedStorageKeys
+        (parent := p) (child := child) (returnData := child.output)
+        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩)
+        (offset := oiw.toNat) (bytes := child.output.take 32) hchildKeys)
+  have hkeys : post.accessedStorageKeys = devm.accessedStorageKeys :=
+    hpostParentKeys.trans hpKeys
   have hlogsPost : post.logs = devm.logs := by
     change p.logs ++ child.logs = devm.logs
     rw [hchildLogs, List.append_nil]
@@ -370,7 +526,8 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
     change child.state = stmid.addBal 2 0
     exact hchildState
   exact ⟨post, hrun, hstackPost, hmemoryPost, hgasPost, hreturnData,
-    hstorage, hlogsPost, houtputPost, herrorPost,
+    hstorage, hcode, haddresses, hkeys,
+    hlogsPost, houtputPost, herrorPost,
     stmid, hsub', hstatePost⟩
 
 end Blanc

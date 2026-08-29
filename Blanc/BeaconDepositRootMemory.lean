@@ -116,6 +116,22 @@ theorem RootMemoryCarrier.read_node
     (memory.read 640 32).1 = node.toBytes := by
   rw [Mem.Reads.read h.reads, h.node_read]
 
+/-- Staging a word at byte zero leaves the current-node register readable. -/
+theorem RootMemoryCarrier.read_node_after_write_zero
+    {memory : Mem} {oldCount shiftedSize node value : B256}
+    (h : RootMemoryCarrier memory oldCount shiftedSize node) :
+    Bytes.toB256 ((memory.write 0 value.toBytes).read 640 32).1 =
+      node := by
+  have hwrites :
+      Mem.Reads (memory.write 0 value.toBytes)
+        (Bytes.writeAt h.image 0 value.toBytes) :=
+    Mem.Reads.write h.wf h.reads _ _
+  rw [Mem.Reads.read hwrites,
+    Bytes.sliceD_writeAt_after _ _ _ _ _ (by
+      rw [B256.length_toBytes]
+      omega),
+    h.node_read, B256.toB256_toBytes]
+
 /-- Shift the fold-size register right by one word-bit. -/
 def RootMemoryCarrier.shiftSize
     {memory : Mem} {oldCount shiftedSize node : B256}
