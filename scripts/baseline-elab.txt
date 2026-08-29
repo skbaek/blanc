@@ -36,6 +36,20 @@
 # spread 0.99x-1.24x, none reaching the 1.50x annotate tier. The run
 # measured 134 modules in 715.4 s against the 755.6 s committed total, so
 # it is its own host control. No existing row is touched.
+#
+# 2026-08-29 additions-only admission of the five executed proxy-pair core
+# rows, measured by `scripts/check-elab.sh --calibrate` at candidate commit
+# 25595fa610e4ac644623ca79babf3d5a127bd727 (seed
+# 1787ef75ae32fe54a1588253bdb979bb1fb46fb8f9cbf283bf12b36e06a48fa1;
+# baseline sha256 7949f5758b4c2a317d7a34947bb634762759cc31356fcd00cfab192c06693596;
+# source-set sha256 09490be658554b6bd3741e5d2e8aef2ceb77265e440e5fde410b161040eeab4e).
+# Five mandatory rows and 12 deterministic controls measured in 91.9 s;
+# control median 1.121x, spread 1.11x-1.20x, none reaching the 1.50x
+# annotation tier. A preceding six-round balanced root control measured warm
+# medians old/two-leaf/exact = 1.268/1.270/1.264 s and reproduced the known
+# cold-root artifact at 3.522 s on the old root; the exact warm gate then
+# measured Blanc.lean at 1.255 s. Its 1.129 s row and every other existing row
+# therefore remain untouched.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
@@ -120,6 +134,11 @@ OK	5.129	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
 OK	1.117	Blanc/PinnedPauseTarget.lean
 OK	0.594	Blanc/ProofRecipesGenerated.lean
+OK	1.356	Blanc/ProxyPairAuthority.lean
+OK	3.016	Blanc/ProxyPairCorrespondence.lean
+OK	4.978	Blanc/ProxyPairExecution.lean
+OK	4.324	Blanc/ProxyPairImplementation.lean
+OK	1.316	Blanc/ProxyPairProgram.lean
 OK	1.455	Blanc/ProxyPairSlots.lean
 OK	1.630	Blanc/RevertPayload.lean
 OK	1.178	Blanc/Reverts.lean
