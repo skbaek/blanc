@@ -7,8 +7,9 @@ no listed donor declaration or common-owner basename shadow survives in the
 historical WETH10 donor family or the Lido family, that neither family contains
 an unapproved alias/export command, and that Weth10HolderFlow imports the
 common module directly.  The one exact `Blanc.ExecutionTrace` compatibility
-export approved when the retained trace carrier moved is ignored; any drift or
-additional alias/export still fails.  It deliberately does not try to
+export and 21 exact compatibility abbreviations approved when the retained
+trace carrier moved are required; any drift or additional alias/export still
+fails.  It deliberately does not try to
 recognize propositionally equivalent declarations under unrelated names; that
 remains an independent review obligation.
 

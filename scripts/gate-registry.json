@@ -312,7 +312,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The wrapper always passes --negative-controls, which copies the whole tree six times through an unguarded shutil.copytree: a dangling symlink or an unreadable file anywhere outside .git/.lake/build makes it raise and the gate fail. Two earlier declarations of that were both wrong. Content hashing the tree reran the gate on every unrelated edit; membership reran it on every unrelated addition and still missed the case, because a dangling symlink is not is_file() and never entered the digest. The traversable mode declares the hazard instead of a corpus \u2014 it refuses to fingerprint a tree it cannot read and contributes nothing otherwise. Residue: chmod-ing an already-present file unreadable is caught, but a file made unreadable and readable again between two runs is not observed.",
+      "note": "The wrapper always passes --negative-controls, which makes one seed copy of the whole tree and nine case copies through ten unguarded shutil.copytree calls: a dangling symlink or an unreadable file anywhere outside .git/.lake/build makes one raise and the gate fail. Two earlier declarations of that were both wrong. Content hashing the tree reran the gate on every unrelated edit; membership reran it on every unrelated addition and still missed the case, because a dangling symlink is not is_file() and never entered the digest. The traversable mode declares the hazard instead of a corpus \u2014 it refuses to fingerprint a tree it cannot read and contributes nothing otherwise. Residue: chmod-ing an already-present file unreadable is caught, but a file made unreadable and readable again between two runs is not observed.",
       "order": 9,
       "verdict": {
         "expect_exit": 0,

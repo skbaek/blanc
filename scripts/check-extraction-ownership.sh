@@ -2,8 +2,9 @@
 # Fail-closed ownership audit for the ExecutionSettlement extraction.
 #
 # The Python checker reads the sole lift manifest, checks common declarations,
-# donor erasure, and Weth10HolderFlow's direct import.  Its built-in controls
-# mutate temporary copies only; this wrapper never writes the working tree.
+# donor erasure, the exact retained-trace compatibility export/abbreviations,
+# and Weth10HolderFlow's direct import.  Its built-in controls mutate temporary
+# copies only; this wrapper never writes the working tree.
 
 set -u
 
