@@ -1,5 +1,7 @@
 import Blanc.ProxyPairExecution
 import Blanc.PinnedPauseTarget
+import Blanc.MessageExecution
+import Blanc.ExecutionTerminal
 
 /-!
 # Settled correspondence for the installed proxy pair
@@ -14,6 +16,7 @@ namespace Blanc.ProxyPair
 
 open Jaune
 open Jaune.Ninst Blanc.Ninst
+open MessageExecution
 
 /-! ## The exact settled observable -/
 
@@ -386,13 +389,6 @@ private def proxyChild
   delcallSpawnMsg (initSevm m) (proxyParent m atCallGas callCost) childGas
     implAdr 0 32 implGuardedCode false
 
-private lemma Bytes.sliceD_zero_32 {bs : Bytes}
-    (hlen : bs.length = 32) : bs.sliceD 0 32 0 = bs := by
-  unfold List.sliceD
-  simp only [List.drop_zero]
-  rw [List.takeD_eq_take _ (by omega), ← hlen]
-  exact List.take_length
-
 private theorem proxyCopiedMemory_size (m : Msg)
     (hlen : m.data.length = 32) : (proxyCopiedMemory m).size = 32 := by
   unfold proxyCopiedMemory
@@ -474,7 +470,7 @@ private theorem implGuarded_exec_nonzero
     Nat.sub_add_cancel henough
   have hdata' : Sevm.dataWord (initSevm msg) 0 ≠ 0 := by
     change Bytes.toB256 (msg.data.sliceD 0 32 0) ≠ 0
-    rw [Bytes.sliceD_zero_32 hlen]
+    rw [Bytes.sliceD_zero_length hlen]
     exact hdata
   obtain ⟨post, hrun, herr, hout, hgas, hstate, _, htra, hlogs⟩ :=
     implGuarded_runCompiledTo_nonzero [implGuarded]
@@ -521,7 +517,7 @@ private theorem implGuarded_exec_zero
     Nat.sub_add_cancel henough
   have hdata' : Sevm.dataWord (initSevm msg) 0 = 0 := by
     change Bytes.toB256 (msg.data.sliceD 0 32 0) = 0
-    rw [Bytes.sliceD_zero_32 hlen]
+    rw [Bytes.sliceD_zero_length hlen]
     exact hdata
   obtain ⟨raw, hrun, herr, hout, hgas, hstate, htra, hlogs⟩ :=
     implGuarded_runCompiledTo_zero [implGuarded]
@@ -573,7 +569,7 @@ private theorem implGuarded_exec_static_nonzero
     Nat.sub_add_cancel henough
   have hdata' : Sevm.dataWord (initSevm msg) 0 ≠ 0 := by
     change Bytes.toB256 (msg.data.sliceD 0 32 0) ≠ 0
-    rw [Bytes.sliceD_zero_32 hlen]
+    rw [Bytes.sliceD_zero_length hlen]
     exact hdata
   have hcode' : (initSevm msg).code = implGuardedCode := by
     exact hcode
@@ -591,67 +587,6 @@ private theorem implGuarded_exec_static_nonzero
   · simpa [Devm.state, initDevm] using hstate
   · simpa [Devm.transientStorage, initDevm] using htra
   · simpa [Devm.logs, initDevm] using hlogs
-
-private theorem processMessage_eq_settle_exec
-    (msg : Msg)
-    (hentry : msg.benvAfterTransfer = .ok msg.benv)
-    (hdisable : msg.disablePrecompiles = true) :
-    processMessage msg =
-      (Frame.ofCall msg).settle (exec (initEvm msg)) := by
-  have hself : msg.withBenv msg.benv = msg := by
-    cases msg
-    rfl
-  have henter : executeCode.enter msg = .inl (initEvm msg) := by
-    unfold executeCode.enter
-    rw [hdisable]
-    cases msg.codeAddress <;> rfl
-  have hframe :
-      (Frame.ofCall msg).enter = .run (initEvm msg) := by
-    unfold Frame.enter Frame.ofCall
-    rw [hentry]
-    simp only
-    rw [hself, henter]
-  unfold processMessage runFrame
-  rw [hframe]
-
-private def settledRevert (msg : Msg) (raw : Devm) : Devm :=
-  (raw.withError (some .revert)).rollback
-    msg.benv.state msg.tenv.transientStorage
-
-private def settledHalt
-    (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) : Devm :=
-  (((raw.withGasLeft 0).setMeta
-      {raw.meta with output := [], error := some (.halt reason)}).rollback
-    msg.benv.state msg.tenv.transientStorage)
-
-private theorem processMessage_clean_of_exec
-    (msg : Msg) (post : Devm)
-    (hentry : msg.benvAfterTransfer = .ok msg.benv)
-    (hdisable : msg.disablePrecompiles = true)
-    (hexec : exec (initEvm msg) = .ok post)
-    (herror : post.error = none) :
-    processMessage msg = .ok post := by
-  rw [processMessage_eq_settle_exec msg hentry hdisable, hexec]
-  simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-    executeCode.handleError, processMessage.settle, herror]
-
-private theorem processMessage_revert_of_exec
-    (msg : Msg) (raw : Devm)
-    (hentry : msg.benvAfterTransfer = .ok msg.benv)
-    (hdisable : msg.disablePrecompiles = true)
-    (hexec : exec (initEvm msg) = .error (.revert, raw)) :
-    processMessage msg = .ok (settledRevert msg raw) := by
-  rw [processMessage_eq_settle_exec msg hentry hdisable, hexec]
-  rfl
-
-private theorem processMessage_halt_of_exec
-    (msg : Msg) (reason : ExceptionalHalt) (raw : Devm)
-    (hentry : msg.benvAfterTransfer = .ok msg.benv)
-    (hdisable : msg.disablePrecompiles = true)
-    (hexec : exec (initEvm msg) = .error (.halt reason, raw)) :
-    processMessage msg = .ok (settledHalt msg reason raw) := by
-  rw [processMessage_eq_settle_exec msg hentry hdisable, hexec]
-  rfl
 
 @[simp] private theorem proxyCallPre_state (m : Msg) (atCallGas : Nat) :
     (proxyCallPre m atCallGas).state = m.benv.state := rfl
@@ -1076,52 +1011,6 @@ private theorem proxy_delcall_halt
   · apply hcross.2 _
     simpa [child] using hresume
 
-private theorem proxy_ret_word_tail
-    (fs : List Func) (sevm : Sevm) (base : Devm)
-    (memory : Mem) (G : Nat) (out : Bytes)
-    (hext :
-      (base.setMach ⟨[0, 32], memory, G⟩).extCost [⟨0, 32⟩] = 0)
-    (hread : (memory.read 0 32).1 = out) :
-    Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[0, 32], memory, G⟩)
-      (Func.last .ret)
-      (.ok (((base.setMach ⟨[], memory, G⟩).memRead 0 32).2.withOutput
-        out)) := by
-  have hrun := Func.runCompiledTo_ret_word
-    (fs := fs) (sevm := sevm)
-    (devm := base.setMach ⟨[0, 32], memory, G⟩)
-    (i := 0) (sz := 32) (s := []) (e := 0) (G := G) (out := out)
-    rfl hext rfl (by
-      simpa only [Devm.setMach_setMach, Devm.memory_setMach,
-        Devm.memRead_fst,
-        show (B256.toNat (0 : B256)) = 0 by decide,
-        show (B256.toNat (32 : B256)) = 32 by decide] using hread)
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach,
-    show (B256.toNat (0 : B256)) = 0 by decide,
-    show (B256.toNat (32 : B256)) = 32 by decide] using hrun
-
-private theorem proxy_rev_empty_tail
-    (fs : List Func) (sevm : Sevm) (base : Devm)
-    (memory : Mem) (G : Nat) :
-    Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[0, 0], memory, G⟩)
-      (Func.last .rev)
-      (.error (.revert,
-        (base.setMach ⟨[], memory, G⟩).withOutput [])) := by
-  have hrun := Func.runCompiledTo_rev
-    (fs := fs) (sevm := sevm)
-    (devm := base.setMach ⟨[0, 0], memory, G⟩)
-    (i := 0) (sz := 0) (s := []) (out := []) (G := G)
-    (d' := base.setMach ⟨[], memory, G⟩)
-    rfl (by
-      change G = G +
-        (base.setMach ⟨[0, 0], memory, G⟩).extCost [⟨0, 0⟩]
-      rw [Devm.extCost_empty_window]
-      simp) (by exact Devm.memRead_zero)
-  simpa only [Devm.setMach_setMach,
-    show Nat.toB256 0 = (0 : B256) by decide] using hrun
-
 private theorem proxy_success_tail
     (m : Msg) (atCallGas callCost childGas : Nat)
     (premises : CorrespondencePremises m)
@@ -1224,7 +1113,7 @@ private theorem proxy_success_tail
         rw [hm]
         decide
       rw [show resumeGas - 33 = finalGas by rfl]
-      exact proxy_ret_word_tail [proxyFallback] (initSevm m) base
+      exact Func.runCompiledTo_ret_word_at_zero [proxyFallback] (initSevm m) base
         (parent.memory.write 0 implReturnWord.toBytes) finalGas
         implReturnWord.toBytes hfinalext hread
   · rfl
@@ -1295,7 +1184,7 @@ private theorem proxy_error_tail
               (B256.toNat 0) 0) = parent.memory := by
         rw [hslice]
         rfl
-      have hrun := proxy_rev_empty_tail [proxyFallback] (initSevm m) base
+      have hrun := Func.runCompiledTo_rev_empty_at_zero [proxyFallback] (initSevm m) base
         parent.memory finalGas
       rw [show resumeGas - 29 = finalGas by rfl]
       simpa [hmemzero, show Nat.toB256 0 = (0 : B256) by decide] using hrun
@@ -1311,30 +1200,6 @@ private theorem proxy_error_tail
     change (incorporateChildOnError parent childPost childPost.output).logs = []
     rw [incorporateChildOnError_logs]
     rfl
-
-private lemma proxy_addAccessedStorageKey_setMach_setMach {base : Devm}
-    {mach mach' : Mach} {target : Adr} {key : B256} :
-    (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
-      (addAccessedStorageKey base target key).setMach mach' := rfl
-
-@[simp] private theorem proxy_setMach_accessedStorageKeys
-    (devm : Devm) (mach : Mach) :
-    (devm.setMach mach).accessedStorageKeys = devm.accessedStorageKeys := rfl
-
-@[simp] private theorem proxy_initDevm_stack (m : Msg) :
-    (initDevm m).stack = [] := rfl
-
-@[simp] private theorem proxy_initDevm_memory (m : Msg) :
-    (initDevm m).memory = Mem.empty := rfl
-
-@[simp] private theorem proxy_initDevm_accessedStorageKeys (m : Msg) :
-    (initDevm m).accessedStorageKeys = m.accessedStorageKeys := rfl
-
-@[simp] private theorem proxy_initSevm_data (m : Msg) :
-    (initSevm m).data = m.data := rfl
-
-@[simp] private theorem proxy_initSevm_currentTarget (m : Msg) :
-    (initSevm m).currentTarget = m.currentTarget := rfl
 
 private theorem proxy_prefix
     (m : Msg) (atCallGas : Nat)
@@ -1357,7 +1222,7 @@ private theorem proxy_prefix
   func_run [9]
   all_goals simp_all [proxyEntry, gBase, gVerylow, gasCopy,
     gasColdSload, ceilDiv, Devm.stack_setMach, Devm.memory_setMach,
-    premises.dataLength]
+    Devm.setMach_accessedStorageKeys, premises.dataLength]
   case h_cost =>
     simp only [show Nat.toB256 32 = (32 : B256) by decide,
       show (B256.toNat (0 : B256)) = 0 by decide,
@@ -1380,13 +1245,13 @@ private theorem proxy_prefix
     have hmem : (initDevm m).memory = Mem.empty := rfl
     simpa only [proxyCallPre, proxyAfterSload, proxyBeforeSload,
       proxyCopiedMemory, proxyEntry, Devm.setMach_setMach,
-      proxy_addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
-      Devm.memory_setMach, proxy_initDevm_stack, proxy_initSevm_data,
-      proxy_initSevm_currentTarget, premises.dataLength,
+      Devm.addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
+      Devm.memory_setMach, Msg.initDevm_stack, Msg.initSevm_data,
+      Msg.initSevm_currentTarget, premises.dataLength,
       show Nat.toB256 32 = (32 : B256) by decide,
       show (B256.toNat (0 : B256)) = 0 by decide,
       show (B256.toNat (32 : B256)) = 32 by decide,
-      Bytes.sliceD_zero_32 premises.dataLength, hslot, hmem] using rest
+      Bytes.sliceD_zero_length premises.dataLength, hslot, hmem] using rest
 
 private theorem proxy_exec_of_func
     (m : Msg) (atCallGas callCost childGas : Nat)
@@ -1631,44 +1496,6 @@ private theorem direct_exec_halt
   refine ⟨final, hexec, ?_, ?_, hlogs⟩
   · simpa [direct] using hstate
   · simpa [direct] using htra
-
-@[simp] private theorem settledRevert_error (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).error = some .revert := rfl
-
-@[simp] private theorem settledRevert_output (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).output = raw.output := rfl
-
-@[simp] private theorem settledRevert_logs (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).logs = raw.logs := rfl
-
-@[simp] private theorem settledRevert_state (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).state = msg.benv.state := rfl
-
-@[simp] private theorem settledRevert_transientStorage
-    (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).transientStorage =
-      msg.tenv.transientStorage := rfl
-
-@[simp] private theorem settledHalt_error
-    (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).error = some (.halt reason) := rfl
-
-@[simp] private theorem settledHalt_output
-    (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).output = [] := rfl
-
-@[simp] private theorem settledHalt_logs
-    (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).logs = raw.logs := rfl
-
-@[simp] private theorem settledHalt_state
-    (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).state = msg.benv.state := rfl
-
-@[simp] private theorem settledHalt_transientStorage
-    (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).transientStorage =
-      msg.tenv.transientStorage := rfl
 
 private theorem settledObservable_clean
     (direct proxied : Devm)

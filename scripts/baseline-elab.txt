@@ -66,6 +66,17 @@ OK	2.175	Blanc/ExecDeterminism.lean
 OK	1.107	Blanc/ExecutionNoninterference.lean
 OK	6.426	Blanc/ExecutionOccurrence.lean
 OK	1.346	Blanc/ExecutionSettlement.lean
+# 2026-08-29 additions-only admission of three common execution-helper rows,
+# measured by `scripts/check-elab.sh --calibrate` from seeding commit
+# 98b49945128b38e009431d4280fe8703ed845e7f; seed sha256
+# 65f7dd264b6807c9addc17fee60184f7673c0478e8ab2428160fd69062c1dd70;
+# baseline sha256 d7ae621056b06bf5eb2a668175a2d02d05c2a5420e3a9e709e53456b5a3d9e0e;
+# source-set sha256 0ff2f30b017dbe642536ef218510c5c0200daa36e8f7906aa644c63128a4baa8.
+# With no local timing cache, the fallback measured all 171 modules outright
+# in 941.7 s versus the 772.1 s committed total, so the run is its own host
+# control. No existing row is touched; the other admitted rows are
+# `Blanc/MessageExecution.lean` and `Blanc/RootedExecution.lean` below.
+OK	1.253	Blanc/ExecutionTerminal.lean
 OK	1.834	Blanc/FlashSpec.lean
 OK	2.816	Blanc/Fmint.lean
 OK	4.277	Blanc/FmintCode.lean
@@ -132,6 +143,7 @@ OK	1.586	Blanc/LidoCircuitBreakerSuccess.lean
 OK	1.219	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
 OK	5.129	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
+OK	1.291	Blanc/MessageExecution.lean
 OK	1.117	Blanc/PinnedPauseTarget.lean
 OK	0.594	Blanc/ProofRecipesGenerated.lean
 OK	1.356	Blanc/ProxyPairAuthority.lean
@@ -142,6 +154,7 @@ OK	1.316	Blanc/ProxyPairProgram.lean
 OK	1.455	Blanc/ProxyPairSlots.lean
 OK	1.630	Blanc/RevertPayload.lean
 OK	1.178	Blanc/Reverts.lean
+OK	1.398	Blanc/RootedExecution.lean
 OK	1.597	Blanc/Semantics.lean
 OK	1.965	Blanc/Solvent.lean
 OK	1.553	Blanc/SourceAttainment.lean

@@ -343,11 +343,6 @@ private theorem returnWord_runCompiled
     omega
   · rfl
 
-private lemma addAccessedStorageKey_setMach_setMach {base : Devm}
-    {m m' : Mach} {target : Adr} {key : B256} :
-    (addAccessedStorageKey (base.setMach m) target key).setMach m' =
-      (addAccessedStorageKey base target key).setMach m' := rfl
-
 private def balanceOfBodyTail : Func :=
   [calldataload] +++ sload ::: mstoreAt 0 +++ returnMemoryRange 0 32
 
@@ -404,7 +399,7 @@ private theorem balanceOfBody_cold_runCompiled
         ⟨[Devm.getStorVal base sevm.currentTarget
             (Sevm.dataWord sevm (32 * 0 + 4))],
           Mem.empty, g - 2103⟩) ?_ ?_
-    · simpa only [addAccessedStorageKey_setMach_setMach,
+    · simpa only [Devm.addAccessedStorageKey_setMach_setMach,
           Devm.getStorVal_setMach, Devm.memory_setMach] using
         (Ninst.runCompiled_sload_cold (sevm := sevm)
           (devm := base.setMach
@@ -585,7 +580,7 @@ private theorem totalSupplyBody_cold_runCompiled
               ⟨[Devm.getStorVal base sevm.currentTarget flashMintedSlot,
                   base.getBal sevm.currentTarget],
                 Mem.empty, g - 2110⟩) ?_ ?_
-        · simpa only [addAccessedStorageKey_setMach_setMach,
+        · simpa only [Devm.addAccessedStorageKey_setMach_setMach,
               Devm.getStorVal_setMach, Devm.memory_setMach] using
             (Ninst.runCompiled_sload_cold (sevm := sevm)
               (devm := base.setMach
@@ -773,7 +768,7 @@ private theorem maxFlashLoanSelfBody_cold_runCompiled
           (addAccessedStorageKey base sevm.currentTarget flashMintedSlot).setMach
             ⟨[Devm.getStorVal base sevm.currentTarget flashMintedSlot],
               Mem.empty, g - 2105⟩) ?_ ?_
-      · simpa only [addAccessedStorageKey_setMach_setMach,
+      · simpa only [Devm.addAccessedStorageKey_setMach_setMach,
             Devm.getStorVal_setMach, Devm.memory_setMach] using
           (Ninst.runCompiled_sload_cold (sevm := sevm)
             (devm := base.setMach ⟨[flashMintedSlot], Mem.empty, g - 5⟩)

@@ -235,6 +235,25 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeContainsName `Blanc.selector target
   | "goal-shape:fixed-byte-offset" =>
       return head == some `Blanc.Mem.Wf || head == some `Blanc.Mem.Reads
+  | "goal-shape:frame-root-carrying" =>
+      return proofRecipeContainsName `Blanc.rootedRunCompiledTo target ||
+        proofRecipeContainsName `Blanc.ninstAllChildRoots target ||
+        proofRecipeContainsName `Blanc.Exec.rawFrameRoots target ||
+        proofRecipeContainsName `Blanc.Exec.rawFrameDescendants target
+  | "goal-shape:message-execution-settlement" =>
+      return proofRecipeContainsName `Jaune.processMessage target &&
+        (proofRecipeContainsName `Jaune.exec target ||
+          proofRecipeContainsName `Jaune.initEvm target)
+  | "goal-shape:devm-common-update-law" =>
+      return proofRecipeContainsName `Jaune.Devm.memWrite target ||
+        proofRecipeContainsName `Jaune.addAccessedStorageKey target ||
+        proofRecipeContainsName `Jaune.Devm.setStorVal target
+  | "goal-shape:terminal-return-revert" =>
+      return head == some `Blanc.Func.RunCompiledTo &&
+        (proofRecipeContainsName `Jaune.Linst.ret target ||
+          proofRecipeContainsName `Jaune.Linst.rev target)
+  | "goal-shape:full-length-slice" =>
+      return proofRecipeContainsName `Jaune.List.sliceD target
   | "goal-shape:runcompiled-family-compression" =>
       return head == some `Blanc.Func.RunCompiled ||
         head == some `Blanc.Func.RunCompiledTo
@@ -256,7 +275,9 @@ elab "blanc_suggest" : tactic =>
     for recipe in ProofRecipes.recipes do
       if ← proofRecipeMatches target recipe then
         found := true
+        let symbols := String.intercalate ", " recipe.symbols
         Lean.logInfo m!"[proof-recipe:{recipe.id}] {recipe.preferredPath}\n\
+          Registered symbols: {symbols}\n\
           Boundary: {recipe.boundary}"
     unless found do
       Lean.logInfo "blanc_suggest: no matching proof recipe"

@@ -173,12 +173,6 @@ private lemma accessDelegation_worldMeta {devm d1 : Devm} {a dadr : Adr}
   · cases h
     exact ⟨rfl, rfl⟩
 
-private lemma memWrite_memory (d : Devm) (i : Nat) (v : Bytes) :
-    (d.memWrite i v).memory = d.memory.write i v := rfl
-
-private lemma memWrite_gasLeft (d : Devm) (i : Nat) (v : Bytes) :
-    (d.memWrite i v).gasLeft = d.gasLeft := rfl
-
 /-- The `value = 0` `CALL` crossing with the responder callee entered.  The
 child spends exactly `17` of its `mcs` and answers the canonical word `1`, so
 the parent resumes with flag `1`, the child's word as returndata, its own
@@ -296,7 +290,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
   · show ((((incorporateChildOnSuccess p out out.output).setMach
       ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).memory = _
-    rw [memWrite_memory, Devm.memory_setMach, hout]
+    rw [Devm.memWrite_memory, Devm.memory_setMach, hout]
     change (d1.memory.extends
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
         oiw.toNat ((1 : B256).toBytes.take osw.toNat) = _
@@ -304,7 +298,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
   · show ((((incorporateChildOnSuccess p out out.output).setMach
       ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).gasLeft = _
-    rw [memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
+    rw [Devm.memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
     change d1.gasLeft - (mcc + ext) + (mcs - 17) = _
     rfl
   · change d1.error = devm.error
@@ -469,7 +463,7 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
   · show ((((incorporateChildOnSuccess p out out.output).setMach
       ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).memory = _
-    rw [memWrite_memory, Devm.memory_setMach, hout]
+    rw [Devm.memWrite_memory, Devm.memory_setMach, hout]
     change (d1.memory.extends
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
         oiw.toNat ((1 : B256).toBytes.take osw.toNat) = _
@@ -477,7 +471,7 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
   · show ((((incorporateChildOnSuccess p out out.output).setMach
       ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).gasLeft = _
-    rw [memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
+    rw [Devm.memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
     change d1.gasLeft - (mcc + ext) + (mcs - 17) = _
     rfl
   · change d1.error = devm.error

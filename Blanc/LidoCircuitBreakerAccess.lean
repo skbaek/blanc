@@ -191,11 +191,6 @@ private theorem heartbeatSloadBase_self
 def heartbeatAfterCountLoad (sevm : Sevm) (base : Devm) : Devm :=
   heartbeatSloadBase sevm base (countSlot sevm.caller.toB256)
 
-private lemma heartbeat_addAccessedStorageKey_setMach_setMach
-    {base : Devm} {m m' : Mach} {target : Adr} {key : B256} :
-    (addAccessedStorageKey (base.setMach m) target key).setMach m' =
-      (addAccessedStorageKey base target key).setMach m' := rfl
-
 /-- Exact first heartbeat chunk: caller tagging and the count SLOAD map an
 arbitrary warm/cold entry base to `heartbeatAfterCountLoad`, charging the
 actual access-list cost and otherwise preserving the base world and logs. -/
@@ -229,7 +224,7 @@ private theorem heartbeat_countLoad_runCompiled
     case a =>
       apply Func.RunCompiled.last
       simp [Linst.Run, Linst.run, Devm.getStorVal_setMach, hcount,
-        gasColdSload, heartbeat_addAccessedStorageKey_setMach_setMach]
+        gasColdSload, Devm.addAccessedStorageKey_setMach_setMach]
 
 /-- Continue from the exact count-load chunk without changing its source
 association or replaying its warm/cold execution proof. -/
@@ -341,7 +336,7 @@ private theorem heartbeat_expiryLoad_runCompiled
       apply Func.RunCompiled.last
       simp [Linst.Run, Linst.run, Devm.getStorVal_setMach,
         heartbeatAfterCountLoad, holdExpiry, gasColdSload,
-        heartbeat_addAccessedStorageKey_setMach_setMach]
+        Devm.addAccessedStorageKey_setMach_setMach]
 
 /-- Continue from the exact expiry-load chunk without changing its source
 association or replaying its warm/cold execution proof. -/
@@ -457,7 +452,7 @@ private theorem heartbeat_intervalLoad_runCompiled
       apply Func.RunCompiled.last
       simp [Linst.Run, Linst.run, Devm.getStorVal_setMach,
         heartbeatAfterExpiryLoad, heartbeatAfterCountLoad, hinterval,
-        gasColdSload, heartbeat_addAccessedStorageKey_setMach_setMach]
+        gasColdSload, Devm.addAccessedStorageKey_setMach_setMach]
 
 /-- Continue the already-proved exact interval push/SLOAD with an arbitrary
 successful residual function. -/
@@ -1598,7 +1593,7 @@ private theorem setHeartbeatInterval_load_runCompiled
     case a =>
       apply Func.RunCompiled.last
       simp [Linst.Run, Linst.run, Devm.getStorVal_setMach, hold,
-        gasColdSload, heartbeat_addAccessedStorageKey_setMach_setMach]
+        gasColdSload, Devm.addAccessedStorageKey_setMach_setMach]
 
 /-- Continue the exact setter interval load with an arbitrary successful
 residual function. -/

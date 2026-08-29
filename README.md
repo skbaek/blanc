@@ -388,6 +388,14 @@ Before beginning a manual multi-step walk or inversion, consult the generated
 `blanc_suggest` tactic at the goal. The index and the tactic's lookup table are
 both generated from `scripts/proof-recipes.toml`; edit that registry and
 regenerate the surfaces rather than editing either generated file by hand.
+`blanc_suggest` prints each matching recipe's validated registered symbols as
+well as its route and boundary.
+
+For need-first declaration discovery that does not depend on a goal matcher,
+start at the branching [common API registry](docs/COMMON_API.md). Follow its
+execution, invariance, state-update, memory, settlement, or compilation branch
+before adding a contract-local helper; the leaves point to shared modules and
+named declarations rather than sibling-contract examples.
 
 ## Proof-performance conventions: defeq, wide-record updates, state towers, and walk term size
 
