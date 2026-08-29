@@ -397,6 +397,15 @@ execution, invariance, state-update, memory, settlement, or compilation branch
 before adding a contract-local helper; the leaves point to shared modules and
 named declarations rather than sibling-contract examples.
 
+The registry also carries the standing **common-library-first workflow** for
+any needed declaration with a generic shape: search before rolling your own,
+use or generalize what a shared module already provides, hoist a
+contract-local original to the common library before using it, build a
+genuinely new generic declaration in a shared module rather than the contract
+that first needs it, and close every common-library change with the registry
+and recipe discoverability updates in the same change. Follow it there rather
+than restating it elsewhere.
+
 ## Proof-performance conventions: defeq, wide-record updates, state towers, and walk term size
 
 Several elaboration-cost bombs have been measured in this repository,

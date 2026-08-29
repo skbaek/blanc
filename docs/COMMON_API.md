@@ -214,10 +214,57 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
 - Source attainment and source-step provenance:
   [`Blanc/SourceAttainment.lean`](../Blanc/SourceAttainment.lean).
 
-## Maintenance rule
+## Common-library-first workflow
 
-When hoisting a reusable declaration, add it to the narrowest branch above (or
-add a new sub-branch), register a goal-sensitive proof recipe when a reliable
-goal shape exists, and remove contract-local copies. Do not add a contract
-module as a registry destination: that is evidence the declaration has not yet
-reached its common owner.
+A needed definition, lemma, tactic, or instance has a **generic shape** when
+its statement nowhere mentions the contract immediately being worked on — when
+that contract's own names could be abstracted away without changing what it
+says. Every generic-shaped need triggers this workflow. It is the standing
+default for all Blanc work, not per-goal advice, and it exists because the
+point of each new contract is to leave the common library stronger than it
+found it, not merely to add the contract.
+
+1. **Search before writing.** Follow the branches above, run
+   `lean_local_search`, and run `blanc_suggest` at the goal. A `blanc_suggest`
+   no-match is not evidence that no shared declaration exists; the registry
+   branches and declaration search are the authority on existence.
+2. **Found in a shared module: use it.** When a close variant exists but is
+   too narrow, generalize the shared declaration in place, provided every
+   existing proof still elaborates — verify with the build and the repository
+   gates. A generalization that would force consumer rewrites is a design
+   change to surface, not a silent rewrite.
+3. **Found only in another contract's module: hoist it first, then use it.**
+   Move it to a shared module below every consumer, rename away any
+   contract-claiming name (the `wbsum` → `balSum` example in `README.md`,
+   *Module hierarchy: contracts are siblings*), remove the contract-local
+   copy, and use it through the shared owner. Never import a sibling contract
+   to reach it; `scripts/check-layering.sh` fails that import in either
+   direction.
+4. **Found nowhere: build it in the common library, then use it.** The
+   generic shape that motivated the search is the placement decision — a new
+   generic declaration is born in a shared module, not in the contract that
+   first needed it.
+5. **Close with discoverability.** Every common-library addition or change —
+   built, generalized, or hoisted — updates this registry in the same change:
+   add the declaration to the narrowest branch above (or add a sub-branch),
+   and when a reliable goal shape exists, register a goal-sensitive recipe in
+   `scripts/proof-recipes.toml` and regenerate the surfaces
+   (`python3 scripts/generate-proof-recipes.py --write`). Verify with
+   `scripts/check-proof-recipes.sh --base main`. Discoverability closure is
+   part of the change that touched the library, not a follow-up task.
+
+Do not add a contract module as a registry destination: that is evidence the
+declaration has not yet reached its common owner.
+
+The workflow is enforced as well as documented, and this section is the map
+of that machinery: [`scripts/check-layering.sh`](../scripts/check-layering.sh)
+owns placement (no cross-contract import, no shared module importing a
+contract); [`scripts/check-proof-recipes.sh`](../scripts/check-proof-recipes.sh)
+keeps the recipe registry and its generated surfaces synchronized, and reports
+byte-identical declaration copies and unregistered local selector tables among
+changed declarations; and
+[`scripts/check-proof-duplication.sh`](../scripts/check-proof-duplication.sh)
+holds the shrink-only textual-duplication baseline. A red row from any of them
+usually means a step above was skipped. Bytecode-segment sharing between call
+sites is a separate, opt-in mechanism with its own guide outside this
+repository; nothing in this workflow requires it.
