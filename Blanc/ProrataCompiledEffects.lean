@@ -157,7 +157,7 @@ theorem prorata_convertToAssets_eq_withdraw_pay
   refine ⟨Sevm.argWord withdrawal 0 *
       (Devm.getBal withdrawPre withdrawal.currentTarget + 1) /
         ((Devm.getStor withdrawPre withdrawal.currentTarget).get supplySlot + offset),
-    rfl, ?_, hwithdrawWord, ?_⟩
+    rfl, ?_, hwithdrawWord.2.2, ?_⟩
   · rw [hArg, hStor, hBal, hTarget] at hviewWord
     exact hviewWord
   · exact ⟨callPre, callPost, guardPost, returnPre, hpre, hpayout, hwithdrawWord⟩
