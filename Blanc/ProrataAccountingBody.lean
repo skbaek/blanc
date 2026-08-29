@@ -27,8 +27,8 @@ theorem retainedTransactionListAccountingReplay
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca benv.state) steps
-        (AccountingSnapshot.ofState ca finalBenv.state) := by
+        (RealizedSnapshot.ofState ca benv.state) steps
+        (RealizedSnapshot.ofState ca finalBenv.state) := by
   induction trace with
   | nil => exact ⟨[], ProrataAccountingReplay.nil_of_eq rfl⟩
   | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail
@@ -65,8 +65,8 @@ theorem retainedSystemMessageAccountingReplay
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca benv.state) steps
-        (AccountingSnapshot.ofState ca state) := by
+        (RealizedSnapshot.ofState ca benv.state) steps
+        (RealizedSnapshot.ofState ca state) := by
   have msgInv : prorataSpec.MsgInv ca
       (systemTransactionMessage benv target data) :=
     systemTransactionMessage_msgInv inv notCreated
@@ -95,8 +95,8 @@ theorem retainedRequestsAccountingReplay
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca benv.state) steps
-        (AccountingSnapshot.ofState ca state) := by
+        (RealizedSnapshot.ofState ca benv.state) steps
+        (RealizedSnapshot.ofState ca state) := by
   obtain ⟨withdrawalSteps, withdrawalReplay⟩ :=
     retainedSystemMessageAccountingReplay trace.withdrawal inv notCreated
       (by decide) blockIndex
@@ -126,8 +126,8 @@ theorem retainedDirectWithdrawalAccountingReplay
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca pre) steps
-        (AccountingSnapshot.ofState ca (processWithdrawalsState pre wds)) := by
+        (RealizedSnapshot.ofState ca pre) steps
+        (RealizedSnapshot.ofState ca (processWithdrawalsState pre wds)) := by
   induction wds generalizing pre with
   | nil => exact ⟨[], ProrataAccountingReplay.nil_of_eq rfl⟩
   | cons wd wds ih =>
@@ -170,8 +170,8 @@ theorem retainedBodyAccountingReplay
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca benv.state) steps
-        (AccountingSnapshot.ofState ca state) := by
+        (RealizedSnapshot.ofState ca benv.state) steps
+        (RealizedSnapshot.ofState ca state) := by
   -- (1) The beacon-roots system message.
   obtain ⟨beaconSteps, beaconReplay⟩ :=
     retainedSystemMessageAccountingReplay trace.beacon inv notCreated

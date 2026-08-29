@@ -16,9 +16,9 @@ projection: `ofState` reads nothing else. -/
 private theorem ofState_congr_get
     {ca : Adr} {before after : State}
     (get : after.get ca = before.get ca) :
-    AccountingSnapshot.ofState ca after = AccountingSnapshot.ofState ca before :=
-  congrArg₂ AccountingSnapshot.mk
-    (congrArg supplyN (congrArg Acct.stor get))
+    RealizedSnapshot.ofState ca after = RealizedSnapshot.ofState ca before :=
+  congrArg₂ RealizedSnapshot.mk
+    (congrArg Acct.stor get)
     (congrArg B256.toNat (congrArg Acct.bal get))
 
 /-- The transaction's prepared message is accounting-ready unless it is a
@@ -33,8 +33,8 @@ theorem TransactionTrace.messageAccountingReplay
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca trace.msg.benv.state) steps
-        (AccountingSnapshot.ofState ca trace.messageState) := by
+        (RealizedSnapshot.ofState ca trace.msg.benv.state) steps
+        (RealizedSnapshot.ofState ca trace.messageState) := by
   have transfer : trace.msg.shouldTransferValue = true :=
     trace.msg_shouldTransferValue
   by_cases target : trace.msg.currentTarget = ca
@@ -55,7 +55,7 @@ theorem TransactionTrace.messageAccountingReplay
           processMessageCall_createCollision_state_eq receiver collision
             trace.message.result
         exact ⟨[], ProrataAccountingReplay.nil_of_eq
-          (congrArg (AccountingSnapshot.ofState ca) stateEq)⟩
+          (congrArg (RealizedSnapshot.ofState ca) stateEq)⟩
   · exact retainedMessageCallAccountingReplay trace.message
       ⟨⟨msgInv, Or.inr target⟩, fun current => absurd current target⟩
       blockIndex transactionIndex
@@ -82,8 +82,8 @@ theorem retainedTransactionAccountingReplay
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca benv.state) steps
-        (AccountingSnapshot.ofState ca state) := by
+        (RealizedSnapshot.ofState ca benv.state) steps
+        (RealizedSnapshot.ofState ca state) := by
   rcases trace.exists_stateChronology with ⟨chronology⟩
   have senderNe : trace.sender ≠ ca := trace.sender_ne inv notCreated
   let provenance : ProrataAccountingProvenance :=
@@ -93,11 +93,11 @@ theorem retainedTransactionAccountingReplay
       actor := none }
   -- (1) The nonce bump and up-front gas debit are invisible to PRORATA.
   have debitSnapshot :
-      AccountingSnapshot.ofState ca trace.msg.benv.state =
-        AccountingSnapshot.ofState ca benv.state := by
+      RealizedSnapshot.ofState ca trace.msg.benv.state =
+        RealizedSnapshot.ofState ca benv.state := by
     rw [prepareMessage_benv trace.prepared]
-    show AccountingSnapshot.ofState ca trace.debitState = _
-    unfold AccountingSnapshot.ofState
+    show RealizedSnapshot.ofState ca trace.debitState = _
+    unfold RealizedSnapshot.ofState
     rw [trace.debitState_getStor_eq (ca := ca),
       trace.debitState_bal_eq senderNe]
   -- (2) The prepared message replays by rung R1.
@@ -121,24 +121,24 @@ theorem retainedTransactionAccountingReplay
       provenance tipBound
   have refundReplay' :
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca trace.messageState) refundSteps
-        (AccountingSnapshot.ofState ca
+        (RealizedSnapshot.ofState ca trace.messageState) refundSteps
+        (RealizedSnapshot.ofState ca
           (trace.refundedState chronology.refundCounter)) := refundReplay
   -- (5) The final deletion fold never names PRORATA.
   have deleteGet := foldl_destroyAccount_get_eq
     (state := trace.coinbaseState chronology.refundCounter)
     (trace.accountsToDelete_ne (prorataSpec_preserves ca) inv notCreated)
   have finalSnapshot :
-      AccountingSnapshot.ofState ca state =
-        AccountingSnapshot.ofState ca
+      RealizedSnapshot.ofState ca state =
+        RealizedSnapshot.ofState ca
           (trace.coinbaseState chronology.refundCounter) :=
-    (congrArg (AccountingSnapshot.ofState ca) chronology.finalState_eq).trans
+    (congrArg (RealizedSnapshot.ofState ca) chronology.finalState_eq).trans
       (ofState_congr_get deleteGet)
   have tipReplay' :
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca
+        (RealizedSnapshot.ofState ca
           (trace.refundedState chronology.refundCounter)) tipSteps
-        (AccountingSnapshot.ofState ca state) := by
+        (RealizedSnapshot.ofState ca state) := by
     rw [finalSnapshot]
     exact tipReplay
   exact ⟨messageSteps ++ (refundSteps ++ tipSteps),

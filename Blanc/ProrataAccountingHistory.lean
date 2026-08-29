@@ -34,8 +34,8 @@ theorem retainedConfiguredBlockAccountingReplay
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca pre.state) steps
-        (AccountingSnapshot.ofState ca post.state) := by
+        (RealizedSnapshot.ofState ca pre.state) steps
+        (RealizedSnapshot.ofState ca post.state) := by
   obtain ⟨steps, replay⟩ :=
     retainedBodyAccountingReplay (ca := ca) trace.bodyTrace
       (trace.openingState ▸ inv)
@@ -66,8 +66,8 @@ theorem retainedConfiguredHistoryAccountingReplay
     (inv : prorataSpec.StateInv ca checkpoint.state) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca checkpoint.state) steps
-        (AccountingSnapshot.ofState ca future.state) := by
+        (RealizedSnapshot.ofState ca checkpoint.state) steps
+        (RealizedSnapshot.ofState ca future.state) := by
   induction history with
   | refl hcfg hctx hid => exact ⟨[], ProrataAccountingReplay.nil_of_eq rfl⟩
   | step prior block ih =>
@@ -102,8 +102,8 @@ inductive ProrataTraceRealizes {cfg : ChainConfig} {deployed : BlockChain}
       (prior : ProrataTraceRealizes root priorSteps current)
       (block : ConfiguredBlockTrace cfg current future)
       (replay : ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca current.state) blockSteps
-        (AccountingSnapshot.ofState ca future.state)) :
+        (RealizedSnapshot.ofState ca current.state) blockSteps
+        (RealizedSnapshot.ofState ca future.state)) :
       ProrataTraceRealizes root (priorSteps ++ blockSteps) future
 
 namespace ProrataTraceRealizes
@@ -130,8 +130,8 @@ theorem toAccountingReplay {cfg : ChainConfig} {deployed future : BlockChain}
     {steps : List (ProrataAccountingStep offset.toNat)}
     (realizes : ProrataTraceRealizes root steps future) :
     ProrataAccountingReplay offset.toNat
-      (AccountingSnapshot.ofState ca deployed.state) steps
-      (AccountingSnapshot.ofState ca future.state) := by
+      (RealizedSnapshot.ofState ca deployed.state) steps
+      (RealizedSnapshot.ofState ca future.state) := by
   induction realizes with
   | refl => exact .nil _
   | step prior block replay ih => exact ih.append replay
@@ -233,7 +233,7 @@ theorem prorata_realized_dust_trace_exact
   obtain ⟨path, hsteps, hfirst, hlast⟩ :=
     ProrataAccountingReplay.exists_path realizes.toAccountingReplay
   have hgenesis : path.first = ⟨0, 0⟩ := by
-    rw [hfirst, root.accountingSnapshot]
+    rw [hfirst, RealizedSnapshot.snapshot_ofState, root.accountingSnapshot]
   have hzero : path.snapshotAt 0 = ⟨0, 0⟩ := by
     rw [path.snapshotAt_zero, hgenesis]
   have hX : path.XAt 0 = 1 := by

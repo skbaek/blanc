@@ -105,6 +105,20 @@ lemma Stor.decrease_set (s : Stor) (a : Adr) (v : B256) :
     show s.get b.toB256 = (s.set a.toB256 _).get b.toB256
     exact (Stor.get_set_ne _ (fun hc => hb (Adr.toB256_inj hc)) _).symm
 
+/-- Read-after-write at an address-shaped key, seen through `Stor.rest`.
+
+The bare halves of `Stor.increase_set` / `Stor.decrease_set`, for a caller
+that books an exact movement of its own rather than an `Increase`/`Decrease`
+relation: a ledger write is visible at its own row, and only there. -/
+lemma Stor.rest_set_self (s : Stor) (a : Adr) (v : B256) :
+    Stor.rest (s.set a.toB256 v) a = v :=
+  Stor.get_set_self _ _ _
+
+/-- A ledger write at one address-shaped key is invisible at every other. -/
+lemma Stor.rest_set_ne (s : Stor) {a b : Adr} (ne : b ≠ a) (v : B256) :
+    Stor.rest (s.set a.toB256 v) b = Stor.rest s b :=
+  Stor.get_set_ne _ (fun hc => ne (Adr.toB256_inj hc).symm) _
+
 lemma frel_of_frel {ξ υ} {x : ξ} {r s : υ → υ → Prop} {f g : ξ → υ}
     (h : r (f x) (g x) → s (f x) (g x)) (h' : Frel x r f g) : Frel x s f g := by
   intro x'; constructor <;> intro hx

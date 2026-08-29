@@ -9,13 +9,13 @@ open Jaune
 
 namespace Prorata
 
-namespace AccountingSnapshot
+namespace RealizedSnapshot
 
-/-- The accounting boundary at an instruction-frame entry.  A frame executing
+/-- The realized boundary at an instruction-frame entry.  A frame executing
 PRORATA begins immediately before its value credit; a foreign frame begins at
 the ordinary world-state projection. -/
 def execEntry (ca : Adr) (sevm : Sevm) (state : State) :
-    AccountingSnapshot :=
+    RealizedSnapshot :=
   if sevm.currentTarget = ca then beforeCredit ca sevm.value state
   else ofState ca state
 
@@ -31,7 +31,7 @@ def execEntry (ca : Adr) (sevm : Sevm) (state : State) :
     execEntry ca sevm state = ofState ca state := by
   simp [execEntry, target]
 
-end AccountingSnapshot
+end RealizedSnapshot
 
 /-- The exact message-level facts needed to interpret a retained raw execution
 as PRORATA accounting.  `codeOrForeign` excludes synthetic CREATE roots that
@@ -57,13 +57,13 @@ theorem ProcessMessage.accountingReplay_of_body
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.execEntry ca sevm pre.state) steps
-        (AccountingSnapshot.ofState ca
+        (RealizedSnapshot.execEntry ca sevm pre.state) steps
+        (RealizedSnapshot.ofState ca
           (Execution.committedPost out committed).state)) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca msg.benv.state) steps
-        (AccountingSnapshot.ofState ca post.state) := by
+        (RealizedSnapshot.ofState ca msg.benv.state) steps
+        (RealizedSnapshot.ofState ca post.state) := by
   by_cases settles :
       Frame.settlementCommits (Frame.ofCall msg) out = true
   · have committed := Frame.raw_commits_of_settlementCommits settles
@@ -76,15 +76,15 @@ theorem ProcessMessage.accountingReplay_of_body
     have preState : pre.state = entry.state :=
       congrArg (fun evm : Evm => evm.dyna.state) evmEq
     have entryBoundary :
-        AccountingSnapshot.execEntry ca sevm pre.state =
-          AccountingSnapshot.messageEntry ca msg entry.state := by
+        RealizedSnapshot.execEntry ca sevm pre.state =
+          RealizedSnapshot.messageEntry ca msg entry.state := by
       rw [sevmEq, preState]
       rfl
     have prefixEq :
-        AccountingSnapshot.execEntry ca sevm pre.state =
-          AccountingSnapshot.ofState ca msg.benv.state :=
+        RealizedSnapshot.execEntry ca sevm pre.state =
+          RealizedSnapshot.ofState ca msg.benv.state :=
       entryBoundary.trans
-        (AccountingSnapshot.messageEntry_eq_ofState caller_ne value_zero
+        (RealizedSnapshot.messageEntry_eq_ofState caller_ne value_zero
           transfer sum_nof)
     have postState : post.state =
         (Execution.committedPost out committed).state :=
@@ -105,7 +105,7 @@ theorem ProcessMessage.accountingReplay_of_body
     have rollback :=
       (_root_.Blanc.ProcessMessage.rollback_of_error process postError).1
     refine ⟨[], ProrataAccountingReplay.nil_of_eq ?_⟩
-    exact congrArg (AccountingSnapshot.ofState ca) rollback
+    exact congrArg (RealizedSnapshot.ofState ca) rollback
 
 /-- Settlement-aware accounting replay for one retained CREATE constructor.
 Fresh-account preparation is silent in the PRORATA projection; clean code
@@ -123,13 +123,13 @@ theorem ProcessCreateMessage.accountingReplay_of_body
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.execEntry ca sevm pre.state) steps
-        (AccountingSnapshot.ofState ca
+        (RealizedSnapshot.execEntry ca sevm pre.state) steps
+        (RealizedSnapshot.ofState ca
           (Execution.committedPost out committed).state)) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca msg.benv.state) steps
-        (AccountingSnapshot.ofState ca post.state) := by
+        (RealizedSnapshot.ofState ca msg.benv.state) steps
+        (RealizedSnapshot.ofState ca post.state) := by
   by_cases settles :
       Frame.settlementCommits (Frame.ofCreate msg) out = true
   · have clean : post.error.isSome = false := by
@@ -151,19 +151,19 @@ theorem ProcessCreateMessage.accountingReplay_of_body
     have preparedBalance :=
       _root_.Blanc.processCreateMessage_msg_bal_eq msg
     have preparedSnapshot :
-        AccountingSnapshot.ofState ca
+        RealizedSnapshot.ofState ca
             (processCreateMessage.msg msg).benv.state =
-          AccountingSnapshot.ofState ca msg.benv.state := by
-      unfold AccountingSnapshot.ofState
-      exact congrArg₂ AccountingSnapshot.mk
-        (congrArg supplyN (congrFun preparedStor ca))
+          RealizedSnapshot.ofState ca msg.benv.state := by
+      unfold RealizedSnapshot.ofState
+      exact congrArg₂ RealizedSnapshot.mk
+        (congrFun preparedStor ca)
         (congrArg B256.toNat (congrFun preparedBalance ca))
     have postSnapshot :
-        AccountingSnapshot.ofState ca post.state =
-          AccountingSnapshot.ofState ca inner.state := by
-      unfold AccountingSnapshot.ofState
-      exact congrArg₂ AccountingSnapshot.mk
-        (congrArg supplyN (congrFun postStor ca))
+        RealizedSnapshot.ofState ca post.state =
+          RealizedSnapshot.ofState ca inner.state := by
+      unfold RealizedSnapshot.ofState
+      exact congrArg₂ RealizedSnapshot.mk
+        (congrFun postStor ca)
         (congrArg B256.toNat (congrFun postBalance ca))
     have innerSum :
         sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
@@ -187,7 +187,7 @@ theorem ProcessCreateMessage.accountingReplay_of_body
     have rollback :=
       _root_.Blanc.ProcessCreateMessage.rollback_of_error process postError
     refine ⟨[], ProrataAccountingReplay.nil_of_eq ?_⟩
-    exact congrArg (AccountingSnapshot.ofState ca) rollback
+    exact congrArg (RealizedSnapshot.ofState ca) rollback
 
 /-- Recursive accounting transport for one actual filled executable slot in a
 foreign frame.  CALL and CREATE share the same settlement-aware child replay;
@@ -203,13 +203,13 @@ theorem Xinst.foreignSomeAccountingReplay
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.execEntry ca cevm.sta cevm.dyna.state) steps
-        (AccountingSnapshot.ofState ca
+        (RealizedSnapshot.execEntry ca cevm.sta cevm.dyna.state) steps
+        (RealizedSnapshot.ofState ca
           (Execution.committedPost raw committed).state)) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca pre.state) steps
-        (AccountingSnapshot.ofState ca post.state) := by
+        (RealizedSnapshot.ofState ca pre.state) steps
+        (RealizedSnapshot.ofState ca post.state) := by
   rcases Xinst.step_shape sevm pre x with
     ⟨execution, shape, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
@@ -237,11 +237,11 @@ theorem Xinst.foreignSomeAccountingReplay
     have preparedBalance : createPre.state.bal = d.state.bal := by
       simpa only [createPre] using genericCreate_prepared_bal sevm d newAddress
     have preparedSnapshot :
-        AccountingSnapshot.ofState ca createPre.state =
-          AccountingSnapshot.ofState ca d.state := by
-      unfold AccountingSnapshot.ofState
-      exact congrArg₂ AccountingSnapshot.mk
-        (congrArg supplyN (congrFun preparedStor ca))
+        RealizedSnapshot.ofState ca createPre.state =
+          RealizedSnapshot.ofState ca d.state := by
+      unfold RealizedSnapshot.ofState
+      exact congrArg₂ RealizedSnapshot.mk
+        (congrFun preparedStor ca)
         (congrArg B256.toNat (congrFun preparedBalance ca))
     have targetEmpty : Devm.getStor d newAddress = .empty :=
       genericCreate_step_spawn_getStor_empty spawn
@@ -321,8 +321,8 @@ def Exec.CoreProrataAccounting
       (_framePath : List Nat) (_nextChild : Nat),
       ∃ steps,
         ProrataAccountingReplay offset.toNat
-          (AccountingSnapshot.execEntry ca sevm pre.state) steps
-          (AccountingSnapshot.ofState ca
+          (RealizedSnapshot.execEntry ca sevm pre.state) steps
+          (RealizedSnapshot.ofState ca
             (Execution.committedPost out committed).state)
 
 /-- A failed raw execution cannot satisfy the committed replay premise. -/
@@ -357,20 +357,22 @@ theorem Exec.CoreProrataAccounting.atTarget
       transactionIndex := transactionIndex
       framePath := framePath
       actor := some sevm.caller.toB256.toAdr }
+  have actorEq : provenance.actor = some sevm.caller :=
+    congrArg some (toAdr_toB256 sevm.caller)
   rcases
       _root_.Blanc.Prorata.Exec.Frame.accountingReplay_or_realizedWithdrawal
-        invocation precondition provenance (caller rfl) with
+        invocation precondition provenance actorEq (caller rfl) with
     replay | withdrawal
-  · rw [AccountingSnapshot.execEntry_of_target rfl]
+  · rw [RealizedSnapshot.execEntry_of_target rfl]
     exact replay
   · rcases withdrawal with ⟨withdrawal⟩
     dsimp only [frame, Exec.Frame.ofRun, Exec.Frame.post] at withdrawal
     have childReplay : ∃ steps,
         ProrataAccountingReplay offset.toNat
-          (AccountingSnapshot.ofState sevm.currentTarget
+          (RealizedSnapshot.ofState sevm.currentTarget
             withdrawal.payout.entry.state)
           steps
-          (AccountingSnapshot.ofState sevm.currentTarget
+          (RealizedSnapshot.ofState sevm.currentTarget
             withdrawal.payout.child.state) := by
       rcases withdrawal.payout.trace with ⟨slot, retained, process⟩
       cases retained with
@@ -381,7 +383,7 @@ theorem Exec.CoreProrataAccounting.atTarget
                 withdrawal.payout.childClean
           refine ⟨[], ProrataAccountingReplay.nil_of_eq ?_⟩
           exact congrArg
-            (AccountingSnapshot.ofState sevm.currentTarget) childState
+            (RealizedSnapshot.ofState sevm.currentTarget) childState
       | @some childPc childSevm childPre childOut childRun =>
           have settles :=
             _root_.Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
@@ -433,11 +435,11 @@ theorem Exec.CoreProrataAccounting.atTarget
               blockIndex transactionIndex (framePath ++ [nextChild]) 0 with
             ⟨steps, replay⟩
           have startEq :
-              AccountingSnapshot.execEntry sevm.currentTarget childSevm
+              RealizedSnapshot.execEntry sevm.currentTarget childSevm
                   childPre.state =
-                AccountingSnapshot.ofState sevm.currentTarget
+                RealizedSnapshot.ofState sevm.currentTarget
                   withdrawal.payout.entry.state := by
-            rw [AccountingSnapshot.execEntry_of_target_ne childTargetNe,
+            rw [RealizedSnapshot.execEntry_of_target_ne childTargetNe,
               childPreEq]
             rfl
           have childPost :=
@@ -446,10 +448,10 @@ theorem Exec.CoreProrataAccounting.atTarget
           refine ⟨steps, ?_⟩
           rw [← startEq, childPost]
           exact replay
-    rcases withdrawal.accountingReplay provenance childReplay with
+    rcases withdrawal.accountingReplay provenance actorEq childReplay with
       ⟨steps, replay⟩
     refine ⟨steps, ?_⟩
-    rw [AccountingSnapshot.execEntry_of_target rfl]
+    rw [RealizedSnapshot.execEntry_of_target rfl]
     exact replay
 
 /-- Foreign nonrecursive execution prefixes their projected accounting change
@@ -496,9 +498,9 @@ theorem Exec.CoreProrataAccounting.nextNone
           (fun target => (target_ne target).elim)
           blockIndex transactionIndex framePath nextChild with
         ⟨tailSteps, tailReplay⟩
-      rw [AccountingSnapshot.execEntry_of_target_ne target_ne] at tailReplay
+      rw [RealizedSnapshot.execEntry_of_target_ne target_ne] at tailReplay
       refine ⟨headSteps ++ tailSteps, ?_⟩
-      rw [AccountingSnapshot.execEntry_of_target_ne target_ne]
+      rw [RealizedSnapshot.execEntry_of_target_ne target_ne]
       exact headReplay.append tailReplay
   | spawn frame resume pc' =>
       simp only [Ninst.StepRun, stepShape, Step.Run] at step
@@ -510,9 +512,9 @@ theorem Exec.CoreProrataAccounting.nextNone
           (fun target => (target_ne target).elim)
           blockIndex transactionIndex framePath (nextChild + 1) with
         ⟨tailSteps, tailReplay⟩
-      rw [AccountingSnapshot.execEntry_of_target_ne target_ne] at tailReplay
+      rw [RealizedSnapshot.execEntry_of_target_ne target_ne] at tailReplay
       refine ⟨headSteps ++ tailSteps, ?_⟩
-      rw [AccountingSnapshot.execEntry_of_target_ne target_ne]
+      rw [RealizedSnapshot.execEntry_of_target_ne target_ne]
       exact headReplay.append tailReplay
 
 /-- A foreign terminal instruction is the final projected accounting segment
@@ -539,7 +541,7 @@ theorem Exec.CoreProrataAccounting.last
       rcases Linst.foreignAccountingReplay step target_ne sumNof provenance
           with ⟨steps, replay⟩
       refine ⟨steps, ?_⟩
-      rw [AccountingSnapshot.execEntry_of_target_ne target_ne]
+      rw [RealizedSnapshot.execEntry_of_target_ne target_ne]
       exact replay
 
 /-- Jump execution is world-state silent, so only its continuation contributes
@@ -565,9 +567,9 @@ theorem Exec.CoreProrataAccounting.jump
       (fun target => (target_ne target).elim)
       blockIndex transactionIndex framePath nextChild with
     ⟨steps, replay⟩
-  rw [AccountingSnapshot.execEntry_of_target_ne target_ne] at replay
+  rw [RealizedSnapshot.execEntry_of_target_ne target_ne] at replay
   refine ⟨steps, ?_⟩
-  rw [AccountingSnapshot.execEntry_of_target_ne target_ne, ← stateEq]
+  rw [RealizedSnapshot.execEntry_of_target_ne target_ne, ← stateEq]
   exact replay
 
 /-- A foreign filled child is replayed at its exact child path, transported
@@ -700,10 +702,10 @@ theorem Exec.CoreProrataAccounting.nextSome
               have childBody :
                   ∀ childCommitted : Execution.commits raw = true, ∃ steps,
                     ProrataAccountingReplay offset.toNat
-                      (AccountingSnapshot.execEntry ca cevm.sta
+                      (RealizedSnapshot.execEntry ca cevm.sta
                         cevm.dyna.state)
                       steps
-                      (AccountingSnapshot.ofState ca
+                      (RealizedSnapshot.ofState ca
                         (Execution.committedPost raw childCommitted).state) := by
                 intro childCommitted
                 exact ihChild child childCommitted childAt childPrecondition
@@ -717,10 +719,10 @@ theorem Exec.CoreProrataAccounting.nextSome
                   (fun target => (target_ne target).elim)
                   blockIndex transactionIndex framePath (nextChild + 1) with
                 ⟨tailSteps, tailReplay⟩
-              rw [AccountingSnapshot.execEntry_of_target_ne target_ne]
+              rw [RealizedSnapshot.execEntry_of_target_ne target_ne]
                 at tailReplay
               refine ⟨headSteps ++ tailSteps, ?_⟩
-              rw [AccountingSnapshot.execEntry_of_target_ne target_ne]
+              rw [RealizedSnapshot.execEntry_of_target_ne target_ne]
               exact headReplay.append tailReplay
 
 /-- The complete interpreter recursion for committed PRORATA accounting.
@@ -778,8 +780,8 @@ theorem Exec.prorataAccountingReplay_of_messageRoot
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.execEntry ca sevm pre.state) steps
-        (AccountingSnapshot.ofState ca
+        (RealizedSnapshot.execEntry ca sevm pre.state) steps
+        (RealizedSnapshot.ofState ca
           (Execution.committedPost out committed).state) := by
   have precondition :=
     ContractSpec.Pre.of_inv_benvAfterTransfer
@@ -836,8 +838,8 @@ theorem retainedProcessMessageAccountingReplay
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca msg.benv.state) steps
-        (AccountingSnapshot.ofState ca post.state) := by
+        (RealizedSnapshot.ofState ca msg.benv.state) steps
+        (RealizedSnapshot.ofState ca post.state) := by
   rcases trace with ⟨slot, retained, process⟩
   cases retained with
   | none =>
@@ -877,8 +879,8 @@ theorem retainedProcessCreateMessageAccountingReplay
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca msg.benv.state) steps
-        (AccountingSnapshot.ofState ca post.state) := by
+        (RealizedSnapshot.ofState ca msg.benv.state) steps
+        (RealizedSnapshot.ofState ca post.state) := by
   rcases trace with ⟨slot, retained, process⟩
   cases retained with
   | none =>
@@ -930,8 +932,8 @@ theorem retainedMessageCallAccountingReplay
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca msg.benv.state) steps
-        (AccountingSnapshot.ofState ca state) := by
+        (RealizedSnapshot.ofState ca msg.benv.state) steps
+        (RealizedSnapshot.ofState ca state) := by
   cases trace with
   | createCollision targetNone collision result =>
       have stateEq :=
@@ -975,10 +977,10 @@ theorem retainedMessageCallAccountingReplay
             messageCallDelegation_caller_eq delegation]
           exact ready.caller_ne target
       have snapshotEq :
-          AccountingSnapshot.ofState ca
+          RealizedSnapshot.ofState ca
               (messageCallExecutionMessage delegated).benv.state =
-            AccountingSnapshot.ofState ca msg.benv.state := by
-        unfold AccountingSnapshot.ofState
+            RealizedSnapshot.ofState ca msg.benv.state := by
+        unfold RealizedSnapshot.ofState
         rw [messageCallExecutionMessage_getStor_eq,
           messageCallExecutionMessage_bal_eq,
           messageCallDelegation_getStor_eq delegation,

@@ -18,21 +18,80 @@ namespace AccountingSnapshot
 def ofState (ca : Adr) (state : State) : AccountingSnapshot :=
   ⟨supplyN (state.getStor ca), (state.bal ca).toNat⟩
 
-/-- The semantic pre-credit snapshot at an entered value-carrying message. -/
-def beforeCredit (ca : Adr) (value : B256) (state : State) :
-    AccountingSnapshot :=
-  ⟨supplyN (state.getStor ca), (state.bal ca).toNat - value.toNat⟩
+end AccountingSnapshot
 
-/-- The accounting boundary at message entry.  A message entering PRORATA is
+/-- The realized PRORATA accounting boundary.
+
+The frozen `AccountingSnapshot` records only the two Nat quantities the
+cumulative-dust identity prices with, so a step recorded over it cannot say
+*whose* shares moved.  A realized boundary keeps PRORATA's own persistent
+storage in place of the total that summarizes it, so the caller-keyed share
+ledger survives the boundary; the ETH balance stays a `Nat` because a semantic
+boundary may sit immediately before an already-credited call value, which is
+not any world state's balance.
+
+`snapshot` is the frozen projection, so everything stated over snapshots reads
+unchanged one level down. -/
+structure RealizedSnapshot where
+  stor : Stor
+  balance : Nat
+
+namespace RealizedSnapshot
+
+/-- The frozen accounting projection of a realized boundary. -/
+def snapshot (boundary : RealizedSnapshot) : AccountingSnapshot :=
+  ⟨supplyN boundary.stor, boundary.balance⟩
+
+/-- The caller-keyed share ledger of a realized boundary: the address-shaped
+storage rows, which are exactly the domain `balSum` sums over. -/
+def ledger (boundary : RealizedSnapshot) : Adr → B256 :=
+  Stor.rest boundary.stor
+
+/-- The realized PRORATA boundary of one exact world state. -/
+def ofState (ca : Adr) (state : State) : RealizedSnapshot :=
+  ⟨state.getStor ca, (state.bal ca).toNat⟩
+
+/-- The semantic pre-credit boundary at an entered value-carrying message. -/
+def beforeCredit (ca : Adr) (value : B256) (state : State) :
+    RealizedSnapshot :=
+  ⟨state.getStor ca, (state.bal ca).toNat - value.toNat⟩
+
+/-- The realized boundary at message entry.  A message entering PRORATA is
 viewed immediately before its value credit; every foreign message is viewed
 at its ordinary world-state projection. -/
 def messageEntry (ca : Adr) (msg : Msg) (state : State) :
-    AccountingSnapshot :=
+    RealizedSnapshot :=
   if msg.currentTarget = ca then beforeCredit ca msg.value state
   else ofState ca state
 
+/-- The realized boundary projects onto the frozen accounting snapshot. -/
+@[simp] theorem snapshot_ofState (ca : Adr) (state : State) :
+    (ofState ca state).snapshot = AccountingSnapshot.ofState ca state := rfl
+
+theorem ofState_snapshot (ca : Adr) (state : State) :
+    (ofState ca state).snapshot =
+      ⟨supplyN (state.getStor ca), (state.bal ca).toNat⟩ := rfl
+
+theorem ofState_ledger (ca : Adr) (state : State) :
+    (ofState ca state).ledger = Stor.rest (state.getStor ca) := rfl
+
+theorem beforeCredit_snapshot (ca : Adr) (value : B256) (state : State) :
+    (beforeCredit ca value state).snapshot =
+      ⟨supplyN (state.getStor ca), (state.bal ca).toNat - value.toNat⟩ := rfl
+
+theorem beforeCredit_ledger (ca : Adr) (value : B256) (state : State) :
+    (beforeCredit ca value state).ledger = Stor.rest (state.getStor ca) := rfl
+
+/-- Equal PRORATA storage and balance is equal realized boundary.  This is the
+shape almost every projected no-op boundary equality takes. -/
+theorem ofState_congr {ca : Adr} {pre post : State}
+    (hstor : post.getStor ca = pre.getStor ca)
+    (hbal : post.bal ca = pre.bal ca) :
+    ofState ca post = ofState ca pre :=
+  congrArg₂ RealizedSnapshot.mk hstor (congrArg B256.toNat hbal)
+
 /-- A successful EVM message transfer connects its semantic entry boundary
-exactly to the ordinary accounting projection of the pre-transfer state. -/
+exactly to the ordinary realized boundary of the pre-transfer state. -/
 theorem messageEntry_eq_ofState
     {ca : Adr} {msg : Msg} {entry : Benv}
     (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
@@ -63,8 +122,8 @@ theorem messageEntry_eq_ofState
         unfold messageEntry
         rw [if_pos rfl]
         unfold beforeCredit ofState
-        apply congrArg₂ AccountingSnapshot.mk
-        · exact congrArg supplyN (fields.1 msg.currentTarget)
+        apply congrArg₂ RealizedSnapshot.mk
+        · exact fields.1 msg.currentTarget
         · change ((debit.addBal msg.currentTarget msg.value).bal
               msg.currentTarget).toNat - msg.value.toNat = _
           rw [of_transfer_bal_target sub (caller_ne shouldTransfer) sum_nof]
@@ -72,12 +131,90 @@ theorem messageEntry_eq_ofState
       · unfold messageEntry
         rw [if_neg target_eq]
         unfold ofState
-        apply congrArg₂ AccountingSnapshot.mk
-        · exact congrArg supplyN (fields.1 ca)
+        apply congrArg₂ RealizedSnapshot.mk
+        · exact fields.1 ca
         · exact congrArg B256.toNat
             (of_transfer_bal_other sub (caller_ne shouldTransfer) target_eq)
 
-end AccountingSnapshot
+end RealizedSnapshot
+
+/-- The exact share-ledger movement of one classified accounting step.
+
+The frozen four-way classification prices a step but never names a holder, so
+by itself it admits a withdrawal that burns someone else's shares.  This is
+the missing half, and the whole reason the realized carrier keeps storage: a
+priced step moves exactly its own actor's ledger row, by exactly its own share
+amount, and leaves every other row alone; an unpriced step moves no row at
+all.  A withdrawal additionally covers its burn from the actor's own row,
+which is what makes a burn impossible to aim at another holder. -/
+def LedgerMove : ProrataAccountingKind → Option Adr →
+    (Adr → B256) → (Adr → B256) → Prop
+  | .deposit _ minted, actor, pre, post =>
+      ∃ x : Adr, actor = some x ∧
+        (post x).toNat = (pre x).toNat + minted ∧
+        ∀ b : Adr, b ≠ x → post b = pre b
+  | .withdraw shares _, actor, pre, post =>
+      ∃ x : Adr, actor = some x ∧
+        shares ≤ (pre x).toNat ∧
+        (post x).toNat = (pre x).toNat - shares ∧
+        ∀ b : Adr, b ≠ x → post b = pre b
+  | .externalCredit _, _, pre, post => post = pre
+  | .silent, _, pre, post => post = pre
+
+/-- A ledger movement is read at whatever actor the chronology records, so a
+step built from a leaf lemma (which knows the caller) transfers to a step
+built from retained provenance (which records it). -/
+theorem LedgerMove.of_actor_eq {kind : ProrataAccountingKind}
+    {actor actor' : Option Adr} {pre post : Adr → B256}
+    (move : LedgerMove kind actor pre post) (eq : actor' = actor) :
+    LedgerMove kind actor' pre post := by
+  rw [eq]; exact move
+
+/-- One realized accounting step: the frozen classification of the boundary
+together with the exact ledger movement that produced it. -/
+structure RealizedEffect (o : Nat) (kind : ProrataAccountingKind)
+    (actor : Option Adr) (pre post : RealizedSnapshot) : Prop where
+  effect : ProrataAccountingEffect o pre.snapshot kind post.snapshot
+  ledger : LedgerMove kind actor pre.ledger post.ledger
+
+/-- PRORATA's mint write, read on the share ledger.  The supply write is
+invisible here (the supply slot is not address-shaped), so the caller's own
+row rises by exactly the minted shares and no other row moves. -/
+theorem ledger_mint (s : Stor) (a : Adr) (v m : B256)
+    (nof : B256.Nof (s.get a.toB256) m) :
+    (Stor.rest ((s.set supplySlot v).set a.toB256 (s.get a.toB256 + m)) a).toNat =
+        (Stor.rest s a).toNat + m.toNat ∧
+      ∀ b : Adr, b ≠ a →
+        Stor.rest ((s.set supplySlot v).set a.toB256 (s.get a.toB256 + m)) b =
+          Stor.rest s b := by
+  constructor
+  · rw [Stor.rest_set_self, B256.toNat_add_eq_of_nof _ _ nof]
+    rfl
+  · intro b hb
+    rw [Stor.rest_set_ne _ hb, Stor.rest_set_prorataSupplySlot]
+
+/-- PRORATA's burn write, read on the share ledger: the caller's own row falls
+by exactly the burned shares and no other row moves. -/
+theorem ledger_burn (s : Stor) (a : Adr) (v m : B256)
+    (le : m ≤ s.get a.toB256) :
+    (Stor.rest ((s.set a.toB256 (s.get a.toB256 - m)).set supplySlot v) a).toNat =
+        (Stor.rest s a).toNat - m.toNat ∧
+      ∀ b : Adr, b ≠ a →
+        Stor.rest ((s.set a.toB256 (s.get a.toB256 - m)).set supplySlot v) b =
+          Stor.rest s b := by
+  constructor
+  · rw [Stor.rest_set_prorataSupplySlot, Stor.rest_set_self,
+      B256.toNat_sub_eq_of_le _ _ le]
+    rfl
+  · intro b hb
+    rw [Stor.rest_set_prorataSupplySlot, Stor.rest_set_ne _ hb]
+
+/-- Retag a realized step with an equal recorded actor. -/
+theorem RealizedEffect.of_actor_eq {o : Nat} {kind : ProrataAccountingKind}
+    {actor actor' : Option Adr} {pre post : RealizedSnapshot}
+    (realized : RealizedEffect o kind actor pre post) (eq : actor' = actor) :
+    RealizedEffect o kind actor' pre post :=
+  ⟨realized.effect, realized.ledger.of_actor_eq eq⟩
 
 /-- Exact invocation identity plus settlement retention exposes the richer
 deployed-byte route classification on the retained frame itself. -/
@@ -111,10 +248,10 @@ theorem DepositEffect.accountingEffect
     (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
       (Devm.getBal pre sevm.currentTarget)) :
     ∃ minted,
-      ProrataAccountingEffect offset.toNat
-        (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
-        (.deposit sevm.value.toNat minted)
-        (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+      RealizedEffect offset.toNat (.deposit sevm.value.toNat minted)
+        (some sevm.caller)
+        (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+        (RealizedSnapshot.ofState sevm.currentTarget post.state) := by
   let stor := Devm.getStor pre sevm.currentTarget
   let balance := Devm.getBal pre sevm.currentTarget
   let supply := stor.get supplySlot
@@ -158,15 +295,23 @@ theorem DepositEffect.accountingEffect
         congrArg B256.toNat (congrFun hbal sevm.currentTarget)
       _ = (balance.toNat - sevm.value.toNat) + sevm.value.toNat :=
         (Nat.sub_add_cancel invariant.value_le_balance).symm
-  refine ⟨minted.toNat, ?_⟩
-  rw [show AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
-      pre.state =
-        ⟨supplyN stor, balance.toNat - sevm.value.toNat⟩ from rfl]
-  rw [show AccountingSnapshot.ofState sevm.currentTarget post.state =
-      ⟨supplyN stor + minted.toNat,
-        (balance.toNat - sevm.value.toNat) + sevm.value.toNat⟩ from by
-      exact congrArg₂ AccountingSnapshot.mk hpostSupply hpostBalance]
-  exact .deposit _ _ _ _ hquote
+  have hcallerNof : B256.Nof (stor.get sevm.caller.toB256) minted := by
+    have hle : (stor.get sevm.caller.toB256).toNat ≤ supply.toNat :=
+      B256.toNat_le_toNat (invariant.share_word_le_supply sevm.caller)
+    unfold B256.Nof at hmintNof ⊢
+    omega
+  refine ⟨minted.toNat, ?_, ?_⟩
+  · show ProrataAccountingEffect offset.toNat
+      ⟨supplyN stor, balance.toNat - sevm.value.toNat⟩ _ _
+    rw [show (RealizedSnapshot.ofState sevm.currentTarget post.state).snapshot =
+        ⟨supplyN stor + minted.toNat,
+          (balance.toNat - sevm.value.toNat) + sevm.value.toNat⟩ from by
+        exact congrArg₂ AccountingSnapshot.mk hpostSupply hpostBalance]
+    exact .deposit _ _ _ _ hquote
+  · refine ⟨sevm.caller, rfl, ?_⟩
+    rw [show (RealizedSnapshot.ofState sevm.currentTarget post.state).ledger =
+        Stor.rest (Devm.getStor post sevm.currentTarget) from rfl, hstor]
+    exact ledger_mint stor sevm.caller (supply + minted) minted hcallerNof
 
 /-- The deposit accounting effect survives the dispatcher's persistent-state
 silent walk from retained frame entry to the raw source body. -/
@@ -176,10 +321,10 @@ theorem BodyEntry.depositAccountingEffect
     (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
       (Devm.getBal pre sevm.currentTarget)) :
     ∃ minted,
-      ProrataAccountingEffect offset.toNat
-        (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
-        (.deposit sevm.value.toNat minted)
-        (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+      RealizedEffect offset.toNat (.deposit sevm.value.toNat minted)
+        (some sevm.caller)
+        (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+        (RealizedSnapshot.ofState sevm.currentTarget post.state) := by
   rcases entry with ⟨bodyPre, hstor, hbal, hcode, run⟩
   have bodyInvariant :
       Inv (Devm.getStor bodyPre sevm.currentTarget) sevm.value
@@ -190,13 +335,13 @@ theorem BodyEntry.depositAccountingEffect
     ⟨minted, accounting⟩
   refine ⟨minted, ?_⟩
   have hpre :
-      AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+      RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
           bodyPre.state =
-        AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+        RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
           pre.state := by
-    unfold AccountingSnapshot.beforeCredit
-    exact congrArg₂ AccountingSnapshot.mk
-      (congrArg supplyN (congrFun hstor sevm.currentTarget))
+    unfold RealizedSnapshot.beforeCredit
+    exact congrArg₂ RealizedSnapshot.mk
+      (congrFun hstor sevm.currentTarget)
       (congrArg (fun balance : B256 =>
         balance.toNat - sevm.value.toNat)
         (congrFun hbal sevm.currentTarget))
@@ -220,13 +365,14 @@ theorem WithdrawPreCallEffect.accountingEffect
           (Sevm.argWord sevm 0 *
             (Devm.getBal pre sevm.currentTarget + 1) /
               ((Devm.getStor pre sevm.currentTarget).get supplySlot + offset))) :
-    ProrataAccountingEffect offset.toNat
-      (AccountingSnapshot.ofState sevm.currentTarget pre.state)
+    RealizedEffect offset.toNat
       (.withdraw (Sevm.argWord sevm 0).toNat
         (Sevm.argWord sevm 0 *
           (Devm.getBal pre sevm.currentTarget + 1) /
             ((Devm.getStor pre sevm.currentTarget).get supplySlot + offset)).toNat)
-      (AccountingSnapshot.ofState sevm.currentTarget paidState) := by
+      (some sevm.caller)
+      (RealizedSnapshot.ofState sevm.currentTarget pre.state)
+      (RealizedSnapshot.ofState sevm.currentTarget paidState) := by
   let shares := Sevm.argWord sevm 0
   let stor := Devm.getStor pre sevm.currentTarget
   let balance := Devm.getBal pre sevm.currentTarget
@@ -271,13 +417,18 @@ theorem WithdrawPreCallEffect.accountingEffect
         balance.toNat - paid.toNat := by
     rw [hpaidBal]
     exact B256.toNat_sub_eq_of_le _ _ hpaidBalance
-  rw [show AccountingSnapshot.ofState sevm.currentTarget pre.state =
-      ⟨supplyN stor, balance.toNat⟩ from rfl]
-  rw [show AccountingSnapshot.ofState sevm.currentTarget paidState =
-      ⟨supplyN stor - shares.toNat, balance.toNat - paid.toNat⟩ from by
-      exact congrArg₂ AccountingSnapshot.mk hpostSupply hpostBalance]
-  exact .withdraw _ _ _ _
-    (B256.toNat_le_toNat hsharesSupply) hquote
+  refine ⟨?_, ?_⟩
+  · show ProrataAccountingEffect offset.toNat ⟨supplyN stor, balance.toNat⟩ _ _
+    rw [show (RealizedSnapshot.ofState sevm.currentTarget paidState).snapshot =
+        ⟨supplyN stor - shares.toNat, balance.toNat - paid.toNat⟩ from by
+        exact congrArg₂ AccountingSnapshot.mk hpostSupply hpostBalance]
+    exact .withdraw _ _ _ _
+      (B256.toNat_le_toNat hsharesSupply) hquote
+  · refine ⟨sevm.caller, rfl, B256.toNat_le_toNat hcover, ?_⟩
+    rw [show (RealizedSnapshot.ofState sevm.currentTarget paidState).ledger =
+        Stor.rest (paidState.getStor sevm.currentTarget) from rfl,
+      hpaidStor, hstor]
+    exact ledger_burn stor sevm.caller (supply - shares) shares hcover
 
 /-- The exact child-message entry selected by an accepted withdrawal payout.
 This packages the semantic paid boundary separately from the callback-final
@@ -385,10 +536,11 @@ theorem WithdrawPreCallEffect.accountingEffect_of_acceptedPayout
     (payout : AcceptedPayout sevm paid callPre callPost guardPost returnPre)
     (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget) :
     ∃ trace : AcceptedPayoutTrace sevm paid callPre callPost,
-      ProrataAccountingEffect offset.toNat
-        (AccountingSnapshot.ofState sevm.currentTarget pre.state)
+      RealizedEffect offset.toNat
         (.withdraw (Sevm.argWord sevm 0).toNat paid.toNat)
-        (AccountingSnapshot.ofState sevm.currentTarget trace.entry.state) := by
+        (some sevm.caller)
+        (RealizedSnapshot.ofState sevm.currentTarget pre.state)
+        (RealizedSnapshot.ofState sevm.currentTarget trace.entry.state) := by
   obtain ⟨trace⟩ := payout.exists_trace recipient_ne
   have fields := effect
   unfold WithdrawPreCallEffect at fields
@@ -476,10 +628,11 @@ structure RealizedWithdrawal (sevm : Sevm) (pre post : Devm) where
   childPre : prorataSpec.Pre sevm.currentTarget
     (initSevm (payout.childMsg.withBenv payout.entry))
     (initDevm (payout.childMsg.withBenv payout.entry))
-  accounting : ProrataAccountingEffect offset.toNat
-    (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+  accounting : RealizedEffect offset.toNat
     (.withdraw (Sevm.argWord sevm 0).toNat paid.toNat)
-    (AccountingSnapshot.ofState sevm.currentTarget payout.entry.state)
+    (some sevm.caller)
+    (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+    (RealizedSnapshot.ofState sevm.currentTarget payout.entry.state)
   postStor : Devm.getStor post = Devm.getStor callPost
   postBalance : Devm.getBal post = Devm.getBal callPost
 
@@ -489,25 +642,24 @@ the target storage and balance remain tied to the callback state. -/
 theorem RealizedWithdrawal.postSnapshot
     {sevm : Sevm} {pre post : Devm}
     (withdrawal : RealizedWithdrawal sevm pre post) :
-    AccountingSnapshot.ofState sevm.currentTarget post.state =
-      AccountingSnapshot.ofState sevm.currentTarget
+    RealizedSnapshot.ofState sevm.currentTarget post.state =
+      RealizedSnapshot.ofState sevm.currentTarget
         withdrawal.payout.child.state := by
   have outerToCall :
-      AccountingSnapshot.ofState sevm.currentTarget post.state =
-        AccountingSnapshot.ofState sevm.currentTarget
+      RealizedSnapshot.ofState sevm.currentTarget post.state =
+        RealizedSnapshot.ofState sevm.currentTarget
           withdrawal.callPost.state := by
-    unfold AccountingSnapshot.ofState
-    exact congrArg₂ AccountingSnapshot.mk
-      (congrArg supplyN
-        (congrFun withdrawal.postStor sevm.currentTarget))
+    unfold RealizedSnapshot.ofState
+    exact congrArg₂ RealizedSnapshot.mk
+      (congrFun withdrawal.postStor sevm.currentTarget)
       (congrArg B256.toNat
         (congrFun withdrawal.postBalance sevm.currentTarget))
   have callToChild :
-      AccountingSnapshot.ofState sevm.currentTarget
+      RealizedSnapshot.ofState sevm.currentTarget
           withdrawal.callPost.state =
-        AccountingSnapshot.ofState sevm.currentTarget
+        RealizedSnapshot.ofState sevm.currentTarget
           withdrawal.payout.child.state :=
-    congrArg (AccountingSnapshot.ofState sevm.currentTarget)
+    congrArg (RealizedSnapshot.ofState sevm.currentTarget)
       withdrawal.payout.callPostState
   exact outerToCall.trans callToChild
 
@@ -549,22 +701,23 @@ theorem BodyEntry.realizedWithdrawal
   rcases effect.accountingEffect_of_acceptedPayout bodyInvariant rfl payout
       recipient_ne with ⟨trace, accounting⟩
   have hpreSnapshot :
-      AccountingSnapshot.ofState sevm.currentTarget bodyPre.state =
-        AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+      RealizedSnapshot.ofState sevm.currentTarget bodyPre.state =
+        RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
           pre.state := by
-    unfold AccountingSnapshot.ofState AccountingSnapshot.beforeCredit
-    exact congrArg₂ AccountingSnapshot.mk
-      (congrArg supplyN (congrFun hstor sevm.currentTarget))
+    unfold RealizedSnapshot.ofState RealizedSnapshot.beforeCredit
+    exact congrArg₂ RealizedSnapshot.mk
+      (congrFun hstor sevm.currentTarget)
       (by
         rw [hvalue]
         change (bodyPre.state.bal sevm.currentTarget).toNat =
           (pre.state.bal sevm.currentTarget).toNat - 0
         rw [Nat.sub_zero]
         exact congrArg B256.toNat (congrFun hbal sevm.currentTarget))
-  have accounting' : ProrataAccountingEffect offset.toNat
-      (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+  have accounting' : RealizedEffect offset.toNat
       (.withdraw (Sevm.argWord sevm 0).toNat paid.toNat)
-      (AccountingSnapshot.ofState sevm.currentTarget trace.entry.state) := by
+      (some sevm.caller)
+      (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+      (RealizedSnapshot.ofState sevm.currentTarget trace.entry.state) := by
     rw [← hpreSnapshot]
     exact accounting
   have childPre := effect.acceptedPayoutChildPre bodyPrecondition rfl trace
@@ -582,46 +735,52 @@ theorem BodyEntry.realizedWithdrawal
 /-- A positive world-state credit that leaves PRORATA storage fixed is the
 frozen external-credit accounting class. -/
 theorem accountingEffect_externalCredit
-    {ca : Adr} {pre post : State} {amount : Nat}
+    {ca : Adr} {pre post : State} {amount : Nat} {actor : Option Adr}
     (hstor : post.getStor ca = pre.getStor ca)
     (hbalance : (post.bal ca).toNat = (pre.bal ca).toNat + amount)
     (hpositive : 0 < amount) :
-    ProrataAccountingEffect offset.toNat
-      (AccountingSnapshot.ofState ca pre) (.externalCredit amount)
-      (AccountingSnapshot.ofState ca post) := by
-  unfold AccountingSnapshot.ofState
-  rw [hstor, hbalance]
-  exact .externalCredit _ _ _ hpositive
+    RealizedEffect offset.toNat (.externalCredit amount) actor
+      (RealizedSnapshot.ofState ca pre) (RealizedSnapshot.ofState ca post) := by
+  refine ⟨?_, ?_⟩
+  · rw [RealizedSnapshot.ofState_snapshot, RealizedSnapshot.ofState_snapshot,
+      hstor, hbalance]
+    exact .externalCredit _ _ _ hpositive
+  · show (RealizedSnapshot.ofState ca post).ledger =
+      (RealizedSnapshot.ofState ca pre).ledger
+    rw [RealizedSnapshot.ofState_ledger, RealizedSnapshot.ofState_ledger, hstor]
 
 /-- A boundary preserving the target storage and balance is exactly silent in
 the four-way accounting vocabulary. -/
 theorem accountingEffect_silent
-    {ca : Adr} {pre post : State}
+    {ca : Adr} {pre post : State} {actor : Option Adr}
     (hstor : post.getStor ca = pre.getStor ca)
     (hbalance : post.bal ca = pre.bal ca) :
-    ProrataAccountingEffect offset.toNat
-      (AccountingSnapshot.ofState ca pre) .silent
-      (AccountingSnapshot.ofState ca post) := by
-  unfold AccountingSnapshot.ofState
-  rw [hstor, hbalance]
-  exact .silent _
+    RealizedEffect offset.toNat .silent actor
+      (RealizedSnapshot.ofState ca pre) (RealizedSnapshot.ofState ca post) := by
+  refine ⟨?_, ?_⟩
+  · rw [RealizedSnapshot.ofState_snapshot, RealizedSnapshot.ofState_snapshot,
+      hstor, hbalance]
+    exact .silent _
+  · show (RealizedSnapshot.ofState ca post).ledger =
+      (RealizedSnapshot.ofState ca pre).ledger
+    rw [RealizedSnapshot.ofState_ledger, RealizedSnapshot.ofState_ledger, hstor]
 
 /-- A nonpayable observation with unchanged target state is silent from its
 semantic (pre-credit) entry as well. -/
 theorem accountingEffect_silentBeforeCredit
-    {sevm : Sevm} {pre post : Devm}
+    {sevm : Sevm} {pre post : Devm} {actor : Option Adr}
     (hvalue : sevm.value = 0)
     (hstor : Devm.getStor post sevm.currentTarget =
       Devm.getStor pre sevm.currentTarget)
     (hbalance : Devm.getBal post sevm.currentTarget =
       Devm.getBal pre sevm.currentTarget) :
-    ProrataAccountingEffect offset.toNat
-      (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
-      .silent (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
-  rw [show AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
-      pre.state = AccountingSnapshot.ofState sevm.currentTarget pre.state
+    RealizedEffect offset.toNat .silent actor
+      (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+      (RealizedSnapshot.ofState sevm.currentTarget post.state) := by
+  rw [show RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
+      pre.state = RealizedSnapshot.ofState sevm.currentTarget pre.state
     from by
-      unfold AccountingSnapshot.beforeCredit AccountingSnapshot.ofState
+      unfold RealizedSnapshot.beforeCredit RealizedSnapshot.ofState
       rw [hvalue]
       rfl]
   exact accountingEffect_silent hstor hbalance
@@ -653,18 +812,18 @@ theorem BodyEntry.donateAccountingEffect
     (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
       (Devm.getBal pre sevm.currentTarget)) :
     ∃ kind,
-      ProrataAccountingEffect offset.toNat
-        (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+      RealizedEffect offset.toNat kind (some sevm.caller)
+        (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
           pre.state)
-        kind (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+        (RealizedSnapshot.ofState sevm.currentTarget post.state) := by
   rcases entry.donatePersistentEq with ⟨hstor, hbal⟩
   let supply := supplyN (Devm.getStor pre sevm.currentTarget)
   let balance := (Devm.getBal pre sevm.currentTarget).toNat
   let amount := sevm.value.toNat
   have hpostSnapshot :
-      AccountingSnapshot.ofState sevm.currentTarget post.state =
+      (RealizedSnapshot.ofState sevm.currentTarget post.state).snapshot =
         ⟨supply, balance⟩ := by
-    unfold AccountingSnapshot.ofState
+    rw [RealizedSnapshot.ofState_snapshot]
     exact congrArg₂ AccountingSnapshot.mk
       (by
         change supplyN (Devm.getStor post sevm.currentTarget) = supply
@@ -672,20 +831,27 @@ theorem BodyEntry.donateAccountingEffect
       (by
         change (Devm.getBal post sevm.currentTarget).toNat = balance
         rw [congrFun hbal sevm.currentTarget])
+  have hpostLedger :
+      (RealizedSnapshot.ofState sevm.currentTarget post.state).ledger =
+        (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
+          pre.state).ledger := by
+    rw [RealizedSnapshot.ofState_ledger, RealizedSnapshot.beforeCredit_ledger]
+    exact congrArg Stor.rest (congrFun hstor sevm.currentTarget)
   have hcredited : balance - amount + amount = balance :=
     Nat.sub_add_cancel invariant.value_le_balance
   by_cases hpositive : 0 < amount
-  · refine ⟨.externalCredit amount, ?_⟩
-    rw [show AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
-        pre.state = ⟨supply, balance - amount⟩ from rfl, hpostSnapshot]
+  · refine ⟨.externalCredit amount, ?_, hpostLedger⟩
+    rw [show (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
+        pre.state).snapshot = ⟨supply, balance - amount⟩ from rfl,
+      hpostSnapshot]
     simpa only [hcredited] using
       (ProrataAccountingEffect.externalCredit
         supply (balance - amount) amount hpositive)
   · have hzero : amount = 0 := Nat.eq_zero_of_not_pos hpositive
-    refine ⟨.silent, ?_⟩
-    rw [show AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
-        pre.state = ⟨supply, balance - amount⟩ from rfl, hpostSnapshot,
-      hzero]
+    refine ⟨.silent, ?_, hpostLedger⟩
+    rw [show (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
+        pre.state).snapshot = ⟨supply, balance - amount⟩ from rfl,
+      hpostSnapshot, hzero]
     exact .silent _
 
 /-- The successful shares preview is a silent accounting observation. -/
@@ -693,9 +859,9 @@ theorem BodyEntry.sharesAccountingEffect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (entry : BodyEntry fs sevm pre post convertToShares)
     (hvalue : sevm.value = 0) :
-    ProrataAccountingEffect offset.toNat
-      (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
-      .silent (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+    RealizedEffect offset.toNat .silent (some sevm.caller)
+      (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+      (RealizedSnapshot.ofState sevm.currentTarget post.state) := by
   rcases entry with ⟨bodyPre, hstor, hbal, -, run⟩
   have effect := convertToShares_effect run
   unfold SharesViewEffect at effect
@@ -710,9 +876,9 @@ theorem BodyEntry.assetsAccountingEffect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (entry : BodyEntry fs sevm pre post convertToAssets)
     (hvalue : sevm.value = 0) :
-    ProrataAccountingEffect offset.toNat
-      (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
-      .silent (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+    RealizedEffect offset.toNat .silent (some sevm.caller)
+      (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+      (RealizedSnapshot.ofState sevm.currentTarget post.state) := by
   rcases entry with ⟨bodyPre, hstor, hbal, -, run⟩
   have effect := convertToAssets_effect run
   unfold AssetsViewEffect at effect
@@ -725,42 +891,46 @@ theorem BodyEntry.assetsAccountingEffect
 /-- A list presentation of connected accounting effects, retaining its exact
 initial and terminal snapshots while remaining convenient for induction. -/
 inductive ProrataAccountingReplay (o : Nat) :
-    AccountingSnapshot → List (ProrataAccountingStep o) →
-      AccountingSnapshot → Prop where
-  | nil (snapshot : AccountingSnapshot) :
-      ProrataAccountingReplay o snapshot [] snapshot
-  | cons {step : ProrataAccountingStep o}
-      {steps : List (ProrataAccountingStep o)} {post : AccountingSnapshot}
-      (tail : ProrataAccountingReplay o step.post steps post) :
-      ProrataAccountingReplay o step.pre (step :: steps) post
+    RealizedSnapshot → List (ProrataAccountingStep o) →
+      RealizedSnapshot → Prop where
+  | nil (boundary : RealizedSnapshot) :
+      ProrataAccountingReplay o boundary [] boundary
+  | cons {pre mid post : RealizedSnapshot} {step : ProrataAccountingStep o}
+      {steps : List (ProrataAccountingStep o)}
+      (pre_eq : step.pre = pre.snapshot)
+      (post_eq : step.post = mid.snapshot)
+      (ledger : LedgerMove step.kind step.provenance.actor
+        pre.ledger mid.ledger)
+      (tail : ProrataAccountingReplay o mid steps post) :
+      ProrataAccountingReplay o pre (step :: steps) post
 
 namespace ProrataAccountingReplay
 
 /-- One realized effect is a connected singleton replay. -/
-theorem singleton {o : Nat} {pre post : AccountingSnapshot}
+theorem singleton {o : Nat} {pre post : RealizedSnapshot}
     {kind : ProrataAccountingKind}
     (provenance : ProrataAccountingProvenance)
-    (effect : ProrataAccountingEffect o pre kind post) :
+    (realized : RealizedEffect o kind provenance.actor pre post) :
     ProrataAccountingReplay o pre
-      [{ pre, post, kind, provenance, effect }] post := by
-  exact ProrataAccountingReplay.cons
-    (step := { pre, post, kind, provenance, effect })
+      [{ pre := pre.snapshot, post := post.snapshot, kind, provenance,
+          effect := realized.effect }] post :=
+  ProrataAccountingReplay.cons rfl rfl realized.ledger
     (ProrataAccountingReplay.nil post)
 
 /-- Concatenate two accounting replays at their shared boundary. -/
-theorem append {o : Nat} {pre mid post : AccountingSnapshot}
+theorem append {o : Nat} {pre mid post : RealizedSnapshot}
     {left right : List (ProrataAccountingStep o)}
     (before : ProrataAccountingReplay o pre left mid)
     (after : ProrataAccountingReplay o mid right post) :
     ProrataAccountingReplay o pre (left ++ right) post := by
   induction before with
-  | nil snapshot =>
+  | nil boundary =>
       simpa using after
-  | cons tail ih =>
-      simpa using ProrataAccountingReplay.cons (ih after)
+  | cons pre_eq post_eq ledger tail ih =>
+      simpa using ProrataAccountingReplay.cons pre_eq post_eq ledger (ih after)
 
-/-- Equal projected boundaries contribute no accounting step. -/
-theorem nil_of_eq {o : Nat} {pre post : AccountingSnapshot}
+/-- Equal realized boundaries contribute no accounting step. -/
+theorem nil_of_eq {o : Nat} {pre post : RealizedSnapshot}
     (eq : post = pre) : ProrataAccountingReplay o pre [] post := by
   rw [eq]
   exact .nil pre
@@ -775,8 +945,8 @@ theorem of_transfer_from_ne
     (sum_nof : sum pre.bal < 2 ^ 256) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca pre) steps
-        (AccountingSnapshot.ofState ca (debit.addBal target value)) := by
+        (RealizedSnapshot.ofState ca pre) steps
+        (RealizedSnapshot.ofState ca (debit.addBal target value)) := by
   have fields := of_state_transfer_fields (callee := target) sub
   by_cases target_eq : target = ca
   · subst target
@@ -789,22 +959,22 @@ theorem of_transfer_from_ne
         (accountingEffect_externalCredit (fields.1 ca) balance_eq positive)⟩
     · have zero : value.toNat = 0 := Nat.eq_zero_of_not_pos positive
       have snapshot_eq :
-          AccountingSnapshot.ofState ca (debit.addBal ca value) =
-            AccountingSnapshot.ofState ca pre := by
-        unfold AccountingSnapshot.ofState
-        exact congrArg₂ AccountingSnapshot.mk
-          (congrArg supplyN (fields.1 ca))
+          RealizedSnapshot.ofState ca (debit.addBal ca value) =
+            RealizedSnapshot.ofState ca pre := by
+        unfold RealizedSnapshot.ofState
+        exact congrArg₂ RealizedSnapshot.mk
+          (fields.1 ca)
           (by rw [balance_eq, zero, Nat.add_zero])
       exact ⟨[], nil_of_eq snapshot_eq⟩
   · have balance_eq :
         (debit.addBal target value).bal ca = pre.bal ca :=
       of_transfer_bal_other sub caller_ne target_eq
     have snapshot_eq :
-        AccountingSnapshot.ofState ca (debit.addBal target value) =
-          AccountingSnapshot.ofState ca pre := by
-      unfold AccountingSnapshot.ofState
-      exact congrArg₂ AccountingSnapshot.mk
-        (congrArg supplyN (fields.1 ca))
+        RealizedSnapshot.ofState ca (debit.addBal target value) =
+          RealizedSnapshot.ofState ca pre := by
+      unfold RealizedSnapshot.ofState
+      exact congrArg₂ RealizedSnapshot.mk
+        (fields.1 ca)
         (congrArg B256.toNat balance_eq)
     exact ⟨[], nil_of_eq snapshot_eq⟩
 
@@ -816,8 +986,8 @@ theorem of_addBal
     (sum_nof : sum pre.bal + value.toNat < 2 ^ 256) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca pre) steps
-        (AccountingSnapshot.ofState ca (pre.addBal target value)) := by
+        (RealizedSnapshot.ofState ca pre) steps
+        (RealizedSnapshot.ofState ca (pre.addBal target value)) := by
   have storage_eq :
       (pre.addBal target value).getStor ca = pre.getStor ca := by
     show ((pre.setBal target (pre.bal target + value)).get ca).stor =
@@ -843,11 +1013,11 @@ theorem of_addBal
         (accountingEffect_externalCredit storage_eq balance_eq positive)⟩
     · have zero : value.toNat = 0 := Nat.eq_zero_of_not_pos positive
       have snapshot_eq :
-          AccountingSnapshot.ofState ca (pre.addBal ca value) =
-            AccountingSnapshot.ofState ca pre := by
-        unfold AccountingSnapshot.ofState
-        exact congrArg₂ AccountingSnapshot.mk
-          (congrArg supplyN storage_eq)
+          RealizedSnapshot.ofState ca (pre.addBal ca value) =
+            RealizedSnapshot.ofState ca pre := by
+        unfold RealizedSnapshot.ofState
+        exact congrArg₂ RealizedSnapshot.mk
+          storage_eq
           (by rw [balance_eq, zero, Nat.add_zero])
       exact ⟨[], nil_of_eq snapshot_eq⟩
   · have balance_eq : (pre.addBal target value).bal ca = pre.bal ca := by
@@ -855,11 +1025,11 @@ theorem of_addBal
       rw [State.setBal_get_ne target_eq]
       rfl
     have snapshot_eq :
-        AccountingSnapshot.ofState ca (pre.addBal target value) =
-          AccountingSnapshot.ofState ca pre := by
-      unfold AccountingSnapshot.ofState
-      exact congrArg₂ AccountingSnapshot.mk
-        (congrArg supplyN storage_eq)
+        RealizedSnapshot.ofState ca (pre.addBal target value) =
+          RealizedSnapshot.ofState ca pre := by
+      unfold RealizedSnapshot.ofState
+      exact congrArg₂ RealizedSnapshot.mk
+        storage_eq
         (congrArg B256.toNat balance_eq)
     exact ⟨[], nil_of_eq snapshot_eq⟩
 
@@ -874,8 +1044,8 @@ theorem of_storage_eq_balance_mono
     (balance_mono : (pre.bal ca).toNat ≤ (post.bal ca).toNat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca pre) steps
-        (AccountingSnapshot.ofState ca post) := by
+        (RealizedSnapshot.ofState ca pre) steps
+        (RealizedSnapshot.ofState ca post) := by
   let amount := (post.bal ca).toNat - (pre.bal ca).toNat
   have balance_eq :
       (post.bal ca).toNat = (pre.bal ca).toNat + amount := by
@@ -886,32 +1056,33 @@ theorem of_storage_eq_balance_mono
       (accountingEffect_externalCredit storage_eq balance_eq positive)⟩
   · have zero : amount = 0 := Nat.eq_zero_of_not_pos positive
     have snapshot_eq :
-        AccountingSnapshot.ofState ca post =
-          AccountingSnapshot.ofState ca pre := by
-      unfold AccountingSnapshot.ofState
-      exact congrArg₂ AccountingSnapshot.mk
-        (congrArg supplyN storage_eq)
+        RealizedSnapshot.ofState ca post =
+          RealizedSnapshot.ofState ca pre := by
+      unfold RealizedSnapshot.ofState
+      exact congrArg₂ RealizedSnapshot.mk
+        storage_eq
         (by rw [balance_eq, zero, Nat.add_zero])
     exact ⟨[], nil_of_eq snapshot_eq⟩
 
 /-- Every replay yields the frozen connected-path carrier used by the exact
 dust theorem; no boundary connectivity is reconstructed axiomatically. -/
-theorem exists_path {o : Nat} {pre post : AccountingSnapshot}
+theorem exists_path {o : Nat} {pre post : RealizedSnapshot}
     {steps : List (ProrataAccountingStep o)}
     (replay : ProrataAccountingReplay o pre steps post) :
     ∃ path : ProrataAccountingPath o,
-      path.steps = steps ∧ path.first = pre ∧ path.last = post := by
+      path.steps = steps ∧ path.first = pre.snapshot ∧
+        path.last = post.snapshot := by
   induction replay with
-  | nil snapshot =>
-      exact ⟨ProrataAccountingPath.nil o snapshot, rfl, rfl, rfl⟩
-  | @cons step steps post tail ih =>
+  | nil boundary =>
+      exact ⟨ProrataAccountingPath.nil o boundary.snapshot, rfl, rfl, rfl⟩
+  | @cons pre mid post step steps pre_eq post_eq _ tail ih =>
       rcases ih with ⟨path, hsteps, hfirst, hlast⟩
-      have connect : step.post = path.first := hfirst.symm
+      have connect : step.post = path.first := post_eq.trans hfirst.symm
       refine ⟨ProrataAccountingPath.cons step path connect, ?_, ?_, ?_⟩
       · rw [ProrataAccountingPath.cons]
         simp only
         rw [hsteps]
-      · rfl
+      · exact pre_eq
       · simpa using hlast
 
 end ProrataAccountingReplay
@@ -922,22 +1093,23 @@ theorem RealizedWithdrawal.accountingReplay
     {sevm : Sevm} {pre post : Devm}
     (withdrawal : RealizedWithdrawal sevm pre post)
     (provenance : ProrataAccountingProvenance)
+    (actor : provenance.actor = some sevm.caller)
     (childReplay : ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState sevm.currentTarget
+        (RealizedSnapshot.ofState sevm.currentTarget
           withdrawal.payout.entry.state)
         steps
-        (AccountingSnapshot.ofState sevm.currentTarget
+        (RealizedSnapshot.ofState sevm.currentTarget
           withdrawal.payout.child.state)) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+        (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
           pre.state)
-        steps (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+        steps (RealizedSnapshot.ofState sevm.currentTarget post.state) := by
   rcases childReplay with ⟨steps, replay⟩
   have combined :=
-    (ProrataAccountingReplay.singleton provenance withdrawal.accounting).append
-      replay
+    (ProrataAccountingReplay.singleton provenance
+      (withdrawal.accounting.of_actor_eq actor)).append replay
   rw [withdrawal.postSnapshot]
   exact ⟨_, combined⟩
 
@@ -952,8 +1124,8 @@ theorem Ninst.foreignNoneAccountingReplay
     (provenance : ProrataAccountingProvenance) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca pre.state) steps
-        (AccountingSnapshot.ofState ca post.state) := by
+        (RealizedSnapshot.ofState ca pre.state) steps
+        (RealizedSnapshot.ofState ca post.state) := by
   exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
     (_root_.Blanc.Ninst.foreignNone_getStor_eq run target_ne)
     (_root_.Blanc.Ninst.targetBalanceMono_of_none run target_ne sum_nof)
@@ -968,8 +1140,8 @@ theorem Linst.foreignAccountingReplay
     (provenance : ProrataAccountingProvenance) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.ofState ca pre.state) steps
-        (AccountingSnapshot.ofState ca post.state) := by
+        (RealizedSnapshot.ofState ca pre.state) steps
+        (RealizedSnapshot.ofState ca post.state) := by
   exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
     (congrFun (_root_.Blanc.Linst.getStor_eq run) ca)
     (_root_.Blanc.Linst.targetBalanceMono_of_foreign
@@ -983,33 +1155,36 @@ theorem ProrataMainRoute.accountingReplay_or_withdraw
     (route : ProrataMainRoute fs sevm pre post)
     (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
       (Devm.getBal pre sevm.currentTarget))
-    (provenance : ProrataAccountingProvenance) :
+    (provenance : ProrataAccountingProvenance)
+    (actor : provenance.actor = some sevm.caller) :
     (∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+        (RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
           pre.state)
-        steps (AccountingSnapshot.ofState sevm.currentTarget post.state)) ∨
+        steps (RealizedSnapshot.ofState sevm.currentTarget post.state)) ∨
       Nonempty (BodyEntry fs sevm pre post Prorata.withdraw) ∧
         sevm.value = 0 := by
   cases route with
   | deposit entry =>
       rcases entry.depositAccountingEffect invariant with ⟨minted, effect⟩
       exact Or.inl ⟨_,
-        ProrataAccountingReplay.singleton provenance effect⟩
+        ProrataAccountingReplay.singleton provenance
+          (effect.of_actor_eq actor)⟩
   | withdraw hvalue entry =>
       exact Or.inr ⟨⟨entry⟩, hvalue⟩
   | convertToShares hvalue entry =>
       exact Or.inl ⟨_,
         ProrataAccountingReplay.singleton provenance
-          (entry.sharesAccountingEffect hvalue)⟩
+          ((entry.sharesAccountingEffect hvalue).of_actor_eq actor)⟩
   | convertToAssets hvalue entry =>
       exact Or.inl ⟨_,
         ProrataAccountingReplay.singleton provenance
-          (entry.assetsAccountingEffect hvalue)⟩
+          ((entry.assetsAccountingEffect hvalue).of_actor_eq actor)⟩
   | donate entry =>
       rcases entry.donateAccountingEffect invariant with ⟨kind, effect⟩
       exact Or.inl ⟨_,
-        ProrataAccountingReplay.singleton provenance effect⟩
+        ProrataAccountingReplay.singleton provenance
+          (effect.of_actor_eq actor)⟩
 
 /-- An exact retained PRORATA frame is either already a complete replay or is
 the unique withdrawal shape whose paid child trace must be replayed next. -/
@@ -1018,11 +1193,12 @@ theorem Exec.Frame.accountingReplay_or_realizedWithdrawal
     (invocation : frame.exactInvocation prorata ca ca)
     (precondition : prorataSpec.Pre ca frame.sevm frame.pre)
     (provenance : ProrataAccountingProvenance)
+    (actor : provenance.actor = some frame.sevm.caller)
     (recipient_ne : frame.sevm.caller.toB256.toAdr ≠ ca) :
     (∃ steps,
       ProrataAccountingReplay offset.toNat
-        (AccountingSnapshot.beforeCredit ca frame.sevm.value frame.pre.state)
-        steps (AccountingSnapshot.ofState ca frame.post.state)) ∨
+        (RealizedSnapshot.beforeCredit ca frame.sevm.value frame.pre.state)
+        steps (RealizedSnapshot.ofState ca frame.post.state)) ∨
       Nonempty (RealizedWithdrawal frame.sevm frame.pre frame.post) := by
   have target_eq : frame.sevm.currentTarget = ca := invocation.2.1
   have preInvariant := precondition.inv
@@ -1037,7 +1213,7 @@ theorem Exec.Frame.accountingReplay_or_realizedWithdrawal
     rw [target_eq]
     exact invariantCa
   have route := exactInvocation_route invocation
-  rcases route.accountingReplay_or_withdraw invariant provenance with
+  rcases route.accountingReplay_or_withdraw invariant provenance actor with
       replay | ⟨⟨entry⟩, hvalue⟩
   · left
     simpa only [target_eq] using replay
