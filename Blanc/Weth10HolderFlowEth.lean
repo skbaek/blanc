@@ -1,4 +1,5 @@
 import Blanc.ExecutionMessageEffects
+import Blanc.ExecutionTransactionEffects
 import Blanc.Weth10HolderFlowAuthenticity
 
 /-!
@@ -787,16 +788,9 @@ theorem TransactionTrace.sender_ne_ca
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    trace.sender ≠ ca := by
-  have hinv : (backedSpec weth10 dp).BenvInv ca benv :=
-    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
-  have hinvBegin :
-      (backedSpec weth10 dp).BenvInv ca benv.beginTransaction := by
-    refine ⟨?_, ?_⟩
-    · simpa [Benv.beginTransaction] using hinv.state
-    · simpa [Benv.beginTransaction] using hinv.ca
-  exact ContractSpec.checkTransaction_sender_ne_of_inv
-    (c := backedSpec weth10 dp) trace.checked hinvBegin
+    trace.sender ≠ ca :=
+  ExecutionTrace.TransactionTrace.sender_ne (c := backedSpec weth10 dp) trace
+    ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated
 
 theorem TransactionTrace.debitState_bal_ca
     {dp : DeployParams} {ca : Adr}
@@ -805,14 +799,9 @@ theorem TransactionTrace.debitState_bal_ca
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    trace.debitState.bal ca = benv.state.bal ca := by
-  have hsender := TransactionTrace.sender_ne_ca trace hstable hnotCreated
-  rcases State.of_subBal trace.debit with ⟨_, hdebit⟩
-  rw [hdebit]
-  show (((benv.state.incrNonce trace.sender).setBal trace.sender _).get ca).bal = _
-  rw [State.setBal_get_ne hsender]
-  rw [State.incrNonce_get_bal]
-  rfl
+    trace.debitState.bal ca = benv.state.bal ca :=
+  ExecutionTrace.TransactionTrace.debitState_bal_eq trace
+    (TransactionTrace.sender_ne_ca trace hstable hnotCreated)
 
 theorem TransactionTrace.accountsToDelete_ne_ca
     {dp : DeployParams} {ca : Adr}
@@ -822,40 +811,16 @@ theorem TransactionTrace.accountsToDelete_ne_ca
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     ∀ address ∈ trace.messageOut.accountsToDelete.toList,
-      address ≠ ca := by
-  let spec := backedSpec weth10 dp
-  have hsender := TransactionTrace.sender_ne_ca trace hstable hnotCreated
-  have hinitial : spec.StateInv ca benv.state :=
-    ⟨hstable.code, hstable.sumNof, hstable.backed⟩
-  have hdebit : spec.StateInv ca trace.debitState :=
-    ContractSpec.StateInv.subBal (c := spec) hsender trace.debit
-      (ContractSpec.StateInv.incrNonce hinitial)
-  have horigin :
-      (transactionTenv benv.beginTransaction tx index trace.sender
-        trace.effectiveGasPrice trace.intrinsicGas
-        trace.blobVersionedHashes).stat.origin ≠ ca := by
-    simpa [transactionTenv] using hsender
-  have hmsg : spec.MsgInv ca trace.msg :=
-    ContractSpec.prepareMessage_preserves_inv trace.prepared hdebit
-      (by simpa [Benv.beginTransaction] using hnotCreated) horigin
-  exact (ContractSpec.processMessageCall_preserves_inv
-    (c := spec) (backedSpec_preserves dp ca)
-    (ExecutionTrace.MessageCallTrace.result trace.message) hmsg).2
+      address ≠ ca :=
+  ExecutionTrace.TransactionTrace.accountsToDelete_ne trace
+    (backedSpec_preserves dp ca)
+    ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated
 
 theorem foldl_destroyAccount_bal_eq
     {ca : Adr} {state : State} {addresses : List Adr}
     (hne : ∀ address ∈ addresses, address ≠ ca) :
-    (addresses.foldl destroyAccount state).bal ca = state.bal ca := by
-  induction addresses generalizing state with
-  | nil => rfl
-  | cons address addresses ih =>
-      rw [List.foldl_cons, ih]
-      · have hget : (Jaune.destroyAccount state address).get ca =
-            state.get ca :=
-          State.get_erase_ne (Ne.symm (hne address (by simp)))
-        exact congrArg Acct.bal hget
-      · intro tail htail
-        exact hne tail (by simp [htail])
+    (addresses.foldl destroyAccount state).bal ca = state.bal ca :=
+  congrArg Acct.bal (ExecutionTrace.foldl_destroyAccount_get_eq hne)
 
 /-- Refund and priority-fee settlement, followed by the transaction's account
 deletions, cannot lower the installed WETH10 account.  This is proved from
@@ -869,76 +834,43 @@ theorem TransactionTrace.postMessage_ethBound
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     EthBound ca trace.messageState state [] := by
-  rcases ExecutionTrace.TransactionTrace.exists_finalStateForm trace with
-    ⟨refundCounter, _hrefund, hstate⟩
-  let used := max
-    (tx.gas - trace.messageOut.gasLeft -
-      min ((tx.gas - trace.messageOut.gasLeft) / 5) refundCounter)
-    trace.calldataFloorGasCost
-  let refundNat := (tx.gas - used) * trace.effectiveGasPrice
-  let tipNat := used *
-    (trace.effectiveGasPrice - benv.stat.baseFeePerGas)
-  let refund : B256 := refundNat.toB256
-  let tip : B256 := tipNat.toB256
-  let refunded := trace.messageState.addBal trace.sender refund
-  let credited := refunded.addBal benv.stat.coinbase tip
-  have hfeeLt := checkTransaction_upfront_lt_modulus trace.checked
-  simp only [Benv.beginTransaction] at hfeeLt
-  have hfloor :=
-    validateTransaction_calldataFloorGasCost_le_gas trace.validation
-  have husedLe : used ≤ tx.gas := by
-    unfold used
-    apply max_le
-    · omega
-    · exact hfloor
-  have hcreditsLe :
-      refundNat + tipNat ≤ tx.gas * trace.effectiveGasPrice := by
-    unfold refundNat tipNat
-    apply le_trans (Nat.add_le_add_left
-      (Nat.mul_le_mul_left _
-        (Nat.sub_le trace.effectiveGasPrice benv.stat.baseFeePerGas)) _)
-    rw [← Nat.add_mul, Nat.sub_add_cancel husedLe]
-  have hrefundLe : refund.toNat ≤ refundNat := by
-    exact toB256_toNat_le refundNat
-  have htipLe : tip.toNat ≤ tipNat := by
-    exact toB256_toNat_le tipNat
-  have hdebitSum := State.balSum_subBal trace.debit
-  dsimp only [State.balSum, transactionBlobGasFee] at hdebitSum
-  rw [State.incrNonce_bal] at hdebitSum
-  have hfeeExact := B256.toNat_toB256_of_lt hfeeLt
-  rw [hfeeExact] at hdebitSum
-  have hmessageSum := processMessageCall_sum_le
-    (ExecutionTrace.MessageCallTrace.result trace.message)
-  rw [prepareMessage_benv trace.prepared] at hmessageSum
-  change sum trace.messageState.bal ≤ sum trace.debitState.bal at hmessageSum
-  have hbaseSum : sum benv.state.bal < 2 ^ 256 := hstable.sumNof
-  have hrefundBound :
-      sum trace.messageState.bal + refund.toNat < 2 ^ 256 := by
-    omega
+  rcases ExecutionTrace.TransactionTrace.exists_stateChronology trace with
+    ⟨chronology⟩
+  obtain ⟨hrefundBound, htipBound⟩ :=
+    ExecutionTrace.TransactionTrace.settlement_sum_bounds trace
+      chronology.refundCounter hstable.sumNof
   have hrefundStep :
-      EthBound ca trace.messageState refunded [] :=
-    (EthStep.externalCredit (ca := ca) (post := refunded)
+      EthBound ca trace.messageState
+        (trace.refundedState chronology.refundCounter) [] :=
+    (EthStep.externalCredit (ca := ca) (pre := trace.messageState)
+      (post := trace.refundedState chronology.refundCounter)
+      (recipient := trace.sender)
+      (value := trace.refundValue chronology.refundCounter)
       rfl hrefundBound).bound
-  have hrefundedSum :
-      sum refunded.bal = sum trace.messageState.bal + refund.toNat := by
-    exact sum_addBal_eq _ _ _ hrefundBound
-  have htipBound : sum refunded.bal + tip.toNat < 2 ^ 256 := by
-    rw [hrefundedSum]
-    omega
-  have htipStep : EthBound ca refunded credited [] :=
-    (EthStep.externalCredit (ca := ca) (post := credited)
+  have htipStep :
+      EthBound ca (trace.refundedState chronology.refundCounter)
+        (trace.coinbaseState chronology.refundCounter) [] :=
+    (EthStep.externalCredit (ca := ca)
+      (pre := trace.refundedState chronology.refundCounter)
+      (post := trace.coinbaseState chronology.refundCounter)
+      (recipient := benv.stat.coinbase)
+      (value := trace.coinbaseValue chronology.refundCounter)
       rfl htipBound).bound
-  have hcredits : EthBound ca trace.messageState credited [] := by
+  have hcredits :
+      EthBound ca trace.messageState
+        (trace.coinbaseState chronology.refundCounter) [] := by
     simpa using hrefundStep.trans htipStep
   have hdelete := TransactionTrace.accountsToDelete_ne_ca trace
     hstable hnotCreated
   have hdeleteBal :
-      (trace.messageOut.accountsToDelete.toList.foldl
-        destroyAccount credited).bal ca = credited.bal ca :=
+      (trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+        (trace.coinbaseState chronology.refundCounter)).bal ca =
+        (trace.coinbaseState chronology.refundCounter).bal ca :=
     foldl_destroyAccount_bal_eq hdelete
-  have hstateBalRaw := congrArg (fun w : State => w.bal ca) hstate
-  have hstateBal : state.bal ca = credited.bal ca :=
-    hstateBalRaw.trans hdeleteBal
+  have hstateBal :
+      state.bal ca = (trace.coinbaseState chronology.refundCounter).bal ca :=
+    (congrArg (fun w : State => w.bal ca) chronology.finalState_eq).trans
+      hdeleteBal
   simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption,
     hstateBal] using hcredits
 
@@ -1260,13 +1192,9 @@ theorem ne_ca_of_messageCreateCollision_false
     {dp : DeployParams} {ca : Adr} {msg : Msg}
     (ready : MessageReady dp ca msg)
     (hcollision : messageCreateCollision msg = false) :
-    msg.currentTarget ≠ ca := by
-  have hcodeNe : (msg.benv.state.getCode ca).toList ≠ [] :=
-    fun hempty => Prog.compile_ne_nil
-      (ready.backed.state.code.symm.trans (congrArg some hempty))
-  unfold messageCreateCollision at hcollision
-  rw [Bool.or_eq_false_iff] at hcollision
-  exact ne_wa_of_not_hasCodeOrNonce hcodeNe hcollision.1
+    msg.currentTarget ≠ ca :=
+  ContractSpec.StateInv.ne_of_messageCreateCollision_false
+    ready.backed.state hcollision
 
 theorem processCreateMessage.chargeCodeGas_bal_eq
     {rules : ForkRules} {pre post : Devm}
@@ -1588,38 +1516,11 @@ theorem TransactionTrace.messageReady
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    MessageReady dp ca trace.msg := by
-  have hsender := TransactionTrace.sender_ne_ca trace hstable hnotCreated
-  have hbackedInitial :
-      (backedSpec weth10 dp).StateInv ca benv.state :=
-    ⟨hstable.code, hstable.sumNof, hstable.backed⟩
-  have hflashInitial :
-      (flashExactSpec dp 0).StateInv ca benv.state :=
-    ⟨hstable.code, trivial, hstable.flashZero⟩
-  have hbackedDebit :
-      (backedSpec weth10 dp).StateInv ca trace.debitState :=
-    ContractSpec.StateInv.subBal (c := backedSpec weth10 dp)
-      hsender trace.debit
-      (ContractSpec.StateInv.incrNonce hbackedInitial)
-  have hflashDebit :
-      (flashExactSpec dp 0).StateInv ca trace.debitState :=
-    ContractSpec.StateInv.subBal (c := flashExactSpec dp 0)
-      hsender trace.debit
-      (ContractSpec.StateInv.incrNonce hflashInitial)
-  have horigin :
-      (transactionTenv benv.beginTransaction tx index trace.sender
-        trace.effectiveGasPrice trace.intrinsicGas
-        trace.blobVersionedHashes).stat.origin ≠ ca := by
-    simpa [transactionTenv] using hsender
-  have hnotBegin : ca ∉ benv.beginTransaction.createdAccounts := by
-    simpa [Benv.beginTransaction] using hnotCreated
-  have hbackedMsg : (backedSpec weth10 dp).MsgInv ca trace.msg :=
-    ContractSpec.prepareMessage_preserves_inv trace.prepared
-      hbackedDebit hnotBegin horigin
-  have hflashMsg : (flashExactSpec dp 0).MsgInv ca trace.msg :=
-    ContractSpec.prepareMessage_preserves_inv trace.prepared
-      hflashDebit hnotBegin horigin
-  exact ⟨hbackedMsg, hflashMsg⟩
+    MessageReady dp ca trace.msg :=
+  ⟨ExecutionTrace.TransactionTrace.msgInv (c := backedSpec weth10 dp) trace
+      ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated,
+    ExecutionTrace.TransactionTrace.msgInv (c := flashExactSpec dp 0) trace
+      ⟨hstable.code, trivial, hstable.flashZero⟩ hnotCreated⟩
 
 theorem TransactionTrace.message_stable_and_safe
     {dp : DeployParams} {ca : Adr}

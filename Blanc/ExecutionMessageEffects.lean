@@ -455,6 +455,20 @@ theorem MsgInv.messageCallExecutionMessage
   exact ContractSpec.MsgInv.pc
     (codeSrc := fun address => msg.benv.state.getCode address) ready
 
+/-- A CREATE wrapper that does *not* collide is running at a foreign address:
+an installed contract's compiled code is non-empty, so a create at its address
+always trips the collision test. -/
+theorem StateInv.ne_of_messageCreateCollision_false
+    {ca : Adr} {msg : Msg} (inv : c.StateInv ca msg.benv.state)
+    (collision : ExecutionTrace.messageCreateCollision msg = false) :
+    msg.currentTarget ≠ ca := by
+  have codeNe : (msg.benv.state.getCode ca).toList ≠ [] :=
+    fun empty => Prog.compile_ne_nil
+      (inv.code.symm.trans (congrArg some empty))
+  unfold ExecutionTrace.messageCreateCollision at collision
+  rw [Bool.or_eq_false_iff] at collision
+  exact ne_wa_of_not_hasCodeOrNonce codeNe collision.1
+
 end ContractSpec
 
 end Blanc

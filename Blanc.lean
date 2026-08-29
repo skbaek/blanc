@@ -8,6 +8,7 @@ import Blanc.ExecutionPath
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
 import Blanc.ExecutionMessageEffects
+import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionOccurrence

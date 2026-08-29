@@ -60,7 +60,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "RootedExecution",
-           "ExecutionMessageEffects"]
+           "ExecutionMessageEffects", "ExecutionTransactionEffects"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],

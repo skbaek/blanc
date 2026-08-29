@@ -192,6 +192,30 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
 - `Exec.descendantFrames`, `Exec.committedFrames`, and retained-node APIs
   traverse only effects that survive the relevant settlement boundary.
 
+### T3. The wrapper is a transaction and the fact is about an installed contract
+
+Use
+[`Blanc/ExecutionTransactionEffects.lean`](../Blanc/ExecutionTransactionEffects.lean):
+
+- `ExecutionTrace.TransactionTrace.sender_ne` rules out a checked sender equal
+  to the contract, and `ExecutionTrace.TransactionTrace.msgInv` carries an
+  arbitrary `ContractSpec` invariant onto the prepared message.
+- `ExecutionTrace.TransactionTrace.debitState_bal_eq` and
+  `ExecutionTrace.TransactionTrace.debitState_getStor_eq` project the nonce
+  bump and up-front gas debit;
+  `ExecutionTrace.TransactionTrace.msg_shouldTransferValue` records that a
+  transaction message always transfers its value.
+- `ExecutionTrace.TransactionTrace.accountsToDelete_ne` and
+  `ExecutionTrace.foldl_destroyAccount_get_eq` cover the final deletion fold.
+- `ExecutionTrace.TransactionTrace.settlement_sum_bounds` funds the sender
+  refund and the coinbase priority fee out of the transaction's own up-front
+  debit, so neither credit needs a wrap-around side condition.
+
+`ContractSpec.StateInv.ne_of_messageCreateCollision_false` in
+[`Blanc/ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean)
+is the message-level companion: a CREATE wrapper that does not collide is
+running at an address other than the installed contract.
+
 ## C — compilation and deployment
 
 ### C1. I need source-to-compiled execution
