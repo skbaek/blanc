@@ -1,0 +1,112 @@
+{
+  "manifest_version": 1,
+  "contract": "TriggerableWithdrawalsGateway",
+  "pinned_commit": "17005714f151e5502c559932319a3f2f74ac2436",
+  "repository": "https://github.com/lidofinance/core",
+  "provenance": {
+    "source_root": "https://raw.githubusercontent.com/lidofinance/core/17005714f151e5502c559932319a3f2f74ac2436/",
+    "files": [
+      {
+        "path": "contracts/0.8.9/TriggerableWithdrawalsGateway.sol",
+        "line_ranges": ["16-33", "40-90", "100-234", "236-309"]
+      },
+      {
+        "path": "contracts/0.8.9/utils/PausableUntil.sol",
+        "line_ranges": ["11-24", "26-61", "63-102"]
+      },
+      {
+        "path": "contracts/0.8.9/utils/access/AccessControlEnumerable.sol",
+        "line_ranges": ["10-18", "31-59"]
+      },
+      {
+        "path": "contracts/0.8.9/utils/access/AccessControl.sol",
+        "line_ranges": ["10-14", "53-67", "84-175", "199-231"]
+      },
+      {
+        "path": "contracts/0.8.9/lib/ExitLimitUtils.sol",
+        "line_ranges": ["5-11", "33-123"]
+      }
+    ],
+    "openzeppelin_dependency": {
+      "alias": "@openzeppelin/contracts-v4.4",
+      "version": "4.4.1",
+      "paths": [
+        "contracts/access/IAccessControl.sol",
+        "contracts/access/IAccessControlEnumerable.sol",
+        "contracts/utils/introspection/IERC165.sol",
+        "contracts/utils/introspection/ERC165.sol"
+      ]
+    }
+  },
+  "derivation": {
+    "hash": "Ethereum Keccak-256 (not NIST SHA3-256)",
+    "selector": "first four bytes of keccak256(canonical_signature)",
+    "event_topic0": "full 32-byte keccak256(canonical_event_signature)",
+    "error_selector": "first four bytes of keccak256(canonical_error_signature)",
+    "role_hash": "full 32-byte keccak256(role_string)",
+    "canonical_type_note": "ValidatorExitData[] is (uint256,uint256,bytes)[]; names and return types are omitted"
+  },
+  "selectors": [
+    {"signature": "PAUSE_ROLE()", "selector": "0x389ed267", "class": "gateway_constant", "source": "TriggerableWithdrawalsGateway.sol:82-82"},
+    {"signature": "RESUME_ROLE()", "selector": "0x2de03aa1", "class": "gateway_constant", "source": "TriggerableWithdrawalsGateway.sol:83-83"},
+    {"signature": "ADD_FULL_WITHDRAWAL_REQUEST_ROLE()", "selector": "0xa0cbdf14", "class": "gateway_constant", "source": "TriggerableWithdrawalsGateway.sol:84-84"},
+    {"signature": "TW_EXIT_LIMIT_MANAGER_ROLE()", "selector": "0x2d44866b", "class": "gateway_constant", "source": "TriggerableWithdrawalsGateway.sol:85-85"},
+    {"signature": "TWR_LIMIT_POSITION()", "selector": "0x76b0023e", "class": "gateway_constant", "source": "TriggerableWithdrawalsGateway.sol:87-87"},
+    {"signature": "VERSION()", "selector": "0xffa1ad74", "class": "gateway_constant", "source": "TriggerableWithdrawalsGateway.sol:89-89"},
+    {"signature": "resume()", "selector": "0x046f7da2", "class": "gateway_function", "guard": "onlyRole(RESUME_ROLE)", "source": "TriggerableWithdrawalsGateway.sol:120-122"},
+    {"signature": "pauseFor(uint256)", "selector": "0xf3f449c7", "class": "gateway_function", "guard": "onlyRole(PAUSE_ROLE)", "source": "TriggerableWithdrawalsGateway.sol:132-134"},
+    {"signature": "pauseUntil(uint256)", "selector": "0xabe9cfc8", "class": "gateway_function", "guard": "onlyRole(PAUSE_ROLE)", "source": "TriggerableWithdrawalsGateway.sol:144-146"},
+    {"signature": "triggerFullWithdrawals((uint256,uint256,bytes)[],address,uint256)", "selector": "0x138b1b15", "class": "gateway_function", "guard": "onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE), whenResumed", "source": "TriggerableWithdrawalsGateway.sol:165-169"},
+    {"signature": "setExitRequestLimit(uint256,uint256,uint256)", "selector": "0x56254a97", "class": "gateway_function", "guard": "onlyRole(TW_EXIT_LIMIT_MANAGER_ROLE)", "source": "TriggerableWithdrawalsGateway.sol:198-203"},
+    {"signature": "getExitRequestLimitFullInfo()", "selector": "0xb6b764b2", "class": "gateway_function", "source": "TriggerableWithdrawalsGateway.sol:214-234"},
+    {"signature": "PAUSE_INFINITELY()", "selector": "0xa302ee38", "class": "pausable_constant", "source": "PausableUntil.sol:14-14"},
+    {"signature": "isPaused()", "selector": "0xb187bd26", "class": "pausable_function", "source": "PausableUntil.sol:50-53"},
+    {"signature": "getResumeSinceTimestamp()", "selector": "0x589ff76c", "class": "pausable_function", "source": "PausableUntil.sol:59-61"},
+    {"signature": "DEFAULT_ADMIN_ROLE()", "selector": "0xa217fddf", "class": "access_control_constant", "source": "AccessControl.sol:67-67"},
+    {"signature": "supportsInterface(bytes4)", "selector": "0x01ffc9a7", "class": "erc165_function", "source": "AccessControl.sol:87-89; AccessControlEnumerable.sol:34-35"},
+    {"signature": "hasRole(bytes32,address)", "selector": "0x91d14854", "class": "access_control_function", "source": "AccessControl.sol:94-96"},
+    {"signature": "getRoleAdmin(bytes32)", "selector": "0x248a9ca3", "class": "access_control_function", "source": "AccessControl.sol:126-128"},
+    {"signature": "grantRole(bytes32,address)", "selector": "0x2f2ff15d", "class": "access_control_function", "guard": "onlyRole(getRoleAdmin(role))", "source": "AccessControl.sol:140-142"},
+    {"signature": "revokeRole(bytes32,address)", "selector": "0xd547741f", "class": "access_control_function", "guard": "onlyRole(getRoleAdmin(role))", "source": "AccessControl.sol:153-155"},
+    {"signature": "renounceRole(bytes32,address)", "selector": "0x36568abe", "class": "access_control_function", "guard": "account == msg.sender", "source": "AccessControl.sol:171-175"},
+    {"signature": "getRoleMember(bytes32,uint256)", "selector": "0x9010d07c", "class": "access_control_enumerable_function", "source": "AccessControlEnumerable.sol:50-52"},
+    {"signature": "getRoleMemberCount(bytes32)", "selector": "0xca15c873", "class": "access_control_enumerable_function", "source": "AccessControlEnumerable.sol:58-59"}
+  ],
+  "events": [
+    {"signature": "ExitRequestsLimitSet(uint256,uint256,uint256)", "topic0": "0x3119d910326e0f179e121df55f23f45b8a5022ff10c73c02aabf2b48ae36070a", "indexed": [], "source": "TriggerableWithdrawalsGateway.sol:75-80"},
+    {"signature": "Paused(uint256)", "topic0": "0x32fb7c9891bc4f963c7de9f1186d2a7755c7d6e9f4604dabe1d8bb3027c2f49e", "indexed": [], "source": "PausableUntil.sol:16-17"},
+    {"signature": "Resumed()", "topic0": "0x62451d457bc659158be6e6247f56ec1df424a5c7597f71c20c2bc44e0965c8f9", "indexed": [], "source": "PausableUntil.sol:18-19"},
+    {"signature": "RoleAdminChanged(bytes32,bytes32,bytes32)", "topic0": "0xbd79b86ffe0ab8e8776151514217cd7cacd52c909f66475c3af44e129f0b00ff", "indexed": ["role", "previousAdminRole", "newAdminRole"], "source": "OZ IAccessControl.sol:18"},
+    {"signature": "RoleGranted(bytes32,address,address)", "topic0": "0x2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d", "indexed": ["role", "account", "sender"], "source": "OZ IAccessControl.sol:26"},
+    {"signature": "RoleRevoked(bytes32,address,address)", "topic0": "0xf6391f5c32d9c69d2a47ea670b442974b53935d1edc7fd64eb21e047a839171b", "indexed": ["role", "account", "sender"], "source": "OZ IAccessControl.sol:35"}
+  ],
+  "errors": [
+    {"signature": "ZeroArgument(string)", "selector": "0x56e42893", "class": "gateway", "source": "TriggerableWithdrawalsGateway.sol:48"},
+    {"signature": "AdminCannotBeZero()", "selector": "0x6b35b1b7", "class": "gateway", "source": "TriggerableWithdrawalsGateway.sol:53"},
+    {"signature": "InsufficientFee(uint256,uint256)", "selector": "0xa458261b", "class": "gateway", "source": "TriggerableWithdrawalsGateway.sol:60"},
+    {"signature": "FeeRefundFailed()", "selector": "0x7f832e95", "class": "gateway", "source": "TriggerableWithdrawalsGateway.sol:65"},
+    {"signature": "ExitRequestsLimitExceeded(uint256,uint256)", "selector": "0x83432d28", "class": "gateway", "source": "TriggerableWithdrawalsGateway.sol:72"},
+    {"signature": "ZeroPauseDuration()", "selector": "0xad58bfc7", "class": "pausable", "source": "PausableUntil.sol:21"},
+    {"signature": "PausedExpected()", "selector": "0xb047186b", "class": "pausable", "source": "PausableUntil.sol:22"},
+    {"signature": "ResumedExpected()", "selector": "0x14378398", "class": "pausable", "source": "PausableUntil.sol:23"},
+    {"signature": "PauseUntilMustBeInFuture()", "selector": "0x73c5d8a6", "class": "pausable", "source": "PausableUntil.sol:24"},
+    {"signature": "LimitExceeded()", "selector": "0x3261c792", "class": "exit_limit_utils", "source": "ExitLimitUtils.sol:35"},
+    {"signature": "TooLargeMaxExitRequestsLimit()", "selector": "0xaea5046a", "class": "exit_limit_utils", "source": "ExitLimitUtils.sol:38"},
+    {"signature": "TooLargeFrameDuration()", "selector": "0xbbdd2da3", "class": "exit_limit_utils", "source": "ExitLimitUtils.sol:41"},
+    {"signature": "TooLargeExitsPerFrame()", "selector": "0x528f4863", "class": "exit_limit_utils", "source": "ExitLimitUtils.sol:44"},
+    {"signature": "ZeroFrameDuration()", "selector": "0x6765a75d", "class": "exit_limit_utils", "source": "ExitLimitUtils.sol:47"}
+  ],
+  "roles": {
+    "DEFAULT_ADMIN_ROLE": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "PAUSE_ROLE": "0x139c2898040ef16910dc9f44dc697df79363da767d8bc92f2e310312b816e46d",
+    "RESUME_ROLE": "0x2fc10cc8ae19568712f7a176fb4978616a610650813c9d05326c34abb62749c7",
+    "ADD_FULL_WITHDRAWAL_REQUEST_ROLE": "0x15fac8ba7fe8dd5344b88c1915452ce66976f270d1cd793c3b0ab579cecd33c0",
+    "TW_EXIT_LIMIT_MANAGER_ROLE": "0x03c30da9b9e4d4789ac88a294d39a63058ca4a498804c2aa823e381df59d0cf4",
+    "TWR_LIMIT_POSITION": "0x3a69583d449251314fd68e4e68fe89ca455d27f2701d2fdee1b16c585fc4e2d6"
+  },
+  "whenResumed": {
+    "exact_syntactic_set": ["triggerFullWithdrawals((uint256,uint256,bytes)[],address,uint256)"],
+    "semantic_internal_resumed_checks": ["pauseFor(uint256)", "pauseUntil(uint256)"],
+    "source": "TriggerableWithdrawalsGateway.sol:169; PausableUntil.sol:69-84"
+  }
+}

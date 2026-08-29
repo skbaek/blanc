@@ -61,6 +61,11 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "RootedExecution"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],
+    "lido-twg": [
+        "LidoTriggerableWithdrawalsGatewayCore",
+        "LidoTriggerableWithdrawalsGatewayTrigger",
+        "LidoTriggerableWithdrawalsGateway",
+    ],
     "proxy-pair": ["ProxyPairSlots", "ProxyPairProgram",
                    "ProxyPairImplementation", "ProxyPairExecution",
                    "ProxyPairCorrespondence", "ProxyPairAuthority"],
