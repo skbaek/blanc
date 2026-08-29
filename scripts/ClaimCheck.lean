@@ -15,6 +15,7 @@ import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerDeploymentRoot
+import Blanc.ProrataAttackTrace
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -3626,5 +3627,120 @@ example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
   DeploymentRoot.reachable_countConservation hroot hreach
 
 end LidoCircuitBreaker
+
+namespace Prorata
+
+open scoped BigOperators
+
+/-! ## PRORATA — the SF-frozen P3 and P4 headline statements.
+
+`~/plans/reports/prorata-etude-sf-memo.md` §5 freezes these five P3 shapes and
+three P4 shapes.  The pins below carry the frozen types and use the named
+declarations as their bodies, so a statement change breaks this file while a
+proof-only refactor does not. -/
+
+-- P3: the genesis-anchored reachable invariant, in its public accounting
+-- spelling — ledger sum equals supply, supply stays capped, and the share
+-- price never falls below genesis.
+example {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed future) :
+    balSum (future.state.getStor ca) =
+        supplyN (future.state.getStor ca) ∧
+      supplyN (future.state.getStor ca) ≤ maxSupply.toNat ∧
+      supplyN (future.state.getStor ca) ≤
+        offset.toNat * (future.state.bal ca).toNat :=
+  DeploymentRoot.reachable_accountingInvariant root reach
+
+-- P3: the pure finite-range cumulative-dust identity over a connected
+-- accounting path.  Exact equality, no tolerance parameter.
+example {o : Nat} (ho : o ≠ 0) (path : ProrataAccountingPath o) :
+    let n := path.steps.length
+    path.XAt n * (∏ j ∈ Finset.range n, path.DAt j) =
+      path.XAt 0 * (∏ j ∈ Finset.Icc 1 n, path.DAt j) +
+        ∑ i ∈ Finset.range n,
+          (path.rhoAt i + path.kappaAt i) *
+            (∏ j ∈ Finset.range i, path.DAt j) *
+              (∏ j ∈ Finset.Icc (i + 2) n, path.DAt j) :=
+  ProrataAccountingPath.prorata_dust_trace_exact ho path
+
+-- P3: the realized endpoint (rung R11).  The same identity over every
+-- realized finite trace of the deployed PRORATA, anchored at its own genesis,
+-- where the root discharges `X₀ = 1` and `D₀ = O`.
+example {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
+    {steps : List (ProrataAccountingStep offset.toNat)}
+    (root : DeploymentRoot cfg deployed ca)
+    (realizes : ProrataTraceRealizes root steps future) :
+    ∃ path : ProrataAccountingPath offset.toNat,
+      path.steps = steps ∧
+      path.first = ⟨0, 0⟩ ∧
+      path.last = AccountingSnapshot.ofState ca future.state ∧
+      path.XAt 0 = 1 ∧
+      path.DAt 0 = offset.toNat ∧
+      path.XAt steps.length * (∏ j ∈ Finset.range steps.length, path.DAt j) =
+        (∏ j ∈ Finset.Icc 1 steps.length, path.DAt j) +
+          ∑ i ∈ Finset.range steps.length,
+            (path.rhoAt i + path.kappaAt i) *
+              (∏ j ∈ Finset.range i, path.DAt j) *
+                (∏ j ∈ Finset.Icc (i + 2) steps.length, path.DAt j) :=
+  prorata_realized_dust_trace_exact root realizes
+
+-- P3 non-vacuity, first direction: the realized carrier never admits a
+-- continuation the configured chain relation does not.
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {ca : Adr} {root : DeploymentRoot cfg deployed ca}
+    {steps : List (ProrataAccountingStep offset.toNat)}
+    (realizes : ProrataTraceRealizes root steps future) :
+    BlockChain.ReachUsing cfg deployed future :=
+  ProrataTraceRealizes.toReachUsing realizes
+
+-- P3 non-vacuity, second direction: every configured continuation of the
+-- deployed PRORATA carries an exact accounting trace.  With the pin above
+-- this fixes the carrier exactly onto chain reachability.
+example {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed future) :
+    ∃ steps, ProrataTraceRealizes root steps future :=
+  prorataTraceRealizes_exists_of_reachUsing root reach
+
+-- P4: the open-context bound.  The coalition's settled take is bounded by its
+-- own settled input plus the outside subsidy it was handed.
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {ca : Adr} {root : DeploymentRoot cfg deployed ca}
+    {coalition : Finset Adr} {victim : Adr}
+    {charge : ProrataAccountingStep offset.toNat → AttackAttribution}
+    {steps : List (ProrataAccountingStep offset.toNat)}
+    (trace : ProrataOpenAttackTrace root coalition victim charge steps future) :
+    outA victim charge steps ≤
+      inA victim charge steps + outsideSubsidy victim charge steps :=
+  attacker_open_context trace
+
+-- P4: no closed attack trace is profitable.  No honesty, cooperation or
+-- no-donation premise appears anywhere in the carrier.
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {ca : Adr} {root : DeploymentRoot cfg deployed ca}
+    {coalition : Finset Adr} {victim : Adr}
+    {steps : List (ProrataAccountingStep offset.toNat)}
+    (trace : ProrataAttackTrace root coalition victim steps future) :
+    outA victim coalitionCharge steps ≤ inA victim coalitionCharge steps :=
+  attacker_no_profit trace
+
+-- P4: the victim's shortfall across a deposit and a later successful exit of
+-- the same unchanged shares is at most one virtual-asset quantum above the
+-- genesis-anchored price ratio.
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {ca : Adr} {root : DeploymentRoot cfg deployed ca}
+    {coalition : Finset Adr} {victim : Adr}
+    {charge : ProrataAccountingStep offset.toNat → AttackAttribution}
+    {steps : List (ProrataAccountingStep offset.toNat)}
+    (trace : ProrataOpenAttackTrace root coalition victim charge steps future)
+    {deposit exit : ProrataAccountingStep offset.toNat} {v m p : Nat}
+    (hmoves : victimMoves victim steps = [deposit, exit])
+    (hdeposit : deposit.kind = .deposit v m)
+    (hexit : exit.kind = .withdraw m p) :
+    v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + offset.toNat) + 1 :=
+  victim_loss_bound trace hmoves hdeposit hexit
+
+end Prorata
 
 end Blanc
