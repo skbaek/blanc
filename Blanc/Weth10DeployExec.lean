@@ -247,14 +247,6 @@ private lemma Bytes.sliceD_writeAt_after
   rw [if_neg]
   omega
 
-private lemma Bytes.sliceD_zero_length {bs : Bytes} {n : Nat}
-    (h : bs.length = n) : bs.sliceD 0 n 0 = bs := by
-  unfold List.sliceD
-  simp only [List.drop_zero]
-  rw [List.takeD_eq_take _ (by omega)]
-  rw [← h]
-  exact List.take_length
-
 private lemma Bytes.getD_sliceD_of_lt
     (bs : Bytes) (start len i : Nat) (hi : i < len) :
     (bs.sliceD start len 0).getD i 0 = bs.getD (start + i) 0 := by

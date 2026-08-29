@@ -111,51 +111,6 @@ def implGuardedRevertEntryGas : Nat := implGuardedRevertGas + gJumpdest
 theorem implGuardedRevertEntryGas_eq : implGuardedRevertEntryGas = 27 := by
   decide
 
-private lemma retPost_world (d : Devm) (S : List B256) (G i sz : Nat)
-    (out : Bytes) :
-    ((((d.setMach ⟨S, d.memory, G⟩).memRead i sz).2).withOutput out).world
-      = d.world := rfl
-
-private lemma retPost_getStorVal (d : Devm) (S : List B256) (G i sz : Nat)
-    (out : Bytes) (a : Adr) (k : B256) :
-    Devm.getStorVal
-        ((((d.setMach ⟨S, d.memory, G⟩).memRead i sz).2).withOutput out) a k =
-      d.getStorVal a k := by
-  unfold Devm.getStorVal Devm.getAcct
-  rw [show ((((d.setMach ⟨S, d.memory, G⟩).memRead i sz).2).withOutput out).state =
-      d.state from congrArg World.state (retPost_world d S G i sz out)]
-
-private lemma retPost_transientStorage (d : Devm) (S : List B256) (G i sz : Nat)
-    (out : Bytes) :
-    ((((d.setMach ⟨S, d.memory, G⟩).memRead i sz).2).withOutput out).transientStorage =
-      d.transientStorage :=
-  congrArg World.transientStorage (retPost_world d S G i sz out)
-
-private lemma getStorVal_setStorVal_self (d : Devm) (a : Adr) (k v : B256) :
-    (d.setStorVal a k v).getStorVal a k = v := by
-  show (Devm.getStor (d.setStorVal a k v) a).get k = v
-  rw [setStorVal_getStor_self, Stor.get_set_self]
-
-private lemma sstoreBase_state (d : Devm) (t : Adr) (key : B256)
-    (rc : Int) (v : B256) :
-    (((addAccessedStorageKey d t key).withRefundCounter rc).setStorVal t key
-      v).state = d.state.setStorVal t key v := rfl
-
-private lemma sstoreBase_error (d : Devm) (t : Adr) (key : B256)
-    (rc : Int) (v : B256) :
-    (((addAccessedStorageKey d t key).withRefundCounter rc).setStorVal t key
-      v).error = d.error := rfl
-
-private lemma sstoreBase_transientStorage (d : Devm) (t : Adr) (key : B256)
-    (rc : Int) (v : B256) :
-    (((addAccessedStorageKey d t key).withRefundCounter rc).setStorVal t key
-      v).transientStorage = d.transientStorage := rfl
-
-private lemma sstoreBase_logs (d : Devm) (t : Adr) (key : B256)
-    (rc : Int) (v : B256) :
-    (((addAccessedStorageKey d t key).withRefundCounter rc).setStorVal t key
-      v).logs = d.logs := rfl
-
 /-! ## The executed success arm
 
 The storage premises are exactly those needed to select the cold, zero-to-one
@@ -207,17 +162,17 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
         exact Devm.memRead_word_fst
           (by rw [show ((0 : B256) * 32).toNat = 0 by decide]; rfl)
   · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
-      Devm.setMach_error, sstoreBase_error, Devm.setMach_error]
+      Devm.setMach_error, Devm.sstoreBase_error, Devm.setMach_error]
   · rfl
   · rfl
   · rw [Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state,
-      Devm.setMach_state, sstoreBase_state, Devm.setMach_state]
-  · rw [retPost_getStorVal]
-    rw [Devm.getStorVal_setMach, getStorVal_setStorVal_self]
-  · rw [retPost_transientStorage, Devm.setMach_transientStorage,
-      sstoreBase_transientStorage, Devm.setMach_transientStorage]
+      Devm.setMach_state, Devm.sstoreBase_state, Devm.setMach_state]
+  · rw [Devm.retPost_getStorVal]
+    rw [Devm.getStorVal_setMach, Devm.getStorVal_setStorVal_self]
+  · rw [Devm.retPost_transientStorage, Devm.setMach_transientStorage,
+      Devm.sstoreBase_transientStorage, Devm.setMach_transientStorage]
   · rw [Devm.withOutput_logs, Devm.memRead_logs, Devm.setMach_logs,
-      Devm.setMach_logs, sstoreBase_logs, Devm.setMach_logs]
+      Devm.setMach_logs, Devm.sstoreBase_logs, Devm.setMach_logs]
 
 /-! ## Guard selection
 
@@ -271,17 +226,17 @@ theorem implGuarded_runCompiledTo_nonzero
         exact Devm.memRead_word_fst
           (by rw [show ((0 : B256) * 32).toNat = 0 by decide]; rfl)
   · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
-      Devm.setMach_error, sstoreBase_error, Devm.setMach_error]
+      Devm.setMach_error, Devm.sstoreBase_error, Devm.setMach_error]
   · rfl
   · rfl
   · rw [Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state,
-      Devm.setMach_state, sstoreBase_state, Devm.setMach_state]
-  · rw [retPost_getStorVal]
-    rw [Devm.getStorVal_setMach, getStorVal_setStorVal_self]
-  · rw [retPost_transientStorage, Devm.setMach_transientStorage,
-      sstoreBase_transientStorage, Devm.setMach_transientStorage]
+      Devm.setMach_state, Devm.sstoreBase_state, Devm.setMach_state]
+  · rw [Devm.retPost_getStorVal]
+    rw [Devm.getStorVal_setMach, Devm.getStorVal_setStorVal_self]
+  · rw [Devm.retPost_transientStorage, Devm.setMach_transientStorage,
+      Devm.sstoreBase_transientStorage, Devm.setMach_transientStorage]
   · rw [Devm.withOutput_logs, Devm.memRead_logs, Devm.setMach_logs,
-      Devm.setMach_logs, sstoreBase_logs, Devm.setMach_logs]
+      Devm.setMach_logs, Devm.sstoreBase_logs, Devm.setMach_logs]
 
 theorem implGuarded_runCompiledTo_zero
     (fs : List Func) (sevm : Sevm) (base : Devm) (G : Nat)

@@ -73,11 +73,6 @@ private theorem size_writeZero_word_of_le
     rw [if_pos h]
     split <;> rfl
 
-theorem addAccessedStorageKey_setMach_setMach
-    {base : Devm} {target : Adr} {key : B256} {m m' : Mach} :
-    (addAccessedStorageKey (base.setMach m) target key).setMach m' =
-      (addAccessedStorageKey base target key).setMach m' := rfl
-
 private theorem accessedStorageKeys_setMach
     {base : Devm} {mach : Mach} :
     (base.setMach mach).accessedStorageKeys = base.accessedStorageKeys := rfl
@@ -119,7 +114,7 @@ theorem temporal_sload_runCompiled
       (by simpa only [Devm.getStorVal_setMach] using hvalue)
       (by simp only [Devm.gasLeft_setMach]) hroom
   · simp only [temporalSloadBase, temporalSloadCost, if_neg hwarm]
-    simpa only [addAccessedStorageKey_setMach_setMach,
+    simpa only [Devm.addAccessedStorageKey_setMach_setMach,
       Devm.memory_setMach] using
       Ninst.runCompiled_sload_cold
         (devm := base.setMach ⟨key :: stack, M, G + gasColdSload⟩)
@@ -1196,7 +1191,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
     rw [hnewValueM']
     rfl
   case a =>
-    rw [addAccessedStorageKey_setMach_setMach, hnewMemory]
+    rw [Devm.addAccessedStorageKey_setMach_setMach, hnewMemory]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     rw [hnewMemoryM', ← hafterIntervalEq]
     have hg : G + 3569 + storeCost - 2174 = G + 1395 + storeCost := by omega

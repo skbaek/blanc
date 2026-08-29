@@ -38,12 +38,6 @@ private lemma accessDelegation_worldMeta {devm d1 : Devm} {a dadr : Adr}
   rcases accessDelegation_devm h with hd | hd <;> subst hd <;>
     exact ⟨rfl, rfl⟩
 
-private lemma memWrite_memory (d : Devm) (i : Nat) (v : Bytes) :
-    (d.memWrite i v).memory = d.memory.write i v := rfl
-
-private lemma memWrite_gasLeft (d : Devm) (i : Nat) (v : Bytes) :
-    (d.memWrite i v).gasLeft = d.gasLeft := rfl
-
 private lemma state_subBal_stor {st stmid : State} {sender a : Adr}
     {value : B256} (h : st.subBal sender value = some stmid) :
     (stmid.get a).stor = (st.get a).stor := by
@@ -275,13 +269,13 @@ private lemma runCompiled_call_zero_value_stubPause
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
-  · rw [memWrite_memory, Devm.memory_setMach, hout]
+  · rw [Devm.memWrite_memory, Devm.memory_setMach, hout]
     simp only [List.take_nil]
     rw [show p.memory = d1.memory.extends
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] from
         callSpawnParent_memory]
     rw [hd1mem]
-  · rw [memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
+  · rw [Devm.memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
     rw [show p.gasLeft = d1.gasLeft - (mcc + ext) from
       callSpawnParent_gasLeft]
   · change d1.error = devm.error
@@ -660,12 +654,12 @@ private lemma runCompiled_statcall_stubQuery
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
-  · rw [memWrite_memory, Devm.memory_setMach, hout]
+  · rw [Devm.memWrite_memory, Devm.memory_setMach, hout]
     rw [show p.memory = d1.memory.extends
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] from
         callSpawnParent_memory]
     rw [hd1mem]
-  · rw [memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
+  · rw [Devm.memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
     rw [show p.gasLeft = d1.gasLeft - (mcc + ext) from
       callSpawnParent_gasLeft]
   · change d1.error = devm.error

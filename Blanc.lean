@@ -3,6 +3,7 @@ import Blanc.WethCode
 import Blanc.Ladder
 import Blanc.BalanceAlgebra
 import Blanc.ExecutionSettlement
+import Blanc.MessageExecution
 import Blanc.ExecutionPath
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
@@ -10,6 +11,8 @@ import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionOccurrence
+import Blanc.RootedExecution
+import Blanc.ExecutionTerminal
 import Blanc.ExecutionNoninterference
 import Blanc.CycleWriteFree
 import Blanc.TransientSettlement

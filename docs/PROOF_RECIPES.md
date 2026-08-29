@@ -173,3 +173,58 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Weth10HolderFlowCompiled.lean](../Blanc/Weth10HolderFlowCompiled.lean) — `exists_acceptedValueCallTrace_same_slot`
 - Registered symbols: `declaration:Mem.Wf`, `declaration:Mem.Reads`
 - Review: `proof-infrastructure` on `2026-08-21`
+
+## `frame-root-carrying-execution`
+
+- Status: `active`
+- Triggers: `goal-shape:frame-root-carrying`
+- Preferred path: Use `rootedRunCompiledTo` to carry a predicate through a compiled walk, discharge childless instructions with `ninstAllChildRoots_of_not_exec` or `NonExecInstruction`, establish spawning children with `ninstAllChildRoots_of_exec_spawn`, and finish a whole program with `Prog.exec_of_rootedRunCompiledTo`.
+- Boundary: This API preserves predicates over raw entered-frame roots. It does not apply settlement/commit filtering; use `ExecutionSettlement` and `ExecutionOccurrence` for retained or committed histories.
+- Owner module: [Blanc/RootedExecution.lean](../Blanc/RootedExecution.lean)
+- Canonical example: [Blanc/RootedExecution.lean](../Blanc/RootedExecution.lean) — `Prog.exec_of_rootedRunCompiledTo`
+- Registered symbols: `module:Blanc/RootedExecution.lean`, `declaration:rootedRunCompiledTo`, `declaration:ninstAllChildRoots`, `declaration:ninstAllChildRoots_of_not_exec`, `declaration:ninstAllChildRoots_of_exec_spawn`, `declaration:funcExecFree`, `declaration:rootedRunCompiledTo_of_execFree`, `declaration:Prog.exec_of_rootedRunCompiledTo`, `declaration:NonExecInstruction`
+- Review: `proof-infrastructure` on `2026-08-29`
+
+## `message-execution-settlement`
+
+- Status: `active`
+- Triggers: `goal-shape:message-execution-settlement`
+- Preferred path: Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site.
+- Boundary: The bridge requires entry-state identity and disabled precompiles. It describes ordinary call-message settlement, not CREATE settlement or retained-frame filtering.
+- Owner module: [Blanc/MessageExecution.lean](../Blanc/MessageExecution.lean)
+- Canonical example: [Blanc/MessageExecution.lean](../Blanc/MessageExecution.lean) — `MessageExecution.processMessage_eq_settle_exec`
+- Registered symbols: `module:Blanc/MessageExecution.lean`, `declaration:MessageExecution.processMessage_eq_settle_exec`, `declaration:MessageExecution.processMessage_clean_of_exec`, `declaration:MessageExecution.processMessage_revert_of_exec`, `declaration:MessageExecution.processMessage_halt_of_exec`, `declaration:MessageExecution.settledRevert`, `declaration:MessageExecution.settledHalt`, `declaration:Msg.initDevm_stack`, `declaration:Msg.initSevm_data`
+- Review: `proof-infrastructure` on `2026-08-29`
+
+## `devm-common-update-laws`
+
+- Status: `active`
+- Triggers: `goal-shape:devm-common-update-law`
+- Preferred path: Before proving a record projection by `rfl`, search the public `Devm` laws in `CommonProofs`: memory writes, accessed-storage/setMach cancellation, storage read-after-write, and the reusable RETURN/SSTORE post projection cuts are named there. Jaune also supplies update-first projection laws such as `Devm.memWrite_gasLeft` and `Devm.setMach_accessedStorageKeys`.
+- Boundary: Use the smallest abstract-base law that matches the goal. Do not unfold a concrete effect tower merely because these laws themselves are definitionally simple.
+- Owner module: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean)
+- Canonical example: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean) — `Devm.addAccessedStorageKey_setMach_setMach`
+- Registered symbols: `module:Blanc/CommonProofs.lean`, `declaration:Devm.memWrite_memory`, `declaration:Devm.memWrite_stack`, `declaration:Devm.addAccessedStorageKey_setMach_setMach`, `declaration:Devm.getStorVal_setStorVal_self`, `declaration:Devm.retPost_getStorVal`, `declaration:Devm.sstoreBase_state`
+- Review: `proof-infrastructure` on `2026-08-29`
+
+## `compiled-terminal-at-zero`
+
+- Status: `active`
+- Triggers: `goal-shape:terminal-return-revert`
+- Preferred path: For an offset-zero 32-byte RETURN or empty REVERT, use `Func.runCompiledTo_ret_word_at_zero` or `Func.runCompiledTo_rev_empty_at_zero`; use the more general `Func.runCompiledTo_ret_word` and `Func.runCompiledTo_rev` only when the offset, size, stack tail, or payload differs.
+- Boundary: These are construction lemmas for two common terminal shapes, not inversion theorems and not a replacement for the general terminal APIs.
+- Owner module: [Blanc/ExecutionTerminal.lean](../Blanc/ExecutionTerminal.lean)
+- Canonical example: [Blanc/ExecutionTerminal.lean](../Blanc/ExecutionTerminal.lean) — `Func.runCompiledTo_ret_word_at_zero`
+- Registered symbols: `module:Blanc/ExecutionTerminal.lean`, `declaration:Func.runCompiledTo_ret_word_at_zero`, `declaration:Func.runCompiledTo_rev_empty_at_zero`
+- Review: `proof-infrastructure` on `2026-08-29`
+
+## `full-length-slice`
+
+- Status: `active`
+- Triggers: `goal-shape:full-length-slice`
+- Preferred path: When a padded `sliceD` begins at zero and its requested width is the source length, rewrite with `Bytes.sliceD_zero_length` instead of reproving the take/drop normalization locally.
+- Boundary: The theorem needs exact equality between source length and requested width. It does not characterize nonzero offsets or shorter/longer windows.
+- Owner module: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean)
+- Canonical example: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean) — `Bytes.sliceD_zero_length`
+- Registered symbols: `module:Blanc/CommonProofs.lean`, `declaration:Bytes.sliceD_zero_length`
+- Review: `proof-infrastructure` on `2026-08-29`

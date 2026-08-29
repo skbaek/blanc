@@ -1,4 +1,7 @@
 import Blanc.ForwardCall
+import Blanc.RootedExecution
+import Blanc.MessageExecution
+import Blanc.ExecutionTerminal
 
 namespace Blanc
 
@@ -83,7 +86,7 @@ example : Func.stop.compileShape.byteSize < 2 := by
   blanc_suggest
   decide
 
--- EXPECT-NO-MATCH
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (f : Func) : f.compileShape.byteSize = f.compileShape.byteSize := by
   blanc_suggest
   rfl
@@ -95,15 +98,51 @@ example :
   blanc_suggest
   decide
 
--- EXPECT-NO-MATCH
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (devm : Devm) (output : Bytes) :
     (devm.withOutput output).pop = (devm.withOutput output).pop := by
   blanc_suggest
   rfl
 
--- EXPECT-NO-MATCH
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (proposition : Prop) (proof : proposition) : proposition := by
   blanc_suggest
   exact proof
+
+-- EXPECT: frame-root-carrying-execution
+example {P : Exec.Deriv → Prop} {fs : List Func} {sevm : Sevm}
+    {pre : Devm} {f : Func} {out : Execution}
+    {run : Func.RunCompiledTo fs sevm pre f out}
+    (rooted : rootedRunCompiledTo P run) : rootedRunCompiledTo P run := by
+  blanc_suggest
+  exact rooted
+
+-- EXPECT: message-execution-settlement
+example (msg : Msg)
+    (hentry : msg.benvAfterTransfer = .ok msg.benv)
+    (hdisable : msg.disablePrecompiles = true) :
+    processMessage msg =
+      (Frame.ofCall msg).settle (exec (initEvm msg)) := by
+  blanc_suggest
+  exact MessageExecution.processMessage_eq_settle_exec msg hentry hdisable
+
+-- EXPECT: devm-common-update-laws
+example (devm : Devm) (index : Nat) (value : Bytes) :
+    (devm.memWrite index value).memory = devm.memory.write index value := by
+  blanc_suggest
+  exact Devm.memWrite_memory devm index value
+
+-- EXPECT: compiled-terminal-at-zero
+example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Func.RunCompiledTo fs sevm pre (Func.last .ret) out) :
+    Func.RunCompiledTo fs sevm pre (Func.last .ret) out := by
+  blanc_suggest
+  exact run
+
+-- EXPECT: full-length-slice
+example {bytes : Bytes} {size : Nat} (h : bytes.length = size) :
+    bytes.sliceD 0 size 0 = bytes := by
+  blanc_suggest
+  exact Bytes.sliceD_zero_length h
 
 end Blanc

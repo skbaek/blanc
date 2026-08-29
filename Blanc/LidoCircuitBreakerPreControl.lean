@@ -101,16 +101,6 @@ from the two removal arms.  `assignmentPost` is the substrate's name for that
 post-write state, so the clearing is a fact about a named state on the common
 prefix of every arm — no arm analysis is needed to establish it. -/
 
-/-- Storage read-after-write at the same address and key.  Another upstream
-candidate: the substrate uses this shape repeatedly but through per-site
-rewrites rather than a named law. -/
-theorem Devm.getStorVal_setStorVal_self (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setStorVal a k v).getStorVal a k = v := by
-  show ((devm.state.setStorVal a k v).get a).stor.get k = v
-  unfold State.setStorVal
-  rw [State.get_set_self]
-  exact Stor.get_set_self _ _ _
-
 theorem temporalSstorePost_getStorVal_self (sevm : Sevm) (base : Devm)
     (key value : B256) :
     (temporalSstorePost sevm base key value).getStorVal

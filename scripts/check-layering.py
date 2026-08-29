@@ -57,6 +57,10 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
           "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
           "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
 
+# Newly extracted common modules live in a separate additive row so concurrent
+# contract branches can extend the historical table cleanly.
+SHARED += ["ExecutionTerminal", "MessageExecution", "RootedExecution"]
+
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],
     "proxy-pair": ["ProxyPairSlots", "ProxyPairProgram",

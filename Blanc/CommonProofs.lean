@@ -4776,7 +4776,11 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
   rw [← hb.stack, h_s₄, h_s₃]
   exact hp
 
-/-- `Devm.memWrite` touches memory only. -/
+/-- `Devm.memWrite` changes memory to the requested write. -/
+@[simp] lemma Devm.memWrite_memory (devm : Devm) (i : Nat) (val : Bytes) :
+    (devm.memWrite i val).memory = devm.memory.write i val := rfl
+
+/-- `Devm.memWrite` leaves the operand stack unchanged. -/
 lemma Devm.memWrite_stack (devm : Devm) (i : Nat) (val : Bytes) :
     (devm.memWrite i val).stack = devm.stack := rfl
 
@@ -8990,11 +8994,84 @@ lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
 
 /-! ### `sstore`'s effect on storage -/
 
+/-- Replacing the machine component before an accessed-storage-key update is
+irrelevant once the caller supplies the final machine component. -/
+@[simp] theorem Devm.addAccessedStorageKey_setMach_setMach
+    {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
+    (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
+      (addAccessedStorageKey base target key).setMach mach' := rfl
+
 lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
     Devm.getStor (devm.setStorVal adr key val) adr = (Devm.getStor devm adr).set key val := by
   simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
     Devm.setWorld, State.setStorVal]
   simp only [Devm.state, State.get_set_self]
+
+/-- Persistent storage read-after-write at the same address and key. -/
+@[simp] theorem Devm.getStorVal_setStorVal_self
+    (devm : Devm) (adr : Adr) (key val : B256) :
+    (devm.setStorVal adr key val).getStorVal adr key = val := by
+  show (Devm.getStor (devm.setStorVal adr key val) adr).get key = val
+  rw [setStorVal_getStor_self, Stor.get_set_self]
+
+/-! ### Reusable projection cuts for compiled RETURN and SSTORE posts -/
+
+/-- A `setMach`/`memRead`/`withOutput` return post preserves the base world. -/
+lemma Devm.retPost_world (devm : Devm) (stack : List B256)
+    (gas index size : Nat) (output : Bytes) :
+    ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+        ).withOutput output).world = devm.world := rfl
+
+/-- A `setMach`/`memRead`/`withOutput` return post preserves persistent
+storage reads. -/
+lemma Devm.retPost_getStorVal (devm : Devm) (stack : List B256)
+    (gas index size : Nat) (output : Bytes) (adr : Adr) (key : B256) :
+    Devm.getStorVal
+        ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+          ).withOutput output) adr key =
+      devm.getStorVal adr key := by
+  unfold Devm.getStorVal Devm.getAcct
+  rw [show (((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+      ).withOutput output).state) = devm.state from
+        congrArg World.state
+          (Devm.retPost_world devm stack gas index size output)]
+
+/-- A `setMach`/`memRead`/`withOutput` return post preserves transient
+storage. -/
+lemma Devm.retPost_transientStorage (devm : Devm) (stack : List B256)
+    (gas index size : Nat) (output : Bytes) :
+    ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+        ).withOutput output).transientStorage = devm.transientStorage :=
+  congrArg World.transientStorage
+    (Devm.retPost_world devm stack gas index size output)
+
+/-- The standard warm/refund/storage-write post has exactly the written
+persistent state. -/
+lemma Devm.sstoreBase_state (devm : Devm) (target : Adr) (key : B256)
+    (refund : Int) (value : B256) :
+    (((addAccessedStorageKey devm target key).withRefundCounter refund
+      ).setStorVal target key value).state =
+        devm.state.setStorVal target key value := rfl
+
+/-- The standard warm/refund/storage-write post preserves the prior error. -/
+lemma Devm.sstoreBase_error (devm : Devm) (target : Adr) (key : B256)
+    (refund : Int) (value : B256) :
+    (((addAccessedStorageKey devm target key).withRefundCounter refund
+      ).setStorVal target key value).error = devm.error := rfl
+
+/-- The standard warm/refund/storage-write post preserves transient storage. -/
+lemma Devm.sstoreBase_transientStorage
+    (devm : Devm) (target : Adr) (key : B256)
+    (refund : Int) (value : B256) :
+    (((addAccessedStorageKey devm target key).withRefundCounter refund
+      ).setStorVal target key value).transientStorage =
+        devm.transientStorage := rfl
+
+/-- The standard warm/refund/storage-write post preserves logs. -/
+lemma Devm.sstoreBase_logs (devm : Devm) (target : Adr) (key : B256)
+    (refund : Int) (value : B256) :
+    (((addAccessedStorageKey devm target key).withRefundCounter refund
+      ).setStorVal target key value).logs = devm.logs := rfl
 
 lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
     (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: xs <<+ s.stack) :
@@ -9385,6 +9462,15 @@ lemma Bytes.getD_writeAt (bs : Bytes) (n : Nat) (xs : Bytes) (i : Nat) :
         List.getD_drop]
       congr 1
       omega
+
+/-- Taking a padded slice from zero at the exact source length returns the
+source unchanged. -/
+lemma Bytes.sliceD_zero_length {bs : Bytes} {n : Nat}
+    (h : bs.length = n) : bs.sliceD 0 n 0 = bs := by
+  unfold List.sliceD
+  simp only [List.drop_zero]
+  rw [List.takeD_eq_take _ (by omega), ← h]
+  exact List.take_length
 
 /-- Writing at the end of the image is an append.  The shape every store in a
 frame that lays memory out once, upward and without gaps, takes. -/
