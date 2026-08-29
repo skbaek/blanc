@@ -159,6 +159,68 @@ theorem reconstructLoadStore_runCompiledTo
       rfl) ?_
   simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
 
+/-- Exact cost of pushing one word and storing it at a memory word. -/
+def reconstructPushStoreCost (value targetWord : B256) : Nat :=
+  pushCost value.toBytes.sig +
+    pushCost ((targetWord * 32).toBytes.sig) + 3
+
+/-- Execute one covered-memory `pushB256`/`mstoreAt` staging fragment. -/
+theorem reconstructPushStore_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {value targetWord : B256}
+    {stack : List B256} {K : Nat} {rest : Func} {ex : Execution}
+    (hmod : memory.size % 32 = 0)
+    (htargetFit : (targetWord * 32).toNat + 32 ≤ memory.size)
+    (hroom : stack.length < 1023)
+    (htail : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨stack,
+          memory.write (targetWord * 32).toNat value.toBytes, K⟩)
+      rest ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨stack, memory, K + reconstructPushStoreCost value targetWord⟩)
+      (pushB256 value ::: mstoreAt targetWord +++ rest) ex := by
+  let cvalue := pushCost value.toBytes.sig
+  let ctarget := pushCost ((targetWord * 32).toBytes.sig)
+  simp only [mstoreAt, prepend]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256
+      (w := value) (c := cvalue) (G := K + ctarget + 3)
+      rfl
+      (by
+        simp only [Devm.gasLeft_setMach, reconstructPushStoreCost,
+          cvalue, ctarget]
+        omega)
+      (by simp only [Devm.stack_setMach]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256
+      (w := targetWord * 32) (c := ctarget) (G := K + 3)
+      rfl
+      (by
+        simp only [Devm.gasLeft_setMach]
+        omega)
+      (by
+        simp only [Devm.stack_setMach, List.length_cons]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_mstore_of
+      (i := targetWord * 32) (v := value) (s := stack)
+      (G := K) (e := 0)
+      rfl
+      (Devm.extCost_zero_of_le hmod htargetFit)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      rfl) ?_
+  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
+
+@[simp] theorem reconstructPushStoreCost_zero_one :
+    reconstructPushStoreCost 0 1 = 8 := by
+  decide +kernel
+
 @[simp] theorem reconstructLoadStoreCost_node_zero :
     reconstructLoadStoreCost nodeWord 0 = 11 := by
   decide +kernel
