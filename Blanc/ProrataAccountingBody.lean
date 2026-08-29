@@ -41,6 +41,47 @@ theorem retainedTransactionListAccountingReplay
       obtain ⟨tailSteps, tailReplay⟩ := ih next.state next.ca
       exact ⟨headSteps ++ tailSteps, headReplay.append tailReplay⟩
 
+/-- Rung R4: a retained Jaune system message realizes one PRORATA accounting
+replay.
+
+No disjointness between PRORATA's address and the four predeploy addresses is
+needed, and none is available: predeploys are ordinary code accounts.  The
+`currentTarget = ca` branch is discharged from the state invariant's own code
+field, exactly as the message rung already does for an ordinary call.
+
+The one side condition is about the system target alone, never about `ca`:
+a system message is sent by the fixed `systemAddress`, so ruling out a
+self-withdrawal root at a system target equal to `ca` needs only that the
+target is not itself the system address.  Every one of the four call sites
+below discharges it by `decide` on concrete addresses, so no rung above this
+one carries it. -/
+theorem retainedSystemMessageAccountingReplay
+    {ca : Adr} {benv : Benv} {target : Adr} {data : Bytes}
+    {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (inv : prorataSpec.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts)
+    (systemNe : target ≠ systemAddress)
+    (blockIndex : Nat) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca benv.state) steps
+        (AccountingSnapshot.ofState ca state) := by
+  have msgInv : prorataSpec.MsgInv ca
+      (systemTransactionMessage benv target data) :=
+    systemTransactionMessage_msgInv inv notCreated
+  have ready : AccountingMessageReady ca
+      (systemTransactionMessage benv target data) := by
+    refine ⟨msgInv.runReady_of_call
+      (systemTransactionMessage_target_isNone benv target data), ?_⟩
+    intro current
+    rw [systemTransactionMessage_currentTarget] at current
+    rw [systemTransactionMessage_caller]
+    exact fun collide => systemNe (current.trans collide.symm)
+  have replay :=
+    retainedMessageCallAccountingReplay trace.message ready blockIndex none
+  rwa [systemTransactionMessage_benv_state] at replay
+
 end Prorata
 
 end Blanc
