@@ -13,6 +13,65 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Ninst
 
+/-- The real sequence of zero-value state transfers made by successive
+successful SHA-256 precompile calls. -/
+inductive ReconstructZeroTransferChain (sevm : Sevm) :
+    State -> State -> Prop where
+  | refl (state : State) : ReconstructZeroTransferChain sevm state state
+  | step {origin before stmid after : State}
+      (previous : ReconstructZeroTransferChain sevm origin before)
+      (sub : before.subBal sevm.currentTarget 0 = some stmid)
+      (add : after = stmid.addBal 2 0) :
+      ReconstructZeroTransferChain sevm origin after
+
+/-- Cumulative non-machine state preserved across reconstruction hashes.
+
+`returnData` is intentionally absent: every successful precompile call replaces
+it with the current digest.  The world-state field records the exact transfer
+chain instead of asserting a stronger state equality than Jaune exposes.
+-/
+structure ReconstructMetaCarrier
+    (sevm : Sevm) (origin current : Devm) : Prop where
+  storage : forall a, Devm.getStor current a = Devm.getStor origin a
+  code : forall a, current.getCode a = origin.getCode a
+  accessedAddresses :
+    current.accessedAddresses = origin.accessedAddresses
+  accessedStorageKeys :
+    current.accessedStorageKeys = origin.accessedStorageKeys
+  logs : current.logs = origin.logs
+  output : current.output = origin.output
+  error : current.error = origin.error
+  state : ReconstructZeroTransferChain sevm origin.state current.state
+
+/-- Initial cumulative metadata carrier. -/
+theorem ReconstructMetaCarrier.refl (sevm : Sevm) (base : Devm) :
+    ReconstructMetaCarrier sevm base base :=
+  ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, rfl,
+    ReconstructZeroTransferChain.refl base.state⟩
+
+/-- Extend cumulative metadata by one successful SHA-256 call. -/
+theorem ReconstructMetaCarrier.afterHash
+    {sevm : Sevm} {origin base post : Devm}
+    (h : ReconstructMetaCarrier sevm origin base)
+    (hstorage : forall a, Devm.getStor post a = Devm.getStor base a)
+    (hcode : forall a, post.getCode a = base.getCode a)
+    (haddresses : post.accessedAddresses = base.accessedAddresses)
+    (hkeys : post.accessedStorageKeys = base.accessedStorageKeys)
+    (hlogs : post.logs = base.logs)
+    (houtput : post.output = base.output)
+    (herror : post.error = base.error)
+    (htransfer : exists stmid,
+      base.state.subBal sevm.currentTarget 0 = some stmid /\
+      post.state = stmid.addBal 2 0) :
+    ReconstructMetaCarrier sevm origin post := by
+  obtain ⟨stmid, hsub, hstate⟩ := htransfer
+  refine ⟨fun a => (hstorage a).trans (h.storage a),
+    fun a => (hcode a).trans (h.code a),
+    haddresses.trans h.accessedAddresses,
+    hkeys.trans h.accessedStorageKeys,
+    hlogs.trans h.logs, houtput.trans h.output, herror.trans h.error, ?_⟩
+  exact ReconstructZeroTransferChain.step h.state hsub hstate
+
 /-- Exact cost of loading one memory word and storing it at another word. -/
 def reconstructLoadStoreCost (sourceWord targetWord : B256) : Nat :=
   pushCost ((sourceWord * 32).toBytes.sig) + 3 +
