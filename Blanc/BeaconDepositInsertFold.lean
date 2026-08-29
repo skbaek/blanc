@@ -1,4 +1,5 @@
 import Blanc.BeaconDepositInsert
+import Blanc.ForwardStorageAccess
 
 /-!
 # Beacon deposit insertion-loop iteration
@@ -24,7 +25,8 @@ structure InsertionLoopState where
 def InsertionLoopState.live (s : InsertionLoopState) : Prop :=
   ((1 : B256) &&& s.size) ≠ 0
 
-instance (s : InsertionLoopState) : Decidable s.live := by
+instance instDecidableInsertionLoopStateLive
+    (s : InsertionLoopState) : Decidable s.live := by
   unfold InsertionLoopState.live
   infer_instance
 
@@ -35,14 +37,12 @@ def InsertionLoopState.key (s : InsertionLoopState) : B256 :=
 /-- Access-set update performed by one selected branch `SLOAD`. -/
 def insertionReadKeys (owner : Adr) (keys : KeySet)
     (key : B256) : KeySet :=
-  if (⟨owner, key⟩ : Adr × B256) ∈ keys then keys
-  else keys.insert ⟨owner, key⟩
+  sloadAccessedStorageKeys owner keys key
 
 /-- Warm/cold charge performed by one selected branch `SLOAD`. -/
 def insertionReadGas (owner : Adr) (keys : KeySet)
     (key : B256) : Nat :=
-  if (⟨owner, key⟩ : Adr × B256) ∈ keys then gasWarmAccess
-  else gasColdSload
+  sloadCostOfKeys owner keys key
 
 /-- One machine-word dead insertion step. -/
 def InsertionLoopState.step (owner : Adr) (stor : Stor)
@@ -120,8 +120,8 @@ theorem insertionStoreCost_eq_sstoreCost
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).accessedStorageKeys =
       insertionReadKeys sevm.currentTarget base.accessedStorageKeys key := by
-  unfold afterSload insertionReadKeys
-  split <;> rfl
+  simpa only [insertionReadKeys] using
+    Blanc.afterSload_accessedStorageKeys sevm base key
 
 @[simp] theorem afterSload_getStor_insertion
     (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
@@ -164,7 +164,7 @@ theorem insertionStoreCost_eq_sstoreCost
 
 theorem insertionDeadStepGas_ge (owner : Adr) (s : InsertionLoopState) :
     436 ≤ insertionDeadStepGas owner s := by
-  unfold insertionDeadStepGas insertionReadGas
+  unfold insertionDeadStepGas insertionReadGas sloadCostOfKeys
   split <;> simp only [gasWarmAccess, gasColdSload] <;> omega
 
 private lemma insertionFold_getStor_setMach

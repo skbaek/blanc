@@ -1,4 +1,6 @@
 import Blanc.BeaconDepositRoot
+import Blanc.ForwardStorageAccess
+import Blanc.WordArithmetic
 
 /-!
 # Beacon deposit root-fold iteration
@@ -25,7 +27,8 @@ structure RootLoopState where
 def RootLoopState.live (s : RootLoopState) : Prop :=
   ((1 : B256) &&& s.size) ≠ 0
 
-instance (s : RootLoopState) : Decidable s.live := by
+instance instDecidableRootLoopStateLive
+    (s : RootLoopState) : Decidable s.live := by
   unfold RootLoopState.live
   infer_instance
 
@@ -35,13 +38,11 @@ def RootLoopState.key (s : RootLoopState) : B256 :=
 
 /-- Access-set update performed by one selected SLOAD. -/
 def rootReadKeys (owner : Adr) (keys : KeySet) (key : B256) : KeySet :=
-  if (⟨owner, key⟩ : Adr × B256) ∈ keys then keys
-  else keys.insert ⟨owner, key⟩
+  sloadAccessedStorageKeys owner keys key
 
 /-- Warm/cold charge performed by one selected SLOAD. -/
 def rootReadGas (owner : Adr) (keys : KeySet) (key : B256) : Nat :=
-  if (⟨owner, key⟩ : Adr × B256) ∈ keys then gasWarmAccess
-  else gasColdSload
+  sloadCostOfKeys owner keys key
 
 /-- One model-side machine-word root iteration. -/
 def RootLoopState.step (owner : Adr) (stor : Stor)
@@ -103,7 +104,7 @@ structure RootLoopCarrier (origin base : Devm) (memory : Mem)
     (sevm : Sevm) (base : Devm) (key : B256) :
     (rootAfterSload sevm base key).accessedStorageKeys =
       rootReadKeys sevm.currentTarget base.accessedStorageKeys key := by
-  unfold rootAfterSload rootReadKeys
+  unfold rootAfterSload rootReadKeys sloadAccessedStorageKeys
   split <;> rfl
 
 @[simp] theorem rootAfterSload_getStor
@@ -147,7 +148,7 @@ structure RootLoopCarrier (origin base : Devm) (memory : Mem)
 
 theorem rootLoopStepGas_ge (owner : Adr) (s : RootLoopState) :
     362 ≤ rootLoopStepGas owner s := by
-  unfold rootLoopStepGas rootReadGas
+  unfold rootLoopStepGas rootReadGas sloadCostOfKeys
   split <;> split <;> simp only [gasWarmAccess, gasColdSload] <;> omega
 
 /-- Machine-word state at the endpoint's first loop entry. -/
@@ -599,11 +600,8 @@ private def rootNatState (height size : Nat) (node : B256)
   ⟨Nat.toB256 height, Nat.toB256 size, node, keys⟩
 
 private theorem one_and_toB256 (n : Nat) (hn : n < 2 ^ 256) :
-    ((1 : B256) &&& Nat.toB256 n) = Nat.toB256 (n % 2) := by
-  apply B256.toNat_inj
-  rw [B256.toNat_and, B256.toNat_toB256_of_lt hn]
-  rw [B256.toNat_toB256_of_lt (by omega : n % 2 < 2 ^ 256)]
-  exact Nat.one_and_eq_mod_two n
+    ((1 : B256) &&& Nat.toB256 n) = Nat.toB256 (n % 2) :=
+  Blanc.one_and_toB256_eq_mod_two n hn
 
 private theorem rootNatState_live_iff
     (height size : Nat) (node : B256) (keys : KeySet)
@@ -623,17 +621,10 @@ private theorem rootNatState_live_iff
     simp only [hone] at hnat
     contradiction
 
-private theorem toB256_succ_of_lt_32 (h : Nat) (hh : h < 32) :
-    Nat.toB256 h + 1 = Nat.toB256 (h + 1) := by
-  apply B256.toNat_inj
-  rw [B256.toNat_add_eq_of_nof]
-  · rw [B256.toNat_toB256_of_lt (by omega : h < 2 ^ 256),
-      B256.toNat_toB256_of_lt (by omega : h + 1 < 2 ^ 256)]
-    rfl
-  · unfold B256.Nof
-    rw [B256.toNat_toB256_of_lt (by omega : h < 2 ^ 256)]
-    change h + 1 < 2 ^ 256
-    omega
+private theorem toB256_succ_of_lt_32 (height : Nat)
+    (hheight : height < 32) :
+    Nat.toB256 height + 1 = Nat.toB256 (height + 1) :=
+  Blanc.toB256_add_one_of_lt height (by omega)
 
 private theorem branchBase_add_toB256 (h : Nat) (hh : h < 32) :
     branchBase + Nat.toB256 h = branchSlot h := by
@@ -684,65 +675,16 @@ private theorem rootNatState_key_of_even
   exact zeroHashBase_add_toB256 height hheight
 
 private theorem lowShift (n : Nat) (hn : n < 2 ^ 64) :
-    n.toUInt64 >>> (1 : Nat).toUInt64 = (n / 2).toUInt64 := by
-  rw [← UInt64.toNat_inj]
-  rw [UInt64.toNat_shiftRight, toNat_toUInt64]
-  rw [Nat.lo_eq_of_lt hn]
-  have hright : (n / 2).toUInt64.toNat = n / 2 := by
-    rw [toNat_toUInt64, Nat.lo_eq_of_lt (by omega : n / 2 < 2 ^ 64)]
-  rw [hright, show ((1 : Nat).toUInt64).toNat = 1 by rfl]
-  norm_num [Nat.shiftRight_eq_div_pow]
+    n.toUInt64 >>> (1 : Nat).toUInt64 = (n / 2).toUInt64 :=
+  Blanc.toUInt64_shiftRight_one n hn
 
 private theorem shift128 (n : Nat) (hn : n < 2 ^ 64) :
-    Nat.toB128 n >>> 1 = Nat.toB128 (n / 2) := by
-  have hn64 : n >>> 64 = 0 := Nat.shiftRight_eq_zero n 64 (by omega)
-  have hhalf64 : (n / 2) >>> 64 = 0 :=
-    Nat.shiftRight_eq_zero (n / 2) 64 (by omega)
-  have hnword : Nat.toB128 n = ((0 : UInt64), n.toUInt64) := by
-    unfold Nat.toB128
-    rw [hn64]
-    rfl
-  have hhword : Nat.toB128 (n / 2) =
-      ((0 : UInt64), (n / 2).toUInt64) := by
-    unfold Nat.toB128
-    rw [hhalf64]
-    rfl
-  rw [hnword, hhword]
-  change B128.shiftRight ((0 : UInt64), n.toUInt64) 1 =
-    ((0 : UInt64), (n / 2).toUInt64)
-  simp only [B128.shiftRight, if_false, if_true, Nat.one_ne_zero,
-    Nat.reduceLT]
-  apply Prod.ext
-  · rfl
-  · simpa only [UInt64.zero_shiftLeft, UInt64.zero_or] using lowShift n hn
+    Nat.toB128 n >>> 1 = Nat.toB128 (n / 2) :=
+  Blanc.toB128_shiftRight_one n hn
 
 private theorem shift256_32 (n : Nat) (hn : n < 2 ^ 32) :
-    Nat.toB256 n >>> 1 = Nat.toB256 (n / 2) := by
-  have hn128 : n >>> 128 = 0 := Nat.shiftRight_eq_zero n 128 (by omega)
-  have hhalf128 : (n / 2) >>> 128 = 0 :=
-    Nat.shiftRight_eq_zero (n / 2) 128 (by omega)
-  have hnword : Nat.toB256 n = ((0 : B128), Nat.toB128 n) := by
-    unfold Nat.toB256
-    rw [hn128]
-    rfl
-  have hhword : Nat.toB256 (n / 2) =
-      ((0 : B128), Nat.toB128 (n / 2)) := by
-    unfold Nat.toB256
-    rw [hhalf128]
-    rfl
-  rw [hnword, hhword]
-  change B256.shiftRight ((0 : B128), Nat.toB128 n) 1 =
-    ((0 : B128), Nat.toB128 (n / 2))
-  simp only [B256.shiftRight, if_false, if_true, Nat.one_ne_zero,
-    Nat.reduceLT]
-  apply Prod.ext
-  · rfl
-  · have hzeroShift : (0 : B128) <<< 127 = 0 := by
-      change B128.shiftLeft ((0 : UInt64), (0 : UInt64)) 127 =
-        ((0 : UInt64), (0 : UInt64))
-      norm_num [B128.shiftLeft]
-    rw [show 128 - 1 = 127 by omega, hzeroShift, B128.zero_or]
-    exact shift128 n (by omega)
+    Nat.toB256 n >>> 1 = Nat.toB256 (n / 2) :=
+  Blanc.toB256_shiftRight_one n (by omega)
 
 private theorem rootNatState_step_of_odd
     (owner : Adr) (stor : Stor) (height size : Nat) (node : B256)
@@ -790,8 +732,8 @@ private def rootNatKeys (owner : Adr) :
           (if size % 2 = 1 then branchSlot height else zeroHashSlot height))
 
 private theorem div_two_div_pow (n k : Nat) :
-    n / 2 / 2 ^ k = n / 2 ^ (k + 1) := by
-  rw [Nat.div_div_eq_div_mul, Nat.pow_succ, Nat.mul_comm]
+    n / 2 / 2 ^ k = n / 2 ^ (k + 1) :=
+  Blanc.div_two_div_pow n k
 
 private theorem rootLoopIter_rootNatState
     (owner : Adr) (stor : Stor) (k height size : Nat) (node : B256)
