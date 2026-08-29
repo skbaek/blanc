@@ -132,6 +132,7 @@ import Blanc.BeaconDepositInsertIterHeight
 import Blanc.BeaconDepositInsertIterSize
 import Blanc.BeaconDepositInsertIterNode
 import Blanc.BeaconDepositInsertIterKeys
+import Blanc.BeaconDepositInsertDead
 import Blanc.BeaconDepositInsertBridge
 import Blanc.BeaconDepositRootMemory
 import Blanc.BeaconDepositRoot

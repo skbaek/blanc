@@ -69,6 +69,7 @@ CONTRACTS = {
                        "BeaconDepositInsertStateProjections",
                        "BeaconDepositInsertIterHeight", "BeaconDepositInsertIterSize",
                        "BeaconDepositInsertIterNode", "BeaconDepositInsertIterKeys",
+                       "BeaconDepositInsertDead",
                        "BeaconDepositInsertBridge",
                        "BeaconDepositRootMemory", "BeaconDepositRoot",
                        "BeaconDepositRootFold", "BeaconDepositRootEffects",

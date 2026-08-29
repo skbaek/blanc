@@ -1,3 +1,4 @@
+import Blanc.BeaconDepositInsertDead
 import Blanc.BeaconDepositInsertIterHeight
 import Blanc.BeaconDepositInsertIterKeys
 import Blanc.BeaconDepositInsertIterNode
