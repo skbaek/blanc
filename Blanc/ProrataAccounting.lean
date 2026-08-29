@@ -288,6 +288,36 @@ namespace ProrataAccountingPath
 
 open ProrataAccountingStep
 
+/-- The empty connected accounting path at one snapshot. -/
+def nil (o : Nat) (snapshot : AccountingSnapshot) :
+    ProrataAccountingPath o where
+  steps := []
+  snapshot := fun _ => snapshot
+  pre_eq := by
+    intro i
+    exact Fin.elim0 i
+  post_eq := by
+    intro i
+    exact Fin.elim0 i
+
+/-- Prepend one exact effect to a connected accounting path. -/
+def cons {o : Nat} (step : ProrataAccountingStep o)
+    (tail : ProrataAccountingPath o)
+    (connect : step.post = tail.snapshot ⟨0, Nat.zero_lt_succ _⟩) :
+    ProrataAccountingPath o where
+  steps := step :: tail.steps
+  snapshot := Fin.cases step.pre tail.snapshot
+  pre_eq := by
+    intro i
+    refine Fin.cases ?_ (fun j => ?_) i
+    · rfl
+    · exact tail.pre_eq j
+  post_eq := by
+    intro i
+    refine Fin.cases ?_ (fun j => ?_) i
+    · exact connect.symm
+    · exact tail.post_eq j
+
 /-- Total boundary lookup; telescope indices are always within the unclamped range. -/
 def snapshotAt {o : Nat} (path : ProrataAccountingPath o) (i : Nat) :
     AccountingSnapshot :=
