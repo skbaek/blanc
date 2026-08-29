@@ -1,4 +1,5 @@
 import Blanc.BeaconDepositInsertDead
+import Blanc.BeaconDepositInsertCommit
 import Blanc.BeaconDepositInsertFirstLiveCost
 import Blanc.BeaconDepositInsertFirstLiveRun
 import Blanc.BeaconDepositInsertIterHeight

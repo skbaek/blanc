@@ -13,6 +13,17 @@ namespace Blanc.BeaconDeposit
 
 open Jaune
 
+/-- The two persistent reconstruction registers consumed before the incremented
+count is staged for insertion. -/
+structure InsertionStartMemoryCarrier
+    (memory : Mem) (oldCount node : B256) : Type where
+  image : Bytes
+  wf : Mem.Wf memory
+  reads : Mem.Reads memory image
+  size_eq : memory.size = 768
+  oldCount_read : image.sliceD 576 32 0 = oldCount.toBytes
+  node_read : image.sliceD 640 32 0 = node.toBytes
+
 /-- The 768-byte register image used by the insertion loop. -/
 structure InsertionMemoryCarrier
     (memory : Mem) (oldCount shiftedSize node : B256) : Type where
@@ -35,6 +46,18 @@ structure InsertionPairMemoryCarrier
   shiftedSize_read : image.sliceD 608 32 0 = shiftedSize.toBytes
   shaInput : memory.data.sliceD 0 64 0 = left.toBytes ++ right.toBytes
 
+theorem InsertionStartMemoryCarrier.readOldCount
+    {memory : Mem} {oldCount node : B256}
+    (h : InsertionStartMemoryCarrier memory oldCount node) :
+    Bytes.toB256 (memory.read 576 32).1 = oldCount := by
+  rw [Mem.Reads.read h.reads, h.oldCount_read, B256.toB256_toBytes]
+
+theorem InsertionStartMemoryCarrier.readNode
+    {memory : Mem} {oldCount node : B256}
+    (h : InsertionStartMemoryCarrier memory oldCount node) :
+    Bytes.toB256 (memory.read 640 32).1 = node := by
+  rw [Mem.Reads.read h.reads, h.node_read, B256.toB256_toBytes]
+
 theorem InsertionMemoryCarrier.readOldCount
     {memory : Mem} {oldCount shiftedSize node : B256}
     (h : InsertionMemoryCarrier memory oldCount shiftedSize node) :
@@ -53,6 +76,55 @@ theorem InsertionMemoryCarrier.readNode
     Bytes.toB256 (memory.read 640 32).1 = node := by
   rw [Mem.Reads.read h.reads, h.node_read, B256.toB256_toBytes]
 
+/-- Forget the shifted-count register before the commit stage overwrites it. -/
+def InsertionMemoryCarrier.toStart
+    {memory : Mem} {oldCount shiftedSize node : B256}
+    (h : InsertionMemoryCarrier memory oldCount shiftedSize node) :
+    InsertionStartMemoryCarrier memory oldCount node :=
+  ⟨h.image, h.wf, h.reads, h.size_eq, h.oldCount_read, h.node_read⟩
+
+/-- The final reconstruction image contains exactly the two registers needed
+before the commit stage writes word 19. -/
+def ReconstructRegistersMemoryCarrier.toInsertionStart
+    {memory : Mem}
+    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
+    {oldCount amount node intermediate second : B256}
+    (h : ReconstructRegistersMemoryCarrier memory pubkeyInput signatureFirst
+      signatureTail withdrawal amountPadded oldCount amount node intermediate
+      second 768) :
+    InsertionStartMemoryCarrier memory oldCount node :=
+  ⟨h.intermediate.node.source.image,
+    h.intermediate.node.source.wf,
+    h.intermediate.node.source.reads,
+    h.intermediate.node.source.size_eq,
+    h.intermediate.node.source.oldCount_read,
+    h.intermediate.node.node_read⟩
+
+/-- Stage the shifted count while preserving the old count and current node. -/
+def InsertionStartMemoryCarrier.writeShiftedSize
+    {memory : Mem} {oldCount node : B256}
+    (h : InsertionStartMemoryCarrier memory oldCount node)
+    (shiftedSize : B256) :
+    InsertionMemoryCarrier (memory.write 608 shiftedSize.toBytes)
+      oldCount shiftedSize node := by
+  let image := Bytes.writeAt h.image 608 shiftedSize.toBytes
+  refine ⟨image, h.wf.write _ _, Mem.Reads.write h.wf h.reads _ _,
+    ?_, ?_, ?_, ?_⟩
+  · rw [Mem.size_write_of_le (by
+      rw [B256.length_toBytes, h.size_eq]
+      omega), h.size_eq]
+  · dsimp only [image]
+    rw [Bytes.sliceD_writeAt_before]
+    exact h.oldCount_read
+    omega
+  · dsimp only [image]
+    rw [show 32 = shiftedSize.toBytes.length by rw [B256.length_toBytes]]
+    exact Bytes.sliceD_writeAt _ _ _
+  · dsimp only [image]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
+      rw [B256.length_toBytes])]
+    exact h.node_read
+
 /-- The final reconstruction image becomes the first insertion image after
 the incremented count is staged in word 19. -/
 def ReconstructRegistersMemoryCarrier.startInsertion
@@ -64,24 +136,7 @@ def ReconstructRegistersMemoryCarrier.startInsertion
       second 768) :
     InsertionMemoryCarrier (memory.write 608 shiftedSize.toBytes)
       oldCount shiftedSize node := by
-  let source := h.intermediate.node.source
-  let image := Bytes.writeAt source.image 608 shiftedSize.toBytes
-  refine ⟨image, source.wf.write _ _, Mem.Reads.write source.wf source.reads _ _,
-    ?_, ?_, ?_, ?_⟩
-  · rw [Mem.size_write_of_le (by
-      rw [B256.length_toBytes, source.size_eq]
-      omega), source.size_eq]
-  · dsimp only [image]
-    rw [Bytes.sliceD_writeAt_before]
-    exact source.oldCount_read
-    omega
-  · dsimp only [image]
-    rw [show 32 = shiftedSize.toBytes.length by rw [B256.length_toBytes]]
-    exact Bytes.sliceD_writeAt _ _ _
-  · dsimp only [image]
-    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes])]
-    exact h.intermediate.node.node_read
+  exact h.toInsertionStart.writeShiftedSize shiftedSize
 
 /-- A covered write below the register bank preserves all three insertion
 words. -/

@@ -693,9 +693,9 @@ and enter the insertion loop at height zero.  The fixed work costs 38 gas in
 addition to the selected count-slot `SSTORE` charge. -/
 theorem commitDeposit_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
-    {memory : Mem} {oldCount shiftedSize node : B256}
+    {memory : Mem} {oldCount node : B256}
     {K : Nat} {ex : Execution}
-    (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
+    (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hsentry : gCallStipend <
       K + 14 + sstoreCost sevm base depositCountSlot (oldCount + 1))
     (hstatic : sevm.isStatic = false)
