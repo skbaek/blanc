@@ -1646,6 +1646,100 @@ lemma of_returnTrue_shared {fs : List Func} {sevm : Sevm} {s r : Devm}
       (B256.length_toBytes 1).symm,
     Bytes.sliceD_writeAt]
 
+/-! ### Shared one-word return observation
+
+The `AbiReturnsTrue` pair above is the constant-`1` case of a shape every
+contract with a `uint256` view or a value-returning entry point ends in: store
+the known stack head at memory word zero, then `RETURN` that complete word.
+Nothing here names a contract, so the general form belongs beside it rather
+than once per contract. -/
+
+/-- A one-word ABI result is observed at the terminal output bytes, not as a
+residual stack word: `RETURN` reads its bytes from memory. -/
+def ReturnsWord (w : B256) (d : Devm) : Prop :=
+  Devm.output d = w.toBytes
+
+/-- Store the known stack head at memory word zero and return that complete
+word.  This is the common tail of constant getters, storage getters and
+value-returning entry points.  The entry memory image is arbitrary because the
+write covers the complete returned window. -/
+lemma of_storeReturnWord {fs : List Func} {sevm : Sevm} {s r : Devm}
+    {w : B256} {img : Bytes} {xs}
+    (hp : w :: xs <<+ s.stack)
+    (h_wf : Mem.Wf s.memory)
+    (h_reads : Mem.Reads s.memory img)
+    (h : Func.Run fs sevm s (mstoreAt 0 +++ returnMemoryRange 0 32) r) :
+    ReturnsWord w r ∧ Devm.getCode s = Devm.getCode r := by
+  rcases of_run_prepend (mstoreAt 0) _ h with ⟨s2, h2, h⟩
+  rcases of_run_mstoreAt_val h2 hp with ⟨hp2, hm2⟩
+  have hwf2 : Mem.Wf s2.memory := by
+    rw [hm2]
+    exact h_wf.write _ _
+  have hrd2 : Mem.Reads s2.memory (Bytes.writeAt img 0 w.toBytes) := by
+    rw [hm2]
+    exact Mem.Reads.write h_wf h_reads 0 _
+  rcases of_run_prepend (pushList [32, 0]) _ h with ⟨s3, h3, h⟩
+  rcases Line.of_run_cons h3 with ⟨u1, q1, h3'⟩
+  rcases Line.of_run_cons h3' with ⟨u2, q2, hnil⟩
+  cases hnil
+  have hu1 : (32 : B256) :: xs <<+ u1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp2
+  have hu2 : (0 : B256) :: (32 : B256) :: xs <<+ s3.stack :=
+    prefix_of_push (of_run_pushB256 q2) hu1
+  have hm3 : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv) h3
+  have hgc : Devm.getCode s = Devm.getCode s3 :=
+    (Line.of_inv Devm.getCode (by line_inv) h2).trans
+      (Line.of_inv Devm.getCode (by line_inv) h3)
+  refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
+  show Devm.output r = _
+  rw [(of_run_ret_val hu2 h).1,
+    show (0 : B256).toNat = 0 from rfl,
+    show (32 : B256).toNat = 32 from rfl,
+    Mem.Reads.read (hm3 ▸ hrd2) 0 32,
+    show (32 : Nat) = w.toBytes.length from
+      (B256.length_toBytes w).symm,
+    Bytes.sliceD_writeAt]
+
+/-- The same fragment with no memory side condition at all.  A caller that
+holds a `Mem.Wf` / `Mem.Reads` image should prefer `of_storeReturnWord`, whose
+proof rewrites through that image; a caller that holds neither gets the same
+conclusion here, because `Mem.read_write_zero` reads the just-written word back
+off the raw write without knowing anything about the rest of memory. -/
+lemma returnsWord_of_storeReturn
+    {fs : List Func} {sevm : Sevm} {s r : Devm} {w : B256} {xs}
+    (hp : w :: xs <<+ s.stack)
+    (h : Func.Run fs sevm s (mstoreAt 0 +++ returnMemoryRange 0 32) r) :
+    ReturnsWord w r ∧ Devm.getCode s = Devm.getCode r := by
+  rcases of_run_prepend (mstoreAt 0) _ h with ⟨s2, h2, h⟩
+  rcases of_run_mstoreAt_val h2 hp with ⟨hp2, hm2⟩
+  rcases of_run_prepend (pushList [32, 0]) _ h with ⟨s3, h3, h⟩
+  rcases Line.of_run_cons h3 with ⟨u1, q1, h3'⟩
+  rcases Line.of_run_cons h3' with ⟨u2, q2, hnil⟩
+  cases hnil
+  have hu1 : (32 : B256) :: xs <<+ u1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp2
+  have hu2 : (0 : B256) :: (32 : B256) :: xs <<+ s3.stack :=
+    prefix_of_push (of_run_pushB256 q2) hu1
+  have hm3 : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv) h3
+  have hne : w.toBytes ≠ [] := by
+    intro hnil
+    have hlen := B256.length_toBytes w
+    rw [hnil] at hlen
+    simp at hlen
+  have hcode : Devm.getCode s = Devm.getCode s3 :=
+    (Line.of_inv Devm.getCode (by line_inv) h2).trans
+      (Line.of_inv Devm.getCode (by line_inv) h3)
+  refine ⟨?_, hcode.trans (of_run_ret_val hu2 h).2⟩
+  show Devm.output r = w.toBytes
+  rw [(of_run_ret_val hu2 h).1, ← hm3, hm2,
+    show ((0 : B256) * 32).toNat = 0 from by decide,
+    show (0 : B256).toNat = 0 from rfl,
+    show (32 : B256).toNat = 32 from rfl,
+    show (32 : Nat) = w.toBytes.length from (B256.length_toBytes w).symm,
+    Mem.read_write_zero _ hne]
+
 /-- **The value-carrying `CALL` inversion.**  A successful `call` step whose
 seven operands are known either pushed the failure flag `0` — the depth guard,
 the balance guard, or a child frame that failed, rollback included — **and left

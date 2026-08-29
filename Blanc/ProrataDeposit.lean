@@ -265,66 +265,6 @@ private theorem deposit_value_guard
     sevm.value ≤ maxValue :=
   (deposit_pre_guards run).1
 
-private lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
-    Ninst.Run e s mul s' → (x :: y :: xs <<+ s.stack) →
-      ((x * y) :: xs <<+ s'.stack) := by
-  intro h hp
-  refine prefix_of_diffBurn_two (· * ·) ?_ hp
-  rcases of_run_reg h with ⟨pc, hrun⟩
-  simp only [Rinst.run, Rinst.runCore] at hrun
-  exact Devm.diffBurn_of_applyBinary hrun
-
-private lemma prefix_of_div {e} {x y xs} {s s' : Devm} :
-    Ninst.Run e s div s' → (x :: y :: xs <<+ s.stack) →
-      ((x / y) :: xs <<+ s'.stack) := by
-  intro h hp
-  refine prefix_of_diffBurn_two (· / ·) ?_ hp
-  rcases of_run_reg h with ⟨pc, hrun⟩
-  simp only [Rinst.run, Rinst.runCore] at hrun
-  exact Devm.diffBurn_of_applyBinary hrun
-
-private lemma returnsWord_of_storeReturn
-    {fs : List Func} {sevm : Sevm} {s r : Devm} {w : B256} {xs}
-    (hp : w :: xs <<+ s.stack)
-    (h : Func.Run fs sevm s (mstoreAt 0 +++ returnMemoryRange 0 32) r) :
-    ReturnsWord w r ∧ Devm.getCode s = Devm.getCode r := by
-  rcases of_run_prepend (mstoreAt 0) _ h with ⟨s2, h2, h⟩
-  rcases of_run_mstoreAt_val h2 hp with ⟨hp2, hm2⟩
-  rcases of_run_prepend (pushList [32, 0]) _ h with ⟨s3, h3, h⟩
-  rcases Line.of_run_cons h3 with ⟨u1, q1, h3'⟩
-  rcases Line.of_run_cons h3' with ⟨u2, q2, hnil⟩
-  cases hnil
-  have hu1 : (32 : B256) :: xs <<+ u1.stack :=
-    prefix_of_push (of_run_pushB256 q1) hp2
-  have hu2 : (0 : B256) :: (32 : B256) :: xs <<+ s3.stack :=
-    prefix_of_push (of_run_pushB256 q2) hu1
-  have hm3 : s2.memory = s3.memory :=
-    Line.of_inv Devm.memory (by line_inv) h3
-  have hne : w.toBytes ≠ [] := by
-    intro hnil
-    have hlen := B256.length_toBytes w
-    rw [hnil] at hlen
-    simp at hlen
-  have hcode : Devm.getCode s = Devm.getCode s3 :=
-    (Line.of_inv Devm.getCode (by line_inv) h2).trans
-      (Line.of_inv Devm.getCode (by line_inv) h3)
-  refine ⟨?_, hcode.trans (of_run_ret_val hu2 h).2⟩
-  show Devm.output r = w.toBytes
-  rw [(of_run_ret_val hu2 h).1, ← hm3, hm2,
-    show ((0 : B256) * 32).toNat = 0 from by decide,
-    show (0 : B256).toNat = 0 from rfl,
-    show (32 : B256).toNat = 32 from rfl,
-    show (32 : Nat) = w.toBytes.length from (B256.length_toBytes w).symm,
-    Mem.read_write_zero _ hne]
-
-private theorem caller_ne_supplySlot (a : Adr) : a.toB256 ≠ supplySlot := by
-  intro h
-  have hv : ValidAdr supplySlot := h ▸ validAdr_toB256 a
-  have hnv : ¬ ValidAdr supplySlot := by
-    rw [validAdr_iff]
-    decide
-  exact hnv hv
-
 /-- Exact successful `deposit` body effect. -/
 theorem deposit_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}

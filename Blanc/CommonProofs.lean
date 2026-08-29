@@ -5148,6 +5148,22 @@ lemma prefix_of_sub {e} {x y xs} {s s' : Devm} :
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
 
+lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s mul s' → (x :: y :: xs <<+ s.stack) → ((x * y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· * ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_div {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s div s' → (x :: y :: xs <<+ s.stack) → ((x / y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· / ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
 lemma prefix_of_push {xs ys} {s s' : Devm} :
     Devm.PushBurn xs s s' → (ys <<+ s.stack) → ((xs ++ ys) <<+ s'.stack) :=
   λ h0 h1 => append_pref h0.stack h1
@@ -6787,6 +6803,47 @@ not pay for them. -/
 section DispatchLogFrame
 
 open scoped LogOutputHinv
+
+/-! The entry route is `fsig +++ dispatch`, so the same log/output projection
+a functional theorem carries through the dispatcher must first be carried
+through `fsig`.  `prefix_of_fsig` above says which word the selector prefix
+leaves on the stack; these two say what it leaves the event log and the output
+buffer.  Both are pure `Line.Run` frames over the four instructions of
+`cdl 0 ++ shiftRight 224`, and neither mentions a contract. -/
+
+/-- `fsig` emits no event. -/
+lemma fsig_logs {e : Sevm} {s t : Devm}
+    (run : Line.Run e s fsig t) : s.logs = t.logs := by
+  unfold fsig cdl shiftRight at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
+  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
+  cases hnil
+  have hshr : s3.logs = t.logs := by
+    rcases of_run_reg q4 with ⟨pc, hrun⟩
+    simp only [Rinst.run, Rinst.runCore] at hrun
+    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.logs
+  exact (of_run_pushB256 q1).logs.trans
+    ((Ninst.Hinv.inv (f := Devm.logs) q2).trans
+      ((of_run_pushB256 q3).logs.trans hshr))
+
+/-- `fsig` writes no output. -/
+lemma fsig_output {e : Sevm} {s t : Devm}
+    (run : Line.Run e s fsig t) : s.output = t.output := by
+  unfold fsig cdl shiftRight at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
+  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
+  cases hnil
+  have hshr : s3.output = t.output := by
+    rcases of_run_reg q4 with ⟨pc, hrun⟩
+    simp only [Rinst.run, Rinst.runCore] at hrun
+    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.output
+  exact (of_run_pushB256 q1).output.trans
+    ((Ninst.Hinv.inv (f := Devm.output) q2).trans
+      ((of_run_pushB256 q3).output.trans hshr))
 
 lemma reach_of_dispatchWith_leaf_logs {sig w : B256} {f p : Func}
     {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
