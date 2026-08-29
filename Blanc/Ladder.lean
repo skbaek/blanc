@@ -803,6 +803,17 @@ More WETH-free material moved down from `Solvent.lean` unchanged: the
 `Linst.Hinv` instances for the balance and storage projections, and the
 sub-execution entry/exit case analyses the ladder above consumes. -/
 
+instance : Linst.Hinv Devm.getCode Devm.getCode Linst.stop := by
+  constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
+
+instance : Linst.Hinv Devm.getCode Devm.getCode Linst.rev := by
+  constructor; intros e s r h
+  simp only [Linst.Run, Linst.run] at h
+  rcases Except.bind_eq_ok h with ⟨v1, h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
+  rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
+  contradiction
+
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
@@ -3057,6 +3068,19 @@ lemma post_of_pre {ca : Adr} {sevm : Sevm} {devm : Devm}
   · exact c.inv_forget (h.inv.left hc)
   · exact h.inv.right hc
 
+/-- A frame postcondition depends only on persistent world state. -/
+lemma Post.of_state_eq {ca : Adr} {sevm sevm' : Sevm} {child post : Devm}
+    (h : c.Post ca sevm' child) (hstate : post.state = child.state) :
+    c.Post ca sevm post := by
+  refine ⟨?_, ?_⟩
+  · have hbal : post.getBal = child.getBal :=
+      funext (getBal_eq_of_state_eq hstate)
+    rw [hbal]
+    exact h.side
+  · show c.Inv (Devm.getStor post ca) 0 (post.getBal ca)
+    rw [getStor_eq_of_state_eq hstate ca, getBal_eq_of_state_eq hstate ca]
+    exact h.inv
+
 lemma Pre.state_eq {wa sevm devm devm'}
     (h_pc : c.Pre wa sevm devm) (h_eq : devm'.state = devm.state) :
     c.Pre wa sevm devm' := by
@@ -3317,6 +3341,51 @@ lemma Pre.child_of_transfer {ca : Adr} {sevm sevm' : Sevm} {devm devm' : Devm}
     show c.Inv (Devm.getStor devm' ca) 0 (devm'.getBal ca)
     rw [h_stor', h_bal']
     exact c.inv_transfer h_sub h_ne h_side_st h_inv_st
+
+/-- The child-frame precondition after an outbound value transfer from the
+contract.  The caller supplies the invariant at the debited balance; the
+contract record's receive law covers the self-call case. -/
+lemma Pre.child_of_outbound_transfer
+    {ca target : Adr} {sevm' : Sevm} {devm' : Devm}
+    {st st_mid : Jaune.State} {value : B256}
+    (h_code : some (st.getCode ca).toList = Prog.compile c.prog)
+    (h_side : c.Side st.bal)
+    (h_inv : c.Inv (st.getStor ca) 0 (st.bal ca - value))
+    (h_sub : st.subBal ca value = some st_mid)
+    (h_state : devm'.state = st_mid.addBal target value)
+    (h_ct : sevm'.currentTarget = target)
+    (h_value : sevm'.value = value) :
+    c.Pre ca sevm' devm' := by
+  rcases of_state_transfer_fields (callee := target) h_sub with
+    ⟨h_t_stor, h_t_code, h_le, h_t_self, h_t_ne⟩
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · show some (devm'.state.get ca).code.toList = Prog.compile c.prog
+    rw [h_state, h_t_code ca]
+    exact h_code
+  · show c.Side devm'.state.bal
+    rw [h_state]
+    exact c.side_transfer h_sub h_side
+  · intro h_target
+    have h_target' : target = ca := h_ct.symm.trans h_target
+    have hbal : ((st_mid.addBal target value).get ca).bal =
+        (st.get ca).bal := h_t_self h_target'
+    show c.Inv (Devm.getStor devm' ca) sevm'.value (devm'.getBal ca)
+    change c.Inv (devm'.state.get ca).stor sevm'.value
+      (devm'.state.get ca).bal
+    rw [h_state, h_value, h_t_stor ca, hbal]
+    apply c.inv_recv h_inv
+    have h_le_nat := B256.toNat_le_toNat h_le
+    change (st.bal ca).toNat = (st.bal ca - value).toNat + value.toNat
+    rw [B256.toNat_sub_eq_of_le _ _ h_le]
+    omega
+  · intro h_target
+    have h_target' : target ≠ ca := fun h => h_target (h_ct.trans h)
+    have hbal : ((st_mid.addBal target value).get ca).bal =
+        (st.get ca).bal - value := h_t_ne h_target'
+    show c.Inv (Devm.getStor devm' ca) 0 (devm'.getBal ca)
+    change c.Inv (devm'.state.get ca).stor 0 (devm'.state.get ca).bal
+    rw [h_state, h_t_stor ca, hbal]
+    exact h_inv
 
 -- the precondition carries over to the initial state of a sub-execution
 -- started without a balance transfer
