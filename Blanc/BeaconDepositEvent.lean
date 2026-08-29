@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositEventMemory
 import Blanc.BytesWrite
+import Blanc.ForwardLog
 
 /-!
 # Beacon deposit event compiled carrier
@@ -916,9 +917,11 @@ private theorem emitDepositEvent_runCompiledTo
       logged.logs = base.logs ++ [depositEventLog sevm.currentTarget event] →
       (∀ (a : Adr) (k : B256),
         logged.getStorVal a k = base.getStorVal a k) →
+      (∀ a : Adr, Devm.getStor logged a = Devm.getStor base a) →
       (∀ a : Adr, logged.getBal a = base.getBal a) →
       (∀ a : Adr, logged.getCode a = base.getCode a) →
       logged.accessedStorageKeys = base.accessedStorageKeys →
+      logged.accessedAddresses = base.accessedAddresses →
       Func.RunCompiledTo fs sevm
         (logged.setMach ⟨[], memory, G⟩) body ex) :
     Func.RunCompiledTo fs sevm
@@ -949,7 +952,7 @@ private theorem emitDepositEvent_runCompiledTo
       (by simp only [Devm.stack_setMach, List.length_cons]; decide)) ?_
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
-  refine Func.runCompiledTo_log_step
+  refine Func.runCompiledTo_log_step_ext
       (topics := [depositEventTopic]) (s := []) rfl rfl hstatic
       (M := memory) rfl (c := 5358)
       (payload := abiDepositEvent event) (M' := memory) ?_ ?_ ?_ ?_ ?_
@@ -975,7 +978,7 @@ private theorem emitDepositEvent_runCompiledTo
       decide +kernel
   · simp only [Devm.gasLeft_setMach]
     omega
-  · intro logged G' hlogs hstor hbal hcode haccess hgas
+  · intro logged G' hlogs hstor hstorMap hbal hcode haccess haddresses hgas
     simp only [Devm.gasLeft_setMach] at hgas
     have hG' : G' = G := by omega
     subst G'
@@ -986,9 +989,11 @@ private theorem emitDepositEvent_runCompiledTo
     change (∀ a : Adr, logged.getBal a = base.getBal a) at hbal
     change (∀ a : Adr, logged.getCode a = base.getCode a) at hcode
     change logged.accessedStorageKeys = base.accessedStorageKeys at haccess
+    change (∀ a : Adr, Devm.getStor logged a = Devm.getStor base a) at hstorMap
+    change logged.accessedAddresses = base.accessedAddresses at haddresses
     have hrun := hbody logged
       (by simpa only [depositEventLog] using hlogs)
-      hstor hbal hcode haccess
+      hstor hstorMap hbal hcode haccess haddresses
     simpa only [prepend] using hrun
 
 private theorem stageEventCountLog_runCompiledTo
@@ -1004,12 +1009,16 @@ private theorem stageEventCountLog_runCompiledTo
       (∀ (a : Adr) (k : B256),
         logged.getStorVal a k =
           (afterSload sevm base depositCountSlot).getStorVal a k) →
+      (∀ a : Adr, Devm.getStor logged a =
+        Devm.getStor (afterSload sevm base depositCountSlot) a) →
       (∀ a : Adr, logged.getBal a =
         (afterSload sevm base depositCountSlot).getBal a) →
       (∀ a : Adr, logged.getCode a =
         (afterSload sevm base depositCountSlot).getCode a) →
       logged.accessedStorageKeys =
         (afterSload sevm base depositCountSlot).accessedStorageKeys →
+      logged.accessedAddresses =
+        (afterSload sevm base depositCountSlot).accessedAddresses →
       Func.RunCompiledTo fs sevm
         (logged.setMach
           ⟨[], depositEventMemory sevm.data amount oldCount, G⟩)
@@ -1039,9 +1048,9 @@ private theorem stageEventCountLog_runCompiledTo
         ⟨[], M19, G + 5366⟩)
       (([pushB256 depositEventTopic] ++ logWith 0 0 18) +++ body) ex := by
     apply emitDepositEvent_runCompiledTo hstatic hfinal
-    intro logged hlogs hstor hbal hcode haccess
+    intro logged hlogs hstor hstorMap hbal hcode haccess haddresses
     simpa only [M19, M18, M17, ← eventMemory_eq] using
-      hbody logged hlogs hstor hbal hcode haccess
+      hbody logged hlogs hstor hstorMap hbal hcode haccess haddresses
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := depositCountSlot) (c := 3)
@@ -1126,12 +1135,16 @@ theorem stageDepositEvent_runCompiledTo
       (∀ (a : Adr) (k : B256),
         logged.getStorVal a k =
           (afterSload sevm base depositCountSlot).getStorVal a k) →
+      (∀ a : Adr, Devm.getStor logged a =
+        Devm.getStor (afterSload sevm base depositCountSlot) a) →
       (∀ a : Adr, logged.getBal a =
         (afterSload sevm base depositCountSlot).getBal a) →
       (∀ a : Adr, logged.getCode a =
         (afterSload sevm base depositCountSlot).getCode a) →
       logged.accessedStorageKeys =
         (afterSload sevm base depositCountSlot).accessedStorageKeys →
+      logged.accessedAddresses =
+        (afterSload sevm base depositCountSlot).accessedAddresses →
       Func.RunCompiledTo fs sevm
         (logged.setMach
           ⟨[], depositEventMemory sevm.data amount oldCount, G⟩)
