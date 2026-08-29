@@ -166,11 +166,13 @@ theorem WithdrawPreCallEffect.accountingEffect
           (Sevm.argWord sevm 0 *
             (Devm.getBal pre sevm.currentTarget + 1) /
               ((Devm.getStor pre sevm.currentTarget).get supplySlot + offset))) :
-    ∃ paid,
-      ProrataAccountingEffect offset.toNat
-        (AccountingSnapshot.ofState sevm.currentTarget pre.state)
-        (.withdraw (Sevm.argWord sevm 0).toNat paid)
-        (AccountingSnapshot.ofState sevm.currentTarget paidState) := by
+    ProrataAccountingEffect offset.toNat
+      (AccountingSnapshot.ofState sevm.currentTarget pre.state)
+      (.withdraw (Sevm.argWord sevm 0).toNat
+        (Sevm.argWord sevm 0 *
+          (Devm.getBal pre sevm.currentTarget + 1) /
+            ((Devm.getStor pre sevm.currentTarget).get supplySlot + offset)).toNat)
+      (AccountingSnapshot.ofState sevm.currentTarget paidState) := by
   let shares := Sevm.argWord sevm 0
   let stor := Devm.getStor pre sevm.currentTarget
   let balance := Devm.getBal pre sevm.currentTarget
@@ -215,7 +217,6 @@ theorem WithdrawPreCallEffect.accountingEffect
         balance.toNat - paid.toNat := by
     rw [hpaidBal]
     exact B256.toNat_sub_eq_of_le _ _ hpaidBalance
-  refine ⟨paid.toNat, ?_⟩
   rw [show AccountingSnapshot.ofState sevm.currentTarget pre.state =
       ⟨supplyN stor, balance.toNat⟩ from rfl]
   rw [show AccountingSnapshot.ofState sevm.currentTarget paidState =
@@ -223,6 +224,203 @@ theorem WithdrawPreCallEffect.accountingEffect
       exact congrArg₂ AccountingSnapshot.mk hpostSupply hpostBalance]
   exact .withdraw _ _ _ _
     (B256.toNat_le_toNat hsharesSupply) hquote
+
+/-- The exact child-message entry selected by an accepted withdrawal payout.
+This packages the semantic paid boundary separately from the callback-final
+state, together with the retained child trace needed for recursive replay. -/
+structure AcceptedPayoutTrace
+    (sevm : Sevm) (paid : B256) (callPre callPost : Devm) where
+  childMsg : Msg
+  entry : Benv
+  child : Devm
+  trace : ExecutionTrace.ProcessMessageTrace childMsg (.ok child)
+  messageState : childMsg.benv.state = callPre.state
+  shouldTransferValue : childMsg.shouldTransferValue = true
+  caller : childMsg.caller = sevm.currentTarget
+  value : childMsg.value = paid
+  target : childMsg.currentTarget = sevm.caller.toB256.toAdr
+  entryTransfer : childMsg.benvAfterTransfer = .ok entry
+  entryStor : entry.state.getStor sevm.currentTarget =
+    callPre.state.getStor sevm.currentTarget
+  entryBalance : entry.state.bal sevm.currentTarget =
+    callPre.state.bal sevm.currentTarget - paid
+  callPostState : callPost.state = child.state
+
+/-- An accepted payout to a recipient distinct from PRORATA exposes its
+immediate post-transfer entry state and the exact retained callback trace. -/
+theorem AcceptedPayout.exists_trace
+    {sevm : Sevm} {paid : B256}
+    {callPre callPost guardPost returnPre : Devm}
+    (payout : AcceptedPayout sevm paid callPre callPost guardPost returnPre)
+    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget) :
+    Nonempty (AcceptedPayoutTrace sevm paid callPre callPost) := by
+  rcases payout with
+    ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, code, avail, pc,
+      hstack, hcall, hpop, hburn, hstep, hdepth, hstackEq, hparentState,
+      hparentMemory, hparentLogs, hparentOutput, hdelegation, hfilled, hpm,
+      hclean, hresume, hcallPostState, hreturnData, hmemory, hpostStack⟩
+  let childMsg :=
+    callMsg sevm parent
+      (min gasWord.toNat (except64th avail) +
+        (if paid.toNat = 0 then 0 else gCallStipend))
+      paid sevm.currentTarget sevm.caller.toB256.toAdr nextAddress true false
+      ((callPre.memory.read 0 0).1) code delegated
+  change ProcessMessage childMsg xl (.ok child) at hpm
+  rcases ExecutionTrace.exists_retainedXlot_of_filled hfilled with
+    ⟨retained⟩
+  let trace : ExecutionTrace.ProcessMessageTrace childMsg (.ok child) :=
+    ⟨xl, retained, hpm⟩
+  have hmessageState : childMsg.benv.state = callPre.state := by
+    change parent.state = callPre.state
+    exact hparentState
+  have hshouldTransfer : childMsg.shouldTransferValue = true := rfl
+  have hcaller : childMsg.caller = sevm.currentTarget := rfl
+  have hvalue : childMsg.value = paid := rfl
+  have htarget :
+      childMsg.currentTarget = sevm.caller.toB256.toAdr := rfl
+  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
+  unfold FrameBody at hbody
+  rcases htransfer : childMsg.benvAfterTransfer with error | entry <;>
+    rw [htransfer] at hbody
+  · rw [hbody.2, processMessage.settle_error] at hset
+    cases hset
+  · rcases of_benvAfterTransfer hshouldTransfer htransfer with
+      ⟨debited, hsub, hentry⟩
+    rw [hmessageState, hcaller, hvalue] at hsub
+    have hentryState :
+        entry.state = debited.addBal sevm.caller.toB256.toAdr paid := by
+      rw [hentry, htarget, hvalue]
+      rfl
+    have fields := of_state_transfer_fields
+      (callee := sevm.caller.toB256.toAdr) hsub
+    have hentryStor :
+        entry.state.getStor sevm.currentTarget =
+          callPre.state.getStor sevm.currentTarget := by
+      rw [hentryState]
+      exact fields.1 sevm.currentTarget
+    have hentryBalance :
+        entry.state.bal sevm.currentTarget =
+          callPre.state.bal sevm.currentTarget - paid := by
+      rw [hentryState]
+      exact fields.2.2.2.2 recipient_ne
+    exact ⟨⟨childMsg, entry, child, trace, hmessageState,
+      hshouldTransfer, hcaller, hvalue, htarget, htransfer,
+      hentryStor, hentryBalance, hcallPostState⟩⟩
+
+/-- The settled prefix and the accepted child entry meet at the exact paid
+boundary of one withdrawal accounting step. -/
+theorem WithdrawPreCallEffect.accountingEffect_of_acceptedPayout
+    {sevm : Sevm} {pre callPre callPost guardPost returnPre : Devm}
+    {paid : B256}
+    (effect : WithdrawPreCallEffect sevm pre callPre)
+    (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
+      (Devm.getBal pre sevm.currentTarget))
+    (paid_eq : paid = Sevm.argWord sevm 0 *
+      (Devm.getBal pre sevm.currentTarget + 1) /
+        ((Devm.getStor pre sevm.currentTarget).get supplySlot + offset))
+    (payout : AcceptedPayout sevm paid callPre callPost guardPost returnPre)
+    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget) :
+    ∃ trace : AcceptedPayoutTrace sevm paid callPre callPost,
+      ProrataAccountingEffect offset.toNat
+        (AccountingSnapshot.ofState sevm.currentTarget pre.state)
+        (.withdraw (Sevm.argWord sevm 0).toNat paid.toNat)
+        (AccountingSnapshot.ofState sevm.currentTarget trace.entry.state) := by
+  obtain ⟨trace⟩ := payout.exists_trace recipient_ne
+  have fields := effect
+  unfold WithdrawPreCallEffect at fields
+  dsimp at fields
+  rcases fields with ⟨_, _, _, hcallBalance, _, _, _, _, _⟩
+  have hcallBalanceAt :
+      callPre.state.bal sevm.currentTarget =
+        pre.state.bal sevm.currentTarget := by
+    exact congrFun hcallBalance sevm.currentTarget
+  have hpaidBalance :
+      trace.entry.state.bal sevm.currentTarget =
+        Devm.getBal pre sevm.currentTarget -
+          (Sevm.argWord sevm 0 *
+            (Devm.getBal pre sevm.currentTarget + 1) /
+              ((Devm.getStor pre sevm.currentTarget).get supplySlot +
+                offset)) := by
+    rw [trace.entryBalance, hcallBalanceAt, paid_eq]
+    rfl
+  refine ⟨trace, ?_⟩
+  simpa only [← paid_eq] using
+    effect.accountingEffect invariant trace.entryStor hpaidBalance
+
+/-- The realized accounting content of one successful deployed withdrawal.
+Its first step stops at the paid child entry; the retained child trace then
+runs to a state whose accounting projection is exactly the outer frame post. -/
+structure RealizedWithdrawal (sevm : Sevm) (pre post : Devm) where
+  paid : B256
+  callPre : Devm
+  callPost : Devm
+  payout : AcceptedPayoutTrace sevm paid callPre callPost
+  accounting : ProrataAccountingEffect offset.toNat
+    (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+    (.withdraw (Sevm.argWord sevm 0).toNat paid.toNat)
+    (AccountingSnapshot.ofState sevm.currentTarget payout.entry.state)
+  postStor : Devm.getStor post = Devm.getStor callPost
+  postBalance : Devm.getBal post = Devm.getBal callPost
+
+/-- A successful withdrawal body realizes the exact paid-entry accounting
+step and retains the callback trace needed to continue the replay. -/
+theorem BodyEntry.realizedWithdrawal
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (entry : BodyEntry fs sevm pre post Prorata.withdraw)
+    (hvalue : sevm.value = 0)
+    (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
+      (Devm.getBal pre sevm.currentTarget))
+    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget) :
+    Nonempty (RealizedWithdrawal sevm pre post) := by
+  rcases entry with ⟨bodyPre, hstor, hbal, _, run⟩
+  have bodyInvariant :
+      Inv (Devm.getStor bodyPre sevm.currentTarget) sevm.value
+        (Devm.getBal bodyPre sevm.currentTarget) := by
+    rw [hstor, hbal]
+    exact invariant
+  let paid := Sevm.argWord sevm 0 *
+    (Devm.getBal bodyPre sevm.currentTarget + 1) /
+      ((Devm.getStor bodyPre sevm.currentTarget).get supplySlot + offset)
+  have pays := withdraw_pays_exactly run
+  change ∃ callPre callPost guardPost returnPre,
+    WithdrawPreCallEffect sevm bodyPre callPre ∧
+    AcceptedPayout sevm paid callPre callPost guardPost returnPre ∧
+    Devm.getStor post = Devm.getStor callPost ∧
+    Devm.getBal post = Devm.getBal callPost ∧
+    ReturnsWord paid post at pays
+  rcases pays with
+    ⟨callPre, callPost, guardPost, returnPre, effect, payout,
+      hpostStor, hpostBalance, _⟩
+  rcases effect.accountingEffect_of_acceptedPayout bodyInvariant rfl payout
+      recipient_ne with ⟨trace, accounting⟩
+  have hpreSnapshot :
+      AccountingSnapshot.ofState sevm.currentTarget bodyPre.state =
+        AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+          pre.state := by
+    unfold AccountingSnapshot.ofState AccountingSnapshot.beforeCredit
+    exact congrArg₂ AccountingSnapshot.mk
+      (congrArg supplyN (congrFun hstor sevm.currentTarget))
+      (by
+        rw [hvalue]
+        change (bodyPre.state.bal sevm.currentTarget).toNat =
+          (pre.state.bal sevm.currentTarget).toNat - 0
+        rw [Nat.sub_zero]
+        exact congrArg B256.toNat (congrFun hbal sevm.currentTarget))
+  have accounting' : ProrataAccountingEffect offset.toNat
+      (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+      (.withdraw (Sevm.argWord sevm 0).toNat paid.toNat)
+      (AccountingSnapshot.ofState sevm.currentTarget trace.entry.state) := by
+    rw [← hpreSnapshot]
+    exact accounting
+  refine ⟨{
+    paid := paid
+    callPre := callPre
+    callPost := callPost
+    payout := trace
+    accounting := ?_
+    postStor := hpostStor
+    postBalance := hpostBalance }⟩
+  · exact accounting'
 
 /-- A positive world-state credit that leaves PRORATA storage fixed is the
 frozen external-credit accounting class. -/
