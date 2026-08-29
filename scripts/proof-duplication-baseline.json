@@ -4,9 +4,9 @@
   "scan_root": "Blanc",
   "min_copy_bytes": 160,
   "min_copy_lines": 5,
-  "families": 52,
-  "sites": 114,
-  "restated_lines": 62,
+  "families": 51,
+  "sites": 112,
+  "restated_lines": 61,
   "unparsable_modules": [],
   "entries": [
     {
@@ -63,11 +63,6 @@
       "id": "25cf4e8cdf678bb4",
       "normalized_sha256": "25cf4e8cdf678bb437199303b7e2ad453f5829ad5ba857ce0e9103418b55b501",
       "sites": 3
-    },
-    {
-      "id": "283bf41a678d828a",
-      "normalized_sha256": "283bf41a678d828a8d6f8903c5c91217a3551e4a241807c7fa01ec60f6cabb8d",
-      "sites": 2
     },
     {
       "id": "2dc872e435e331d9",
@@ -270,5 +265,5 @@
       "sites": 2
     }
   ],
-  "digest": "ca5f1cd12ea7830a960157a6616d11fadfca0d7f7ce36e0fe1700ac84a1e9521"
+  "digest": "c94f1e1a6616ad02e49f3918fb970c186d407809e9ad218bfba5d658d19bb3c8"
 }
