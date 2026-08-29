@@ -602,6 +602,110 @@ theorem append {o : Nat} {pre mid post : AccountingSnapshot}
   | cons tail ih =>
       simpa using ProrataAccountingReplay.cons (ih after)
 
+/-- Equal projected boundaries contribute no accounting step. -/
+theorem nil_of_eq {o : Nat} {pre post : AccountingSnapshot}
+    (eq : post = pre) : ProrataAccountingReplay o pre [] post := by
+  rw [eq]
+  exact .nil pre
+
+/-- A successful transfer from an address other than PRORATA either credits
+PRORATA exactly or leaves its accounting projection unchanged. -/
+theorem of_transfer_from_ne
+    {ca caller target : Adr} {pre debit : State} {value : B256}
+    (provenance : ProrataAccountingProvenance)
+    (caller_ne : caller ≠ ca)
+    (sub : pre.subBal caller value = some debit)
+    (sum_nof : sum pre.bal < 2 ^ 256) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca pre) steps
+        (AccountingSnapshot.ofState ca (debit.addBal target value)) := by
+  have fields := of_state_transfer_fields (callee := target) sub
+  by_cases target_eq : target = ca
+  · subst target
+    have balance_eq :
+        ((debit.addBal ca value).bal ca).toNat =
+          (pre.bal ca).toNat + value.toNat :=
+      of_transfer_bal_target sub caller_ne sum_nof
+    by_cases positive : 0 < value.toNat
+    · exact ⟨_, singleton provenance
+        (accountingEffect_externalCredit (fields.1 ca) balance_eq positive)⟩
+    · have zero : value.toNat = 0 := Nat.eq_zero_of_not_pos positive
+      have snapshot_eq :
+          AccountingSnapshot.ofState ca (debit.addBal ca value) =
+            AccountingSnapshot.ofState ca pre := by
+        unfold AccountingSnapshot.ofState
+        exact congrArg₂ AccountingSnapshot.mk
+          (congrArg supplyN (fields.1 ca))
+          (by rw [balance_eq, zero, Nat.add_zero])
+      exact ⟨[], nil_of_eq snapshot_eq⟩
+  · have balance_eq :
+        (debit.addBal target value).bal ca = pre.bal ca :=
+      of_transfer_bal_other sub caller_ne target_eq
+    have snapshot_eq :
+        AccountingSnapshot.ofState ca (debit.addBal target value) =
+          AccountingSnapshot.ofState ca pre := by
+      unfold AccountingSnapshot.ofState
+      exact congrArg₂ AccountingSnapshot.mk
+        (congrArg supplyN (fields.1 ca))
+        (congrArg B256.toNat balance_eq)
+    exact ⟨[], nil_of_eq snapshot_eq⟩
+
+/-- A direct world-state balance credit is an exact external-credit step when
+it targets PRORATA and is positive; every other case is a projected no-op. -/
+theorem of_addBal
+    {ca target : Adr} {pre : State} {value : B256}
+    (provenance : ProrataAccountingProvenance)
+    (sum_nof : sum pre.bal + value.toNat < 2 ^ 256) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca pre) steps
+        (AccountingSnapshot.ofState ca (pre.addBal target value)) := by
+  have storage_eq :
+      (pre.addBal target value).getStor ca = pre.getStor ca := by
+    show ((pre.setBal target (pre.bal target + value)).get ca).stor =
+      (pre.get ca).stor
+    rw [State.setBal_get_stor]
+  by_cases target_eq : target = ca
+  · subst target
+    have nof : B256.Nof (pre.bal ca) value := by
+      unfold B256.Nof
+      have target_le : (pre.bal ca).toNat ≤ sum pre.bal := le_sum
+      omega
+    have balance_eq :
+        ((pre.addBal ca value).bal ca).toNat =
+          (pre.bal ca).toNat + value.toNat := by
+      have word_eq : (pre.addBal ca value).bal ca =
+          pre.bal ca + value := by
+        show ((pre.setBal ca (pre.bal ca + value)).get ca).bal = _
+        rw [State.setBal_get_self]
+        rfl
+      rw [word_eq, B256.toNat_add_eq_of_nof _ _ nof]
+    by_cases positive : 0 < value.toNat
+    · exact ⟨_, singleton provenance
+        (accountingEffect_externalCredit storage_eq balance_eq positive)⟩
+    · have zero : value.toNat = 0 := Nat.eq_zero_of_not_pos positive
+      have snapshot_eq :
+          AccountingSnapshot.ofState ca (pre.addBal ca value) =
+            AccountingSnapshot.ofState ca pre := by
+        unfold AccountingSnapshot.ofState
+        exact congrArg₂ AccountingSnapshot.mk
+          (congrArg supplyN storage_eq)
+          (by rw [balance_eq, zero, Nat.add_zero])
+      exact ⟨[], nil_of_eq snapshot_eq⟩
+  · have balance_eq : (pre.addBal target value).bal ca = pre.bal ca := by
+      show ((pre.setBal target (pre.bal target + value)).get ca).bal = _
+      rw [State.setBal_get_ne target_eq]
+      rfl
+    have snapshot_eq :
+        AccountingSnapshot.ofState ca (pre.addBal target value) =
+          AccountingSnapshot.ofState ca pre := by
+      unfold AccountingSnapshot.ofState
+      exact congrArg₂ AccountingSnapshot.mk
+        (congrArg supplyN storage_eq)
+        (congrArg B256.toNat balance_eq)
+    exact ⟨[], nil_of_eq snapshot_eq⟩
+
 /-- Every replay yields the frozen connected-path carrier used by the exact
 dust theorem; no boundary connectivity is reconstructed axiomatically. -/
 theorem exists_path {o : Nat} {pre post : AccountingSnapshot}
