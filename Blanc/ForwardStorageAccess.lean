@@ -104,4 +104,37 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   unfold afterSstore
   split <;> rfl
 
+@[simp] theorem afterSstore_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstore sevm base key value).accessedStorageKeys =
+      sloadAccessedStorageKeys sevm.currentTarget
+        base.accessedStorageKeys key := by
+  unfold afterSstore sloadAccessedStorageKeys
+  split <;> rfl
+
+@[simp] theorem afterSstore_getStor_self
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    Devm.getStor (afterSstore sevm base key value) sevm.currentTarget =
+      (Devm.getStor base sevm.currentTarget).set key value := by
+  unfold afterSstore
+  split
+  · rw [setStorVal_getStor_self, Devm.withRefundCounter_getStor]
+  · rw [setStorVal_getStor_self, Devm.withRefundCounter_getStor,
+      addAccessedStorageKey_getStor]
+
+/-- The selected `SSTORE` charge depends on the pre-state only through its
+accessed-key set and the target's storage, so any two states agreeing on both
+are charged identically. -/
+theorem sstoreCost_congr {sevm : Sevm} {d1 d2 : Devm} (key value : B256)
+    (hkeys : d1.accessedStorageKeys = d2.accessedStorageKeys)
+    (hstor : Devm.getStor d1 sevm.currentTarget =
+      Devm.getStor d2 sevm.currentTarget) :
+    sstoreCost sevm d1 key value = sstoreCost sevm d2 key value := by
+  unfold sstoreCost
+  rw [hkeys]
+  show _ + sstoreValueCost _
+    ((Devm.getStor d1 sevm.currentTarget).get key) value = _
+  rw [hstor]
+  rfl
+
 end Blanc
