@@ -268,4 +268,81 @@ def RootPairMemoryCarrier.finishHash
   change RootMemoryCarrier M oldCount shiftedSize digest
   exact ⟨I, hwf, hreads, hsize, hlen, hold, hshift, hnode⟩
 
+/-- Register image established by the public root endpoint before entering the
+first loop iteration. -/
+def rootInitialMemory (count : B256) : Mem :=
+  ((Mem.empty.write 576 count.toBytes).write 608 count.toBytes).write
+    640 (0 : B256).toBytes
+
+def rootInitialImage (count : B256) : Bytes :=
+  ((Bytes.writeAt [] 576 count.toBytes)
+      |> fun image => Bytes.writeAt image 608 count.toBytes)
+    |> fun image => Bytes.writeAt image 640 (0 : B256).toBytes
+
+/-- The endpoint's three stores establish the exact 672-byte root register
+carrier. -/
+def rootInitialMemory_carrier (count : B256) :
+    RootMemoryCarrier (rootInitialMemory count) count count 0 := by
+  let M0 := Mem.empty
+  let I0 : Bytes := []
+  let M1 := M0.write 576 count.toBytes
+  let I1 := Bytes.writeAt I0 576 count.toBytes
+  let M2 := M1.write 608 count.toBytes
+  let I2 := Bytes.writeAt I1 608 count.toBytes
+  let M3 := M2.write 640 (0 : B256).toBytes
+  let I3 := Bytes.writeAt I2 640 (0 : B256).toBytes
+  have hwf0 : Mem.Wf M0 := Mem.wf_empty
+  have hreads0 : Mem.Reads M0 I0 := Mem.reads_empty
+  have hwf1 : Mem.Wf M1 := hwf0.write _ _
+  have hreads1 : Mem.Reads M1 I1 := Mem.Reads.write hwf0 hreads0 _ _
+  have hwf2 : Mem.Wf M2 := hwf1.write _ _
+  have hreads2 : Mem.Reads M2 I2 := Mem.Reads.write hwf1 hreads1 _ _
+  have hwf3 : Mem.Wf M3 := hwf2.write _ _
+  have hreads3 : Mem.Reads M3 I3 := Mem.Reads.write hwf2 hreads2 _ _
+  have hsize1 : M1.size = 608 := by
+    dsimp only [M1, M0]
+    rw [Mem.size_write_word_at]
+    decide +kernel
+  have hsize2 : M2.size = 640 := by
+    dsimp only [M2]
+    rw [Mem.size_write_word_at, hsize1]
+    decide +kernel
+  have hsize3 : M3.size = 672 := by
+    dsimp only [M3]
+    rw [Mem.size_write_word_at, hsize2]
+    decide +kernel
+  have hlen1 : I1.length = 608 := by
+    dsimp only [I1, I0]
+    rw [Bytes.length_writeAt, B256.length_toBytes]
+    decide +kernel
+  have hlen2 : I2.length = 640 := by
+    dsimp only [I2]
+    rw [Bytes.length_writeAt, hlen1, B256.length_toBytes]
+    decide +kernel
+  have hlen3 : I3.length = 672 := by
+    dsimp only [I3]
+    rw [Bytes.length_writeAt, hlen2, B256.length_toBytes]
+    decide +kernel
+  have hold : I3.sliceD 576 32 0 = count.toBytes := by
+    dsimp only [I3]
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
+    dsimp only [I2]
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
+    dsimp only [I1]
+    rw [show 32 = count.toBytes.length by rw [B256.length_toBytes]]
+    exact Bytes.sliceD_writeAt _ _ _
+  have hshift : I3.sliceD 608 32 0 = count.toBytes := by
+    dsimp only [I3]
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
+    dsimp only [I2]
+    rw [show 32 = count.toBytes.length by rw [B256.length_toBytes]]
+    exact Bytes.sliceD_writeAt _ _ _
+  have hnode : I3.sliceD 640 32 0 = (0 : B256).toBytes := by
+    dsimp only [I3]
+    rw [show 32 = (0 : B256).toBytes.length by rw [B256.length_toBytes]]
+    exact Bytes.sliceD_writeAt _ _ _
+  change RootMemoryCarrier M3 count count 0
+  exact ⟨I3, hwf3, hreads3, hsize3, hlen3,
+    hold, hshift, hnode⟩
+
 end Blanc.BeaconDeposit

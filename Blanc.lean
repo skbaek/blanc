@@ -117,8 +117,11 @@ import Blanc.BeaconDepositMemory
 import Blanc.BeaconDepositSha
 import Blanc.BeaconDepositRootMemory
 import Blanc.BeaconDepositRoot
+import Blanc.BeaconDepositRootFold
 import Blanc.BeaconDepositEffects
 import Blanc.BeaconDepositCountEffects
+import Blanc.BeaconDepositRootEffects
+import Blanc.BeaconDepositRootPublic
 import Blanc.ProxyPairSlots
 
 namespace Blanc

@@ -62,6 +62,8 @@ CONTRACTS = {
                        "BeaconDeposit", "BeaconDepositCode", "BeaconDepositDeploy",
                        "BeaconDepositMemory", "BeaconDepositSha",
                        "BeaconDepositRootMemory", "BeaconDepositRoot",
+                       "BeaconDepositRootFold", "BeaconDepositRootEffects",
+                       "BeaconDepositRootPublic",
                        "BeaconDepositEffects",
                        "BeaconDepositCountEffects"],
     "proxy-pair": ["ProxyPairSlots"],
