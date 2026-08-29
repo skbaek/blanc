@@ -139,6 +139,32 @@ inductive OnlyRoleRoute
       (stack : tail <<+ callPre.stack)
       (storage : Devm.getStor pre = Devm.getStor callPre)
 
+/-- Peel the family's canonical-address argument guard at an arbitrary
+outcome.  An address-shaped argument word makes the masked test zero, which is
+the falling-through arm; a dirty word takes the revert arm instead. -/
+theorem canonicalArg_body_of_valid
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {index : B256} {body : Func} {tail : Stack}
+    (hvalid : ValidAdr (Sevm.argWord sevm index))
+    (hp : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre (canonicalArg index body) out) :
+    ∃ bodyPre,
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+        sevm bodyPre body out ∧
+      tail <<+ bodyPre.stack ∧
+      Devm.getStor pre = Devm.getStor bodyPre := by
+  unfold canonicalArg at run
+  obtain ⟨guardPost, guardLine, branchRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨y, pGuard, hiff⟩ := prefix_of_argCheckNonAddress hp guardLine
+  rw [hiff.mpr hvalid] at pGuard
+  obtain ⟨bodyPre, hpop, bodyRun, pBody⟩ :=
+    Func.RunCompiledTo.zero_branch_of_prefix pGuard branchRun
+  have guardStor : Devm.getStor pre = Devm.getStor guardPost :=
+    Line.of_inv Devm.getStor (by line_inv) guardLine
+  exact ⟨bodyPre, bodyRun, pBody,
+    guardStor.trans (funext (getStor_eq_of_state_eq hpop.state))⟩
+
 /-- Exact arbitrary-outcome traversal of the shared `onlyRole` modifier. -/
 theorem onlyRole_route
     {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}

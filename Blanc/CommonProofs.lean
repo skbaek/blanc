@@ -9386,6 +9386,17 @@ lemma of_check_non_address {e : Sevm} {s s' : Devm} {x xs}
     revert h_and; revert sm; line_prefix
   refine ⟨_, h_pfx2, Iff.symm validAdr_iff⟩
 
+/-- `arg k ++ checkNonAddress`, the composite an address-shaped argument guard
+tests: the masked word is zero exactly when the argument's head word is
+address-shaped.  Contract-neutral, so it lives here rather than in the first
+family that needed it. -/
+theorem prefix_of_argCheckNonAddress {e : Sevm} {s s' : Devm} {k : B256}
+    {xs : Stack} (hp : xs <<+ s.stack)
+    (run : Line.Run e s (arg k ++ checkNonAddress) s') :
+    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ValidAdr (Sevm.argWord e k)) := by
+  rcases of_run_append (arg k) run with ⟨_mid, r1, r2⟩
+  exact of_check_non_address (prefix_of_arg hp r1) r2
+
 lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
     (x :: xs <<+ s.stack) →
     Line.Run e s checkAddress s' →

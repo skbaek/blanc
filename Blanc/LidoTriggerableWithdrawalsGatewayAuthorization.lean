@@ -1,4 +1,5 @@
 import Blanc.LidoTriggerableWithdrawalsGatewayA2
+import Blanc.LidoTriggerableWithdrawalsGatewayRoleRoute
 import Blanc.LidoTriggerableWithdrawalsGatewayTriggerAuthorizationRoute
 import Blanc.LidoTriggerableWithdrawalsGatewayPinnedTargetInterface
 
@@ -348,6 +349,282 @@ theorem collision_role_failure_outcome_of_route
       sevm entry (.call collisionRefusalSlot) out) :
     CollisionRoleFailure out := by
   simpa [CollisionRoleFailure] using collisionRefusal_call_reverts_exact hroute
+
+/-! ## From an `onlyRole` route to the exact absent-role outcome -/
+
+/-- A caller without the exact flat record cannot take the authorized arm, so
+every remaining `onlyRole` continuation is one of the two exact auxiliary
+failures.  This is the only place the four-way route is collapsed. -/
+theorem absentRole_of_onlyRole_route
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {role : B256} {body : Func} {tail : Stack}
+    (lacksRole : ¬ CallerHasRole (Devm.getStor pre sevm.currentTarget)
+      role sevm.caller.toB256)
+    (route : OnlyRoleRoute dp sevm pre role body tail out) :
+    AbsentRoleFailure out := by
+  cases route with
+  | authorized _ hasRole _ _ _ => exact (lacksRole hasRole).elim
+  | missingRole _ _ callRun _ _ =>
+      exact Or.inl (zeroIndex_role_failure_outcome_of_route callRun)
+  | roleCollision _ _ _ callRun _ _ =>
+      exact Or.inr (collision_role_failure_outcome_of_route callRun)
+  | accountCollision _ _ _ _ callRun _ _ =>
+      exact Or.inr (collision_role_failure_outcome_of_route callRun)
+
+/-- The shared opening for a statically-shaped nonpayable role gate: the
+dispatcher hands over the exact wrapped body, `nonpayable` and
+`requireStaticArgs` are peeled by their own arbitrary-outcome lemmas, and the
+caller's absent record is transported along the storage chain to the route's
+entry.  No body-walk premise is introduced. -/
+private theorem absentRole_of_static_entry
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {selector role : B256} {words : Nat} {body wrapped : Func}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
+    (hsize : B256.ltCheck sevm.data.length.toB256
+      (Nat.toB256 (4 + 32 * words)) = 0)
+    (hselector : Sevm.selector sevm = selector)
+    (hmember : (selector, nonpayable wrapped) ∈ funcs dp)
+    (hshape : wrapped = requireStaticArgs words (onlyRole role body))
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      role sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  subst hshape
+  obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
+    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hguard
+      hselector hmember
+  have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
+    ⟨dispatchPre.stack, rfl⟩
+  obtain ⟨staticPre, staticRun, pStatic, staticStor⟩ :=
+    Func.RunCompiledTo.nonpayable_body_of_value_zero hvalue pDispatch
+      dispatchRun
+  obtain ⟨rolePre, roleRun, pRole, roleStor⟩ :=
+    requireStaticArgs_body_of_sufficient_calldata pStatic hsize staticRun
+  have chain : Devm.getStor entry = Devm.getStor rolePre :=
+    (funext (getStor_eq_of_state_eq dispatchFrame.state)).trans
+      (staticStor.trans roleStor)
+  refine absentRole_of_onlyRole_route ?_ (onlyRole_route pRole roleRun)
+  rw [← congrFun chain sevm.currentTarget]
+  exact lacksRole
+
+/-- The same opening for the one protected entry that takes no static
+arguments, so the dispatcher body is `nonpayable (onlyRole ..)` directly. -/
+private theorem absentRole_of_plain_entry
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {selector role : B256} {body wrapped : Func}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
+    (hselector : Sevm.selector sevm = selector)
+    (hmember : (selector, nonpayable wrapped) ∈ funcs dp)
+    (hshape : wrapped = onlyRole role body)
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      role sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  subst hshape
+  obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
+    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hguard
+      hselector hmember
+  have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
+    ⟨dispatchPre.stack, rfl⟩
+  obtain ⟨rolePre, roleRun, pRole, roleStor⟩ :=
+    Func.RunCompiledTo.nonpayable_body_of_value_zero hvalue pDispatch
+      dispatchRun
+  have chain : Devm.getStor entry = Devm.getStor rolePre :=
+    (funext (getStor_eq_of_state_eq dispatchFrame.state)).trans roleStor
+  refine absentRole_of_onlyRole_route ?_ (onlyRole_route pRole roleRun)
+  rw [← congrFun chain sevm.currentTarget]
+  exact lacksRole
+
+/-- The opening for the two admin entries, which additionally canonicalise
+their account argument before the role gate. -/
+private theorem absentRole_of_canonical_entry
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {selector role index : B256} {words : Nat} {body wrapped : Func}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
+    (hsize : B256.ltCheck sevm.data.length.toB256
+      (Nat.toB256 (4 + 32 * words)) = 0)
+    (hvalid : ValidAdr (Sevm.argWord sevm index))
+    (hselector : Sevm.selector sevm = selector)
+    (hmember : (selector, nonpayable wrapped) ∈ funcs dp)
+    (hshape : wrapped =
+      requireStaticArgs words (canonicalArg index (onlyRole role body)))
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      role sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  subst hshape
+  obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
+    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hguard
+      hselector hmember
+  have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
+    ⟨dispatchPre.stack, rfl⟩
+  obtain ⟨staticPre, staticRun, pStatic, staticStor⟩ :=
+    Func.RunCompiledTo.nonpayable_body_of_value_zero hvalue pDispatch
+      dispatchRun
+  obtain ⟨canonPre, canonRun, pCanon, canonStor⟩ :=
+    requireStaticArgs_body_of_sufficient_calldata pStatic hsize staticRun
+  obtain ⟨rolePre, roleRun, pRole, roleStor⟩ :=
+    canonicalArg_body_of_valid hvalid pCanon canonRun
+  have chain : Devm.getStor entry = Devm.getStor rolePre :=
+    (funext (getStor_eq_of_state_eq dispatchFrame.state)).trans
+      (staticStor.trans (canonStor.trans roleStor))
+  refine absentRole_of_onlyRole_route ?_ (onlyRole_route pRole roleRun)
+  rw [← congrFun chain sevm.currentTarget]
+  exact lacksRole
+
+/-! ## Public absent-role negatives -/
+
+/-- `pauseFor` reverts for a caller without `PAUSE_ROLE`, at the exact
+canonical calldata image and with no premise about the guarded body. -/
+theorem pauseFor_absent_role_reverts
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {duration : B256}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hdata : sevm.data = pauseForCalldata duration)
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      pauseRole sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  have hlen : sevm.data.length = 36 := by
+    rw [hdata]; exact pauseForCalldata_length duration
+  refine absentRole_of_static_entry (words := 1) hprog hentryStack hvalue
+    ?_ ?_ (selector_of_pauseForAuthorizationCalldata hdata) (by simp [funcs])
+    pauseFor_role_gate_exact lacksRole
+  · rw [hlen]; decide
+  · rw [hlen]; decide
+
+/-- `pauseUntil` reverts for a caller without `PAUSE_ROLE`. -/
+theorem pauseUntil_absent_role_reverts
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {expiry : B256}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hdata : sevm.data = pauseUntilAuthorizationCalldata expiry)
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      pauseRole sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  have hlen : sevm.data.length = 36 := by
+    rw [hdata]; exact pauseUntilAuthorizationCalldata_length expiry
+  refine absentRole_of_static_entry (words := 1) hprog hentryStack hvalue
+    ?_ ?_ (selector_of_pauseUntilAuthorizationCalldata hdata)
+    (by simp [funcs]) pauseUntil_role_gate_exact lacksRole
+  · rw [hlen]; decide
+  · rw [hlen]; decide
+
+/-- `setExitRequestLimit` reverts for a caller without
+`TW_EXIT_LIMIT_MANAGER_ROLE`. -/
+theorem setExitRequestLimit_absent_role_reverts
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {maximum exitsPerFrame frameDuration : B256}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hdata : sevm.data = setExitRequestLimitAuthorizationCalldata maximum
+      exitsPerFrame frameDuration)
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      twExitLimitManagerRole sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  have hlen : sevm.data.length = 100 := by
+    rw [hdata]
+    exact setExitRequestLimitAuthorizationCalldata_length maximum
+      exitsPerFrame frameDuration
+  refine absentRole_of_static_entry (words := 3) hprog hentryStack hvalue
+    ?_ ?_ (selector_of_setExitRequestLimitAuthorizationCalldata hdata)
+    (by simp [funcs]) setExitRequestLimit_role_gate_exact lacksRole
+  · rw [hlen]; decide
+  · rw [hlen]; decide
+
+/-- `resume` reverts for a caller without `RESUME_ROLE`. -/
+theorem resume_absent_role_reverts
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hdata : sevm.data = resumeAuthorizationCalldata)
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      resumeRole sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  have hlen : sevm.data.length = 4 := by
+    rw [hdata]; exact resumeAuthorizationCalldata_length
+  refine absentRole_of_plain_entry hprog hentryStack hvalue ?_
+    (selector_of_resumeAuthorizationCalldata hdata) (by simp [funcs])
+    resume_role_gate_exact lacksRole
+  · rw [hlen]; decide
+
+/-- The admin entries' account argument is address-shaped by construction. -/
+theorem grantRoleAuthorization_arg1
+    {sevm : Sevm} {role : B256} {account : Adr}
+    (hdata : sevm.data = grantRoleAuthorizationCalldata role account) :
+    Sevm.argWord sevm 1 = account.toB256 := by
+  change Sevm.dataWord sevm 36 = account.toB256
+  apply dataWord_of_append
+    (pre := abiSelectorBytes selGrantRole ++ role.toBytes)
+    (post := [])
+  · simp [abiSelectorBytes_length, B256.length_toBytes]
+    rfl
+  · rw [hdata, grantRoleAuthorizationCalldata]
+    simp [List.append_assoc]
+
+theorem revokeRoleAuthorization_arg1
+    {sevm : Sevm} {role : B256} {account : Adr}
+    (hdata : sevm.data = revokeRoleAuthorizationCalldata role account) :
+    Sevm.argWord sevm 1 = account.toB256 := by
+  change Sevm.dataWord sevm 36 = account.toB256
+  apply dataWord_of_append
+    (pre := abiSelectorBytes selRevokeRole ++ role.toBytes)
+    (post := [])
+  · simp [abiSelectorBytes_length, B256.length_toBytes]
+    rfl
+  · rw [hdata, revokeRoleAuthorizationCalldata]
+    simp [List.append_assoc]
+
+/-- `grantRole` reverts for a caller without the default admin role. -/
+theorem grantRole_absent_role_reverts
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {role : B256} {account : Adr}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hdata : sevm.data = grantRoleAuthorizationCalldata role account)
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      defaultAdminRole sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  have hlen : sevm.data.length = 68 := by
+    rw [hdata]; exact grantRoleAuthorizationCalldata_length role account
+  refine absentRole_of_canonical_entry (words := 2) hprog hentryStack hvalue
+    ?_ ?_ ?_ (selector_of_grantRoleAuthorizationCalldata hdata)
+    (by simp [funcs]) grantRole_role_gate_exact lacksRole
+  · rw [hlen]; decide
+  · rw [hlen]; decide
+  · rw [grantRoleAuthorization_arg1 hdata]; exact ⟨account, rfl⟩
+
+/-- `revokeRole` reverts for a caller without the default admin role. -/
+theorem revokeRole_absent_role_reverts
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {role : B256} {account : Adr}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
+    (hdata : sevm.data = revokeRoleAuthorizationCalldata role account)
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      defaultAdminRole sevm.caller.toB256) :
+    AbsentRoleFailure out := by
+  have hlen : sevm.data.length = 68 := by
+    rw [hdata]; exact revokeRoleAuthorizationCalldata_length role account
+  refine absentRole_of_canonical_entry (words := 2) hprog hentryStack hvalue
+    ?_ ?_ ?_ (selector_of_revokeRoleAuthorizationCalldata hdata)
+    (by simp [funcs]) revokeRole_role_gate_exact lacksRole
+  · rw [hlen]; decide
+  · rw [hlen]; decide
+  · rw [revokeRoleAuthorization_arg1 hdata]; exact ⟨account, rfl⟩
 
 /-!
 ## Public route obligations (intentionally not weakened)

@@ -1093,7 +1093,13 @@ Blanc.ProxyPair.settledObservable_rejects_reverse_revert_halt|$STANDARD
 Blanc.ProxyPair.proxy_entrySstoreFree|$STANDARD
 Blanc.ProxyPair.implGuarded_entrySstoreFree_rejected|$STANDARD
 Blanc.ProxyPair.proxyProg_success_successfulSstore_sourceSite|$STANDARD
-Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite|$STANDARD"
+Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.pauseFor_absent_role_reverts|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.pauseUntil_absent_role_reverts|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.resume_absent_role_reverts|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.setExitRequestLimit_absent_role_reverts|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.grantRole_absent_role_reverts|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.revokeRole_absent_role_reverts|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

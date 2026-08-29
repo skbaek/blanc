@@ -189,22 +189,20 @@ theorem Func.RunCompiledTo.succ_branch_of_prefix
     have tail := (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hp).2
     exact ⟨armPre, w, hnz, hpop, harm, tail⟩
 
-/-- A successful walk through the shared nonpayable modifier proves zero call
-value and reaches its protected body without changing storage. -/
-theorem Func.RunCompiledTo.nonpayable_body_of_ok
-    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+/-- Peel the shared nonpayable wrapper at an **arbitrary** outcome.  The
+`_of_ok` form below can only see `sevm.value = 0` because it succeeded; a
+negative theorem knows the value from its own hypothesis instead, and still
+needs the body walk. -/
+theorem Func.RunCompiledTo.nonpayable_body_of_value_zero
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
     {body : Func} {tail : Stack}
+    (valueZero : sevm.value = 0)
     (hp : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre (nonpayable body) (.ok post)) :
-    sevm.value = 0 ∧
-      ∃ bodyPre,
-        Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
-        tail <<+ bodyPre.stack ∧
-        Devm.getStor pre = Devm.getStor bodyPre := by
-  have valueZero : sevm.value = 0 :=
-    value_eq_zero_of_run_nonpayable
-      (Func.Run.of_runCompiled
-        (Func.RunCompiled.of_runCompiledTo_ok run))
+    (run : Func.RunCompiledTo fs sevm pre (nonpayable body) out) :
+    ∃ bodyPre,
+      Func.RunCompiledTo fs sevm bodyPre body out ∧
+      tail <<+ bodyPre.stack ∧
+      Devm.getStor pre = Devm.getStor bodyPre := by
   unfold nonpayable at run
   obtain ⟨afterValue, qvalue, run⟩ := runCompiledTo_next_inv run
   obtain ⟨testPre, qzero, branchRun⟩ := runCompiledTo_next_inv run
@@ -221,7 +219,26 @@ theorem Func.RunCompiledTo.nonpayable_body_of_ok
     (Ninst.Hinv.inv (f := Devm.getStor) rvalue).trans
       ((Ninst.Hinv.inv (f := Devm.getStor) rzero).trans
         (funext (getStor_eq_of_state_eq hpop.state)))
-  exact ⟨valueZero, bodyPre, bodyRun, pBody, bodyStor⟩
+  exact ⟨bodyPre, bodyRun, pBody, bodyStor⟩
+
+/-- A successful walk through the shared nonpayable modifier proves zero call
+value and reaches its protected body without changing storage. -/
+theorem Func.RunCompiledTo.nonpayable_body_of_ok
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {body : Func} {tail : Stack}
+    (hp : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre (nonpayable body) (.ok post)) :
+    sevm.value = 0 ∧
+      ∃ bodyPre,
+        Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
+        tail <<+ bodyPre.stack ∧
+        Devm.getStor pre = Devm.getStor bodyPre := by
+  have valueZero : sevm.value = 0 :=
+    value_eq_zero_of_run_nonpayable
+      (Func.Run.of_runCompiled
+        (Func.RunCompiled.of_runCompiledTo_ok run))
+  exact ⟨valueZero,
+    Func.RunCompiledTo.nonpayable_body_of_value_zero valueZero hp run⟩
 
 private lemma of_run_rev_empty {sevm : Sevm} {devm : Devm} {s : List B256}
     {ex : Execution}
