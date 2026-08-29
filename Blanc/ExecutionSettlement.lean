@@ -336,6 +336,24 @@ theorem genericCreate_prepared_bal
   change (pre.state.incrNonce sevm.currentTarget).bal = pre.state.bal
   exact State.incrNonce_bal
 
+/-- CREATE's nonce/access-list preparation preserves persistent storage at
+every address. -/
+theorem genericCreate_prepared_getStor
+    (sevm : Sevm) (pre : Devm) (newAddress : Adr) :
+    (addAccessedAddress
+        (((pre.withGasLeft
+            (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+          []).incrNonce sevm.currentTarget) newAddress).state.getStor =
+      pre.state.getStor := by
+  funext address
+  change (pre.state.incrNonce sevm.currentTarget).getStor address =
+    pre.state.getStor address
+  simp only [State.incrNonce, State.getStor]
+  by_cases target : sevm.currentTarget = address
+  · subst target
+    rw [State.get_set_self]
+  · rw [State.get_set_ne _ target]
+
 /-- CREATE message preparation clears the prospective account storage and
 increments its nonce, but leaves the complete world-balance map unchanged. -/
 theorem processCreateMessage_msg_bal_eq (msg : Msg) :

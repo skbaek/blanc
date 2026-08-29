@@ -3772,6 +3772,46 @@ lemma Xinst.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} 
     · exact h_ne
     · rw [hsf] at hstv; cases hstv
 
+/-- A successful nonrecursive instruction in a foreign frame preserves the
+contract precondition.  This packages the register/push/executable split used
+by proof-indexed interpreter recursions. -/
+lemma Ninst.none_preserves_precond
+    {wa : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm} {n : Ninst}
+    (run : Ninst.StepRun pc sevm pre n .none (.ok inter))
+    (target_ne : sevm.currentTarget ≠ wa)
+    (precondition : c.Pre wa sevm pre) :
+    c.Pre wa sevm inter := by
+  cases n with
+  | push xs le =>
+      simp only [Ninst.StepRun, Ninst.step_push,
+        Step.run_ofExecution] at run
+      rcases Except.bind_eq_ok run.2.symm with
+        ⟨charged, charge, pushed⟩
+      exact precondition.state_eq
+        (((Devm.burn_of_chargeGas charge).state).trans
+          ((Devm.push_of_push pushed).state)).symm
+  | reg r =>
+      have registerRun : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
+        simp only [Ninst.StepRun, Ninst.step_reg,
+          Step.run_ofExecution] at run
+        exact run.2.symm
+      by_cases store : r = Rinst.sstore
+      · subst store
+        have frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
+        rw [registerRun] at frame
+        refine Pre.of_eqs precondition (frame.getCode_eq wa).symm ?_
+          (sstore_preserves_getStor_ne registerRun target_ne)
+        funext address
+        exact (frame.getBal_eq address).symm
+      · exact Pre.of_eqs precondition
+          (Rinst.preserves_getCode registerRun wa)
+          (Rinst.preserves_bal registerRun).symm
+          (congrFun (Rinst.preserves_stor store registerRun) wa).symm
+  | exec x =>
+      apply Xinst.none_preserves_precond (x := x) _ target_ne precondition
+      simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
+        Xinst.Run] using run
+
 
 
 -- the precondition carries over to the initial state of a sub-execution
