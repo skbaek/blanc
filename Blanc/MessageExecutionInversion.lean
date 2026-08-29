@@ -100,4 +100,17 @@ theorem processMessage_entry_stack
   dsimp [Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv] at stack
   exact stack
 
+/-- A retained code frame also starts with empty memory.  Kept separate from
+`processMessage_entry_facts` for the same reason as the stack projection: a
+walk that reads scratch words needs the image, not just well-formedness. -/
+theorem processMessage_entry_memory
+    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {raw : Execution}
+    {ex : Except (EvmError × State × AdrSet × Tra) Devm}
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
+    pre.memory = Mem.empty := by
+  have enter := (RunFrame.some_inv process).1
+  exact Blanc.Frame.enter_run_memory enter
+
 end Blanc.MessageExecution

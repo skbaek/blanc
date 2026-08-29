@@ -163,12 +163,11 @@ private theorem trigger_guard_passes
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
         sevm restPre rest out ∧
       tail <<+ restPre.stack ∧
-      Devm.getStor guardPost = Devm.getStor restPre ∧
+      guardPost.state = restPre.state ∧
       guardPost.memory = restPre.memory := by
   obtain ⟨restPre, hpop, restRun, pRest⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pGuard branchRun
-  exact ⟨restPre, restRun, pRest,
-    funext (getStor_eq_of_state_eq hpop.state), hpop.memory⟩
+  exact ⟨restPre, restRun, pRest, hpop.state, hpop.memory⟩
 
 theorem rebasedTriggerRoleFailure_call_reverts_exact
     {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -322,6 +321,713 @@ private theorem triggerLoadWord_step
     exact pushWf.extend _ _
   · rw [memory]
     exact pushReads.extend _ _
+
+/-! ## The validator's guarded suffixes
+
+`Trigger.validateCalldata` is a linear chain of six guards, each of which
+either calls the malformed-ABI reverter or falls through to the next.  Naming
+the suffixes lets every guard be walked by its own small lemma instead of one
+proof carrying the whole nested term; `validateCalldata_eq` pins the names to
+the source so they cannot drift. -/
+
+private def validatorAfterBounds : Func :=
+  pushB256 0 ::: Trigger.storeWord Trigger.loopIndexWord +++
+    pushB256 0 ::: Trigger.storeWord Trigger.pubkeysTailBytesWord +++
+      pushB256 0 ::: Trigger.storeWord Trigger.routerTupleBytesWord +++
+        Func.call Trigger.afterValidationSlot
+
+private def validatorAfterCount : Func :=
+  Trigger.loadWord Trigger.arrayLengthPtrWord +++
+    pushB256 32 ::: Ninst.add :::
+      Trigger.storeWord Trigger.arrayElementsBaseWord +++
+        Trigger.loadWord Trigger.arrayElementsBaseWord +++
+          Trigger.loadWord Trigger.requestsCountWord +++
+            pushB256 32 ::: Ninst.mul ::: Ninst.add :::
+              Trigger.loadWord Trigger.calldataSizeWord +++ Ninst.lt :::
+                ((Func.call Trigger.malformedAbiSlot) <?> validatorAfterBounds)
+
+private def validatorAfterHeader : Func :=
+  Trigger.calldataloadAt Trigger.arrayLengthPtrWord +++
+    Trigger.storeWord Trigger.requestsCountWord +++
+      pushB256 Trigger.maxUint64 :::
+        Trigger.loadWord Trigger.requestsCountWord +++ Ninst.gt :::
+          ((Func.call Trigger.malformedAbiSlot) <?> validatorAfterCount)
+
+private def validatorAfterOffset : Func :=
+  arg 0 +++ Trigger.storeWord Trigger.validatorsOffsetWord +++
+    arg 0 +++ pushB256 4 ::: Ninst.add :::
+      Trigger.storeWord Trigger.arrayLengthPtrWord +++
+        Trigger.loadWord Trigger.arrayLengthPtrWord +++
+          pushB256 32 ::: Ninst.add :::
+            Trigger.loadWord Trigger.calldataSizeWord +++ Ninst.lt :::
+              ((Func.call Trigger.malformedAbiSlot) <?> validatorAfterHeader)
+
+private def validatorAfterAddress : Func :=
+  arg 1 +++ Trigger.storeWord Trigger.refundRecipientWord +++
+    arg 2 +++ Trigger.storeWord Trigger.exitTypeWord +++
+      pushB256 Trigger.maxUint64 ::: arg 0 +++ Ninst.gt :::
+        ((Func.call Trigger.malformedAbiSlot) <?> validatorAfterOffset)
+
+private def validatorAfterSize : Func :=
+  Ninst.calldatasize ::: Trigger.storeWord Trigger.calldataSizeWord +++
+    arg 1 +++ checkNonAddress +++
+      ((Func.call Trigger.malformedAbiSlot) <?> validatorAfterAddress)
+
+/-- The names above are exactly the source's nested suffixes. -/
+private theorem validateCalldata_eq :
+    Trigger.validateCalldata =
+      pushB256 100 ::: Ninst.calldatasize ::: Ninst.lt :::
+        ((Func.call Trigger.malformedAbiSlot) <?> validatorAfterSize) := rfl
+
+/-! ## Walking the validator's guards
+
+Each step consumes one guard at the canonical empty-array image, where every
+flag is zero.  Memory travels as a `Mem.Wf`/`Mem.Reads` pair over an explicit
+byte image, so a scratch word read back later resolves against the image the
+validator itself wrote rather than against an assumed read-over-write fact. -/
+
+/-- Guard 1 — the 132-byte canonical image clears the size floor. -/
+private theorem validator_step_size
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {refundRecipient : Adr} {exitType : B256} {tail : Stack}
+    (hp : tail <<+ pre.stack)
+    (hdata : sevm.data =
+      triggerEmptyAuthorizationCalldata refundRecipient exitType)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre
+        (Trigger.rebaseLocalCalls triggerAuxDelta Trigger.validateCalldata)
+        out) :
+    ∃ next,
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm next
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterSize) out ∧
+      tail <<+ next.stack ∧
+      pre.state = next.state ∧
+      pre.memory = next.memory := by
+  rw [validateCalldata_eq] at run
+  obtain ⟨s1, q1, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨s2, q2, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨s3, q3, run⟩ := runCompiledTo_next_inv run
+  have r1 := Ninst.Run.of_runCompiled q1
+  have r2 := Ninst.Run.of_runCompiled q2
+  have r3 := Ninst.Run.of_runCompiled q3
+  have p1 := prefix_of_push (of_run_pushB256 r1) hp
+  have p2 := prefix_of_push (of_run_calldatasize r2) p1
+  have p3 := prefix_of_lt r3 p2
+  have hlen : sevm.data.length = 132 := by
+    rw [hdata]
+    exact triggerEmptyAuthorizationCalldata_length refundRecipient exitType
+  have hflag : (Nat.toB256 sevm.data.length <? (100 : B256)) = 0 := by
+    rw [hlen]; decide
+  have g : (0 : B256) :: tail <<+ s3.stack := by simpa [hflag] using p3
+  obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
+    trigger_guard_passes g run
+  refine ⟨next, nextRun, pNext, ?_, ?_⟩
+  · exact ((Ninst.Hinv.inv (f := Devm.state) r1).trans
+      ((Ninst.Hinv.inv (f := Devm.state) r2).trans
+        ((Ninst.Hinv.inv (f := Devm.state) r3).trans stateNext)))
+  · exact ((Ninst.Hinv.inv (f := Devm.memory) r1).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) r2).trans
+        ((Ninst.Hinv.inv (f := Devm.memory) r3).trans memNext)))
+
+/-- Guard 2 — the refund recipient is address-shaped, so the dirty-high-bit
+check falls through.  The calldata size is banked in its scratch word. -/
+private theorem validator_step_address
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {refundRecipient : Adr} {exitType : B256} {tail : Stack} {image : Bytes}
+    (hp : tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (hdata : sevm.data =
+      triggerEmptyAuthorizationCalldata refundRecipient exitType)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterSize)
+      out) :
+    ∃ next,
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm next
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterAddress) out ∧
+      tail <<+ next.stack ∧
+      Mem.Wf next.memory ∧
+      Mem.Reads next.memory
+        (Bytes.writeAt image 32 (Nat.toB256 132).toBytes) ∧
+      pre.state = next.state := by
+  have hlen : sevm.data.length = 132 := by
+    rw [hdata]
+    exact triggerEmptyAuthorizationCalldata_length refundRecipient exitType
+  unfold validatorAfterSize at run
+  obtain ⟨s1, q1, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  have r1 := Ninst.Run.of_runCompiled q1
+  have p1 : Nat.toB256 132 :: tail <<+ s1.stack := by
+    simpa [hlen] using prefix_of_push (of_run_calldatasize r1) hp
+  have wf1 : Mem.Wf s1.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r1]; exact hwf
+  have reads1 : Mem.Reads s1.memory image := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r1]; exact hreads
+  obtain ⟨s2, storeRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p2, wf2, reads2, state2⟩ :=
+    triggerStoreWord_step p1 wf1 reads1 storeRun
+  obtain ⟨s3, argRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨s4, checkRun, run⟩ := runCompiledTo_prepend_inv run
+  have pArg := prefix_of_arg p2 argRun
+  obtain ⟨y, pY, hiff⟩ := of_check_non_address pArg checkRun
+  have hy : y = 0 :=
+    hiff.mpr ⟨refundRecipient, (triggerEmptyAuthorization_arg1 hdata).symm⟩
+  rw [hy] at pY
+  obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
+    trigger_guard_passes pY run
+  have argMem : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv) argRun
+  have checkMem : s3.memory = s4.memory :=
+    Line.of_inv Devm.memory (by line_inv) checkRun
+  refine ⟨next, nextRun, pNext, ?_, ?_, ?_⟩
+  · rw [← memNext, ← checkMem, ← argMem]; exact wf2
+  · rw [← memNext, ← checkMem, ← argMem]
+    rw [show ((Trigger.calldataSizeWord * 32 : B256)).toNat = 32 from by
+      decide] at reads2
+    exact reads2
+  · exact ((Ninst.Hinv.inv (f := Devm.state) r1).trans
+      (state2.trans
+        ((Line.of_inv Devm.state (by line_inv) argRun).trans
+          ((Line.of_inv Devm.state (by line_inv) checkRun).trans
+            stateNext))))
+
+/-- Guard 3 — the head offset `0x60` is far below the `uint64` decoder bound.
+The refund recipient and exit type are banked on the way. -/
+private theorem validator_step_offset
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {refundRecipient : Adr} {exitType : B256} {tail : Stack} {image : Bytes}
+    (hp : tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (hdata : sevm.data =
+      triggerEmptyAuthorizationCalldata refundRecipient exitType)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterAddress) out) :
+    ∃ next,
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm next
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterOffset) out ∧
+      tail <<+ next.stack ∧
+      Mem.Wf next.memory ∧
+      Mem.Reads next.memory
+        (Bytes.writeAt
+          (Bytes.writeAt image 192 refundRecipient.toB256.toBytes)
+          224 exitType.toBytes) ∧
+      pre.state = next.state := by
+  unfold validatorAfterAddress at run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s1, arg1Run, run⟩ := runCompiledTo_prepend_inv run
+  have p1 : refundRecipient.toB256 :: tail <<+ s1.stack := by
+    rw [← triggerEmptyAuthorization_arg1 hdata]
+    exact prefix_of_arg hp arg1Run
+  have wf1 : Mem.Wf s1.memory := by
+    rw [← Line.of_inv Devm.memory (by line_inv) arg1Run]; exact hwf
+  have reads1 : Mem.Reads s1.memory image := by
+    rw [← Line.of_inv Devm.memory (by line_inv) arg1Run]; exact hreads
+  obtain ⟨s2, store1Run, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p2, wf2, reads2, state2⟩ :=
+    triggerStoreWord_step p1 wf1 reads1 store1Run
+  rw [show ((Trigger.refundRecipientWord * 32 : B256)).toNat = 192 from by
+    decide] at reads2
+  obtain ⟨s3, arg2Run, run⟩ := runCompiledTo_prepend_inv run
+  have p3 : exitType :: tail <<+ s3.stack := by
+    rw [← triggerEmptyAuthorization_arg2 hdata]
+    exact prefix_of_arg p2 arg2Run
+  have wf3 : Mem.Wf s3.memory := by
+    rw [← Line.of_inv Devm.memory (by line_inv) arg2Run]; exact wf2
+  have reads3 : Mem.Reads s3.memory
+      (Bytes.writeAt image 192 refundRecipient.toB256.toBytes) := by
+    rw [← Line.of_inv Devm.memory (by line_inv) arg2Run]; exact reads2
+  obtain ⟨s4, store2Run, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p4, wf4, reads4, state4⟩ :=
+    triggerStoreWord_step p3 wf3 reads3 store2Run
+  rw [show ((Trigger.exitTypeWord * 32 : B256)).toNat = 224 from by
+    decide] at reads4
+  obtain ⟨s5, q5, run⟩ := runCompiledTo_next_inv run
+  have r5 := Ninst.Run.of_runCompiled q5
+  have p5 := prefix_of_push (of_run_pushB256 r5) p4
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s6, arg0Run, run⟩ := runCompiledTo_prepend_inv run
+  have p6 : (0x60 : B256) :: Trigger.maxUint64 :: tail <<+ s6.stack := by
+    rw [← triggerEmptyAuthorization_arg0 hdata]
+    simpa using prefix_of_arg p5 arg0Run
+  obtain ⟨s7, q7, run⟩ := runCompiledTo_next_inv run
+  have r7 := Ninst.Run.of_runCompiled q7
+  have p7 := prefix_of_gt r7 p6
+  have g : (0 : B256) :: tail <<+ s7.stack := by
+    simpa [show ((0x60 : B256) >? Trigger.maxUint64) = 0 from by decide]
+      using p7
+  obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
+    trigger_guard_passes g run
+  have mem5 : s4.memory = s5.memory := Ninst.Hinv.inv (f := Devm.memory) r5
+  have mem6 : s5.memory = s6.memory :=
+    Line.of_inv Devm.memory (by line_inv) arg0Run
+  have mem7 : s6.memory = s7.memory := Ninst.Hinv.inv (f := Devm.memory) r7
+  refine ⟨next, nextRun, pNext, ?_, ?_, ?_⟩
+  · rw [← memNext, ← mem7, ← mem6, ← mem5]; exact wf4
+  · rw [← memNext, ← mem7, ← mem6, ← mem5]; exact reads4
+  · exact ((Line.of_inv Devm.state (by line_inv) arg1Run).trans
+      (state2.trans
+        ((Line.of_inv Devm.state (by line_inv) arg2Run).trans
+          (state4.trans
+            ((Ninst.Hinv.inv (f := Devm.state) r5).trans
+              ((Line.of_inv Devm.state (by line_inv) arg0Run).trans
+                ((Ninst.Hinv.inv (f := Devm.state) r7).trans
+                  stateNext)))))))
+
+/-- Guard 4 — the array-length pointer `0x60 + 4 = 100` leaves a whole word
+inside the 132-byte image, so the header bound holds with no slack.  Reads
+resolve against the banked size word rather than an assumed memory fact. -/
+private theorem validator_step_header
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {refundRecipient : Adr} {exitType : B256} {tail : Stack} {image : Bytes}
+    (hp : tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (hsize : Bytes.toB256 (image.sliceD 32 32 0) = Nat.toB256 132)
+    (hdata : sevm.data =
+      triggerEmptyAuthorizationCalldata refundRecipient exitType)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterOffset) out) :
+    ∃ next image',
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm next
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterHeader) out ∧
+      tail <<+ next.stack ∧
+      Mem.Wf next.memory ∧
+      Mem.Reads next.memory image' ∧
+      Bytes.toB256 (image'.sliceD 32 32 0) = Nat.toB256 132 ∧
+      Bytes.toB256 (image'.sliceD 96 32 0) = Nat.toB256 100 ∧
+      pre.state = next.state := by
+  unfold validatorAfterOffset at run
+  simp only [rebaseLocalCalls_prepend] at run
+  -- arg 0, banked as the validators offset
+  obtain ⟨s1, argA, run⟩ := runCompiledTo_prepend_inv run
+  have p1 : (0x60 : B256) :: tail <<+ s1.stack := by
+    rw [← triggerEmptyAuthorization_arg0 hdata]; exact prefix_of_arg hp argA
+  have wf1 : Mem.Wf s1.memory := by
+    rw [← Line.of_inv Devm.memory (by line_inv) argA]; exact hwf
+  have reads1 : Mem.Reads s1.memory image := by
+    rw [← Line.of_inv Devm.memory (by line_inv) argA]; exact hreads
+  obtain ⟨s2, storeA, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p2, wf2, reads2, state2⟩ :=
+    triggerStoreWord_step p1 wf1 reads1 storeA
+  rw [show ((Trigger.validatorsOffsetWord * 32 : B256)).toNat = 64 from by
+    decide] at reads2
+  -- arg 0 again, plus four, banked as the array-length pointer
+  obtain ⟨s3, argB, run⟩ := runCompiledTo_prepend_inv run
+  have p3 : (0x60 : B256) :: tail <<+ s3.stack := by
+    rw [← triggerEmptyAuthorization_arg0 hdata]; exact prefix_of_arg p2 argB
+  have wf3 : Mem.Wf s3.memory := by
+    rw [← Line.of_inv Devm.memory (by line_inv) argB]; exact wf2
+  have reads3 : Mem.Reads s3.memory
+      (Bytes.writeAt image 64 (0x60 : B256).toBytes) := by
+    rw [← Line.of_inv Devm.memory (by line_inv) argB]; exact reads2
+  obtain ⟨s4, q4, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨s5, q5, run⟩ := runCompiledTo_next_inv run
+  have r4 := Ninst.Run.of_runCompiled q4
+  have r5 := Ninst.Run.of_runCompiled q5
+  have p4 := prefix_of_push (of_run_pushB256 r4) p3
+  have p5 : (100 : B256) :: tail <<+ s5.stack := by
+    simpa [show ((4 : B256) + 0x60) = 100 from by decide]
+      using prefix_of_add r5 p4
+  have wf5 : Mem.Wf s5.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r5,
+      ← Ninst.Hinv.inv (f := Devm.memory) r4]
+    exact wf3
+  have reads5 : Mem.Reads s5.memory
+      (Bytes.writeAt image 64 (0x60 : B256).toBytes) := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r5,
+      ← Ninst.Hinv.inv (f := Devm.memory) r4]
+    exact reads3
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s6, storeB, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p6, wf6, reads6, state6⟩ :=
+    triggerStoreWord_step p5 wf5 reads5 storeB
+  rw [show ((Trigger.arrayLengthPtrWord * 32 : B256)).toNat = 96 from by
+    decide] at reads6
+  -- the two reads this guard compares
+  have hptr : Bytes.toB256
+      ((Bytes.writeAt (Bytes.writeAt image 64 (0x60 : B256).toBytes) 96
+        (100 : B256).toBytes).sliceD 96 32 0) = 100 :=
+    Bytes.readWord_writeAt_self _ 96 100
+  have hsize' : Bytes.toB256
+      ((Bytes.writeAt (Bytes.writeAt image 64 (0x60 : B256).toBytes) 96
+        (100 : B256).toBytes).sliceD 32 32 0) = Nat.toB256 132 := by
+    rw [Bytes.readWord_writeAt_of_disjoint _ 32 96 100 (Or.inl (by omega)),
+      Bytes.readWord_writeAt_of_disjoint _ 32 64 (0x60 : B256)
+        (Or.inl (by omega))]
+    exact hsize
+  obtain ⟨s7, loadA, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p7, wf7, reads7, state7⟩ :=
+    triggerLoadWord_step (value := 100) p6 wf6 reads6
+      (by rw [show ((Trigger.arrayLengthPtrWord * 32 : B256)).toNat = 96 from
+        by decide]; exact hptr) loadA
+  obtain ⟨s8, q8, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨s9, q9, run⟩ := runCompiledTo_next_inv run
+  have r8 := Ninst.Run.of_runCompiled q8
+  have r9 := Ninst.Run.of_runCompiled q9
+  have p8 := prefix_of_push (of_run_pushB256 r8) p7
+  have p9 : (132 : B256) :: tail <<+ s9.stack := by
+    simpa [show ((32 : B256) + 100) = 132 from by decide]
+      using prefix_of_add r9 p8
+  have wf9 : Mem.Wf s9.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r9,
+      ← Ninst.Hinv.inv (f := Devm.memory) r8]
+    exact wf7
+  have reads9 : Mem.Reads s9.memory
+      (Bytes.writeAt (Bytes.writeAt image 64 (0x60 : B256).toBytes) 96
+        (100 : B256).toBytes) := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r9,
+      ← Ninst.Hinv.inv (f := Devm.memory) r8]
+    exact reads7
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s10, loadB, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p10, wf10, reads10, state10⟩ :=
+    triggerLoadWord_step (value := Nat.toB256 132) p9 wf9 reads9
+      (by rw [show ((Trigger.calldataSizeWord * 32 : B256)).toNat = 32 from
+        by decide]; exact hsize') loadB
+  obtain ⟨s11, q11, run⟩ := runCompiledTo_next_inv run
+  have r11 := Ninst.Run.of_runCompiled q11
+  have g : (0 : B256) :: tail <<+ s11.stack := by
+    simpa [show ((Nat.toB256 132 : B256) <? 132) = 0 from by decide]
+      using prefix_of_lt r11 p10
+  obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
+    trigger_guard_passes g run
+  refine ⟨next,
+    Bytes.writeAt (Bytes.writeAt image 64 (0x60 : B256).toBytes) 96
+      (100 : B256).toBytes,
+    nextRun, pNext, ?_, ?_, hsize', hptr, ?_⟩
+  · rw [← memNext, ← Ninst.Hinv.inv (f := Devm.memory) r11]; exact wf10
+  · rw [← memNext, ← Ninst.Hinv.inv (f := Devm.memory) r11]; exact reads10
+  · exact ((Line.of_inv Devm.state (by line_inv) argA).trans
+      (state2.trans ((Line.of_inv Devm.state (by line_inv) argB).trans
+        ((Ninst.Hinv.inv (f := Devm.state) r4).trans
+          ((Ninst.Hinv.inv (f := Devm.state) r5).trans
+            (state6.trans (state7.trans
+              ((Ninst.Hinv.inv (f := Devm.state) r8).trans
+                ((Ninst.Hinv.inv (f := Devm.state) r9).trans
+                  (state10.trans
+                    ((Ninst.Hinv.inv (f := Devm.state) r11).trans
+                      stateNext)))))))))))
+
+/-- Guard 5 — the canonical image declares an empty validator array, and zero
+is trivially within the `uint64` count bound. -/
+private theorem validator_step_count
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {refundRecipient : Adr} {exitType : B256} {tail : Stack} {image : Bytes}
+    (hp : tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (hsize : Bytes.toB256 (image.sliceD 32 32 0) = Nat.toB256 132)
+    (hptr : Bytes.toB256 (image.sliceD 96 32 0) = Nat.toB256 100)
+    (hdata : sevm.data =
+      triggerEmptyAuthorizationCalldata refundRecipient exitType)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterHeader) out) :
+    ∃ next image',
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm next
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterCount) out ∧
+      tail <<+ next.stack ∧
+      Mem.Wf next.memory ∧
+      Mem.Reads next.memory image' ∧
+      Bytes.toB256 (image'.sliceD 32 32 0) = Nat.toB256 132 ∧
+      Bytes.toB256 (image'.sliceD 96 32 0) = Nat.toB256 100 ∧
+      Bytes.toB256 (image'.sliceD 160 32 0) = 0 ∧
+      pre.state = next.state := by
+  unfold validatorAfterHeader at run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s1, clRun, run⟩ := runCompiledTo_prepend_inv run
+  unfold Trigger.calldataloadAt at clRun
+  rcases of_run_append (Trigger.loadWord Trigger.arrayLengthPtrWord) clRun
+    with ⟨m, loadRun, tailRun⟩
+  obtain ⟨pm, wfm, readsm, statem⟩ :=
+    triggerLoadWord_step (value := Nat.toB256 100) hp hwf hreads
+      (by rw [show ((Trigger.arrayLengthPtrWord * 32 : B256)).toNat = 96 from
+        by decide]; exact hptr) loadRun
+  rcases Line.of_run_cons tailRun with ⟨_, clStep, hnil⟩
+  cases hnil
+  have p1 : (0 : B256) :: tail <<+ s1.stack := by
+    rw [← triggerEmptyAuthorization_arrayLength hdata]
+    simpa [show (Nat.toB256 100 : B256) = 100 from by decide]
+      using prefix_of_calldataload_val clStep pm
+  have wf1 : Mem.Wf s1.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) clStep]; exact wfm
+  have reads1 : Mem.Reads s1.memory image := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) clStep]; exact readsm
+  obtain ⟨s2, storeRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p2, wf2, reads2, state2⟩ :=
+    triggerStoreWord_step p1 wf1 reads1 storeRun
+  rw [show ((Trigger.requestsCountWord * 32 : B256)).toNat = 160 from by
+    decide] at reads2
+  have hcount : Bytes.toB256
+      ((Bytes.writeAt image 160 (0 : B256).toBytes).sliceD 160 32 0) = 0 :=
+    Bytes.readWord_writeAt_self _ 160 0
+  have hsize' : Bytes.toB256
+      ((Bytes.writeAt image 160 (0 : B256).toBytes).sliceD 32 32 0) =
+        Nat.toB256 132 := by
+    rw [Bytes.readWord_writeAt_of_disjoint _ 32 160 0 (Or.inl (by omega))]
+    exact hsize
+  have hptr' : Bytes.toB256
+      ((Bytes.writeAt image 160 (0 : B256).toBytes).sliceD 96 32 0) =
+        Nat.toB256 100 := by
+    rw [Bytes.readWord_writeAt_of_disjoint _ 96 160 0 (Or.inl (by omega))]
+    exact hptr
+  obtain ⟨s3, q3, run⟩ := runCompiledTo_next_inv run
+  have r3 := Ninst.Run.of_runCompiled q3
+  have p3 := prefix_of_push (of_run_pushB256 r3) p2
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s4, loadRun2, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p4, wf4, reads4, state4⟩ :=
+    triggerLoadWord_step (value := 0) p3
+      (by rw [← Ninst.Hinv.inv (f := Devm.memory) r3]; exact wf2)
+      (by rw [← Ninst.Hinv.inv (f := Devm.memory) r3]; exact reads2)
+      (by rw [show ((Trigger.requestsCountWord * 32 : B256)).toNat = 160 from
+        by decide]; exact hcount) loadRun2
+  obtain ⟨s5, q5, run⟩ := runCompiledTo_next_inv run
+  have r5 := Ninst.Run.of_runCompiled q5
+  have g : (0 : B256) :: tail <<+ s5.stack := by
+    simpa [show ((0 : B256) >? Trigger.maxUint64) = 0 from by decide]
+      using prefix_of_gt r5 p4
+  obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
+    trigger_guard_passes g run
+  refine ⟨next, Bytes.writeAt image 160 (0 : B256).toBytes,
+    nextRun, pNext, ?_, ?_, hsize', hptr', hcount, ?_⟩
+  · rw [← memNext, ← Ninst.Hinv.inv (f := Devm.memory) r5]; exact wf4
+  · rw [← memNext, ← Ninst.Hinv.inv (f := Devm.memory) r5]; exact reads4
+  · exact (statem.trans ((Ninst.Hinv.inv (f := Devm.state) clStep).trans
+      (state2.trans ((Ninst.Hinv.inv (f := Devm.state) r3).trans
+        (state4.trans ((Ninst.Hinv.inv (f := Devm.state) r5).trans
+          stateNext))))))
+
+/-- Guard 6 — with an empty array the element region is exactly the end of the
+image, so the final bound holds and the validator reaches its continuation. -/
+private theorem validator_step_bounds
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {tail : Stack} {image : Bytes}
+    (hp : tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (hsize : Bytes.toB256 (image.sliceD 32 32 0) = Nat.toB256 132)
+    (hptr : Bytes.toB256 (image.sliceD 96 32 0) = Nat.toB256 100)
+    (hcount : Bytes.toB256 (image.sliceD 160 32 0) = 0)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterCount) out) :
+    ∃ next image',
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm next
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterBounds) out ∧
+      tail <<+ next.stack ∧
+      Mem.Wf next.memory ∧
+      Mem.Reads next.memory image' ∧
+      pre.state = next.state := by
+  unfold validatorAfterCount at run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s1, loadA, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p1, wf1, reads1, state1⟩ :=
+    triggerLoadWord_step (value := Nat.toB256 100) hp hwf hreads
+      (by rw [show ((Trigger.arrayLengthPtrWord * 32 : B256)).toNat = 96 from
+        by decide]; exact hptr) loadA
+  obtain ⟨s2, q2, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨s3, q3, run⟩ := runCompiledTo_next_inv run
+  have r2 := Ninst.Run.of_runCompiled q2
+  have r3 := Ninst.Run.of_runCompiled q3
+  have p2 := prefix_of_push (of_run_pushB256 r2) p1
+  have p3 : (132 : B256) :: tail <<+ s3.stack := by
+    simpa [show ((32 : B256) + Nat.toB256 100) = 132 from by decide]
+      using prefix_of_add r3 p2
+  have wf3 : Mem.Wf s3.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r3,
+      ← Ninst.Hinv.inv (f := Devm.memory) r2]
+    exact wf1
+  have reads3 : Mem.Reads s3.memory image := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r3,
+      ← Ninst.Hinv.inv (f := Devm.memory) r2]
+    exact reads1
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s4, storeRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p4, wf4, reads4, state4⟩ :=
+    triggerStoreWord_step p3 wf3 reads3 storeRun
+  rw [show ((Trigger.arrayElementsBaseWord * 32 : B256)).toNat = 128 from by
+    decide] at reads4
+  have hbase : Bytes.toB256
+      ((Bytes.writeAt image 128 (132 : B256).toBytes).sliceD 128 32 0) = 132 :=
+    Bytes.readWord_writeAt_self _ 128 132
+  have hcount' : Bytes.toB256
+      ((Bytes.writeAt image 128 (132 : B256).toBytes).sliceD 160 32 0) = 0 := by
+    rw [Bytes.readWord_writeAt_of_disjoint _ 160 128 132 (Or.inr (by omega))]
+    exact hcount
+  have hsize' : Bytes.toB256
+      ((Bytes.writeAt image 128 (132 : B256).toBytes).sliceD 32 32 0) =
+        Nat.toB256 132 := by
+    rw [Bytes.readWord_writeAt_of_disjoint _ 32 128 132 (Or.inl (by omega))]
+    exact hsize
+  obtain ⟨s5, loadB, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p5, wf5, reads5, state5⟩ :=
+    triggerLoadWord_step (value := 132) p4 wf4 reads4
+      (by rw [show ((Trigger.arrayElementsBaseWord * 32 : B256)).toNat = 128
+        from by decide]; exact hbase) loadB
+  obtain ⟨s6, loadC, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p6, wf6, reads6, state6⟩ :=
+    triggerLoadWord_step (value := 0) p5 wf5 reads5
+      (by rw [show ((Trigger.requestsCountWord * 32 : B256)).toNat = 160 from
+        by decide]; exact hcount') loadC
+  obtain ⟨s7, q7, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨s8, q8, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨s9, q9, run⟩ := runCompiledTo_next_inv run
+  have r7 := Ninst.Run.of_runCompiled q7
+  have r8 := Ninst.Run.of_runCompiled q8
+  have r9 := Ninst.Run.of_runCompiled q9
+  have p7 := prefix_of_push (of_run_pushB256 r7) p6
+  have p8 : (0 : B256) :: (132 : B256) :: tail <<+ s8.stack := by
+    simpa [show ((32 : B256) * 0) = 0 from by decide]
+      using prefix_of_mul r8 p7
+  have p9 : (132 : B256) :: tail <<+ s9.stack := by
+    simpa [show ((0 : B256) + 132) = 132 from by decide]
+      using prefix_of_add r9 p8
+  have wf9 : Mem.Wf s9.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r9,
+      ← Ninst.Hinv.inv (f := Devm.memory) r8,
+      ← Ninst.Hinv.inv (f := Devm.memory) r7]
+    exact wf6
+  have reads9 : Mem.Reads s9.memory
+      (Bytes.writeAt image 128 (132 : B256).toBytes) := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) r9,
+      ← Ninst.Hinv.inv (f := Devm.memory) r8,
+      ← Ninst.Hinv.inv (f := Devm.memory) r7]
+    exact reads6
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s10, loadD, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p10, wf10, reads10, state10⟩ :=
+    triggerLoadWord_step (value := Nat.toB256 132) p9 wf9 reads9
+      (by rw [show ((Trigger.calldataSizeWord * 32 : B256)).toNat = 32 from
+        by decide]; exact hsize') loadD
+  obtain ⟨s11, q11, run⟩ := runCompiledTo_next_inv run
+  have r11 := Ninst.Run.of_runCompiled q11
+  have g : (0 : B256) :: tail <<+ s11.stack := by
+    simpa [show ((Nat.toB256 132 : B256) <? 132) = 0 from by decide]
+      using prefix_of_lt r11 p10
+  obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
+    trigger_guard_passes g run
+  refine ⟨next, Bytes.writeAt image 128 (132 : B256).toBytes,
+    nextRun, pNext, ?_, ?_, ?_⟩
+  · rw [← memNext, ← Ninst.Hinv.inv (f := Devm.memory) r11]; exact wf10
+  · rw [← memNext, ← Ninst.Hinv.inv (f := Devm.memory) r11]; exact reads10
+  · exact (state1.trans ((Ninst.Hinv.inv (f := Devm.state) r2).trans
+      ((Ninst.Hinv.inv (f := Devm.state) r3).trans
+        (state4.trans (state5.trans (state6.trans
+          ((Ninst.Hinv.inv (f := Devm.state) r7).trans
+            ((Ninst.Hinv.inv (f := Devm.state) r8).trans
+              ((Ninst.Hinv.inv (f := Devm.state) r9).trans
+                (state10.trans ((Ninst.Hinv.inv (f := Devm.state) r11).trans
+                  stateNext)))))))))))
+
+/-- Guard 7 has no test: the loop counters are zeroed and control transfers to
+`afterValidation`, whose slot is the rebased one the runtime actually holds. -/
+private theorem validator_step_enter
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {tail : Stack} {image : Bytes}
+    (hp : tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre
+        (Trigger.rebaseLocalCalls triggerAuxDelta validatorAfterBounds) out) :
+    ∃ next,
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm next
+        (Trigger.rebaseLocalCalls triggerAuxDelta Trigger.afterValidation)
+        out ∧
+      tail <<+ next.stack ∧
+      pre.state = next.state := by
+  unfold validatorAfterBounds at run
+  obtain ⟨s1, q1, run⟩ := runCompiledTo_next_inv run
+  have r1 := Ninst.Run.of_runCompiled q1
+  have p1 := prefix_of_push (of_run_pushB256 r1) hp
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s2, storeA, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p2, wf2, reads2, state2⟩ :=
+    triggerStoreWord_step p1
+      (by rw [← Ninst.Hinv.inv (f := Devm.memory) r1]; exact hwf)
+      (by rw [← Ninst.Hinv.inv (f := Devm.memory) r1]; exact hreads) storeA
+  obtain ⟨s3, q3, run⟩ := runCompiledTo_next_inv run
+  have r3 := Ninst.Run.of_runCompiled q3
+  have p3 := prefix_of_push (of_run_pushB256 r3) p2
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s4, storeB, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p4, wf4, reads4, state4⟩ :=
+    triggerStoreWord_step p3
+      (by rw [← Ninst.Hinv.inv (f := Devm.memory) r3]; exact wf2)
+      (by rw [← Ninst.Hinv.inv (f := Devm.memory) r3]; exact reads2) storeB
+  obtain ⟨s5, q5, run⟩ := runCompiledTo_next_inv run
+  have r5 := Ninst.Run.of_runCompiled q5
+  have p5 := prefix_of_push (of_run_pushB256 r5) p4
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨s6, storeC, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨p6, wf6, reads6, state6⟩ :=
+    triggerStoreWord_step p5
+      (by rw [← Ninst.Hinv.inv (f := Devm.memory) r5]; exact wf4)
+      (by rw [← Ninst.Hinv.inv (f := Devm.memory) r5]; exact reads4) storeC
+  obtain ⟨next, burn, bodyRun⟩ :=
+    runCompiledTo_call_inv (runtime_rebasedTriggerAfterValidation_get dp) run
+  refine ⟨next, bodyRun, ?_, ?_⟩
+  · rw [← burn.stack]; exact p6
+  · exact ((Ninst.Hinv.inv (f := Devm.state) r1).trans
+      (state2.trans ((Ninst.Hinv.inv (f := Devm.state) r3).trans
+        (state4.trans ((Ninst.Hinv.inv (f := Devm.state) r5).trans
+          (state6.trans burn.state))))))
+
+/-! ## The canonical trigger input reaches `afterValidation` -/
+
+/-- The smallest complete canonical trigger input clears every validator guard
+and transfers to `Trigger.afterValidation`.  Storage is untouched along the
+way, so a role or pause fact stated at the entry survives to the guard.  The
+walk assumes nothing about the entry memory beyond well-formedness: the
+validator stores each scratch word before it reads it. -/
+theorem triggerFullWithdrawals_reaches_afterValidation
+    {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {refundRecipient : Adr} {exitType : B256} {tail : Stack}
+    (hp : tail <<+ pre.stack)
+    (hmem : pre.memory = Mem.empty)
+    (hdata : sevm.data =
+      triggerEmptyAuthorizationCalldata refundRecipient exitType)
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre (triggerFullWithdrawals dp) out) :
+    ∃ bodyPre,
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm bodyPre
+        (Trigger.rebaseLocalCalls triggerAuxDelta Trigger.afterValidation)
+        out ∧
+      tail <<+ bodyPre.stack ∧
+      pre.state = bodyPre.state := by
+  rw [triggerFullWithdrawals_rebasedValidator_exact] at run
+  obtain ⟨n1, run1, p1, state1, mem1⟩ := validator_step_size hp hdata run
+  have wf1 : Mem.Wf n1.memory := by rw [← mem1, hmem]; exact Mem.wf_empty
+  have reads1 : Mem.Reads n1.memory [] := by
+    rw [← mem1, hmem]; exact Mem.reads_empty
+  obtain ⟨n2, run2, p2, wf2, reads2, state2⟩ :=
+    validator_step_address p1 wf1 reads1 hdata run1
+  obtain ⟨n3, run3, p3, wf3, reads3, state3⟩ :=
+    validator_step_offset p2 wf2 reads2 hdata run2
+  have hsize : Bytes.toB256
+      ((Bytes.writeAt
+        (Bytes.writeAt (Bytes.writeAt [] 32 (Nat.toB256 132).toBytes) 192
+          refundRecipient.toB256.toBytes) 224 exitType.toBytes).sliceD
+        32 32 0) = Nat.toB256 132 := by
+    rw [Bytes.readWord_writeAt_of_disjoint _ 32 224 exitType
+        (Or.inl (by omega)),
+      Bytes.readWord_writeAt_of_disjoint _ 32 192 refundRecipient.toB256
+        (Or.inl (by omega))]
+    exact Bytes.readWord_writeAt_self _ 32 (Nat.toB256 132)
+  obtain ⟨n4, image4, run4, p4, wf4, reads4, hsize4, hptr4, state4⟩ :=
+    validator_step_header p3 wf3 reads3 hsize hdata run3
+  obtain ⟨n5, image5, run5, p5, wf5, reads5, hsize5, hptr5, hcount5, state5⟩ :=
+    validator_step_count p4 wf4 reads4 hsize4 hptr4 hdata run4
+  obtain ⟨n6, image6, run6, p6, wf6, reads6, state6⟩ :=
+    validator_step_bounds p5 wf5 reads5 hsize5 hptr5 hcount5 run5
+  obtain ⟨n7, run7, p7, state7⟩ := validator_step_enter p6 wf6 reads6 run6
+  exact ⟨n7, run7, p7,
+    state1.trans (state2.trans (state3.trans (state4.trans
+      (state5.trans (state6.trans state7)))))⟩
 
 /-! ## Exact flat-role classification -/
 

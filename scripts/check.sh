@@ -1099,7 +1099,10 @@ Blanc.LidoTriggerableWithdrawalsGateway.pauseUntil_absent_role_reverts|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.resume_absent_role_reverts|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.setExitRequestLimit_absent_role_reverts|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.grantRole_absent_role_reverts|$STANDARD
-Blanc.LidoTriggerableWithdrawalsGateway.revokeRole_absent_role_reverts|$STANDARD"
+Blanc.LidoTriggerableWithdrawalsGateway.revokeRole_absent_role_reverts|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_absent_role_reverts|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_authorized_paused_reverts|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_reaches_afterValidation|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

@@ -90,15 +90,6 @@ private structure StubFrame (target : Adr) (calldata : Bytes)
   currentTarget : sevm.currentTarget = target
   data : sevm.data = calldata
 
-private lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
-    Ninst.Run e s Ninst.mul s' →
-      (x :: y :: xs <<+ s.stack) → ((x * y) :: xs <<+ s'.stack) := by
-  intro run stackPrefix
-  refine prefix_of_diffBurn_two (· * ·) ?_ stackPrefix
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  exact Devm.diffBurn_of_applyBinary instructionRun
-
 private lemma mem_reads_self (memory : Mem) :
     Mem.Reads memory memory.data.toList := by
   intro index

@@ -5092,6 +5092,17 @@ lemma prefix_of_lt {e} {x y xs} {s s' : Devm} :
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
 
+/-- `MUL` replaces the top two words with their product above the known tail.
+Contract-neutral, so it sits with the rest of the binary-operator family. -/
+lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s Ninst.mul s' →
+      (x :: y :: xs <<+ s.stack) → ((x * y) :: xs <<+ s'.stack) := by
+  intro run stackPrefix
+  refine prefix_of_diffBurn_two (· * ·) ?_ stackPrefix
+  rcases of_run_reg run with ⟨pc, instructionRun⟩
+  simp only [Rinst.run, Rinst.runCore] at instructionRun
+  exact Devm.diffBurn_of_applyBinary instructionRun
+
 lemma prefix_of_gt {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s gt s' → (x :: y :: xs <<+ s.stack) → ((x >? y) :: xs <<+ s'.stack) := by
   intro h0 h1
@@ -6053,6 +6064,34 @@ instance : Rinst.Hinv Devm.state Rinst.mstore :=
 instance : Rinst.Hinv Devm.state Rinst.mload :=
   ⟨Rinst.preserves_state (by intro h; cases h) (by intro h; cases h)⟩
 
+/-- The whole persistent world state is preserved by every register
+instruction except the two store forms; these are the cases the compiled
+walks in this repository actually step through. -/
+syntax "show_hinv_state" : tactic
+macro_rules
+  | `(tactic| show_hinv_state) =>
+    `(tactic| exact ⟨Rinst.preserves_state (by intro h; cases h)
+        (by intro h; cases h)⟩)
+
+instance : Rinst.Hinv Devm.state Rinst.calldatasize := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.calldataload := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.lt := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.gt := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.add := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.mul := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.sub := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.and := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.or := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.not := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.eq := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.shl := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.shr := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.div := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.mod := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.exp := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.slt := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.sgt := by show_hinv_state
+
 /-- An observation preserved as a whole family is preserved at each index.  A
 walk that only tracks one account's balance states its invariant as the
 projection `fun d => d.getBal a`, so the family instances above are exposed at
@@ -6343,6 +6382,13 @@ instance : Rinst.Hinv Devm.memory Rinst.or := by show_hinv_mem_binary
 instance : Rinst.Hinv Devm.memory Rinst.xor := by show_hinv_mem_binary
 instance : Rinst.Hinv Devm.memory Rinst.shl := by show_hinv_mem_binary
 instance : Rinst.Hinv Devm.memory Rinst.shr := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.mul := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.div := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.mod := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.sdiv := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.smod := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.slt := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.sgt := by show_hinv_mem_binary
 instance : Rinst.Hinv Devm.memory Rinst.not := by show_hinv_mem_unary
 instance : Rinst.Hinv Devm.memory Rinst.iszero := by show_hinv_mem_unary
 instance : Rinst.Hinv Devm.memory Rinst.address := by show_hinv_mem_push
@@ -10147,6 +10193,26 @@ lemma Bytes.sliceD_writeAt_after
   rw [Bytes.getD_writeAt]
   rw [if_neg]
   omega
+
+/-- Reading back the 32-byte word just written at `n`.  Scratch-word walks
+store and reload whole words, so this is the shape they need rather than the
+length-polymorphic `Bytes.sliceD_writeAt`. -/
+lemma Bytes.readWord_writeAt_self (bs : Bytes) (n : Nat) (v : B256) :
+    Bytes.toB256 ((Bytes.writeAt bs n v.toBytes).sliceD n 32 0) = v := by
+  rw [show (32 : Nat) = v.toBytes.length from (B256.length_toBytes v).symm,
+    Bytes.sliceD_writeAt]
+  exact B256.toB256_toBytes v
+
+/-- A 32-byte word write that misses the 32-byte read window entirely, on
+either side, leaves it alone. -/
+lemma Bytes.readWord_writeAt_of_disjoint (bs : Bytes) (start n : Nat)
+    (v : B256) (h : start + 32 ≤ n ∨ n + 32 ≤ start) :
+    (Bytes.writeAt bs n v.toBytes).sliceD start 32 0 =
+      bs.sliceD start 32 0 := by
+  rcases h with h | h
+  · exact Bytes.sliceD_writeAt_before bs v.toBytes start 32 n h
+  · exact Bytes.sliceD_writeAt_after bs v.toBytes start 32 n
+      (by rw [B256.length_toBytes]; exact h)
 
 /-- What a `CALL`, `LOG` or `MLOAD` reads out of a memory whose image is known:
 exactly the corresponding slice of the image, zero-padded past its end. -/

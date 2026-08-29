@@ -138,15 +138,22 @@ For different offsets, sizes, stack tails, or payloads, use the general
   including `prefix_of_timestamp` for the block-time push and `prefix_of_xor`
   for `XOR`.  These declarations are also registered with the
   `stack-prefix-transport` recipe.
-- `Devm.state` is preserved by `mstore` and `mload`; a walk that tracks a
-  single account's balance states its invariant as the pointwise projection
-  `fun d => Devm.getBal d a`, for which `Rinst`/`Ninst` instances are
-  registered beside the whole-family ones.
+- `Devm.state` is preserved by `mstore`, `mload` and the register arithmetic
+  and comparison instructions (`show_hinv_state` builds those from
+  `Rinst.preserves_state`); `Devm.memory` likewise now covers the full binary
+  arithmetic family.  A walk that tracks a single account's balance states its
+  invariant as the pointwise projection `fun d => Devm.getBal d a`, for which
+  `Rinst`/`Ninst` instances are registered beside the whole-family ones.
 - A missing contract-neutral instance belongs in a shared module below every
   consumer, not in the first contract that needs it.
 
 ### I2. The property concerns a complete execution or child frames
 
+- Message-entry projections: `processMessage_entry_facts` carries the code,
+  target, calldata, time, storage and `Mem.Wf` facts, with `pre.stack = []` and
+  `pre.memory = Mem.empty` kept separate as `processMessage_entry_stack` and
+  `processMessage_entry_memory` so a walk that reads scratch words can take the
+  image rather than only well-formedness.
 - Generic execution noninterference:
   [`Blanc/ExecutionNoninterference.lean`](../Blanc/ExecutionNoninterference.lean).
   For `Exec.NoRetainedWriteTo`, first split on `Execution.commits out = true`:
@@ -239,7 +246,10 @@ arithmetic, so consume it there rather than restating it per family.
 A scratch-word walk that writes several fixed slots and reads them back needs
 both disjointness halves: `Bytes.sliceD_writeAt` reads exactly what was just
 written, while `Bytes.sliceD_writeAt_before` and `Bytes.sliceD_writeAt_after`
-skip a write that lands wholly above or wholly below the read window.
+skip a write that lands wholly above or wholly below the read window.  At
+whole-word granularity prefer `Bytes.readWord_writeAt_self` and
+`Bytes.readWord_writeAt_of_disjoint`, which fix the 32-byte width and take the
+disjointness as a single `≤`-disjunction.
 
 ## T — settlement
 

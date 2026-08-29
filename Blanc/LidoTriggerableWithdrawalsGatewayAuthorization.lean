@@ -626,47 +626,111 @@ theorem revokeRole_absent_role_reverts
   · rw [hlen]; decide
   · rw [revokeRoleAuthorization_arg1 hdata]; exact ⟨account, rfl⟩
 
+/-! ## The payable trigger
+
+Unlike the six entries above, `triggerFullWithdrawals` is payable and carries
+its role guard inside the compiled trigger body, after the live calldata
+validator.  Both theorems below therefore walk the validator rather than
+assuming its outcome, and neither takes a body-walk premise. -/
+
+/-- The trigger reverts for a caller without `ADD_FULL_WITHDRAWAL_REQUEST_ROLE`
+at the canonical empty-array input — whatever the pause projection says.  This
+is the first half of the modifier-precedence pair. -/
+theorem triggerFullWithdrawals_absent_role_reverts
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {refundRecipient : Adr} {exitType : B256}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hentryMemory : entry.memory = Mem.empty)
+    (hdata : sevm.data =
+      triggerEmptyAuthorizationCalldata refundRecipient exitType)
+    (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      addFullWithdrawalRequestRole sevm.caller.toB256) :
+    TriggerRoleFailure out := by
+  have hlen : sevm.data.length = 132 := by
+    rw [hdata]
+    exact triggerEmptyAuthorizationCalldata_length refundRecipient exitType
+  obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
+    dispatcher_body_of_prog_run_empty_frame (body := triggerFullWithdrawals dp)
+      hprog hentryStack (by rw [hlen]; decide)
+      (selector_of_triggerEmptyAuthorizationCalldata hdata) (by simp [funcs])
+  have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
+    ⟨dispatchPre.stack, rfl⟩
+  have memDispatch : dispatchPre.memory = Mem.empty := by
+    rw [← dispatchFrame.memory]; exact hentryMemory
+  obtain ⟨bodyPre, bodyRun, pBody, stateBody⟩ :=
+    triggerFullWithdrawals_reaches_afterValidation pDispatch memDispatch hdata
+      dispatchRun
+  refine triggerAfterValidation_absent_reverts pBody ?_ bodyRun
+  rw [← funext (getStor_eq_of_state_eq
+    (dispatchFrame.state.trans stateBody))]
+  exact lacksRole
+
+/-- The second half: with the role present but the gateway paused, the trigger
+reaches the `ResumedExpected()` boundary before any value, array or quota
+processing. -/
+theorem triggerFullWithdrawals_authorized_paused_reverts
+    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
+    {refundRecipient : Adr} {exitType : B256}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hentryMemory : entry.memory = Mem.empty)
+    (hdata : sevm.data =
+      triggerEmptyAuthorizationCalldata refundRecipient exitType)
+    (hasRole : CallerHasRole (Devm.getStor entry sevm.currentTarget)
+      addFullWithdrawalRequestRole sevm.caller.toB256)
+    (hbalance : B256.ltCheck (entry.getBal sevm.currentTarget) sevm.value = 0)
+    (hpaused : B256.ltCheck sevm.benvStat.time
+      (entry.getStorVal sevm.currentTarget resumeSinceSlot) ≠ 0) :
+    PausedTriggerFailure out := by
+  have hlen : sevm.data.length = 132 := by
+    rw [hdata]
+    exact triggerEmptyAuthorizationCalldata_length refundRecipient exitType
+  obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
+    dispatcher_body_of_prog_run_empty_frame (body := triggerFullWithdrawals dp)
+      hprog hentryStack (by rw [hlen]; decide)
+      (selector_of_triggerEmptyAuthorizationCalldata hdata) (by simp [funcs])
+  have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
+    ⟨dispatchPre.stack, rfl⟩
+  have memDispatch : dispatchPre.memory = Mem.empty := by
+    rw [← dispatchFrame.memory]; exact hentryMemory
+  obtain ⟨bodyPre, bodyRun, pBody, stateBody⟩ :=
+    triggerFullWithdrawals_reaches_afterValidation pDispatch memDispatch hdata
+      dispatchRun
+  have hstate : entry.state = bodyPre.state :=
+    dispatchFrame.state.trans stateBody
+  refine triggerAfterValidation_authorized_paused_reverts pBody ?_ ?_ ?_ bodyRun
+  · rw [← funext (getStor_eq_of_state_eq hstate)]; exact hasRole
+  · rw [← getBal_eq_of_state_eq hstate sevm.currentTarget]; exact hbalance
+  · show B256.ltCheck sevm.benvStat.time
+      (bodyPre.getStorVal sevm.currentTarget resumeSinceSlot) ≠ 0
+    rw [show bodyPre.getStorVal sevm.currentTarget resumeSinceSlot =
+        entry.getStorVal sevm.currentTarget resumeSinceSlot from
+      congrArg (fun s : Stor => s.get resumeSinceSlot)
+        (getStor_eq_of_state_eq hstate sevm.currentTarget).symm]
+    exact hpaused
+
 /-!
-## Public route obligations (intentionally not weakened)
+## What the negatives above do and do not say
 
-For each entry in `roleGatedDispatchEntries`, the remaining proof must:
+Each of the seven entries reverts for a caller without its role, stated from
+the program run, the exact canonical calldata image, an empty entry frame and
+(for the six nonpayable entries) zero value.  None takes a body-walk premise,
+so none can be satisfied by a route that never reaches the guard.
 
-* start with `Prog.RunCompiledTo`, `entry.stack = []`, the exact calldata
-  equality above, and (for the six nonpayable entries) `sevm.value = 0`;
-* obtain the exact dispatcher body from
-  `dispatcher_body_of_prog_run_empty_frame`;
-* peel only the endpoint-owned wrappers (`nonpayable`, `requireStaticArgs`, and
-  `canonicalArg`) before consuming the family-owned arbitrary-out `onlyRole`
-  route; and
-* turn its missing/collision call alternative into `AbsentRoleFailure out`
-  with the exact auxiliary consumers above.
+The conclusions are the exact auxiliary outcomes, not merely "some revert":
+`AbsentRoleFailure` is the shared `onlyRole` disjunction of the AccessControl
+payload and collision refusal, and `TriggerRoleFailure` is the trigger's own
+AccessControl boundary — identified with the shared one by
+`triggerRoleFailure_eq_missingRole`.  Each retains the out-of-gas alternative,
+because the selector reverter's final dynamic-memory read may itself exhaust
+gas; that is a resource fact, not an authorization one.
 
-The intended public declarations, deliberately absent until that route is
-validated, are:
-
-```lean
-pauseFor_absent_role_reverts
-pauseUntil_absent_role_reverts
-resume_absent_role_reverts
-setExitRequestLimit_absent_role_reverts
-grantRole_absent_role_reverts
-revokeRole_absent_role_reverts
-```
-
-Each quantifies over the exact endpoint arguments and concludes
-`AbsentRoleFailure out` from
-`¬ CallerHasRole (Devm.getStor entry sevm.currentTarget) requiredRole
-sevm.caller.toB256`.  No body-walk premise belongs in those signatures.
-
-The payable trigger is a separate concrete source walk.  The intended
-`triggerFullWithdrawals_absent_role_reverts` starts from
-`triggerEmptyAuthorizationCalldata`, reaches `Trigger.afterValidation` through
-the live validator, and concludes `TriggerRoleFailure out`.  The two precedence
-theorems then state (1) absence reaches that role failure regardless of the
-`resumeSinceSlot` projection and (2) an exact `CallerHasRole` record together
-with `timestamp < resumeSince` reaches `PausedTriggerFailure out`, before the
-value/nonempty/quota checks.  These declarations remain absent rather than
-accepting an assumed validator/body route.
+Modifier precedence is pinned for the payable trigger by the two theorems
+above it: absence reaches the role failure *whatever* the pause projection
+says, while an exact role record together with a paused projection reaches
+`PausedTriggerFailure` before any value, array or quota processing.  Both walk
+the live validator rather than assuming it.
 -/
 
 end LidoTriggerableWithdrawalsGateway
