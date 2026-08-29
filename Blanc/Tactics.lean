@@ -214,6 +214,7 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
   | "goal-head:Ninst.Inv" => return head == some `Blanc.Ninst.Inv
   | "goal-head:Rinst.Inv" => return head == some `Blanc.Rinst.Inv
   | "goal-head:Func.Inv" => return head == some `Blanc.Func.Inv
+  | "goal-head:Linst.Inv" => return head == some `Blanc.Linst.Inv
   | "implication-premise:Line.Run" =>
       return proofRecipeHasPremiseHead `Blanc.Line.Run target
   | "implication-premise:Func.Run" =>
@@ -240,6 +241,20 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ninstAllChildRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameDescendants target
+  | "goal-shape:retained-wrapper-trace" =>
+      return proofRecipeContainsName `Blanc.ExecutionTrace.RetainedXlot target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.ProcessMessageTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.ProcessCreateMessageTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.MessageCallTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.TransactionTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.ApplyTransactionsTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.SystemMessageTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.RequestsTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.AppliedBodyTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredBlockTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredHistoryTrace target
+  | "goal-head:StateReplay" => return head == some `Blanc.StateReplay
+  | "goal-head:ReturnsWord" => return head == some `Blanc.ReturnsWord
   | "goal-shape:message-execution-settlement" =>
       return proofRecipeContainsName `Jaune.processMessage target &&
         (proofRecipeContainsName `Jaune.exec target ||

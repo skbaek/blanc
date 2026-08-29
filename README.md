@@ -91,6 +91,20 @@ This repo contains the following files:
   same-frame `ParentPrefix`, exact invocation identity, and compiler-structural
   source cursors. Raw occurrences include terminal errors and work later
   reverted; settlement survival is a separate refinement.
+- [ExecutionTrace.lean](Blanc/ExecutionTrace.lean),
+  [ExecutionHistory.lean](Blanc/ExecutionHistory.lean), and
+  [ExecutionPath.lean](Blanc/ExecutionPath.lean): exact retained wrapper
+  carriers from messages through configured histories, plus stable paths to
+  settlement-retained frames.
+- [ExecutionStateTrace.lean](Blanc/ExecutionStateTrace.lean) and its
+  `ExecutionMessageStateTrace`, `ExecutionTransactionStateTrace`,
+  `ExecutionBodyStateTrace`, and `ExecutionHistoryStateTrace` layers: ordered,
+  provenance-carrying world-state replays across those retained wrappers.
+- `ExecutionMessageEffects`, `ExecutionTransactionEffects`,
+  `ExecutionBodyEffects`, and `ExecutionHistoryEffects`: contract-neutral
+  storage, balance, and `ContractSpec` invariant transports for each retained
+  wrapper layer. The [common API registry](docs/COMMON_API.md) is the
+  need-first index for the carriers, chronologies, and effect families.
 - [CycleWriteFree.lean](Blanc/CycleWriteFree.lean): a total finite-component
   certificate and arbitrary-outcome theorem for **same-frame source-level
   SSTORE-occurrence freedom**. It scans selected bodies structurally, treats

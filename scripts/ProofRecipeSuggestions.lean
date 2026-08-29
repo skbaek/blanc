@@ -2,6 +2,7 @@ import Blanc.ForwardCall
 import Blanc.RootedExecution
 import Blanc.MessageExecution
 import Blanc.ExecutionTerminal
+import Blanc.ExecutionHistoryStateTrace
 
 namespace Blanc
 
@@ -40,6 +41,12 @@ example {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func} :
 -- EXPECT: function-observation-invariance
 example {f : Func} (inv : Func.Inv Devm.getBal Devm.getBal f) :
     Func.Inv Devm.getBal Devm.getBal f := by
+  blanc_suggest
+  exact inv
+
+-- EXPECT: function-observation-invariance
+example (inv : Linst.Inv Devm.getCode Devm.getCode Linst.stop) :
+    Linst.Inv Devm.getCode Devm.getCode Linst.stop := by
   blanc_suggest
   exact inv
 
@@ -144,5 +151,25 @@ example {bytes : Bytes} {size : Nat} (h : bytes.length = size) :
     bytes.sliceD 0 size 0 = bytes := by
   blanc_suggest
   exact Bytes.sliceD_zero_length h
+
+-- EXPECT: retained-wrapper-trace
+example {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : Nonempty (ExecutionTrace.MessageCallTrace msg state out)) :
+    Nonempty (ExecutionTrace.MessageCallTrace msg state out) := by
+  blanc_suggest
+  exact trace
+
+-- EXPECT: retained-state-replay
+example {Origin : Type} {pre post : State}
+    {events : List (StateTransition Origin)}
+    (replay : StateReplay pre events post) : StateReplay pre events post := by
+  blanc_suggest
+  exact replay
+
+-- EXPECT: one-word-source-return
+example (word : B256) (devm : Devm) (observed : ReturnsWord word devm) :
+    ReturnsWord word devm := by
+  blanc_suggest
+  exact observed
 
 end Blanc

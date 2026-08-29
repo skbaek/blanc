@@ -46,9 +46,9 @@ def recipes : List Recipe := [
     id := "stack-prefix-transport"
     status := "active"
     triggers := ["goal-shape:stack-prefix-line-run"]
-    preferredPath := "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals."
-    symbols := ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref"]
-    boundary := "`line_prefix` supports a finite instruction set and refuses instructions without a registered case."
+    preferredPath := "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL or DIV step, use `prefix_of_mul` or `prefix_of_div` directly because those instructions do not have a `line_prefix` arm."
+    symbols := ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref", "declaration:prefix_of_mul", "declaration:prefix_of_div"]
+    boundary := "`line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct MUL/DIV lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried."
   },
   {
     id := "state-context-cleanup"
@@ -69,10 +69,10 @@ def recipes : List Recipe := [
   {
     id := "function-observation-invariance"
     status := "active"
-    triggers := ["goal-head:Func.Inv"]
-    preferredPath := "Use `func_inv` to assemble the function invariant from registered line and terminal invariants."
-    symbols := ["tactic:func_inv", "declaration:Func.Inv"]
-    boundary := "It deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry."
+    triggers := ["goal-head:Func.Inv", "goal-head:Linst.Inv"]
+    preferredPath := "For `Func.Inv`, use `func_inv` to assemble the function invariant from registered line and terminal invariants. For a terminal `Linst.Inv`, use the registered instance directly with `exact Linst.Hinv.inv`."
+    symbols := ["tactic:func_inv", "declaration:Func.Inv", "declaration:Linst.Inv", "declaration:Linst.Hinv"]
+    boundary := "`func_inv` deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry. A missing terminal instance belongs in the lowest common shared module, not in a contract consumer."
   },
   {
     id := "call-boundary-outcomes"
@@ -177,6 +177,30 @@ def recipes : List Recipe := [
     preferredPath := "When a padded `sliceD` begins at zero and its requested width is the source length, rewrite with `Bytes.sliceD_zero_length` instead of reproving the take/drop normalization locally."
     symbols := ["module:Blanc/CommonProofs.lean", "declaration:Bytes.sliceD_zero_length"]
     boundary := "The theorem needs exact equality between source length and requested width. It does not characterize nonzero offsets or shorter/longer windows."
+  },
+  {
+    id := "retained-wrapper-trace"
+    status := "active"
+    triggers := ["goal-shape:retained-wrapper-trace"]
+    preferredPath := "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state."
+    symbols := ["module:Blanc/ExecutionTrace.lean", "module:Blanc/ExecutionHistory.lean", "declaration:ExecutionTrace.RetainedXlot", "declaration:ExecutionTrace.exists_retainedXlot_of_filled", "declaration:ExecutionTrace.ProcessMessageTrace", "declaration:ExecutionTrace.exists_processMessageTrace", "declaration:ExecutionTrace.ProcessCreateMessageTrace", "declaration:ExecutionTrace.exists_processCreateMessageTrace", "declaration:ExecutionTrace.MessageCallTrace", "declaration:ExecutionTrace.exists_messageCallTrace", "declaration:ExecutionTrace.TransactionTrace", "declaration:ExecutionTrace.exists_transactionTrace", "declaration:ExecutionTrace.ApplyTransactionsTrace", "declaration:ExecutionTrace.exists_applyTransactionsTrace", "declaration:ExecutionTrace.SystemMessageTrace", "declaration:ExecutionTrace.exists_systemMessageTrace", "declaration:ExecutionTrace.RequestsTrace", "declaration:ExecutionTrace.exists_requestsTrace", "declaration:ExecutionTrace.AppliedBodyTrace", "declaration:ExecutionTrace.exists_appliedBodyTrace", "declaration:ExecutionTrace.ConfiguredBlockTrace", "declaration:ExecutionTrace.exists_configuredBlockTrace_of_transition", "declaration:ExecutionTrace.ConfiguredHistoryTrace", "declaration:ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing"]
+    boundary := "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay."
+  },
+  {
+    id := "retained-state-replay"
+    status := "active"
+    triggers := ["goal-head:StateReplay"]
+    preferredPath := "Build the chronology at the narrowest retained layer and finish with its `stateReplay` theorem. Use `Exec.committedStateReplay` for a recursive execution, then the message, transaction, body, block, or history chronology module to retain wrapper boundaries in their exact execution order. Compose or relabel an existing replay with `StateReplay.append`, `StateReplay.mapOrigin`, and `StateTransition.mapOrigin`."
+    symbols := ["module:Blanc/ExecutionStateTrace.lean", "module:Blanc/ExecutionMessageStateTrace.lean", "module:Blanc/ExecutionTransactionStateTrace.lean", "module:Blanc/ExecutionBodyStateTrace.lean", "module:Blanc/ExecutionHistoryStateTrace.lean", "declaration:StateTransition", "declaration:StateReplay", "declaration:StateReplay.append", "declaration:StateTransition.mapOrigin", "declaration:StateReplay.mapOrigin", "declaration:Exec.committedStateReplay", "declaration:ExecutionTrace.MessageCallTrace.stateReplay", "declaration:ExecutionTrace.TransactionStateChronology.stateReplay", "declaration:ExecutionTrace.AppliedBodyStateChronology.stateReplay", "declaration:ExecutionTrace.ConfiguredHistoryStateChronology.stateReplay"]
+    boundary := "A `StateReplay` proves endpoint continuity and preserves exact provenance; it does not classify a transition as a contract deposit, withdrawal, or attack step. Apply that interpretation only in the contract-owned layer above the generic chronology."
+  },
+  {
+    id := "one-word-source-return"
+    status := "active"
+    triggers := ["goal-head:ReturnsWord"]
+    preferredPath := "For the source fragment `mstoreAt 0 +++ returnMemoryRange 0 32`, use `of_storeReturnWord` when a `Mem.Wf`/`Mem.Reads` image is already available, or `returnsWord_of_storeReturn` when no memory side condition is in context. Both prove `ReturnsWord` from the known stack head and preserve code."
+    symbols := ["module:Blanc/Ladder.lean", "declaration:ReturnsWord", "declaration:of_storeReturnWord", "declaration:returnsWord_of_storeReturn"]
+    boundary := "This is the source-level one-word ABI observation. For a compiled terminal walk use `Func.runCompiledTo_ret_word_at_zero`; for other offsets, sizes, or payloads use the general return APIs."
   },
 ]
 
