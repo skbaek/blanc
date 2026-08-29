@@ -294,6 +294,8 @@ structure AcceptedPayoutTrace
   caller : childMsg.caller = sevm.currentTarget
   value : childMsg.value = paid
   target : childMsg.currentTarget = sevm.caller.toB256.toAdr
+  targetNe : childMsg.currentTarget ≠ sevm.currentTarget
+  depth : (initSevm (childMsg.withBenv entry)).depth < sevm.depth
   entryTransfer : childMsg.benvAfterTransfer = .ok entry
   entryStor : entry.state.getStor sevm.currentTarget =
     callPre.state.getStor sevm.currentTarget
@@ -333,6 +335,9 @@ theorem AcceptedPayout.exists_trace
   have hvalue : childMsg.value = paid := rfl
   have htarget :
       childMsg.currentTarget = sevm.caller.toB256.toAdr := rfl
+  have htargetNe : childMsg.currentTarget ≠ sevm.currentTarget := by
+    rw [htarget]
+    exact recipient_ne
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
   unfold FrameBody at hbody
   rcases htransfer : childMsg.benvAfterTransfer with error | entry <;>
@@ -346,6 +351,10 @@ theorem AcceptedPayout.exists_trace
         entry.state = debited.addBal sevm.caller.toB256.toAdr paid := by
       rw [hentry, htarget, hvalue]
       rfl
+    have hchildDepth :
+        (initSevm (childMsg.withBenv entry)).depth < sevm.depth := by
+      change sevm.depth - 1 < sevm.depth
+      omega
     have fields := of_state_transfer_fields
       (callee := sevm.caller.toB256.toAdr) hsub
     have hentryStor :
@@ -359,7 +368,7 @@ theorem AcceptedPayout.exists_trace
       rw [hentryState]
       exact fields.2.2.2.2 recipient_ne
     exact ⟨⟨childMsg, entry, child, trace, hclean, hmessageState,
-      hshouldTransfer, hcaller, hvalue, htarget, htransfer,
+      hshouldTransfer, hcaller, hvalue, htarget, htargetNe, hchildDepth, htransfer,
       hentryStor, hentryBalance, hcallPostState⟩⟩
 
 /-- The settled prefix and the accepted child entry meet at the exact paid
@@ -906,6 +915,31 @@ theorem exists_path {o : Nat} {pre post : AccountingSnapshot}
       · simpa using hlast
 
 end ProrataAccountingReplay
+
+/-- Prefixing the recursively replayed callback with its realized withdrawal
+step yields the complete accounting replay of the enclosing PRORATA frame. -/
+theorem RealizedWithdrawal.accountingReplay
+    {sevm : Sevm} {pre post : Devm}
+    (withdrawal : RealizedWithdrawal sevm pre post)
+    (provenance : ProrataAccountingProvenance)
+    (childReplay : ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState sevm.currentTarget
+          withdrawal.payout.entry.state)
+        steps
+        (AccountingSnapshot.ofState sevm.currentTarget
+          withdrawal.payout.child.state)) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+          pre.state)
+        steps (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+  rcases childReplay with ⟨steps, replay⟩
+  have combined :=
+    (ProrataAccountingReplay.singleton provenance withdrawal.accounting).append
+      replay
+  rw [withdrawal.postSnapshot]
+  exact ⟨_, combined⟩
 
 /-- Every successful nonrecursive instruction in a foreign frame realizes
 exactly the projected PRORATA accounting change: either a positive external

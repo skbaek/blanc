@@ -65,6 +65,30 @@ private theorem processMessage_clean_input
           rw [herror] at hclean
           simp at hclean
 
+/-- A clean successful message settlement retains a clean successful raw
+input and changes no world state after that input.  This is the common
+settlement seam for consumers that need the exact retained endpoint rather
+than merely the fact that the frame commits. -/
+theorem ProcessMessage.clean_input_state_of_settle
+    {msg : Msg}
+    {input : Except (EvmError × State × AdrSet × Tra) Devm}
+    {post : Devm}
+    (hresult : processMessage.settle msg input = .ok post)
+    (hclean : post.error.isSome = false) :
+    ∃ raw : Devm, input = .ok raw ∧ raw.error.isSome = false ∧
+      post.state = raw.state := by
+  have postNone : post.error.isNone = true := by
+    cases herror : post.error <;> simp_all
+  rcases processMessage_clean_input hresult postNone with
+    ⟨raw, rfl, rawNone⟩
+  have rawSome : raw.error.isSome = false := by
+    cases herror : raw.error <;> simp_all
+  refine ⟨raw, rfl, rawSome, ?_⟩
+  unfold processMessage.settle at hresult
+  dsimp only [bind, Except.bind] at hresult
+  rw [if_neg (by simp [rawSome])] at hresult
+  exact congrArg Devm.state (Except.ok.inj hresult).symm
+
 private theorem processCreateMessage_clean_input
     {msg : Msg}
     {input : Except (EvmError × State × AdrSet × Tra) Devm}

@@ -2793,7 +2793,38 @@ theorem Linst.getStor_eq
       exact (preToOne.trans (charged.trans
         (transferredEq.trans postEq))).symm
 
-/-! ## Pointwise balance monotonicity at foreign execution boundaries -/
+/-! ## Clean childless settlement and pointwise balance monotonicity -/
+
+/-- A clean no-slot message with a successful transfer ends at that exact
+entry world.  Empty interpreted slots therefore hide no later world-state
+change; the only executable no-slot branch is a synchronous precompile. -/
+theorem ProcessMessage.none_ok_state_eq_entry_of_clean
+    {msg : Msg} {entry : Benv} {post : Devm}
+    (run : ProcessMessage msg .none (.ok post))
+    (transfer : msg.benvAfterTransfer = .ok entry)
+    (clean : post.error.isSome = false) :
+    post.state = entry.state := by
+  obtain ⟨result, body, settle⟩ := ProcessMessage.iff_body.mp run
+  rcases ProcessMessage.clean_input_state_of_settle settle.symm clean with
+    ⟨raw, result_eq, _, postState⟩
+  unfold FrameBody at body
+  rw [transfer, result_eq] at body
+  change ExecuteCode (msg.withBenv entry) .none (.ok raw) at body
+  unfold ExecuteCode at body
+  cases entered : executeCode.enter (msg.withBenv entry) with
+  | inl evm =>
+      rw [entered] at body
+      rcases body with ⟨execution, slot, _⟩
+      cases slot
+  | inr execution =>
+      rw [entered] at body
+      rcases executeCode.enter_inr entered with ⟨address, execution_eq⟩
+      have handled : executeCode.handleError
+          (executePrecomp (initEvm (msg.withBenv entry)) address) =
+          .ok raw := by
+        rw [← execution_eq, ← body.2]
+      exact postState.trans
+        (executeCode.handle_precompile_ok_state handled)
 
 /-- A successful call/message with no interpreter child cannot lower the
 balance of an address distinct from every actual value-transfer caller. -/
