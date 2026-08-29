@@ -76,7 +76,33 @@ OK	1.346	Blanc/ExecutionSettlement.lean
 # in 941.7 s versus the 772.1 s committed total, so the run is its own host
 # control. No existing row is touched; the other admitted rows are
 # `Blanc/MessageExecution.lean` and `Blanc/RootedExecution.lean` below.
+#
+# 2026-08-30 prorata-etude-v1 additions-only admission at candidate commit
+# dc512bcdac4fceecf2fe7bc902e42a426c178803. One `scripts/check-elab.sh --calibrate` run measured all 205 modules
+# outright in 881.5 s against the 776.0 s committed total; the gate drew no
+# control because every module carrying a baseline row was measured and
+# compared directly, so the run is its own host control. The host was sampled
+# immediately before and after and was identical (79% free, swap 1882 MiB,
+# no Lean server resident), so the timing is uncontended. No existing row is
+# touched. The 34 new rows are this goal's own modules: 22 `Prorata*` and 12
+# contract-neutral `Execution*` modules hoisted under the user's 2026-08-30
+# shared-hoist authority. The goal's admission class 2 names "the new
+# `Prorata*` modules"; extending it to the shared modules this goal itself
+# created is recorded here and in the completion report rather than left
+# silent.
+OK	1.224	Blanc/ExecutionBodyEffects.lean
+OK	1.272	Blanc/ExecutionBodyStateTrace.lean
+OK	1.190	Blanc/ExecutionHistory.lean
+OK	1.182	Blanc/ExecutionHistoryEffects.lean
+OK	1.193	Blanc/ExecutionHistoryStateTrace.lean
+OK	1.344	Blanc/ExecutionMessageEffects.lean
+OK	1.198	Blanc/ExecutionMessageStateTrace.lean
+OK	1.394	Blanc/ExecutionPath.lean
+OK	1.532	Blanc/ExecutionStateTrace.lean
 OK	1.253	Blanc/ExecutionTerminal.lean
+OK	1.537	Blanc/ExecutionTrace.lean
+OK	1.237	Blanc/ExecutionTransactionEffects.lean
+OK	1.251	Blanc/ExecutionTransactionStateTrace.lean
 OK	1.834	Blanc/FlashSpec.lean
 OK	2.816	Blanc/Fmint.lean
 OK	4.277	Blanc/FmintCode.lean
@@ -146,6 +172,28 @@ OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
 OK	1.291	Blanc/MessageExecution.lean
 OK	1.117	Blanc/PinnedPauseTarget.lean
 OK	0.594	Blanc/ProofRecipesGenerated.lean
+OK	1.670	Blanc/Prorata.lean
+OK	1.393	Blanc/ProrataAccounting.lean
+OK	1.216	Blanc/ProrataAccountingBody.lean
+OK	1.371	Blanc/ProrataAccountingExec.lean
+OK	1.222	Blanc/ProrataAccountingHistory.lean
+OK	1.200	Blanc/ProrataAccountingTransaction.lean
+OK	1.311	Blanc/ProrataArithmetic.lean
+OK	1.786	Blanc/ProrataAttackModel.lean
+OK	1.602	Blanc/ProrataAttackPath.lean
+OK	1.346	Blanc/ProrataAttackTrace.lean
+OK	1.856	Blanc/ProrataCode.lean
+OK	1.183	Blanc/ProrataCompiledEffects.lean
+OK	1.166	Blanc/ProrataConsistency.lean
+OK	1.161	Blanc/ProrataDeploymentRoot.lean
+OK	1.455	Blanc/ProrataDeposit.lean
+OK	2.573	Blanc/ProrataFunctional.lean
+OK	1.240	Blanc/ProrataInvariant.lean
+OK	1.211	Blanc/ProrataPreservation.lean
+OK	1.489	Blanc/ProrataRead.lean
+OK	1.459	Blanc/ProrataRealizedAccounting.lean
+OK	1.495	Blanc/ProrataSound.lean
+OK	1.597	Blanc/ProrataWithdraw.lean
 OK	1.356	Blanc/ProxyPairAuthority.lean
 OK	3.016	Blanc/ProxyPairCorrespondence.lean
 OK	4.978	Blanc/ProxyPairExecution.lean
