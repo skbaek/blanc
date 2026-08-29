@@ -82,6 +82,34 @@ theorem retainedSystemMessageAccountingReplay
     retainedMessageCallAccountingReplay trace.message ready blockIndex none
   rwa [systemTransactionMessage_benv_state] at replay
 
+/-- Rung R5: the two checked request-system calls at the tail of `applyBody`
+realize one PRORATA accounting replay.  Both are rung R4, composed at the
+world the first one leaves; each system target's disequality from
+`systemAddress` is settled on concrete addresses. -/
+theorem retainedRequestsAccountingReplay
+    {ca : Adr} {benv : Benv} {bout : BlockOutput}
+    {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (inv : prorataSpec.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts)
+    (blockIndex : Nat) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca benv.state) steps
+        (AccountingSnapshot.ofState ca state) := by
+  obtain ⟨withdrawalSteps, withdrawalReplay⟩ :=
+    retainedSystemMessageAccountingReplay trace.withdrawal inv notCreated
+      (by decide) blockIndex
+  have withdrawalInv : prorataSpec.BenvInv ca
+      (benv.withState trace.withdrawalState) :=
+    trace.withdrawal.benvInv (prorataSpec_preserves ca) ⟨inv, notCreated⟩
+  obtain ⟨consolidationSteps, consolidationReplay⟩ :=
+    retainedSystemMessageAccountingReplay trace.consolidation
+      withdrawalInv.state withdrawalInv.ca (by decide) blockIndex
+  refine ⟨withdrawalSteps ++ consolidationSteps, ?_⟩
+  rw [RequestsTrace.state_eq_consolidationState trace]
+  exact withdrawalReplay.append consolidationReplay
+
 end Prorata
 
 end Blanc
