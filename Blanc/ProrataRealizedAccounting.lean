@@ -170,6 +170,54 @@ theorem LedgerMove.of_actor_eq {kind : ProrataAccountingKind}
     LedgerMove kind actor' pre post := by
   rw [eq]; exact move
 
+/-- No step moves the share row of anyone but its own recorded actor.
+
+This is the fact the actor overlay is blocked on, and it holds uniformly
+across all four classes: an attacker's withdrawal cannot burn another
+holder's shares, and a step with no recorded actor moves no row at all. -/
+theorem LedgerMove.eq_of_ne_actor {kind : ProrataAccountingKind}
+    {actor : Option Adr} {pre post : Adr → B256} {y : Adr}
+    (move : LedgerMove kind actor pre post) (ne : actor ≠ some y) :
+    post y = pre y := by
+  cases kind with
+  | deposit amount minted =>
+      obtain ⟨x, hactor, -, hother⟩ := move
+      exact hother y fun hy => ne (hactor.trans (congrArg some hy.symm))
+  | withdraw shares paid =>
+      obtain ⟨x, hactor, -, -, hother⟩ := move
+      exact hother y fun hy => ne (hactor.trans (congrArg some hy.symm))
+  | externalCredit amount => exact congrFun move y
+  | silent => exact congrFun move y
+
+/-- A deposit credits exactly the depositing actor's own ledger row. -/
+theorem LedgerMove.deposit_row {amount minted : Nat} {actor : Option Adr}
+    {pre post : Adr → B256} {x : Adr}
+    (move : LedgerMove (.deposit amount minted) actor pre post)
+    (hactor : actor = some x) :
+    (post x).toNat = (pre x).toNat + minted := by
+  obtain ⟨x', hx, hrow, -⟩ := move
+  obtain rfl := Option.some.inj (hactor.symm.trans hx)
+  exact hrow
+
+/-- A withdrawal covers its burn from the withdrawing actor's own row. -/
+theorem LedgerMove.withdraw_cover {shares paid : Nat} {actor : Option Adr}
+    {pre post : Adr → B256} {x : Adr}
+    (move : LedgerMove (.withdraw shares paid) actor pre post)
+    (hactor : actor = some x) : shares ≤ (pre x).toNat := by
+  obtain ⟨x', hx, hle, -, -⟩ := move
+  obtain rfl := Option.some.inj (hactor.symm.trans hx)
+  exact hle
+
+/-- A withdrawal debits exactly the withdrawing actor's own ledger row. -/
+theorem LedgerMove.withdraw_row {shares paid : Nat} {actor : Option Adr}
+    {pre post : Adr → B256} {x : Adr}
+    (move : LedgerMove (.withdraw shares paid) actor pre post)
+    (hactor : actor = some x) :
+    (post x).toNat = (pre x).toNat - shares := by
+  obtain ⟨x', hx, -, hrow, -⟩ := move
+  obtain rfl := Option.some.inj (hactor.symm.trans hx)
+  exact hrow
+
 /-- One realized accounting step: the frozen classification of the boundary
 together with the exact ledger movement that produced it. -/
 structure RealizedEffect (o : Nat) (kind : ProrataAccountingKind)

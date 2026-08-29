@@ -148,6 +148,30 @@ Use `Devm.StateWriteFrame` and its reflexive/transitive/composition lemmas in
 `Blanc/CommonProofs.lean`, then inspect higher-level relation combinators in
 [`Blanc/Ladder.lean`](../Blanc/Ladder.lean).
 
+If the fact is about which holder's balance moved rather than how states
+compose, continue to S4.
+
+### S4. I need the address-shaped storage rows a token ledger sums over
+
+`Stor.rest` in [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean) is the
+holder-keyed view of persistent storage — exactly the domain `balSum` sums
+over — and it is the right vocabulary for "who moved, and by how much".  Its
+laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
+
+- `Stor.rest_set_self` and `Stor.rest_set_ne` are read-after-write on one row:
+  a holder-keyed write is visible at its own row and nowhere else.  Reach for
+  these when a proof books an exact per-row movement of its own.
+- `Stor.increase_set` and `Stor.decrease_set` package the same write as the
+  `Increase` / `Decrease` relations the `Σ` lemmas consume; `Stor.AgreeOffAdr`
+  is the complementary half, saying nothing outside the address-shaped keys
+  moved.
+- `le_sum` bounds one row by the sum, and `add_le_sum_of_ne` bounds two
+  distinct rows together — the two facts needed to turn "the actor's own row
+  covers the move" into "the rest of the ledger is untouched and still fits".
+- A write at a fixed non-address slot is invisible here; each contract states
+  that separately (`Stor.rest_set_supplySlot`, `Stor.rest_set_prorataSupplySlot`)
+  because the slot is the contract's own.
+
 ## M — bytes and memory
 
 ### M1. The goal is a `sliceD` normalization
