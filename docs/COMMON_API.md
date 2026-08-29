@@ -168,6 +168,11 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
 - `le_sum` bounds one row by the sum, and `add_le_sum_of_ne` bounds two
   distinct rows together — the two facts needed to turn "the actor's own row
   covers the move" into "the rest of the ledger is untouched and still fits".
+- `sum_add_assoc` and `sum_sub_assoc` move `Σ` across an `Increase`/`Decrease`.
+  `sum_eq_add_of_row_add` and `sum_eq_sub_of_row_sub` are their `Nat`-level
+  readings, for a caller holding an exact per-row `Nat` equation plus "no other
+  row moved" instead of a `B256`-valued relation; neither asks for an overflow
+  side condition, because the post row is itself a word.
 - A write at a fixed non-address slot is invisible here; each contract states
   that separately (`Stor.rest_set_supplySlot`, `Stor.rest_set_prorataSupplySlot`)
   because the slot is the contract's own.

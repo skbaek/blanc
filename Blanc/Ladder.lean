@@ -222,6 +222,52 @@ lemma sum_add_assoc {k v} {f g : Adr → B256}
     nof
     (Nat.succ_le_of_lt <| Adr.toNat_lt_size _)
 
+/-- One row rises by exactly `m` and no other row moves, so `Σ` rises by `m`.
+
+The `Nat`-level reading of `sum_add_assoc`, for a caller holding an exact
+per-row `Nat` equation rather than a `B256`-valued `Increase`.  No overflow
+side condition is asked for: the post row is itself a word, so it witnesses
+that the rise fits. -/
+lemma sum_eq_add_of_row_add {f g : Adr → B256} {x : Adr} {m : Nat}
+    (row : (g x).toNat = (f x).toNat + m)
+    (rest : ∀ b : Adr, b ≠ x → g b = f b) :
+    sum g = sum f + m := by
+  have g_lt := B256.toNat_lt (g x)
+  have word : (Nat.toB256 m).toNat = m :=
+    B256.toNat_toB256_of_lt (by omega)
+  have nof : B256.Nof (f x) (Nat.toB256 m) := by
+    show (f x).toNat + (Nat.toB256 m).toNat < 2 ^ 256
+    rw [word, ← row]; exact g_lt
+  have inc : Increase x (Nat.toB256 m) f g := by
+    intro b
+    refine ⟨?_, fun hb => (rest b (Ne.symm hb)).symm⟩
+    rintro rfl
+    exact B256.toNat_inj _ _
+      (by rw [B256.toNat_add_eq_of_nof _ _ nof, word, row])
+  have := sum_add_assoc inc nof
+  omega
+
+/-- One row falls by exactly `m` from a row that covers it and no other row
+moves, so `Σ` falls by `m`: the `Nat`-level reading of `sum_sub_assoc`. -/
+lemma sum_eq_sub_of_row_sub {f g : Adr → B256} {x : Adr} {m : Nat}
+    (cover : m ≤ (f x).toNat)
+    (row : (g x).toNat = (f x).toNat - m)
+    (rest : ∀ b : Adr, b ≠ x → g b = f b) :
+    sum g = sum f - m := by
+  have f_lt := B256.toNat_lt (f x)
+  have word : (Nat.toB256 m).toNat = m :=
+    B256.toNat_toB256_of_lt (by omega)
+  have le : Nat.toB256 m ≤ f x := by
+    rw [B256.le_iff_toNat_le_toNat, word]; exact cover
+  have dec : Decrease x (Nat.toB256 m) f g := by
+    intro b
+    refine ⟨?_, fun hb => (rest b (Ne.symm hb)).symm⟩
+    rintro rfl
+    exact B256.toNat_inj _ _
+      (by rw [B256.toNat_sub_eq_of_le _ _ le, word, row])
+  have := sum_sub_assoc dec le
+  omega
+
 lemma add_le_sumBelow (f : Adr → B256) {x y : Adr} {n}
     (x_lt : x.toNat < y.toNat) (y_lt : y.toNat < n) :
     (f x).toNat + (f y).toNat ≤ sumBelow f n := by
