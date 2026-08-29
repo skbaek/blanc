@@ -653,6 +653,48 @@ lemma Func.runCompiledTo_mstore_step {fs : List Func} {sevm : Sevm} {devm : Devm
       [⟨i.toNat, 32⟩]) h_stk rfl (by omega) rfl) ?_
   exact h_next _ _ rfl (by omega)
 
+/-- `mstoreAt` over an abstract memory.  The written image remains behind the
+continuation boundary instead of becoming a concrete write tower in every
+later compiled state. -/
+lemma Func.runCompiledTo_mstoreAt
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {stack : List B256} {value word : B256}
+    {G pushGas extGas : Nat} {body : Func} {ex : Execution}
+    (hpushCost : pushCost (word * 32).toBytes.sig = pushGas)
+    (hroom : stack.length < 1023)
+    (hext : ∀ (S : List B256) (G' : Nat),
+      (base.setMach ⟨S, memory, G'⟩).extCost
+        [⟨(word * 32).toNat, 32⟩] = extGas)
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨stack, memory.write (word * 32).toNat value.toBytes, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨value :: stack, memory, G + pushGas + gVerylow + extGas⟩)
+      (mstoreAt word +++ body) ex := by
+  unfold mstoreAt
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256
+      (G := G + gVerylow + extGas) hpushCost
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by
+        simp only [Devm.stack_setMach, List.length_cons]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.runCompiledTo_mstore_step
+    (M := memory) (c := gVerylow + extGas) rfl rfl ?_ ?_ ?_
+  · rw [hext]
+  · simp only [Devm.gasLeft_setMach]
+    omega
+  · intro memory' G' hmemory hgas
+    simp only [Devm.gasLeft_setMach] at hgas
+    subst memory'
+    have hG' : G' = G := by omega
+    subst G'
+    simpa only [Devm.setMach_setMach, prepend] using hbody
+
 /-- `LOG n` as a walk step.  The emitted entry, the untouched storage and
 accessed set, and the gas account arrive in the continuation. -/
 lemma Func.runCompiledTo_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}

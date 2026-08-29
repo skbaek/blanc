@@ -119,6 +119,7 @@ coordinates for downstream event staging. -/
 structure DepositDecodedMemoryCarrier
     (memory : Mem) (data : Bytes) : Type where
   image : Bytes
+  image_eq : image = depositDecodedImage data
   wf : Mem.Wf memory
   reads : Mem.Reads memory image
   size_eq : memory.size = 192
@@ -338,7 +339,7 @@ def depositDecodedMemory_carrier (data : Bytes) :
       rw [B256.length_toBytes]]
     exact Bytes.sliceD_writeAt _ _ _
   change DepositDecodedMemoryCarrier M6 data
-  exact ⟨I6, hwf6, hreads6, hsize6, hlen6,
+  exact ⟨I6, rfl, hwf6, hreads6, hsize6, hlen6,
     hoffset0, hoffset1, hoffset2, hlength0, hlength1, hlength2⟩
 
 end Blanc.BeaconDeposit

@@ -204,47 +204,6 @@ private theorem validateDynamicTailAfterArg_success_runCompiledTo
     simpa only [show G + 143 - 28 = G + 115 by omega] using hlengthWordRun
   simpa only [validateDynamicTailAfterArg] using hoffsetRun
 
-/-- One `mstoreAt` step over an abstract memory.  Keeping the threaded memory
-abstract prevents the compiled-walk term from carrying a concrete write tower. -/
-private theorem mstoreAt_success_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    {memory : Mem} {stack : List B256} {value word : B256}
-    {G pushGas extGas : Nat} {body : Func} {ex : Execution}
-    (hpushCost : pushCost (word * 32).toBytes.sig = pushGas)
-    (hroom : stack.length < 1023)
-    (hext : ∀ (S : List B256) (G' : Nat),
-      (base.setMach ⟨S, memory, G'⟩).extCost
-        [⟨(word * 32).toNat, 32⟩] = extGas)
-    (hbody : Func.RunCompiledTo fs sevm
-      (base.setMach
-        ⟨stack, memory.write (word * 32).toNat value.toBytes, G⟩)
-      body ex) :
-    Func.RunCompiledTo fs sevm
-      (base.setMach
-        ⟨value :: stack, memory, G + pushGas + gVerylow + extGas⟩)
-      (mstoreAt word +++ body) ex := by
-  unfold mstoreAt
-  refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
-      (G := G + gVerylow + extGas) hpushCost
-      (by simp only [Devm.gasLeft_setMach]; omega)
-      (by
-        simp only [Devm.stack_setMach, List.length_cons]
-        omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
-    Devm.memory_setMach]
-  refine Func.runCompiledTo_mstore_step
-    (M := memory) (c := gVerylow + extGas) rfl rfl ?_ ?_ ?_
-  · rw [hext]
-  · simp only [Devm.gasLeft_setMach]
-    omega
-  · intro memory' G' hmemory hgas
-    simp only [Devm.gasLeft_setMach] at hgas
-    subst memory'
-    have hG' : G' = G := by omega
-    subst G'
-    simpa only [Devm.setMach_setMach, prepend] using hbody
-
 private def depositDecodedTail0Memory (data : Bytes) : Mem :=
   (Mem.empty.write 96 (depositLengthWord data 0).toBytes)
     |>.write 0 (depositOffsetWord data 0).toBytes
@@ -364,7 +323,7 @@ private theorem depositTail2OffsetStore_success_runCompiledTo
     rw [show ((2 : B256) * 32).toNat = 64 by decide +kernel,
       depositDecodedTail2Memory_eq]
     exact hbody
-  have hstore := mstoreAt_success_runCompiledTo
+  have hstore := Func.runCompiledTo_mstoreAt
     (base := base) (memory := depositDecodedTail2LengthMemory sevm.data)
     (stack := []) (value := depositOffsetWord sevm.data 2)
     (word := 2) (G := G) (pushGas := 3) (extGas := 0)
@@ -406,7 +365,7 @@ private theorem depositTail2Stores_success_runCompiledTo
       (mstoreAt 2 +++ body) ex := by
     rw [show ((5 : B256) * 32).toNat = 160 by decide +kernel]
     simpa only [depositDecodedTail2LengthMemory] using hoffsetRun
-  have hstore := mstoreAt_success_runCompiledTo
+  have hstore := Func.runCompiledTo_mstoreAt
     (base := base) (memory := depositDecodedTail1Memory sevm.data)
     (stack := [depositOffsetWord sevm.data 2])
     (value := depositLengthWord sevm.data 2)
