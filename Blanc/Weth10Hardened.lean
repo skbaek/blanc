@@ -288,10 +288,10 @@ theorem MessageCallTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
         MessageCallTrace.flowActions]
       split
       · exact .nil dp ca
-      · exact trace.retained.ledgerMirrors dp ca
+      · exact RetainedXlot.ledgerMirrors dp ca trace.retained
   | callRun htarget delegated refund hdelegation execMsg hexecMsg evm
       hcore trace hresult =>
-      exact trace.retained.ledgerMirrors dp ca
+      exact RetainedXlot.ledgerMirrors dp ca trace.retained
 
 theorem TransactionTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
@@ -299,7 +299,7 @@ theorem TransactionTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
     (trace : TransactionTrace benv bout tx index state bout') :
     LedgerMirrors dp ca (trace.attributionStream dp ca)
       (trace.flowActions dp ca) :=
-  trace.message.ledgerMirrors dp ca
+  MessageCallTrace.ledgerMirrors dp ca trace.message
 
 theorem ApplyTransactionsTrace.ledgerMirrors (dp : DeployParams) (ca : Adr) :
     {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
@@ -309,7 +309,7 @@ theorem ApplyTransactionsTrace.ledgerMirrors (dp : DeployParams) (ca : Adr) :
       (trace.flowActions dp ca)
   | _, _, _, _, _, .nil _ _ => .nil dp ca
   | _, _, _, _, _, .cons head tail =>
-      (head.ledgerMirrors dp ca).append
+      (TransactionTrace.ledgerMirrors dp ca head).append
         (ApplyTransactionsTrace.ledgerMirrors dp ca tail)
 
 theorem SystemMessageTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
@@ -318,15 +318,15 @@ theorem SystemMessageTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
     (trace : SystemMessageTrace benv target data state out) :
     LedgerMirrors dp ca (trace.attributionStream dp ca)
       (trace.flowActions dp ca) :=
-  trace.message.ledgerMirrors dp ca
+  MessageCallTrace.ledgerMirrors dp ca trace.message
 
 theorem RequestsTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout') :
     LedgerMirrors dp ca (trace.attributionStream dp ca)
       (trace.flowActions dp ca) :=
-  (trace.withdrawal.ledgerMirrors dp ca).append
-    (trace.consolidation.ledgerMirrors dp ca)
+  (SystemMessageTrace.ledgerMirrors dp ca trace.withdrawal).append
+    (SystemMessageTrace.ledgerMirrors dp ca trace.consolidation)
 
 theorem AppliedBodyTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
@@ -334,10 +334,10 @@ theorem AppliedBodyTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
     (trace : AppliedBodyTrace benv txs wds state bout) :
     LedgerMirrors dp ca (trace.attributionStream dp ca)
       (trace.flowActions dp ca) :=
-  (((trace.beacon.ledgerMirrors dp ca).append
-    (trace.history.ledgerMirrors dp ca)).append
-      (trace.transactions.ledgerMirrors dp ca)).append
-        (trace.requests.ledgerMirrors dp ca)
+  (((SystemMessageTrace.ledgerMirrors dp ca trace.beacon).append
+    (SystemMessageTrace.ledgerMirrors dp ca trace.history)).append
+      (ApplyTransactionsTrace.ledgerMirrors dp ca trace.transactions)).append
+        (RequestsTrace.ledgerMirrors dp ca trace.requests)
 
 theorem AccountedBlock.ledgerMirrors
     {chainId : UInt64} {dp : DeployParams} {ca : Adr}
@@ -346,7 +346,7 @@ theorem AccountedBlock.ledgerMirrors
     LedgerMirrors dp ca (accounted.attributionStream dp ca)
       accounted.actions := by
   rw [accounted.actions_eq]
-  exact accounted.bodyTrace.ledgerMirrors dp ca
+  exact AppliedBodyTrace.ledgerMirrors dp ca accounted.bodyTrace
 
 /-- The chronological attribution ledger of a history mirrors its committed
 action ledger: every record is retained, and both carry the same permanent
@@ -533,17 +533,19 @@ theorem MessageCallTrace.rootedLedger (dp : DeployParams) (ca : Adr)
       simp only [MessageCallTrace.attributionStream]
       split
       · exact .nil dp ca
-      · exact trace.retained.rootedLedger dp ca trace.allFramesRoot
+      · exact RetainedXlot.rootedLedger dp ca trace.retained
+          (ProcessCreateMessageTrace.allFramesRoot trace)
   | callRun htarget delegated refund hdelegation execMsg hexecMsg evm
       hcore trace hresult =>
-      exact trace.retained.rootedLedger dp ca trace.allFramesRoot
+      exact RetainedXlot.rootedLedger dp ca trace.retained
+        (ProcessMessageTrace.allFramesRoot trace)
 
 theorem TransactionTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout') :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
-  trace.message.rootedLedger dp ca
+  MessageCallTrace.rootedLedger dp ca trace.message
 
 theorem ApplyTransactionsTrace.rootedLedger (dp : DeployParams) (ca : Adr) :
     {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
@@ -552,7 +554,7 @@ theorem ApplyTransactionsTrace.rootedLedger (dp : DeployParams) (ca : Adr) :
     RootedLedger dp ca (trace.attributionStream dp ca)
   | _, _, _, _, _, .nil _ _ => .nil dp ca
   | _, _, _, _, _, .cons head tail =>
-      (head.rootedLedger dp ca).append
+      (TransactionTrace.rootedLedger dp ca head).append
         (ApplyTransactionsTrace.rootedLedger dp ca tail)
 
 theorem SystemMessageTrace.rootedLedger (dp : DeployParams) (ca : Adr)
@@ -560,31 +562,31 @@ theorem SystemMessageTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out) :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
-  trace.message.rootedLedger dp ca
+  MessageCallTrace.rootedLedger dp ca trace.message
 
 theorem RequestsTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout') :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
-  (trace.withdrawal.rootedLedger dp ca).append
-    (trace.consolidation.rootedLedger dp ca)
+  (SystemMessageTrace.rootedLedger dp ca trace.withdrawal).append
+    (SystemMessageTrace.rootedLedger dp ca trace.consolidation)
 
 theorem AppliedBodyTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
     (trace : AppliedBodyTrace benv txs wds state bout) :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
-  (((trace.beacon.rootedLedger dp ca).append
-    (trace.history.rootedLedger dp ca)).append
-      (trace.transactions.rootedLedger dp ca)).append
-        (trace.requests.rootedLedger dp ca)
+  (((SystemMessageTrace.rootedLedger dp ca trace.beacon).append
+    (SystemMessageTrace.rootedLedger dp ca trace.history)).append
+      (ApplyTransactionsTrace.rootedLedger dp ca trace.transactions)).append
+        (RequestsTrace.rootedLedger dp ca trace.requests)
 
 theorem AccountedBlock.rootedLedger
     {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
     (accounted : AccountedBlock chainId dp ca pre post) :
     RootedLedger dp ca (accounted.attributionStream dp ca) :=
-  accounted.bodyTrace.rootedLedger dp ca
+  AppliedBodyTrace.rootedLedger dp ca accounted.bodyTrace
 
 /-- Every record of a history's chronological attribution ledger carries the
 root context of the committed frame that produced it. -/

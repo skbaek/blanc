@@ -1,9 +1,12 @@
 import Blanc.Semantics
+import Jaune.Transaction
 
 /-!
 Contract-neutral committed-execution and complete frame-settlement traversal.
 Child retention is decided by full frame settlement, including CREATE code
-deposit, rather than raw execution success.
+deposit, rather than raw execution success.  This module also owns the small
+checked-to-unchecked system-transaction bridge shared by invariant and retained
+trace consumers.
 -/
 
 namespace Blanc
@@ -274,5 +277,21 @@ theorem Frame.settlementCommits_ofCall_of_raw_commits
             processMessage.settle, Bind.bind, Except.bind, herror]
       | some error =>
           simp [Execution.commits, herror] at hraw
+
+/-- A successful checked system transaction exposes the same successful raw
+message result used by generic invariant and retained-trace consumers. -/
+lemma processCheckedSystemTransaction_to_unchecked {benv : Benv}
+    {target : Adr} {data : Bytes} {st : Jaune.State} {out : MsgCallOutput}
+    (h : processCheckedSystemTransaction benv target data = .ok ⟨st, out⟩) :
+    processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
+  dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
+  split at h
+  · cases h
+  · rcases Except.bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
+    split at h2
+    · cases h2
+    · obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h2)
+      rw [Except.mapError_eq_ok_iff] at h1
+      subst h3; subst h4; exact h1
 
 end Blanc

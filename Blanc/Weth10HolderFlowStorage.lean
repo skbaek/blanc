@@ -322,9 +322,11 @@ theorem FlowAction.HasExecOrigin.exists_exact_committedFrame
 
 theorem RetainedXlot.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {xl : Xlot}
-    (retained : RetainedXlot xl) (roots : retained.AllFramesRoot)
+    (retained : RetainedXlot xl)
+    (roots : Blanc.Weth10.RetainedXlot.AllFramesRoot retained)
     {action : FlowAction}
-    (h : action ∈ retained.flowActions dp ca) :
+    (h : action ∈
+      Blanc.Weth10.RetainedXlot.flowActions dp ca retained) :
     action.HasExecOrigin dp ca := by
   cases retained with
   | none => simp [RetainedXlot.flowActions] at h
@@ -338,17 +340,21 @@ theorem ProcessMessageTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {msg : Msg}
     {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (trace : ProcessMessageTrace msg out) {action : FlowAction}
-    (h : action ∈ trace.retained.flowActions dp ca) :
+    (h : action ∈ Blanc.Weth10.RetainedXlot.flowActions dp ca
+      trace.retained) :
     action.HasExecOrigin dp ca :=
-  trace.retained.hasExecOrigin_of_mem_flowActions trace.allFramesRoot h
+  RetainedXlot.hasExecOrigin_of_mem_flowActions trace.retained
+    (ProcessMessageTrace.allFramesRoot trace) h
 
 theorem ProcessCreateMessageTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {msg : Msg}
     {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (trace : ProcessCreateMessageTrace msg out) {action : FlowAction}
-    (h : action ∈ trace.retained.flowActions dp ca) :
+    (h : action ∈ Blanc.Weth10.RetainedXlot.flowActions dp ca
+      trace.retained) :
     action.HasExecOrigin dp ca :=
-  trace.retained.hasExecOrigin_of_mem_flowActions trace.allFramesRoot h
+  RetainedXlot.hasExecOrigin_of_mem_flowActions trace.retained
+    (ProcessCreateMessageTrace.allFramesRoot trace) h
 
 private theorem frame_enter_run_memory_empty
     {frame : Frame} {child : Evm}
@@ -366,7 +372,8 @@ theorem ProcessMessageTrace.exists_authenticFrame_of_mem_flowActions
     (hcode : some (msg.benv.state.getCode ca).toList =
       Prog.compile (weth10 dp))
     {action : FlowAction}
-    (h : action ∈ trace.retained.flowActions dp ca) :
+    (h : action ∈ Blanc.Weth10.RetainedXlot.flowActions dp ca
+      trace.retained) :
     ∃ frame : Exec.Frame, Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
       Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   rcases trace with ⟨slot, retained, hrun⟩
@@ -392,7 +399,8 @@ theorem ProcessCreateMessageTrace.exists_authenticFrame_of_mem_flowActions
     (hcode : some (msg.benv.state.getCode ca).toList =
       Prog.compile (weth10 dp))
     {action : FlowAction}
-    (h : action ∈ trace.retained.flowActions dp ca) :
+    (h : action ∈ Blanc.Weth10.RetainedXlot.flowActions dp ca
+      trace.retained) :
     ∃ frame : Exec.Frame, Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
       Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   rcases trace with ⟨slot, retained, hrun⟩
@@ -414,7 +422,8 @@ theorem ProcessCreateMessageTrace.exists_authenticFrame_of_mem_flowActions
 theorem MessageCallTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {msg : Msg} {state : State}
     {out : MsgCallOutput} (trace : MessageCallTrace msg state out)
-    {action : FlowAction} (h : action ∈ trace.flowActions dp ca) :
+    {action : FlowAction}
+    (h : action ∈ Blanc.Weth10.MessageCallTrace.flowActions dp ca trace) :
     action.HasExecOrigin dp ca := by
   cases trace with
   | createCollision htarget hcollision hresult =>
@@ -423,24 +432,28 @@ theorem MessageCallTrace.hasExecOrigin_of_mem_flowActions
       simp only [MessageCallTrace.flowActions] at h
       split at h
       · simp at h
-      · exact trace.hasExecOrigin_of_mem_flowActions h
+      · exact
+          ProcessCreateMessageTrace.hasExecOrigin_of_mem_flowActions trace h
   | callRun htarget delegated refund hdelegation execMsg hexecMsg evm
       hcore trace hresult =>
-      exact trace.hasExecOrigin_of_mem_flowActions h
+      exact ProcessMessageTrace.hasExecOrigin_of_mem_flowActions trace h
 
 theorem TransactionTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {benv : Benv} {bout : BlockOutput}
     {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
-    {action : FlowAction} (h : action ∈ trace.flowActions dp ca) :
+    {action : FlowAction}
+    (h : action ∈ Blanc.Weth10.TransactionTrace.flowActions dp ca trace) :
     action.HasExecOrigin dp ca :=
-  trace.message.hasExecOrigin_of_mem_flowActions h
+  MessageCallTrace.hasExecOrigin_of_mem_flowActions trace.message h
 
 theorem ApplyTransactionsTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {txs : List (Nat × Tx)}
     {benv finalBenv : Benv} {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    {action : FlowAction} (h : action ∈ trace.flowActions dp ca) :
+    {action : FlowAction}
+    (h : action ∈
+      Blanc.Weth10.ApplyTransactionsTrace.flowActions dp ca trace) :
     action.HasExecOrigin dp ca := by
   induction trace with
   | nil benv bout =>
@@ -449,41 +462,50 @@ theorem ApplyTransactionsTrace.hasExecOrigin_of_mem_flowActions
       simp only [ApplyTransactionsTrace.flowActions,
         List.mem_append] at h
       rcases h with hhead | htail
-      · exact head.hasExecOrigin_of_mem_flowActions hhead
+      · exact TransactionTrace.hasExecOrigin_of_mem_flowActions head hhead
       · exact ih htail
 
 theorem SystemMessageTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {benv : Benv} {target : Adr}
     {data : Bytes} {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out)
-    {action : FlowAction} (h : action ∈ trace.flowActions dp ca) :
+    {action : FlowAction}
+    (h : action ∈ Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace) :
     action.HasExecOrigin dp ca :=
-  trace.message.hasExecOrigin_of_mem_flowActions h
+  MessageCallTrace.hasExecOrigin_of_mem_flowActions trace.message h
 
 theorem RequestsTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {benv : Benv} {bout : BlockOutput}
     {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout')
-    {action : FlowAction} (h : action ∈ trace.flowActions dp ca) :
+    {action : FlowAction}
+    (h : action ∈ Blanc.Weth10.RequestsTrace.flowActions dp ca trace) :
     action.HasExecOrigin dp ca := by
   simp only [RequestsTrace.flowActions, List.mem_append] at h
   rcases h with hwithdrawal | hconsolidation
-  · exact trace.withdrawal.hasExecOrigin_of_mem_flowActions hwithdrawal
-  · exact trace.consolidation.hasExecOrigin_of_mem_flowActions hconsolidation
+  · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
+      trace.withdrawal hwithdrawal
+  · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
+      trace.consolidation hconsolidation
 
 theorem AppliedBodyTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {benv : Benv}
     {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
     (trace : AppliedBodyTrace benv txs wds state bout)
-    {action : FlowAction} (h : action ∈ trace.flowActions dp ca) :
+    {action : FlowAction}
+    (h : action ∈ Blanc.Weth10.AppliedBodyTrace.flowActions dp ca trace) :
     action.HasExecOrigin dp ca := by
   simp only [AppliedBodyTrace.flowActions, List.mem_append] at h
   rcases h with ((hbeacon | hhistory) | htransactions) | hrequests
-  · exact trace.beacon.hasExecOrigin_of_mem_flowActions hbeacon
-  · exact trace.history.hasExecOrigin_of_mem_flowActions hhistory
-  · exact trace.transactions.hasExecOrigin_of_mem_flowActions htransactions
-  · exact trace.requests.hasExecOrigin_of_mem_flowActions hrequests
+  · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
+      trace.beacon hbeacon
+  · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
+      trace.history hhistory
+  · exact ApplyTransactionsTrace.hasExecOrigin_of_mem_flowActions
+      trace.transactions htransactions
+  · exact RequestsTrace.hasExecOrigin_of_mem_flowActions
+      trace.requests hrequests
 
 theorem AccountedBlock.hasExecOrigin_of_mem_actions
     {chainId : UInt64} {dp : DeployParams} {ca : Adr}
@@ -492,7 +514,7 @@ theorem AccountedBlock.hasExecOrigin_of_mem_actions
     {action : FlowAction} (h : action ∈ accounted.actions) :
     action.HasExecOrigin dp ca := by
   rw [accounted.actions_eq] at h
-  exact accounted.bodyTrace.hasExecOrigin_of_mem_flowActions h
+  exact AppliedBodyTrace.hasExecOrigin_of_mem_flowActions accounted.bodyTrace h
 
 /-- Every action in the full Prague history has an actual retained `Exec`
 origin and therefore inherits the rollback-pruned committed boundary. -/

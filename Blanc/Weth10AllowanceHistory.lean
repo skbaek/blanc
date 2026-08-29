@@ -272,7 +272,7 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
       have htargetNe := ne_ca_of_messageCreateCollision_false
         ready hcollision
       have htransport :=
-        trace.allowanceTransported_of_committedExecSound
+        ProcessCreateMessageTrace.allowanceTransported_of_committedExecSound trace
           hsound ready htarget htargetNe
       have hstate := processMessageCall_createRun_state_eq
         htarget hcollision hcore hresult
@@ -296,7 +296,8 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
       have htransport :
           AllowanceTransported ca execMsg.benv.state evm.state
             (trace.retained.attributionStream dp ca) :=
-        trace.allowanceTransported_of_committedExecSound hsound runReadyExec
+        ProcessMessageTrace.allowanceTransported_of_committedExecSound trace
+          hsound runReadyExec
       have hstate := processMessageCall_callRun_state_eq
         htarget hdelegation hexecMsg hcore hresult
       have hpre :
@@ -381,14 +382,16 @@ theorem RequestsTrace.allowanceTransported
     AllowanceTransported ca benv.state state
       (trace.attributionStream dp ca) := by
   have hwithdrawal :=
-    trace.withdrawal.allowanceTransported hmessage hstable hnotCreated
+    SystemMessageTrace.allowanceTransported trace.withdrawal hmessage hstable
+      hnotCreated
   have hwithdrawalMeta :=
-    trace.withdrawal.stable_and_sum_le hstable hnotCreated
+    SystemMessageTrace.stable_and_sum_le trace.withdrawal hstable hnotCreated
   have hconsolidation :=
-    trace.consolidation.allowanceTransported hmessage hwithdrawalMeta.1
+    SystemMessageTrace.allowanceTransported trace.consolidation hmessage
+      hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hboth := hwithdrawal.append hconsolidation
-  have hstate := trace.state_eq_consolidationState
+  have hstate := RequestsTrace.state_eq_consolidationState trace
   simpa [RequestsTrace.attributionStream, Benv.withState, hstate] using hboth
 
 theorem AppliedBodyTrace.allowanceTransported
@@ -403,20 +406,21 @@ theorem AppliedBodyTrace.allowanceTransported
     AllowanceTransported ca benv.state state
       (trace.attributionStream dp ca) := by
   have hbeacon :=
-    trace.beacon.allowanceTransported hmessage hstable hnotCreated
+    SystemMessageTrace.allowanceTransported trace.beacon hmessage hstable
+      hnotCreated
   have hbeaconMeta :=
-    trace.beacon.stable_and_sum_le hstable hnotCreated
+    SystemMessageTrace.stable_and_sum_le trace.beacon hstable hnotCreated
   have hhistory :=
-    trace.history.allowanceTransported hmessage hbeaconMeta.1
+    SystemMessageTrace.allowanceTransported trace.history hmessage hbeaconMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hhistoryMeta :=
-    trace.history.stable_and_sum_le hbeaconMeta.1
+    SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have htransactions :=
     ApplyTransactionsTrace.allowanceTransported dp ca hmessage
       trace.transactions hhistoryMeta.1
       (by simpa [Benv.withState] using hnotCreated)
-  have htxSum := trace.transactions.sum_le
+  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
@@ -429,21 +433,21 @@ theorem AppliedBodyTrace.allowanceTransported
       sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
     omega
   have htransactionsStable :=
-    trace.transactions.stable hhistoryMeta.1
+    ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
   have htransactionNotCreated :
       ca ∉ trace.transactionBenv.createdAccounts := by
-    rw [trace.transactions.createdAccounts_eq]
+    rw [ApplyTransactionsTrace.createdAccounts_eq trace.transactions]
     simpa [Benv.withState] using hnotCreated
   have hwithdrawals :
       AllowanceTransported ca trace.transactionBenv.state
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
     AllowanceTransported.of_getStor_eq
       (processWithdrawalsState_getStor_eq ca _ _).symm
-  have hrequests := trace.requests.allowanceTransported hmessage
+  have hrequests := RequestsTrace.allowanceTransported trace.requests hmessage
     hwithdrawalsStable
     (by simpa [Benv.withState] using htransactionNotCreated)
   have htotal :=
@@ -460,8 +464,8 @@ theorem AccountedBlock.allowanceTransported
     (hstable : Stable dp ca pre.state) :
     AllowanceTransported ca pre.state post.state
       (accounted.attributionStream dp ca) := by
-  have hbody := accounted.bodyTrace.allowanceTransported hmessage hstable
-    (by simp [initBenv]) accounted.bound
+  have hbody := AppliedBodyTrace.allowanceTransported accounted.bodyTrace
+    hmessage hstable (by simp [initBenv]) accounted.bound
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq
   simpa [initBenv, AccountedBlock.attributionStream, hpost] using hbody
@@ -756,7 +760,8 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
       have htargetNe := ne_ca_of_messageCreateCollision_false
         ready hcollision
       have htransport :=
-        trace.allowanceTransportedSound_of_committedExecSound
+        ProcessCreateMessageTrace.allowanceTransportedSound_of_committedExecSound
+          trace
           hsound ready htarget htargetNe
       have hstate := processMessageCall_createRun_state_eq
         htarget hcollision hcore hresult
@@ -780,8 +785,8 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
       have htransport :
           AllowanceTransportedSound ca execMsg.benv.state evm.state
             (trace.retained.attributionStream dp ca) :=
-        trace.allowanceTransportedSound_of_committedExecSound hsound
-          runReadyExec
+        ProcessMessageTrace.allowanceTransportedSound_of_committedExecSound trace
+          hsound runReadyExec
       have hstate := processMessageCall_callRun_state_eq
         htarget hdelegation hexecMsg hcore hresult
       have hpre :
@@ -872,14 +877,16 @@ theorem RequestsTrace.allowanceTransportedSound
     AllowanceTransportedSound ca benv.state state
       (trace.attributionStream dp ca) := by
   have hwithdrawal :=
-    trace.withdrawal.allowanceTransportedSound hmessage hstable hnotCreated
+    SystemMessageTrace.allowanceTransportedSound trace.withdrawal hmessage hstable
+      hnotCreated
   have hwithdrawalMeta :=
-    trace.withdrawal.stable_and_sum_le hstable hnotCreated
+    SystemMessageTrace.stable_and_sum_le trace.withdrawal hstable hnotCreated
   have hconsolidation :=
-    trace.consolidation.allowanceTransportedSound hmessage hwithdrawalMeta.1
+    SystemMessageTrace.allowanceTransportedSound trace.consolidation hmessage
+      hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hboth := hwithdrawal.append hconsolidation
-  have hstate := trace.state_eq_consolidationState
+  have hstate := RequestsTrace.state_eq_consolidationState trace
   simpa [RequestsTrace.attributionStream, Benv.withState, hstate] using hboth
 
 theorem AppliedBodyTrace.allowanceTransportedSound
@@ -894,20 +901,22 @@ theorem AppliedBodyTrace.allowanceTransportedSound
     AllowanceTransportedSound ca benv.state state
       (trace.attributionStream dp ca) := by
   have hbeacon :=
-    trace.beacon.allowanceTransportedSound hmessage hstable hnotCreated
+    SystemMessageTrace.allowanceTransportedSound trace.beacon hmessage hstable
+      hnotCreated
   have hbeaconMeta :=
-    trace.beacon.stable_and_sum_le hstable hnotCreated
+    SystemMessageTrace.stable_and_sum_le trace.beacon hstable hnotCreated
   have hhistory :=
-    trace.history.allowanceTransportedSound hmessage hbeaconMeta.1
+    SystemMessageTrace.allowanceTransportedSound trace.history hmessage
+      hbeaconMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hhistoryMeta :=
-    trace.history.stable_and_sum_le hbeaconMeta.1
+    SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have htransactions :=
     ApplyTransactionsTrace.allowanceTransportedSound dp ca hmessage
       trace.transactions hhistoryMeta.1
       (by simpa [Benv.withState] using hnotCreated)
-  have htxSum := trace.transactions.sum_le
+  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
@@ -920,22 +929,22 @@ theorem AppliedBodyTrace.allowanceTransportedSound
       sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
     omega
   have htransactionsStable :=
-    trace.transactions.stable hhistoryMeta.1
+    ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
   have htransactionNotCreated :
       ca ∉ trace.transactionBenv.createdAccounts := by
-    rw [trace.transactions.createdAccounts_eq]
+    rw [ApplyTransactionsTrace.createdAccounts_eq trace.transactions]
     simpa [Benv.withState] using hnotCreated
   have hwithdrawals :
       AllowanceTransportedSound ca trace.transactionBenv.state
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
     AllowanceTransportedSound.of_getStor_eq
       (processWithdrawalsState_getStor_eq ca _ _).symm
-  have hrequests := trace.requests.allowanceTransportedSound hmessage
-    hwithdrawalsStable
+  have hrequests := RequestsTrace.allowanceTransportedSound trace.requests
+    hmessage hwithdrawalsStable
     (by simpa [Benv.withState] using htransactionNotCreated)
   have htotal :=
     (((hbeacon.append hhistory).append htransactions).append
@@ -951,8 +960,8 @@ theorem AccountedBlock.allowanceTransportedSound
     (hstable : Stable dp ca pre.state) :
     AllowanceTransportedSound ca pre.state post.state
       (accounted.attributionStream dp ca) := by
-  have hbody := accounted.bodyTrace.allowanceTransportedSound hmessage hstable
-    (by simp [initBenv]) accounted.bound
+  have hbody := AppliedBodyTrace.allowanceTransportedSound accounted.bodyTrace
+    hmessage hstable (by simp [initBenv]) accounted.bound
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq
   simpa [initBenv, AccountedBlock.attributionStream, hpost] using hbody
@@ -994,4 +1003,3 @@ theorem AccountedHistory.allowanceTransportedSound
 end Weth10
 
 end Blanc
-

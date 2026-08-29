@@ -3,6 +3,7 @@ import Blanc.WethCode
 import Blanc.Ladder
 import Blanc.BalanceAlgebra
 import Blanc.ExecutionSettlement
+import Blanc.ExecutionTrace
 import Blanc.ExecutionOccurrence
 import Blanc.ExecutionNoninterference
 import Blanc.CycleWriteFree

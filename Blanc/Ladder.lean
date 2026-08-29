@@ -6071,20 +6071,6 @@ lemma applyTransactions_sum_le
     obtain ⟨⟨st, bout''⟩, h1, h2⟩ := Except.bind_eq_ok h_run
     exact le_trans (ih h2) (processTransaction_sum_le h1)
 
-lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} {data : Bytes}
-    {st : Jaune.State} {out : MsgCallOutput}
-    (h : processCheckedSystemTransaction benv target data = .ok ⟨st, out⟩) :
-    processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
-  dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
-  split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
-    split at h2
-    · cases h2
-    · obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h2)
-      rw [Except.mapError_eq_ok_iff] at h1
-      subst h3; subst h4; exact h1
-
 /-! ## Chain-level reachability
 
 `BlockChain.Reach` and `BlockChain.ReachUsing` appear in audited statements, so
