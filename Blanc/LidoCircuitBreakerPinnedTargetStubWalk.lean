@@ -31,11 +31,32 @@ private lemma withOutput_gasLeft (devm : Devm) (out : Bytes) :
 private lemma memRead_gasLeft (devm : Devm) (index size : Nat) :
     (devm.memRead index size).2.gasLeft = devm.gasLeft := rfl
 
+private theorem compact_pause_word_eq_projection (time duration : B256) :
+    time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration =
+      pauseForProjection time duration := by
+  by_cases infinite : duration = pauseInfiniteSentinel
+  · subst duration
+    have one_ne_zero : (1 : B256) ≠ 0 := by decide
+    simp [pauseForProjection, B256.eqCheck, one_ne_zero]
+    have mulZero : time * (0 : B256) = 0 := by
+      change (time.toNat * 0).toB256 = 0
+      rw [Nat.mul_zero]
+      rfl
+    rw [mulZero]
+    rfl
+  · have reverse : pauseInfiniteSentinel ≠ duration := Ne.symm infinite
+    simp [pauseForProjection, B256.eqCheck, infinite, reverse]
+    have mulOne : time * (1 : B256) = time := by
+      change (time.toNat * 1).toB256 = time
+      rw [Nat.mul_one]
+      exact toB256_toNat time
+    rw [mulOne]
+
 def stubPausePost (sevm : Sevm) (base : Devm)
     (duration : B256) : Devm :=
   temporalSstorePost sevm
     (addAccessedStorageKey base sevm.currentTarget pausedUntilSlot)
-    pausedUntilSlot (sevm.benvStat.time + duration)
+    pausedUntilSlot (pauseForProjection sevm.benvStat.time duration)
 
 lemma stubPausePost_logs (sevm : Sevm) (base : Devm)
     (duration : B256) :
@@ -44,7 +65,7 @@ lemma stubPausePost_logs (sevm : Sevm) (base : Devm)
 lemma stubPausePost_refundCounter (sevm : Sevm) (base : Devm)
     (duration : B256) :
     (stubPausePost sevm base duration).refundCounter =
-      sstoreNewRefundCounter (sevm.benvStat.time + duration)
+      sstoreNewRefundCounter (pauseForProjection sevm.benvStat.time duration)
         (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
         (base.getStorVal sevm.currentTarget pausedUntilSlot)
         base.refundCounter := rfl
@@ -74,13 +95,13 @@ lemma stubPausePost_state (sevm : Sevm) (base : Devm)
     (duration : B256) :
     (stubPausePost sevm base duration).state =
       base.state.setStorVal sevm.currentTarget pausedUntilSlot
-        (sevm.benvStat.time + duration) := rfl
+        (pauseForProjection sevm.benvStat.time duration) := rfl
 
 /-! ## The write arm -/
 
 /-- The compiled `pauseFor(uint256)` arm executes from a cold paused-until
 slot in the row-19 zero-to-nonzero price case.  The SSTORE costs `22100` and
-the surrounding source instructions cost `13`. -/
+the surrounding source instructions cost `32`. -/
 theorem stubPause_cold_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (duration : B256) (G : Nat)
@@ -91,13 +112,13 @@ theorem stubPause_cold_runCompiledTo
     (hcost : gasColdSload + sstoreValueCost
       (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
       (base.getStorVal sevm.currentTarget pausedUntilSlot)
-      (sevm.benvStat.time + duration) = 22100) :
+      (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 22113⟩)
+        (base.setMach ⟨[], Mem.empty, G + 22132⟩)
         stubPause (.ok post) ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot =
-        sevm.benvStat.time + duration ∧
+        pauseForProjection sevm.benvStat.time duration ∧
       post.gasLeft = G ∧
       post.error = base.error ∧
       post.output = base.output ∧
@@ -106,22 +127,35 @@ theorem stubPause_cold_runCompiledTo
   unfold stubPause stubPauseLine arg cdl
   apply Exists.intro
   constructor
-  · func_run [sevm.benvStat.time + duration, 22100]
+  · func_run [~~~(0 : B256), pauseInfiniteSentinel =? duration,
+      (pauseInfiniteSentinel =? duration) =? 0,
+      sevm.benvStat.time * (((pauseInfiniteSentinel =? duration) =? 0)),
+      sevm.benvStat.time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration,
+      22100]
     case h_val =>
-      simpa only [show (32 * (0 : B256) + 4) = 4 by decide] using
-        congrArg (fun word => sevm.benvStat.time + word) harg
-    case h_cost =>
-      simpa only [Devm.getStorVal_setMach] using hcost
-    case a => exact Func.RunCompiledTo.last rfl
+      rw [show (32 * (0 : B256) + 4) = 4 by decide, harg]
+      rfl
+    all_goals try {
+      simp [show (32 * (0 : B256) + 4) = 4 by decide, harg,
+        pauseInfiniteSentinel, B256.eqCheck] }
+    all_goals try {
+      have hcost' := hcost
+      rw [← compact_pause_word_eq_projection] at hcost'
+      simpa only [Devm.getStorVal_setMach] using hcost' }
+    all_goals try {
+      simp only [Devm.gasLeft_setMach, gLow]
+      omega }
+    all_goals try { exact Func.RunCompiledTo.last rfl }
   · refine ⟨?_, ?_, rfl, rfl, ?_, ?_⟩
     · rw [Devm.getStorVal_setMach]
       show (Devm.getStor _ sevm.currentTarget).get pausedUntilSlot = _
       rw [setStorVal_getStor_self, Stor.get_set_self]
+      rw [compact_pause_word_eq_projection]
     · simp only [Devm.gasLeft_setMach]
       omega
-    · change (stubPausePost sevm base duration).meta = _
+    · rw [compact_pause_word_eq_projection]
       rfl
-    · change (stubPausePost sevm base duration).world = _
+    · rw [compact_pause_word_eq_projection]
       rfl
 
 /-! ## The query arm -/
@@ -189,13 +223,13 @@ private theorem stubBaseMain_pause_cold_runCompiledTo
     (hcost : gasColdSload + sstoreValueCost
       (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
       (base.getStorVal sevm.currentTarget pausedUntilSlot)
-      (sevm.benvStat.time + duration) = 22100) :
+      (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 22135⟩)
+        (base.setMach ⟨[], Mem.empty, G + 22154⟩)
         stubBaseMain (.ok post) ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot =
-        sevm.benvStat.time + duration ∧
+        pauseForProjection sevm.benvStat.time duration ∧
       post.gasLeft = G ∧
       post.error = base.error ∧
       post.output = base.output ∧
@@ -209,7 +243,7 @@ private theorem stubBaseMain_pause_cold_runCompiledTo
   func_run (4) [1]
   case h_val => simp [B256.eqCheck, hsize]
   case h_arm =>
-    have hg : G + 22135 - 22 = G + 22113 := by omega
+    have hg : G + 22154 - 22 = G + 22132 := by omega
     rw [hg]
     exact body
 
@@ -261,13 +295,13 @@ theorem stubMain_pause_cold_runCompiledTo
     (hcost : gasColdSload + sstoreValueCost
       (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
       (base.getStorVal sevm.currentTarget pausedUntilSlot)
-      (sevm.benvStat.time + duration) = 22100) :
+      (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 22165⟩)
+        (base.setMach ⟨[], Mem.empty, G + 22184⟩)
         stubMain (.ok post) ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot =
-        sevm.benvStat.time + duration ∧
+        pauseForProjection sevm.benvStat.time duration ∧
       post.gasLeft = G ∧
       post.error = base.error ∧
       post.output = base.output ∧
@@ -282,11 +316,11 @@ theorem stubMain_pause_cold_runCompiledTo
   have protectedNonzero : stubProtectedSelector ≠ 0 := by
     decide +kernel
   have tail := protected_zero_tail_runCompiledTo fs sevm base
-    stubProtectedSelector pauseForSelector Mem.empty (G + 22135) post
+    stubProtectedSelector pauseForSelector Mem.empty (G + 22154) post
     protectedNe protectedNonzero body
   have head := fsig_prepend_runCompiledTo fs sevm base pauseForSelector
-    Mem.empty (G + 22154) _ post hselector tail
-  have hg : G + 22154 + 11 = G + 22165 := by omega
+    Mem.empty (G + 22173) _ post hselector tail
+  have hg : G + 22173 + 11 = G + 22184 := by omega
   rw [hg] at head
   rw [stubMain, stubProtectedLine, prepend_append]
   exact head
@@ -375,13 +409,13 @@ theorem stubProgram_pause_cold_runCompiledTo
     (hcost : gasColdSload + sstoreValueCost
       (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
       (base.getStorVal sevm.currentTarget pausedUntilSlot)
-      (sevm.benvStat.time + duration) = 22100) :
+      (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, G + 22166⟩)
+        (base.setMach ⟨[], Mem.empty, G + 22185⟩)
         stubProgram (.ok post) ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot =
-        sevm.benvStat.time + duration ∧
+        pauseForProjection sevm.benvStat.time duration ∧
       post.gasLeft = G ∧
       post.error = base.error ∧
       post.output = base.output ∧
@@ -391,8 +425,8 @@ theorem stubProgram_pause_cold_runCompiledTo
     stubMain_pause_cold_runCompiledTo [stubMain] sevm base duration G
       hselector hsize harg hcold hdynamic hcost
   refine ⟨post, ?_, effect, gas, error, output, hmeta, world⟩
-  apply Prog.runCompiledTo_intro (G := G + 22165)
-      (mid := base.setMach ⟨[], Mem.empty, G + 22165⟩)
+  apply Prog.runCompiledTo_intro (G := G + 22184)
+      (mid := base.setMach ⟨[], Mem.empty, G + 22184⟩)
   · simp only [Devm.gasLeft_setMach, gJumpdest]
   · rfl
   · simpa only [stubProgram] using body
@@ -674,7 +708,7 @@ above. -/
 theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
     (hcode : m.code = stubCode)
     (hdata : m.data = pauseForCalldata duration)
-    (hgas : m.gas = G + 22166)
+    (hgas : m.gas = G + 22185)
     (hcold : ((initSevm m).currentTarget, pausedUntilSlot) ∉
       (initDevm m).accessedStorageKeys)
     (hdynamic : (initSevm m).isStatic = false)
@@ -682,7 +716,7 @@ theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
       (getOrigStorVal (initSevm m) (initSevm m).currentTarget
         pausedUntilSlot)
       ((initDevm m).getStorVal (initSevm m).currentTarget pausedUntilSlot)
-      ((initSevm m).benvStat.time + duration) = 22100) :
+      (pauseForProjection (initSevm m).benvStat.time duration) = 22100) :
     ∃ post,
       exec (initEvm m) = .ok post ∧
       post.error = none ∧
@@ -692,7 +726,7 @@ theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
         (stubPausePost (initSevm m) (initDevm m) duration).meta ∧
       post.world = (stubPausePost (initSevm m) (initDevm m) duration).world ∧
       post.getStorVal (initSevm m).currentTarget pausedUntilSlot =
-        (initSevm m).benvStat.time + duration := by
+        pauseForProjection (initSevm m).benvStat.time duration := by
   have hdata' : (initSevm m).data = pauseForCalldata duration := hdata
   obtain ⟨hselector, hsize, harg⟩ := pauseForCalldata_facts hdata'
   obtain ⟨post, walk, effect, gas, error, output, hmeta, world⟩ :=
@@ -701,7 +735,7 @@ theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
   have hrun : Prog.RunCompiledTo (initSevm m) (initDevm m) stubProgram
       (.ok post) := by
     have hbase : (initDevm m).setMach
-        ⟨[], Mem.empty, G + 22166⟩ = initDevm m := by
+        ⟨[], Mem.empty, G + 22185⟩ = initDevm m := by
       rw [← hgas]
       rfl
     rw [hbase] at walk
@@ -717,6 +751,78 @@ theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
     rfl
   · rw [output]
     rfl
+
+/-! ## Concrete sentinel execution -/
+
+def stubPauseSentinelTarget : Adr := 0x123
+
+def stubPauseSentinelState : State :=
+  State.set (.empty : State) stubPauseSentinelTarget
+    {Acct.nil with code := stubCode}
+
+def stubPauseSentinelMsg : Msg :=
+  { (default : Msg) with
+    benv :=
+      { (default : Benv) with
+        state := stubPauseSentinelState
+        stat :=
+          { (default : BenvStat) with
+            origState := stubPauseSentinelState
+            time := 7 } }
+    caller := 1
+    target := some stubPauseSentinelTarget
+    currentTarget := stubPauseSentinelTarget
+    gas := 22185
+    value := 0
+    data := pauseForCalldata pauseInfiniteSentinel
+    codeAddress := some stubPauseSentinelTarget
+    code := stubCode
+    isStatic := false
+    disablePrecompiles := true }
+
+/-- The actual compiled stub preserves the all-ones duration at a nonzero
+timestamp, so the result differs from the wrapping timestamp-plus-duration
+expression. -/
+theorem stubPause_sentinel_execution :
+    ∃ post,
+      exec (initEvm stubPauseSentinelMsg) = .ok post ∧
+      post.getStorVal stubPauseSentinelTarget pausedUntilSlot =
+        pauseInfiniteSentinel ∧
+      post.getStorVal stubPauseSentinelTarget pausedUntilSlot ≠
+        (7 : B256) + pauseInfiniteSentinel := by
+  obtain ⟨post, hexec, herr, hout, hgas, hmeta, hworld, hstored⟩ :=
+    stubPause_exec stubPauseSentinelMsg pauseInfiniteSentinel 0
+      rfl rfl rfl (by
+        change (stubPauseSentinelTarget, pausedUntilSlot) ∉
+          (Std.HashSet.emptyWithCapacity : KeySet)
+        exact Std.HashSet.not_mem_emptyWithCapacity) rfl (by
+        have h_orig :
+            getOrigStorVal (initSevm stubPauseSentinelMsg)
+              (initSevm stubPauseSentinelMsg).currentTarget
+              pausedUntilSlot = 0 := by
+          change (State.get stubPauseSentinelState stubPauseSentinelTarget).stor.get
+            pausedUntilSlot = 0
+          rw [stubPauseSentinelState, State.get_set_self]
+          rfl
+        have h_cur :
+            (initDevm stubPauseSentinelMsg).getStorVal
+              (initSevm stubPauseSentinelMsg).currentTarget
+              pausedUntilSlot = 0 := by
+          change (State.get stubPauseSentinelState stubPauseSentinelTarget).stor.get
+            pausedUntilSlot = 0
+          rw [stubPauseSentinelState, State.get_set_self]
+          rfl
+        rw [h_orig, h_cur, pauseForProjection]
+        have hmax : (0 : B256) ≠ B256.max := by
+          decide +kernel
+        simp [pauseInfiniteSentinel, sstoreValueCost, gasStorageSet,
+          gasColdSload, hmax])
+  refine ⟨post, hexec, ?_, ?_⟩
+  · simpa [stubPauseSentinelMsg, initSevm, pauseForProjection] using hstored
+  · rw [show post.getStorVal stubPauseSentinelTarget pausedUntilSlot =
+      pauseInfiniteSentinel by
+        simpa [stubPauseSentinelMsg, initSevm, pauseForProjection] using hstored]
+    decide +kernel
 
 /-- A message carrying the installed stub and exact `isPaused()` calldata
 executes the warm canonical-true query route. -/

@@ -2161,7 +2161,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
     ∃ mid : Devm,
       mid.stack = [] ∧
       mid.memory = pauseDecodedMemory stubRunMemoryLast pauseWorldDuration ∧
-      mid.gasLeft = 42362 ∧
+      mid.gasLeft = 42343 ∧
       (∀ key : B256,
         mid.getStorVal configWorldOwner key =
           stubRunAfterSetBase.getStorVal configWorldOwner key) ∧
@@ -2210,6 +2210,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
       (by simpa only [toAdr_toB256] using
         stubPauseWorld_target_not_precompile)
       (by norm_num)
+      (by norm_num)
   rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
@@ -2224,7 +2225,8 @@ private theorem stubPauseWorld_afterSetStubSeam :
         ((state_setStorVal_stor_ne_local
           (st₁.addBal pauseWorldCallee.toB256.toAdr 0) htargetOwner
           PinnedTargetControl.pausedUntilSlot
-          (stubPauseWorldSevm.benvStat.time + pauseWorldDuration)).trans
+          (pauseForProjection stubPauseWorldSevm.benvStat.time
+            pauseWorldDuration)).trans
           ((state_addBal_stor_local st₁ pauseWorldCallee.toB256.toAdr 0
             configWorldOwner).trans
             (state_subBal_stor_local hsub₁ configWorldOwner))))
@@ -2318,7 +2320,7 @@ private theorem stubPauseWorld_successSuffix :
     ((runtime officialParams).main :: (runtime officialParams).aux)
     stubPauseWorldSevm mid stubRunDecodedMemory stubRunImage8
     pauseWorldCallee.toB256 pauseWorldDuration pauseWorldPauser
-    pauseWorldExpiry pauseWorldExpiry 100 2900 36040
+    pauseWorldExpiry pauseWorldExpiry 100 2900 36021
     (by simpa only [stubRunDecodedMemory, stubRunMemoryLast] using
       stubRunMem_wf8)
     (by simpa only [stubRunDecodedMemory, stubRunMemoryLast, stubRunImage8,
@@ -2352,8 +2354,8 @@ private theorem stubPauseWorld_successSuffix :
     (by norm_num [gCallStipend])
     rfl
   have hmidEta : mid.setMach
-      ⟨[], stubRunDecodedMemory, 36040 + 3322 + 100 + 2900⟩ = mid := by
-    rw [show (36040 + 3322 + 100 + 2900 : Nat) = 42362 from by norm_num,
+      ⟨[], stubRunDecodedMemory, 36021 + 3322 + 100 + 2900⟩ = mid := by
+    rw [show (36021 + 3322 + 100 + 2900 : Nat) = 42343 from by norm_num,
       stubRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
   rw [hmidEta] at hW8

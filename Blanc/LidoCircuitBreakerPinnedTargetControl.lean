@@ -19,10 +19,14 @@ def pausedUntilSlot : B256 := 0
 def pausedUntil (_target : Adr) (stor : Stor) : B256 :=
   stor.get pausedUntilSlot
 
-/-- `pauseFor(uint256)`: store `block.timestamp + duration`. -/
+/-- `pauseFor(uint256)`: preserve the infinite sentinel, otherwise store
+`block.timestamp + duration`.  The compact straight-line selector avoids a
+branch while keeping the public projection exact. -/
 def stubPauseLine : Line :=
-  arg 0 ++ [Ninst.timestamp, Ninst.add, Ninst.pushB256 pausedUntilSlot,
-    Ninst.sstore]
+  arg 0 ++
+    [Ninst.dup 0, Ninst.pushB256 0, Ninst.not, Ninst.eq, Ninst.iszero,
+      Ninst.timestamp, Ninst.mul, Ninst.add,
+      Ninst.pushB256 pausedUntilSlot, Ninst.sstore]
 
 def stubPause : Func := stubPauseLine +++ Func.stop
 
@@ -162,6 +166,36 @@ private lemma prefix_of_timestamp
   simp only [Rinst.run, Rinst.runCore] at instructionRun
   exact prefix_of_push (Devm.pushBurn_of_pushItem instructionRun) stackPrefix
 
+private lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s Ninst.mul s' →
+      (x :: y :: xs <<+ s.stack) → ((x * y) :: xs <<+ s'.stack) := by
+  intro run stackPrefix
+  refine prefix_of_diffBurn_two (· * ·) ?_ stackPrefix
+  rcases of_run_reg run with ⟨pc, instructionRun⟩
+  simp only [Rinst.run, Rinst.runCore] at instructionRun
+  exact Devm.diffBurn_of_applyBinary instructionRun
+
+private theorem compact_pause_word_eq_projection (time duration : B256) :
+    time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration =
+      pauseForProjection time duration := by
+  by_cases infinite : duration = pauseInfiniteSentinel
+  · subst duration
+    have one_ne_zero : (1 : B256) ≠ 0 := by decide
+    simp [pauseForProjection, B256.eqCheck, one_ne_zero]
+    have mulZero : time * (0 : B256) = 0 := by
+      change (time.toNat * 0).toB256 = 0
+      rw [Nat.mul_zero]
+      rfl
+    rw [mulZero]
+    rfl
+  · have reverse : pauseInfiniteSentinel ≠ duration := Ne.symm infinite
+    simp [pauseForProjection, B256.eqCheck, infinite, reverse]
+    have mulOne : time * (1 : B256) = time := by
+      change (time.toNat * 1).toB256 = time
+      rw [Nat.mul_one]
+      exact toB256_toNat time
+    rw [mulOne]
+
 private lemma mem_reads_self (memory : Mem) :
     Mem.Reads memory memory.data.toList := by
   intro index
@@ -257,7 +291,7 @@ theorem stub_pauseFor_effect
     (uses : some sevm.code.toList = Prog.compile stubProgram)
     (run : Exec 0 sevm pre (.ok post)) :
     pausedUntil target (post.state.getStor target) =
-      sevm.benvStat.time + duration := by
+      pauseForProjection sevm.benvStat.time duration := by
   rcases stubMain_run_of_exec run uses with ⟨entry, -, mainRun⟩
   rcases stubBase_run_of_main target mainRun with
     ⟨entry, baseRun, -, -⟩
@@ -297,7 +331,19 @@ theorem stub_pauseFor_effect
     rcases of_run_append (arg 0) pauseLineRun with
       ⟨afterArg, argRun, pauseLineRun⟩
     rcases Line.of_run_cons pauseLineRun with
+      ⟨afterDup, dupRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterZero, zeroRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterNot, notRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterEq, eqRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterIszero, iszeroRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
       ⟨afterTime, timeRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterMul, mulRun, pauseLineRun⟩
     rcases Line.of_run_cons pauseLineRun with
       ⟨afterAdd, addRun, pauseLineRun⟩
     rcases Line.of_run_cons pauseLineRun with
@@ -314,14 +360,41 @@ theorem stub_pauseFor_effect
         rfl
       · simpa [pauseForCalldata] using frame.data
     rw [argEq] at argPrefix
-    have timePrefix : sevm.benvStat.time :: duration :: [] <<+
+    have dupPrefix : duration :: duration :: [] <<+ afterDup.stack :=
+      prefix_of_dup_val dupRun (by show_nth) argPrefix
+    have zeroPrefix : (0 : B256) :: duration :: duration :: [] <<+
+        afterZero.stack :=
+      prefix_of_push (of_run_pushB256 zeroRun) dupPrefix
+    have notPrefix : pauseInfiniteSentinel :: duration :: duration :: [] <<+
+        afterNot.stack := by
+      have zeroNot : ~~~ (0 : B256) = pauseInfiniteSentinel := rfl
+      rw [← zeroNot]
+      exact prefix_of_not notRun zeroPrefix
+    have eqPrefix : (pauseInfiniteSentinel =? duration) :: duration :: [] <<+
+        afterEq.stack :=
+      prefix_of_eq eqRun notPrefix
+    have iszeroPrefix :
+        ((pauseInfiniteSentinel =? duration) =? 0) :: duration :: [] <<+
+          afterIszero.stack :=
+      prefix_of_iszero iszeroRun eqPrefix
+    have timePrefix : sevm.benvStat.time ::
+        ((pauseInfiniteSentinel =? duration) =? 0) :: duration :: [] <<+
         afterTime.stack :=
-      prefix_of_timestamp argPrefix timeRun
-    have sumPrefix : (sevm.benvStat.time + duration) :: [] <<+
+      prefix_of_timestamp iszeroPrefix timeRun
+    have mulPrefix :
+        (sevm.benvStat.time *
+          ((pauseInfiniteSentinel =? duration) =? 0)) :: duration :: [] <<+
+            afterMul.stack :=
+      prefix_of_mul mulRun timePrefix
+    have sumPrefix :
+        (sevm.benvStat.time *
+          ((pauseInfiniteSentinel =? duration) =? 0) + duration) :: [] <<+
         afterAdd.stack :=
-      prefix_of_add addRun timePrefix
+      prefix_of_add addRun mulPrefix
     have keyPrefix : pausedUntilSlot ::
-        (sevm.benvStat.time + duration) :: [] <<+ beforeStore.stack :=
+        (sevm.benvStat.time *
+          ((pauseInfiniteSentinel =? duration) =? 0) + duration) :: [] <<+
+            beforeStore.stack :=
       prefix_of_push (of_run_pushB256 keyRun) sumPrefix
     have effect := sstore_getStor_set storeRun keyPrefix
     rw [frame.currentTarget] at effect
@@ -329,8 +402,9 @@ theorem stub_pauseFor_effect
       (Func.of_inv Devm.getStor Devm.getStor (by func_inv) stopRun) target
     unfold pausedUntil
     change (Devm.getStor post target).get pausedUntilSlot =
-      sevm.benvStat.time + duration
-    rw [← stopStor, effect, Stor.get_set_self]
+      pauseForProjection sevm.benvStat.time duration
+    rw [← stopStor, effect, Stor.get_set_self,
+      compact_pause_word_eq_projection]
 
 /-- The Lido one-word return fragment returns the stack head and preserves the
 entry error field.  Its full overwrite makes the initial memory image
@@ -875,7 +949,9 @@ theorem stub_successful_pause_composition
     (executes : MessageExecutesProgram msg xl stubProgram)
     (process : ProcessMessage msg xl (.ok post))
     (clean : post.error.isSome = false)
-    (strictGrowth : msg.benv.stat.time < msg.benv.stat.time + duration) :
+    (strictGrowth :
+      msg.benv.stat.time <
+        pauseForProjection msg.benv.stat.time duration) :
     PausedAt pausedUntil post.state target msg.benv.stat.time ∧
       ∀ key ∈ [countSlot pauser.toB256, heartbeatIntervalSlot],
         TargetInvocationNoRetainedWriteTo xl circuitBreaker key := by
