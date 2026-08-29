@@ -976,7 +976,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of gates 21, 22 and 23 plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate \u2014 the recursive Blanc population is what preserves that membership sensitivity.",
+      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate \u2014 the recursive Blanc population is what preserves that membership sensitivity.",
       "order": 25,
       "verdict": {
         "expect_exit": 0,
