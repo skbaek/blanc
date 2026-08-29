@@ -302,7 +302,7 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
         htarget hdelegation hexecMsg hcore hresult
       have hpre :
           execMsg.benv.state.getStor = msg.benv.state.getStor := by
-        rw [hexecMsg, messageCallExecutionMessage_getStor_eq,
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
           messageCallDelegation_getStor_eq hdelegation]
       change AllowanceTransported ca msg.benv.state state
         (trace.retained.attributionStream dp ca)
@@ -792,7 +792,7 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
         htarget hdelegation hexecMsg hcore hresult
       have hpre :
           execMsg.benv.state.getStor = msg.benv.state.getStor := by
-        rw [hexecMsg, messageCallExecutionMessage_getStor_eq,
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
           messageCallDelegation_getStor_eq hdelegation]
       change AllowanceTransportedSound ca msg.benv.state state
         (trace.retained.attributionStream dp ca)

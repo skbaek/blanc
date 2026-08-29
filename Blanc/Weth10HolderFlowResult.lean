@@ -450,12 +450,6 @@ theorem messageCallDelegation_getStor_eq
     rcases hrest with ⟨rfl, rfl⟩
     exact setDelegation_getStor_eq hset
 
-theorem messageCallExecutionMessage_getStor_eq (msg : Msg) :
-    (messageCallExecutionMessage msg).benv.state.getStor =
-      msg.benv.state.getStor := by
-  unfold messageCallExecutionMessage
-  split <;> rfl
-
 /-- The concrete committed-execution theorem discharges collision, delegation,
 precompile/no-code, create-settlement, and ordinary call wrappers. -/
 theorem CommittedExecStorageSound.messageStorageSound
@@ -506,7 +500,7 @@ theorem CommittedExecStorageSound.messageStorageSound
         htarget hdelegation hexecMsg hcore hresult
       have hpre :
           execMsg.benv.state.getStor = msg.benv.state.getStor := by
-        rw [hexecMsg, messageCallExecutionMessage_getStor_eq,
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
           messageCallDelegation_getStor_eq hdelegation]
       change StateStorageFlowAccounting ca msg.benv.state state
         (trace.retained.flowActions dp ca)

@@ -1,3 +1,4 @@
+import Blanc.ExecutionMessageEffects
 import Blanc.Weth10HolderFlowAuthenticity
 
 /-!
@@ -1402,12 +1403,6 @@ theorem messageCallDelegation_target_eq
     rcases hrest with ⟨rfl, rfl⟩
     exact (setDelegation_fields hset).2.1
 
-theorem messageCallExecutionMessage_bal_eq (msg : Msg) :
-    (messageCallExecutionMessage msg).benv.state.bal =
-      msg.benv.state.bal := by
-  unfold messageCallExecutionMessage
-  split <;> rfl
-
 theorem messageCallExecutionMessage_target_eq (msg : Msg) :
     (messageCallExecutionMessage msg).target = msg.target := by
   unfold messageCallExecutionMessage
@@ -1578,7 +1573,7 @@ theorem CommittedExecEthSound.messageEthSound
       have hstate := processMessageCall_callRun_state_eq
         htarget hdelegation hexecMsg hcore hresult
       have hpre : execMsg.benv.state.bal = msg.benv.state.bal := by
-        rw [hexecMsg, messageCallExecutionMessage_bal_eq,
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_bal_eq,
           messageCallDelegation_bal_eq hdelegation]
       change EthBound ca msg.benv.state state
         (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)
