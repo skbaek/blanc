@@ -251,6 +251,54 @@ theorem accountingEffect_silent
   rw [hstor, hbalance]
   exact .silent _
 
+/-- A list presentation of connected accounting effects, retaining its exact
+initial and terminal snapshots while remaining convenient for induction. -/
+inductive ProrataAccountingReplay (o : Nat) :
+    AccountingSnapshot → List (ProrataAccountingStep o) →
+      AccountingSnapshot → Prop where
+  | nil (snapshot : AccountingSnapshot) :
+      ProrataAccountingReplay o snapshot [] snapshot
+  | cons {step : ProrataAccountingStep o}
+      {steps : List (ProrataAccountingStep o)} {post : AccountingSnapshot}
+      (tail : ProrataAccountingReplay o step.post steps post) :
+      ProrataAccountingReplay o step.pre (step :: steps) post
+
+namespace ProrataAccountingReplay
+
+/-- Concatenate two accounting replays at their shared boundary. -/
+theorem append {o : Nat} {pre mid post : AccountingSnapshot}
+    {left right : List (ProrataAccountingStep o)}
+    (before : ProrataAccountingReplay o pre left mid)
+    (after : ProrataAccountingReplay o mid right post) :
+    ProrataAccountingReplay o pre (left ++ right) post := by
+  induction before with
+  | nil snapshot =>
+      simpa using after
+  | cons tail ih =>
+      simpa using ProrataAccountingReplay.cons (ih after)
+
+/-- Every replay yields the frozen connected-path carrier used by the exact
+dust theorem; no boundary connectivity is reconstructed axiomatically. -/
+theorem exists_path {o : Nat} {pre post : AccountingSnapshot}
+    {steps : List (ProrataAccountingStep o)}
+    (replay : ProrataAccountingReplay o pre steps post) :
+    ∃ path : ProrataAccountingPath o,
+      path.steps = steps ∧ path.first = pre ∧ path.last = post := by
+  induction replay with
+  | nil snapshot =>
+      exact ⟨ProrataAccountingPath.nil o snapshot, rfl, rfl, rfl⟩
+  | @cons step steps post tail ih =>
+      rcases ih with ⟨path, hsteps, hfirst, hlast⟩
+      have connect : step.post = path.first := hfirst.symm
+      refine ⟨ProrataAccountingPath.cons step path connect, ?_, ?_, ?_⟩
+      · rw [ProrataAccountingPath.cons]
+        simp only
+        rw [hsteps]
+      · rfl
+      · simpa using hlast
+
+end ProrataAccountingReplay
+
 end Prorata
 
 end Blanc

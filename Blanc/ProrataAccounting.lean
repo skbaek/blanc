@@ -318,6 +318,31 @@ def cons {o : Nat} (step : ProrataAccountingStep o)
     · exact connect.symm
     · exact tail.post_eq j
 
+/-- The initial snapshot of a connected accounting path. -/
+def first {o : Nat} (path : ProrataAccountingPath o) : AccountingSnapshot :=
+  path.snapshot ⟨0, Nat.zero_lt_succ _⟩
+
+/-- The terminal snapshot of a connected accounting path. -/
+def last {o : Nat} (path : ProrataAccountingPath o) : AccountingSnapshot :=
+  path.snapshot ⟨path.steps.length, Nat.lt_succ_self _⟩
+
+@[simp] theorem nil_first {o : Nat} (snapshot : AccountingSnapshot) :
+    (nil o snapshot).first = snapshot := rfl
+
+@[simp] theorem nil_last {o : Nat} (snapshot : AccountingSnapshot) :
+    (nil o snapshot).last = snapshot := rfl
+
+@[simp] theorem cons_first {o : Nat} (step : ProrataAccountingStep o)
+    (tail : ProrataAccountingPath o)
+    (connect : step.post = tail.first) :
+    (cons step tail connect).first = step.pre := rfl
+
+@[simp] theorem cons_last {o : Nat} (step : ProrataAccountingStep o)
+    (tail : ProrataAccountingPath o)
+    (connect : step.post = tail.first) :
+    (cons step tail connect).last = tail.last := by
+  rfl
+
 /-- Total boundary lookup; telescope indices are always within the unclamped range. -/
 def snapshotAt {o : Nat} (path : ProrataAccountingPath o) (i : Nat) :
     AccountingSnapshot :=
