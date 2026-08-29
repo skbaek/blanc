@@ -11,6 +11,8 @@ namespace Prorata
 
 open _root_.Blanc.ExecutionTrace
 
+open scoped BigOperators
+
 /-- Rung R8: a whole configured block realizes one PRORATA accounting replay,
 from the world the parent chain leaves to the world the imported block
 installs.
@@ -169,6 +171,86 @@ theorem prorataTraceRealizes_exists_of_reachUsing
     ∃ steps, ProrataTraceRealizes root steps future := by
   rcases exists_configuredHistoryTrace_of_reachUsing reach with ⟨history⟩
   exact prorataTraceRealizes_of_configuredHistoryTrace root history
+
+/-! ## Rung R11: the realized cumulative-dust identity -/
+
+namespace ProrataAccountingPath
+
+/-- The telescope's unclamped boundary lookup at index zero is the connected
+path's own first snapshot. -/
+theorem snapshotAt_zero {o : Nat} (path : ProrataAccountingPath o) :
+    path.snapshotAt 0 = path.first := by
+  unfold snapshotAt first
+  congr 1
+
+end ProrataAccountingPath
+
+namespace DeploymentRoot
+
+/-- The deployment root's accounting projection is the genesis snapshot: no
+shares issued and no target balance.  This is what anchors the cumulative-dust
+telescope at `X0 = 1` and `D0 = O`. -/
+theorem accountingSnapshot {cfg : ChainConfig} {deployed : BlockChain}
+    {ca : Adr} (root : DeploymentRoot cfg deployed ca) :
+    AccountingSnapshot.ofState ca deployed.state = ⟨0, 0⟩ := by
+  unfold AccountingSnapshot.ofState
+  rw [root.emptyStorage, root.zeroBalance]
+  rfl
+
+end DeploymentRoot
+
+/-- Rung R11: the SF-frozen cumulative-dust identity, holding over every
+realized finite trace of the deployed PRORATA from its own genesis.
+
+The path is the connected carrier `ProrataAccountingReplay.exists_path`
+extracts from the realized trace, so its steps are exactly the realized ones
+and its boundaries are the realized boundaries -- no connectivity is
+reconstructed.  Anchoring at the deployment root discharges the two genesis
+constants the frozen statement names: the root's empty storage gives `D0 = O`
+and its zero target balance gives `X0 = 1`, which is why the leading term of
+the telescope is the bare denominator product rather than a scaled one.
+
+No hypothesis is added.  `2 <= O` is not needed here -- it is the separate
+P4 no-profit premise -- and the only arithmetic side condition, `O != 0`, is
+discharged from the compiled offset. -/
+theorem prorata_realized_dust_trace_exact
+    {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
+    {steps : List (ProrataAccountingStep offset.toNat)}
+    (root : DeploymentRoot cfg deployed ca)
+    (realizes : ProrataTraceRealizes root steps future) :
+    ∃ path : ProrataAccountingPath offset.toNat,
+      path.steps = steps ∧
+      path.first = ⟨0, 0⟩ ∧
+      path.last = AccountingSnapshot.ofState ca future.state ∧
+      path.XAt 0 = 1 ∧
+      path.DAt 0 = offset.toNat ∧
+      path.XAt steps.length * (∏ j ∈ Finset.range steps.length, path.DAt j) =
+        (∏ j ∈ Finset.Icc 1 steps.length, path.DAt j) +
+          ∑ i ∈ Finset.range steps.length,
+            (path.rhoAt i + path.kappaAt i) *
+              (∏ j ∈ Finset.range i, path.DAt j) *
+                (∏ j ∈ Finset.Icc (i + 2) steps.length, path.DAt j) := by
+  obtain ⟨path, hsteps, hfirst, hlast⟩ :=
+    ProrataAccountingReplay.exists_path realizes.toAccountingReplay
+  have hgenesis : path.first = ⟨0, 0⟩ := by
+    rw [hfirst, root.accountingSnapshot]
+  have hzero : path.snapshotAt 0 = ⟨0, 0⟩ := by
+    rw [path.snapshotAt_zero, hgenesis]
+  have hX : path.XAt 0 = 1 := by
+    simp [ProrataAccountingPath.XAt, ProrataAccountingStep.X, hzero]
+  have hD : path.DAt 0 = offset.toNat := by
+    simp [ProrataAccountingPath.DAt, ProrataAccountingStep.D, hzero]
+  refine ⟨path, hsteps, hgenesis, hlast, hX, hD, ?_⟩
+  have hexact : path.XAt path.steps.length *
+      (∏ j ∈ Finset.range path.steps.length, path.DAt j) =
+        path.XAt 0 * (∏ j ∈ Finset.Icc 1 path.steps.length, path.DAt j) +
+          ∑ i ∈ Finset.range path.steps.length,
+            (path.rhoAt i + path.kappaAt i) *
+              (∏ j ∈ Finset.range i, path.DAt j) *
+                (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.DAt j) :=
+    ProrataAccountingPath.prorata_dust_trace_exact (by simp) path
+  rw [hsteps, hX, Nat.one_mul] at hexact
+  exact hexact
 
 end Prorata
 
