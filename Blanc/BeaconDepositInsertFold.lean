@@ -123,45 +123,6 @@ theorem insertionStoreCost_eq_sstoreCost
   simpa only [insertionReadKeys] using
     Blanc.afterSload_accessedStorageKeys sevm base key
 
-@[simp] theorem afterSload_getStor_insertion
-    (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
-    Devm.getStor (afterSload sevm base key) address =
-      Devm.getStor base address := by
-  unfold afterSload
-  split <;> rfl
-
-@[simp] theorem afterSload_getCode_insertion
-    (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
-    (afterSload sevm base key).getCode address =
-      base.getCode address := by
-  unfold afterSload
-  split <;> rfl
-
-@[simp] theorem afterSload_accessedAddresses_insertion
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSload sevm base key).accessedAddresses =
-      base.accessedAddresses := by
-  unfold afterSload
-  split <;> rfl
-
-@[simp] theorem afterSload_logs_insertion
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSload sevm base key).logs = base.logs := by
-  unfold afterSload
-  split <;> rfl
-
-@[simp] theorem afterSload_output_insertion
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSload sevm base key).output = base.output := by
-  unfold afterSload
-  split <;> rfl
-
-@[simp] theorem afterSload_error_insertion
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSload sevm base key).error = base.error := by
-  unfold afterSload
-  split <;> rfl
-
 theorem insertionDeadStepGas_ge (owner : Adr) (s : InsertionLoopState) :
     436 ≤ insertionDeadStepGas owner s := by
   unfold insertionDeadStepGas insertionReadGas sloadCostOfKeys
@@ -221,16 +182,16 @@ private def insertionLoopCarrier_step
   · simpa [InsertionLoopState.step] using
       hmem.writeShiftedSize (s.size >>> 1)
   · intro a
-    rw [hstorage, afterSload_getStor_insertion, carrier.stor]
+    rw [hstorage, Blanc.afterSload_getStor, carrier.stor]
   · intro a
-    rw [hcode, afterSload_getCode_insertion, carrier.code]
-  · rw [haddresses, afterSload_accessedAddresses_insertion,
+    rw [hcode, Blanc.afterSload_getCode, carrier.code]
+  · rw [haddresses, Blanc.afterSload_accessedAddresses,
       carrier.addresses]
   · rw [hkeys, afterSload_accessedStorageKeys_insertion, carrier.keys]
     rfl
-  · rw [hlogs, afterSload_logs_insertion, carrier.logs]
-  · rw [houtput, afterSload_output_insertion, carrier.output]
-  · rw [herror, afterSload_error_insertion, carrier.error]
+  · rw [hlogs, Blanc.afterSload_logs, carrier.logs]
+  · rw [houtput, Blanc.afterSload_output, carrier.output]
+  · rw [herror, Blanc.afterSload_error, carrier.error]
 
 /-- Exact existential CPS composition of any dead insertion prefix. -/
 theorem insertionLoop_dead_iterations_exists_runCompiledTo
@@ -317,11 +278,11 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
       have hnodelegSha :
           getDelegatedCodeAddress (shaBase.getCode 2) = none := by
         simpa only [shaBase, loaded, insertionFold_getCode_setMach,
-          afterSload_getCode_insertion] using hnodelegBase
+          Blanc.afterSload_getCode] using hnodelegBase
       have hwarmSha : (2 : Adr) ∈ shaBase.accessedAddresses := by
         change (2 : Adr) ∈ loaded.accessedAddresses
         dsimp only [loaded]
-        rw [afterSload_accessedAddresses_insertion]
+        rw [Blanc.afterSload_accessedAddresses]
         exact hwarmBase
       obtain ⟨callPost, _hstack, _hmemory, hcallMemNE,
           _hgas, _hreturn, hstorage, hcode, haddresses, hkeys,

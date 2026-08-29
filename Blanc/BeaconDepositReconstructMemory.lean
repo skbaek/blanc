@@ -38,6 +38,31 @@ structure ReconstructSourceMemoryCarrier
   oldCount_read : image.sliceD 576 32 0 = oldCount.toBytes
   amount_read : image.sliceD 672 32 0 = amount.toBytes
 
+/-- The event-stage carrier exposes the five raw reconstruction windows
+without replaying the concrete memory-write construction.  Their semantic
+identification with the deposit fields is kept as a separate bridge. -/
+def DepositEventMemoryCarrier.toReconstructSource
+    {memory : Mem} {event : DepositEvent} {amount oldCount : B256}
+    (h : DepositEventMemoryCarrier memory event amount oldCount) :
+    ReconstructSourceMemoryCarrier memory
+      (h.image.sliceD 192 64 0)
+      (h.image.sliceD 416 64 0)
+      (h.image.sliceD 480 32 0)
+      (h.image.sliceD 288 32 0)
+      (h.image.sliceD 352 32 0)
+      oldCount amount 704 :=
+  { image := h.image
+    wf := h.wf
+    reads := h.reads
+    size_eq := h.size_eq
+    pubkeyInput_read := rfl
+    withdrawal_read := rfl
+    amountPadded_read := rfl
+    signatureFirst_read := rfl
+    signatureTail_read := rfl
+    oldCount_read := h.oldCount_read
+    amount_read := h.amount_read }
+
 theorem ReconstructSourceMemoryCarrier.shaPubkeyInput
     {memory : Mem}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
