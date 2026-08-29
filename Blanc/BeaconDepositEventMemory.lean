@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositAbiMemory
 import Blanc.BeaconDepositMemory
+import Blanc.BytesWrite
 
 /-!
 # Beacon deposit event memory
@@ -39,13 +40,6 @@ structure DepositEventInputMemoryCarrier
     (depositOffsetWord data 2).toBytes
   amount_read : image.sliceD 672 32 0 = amount.toBytes
 
-private lemma Bytes.length_writeAt_event
-    (bs : Bytes) (n : Nat) (xs : Bytes) :
-    (Bytes.writeAt bs n xs).length = max bs.length (n + xs.length) := by
-  simp only [Bytes.writeAt, List.length_append, List.takeD_length,
-    List.length_drop]
-  omega
-
 /-- The concrete decoder-plus-amount image satisfies the event input carrier. -/
 def depositEventInputMemory_carrier (data : Bytes) (amount : B256) :
     DepositEventInputMemoryCarrier
@@ -62,7 +56,7 @@ def depositEventInputMemory_carrier (data : Bytes) (amount : B256) :
     decide +kernel
   have hlen : (depositEventInputImage data amount).length = 704 := by
     unfold depositEventInputImage
-    rw [Bytes.length_writeAt_event, ← hdec.image_eq, hdec.image_length,
+    rw [Bytes.length_writeAt, ← hdec.image_eq, hdec.image_length,
       B256.length_toBytes]
     decide +kernel
   have hoffset0 : (depositEventInputImage data amount).sliceD 0 32 0 =
@@ -102,7 +96,7 @@ private theorem EventMemoryImage.write
   have hsize : (memory.write n ys).size = 704 := by
     rw [Mem.size_write_of_le (by rw [h.size_eq]; exact hfit), h.size_eq]
   have hlen : (Bytes.writeAt image n ys).length = 704 := by
-    rw [Bytes.length_writeAt_event, h.image_length]
+    rw [Bytes.length_writeAt, h.image_length]
     omega
   exact ⟨h.wf.write _ _, Mem.Reads.write h.wf h.reads _ _, hsize, hlen⟩
 
@@ -119,40 +113,10 @@ private theorem EventMemoryImage.storeLe64
       h.size_eq]
   have hle64 : (le64 word.toNat).length = 8 := rfl
   have hlen : (storeLe64Image image base word).length = 704 := by
-    rw [storeLe64Image_eq_le64, Bytes.length_writeAt_event,
+    rw [storeLe64Image_eq_le64, Bytes.length_writeAt,
       h.image_length, hle64]
     omega
   exact ⟨hinv.1, hinv.2, hsize, hlen⟩
-
-private theorem sliceD_split {ξ : Type} (xs : List ξ) (d : ξ) :
-    ∀ (a m b : Nat),
-      xs.sliceD m (a + b) d =
-        xs.sliceD m a d ++ xs.sliceD (m + a) b d := by
-  intro a
-  induction a with
-  | zero =>
-      intro m b
-      simp [List.sliceD, List.takeD]
-  | succ a ih =>
-      intro m b
-      rw [show a + 1 + b = (a + b) + 1 by omega,
-        List.sliceD_succ, ih (m + 1) b,
-        List.sliceD_succ xs m a d,
-        show m + (a + 1) = m + 1 + a by omega]
-      rfl
-
-private theorem Bytes.sliceD_writeAt_after_event
-    (bs xs : Bytes) (start len n : Nat)
-    (h : n + xs.length ≤ start) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt]
-  rw [if_neg]
-  omega
 
 private theorem Bytes.sliceD_writeAt_inside_event
     (bs xs : Bytes) (start len n : Nat)
@@ -173,7 +137,7 @@ private theorem Bytes.sliceD_writeAt_extend_event
     (hpre : bs.sliceD 0 n 0 = pre) :
     (Bytes.writeAt bs n xs).sliceD 0 (n + xs.length) 0 =
       pre ++ xs := by
-  rw [sliceD_split _ 0 n 0 xs.length,
+  rw [List.sliceD_add _ 0 n 0 xs.length,
     Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
     Nat.zero_add, hpre, Bytes.sliceD_writeAt]
 
@@ -182,7 +146,7 @@ private theorem Bytes.sliceD_join_event
     (hleft : bs.sliceD start lenLeft 0 = left)
     (hright : bs.sliceD (start + lenLeft) lenRight 0 = right) :
     bs.sliceD start (lenLeft + lenRight) 0 = left ++ right := by
-  rw [sliceD_split _ 0 lenLeft start lenRight, hleft, hright]
+  rw [List.sliceD_add _ 0 lenLeft start lenRight, hleft, hright]
 
 private theorem Bytes.sliceD_zeroThenLe64_event
     (bs : Bytes) (base : Nat) (word : B256) :
@@ -204,7 +168,7 @@ private theorem Bytes.sliceD_zeroThenLe64_event
         (Bytes.writeAt bs base (0 : B256).toBytes)
         base (le64 word.toNat)).sliceD (base + 8) 24 0 =
           zeros 24 := by
-    rw [Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       change base + 8 ≤ base + 8
       omega)]
     rw [Bytes.sliceD_writeAt_inside_event _ _ _ _ _ (by omega) (by
@@ -244,7 +208,7 @@ private theorem depositEventPubkeyRegion
         (Bytes.writeAt image 224 (0 : B256).toBytes)
         192 (depositEventPubkeySlice data)).sliceD 240 16 0 =
           zeros 16 := by
-    rw [Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [hpubkeyLength])]
     rw [Bytes.sliceD_writeAt_inside_event _ _ _ _ _
       (by omega) (by rw [B256.length_toBytes])]
@@ -266,11 +230,11 @@ private theorem EventPayloadRegions.writeBefore
     (n : Nat) (xs : Bytes) (hfit : n + xs.length ≤ 192) :
     EventPayloadRegions (Bytes.writeAt image n xs) data := by
   constructor
-  · rw [Bytes.sliceD_writeAt_after_event _ _ _ _ _ hfit]
+  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hfit]
     exact h.pubkey
-  · rw [Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by omega)]
+  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.withdrawal
-  · rw [Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by omega)]
+  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.signature
 
 private theorem eventPayloadRegions_staged
@@ -567,7 +531,7 @@ theorem depositEventImage_event_read
   have hwithdrawal11 : I11.sliceD 288 32 0 =
       depositEventWithdrawalSlice data := by
     dsimp only [I11]
-    rw [Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes])]
     exact hp10.withdrawal
   have h11Full : I11.sliceD 0 320 0 =
@@ -648,18 +612,18 @@ theorem depositEventImage_event_read
   have hsignature15 : I15.sliceD 416 96 0 =
       depositEventSignatureSlice data := by
     dsimp only [I15, I14, I13, I12, I11]
-    rw [Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]), storeLe64Image_eq_le64,
-      Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         change 352 + 8 ≤ 416
         omega),
-      Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         rw [B256.length_toBytes]
         omega),
-      Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         rw [B256.length_toBytes]
         omega),
-      Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         rw [B256.length_toBytes]
         omega)]
     exact hp10.signature
@@ -723,7 +687,7 @@ theorem depositEventImage_event_read
   have hindexRight : I19.sliceD 552 24 0 = zeros 24 := by
     dsimp only [I19, I18, I17]
     rw [storeLe64Image_eq_le64,
-      Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         change 544 + 8 ≤ 552
         omega),
       Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
@@ -828,7 +792,7 @@ def depositEventMemory_carrier
         oldCount.toBytes := by
     unfold depositEventImage
     rw [storeLe64Image_eq_le64,
-      Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         change 544 + 8 ≤ 576
         omega)]
     simpa only [B256.length_toBytes] using
@@ -875,7 +839,7 @@ def depositEventMemory_carrier
     unfold depositEventImage
     simp only [storeLe64Image_eq_le64]
     repeat' first
-      | rw [Bytes.sliceD_writeAt_after_event _ _ _ _ _ (by
+      | rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
           simp only [B256.length_toBytes, depositEventPubkeySlice,
             depositEventWithdrawalSlice, depositEventSignatureSlice,
             List.length_sliceD, le64, List.length_cons, List.length_nil]

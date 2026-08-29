@@ -34,7 +34,7 @@ theorem getDepositRoot_zero_runCompiled
       G + 416 +
           rootLoopGas sevm.currentTarget stor 32
             (rootInitialLoopState
-              (rootAfterSload sevm base depositCountSlot)
+              (afterSload sevm base depositCountSlot)
               (Nat.toB256 count)) <
         2 ^ 256)
     (hcode : sevm.code.toList = code) :
@@ -58,7 +58,7 @@ theorem getDepositRoot_zero_runCompiled
       post.accessedStorageKeys =
         (rootLoopIter sevm.currentTarget stor 32
           (rootInitialLoopState
-            (rootAfterSload sevm base depositCountSlot)
+            (afterSload sevm base depositCountSlot)
             (Nat.toB256 count))).keys ∧
       post.logs = base.logs ∧
       post.error = base.error ∧
@@ -77,7 +77,7 @@ theorem getDepositRoot_zero_runCompiled
     416 +
       rootLoopGas sevm.currentTarget stor 32
         (rootInitialLoopState
-          (rootAfterSload sevm base depositCountSlot)
+          (afterSload sevm base depositCountSlot)
           (Nat.toB256 count)) +
       getDepositRootPrefixGas sevm base
   have hendpoint' :
@@ -90,7 +90,7 @@ theorem getDepositRoot_zero_runCompiled
           G + 416 +
               rootLoopGas sevm.currentTarget stor 32
                 (rootInitialLoopState
-                  (rootAfterSload sevm base depositCountSlot)
+                  (afterSload sevm base depositCountSlot)
                   (Nat.toB256 count)) +
             getDepositRootPrefixGas sevm base := by
       dsimp only [endpointGas]
@@ -102,7 +102,7 @@ theorem getDepositRoot_zero_runCompiled
           G + 416 +
               rootLoopGas sevm.currentTarget stor 32
                 (rootInitialLoopState
-                  (rootAfterSload sevm base depositCountSlot)
+                  (afterSload sevm base depositCountSlot)
                   (Nat.toB256 count)) +
             getDepositRootPrefixGas sevm base⟩)
       getDepositRootEndpoint post

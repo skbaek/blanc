@@ -50,7 +50,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
-          "BalanceAlgebra", "WordArithmetic", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
+          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
           "ForwardNoRawSstore",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
           "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",

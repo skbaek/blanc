@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositEventMemory
 import Blanc.BeaconDepositSha
+import Blanc.BytesWrite
 
 /-!
 # Beacon deposit reconstruction memory carriers
@@ -13,43 +14,6 @@ grow from the initial 704-byte image to 768 bytes.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-
-private lemma Bytes.sliceD_writeAt_after_reconstruct
-    (bs xs : Bytes) (start len n : Nat)
-    (h : n + xs.length ≤ start) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt, if_neg]
-  omega
-
-private lemma Bytes.sliceD_stagedPair_reconstruct
-    (image : Bytes) (left right : B256) :
-    (Bytes.writeAt
-      (Bytes.writeAt image 0 left.toBytes) 32 right.toBytes).sliceD
-        0 64 0 = left.toBytes ++ right.toBytes := by
-  have hleft : left.toBytes.length = 32 := B256.length_toBytes left
-  have hright : right.toBytes.length = 32 := B256.length_toBytes right
-  have hfirst : Bytes.writeAt image 0 left.toBytes =
-      left.toBytes ++ image.drop 32 := by
-    rw [Bytes.writeAt, hleft, show List.takeD 0 image 0 = [] from rfl,
-      List.nil_append, Nat.zero_add]
-  have hsecond :
-      Bytes.writeAt (left.toBytes ++ image.drop 32) 32 right.toBytes =
-        left.toBytes ++ (right.toBytes ++ (image.drop 32).drop 32) := by
-    rw [Bytes.writeAt, hright, List.takeD_eq_take _ (by simp [hleft]),
-      List.take_left' hleft,
-      show 32 + 32 = left.toBytes.length + 32 by rw [hleft],
-      List.drop_append, List.append_assoc]
-    simp [hleft]
-  rw [hfirst, hsecond]
-  unfold List.sliceD
-  rw [List.drop_zero,
-    List.takeD_eq_take _ (by simp [hleft, hright]; omega),
-    ← List.append_assoc, List.take_left' (by simp [hleft, hright])]
 
 /-- The source windows retained throughout deposit-data reconstruction.
 
@@ -184,25 +148,25 @@ def ReconstructSourceMemoryCarrier.writeBeforeSources
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [Mem.size_write_of_le (by rw [h.size_eq]; exact hfit), h.size_eq]
   · dsimp only [image']
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ hbefore]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hbefore]
     exact h.pubkeyInput_read
   · dsimp only [image']
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.withdrawal_read
   · dsimp only [image']
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.amountPadded_read
   · dsimp only [image']
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.signatureFirst_read
   · dsimp only [image']
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.signatureTail_read
   · dsimp only [image']
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.oldCount_read
   · dsimp only [image']
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.amount_read
 
 /-- A digest write beginning at or above byte 704 preserves every source. -/
@@ -280,7 +244,7 @@ def ReconstructSourceMemoryCarrier.writeNodeSource
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
     exact h.oldCount_read
   · dsimp only [image']
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes])]
     exact h.amount_read
 
@@ -435,10 +399,10 @@ def ReconstructIntermediateMemoryCarrier.stagePair
     change (Bytes.writeAt
       (Bytes.writeAt h.node.source.image 0 left.toBytes)
       32 right.toBytes).sliceD 640 32 0 = node.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega),
-      Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         rw [B256.length_toBytes]
         omega)]
     exact h.node.node_read
@@ -451,10 +415,10 @@ def ReconstructIntermediateMemoryCarrier.stagePair
     change (Bytes.writeAt
       (Bytes.writeAt h.node.source.image 0 left.toBytes)
       32 right.toBytes).sliceD 704 32 0 = intermediate.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega),
-      Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         rw [B256.length_toBytes]
         omega)]
     exact h.intermediate_read
@@ -468,7 +432,7 @@ def ReconstructIntermediateMemoryCarrier.stagePair
     change (Bytes.writeAt
       (Bytes.writeAt h.node.source.image 0 left.toBytes)
       32 right.toBytes).sliceD 0 64 0 = left.toBytes ++ right.toBytes
-    exact Bytes.sliceD_stagedPair_reconstruct _ _ _
+    exact Bytes.sliceD_stagedPair _ _ _
   have hsha := Mem.Reads.read intermediate'.node.source.reads 0 64
   change ((memory.write 0 left.toBytes).write 32 right.toBytes).data.sliceD
     0 64 0 = intermediate'.node.source.image.sliceD 0 64 0 at hsha
@@ -583,10 +547,10 @@ def ReconstructRegistersMemoryCarrier.stagePair
     change (Bytes.writeAt
       (Bytes.writeAt h.intermediate.node.source.image 0 left.toBytes)
       32 right.toBytes).sliceD 736 32 0 = second.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega),
-      Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by
         rw [B256.length_toBytes]
         omega)]
     exact h.second_read
@@ -614,7 +578,7 @@ def ReconstructRegistersMemoryCarrier.writeNode
       intermediate.toBytes := by
     change (Bytes.writeAt h.intermediate.node.source.image 640 node'.toBytes).sliceD
       704 32 0 = intermediate.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega)]
     exact h.intermediate.intermediate_read
@@ -627,7 +591,7 @@ def ReconstructRegistersMemoryCarrier.writeNode
       second.toBytes := by
     change (Bytes.writeAt h.intermediate.node.source.image 640 node'.toBytes).sliceD
       736 32 0 = second.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega)]
     exact h.second_read
@@ -651,7 +615,7 @@ def ReconstructRegistersMemoryCarrier.writeIntermediate
       second.toBytes := by
     change (Bytes.writeAt h.intermediate.node.source.image 704
       intermediate'.toBytes).sliceD 736 32 0 = second.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes])]
     exact h.second_read
   exact ⟨nextIntermediate, hsecond⟩
@@ -674,7 +638,7 @@ def ReconstructIntermediateMemoryCarrier.writeBeforeSources
   have hnode : source'.image.sliceD 640 32 0 = node.toBytes := by
     change (Bytes.writeAt h.node.source.image n xs).sliceD 640 32 0 =
       node.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.node.node_read
   let node' : ReconstructNodeMemoryCarrier (memory.write n xs)
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
@@ -683,7 +647,7 @@ def ReconstructIntermediateMemoryCarrier.writeBeforeSources
       intermediate.toBytes := by
     change (Bytes.writeAt h.node.source.image n xs).sliceD 704 32 0 =
       intermediate.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.intermediate_read
   exact ⟨node', hintermediate⟩
 
@@ -707,7 +671,7 @@ def ReconstructRegistersMemoryCarrier.writeBeforeSources
       second.toBytes := by
     change (Bytes.writeAt h.intermediate.node.source.image n xs).sliceD
       736 32 0 = second.toBytes
-    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.second_read
   exact ⟨intermediate', hsecond⟩
 

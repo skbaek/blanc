@@ -98,52 +98,52 @@ structure RootLoopCarrier (origin base : Devm) (memory : Mem)
 @[simp] theorem rootReadGas_eq_rootSloadCost
     (sevm : Sevm) (base : Devm) (key : B256) :
     rootReadGas sevm.currentTarget base.accessedStorageKeys key =
-      rootSloadCost sevm base key := rfl
+      sloadCost sevm base key := rfl
 
 @[simp] theorem rootAfterSload_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (key : B256) :
-    (rootAfterSload sevm base key).accessedStorageKeys =
+    (afterSload sevm base key).accessedStorageKeys =
       rootReadKeys sevm.currentTarget base.accessedStorageKeys key := by
-  unfold rootAfterSload rootReadKeys sloadAccessedStorageKeys
+  unfold afterSload rootReadKeys sloadAccessedStorageKeys
   split <;> rfl
 
 @[simp] theorem rootAfterSload_getStor
     (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
-    Devm.getStor (rootAfterSload sevm base key) address =
+    Devm.getStor (afterSload sevm base key) address =
       Devm.getStor base address := by
-  unfold rootAfterSload
+  unfold afterSload
   split <;> rfl
 
 @[simp] theorem rootAfterSload_getCode
     (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
-    (rootAfterSload sevm base key).getCode address =
+    (afterSload sevm base key).getCode address =
       base.getCode address := by
-  unfold rootAfterSload
+  unfold afterSload
   split <;> rfl
 
 @[simp] theorem rootAfterSload_accessedAddresses
     (sevm : Sevm) (base : Devm) (key : B256) :
-    (rootAfterSload sevm base key).accessedAddresses =
+    (afterSload sevm base key).accessedAddresses =
       base.accessedAddresses := by
-  unfold rootAfterSload
+  unfold afterSload
   split <;> rfl
 
 @[simp] theorem rootAfterSload_logs
     (sevm : Sevm) (base : Devm) (key : B256) :
-    (rootAfterSload sevm base key).logs = base.logs := by
-  unfold rootAfterSload
+    (afterSload sevm base key).logs = base.logs := by
+  unfold afterSload
   split <;> rfl
 
 @[simp] theorem rootAfterSload_output
     (sevm : Sevm) (base : Devm) (key : B256) :
-    (rootAfterSload sevm base key).output = base.output := by
-  unfold rootAfterSload
+    (afterSload sevm base key).output = base.output := by
+  unfold afterSload
   split <;> rfl
 
 @[simp] theorem rootAfterSload_error
     (sevm : Sevm) (base : Devm) (key : B256) :
-    (rootAfterSload sevm base key).error = base.error := by
-  unfold rootAfterSload
+    (afterSload sevm base key).error = base.error := by
+  unfold afterSload
   split <;> rfl
 
 theorem rootLoopStepGas_ge (owner : Adr) (s : RootLoopState) :
@@ -205,16 +205,16 @@ private def rootLoopCarrier_step_live
     (hmem : RootMemoryCarrier callPost.memory oldCount s.size
       (hashPair Bytes.sha256 (stor.get s.key) s.node))
     (hstorage : ∀ a, Devm.getStor callPost a =
-      Devm.getStor (rootAfterSload sevm base s.key) a)
+      Devm.getStor (afterSload sevm base s.key) a)
     (hcode : ∀ a, callPost.getCode a =
-      (rootAfterSload sevm base s.key).getCode a)
+      (afterSload sevm base s.key).getCode a)
     (haddresses : callPost.accessedAddresses =
-      (rootAfterSload sevm base s.key).accessedAddresses)
+      (afterSload sevm base s.key).accessedAddresses)
     (hkeys : callPost.accessedStorageKeys =
-      (rootAfterSload sevm base s.key).accessedStorageKeys)
-    (hlogs : callPost.logs = (rootAfterSload sevm base s.key).logs)
-    (houtput : callPost.output = (rootAfterSload sevm base s.key).output)
-    (herror : callPost.error = (rootAfterSload sevm base s.key).error) :
+      (afterSload sevm base s.key).accessedStorageKeys)
+    (hlogs : callPost.logs = (afterSload sevm base s.key).logs)
+    (houtput : callPost.output = (afterSload sevm base s.key).output)
+    (herror : callPost.error = (afterSload sevm base s.key).error) :
     RootLoopCarrier origin callPost
       (callPost.memory.write 608 (s.size >>> 1).toBytes)
       oldCount (s.step sevm.currentTarget stor) := by
@@ -239,16 +239,16 @@ private def rootLoopCarrier_step_dead
     (hmem : RootMemoryCarrier callPost.memory oldCount s.size
       (hashPair Bytes.sha256 s.node (stor.get s.key)))
     (hstorage : ∀ a, Devm.getStor callPost a =
-      Devm.getStor (rootAfterSload sevm base s.key) a)
+      Devm.getStor (afterSload sevm base s.key) a)
     (hcode : ∀ a, callPost.getCode a =
-      (rootAfterSload sevm base s.key).getCode a)
+      (afterSload sevm base s.key).getCode a)
     (haddresses : callPost.accessedAddresses =
-      (rootAfterSload sevm base s.key).accessedAddresses)
+      (afterSload sevm base s.key).accessedAddresses)
     (hkeys : callPost.accessedStorageKeys =
-      (rootAfterSload sevm base s.key).accessedStorageKeys)
-    (hlogs : callPost.logs = (rootAfterSload sevm base s.key).logs)
-    (houtput : callPost.output = (rootAfterSload sevm base s.key).output)
-    (herror : callPost.error = (rootAfterSload sevm base s.key).error) :
+      (afterSload sevm base s.key).accessedStorageKeys)
+    (hlogs : callPost.logs = (afterSload sevm base s.key).logs)
+    (houtput : callPost.output = (afterSload sevm base s.key).output)
+    (herror : callPost.error = (afterSload sevm base s.key).error) :
     RootLoopCarrier origin callPost
       (callPost.memory.write 608 (s.size >>> 1).toBytes)
       oldCount (s.step sevm.currentTarget stor) := by
@@ -340,7 +340,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
       · have hkey : s.key = branchBase + s.height := by
           simp only [RootLoopState.key, if_pos hlive]
         let left := stor.get s.key
-        let loaded := rootAfterSload sevm base s.key
+        let loaded := afterSload sevm base s.key
         let staged :=
           (memory.write 0 left.toBytes).write 32 s.node.toBytes
         let shaBase := loaded.setMach ⟨[], staged, 0⟩
@@ -421,7 +421,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
             (base.setMach
               ⟨[s.height], memory,
                 (K + tailGas + 285) + 78 +
-                  rootSloadCost sevm base
+                  sloadCost sevm base
                     (branchBase + s.height)⟩)
             rootLoop ex := by
           apply rootLoopLive_runCompiledTo
@@ -430,12 +430,12 @@ theorem rootLoop_iterations_exists_runCompiledTo
           simpa only [shaBase, loaded, staged, hkey,
             Devm.setMach_setMach, Devm.memory_setMach] using hshaRun
         have hcost :
-            rootSloadCost sevm base (branchBase + s.height) =
+            sloadCost sevm base (branchBase + s.height) =
               rootReadGas sevm.currentTarget s.keys s.key := by
           rw [← hkey, ← rootReadGas_eq_rootSloadCost, carrier.keys]
         have hgas :
             (K + tailGas + 285) + 78 +
-                rootSloadCost sevm base (branchBase + s.height) =
+                sloadCost sevm base (branchBase + s.height) =
               K + rootLoopGas sevm.currentTarget stor (n + 1) s := by
           rw [hcost]
           dsimp only [tailGas, next]
@@ -448,7 +448,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
         have hbit : ((1 : B256) &&& s.size) = 0 := by
           exact not_ne_iff.mp hlive
         let right := stor.get s.key
-        let loaded := rootAfterSload sevm base s.key
+        let loaded := afterSload sevm base s.key
         let staged :=
           (memory.write 0 s.node.toBytes).write 32 right.toBytes
         let shaBase := loaded.setMach ⟨[], staged, 0⟩
@@ -529,7 +529,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
             (base.setMach
               ⟨[s.height], memory,
                 (K + tailGas + 285) + 77 +
-                  rootSloadCost sevm base
+                  sloadCost sevm base
                     (zeroHashBase + s.height)⟩)
             rootLoop ex := by
           apply rootLoopDead_runCompiledTo
@@ -538,12 +538,12 @@ theorem rootLoop_iterations_exists_runCompiledTo
           simpa only [shaBase, loaded, staged, hkey,
             Devm.setMach_setMach, Devm.memory_setMach] using hshaRun
         have hcost :
-            rootSloadCost sevm base (zeroHashBase + s.height) =
+            sloadCost sevm base (zeroHashBase + s.height) =
               rootReadGas sevm.currentTarget s.keys s.key := by
           rw [← hkey, ← rootReadGas_eq_rootSloadCost, carrier.keys]
         have hgas :
             (K + tailGas + 285) + 77 +
-                rootSloadCost sevm base (zeroHashBase + s.height) =
+                sloadCost sevm base (zeroHashBase + s.height) =
               K + rootLoopGas sevm.currentTarget stor (n + 1) s := by
           rw [hcost]
           dsimp only [tailGas, next]
@@ -843,7 +843,7 @@ theorem rootLoopActive_32_initial
 /-! ## Endpoint prefix -/
 
 def getDepositRootPrefixGas (sevm : Sevm) (base : Devm) : Nat :=
-  103 + rootSloadCost sevm base depositCountSlot
+  103 + sloadCost sevm base depositCountSlot
 
 /-- Exact initialization of the three root registers and entry to the loop. -/
 theorem getDepositRootEndpoint_prefix_runCompiledTo
@@ -852,14 +852,14 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
     (hvalue : base.getStorVal sevm.currentTarget depositCountSlot = count)
     (hrootLoop : fs[rootLoopSlot]? = some rootLoop)
     (htail : Func.RunCompiledTo fs sevm
-      ((rootAfterSload sevm base depositCountSlot).setMach
+      ((afterSload sevm base depositCountSlot).setMach
         ⟨[0], rootInitialMemory count, K⟩)
       rootLoop ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], Mem.empty, K + getDepositRootPrefixGas sevm base⟩)
       getDepositRootEndpoint ex := by
-  let loaded := rootAfterSload sevm base depositCountSlot
+  let loaded := afterSload sevm base depositCountSlot
   let M1 := Mem.empty.write 576 count.toBytes
   let M2 := M1.write 608 count.toBytes
   let M3 := M2.write 640 (0 : B256).toBytes
@@ -879,7 +879,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := depositCountSlot) (c := gVerylow)
-      (G := K + 100 + rootSloadCost sevm base depositCountSlot)
+      (G := K + 100 + sloadCost sevm base depositCountSlot)
       (by
         unfold depositCountSlot
         decide +kernel)

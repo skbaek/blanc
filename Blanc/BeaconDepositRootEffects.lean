@@ -30,7 +30,7 @@ theorem getDepositRootEndpoint_runCompiled
       G + 416 +
           rootLoopGas sevm.currentTarget stor 32
             (rootInitialLoopState
-              (rootAfterSload sevm base depositCountSlot)
+              (afterSload sevm base depositCountSlot)
               (Nat.toB256 count)) <
         2 ^ 256)
     (hrootContinuation :
@@ -43,7 +43,7 @@ theorem getDepositRootEndpoint_runCompiled
             G + 416 +
                 rootLoopGas sevm.currentTarget stor 32
                   (rootInitialLoopState
-                    (rootAfterSload sevm base depositCountSlot)
+                    (afterSload sevm base depositCountSlot)
                     (Nat.toB256 count)) +
               getDepositRootPrefixGas sevm base⟩)
         getDepositRootEndpoint post ∧
@@ -67,11 +67,11 @@ theorem getDepositRootEndpoint_runCompiled
       post.accessedStorageKeys =
         (rootLoopIter sevm.currentTarget stor 32
           (rootInitialLoopState
-            (rootAfterSload sevm base depositCountSlot)
+            (afterSload sevm base depositCountSlot)
             (Nat.toB256 count))).keys ∧
       post.logs = base.logs ∧
       post.error = base.error := by
-  let loaded := rootAfterSload sevm base depositCountSlot
+  let loaded := afterSload sevm base depositCountSlot
   let initial := rootInitialLoopState loaded (Nat.toB256 count)
   let final := rootLoopIter sevm.currentTarget stor 32 initial
   let node :=
@@ -562,7 +562,7 @@ def getDepositRootRuntimeGas
   416 +
     rootLoopGas sevm.currentTarget stor 32
       (rootInitialLoopState
-        (rootAfterSload sevm base depositCountSlot)
+        (afterSload sevm base depositCountSlot)
         (Nat.toB256 count)) +
     getDepositRootPrefixGas sevm base +
     nonpayableEndpointZeroGas +

@@ -1,4 +1,5 @@
 import Blanc.BeaconDepositEventMemory
+import Blanc.BytesWrite
 
 /-!
 # Beacon deposit event compiled carrier
@@ -47,19 +48,6 @@ private theorem eventMemory_eq
         544 oldCount := by
   rfl
 
-private theorem Bytes.sliceD_writeAt_after_compiledEvent
-    (bs xs : Bytes) (start len n : Nat)
-    (h : n + xs.length ≤ start) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt]
-  rw [if_neg]
-  omega
-
 private structure EventOffsetMemoryCarrier
     (memory : Mem) (data : Bytes) (amount : B256) : Type where
   image : Bytes
@@ -104,7 +92,7 @@ private def EventOffsetMemoryCarrier.writeAfter
     exact h.offset1_read
   · rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
     exact h.offset2_read
-  · rw [Bytes.sliceD_writeAt_after_compiledEvent _ _ _ _ _
+  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _
       hbeforeAmount]
     exact h.amount_read
 
@@ -137,7 +125,7 @@ private def EventAmountMemoryCarrier.writeBefore
     omega
   refine ⟨Bytes.writeAt h.image n xs, h.wf.write _ _,
     Mem.Reads.write h.wf h.reads _ _, hsize, hlen, ?_⟩
-  rw [Bytes.sliceD_writeAt_after_compiledEvent _ _ _ _ _ hbeforeAmount]
+  rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hbeforeAmount]
   exact h.amount_read
 
 private def EventAmountMemoryCarrier.writeWordBefore
@@ -170,7 +158,7 @@ private def EventAmountMemoryCarrier.storeLe64Before
   refine ⟨storeLe64Image h.image base word, hinv.1, hinv.2,
     hsize, hlen, ?_⟩
   rw [storeLe64Image_eq_le64,
-    Bytes.sliceD_writeAt_after_compiledEvent _ _ _ _ _ (by
+    Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       simp only [le64, List.length_cons, List.length_nil]
       exact hbeforeAmount)]
   exact h.amount_read

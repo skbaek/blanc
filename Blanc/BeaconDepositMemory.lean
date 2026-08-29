@@ -1,5 +1,6 @@
 import Blanc.BeaconDeposit
 import Blanc.BeaconDepositEncoding
+import Blanc.BytesWrite
 import Blanc.ForwardMstore8
 import Jaune.Types
 
@@ -342,19 +343,6 @@ theorem getDepositCountHeaderMemory_spec :
   change Mem.Wf M3 ∧ Mem.Reads M3 I3 ∧
     M3.size = 96 ∧ M3.size % 32 = 0
   exact ⟨hwf3, hreads3, hsize3, by rw [hsize3]⟩
-
-private lemma Bytes.writeAt_append_middle_at
-    {pre old suffix replacement : Bytes} {offset : Nat}
-    (hprefix : pre.length = offset)
-    (hlen : old.length = replacement.length) :
-    Bytes.writeAt (pre ++ old ++ suffix) offset replacement =
-      pre ++ replacement ++ suffix := by
-  rw [← hprefix]
-  unfold Bytes.writeAt
-  rw [List.takeD_eq_take _ (by simp)]
-  simp only [List.append_assoc]
-  rw [List.take_left]
-  simp [List.drop_append, hlen]
 
 def getDepositCountResultMemory (word : B256) : Mem :=
   storeLe64Memory getDepositCountHeaderMemory 64 word

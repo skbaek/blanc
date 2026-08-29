@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositRootMemory
 import Blanc.BeaconDepositMemory
+import Blanc.BytesWrite
 
 /-!
 # Beacon deposit root-fold compiled carriers
@@ -15,22 +16,6 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Ninst
 
-/-- State-dependent cost of one root-fold storage read. -/
-def rootSloadCost (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
-  if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
-      base.accessedStorageKeys then
-    gasWarmAccess
-  else
-    gasColdSload
-
-/-- Meta-state after one root-fold storage read. -/
-def rootAfterSload (sevm : Sevm) (base : Devm) (key : B256) : Devm :=
-  if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
-      base.accessedStorageKeys then
-    base
-  else
-    addAccessedStorageKey base sevm.currentTarget key
-
 private lemma root_addAccessedStorageKey_setMach_setMach
     {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
@@ -44,20 +29,20 @@ theorem rootSload_runCompiled
     (hroom : stack.length < 1024) :
     Ninst.RunCompiled sevm
       (base.setMach
-        ⟨key :: stack, memory, G + rootSloadCost sevm base key⟩)
+        ⟨key :: stack, memory, G + sloadCost sevm base key⟩)
       sload
-      ((rootAfterSload sevm base key).setMach
+      ((afterSload sevm base key).setMach
         ⟨value :: stack, memory, G⟩) := by
   by_cases hwarm :
       (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
         base.accessedStorageKeys
-  · rw [rootSloadCost, if_pos hwarm, rootAfterSload, if_pos hwarm]
+  · rw [sloadCost, if_pos hwarm, afterSload, if_pos hwarm]
     exact Ninst.runCompiled_sload_warm
       (k := key) (v := value) (s := stack) (G := G)
       rfl hwarm hvalue
       (by simp only [Devm.gasLeft_setMach, gasWarmAccess])
       hroom
-  · rw [rootSloadCost, if_neg hwarm, rootAfterSload, if_neg hwarm]
+  · rw [sloadCost, if_neg hwarm, afterSload, if_neg hwarm]
     simpa only [root_addAccessedStorageKey_setMach_setMach,
       Devm.memory_setMach] using
       (Ninst.runCompiled_sload_cold
@@ -69,19 +54,6 @@ theorem rootSload_runCompiled
         (by simpa only [Devm.getStorVal_setMach] using hvalue)
         (by simp only [Devm.gasLeft_setMach, gasColdSload])
         hroom)
-
-private lemma Bytes.sliceD_writeAt_after_root
-    (bs xs : Bytes) (start len n : Nat)
-    (h : n + xs.length ≤ start) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt]
-  rw [if_neg]
-  omega
 
 private theorem rootStageLoadedLeft_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -111,7 +83,7 @@ private theorem rootStageLoadedLeft_runCompiledTo
     exact Mem.Reads.write hmem.wf hmem.reads 0 _
   have hnodeRead : Bytes.toB256 (M1.read 640 32).1 = node := by
     rw [Mem.Reads.read hreads1]
-    rw [Bytes.sliceD_writeAt_after_root _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega)]
     rw [hmem.node_read, B256.toB256_toBytes]
@@ -200,17 +172,17 @@ private theorem rootLiveLoad_runCompiledTo
       (branchBase + height) = left)
     (hroom : stack.length < 1022)
     (htail : Func.RunCompiledTo fs sevm
-      ((rootAfterSload sevm base (branchBase + height)).setMach
+      ((afterSload sevm base (branchBase + height)).setMach
         ⟨left :: height :: stack, memory, K + 17⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + rootSloadCost sevm base (branchBase + height)⟩)
+          K + 26 + sloadCost sevm base (branchBase + height)⟩)
       (dup 0 ::: pushB256 branchBase ::: add ::: sload ::: rest) ex := by
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_dup (n := 0) (w := height)
-      (G := K + 23 + rootSloadCost sevm base (branchBase + height))
+      (G := K + 23 + sloadCost sevm base (branchBase + height))
       rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
@@ -218,7 +190,7 @@ private theorem rootLiveLoad_runCompiledTo
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := branchBase) (c := 3)
-      (G := K + 20 + rootSloadCost sevm base (branchBase + height))
+      (G := K + 20 + sloadCost sevm base (branchBase + height))
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
@@ -228,7 +200,7 @@ private theorem rootLiveLoad_runCompiledTo
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
       (cost := gVerylow) (x := branchBase) (y := height)
       (v := branchBase + height) (s := height :: stack)
-      (G := K + 17 + rootSloadCost sevm base (branchBase + height))
+      (G := K + 17 + sloadCost sevm base (branchBase + height))
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_cons]; omega)) ?_
@@ -249,14 +221,14 @@ theorem rootLiveStage_runCompiledTo
       (branchBase + height) = left)
     (hroom : stack.length < 1022)
     (htail : Func.RunCompiledTo fs sevm
-      ((rootAfterSload sevm base (branchBase + height)).setMach
+      ((afterSload sevm base (branchBase + height)).setMach
         ⟨height :: stack,
           (memory.write 0 left.toBytes).write 32 node.toBytes, K⟩)
       (sha64 0 nodeWord (.call rootContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + rootSloadCost sevm base (branchBase + height)⟩)
+          K + 26 + sloadCost sevm base (branchBase + height)⟩)
       rootLiveStep ex := by
   apply rootLiveLoad_runCompiledTo hval hroom
   apply rootStageLoadedLeft_runCompiledTo hmem hroom
@@ -343,14 +315,14 @@ private theorem rootDeadLoadRight_runCompiledTo
       (zeroHashBase + height) = right)
     (hroom : stack.length < 1022)
     (htail : Func.RunCompiledTo fs sevm
-      ((rootAfterSload sevm base (zeroHashBase + height)).setMach
+      ((afterSload sevm base (zeroHashBase + height)).setMach
         ⟨height :: stack,
           (memory.write 0 node.toBytes).write 32 right.toBytes, K⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory.write 0 node.toBytes,
-          K + 15 + rootSloadCost sevm base (zeroHashBase + height)⟩)
+          K + 15 + sloadCost sevm base (zeroHashBase + height)⟩)
       (dup 0 ::: pushB256 zeroHashBase ::: add ::: sload :::
         mstoreAt 1 +++ rest) ex := by
   let M1 := memory.write 0 node.toBytes
@@ -363,7 +335,7 @@ private theorem rootDeadLoadRight_runCompiledTo
     show (1 * 32 : B256) = 32 by decide +kernel]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_dup (n := 0) (w := height)
-      (G := K + 12 + rootSloadCost sevm base (zeroHashBase + height))
+      (G := K + 12 + sloadCost sevm base (zeroHashBase + height))
       rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
@@ -371,7 +343,7 @@ private theorem rootDeadLoadRight_runCompiledTo
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := zeroHashBase) (c := 3)
-      (G := K + 9 + rootSloadCost sevm base (zeroHashBase + height))
+      (G := K + 9 + sloadCost sevm base (zeroHashBase + height))
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
@@ -381,7 +353,7 @@ private theorem rootDeadLoadRight_runCompiledTo
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
       (cost := gVerylow) (x := zeroHashBase) (y := height)
       (v := zeroHashBase + height) (s := height :: stack)
-      (G := K + 6 + rootSloadCost sevm base (zeroHashBase + height))
+      (G := K + 6 + sloadCost sevm base (zeroHashBase + height))
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_cons]; omega)) ?_
@@ -389,9 +361,9 @@ private theorem rootDeadLoadRight_runCompiledTo
   have hsload : Ninst.RunCompiled sevm
       (base.setMach
         ⟨(zeroHashBase + height) :: height :: stack,
-          M1, K + 6 + rootSloadCost sevm base (zeroHashBase + height)⟩)
+          M1, K + 6 + sloadCost sevm base (zeroHashBase + height)⟩)
       sload
-      ((rootAfterSload sevm base (zeroHashBase + height)).setMach
+      ((afterSload sevm base (zeroHashBase + height)).setMach
         ⟨right :: height :: stack, M1, K + 6⟩) :=
     rootSload_runCompiled hval
       (by simp only [List.length_cons]; omega)
@@ -428,16 +400,16 @@ theorem rootDeadStage_runCompiledTo
       (zeroHashBase + height) = right)
     (hroom : stack.length < 1022)
     (htail : Func.RunCompiledTo fs sevm
-      ((rootAfterSload sevm base (zeroHashBase + height)).setMach
+      ((afterSload sevm base (zeroHashBase + height)).setMach
         ⟨height :: stack,
           (memory.write 0 node.toBytes).write 32 right.toBytes, K⟩)
       (sha64 0 nodeWord (.call rootContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + rootSloadCost sevm base (zeroHashBase + height)⟩)
+          K + 26 + sloadCost sevm base (zeroHashBase + height)⟩)
       rootDeadStep ex := by
-  let C := rootSloadCost sevm base (zeroHashBase + height)
+  let C := sloadCost sevm base (zeroHashBase + height)
   have hload : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory.write 0 node.toBytes, K + 15 + C⟩)
@@ -622,16 +594,16 @@ theorem rootLoopLive_runCompiledTo
       (branchBase + height) = left)
     (hroom : stack.length < 1022)
     (htail : Func.RunCompiledTo fs sevm
-      ((rootAfterSload sevm base (branchBase + height)).setMach
+      ((afterSload sevm base (branchBase + height)).setMach
         ⟨height :: stack,
           (memory.write 0 left.toBytes).write 32 node.toBytes, K⟩)
       (sha64 0 nodeWord (.call rootContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 78 + rootSloadCost sevm base (branchBase + height)⟩)
+          K + 78 + sloadCost sevm base (branchBase + height)⟩)
       rootLoop ex := by
-  let C := rootSloadCost sevm base (branchBase + height)
+  let C := sloadCost sevm base (branchBase + height)
   have harm : Func.RunCompiledTo fs sevm
       (base.setMach ⟨height :: stack, memory, K + 26 + C⟩)
       rootLiveStep ex :=
@@ -655,16 +627,16 @@ theorem rootLoopDead_runCompiledTo
       (zeroHashBase + height) = right)
     (hroom : stack.length < 1022)
     (htail : Func.RunCompiledTo fs sevm
-      ((rootAfterSload sevm base (zeroHashBase + height)).setMach
+      ((afterSload sevm base (zeroHashBase + height)).setMach
         ⟨height :: stack,
           (memory.write 0 node.toBytes).write 32 right.toBytes, K⟩)
       (sha64 0 nodeWord (.call rootContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 77 + rootSloadCost sevm base (zeroHashBase + height)⟩)
+          K + 77 + sloadCost sevm base (zeroHashBase + height)⟩)
       rootLoop ex := by
-  let C := rootSloadCost sevm base (zeroHashBase + height)
+  let C := sloadCost sevm base (zeroHashBase + height)
   have harm : Func.RunCompiledTo fs sevm
       (base.setMach ⟨height :: stack, memory, K + 26 + C⟩)
       rootDeadStep ex :=
@@ -976,20 +948,6 @@ theorem rootShaTail_runCompiledTo
 
 /-! ## Terminal count mix-in memory -/
 
-private lemma Bytes.sliceD_zero_length_rootFinish {bs : Bytes} {n : Nat}
-    (h : bs.length = n) : bs.sliceD 0 n 0 = bs := by
-  unfold List.sliceD
-  simp only [List.drop_zero]
-  rw [List.takeD_eq_take _ (by omega)]
-  rw [← h]
-  exact List.take_length
-
-private lemma Bytes.getD_sliceD_of_lt_rootFinish
-    (bs : Bytes) (start len i : Nat) (hi : i < len) :
-    (bs.sliceD start len 0).getD i 0 = bs.getD (start + i) 0 := by
-  rw [List.sliceD_eq_map]
-  simp [List.getD_eq_getElem?_getD, hi]
-
 private lemma Bytes.sliceD_writeAt_congr_rootFinish
     {bs cs xs : Bytes} {len n : Nat}
     (h : bs.sliceD 0 len 0 = cs.sliceD 0 len 0) :
@@ -1004,21 +962,8 @@ private lemma Bytes.sliceD_writeAt_congr_rootFinish
   split
   · rfl
   · have hg := congrArg (fun zs : Bytes => zs.getD i 0) h
-    simpa only [Bytes.getD_sliceD_of_lt_rootFinish _ 0 len i hi',
+    simpa only [Bytes.getD_sliceD_of_lt _ 0 len i hi',
       Nat.zero_add] using hg
-
-private lemma Bytes.writeAt_append_middle_at_rootFinish
-    {pre old suffix replacement : Bytes} {offset : Nat}
-    (hprefix : pre.length = offset)
-    (hlen : old.length = replacement.length) :
-    Bytes.writeAt (pre ++ old ++ suffix) offset replacement =
-      pre ++ replacement ++ suffix := by
-  rw [← hprefix]
-  unfold Bytes.writeAt
-  rw [List.takeD_eq_take _ (by simp)]
-  simp only [List.append_assoc]
-  rw [List.take_left]
-  simp [List.drop_append, hlen]
 
 def rootFinishStagedMemory
     (memory : Mem) (oldCount node : B256) : Mem :=
@@ -1074,7 +1019,7 @@ def RootMemoryCarrier.stageFinish
       _ = explicit := by simp only [explicit, List.append_assoc]
   have hprefixEq :
       pair.image.sliceD 0 64 0 = explicit.sliceD 0 64 0 := by
-    rw [Bytes.sliceD_zero_length_rootFinish hexplicitLength]
+    rw [Bytes.sliceD_zero_length hexplicitLength]
     exact hpairExplicit
   have hcongr := Bytes.sliceD_writeAt_congr_rootFinish
     (bs := pair.image) (cs := explicit)
@@ -1083,7 +1028,7 @@ def RootMemoryCarrier.stageFinish
       Bytes.writeAt explicit 32 (le64 oldCount.toNat) =
         node.toBytes ++ le64 oldCount.toNat ++ zeros 24 := by
     dsimp only [explicit]
-    exact Bytes.writeAt_append_middle_at_rootFinish
+    exact Bytes.writeAt_append_middle_at
       (pre := node.toBytes) (old := zeros 8) (suffix := zeros 24)
       (replacement := le64 oldCount.toNat) (offset := 32)
       (B256.length_toBytes node)
@@ -1100,7 +1045,7 @@ def RootMemoryCarrier.stageFinish
             0 64 0 := hcongr
       _ = node.toBytes ++ le64 oldCount.toNat ++ zeros 24 := by
         rw [hwrite,
-          Bytes.sliceD_zero_length_rootFinish hdesiredLength]
+          Bytes.sliceD_zero_length hdesiredLength]
   have hread := Mem.Reads.read hinv.2 0 64
   have hinput :
       (rootFinishStagedMemory memory oldCount node).data.sliceD 0 64 0 =

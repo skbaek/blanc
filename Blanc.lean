@@ -3,6 +3,7 @@ import Blanc.WethCode
 import Blanc.Ladder
 import Blanc.BalanceAlgebra
 import Blanc.WordArithmetic
+import Blanc.BytesWrite
 import Blanc.ExecutionSettlement
 import Blanc.ExecutionOccurrence
 import Blanc.DeploymentOccurrence

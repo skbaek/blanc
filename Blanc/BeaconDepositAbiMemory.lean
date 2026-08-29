@@ -1,5 +1,6 @@
 import Blanc.BeaconDeposit
 import Blanc.BeaconDepositEncoding
+import Blanc.BytesWrite
 
 /-!
 # Beacon deposit ABI-decoder memory
@@ -130,26 +131,6 @@ structure DepositDecodedMemoryCarrier
   length0_read : image.sliceD 96 32 0 = (depositLengthWord data 0).toBytes
   length1_read : image.sliceD 128 32 0 = (depositLengthWord data 1).toBytes
   length2_read : image.sliceD 160 32 0 = (depositLengthWord data 2).toBytes
-
-private lemma Bytes.length_writeAt
-    (bs : Bytes) (n : Nat) (xs : Bytes) :
-    (Bytes.writeAt bs n xs).length = max bs.length (n + xs.length) := by
-  simp only [Bytes.writeAt, List.length_append, List.takeD_length,
-    List.length_drop]
-  omega
-
-private lemma Bytes.sliceD_writeAt_after
-    (bs xs : Bytes) (start len n : Nat)
-    (h : n + xs.length ≤ start) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt]
-  rw [if_neg]
-  omega
 
 theorem DepositDecodedMemoryCarrier.read_offset0
     {memory : Mem} {data : Bytes}

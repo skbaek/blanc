@@ -1,4 +1,5 @@
 import Blanc.BeaconDepositReconstruct
+import Blanc.BytesWrite
 
 /-!
 # Beacon deposit insertion memory carriers
@@ -11,43 +12,6 @@ inputs and carries exactly those three words through pair staging and shifts.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-
-private lemma Bytes.sliceD_writeAt_after_insert
-    (bs xs : Bytes) (start len n : Nat)
-    (h : n + xs.length ≤ start) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt, if_neg]
-  omega
-
-private lemma Bytes.sliceD_stagedPair_insert
-    (image : Bytes) (left right : B256) :
-    (Bytes.writeAt
-      (Bytes.writeAt image 0 left.toBytes) 32 right.toBytes).sliceD
-        0 64 0 = left.toBytes ++ right.toBytes := by
-  have hleft : left.toBytes.length = 32 := B256.length_toBytes left
-  have hright : right.toBytes.length = 32 := B256.length_toBytes right
-  have hfirst : Bytes.writeAt image 0 left.toBytes =
-      left.toBytes ++ image.drop 32 := by
-    rw [Bytes.writeAt, hleft, show List.takeD 0 image 0 = [] from rfl,
-      List.nil_append, Nat.zero_add]
-  have hsecond :
-      Bytes.writeAt (left.toBytes ++ image.drop 32) 32 right.toBytes =
-        left.toBytes ++ (right.toBytes ++ (image.drop 32).drop 32) := by
-    rw [Bytes.writeAt, hright, List.takeD_eq_take _ (by simp [hleft]),
-      List.take_left' hleft,
-      show 32 + 32 = left.toBytes.length + 32 by rw [hleft],
-      List.drop_append, List.append_assoc]
-    simp [hleft]
-  rw [hfirst, hsecond]
-  unfold List.sliceD
-  rw [List.drop_zero,
-    List.takeD_eq_take _ (by simp [hleft, hright]; omega),
-    ← List.append_assoc, List.take_left' (by simp [hleft, hright])]
 
 /-- The 768-byte register image used by the insertion loop. -/
 structure InsertionMemoryCarrier
@@ -115,7 +79,7 @@ def ReconstructRegistersMemoryCarrier.startInsertion
     rw [show 32 = shiftedSize.toBytes.length by rw [B256.length_toBytes]]
     exact Bytes.sliceD_writeAt _ _ _
   · dsimp only [image]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes])]
     exact h.intermediate.node.node_read
 
@@ -134,13 +98,13 @@ def InsertionMemoryCarrier.writeBeforeRegisters
     ?_, ?_, ?_, ?_⟩
   · rw [Mem.size_write_of_le (by rw [h.size_eq]; exact hfit), h.size_eq]
   · dsimp only [image]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ hbefore]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hbefore]
     exact h.oldCount_read
   · dsimp only [image]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.shiftedSize_read
   · dsimp only [image]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ (by omega)]
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
     exact h.node_read
 
 /-- Replace the shifted-count register while preserving old count and node. -/
@@ -164,7 +128,7 @@ def InsertionMemoryCarrier.writeShiftedSize
     rw [show 32 = shiftedSize'.toBytes.length by rw [B256.length_toBytes]]
     exact Bytes.sliceD_writeAt _ _ _
   · dsimp only [image]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes])]
     exact h.node_read
 
@@ -195,26 +159,26 @@ def InsertionMemoryCarrier.stagePair
       omega), hsize1]
   have hold : I2.sliceD 576 32 0 = oldCount.toBytes := by
     dsimp only [I2]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega)]
     dsimp only [I1]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega)]
     exact h.oldCount_read
   have hshift : I2.sliceD 608 32 0 = shiftedSize.toBytes := by
     dsimp only [I2]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega)]
     dsimp only [I1]
-    rw [Bytes.sliceD_writeAt_after_insert _ _ _ _ _ (by
+    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]
       omega)]
     exact h.shiftedSize_read
   have hpairImage : I2.sliceD 0 64 0 = left.toBytes ++ node.toBytes := by
-    exact Bytes.sliceD_stagedPair_insert h.image left node
+    exact Bytes.sliceD_stagedPair h.image left node
   have hsha := Mem.Reads.read hreads2 0 64
   change M2.data.sliceD 0 64 0 = I2.sliceD 0 64 0 at hsha
   rw [hpairImage] at hsha

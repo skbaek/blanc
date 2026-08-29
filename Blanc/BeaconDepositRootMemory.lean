@@ -1,4 +1,5 @@
 import Blanc.BeaconDepositSha
+import Blanc.BytesWrite
 
 /-!
 # Beacon deposit root-fold memory carriers
@@ -12,66 +13,6 @@ available in words 18, 19, and 20.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-
-private lemma Bytes.length_writeAt
-    (bs : Bytes) (n : Nat) (xs : Bytes) :
-    (Bytes.writeAt bs n xs).length = max bs.length (n + xs.length) := by
-  simp only [Bytes.writeAt, List.length_append, List.takeD_length,
-    List.length_drop]
-  omega
-
-private lemma Bytes.sliceD_writeAt_after
-    (bs xs : Bytes) (start len n : Nat)
-    (h : n + xs.length ≤ start) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt]
-  rw [if_neg]
-  omega
-
-private lemma Bytes.sliceD_stagedPair
-    (image : Bytes) (left right : B256) :
-    (Bytes.writeAt
-      (Bytes.writeAt image 0 left.toBytes) 32 right.toBytes).sliceD
-        0 64 0 = left.toBytes ++ right.toBytes := by
-  rw [List.sliceD_eq_map]
-  apply List.ext_get
-  · simp only [List.length_map, List.length_range, List.length_append,
-      B256.length_toBytes]
-  · intro i hi₁ hi₂
-    simp only [List.length_map, List.length_range] at hi₁
-    simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range,
-      zero_add]
-    by_cases hi : i < 32
-    · rw [Bytes.getD_writeAt, if_neg (by omega),
-        Bytes.getD_writeAt, if_pos (by
-          simp only [B256.length_toBytes]
-          omega)]
-      rw [List.getElem_append_left (by
-        simpa only [B256.length_toBytes] using hi)]
-      rw [Nat.sub_zero, List.getD_eq_getElem?_getD,
-        List.getElem?_eq_getElem (by
-          simpa only [B256.length_toBytes] using hi)]
-      rfl
-    · have hi32 : 32 ≤ i := Nat.not_lt.mp hi
-      have hi64 : i < 64 := hi₁
-      have hir : i - 32 < right.toBytes.length := by
-        rw [B256.length_toBytes]
-        omega
-      rw [Bytes.getD_writeAt, if_pos (by
-        simp only [B256.length_toBytes]
-        omega)]
-      rw [List.getElem_append_right (by
-        simp only [B256.length_toBytes]
-        omega)]
-      rw [List.getD_eq_getElem?_getD,
-        List.getElem?_eq_getElem hir]
-      simp only [B256.length_toBytes]
-      rfl
 
 /-- The three persistent register words used throughout the root fold. -/
 structure RootMemoryCarrier
