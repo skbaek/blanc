@@ -61,7 +61,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "RootedExecution",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
-           "ExecutionBodyEffects"]
+           "ExecutionBodyEffects", "ExecutionHistoryEffects"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],

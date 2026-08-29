@@ -261,6 +261,33 @@ the body-level sibling of T3:
   invariant across the whole credit fold.
 - Requests: `ExecutionTrace.RequestsTrace.stateInv_and_sum_le`.
 
+### T6. The wrapper is a configured block or a whole chain history
+
+Use
+[`Blanc/ExecutionHistoryEffects.lean`](../Blanc/ExecutionHistoryEffects.lean),
+the history-level sibling of T5.  The carriers themselves
+(`ExecutionTrace.ConfiguredBlockTrace`, `ExecutionTrace.ConfiguredHistoryTrace`
+and their existence theorems) live in
+[`Blanc/ExecutionHistory.lean`](../Blanc/ExecutionHistory.lean); both layers are
+schedule-parametric, so a history crossing fork activations is one derivation
+and no fork is hard-coded anywhere:
+
+- Entering a block's body: `ExecutionTrace.ConfiguredBlockTrace.openingState`
+  says block preparation copies the parent chain's world state verbatim, so the
+  preparation boundary moves no value;
+  `..._.not_mem_openingCreatedAccounts` discharges any not-yet-created side
+  condition from the empty created-account set each block opens with, which is
+  why that side condition never has to cross a block boundary;
+  `ExecutionTrace.ConfiguredBlockTrace.openingBenvInv` packages both into the
+  `ContractSpec.BenvInv` an `applyBody`-level rung asks for, and
+  `ExecutionTrace.ConfiguredBlockTrace.openingBound` reads the carrier's own
+  `wdsum` bound at that same environment.
+- Leaving a block: `ExecutionTrace.ConfiguredBlockTrace.postState` identifies
+  the imported chain's state with the world the body left.
+- Whole histories: `ExecutionTrace.ConfiguredHistoryTrace.stateInv` carries an
+  arbitrary preserved `ContractSpec` invariant from a checkpoint to every
+  configured continuation, over `ConfiguredHistoryTrace.toReachUsing`.
+
 ## C — compilation and deployment
 
 ### C1. I need source-to-compiled execution
