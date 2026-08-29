@@ -110,6 +110,41 @@ theorem retainedRequestsAccountingReplay
   rw [RequestsTrace.state_eq_consolidationState trace]
   exact withdrawalReplay.append consolidationReplay
 
+/-- Rung R6: the block's direct consensus withdrawals realize one PRORATA
+accounting replay -- one `externalCredit` step per *positive* credit to
+PRORATA, and no step at all for a zero credit or a credit to anyone else.
+`ProrataAccountingReplay.of_addBal` performs exactly that split, as it already
+does for rung R2's coinbase priority fee.
+
+The block bound is what makes each credit exact.  Without it a withdrawal
+could wrap PRORATA's balance, and a wrapped credit is not an external-credit
+step; the same bound is what the generic `applyBody` invariant rung asks
+for. -/
+theorem retainedDirectWithdrawalAccountingReplay
+    {ca : Adr} (pre : State) (wds : List Withdrawal)
+    (bound : sum pre.bal + wdsum wds < 2 ^ 256)
+    (blockIndex : Nat) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca pre) steps
+        (AccountingSnapshot.ofState ca (processWithdrawalsState pre wds)) := by
+  induction wds generalizing pre with
+  | nil => exact ⟨[], ProrataAccountingReplay.nil_of_eq rfl⟩
+  | cons wd wds ih =>
+      obtain ⟨headBound, tailBound⟩ := withdrawalCredit_bounds bound
+      let provenance : ProrataAccountingProvenance :=
+        { blockIndex := blockIndex
+          transactionIndex := none
+          framePath := []
+          actor := none }
+      obtain ⟨headSteps, headReplay⟩ :=
+        ProrataAccountingReplay.of_addBal (ca := ca) (target := wd.recipient)
+          provenance headBound
+      obtain ⟨tailSteps, tailReplay⟩ := ih _ tailBound
+      refine ⟨headSteps ++ tailSteps, ?_⟩
+      rw [processWithdrawalsState_cons]
+      exact headReplay.append tailReplay
+
 end Prorata
 
 end Blanc
