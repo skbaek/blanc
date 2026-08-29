@@ -70,7 +70,7 @@ CONTRACTS = {
                    "ProxyPairCorrespondence", "ProxyPairAuthority"],
     "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",
                 "ProrataAccountingExec", "ProrataAccountingTransaction",
-                "ProrataAccountingBody",
+                "ProrataAccountingBody", "ProrataAccountingHistory",
                 "ProrataRealizedAccounting",
                 "ProrataFunctional",
                 "ProrataDeposit", "ProrataRead", "ProrataWithdraw",
