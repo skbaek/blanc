@@ -204,6 +204,47 @@ private theorem validateDynamicTailAfterArg_success_runCompiledTo
     simpa only [show G + 143 - 28 = G + 115 by omega] using hlengthWordRun
   simpa only [validateDynamicTailAfterArg] using hoffsetRun
 
+/-- One `mstoreAt` step over an abstract memory.  Keeping the threaded memory
+abstract prevents the compiled-walk term from carrying a concrete write tower. -/
+private theorem mstoreAt_success_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {stack : List B256} {value word : B256}
+    {G pushGas extGas : Nat} {body : Func} {ex : Execution}
+    (hpushCost : pushCost (word * 32).toBytes.sig = pushGas)
+    (hroom : stack.length < 1023)
+    (hext : ∀ (S : List B256) (G' : Nat),
+      (base.setMach ⟨S, memory, G'⟩).extCost
+        [⟨(word * 32).toNat, 32⟩] = extGas)
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨stack, memory.write (word * 32).toNat value.toBytes, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨value :: stack, memory, G + pushGas + gVerylow + extGas⟩)
+      (mstoreAt word +++ body) ex := by
+  unfold mstoreAt
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256
+      (G := G + gVerylow + extGas) hpushCost
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by
+        simp only [Devm.stack_setMach, List.length_cons]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.runCompiledTo_mstore_step
+    (M := memory) (c := gVerylow + extGas) rfl rfl ?_ ?_ ?_
+  · rw [hext]
+  · simp only [Devm.gasLeft_setMach]
+    omega
+  · intro memory' G' hmemory hgas
+    simp only [Devm.gasLeft_setMach] at hgas
+    subst memory'
+    have hG' : G' = G := by omega
+    subst G'
+    simpa only [Devm.setMach_setMach, prepend] using hbody
+
 private def depositDecodedTail0Memory (data : Bytes) : Mem :=
   (Mem.empty.write 96 (depositLengthWord data 0).toBytes)
     |>.write 0 (depositOffsetWord data 0).toBytes
@@ -286,5 +327,283 @@ private theorem depositTail1Stores_success_runCompiledTo
         show ((4 : B256) * 32).toNat = 128 by decide +kernel,
         show ((1 : B256) * 32).toNat = 32 by decide +kernel,
         show G + 15 - 15 = G by omega] using hbody
+
+private def depositDecodedTail2LengthMemory (data : Bytes) : Mem :=
+  (depositDecodedTail1Memory data).write 160
+    (depositLengthWord data 2).toBytes
+
+private theorem depositDecodedTail2LengthMemory_size (data : Bytes) :
+    (depositDecodedTail2LengthMemory data).size = 192 := by
+  unfold depositDecodedTail2LengthMemory
+  rw [Mem.size_write_word_at, depositDecodedTail1Memory_size]
+  decide +kernel
+
+private theorem depositDecodedTail2Memory_eq (data : Bytes) :
+    (depositDecodedTail2LengthMemory data).write 64
+        (depositOffsetWord data 2).toBytes =
+      depositDecodedMemory data := by
+  rfl
+
+private theorem depositTail2OffsetStore_success_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    {body : Func} {ex : Execution}
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], depositDecodedMemory sevm.data, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[depositOffsetWord sevm.data 2],
+          depositDecodedTail2LengthMemory sevm.data, G + 6⟩)
+      (mstoreAt 2 +++ body) ex := by
+  have hbody' : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[], (depositDecodedTail2LengthMemory sevm.data).write
+          ((2 : B256) * 32).toNat
+          (depositOffsetWord sevm.data 2).toBytes, G⟩)
+      body ex := by
+    rw [show ((2 : B256) * 32).toNat = 64 by decide +kernel,
+      depositDecodedTail2Memory_eq]
+    exact hbody
+  have hstore := mstoreAt_success_runCompiledTo
+    (base := base) (memory := depositDecodedTail2LengthMemory sevm.data)
+    (stack := []) (value := depositOffsetWord sevm.data 2)
+    (word := 2) (G := G) (pushGas := 3) (extGas := 0)
+    (body := body)
+    (by decide +kernel) (by decide)
+    (by
+      intro S G'
+      exact Devm.extCost_zero_of_le
+        (N := depositDecodedTail2LengthMemory sevm.data)
+        (i := ((2 : B256) * 32).toNat) (sz := 32)
+        (by rw [depositDecodedTail2LengthMemory_size])
+        (by rw [depositDecodedTail2LengthMemory_size]; decide +kernel))
+    hbody'
+  simpa only [
+    show G + 3 + gVerylow + 0 = G + 6 by
+      simp only [gVerylow]] using hstore
+
+private theorem depositTail2Stores_success_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    {body : Func} {ex : Execution}
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], depositDecodedMemory sevm.data, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[depositLengthWord sevm.data 2,
+          depositOffsetWord sevm.data 2],
+          depositDecodedTail1Memory sevm.data, G + 15⟩)
+      (mstoreAt 5 +++ mstoreAt 2 +++ body) ex := by
+  have hoffsetRun :=
+    depositTail2OffsetStore_success_runCompiledTo (base := base) hbody
+  have hrest : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[depositOffsetWord sevm.data 2],
+          (depositDecodedTail1Memory sevm.data).write
+            ((5 : B256) * 32).toNat
+            (depositLengthWord sevm.data 2).toBytes,
+          G + 6⟩)
+      (mstoreAt 2 +++ body) ex := by
+    rw [show ((5 : B256) * 32).toNat = 160 by decide +kernel]
+    simpa only [depositDecodedTail2LengthMemory] using hoffsetRun
+  have hstore := mstoreAt_success_runCompiledTo
+    (base := base) (memory := depositDecodedTail1Memory sevm.data)
+    (stack := [depositOffsetWord sevm.data 2])
+    (value := depositLengthWord sevm.data 2)
+    (word := 5) (G := G + 6) (pushGas := 3) (extGas := 3)
+    (body := mstoreAt 2 +++ body)
+    (by decide +kernel)
+    (by
+      simp only [List.length_cons, List.length_nil]
+      omega)
+    (by
+      intro S G'
+      exact Devm.extCost_of_size
+        (N := depositDecodedTail1Memory sevm.data)
+        (i := ((5 : B256) * 32).toNat) (sz := 32)
+        (depositDecodedTail1Memory_size sevm.data) (by decide +kernel))
+    hrest
+  simpa only [
+    show G + 6 + 3 + gVerylow + 3 = G + 15 by
+      simp only [gVerylow]] using hstore
+
+private theorem validateDynamicTail_eq
+    (head offsetWord lengthWord : B256) (body : Func) :
+    validateDynamicTail head offsetWord lengthWord body =
+      arg head +++
+        validateDynamicTailAfterArg offsetWord lengthWord body := by
+  rfl
+
+/-- Add the two-instruction ABI-head load to an already certified tail. -/
+private theorem validateDynamicTail_success_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {stack : List B256}
+    {G head headNat offsetWord lengthWord : Nat}
+    {body : Func} {ex : Execution}
+    (haddress : (32 * Nat.toB256 head) + 4 =
+      Nat.toB256 (4 + 32 * headNat))
+    (hpushCost :
+      pushCost ((32 * Nat.toB256 head) + 4).toBytes.sig = 3)
+    (hheadBound : 4 + 32 * headNat < 2 ^ 256)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec : DynamicTailDecodable sevm.data headNat)
+    (hroom : stack.length < 1018)
+    (haccept : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨depositLengthWord sevm.data headNat ::
+          depositOffsetWord sevm.data headNat :: stack, memory, G⟩)
+      (mstoreAt (Nat.toB256 lengthWord) +++
+        mstoreAt (Nat.toB256 offsetWord) +++ body) ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨stack, memory, G + 149⟩)
+      (validateDynamicTail (Nat.toB256 head)
+        (Nat.toB256 offsetWord) (Nat.toB256 lengthWord) body) ex := by
+  have hafter := validateDynamicTailAfterArg_success_runCompiledTo
+    (base := base) (memory := memory) (stack := stack)
+    (head := headNat) (offsetWord := offsetWord)
+    (lengthWord := lengthWord) hdataBound hdec hroom haccept
+  have hload :
+      Sevm.dataWord sevm ((32 * Nat.toB256 head) + 4) =
+        depositOffsetWord sevm.data headNat := by
+    rw [haddress]
+    exact dataWord_depositOffsetWord headNat hheadBound
+  rw [validateDynamicTail_eq]
+  unfold arg cdl
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (G := G + 146) hpushCost
+      (by simp only [Devm.gasLeft_setMach])
+      (by
+        simp only [Devm.stack_setMach]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_calldataload
+      (v := depositOffsetWord sevm.data headNat) (G := G + 143)
+      rfl hload
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by omega)) ?_
+  simpa only [Devm.setMach_setMach, Devm.memory_setMach, prepend]
+    using hafter
+
+private theorem depositTail2_success_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    {body : Func} {ex : Execution}
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec : DynamicTailDecodable sevm.data 2)
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], depositDecodedMemory sevm.data, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[], depositDecodedTail1Memory sevm.data, G + 164⟩)
+      (validateDynamicTail 2 2 5 body) ex := by
+  have hstores := depositTail2Stores_success_runCompiledTo
+    (base := base) hbody
+  have hrun := validateDynamicTail_success_runCompiledTo
+    (base := base) (memory := depositDecodedTail1Memory sevm.data)
+    (stack := []) (G := G + 15)
+    (head := 2) (headNat := 2) (offsetWord := 2) (lengthWord := 5)
+    (body := body)
+    (by decide +kernel) (by decide +kernel) (by decide +kernel)
+    hdataBound hdec (by decide) hstores
+  simpa only [
+    show Nat.toB256 2 = (2 : B256) by decide +kernel,
+    show Nat.toB256 5 = (5 : B256) by decide +kernel,
+    show G + 15 + 149 = G + 164 by omega] using hrun
+
+private theorem depositTail1_success_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    {body : Func} {ex : Execution}
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec1 : DynamicTailDecodable sevm.data 1)
+    (hdec2 : DynamicTailDecodable sevm.data 2)
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], depositDecodedMemory sevm.data, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[], depositDecodedTail0Memory sevm.data, G + 328⟩)
+      (validateDynamicTail 1 1 4
+        (validateDynamicTail 2 2 5 body)) ex := by
+  have htail2 := depositTail2_success_runCompiledTo
+    (base := base) hdataBound hdec2 hbody
+  have hstores := depositTail1Stores_success_runCompiledTo
+    (base := base) htail2
+  have hrun := validateDynamicTail_success_runCompiledTo
+    (base := base) (memory := depositDecodedTail0Memory sevm.data)
+    (stack := []) (G := G + 164 + 15)
+    (head := 1) (headNat := 1) (offsetWord := 1) (lengthWord := 4)
+    (body := validateDynamicTail 2 2 5 body)
+    (by decide +kernel) (by decide +kernel) (by decide +kernel)
+    hdataBound hdec1 (by decide) hstores
+  simpa only [
+    show Nat.toB256 1 = (1 : B256) by decide +kernel,
+    show Nat.toB256 4 = (4 : B256) by decide +kernel,
+    show G + 164 + 15 + 149 = G + 328 by omega] using hrun
+
+private theorem depositDynamicTails_success_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    {body : Func} {ex : Execution}
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec0 : DynamicTailDecodable sevm.data 0)
+    (hdec1 : DynamicTailDecodable sevm.data 1)
+    (hdec2 : DynamicTailDecodable sevm.data 2)
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], depositDecodedMemory sevm.data, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], Mem.empty, G + 500⟩)
+      (validateDynamicTail 0 0 3
+        (validateDynamicTail 1 1 4
+          (validateDynamicTail 2 2 5 body))) ex := by
+  have htail1 := depositTail1_success_runCompiledTo
+    (base := base) hdataBound hdec1 hdec2 hbody
+  have hstores := depositTail0Stores_success_runCompiledTo
+    (base := base) htail1
+  have hrun := validateDynamicTail_success_runCompiledTo
+    (base := base) (memory := Mem.empty) (stack := [])
+    (G := G + 328 + 23)
+    (head := 0) (headNat := 0) (offsetWord := 0) (lengthWord := 3)
+    (body := validateDynamicTail 1 1 4
+      (validateDynamicTail 2 2 5 body))
+    (by decide +kernel) (by decide +kernel) (by decide +kernel)
+    hdataBound hdec0 (by decide) hstores
+  simpa only [
+    show Nat.toB256 0 = (0 : B256) by decide +kernel,
+    show Nat.toB256 3 = (3 : B256) by decide +kernel,
+    show G + 328 + 23 + 149 = G + 500 by omega] using hrun
+
+/-- A well-formed deposit ABI reaches the source body with the exact six-word
+decoder memory and 521 gas consumed. -/
+theorem validateDepositAbi_success_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {body : Func} {ex : Execution}
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec : DepositAbiDecodable sevm.data pubkey
+      withdrawalCredentials signature depositDataRoot)
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], depositDecodedMemory sevm.data, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], Mem.empty, G + 521⟩)
+      (validateDepositAbi body) ex := by
+  have hlengthNat : sevm.data.length.toB256.toNat =
+      sevm.data.length := by
+    exact B256.toNat_toB256_of_lt hdataBound
+  have hheadInBounds :
+      B256.ltCheck sevm.data.length.toB256 132 = 0 := by
+    simp only [B256.ltCheck]
+    rw [if_neg]
+    rw [B256.lt_iff_toNat_lt_toNat, hlengthNat,
+      show (132 : B256).toNat = 132 by decide +kernel]
+    exact not_lt_of_ge hdec.head
+  have hdecoded := depositDynamicTails_success_runCompiledTo
+    (base := base) hdataBound hdec.pubkeyTail
+      hdec.withdrawalCredentialsTail hdec.signatureTail hbody
+  unfold validateDepositAbi
+  func_run (4) [0]
+  simpa only [show G + 521 - 21 = G + 500 by omega] using hdecoded
 
 end Blanc.BeaconDeposit
