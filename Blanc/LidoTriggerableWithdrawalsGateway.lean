@@ -1,4 +1,5 @@
 import Blanc.LidoTriggerableWithdrawalsGatewayTrigger
+import Blanc.LinearDispatch
 
 /-!
   Source-level Blanc runtime for the Triggerable Withdrawals Gateway.
@@ -510,13 +511,6 @@ def funcs (dp : DeployParams) : List (B256 × Func) :=
     (selRenounceRole, nonpayable renounceRole),
     (selGetRoleMember, nonpayable getRoleMember),
     (selGetRoleMemberCount, nonpayable getRoleMemberCount) ]
-
-def linearDispatchWith (k : Nat) : List (B256 × Func) → Func
-  | [] => .call k
-  | [(word, body)] => pushB256 word ::: eq ::: (body <?> .call k)
-  | (word, body) :: rest =>
-      dup 0 ::: pushB256 word ::: eq :::
-        ((pop ::: body) <?> linearDispatchWith k rest)
 
 def runtimeMain (dp : DeployParams) : Func :=
   pushB256 4 ::: calldatasize ::: lt :::

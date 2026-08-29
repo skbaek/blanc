@@ -39,6 +39,25 @@ registry has identified the likely vocabulary.
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
+- Invert an existing arbitrary-outcome compiled walk:
+  [`Blanc/CompiledWalkInversion.lean`](../Blanc/CompiledWalkInversion.lean).
+  Use `runCompiledTo_next_inv`, `runCompiledTo_branch_inv`,
+  `runCompiledTo_call_inv`, and `runCompiledTo_prepend_inv` for structural
+  nodes; `runCompiledTo_last_inv`, `runCompiledTo_rev_inv`, and
+  `runCompiledTo_revSelector_inv` for terminal/revert nodes.  The shared
+  `iszero_stack_inv` also transports the unchanged memory and return data.
+  This remains COMMON_API-only: the same `Func.RunCompiledTo` head is also the
+  reliable trigger for construction recipes, so an automatic recipe would
+  conflate constructing and inverting a walk.
+- Recover a selected body from a linear selector dispatcher:
+  [`Blanc/LinearDispatch.lean`](../Blanc/LinearDispatch.lean) defines the
+  shared `Blanc.linearDispatchWith` and `Blanc.selectorUnique`; the companion
+  [`Blanc/LinearDispatchCorrectness.lean`](../Blanc/LinearDispatchCorrectness.lean)
+  owns `dispatchBodyWitness_of_runCompiledTo`.  Supply selector uniqueness,
+  selected-entry membership, the initial `selector :: tail` stack, and the
+  exact `RunCompiledTo` walk; it returns the exact selected-body walk and a
+  `DispatchFramePreserved` witness before any contract-specific ABI, role, or
+  storage reasoning.
 - Calls, delegate calls, or child-frame resumption: go to E2.
 - A predicate must hold for every entered child root: go to E3.
 - Only the terminal RETURN/REVERT remains: go to E4.
@@ -105,6 +124,11 @@ For different offsets, sizes, stack tails, or payloads, use the general
 
 - Generic execution noninterference:
   [`Blanc/ExecutionNoninterference.lean`](../Blanc/ExecutionNoninterference.lean).
+  For `Exec.NoRetainedWriteTo`, first split on `Execution.commits out = true`:
+  `Exec.noRetainedWriteTo_of_not_commits` closes the rollback arm;
+  `Exec.noRetainedWriteTo_of_no_execOccurrence`,
+  `Exec.noRetainedWriteTo_of_sourceSites_no_exec`, and
+  `Exec.noRetainedWriteTo_of_frame_owners_ne` are the committing routes.
 - Write-freedom across cycles:
   [`Blanc/CycleWriteFree.lean`](../Blanc/CycleWriteFree.lean).
 - Transient-state invariance and settlement:
@@ -180,6 +204,11 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
   `processMessage_halt_of_exec` cover the three raw outcomes.
 - `settledRevert` and `settledHalt`, with their projection lemmas, name the
   canonical settled error machines.
+- For the inversion direction, use
+  [`Blanc/MessageExecutionInversion.lean`](../Blanc/MessageExecutionInversion.lean):
+  `processMessage_clean_rawPost` recovers a clean successful raw post, while
+  `processMessage_entry_facts` recovers code, target, calldata, timestamp,
+  entry storage, and memory well-formedness from the actual retained frame.
 - `Msg.initDevm_*` and `Msg.initSevm_*` expose canonical message-entry fields.
 
 ### T2. I need to know which child effects survive settlement

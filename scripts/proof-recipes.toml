@@ -25,6 +25,26 @@ review_owner = "proof-infrastructure"
 review_date = "2026-08-25"
 
 [[recipe]]
+id = "linear-dispatch-selection"
+status = "active"
+triggers = ["goal-shape:linear-dispatch-selection"]
+preferred_path = "For an existing `Func.RunCompiledTo` walk rooted at `Blanc.linearDispatchWith`, apply `dispatchBodyWitness_of_runCompiledTo` after supplying selector uniqueness, the selected entry, and the initial `selector :: tail` stack. The result is the exact selected-body walk plus stack removal and `DispatchFramePreserved`."
+boundary = "The neutral theorem discharges only the dispatcher opcode inversions. It does not know a contract's selector census, calldata ABI, role storage, auxiliary rebasing, or selected-body semantics."
+owner_module = "Blanc/LinearDispatchCorrectness.lean"
+canonical_example = "Blanc/LinearDispatchCorrectness.lean:dispatchBodyWitness_of_runCompiledTo"
+symbols = [
+  "module:Blanc/LinearDispatch.lean",
+  "module:Blanc/LinearDispatchCorrectness.lean",
+  "declaration:Blanc.linearDispatchWith",
+  "declaration:Blanc.selectorUnique",
+  "declaration:Blanc.Devm.DispatchFramePreserved",
+  "declaration:Blanc.DispatchBodyWitness",
+  "declaration:Blanc.dispatchBodyWitness_of_runCompiledTo",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-29"
+
+[[recipe]]
 id = "line-run-split"
 status = "active"
 triggers = ["implication-premise:Line.Run"]
@@ -234,20 +254,42 @@ review_date = "2026-08-29"
 id = "message-execution-settlement"
 status = "active"
 triggers = ["goal-shape:message-execution-settlement"]
-preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site."
-boundary = "The bridge requires entry-state identity and disabled precompiles. It describes ordinary call-message settlement, not CREATE settlement or retained-frame filtering."
+preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post and `processMessage_entry_facts` to recover the actual entry frame projections."
+boundary = "The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
 owner_module = "Blanc/MessageExecution.lean"
 canonical_example = "Blanc/MessageExecution.lean:MessageExecution.processMessage_eq_settle_exec"
 symbols = [
   "module:Blanc/MessageExecution.lean",
+  "module:Blanc/MessageExecutionInversion.lean",
   "declaration:MessageExecution.processMessage_eq_settle_exec",
   "declaration:MessageExecution.processMessage_clean_of_exec",
   "declaration:MessageExecution.processMessage_revert_of_exec",
   "declaration:MessageExecution.processMessage_halt_of_exec",
+  "declaration:MessageExecution.processMessage_clean_rawPost",
+  "declaration:MessageExecution.processMessage_entry_facts",
   "declaration:MessageExecution.settledRevert",
   "declaration:MessageExecution.settledHalt",
   "declaration:Msg.initDevm_stack",
   "declaration:Msg.initSevm_data",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-29"
+
+[[recipe]]
+id = "retained-write-noninterference"
+status = "active"
+triggers = ["goal-shape:retained-write-noninterference"]
+preferred_path = "For `Exec.NoRetainedWriteTo`, split first on `Execution.commits out = true`. Close the rollback arm with `Exec.noRetainedWriteTo_of_not_commits`; on a committing execution use `Exec.noRetainedWriteTo_of_sourceSites_no_exec` for a source-childless program, `Exec.noRetainedWriteTo_of_no_execOccurrence` for an occurrence-level proof, or `Exec.noRetainedWriteTo_of_frame_owners_ne` when entered child frames have distinct storage owners."
+boundary = "The noncommitting theorem proves retained-write absence by rollback, not raw instruction absence. The committing routes still need exact invocation/source or entered-frame ownership evidence; do not infer childlessness merely from a static call flag."
+owner_module = "Blanc/ExecutionNoninterference.lean"
+canonical_example = "Blanc/ExecutionNoninterference.lean:Exec.noRetainedWriteTo_of_not_commits"
+symbols = [
+  "module:Blanc/ExecutionNoninterference.lean",
+  "declaration:Exec.NoRetainedWriteTo",
+  "declaration:Exec.noRetainedWriteTo_of_not_commits",
+  "declaration:Exec.noRetainedWriteTo_of_no_execOccurrence",
+  "declaration:Exec.noRetainedWriteTo_of_sourceSites_no_exec",
+  "declaration:Exec.noRetainedWriteTo_of_frame_owners_ne",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-29"

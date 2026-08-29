@@ -2,6 +2,8 @@ import Blanc.ForwardCall
 import Blanc.RootedExecution
 import Blanc.MessageExecution
 import Blanc.ExecutionTerminal
+import Blanc.ExecutionNoninterference
+import Blanc.LinearDispatchCorrectness
 
 namespace Blanc
 
@@ -22,6 +24,19 @@ example {fs : List Func} {sevm : Sevm} {pre : Devm} {f : Func}
     Func.RunCompiledTo fs sevm pre f out := by
   blanc_suggest
   exact run
+
+-- EXPECT: linear-dispatch-selection
+example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {fallback : Nat} {entries : List (B256 × Func)} {selector : B256}
+    {tail : Stack} {body : Func}
+    (unique : selectorUnique entries) (member : (selector, body) ∈ entries)
+    (stack : pre.stack = selector :: tail) :
+    Func.RunCompiledTo fs sevm pre
+      (Blanc.linearDispatchWith fallback entries) out →
+      DispatchBodyWitness fs sevm pre entries selector tail body out := by
+  blanc_suggest
+  intro run
+  exact dispatchBodyWitness_of_runCompiledTo unique member stack run
 
 -- EXPECT: line-run-split
 example {sevm : Sevm} {pre post : Devm} {line : Line} :
@@ -116,6 +131,14 @@ example {P : Exec.Deriv → Prop} {fs : List Func} {sevm : Sevm}
     (rooted : rootedRunCompiledTo P run) : rootedRunCompiledTo P run := by
   blanc_suggest
   exact rooted
+
+-- EXPECT: retained-write-noninterference
+example {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (owner : Adr) (key : B256)
+    (notCommitted : Execution.commits out ≠ true) :
+    Exec.NoRetainedWriteTo run owner key := by
+  blanc_suggest
+  exact Exec.noRetainedWriteTo_of_not_commits run notCommitted owner key
 
 -- EXPECT: message-execution-settlement
 example (msg : Msg)

@@ -233,6 +233,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeIsByteSizeComposition target
   | "goal-shape:selector-separation" =>
       return proofRecipeContainsName `Blanc.selector target
+  | "goal-shape:linear-dispatch-selection" =>
+      return proofRecipeContainsName `Blanc.linearDispatchWith target
   | "goal-shape:fixed-byte-offset" =>
       return head == some `Blanc.Mem.Wf || head == some `Blanc.Mem.Reads
   | "goal-shape:frame-root-carrying" =>
@@ -240,6 +242,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ninstAllChildRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameDescendants target
+  | "goal-shape:retained-write-noninterference" =>
+      return head == some `Blanc.Exec.NoRetainedWriteTo
   | "goal-shape:message-execution-settlement" =>
       return proofRecipeContainsName `Jaune.processMessage target &&
         (proofRecipeContainsName `Jaune.exec target ||

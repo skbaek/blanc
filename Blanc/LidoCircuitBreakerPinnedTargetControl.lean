@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerPinnedTarget
+import Blanc.MessageExecutionInversion
 
 /-!
 # Test-scoped controls for the pinned-target protocol
@@ -729,72 +730,6 @@ theorem stub_isPaused_truthful
     rw [dispatchZero] at flagEq
     exact (flagNonzero flagEq).elim
 
-/-- A clean settled message exposes the successful raw post without changing
-its state or output. -/
-private theorem cleanProcess_rawPost
-    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    {raw : Execution}
-    (process : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) (.ok post))
-    (clean : post.error.isSome = false) :
-    ∃ rawPost, raw = .ok rawPost ∧ rawPost.error = none ∧
-      post.state = rawPost.state ∧ post.output = rawPost.output := by
-  have settles :=
-    ProcessMessage.settlementCommits_of_some_ok_clean process clean
-  have commits : Execution.commits raw = true :=
-    Frame.raw_commits_of_settlementCommits settles
-  cases raw with
-  | error err => simp [Execution.commits] at commits
-  | ok rawPost =>
-      cases errorEq : rawPost.error with
-      | some err => simp [Execution.commits, errorEq] at commits
-      | none =>
-          refine ⟨rawPost, rfl, errorEq, ?_, ?_⟩
-          · exact ProcessMessage.ok_state_eq_committedPost process commits
-          · have settleEq := (RunFrame.some_inv process).2
-            simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-              executeCode.handleError, processMessage.settle, errorEq] at settleEq
-            exact congrArg Devm.output settleEq
-
-/-- Facts inherited by the retained code frame from its exact message entry. -/
-private theorem processEntry_facts
-    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {raw : Execution} {ex : TargetMessageResult} (target : Adr)
-    (process : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
-    pc = 0 ∧ sevm.code = msg.code ∧
-      sevm.currentTarget = msg.currentTarget ∧
-      sevm.codeAddress = msg.codeAddress ∧ sevm.data = msg.data ∧
-      sevm.benvStat.time = msg.benv.stat.time ∧
-      pre.state.getStor target = msg.benv.state.getStor target ∧
-      Mem.Wf pre.memory := by
-  have enter := (RunFrame.some_inv process).1
-  have pcZero := Frame.enter_run_pc enter
-  have codeEq := Frame.enter_run_code enter
-  have current := Frame.enter_run_currentTarget enter
-  have memory := Blanc.Frame.enter_run_memory enter
-  rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
-  change msg.benvAfterTransfer = .ok benv at transfer
-  have data := congrArg (fun evm : Evm => evm.sta.data) evmEq
-  have codeAddress := congrArg (fun evm : Evm => evm.sta.codeAddress) evmEq
-  have time := congrArg (fun evm : Evm => evm.sta.benvStat.time) evmEq
-  have state := congrArg (fun evm : Evm => evm.dyna.state) evmEq
-  dsimp [Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv] at codeEq current codeAddress data time memory
-  change pre.state = benv.state at state
-  have statEq : benv.stat = msg.benv.stat := by
-    by_cases transfers : msg.shouldTransferValue = true
-    · obtain ⟨middle, sub, rfl⟩ :=
-        of_benvAfterTransfer transfers transfer
-      rfl
-    · rw [of_benvAfterTransfer_no transfers transfer]
-  have storage : pre.state.getStor target =
-      msg.benv.state.getStor target := by
-    rw [state, benvAfterTransfer_getStor_eq transfer]
-  refine ⟨pcZero, codeEq, current, codeAddress, data,
-    time.trans (congrArg BenvStat.time statEq), storage, ?_⟩
-  rw [memory]
-  exact Mem.wf_empty
-
 /-- The compiled stub discharges the complete Lido specialization, including
 one nonempty protected selector whose clean paused execution must revert. -/
 theorem stub_lidoPinnedPauseTarget
@@ -812,11 +747,11 @@ theorem stub_lidoPinnedPauseTarget
     rcases executes with
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
     subst xl
-    rcases processEntry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     subst pc
-    rcases cleanProcess_rawPost process clean with
+    rcases MessageExecution.processMessage_clean_rawPost process clean with
       ⟨rawPost, rfl, rawClean, stateEq, outputEq⟩
     have frame : StubFrame target (pauseForCalldata duration) sevm :=
       ⟨current.trans exactCall.currentTarget, data.trans exactCall.data⟩
@@ -831,11 +766,11 @@ theorem stub_lidoPinnedPauseTarget
     rcases executes with
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
     subst xl
-    rcases processEntry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     subst pc
-    rcases cleanProcess_rawPost process clean with
+    rcases MessageExecution.processMessage_clean_rawPost process clean with
       ⟨rawPost, rfl, rawClean, stateEq, outputEq⟩
     have frame : StubFrame target isPausedCalldata sevm :=
       ⟨current.trans exactCall.currentTarget, data.trans exactCall.data⟩
@@ -885,7 +820,7 @@ theorem stub_lidoPinnedPauseTarget
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨witnessRun⟩⟩
     subst xl
     intro actualRun
-    rcases processEntry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     have msgCurrent : msg.currentTarget = target := by
@@ -913,14 +848,14 @@ theorem stub_lidoPinnedPauseTarget
     · rcases executes with
         ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨witnessRun⟩⟩
       subst xl
-      rcases processEntry_facts target process with
+      rcases MessageExecution.processMessage_entry_facts target process with
         ⟨pcZero, codeEq, current, entryCodeAddress, data, time,
           entryStorage, memoryWf⟩
       subst pc
       have clean : child.error.isSome = false := by
         rw [childClean]
         rfl
-      rcases cleanProcess_rawPost process clean with
+      rcases MessageExecution.processMessage_clean_rawPost process clean with
         ⟨rawPost, rfl, rawClean, stateEq, outputEq⟩
       have uses : some sevm.code.toList = Prog.compile stubProgram := by
         rw [codeEq]

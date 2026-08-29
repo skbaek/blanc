@@ -51,13 +51,14 @@ import sys
 
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "Compiled", "DeploymentCompiled", "DeploymentMessage", "Forward", "Reverts", "ForwardCall",
-          "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
+          "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecutionSettlement",
           "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
           "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
 
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
-SHARED += ["ExecutionTerminal", "MessageExecution", "RootedExecution"]
+SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
+           "RootedExecution"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],
@@ -65,6 +66,7 @@ CONTRACTS = {
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
         "LidoTriggerableWithdrawalsGateway",
+        "LidoTriggerableWithdrawalsGatewayPinnedTargetControl",
     ],
     "proxy-pair": ["ProxyPairSlots", "ProxyPairProgram",
                    "ProxyPairImplementation", "ProxyPairExecution",
