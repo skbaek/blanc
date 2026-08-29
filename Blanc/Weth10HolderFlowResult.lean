@@ -705,7 +705,8 @@ theorem RequestsTrace.storageAccounting
       hmessage hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hboth := hwithdrawal.append hconsolidation
-  have hstate := RequestsTrace.state_eq_consolidationState trace
+  have hstate :=
+    ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
   simpa [RequestsTrace.flowActions, Benv.withState, hstate] using hboth
 
 theorem AppliedBodyTrace.storageAccounting

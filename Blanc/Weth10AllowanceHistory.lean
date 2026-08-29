@@ -391,7 +391,8 @@ theorem RequestsTrace.allowanceTransported
       hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hboth := hwithdrawal.append hconsolidation
-  have hstate := RequestsTrace.state_eq_consolidationState trace
+  have hstate :=
+    ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
   simpa [RequestsTrace.attributionStream, Benv.withState, hstate] using hboth
 
 theorem AppliedBodyTrace.allowanceTransported
@@ -886,7 +887,8 @@ theorem RequestsTrace.allowanceTransportedSound
       hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hboth := hwithdrawal.append hconsolidation
-  have hstate := RequestsTrace.state_eq_consolidationState trace
+  have hstate :=
+    ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
   simpa [RequestsTrace.attributionStream, Benv.withState, hstate] using hboth
 
 theorem AppliedBodyTrace.allowanceTransportedSound

@@ -57,6 +57,15 @@ theorem StateReplay.mapOrigin
   | nil => exact .nil _
   | cons event rest ih => exact .cons (event.mapOrigin f) ih
 
+/-- Change only the named final state of an already continuous replay. -/
+theorem StateReplay.castPost
+    {Origin : Type} {pre post post' : State}
+    {events : List (StateTransition Origin)}
+    (replay : StateReplay pre events post) (eq : post = post') :
+    StateReplay pre events post' := by
+  subst post'
+  exact replay
+
 /-- The semantic boundary crossed by one retained execution segment. -/
 inductive Exec.StateBoundaryKind where
   /-- A non-spawning instruction advanced the current frame. -/

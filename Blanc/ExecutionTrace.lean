@@ -204,6 +204,14 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
           rfl)
           (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
 
+/-- Recover the exact deterministic wrapper equation retained by a message
+trace. -/
+theorem MessageCallTrace.result
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out) :
+    processMessageCall msg = .ok (state, out) := by
+  cases trace <;> assumption
+
 /-! ## Transaction traces -/
 
 def transactionPreludeBout
@@ -298,6 +306,79 @@ theorem exists_transactionTrace
     by simpa [transactionBlobGasFee, Benv.beginTransaction] using hdebit',
     by simpa [transactionTenv, Benv.beginTransaction] using hprepared,
     messageTrace, h_result⟩⟩
+
+/-- Exact post-message transaction settlement form.  This exposes the two
+gas credits and the final account-deletion fold without re-executing or
+approximating the transaction. -/
+theorem TransactionTrace.exists_finalStateForm
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout') :
+    ∃ refundCounter : Nat,
+      Int.toNat? trace.messageOut.refundCounter = some refundCounter ∧
+      state =
+        trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+          ((trace.messageState.addBal trace.sender
+              ((tx.gas -
+                  max (tx.gas - trace.messageOut.gasLeft -
+                    min ((tx.gas - trace.messageOut.gasLeft) / 5)
+                      refundCounter)
+                    trace.calldataFloorGasCost) *
+                trace.effectiveGasPrice).toB256).addBal
+            benv.stat.coinbase
+              (max (tx.gas - trace.messageOut.gasLeft -
+                  min ((tx.gas - trace.messageOut.gasLeft) / 5)
+                    refundCounter)
+                  trace.calldataFloorGasCost *
+                (trace.effectiveGasPrice -
+                  benv.stat.baseFeePerGas)).toB256) := by
+  have hrun := trace.result
+  unfold processTransaction at hrun
+  simp only [Benv.beginTransaction] at hrun
+  rcases Except.bind_eq_ok hrun with ⟨prelude, hprelude, hrun⟩
+  have hpreludeEq := Except.ok.inj hprelude
+  subst prelude
+  rcases Except.bind_eq_ok hrun with ⟨validated, hvalidated, hrun⟩
+  rcases validated with ⟨intrinsicGas, calldataFloorGasCost⟩
+  rw [Except.mapError_eq_ok_iff] at hvalidated
+  have hvalidatedEq : intrinsicGas = trace.intrinsicGas ∧
+      calldataFloorGasCost = trace.calldataFloorGasCost := by
+    exact Prod.mk.inj (Except.ok.inj (hvalidated.symm.trans trace.validation))
+  rcases hvalidatedEq with ⟨rfl, rfl⟩
+  rcases Except.bind_eq_ok hrun with ⟨checked, hchecked, hrun⟩
+  rcases checked with
+    ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩
+  have hcheckedEq := Except.ok.inj (hchecked.symm.trans trace.checked)
+  simp only [Prod.mk.injEq] at hcheckedEq
+  rcases hcheckedEq with ⟨rfl, rfl, rfl, rfl⟩
+  rcases Except.bind_eq_ok hrun with ⟨debitState, hdebit, hrun⟩
+  have hdebitSome := Option.toExcept_eq_ok hdebit
+  have hdebitEq : debitState = trace.debitState := by
+    have htraceDebit := trace.debit
+    simp only [transactionBlobGasFee] at htraceDebit
+    rw [htraceDebit] at hdebitSome
+    exact Option.some.inj hdebitSome.symm
+  subst debitState
+  rcases Except.bind_eq_ok hrun with ⟨msg, hprepared, hrun⟩
+  have hmsgEq : msg = trace.msg := Except.ok.inj
+    (hprepared.symm.trans trace.prepared)
+  subst msg
+  rcases Except.bind_eq_ok hrun with ⟨messageResult, hmessage, hrun⟩
+  rcases messageResult with ⟨messageState, messageOut⟩
+  rw [Except.mapError_eq_ok_iff] at hmessage
+  have htraceMessage : processMessageCall trace.msg =
+      .ok (trace.messageState, trace.messageOut) :=
+    trace.message.result
+  have hmessageEq : messageState = trace.messageState ∧
+      messageOut = trace.messageOut := by
+    exact Prod.mk.inj (Except.ok.inj
+      (hmessage.symm.trans htraceMessage))
+  rcases hmessageEq with ⟨rfl, rfl⟩
+  rcases Except.bind_eq_ok hrun with ⟨refundCounter, hrefund, hrun⟩
+  have hrefundSome := Option.toExcept_eq_ok hrefund
+  simp only at hrun
+  have hfinal := Except.ok.inj hrun
+  exact ⟨refundCounter, hrefundSome, (Prod.mk.inj hfinal).1.symm⟩
 
 /-- Exact retained replay of the decoded transaction list. -/
 inductive ApplyTransactionsTrace :
@@ -409,6 +490,34 @@ theorem exists_requestsTrace
           withdrawalState, withdrawalOut, hwithdrawal, withdrawalTrace,
           consolidationState, consolidationOut,
           hconsolidation, consolidationTrace, h_result⟩⟩))
+
+/-- The final request-processing state is the state returned by the second
+checked system message. -/
+theorem RequestsTrace.state_eq_consolidationState
+    {benv : Benv} {bout : BlockOutput}
+    {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout') :
+    state = trace.consolidationState := by
+  have hconsolidation :
+      processCheckedSystemTransaction
+        { state := trace.withdrawalState
+          createdAccounts := benv.createdAccounts
+          stat := benv.stat }
+        consolidationRequestPredeployAddress [] =
+          .ok (trace.consolidationState, trace.consolidationOut) := by
+    simpa only [Benv.withState] using trace.consolidationRun
+  have hrun := trace.run
+  unfold processGeneralPurposeRequests at hrun
+  rw [trace.parsed] at hrun
+  simp only [bind, Except.bind] at hrun
+  split at hrun <;>
+    (rw [trace.withdrawalRun] at hrun
+     dsimp only at hrun
+     split at hrun <;>
+       (rw [hconsolidation] at hrun
+        dsimp only at hrun
+        split at hrun <;>
+          exact (Prod.mk.inj (Except.ok.inj hrun)).1.symm))
 
 /-- Complete retained execution evidence for a successful body under Jaune's
 currently modelled body semantics.  This includes the two pre-transaction

@@ -7,6 +7,7 @@ import Blanc.ExecutionPath
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
 import Blanc.ExecutionHistory
+import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionOccurrence
 import Blanc.ExecutionNoninterference
 import Blanc.CycleWriteFree

@@ -813,12 +813,6 @@ theorem TransactionTrace.debitState_bal_ca
   rw [State.incrNonce_get_bal]
   rfl
 
-theorem MessageCallTrace.result
-    {msg : Msg} {state : State} {out : MsgCallOutput}
-    (trace : MessageCallTrace msg state out) :
-    processMessageCall msg = .ok (state, out) := by
-  cases trace <;> assumption
-
 theorem TransactionTrace.accountsToDelete_ne_ca
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
@@ -845,7 +839,7 @@ theorem TransactionTrace.accountsToDelete_ne_ca
       (by simpa [Benv.beginTransaction] using hnotCreated) horigin
   exact (ContractSpec.processMessageCall_preserves_inv
     (c := spec) (backedSpec_preserves dp ca)
-    (MessageCallTrace.result trace.message) hmsg).2
+    (ExecutionTrace.MessageCallTrace.result trace.message) hmsg).2
 
 theorem foldl_destroyAccount_bal_eq
     {ca : Adr} {state : State} {addresses : List Adr}
@@ -862,79 +856,6 @@ theorem foldl_destroyAccount_bal_eq
       · intro tail htail
         exact hne tail (by simp [htail])
 
-/-- Exact post-message transaction settlement form.  This exposes the two
-gas credits and the final account-deletion fold without re-executing or
-approximating the transaction. -/
-theorem TransactionTrace.exists_finalStateForm
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout') :
-    ∃ refundCounter : Nat,
-      Int.toNat? trace.messageOut.refundCounter = some refundCounter ∧
-      state =
-        trace.messageOut.accountsToDelete.toList.foldl destroyAccount
-          ((trace.messageState.addBal trace.sender
-              ((tx.gas -
-                  max (tx.gas - trace.messageOut.gasLeft -
-                    min ((tx.gas - trace.messageOut.gasLeft) / 5)
-                      refundCounter)
-                    trace.calldataFloorGasCost) *
-                trace.effectiveGasPrice).toB256).addBal
-            benv.stat.coinbase
-              (max (tx.gas - trace.messageOut.gasLeft -
-                  min ((tx.gas - trace.messageOut.gasLeft) / 5)
-                    refundCounter)
-                  trace.calldataFloorGasCost *
-                (trace.effectiveGasPrice -
-                  benv.stat.baseFeePerGas)).toB256) := by
-  have hrun := trace.result
-  unfold processTransaction at hrun
-  simp only [Benv.beginTransaction] at hrun
-  rcases Except.bind_eq_ok hrun with ⟨prelude, hprelude, hrun⟩
-  have hpreludeEq := Except.ok.inj hprelude
-  subst prelude
-  rcases Except.bind_eq_ok hrun with ⟨validated, hvalidated, hrun⟩
-  rcases validated with ⟨intrinsicGas, calldataFloorGasCost⟩
-  rw [Except.mapError_eq_ok_iff] at hvalidated
-  have hvalidatedEq : intrinsicGas = trace.intrinsicGas ∧
-      calldataFloorGasCost = trace.calldataFloorGasCost := by
-    exact Prod.mk.inj (Except.ok.inj (hvalidated.symm.trans trace.validation))
-  rcases hvalidatedEq with ⟨rfl, rfl⟩
-  rcases Except.bind_eq_ok hrun with ⟨checked, hchecked, hrun⟩
-  rcases checked with
-    ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩
-  have hcheckedEq := Except.ok.inj (hchecked.symm.trans trace.checked)
-  simp only [Prod.mk.injEq] at hcheckedEq
-  rcases hcheckedEq with ⟨rfl, rfl, rfl, rfl⟩
-  rcases Except.bind_eq_ok hrun with ⟨debitState, hdebit, hrun⟩
-  have hdebitSome := Option.toExcept_eq_ok hdebit
-  have hdebitEq : debitState = trace.debitState := by
-    have htraceDebit := trace.debit
-    simp only [transactionBlobGasFee] at htraceDebit
-    rw [htraceDebit] at hdebitSome
-    exact Option.some.inj hdebitSome.symm
-  subst debitState
-  rcases Except.bind_eq_ok hrun with ⟨msg, hprepared, hrun⟩
-  have hmsgEq : msg = trace.msg := Except.ok.inj
-    (hprepared.symm.trans trace.prepared)
-  subst msg
-  rcases Except.bind_eq_ok hrun with ⟨messageResult, hmessage, hrun⟩
-  rcases messageResult with ⟨messageState, messageOut⟩
-  rw [Except.mapError_eq_ok_iff] at hmessage
-  have htraceMessage : processMessageCall trace.msg =
-      .ok (trace.messageState, trace.messageOut) := by
-    cases trace.message <;> assumption
-  have hmessageEq : messageState = trace.messageState ∧
-      messageOut = trace.messageOut := by
-    exact Prod.mk.inj (Except.ok.inj
-      (hmessage.symm.trans htraceMessage))
-  rcases hmessageEq with ⟨rfl, rfl⟩
-  rcases Except.bind_eq_ok hrun with ⟨refundCounter, hrefund, hrun⟩
-  have hrefundSome := Option.toExcept_eq_ok hrefund
-  simp only at hrun
-  have hfinal := Except.ok.inj hrun
-  exact ⟨refundCounter, hrefundSome, (Prod.mk.inj hfinal).1.symm⟩
-
 /-- Refund and priority-fee settlement, followed by the transaction's account
 deletions, cannot lower the installed WETH10 account.  This is proved from
 the checked up-front debit and the actual message result, so it also covers a
@@ -947,7 +868,7 @@ theorem TransactionTrace.postMessage_ethBound
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     EthBound ca trace.messageState state [] := by
-  rcases TransactionTrace.exists_finalStateForm trace with
+  rcases ExecutionTrace.TransactionTrace.exists_finalStateForm trace with
     ⟨refundCounter, _hrefund, hstate⟩
   let used := max
     (tx.gas - trace.messageOut.gasLeft -
@@ -986,7 +907,7 @@ theorem TransactionTrace.postMessage_ethBound
   have hfeeExact := B256.toNat_toB256_of_lt hfeeLt
   rw [hfeeExact] at hdebitSum
   have hmessageSum := processMessageCall_sum_le
-    (MessageCallTrace.result trace.message)
+    (ExecutionTrace.MessageCallTrace.result trace.message)
   rw [prepareMessage_benv trace.prepared] at hmessageSum
   change sum trace.messageState.bal ≤ sum trace.debitState.bal at hmessageSum
   have hbaseSum : sum benv.state.bal < 2 ^ 256 := hstable.sumNof
@@ -1987,32 +1908,6 @@ theorem ApplyTransactionsTrace.ethBound
           (TransactionTrace.stable head hstable hnotCreated)
           (by simpa [Benv.withState] using hnotCreated))
 
-theorem RequestsTrace.state_eq_consolidationState
-    {benv : Benv} {bout : BlockOutput}
-    {state : State} {bout' : BlockOutput}
-    (trace : RequestsTrace benv bout state bout') :
-    state = trace.consolidationState := by
-  have hconsolidation :
-      processCheckedSystemTransaction
-        { state := trace.withdrawalState
-          createdAccounts := benv.createdAccounts
-          stat := benv.stat }
-        consolidationRequestPredeployAddress [] =
-          .ok (trace.consolidationState, trace.consolidationOut) := by
-    simpa only [Benv.withState] using trace.consolidationRun
-  have hrun := trace.run
-  unfold processGeneralPurposeRequests at hrun
-  rw [trace.parsed] at hrun
-  simp only [bind, Except.bind] at hrun
-  split at hrun <;>
-    (rw [trace.withdrawalRun] at hrun
-     dsimp only at hrun
-     split at hrun <;>
-       (rw [hconsolidation] at hrun
-        dsimp only at hrun
-        split at hrun <;>
-          exact (Prod.mk.inj (Except.ok.inj hrun)).1.symm))
-
 theorem RequestsTrace.ethBound
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {bout : BlockOutput}
@@ -2033,7 +1928,7 @@ theorem RequestsTrace.ethBound
       (by simpa [Benv.withState] using hnotCreated)
   have hboth := hwithdrawal.trans hconsolidation
   simpa [RequestsTrace.flowActions, Benv.withState,
-    RequestsTrace.state_eq_consolidationState trace] using hboth
+    ExecutionTrace.RequestsTrace.state_eq_consolidationState trace] using hboth
 
 theorem RequestsTrace.stable_and_sum_le
     {dp : DeployParams} {ca : Adr}
@@ -2048,7 +1943,8 @@ theorem RequestsTrace.stable_and_sum_le
   have hconsolidation :=
     SystemMessageTrace.stable_and_sum_le trace.consolidation hwithdrawal.1
       (by simpa [Benv.withState] using hnotCreated)
-  have hstate := RequestsTrace.state_eq_consolidationState trace
+  have hstate :=
+    ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
   constructor
   · simpa [hstate] using hconsolidation.1
   · have hsum :

@@ -52,7 +52,8 @@ import sys
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "Compiled", "DeploymentCompiled", "DeploymentMessage", "Forward", "Reverts", "ForwardCall",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
-          "ExecutionHistory",
+          "ExecutionMessageStateTrace", "ExecutionTransactionStateTrace",
+          "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryStateTrace",
           "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
           "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
 
