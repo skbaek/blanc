@@ -210,6 +210,9 @@ Use
 - `ExecutionTrace.TransactionTrace.settlement_sum_bounds` funds the sender
   refund and the coinbase priority fee out of the transaction's own up-front
   debit, so neither credit needs a wrap-around side condition.
+- `ExecutionTrace.TransactionTrace.benvInv` moves a whole `ContractSpec.BenvInv`
+  across one retained transaction.  Its balance-sum premise is explicit: a
+  general `ContractSpec.Side` need not be `SumNof`.
 
 `ContractSpec.StateInv.ne_of_messageCreateCollision_false` in
 [`Blanc/ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean)
@@ -228,6 +231,35 @@ Use
 - `ExecutionTrace.messageCallExecutionMessage_caller_eq` and its siblings
   (`_target_eq`, `_currentTarget_eq`, `_shouldTransferValue_eq`,
   `_getStor_eq`, `_bal_eq`) do the same across delegated-code resolution.
+
+### T5. The wrapper is a block body and the fact is about an installed contract
+
+Use [`Blanc/ExecutionBodyEffects.lean`](../Blanc/ExecutionBodyEffects.lean),
+the body-level sibling of T3:
+
+- System messages: `ExecutionTrace.systemTransactionMessage_msgInv` carries an
+  arbitrary `ContractSpec` invariant onto a Jaune system message, and does so
+  without needing the system target to differ from the installed contract.
+  `ExecutionTrace.systemTransactionMessage_target`,
+  `..._target_isNone`, `..._currentTarget`, `..._caller`, `..._benv_state`
+  and `..._benv_createdAccounts` project the message's fixed fields — the
+  caller is always `systemAddress`.
+  `ExecutionTrace.SystemMessageTrace.stateInv_and_sum_le` and
+  `ExecutionTrace.SystemMessageTrace.benvInv` move the invariant and the
+  balance-sum bound across a retained system message.
+- Transaction lists: `ExecutionTrace.ApplyTransactionsTrace.run` recovers the
+  `applyTransactions` call a retained list trace witnesses, so every ladder
+  rung stated over that function applies to a trace unchanged.
+  `ExecutionTrace.ApplyTransactionsTrace.sum_le`,
+  `ExecutionTrace.ApplyTransactionsTrace.createdAccounts_eq` and
+  `ExecutionTrace.ApplyTransactionsTrace.benvInv` are the three facts a
+  body-level lift needs from a transaction list.
+- Direct withdrawals: `ExecutionTrace.withdrawalCredit_toNat` and
+  `ExecutionTrace.withdrawalCredit_bounds` are the exactness and the induction
+  step of the `wdsum` block bound;
+  `ExecutionTrace.benvInv_processWithdrawalsState` moves an arbitrary
+  invariant across the whole credit fold.
+- Requests: `ExecutionTrace.RequestsTrace.stateInv_and_sum_le`.
 
 ## C — compilation and deployment
 

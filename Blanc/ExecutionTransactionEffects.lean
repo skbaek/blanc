@@ -107,6 +107,20 @@ theorem TransactionTrace.msg_shouldTransferValue
       simp only [receiver] at prepared
       rw [← Except.ok.inj prepared]
 
+/-- An arbitrary contract invariant survives one whole retained transaction.
+The balance-sum bound is an explicit premise rather than a projection of the
+invariant: a general `ContractSpec.Side` need not be `SumNof`. -/
+theorem TransactionTrace.benvInv
+    {ca : Adr} {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (preserves : c.Preserves ca)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (inv : c.BenvInv ca benv) :
+    c.BenvInv ca (benv.withState state) :=
+  ContractSpec.processTransaction_preserves_inv ca preserves benv bout bout' tx
+    index state trace.result sumNof inv
+
 /-! ## Final settlement -/
 
 /-- A transaction never destroys an installed contract account. -/

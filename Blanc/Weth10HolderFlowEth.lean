@@ -1,5 +1,6 @@
 import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionTransactionEffects
+import Blanc.ExecutionBodyEffects
 import Blanc.Weth10HolderFlowAuthenticity
 
 /-!
@@ -730,33 +731,13 @@ theorem processWithdrawalsState_ethBound
   induction withdrawals generalizing state with
   | nil => exact EthBound.refl ca state
   | cons withdrawal withdrawals ih =>
-      have hsum : wdsum (withdrawal :: withdrawals) =
-          withdrawal.amount.toNat * 10 ^ 9 + wdsum withdrawals := by
-        simp [wdsum]
-      rw [hsum] at hbound
+      obtain ⟨hheadBound, htailBound⟩ :=
+        ExecutionTrace.withdrawalCredit_bounds hbound
       let value := withdrawal.amount * (10 ^ 9).toB256
-      have hvalue : value.toNat = withdrawal.amount.toNat * 10 ^ 9 := by
-        have h9 : (10 : Nat) ^ 9 ↾ 256 = 10 ^ 9 :=
-          Nat.lo_eq_of_lt (by omega)
-        rw [B256.toNat_mul, B256.toNat_toB256,
-          h9, Nat.lo_eq_of_lt (by omega)]
-      have hheadBound : sum state.bal + value.toNat < 2 ^ 256 := by
-        rw [hvalue]
-        exact lt_of_le_of_lt
-          (Nat.add_le_add_left
-            (Nat.le_add_right
-              (withdrawal.amount.toNat * 10 ^ 9) (wdsum withdrawals))
-            (sum state.bal))
-          hbound
       let next := state.addBal withdrawal.recipient value
       have hhead : EthBound ca state next [] :=
         (EthStep.externalCredit (ca := ca) (post := next)
           rfl hheadBound).bound
-      have hsumNext : sum next.bal = sum state.bal + value.toNat := by
-        exact sum_addBal_eq state withdrawal.recipient value hheadBound
-      have htailBound : sum next.bal + wdsum withdrawals < 2 ^ 256 := by
-        rw [hsumNext, hvalue]
-        omega
       have htail := ih next htailBound
       have hcombined := hhead.trans htail
       simpa [processWithdrawalsState, next, value] using hcombined
@@ -1566,44 +1547,14 @@ theorem SystemMessageTrace.messageReady
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
-    (trace : SystemMessageTrace benv target data state out)
+    (_trace : SystemMessageTrace benv target data state out)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    MessageReady dp ca (systemTransactionMessage benv target data) := by
-  have one :
-      ∀ (spec : ContractSpec),
-        spec.StateInv ca benv.state →
-        spec.MsgInv ca (systemTransactionMessage benv target data) := by
-    intro spec hinv
-    have hstate : spec.StateInv ca
-        (systemTransactionMessage benv target data).benv.state := by
-      simpa [systemTransactionMessage, processSystemTransactionMsg,
-        Benv.beginTransaction] using hinv
-    refine ⟨hstate, ?_, ?_, ?_, ?_, ?_⟩
-    · refine ⟨?_, ?_⟩
-      · simpa [systemTransactionMessage, processSystemTransactionMsg,
-          Benv.beginTransaction] using hnotCreated
-      · exact fun hempty => Prog.compile_ne_nil
-          (hstate.code.symm.trans (congrArg some hempty))
-    · intro _ hcurrent
-      have htarget : target = ca := by
-        simpa [systemTransactionMessage, processSystemTransactionMsg] using
-          hcurrent
-      subst target
-      simpa [systemTransactionMessage, processSystemTransactionMsg,
-        Benv.beginTransaction] using hstate.code
-    · intro _ hcurrent
-      have htarget : target = ca := by
-        simpa [systemTransactionMessage, processSystemTransactionMsg] using
-          hcurrent
-      subst target
-      simp [systemTransactionMessage, processSystemTransactionMsg]
-    · intro htransfer
-      simp [systemTransactionMessage, processSystemTransactionMsg] at htransfer
-    · intro _ _
-      simp [systemTransactionMessage, processSystemTransactionMsg]
-  exact ⟨one _ ⟨hstable.code, hstable.sumNof, hstable.backed⟩,
-    one _ ⟨hstable.code, trivial, hstable.flashZero⟩⟩
+    MessageReady dp ca (systemTransactionMessage benv target data) :=
+  ⟨ExecutionTrace.systemTransactionMessage_msgInv
+      ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated,
+    ExecutionTrace.systemTransactionMessage_msgInv
+      ⟨hstable.code, trivial, hstable.flashZero⟩ hnotCreated⟩
 
 theorem SystemMessageTrace.ethBound
     {dp : DeployParams} {ca : Adr}
@@ -1631,20 +1582,10 @@ theorem SystemMessageTrace.stable_and_sum_le
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     Stable dp ca state ∧ sum state.bal ≤ sum benv.state.bal := by
-  have hbackedInput :
-      (backedSpec weth10 dp).BenvInv ca benv :=
+  have hbacked := trace.stateInv_and_sum_le (backedSpec_preserves dp ca)
     ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
-  have hflashInput :
-      (flashExactSpec dp 0).BenvInv ca benv :=
+  have hflash := trace.stateInv_and_sum_le (flashExactSpec_preserves dp ca 0)
     ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
-  have hbacked :=
-    ContractSpec.processUncheckedSystemTransaction_preserves_inv_sum_le
-      ca (backedSpec_preserves dp ca) benv target data state out
-      trace.run hbackedInput
-  have hflash :=
-    ContractSpec.processUncheckedSystemTransaction_preserves_inv_sum_le
-      ca (flashExactSpec_preserves dp ca 0) benv target data state out
-      trace.run hflashInput
   exact ⟨⟨hbacked.1.code, hbacked.1.side, hbacked.1.inv,
     hflash.1.inv⟩, hbacked.2⟩
 
@@ -1663,22 +1604,15 @@ theorem ApplyTransactionsTrace.sum_le
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
-    sum finalBenv.state.bal ≤ sum benv.state.bal := by
-  induction trace with
-  | nil => exact le_rfl
-  | cons head tail ih =>
-      have hhead := processTransaction_sum_le head.result
-      exact le_trans (by simpa [Benv.withState] using ih) hhead
+    sum finalBenv.state.bal ≤ sum benv.state.bal :=
+  ExecutionTrace.ApplyTransactionsTrace.sum_le trace
 
 theorem ApplyTransactionsTrace.createdAccounts_eq
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
-    finalBenv.createdAccounts = benv.createdAccounts := by
-  induction trace with
-  | nil => rfl
-  | cons head tail ih =>
-      simpa [Benv.withState] using ih
+    finalBenv.createdAccounts = benv.createdAccounts :=
+  ExecutionTrace.ApplyTransactionsTrace.createdAccounts_eq trace
 
 theorem ApplyTransactionsTrace.stable
     {dp : DeployParams} {ca : Adr}
@@ -1688,11 +1622,12 @@ theorem ApplyTransactionsTrace.stable
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     Stable dp ca finalBenv.state := by
-  induction trace with
-  | nil => exact hstable
-  | cons head tail ih =>
-      have hnext := TransactionTrace.stable head hstable hnotCreated
-      exact ih hnext (by simpa [Benv.withState] using hnotCreated)
+  have hbacked := trace.benvInv (backedSpec_preserves dp ca) hstable.sumNof
+    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
+  have hflash := trace.benvInv (flashExactSpec_preserves dp ca 0)
+    hstable.sumNof ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
+  exact ⟨hbacked.state.code, hbacked.state.side, hbacked.state.inv,
+    hflash.state.inv⟩
 
 theorem ApplyTransactionsTrace.ethBound
     (dp : DeployParams) (ca : Adr)
@@ -1743,20 +1678,12 @@ theorem RequestsTrace.stable_and_sum_le
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     Stable dp ca state ∧ sum state.bal ≤ sum benv.state.bal := by
-  have hwithdrawal :=
-    SystemMessageTrace.stable_and_sum_le trace.withdrawal hstable hnotCreated
-  have hconsolidation :=
-    SystemMessageTrace.stable_and_sum_le trace.consolidation hwithdrawal.1
-      (by simpa [Benv.withState] using hnotCreated)
-  have hstate :=
-    ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
-  constructor
-  · simpa [hstate] using hconsolidation.1
-  · have hsum :
-        sum trace.consolidationState.bal ≤ sum benv.state.bal :=
-      le_trans (by simpa [Benv.withState] using hconsolidation.2)
-        hwithdrawal.2
-    simpa [hstate] using hsum
+  have hbacked := trace.stateInv_and_sum_le (backedSpec_preserves dp ca)
+    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
+  have hflash := trace.stateInv_and_sum_le (flashExactSpec_preserves dp ca 0)
+    ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
+  exact ⟨⟨hbacked.1.code, hbacked.1.side, hbacked.1.inv,
+    hflash.1.inv⟩, hbacked.2⟩
 
 /-! ## Block-body and history lifts -/
 
