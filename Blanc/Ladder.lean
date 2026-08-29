@@ -3435,6 +3435,44 @@ theorem genericCreate_step_spawn_exact
   all_goals obtain ⟨rfl, rfl⟩ := hspawn
   all_goals exact ⟨rfl, rfl⟩
 
+/-- Every recursive instruction child either receives the parent's current
+target as its caller or keeps that target as its own execution context.  This
+is the common caller-separation fact behind direct callbacks into a distinct
+installed contract. -/
+theorem Xinst.step_spawn_caller_eq_parent_or_target_eq_parent
+    {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {frame : Frame} {resume : Resume}
+    (spawn : Xinst.step sevm devm x = .spawn frame resume) :
+    frame.inner.caller = sevm.currentTarget ∨
+      frame.inner.currentTarget = sevm.currentTarget := by
+  rcases Xinst.step_shape sevm devm x with ⟨execution, shape, -⟩ |
+      ⟨d, endowment, newAddress, mi, ms, -, shape⟩ |
+      ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+        ii, isz, oi, osz, code, delegated, -, -, callKind, -, shape⟩ <;>
+    rw [shape] at spawn
+  · cases spawn
+  · rcases genericCreate_step_spawn_exact spawn with ⟨rfl, -⟩
+    exact Or.inl rfl
+  · rcases genericCall_step_spawn_exact spawn with ⟨rfl, -⟩
+    rcases callKind with ⟨-, caller_eq⟩ | ⟨-, target_eq⟩
+    · exact Or.inl caller_eq
+    · exact Or.inr target_eq
+
+/-- A child aimed at `ca` from a parent executing elsewhere cannot itself
+have `ca` as caller. -/
+theorem Xinst.step_spawn_caller_ne_of_target_eq
+    {ca : Adr} {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {frame : Frame} {resume : Resume}
+    (spawn : Xinst.step sevm devm x = .spawn frame resume)
+    (parent_ne : sevm.currentTarget ≠ ca)
+    (target_eq : frame.inner.currentTarget = ca) :
+    frame.inner.caller ≠ ca := by
+  rcases Xinst.step_spawn_caller_eq_parent_or_target_eq_parent spawn with
+      caller_eq | child_eq
+  · rw [caller_eq]
+    exact parent_ne
+  · exact (parent_ne (child_eq.symm.trans target_eq)).elim
+
 /-- A recursive CREATE spawn passed the collision check, so the target's
 persistent storage was empty before fresh-account preparation. -/
 theorem genericCreate_step_spawn_getStor_empty
