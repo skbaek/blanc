@@ -764,6 +764,42 @@ theorem ProrataMainRoute.accountingReplay_or_withdraw
       exact Or.inl ⟨_,
         ProrataAccountingReplay.singleton provenance effect⟩
 
+/-- An exact retained PRORATA frame is either already a complete replay or is
+the unique withdrawal shape whose paid child trace must be replayed next. -/
+theorem Exec.Frame.accountingReplay_or_realizedWithdrawal
+    {ca : Adr} {frame : Exec.Frame}
+    (invocation : frame.exactInvocation prorata ca ca)
+    (precondition : prorataSpec.Pre ca frame.sevm frame.pre)
+    (provenance : ProrataAccountingProvenance)
+    (recipient_ne : frame.sevm.caller.toB256.toAdr ≠ ca) :
+    (∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.beforeCredit ca frame.sevm.value frame.pre.state)
+        steps (AccountingSnapshot.ofState ca frame.post.state)) ∨
+      Nonempty (RealizedWithdrawal frame.sevm frame.pre frame.post) := by
+  have target_eq : frame.sevm.currentTarget = ca := invocation.2.1
+  have preInvariant := precondition.inv
+  unfold ContractSpec.PreInv at preInvariant
+  have invariantCa :
+      Inv (Devm.getStor frame.pre ca) frame.sevm.value
+        (Devm.getBal frame.pre ca) :=
+    preInvariant.1 target_eq
+  have invariant :
+      Inv (Devm.getStor frame.pre frame.sevm.currentTarget) frame.sevm.value
+        (Devm.getBal frame.pre frame.sevm.currentTarget) := by
+    rw [target_eq]
+    exact invariantCa
+  have route := exactInvocation_route invocation
+  rcases route.accountingReplay_or_withdraw invariant provenance with
+      replay | ⟨⟨entry⟩, hvalue⟩
+  · left
+    simpa only [target_eq] using replay
+  · right
+    have recipient_ne' :
+        frame.sevm.caller.toB256.toAdr ≠ frame.sevm.currentTarget := by
+      simpa only [target_eq] using recipient_ne
+    exact entry.realizedWithdrawal hvalue invariant recipient_ne'
+
 end Prorata
 
 end Blanc
