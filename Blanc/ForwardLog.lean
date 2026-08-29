@@ -45,4 +45,39 @@ lemma Func.runCompiledTo_log_step_ext {fs : List Func} {sevm : Sevm}
   exact h_next _ _ rfl (fun _ _ => rfl) (fun _ => rfl) (fun _ => rfl)
     (fun _ => rfl) rfl rfl (by omega)
 
+/-- Existential form of the same rule: the post-log state is exhibited, so a
+walk that must produce a concrete outcome downstream can compose with it.  The
+continuation form above is the same fact with the state left universally
+quantified. -/
+lemma Func.runCompiledTo_log_step_exists {fs : List Func} {sevm : Sevm}
+    {devm : Devm}
+    {n : Fin 5} {i sz : B256} {topics s : List B256} {c G : Nat} {M M' : Mem}
+    {payload : Bytes} {rest : Func}
+    (h_stk : devm.stack = i :: sz :: (topics ++ s))
+    (h_len : topics.length = n.val) (h_static : sevm.isStatic = false)
+    (h_mem : devm.memory = M)
+    (h_cost : gLog + gLogdata * sz.toNat + gLogtopic * n.val
+      + devm.extCost [⟨i.toNat, sz.toNat⟩] = c)
+    (h_data : (M.read i.toNat sz.toNat).1 = payload)
+    (h_img : (M.read i.toNat sz.toNat).2 = M')
+    (h_gas : devm.gasLeft = G + c) :
+    ∃ logged : Devm,
+      logged.logs = devm.logs ++ [⟨sevm.currentTarget, topics, payload⟩] ∧
+      (∀ (a : Adr) (k : B256), logged.getStorVal a k = devm.getStorVal a k) ∧
+      (∀ a : Adr, Devm.getStor logged a = Devm.getStor devm a) ∧
+      (∀ a : Adr, logged.getBal a = devm.getBal a) ∧
+      (∀ a : Adr, logged.getCode a = devm.getCode a) ∧
+      logged.accessedStorageKeys = devm.accessedStorageKeys ∧
+      logged.accessedAddresses = devm.accessedAddresses ∧
+      ∀ {ex : Execution},
+        Func.RunCompiledTo fs sevm (logged.setMach ⟨s, M', G⟩) rest ex →
+        Func.RunCompiledTo fs sevm devm (Func.next (.reg (.log n)) rest) ex := by
+  refine ⟨devm.addLog ⟨sevm.currentTarget, topics, payload⟩, rfl,
+    fun _ _ => rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, rfl, rfl, ?_⟩
+  intro ex htail
+  subst h_mem
+  exact Func.RunCompiledTo.next
+    (Ninst.runCompiled_log_of (G := G) h_stk h_len h_static h_cost h_data
+      h_img (by omega)) htail
+
 end Blanc
