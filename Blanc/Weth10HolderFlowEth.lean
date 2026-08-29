@@ -1081,22 +1081,9 @@ theorem ProcessMessage.ethBound_of_none_conditions
     (hcaller : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (hsum : sum msg.benv.state.bal < 2 ^ 256) :
     EthBound ca msg.benv.state post.state [] := by
-  rcases ProcessMessage.none_ok_state_cases hprocess with hrollback |
-    ⟨benv, htransfer, hpost⟩
-  · rw [hrollback]
-    exact EthBound.refl ca msg.benv.state
-  · rw [hpost]
-    cases hvalue : msg.shouldTransferValue with
-    | false =>
-        exact (EthStep.of_benvAfterTransfer_noTransfer
-          hvalue htransfer).bound
-    | true =>
-        by_cases htarget : msg.currentTarget = ca
-        · exact (EthStep.of_benvAfterTransfer_unclassifiedInward hvalue
-            (hcaller hvalue) htarget hsum
-            htransfer).bound
-        · exact (EthStep.of_benvAfterTransfer_unrelated hvalue
-            (hcaller hvalue) htarget htransfer).bound
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none
+      hprocess hcaller hsum)
 
 theorem ProcessMessage.ethBound_of_none
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
@@ -1229,10 +1216,8 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
 
 theorem processCreateMessage_msg_bal_eq (msg : Msg) :
     (processCreateMessage.msg msg).benv.state.bal =
-      msg.benv.state.bal := by
-  change ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
-    msg.currentTarget).bal = msg.benv.state.bal
-  rw [State.incrNonce_bal, State.setStor_bal]
+      msg.benv.state.bal :=
+  Blanc.processCreateMessage_msg_bal_eq msg
 
 theorem MessageReady.processCreateMessage_msg
     {dp : DeployParams} {ca : Adr} {msg : Msg}
@@ -1285,17 +1270,8 @@ theorem ne_ca_of_messageCreateCollision_false
 theorem processCreateMessage.chargeCodeGas_bal_eq
     {rules : ForkRules} {pre post : Devm}
     (h : processCreateMessage.chargeCodeGas rules pre = .ok post) :
-    post.state.bal = pre.state.bal := by
-  unfold processCreateMessage.chargeCodeGas at h
-  dsimp only at h
-  split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
-    split at hrest
-    · cases hrest
-    · cases hrest
-      funext address
-      exact chargeGas_getBal_eq hcharge address
+    post.state.bal = pre.state.bal :=
+  _root_.Blanc.processCreateMessage.chargeCodeGas_bal_eq h
 
 theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
     {msg : Msg} {slot : Xlot} {post : Devm}
@@ -1303,57 +1279,9 @@ theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
     (herror : post.error.isSome = false) :
     ∃ inner : Devm,
       ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
-      post.state.bal = inner.state.bal := by
-  rcases ProcessCreateMessage.iff_processMessage.mp hprocess with
-    ⟨result, hinner, hsettle⟩
-  cases result with
-  | error error =>
-      simp [processCreateMessage.settle] at hsettle
-  | ok inner =>
-      unfold processCreateMessage.settle at hsettle
-      simp only [bind, Except.bind] at hsettle
-      by_cases hinnerNone : inner.error.isNone = true
-      · rw [if_pos hinnerNone] at hsettle
-        cases hcharge :
-          processCreateMessage.chargeCodeGas
-            msg.benv.stat.rules inner with
-        | error error =>
-            rw [hcharge] at hsettle
-            rcases error with ⟨error, charged⟩
-            cases error with
-            | halt reason =>
-                have heq := Except.ok.inj hsettle
-                rw [heq] at herror
-                simp [processCreateMessage.exceptionalHalt,
-                  Devm.error, Devm.setMeta] at herror
-            | revert => cases hsettle
-            | crypto reason => cases hsettle
-            | internal reason => cases hsettle
-        | ok charged =>
-            rw [hcharge] at hsettle
-            have heq := Except.ok.inj hsettle
-            refine ⟨inner, hinner, ?_⟩
-            calc
-              post.state.bal =
-                  (charged.setCode msg.currentTarget
-                    ⟨⟨charged.output⟩⟩).state.bal :=
-                congrArg (fun d : Devm => d.state.bal) heq
-              _ = charged.state.bal := by
-                rw [show (charged.setCode msg.currentTarget
-                  ⟨⟨charged.output⟩⟩).state =
-                    charged.state.setCode msg.currentTarget
-                      ⟨⟨charged.output⟩⟩ from rfl,
-                  State.setCode_bal]
-              _ = inner.state.bal :=
-                processCreateMessage.chargeCodeGas_bal_eq hcharge
-      · rw [if_neg hinnerNone] at hsettle
-        have heq := Except.ok.inj hsettle
-        rw [heq] at herror
-        simp [Devm.rollback, Devm.setWorld, Devm.error] at herror
-        apply False.elim
-        apply hinnerNone
-        rw [show inner.error = none from herror]
-        rfl
+      post.state.bal = inner.state.bal :=
+  _root_.Blanc.ProcessCreateMessage.ok_state_eq_inner_of_no_error
+    hprocess herror
 
 /-- CREATE settlement around a no-interpreter-slot constructor is also ETH
 sound under the explicit foreign-caller entry conditions.  Code-deposit
@@ -1365,28 +1293,9 @@ theorem ProcessCreateMessage.ethBound_of_none_conditions
     (hcaller : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (hsum : sum msg.benv.state.bal < 2 ^ 256) :
     EthBound ca msg.benv.state post.state [] := by
-  let trace : ProcessCreateMessageTrace msg (.ok post) :=
-    ⟨.none, .none, hprocess⟩
-  cases herror : post.error.isSome with
-  | true =>
-      rw [ProcessCreateMessage.rollback_of_error trace.run herror]
-      exact EthBound.refl ca msg.benv.state
-  | false =>
-      rcases ProcessCreateMessage.ok_state_eq_inner_of_no_error
-        trace.run herror with ⟨inner, hinner, hpost⟩
-      have hcallerSeed :
-          (processCreateMessage.msg msg).shouldTransferValue = true →
-            (processCreateMessage.msg msg).caller ≠ ca := by
-        simpa [processCreateMessage.msg, Msg.withBenv] using hcaller
-      have hsumSeed :
-          sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
-        rw [processCreateMessage_msg_bal_eq]
-        exact hsum
-      have hbound := ProcessMessage.ethBound_of_none_conditions
-        hinner hcallerSeed hsumSeed
-      unfold EthBound at hbound ⊢
-      rw [hpost, ← congrFun (processCreateMessage_msg_bal_eq msg) ca]
-      exact hbound
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none
+      hprocess hcaller hsum)
 
 /-- Create settlement contributes retained raw actions only when code-deposit
 settlement also commits.  The error arm proves the outer rollback exactly. -/

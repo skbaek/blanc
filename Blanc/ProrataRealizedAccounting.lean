@@ -787,6 +787,40 @@ theorem exists_path {o : Nat} {pre post : AccountingSnapshot}
 
 end ProrataAccountingReplay
 
+/-- Every successful nonrecursive instruction in a foreign frame realizes
+exactly the projected PRORATA accounting change: either a positive external
+credit or no accounting step. -/
+theorem Ninst.foreignNoneAccountingReplay
+    {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (run : Ninst.StepRun pc sevm pre n .none (.ok post))
+    (target_ne : sevm.currentTarget ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256)
+    (provenance : ProrataAccountingProvenance) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca pre.state) steps
+        (AccountingSnapshot.ofState ca post.state) := by
+  exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
+    (_root_.Blanc.Ninst.foreignNone_getStor_eq run target_ne)
+    (_root_.Blanc.Ninst.targetBalanceMono_of_none run target_ne sum_nof)
+
+/-- Every successful terminal instruction in a foreign frame realizes exactly
+one projected PRORATA external credit or no accounting step. -/
+theorem Linst.foreignAccountingReplay
+    {ca : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (run : Linst.Run sevm pre l (.ok post))
+    (target_ne : sevm.currentTarget ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256)
+    (provenance : ProrataAccountingProvenance) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca pre.state) steps
+        (AccountingSnapshot.ofState ca post.state) := by
+  exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
+    (congrFun (_root_.Blanc.Linst.getStor_eq run) ca)
+    (_root_.Blanc.Linst.targetBalanceMono_of_foreign
+      run target_ne sum_nof)
+
 /-- Every successful deployed route except withdrawal is already a complete
 singleton accounting replay.  The withdrawal arm is retained for the
 settlement-aware child recursion that follows. -/

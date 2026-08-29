@@ -7100,26 +7100,6 @@ lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
   rw [h_empty_list] at hwa
   exact hwa rfl
 
-lemma State.set_bal {st : Jaune.State} {a : Adr} {ac : Acct}
-    (h : ac.bal = (st.get a).bal) : (st.set a ac).bal = st.bal := by
-  funext b
-  by_cases hb : b = a
-  · subst hb
-    show ((st.set b ac).get b).bal = (st.get b).bal
-    rw [State.get_set_self]
-    exact h
-  · show ((st.set a ac).get b).bal = (st.get b).bal
-    rw [State.get_set_ne _ (fun hc => hb hc.symm)]
-
-lemma State.setStor_bal {st : Jaune.State} {a : Adr} {s : Stor} :
-    (st.setStor a s).bal = st.bal := State.set_bal rfl
-
-lemma State.incrNonce_bal {st : Jaune.State} {a : Adr} :
-    (st.incrNonce a).bal = st.bal := State.set_bal rfl
-
-lemma State.setCode_bal {st : Jaune.State} {a : Adr} {cd : ByteArray} :
-    (st.setCode a cd).bal = st.bal := State.set_bal rfl
-
 -- The create-seeding step: wa ∉ msg.benv.createdAccounts and code is untouched.
 lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}
     (h_ct : msg.currentTarget ≠ wa)
