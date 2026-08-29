@@ -924,6 +924,81 @@ theorem retainedProcessCreateMessageAccountingReplay
       exact Exec.prorataAccountingReplay_of_messageRoot run transfer evmEq
         committed preparedReady blockIndex transactionIndex
 
+open _root_.Blanc.ExecutionTrace in
+/-- The settled message-call wrapper realizes a complete PRORATA accounting
+replay from its pre-transfer world to the wrapper's settled world state.  A
+create collision runs no code at all; a CREATE execution reuses the create
+rung with the freshness its own collision test already certifies; an ordinary
+call transports readiness and the accounting projection across the EIP-7702
+delegation prefix and delegated-code resolution before reusing the message
+rung. -/
+theorem retainedMessageCallAccountingReplay
+    {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : _root_.Blanc.ExecutionTrace.MessageCallTrace msg state out)
+    (ready : AccountingMessageReady ca msg)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca msg.benv.state) steps
+        (AccountingSnapshot.ofState ca state) := by
+  cases trace with
+  | createCollision targetNone collision result =>
+      have stateEq :=
+        processMessageCall_createCollision_state_eq targetNone collision result
+      let provenance : ProrataAccountingProvenance :=
+        { blockIndex := blockIndex
+          transactionIndex := transactionIndex
+          framePath := []
+          actor := none }
+      exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
+        (by rw [stateEq]) (by rw [stateEq])
+  | createRun targetNone collision evm core inner result =>
+      have targetNe : msg.currentTarget ≠ ca := by
+        rcases ready.runReady.codeOrForeign with call | foreign
+        · exact Bool.noConfusion (targetNone.symm.trans call)
+        · exact foreign
+      have fresh := messageCreateCollision_false_getStor_eq_empty collision
+      have stateEq :=
+        processMessageCall_createRun_state_eq targetNone collision core result
+      rw [stateEq]
+      exact retainedProcessCreateMessageAccountingReplay inner ready
+        targetNone targetNe fresh blockIndex transactionIndex
+  | callRun targetSome delegated refund delegation execMsg execMsgEq evm
+      core inner result =>
+      subst execMsgEq
+      have stateEq :=
+        processMessageCall_callRun_state_eq targetSome delegation rfl core
+          result
+      have delegatedInv :=
+        ready.runReady.ready.of_messageCallDelegation delegation
+      have execReady : AccountingMessageReady ca
+          (messageCallExecutionMessage delegated) := by
+        refine ⟨⟨delegatedInv.messageCallExecutionMessage, Or.inl ?_⟩, ?_⟩
+        · rw [messageCallExecutionMessage_target_eq,
+            messageCallDelegation_target_eq delegation]
+          exact targetSome
+        · rcases ready.callerOrForeign with transfer | foreign
+          · refine Or.inl ?_
+            rw [messageCallExecutionMessage_shouldTransferValue_eq,
+              messageCallDelegation_shouldTransferValue_eq delegation]
+            exact transfer
+          · refine Or.inr ?_
+            rw [messageCallExecutionMessage_currentTarget_eq,
+              messageCallDelegation_currentTarget_eq delegation]
+            exact foreign
+      have snapshotEq :
+          AccountingSnapshot.ofState ca
+              (messageCallExecutionMessage delegated).benv.state =
+            AccountingSnapshot.ofState ca msg.benv.state := by
+        unfold AccountingSnapshot.ofState
+        rw [messageCallExecutionMessage_getStor_eq,
+          messageCallExecutionMessage_bal_eq,
+          messageCallDelegation_getStor_eq delegation,
+          messageCallDelegation_bal_eq delegation]
+      rw [stateEq, ← snapshotEq]
+      exact retainedProcessMessageAccountingReplay inner execReady
+        blockIndex transactionIndex
+
 end Prorata
 
 end Blanc

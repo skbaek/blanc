@@ -261,6 +261,21 @@ theorem messageCallExecutionMessage_shouldTransferValue_eq (msg : Msg) :
   unfold messageCallExecutionMessage
   split <;> rfl
 
+/-- A false create-collision test certifies that the wrapper's target holds
+no persistent storage, which is exactly the freshness side condition the
+CREATE core asks for. -/
+theorem messageCreateCollision_false_getStor_eq_empty
+    {msg : Msg} (collision : messageCreateCollision msg = false) :
+    msg.benv.state.getStor msg.currentTarget = Stor.empty := by
+  unfold messageCreateCollision at collision
+  rw [Bool.or_eq_false_iff] at collision
+  have isEmpty :
+      (msg.benv.state.getStor msg.currentTarget).isEmpty = true := by
+    have noStorage := collision.2
+    unfold accountHasStorage at noStorage
+    simpa using noStorage
+  exact Std.TreeMap.eq_empty_of_isEmpty isEmpty
+
 /-- A successful create-collision wrapper leaves the world state unchanged. -/
 theorem processMessageCall_createCollision_state_eq
     {msg : Msg} {state : State} {out : MsgCallOutput}
