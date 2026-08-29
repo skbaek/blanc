@@ -688,4 +688,150 @@ theorem insertionLoopLive_runCompiledTo
   rw [hgas] at hdispatch
   simpa only [C] using hdispatch
 
+/-- Increment and store the deposit count, stage that same count in word 19,
+and enter the insertion loop at height zero.  The fixed work costs 38 gas in
+addition to the selected count-slot `SSTORE` charge. -/
+theorem commitDeposit_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {oldCount shiftedSize node : B256}
+    {K : Nat} {ex : Execution}
+    (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
+    (hsentry : gCallStipend <
+      K + 14 + sstoreCost sevm base depositCountSlot (oldCount + 1))
+    (hstatic : sevm.isStatic = false)
+    (hloop : fs[insertionLoopSlot]? = some insertionLoop)
+    (htail : Func.RunCompiledTo fs sevm
+      ((afterSstore sevm base depositCountSlot (oldCount + 1)).setMach
+        ⟨[0], memory.write 608 (oldCount + 1).toBytes, K⟩)
+      insertionLoop ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[], memory,
+          K + 38 +
+            sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+      commitDeposit ex := by
+  have hmod : memory.size % 32 = 0 := by
+    rw [hmem.size_eq]
+  have holdRead : Bytes.toB256 (memory.read 576 32).1 = oldCount :=
+    hmem.readOldCount
+  have holdMem : (memory.read 576 32).2 = memory := by
+    apply Mem.read_snd_eq_self
+    apply memExtSize_of_le
+    · exact hmod
+    · rw [hmem.size_eq]
+      omega
+  simp only [commitDeposit, loadWord, mstoreAt, prepend,
+    show (oldCountWord * 32 : B256) = 576 by decide +kernel,
+    show (shiftedSizeWord * 32 : B256) = 608 by decide +kernel]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (w := 576) (c := 3)
+      (G := K + 35 +
+        sstoreCost sevm base depositCountSlot (oldCount + 1))
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_mload_of
+      (i := 576) (v := oldCount) (s := []) (c := 3)
+      (G := K + 32 +
+        sstoreCost sevm base depositCountSlot (oldCount + 1))
+      (M := memory)
+      rfl
+      (by
+        rw [Devm.extCost_zero_of_le hmod (by
+          rw [hmem.size_eq]
+          decide +kernel)]
+        decide)
+      holdRead holdMem
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by simp only [List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (w := 1) (c := 3)
+      (G := K + 29 +
+        sstoreCost sevm base depositCountSlot (oldCount + 1))
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons,
+        List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
+      (cost := gVerylow) (x := 1) (y := oldCount)
+      (v := oldCount + 1) (s := [])
+      (G := K + 26 +
+        sstoreCost sevm base depositCountSlot (oldCount + 1))
+      (by rintro ⟨⟩) rfl rfl
+      (B256.add_comm (xs := (1 : B256)) (ys := oldCount))
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_dup (n := 0) (w := oldCount + 1)
+      (G := K + 23 +
+        sstoreCost sevm base depositCountSlot (oldCount + 1))
+      rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons,
+        List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (w := 608) (c := 3)
+      (G := K + 20 +
+        sstoreCost sevm base depositCountSlot (oldCount + 1))
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons,
+        List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_mstore_of
+      (i := 608) (v := oldCount + 1) (s := [oldCount + 1])
+      (G := K + 17 +
+        sstoreCost sevm base depositCountSlot (oldCount + 1))
+      (e := 0)
+      rfl
+      (Devm.extCost_zero_of_le hmod (by
+        rw [hmem.size_eq]
+        decide +kernel))
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      rfl) ?_
+  simp only [Devm.setMach_setMach,
+    show (608 : B256).toNat = 608 by decide +kernel]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (w := depositCountSlot) (c := 3)
+      (G := K + 14 +
+        sstoreCost sevm base depositCountSlot (oldCount + 1))
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons,
+        List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_sstore_selected_setMach
+      (base := base) (key := depositCountSlot) (value := oldCount + 1)
+      (stack := [])
+      (memory := memory.write 608 (oldCount + 1).toBytes)
+      (G := K + 14) hsentry hstatic) ?_
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (w := 0) (c := 2) (G := K + 12)
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach])
+      (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  exact Func.runCompiledTo_call' (G := K) hloop
+    (by simp only [Devm.stack_setMach, List.length_cons,
+      List.length_nil]; omega)
+    (by simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest])
+    (by
+      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using htail)
+
 end Blanc.BeaconDeposit
