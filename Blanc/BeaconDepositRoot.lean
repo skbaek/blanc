@@ -918,7 +918,7 @@ theorem rootShaTail_runCompiledTo
     decide +kernel
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtput, herror, hlift⟩ :=
+      hlogs, houtput, herror, _htransfer, hlift⟩ :=
     sha64_success_prefix_runCompiledTo
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 0) (outputWord := nodeWord)
@@ -1453,7 +1453,7 @@ private theorem rootFinishShaReturn_runCompiled
     decide +kernel
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturnData,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, _houtput, herror, hlift⟩ :=
+      hlogs, _houtput, herror, _htransfer, hlift⟩ :=
     sha64_success_prefix_runCompiledTo
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := nodeWord)
