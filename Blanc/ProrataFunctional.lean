@@ -70,6 +70,19 @@ inductive ProrataMainSuccess (fs : List Func) (sevm : Sevm)
   | convertToAssets (entry : BodyEntry fs sevm pre post Prorata.convertToAssets)
   | donate (entry : BodyEntry fs sevm pre post Prorata.donate)
 
+/-- The same exhaustive main-route classification, retaining the shared
+zero-value ingress fact for the three nonpayable bodies. -/
+inductive ProrataMainRoute (fs : List Func) (sevm : Sevm)
+    (pre post : Devm) : Prop where
+  | deposit (entry : BodyEntry fs sevm pre post Prorata.deposit)
+  | withdraw (value_eq_zero : sevm.value = 0)
+      (entry : BodyEntry fs sevm pre post Prorata.withdraw)
+  | convertToShares (value_eq_zero : sevm.value = 0)
+      (entry : BodyEntry fs sevm pre post Prorata.convertToShares)
+  | convertToAssets (value_eq_zero : sevm.value = 0)
+      (entry : BodyEntry fs sevm pre post Prorata.convertToAssets)
+  | donate (entry : BodyEntry fs sevm pre post Prorata.donate)
+
 private lemma EntryFrame.trans {s t u : Devm}
     (h : EntryFrame s t) (k : EntryFrame t u) : EntryFrame s u :=
   ⟨h.stor.trans k.stor, h.bal.trans k.bal, h.code.trans k.code,
@@ -444,11 +457,12 @@ private theorem convertToAssets_body_of_prorataMain
   · exact (hnz (popBurn_pref hpop hdepositFlag).1).elim
 
 /-- Every successful execution of the hand-shaped main reaches exactly one of
-the five raw PRORATA bodies through a persistent-state-silent ingress. -/
-theorem classify_prorataMain_success
+the five raw PRORATA bodies through a persistent-state-silent ingress, and the
+shared nonpayable split retains zero callvalue for its three guarded routes. -/
+theorem classify_prorataMain_route
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (run : Func.Run fs sevm pre Prorata.prorataMain post) :
-    ProrataMainSuccess fs sevm pre post := by
+    ProrataMainRoute fs sevm pre post := by
   simp only [Prorata.prorataMain] at run
   rcases of_run_prepend fsig _ run with ⟨afterSig, hsig, hmain⟩
   rcases of_run_prepend
@@ -471,7 +485,14 @@ theorem classify_prorataMain_success
       ⟨afterValuePop, hvaluePop, hzeroDispatch⟩ |
       ⟨valueFlag, afterValuePop, afterValueBurn, hvalueFlag,
         hvaluePop, hvalueBurn, hdonate⟩
-    · have routeZero : EntryFrame pre afterValuePop :=
+    · have hvaluePrefix : sevm.value :: [] <<+ afterValue.stack := by
+        rcases Line.of_run_cons hvalueLine with
+          ⟨afterCallvalue, hcallvalue, hnil⟩
+        cases hnil
+        exact prefix_of_push (of_run_callvalue hcallvalue) nil_pref
+      have hvalueZero : sevm.value = 0 :=
+        (popBurn_pref hvaluePop hvaluePrefix).1.symm
+      have routeZero : EntryFrame pre afterValuePop :=
         routeValue.trans (entryFrame_pop hvaluePop)
       simp only [Prorata.zeroValueDispatch] at hzeroDispatch
       rcases of_run_prepend
@@ -511,18 +532,18 @@ theorem classify_prorataMain_success
           · exact .donate
               ((routeAssetsTest.trans (entryFrame_pop hassetsPop)).bodyEntry
                 hdonateBody)
-          · exact .convertToAssets
+          · exact .convertToAssets hvalueZero
               ((routeAssetsTest.trans ((entryFrame_pop hassetsPop).trans
                 (entryFrame_burn hassetsBurn))).bodyEntry hassetsBodyPath)
         · rcases of_run_prepend [pop] Prorata.convertToShares hsharesBody with
               ⟨sharesEntry, hsharesBodyPop, hsharesRun⟩
-          exact .convertToShares
+          exact .convertToShares hvalueZero
             ((routeSharesTest.trans ((entryFrame_pop hsharesPop).trans
               ((entryFrame_burn hsharesBurn).trans
                 (entryFrame_popLine hsharesBodyPop)))).bodyEntry hsharesRun)
       · rcases of_run_prepend [pop] Prorata.withdraw hwithdrawPath with
             ⟨withdrawEntry, hwithdrawBodyPop, hwithdrawRun⟩
-        exact .withdraw
+        exact .withdraw hvalueZero
           ((routeWithdrawTest.trans ((entryFrame_pop hwithdrawPop).trans
             ((entryFrame_burn hwithdrawBurn).trans
               (entryFrame_popLine hwithdrawBodyPop)))).bodyEntry hwithdrawRun)
@@ -538,6 +559,19 @@ theorem classify_prorataMain_success
       ((routeDepositTest.trans ((entryFrame_pop hdepositPop).trans
         ((entryFrame_burn hdepositBurn).trans
           (entryFrame_popLine hdepositBodyPop)))).bodyEntry hdepositRun)
+
+/-- Compatibility projection retaining the original persistent-state route
+surface for consumers that do not need the nonpayable value fact. -/
+theorem classify_prorataMain_success
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (run : Func.Run fs sevm pre Prorata.prorataMain post) :
+    ProrataMainSuccess fs sevm pre post := by
+  cases classify_prorataMain_route run with
+  | deposit entry => exact .deposit entry
+  | withdraw _ entry => exact .withdraw entry
+  | convertToShares _ entry => exact .convertToShares entry
+  | convertToAssets _ entry => exact .convertToAssets entry
+  | donate entry => exact .donate entry
 
 /-- A successful call on a recognized ABI selector reaches the corresponding
 raw PRORATA body with its selector removed.  The nonempty word premise rules

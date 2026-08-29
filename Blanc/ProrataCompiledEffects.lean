@@ -31,12 +31,13 @@ private theorem BodyEntry.of_burn
     rw [burn.state]
 
 /-- Every successful invocation of the deployed PRORATA bytecode reaches one
-of its five source-level bodies, retaining the persistent state at entry. -/
-theorem classify_prorata_exec_success
+of its five source-level bodies, retaining both persistent entry state and the
+shared zero-value fact for each nonpayable route. -/
+theorem classify_prorata_exec_route
     {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))
     (h_code : sevm.code.toList = prorataCode) :
-    ProrataMainSuccess (prorata.main :: prorata.aux) sevm pre post := by
+    ProrataMainRoute (prorata.main :: prorata.aux) sevm pre post := by
   have hrun := correct sevm pre prorata post exc
     (installed_prorata_compile h_code)
   dsimp only [Prog.Run] at hrun
@@ -47,13 +48,28 @@ theorem classify_prorata_exec_success
   rename Devm => entry
   cases hentry
   change Func.Run _ sevm entry prorataMain post at hmain
-  rcases classify_prorataMain_success hmain with
-    hdeposit | hwithdraw | hshares | hassets | hdonate
+  rcases classify_prorataMain_route hmain with
+    hdeposit | ⟨hvalue, hwithdraw⟩ | ⟨hvalue, hshares⟩ |
+      ⟨hvalue, hassets⟩ | hdonate
   · exact .deposit (BodyEntry.of_burn hburn hdeposit)
-  · exact .withdraw (BodyEntry.of_burn hburn hwithdraw)
-  · exact .convertToShares (BodyEntry.of_burn hburn hshares)
-  · exact .convertToAssets (BodyEntry.of_burn hburn hassets)
+  · exact .withdraw hvalue (BodyEntry.of_burn hburn hwithdraw)
+  · exact .convertToShares hvalue (BodyEntry.of_burn hburn hshares)
+  · exact .convertToAssets hvalue (BodyEntry.of_burn hburn hassets)
   · exact .donate (BodyEntry.of_burn hburn hdonate)
+
+/-- Compatibility projection for consumers that only need the five-way
+persistent-state body classification. -/
+theorem classify_prorata_exec_success
+    {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (h_code : sevm.code.toList = prorataCode) :
+    ProrataMainSuccess (prorata.main :: prorata.aux) sevm pre post := by
+  cases classify_prorata_exec_route exc h_code with
+  | deposit entry => exact .deposit entry
+  | withdraw _ entry => exact .withdraw entry
+  | convertToShares _ entry => exact .convertToShares entry
+  | convertToAssets _ entry => exact .convertToAssets entry
+  | donate entry => exact .donate entry
 
 theorem prorata_deposit_exec_effect
     {sevm : Sevm} {pre post : Devm}
