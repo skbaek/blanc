@@ -90,83 +90,6 @@ private structure StubFrame (target : Adr) (calldata : Bytes)
   currentTarget : sevm.currentTarget = target
   data : sevm.data = calldata
 
-private lemma shiftRight224_of_take4_eq_protected (x : B256)
-    (h : x.toBytes.take 4 = [0x3d, 0x7b, 0x36, 0x9a]) :
-    x >>> 224 = (0x3d7b369a : B256) := by
-  rcases x with ⟨⟨x3, x2⟩, ⟨x1, x0⟩⟩
-  simp [B256.toBytes, B128.toBytes, UInt64.toBytes, UInt32.toBytes,
-    UInt16.toBytes, List.take] at h
-  change B256.shiftRight (⟨⟨_, _⟩, ⟨_, _⟩⟩ : B256) 224 = _
-  simp only [B256.shiftRight]
-  change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
-  simp only [B128.shiftRight]
-  norm_num
-  congr 3
-  change x3 >>> (32 : UInt64) = (1031485082 : UInt64)
-  rcases h with ⟨h0, h1, h2, h3⟩
-  have h1' :
-      ((x3 >>> 32).toUInt32 >>> 16).toUInt16.toUInt8 = 123 := by
-    simpa using h1
-  have h2' :
-      ((x3 >>> 32).toUInt32.toUInt16 >>> 8).toUInt8 = 54 := by
-    simpa using h2
-  have h3' : (x3 >>> 32).toUInt32.toUInt16.toUInt8 = 154 := by
-    simpa using h3
-  have hbytes :
-      (x3 >>> 32).toUInt32.toBytes = [61, 123, 54, 154] := by
-    simp only [UInt32.toBytes, UInt16.toBytes]
-    rw [h0, h1', h2', h3']
-    rfl
-  have hy32 : (x3 >>> 32).toUInt32 = (1031485082 : UInt32) := by
-    have converted := congrArg Bytes.toUInt32 hbytes
-    rw [toUInt32_toBytes] at converted
-    exact converted
-  have hlt : (x3 >>> 32).toNat < 4294967296 := by
-    rw [UInt64.toNat_shiftRight]
-    change x3.toNat >>> 32 < 4294967296
-    rw [Nat.shiftRight_eq_div_pow]
-    norm_num
-    have hx := UInt64.toNat_lt x3
-    omega
-  rw [← UInt64.toNat_inj]
-  have hyNat := congrArg UInt32.toNat hy32
-  simp only [UInt64.toUInt32_toNat, Nat.mod_eq_of_lt hlt] at hyNat
-  exact hyNat.trans rfl
-
-private theorem selector_eq_protected_of_data {sevm : Sevm} {tail : Bytes}
-    (hdata : sevm.data = abiSelectorBytes stubProtectedSelector ++ tail) :
-    Sevm.selector sevm = stubProtectedSelector := by
-  have protectedEq : stubProtectedSelector = (0x3d7b369a : B256) := by
-    decide +kernel
-  have protectedBytes :
-      abiSelectorBytes (0x3d7b369a : B256) =
-        [0x3d, 0x7b, 0x36, 0x9a] := rfl
-  rw [protectedEq, protectedBytes] at hdata
-  let word := sevm.data.sliceD 0 32 0
-  have wordLength : word.length = 32 := by
-    exact List.takeD_length _ _ _
-  have roundtrip : (Bytes.toB256 word).toBytes = word :=
-    Bytes.toBytes_toB256_of_length wordLength
-  have firstFour :
-      (Bytes.toB256 word).toBytes.take 4 =
-        [0x3d, 0x7b, 0x36, 0x9a] := by
-    rw [roundtrip]
-    unfold word
-    rw [hdata]
-    rfl
-  rw [protectedEq]
-  exact shiftRight224_of_take4_eq_protected _ firstFour
-
-private lemma prefix_of_timestamp
-    {sevm : Sevm} {pre post : Devm} {xs : Stack}
-    (stackPrefix : xs <<+ pre.stack)
-    (run : Ninst.Run sevm pre Ninst.timestamp post) :
-    sevm.benvStat.time :: xs <<+ post.stack := by
-  change Ninst.Run sevm pre (.reg .timestamp) post at run
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  exact prefix_of_push (Devm.pushBurn_of_pushItem instructionRun) stackPrefix
-
 private lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s Ninst.mul s' →
       (x :: y :: xs <<+ s.stack) → ((x * y) :: xs <<+ s'.stack) := by
@@ -175,27 +98,6 @@ private lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
   rcases of_run_reg run with ⟨pc, instructionRun⟩
   simp only [Rinst.run, Rinst.runCore] at instructionRun
   exact Devm.diffBurn_of_applyBinary instructionRun
-
-private theorem compact_pause_word_eq_projection (time duration : B256) :
-    time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration =
-      pauseForProjection time duration := by
-  by_cases infinite : duration = pauseInfiniteSentinel
-  · subst duration
-    have one_ne_zero : (1 : B256) ≠ 0 := by decide
-    simp [pauseForProjection, B256.eqCheck, one_ne_zero]
-    have mulZero : time * (0 : B256) = 0 := by
-      change (time.toNat * 0).toB256 = 0
-      rw [Nat.mul_zero]
-      rfl
-    rw [mulZero]
-    rfl
-  · have reverse : pauseInfiniteSentinel ≠ duration := Ne.symm infinite
-    simp [pauseForProjection, B256.eqCheck, infinite, reverse]
-    have mulOne : time * (1 : B256) = time := by
-      change (time.toNat * 1).toB256 = time
-      rw [Nat.mul_one]
-      exact toB256_toNat time
-    rw [mulOne]
 
 private lemma mem_reads_self (memory : Mem) :
     Mem.Reads memory memory.data.toList := by
@@ -861,8 +763,16 @@ theorem stub_lidoPinnedPauseTarget
         rw [codeEq]
         exact messageUses
       rcases hasSelector with ⟨tail, messageData⟩
+      have canonical :
+          Bytes.toB256 (abiSelectorBytes stubProtectedSelector) =
+            stubProtectedSelector := by
+        have protectedEq : stubProtectedSelector = (0x3d7b369a : B256) := by
+          decide +kernel
+        rw [protectedEq]
+        rfl
       have selectorEq : Sevm.selector sevm = stubProtectedSelector :=
-        selector_eq_protected_of_data (data.trans messageData)
+        Blanc.selector_eq_of_data_eq_abiSelectorBytes_append canonical
+          (data.trans messageData)
       rcases stubMain_run_of_exec witnessRun uses with
         ⟨entry, burnBy, mainRun⟩
       exact (not_stubMain_run_of_protected selectorEq mainRun).elim

@@ -64,18 +64,6 @@ private lemma of_runCompiledTo_prepend {fs : List Func} {sevm : Sevm}
       rcases of_runCompiledTo_prepend p q tail with ⟨s1, hp, hq⟩
       exact ⟨s1, .cons (Ninst.Run.of_runCompiled step) hp, hq⟩
 
-/-- `TIMESTAMP` pushes the block time.  `Blanc/Tactics.lean`'s `line_prefix`
-has no case for it, so the two lines the checked addition needs are supplied
-here. -/
-private lemma prefix_of_timestamp {sevm : Sevm} {pre post : Devm} {xs : Stack}
-    (stackPrefix : xs <<+ pre.stack)
-    (run : Ninst.Run sevm pre Ninst.timestamp post) :
-    sevm.benvStat.time :: xs <<+ post.stack := by
-  change Ninst.Run sevm pre (.reg .timestamp) post at run
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  exact prefix_of_push (Devm.pushBurn_of_pushItem instructionRun) stackPrefix
-
 /-! ## The store both arms fall into -/
 
 /-- The straight-line prefix of `pauseExpiryFinish` that turns the carried

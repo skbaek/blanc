@@ -76,7 +76,13 @@ preferred_path = "Use `line_prefix` or `generalize_line_prefix`, with `show_pref
 boundary = "`line_prefix` supports a finite instruction set and refuses instructions without a registered case."
 owner_module = "Blanc/Tactics.lean"
 canonical_example = "Blanc/Weth10HolderFlowCompiled.lean:recognized_of_run_dispatchWith"
-symbols = ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref"]
+symbols = [
+  "tactic:line_prefix",
+  "tactic:generalize_line_prefix",
+  "tactic:show_pref",
+  "declaration:prefix_of_timestamp",
+  "declaration:prefix_of_xor",
+]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-20"
 
@@ -254,7 +260,7 @@ review_date = "2026-08-29"
 id = "message-execution-settlement"
 status = "active"
 triggers = ["goal-shape:message-execution-settlement"]
-preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post and `processMessage_entry_facts` to recover the actual entry frame projections."
+preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and `processMessage_entry_stack` for the separate empty-stack projection."
 boundary = "The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
 owner_module = "Blanc/MessageExecution.lean"
 canonical_example = "Blanc/MessageExecution.lean:MessageExecution.processMessage_eq_settle_exec"
@@ -267,6 +273,7 @@ symbols = [
   "declaration:MessageExecution.processMessage_halt_of_exec",
   "declaration:MessageExecution.processMessage_clean_rawPost",
   "declaration:MessageExecution.processMessage_entry_facts",
+  "declaration:MessageExecution.processMessage_entry_stack",
   "declaration:MessageExecution.settledRevert",
   "declaration:MessageExecution.settledHalt",
   "declaration:Msg.initDevm_stack",

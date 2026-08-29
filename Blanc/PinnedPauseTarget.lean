@@ -100,6 +100,31 @@ def pauseForProjection (time duration : B256) : B256 :=
   if duration = pauseInfiniteSentinel then pauseInfiniteSentinel
   else time + duration
 
+/-- The branch-free encoding of `pauseForProjection`: multiplying the timestamp
+by the negated sentinel test selects the sentinel arm without a jump.  Every
+faithful `PausableUntil` port compiles the pause word this way, so the identity
+is stated once here beside the projection rather than per contract family. -/
+theorem compact_pause_word_eq_projection (time duration : B256) :
+    time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration =
+      pauseForProjection time duration := by
+  by_cases infinite : duration = pauseInfiniteSentinel
+  · subst duration
+    have one_ne_zero : (1 : B256) ≠ 0 := by decide
+    simp [pauseForProjection, B256.eqCheck, one_ne_zero]
+    have mulZero : time * (0 : B256) = 0 := by
+      change (time.toNat * 0).toB256 = 0
+      rw [Nat.mul_zero]
+      rfl
+    rw [mulZero]
+    rfl
+  · have reverse : pauseInfiniteSentinel ≠ duration := Ne.symm infinite
+    simp [pauseForProjection, B256.eqCheck, infinite, reverse]
+    have mulOne : time * (1 : B256) = time := by
+      change (time.toNat * 1).toB256 = time
+      rw [Nat.mul_one]
+      exact toB256_toNat time
+    rw [mulOne]
+
 /-- Calldata has the selected ABI function selector and an arbitrary tail. -/
 def HasSelector (msg : Msg) (selected : B256) : Prop :=
   ∃ tail, msg.data = abiSelectorBytes selected ++ tail

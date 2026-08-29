@@ -87,6 +87,142 @@ theorem runCompiledTo_last_inv {fs : List Func} {sevm : Sevm} {devm : Devm}
     Linst.Run sevm devm l ex := by
   cases h with | last h => exact h
 
+/-- A successful compiled `STOP` returns its exact input machine state. -/
+theorem Func.RunCompiledTo.stop_eq
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (run : Func.RunCompiledTo fs sevm pre Func.stop (.ok post)) :
+    post = pre := by
+  have terminal := runCompiledTo_last_inv run
+  simp [Linst.Run, Linst.run] at terminal
+  exact terminal.symm
+
+/-- `REVERT` cannot produce a successful outcome, however its operand reads
+fail.  This is the successful-outcome half of the contract-neutral terminal
+inversion used by compiled-walk eliminators. -/
+theorem Linst.not_run_rev_ok {sevm : Sevm} {devm post : Devm}
+    (run : Linst.Run sevm devm .rev (.ok post)) : False := by
+  simp only [Linst.Run, Linst.run] at run
+  rcases Except.bind_eq_ok run with ⟨_v1, _h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨_v2, _h3, h4⟩
+  rcases Except.bind_eq_ok h4 with ⟨_v3, _h5, h6⟩
+  contradiction
+
+private theorem prependStoresRev_not_ok
+    {fs : List Func} {sevm : Sevm} {rest : Func}
+    (terminal : ∀ {pre post : Devm},
+      Func.RunCompiledTo fs sevm pre rest (.ok post) → False)
+    (iws : List (B256 × Nat)) :
+    ∀ {pre post : Devm},
+      Func.RunCompiledTo fs sevm pre (prependStoresRev iws rest) (.ok post) →
+        False := by
+  induction iws generalizing rest with
+  | nil =>
+      intro pre post run
+      exact terminal (by simpa [prependStoresRev] using run)
+  | cons iw iws ih =>
+      intro pre post run
+      apply ih (rest := prependStore iw.1 iw.2 rest)
+      · intro innerPre innerPost innerRun
+        unfold prependStore at innerRun
+        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+        exact terminal innerRun
+      · simpa [prependStoresRev] using run
+
+/-- `Func.revData` cannot end in a successful outcome.  This is the exact
+compiled-walk elimination seam: it peels the generated constant-word stores
+and reaches the terminal `REVERT`, without a fuel bound or evaluator result. -/
+theorem Func.RunCompiledTo.not_ok_revData
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {blob : Bytes}
+    (run : Func.RunCompiledTo fs sevm pre (Func.revData blob) (.ok post)) :
+    False := by
+  unfold Func.revData at run
+  apply prependStoresRev_not_ok (iws := (bytesWords blob).zipIdx) ?_ run
+  intro innerPre innerPost innerRun
+  obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+  obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
+  exact Linst.not_run_rev_ok (runCompiledTo_last_inv innerRun)
+
+/-- A zero stack head forces the fall-through arm of a compiled branch and
+preserves the known tail across the branch pop. -/
+theorem Func.RunCompiledTo.zero_branch_of_prefix
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {left right : Func} {xs : Stack}
+    (hp : (0 : B256) :: xs <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre (Func.branch left right) out) :
+    ∃ armPre,
+      Devm.PopBurnBy [0] (gVerylow + gHigh) pre armPre ∧
+      Func.RunCompiledTo fs sevm armPre left out ∧
+      xs <<+ armPre.stack := by
+  rcases runCompiledTo_branch_inv run with hzero | hsucc
+  · rcases hzero with ⟨armPre, -, hpop, harm⟩
+    have tail := (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hp).2
+    exact ⟨armPre, hpop, harm, tail⟩
+  · rcases hsucc with ⟨w, armPre, hw, hstack, -, -⟩
+    have pw : w :: ([] : Stack) <<+ pre.stack :=
+      ⟨armPre.stack, by simpa [Split] using hstack⟩
+    exact (hw (pref_head_unique hp pw).symm).elim
+
+/-- A known nonzero stack head forces the jumped arm of a compiled branch and
+preserves the known tail across the branch pop. -/
+theorem Func.RunCompiledTo.succ_branch_of_prefix
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {left right : Func} {w : B256} {xs : Stack}
+    (hw : w ≠ 0) (hp : w :: xs <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre (Func.branch left right) out) :
+    ∃ armPre branchWord,
+      branchWord ≠ 0 ∧
+      Devm.PopBurnBy [branchWord] (gVerylow + gHigh + gJumpdest) pre armPre ∧
+      Func.RunCompiledTo fs sevm armPre right out ∧
+      xs <<+ armPre.stack := by
+  rcases runCompiledTo_branch_inv run with hzero | hsucc
+  · rcases hzero with ⟨armPre, hstack, -, -⟩
+    have pzero : (0 : B256) :: ([] : Stack) <<+ pre.stack :=
+      ⟨armPre.stack, by simpa [Split] using hstack⟩
+    exact (hw (pref_head_unique hp pzero)).elim
+  · rcases hsucc with ⟨branchWord, armPre, hnz, hstack, hpop, harm⟩
+    have pword : branchWord :: ([] : Stack) <<+ pre.stack :=
+      ⟨armPre.stack, by simpa [Split] using hstack⟩
+    have hword : branchWord = w := pref_head_unique pword hp
+    subst branchWord
+    have tail := (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hp).2
+    exact ⟨armPre, w, hnz, hpop, harm, tail⟩
+
+/-- A successful walk through the shared nonpayable modifier proves zero call
+value and reaches its protected body without changing storage. -/
+theorem Func.RunCompiledTo.nonpayable_body_of_ok
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {body : Func} {tail : Stack}
+    (hp : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre (nonpayable body) (.ok post)) :
+    sevm.value = 0 ∧
+      ∃ bodyPre,
+        Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
+        tail <<+ bodyPre.stack ∧
+        Devm.getStor pre = Devm.getStor bodyPre := by
+  have valueZero : sevm.value = 0 :=
+    value_eq_zero_of_run_nonpayable
+      (Func.Run.of_runCompiled
+        (Func.RunCompiled.of_runCompiledTo_ok run))
+  unfold nonpayable at run
+  obtain ⟨afterValue, qvalue, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨testPre, qzero, branchRun⟩ := runCompiledTo_next_inv run
+  have rvalue := Ninst.Run.of_runCompiled qvalue
+  have rzero := Ninst.Run.of_runCompiled qzero
+  have pValue := prefix_of_push (of_run_callvalue rvalue) hp
+  have pTest := prefix_of_iszero rzero pValue
+  have pOne : (1 : B256) :: tail <<+ testPre.stack := by
+    simpa [valueZero, B256.eqCheck] using pTest
+  obtain ⟨bodyPre, _, -, hpop, bodyRun, pBody⟩ :=
+    Func.RunCompiledTo.succ_branch_of_prefix
+      (by decide : (1 : B256) ≠ 0) pOne branchRun
+  have bodyStor : Devm.getStor pre = Devm.getStor bodyPre :=
+    (Ninst.Hinv.inv (f := Devm.getStor) rvalue).trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) rzero).trans
+        (funext (getStor_eq_of_state_eq hpop.state)))
+  exact ⟨valueZero, bodyPre, bodyRun, pBody, bodyStor⟩
+
 private lemma of_run_rev_empty {sevm : Sevm} {devm : Devm} {s : List B256}
     {ex : Execution}
     (h_stk : devm.stack = (0 : B256) :: (0 : B256) :: s)
@@ -216,5 +352,33 @@ theorem runCompiledTo_revSelector_inv {fs : List Func} {sevm : Sevm}
       show ((4 : B256)).toNat = 4 from rfl,
       read_selector_of_write_zero (B256.length_toBytes _),
       toBytes_toB256_drop28 data hlen]
+
+/-- A known call to an empty-data `REVERT` body cannot produce `.ok`. -/
+theorem Func.RunCompiledTo.not_ok_call_rev
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {slot : Nat}
+    (hget : fs[slot]? = some Func.rev)
+    (run : Func.RunCompiledTo fs sevm pre (.call slot) (.ok post)) : False := by
+  obtain ⟨_, -, bodyRun⟩ := runCompiledTo_call_inv hget run
+  rcases runCompiledTo_rev_inv bodyRun with ⟨_, impossible, -⟩
+  cases impossible
+
+/-- A known call to a four-byte selector reverter cannot produce `.ok`. -/
+theorem Func.RunCompiledTo.not_ok_call_revSelector
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {slot : Nat}
+    {data : Bytes} {hlen : data.length = 4}
+    (hget : fs[slot]? = some (Func.revSelector data hlen))
+    (run : Func.RunCompiledTo fs sevm pre (.call slot) (.ok post)) : False := by
+  obtain ⟨_, -, bodyRun⟩ := runCompiledTo_call_inv hget run
+  rcases runCompiledTo_revSelector_inv bodyRun with
+    ⟨_, impossible⟩ | ⟨_, impossible, -⟩ <;> cases impossible
+
+/-- A known call to an arbitrary-data reverter cannot produce `.ok`. -/
+theorem Func.RunCompiledTo.not_ok_call_revData
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {slot : Nat}
+    {blob : Bytes}
+    (hget : fs[slot]? = some (Func.revData blob))
+    (run : Func.RunCompiledTo fs sevm pre (.call slot) (.ok post)) : False := by
+  obtain ⟨_, -, bodyRun⟩ := runCompiledTo_call_inv hget run
+  exact Func.RunCompiledTo.not_ok_revData bodyRun
 
 end Blanc

@@ -60,7 +60,7 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Boundary: `line_prefix` supports a finite instruction set and refuses instructions without a registered case.
 - Owner module: [Blanc/Tactics.lean](../Blanc/Tactics.lean)
 - Canonical example: [Blanc/Weth10HolderFlowCompiled.lean](../Blanc/Weth10HolderFlowCompiled.lean) — `recognized_of_run_dispatchWith`
-- Registered symbols: `tactic:line_prefix`, `tactic:generalize_line_prefix`, `tactic:show_pref`
+- Registered symbols: `tactic:line_prefix`, `tactic:generalize_line_prefix`, `tactic:show_pref`, `declaration:prefix_of_timestamp`, `declaration:prefix_of_xor`
 - Review: `proof-infrastructure` on `2026-08-20`
 
 ## `state-context-cleanup`
@@ -200,11 +200,11 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:message-execution-settlement`
-- Preferred path: Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post and `processMessage_entry_facts` to recover the actual entry frame projections.
+- Preferred path: Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and `processMessage_entry_stack` for the separate empty-stack projection.
 - Boundary: The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement.
 - Owner module: [Blanc/MessageExecution.lean](../Blanc/MessageExecution.lean)
 - Canonical example: [Blanc/MessageExecution.lean](../Blanc/MessageExecution.lean) — `MessageExecution.processMessage_eq_settle_exec`
-- Registered symbols: `module:Blanc/MessageExecution.lean`, `module:Blanc/MessageExecutionInversion.lean`, `declaration:MessageExecution.processMessage_eq_settle_exec`, `declaration:MessageExecution.processMessage_clean_of_exec`, `declaration:MessageExecution.processMessage_revert_of_exec`, `declaration:MessageExecution.processMessage_halt_of_exec`, `declaration:MessageExecution.processMessage_clean_rawPost`, `declaration:MessageExecution.processMessage_entry_facts`, `declaration:MessageExecution.settledRevert`, `declaration:MessageExecution.settledHalt`, `declaration:Msg.initDevm_stack`, `declaration:Msg.initSevm_data`
+- Registered symbols: `module:Blanc/MessageExecution.lean`, `module:Blanc/MessageExecutionInversion.lean`, `declaration:MessageExecution.processMessage_eq_settle_exec`, `declaration:MessageExecution.processMessage_clean_of_exec`, `declaration:MessageExecution.processMessage_revert_of_exec`, `declaration:MessageExecution.processMessage_halt_of_exec`, `declaration:MessageExecution.processMessage_clean_rawPost`, `declaration:MessageExecution.processMessage_entry_facts`, `declaration:MessageExecution.processMessage_entry_stack`, `declaration:MessageExecution.settledRevert`, `declaration:MessageExecution.settledHalt`, `declaration:Msg.initDevm_stack`, `declaration:Msg.initSevm_data`
 - Review: `proof-infrastructure` on `2026-08-29`
 
 ## `retained-write-noninterference`

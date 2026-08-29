@@ -55,7 +55,7 @@ def recipes : List Recipe := [
     status := "active"
     triggers := ["goal-shape:stack-prefix-line-run"]
     preferredPath := "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals."
-    symbols := ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref"]
+    symbols := ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref", "declaration:prefix_of_timestamp", "declaration:prefix_of_xor"]
     boundary := "`line_prefix` supports a finite instruction set and refuses instructions without a registered case."
   },
   {
@@ -158,8 +158,8 @@ def recipes : List Recipe := [
     id := "message-execution-settlement"
     status := "active"
     triggers := ["goal-shape:message-execution-settlement"]
-    preferredPath := "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post and `processMessage_entry_facts` to recover the actual entry frame projections."
-    symbols := ["module:Blanc/MessageExecution.lean", "module:Blanc/MessageExecutionInversion.lean", "declaration:MessageExecution.processMessage_eq_settle_exec", "declaration:MessageExecution.processMessage_clean_of_exec", "declaration:MessageExecution.processMessage_revert_of_exec", "declaration:MessageExecution.processMessage_halt_of_exec", "declaration:MessageExecution.processMessage_clean_rawPost", "declaration:MessageExecution.processMessage_entry_facts", "declaration:MessageExecution.settledRevert", "declaration:MessageExecution.settledHalt", "declaration:Msg.initDevm_stack", "declaration:Msg.initSevm_data"]
+    preferredPath := "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and `processMessage_entry_stack` for the separate empty-stack projection."
+    symbols := ["module:Blanc/MessageExecution.lean", "module:Blanc/MessageExecutionInversion.lean", "declaration:MessageExecution.processMessage_eq_settle_exec", "declaration:MessageExecution.processMessage_clean_of_exec", "declaration:MessageExecution.processMessage_revert_of_exec", "declaration:MessageExecution.processMessage_halt_of_exec", "declaration:MessageExecution.processMessage_clean_rawPost", "declaration:MessageExecution.processMessage_entry_facts", "declaration:MessageExecution.processMessage_entry_stack", "declaration:MessageExecution.settledRevert", "declaration:MessageExecution.settledHalt", "declaration:Msg.initDevm_stack", "declaration:Msg.initSevm_data"]
     boundary := "The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
   },
   {

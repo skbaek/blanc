@@ -84,4 +84,20 @@ theorem processMessage_entry_facts
   rw [memory]
   exact Mem.wf_empty
 
+/-- A retained code frame starts with the empty EVM operand stack.  This is
+kept separate from `processMessage_entry_facts` so adding the projection does
+not change that theorem's established consumer-facing conjunction. -/
+theorem processMessage_entry_stack
+    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {raw : Execution}
+    {ex : Except (EvmError × State × AdrSet × Tra) Devm}
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
+    pre.stack = [] := by
+  have enter := (RunFrame.some_inv process).1
+  rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
+  have stack := congrArg (fun evm : Evm => evm.dyna.stack) evmEq
+  dsimp [Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv] at stack
+  exact stack
+
 end Blanc.MessageExecution

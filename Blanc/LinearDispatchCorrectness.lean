@@ -22,7 +22,8 @@ def Devm.DispatchFramePreserved (pre post : Devm) : Prop :=
       gasLeft := fun _ _ => True }
     pre post
 
-private theorem dispatchFrame_trans {a b c : Devm}
+/-- Dispatch-frame preservation composes across adjacent route segments. -/
+theorem Devm.DispatchFramePreserved.trans {a b c : Devm}
     (hab : Devm.DispatchFramePreserved a b)
     (hbc : Devm.DispatchFramePreserved b c) :
     Devm.DispatchFramePreserved a c := by
@@ -42,7 +43,7 @@ private theorem dispatchFrame_trans {a b c : Devm}
   · exact hab.createdAccounts.trans hbc.createdAccounts
   · exact hab.transientStorage.trans hbc.transientStorage
 
-private theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
+theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
     (h : Devm.PushBurn xs a b) : Devm.DispatchFramePreserved a b := by
   constructor
   · trivial
@@ -60,7 +61,7 @@ private theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
   · exact h.createdAccounts
   · exact h.transientStorage
 
-private theorem dispatchFrame_of_popBurnBy {xs : List B256} {cost : Nat}
+theorem dispatchFrame_of_popBurnBy {xs : List B256} {cost : Nat}
     {a b : Devm} (h : Devm.PopBurnBy xs cost a b) :
     Devm.DispatchFramePreserved a b := by
   constructor
@@ -97,7 +98,7 @@ private theorem dispatchFrame_of_popBurn {xs : List B256} {a b : Devm}
   · exact h.createdAccounts
   · exact h.transientStorage
 
-private theorem dispatchFrame_of_diffBurn {xs ys : List B256} {a b : Devm}
+theorem dispatchFrame_of_diffBurn {xs ys : List B256} {a b : Devm}
     (h : Devm.DiffBurn xs ys a b) : Devm.DispatchFramePreserved a b := by
   constructor
   · trivial
@@ -293,7 +294,7 @@ private theorem dispatch_select_prefix
             rw [hflagStack]
             simp [B256.eqCheck]
           have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
-            dispatchFrame_trans (pushFrame hpush) (eqFrame heq)
+            (pushFrame hpush).trans (eqFrame heq)
           rcases runCompiledTo_branch_inv hbranch with
             ⟨armPre, hzero, hpop, harm⟩ |
             ⟨w, armPre, hw, hwstack, hpop, harm⟩
@@ -306,7 +307,7 @@ private theorem dispatch_select_prefix
             have hbodyStack : armPre.stack = tail :=
               stack_of_popBurnBy hpop hflag
             exact ⟨armPre, harm, hbodyStack,
-              dispatchFrame_trans hlineFrame
+              hlineFrame.trans
                 (dispatchFrame_of_popBurnBy hpop)⟩
       | cons head suffix' =>
           rcases head with ⟨headSelector, headBody⟩
@@ -329,8 +330,8 @@ private theorem dispatch_select_prefix
             rw [hflagStack]
             simp [B256.eqCheck]
           have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
-            dispatchFrame_trans (dupFrame hdup)
-              (dispatchFrame_trans (pushFrame hpush) (eqFrame heq))
+            (dupFrame hdup).trans
+              ((pushFrame hpush).trans (eqFrame heq))
           rcases runCompiledTo_branch_inv hbranch with
             ⟨armPre, hzero, hpop, harm⟩ |
             ⟨w, armPre, hw, hwstack, hpop, harm⟩
@@ -356,8 +357,8 @@ private theorem dispatch_select_prefix
             have hbodyStack : bodyPre.stack = tail := by
               exact stack_of_popBurn hpopBurn harmStack
             exact ⟨bodyPre, hbody, hbodyStack,
-              dispatchFrame_trans hlineFrame
-                (dispatchFrame_trans (dispatchFrame_of_popBurnBy hpop)
+              hlineFrame.trans
+                ((dispatchFrame_of_popBurnBy hpop).trans
                   (dispatchFrame_of_popBurn hpopBurn))⟩
   | cons head pre ih =>
       intro suffix entry hbefore hrun hstack
@@ -384,8 +385,8 @@ private theorem dispatch_select_prefix
         rw [hflagStack]
         simp [B256.eqCheck, hne]
       have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
-        dispatchFrame_trans (dupFrame hdup)
-          (dispatchFrame_trans (pushFrame hpush) (eqFrame heq))
+        (dupFrame hdup).trans
+          ((pushFrame hpush).trans (eqFrame heq))
       rcases runCompiledTo_branch_inv hbranch with
         ⟨armPre, hzero, hpop, harm⟩ |
         ⟨w, armPre, hw, hwstack, hpop, harm⟩
@@ -395,8 +396,8 @@ private theorem dispatch_select_prefix
           ih suffix armPre (fun candidate hmem =>
             hbefore candidate (by simp [hmem])) harm harmStack
         exact ⟨bodyPre, hbody, hbodyStack,
-          dispatchFrame_trans hlineFrame
-            (dispatchFrame_trans (dispatchFrame_of_popBurnBy hpop)
+          hlineFrame.trans
+            ((dispatchFrame_of_popBurnBy hpop).trans
               hbodyFrame)⟩
       · have : (0 : B256) ≠ w := by
           exact fun h => hw h.symm

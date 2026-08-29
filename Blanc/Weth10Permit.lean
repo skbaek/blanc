@@ -2658,13 +2658,6 @@ from a successful run through the exact WETH10 auxiliary table: a hypothetical
 nonzero guard would have entered the fixed `expiredPermitError` reverter, which
 has no successful `Func.Run`. -/
 
-private lemma prefix_of_timestamp {e : Sevm} {s s' : Devm} {xs : Stack}
-    (hp : xs <<+ s.stack) (h : Ninst.Run e s timestamp s') :
-    e.benvStat.time :: xs <<+ s'.stack := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact prefix_of_push (Devm.pushBurn_of_pushItem run) hp
-
 private lemma memory_eq_of_timestamp {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s timestamp s') : s.memory = s'.memory := by
   rcases of_run_reg h with ⟨pc, run⟩

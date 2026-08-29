@@ -46,6 +46,17 @@ registry has identified the likely vocabulary.
   nodes; `runCompiledTo_last_inv`, `runCompiledTo_rev_inv`, and
   `runCompiledTo_revSelector_inv` for terminal/revert nodes.  The shared
   `iszero_stack_inv` also transports the unchanged memory and return data.
+  Known impossible successful terminals/calls use `Linst.not_run_rev_ok`,
+  `Func.RunCompiledTo.not_ok_revData`,
+  `Func.RunCompiledTo.not_ok_call_revData`,
+  `Func.RunCompiledTo.not_ok_call_rev`, and
+  `Func.RunCompiledTo.not_ok_call_revSelector`; successful `STOP` identity is
+  `Func.RunCompiledTo.stop_eq`.  For a known branch-head prefix use
+  `Func.RunCompiledTo.zero_branch_of_prefix` or
+  `Func.RunCompiledTo.succ_branch_of_prefix`, both outcome-polymorphic.  A
+  successful shared `nonpayable` wrapper is peeled by
+  `Func.RunCompiledTo.nonpayable_body_of_ok`, which also derives zero value and
+  preserves the known stack tail and storage.
   This remains COMMON_API-only: the same `Func.RunCompiledTo` head is also the
   reliable trigger for construction recipes, so an automatic recipe would
   conflate constructing and inverting a walk.
@@ -57,7 +68,12 @@ registry has identified the likely vocabulary.
   selected-entry membership, the initial `selector :: tail` stack, and the
   exact `RunCompiledTo` walk; it returns the exact selected-body walk and a
   `DispatchFramePreserved` witness before any contract-specific ABI, role, or
-  storage reasoning.
+  storage reasoning.  Compose adjacent witnesses with
+  `Devm.DispatchFramePreserved.trans`.  When a family builds its own dispatcher
+  walk it can also consume the frame steps directly:
+  `dispatchFrame_of_pushBurn`, `dispatchFrame_of_popBurnBy`, and
+  `dispatchFrame_of_diffBurn` carry a `DispatchFramePreserved` across one push,
+  one burning pop, and a stack difference respectively.
 - Calls, delegate calls, or child-frame resumption: go to E2.
 - A predicate must hold for every entered child root: go to E3.
 - Only the terminal RETURN/REVERT remains: go to E4.
@@ -117,6 +133,15 @@ For different offsets, sizes, stack tails, or payloads, use the general
 - `Ninst.Inv`, `Rinst.Inv`, and `Line.Inv`: use `line_inv` plus the registered
   `Ninst.Hinv` / `Rinst.Hinv` instances in `Blanc/Tactics.lean`.
 - `Func.Inv`: use `func_inv`; it intentionally refuses arbitrary `Func.call`.
+- For direct stack-prefix transport through shared line instructions, use the
+  `prefix_of_*` family in [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean),
+  including `prefix_of_timestamp` for the block-time push and `prefix_of_xor`
+  for `XOR`.  These declarations are also registered with the
+  `stack-prefix-transport` recipe.
+- `Devm.state` is preserved by `mstore` and `mload`; a walk that tracks a
+  single account's balance states its invariant as the pointwise projection
+  `fun d => Devm.getBal d a`, for which `Rinst`/`Ninst` instances are
+  registered beside the whole-family ones.
 - A missing contract-neutral instance belongs in a shared module below every
   consumer, not in the first contract that needs it.
 
@@ -172,12 +197,31 @@ Use `Devm.StateWriteFrame` and its reflexive/transitive/composition lemmas in
 `Blanc/CommonProofs.lean`, then inspect higher-level relation combinators in
 [`Blanc/Ladder.lean`](../Blanc/Ladder.lean).
 
+### S4. I need a basic EVM-word identity
+
+Use the word/arithmetic declarations in
+[`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before destructing a
+`B256`.  In particular, `B256.and_comm` and `B256.xor_comm` provide the shared
+commutativity facts for bitwise conjunction and exclusive-or, while
+`B256.and_idem_right` removes a repeated identical mask.
+
+For the pause face specifically, `compact_pause_word_eq_projection` in
+[`Blanc/PinnedPauseTarget.lean`](../Blanc/PinnedPauseTarget.lean) identifies the
+branch-free compiled pause word `time * ((sentinel =? duration) =? 0) + duration`
+with `pauseForProjection`.  Every faithful `PausableUntil` port compiles that
+arithmetic, so consume it there rather than restating it per family.
+
 ## M — bytes and memory
 
 ### M1. The goal is a `sliceD` normalization
 
 - Full source from offset zero: `Bytes.sliceD_zero_length` in
   `Blanc/CommonProofs.lean`.
+- Recover a selector from calldata described as
+  `abiSelectorBytes selected ++ tail` with
+  `selector_eq_of_data_eq_abiSelectorBytes_append`; discharge its explicit
+  canonicality premise `Bytes.toB256 (abiSelectorBytes selected) = selected`
+  for the concrete four-byte selector.
 - Read back a `Bytes.writeAt`: `Bytes.sliceD_writeAt` and the neighboring
   pointwise/write-layout laws in `Blanc/CommonProofs.lean`.
 - Fixed or padded memory windows: use `Mem.Wf` and `Mem.Reads` before adding a
@@ -208,7 +252,9 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
   [`Blanc/MessageExecutionInversion.lean`](../Blanc/MessageExecutionInversion.lean):
   `processMessage_clean_rawPost` recovers a clean successful raw post, while
   `processMessage_entry_facts` recovers code, target, calldata, timestamp,
-  entry storage, and memory well-formedness from the actual retained frame.
+  entry storage, and memory well-formedness from the actual retained frame;
+  `processMessage_entry_stack` separately recovers its empty operand stack
+  without changing the established conjunction returned by the former.
 - `Msg.initDevm_*` and `Msg.initSevm_*` expose canonical message-entry fields.
 
 ### T2. I need to know which child effects survive settlement

@@ -31,27 +31,6 @@ private lemma withOutput_gasLeft (devm : Devm) (out : Bytes) :
 private lemma memRead_gasLeft (devm : Devm) (index size : Nat) :
     (devm.memRead index size).2.gasLeft = devm.gasLeft := rfl
 
-private theorem compact_pause_word_eq_projection (time duration : B256) :
-    time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration =
-      pauseForProjection time duration := by
-  by_cases infinite : duration = pauseInfiniteSentinel
-  · subst duration
-    have one_ne_zero : (1 : B256) ≠ 0 := by decide
-    simp [pauseForProjection, B256.eqCheck, one_ne_zero]
-    have mulZero : time * (0 : B256) = 0 := by
-      change (time.toNat * 0).toB256 = 0
-      rw [Nat.mul_zero]
-      rfl
-    rw [mulZero]
-    rfl
-  · have reverse : pauseInfiniteSentinel ≠ duration := Ne.symm infinite
-    simp [pauseForProjection, B256.eqCheck, infinite, reverse]
-    have mulOne : time * (1 : B256) = time := by
-      change (time.toNat * 1).toB256 = time
-      rw [Nat.mul_one]
-      exact toB256_toNat time
-    rw [mulOne]
-
 def stubPausePost (sevm : Sevm) (base : Devm)
     (duration : B256) : Devm :=
   temporalSstorePost sevm
