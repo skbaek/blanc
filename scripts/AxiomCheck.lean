@@ -63,6 +63,7 @@ import Blanc.LidoCircuitBreakerPinnedTargetComposition
 import Blanc.LidoCircuitBreakerPinnedTargetStubWalk
 import Blanc.LidoCircuitBreakerPinnedTargetStubCrossing
 import Blanc.LidoCircuitBreakerPinnedTargetCompositionControl
+import Blanc.ProrataAttackTrace
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -848,3 +849,54 @@ import Blanc.LidoCircuitBreakerPinnedTargetCompositionControl
 #print axioms Blanc.ProxyPair.implGuarded_entrySstoreFree_rejected
 #print axioms Blanc.ProxyPair.proxyProg_success_successfulSstore_sourceSite
 #print axioms Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite
+#print axioms Blanc.prorataCode_compile
+#print axioms Blanc.Prorata.classify_prorata_exec_route
+#print axioms Blanc.Prorata.classify_prorata_exec_success
+#print axioms Blanc.Prorata.prorata_deposit_exec_effect
+#print axioms Blanc.Prorata.prorata_withdraw_exec_effect
+#print axioms Blanc.Prorata.prorata_convertToShares_exec_effect
+#print axioms Blanc.Prorata.prorata_convertToAssets_exec_effect
+#print axioms Blanc.Prorata.prorata_convertToShares_eq_deposit_mint
+#print axioms Blanc.Prorata.prorata_convertToAssets_eq_withdraw_pay
+#print axioms Blanc.Prorata.deposit_effect
+#print axioms Blanc.Prorata.withdraw_settles_before_call
+#print axioms Blanc.Prorata.withdraw_pays_exactly
+#print axioms Blanc.Prorata.convertToShares_effect
+#print axioms Blanc.Prorata.convertToAssets_effect
+#print axioms Blanc.Prorata.convertToShares_eq_deposit_mint
+#print axioms Blanc.Prorata.convertToAssets_eq_withdraw_pay
+#print axioms Blanc.Prorata.deposit_quote_toNat
+#print axioms Blanc.Prorata.withdraw_quote_toNat
+#print axioms Blanc.Prorata.mintN_never_overmints
+#print axioms Blanc.Prorata.payN_never_overpays
+#print axioms Blanc.Prorata.payN_le_balance
+#print axioms Blanc.Prorata.Inv.withdraw_pay_word_le_balance
+#print axioms Blanc.Prorata.deposit_price_nondecreasing
+#print axioms Blanc.Prorata.withdraw_price_nondecreasing
+#print axioms Blanc.Prorata.withdraw_ceil_shares_covers_assets
+#print axioms Blanc.Prorata.deposit_floor_shares_ceil_assets_le
+#print axioms Blanc.Prorata.mintN_residue_eq
+#print axioms Blanc.Prorata.payN_residue_eq
+#print axioms Blanc.Prorata.roundtrip_dust_eq
+#print axioms Blanc.Prorata.immediate_roundtrip_loss_le
+#print axioms Blanc.Prorata.prorataSpec_sound
+#print axioms Blanc.Prorata.prorataSpec_preserves
+#print axioms Blanc.Prorata.DeploymentRoot.reachable_stateInv
+#print axioms Blanc.Prorata.DeploymentRoot.reachable_accountingInvariant
+#print axioms Blanc.Prorata.ProrataAccountingPath.prorata_dust_trace_exact
+#print axioms Blanc.Prorata.retainedMessageCallAccountingReplay
+#print axioms Blanc.Prorata.retainedTransactionAccountingReplay
+#print axioms Blanc.Prorata.retainedTransactionListAccountingReplay
+#print axioms Blanc.Prorata.retainedSystemMessageAccountingReplay
+#print axioms Blanc.Prorata.retainedRequestsAccountingReplay
+#print axioms Blanc.Prorata.retainedDirectWithdrawalAccountingReplay
+#print axioms Blanc.Prorata.retainedBodyAccountingReplay
+#print axioms Blanc.Prorata.retainedConfiguredBlockAccountingReplay
+#print axioms Blanc.Prorata.retainedConfiguredHistoryAccountingReplay
+#print axioms Blanc.Prorata.ProrataTraceRealizes.toReachUsing
+#print axioms Blanc.Prorata.ProrataTraceRealizes.toAccountingReplay
+#print axioms Blanc.Prorata.prorataTraceRealizes_exists_of_reachUsing
+#print axioms Blanc.Prorata.prorata_realized_dust_trace_exact
+#print axioms Blanc.Prorata.attacker_open_context
+#print axioms Blanc.Prorata.attacker_no_profit
+#print axioms Blanc.Prorata.victim_loss_bound

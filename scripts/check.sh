@@ -1093,7 +1093,58 @@ Blanc.ProxyPair.settledObservable_rejects_reverse_revert_halt|$STANDARD
 Blanc.ProxyPair.proxy_entrySstoreFree|$STANDARD
 Blanc.ProxyPair.implGuarded_entrySstoreFree_rejected|$STANDARD
 Blanc.ProxyPair.proxyProg_success_successfulSstore_sourceSite|$STANDARD
-Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite|$STANDARD"
+Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite|$STANDARD
+Blanc.prorataCode_compile|$STANDARD
+Blanc.Prorata.classify_prorata_exec_route|$STANDARD
+Blanc.Prorata.classify_prorata_exec_success|$STANDARD
+Blanc.Prorata.prorata_deposit_exec_effect|$STANDARD
+Blanc.Prorata.prorata_withdraw_exec_effect|$STANDARD
+Blanc.Prorata.prorata_convertToShares_exec_effect|$STANDARD
+Blanc.Prorata.prorata_convertToAssets_exec_effect|$STANDARD
+Blanc.Prorata.prorata_convertToShares_eq_deposit_mint|$STANDARD
+Blanc.Prorata.prorata_convertToAssets_eq_withdraw_pay|$STANDARD
+Blanc.Prorata.deposit_effect|$STANDARD
+Blanc.Prorata.withdraw_settles_before_call|$STANDARD
+Blanc.Prorata.withdraw_pays_exactly|$STANDARD
+Blanc.Prorata.convertToShares_effect|$STANDARD
+Blanc.Prorata.convertToAssets_effect|$STANDARD
+Blanc.Prorata.convertToShares_eq_deposit_mint|$STANDARD
+Blanc.Prorata.convertToAssets_eq_withdraw_pay|$STANDARD
+Blanc.Prorata.deposit_quote_toNat|$STANDARD
+Blanc.Prorata.withdraw_quote_toNat|$STANDARD
+Blanc.Prorata.mintN_never_overmints|propext
+Blanc.Prorata.payN_never_overpays|propext
+Blanc.Prorata.payN_le_balance|propext, Quot.sound
+Blanc.Prorata.Inv.withdraw_pay_word_le_balance|$STANDARD
+Blanc.Prorata.deposit_price_nondecreasing|propext, Quot.sound
+Blanc.Prorata.withdraw_price_nondecreasing|propext, Quot.sound
+Blanc.Prorata.withdraw_ceil_shares_covers_assets|propext, Quot.sound
+Blanc.Prorata.deposit_floor_shares_ceil_assets_le|$STANDARD
+Blanc.Prorata.mintN_residue_eq|propext
+Blanc.Prorata.payN_residue_eq|propext
+Blanc.Prorata.roundtrip_dust_eq|propext, Quot.sound
+Blanc.Prorata.immediate_roundtrip_loss_le|$STANDARD
+Blanc.Prorata.prorataSpec_sound|$STANDARD
+Blanc.Prorata.prorataSpec_preserves|$STANDARD
+Blanc.Prorata.DeploymentRoot.reachable_stateInv|$STANDARD
+Blanc.Prorata.DeploymentRoot.reachable_accountingInvariant|$STANDARD
+Blanc.Prorata.ProrataAccountingPath.prorata_dust_trace_exact|$STANDARD
+Blanc.Prorata.retainedMessageCallAccountingReplay|$STANDARD
+Blanc.Prorata.retainedTransactionAccountingReplay|$STANDARD
+Blanc.Prorata.retainedTransactionListAccountingReplay|$STANDARD
+Blanc.Prorata.retainedSystemMessageAccountingReplay|$STANDARD
+Blanc.Prorata.retainedRequestsAccountingReplay|$STANDARD
+Blanc.Prorata.retainedDirectWithdrawalAccountingReplay|$STANDARD
+Blanc.Prorata.retainedBodyAccountingReplay|$STANDARD
+Blanc.Prorata.retainedConfiguredBlockAccountingReplay|$STANDARD
+Blanc.Prorata.retainedConfiguredHistoryAccountingReplay|$STANDARD
+Blanc.Prorata.ProrataTraceRealizes.toReachUsing|$STANDARD
+Blanc.Prorata.ProrataTraceRealizes.toAccountingReplay|$STANDARD
+Blanc.Prorata.prorataTraceRealizes_exists_of_reachUsing|$STANDARD
+Blanc.Prorata.prorata_realized_dust_trace_exact|$STANDARD
+Blanc.Prorata.attacker_open_context|$STANDARD
+Blanc.Prorata.attacker_no_profit|$STANDARD
+Blanc.Prorata.victim_loss_bound|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
