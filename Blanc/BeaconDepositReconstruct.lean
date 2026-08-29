@@ -175,4 +175,80 @@ theorem reconstructLoadStore_runCompiledTo
     reconstructLoadStoreCost secondIntermediateWord 1 = 12 := by
   decide +kernel
 
+/-- Run the direct pubkey SHA-256 site and establish the node register. -/
+theorem reconstructPubkeySha_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
+    {oldCount amount : B256} {stack : List B256}
+    {success : Func} {K : Nat}
+    (source : ReconstructSourceMemoryCarrier base.memory pubkeyInput
+      signatureFirst signatureTail withdrawal amountPadded oldCount amount 704)
+    (hmetaBase : ReconstructMetaCarrier sevm origin base)
+    (hnodeleg : getDelegatedCodeAddress (origin.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ origin.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hbound : K + 221 < 2 ^ 256)
+    (hroom : stack.length < 1019) :
+    ∃ callPost,
+      callPost.stack = 1 :: stack ∧
+      callPost.memory = base.memory.write 640
+        (Bytes.sha256 pubkeyInput).toBytes ∧
+      Nonempty (ReconstructNodeMemoryCarrier callPost.memory pubkeyInput
+        signatureFirst signatureTail withdrawal amountPadded oldCount amount
+        (Bytes.sha256 pubkeyInput) 704) ∧
+      callPost.gasLeft = K + 37 ∧
+      callPost.returnData = (Bytes.sha256 pubkeyInput).toBytes ∧
+      ReconstructMetaCarrier sevm origin callPost ∧
+      ∀ {ex : Execution},
+        Func.RunCompiledTo fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+        Func.RunCompiledTo fs sevm
+          (base.setMach ⟨stack, base.memory, K + 238⟩)
+          (sha64 6 nodeWord success) ex := by
+  have hinput : ((6 : B256) * 32).toNat = 192 := by
+    decide +kernel
+  have houtput : (nodeWord * 32).toNat = 640 := by
+    decide +kernel
+  have hcovered : memExtsSize base.memory.size
+      [⟨((6 : B256) * 32).toNat, 64⟩,
+        ⟨(nodeWord * 32).toNat, 32⟩] = base.memory.size := by
+    rw [hinput, houtput, source.size_eq]
+    decide +kernel
+  have hnodelegBase :
+      getDelegatedCodeAddress (base.getCode 2) = none := by
+    rw [hmetaBase.code 2]
+    exact hnodeleg
+  have hwarmBase : (2 : Adr) ∈ base.accessedAddresses := by
+    rw [hmetaBase.accessedAddresses]
+    exact hwarm
+  obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
+      hstorage, hcode, haddresses, hkeys,
+      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+    sha64_success_prefix_runCompiledTo
+      (fs := fs) (sevm := sevm) (base := base)
+      (inputWord := 6) (outputWord := nodeWord)
+      (stack := stack) (success := success) (K := K)
+      hcovered hnodelegBase hwarmBase hpre hdepth hbound hroom
+  have hmemory' : callPost.memory = base.memory.write 640
+      (Bytes.sha256 pubkeyInput).toBytes := by
+    rw [hinput, houtput, source.shaPubkeyInput] at hmemory
+    exact hmemory
+  have hreturn' :
+      callPost.returnData = (Bytes.sha256 pubkeyInput).toBytes := by
+    rw [hinput, source.shaPubkeyInput] at hreturn
+    exact hreturn
+  have hcarrier : ReconstructNodeMemoryCarrier callPost.memory pubkeyInput
+      signatureFirst signatureTail withdrawal amountPadded oldCount amount
+      (Bytes.sha256 pubkeyInput) 704 := by
+    rw [hmemory']
+    exact source.writeNode (Bytes.sha256 pubkeyInput) (by omega)
+  have hmeta : ReconstructMetaCarrier sevm origin callPost :=
+    hmetaBase.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta herror
+      htransfer
+  refine ⟨callPost, hstack, hmemory', ⟨hcarrier⟩, hgas, hreturn', hmeta, ?_⟩
+  intro ex htail
+  have hwhole := hlift htail
+  simpa only [sha64SuccessCost_six_node] using hwhole
+
 end Blanc.BeaconDeposit
