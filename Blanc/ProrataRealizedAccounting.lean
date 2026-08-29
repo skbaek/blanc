@@ -251,6 +251,122 @@ theorem accountingEffect_silent
   rw [hstor, hbalance]
   exact .silent _
 
+/-- A nonpayable observation with unchanged target state is silent from its
+semantic (pre-credit) entry as well. -/
+theorem accountingEffect_silentBeforeCredit
+    {sevm : Sevm} {pre post : Devm}
+    (hvalue : sevm.value = 0)
+    (hstor : Devm.getStor post sevm.currentTarget =
+      Devm.getStor pre sevm.currentTarget)
+    (hbalance : Devm.getBal post sevm.currentTarget =
+      Devm.getBal pre sevm.currentTarget) :
+    ProrataAccountingEffect offset.toNat
+      (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+      .silent (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+  rw [show AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+      pre.state = AccountingSnapshot.ofState sevm.currentTarget pre.state
+    from by
+      unfold AccountingSnapshot.beforeCredit AccountingSnapshot.ofState
+      rw [hvalue]
+      rfl]
+  exact accountingEffect_silent hstor hbalance
+
+/-- The successful donation body changes neither persistent storage nor any
+world balance; its only economic effect is the already-completed entry
+credit. -/
+theorem BodyEntry.donatePersistentEq
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (entry : BodyEntry fs sevm pre post donate) :
+    Devm.getStor post = Devm.getStor pre ∧
+      Devm.getBal post = Devm.getBal pre := by
+  rcases entry with ⟨bodyPre, hstor, hbal, -, run⟩
+  have hstorBody : Devm.getStor bodyPre = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by
+      unfold donate
+      func_inv) run
+  have hbalBody : Devm.getBal bodyPre = Devm.getBal post :=
+    Func.of_inv Devm.getBal Devm.getBal (by
+      unfold donate
+      func_inv) run
+  exact ⟨hstorBody.symm.trans hstor, hbalBody.symm.trans hbal⟩
+
+/-- A donation is either the positive external-credit class or, at zero
+value, the silent class. -/
+theorem BodyEntry.donateAccountingEffect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (entry : BodyEntry fs sevm pre post donate)
+    (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
+      (Devm.getBal pre sevm.currentTarget)) :
+    ∃ kind,
+      ProrataAccountingEffect offset.toNat
+        (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+          pre.state)
+        kind (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+  rcases entry.donatePersistentEq with ⟨hstor, hbal⟩
+  let supply := supplyN (Devm.getStor pre sevm.currentTarget)
+  let balance := (Devm.getBal pre sevm.currentTarget).toNat
+  let amount := sevm.value.toNat
+  have hpostSnapshot :
+      AccountingSnapshot.ofState sevm.currentTarget post.state =
+        ⟨supply, balance⟩ := by
+    unfold AccountingSnapshot.ofState
+    exact congrArg₂ AccountingSnapshot.mk
+      (by
+        change supplyN (Devm.getStor post sevm.currentTarget) = supply
+        rw [congrFun hstor sevm.currentTarget])
+      (by
+        change (Devm.getBal post sevm.currentTarget).toNat = balance
+        rw [congrFun hbal sevm.currentTarget])
+  have hcredited : balance - amount + amount = balance :=
+    Nat.sub_add_cancel invariant.value_le_balance
+  by_cases hpositive : 0 < amount
+  · refine ⟨.externalCredit amount, ?_⟩
+    rw [show AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+        pre.state = ⟨supply, balance - amount⟩ from rfl, hpostSnapshot]
+    simpa only [hcredited] using
+      (ProrataAccountingEffect.externalCredit
+        supply (balance - amount) amount hpositive)
+  · have hzero : amount = 0 := Nat.eq_zero_of_not_pos hpositive
+    refine ⟨.silent, ?_⟩
+    rw [show AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+        pre.state = ⟨supply, balance - amount⟩ from rfl, hpostSnapshot,
+      hzero]
+    exact .silent _
+
+/-- The successful shares preview is a silent accounting observation. -/
+theorem BodyEntry.sharesAccountingEffect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (entry : BodyEntry fs sevm pre post convertToShares)
+    (hvalue : sevm.value = 0) :
+    ProrataAccountingEffect offset.toNat
+      (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+      .silent (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+  rcases entry with ⟨bodyPre, hstor, hbal, -, run⟩
+  have effect := convertToShares_effect run
+  unfold SharesViewEffect at effect
+  dsimp at effect
+  rcases effect with ⟨-, -, -, -, hpostStor, hpostBal, -, -⟩
+  exact accountingEffect_silentBeforeCredit hvalue
+    (congrFun (hpostStor.trans hstor) sevm.currentTarget)
+    (congrFun (hpostBal.trans hbal) sevm.currentTarget)
+
+/-- The successful assets preview is a silent accounting observation. -/
+theorem BodyEntry.assetsAccountingEffect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (entry : BodyEntry fs sevm pre post convertToAssets)
+    (hvalue : sevm.value = 0) :
+    ProrataAccountingEffect offset.toNat
+      (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value pre.state)
+      .silent (AccountingSnapshot.ofState sevm.currentTarget post.state) := by
+  rcases entry with ⟨bodyPre, hstor, hbal, -, run⟩
+  have effect := convertToAssets_effect run
+  unfold AssetsViewEffect at effect
+  dsimp at effect
+  rcases effect with ⟨-, -, -, hpostStor, hpostBal, -, -⟩
+  exact accountingEffect_silentBeforeCredit hvalue
+    (congrFun (hpostStor.trans hstor) sevm.currentTarget)
+    (congrFun (hpostBal.trans hbal) sevm.currentTarget)
+
 /-- A list presentation of connected accounting effects, retaining its exact
 initial and terminal snapshots while remaining convenient for induction. -/
 inductive ProrataAccountingReplay (o : Nat) :
@@ -264,6 +380,17 @@ inductive ProrataAccountingReplay (o : Nat) :
       ProrataAccountingReplay o step.pre (step :: steps) post
 
 namespace ProrataAccountingReplay
+
+/-- One realized effect is a connected singleton replay. -/
+theorem singleton {o : Nat} {pre post : AccountingSnapshot}
+    {kind : ProrataAccountingKind}
+    (provenance : ProrataAccountingProvenance)
+    (effect : ProrataAccountingEffect o pre kind post) :
+    ProrataAccountingReplay o pre
+      [{ pre, post, kind, provenance, effect }] post := by
+  exact ProrataAccountingReplay.cons
+    (step := { pre, post, kind, provenance, effect })
+    (ProrataAccountingReplay.nil post)
 
 /-- Concatenate two accounting replays at their shared boundary. -/
 theorem append {o : Nat} {pre mid post : AccountingSnapshot}
@@ -298,6 +425,42 @@ theorem exists_path {o : Nat} {pre post : AccountingSnapshot}
       · simpa using hlast
 
 end ProrataAccountingReplay
+
+/-- Every successful deployed route except withdrawal is already a complete
+singleton accounting replay.  The withdrawal arm is retained for the
+settlement-aware child recursion that follows. -/
+theorem ProrataMainRoute.accountingReplay_or_withdraw
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (route : ProrataMainRoute fs sevm pre post)
+    (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
+      (Devm.getBal pre sevm.currentTarget))
+    (provenance : ProrataAccountingProvenance) :
+    (∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.beforeCredit sevm.currentTarget sevm.value
+          pre.state)
+        steps (AccountingSnapshot.ofState sevm.currentTarget post.state)) ∨
+      Nonempty (BodyEntry fs sevm pre post Prorata.withdraw) ∧
+        sevm.value = 0 := by
+  cases route with
+  | deposit entry =>
+      rcases entry.depositAccountingEffect invariant with ⟨minted, effect⟩
+      exact Or.inl ⟨_,
+        ProrataAccountingReplay.singleton provenance effect⟩
+  | withdraw hvalue entry =>
+      exact Or.inr ⟨⟨entry⟩, hvalue⟩
+  | convertToShares hvalue entry =>
+      exact Or.inl ⟨_,
+        ProrataAccountingReplay.singleton provenance
+          (entry.sharesAccountingEffect hvalue)⟩
+  | convertToAssets hvalue entry =>
+      exact Or.inl ⟨_,
+        ProrataAccountingReplay.singleton provenance
+          (entry.assetsAccountingEffect hvalue)⟩
+  | donate entry =>
+      rcases entry.donateAccountingEffect invariant with ⟨kind, effect⟩
+      exact Or.inl ⟨_,
+        ProrataAccountingReplay.singleton provenance effect⟩
 
 end Prorata
 
