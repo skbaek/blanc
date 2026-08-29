@@ -280,7 +280,9 @@ elab "blanc_suggest" : tactic =>
           Registered symbols: {symbols}\n\
           Boundary: {recipe.boundary}"
     unless found do
-      Lean.logInfo "blanc_suggest: no matching proof recipe"
+      Lean.logInfo "blanc_suggest: no matching proof recipe\n\
+        Declaration discovery: consult docs/COMMON_API.md before adding a \
+        contract-local helper."
 
 def String.toSyntax (s : String) : Lean.Syntax :=
   Lean.Syntax.ident Lean.SourceInfo.none s.toRawSubstring

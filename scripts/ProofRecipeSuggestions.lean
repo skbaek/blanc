@@ -86,7 +86,7 @@ example : Func.stop.compileShape.byteSize < 2 := by
   blanc_suggest
   decide
 
--- EXPECT-NO-MATCH
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (f : Func) : f.compileShape.byteSize = f.compileShape.byteSize := by
   blanc_suggest
   rfl
@@ -98,13 +98,13 @@ example :
   blanc_suggest
   decide
 
--- EXPECT-NO-MATCH
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (devm : Devm) (output : Bytes) :
     (devm.withOutput output).pop = (devm.withOutput output).pop := by
   blanc_suggest
   rfl
 
--- EXPECT-NO-MATCH
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (proposition : Prop) (proof : proposition) : proposition := by
   blanc_suggest
   exact proof
