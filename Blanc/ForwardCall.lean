@@ -301,6 +301,50 @@ theorem Ninst.runCompiled_sload_selected
         (by simp only [Devm.gasLeft_setMach, gasColdSload])
         hroom)
 
+/-- Exact selected warm/cold charge of one `SSTORE`. -/
+def sstoreCost (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
+  (if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      devm.accessedStorageKeys then 0 else gasColdSload) +
+    sstoreValueCost (getOrigStorVal sevm sevm.currentTarget key)
+      (devm.getStorVal sevm.currentTarget key) value
+
+/-- Meta/world state after one selected warm/cold `SSTORE`. -/
+def afterSstore (sevm : Sevm) (devm : Devm)
+    (key value : B256) : Devm :=
+  let accessed :=
+    if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+        devm.accessedStorageKeys then devm
+    else addAccessedStorageKey devm sevm.currentTarget key
+  (accessed.withRefundCounter
+      (sstoreNewRefundCounter value
+        (getOrigStorVal sevm sevm.currentTarget key)
+        (devm.getStorVal sevm.currentTarget key) devm.refundCounter)).setStorVal
+    sevm.currentTarget key value
+
+/-- One exact `SSTORE` whose warm/cold choice stays inside neutral carrier
+definitions. The caller supplies the real EIP-2200 sentry and static-context
+premises; the successor exposes the selected access-set and refund update. -/
+theorem Ninst.runCompiled_sstore_selected
+    {sevm : Sevm} {devm : Devm} {key value : B256}
+    {stack : List B256} {G : Nat}
+    (hstack : devm.stack = key :: value :: stack)
+    (hsentry : gCallStipend < devm.gasLeft)
+    (hstatic : sevm.isStatic = false)
+    (hgas : devm.gasLeft = G + sstoreCost sevm devm key value) :
+    Ninst.RunCompiled sevm devm sstore
+      ((afterSstore sevm devm key value).setMach
+        ⟨stack, devm.memory, G⟩) := by
+  by_cases hwarm :
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+        devm.accessedStorageKeys
+  · simp only [sstoreCost, if_pos hwarm, Nat.zero_add,
+      afterSstore] at hgas ⊢
+    exact Ninst.runCompiled_sstore_warm hstack hwarm hsentry hstatic
+      rfl rfl hgas
+  · simp only [sstoreCost, if_neg hwarm, afterSstore] at hgas ⊢
+    exact Ninst.runCompiled_sstore_cold hstack hwarm hsentry hstatic
+      rfl rfl hgas
+
 /-! ### The two storage steps, in continuation-passing form
 
 `Ninst.runCompiled_sload_of` above and `Blanc/Forward.lean`'s
