@@ -946,4 +946,71 @@ theorem reconstructAmountSignatureSha_runCompiledTo
     reconstructLoadStoreCost_intermediate_one,
     reconstructLoadStoreCost_eleven_zero] using hwhole
 
+/-- Combine the pubkey/withdrawal and amount/signature branches into the final
+deposit-data node. -/
+theorem reconstructFinishSha_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
+    {oldCount amount node intermediate second : B256}
+    {stack : List B256} {success : Func} {K : Nat}
+    (hregisters : ReconstructRegistersMemoryCarrier base.memory
+      pubkeyInput signatureFirst signatureTail withdrawal amountPadded
+      oldCount amount node intermediate second 768)
+    (hmetaBase : ReconstructMetaCarrier sevm origin base)
+    (hnodeleg : getDelegatedCodeAddress (origin.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ origin.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hbound : K + 221 < 2 ^ 256)
+    (hroom : stack.length < 1019) :
+    ∃ callPost,
+      Nonempty (ReconstructRegistersMemoryCarrier callPost.memory
+        pubkeyInput signatureFirst signatureTail withdrawal amountPadded
+        oldCount amount (hashPair Bytes.sha256 node intermediate)
+        intermediate second 768) ∧
+      callPost.returnData =
+        (hashPair Bytes.sha256 node intermediate).toBytes ∧
+      ReconstructMetaCarrier sevm origin callPost ∧
+      ∀ {ex : Execution},
+        Func.RunCompiledTo fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+        Func.RunCompiledTo fs sevm
+          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (loadWord nodeWord +++ mstoreAt 0 +++
+            loadWord intermediateWord +++ mstoreAt 1 +++
+            sha64 0 nodeWord success) ex := by
+  let firstMemory := base.memory.write 0 node.toBytes
+  have hfirstCarrier : ReconstructRegistersMemoryCarrier firstMemory
+      pubkeyInput signatureFirst signatureTail withdrawal amountPadded
+      oldCount amount node intermediate second 768 := by
+    simpa only [firstMemory] using
+      hregisters.writeBeforeSources 0 node.toBytes
+        (by rw [B256.length_toBytes]; omega)
+        (by rw [B256.length_toBytes]; omega)
+  obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
+    reconstructPairSha_runCompiledTo
+      (fs := fs) (sevm := sevm) (origin := origin) (base := base)
+      (hregisters := hregisters) (hmetaBase := hmetaBase)
+      (leftWord := nodeWord) (rightWord := intermediateWord)
+      (outputWord := nodeWord) (left := node) (right := intermediate)
+      (stack := stack) (success := success) (K := K)
+      hnodeleg hwarm hpre hdepth hbound
+      (by decide +kernel) (by decide +kernel) (by decide +kernel)
+      hregisters.intermediate.node.readNode
+      hfirstCarrier.intermediate.readIntermediate hroom
+  have hpair := hregisters.stagePair node intermediate (by omega)
+  have hcarrier : ReconstructRegistersMemoryCarrier callPost.memory
+      pubkeyInput signatureFirst signatureTail withdrawal amountPadded
+      oldCount amount (hashPair Bytes.sha256 node intermediate)
+      intermediate second 768 := by
+    rw [hmemory]
+    exact hpair.registers.writeNode
+      (hashPair Bytes.sha256 node intermediate) (by omega)
+  refine ⟨callPost, ⟨hcarrier⟩, hreturn, hmeta, ?_⟩
+  intro ex htail
+  have hwhole := hlift htail
+  simpa only [sha64SuccessCost_zero_node,
+    reconstructLoadStoreCost_intermediate_one,
+    reconstructLoadStoreCost_node_zero] using hwhole
+
 end Blanc.BeaconDeposit
