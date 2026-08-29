@@ -43,6 +43,39 @@ theorem retainedConfiguredBlockAccountingReplay
   rw [trace.postState]
   rwa [trace.openingState] at replay
 
+/-- Rung R9: a whole retained configured history realizes one PRORATA
+accounting replay, from the world at the checkpoint to the world at any
+configured continuation of it.
+
+Nothing is added above rung R8's single premise.  The state invariant is
+carried from one block to the next by the generic ladder, through the chain
+reachability the history itself projects to
+(`ConfiguredHistoryTrace.stateInv`), and `prorataSpec.Preserves ca` is
+discharged internally from `prorataSpec_preserves` rather than taken as a
+hypothesis.  No not-yet-created side condition is threaded at all: each block
+re-establishes it from its own empty created-account set, which is what makes
+this induction carry exactly one fact.
+
+The blocks are composed in chain order, and each block's steps are tagged with
+that block's own header number rather than a synthetic counter. -/
+theorem retainedConfiguredHistoryAccountingReplay
+    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (inv : prorataSpec.StateInv ca checkpoint.state) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca checkpoint.state) steps
+        (AccountingSnapshot.ofState ca future.state) := by
+  induction history with
+  | refl hcfg hctx hid => exact ⟨[], ProrataAccountingReplay.nil_of_eq rfl⟩
+  | step prior block ih =>
+      obtain ⟨priorSteps, priorReplay⟩ := ih
+      obtain ⟨blockSteps, blockReplay⟩ :=
+        retainedConfiguredBlockAccountingReplay block
+          (prior.stateInv (prorataSpec_preserves ca) inv)
+          block.block.header.number
+      exact ⟨priorSteps ++ blockSteps, priorReplay.append blockReplay⟩
+
 end Prorata
 
 end Blanc
