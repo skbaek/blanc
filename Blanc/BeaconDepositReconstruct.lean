@@ -1013,4 +1013,151 @@ theorem reconstructFinishSha_runCompiledTo
     reconstructLoadStoreCost_intermediate_one,
     reconstructLoadStoreCost_node_zero] using hwhole
 
+/-- The complete seven-site compiled reconstruction, with exact gas and the
+final deposit-data node left in word 20. -/
+theorem reconstructDepositDataNode_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
+    {oldCount amount : B256} {stack : List B256}
+    {success : Func} {K : Nat}
+    (source : ReconstructSourceMemoryCarrier base.memory pubkeyInput
+      signatureFirst signatureTail withdrawal amountPadded oldCount amount 704)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hbound : K + 1762 < 2 ^ 256)
+    (hroom : stack.length < 1019) :
+    let pubkeyNode := Bytes.sha256 pubkeyInput
+    let signatureFirstNode := Bytes.sha256 signatureFirst
+    let signatureSecondNode :=
+      reconstructSignatureSecondDigest signatureTail
+    let signatureNode :=
+      hashPair Bytes.sha256 signatureFirstNode signatureSecondNode
+    let pubkeyWithdrawalNode :=
+      hashPair Bytes.sha256 pubkeyNode (Bytes.toB256 withdrawal)
+    let amountSignatureNode :=
+      hashPair Bytes.sha256 (Bytes.toB256 amountPadded) signatureNode
+    let depositNode :=
+      hashPair Bytes.sha256 pubkeyWithdrawalNode amountSignatureNode
+    ∃ finalPost,
+      Nonempty (ReconstructRegistersMemoryCarrier finalPost.memory
+        pubkeyInput signatureFirst signatureTail withdrawal amountPadded
+        oldCount amount depositNode amountSignatureNode signatureSecondNode 768) ∧
+      finalPost.returnData = depositNode.toBytes ∧
+      ReconstructMetaCarrier sevm base finalPost ∧
+      ∀ {ex : Execution},
+        Func.RunCompiledTo fs sevm
+          (finalPost.setMach ⟨stack, finalPost.memory, K⟩) success ex →
+        Func.RunCompiledTo fs sevm
+          (base.setMach ⟨stack, base.memory, K + 1779⟩)
+          (reconstructDepositDataNode success) ex := by
+  let pubkeyNode := Bytes.sha256 pubkeyInput
+  let signatureFirstNode := Bytes.sha256 signatureFirst
+  let signatureSecondNode :=
+    reconstructSignatureSecondDigest signatureTail
+  let signatureNode :=
+    hashPair Bytes.sha256 signatureFirstNode signatureSecondNode
+  let pubkeyWithdrawalNode :=
+    hashPair Bytes.sha256 pubkeyNode (Bytes.toB256 withdrawal)
+  let amountSignatureNode :=
+    hashPair Bytes.sha256 (Bytes.toB256 amountPadded) signatureNode
+  let depositNode :=
+    hashPair Bytes.sha256 pubkeyWithdrawalNode amountSignatureNode
+  let finish :=
+    loadWord nodeWord +++ mstoreAt 0 +++
+    loadWord intermediateWord +++ mstoreAt 1 +++
+    sha64 0 nodeWord success
+  let amountAndSignature :=
+    loadWord 11 +++ mstoreAt 0 +++
+    loadWord intermediateWord +++ mstoreAt 1 +++
+    sha64 0 intermediateWord finish
+  let pubkeyAndWithdrawal :=
+    loadWord nodeWord +++ mstoreAt 0 +++
+    loadWord 9 +++ mstoreAt 1 +++
+    sha64 0 nodeWord amountAndSignature
+  let signatureRoot :=
+    loadWord intermediateWord +++ mstoreAt 0 +++
+    loadWord secondIntermediateWord +++ mstoreAt 1 +++
+    sha64 0 intermediateWord pubkeyAndWithdrawal
+  let signatureSecondHalf :=
+    loadWord 15 +++ mstoreAt 0 +++
+    pushB256 0 ::: mstoreAt 1 +++
+    sha64 0 secondIntermediateWord signatureRoot
+  have hmeta0 := ReconstructMetaCarrier.refl sevm base
+  obtain ⟨post1, _hstack1, _hmemory1, hnode1, _hgas1, _hreturn1,
+      hmeta1, hlift1⟩ :=
+    reconstructPubkeySha_runCompiledTo
+      (fs := fs) (sevm := sevm) (origin := base) (base := base)
+      (source := source) (hmetaBase := hmeta0)
+      (stack := stack)
+      (success := sha64 13 intermediateWord signatureSecondHalf)
+      (K := K + 1541)
+      hnodeleg hwarm hpre hdepth (by omega) hroom
+  obtain ⟨hnode1⟩ := hnode1
+  obtain ⟨post2, _hstack2, _hmemory2, hintermediate2,
+      _hgas2, _hreturn2, hmeta2, hlift2⟩ :=
+    reconstructSignatureFirstSha_runCompiledTo
+      (fs := fs) (sevm := sevm) (origin := base) (base := post1)
+      (hnode := hnode1) (hmetaBase := hmeta1)
+      (stack := stack) (success := signatureSecondHalf)
+      (K := K + 1299)
+      hnodeleg hwarm hpre hdepth (by omega) hroom
+  obtain ⟨hintermediate2⟩ := hintermediate2
+  obtain ⟨post3, _hmemory3, hregisters3, _hreturn3,
+      hmeta3, hlift3⟩ :=
+    reconstructSignatureSecondSha_runCompiledTo
+      (fs := fs) (sevm := sevm) (origin := base) (base := post2)
+      (hintermediate := hintermediate2) (hmetaBase := hmeta2)
+      (stack := stack) (success := signatureRoot)
+      (K := K + 1040)
+      hnodeleg hwarm hpre hdepth (by omega) hroom
+  obtain ⟨hregisters3⟩ := hregisters3
+  obtain ⟨post4, hregisters4, _hreturn4, hmeta4, hlift4⟩ :=
+    reconstructSignatureRootSha_runCompiledTo
+      (fs := fs) (sevm := sevm) (origin := base) (base := post3)
+      (hregisters := hregisters3) (hmetaBase := hmeta3)
+      (stack := stack) (success := pubkeyAndWithdrawal)
+      (K := K + 780)
+      hnodeleg hwarm hpre hdepth (by omega) hroom
+  obtain ⟨hregisters4⟩ := hregisters4
+  obtain ⟨post5, hregisters5, _hreturn5, hmeta5, hlift5⟩ :=
+    reconstructPubkeyWithdrawalSha_runCompiledTo
+      (fs := fs) (sevm := sevm) (origin := base) (base := post4)
+      (hregisters := hregisters4) (hmetaBase := hmeta4)
+      (stack := stack) (success := amountAndSignature)
+      (K := K + 520)
+      hnodeleg hwarm hpre hdepth (by omega) hroom
+  obtain ⟨hregisters5⟩ := hregisters5
+  obtain ⟨post6, hregisters6, _hreturn6, hmeta6, hlift6⟩ :=
+    reconstructAmountSignatureSha_runCompiledTo
+      (fs := fs) (sevm := sevm) (origin := base) (base := post5)
+      (hregisters := hregisters5) (hmetaBase := hmeta5)
+      (stack := stack) (success := finish) (K := K + 260)
+      hnodeleg hwarm hpre hdepth (by omega) hroom
+  obtain ⟨hregisters6⟩ := hregisters6
+  obtain ⟨finalPost, hregisters7, hreturn7, hmeta7, hlift7⟩ :=
+    reconstructFinishSha_runCompiledTo
+      (fs := fs) (sevm := sevm) (origin := base) (base := post6)
+      (hregisters := hregisters6) (hmetaBase := hmeta6)
+      (stack := stack) (success := success) (K := K)
+      hnodeleg hwarm hpre hdepth (by omega) hroom
+  refine ⟨finalPost, ?_, ?_, hmeta7, ?_⟩
+  · simpa only [pubkeyNode, signatureFirstNode, signatureSecondNode,
+      signatureNode, pubkeyWithdrawalNode, amountSignatureNode,
+      depositNode] using hregisters7
+  · simpa only [pubkeyNode, signatureFirstNode, signatureSecondNode,
+      signatureNode, pubkeyWithdrawalNode, amountSignatureNode,
+      depositNode] using hreturn7
+  intro ex htail
+  have hrun7 := hlift7 htail
+  have hrun6 := hlift6 hrun7
+  have hrun5 := hlift5 hrun6
+  have hrun4 := hlift4 hrun5
+  have hrun3 := hlift3 hrun4
+  have hrun2 := hlift2 hrun3
+  have hrun1 := hlift1 hrun2
+  simpa only [reconstructDepositDataNode, finish, amountAndSignature,
+    pubkeyAndWithdrawal, signatureRoot, signatureSecondHalf] using hrun1
+
 end Blanc.BeaconDeposit
