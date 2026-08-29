@@ -883,4 +883,285 @@ theorem supportsInterface_ffffffff_runCompiled
     hdataLength hdataBound hvalue hselector hcode
   simp [supportsInterfaceArg, harg]
 
+/-! ## The deposit selector path -/
+
+private def depositLeafRoute : Func :=
+  pushB256 depositSelector ::: eq ::: (depositEndpoint <?> Func.rev)
+
+private def depositRightTree : DispatchTree :=
+  .fork
+    (.leaf getDepositCountSelector
+      (nonpayableEndpoint getDepositCountEndpoint))
+    (.leaf getDepositRootSelector
+      (nonpayableEndpoint getDepositRootEndpoint))
+
+private def depositMiddleDispatch : Func :=
+  dup 0 ::: pushB256 getDepositCountSelector ::: gt :::
+    (depositLeafRoute <?> dispatch depositRightTree)
+
+private def depositRootDispatch : Func :=
+  dup 0 ::: pushB256 depositSelector ::: gt :::
+    (dispatch
+      (.leaf supportsInterfaceSelector
+        (nonpayableEndpoint supportsInterfaceEndpoint)) <?>
+      depositMiddleDispatch)
+
+private def depositMainRoute : Func :=
+  fsig +++ depositRootDispatch
+
+private theorem depositMainRoute_eq :
+    Func.main tree = depositMainRoute := by
+  rfl
+
+private theorem depositLeafRoute_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {out : Execution} {G : Nat}
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], Mem.empty, G⟩) depositEndpoint out) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      depositLeafRoute out := by
+  unfold depositLeafRoute
+  have hpushCost : pushCost depositSelector.toBytes.sig = gVerylow := by
+    rw [depositSelector_eq]
+    decide +kernel
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (G := G + 17) hpushCost
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_binary (r := .eq) (f := B256.eqCheck)
+      (cost := gVerylow) (G := G + 14) (v := 1)
+      (by rintro ⟨⟩) rfl rfl (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by decide)) ?_
+  simp only [Devm.setMach_setMach]
+  exact Func.runCompiledTo_branch_succ
+    (w := (1 : B256)) (s := []) (G := G)
+    (by decide) rfl
+    (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      omega)
+    (by
+      simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
+    hbody
+
+private theorem depositMiddleDispatch_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {out : Execution} {G : Nat}
+    (hleaf : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      depositLeafRoute out) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      depositMiddleDispatch out := by
+  unfold depositMiddleDispatch
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_dup
+      (n := 0) (w := depositSelector) (G := G + 40) rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  have hpushCost :
+      pushCost getDepositCountSelector.toBytes.sig = gVerylow := by
+    rw [getDepositCountSelector_eq]
+    decide +kernel
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (G := G + 37) hpushCost
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_binary (r := .gt) (f := B256.gtCheck)
+      (cost := gVerylow) (G := G + 34) (v := 1)
+      (by rintro ⟨⟩) rfl rfl
+      (by
+        rw [depositSelector_eq, getDepositCountSelector_eq]
+        decide +kernel)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [List.length_cons, List.length_nil]
+        omega)) ?_
+  simp only [Devm.setMach_setMach]
+  exact Func.runCompiledTo_branch_succ
+    (w := (1 : B256)) (s := [depositSelector]) (G := G + 20)
+    (by decide) rfl
+    (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      omega)
+    (by
+      simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
+    (by
+      simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hleaf)
+
+private theorem depositRootDispatch_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {out : Execution} {G : Nat}
+    (hmiddle : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      depositMiddleDispatch out) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      depositRootDispatch out := by
+  unfold depositRootDispatch
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_dup
+      (n := 0) (w := depositSelector) (G := G + 62) rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  have hpushCost : pushCost depositSelector.toBytes.sig = gVerylow := by
+    rw [depositSelector_eq]
+    decide +kernel
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (G := G + 59) hpushCost
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_binary (r := .gt) (f := B256.gtCheck)
+      (cost := gVerylow) (G := G + 56) (v := 0)
+      (by rintro ⟨⟩) rfl rfl
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [List.length_cons, List.length_nil]
+        omega)) ?_
+  simp only [Devm.setMach_setMach]
+  exact Func.runCompiledTo_branch_zero
+    (s := [depositSelector]) (G := G + 43)
+    rfl
+    (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      omega)
+    (by
+      simp only [Devm.gasLeft_setMach, gVerylow, gHigh])
+    (by
+      simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hmiddle)
+
+private theorem depositMainRoute_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {out : Execution} {G : Nat}
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hroot : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      depositRootDispatch out) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], Mem.empty, G + 76⟩)
+      (Func.main tree) out := by
+  rw [depositMainRoute_eq]
+  unfold depositMainRoute fsig shiftRight cdl
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (c := gBase) (G := G + 74)
+      pushCost_zero
+      (by simp only [Devm.gasLeft_setMach, gBase])
+      (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_calldataload
+      (v := Sevm.dataWord sevm 0) (G := G + 71) rfl rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by decide)) ?_
+  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  have hpush224 : pushCost (224 : B256).toBytes.sig = gVerylow := by
+    decide +kernel
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (G := G + 68) hpush224
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  have h224 : (224 : B256).toNat = 224 := by
+    decide +kernel
+  have hselector' :
+      Sevm.dataWord sevm 0 >>> (224 : B256).toNat = depositSelector := by
+    rw [h224]
+    exact hselector
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_binary (r := .shr)
+      (f := fun x y => y >>> x.toNat)
+      (cost := gVerylow) (G := G + 65)
+      (v := depositSelector)
+      (by rintro ⟨⟩) rfl rfl hselector'
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by decide)) ?_
+  simp only [Devm.setMach_setMach]
+  simpa only [Devm.memory_setMach, prepend] using hroot
+
+def depositRouteGas : Nat := 93
+
+/-- Exact compiled selector-tree cost for the payable `deposit` route.  Unlike
+the other three selectors, `deposit`'s tree leaf is the endpoint itself, so no
+nonpayable wrapper sits between this route and the endpoint and the route
+carries no premise about `sevm.value`. -/
+theorem deposit_route_runCompiledTo
+    {sevm : Sevm} {base : Devm} {out : Execution} {K : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], Mem.empty, K⟩) depositEndpoint out) :
+    Prog.RunCompiledTo sevm
+      (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩)
+      runtime out := by
+  have hleaf :=
+    depositLeafRoute_runCompiledTo (G := K) hbody
+  have hmiddle :=
+    depositMiddleDispatch_runCompiledTo (G := K) hleaf
+  have hroot :=
+    depositRootDispatch_runCompiledTo (G := K) hmiddle
+  have hmain :=
+    depositMainRoute_runCompiledTo (G := K) hselector hroot
+  refine Prog.runCompiledTo_intro
+    (mid := base.setMach ⟨[], Mem.empty, K + 92⟩)
+    (G := K + 92) ?_ rfl ?_
+  · simp only [Devm.gasLeft_setMach, depositRouteGas, gJumpdest]
+  · unfold runtime
+    func_run (1) []
+    exact Func.runCompiledTo_branch_succ
+      (w := sevm.data.length.toB256) (s := []) (G := K + 76)
+      hnonempty rfl
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega)
+      (by
+        simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest]
+        omega)
+      (by
+        simpa only [runtime, Devm.setMach_setMach, Devm.memory_setMach]
+          using hmain)
+
+/-- Successful specialization of the exact public deposit route. -/
+theorem deposit_route_runCompiled
+    {sevm : Sevm} {base post : Devm} {K : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hbody : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], Mem.empty, K⟩) depositEndpoint post) :
+    Prog.RunCompiled sevm
+      (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩)
+      runtime post := by
+  rcases deposit_route_runCompiledTo hnonempty hselector
+      (Func.RunCompiledTo.of_runCompiled hbody) with
+    ⟨mid, hburn, hmain⟩
+  exact ⟨mid, hburn, Func.RunCompiled.of_runCompiledTo_ok hmain⟩
+
 end Blanc.BeaconDeposit
