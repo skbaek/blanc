@@ -56,6 +56,45 @@ inductive ProrataAccountingEffect (o : Nat) :
   | silent (snapshot : AccountingSnapshot) :
       ProrataAccountingEffect o snapshot .silent snapshot
 
+namespace ProrataAccountingEffect
+
+/-! Inversion at a known class.  A caller that already knows which of the four
+classes a boundary carries reads its pricing fact and its exact post-state
+without re-deriving the case split, and without destructuring the step that
+carries the effect. -/
+
+/-- A deposit quotes its mint and moves supply and balance by exactly it. -/
+theorem deposit_inv {o : Nat} {pre post : AccountingSnapshot} {amount minted : Nat}
+    (effect : ProrataAccountingEffect o pre (.deposit amount minted) post) :
+    minted = mintN o amount pre.supply pre.balance ∧
+      post = ⟨pre.supply + minted, pre.balance + amount⟩ := by
+  cases effect with
+  | deposit supply balance amount minted hquote => exact ⟨hquote, rfl⟩
+
+/-- A withdrawal burns accounted shares, quotes its payout, and moves supply
+and balance by exactly those amounts. -/
+theorem withdraw_inv {o : Nat} {pre post : AccountingSnapshot} {shares paid : Nat}
+    (effect : ProrataAccountingEffect o pre (.withdraw shares paid) post) :
+    shares ≤ pre.supply ∧ paid = payN o shares pre.supply pre.balance ∧
+      post = ⟨pre.supply - shares, pre.balance - paid⟩ := by
+  cases effect with
+  | withdraw supply balance shares paid hshares hquote => exact ⟨hshares, hquote, rfl⟩
+
+/-- An external credit is positive and moves the balance alone. -/
+theorem externalCredit_inv {o : Nat} {pre post : AccountingSnapshot} {amount : Nat}
+    (effect : ProrataAccountingEffect o pre (.externalCredit amount) post) :
+    0 < amount ∧ post = ⟨pre.supply, pre.balance + amount⟩ := by
+  cases effect with
+  | externalCredit supply balance amount hpositive => exact ⟨hpositive, rfl⟩
+
+/-- An observation moves nothing. -/
+theorem silent_inv {o : Nat} {pre post : AccountingSnapshot}
+    (effect : ProrataAccountingEffect o pre .silent post) : post = pre := by
+  cases effect with
+  | silent snapshot => rfl
+
+end ProrataAccountingEffect
+
 /-- One classified step with its exact semantic boundary and chronology. -/
 structure ProrataAccountingStep (o : Nat) where
   pre : AccountingSnapshot
