@@ -626,6 +626,8 @@ def WithdrawPaysExactly (sevm : Sevm) (pre post : Devm) : Prop :=
   ∃ callPre callPost guardPost returnPre,
     WithdrawPreCallEffect sevm pre callPre ∧
     AcceptedPayout sevm p callPre callPost guardPost returnPre ∧
+    Devm.getStor post = Devm.getStor callPost ∧
+    Devm.getBal post = Devm.getBal callPost ∧
     ReturnsWord p post
 
 private theorem returnsWord_of_storeReturn
@@ -670,10 +672,16 @@ theorem withdraw_pays_exactly
   change ∃ callPre callPost guardPost returnPre,
     WithdrawPreCallEffect sevm pre callPre ∧
     AcceptedPayout sevm p callPre callPost guardPost returnPre ∧
+    Devm.getStor post = Devm.getStor callPost ∧
+    Devm.getBal post = Devm.getBal callPost ∧
     ReturnsWord p post
   rcases withdraw_settles_before_call run with
     ⟨callPre, callPost, hpreRaw, hcall, htail⟩
   simp only [withdrawAfterCall] at htail
+  have hstorTail : Devm.getStor callPost = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by func_inv) htail
+  have hbalTail : Devm.getBal callPost = Devm.getBal post :=
+    Func.of_inv Devm.getBal Devm.getBal (by func_inv) htail
   rcases of_run_branch htail with
     ⟨_, hzero, hrev⟩ | ⟨w, guardPost, returnPre, hw, hpop, hburn, hreturn⟩
   · exact (not_run_rev hrev).elim
@@ -713,13 +721,15 @@ theorem withdraw_pays_exactly
       supplySlot :: [] <<+ returnPre.stack := by
     rw [← hburn.stack]
     exact hguardPrefix
-  refine ⟨callPre, callPost, guardPost, returnPre, hpreRaw, ?_, ?_⟩
+  refine ⟨callPre, callPost, guardPost, returnPre, hpreRaw, ?_, ?_, ?_, ?_⟩
   · unfold AcceptedPayout
     exact ⟨gasWord, p :: S :: (S + offset) :: Sevm.argWord sevm 0 :: supplySlot :: [],
       parent, child, xl, delegated, nextAddress, code, avail, pc,
       hstack', hcall, hpop1, hburn, hstep, hdepth, hstackEq, hparentState,
       hparentMemory, hparentLogs, hparentOutput, hdelegated, hfilled, hmessage,
       hclean, hresume, hpostState, hpostReturnData, hpostMemory, hpostStack⟩
+  · exact hstorTail.symm
+  · exact hbalTail.symm
   · exact returnsWord_of_storeReturn hreturnPrefix hreturn
 
 end Prorata

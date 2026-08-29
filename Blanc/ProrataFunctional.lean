@@ -51,6 +51,25 @@ private structure EntryFrame (s t : Devm) : Prop where
   logs : s.logs = t.logs
   output : s.output = t.output
 
+/-- A successful hand-shaped dispatch route reaches one raw body without
+changing the persistent state observed by the contract specification. -/
+def BodyEntry (fs : List Func) (sevm : Sevm) (pre post : Devm)
+    (body : Func) : Prop :=
+  ∃ entry,
+    Devm.getStor entry = Devm.getStor pre ∧
+    Devm.getBal entry = Devm.getBal pre ∧
+    Devm.getCode entry = Devm.getCode pre ∧
+    Func.Run fs sevm entry body post
+
+/-- The five possible raw bodies of a successful `prorataMain` execution. -/
+inductive ProrataMainSuccess (fs : List Func) (sevm : Sevm)
+    (pre post : Devm) : Prop where
+  | deposit (entry : BodyEntry fs sevm pre post Prorata.deposit)
+  | withdraw (entry : BodyEntry fs sevm pre post Prorata.withdraw)
+  | convertToShares (entry : BodyEntry fs sevm pre post Prorata.convertToShares)
+  | convertToAssets (entry : BodyEntry fs sevm pre post Prorata.convertToAssets)
+  | donate (entry : BodyEntry fs sevm pre post Prorata.donate)
+
 private lemma EntryFrame.trans {s t u : Devm}
     (h : EntryFrame s t) (k : EntryFrame t u) : EntryFrame s u :=
   ⟨h.stor.trans k.stor, h.bal.trans k.bal, h.code.trans k.code,
@@ -66,6 +85,12 @@ private lemma EntryFrame.exists_run {fs : List Func} {e : Sevm} {pre entry post 
       Func.Run fs e s' body post :=
   ⟨entry, frame.stor.symm, frame.bal.symm, frame.code.symm, frame.memory.symm,
     frame.logs.symm, frame.output.symm, run⟩
+
+private lemma EntryFrame.bodyEntry {fs : List Func} {e : Sevm}
+    {pre entry post : Devm} {body : Func}
+    (frame : EntryFrame pre entry) (run : Func.Run fs e entry body post) :
+    BodyEntry fs e pre post body :=
+  ⟨entry, frame.stor.symm, frame.bal.symm, frame.code.symm, run⟩
 
 private lemma getStor_of_state {s t : Devm} (h : s.state = t.state) :
     Devm.getStor s = Devm.getStor t := by
@@ -121,6 +146,21 @@ private lemma entryFrame_callvalue {e : Sevm} {s t : Devm}
   have push := of_run_callvalue qvalue
   exact ⟨getStor_of_state push.state, getBal_of_state push.state,
     getCode_of_state push.state, push.memory, push.logs, push.output⟩
+
+private lemma entryFrame_selectorTest {e : Sevm} {s t : Devm} {sig : B256}
+    (run : Line.Run e s [dup 0, pushB256 sig, eq] t) : EntryFrame s t :=
+  entryFrame_line (by line_inv) (by line_inv) (by line_inv)
+    (by line_inv) (by line_inv) (by line_inv) run
+
+private lemma entryFrame_plainSelectorTest {e : Sevm} {s t : Devm} {sig : B256}
+    (run : Line.Run e s [pushB256 sig, eq] t) : EntryFrame s t :=
+  entryFrame_line (by line_inv) (by line_inv) (by line_inv)
+    (by line_inv) (by line_inv) (by line_inv) run
+
+private lemma entryFrame_popLine {e : Sevm} {s t : Devm}
+    (run : Line.Run e s [pop] t) : EntryFrame s t :=
+  entryFrame_line (by line_inv) (by line_inv) (by line_inv)
+    (by line_inv) (by line_inv) (by line_inv) run
 
 private lemma selector_flag {e : Sevm} {s t : Devm} {sig expected : B256}
     (hp : sig :: [] <<+ s.stack)
@@ -402,6 +442,102 @@ private theorem convertToAssets_body_of_prorataMain
       · exact (hnzWithdraw (popBurn_pref hpopWithdraw hwithdrawFlag).1).elim
     · exact (not_run_pop_donate h_nonempty hdonate).elim
   · exact (hnz (popBurn_pref hpop hdepositFlag).1).elim
+
+/-- Every successful execution of the hand-shaped main reaches exactly one of
+the five raw PRORATA bodies through a persistent-state-silent ingress. -/
+theorem classify_prorataMain_success
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (run : Func.Run fs sevm pre Prorata.prorataMain post) :
+    ProrataMainSuccess fs sevm pre post := by
+  simp only [Prorata.prorataMain] at run
+  rcases of_run_prepend fsig _ run with ⟨afterSig, hsig, hmain⟩
+  rcases of_run_prepend
+      [dup 0, pushB256 (selector "deposit" []), eq] _ hmain with
+    ⟨afterDepositTest, hdepositTest, hdepositBranch⟩
+  have routeSig : EntryFrame pre afterSig := entryFrame_fsig hsig
+  have routeDepositTest : EntryFrame pre afterDepositTest :=
+    routeSig.trans (entryFrame_selectorTest hdepositTest)
+  rcases of_run_branch hdepositBranch with
+    ⟨afterDepositPop, hdepositPop, hvalue⟩ |
+    ⟨depositFlag, afterDepositPop, afterDepositBurn, hdepositFlag,
+      hdepositPop, hdepositBurn, hdeposit⟩
+  · have routeValuePre : EntryFrame pre afterDepositPop :=
+      routeDepositTest.trans (entryFrame_pop hdepositPop)
+    rcases of_run_prepend [callvalue] _ hvalue with
+      ⟨afterValue, hvalueLine, hvalueBranch⟩
+    have routeValue : EntryFrame pre afterValue :=
+      routeValuePre.trans (entryFrame_callvalue hvalueLine)
+    rcases of_run_branch hvalueBranch with
+      ⟨afterValuePop, hvaluePop, hzeroDispatch⟩ |
+      ⟨valueFlag, afterValuePop, afterValueBurn, hvalueFlag,
+        hvaluePop, hvalueBurn, hdonate⟩
+    · have routeZero : EntryFrame pre afterValuePop :=
+        routeValue.trans (entryFrame_pop hvaluePop)
+      simp only [Prorata.zeroValueDispatch] at hzeroDispatch
+      rcases of_run_prepend
+          [dup 0, pushB256 (selector "withdraw" [.uint256]), eq] _
+          hzeroDispatch with
+        ⟨afterWithdrawTest, hwithdrawTest, hwithdrawBranch⟩
+      have routeWithdrawTest : EntryFrame pre afterWithdrawTest :=
+        routeZero.trans (entryFrame_selectorTest hwithdrawTest)
+      rcases of_run_branch hwithdrawBranch with
+        ⟨afterWithdrawPop, hwithdrawPop, hsharesPath⟩ |
+        ⟨withdrawFlag, afterWithdrawPop, afterWithdrawBurn, hwithdrawFlag,
+          hwithdrawPop, hwithdrawBurn, hwithdrawPath⟩
+      · have routeSharesPre : EntryFrame pre afterWithdrawPop :=
+          routeWithdrawTest.trans (entryFrame_pop hwithdrawPop)
+        rcases of_run_prepend
+            [dup 0, pushB256 (selector "convertToShares" [.uint256]), eq] _
+            hsharesPath with
+          ⟨afterSharesTest, hsharesTest, hsharesBranch⟩
+        have routeSharesTest : EntryFrame pre afterSharesTest :=
+          routeSharesPre.trans (entryFrame_selectorTest hsharesTest)
+        rcases of_run_branch hsharesBranch with
+          ⟨afterSharesPop, hsharesPop, hassetsPath⟩ |
+          ⟨sharesFlag, afterSharesPop, afterSharesBurn, hsharesFlag,
+            hsharesPop, hsharesBurn, hsharesBody⟩
+        · have routeAssetsPre : EntryFrame pre afterSharesPop :=
+            routeSharesTest.trans (entryFrame_pop hsharesPop)
+          rcases of_run_prepend
+              [pushB256 (selector "convertToAssets" [.uint256]), eq] _
+              hassetsPath with
+            ⟨afterAssetsTest, hassetsTest, hassetsBranch⟩
+          have routeAssetsTest : EntryFrame pre afterAssetsTest :=
+            routeAssetsPre.trans (entryFrame_plainSelectorTest hassetsTest)
+          rcases of_run_branch hassetsBranch with
+            ⟨donateEntry, hassetsPop, hdonateBody⟩ |
+            ⟨assetsFlag, afterAssetsPop, afterAssetsBurn, hassetsFlag,
+              hassetsPop, hassetsBurn, hassetsBodyPath⟩
+          · exact .donate
+              ((routeAssetsTest.trans (entryFrame_pop hassetsPop)).bodyEntry
+                hdonateBody)
+          · exact .convertToAssets
+              ((routeAssetsTest.trans ((entryFrame_pop hassetsPop).trans
+                (entryFrame_burn hassetsBurn))).bodyEntry hassetsBodyPath)
+        · rcases of_run_prepend [pop] Prorata.convertToShares hsharesBody with
+              ⟨sharesEntry, hsharesBodyPop, hsharesRun⟩
+          exact .convertToShares
+            ((routeSharesTest.trans ((entryFrame_pop hsharesPop).trans
+              ((entryFrame_burn hsharesBurn).trans
+                (entryFrame_popLine hsharesBodyPop)))).bodyEntry hsharesRun)
+      · rcases of_run_prepend [pop] Prorata.withdraw hwithdrawPath with
+            ⟨withdrawEntry, hwithdrawBodyPop, hwithdrawRun⟩
+        exact .withdraw
+          ((routeWithdrawTest.trans ((entryFrame_pop hwithdrawPop).trans
+            ((entryFrame_burn hwithdrawBurn).trans
+              (entryFrame_popLine hwithdrawBodyPop)))).bodyEntry hwithdrawRun)
+    · rcases of_run_prepend [pop] Prorata.donate hdonate with
+          ⟨donateEntry, hdonatePop, hdonateRun⟩
+      exact .donate
+        ((routeValue.trans ((entryFrame_pop hvaluePop).trans
+          ((entryFrame_burn hvalueBurn).trans
+            (entryFrame_popLine hdonatePop)))).bodyEntry hdonateRun)
+  · rcases of_run_prepend [pop] Prorata.deposit hdeposit with
+        ⟨depositEntry, hdepositBodyPop, hdepositRun⟩
+    exact .deposit
+      ((routeDepositTest.trans ((entryFrame_pop hdepositPop).trans
+        ((entryFrame_burn hdepositBurn).trans
+          (entryFrame_popLine hdepositBodyPop)))).bodyEntry hdepositRun)
 
 /-- A successful call on a recognized ABI selector reaches the corresponding
 raw PRORATA body with its selector removed.  The nonempty word premise rules
