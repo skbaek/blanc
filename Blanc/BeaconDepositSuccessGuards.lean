@@ -77,4 +77,68 @@ theorem depositSuccessGuards_runCompiledTo
       holdMem]
     simpa only [Nat.add_sub_cancel] using htail
 
+/-- Reconstruct the deposit-data node from the decoded deposit arguments and
+run both post-reconstruction guards.  The reconstructed node is exactly the
+model's `depositDataNode`, and the composed path reaches `commitDeposit` after
+exactly `1779 + 59 = 1838` gas. -/
+theorem reconstructDepositDataNode_successGuards_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {pubkey withdrawalCredentials signature amountLE : Bytes}
+    {oldCount amount : B256} {G : Nat}
+    (source : ReconstructSourceMemoryCarrier base.memory
+      (pubkey ++ zeros 16) (signature.take 64) (signature.drop 64)
+      withdrawalCredentials (amountLE ++ zeros 24) oldCount amount 704)
+    (hwithdrawal : withdrawalCredentials.length = 32)
+    (hamount : amountLE.length = 8)
+    (hsignature : signature.length = 96)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hbound : (G + 59) + 1762 < 2 ^ 256)
+    (hroot : Sevm.argWord sevm 3 =
+      depositDataNode Bytes.sha256 pubkey withdrawalCredentials signature
+        amountLE)
+    (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1)) :
+    ∃ finalPost,
+      Nonempty (InsertionStartMemoryCarrier finalPost.memory oldCount
+        (depositDataNode Bytes.sha256 pubkey withdrawalCredentials signature
+          amountLE)) ∧
+      finalPost.returnData =
+        (depositDataNode Bytes.sha256 pubkey withdrawalCredentials signature
+          amountLE).toBytes ∧
+      ReconstructMetaCarrier sevm base finalPost ∧
+      ∀ {ex : Execution},
+        Func.RunCompiledTo fs sevm
+          (finalPost.setMach ⟨[], finalPost.memory, G⟩) commitDeposit ex →
+        Func.RunCompiledTo fs sevm
+          (base.setMach ⟨[], base.memory, G + 1838⟩)
+          (reconstructDepositDataNode depositSuccessGuards) ex := by
+  have hnodeEq := reconstructedDepositNode_eq_model pubkey
+    withdrawalCredentials signature amountLE hwithdrawal hamount hsignature
+  obtain ⟨finalPost, hregisters, hreturn, hmeta, hlift⟩ :=
+    reconstructDepositDataNode_runCompiledTo
+      (fs := fs) (sevm := sevm) (base := base)
+      (pubkeyInput := pubkey ++ zeros 16)
+      (signatureFirst := signature.take 64)
+      (signatureTail := signature.drop 64)
+      (withdrawal := withdrawalCredentials)
+      (amountPadded := amountLE ++ zeros 24)
+      (oldCount := oldCount) (amount := amount) (stack := [])
+      (success := depositSuccessGuards) (K := G + 59)
+      source hnodeleg hwarm hpre hdepth hbound (by simp)
+  obtain ⟨hcarrier⟩ := hregisters
+  refine ⟨finalPost, ⟨?_⟩, ?_, hmeta, ?_⟩
+  · rw [← hnodeEq]
+    exact hcarrier.toInsertionStart
+  · rw [← hnodeEq]
+    exact hreturn
+  · intro ex htail
+    have hguards := depositSuccessGuards_runCompiledTo
+      (fs := fs) (sevm := sevm) (base := finalPost)
+      (memory := finalPost.memory) (G := G)
+      hcarrier.toInsertionStart (hroot.trans hnodeEq.symm) hcap htail
+    have hgas : G + 59 + 1779 = G + 1838 := by omega
+    simpa only [hgas] using hlift hguards
+
 end Blanc.BeaconDeposit
