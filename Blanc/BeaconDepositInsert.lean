@@ -556,4 +556,136 @@ theorem insertionShaTail_runCompiledTo
   have hwhole := hlift hsuccess
   simpa only [sha64SuccessCost_zero_node] using hwhole
 
+/-- Store the accumulated node at the first live branch and stop.  The fixed
+work costs 20 gas in addition to the selected warm/cold `SSTORE` charge. -/
+theorem insertionLive_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {oldCount shiftedSize node height : B256}
+    {K : Nat}
+    (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
+    (hsentry : gCallStipend <
+      K + 2 + sstoreCost sevm base (branchBase + height) node)
+    (hstatic : sevm.isStatic = false) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[height], memory,
+          K + 20 + sstoreCost sevm base (branchBase + height) node⟩)
+      insertionLive
+      (.ok ((afterSstore sevm base (branchBase + height) node).setMach
+        ⟨[], memory, K⟩)) := by
+  have hmod : memory.size % 32 = 0 := by
+    rw [hmem.size_eq]
+  have hnodeRead : Bytes.toB256 (memory.read 640 32).1 = node :=
+    hmem.readNode
+  have hnodeMem : (memory.read 640 32).2 = memory := by
+    apply Mem.read_snd_eq_self
+    apply memExtSize_of_le
+    · exact hmod
+    · rw [hmem.size_eq]
+      omega
+  simp only [insertionLive, loadWord, prepend,
+    show (nodeWord * 32 : B256) = 640 by decide +kernel]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_dup (n := 0) (w := height)
+      (G := K + 17 + sstoreCost sevm base (branchBase + height) node)
+      rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons,
+        List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (w := branchBase) (c := 3)
+      (G := K + 14 + sstoreCost sevm base (branchBase + height) node)
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons,
+        List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
+      (cost := gVerylow) (x := branchBase) (y := height)
+      (v := branchBase + height) (s := [height])
+      (G := K + 11 + sstoreCost sevm base (branchBase + height) node)
+      (by rintro ⟨⟩) rfl rfl rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [List.length_cons, List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (w := 640) (c := 3)
+      (G := K + 8 + sstoreCost sevm base (branchBase + height) node)
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons,
+        List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_mload_of
+      (i := 640) (v := node) (s := (branchBase + height) :: [height])
+      (c := 3)
+      (G := K + 5 + sstoreCost sevm base (branchBase + height) node)
+      (M := memory)
+      rfl
+      (by
+        rw [Devm.extCost_zero_of_le hmod (by
+          rw [hmem.size_eq]
+          decide +kernel)]
+        decide)
+      hnodeRead hnodeMem
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by simp only [List.length_cons, List.length_nil]; omega)) ?_
+  simp only [Devm.setMach_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_swap (n := 0)
+      (S := (branchBase + height) :: node :: [height])
+      (G := K + 2 + sstoreCost sevm base (branchBase + height) node)
+      rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_sstore_selected_setMach
+      (base := base) (key := branchBase + height) (value := node)
+      (stack := [height]) (memory := memory) (G := K + 2)
+      hsentry hstatic) ?_
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pop (G := K) rfl
+      (by simp only [Devm.gasLeft_setMach, gBase])) ?_
+  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  exact Func.RunCompiledTo.last rfl
+
+/-- Dispatch to the first live branch, store the accumulated node, and stop.
+The fixed work costs 46 gas in addition to the selected `SSTORE` charge. -/
+theorem insertionLoopLive_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {oldCount shiftedSize node height : B256}
+    {K : Nat}
+    (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
+    (hbit : ((1 : B256) &&& shiftedSize) ≠ 0)
+    (hsentry : gCallStipend <
+      K + 2 + sstoreCost sevm base (branchBase + height) node)
+    (hstatic : sevm.isStatic = false) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[height], memory,
+          K + 46 + sstoreCost sevm base (branchBase + height) node⟩)
+      insertionLoop
+      (.ok ((afterSstore sevm base (branchBase + height) node).setMach
+        ⟨[], memory, K⟩)) := by
+  let C := sstoreCost sevm base (branchBase + height) node
+  have harm : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[height], memory, K + 20 + C⟩)
+      insertionLive
+      (.ok ((afterSstore sevm base (branchBase + height) node).setMach
+        ⟨[], memory, K⟩)) :=
+    insertionLive_runCompiledTo hmem hsentry hstatic
+  have hdispatch :=
+    insertionLoopLive_dispatch_runCompiledTo
+      (K := K + 20 + C) hmem hbit
+      (by simp only [List.length_nil]; omega) harm
+  have hgas : K + 20 + C + 26 = K + 46 + C := by omega
+  rw [hgas] at hdispatch
+  simpa only [C] using hdispatch
+
 end Blanc.BeaconDeposit

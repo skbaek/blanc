@@ -345,6 +345,63 @@ theorem Ninst.runCompiled_sstore_selected
     exact Ninst.runCompiled_sstore_cold hstack hwarm hsentry hstatic
       rfl rfl hgas
 
+@[simp] theorem sstoreCost_setMach
+    {sevm : Sevm} {base : Devm} {mach : Mach} {key value : B256} :
+    sstoreCost sevm (base.setMach mach) key value =
+      sstoreCost sevm base key value := rfl
+
+private lemma accessedStorageKeys_setMach_selected
+    {base : Devm} {mach : Mach} :
+    (base.setMach mach).accessedStorageKeys =
+      base.accessedStorageKeys := rfl
+
+private lemma afterSstore_setMach_setMach_selected
+    {sevm : Sevm} {base : Devm} {mach mach' : Mach}
+    {key value : B256} :
+    (afterSstore sevm (base.setMach mach) key value).setMach mach' =
+      (afterSstore sevm base key value).setMach mach' := by
+  unfold afterSstore
+  by_cases hwarm :
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+        base.accessedStorageKeys
+  · simp only [accessedStorageKeys_setMach_selected,
+      Devm.getStorVal_setMach, Devm.setMach_refundCounter,
+      hwarm, if_pos]
+    rfl
+  · simp only [accessedStorageKeys_setMach_selected,
+      Devm.getStorVal_setMach, Devm.setMach_refundCounter,
+      hwarm]
+    rfl
+
+/-- The selected warm/cold `SSTORE` rule specialized to a caller-owned
+machine image.  The selected cost and successor remain phrased over the
+stable base state, so later instructions do not inherit a machine-register
+term in either one. -/
+theorem Ninst.runCompiled_sstore_selected_setMach
+    {sevm : Sevm} {base : Devm} {key value : B256}
+    {stack : List B256} {memory : Mem} {G : Nat}
+    (hsentry : gCallStipend < G + sstoreCost sevm base key value)
+    (hstatic : sevm.isStatic = false) :
+    Ninst.RunCompiled sevm
+      (base.setMach
+        ⟨key :: value :: stack, memory,
+          G + sstoreCost sevm base key value⟩)
+      sstore
+      ((afterSstore sevm base key value).setMach
+        ⟨stack, memory, G⟩) := by
+  simpa only [sstoreCost_setMach,
+    afterSstore_setMach_setMach_selected, Devm.memory_setMach] using
+    (Ninst.runCompiled_sstore_selected
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨key :: value :: stack, memory,
+          G + sstoreCost sevm base key value⟩)
+      (key := key) (value := value) (stack := stack) (G := G)
+      rfl
+      (by simpa only [Devm.gasLeft_setMach] using hsentry)
+      hstatic
+      (by simp only [Devm.gasLeft_setMach, sstoreCost_setMach]))
+
 /-! ### The two storage steps, in continuation-passing form
 
 `Ninst.runCompiled_sload_of` above and `Blanc/Forward.lean`'s
