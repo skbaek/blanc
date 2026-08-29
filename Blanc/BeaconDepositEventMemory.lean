@@ -213,13 +213,13 @@ private theorem Bytes.sliceD_zeroThenLe64_event
     decide +kernel
   exact Bytes.sliceD_join_event hleft hright
 
-private def depositEventPubkeySlice (data : Bytes) : Bytes :=
+def depositEventPubkeySlice (data : Bytes) : Bytes :=
   data.sliceD (36 + dynamicOffset data 0) 48 0
 
-private def depositEventWithdrawalSlice (data : Bytes) : Bytes :=
+def depositEventWithdrawalSlice (data : Bytes) : Bytes :=
   data.sliceD (36 + dynamicOffset data 1) 32 0
 
-private def depositEventSignatureSlice (data : Bytes) : Bytes :=
+def depositEventSignatureSlice (data : Bytes) : Bytes :=
   data.sliceD (36 + dynamicOffset data 2) 96 0
 
 private theorem depositEventPubkeyRegion

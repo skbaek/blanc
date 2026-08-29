@@ -244,6 +244,63 @@ lemma le_sload_cost_of {sevm : Sevm} {devm : Devm} {k : B256} {c : Nat}
     gasWarmAccess ≤ c ∧ c ≤ gasColdSload := by
   subst h_cost; split <;> exact ⟨by decide, by decide⟩
 
+/-- State-dependent charge selected by one `SLOAD`. -/
+def sloadCost (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
+  if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      base.accessedStorageKeys then
+    gasWarmAccess
+  else
+    gasColdSload
+
+/-- Meta-state after one `SLOAD`, including a newly warmed key when needed. -/
+def afterSload (sevm : Sevm) (base : Devm) (key : B256) : Devm :=
+  if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      base.accessedStorageKeys then
+    base
+  else
+    addAccessedStorageKey base sevm.currentTarget key
+
+private lemma addAccessedStorageKey_setMach_setMach_selected
+    {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
+    (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
+      (addAccessedStorageKey base target key).setMach mach' := rfl
+
+/-- One exact `SLOAD` whose warm/cold choice stays inside neutral carrier
+definitions.  Unlike the CPS rule below, this needs only the actually selected
+charge and is therefore suitable for minimal-gas theorems. -/
+theorem Ninst.runCompiled_sload_selected
+    {sevm : Sevm} {base : Devm} {key value : B256}
+    {stack : List B256} {memory : Mem} {G : Nat}
+    (hvalue : base.getStorVal sevm.currentTarget key = value)
+    (hroom : stack.length < 1024) :
+    Ninst.RunCompiled sevm
+      (base.setMach
+        ⟨key :: stack, memory, G + sloadCost sevm base key⟩)
+      sload
+      ((afterSload sevm base key).setMach
+        ⟨value :: stack, memory, G⟩) := by
+  by_cases hwarm :
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+        base.accessedStorageKeys
+  · rw [sloadCost, if_pos hwarm, afterSload, if_pos hwarm]
+    exact Ninst.runCompiled_sload_warm
+      (k := key) (v := value) (s := stack) (G := G)
+      rfl hwarm hvalue
+      (by simp only [Devm.gasLeft_setMach, gasWarmAccess])
+      hroom
+  · rw [sloadCost, if_neg hwarm, afterSload, if_neg hwarm]
+    simpa only [addAccessedStorageKey_setMach_setMach_selected,
+      Devm.memory_setMach] using
+      (Ninst.runCompiled_sload_cold
+        (sevm := sevm)
+        (devm := base.setMach
+          ⟨key :: stack, memory, G + gasColdSload⟩)
+        (k := key) (v := value) (s := stack) (G := G)
+        rfl hwarm
+        (by simpa only [Devm.getStorVal_setMach] using hvalue)
+        (by simp only [Devm.gasLeft_setMach, gasColdSload])
+        hroom)
+
 /-! ### The two storage steps, in continuation-passing form
 
 `Ninst.runCompiled_sload_of` above and `Blanc/Forward.lean`'s
