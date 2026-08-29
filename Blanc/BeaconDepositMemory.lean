@@ -453,39 +453,39 @@ private theorem return96_runCompiled
 
 /-! ## Small compiled carriers for the `MSTORE8` chain -/
 
-private theorem storeByteShift_runCompiled
+private theorem storeByteShiftStack_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {memory : Mem} {word i : B256} {G : Nat} {rest : Func}
+    {stack : List B256}
     (hsize32 : memory.size % 32 = 0)
     (hfit : i.toNat + 1 ≤ memory.size)
     (hpush : pushCost i.toBytes.sig = gVerylow)
+    (hroom : stack.length + 2 < 1024)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[word >>> 8],
+        ⟨(word >>> 8) :: stack,
           memory.write i.toNat [word.2.2.toUInt8], G⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[word], memory, G + 15⟩)
+      (base.setMach ⟨word :: stack, memory, G + 15⟩)
       (dup 0 ::: pushB256 i ::: mstore8 :::
         pushB256 8 ::: shr ::: rest)
       post := by
   apply Func.RunCompiled.next
   · exact Ninst.runCompiled_dup (n := 0) (w := word) (G := G + 12) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil];
-          omega)
+      (by simp only [Devm.stack_setMach, List.length_cons]; omega)
   · simp only [Devm.setMach_setMach, Devm.stack_setMach,
       Devm.memory_setMach]
     apply Func.RunCompiled.next
     · exact Ninst.runCompiled_pushB256 (G := G + 9) hpush
         (by simp only [Devm.gasLeft_setMach, gVerylow])
-        (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil];
-            omega)
+        (by simp only [Devm.stack_setMach, List.length_cons]; omega)
     · simp only [Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach]
       apply Func.RunCompiled.next
       · exact Ninst.runCompiled_mstore8_of
-          (i := i) (v := word) (s := [word]) (G := G + 6) (e := 0)
+          (i := i) (v := word) (s := word :: stack) (G := G + 6) (e := 0)
           rfl
           (Devm.extCost_zero_of_le hsize32 hfit)
           (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -495,51 +495,210 @@ private theorem storeByteShift_runCompiled
         · exact Ninst.runCompiled_pushB256 (w := 8) (c := gVerylow)
             (G := G + 3) (by decide +kernel)
             (by simp only [Devm.gasLeft_setMach, gVerylow])
-            (by simp only [Devm.stack_setMach, List.length_cons,
-                List.length_nil]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons]; omega)
         · simp only [Devm.setMach_setMach, Devm.stack_setMach,
             Devm.memory_setMach]
           apply Func.RunCompiled.next
           · exact Ninst.runCompiled_binary
               (r := .shr) (f := fun x y => y >>> x.toNat)
               (cost := gVerylow) (G := G) (x := 8) (y := word)
-              (v := word >>> 8) (s := [])
+              (v := word >>> 8) (s := stack)
               (by rintro ⟨⟩) rfl rfl
               (by simp only [show (8 : B256).toNat = 8 by decide +kernel])
               (by simp only [Devm.gasLeft_setMach, gVerylow])
-              (by simp only [List.length_nil]; omega)
+              (by omega)
           · simpa only [Devm.setMach_setMach, Devm.memory_setMach] using
               hrest
 
-private theorem storeByteLast_runCompiled
+private theorem storeByteLastStack_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {memory : Mem} {word i : B256} {G : Nat} {rest : Func}
+    {stack : List B256}
     (hsize32 : memory.size % 32 = 0)
     (hfit : i.toNat + 1 ≤ memory.size)
     (hpush : pushCost i.toBytes.sig = gVerylow)
+    (hroom : stack.length + 1 < 1024)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], memory.write i.toNat [word.2.2.toUInt8], G⟩)
+        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[word], memory, G + 6⟩)
+      (base.setMach ⟨word :: stack, memory, G + 6⟩)
       (pushB256 i ::: mstore8 ::: rest)
       post := by
   apply Func.RunCompiled.next
   · exact Ninst.runCompiled_pushB256 (G := G + 3) hpush
       (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil];
-          omega)
+      (by simp only [Devm.stack_setMach, List.length_cons]; omega)
   · simp only [Devm.setMach_setMach, Devm.stack_setMach,
       Devm.memory_setMach]
     apply Func.RunCompiled.next
     · exact Ninst.runCompiled_mstore8_of
-        (i := i) (v := word) (s := []) (G := G) (e := 0)
+        (i := i) (v := word) (s := stack) (G := G) (e := 0)
         rfl
         (Devm.extCost_zero_of_le hsize32 hfit)
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         rfl
     · simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hrest
+
+/-- Execute `storeLe64At` at any non-wrapping concrete address.  The
+continuation may retain an arbitrary tail stack; the chain costs exactly 111
+gas and preserves the existing logical memory size. -/
+theorem storeLe64At_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {memory : Mem} {word address : B256} {offset G : Nat}
+    {rest : Func} {stack : List B256}
+    (hsize32 : memory.size % 32 = 0)
+    (hfit : offset + 8 ≤ memory.size)
+    (hroom : stack.length + 2 < 1024)
+    (hnat0 : address.toNat = offset)
+    (hnat1 : (address + 1).toNat = offset + 1)
+    (hnat2 : (address + 2).toNat = offset + 2)
+    (hnat3 : (address + 3).toNat = offset + 3)
+    (hnat4 : (address + 4).toNat = offset + 4)
+    (hnat5 : (address + 5).toNat = offset + 5)
+    (hnat6 : (address + 6).toNat = offset + 6)
+    (hnat7 : (address + 7).toNat = offset + 7)
+    (hpush0 : pushCost address.toBytes.sig = gVerylow)
+    (hpush1 : pushCost (address + 1).toBytes.sig = gVerylow)
+    (hpush2 : pushCost (address + 2).toBytes.sig = gVerylow)
+    (hpush3 : pushCost (address + 3).toBytes.sig = gVerylow)
+    (hpush4 : pushCost (address + 4).toBytes.sig = gVerylow)
+    (hpush5 : pushCost (address + 5).toBytes.sig = gVerylow)
+    (hpush6 : pushCost (address + 6).toBytes.sig = gVerylow)
+    (hpush7 : pushCost (address + 7).toBytes.sig = gVerylow)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach
+        ⟨stack, storeLe64Memory memory offset word, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨word :: stack, memory, G + 111⟩)
+      (storeLe64At address +++ rest) post := by
+  let M0 := memory
+  let M1 := M0.write address.toNat [word.2.2.toUInt8]
+  let M2 := M1.write (address + 1).toNat [(word >>> 8).2.2.toUInt8]
+  let M3 := M2.write (address + 2).toNat
+    [(word >>> 8 >>> 8).2.2.toUInt8]
+  let M4 := M3.write (address + 3).toNat
+    [(word >>> 8 >>> 8 >>> 8).2.2.toUInt8]
+  let M5 := M4.write (address + 4).toNat
+    [(word >>> 8 >>> 8 >>> 8 >>> 8).2.2.toUInt8]
+  let M6 := M5.write (address + 5).toNat
+    [(word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8).2.2.toUInt8]
+  let M7 := M6.write (address + 6).toNat
+    [(word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8).2.2.toUInt8]
+  let M8 := M7.write (address + 7).toNat
+    [(word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8).2.2.toUInt8]
+  have hsize1 : M1.size = memory.size := by
+    dsimp only [M1, M0]
+    rw [Mem.size_write_of_le (by
+      rw [hnat0]
+      simp only [List.length_cons, List.length_nil]
+      omega)]
+  have hsize2 : M2.size = memory.size := by
+    dsimp only [M2]
+    rw [Mem.size_write_of_le (by
+      rw [hnat1, hsize1]
+      simp only [List.length_cons, List.length_nil]
+      omega), hsize1]
+  have hsize3 : M3.size = memory.size := by
+    dsimp only [M3]
+    rw [Mem.size_write_of_le (by
+      rw [hnat2, hsize2]
+      simp only [List.length_cons, List.length_nil]
+      omega), hsize2]
+  have hsize4 : M4.size = memory.size := by
+    dsimp only [M4]
+    rw [Mem.size_write_of_le (by
+      rw [hnat3, hsize3]
+      simp only [List.length_cons, List.length_nil]
+      omega), hsize3]
+  have hsize5 : M5.size = memory.size := by
+    dsimp only [M5]
+    rw [Mem.size_write_of_le (by
+      rw [hnat4, hsize4]
+      simp only [List.length_cons, List.length_nil]
+      omega), hsize4]
+  have hsize6 : M6.size = memory.size := by
+    dsimp only [M6]
+    rw [Mem.size_write_of_le (by
+      rw [hnat5, hsize5]
+      simp only [List.length_cons, List.length_nil]
+      omega), hsize5]
+  have hsize7 : M7.size = memory.size := by
+    dsimp only [M7]
+    rw [Mem.size_write_of_le (by
+      rw [hnat6, hsize6]
+      simp only [List.length_cons, List.length_nil]
+      omega), hsize6]
+  have hM8 : M8 = storeLe64Memory memory offset word := by
+    dsimp only [M8, M7, M6, M5, M4, M3, M2, M1, M0]
+    rw [hnat0, hnat1, hnat2, hnat3, hnat4, hnat5, hnat6, hnat7]
+    rfl
+  have htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨stack, M8, G⟩) rest post := by
+    rw [hM8]
+    exact hrest
+  unfold storeLe64At
+  apply storeByteShiftStack_runCompiled
+      (memory := M0) (word := word) (i := address) (G := G + 96)
+      (stack := stack)
+  · simpa only [M0] using hsize32
+  · rw [hnat0]; dsimp only [M0]; omega
+  · exact hpush0
+  · exact hroom
+  apply storeByteShiftStack_runCompiled
+      (memory := M1) (word := word >>> 8) (i := address + 1)
+      (G := G + 81) (stack := stack)
+  · rw [hsize1]; exact hsize32
+  · rw [hnat1, hsize1]; omega
+  · exact hpush1
+  · exact hroom
+  apply storeByteShiftStack_runCompiled
+      (memory := M2) (word := word >>> 8 >>> 8) (i := address + 2)
+      (G := G + 66) (stack := stack)
+  · rw [hsize2]; exact hsize32
+  · rw [hnat2, hsize2]; omega
+  · exact hpush2
+  · exact hroom
+  apply storeByteShiftStack_runCompiled
+      (memory := M3) (word := word >>> 8 >>> 8 >>> 8) (i := address + 3)
+      (G := G + 51) (stack := stack)
+  · rw [hsize3]; exact hsize32
+  · rw [hnat3, hsize3]; omega
+  · exact hpush3
+  · exact hroom
+  apply storeByteShiftStack_runCompiled
+      (memory := M4) (word := word >>> 8 >>> 8 >>> 8 >>> 8)
+      (i := address + 4) (G := G + 36) (stack := stack)
+  · rw [hsize4]; exact hsize32
+  · rw [hnat4, hsize4]; omega
+  · exact hpush4
+  · exact hroom
+  apply storeByteShiftStack_runCompiled
+      (memory := M5) (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
+      (i := address + 5) (G := G + 21) (stack := stack)
+  · rw [hsize5]; exact hsize32
+  · rw [hnat5, hsize5]; omega
+  · exact hpush5
+  · exact hroom
+  apply storeByteShiftStack_runCompiled
+      (memory := M6)
+      (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
+      (i := address + 6) (G := G + 6) (stack := stack)
+  · rw [hsize6]; exact hsize32
+  · rw [hnat6, hsize6]; omega
+  · exact hpush6
+  · exact hroom
+  apply storeByteLastStack_runCompiled
+      (memory := M7)
+      (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
+      (i := address + 7) (G := G) (stack := stack)
+  · rw [hsize7]; exact hsize32
+  · rw [hnat7, hsize7]; omega
+  · exact hpush7
+  · omega
+  · exact htail
 
 /-- The exact 111-gas compiled `storeLe64At 64` suffix used by the count
 endpoint.  The continuation sees the canonical 96-byte dynamic-return image. -/
@@ -554,117 +713,48 @@ theorem storeLe64At64_runCompiled
       (base.setMach
         ⟨[word], getDepositCountHeaderMemory, G + 111⟩)
       (storeLe64At 64 +++ rest) post := by
-  let M0 := getDepositCountHeaderMemory
-  let M1 := M0.write 64 [word.2.2.toUInt8]
-  let M2 := M1.write 65 [(word >>> 8).2.2.toUInt8]
-  let M3 := M2.write 66 [(word >>> 8 >>> 8).2.2.toUInt8]
-  let M4 := M3.write 67 [(word >>> 8 >>> 8 >>> 8).2.2.toUInt8]
-  let M5 := M4.write 68 [(word >>> 8 >>> 8 >>> 8 >>> 8).2.2.toUInt8]
-  let M6 := M5.write 69
-    [(word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8).2.2.toUInt8]
-  let M7 := M6.write 70
-    [(word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8).2.2.toUInt8]
-  let M8 := M7.write 71
-    [(word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8).2.2.toUInt8]
-  have hsize0 : M0.size = 96 :=
-    getDepositCountHeaderMemory_spec.2.2.1
-  have hsize1 : M1.size = 96 := by
-    dsimp only [M1]
-    rw [Mem.size_write_of_le (by
-      rw [hsize0]
-      simp only [List.length_cons, List.length_nil]
-      omega), hsize0]
-  have hsize2 : M2.size = 96 := by
-    dsimp only [M2]
-    rw [Mem.size_write_of_le (by
-      rw [hsize1]
-      simp only [List.length_cons, List.length_nil]
-      omega), hsize1]
-  have hsize3 : M3.size = 96 := by
-    dsimp only [M3]
-    rw [Mem.size_write_of_le (by
-      rw [hsize2]
-      simp only [List.length_cons, List.length_nil]
-      omega), hsize2]
-  have hsize4 : M4.size = 96 := by
-    dsimp only [M4]
-    rw [Mem.size_write_of_le (by
-      rw [hsize3]
-      simp only [List.length_cons, List.length_nil]
-      omega), hsize3]
-  have hsize5 : M5.size = 96 := by
-    dsimp only [M5]
-    rw [Mem.size_write_of_le (by
-      rw [hsize4]
-      simp only [List.length_cons, List.length_nil]
-      omega), hsize4]
-  have hsize6 : M6.size = 96 := by
-    dsimp only [M6]
-    rw [Mem.size_write_of_le (by
-      rw [hsize5]
-      simp only [List.length_cons, List.length_nil]
-      omega), hsize5]
-  have hsize7 : M7.size = 96 := by
-    dsimp only [M7]
-    rw [Mem.size_write_of_le (by
-      rw [hsize6]
-      simp only [List.length_cons, List.length_nil]
-      omega), hsize6]
-  have htail : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M8, G⟩) rest post := by
-    simpa only [getDepositCountResultMemory, storeLe64Memory,
-      storeLowBytesMemory, M0, M1, M2, M3, M4, M5, M6, M7, M8]
-      using hrest
-  unfold storeLe64At
-  apply storeByteShift_runCompiled
-      (memory := M0) (word := word) (i := 64) (G := G + 96)
-  · rw [hsize0]
-  · rw [hsize0]; decide +kernel
-  · decide +kernel
-  apply storeByteShift_runCompiled
-      (memory := M1) (word := word >>> 8) (i := 65) (G := G + 81)
-  · rw [hsize1]
-  · rw [hsize1]; decide +kernel
-  · decide +kernel
-  apply storeByteShift_runCompiled
-      (memory := M2) (word := word >>> 8 >>> 8)
-      (i := 66) (G := G + 66)
-  · rw [hsize2]
-  · rw [hsize2]; decide +kernel
-  · decide +kernel
-  apply storeByteShift_runCompiled
-      (memory := M3) (word := word >>> 8 >>> 8 >>> 8)
-      (i := 67) (G := G + 51)
-  · rw [hsize3]
-  · rw [hsize3]; decide +kernel
-  · decide +kernel
-  apply storeByteShift_runCompiled
-      (memory := M4) (word := word >>> 8 >>> 8 >>> 8 >>> 8)
-      (i := 68) (G := G + 36)
-  · rw [hsize4]
-  · rw [hsize4]; decide +kernel
-  · decide +kernel
-  apply storeByteShift_runCompiled
-      (memory := M5) (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
-      (i := 69) (G := G + 21)
-  · rw [hsize5]
-  · rw [hsize5]; decide +kernel
-  · decide +kernel
-  apply storeByteShift_runCompiled
-      (memory := M6)
-      (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
-      (i := 70) (G := G + 6)
-  · rw [hsize6]
-  · rw [hsize6]; decide +kernel
-  · decide +kernel
-  apply storeByteLast_runCompiled
-      (memory := M7)
-      (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
-      (i := 71) (G := G)
-  · rw [hsize7]
-  · rw [hsize7]; decide +kernel
-  · decide +kernel
-  · exact htail
+  exact storeLe64At_runCompiled
+    (memory := getDepositCountHeaderMemory)
+    (address := 64) (offset := 64) (stack := [])
+    getDepositCountHeaderMemory_spec.2.2.2
+    (by rw [getDepositCountHeaderMemory_spec.2.2.1]; omega)
+    (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    hrest
+
+/-- The root endpoint's exact 111-gas little-endian store at byte 32. -/
+theorem storeLe64At32_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {memory : Mem} {word : B256} {G : Nat} {rest : Func}
+    (hsize32 : memory.size % 32 = 0)
+    (hfit : 32 + 8 ≤ memory.size)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach
+        ⟨[], storeLe64Memory memory 32 word, G⟩)
+      rest post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[word], memory, G + 111⟩)
+      (storeLe64At 32 +++ rest) post := by
+  exact storeLe64At_runCompiled
+    (memory := memory) (address := 32) (offset := 32) (stack := [])
+    hsize32 hfit
+    (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
+    hrest
 
 /-- Build the three-word ABI dynamic-bytes header in exactly 34 gas. -/
 theorem getDepositCountHeader_runCompiled

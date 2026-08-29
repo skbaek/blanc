@@ -115,6 +115,8 @@ import Blanc.BeaconDepositCode
 import Blanc.BeaconDepositDeploy
 import Blanc.BeaconDepositMemory
 import Blanc.BeaconDepositSha
+import Blanc.BeaconDepositRootMemory
+import Blanc.BeaconDepositRoot
 import Blanc.BeaconDepositEffects
 import Blanc.BeaconDepositCountEffects
 import Blanc.ProxyPairSlots
