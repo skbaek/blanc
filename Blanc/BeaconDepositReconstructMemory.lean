@@ -656,4 +656,59 @@ def ReconstructRegistersMemoryCarrier.writeIntermediate
     exact h.second_read
   exact ⟨nextIntermediate, hsecond⟩
 
+/-- One low staging write preserves the node/intermediate carrier. -/
+def ReconstructIntermediateMemoryCarrier.writeBeforeSources
+    {memory : Mem}
+    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
+    {oldCount amount node intermediate : B256} {size : Nat}
+    (h : ReconstructIntermediateMemoryCarrier memory pubkeyInput
+      signatureFirst signatureTail withdrawal amountPadded oldCount amount
+      node intermediate size)
+    (n : Nat) (xs : Bytes)
+    (hbefore : n + xs.length ≤ 192)
+    (hfit : n + xs.length ≤ size) :
+    ReconstructIntermediateMemoryCarrier (memory.write n xs)
+      pubkeyInput signatureFirst signatureTail withdrawal amountPadded
+      oldCount amount node intermediate size := by
+  let source' := h.node.source.writeBeforeSources n xs hbefore hfit
+  have hnode : source'.image.sliceD 640 32 0 = node.toBytes := by
+    change (Bytes.writeAt h.node.source.image n xs).sliceD 640 32 0 =
+      node.toBytes
+    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    exact h.node.node_read
+  let node' : ReconstructNodeMemoryCarrier (memory.write n xs)
+      pubkeyInput signatureFirst signatureTail withdrawal amountPadded
+      oldCount amount node size := ⟨source', hnode⟩
+  have hintermediate : node'.source.image.sliceD 704 32 0 =
+      intermediate.toBytes := by
+    change (Bytes.writeAt h.node.source.image n xs).sliceD 704 32 0 =
+      intermediate.toBytes
+    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    exact h.intermediate_read
+  exact ⟨node', hintermediate⟩
+
+/-- One low staging write preserves all three digest registers. -/
+def ReconstructRegistersMemoryCarrier.writeBeforeSources
+    {memory : Mem}
+    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
+    {oldCount amount node intermediate second : B256} {size : Nat}
+    (h : ReconstructRegistersMemoryCarrier memory pubkeyInput signatureFirst
+      signatureTail withdrawal amountPadded oldCount amount node intermediate
+      second size)
+    (n : Nat) (xs : Bytes)
+    (hbefore : n + xs.length ≤ 192)
+    (hfit : n + xs.length ≤ size) :
+    ReconstructRegistersMemoryCarrier (memory.write n xs)
+      pubkeyInput signatureFirst signatureTail withdrawal amountPadded
+      oldCount amount node intermediate second size := by
+  let intermediate' :=
+    h.intermediate.writeBeforeSources n xs hbefore hfit
+  have hsecond : intermediate'.node.source.image.sliceD 736 32 0 =
+      second.toBytes := by
+    change (Bytes.writeAt h.intermediate.node.source.image n xs).sliceD
+      736 32 0 = second.toBytes
+    rw [Bytes.sliceD_writeAt_after_reconstruct _ _ _ _ _ (by omega)]
+    exact h.second_read
+  exact ⟨intermediate', hsecond⟩
+
 end Blanc.BeaconDeposit
