@@ -136,6 +136,7 @@ import Blanc.ProrataSound
 import Blanc.ProrataDeploymentRoot
 import Blanc.ProrataRealizedAccounting
 import Blanc.ProrataAccountingExec
+import Blanc.ProrataAccountingTransaction
 import Blanc.ProrataAttackModel
 import Blanc.ProrataAttackPath
 
