@@ -3674,7 +3674,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
     ∃ path : ProrataAccountingPath offset.toNat,
       path.steps = steps ∧
       path.first = ⟨0, 0⟩ ∧
-      path.last = AccountingSnapshot.ofState ca future.state ∧
+      path.last = AccountingSnapshot.ofWorldState ca future.state ∧
       path.XAt 0 = 1 ∧
       path.DAt 0 = offset.toNat ∧
       path.XAt steps.length * (∏ j ∈ Finset.range steps.length, path.DAt j) =

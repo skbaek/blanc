@@ -192,8 +192,8 @@ shares issued and no target balance.  This is what anchors the cumulative-dust
 telescope at `X0 = 1` and `D0 = O`. -/
 theorem accountingSnapshot {cfg : ChainConfig} {deployed : BlockChain}
     {ca : Adr} (root : DeploymentRoot cfg deployed ca) :
-    AccountingSnapshot.ofState ca deployed.state = ⟨0, 0⟩ := by
-  unfold AccountingSnapshot.ofState
+    AccountingSnapshot.ofWorldState ca deployed.state = ⟨0, 0⟩ := by
+  unfold AccountingSnapshot.ofWorldState
   rw [root.emptyStorage, root.zeroBalance]
   rfl
 
@@ -221,7 +221,7 @@ theorem prorata_realized_dust_trace_exact
     ∃ path : ProrataAccountingPath offset.toNat,
       path.steps = steps ∧
       path.first = ⟨0, 0⟩ ∧
-      path.last = AccountingSnapshot.ofState ca future.state ∧
+      path.last = AccountingSnapshot.ofWorldState ca future.state ∧
       path.XAt 0 = 1 ∧
       path.DAt 0 = offset.toNat ∧
       path.XAt steps.length * (∏ j ∈ Finset.range steps.length, path.DAt j) =

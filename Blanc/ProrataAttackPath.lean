@@ -561,7 +561,7 @@ theorem claimBound {o : Nat} (ho : 2 ≤ o)
       exact hclaim
 
 /-- Every actor-classified step preserves the full attack-state invariant. -/
-theorem invariant {o : Nat} (ho : 2 ≤ o)
+theorem preservesInvariant {o : Nat} (ho : 2 ≤ o)
     {pre post : ProrataAttackState o} {kind : ProrataAttackKind}
     (effect : ProrataAttackEffect o pre kind post)
     (hpre : pre.Invariant) : post.Invariant := by
@@ -613,7 +613,7 @@ theorem invariant {o : Nat} (ho : 2 ≤ o)
   | genesis =>
       exact ProrataAttackState.genesis_invariant o
   | snoc step path ih =>
-      exact step.effect.invariant ho ih
+      exact step.effect.preservesInvariant ho ih
 
 /-- Pure open-context payout bound; the realized-trace theorem later exposes
 the unsuffixed SF headline. -/

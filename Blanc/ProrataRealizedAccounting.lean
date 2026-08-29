@@ -15,7 +15,7 @@ namespace Prorata
 namespace AccountingSnapshot
 
 /-- The public PRORATA accounting projection of one exact world state. -/
-def ofState (ca : Adr) (state : State) : AccountingSnapshot :=
+def ofWorldState (ca : Adr) (state : State) : AccountingSnapshot :=
   ⟨supplyN (state.getStor ca), (state.bal ca).toNat⟩
 
 end AccountingSnapshot
@@ -66,7 +66,7 @@ def messageEntry (ca : Adr) (msg : Msg) (state : State) :
 
 /-- The realized boundary projects onto the frozen accounting snapshot. -/
 @[simp] theorem snapshot_ofState (ca : Adr) (state : State) :
-    (ofState ca state).snapshot = AccountingSnapshot.ofState ca state := rfl
+    (ofState ca state).snapshot = AccountingSnapshot.ofWorldState ca state := rfl
 
 theorem ofState_snapshot (ca : Adr) (state : State) :
     (ofState ca state).snapshot =
