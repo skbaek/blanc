@@ -435,6 +435,43 @@ def reconstructSignatureSecondDigest (signatureTail : Bytes) : B256 :=
   Bytes.sha256
     ((Bytes.toB256 signatureTail).toBytes ++ (0 : B256).toBytes)
 
+/-- The seven reconstruction sites compute the model's deposit-data node when
+their fixed-width byte inputs come from the decoded deposit arguments. -/
+theorem reconstructedDepositNode_eq_model
+    (pubkey withdrawalCredentials signature amountLE : Bytes)
+    (hwithdrawal : withdrawalCredentials.length = 32)
+    (hamount : amountLE.length = 8)
+    (hsignature : signature.length = 96) :
+    let pubkeyInput := pubkey ++ zeros 16
+    let signatureFirst := signature.take 64
+    let signatureTail := signature.drop 64
+    let amountPadded := amountLE ++ zeros 24
+    let pubkeyNode := Bytes.sha256 pubkeyInput
+    let signatureFirstNode := Bytes.sha256 signatureFirst
+    let signatureSecondNode :=
+      reconstructSignatureSecondDigest signatureTail
+    let signatureNode :=
+      hashPair Bytes.sha256 signatureFirstNode signatureSecondNode
+    let pubkeyWithdrawalNode :=
+      hashPair Bytes.sha256 pubkeyNode (Bytes.toB256 withdrawalCredentials)
+    let amountSignatureNode :=
+      hashPair Bytes.sha256 (Bytes.toB256 amountPadded) signatureNode
+    hashPair Bytes.sha256 pubkeyWithdrawalNode amountSignatureNode =
+      depositDataNode Bytes.sha256 pubkey withdrawalCredentials signature
+        amountLE := by
+  have hsignatureTail : (signature.drop 64).length = 32 := by
+    simp only [List.length_drop]
+    omega
+  have hamountPadded : (amountLE ++ zeros 24).length = 32 := by
+    simp [List.length_append, hamount, zeros]
+  have hzero : (0 : B256).toBytes = zeros 32 := by
+    decide +kernel
+  simp only [reconstructSignatureSecondDigest, depositDataNode, pubkeyRoot,
+    signatureRoot, hashPair]
+  rw [Bytes.toBytes_toB256_of_length hsignatureTail,
+    Bytes.toBytes_toB256_of_length hwithdrawal,
+    Bytes.toBytes_toB256_of_length hamountPadded, hzero]
+
 /-- Stage the fixed-width signature tail and zero padding, run the exact second
 memory expansion, and establish all three reconstruction registers. -/
 theorem reconstructSignatureSecondSha_runCompiledTo
