@@ -143,6 +143,7 @@ import Blanc.ProrataAccountingBody
 import Blanc.ProrataAccountingHistory
 import Blanc.ProrataAttackModel
 import Blanc.ProrataAttackPath
+import Blanc.ProrataAttackTrace
 
 namespace Blanc
 
