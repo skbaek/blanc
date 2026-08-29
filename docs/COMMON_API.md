@@ -236,6 +236,11 @@ arithmetic, so consume it there rather than restating it per family.
 - `Func.runCompiledTo_mstore_step` and other compiled memory steps live in the
   forward construction modules.
 
+A scratch-word walk that writes several fixed slots and reads them back needs
+both disjointness halves: `Bytes.sliceD_writeAt` reads exactly what was just
+written, while `Bytes.sliceD_writeAt_before` and `Bytes.sliceD_writeAt_after`
+skip a write that lands wholly above or wholly below the read window.
+
 ## T — settlement
 
 ### T1. I have `exec (initEvm msg)` and need `processMessage msg`

@@ -10132,6 +10132,22 @@ lemma Bytes.sliceD_writeAt_before
   rw [if_neg]
   omega
 
+/-- The mirror of `Bytes.sliceD_writeAt_before`: a write that lands entirely
+below the read window leaves it alone.  Scratch-word walks need both halves,
+because later writes may sit on either side of an earlier word. -/
+lemma Bytes.sliceD_writeAt_after
+    (bs xs : Bytes) (start len n : Nat)
+    (h : n + xs.length ≤ start) :
+    (Bytes.writeAt bs n xs).sliceD start len 0 =
+      bs.sliceD start len 0 := by
+  rw [List.sliceD_eq_map, List.sliceD_eq_map]
+  apply List.map_congr_left
+  intro i hi
+  have hi' := List.mem_range.mp hi
+  rw [Bytes.getD_writeAt]
+  rw [if_neg]
+  omega
+
 /-- What a `CALL`, `LOG` or `MLOAD` reads out of a memory whose image is known:
 exactly the corresponding slice of the image, zero-padded past its end. -/
 lemma Mem.Reads.read {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (i n : Nat) :

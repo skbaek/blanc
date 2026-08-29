@@ -149,6 +149,27 @@ theorem triggerFullWithdrawals_rebasedValidator_exact (dp : DeployParams) :
       Trigger.rebaseLocalCalls triggerAuxDelta Trigger.validateCalldata := by
   rfl
 
+/-! ## Passing the validator's guards -/
+
+/-- One passed validator guard: a zero flag takes the falling-through arm,
+leaving storage and memory untouched by the branch itself. -/
+private theorem trigger_guard_passes
+    {dp : DeployParams} {sevm : Sevm} {guardPost : Devm} {out : Execution}
+    {errSlot : Nat} {rest : Func} {tail : Stack}
+    (pGuard : (0 : B256) :: tail <<+ guardPost.stack)
+    (branchRun : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm guardPost (Func.branch rest (Func.call errSlot)) out) :
+    ∃ restPre,
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+        sevm restPre rest out ∧
+      tail <<+ restPre.stack ∧
+      Devm.getStor guardPost = Devm.getStor restPre ∧
+      guardPost.memory = restPre.memory := by
+  obtain ⟨restPre, hpop, restRun, pRest⟩ :=
+    Func.RunCompiledTo.zero_branch_of_prefix pGuard branchRun
+  exact ⟨restPre, restRun, pRest,
+    funext (getStor_eq_of_state_eq hpop.state), hpop.memory⟩
+
 theorem rebasedTriggerRoleFailure_call_reverts_exact
     {dp : DeployParams} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
