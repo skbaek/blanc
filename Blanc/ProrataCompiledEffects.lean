@@ -16,6 +16,45 @@ private theorem installed_prorata_compile {sevm : Sevm}
     some sevm.code.toList = some prorataCode := congrArg some h_code
     _ = Prog.compile Prorata.prorata := prorataCode_compile.symm
 
+private theorem BodyEntry.of_burn
+    {fs : List Func} {sevm : Sevm} {pre entry post : Devm} {body : Func}
+    (burn : Devm.Burn pre entry)
+    (bodyEntry : BodyEntry fs sevm entry post body) :
+    BodyEntry fs sevm pre post body := by
+  rcases bodyEntry with ⟨bodyPre, hstor, hbal, hcode, run⟩
+  refine ⟨bodyPre, hstor.trans ?_, hbal.trans ?_, hcode.trans ?_, run⟩
+  · funext a
+    exact burn.getStor a
+  · funext a
+    exact burn.getBal a
+  · change entry.state.getCode = pre.state.getCode
+    rw [burn.state]
+
+/-- Every successful invocation of the deployed PRORATA bytecode reaches one
+of its five source-level bodies, retaining the persistent state at entry. -/
+theorem classify_prorata_exec_success
+    {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (h_code : sevm.code.toList = prorataCode) :
+    ProrataMainSuccess (prorata.main :: prorata.aux) sevm pre post := by
+  have hrun := correct sevm pre prorata post exc
+    (installed_prorata_compile h_code)
+  dsimp only [Prog.Run] at hrun
+  cases hrun
+  rename (_ = _) => hentry
+  rename (Func.Run _ _ _ _ _) => hmain
+  rename (Devm.Burn _ _) => hburn
+  rename Devm => entry
+  cases hentry
+  change Func.Run _ sevm entry prorataMain post at hmain
+  rcases classify_prorataMain_success hmain with
+    hdeposit | hwithdraw | hshares | hassets | hdonate
+  · exact .deposit (BodyEntry.of_burn hburn hdeposit)
+  · exact .withdraw (BodyEntry.of_burn hburn hwithdraw)
+  · exact .convertToShares (BodyEntry.of_burn hburn hshares)
+  · exact .convertToAssets (BodyEntry.of_burn hburn hassets)
+  · exact .donate (BodyEntry.of_burn hburn hdonate)
+
 theorem prorata_deposit_exec_effect
     {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))
