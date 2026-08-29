@@ -48,7 +48,8 @@ private theorem sha64_success_suffix_runCompiledTo
   all_goals try omega
   simpa only [Devm.memory_setMach, Nat.add_sub_cancel] using h_tail
 
-/-- Run the argument prefix, warm SHA-256 call, and successful decoder guards.
+/-- Run the argument prefix, warm SHA-256 call, and successful decoder guards
+with an exact selected memory-expansion charge.
 
 The returned `callPost` is the state immediately after `STATICCALL`; the last
 field turns any exact-gas continuation from the post-guard state into a run of
@@ -56,22 +57,25 @@ the complete `sha64` wrapper.  Keeping the call state visible lets downstream
 fold proofs consume the digest and preservation facts without re-opening the
 precompile semantics.
 -/
-theorem sha64_success_prefix_runCompiledTo
+theorem sha64_success_prefix_runCompiledTo_ext
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {inputWord outputWord : B256} {stack : List B256}
-    {success : Func} {K : Nat}
-    (hcovered : memExtsSize base.memory.size
+    {success : Func} {K ext : Nat}
+    (hext : base.extCost
       [⟨(inputWord * 32).toNat, 64⟩,
-        ⟨(outputWord * 32).toNat, 32⟩] = base.memory.size)
+        ⟨(outputWord * 32).toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ base.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hdepth : sevm.depth ≠ 0)
-    (hbound : K + 221 < 2 ^ 256)
+    (hbound : K + 221 + ext < 2 ^ 256)
     (hroom : stack.length < 1019) :
     ∃ callPost,
       callPost.stack = 1 :: stack ∧
-      callPost.memory = base.memory.write (outputWord * 32).toNat
+      callPost.memory = (base.memory.extends
+        [⟨(inputWord * 32).toNat, 64⟩,
+          ⟨(outputWord * 32).toNat, 32⟩]).write
+        (outputWord * 32).toNat
         (Bytes.sha256
           (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes ∧
       callPost.gasLeft = K + 37 ∧
@@ -91,23 +95,24 @@ theorem sha64_success_prefix_runCompiledTo
         Func.RunCompiledTo fs sevm
           (base.setMach
             ⟨stack, base.memory,
-              K + sha64SuccessCost inputWord outputWord⟩)
+              K + sha64SuccessCost inputWord outputWord + ext⟩)
           (sha64 inputWord outputWord success) ex := by
   let callPre := base.setMach
-    ⟨Nat.toB256 (K + 221) :: (2 : B256) ::
+    ⟨Nat.toB256 (K + 221 + ext) :: (2 : B256) ::
       (inputWord * 32) :: (64 : B256) ::
       (outputWord * 32) :: (32 : B256) :: stack,
-      base.memory, K + 221⟩
+      base.memory, K + 221 + ext⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtput, herror, _stmid, _hsub, _hstate⟩ :=
-    Ninst.runCompiled_statcall_sha256_64_warm
+    Ninst.runCompiled_statcall_sha256_64_warm_ext
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
-      (s := stack) (G := K + 221)
+      (s := stack) (G := K + 221 + ext) (ext := ext)
       (by simp only [callPre, Devm.stack_setMach])
       (by simp only [callPre, Devm.gasLeft_setMach])
-      (by simpa only [callPre, Devm.memory_setMach] using hcovered)
+      (by
+        simpa only [callPre, Devm.extCost, Devm.memory_setMach] using hext)
       (by simpa only [callPre, Devm.getCode_setMach] using hnodeleg)
       (by
         change (2 : Adr) ∈ base.accessedAddresses
@@ -115,7 +120,10 @@ theorem sha64_success_prefix_runCompiledTo
       hpre hdepth (by omega) hbound (by omega)
   have hgas' : callPost.gasLeft = K + 37 := by omega
   have hmemory' :
-      callPost.memory = base.memory.write (outputWord * 32).toNat
+      callPost.memory = (base.memory.extends
+        [⟨(inputWord * 32).toNat, 64⟩,
+          ⟨(outputWord * 32).toNat, 32⟩]).write
+        (outputWord * 32).toNat
         (Bytes.sha256
           (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes := by
     simpa only [callPre, Devm.memory_setMach] using hmemory
@@ -183,9 +191,9 @@ theorem sha64_success_prefix_runCompiledTo
       (sevm := sevm)
       (devm := base.setMach
         ⟨stack, base.memory,
-          K + sha64SuccessCost inputWord outputWord⟩)
+          K + sha64SuccessCost inputWord outputWord + ext⟩)
       (w := (32 : B256)) (c := c32)
-      (G := K + (cout + c64 + cin + c2 + 223))
+      (G := K + (cout + c64 + cin + c2 + 223) + ext)
       (by rfl)
       (by
         simp only [Devm.gasLeft_setMach, sha64SuccessCost,
@@ -196,7 +204,7 @@ theorem sha64_success_prefix_runCompiledTo
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := outputWord * 32) (c := cout)
-      (G := K + (c64 + cin + c2 + 223))
+      (G := K + (c64 + cin + c2 + 223) + ext)
       (by rfl)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by
@@ -206,7 +214,7 @@ theorem sha64_success_prefix_runCompiledTo
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := (64 : B256)) (c := c64)
-      (G := K + (cin + c2 + 223))
+      (G := K + (cin + c2 + 223) + ext)
       (by rfl)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by
@@ -216,7 +224,7 @@ theorem sha64_success_prefix_runCompiledTo
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := inputWord * 32) (c := cin)
-      (G := K + (c2 + 223))
+      (G := K + (c2 + 223) + ext)
       (by rfl)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by
@@ -226,7 +234,7 @@ theorem sha64_success_prefix_runCompiledTo
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := (2 : B256)) (c := c2)
-      (G := K + 223)
+      (G := K + 223 + ext)
       (by rfl)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by
@@ -235,8 +243,8 @@ theorem sha64_success_prefix_runCompiledTo
   simp only [Devm.setMach_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_gas
-      (G := K + 221)
-      (by simp only [Devm.gasLeft_setMach, gBase])
+      (G := K + 221 + ext)
+      (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by
         simp only [Devm.stack_setMach, List.length_cons]
         omega)) ?_
@@ -255,6 +263,54 @@ theorem sha64_success_prefix_runCompiledTo
   rw [hpost]
   simpa only [callPre, Devm.stack_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach] using hstat
+
+/-- Covered-memory compatibility form of
+`sha64_success_prefix_runCompiledTo_ext`. -/
+theorem sha64_success_prefix_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {inputWord outputWord : B256} {stack : List B256}
+    {success : Func} {K : Nat}
+    (hcovered : memExtsSize base.memory.size
+      [⟨(inputWord * 32).toNat, 64⟩,
+        ⟨(outputWord * 32).toNat, 32⟩] = base.memory.size)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hbound : K + 221 < 2 ^ 256)
+    (hroom : stack.length < 1019) :
+    ∃ callPost,
+      callPost.stack = 1 :: stack ∧
+      callPost.memory = base.memory.write (outputWord * 32).toNat
+        (Bytes.sha256
+          (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes ∧
+      callPost.gasLeft = K + 37 ∧
+      callPost.returnData =
+        (Bytes.sha256
+          (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes ∧
+      (∀ a, Devm.getStor callPost a = Devm.getStor base a) ∧
+      (∀ a, callPost.getCode a = base.getCode a) ∧
+      callPost.accessedAddresses = base.accessedAddresses ∧
+      callPost.accessedStorageKeys = base.accessedStorageKeys ∧
+      callPost.logs = base.logs ∧
+      callPost.output = base.output ∧
+      callPost.error = base.error ∧
+      ∀ {ex : Execution},
+        Func.RunCompiledTo fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+        Func.RunCompiledTo fs sevm
+          (base.setMach
+            ⟨stack, base.memory,
+              K + sha64SuccessCost inputWord outputWord⟩)
+          (sha64 inputWord outputWord success) ex := by
+  have hext : base.extCost
+      [⟨(inputWord * 32).toNat, 64⟩,
+        ⟨(outputWord * 32).toNat, 32⟩] = 0 := by
+    simp only [Devm.extCost, hcovered]
+    omega
+  simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
+    (sha64_success_prefix_runCompiledTo_ext
+      (ext := 0) hext hnodeleg hwarm hpre hdepth (by simpa using hbound) hroom)
 
 /-! ## Contract-site cost specializations -/
 

@@ -281,33 +281,35 @@ private lemma successfulCallPost_getCode
   change child.getCode a = pre.getCode a
   exact h a
 
-/-- A warm, undelegated address-two call over already-covered 64-byte input
-and 32-byte output windows succeeds with the exact SHA-256 image.  The net
-instruction cost is 184 gas: 100 for the warm account access and 84 for the
-two-word precompile input. -/
-theorem Ninst.runCompiled_statcall_sha256_64_warm
+/-- A warm, undelegated address-two call over a 64-byte input and 32-byte
+output window succeeds with the exact SHA-256 image.  The net instruction
+cost is 184 gas plus the selected memory-expansion charge: 100 for the warm
+account access and 84 for the two-word precompile input. -/
+theorem Ninst.runCompiled_statcall_sha256_64_warm_ext
     {sevm : Sevm} {devm : Devm} {iiw oiw : B256}
-    {s : List B256} {G : Nat}
+    {s : List B256} {G ext : Nat}
     (hstk : devm.stack =
       Nat.toB256 G :: (2 : B256) :: iiw :: (64 : B256) ::
         oiw :: (32 : B256) :: s)
     (hgas : devm.gasLeft = G)
-    (hcovered : memExtsSize devm.memory.size
-      [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = devm.memory.size)
+    (hext : (devm.setMach
+      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+        [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hdepth : sevm.depth ≠ 0)
-    (hfloor : 185 ≤ G)
+    (hfloor : 185 + ext ≤ G)
     (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
       Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
       post.stack = 1 :: s ∧
-      post.memory = devm.memory.write oiw.toNat
+      post.memory = (devm.memory.extends
+        [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩]).write oiw.toNat
         (Bytes.sha256
           (devm.memory.data.sliceD iiw.toNat 64 0)).toBytes ∧
-      post.gasLeft = G - 184 ∧
+      post.gasLeft = G - (184 + ext) ∧
       post.returnData =
         (Bytes.sha256
           (devm.memory.data.sliceD iiw.toNat 64 0)).toBytes ∧
@@ -322,9 +324,9 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = stmid.addBal 2 0 := by
   let base := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩
-  have hext : base.extCost
-      [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = 0 := by
-    exact Devm.extCost_covered hcovered
+  have hextBase : base.extCost
+      [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext := by
+    simpa only [base] using hext
   have hnodel :
       getDelegatedCodeAddress (base.state.getCode 2) = none := by
     change getDelegatedCodeAddress (devm.getCode 2) = none
@@ -347,10 +349,10 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
     omega
   obtain ⟨mcc, mcs, hsplit⟩ : ∃ mcc mcs,
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft
-        0 gasWarmAccess = ⟨mcc, mcs⟩ := ⟨_, _, rfl⟩
+        ext gasWarmAccess = ⟨mcc, mcs⟩ := ⟨_, _, rfl⟩
   obtain ⟨hmcs, hcross, hgasout⟩ :
-      84 ≤ mcs ∧ mcc + 0 ≤ G ∧
-        G - (mcc + 0) + (mcs - 84) = G - 184 := by
+      84 ≤ mcs ∧ mcc + ext ≤ G ∧
+        G - (mcc + ext) + (mcs - 84) = G - (184 + ext) := by
     have hGnat : (Nat.toB256 G).toNat = G :=
       B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
@@ -358,21 +360,20 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
     rw [hGnat, if_neg (by simp only [gasWarmAccess]; omega)] at hsplit
     simp only [gasWarmAccess] at hsplit
     have hmin :
-        min G (except64th (G - 0 - 100)) =
-          except64th (G - 100) := by
-      have h1 : except64th (G - 0 - 100) ≤ G := by
+        min G (except64th (G - ext - 100)) =
+          except64th (G - ext - 100) := by
+      have h1 : except64th (G - ext - 100) ≤ G := by
         unfold except64th
         omega
       rw [Nat.min_eq_right h1]
-      norm_num
     rw [hmin] at hsplit
-    have h1 : except64th (G - 100) + 100 = mcc :=
+    have h1 : except64th (G - ext - 100) + 100 = mcc :=
       congrArg Prod.fst hsplit
-    have h2 : except64th (G - 100) + 0 = mcs :=
+    have h2 : except64th (G - ext - 100) + 0 = mcs :=
       congrArg Prod.snd hsplit
     unfold except64th at h1 h2
     exact ⟨by omega, by omega, by omega⟩
-  let p := callSpawnParent d0 (mcc + 0)
+  let p := callSpawnParent d0 (mcc + ext)
     iiw.toNat 64 oiw.toNat 32
   let msg := statcallSpawnMsg sevm p mcs 2 2
     iiw.toNat 64 (base.state.getCode 2) false
@@ -406,19 +407,17 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
   have hrun : Ninst.RunCompiled sevm devm (.exec .statcall) post := by
     simpa only [msg, cev, child, post] using
       (Ninst.runCompiled_statcall_sha256_64
-        (parent := p) (benv := benv') hstk hext hdel hacc hsplit
+        (parent := p) (benv := benv') hstk hextBase hdel hacc hsplit
         (by rw [hd0gas]; exact hcross) hdepth rfl hbt hpre' hlen hmcs hproom)
-  have hpmem : p.memory = devm.memory := by
-    change d0.memory.extends
-      [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = devm.memory
-    change devm.memory.extends
-      [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = devm.memory
-    exact Mem.extends_covered hcovered
+  have hpmem : p.memory = devm.memory.extends
+      [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] := by
+    rfl
   have hcevdata :
       cev.sta.data = devm.memory.data.sliceD iiw.toNat 64 0 := by
     change p.memory.data.sliceD iiw.toNat 64 0 =
       devm.memory.data.sliceD iiw.toNat 64 0
     rw [hpmem]
+    rfl
   have hchildOutput :
       child.output =
         (Bytes.sha256
@@ -448,15 +447,16 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
       (Bytes.sha256 (devm.memory.data.sliceD iiw.toNat 64 0)),
       List.take_length]
   have hmemoryPost :
-      post.memory = devm.memory.write oiw.toNat
+      post.memory = (devm.memory.extends
+        [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩]).write oiw.toNat
         (Bytes.sha256
           (devm.memory.data.sliceD iiw.toNat 64 0)).toBytes := by
     change p.memory.write oiw.toNat (child.output.take 32) = _
     rw [hchildOutput, htake, hpmem]
-  have hgasPost : post.gasLeft = G - 184 := by
-    change p.gasLeft + child.gasLeft = G - 184
+  have hgasPost : post.gasLeft = G - (184 + ext) := by
+    change p.gasLeft + child.gasLeft = G - (184 + ext)
     rw [hchildGas]
-    change d0.gasLeft - (mcc + 0) + (mcs - 84) = G - 184
+    change d0.gasLeft - (mcc + ext) + (mcs - 84) = G - (184 + ext)
     rw [hd0gas]
     exact hgasout
   have hreturnData :
@@ -529,5 +529,52 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
     hstorage, hcode, haddresses, hkeys,
     hlogsPost, houtputPost, herrorPost,
     stmid, hsub', hstatePost⟩
+
+/-- Covered-memory compatibility form of
+`runCompiled_statcall_sha256_64_warm_ext`. -/
+theorem Ninst.runCompiled_statcall_sha256_64_warm
+    {sevm : Sevm} {devm : Devm} {iiw oiw : B256}
+    {s : List B256} {G : Nat}
+    (hstk : devm.stack =
+      Nat.toB256 G :: (2 : B256) :: iiw :: (64 : B256) ::
+        oiw :: (32 : B256) :: s)
+    (hgas : devm.gasLeft = G)
+    (hcovered : memExtsSize devm.memory.size
+      [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = devm.memory.size)
+    (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hfloor : 185 ≤ G)
+    (hbound : G < 2 ^ 256)
+    (hroom : s.length < 1024) :
+    ∃ post,
+      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      post.stack = 1 :: s ∧
+      post.memory = devm.memory.write oiw.toNat
+        (Bytes.sha256
+          (devm.memory.data.sliceD iiw.toNat 64 0)).toBytes ∧
+      post.gasLeft = G - 184 ∧
+      post.returnData =
+        (Bytes.sha256
+          (devm.memory.data.sliceD iiw.toNat 64 0)).toBytes ∧
+      (∀ a, Devm.getStor post a = Devm.getStor devm a) ∧
+      (∀ a, post.getCode a = devm.getCode a) ∧
+      post.accessedAddresses = devm.accessedAddresses ∧
+      post.accessedStorageKeys = devm.accessedStorageKeys ∧
+      post.logs = devm.logs ∧
+      post.output = devm.output ∧
+      post.error = devm.error ∧
+      ∃ stmid,
+        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
+        post.state = stmid.addBal 2 0 := by
+  have hext : (devm.setMach
+      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+        [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = 0 :=
+    Devm.extCost_covered hcovered
+  simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
+    (Ninst.runCompiled_statcall_sha256_64_warm_ext
+      (ext := 0) hstk hgas hext hnodeleg hwarm hpre hdepth
+      (by omega) hbound hroom)
 
 end Blanc
