@@ -361,7 +361,8 @@ theorem Exec.CoreProrataAccounting.atTarget
   let provenance : ProrataAccountingProvenance :=
     { blockIndex := blockIndex
       transactionIndex := transactionIndex
-      framePath := framePath }
+      framePath := framePath
+      actor := some sevm.caller.toB256.toAdr }
   rcases
       _root_.Blanc.Prorata.Exec.Frame.accountingReplay_or_realizedWithdrawal
         invocation precondition provenance (caller rfl) with
@@ -480,7 +481,8 @@ theorem Exec.CoreProrataAccounting.nextNone
   let provenance : ProrataAccountingProvenance :=
     { blockIndex := blockIndex
       transactionIndex := transactionIndex
-      framePath := framePath }
+      framePath := framePath
+      actor := none }
   rcases Ninst.foreignNoneAccountingReplay step target_ne sumNof provenance
       with ⟨headSteps, headReplay⟩
   cases stepShape : Ninst.step ⟨pc, sevm, pre⟩ n with
@@ -538,7 +540,8 @@ theorem Exec.CoreProrataAccounting.last
       let provenance : ProrataAccountingProvenance :=
         { blockIndex := blockIndex
           transactionIndex := transactionIndex
-          framePath := framePath }
+          framePath := framePath
+          actor := none }
       rcases Linst.foreignAccountingReplay step target_ne sumNof provenance
           with ⟨steps, replay⟩
       refine ⟨steps, ?_⟩
@@ -847,7 +850,8 @@ theorem retainedProcessMessageAccountingReplay
       let provenance : ProrataAccountingProvenance :=
         { blockIndex := blockIndex
           transactionIndex := transactionIndex
-          framePath := [] }
+          framePath := []
+          actor := none }
       exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
         (congrFun
           (_root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq
@@ -887,7 +891,8 @@ theorem retainedProcessCreateMessageAccountingReplay
       let provenance : ProrataAccountingProvenance :=
         { blockIndex := blockIndex
           transactionIndex := transactionIndex
-          framePath := [] }
+          framePath := []
+          actor := none }
       exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
         (congrFun
           (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty

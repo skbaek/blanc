@@ -24,11 +24,14 @@ inductive ProrataAccountingKind where
   | silent
 deriving DecidableEq
 
-/-- Stable chronology metadata retained by the EVM trace carrier. -/
+/-- Stable chronology metadata retained by the EVM trace carrier.  `actor`
+names the caller of the frame that produced the step when that frame is an
+actual PRORATA invocation, and is absent for foreign or no-slot steps. -/
 structure ProrataAccountingProvenance where
   blockIndex : Nat
   transactionIndex : Option Nat
   framePath : List Nat
+  actor : Option Jaune.Adr
 deriving DecidableEq
 
 /-- The exact state equation and pricing fact for one accounting step. -/
