@@ -212,6 +212,12 @@ theorem messageCallDelegation_fields
     rcases rest with ⟨rfl, rfl⟩
     exact setDelegation_fields delegatedRun
 
+theorem messageCallDelegation_caller_eq
+    {msg delegated : Msg} {refund : Nat}
+    (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
+    delegated.caller = msg.caller :=
+  (messageCallDelegation_fields run).1
+
 theorem messageCallDelegation_target_eq
     {msg delegated : Msg} {refund : Nat}
     (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
@@ -241,6 +247,12 @@ theorem messageCallExecutionMessage_getStor_eq (msg : Msg) :
 theorem messageCallExecutionMessage_bal_eq (msg : Msg) :
     (messageCallExecutionMessage msg).benv.state.bal =
       msg.benv.state.bal := by
+  unfold messageCallExecutionMessage
+  split <;> rfl
+
+/-- Resolving delegated code leaves the calling actor alone. -/
+theorem messageCallExecutionMessage_caller_eq (msg : Msg) :
+    (messageCallExecutionMessage msg).caller = msg.caller := by
   unfold messageCallExecutionMessage
   split <;> rfl
 

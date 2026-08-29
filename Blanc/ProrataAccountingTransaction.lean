@@ -41,7 +41,7 @@ theorem TransactionTrace.messageAccountingReplay
   · cases receiver : trace.msg.target.isNone with
     | false =>
         exact retainedMessageCallAccountingReplay trace.message
-          ⟨⟨msgInv, Or.inl receiver⟩, Or.inl transfer⟩
+          ⟨⟨msgInv, Or.inl receiver⟩, fun _ => msgInv.ne transfer⟩
           blockIndex transactionIndex
     | true =>
         have collision : messageCreateCollision trace.msg = true := by
@@ -57,7 +57,8 @@ theorem TransactionTrace.messageAccountingReplay
         exact ⟨[], ProrataAccountingReplay.nil_of_eq
           (congrArg (AccountingSnapshot.ofState ca) stateEq)⟩
   · exact retainedMessageCallAccountingReplay trace.message
-      ⟨⟨msgInv, Or.inr target⟩, Or.inl transfer⟩ blockIndex transactionIndex
+      ⟨⟨msgInv, Or.inr target⟩, fun current => absurd current target⟩
+      blockIndex transactionIndex
 
 /-- Rung R2: one whole successful transaction realizes a complete PRORATA
 accounting replay, from the world it opens on to its exact final state.

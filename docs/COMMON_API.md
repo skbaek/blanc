@@ -216,6 +216,19 @@ Use
 is the message-level companion: a CREATE wrapper that does not collide is
 running at an address other than the installed contract.
 
+### T4. The wrapper is a message call and I must see through delegation
+
+Use
+[`Blanc/ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean):
+
+- `ExecutionTrace.messageCallDelegation_fields` and its named projections
+  (`_caller_eq`, `_target_eq`, `_currentTarget_eq`,
+  `_shouldTransferValue_eq`) carry a routing or value field across the
+  EIP-7702 authorization prefix; `_getStor_eq` and `_bal_eq` carry the world.
+- `ExecutionTrace.messageCallExecutionMessage_caller_eq` and its siblings
+  (`_target_eq`, `_currentTarget_eq`, `_shouldTransferValue_eq`,
+  `_getStor_eq`, `_bal_eq`) do the same across delegated-code resolution.
+
 ## C — compilation and deployment
 
 ### C1. I need source-to-compiled execution

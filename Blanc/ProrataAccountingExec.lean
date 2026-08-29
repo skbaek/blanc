@@ -35,19 +35,13 @@ end AccountingSnapshot
 
 /-- The exact message-level facts needed to interpret a retained raw execution
 as PRORATA accounting.  `codeOrForeign` excludes synthetic CREATE roots that
-run arbitrary code at the installed address; `callerOrForeign` excludes a
-direct self-withdrawal root while remaining vacuous for foreign roots. -/
+run arbitrary code at the installed address; `caller_ne` excludes a direct
+self-withdrawal root, and is stated as the implication its one consumer uses
+so that a wrapper may discharge it from the caller's own identity rather than
+only from value transfer or foreignness. -/
 structure AccountingMessageReady (ca : Adr) (msg : Msg) : Prop where
   runReady : prorataSpec.MessageRunReady ca msg
-  callerOrForeign :
-    msg.shouldTransferValue = true ∨ msg.currentTarget ≠ ca
-
-theorem AccountingMessageReady.caller_ne
-    {ca : Adr} {msg : Msg} (ready : AccountingMessageReady ca msg)
-    (target : msg.currentTarget = ca) : msg.caller ≠ ca := by
-  rcases ready.callerOrForeign with transfer | foreign
-  · exact ready.runReady.ready.ne transfer
-  · exact False.elim (foreign target)
+  caller_ne : msg.currentTarget = ca → msg.caller ≠ ca
 
 /-- Settlement-aware accounting replay for one retained CALL message.  A
 committing child contributes its recursively proved body; a noncommitting
@@ -912,12 +906,9 @@ theorem retainedProcessCreateMessageAccountingReplay
         exact targetNe (by
           simpa [processCreateMessage.msg, Msg.withBenv] using target)
       have preparedReady : AccountingMessageReady ca
-          (processCreateMessage.msg msg) := by
-        refine ⟨preparedInv.runReady_of_foreign preparedTargetNe, ?_⟩
-        rcases ready.callerOrForeign with transfer | foreign
-        · exact Or.inl (by
-            simpa [processCreateMessage.msg, Msg.withBenv] using transfer)
-        · exact Or.inr preparedTargetNe
+          (processCreateMessage.msg msg) :=
+        ⟨preparedInv.runReady_of_foreign preparedTargetNe,
+          fun target => absurd target preparedTargetNe⟩
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with
         ⟨entry, transfer, evmEq⟩
@@ -977,15 +968,12 @@ theorem retainedMessageCallAccountingReplay
         · rw [messageCallExecutionMessage_target_eq,
             messageCallDelegation_target_eq delegation]
           exact targetSome
-        · rcases ready.callerOrForeign with transfer | foreign
-          · refine Or.inl ?_
-            rw [messageCallExecutionMessage_shouldTransferValue_eq,
-              messageCallDelegation_shouldTransferValue_eq delegation]
-            exact transfer
-          · refine Or.inr ?_
-            rw [messageCallExecutionMessage_currentTarget_eq,
-              messageCallDelegation_currentTarget_eq delegation]
-            exact foreign
+        · intro target
+          rw [messageCallExecutionMessage_currentTarget_eq,
+            messageCallDelegation_currentTarget_eq delegation] at target
+          rw [messageCallExecutionMessage_caller_eq,
+            messageCallDelegation_caller_eq delegation]
+          exact ready.caller_ne target
       have snapshotEq :
           AccountingSnapshot.ofState ca
               (messageCallExecutionMessage delegated).benv.state =
