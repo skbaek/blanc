@@ -1,4 +1,5 @@
 import Blanc.BeaconDepositCore
+import Blanc.BytesWrite
 
 /-!
 # Beacon deposit ABI encoding facts
@@ -152,6 +153,175 @@ theorem abiDepositEvent_length
   rw [hpubkey, hwithdrawal, hamount, hsignature, hindex]
   decide +kernel
 
+/-- The canonical event image specialized to the five fixed widths used by
+the deposit contract. -/
+theorem abiDepositEvent_fixed_layout
+    (event : DepositEvent)
+    (hpubkey : event.pubkey.length = 48)
+    (hwithdrawal : event.withdrawal_credentials.length = 32)
+    (hamount : event.amount.length = 8)
+    (hsignature : event.signature.length = 96)
+    (hindex : event.index.length = 8) :
+    abiDepositEvent event =
+      (160 : B256).toBytes ++ (256 : B256).toBytes ++
+        (320 : B256).toBytes ++ (384 : B256).toBytes ++
+          (512 : B256).toBytes ++ (48 : B256).toBytes ++
+            event.pubkey ++ zeros 16 ++ (32 : B256).toBytes ++
+              event.withdrawal_credentials ++ (8 : B256).toBytes ++
+                event.amount ++ zeros 24 ++ (96 : B256).toBytes ++
+                  event.signature ++ (8 : B256).toBytes ++ event.index ++
+                    zeros 24 := by
+  have hpubkeyTail : abiBytesTail event.pubkey =
+      (48 : B256).toBytes ++ event.pubkey ++ zeros 16 := by
+    rw [abiBytesTail, hpubkey]
+    simp [ceil32, zeros]
+    decide +kernel
+  have hwithdrawalTail : abiBytesTail event.withdrawal_credentials =
+      (32 : B256).toBytes ++ event.withdrawal_credentials := by
+    rw [abiBytesTail, hwithdrawal]
+    simp [ceil32]
+    decide +kernel
+  have hamountTail : abiBytesTail event.amount =
+      (8 : B256).toBytes ++ event.amount ++ zeros 24 := by
+    rw [abiBytesTail, hamount]
+    simp [ceil32, zeros]
+    decide +kernel
+  have hsignatureTail : abiBytesTail event.signature =
+      (96 : B256).toBytes ++ event.signature := by
+    rw [abiBytesTail, hsignature]
+    simp [ceil32]
+    decide +kernel
+  have hindexTail : abiBytesTail event.index =
+      (8 : B256).toBytes ++ event.index ++ zeros 24 := by
+    rw [abiBytesTail, hindex]
+    simp [ceil32, zeros]
+    decide +kernel
+  simp only [abiDepositEvent, hpubkeyTail, hwithdrawalTail, hamountTail,
+    hsignatureTail, hindexTail, List.append_assoc]
+
+/-- The first reconstruction hash input is the padded pubkey payload inside
+the canonical fixed-width event image. -/
+theorem abiDepositEvent_pubkeyInput_read
+    (event : DepositEvent)
+    (hpubkey : event.pubkey.length = 48)
+    (hwithdrawal : event.withdrawal_credentials.length = 32)
+    (hamount : event.amount.length = 8)
+    (hsignature : event.signature.length = 96)
+    (hindex : event.index.length = 8) :
+    (abiDepositEvent event).sliceD 192 64 0 =
+      event.pubkey ++ zeros 16 := by
+  rw [abiDepositEvent_fixed_layout event hpubkey hwithdrawal hamount
+    hsignature hindex]
+  let pre : Bytes :=
+    (160 : B256).toBytes ++ (256 : B256).toBytes ++
+      (320 : B256).toBytes ++ (384 : B256).toBytes ++
+        (512 : B256).toBytes ++ (48 : B256).toBytes
+  let middle : Bytes := event.pubkey ++ zeros 16
+  let post : Bytes :=
+    (32 : B256).toBytes ++ event.withdrawal_credentials ++
+      (8 : B256).toBytes ++ event.amount ++ zeros 24 ++
+        (96 : B256).toBytes ++ event.signature ++
+          (8 : B256).toBytes ++ event.index ++ zeros 24
+  have h := Bytes.sliceD_append_middle pre middle post
+  have hpre : pre.length = 192 := by
+    simp [pre, B256.length_toBytes]
+  have hmiddle : middle.length = 64 := by
+    simp [middle, hpubkey, zeros]
+  rw [hpre, hmiddle] at h
+  simpa only [pre, middle, post, List.append_assoc] using h
+
+/-- The withdrawal-credentials reconstruction word inside the canonical
+fixed-width event image. -/
+theorem abiDepositEvent_withdrawal_read
+    (event : DepositEvent)
+    (hpubkey : event.pubkey.length = 48)
+    (hwithdrawal : event.withdrawal_credentials.length = 32)
+    (hamount : event.amount.length = 8)
+    (hsignature : event.signature.length = 96)
+    (hindex : event.index.length = 8) :
+    (abiDepositEvent event).sliceD 288 32 0 =
+      event.withdrawal_credentials := by
+  rw [abiDepositEvent_fixed_layout event hpubkey hwithdrawal hamount
+    hsignature hindex]
+  let pre : Bytes :=
+    (160 : B256).toBytes ++ (256 : B256).toBytes ++
+      (320 : B256).toBytes ++ (384 : B256).toBytes ++
+        (512 : B256).toBytes ++ (48 : B256).toBytes ++
+          event.pubkey ++ zeros 16 ++ (32 : B256).toBytes
+  let middle : Bytes := event.withdrawal_credentials
+  let post : Bytes :=
+    (8 : B256).toBytes ++ event.amount ++ zeros 24 ++
+      (96 : B256).toBytes ++ event.signature ++
+        (8 : B256).toBytes ++ event.index ++ zeros 24
+  have h := Bytes.sliceD_append_middle pre middle post
+  have hpre : pre.length = 288 := by
+    simp [pre, B256.length_toBytes, hpubkey, zeros]
+  have hmiddle : middle.length = 32 := by
+    simpa only [middle] using hwithdrawal
+  rw [hpre, hmiddle] at h
+  simpa only [pre, middle, post, List.append_assoc] using h
+
+/-- The little-endian amount and its zero padding inside the canonical
+fixed-width event image. -/
+theorem abiDepositEvent_amountPadded_read
+    (event : DepositEvent)
+    (hpubkey : event.pubkey.length = 48)
+    (hwithdrawal : event.withdrawal_credentials.length = 32)
+    (hamount : event.amount.length = 8)
+    (hsignature : event.signature.length = 96)
+    (hindex : event.index.length = 8) :
+    (abiDepositEvent event).sliceD 352 32 0 =
+      event.amount ++ zeros 24 := by
+  rw [abiDepositEvent_fixed_layout event hpubkey hwithdrawal hamount
+    hsignature hindex]
+  let pre : Bytes :=
+    (160 : B256).toBytes ++ (256 : B256).toBytes ++
+      (320 : B256).toBytes ++ (384 : B256).toBytes ++
+        (512 : B256).toBytes ++ (48 : B256).toBytes ++
+          event.pubkey ++ zeros 16 ++ (32 : B256).toBytes ++
+            event.withdrawal_credentials ++ (8 : B256).toBytes
+  let middle : Bytes := event.amount ++ zeros 24
+  let post : Bytes :=
+    (96 : B256).toBytes ++ event.signature ++
+      (8 : B256).toBytes ++ event.index ++ zeros 24
+  have h := Bytes.sliceD_append_middle pre middle post
+  have hpre : pre.length = 352 := by
+    simp [pre, B256.length_toBytes, hpubkey, hwithdrawal, zeros]
+  have hmiddle : middle.length = 32 := by
+    simp [middle, hamount, zeros]
+  rw [hpre, hmiddle] at h
+  simpa only [pre, middle, post, List.append_assoc] using h
+
+/-- The complete signature payload inside the canonical fixed-width event
+image. -/
+theorem abiDepositEvent_signature_read
+    (event : DepositEvent)
+    (hpubkey : event.pubkey.length = 48)
+    (hwithdrawal : event.withdrawal_credentials.length = 32)
+    (hamount : event.amount.length = 8)
+    (hsignature : event.signature.length = 96)
+    (hindex : event.index.length = 8) :
+    (abiDepositEvent event).sliceD 416 96 0 = event.signature := by
+  rw [abiDepositEvent_fixed_layout event hpubkey hwithdrawal hamount
+    hsignature hindex]
+  let pre : Bytes :=
+    (160 : B256).toBytes ++ (256 : B256).toBytes ++
+      (320 : B256).toBytes ++ (384 : B256).toBytes ++
+        (512 : B256).toBytes ++ (48 : B256).toBytes ++
+          event.pubkey ++ zeros 16 ++ (32 : B256).toBytes ++
+            event.withdrawal_credentials ++ (8 : B256).toBytes ++
+              event.amount ++ zeros 24 ++ (96 : B256).toBytes
+  let middle : Bytes := event.signature
+  let post : Bytes :=
+    (8 : B256).toBytes ++ event.index ++ zeros 24
+  have h := Bytes.sliceD_append_middle pre middle post
+  have hpre : pre.length = 416 := by
+    simp [pre, B256.length_toBytes, hpubkey, hwithdrawal, hamount, zeros]
+  have hmiddle : middle.length = 96 := by
+    simpa only [middle] using hsignature
+  rw [hpre, hmiddle] at h
+  simpa only [pre, middle, post, List.append_assoc] using h
+
 /-! ## Canonical deposit calldata round-trip -/
 
 private theorem calldataWord_append_word
@@ -163,16 +333,6 @@ private theorem calldataWord_append_word
     List.takeD_eq_take _ (by simp [B256.length_toBytes]),
     List.take_length_append' (B256.length_toBytes word).symm,
     B256.toB256_toBytes]
-
-private theorem sliceD_append_middle
-    (pre middle post : Bytes) :
-    (pre ++ middle ++ post).sliceD
-      pre.length middle.length 0 = middle := by
-  simp only [List.sliceD]
-  rw [List.append_assoc,
-    List.drop_length_append' rfl,
-    List.takeD_eq_take _ (by simp),
-    List.take_length_append' rfl]
 
 private theorem calldataWord_append_abiBytesTail
     (pre data post : Bytes) :
@@ -191,7 +351,7 @@ private theorem sliceD_append_abiBytesTail
     (pre data post : Bytes) :
     (pre ++ abiBytesTail data ++ post).sliceD
       (pre.length + 32) data.length 0 = data := by
-  convert sliceD_append_middle
+  convert Bytes.sliceD_append_middle
     (pre ++ (Nat.toB256 data.length).toBytes)
     data
     (List.replicate (ceil32 data.length - data.length) 0 ++ post) using 1

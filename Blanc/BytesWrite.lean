@@ -103,6 +103,18 @@ lemma Bytes.sliceD_zero_length {bs : Bytes} {n : Nat}
   rw [List.takeD_eq_take _ (Nat.le_refl _)]
   exact List.take_length
 
+/-- A padded slice selecting an exact middle segment of a concatenation
+returns that segment. -/
+lemma Bytes.sliceD_append_middle
+    (pre middle post : Bytes) :
+    (pre ++ middle ++ post).sliceD
+      pre.length middle.length 0 = middle := by
+  simp only [List.sliceD]
+  rw [List.append_assoc,
+    List.drop_length_append' rfl,
+    List.takeD_eq_take _ (by simp),
+    List.take_length_append' rfl]
+
 /-- An in-range indexed read of a padded slice is the corresponding read of
 the source image. -/
 lemma Bytes.getD_sliceD_of_lt
@@ -110,6 +122,47 @@ lemma Bytes.getD_sliceD_of_lt
     (bs.sliceD start len 0).getD i 0 = bs.getD (start + i) 0 := by
   unfold List.sliceD
   rw [List.getD_takeD, if_pos hi, List.getD_drop]
+
+/-- Slicing inside a padded slice agrees with slicing the same window from
+the original image, provided the inner window fits within the outer one. -/
+lemma Bytes.sliceD_sliceD_of_le
+    (bs : Bytes) (outerStart outerLen innerStart innerLen : Nat)
+    (hfit : innerStart + innerLen ≤ outerLen) :
+    (bs.sliceD outerStart outerLen 0).sliceD innerStart innerLen 0 =
+      bs.sliceD (outerStart + innerStart) innerLen 0 := by
+  rw [List.sliceD_eq_map
+      (bs.sliceD outerStart outerLen 0) 0 innerLen innerStart,
+    List.sliceD_eq_map bs 0 innerLen (outerStart + innerStart)]
+  apply List.map_congr_left
+  intro i hi
+  have hi' := List.mem_range.mp hi
+  rw [Bytes.getD_sliceD_of_lt _ _ _ _ (by omega)]
+  congr 1
+  omega
+
+/-- Equality of a padded region transfers to every window contained in that
+region. -/
+lemma Bytes.sliceD_of_sliceD_eq
+    {image knownRegion : Bytes}
+    {regionStart regionLen innerStart innerLen : Nat}
+    (hregion : image.sliceD regionStart regionLen 0 = knownRegion)
+    (hfit : innerStart + innerLen ≤ regionLen) :
+    image.sliceD (regionStart + innerStart) innerLen 0 =
+      knownRegion.sliceD innerStart innerLen 0 := by
+  have h := congrArg
+    (fun bs : Bytes => bs.sliceD innerStart innerLen 0) hregion
+  rw [Bytes.sliceD_sliceD_of_le _ _ _ _ _ hfit] at h
+  exact h
+
+/-- Equality of a padded prefix transfers to every window contained in that
+prefix. -/
+lemma Bytes.sliceD_of_sliceD_zero_eq
+    {image knownPrefix : Bytes} {total start len : Nat}
+    (hprefix : image.sliceD 0 total 0 = knownPrefix)
+    (hfit : start + len ≤ total) :
+    image.sliceD start len 0 = knownPrefix.sliceD start len 0 := by
+  simpa only [Nat.zero_add] using
+    (Bytes.sliceD_of_sliceD_eq hprefix hfit)
 
 /-- Replacing a middle segment by an equal-length payload preserves the exact
 prefix and suffix. -/

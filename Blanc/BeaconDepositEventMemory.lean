@@ -285,6 +285,40 @@ def stagedDepositEvent (data : Bytes) (amount oldCount : B256) : DepositEvent :=
     le64 amount.toNat, depositEventSignatureSlice data,
     le64 oldCount.toNat⟩
 
+/-- Successful ABI decoding identifies the fixed-width event slices with the
+model's three dynamic deposit arguments. -/
+theorem stagedDepositEvent_eq_of_decodable
+    {data pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot amount oldCount : B256}
+    (hdec : DepositAbiDecodable data pubkey withdrawalCredentials signature
+      depositDataRoot)
+    (hpubkey : pubkey.length = 48)
+    (hwithdrawal : withdrawalCredentials.length = 32)
+    (hsignature : signature.length = 96) :
+    stagedDepositEvent data amount oldCount =
+      ⟨pubkey, withdrawalCredentials, le64 amount.toNat, signature,
+        le64 oldCount.toNat⟩ := by
+  have hlength0 : dynamicLength data 0 = 48 := by
+    have h := congrArg List.length hdec.pubkey_eq
+    simpa only [dynamicPayload, List.length_sliceD, hpubkey] using h
+  have hlength1 : dynamicLength data 1 = 32 := by
+    have h := congrArg List.length hdec.withdrawalCredentials_eq
+    simpa only [dynamicPayload, List.length_sliceD, hwithdrawal] using h
+  have hlength2 : dynamicLength data 2 = 96 := by
+    have h := congrArg List.length hdec.signature_eq
+    simpa only [dynamicPayload, List.length_sliceD, hsignature] using h
+  have hpubkeyEq : depositEventPubkeySlice data = pubkey := by
+    simpa only [depositEventPubkeySlice, dynamicPayload, hlength0] using
+      hdec.pubkey_eq
+  have hwithdrawalEq :
+      depositEventWithdrawalSlice data = withdrawalCredentials := by
+    simpa only [depositEventWithdrawalSlice, dynamicPayload, hlength1] using
+      hdec.withdrawalCredentials_eq
+  have hsignatureEq : depositEventSignatureSlice data = signature := by
+    simpa only [depositEventSignatureSlice, dynamicPayload, hlength2] using
+      hdec.signature_eq
+  simp only [stagedDepositEvent, hpubkeyEq, hwithdrawalEq, hsignatureEq]
+
 /-- Final memory after `stageDepositEvent`, before the following reconstruction
 walk starts.  Every binding is one source instruction's memory mutation. -/
 def depositEventMemory (data : Bytes) (amount oldCount : B256) : Mem :=
@@ -732,36 +766,10 @@ theorem depositEventImage_event_read
     have hsignatureLength :
         (depositEventSignatureSlice data).length = 96 := by
       simp only [depositEventSignatureSlice, List.length_sliceD]
-    have hpubkeyTail : abiBytesTail (depositEventPubkeySlice data) =
-        (48 : B256).toBytes ++ depositEventPubkeySlice data ++
-          zeros 16 := by
-      rw [abiBytesTail, hpubkeyLength]
-      simp [ceil32, zeros]
-      decide +kernel
-    have hwithdrawalTail :
-        abiBytesTail (depositEventWithdrawalSlice data) =
-          (32 : B256).toBytes ++ depositEventWithdrawalSlice data := by
-      rw [abiBytesTail, hwithdrawalLength]
-      simp [ceil32]
-      decide +kernel
-    have hamountTail : abiBytesTail (le64 amount.toNat) =
-        (8 : B256).toBytes ++ le64 amount.toNat ++ zeros 24 := by
-      rw [abiBytesTail, show (le64 amount.toNat).length = 8 by rfl]
-      simp [ceil32, zeros]
-      decide +kernel
-    have hsignatureTail : abiBytesTail (depositEventSignatureSlice data) =
-        (96 : B256).toBytes ++ depositEventSignatureSlice data := by
-      rw [abiBytesTail, hsignatureLength]
-      simp [ceil32]
-      decide +kernel
-    have hindexTail : abiBytesTail (le64 oldCount.toNat) =
-        (8 : B256).toBytes ++ le64 oldCount.toNat ++ zeros 24 := by
-      rw [abiBytesTail, show (le64 oldCount.toNat).length = 8 by rfl]
-      simp [ceil32, zeros]
-      decide +kernel
-    simp only [stagedDepositEvent, abiDepositEvent, hpubkeyTail,
-      hwithdrawalTail, hamountTail, hsignatureTail, hindexTail,
-      List.append_assoc]
+    simpa only [stagedDepositEvent, List.append_assoc] using
+      (abiDepositEvent_fixed_layout
+        (stagedDepositEvent data amount oldCount)
+        hpubkeyLength hwithdrawalLength rfl hsignatureLength rfl).symm
   simpa only [depositEventImage, I19, I18, I17, I16, I15, I14, I13,
     I12, I11, I10, I9, I8, I7, I6, I5, I4, I3, I2, I1, I0] using
       hfinal.trans habi

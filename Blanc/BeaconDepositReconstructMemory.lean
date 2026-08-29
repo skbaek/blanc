@@ -63,6 +63,106 @@ def DepositEventMemoryCarrier.toReconstructSource
     oldCount_read := h.oldCount_read
     amount_read := h.amount_read }
 
+/-- A fixed-width canonical event image supplies the semantic reconstruction
+inputs, including the two signature halves. -/
+def DepositEventMemoryCarrier.toFixedReconstructSource
+    {memory : Mem} {event : DepositEvent} {amount oldCount : B256}
+    (h : DepositEventMemoryCarrier memory event amount oldCount)
+    (hpubkey : event.pubkey.length = 48)
+    (hwithdrawal : event.withdrawal_credentials.length = 32)
+    (hamount : event.amount.length = 8)
+    (hsignature : event.signature.length = 96)
+    (hindex : event.index.length = 8) :
+    ReconstructSourceMemoryCarrier memory
+      (event.pubkey ++ zeros 16)
+      (event.signature.take 64)
+      (event.signature.drop 64)
+      event.withdrawal_credentials
+      (event.amount ++ zeros 24)
+      oldCount amount 704 := by
+  have hpubkeyRead : h.image.sliceD 192 64 0 =
+      event.pubkey ++ zeros 16 := by
+    rw [Bytes.sliceD_of_sliceD_zero_eq h.event_read (by omega),
+      abiDepositEvent_pubkeyInput_read event hpubkey hwithdrawal hamount
+        hsignature hindex]
+  have hwithdrawalRead : h.image.sliceD 288 32 0 =
+      event.withdrawal_credentials := by
+    rw [Bytes.sliceD_of_sliceD_zero_eq h.event_read (by omega),
+      abiDepositEvent_withdrawal_read event hpubkey hwithdrawal hamount
+        hsignature hindex]
+  have hamountRead : h.image.sliceD 352 32 0 =
+      event.amount ++ zeros 24 := by
+    rw [Bytes.sliceD_of_sliceD_zero_eq h.event_read (by omega),
+      abiDepositEvent_amountPadded_read event hpubkey hwithdrawal hamount
+        hsignature hindex]
+  have hsignatureRead : h.image.sliceD 416 96 0 = event.signature := by
+    rw [Bytes.sliceD_of_sliceD_zero_eq h.event_read (by omega),
+      abiDepositEvent_signature_read event hpubkey hwithdrawal hamount
+        hsignature hindex]
+  have hsignatureFirst : h.image.sliceD 416 64 0 =
+      event.signature.take 64 := by
+    have hregion := Bytes.sliceD_of_sliceD_eq
+      (innerStart := 0) (innerLen := 64) hsignatureRead (by omega)
+    have hslice : event.signature.sliceD 0 64 0 =
+        event.signature.take 64 := by
+      unfold List.sliceD
+      simp only [List.drop_zero]
+      rw [List.takeD_eq_take _ (by omega)]
+    simpa only [Nat.add_zero, hslice] using hregion
+  have hsignatureTail : h.image.sliceD 480 32 0 =
+      event.signature.drop 64 := by
+    have hregion := Bytes.sliceD_of_sliceD_eq
+      (innerStart := 64) (innerLen := 32) hsignatureRead (by omega)
+    have hslice : event.signature.sliceD 64 32 0 =
+        event.signature.drop 64 := by
+      unfold List.sliceD
+      rw [List.takeD_eq_take _ (by
+        simp only [List.length_drop]
+        omega)]
+      have hdrop : (event.signature.drop 64).length = 32 := by
+        simp only [List.length_drop]
+        omega
+      rw [← hdrop]
+      exact List.take_length
+    simpa only [show 416 + 64 = 480 by omega, hslice] using hregion
+  exact
+    { image := h.image
+      wf := h.wf
+      reads := h.reads
+      size_eq := h.size_eq
+      pubkeyInput_read := hpubkeyRead
+      withdrawal_read := hwithdrawalRead
+      amountPadded_read := hamountRead
+      signatureFirst_read := hsignatureFirst
+      signatureTail_read := hsignatureTail
+      oldCount_read := h.oldCount_read
+      amount_read := h.amount_read }
+
+/-- The staged event carrier becomes the model-facing reconstruction carrier
+once the successful ABI decoder and source length guards are available. -/
+def DepositEventMemoryCarrier.toDecodedReconstructSource
+    {memory : Mem} {data pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot amount oldCount : B256}
+    (h : DepositEventMemoryCarrier memory
+      (stagedDepositEvent data amount oldCount) amount oldCount)
+    (hdec : DepositAbiDecodable data pubkey withdrawalCredentials signature
+      depositDataRoot)
+    (hpubkey : pubkey.length = 48)
+    (hwithdrawal : withdrawalCredentials.length = 32)
+    (hsignature : signature.length = 96) :
+    ReconstructSourceMemoryCarrier memory
+      (pubkey ++ zeros 16)
+      (signature.take 64)
+      (signature.drop 64)
+      withdrawalCredentials
+      (le64 amount.toNat ++ zeros 24)
+      oldCount amount 704 := by
+  have hevent := stagedDepositEvent_eq_of_decodable
+    hdec hpubkey hwithdrawal hsignature (amount := amount)
+      (oldCount := oldCount)
+  rw [hevent] at h
+  exact h.toFixedReconstructSource hpubkey hwithdrawal rfl hsignature rfl
+
 theorem ReconstructSourceMemoryCarrier.shaPubkeyInput
     {memory : Mem}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
