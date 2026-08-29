@@ -50,7 +50,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
-          "BalanceAlgebra", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall",
+          "BalanceAlgebra", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardSha256",
           "ForwardNoRawSstore",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
           "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
@@ -60,7 +60,7 @@ CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        "BeaconDepositCore", "BeaconDepositEncoding",
                        "BeaconDeposit", "BeaconDepositCode", "BeaconDepositDeploy",
-                       "BeaconDepositMemory", "BeaconDepositEffects",
+                       "BeaconDepositMemory", "BeaconDepositSha", "BeaconDepositEffects",
                        "BeaconDepositCountEffects"],
     "proxy-pair": ["ProxyPairSlots"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
