@@ -1,6 +1,7 @@
 -- ProrataAccountingExec.lean : recursive execution accounting replay.
 
 import Blanc.ProrataRealizedAccounting
+import Blanc.ExecutionMessageEffects
 
 namespace Blanc
 
@@ -31,6 +32,22 @@ def execEntry (ca : Adr) (sevm : Sevm) (state : State) :
   simp [execEntry, target]
 
 end AccountingSnapshot
+
+/-- The exact message-level facts needed to interpret a retained raw execution
+as PRORATA accounting.  `codeOrForeign` excludes synthetic CREATE roots that
+run arbitrary code at the installed address; `callerOrForeign` excludes a
+direct self-withdrawal root while remaining vacuous for foreign roots. -/
+structure AccountingMessageReady (ca : Adr) (msg : Msg) : Prop where
+  runReady : prorataSpec.MessageRunReady ca msg
+  callerOrForeign :
+    msg.shouldTransferValue = true ∨ msg.currentTarget ≠ ca
+
+theorem AccountingMessageReady.caller_ne
+    {ca : Adr} {msg : Msg} (ready : AccountingMessageReady ca msg)
+    (target : msg.currentTarget = ca) : msg.caller ≠ ca := by
+  rcases ready.callerOrForeign with transfer | foreign
+  · exact ready.runReady.ready.ne transfer
+  · exact False.elim (foreign target)
 
 /-- Settlement-aware accounting replay for one retained CALL message.  A
 committing child contributes its recursively proved body; a noncommitting
@@ -749,6 +766,158 @@ theorem Exec.coreProrataAccounting {ca : Adr} :
       hat step next targetNe ihNext
   · intro pc sevm pre l out hat step targetNe
     exact Exec.CoreProrataAccounting.last hat step targetNe
+
+/-- Instantiate the recursive interpreter theorem at the exact EVM root
+selected by a successful message entry. -/
+theorem Exec.prorataAccountingReplay_of_messageRoot
+    {ca : Adr} {msg : Msg} {entry : Benv}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (transfer : msg.benvAfterTransfer = .ok entry)
+    (evmEq : (⟨pc, sevm, pre⟩ : Evm) =
+      initEvm (msg.withBenv entry))
+    (committed : Execution.commits out = true)
+    (ready : AccountingMessageReady ca msg)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.execEntry ca sevm pre.state) steps
+        (AccountingSnapshot.ofState ca
+          (Execution.committedPost out committed).state) := by
+  have precondition :=
+    ContractSpec.Pre.of_inv_benvAfterTransfer
+      ready.runReady.ready.ne ready.runReady.ready.val0
+      transfer ready.runReady.ready.state
+  have pcEq := congrArg Evm.pc evmEq
+  have sevmEq := congrArg Evm.sta evmEq
+  have preEq := congrArg Evm.dyna evmEq
+  dsimp only [initEvm] at pcEq sevmEq preEq
+  subst pc
+  subst sevm
+  subst pre
+  have installed : Prog.At prorata ca 0
+      (initSevm (msg.withBenv entry))
+      (initDevm (msg.withBenv entry)) := by
+    refine ⟨precondition.code, ?_⟩
+    intro target
+    refine ⟨?_, rfl⟩
+    rcases ready.runReady.codeOrForeign with call | foreign
+    · exact ready.runReady.ready.code call
+        (by simpa [initSevm, Msg.withBenv] using target)
+    · exact False.elim (foreign
+        (by simpa [initSevm, Msg.withBenv] using target))
+  have direct :
+      (initSevm (msg.withBenv entry)).currentTarget = ca →
+        (initSevm (msg.withBenv entry)).codeAddress = some ca := by
+    intro target
+    rcases ready.runReady.codeOrForeign with call | foreign
+    · exact ready.runReady.ready.codeAddress call
+        (by simpa [initSevm, Msg.withBenv] using target)
+    · exact False.elim (foreign
+        (by simpa [initSevm, Msg.withBenv] using target))
+  have caller :
+      (initSevm (msg.withBenv entry)).currentTarget = ca →
+        (initSevm (msg.withBenv entry)).caller.toB256.toAdr ≠ ca := by
+    intro target
+    rw [toAdr_toB256]
+    exact ready.caller_ne
+      (by simpa [initSevm, Msg.withBenv] using target)
+  have all := Exec.coreProrataAccounting (ca := ca)
+  have core := all 0 (initSevm (msg.withBenv entry))
+    (initDevm (msg.withBenv entry)) out run installed
+  exact core run committed installed precondition direct caller
+    blockIndex transactionIndex [] 0
+
+/-- A retained raw message realizes a complete PRORATA accounting replay from
+the wrapper's pre-transfer world to its settled post-state.  A no-slot message
+is classified directly; an interpreted slot consumes the generic recursive
+execution theorem with root frame provenance. -/
+theorem retainedProcessMessageAccountingReplay
+    {ca : Adr} {msg : Msg} {post : Devm}
+    (trace : _root_.Blanc.ExecutionTrace.ProcessMessageTrace msg (.ok post))
+    (ready : AccountingMessageReady ca msg)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca msg.benv.state) steps
+        (AccountingSnapshot.ofState ca post.state) := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none =>
+      let provenance : ProrataAccountingProvenance :=
+        { blockIndex := blockIndex
+          transactionIndex := transactionIndex
+          framePath := [] }
+      exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
+        (congrFun
+          (_root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq
+            process) ca)
+        (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none process
+          ready.runReady.ready.ne ready.runReady.ready.state.side)
+  | @some pc sevm pre out run =>
+      apply ProcessMessage.accountingReplay_of_body process
+        ready.runReady.ready.ne ready.runReady.ready.val0
+        ready.runReady.ready.state.side
+      intro committed
+      have enter := (RunFrame.some_inv process).1
+      rcases Frame.enter_run_inv enter with
+        ⟨entry, transfer, evmEq⟩
+      exact Exec.prorataAccountingReplay_of_messageRoot run transfer evmEq
+        committed ready blockIndex transactionIndex
+
+/-- CREATE counterpart of `retainedProcessMessageAccountingReplay`.  Fresh
+account preparation and code-deposit settlement are interpreted once around
+the same retained recursive constructor execution. -/
+theorem retainedProcessCreateMessageAccountingReplay
+    {ca : Adr} {msg : Msg} {post : Devm}
+    (trace :
+      _root_.Blanc.ExecutionTrace.ProcessCreateMessageTrace msg (.ok post))
+    (ready : AccountingMessageReady ca msg)
+    (targetNone : msg.target.isNone = true)
+    (targetNe : msg.currentTarget ≠ ca)
+    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca msg.benv.state) steps
+        (AccountingSnapshot.ofState ca post.state) := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none =>
+      let provenance : ProrataAccountingProvenance :=
+        { blockIndex := blockIndex
+          transactionIndex := transactionIndex
+          framePath := [] }
+      exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
+        (congrFun
+          (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty
+            process fresh) ca)
+        (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none process
+          ready.runReady.ready.ne ready.runReady.ready.state.side)
+  | @some pc sevm pre out run =>
+      apply ProcessCreateMessage.accountingReplay_of_body process
+        ready.runReady.ready.ne ready.runReady.ready.val0 fresh
+        ready.runReady.ready.state.side
+      intro committed
+      have preparedInv :=
+        ready.runReady.ready.processCreateMessage_msg targetNone targetNe
+      have preparedTargetNe :
+          (processCreateMessage.msg msg).currentTarget ≠ ca := by
+        intro target
+        exact targetNe (by
+          simpa [processCreateMessage.msg, Msg.withBenv] using target)
+      have preparedReady : AccountingMessageReady ca
+          (processCreateMessage.msg msg) := by
+        refine ⟨preparedInv.runReady_of_foreign preparedTargetNe, ?_⟩
+        rcases ready.callerOrForeign with transfer | foreign
+        · exact Or.inl (by
+            simpa [processCreateMessage.msg, Msg.withBenv] using transfer)
+        · exact Or.inr preparedTargetNe
+      have enter := (RunFrame.some_inv process).1
+      rcases Frame.enter_run_inv enter with
+        ⟨entry, transfer, evmEq⟩
+      exact Exec.prorataAccountingReplay_of_messageRoot run transfer evmEq
+        committed preparedReady blockIndex transactionIndex
 
 end Prorata
 

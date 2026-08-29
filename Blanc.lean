@@ -6,6 +6,7 @@ import Blanc.ExecutionSettlement
 import Blanc.ExecutionPath
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
+import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionOccurrence
