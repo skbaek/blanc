@@ -51,7 +51,7 @@ import sys
 
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
-          "ForwardNoRawSstore",
+          "ForwardNoRawSstore", "ForwardLog",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
           "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
           "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
@@ -75,6 +75,7 @@ CONTRACTS = {
                        "BeaconDepositInsertFirstLiveRun",
                        "BeaconDepositInsertCommit", "BeaconDepositInsertBridge",
                        "BeaconDepositSuccessGuards",
+                       "BeaconDepositGuards",
                        "BeaconDepositRootMemory", "BeaconDepositRoot",
                        "BeaconDepositRootFold", "BeaconDepositRootEffects",
                        "BeaconDepositRootPublic",

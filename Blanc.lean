@@ -98,6 +98,7 @@ import Blanc.ForwardCall
 import Blanc.ForwardStorageAccess
 import Blanc.ForwardSha256
 import Blanc.ForwardNoRawSstore
+import Blanc.ForwardLog
 import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowResult
 import Blanc.Weth10HolderFlowWriteCompleteness
