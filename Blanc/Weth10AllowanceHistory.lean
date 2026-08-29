@@ -22,6 +22,8 @@ open Jaune
 
 namespace Weth10
 
+open _root_.Blanc.ExecutionTrace (systemTransactionMessage)
+
 /-! ## The world-state carrier -/
 
 /-- Allowance-region transport at ordinary world-state endpoints: every tagged

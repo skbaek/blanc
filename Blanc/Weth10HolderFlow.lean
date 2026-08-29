@@ -655,11 +655,6 @@ abbrev SystemMessageTrace := ExecutionTrace.SystemMessageTrace
 abbrev RequestsTrace := ExecutionTrace.RequestsTrace
 abbrev AppliedBodyTrace := ExecutionTrace.AppliedBodyTrace
 
-export Blanc.ExecutionTrace
-  (messageCreateCollision messageCallDelegation messageCallExecutionMessage
-    transactionPreludeBout transactionBlobGasFee transactionTenv
-    systemTransactionMessage)
-
 theorem exists_retainedXlot_of_filled {xl : Xlot}
     (h : xl.Filled) : Nonempty (RetainedXlot xl) :=
   ExecutionTrace.exists_retainedXlot_of_filled h

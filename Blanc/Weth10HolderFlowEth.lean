@@ -20,6 +20,10 @@ open Jaune
 
 namespace Weth10
 
+open _root_.Blanc.ExecutionTrace
+  (messageCreateCollision messageCallDelegation messageCallExecutionMessage
+    systemTransactionMessage)
+
 /-- ETH entering WETH10 and represented by an ordinary mint action. -/
 def FlowAtom.ethMint : FlowAtom → Nat
   | .ordinaryMint _ _ amount => amount

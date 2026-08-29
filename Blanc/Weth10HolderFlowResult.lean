@@ -18,6 +18,9 @@ open Jaune
 
 namespace Weth10
 
+open _root_.Blanc.ExecutionTrace
+  (messageCallDelegation transactionTenv systemTransactionMessage)
+
 /-- Wrap-aware balance-storage accounting at ordinary world-state endpoints. -/
 structure StateStorageFlowAccounting (ca : Adr) (pre post : State)
     (actions : List FlowAction) : Prop where

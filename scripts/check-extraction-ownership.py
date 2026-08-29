@@ -5,21 +5,22 @@ The sole ownership map is execution-settlement-lift-manifest.json.  It checks
 that every listed declaration is genuinely declared by the common module, that
 no listed donor declaration or common-owner basename shadow survives in the
 historical WETH10 donor family or the Lido family, that neither family contains
-an unapproved alias/export command, and that Weth10HolderFlow imports the
-common module directly.  The one exact `Blanc.ExecutionTrace` compatibility
-export and 21 exact compatibility abbreviations approved when the retained
-trace carrier moved are required; any drift or additional alias/export still
-fails.  It deliberately does not try to
+an alias/export command, and that Weth10HolderFlow imports the
+common module directly.  The 21 exact compatibility abbreviations approved
+when the retained trace carrier moved are required; any drift or added
+alias/export still fails.  A contract module may consume a common declaration
+but must never re-provide one, so no export is approved: each consumer imports
+and opens `Blanc.ExecutionTrace` directly.  It deliberately does not try to
 recognize propositionally equivalent declarations under unrelated names; that
 remains an independent review obligation.
 
-``--negative-controls`` runs ten controls: the historical donor alias, an
+``--negative-controls`` runs nine controls: the historical donor alias, an
 unexpected donor export, a Lido common-owner basename shadow, a Lido alias, a
 missing common declaration, a missing direct import, and distinct trailing-`?`
-declaration parsing, plus removal of the approved trace compatibility export,
-removal of the WETH flow compatibility block, and right-hand-side drift in the
-attribution compatibility block.  Each must fail with its own diagnostic tag,
-so a green control run proves the relevant channel is live.
+declaration parsing, plus removal of the WETH flow compatibility block and
+right-hand-side drift in the attribution compatibility block.  Each must fail
+with its own diagnostic tag, so a green control run proves the relevant
+channel is live.
 """
 
 from __future__ import annotations
@@ -49,10 +50,6 @@ DECL_RE = re.compile(
 IMPORT_RE = re.compile(rf"^\s*import\s+({IDENT})(?:\s|$)")
 ALIAS_COMMAND_RE = re.compile(r"\balias\b")
 EXPORT_COMMAND_RE = re.compile(r"\bexport\b")
-APPROVED_TRACE_COMPAT_EXPORT = """export Blanc.ExecutionTrace
-  (messageCreateCollision messageCallDelegation messageCallExecutionMessage
-    transactionPreludeBout transactionBlobGasFee transactionTenv
-    systemTransactionMessage)"""
 APPROVED_TRACE_COMPAT_ABBREVS = {
     "Blanc/Weth10HolderFlow.lean": """abbrev Blanc.ExecutionTrace.RetainedXlot.flowActions :=
   Blanc.Weth10.RetainedXlot.flowActions
@@ -210,26 +207,16 @@ def imports(path: Path) -> set[str]:
 
 
 def donor_aliases_or_exports(path: Path, donors: set[str]) -> list[tuple[str, int, str]]:
-    """Reject every unapproved alias/export command in a donor module.
+    """Reject every alias/export command in a donor module.
 
-    Apart from the exact trace export below, the audited WETH donor set
-    contains no legitimate alias or export command. Rejecting either command
-    keyword token anywhere outside comments avoids
+    The audited WETH donor set contains no legitimate alias or export command:
+    a contract module consumes common declarations, it never re-provides them.
+    Rejecting either command keyword token anywhere outside comments avoids
     unsound approximations of Lean's command wrappers, modifiers, multiline,
     root-qualified, and ancestor-relative name grammar. A future string or
-    macro containing the token fails conservatively for human review.  The
-    exact retained-trace compatibility export is the sole reviewed exception;
-    whitespace or name drift makes it visible again and therefore fail closed.
+    macro containing the token fails conservatively for human review.
     """
     source = strip_comments(path.read_text(encoding="utf-8"))
-    if path.name == "Weth10HolderFlow.lean":
-        count = source.count(APPROVED_TRACE_COMPAT_EXPORT)
-        if count == 1:
-            erased = "".join(
-                "\n" if char == "\n" else " "
-                for char in APPROVED_TRACE_COMPAT_EXPORT
-            )
-            source = source.replace(APPROVED_TRACE_COMPAT_EXPORT, erased, 1)
     hits: list[tuple[str, int, str]] = []
     for form, pattern in (("alias", ALIAS_COMMAND_RE), ("export", EXPORT_COMMAND_RE)):
         for match in pattern.finditer(source):
@@ -338,16 +325,6 @@ def audit(root: Path) -> list[str]:
             errors.append(f"DIRECT-IMPORT-MISSING — required consumer module missing: {config.direct_module}")
         elif config.direct_import not in imports(direct_path):
             errors.append(f"DIRECT-IMPORT-MISSING — {config.direct_module} does not directly import {config.direct_import}")
-        elif (
-            strip_comments(direct_path.read_text(encoding="utf-8")).count(
-                APPROVED_TRACE_COMPAT_EXPORT
-            )
-            != 1
-        ):
-            errors.append(
-                "TRACE-COMPAT-EXPORT — Blanc/Weth10HolderFlow.lean must "
-                "contain the exact approved Blanc.ExecutionTrace export"
-            )
         return errors
     except (OSError, ValueError) as exc:
         return [f"SETUP — extraction ownership: {exc}"]
@@ -367,21 +344,6 @@ def mutate_donor_export(root: Path) -> None:
     path = root / "Blanc/Weth10HolderFlow.lean"
     with path.open("a", encoding="utf-8") as handle:
         handle.write("\nexport Blanc.Execution (commits)\n")
-
-
-def mutate_trace_compat_export_missing(root: Path) -> None:
-    path = root / "Blanc/Weth10HolderFlow.lean"
-    text = path.read_text(encoding="utf-8")
-    if text.count(APPROVED_TRACE_COMPAT_EXPORT) != 1:
-        raise ValueError("negative control could not uniquely find approved trace export")
-    path.write_text(
-        text.replace(
-            APPROVED_TRACE_COMPAT_EXPORT,
-            "-- removed trace compatibility export",
-            1,
-        ),
-        encoding="utf-8",
-    )
 
 
 def mutate_trace_compat_flow_missing(root: Path) -> None:
@@ -453,8 +415,6 @@ def negative_controls(root: Path) -> list[str]:
     controls = [
         ("donor-alias", "DONOR-SURVIVOR", mutate_donor_alias),
         ("donor-export", "DONOR-SURVIVOR", mutate_donor_export),
-        ("trace-export-missing", "TRACE-COMPAT-EXPORT",
-         mutate_trace_compat_export_missing),
         ("trace-flow-compat-missing", "TRACE-COMPAT-ABBREV",
          mutate_trace_compat_flow_missing),
         ("trace-attribution-compat-drift", "TRACE-COMPAT-ABBREV",
@@ -525,9 +485,9 @@ def main() -> int:
                 print(control)
             print(f"REGRESSION — extraction ownership: {len(controls)} negative control(s) failed")
             return 1
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and unapproved aliases/exports absent; approved trace compatibility export and 21 abbreviations exact; direct import present; 10/10 negative controls live")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present; 9/9 negative controls live")
     else:
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and unapproved aliases/exports absent; approved trace compatibility export and 21 abbreviations exact; direct import present")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present")
     return 0
 
 
