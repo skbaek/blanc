@@ -362,6 +362,34 @@ structure RealizedWithdrawal (sevm : Sevm) (pre post : Devm) where
   postStor : Devm.getStor post = Devm.getStor callPost
   postBalance : Devm.getBal post = Devm.getBal callPost
 
+/-- The retained callback result is the exact accounting endpoint of the
+outer withdrawal frame.  Machine-local return cleanup is erased here, while
+the target storage and balance remain tied to the callback state. -/
+theorem RealizedWithdrawal.postSnapshot
+    {sevm : Sevm} {pre post : Devm}
+    (withdrawal : RealizedWithdrawal sevm pre post) :
+    AccountingSnapshot.ofState sevm.currentTarget post.state =
+      AccountingSnapshot.ofState sevm.currentTarget
+        withdrawal.payout.child.state := by
+  have outerToCall :
+      AccountingSnapshot.ofState sevm.currentTarget post.state =
+        AccountingSnapshot.ofState sevm.currentTarget
+          withdrawal.callPost.state := by
+    unfold AccountingSnapshot.ofState
+    exact congrArg₂ AccountingSnapshot.mk
+      (congrArg supplyN
+        (congrFun withdrawal.postStor sevm.currentTarget))
+      (congrArg B256.toNat
+        (congrFun withdrawal.postBalance sevm.currentTarget))
+  have callToChild :
+      AccountingSnapshot.ofState sevm.currentTarget
+          withdrawal.callPost.state =
+        AccountingSnapshot.ofState sevm.currentTarget
+          withdrawal.payout.child.state :=
+    congrArg (AccountingSnapshot.ofState sevm.currentTarget)
+      withdrawal.payout.callPostState
+  exact outerToCall.trans callToChild
+
 /-- A successful withdrawal body realizes the exact paid-entry accounting
 step and retains the callback trace needed to continue the replay. -/
 theorem BodyEntry.realizedWithdrawal
@@ -704,6 +732,37 @@ theorem of_addBal
       exact congrArg₂ AccountingSnapshot.mk
         (congrArg supplyN storage_eq)
         (congrArg B256.toNat balance_eq)
+    exact ⟨[], nil_of_eq snapshot_eq⟩
+
+/-- Any projected transition that fixes PRORATA storage and cannot lower its
+balance is either one positive external credit or no accounting step at all.
+This endpoint lemma lets foreign opcode proofs expose only their two relevant
+facts instead of duplicating the four-way classifier. -/
+theorem of_storage_eq_balance_mono
+    {ca : Adr} {pre post : State}
+    (provenance : ProrataAccountingProvenance)
+    (storage_eq : post.getStor ca = pre.getStor ca)
+    (balance_mono : (pre.bal ca).toNat ≤ (post.bal ca).toNat) :
+    ∃ steps,
+      ProrataAccountingReplay offset.toNat
+        (AccountingSnapshot.ofState ca pre) steps
+        (AccountingSnapshot.ofState ca post) := by
+  let amount := (post.bal ca).toNat - (pre.bal ca).toNat
+  have balance_eq :
+      (post.bal ca).toNat = (pre.bal ca).toNat + amount := by
+    dsimp only [amount]
+    omega
+  by_cases positive : 0 < amount
+  · exact ⟨_, singleton provenance
+      (accountingEffect_externalCredit storage_eq balance_eq positive)⟩
+  · have zero : amount = 0 := Nat.eq_zero_of_not_pos positive
+    have snapshot_eq :
+        AccountingSnapshot.ofState ca post =
+          AccountingSnapshot.ofState ca pre := by
+      unfold AccountingSnapshot.ofState
+      exact congrArg₂ AccountingSnapshot.mk
+        (congrArg supplyN storage_eq)
+        (by rw [balance_eq, zero, Nat.add_zero])
     exact ⟨[], nil_of_eq snapshot_eq⟩
 
 /-- Every replay yields the frozen connected-path carrier used by the exact
