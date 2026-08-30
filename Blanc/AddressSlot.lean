@@ -14,6 +14,11 @@ namespace Blanc
 open Jaune
 open Jaune.Ninst Ninst
 
+/-- Read an address-typed storage word, discarding the raw upper ninety-six
+bits exactly as Solidity does when an `address` value is loaded. -/
+def loadAddressWordAt (slot : B256) : Line :=
+  [pushB256 slot, sload] ++ pushAddressMask ++ [Ninst.not, Ninst.and]
+
 /-- Store an address-typed word in `slot` with Solidity's packed-field
 semantics.  Given `newAddress :: stack`, this preserves the slot's upper
 ninety-six bits and replaces only its low 160 bits.  This matters even for

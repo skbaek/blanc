@@ -61,7 +61,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
-           "RootedExecution", "AddressSlot", "MessageResult",
+           "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "DelegatecallEnvelope",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects"]
@@ -92,6 +92,7 @@ CONTRACTS = {
                    "ProxyPairOssifiableArtifacts",
                    "ProxyPairOssifiableForwarding",
                    "ProxyPairOssifiableControl",
+                   "ProxyPairOssifiableControlEffects",
                    "ProxyPairOssifiableConstructor",
                    "ProxyPairImplementation", "ProxyPairExecution",
                    "ProxyPairCorrespondence", "ProxyPairAuthority"],

@@ -108,6 +108,7 @@ import Blanc.RevertPayload
 import Blanc.CompiledWalkInversion
 import Blanc.LinearDispatch
 import Blanc.AddressSlot
+import Blanc.AddressSlotProofs
 import Blanc.ForwardCall
 import Blanc.DelegatecallEnvelope
 import Blanc.Weth10Redeemable
@@ -131,6 +132,7 @@ import Blanc.ProxyPairOssifiableDeploy
 import Blanc.ProxyPairOssifiableArtifacts
 import Blanc.ProxyPairOssifiableForwarding
 import Blanc.ProxyPairOssifiableControl
+import Blanc.ProxyPairOssifiableControlEffects
 import Blanc.ProxyPairOssifiableConstructor
 import Blanc.ProxyPairImplementation
 import Blanc.ProxyPairExecution

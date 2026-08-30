@@ -1,4 +1,5 @@
 import Blanc.RevertPayload
+import Blanc.TransientInvariance
 
 /-!
 # Contract-neutral inversion of compiled function walks
@@ -12,6 +13,7 @@ they do not mention a contract, selector table, or deployment family.
 namespace Blanc
 
 open Jaune
+open scoped LogOutputHinv
 
 /-- `Func.RunCompiledTo` at a `.next` node. -/
 theorem runCompiledTo_next_inv {fs : List Func} {sevm : Sevm}
@@ -393,6 +395,267 @@ theorem runCompiledTo_revSelector_inv {fs : List Func} {sevm : Sevm}
       show ((4 : B256)).toNat = 4 from rfl,
       read_selector_of_write_zero (B256.length_toBytes _),
       toBytes_toB256_drop28 data hlen]
+
+/-- Invert the constant-store prefix while retaining its exact memory image
+and the three state components relevant to a panic frame. -/
+theorem runCompiledTo_prependStoresRev_frame_inv
+    {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {stores : List (B256 × Nat)} {rest : Func} {ex : Execution}
+    (hbound : ∀ store ∈ stores, 32 * store.2 < 2 ^ 256)
+    (run : Func.RunCompiledTo fs sevm pre
+      (prependStoresRev stores rest) ex) :
+    ∃ mid,
+      Func.RunCompiledTo fs sevm mid rest ex ∧
+      Devm.getStor pre = Devm.getStor mid ∧
+      pre.transientStorage = mid.transientStorage ∧
+      pre.logs = mid.logs ∧
+      mid.memory = Mem.writeStoresRev pre.memory stores := by
+  induction stores generalizing pre rest with
+  | nil =>
+      exact ⟨pre, run, rfl, rfl, rfl, rfl⟩
+  | cons store stores ih =>
+      have hhead : 32 * store.2 < 2 ^ 256 := hbound store (by simp)
+      have htail : ∀ item ∈ stores, 32 * item.2 < 2 ^ 256 := by
+        intro item hitem
+        exact hbound item (by simp [hitem])
+      change Func.RunCompiledTo fs sevm pre
+        (prependStoresRev stores
+          (prependStore store.1 store.2 rest)) ex at run
+      obtain ⟨storePre, hstorePre, hstorPrefix, htransientPrefix,
+        hlogsPrefix, hmemoryPrefix⟩ := ih htail run
+      unfold prependStore at hstorePre
+      obtain ⟨wordPost, hpushWord, hstorePre⟩ :=
+        runCompiledTo_next_inv hstorePre
+      obtain ⟨indexPost, hpushIndex, hstorePre⟩ :=
+        runCompiledTo_next_inv hstorePre
+      obtain ⟨mid, hmstore, hrest⟩ := runCompiledTo_next_inv hstorePre
+      have rpushWord := Ninst.Run.of_runCompiled hpushWord
+      have rpushIndex := Ninst.Run.of_runCompiled hpushIndex
+      have rmstore := Ninst.Run.of_runCompiled hmstore
+      have pword := of_run_pushB256 rpushWord
+      have pindex := of_run_pushB256 rpushIndex
+      obtain ⟨index, word, hpop, hmemory⟩ := of_run_mstore_val rmstore
+      have hoperands :
+          index = Nat.toB256 (32 * store.2) ∧ word = store.1 := by
+        unfold Stack.Pop Split at hpop
+        rw [pindex.stack, pword.stack] at hpop
+        injection hpop with hindex htail
+        injection htail with hword _
+        exact ⟨hindex.symm, hword.symm⟩
+      refine ⟨mid, hrest, ?_, ?_, ?_, ?_⟩
+      · exact hstorPrefix.trans
+          ((Ninst.Hinv.inv (f := Devm.getStor) rpushWord).trans
+            ((Ninst.Hinv.inv (f := Devm.getStor) rpushIndex).trans
+              (Ninst.Hinv.inv (f := Devm.getStor) rmstore)))
+      · exact htransientPrefix.trans
+          ((Ninst.Hinv.inv (f := Devm.transientStorage) rpushWord).trans
+            ((Ninst.Hinv.inv (f := Devm.transientStorage) rpushIndex).trans
+              (Ninst.Hinv.inv (f := Devm.transientStorage) rmstore)))
+      · exact hlogsPrefix.trans
+          (pword.logs.trans
+            (pindex.logs.trans (Ninst.Hinv.inv (f := Devm.logs) rmstore)))
+      · rw [hmemory, hoperands.1, hoperands.2,
+          ← pindex.memory, ← pword.memory, hmemoryPrefix,
+          B256.toNat_toB256_of_lt hhead]
+        rfl
+
+/-- Invert `REVERT` with known operands while retaining its frame effects.
+The final window-expansion charge is the only remaining out-of-gas point. -/
+theorem of_run_rev_window_frame
+    {sevm : Sevm} {devm : Devm} {i sz : B256}
+    {tail : List B256} {ex : Execution}
+    (hstack : devm.stack = i :: sz :: tail)
+    (run : Linst.Run sevm devm .rev ex) :
+    (∃ d,
+      ex = .error (.halt (.outOfGas .none), d) ∧
+      Devm.getStor d = Devm.getStor devm ∧
+      d.transientStorage = devm.transientStorage ∧
+      d.logs = devm.logs) ∨
+    (∃ post,
+      ex = .error (.revert, post) ∧
+      post.output = (devm.memory.read i.toNat sz.toNat).1 ∧
+      Devm.getStor post = Devm.getStor devm ∧
+      post.transientStorage = devm.transientStorage ∧
+      post.logs = devm.logs) := by
+  have heq : Linst.run sevm devm .rev = ex := run
+  rcases Nat.lt_or_ge devm.gasLeft
+      (devm.extCost [⟨i.toNat, sz.toNat⟩]) with hgas | hgas
+  · have hoog : Linst.run sevm devm .rev =
+        .error ⟨.halt (.outOfGas .none),
+          devm.setMach ⟨tail, devm.memory, devm.gasLeft⟩⟩ := by
+      show (do
+        let ⟨index, d⟩ ← devm.popToNat
+        let ⟨size, d⟩ ← d.popToNat
+        let cost := d.extCost [⟨index, size⟩]
+        let d ← chargeGas cost d
+        let ⟨output, d⟩ := d.memRead index size
+        let d := d.withOutput output
+        Except.error ⟨.revert, d⟩) = _
+      rw [Devm.popToNat_eq_ok hstack]
+      simp only [bind, Except.bind]
+      rw [Devm.popToNat_eq_ok
+        (devm := devm.setMach
+          ⟨sz :: tail, devm.memory, devm.gasLeft⟩) rfl]
+      simp only [Devm.setMach_setMach, Devm.memory_setMach,
+        Devm.gasLeft_setMach]
+      have hext : (devm.setMach
+          ⟨tail, devm.memory, devm.gasLeft⟩).extCost
+          [⟨i.toNat, sz.toNat⟩] =
+            devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
+      rw [hext]
+      have hcharge : chargeGas
+          (devm.extCost [⟨i.toNat, sz.toNat⟩])
+          (devm.setMach ⟨tail, devm.memory, devm.gasLeft⟩) =
+            .error ⟨.halt (.outOfGas .none),
+              devm.setMach ⟨tail, devm.memory, devm.gasLeft⟩⟩ := by
+        rw [chargeGas_def]
+        have hsafe : safeSub
+            (devm.setMach ⟨tail, devm.memory, devm.gasLeft⟩).gasLeft
+            (devm.extCost [⟨i.toNat, sz.toNat⟩]) = none := by
+          unfold safeSub
+          rw [if_neg (by simp only [Devm.gasLeft_setMach]; omega)]
+        rw [hsafe]
+      rw [hcharge]
+    exact Or.inl ⟨_, heq.symm.trans hoog, rfl, rfl, rfl⟩
+  · let post :=
+      ((devm.setMach ⟨tail, devm.memory,
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
+          i.toNat sz.toNat).2.withOutput
+        (devm.memory.read i.toNat sz.toNat).1
+    have hpost : Linst.run sevm devm .rev = .error (.revert, post) := by
+      exact Linst.run_rev_eq_error hstack hgas rfl
+    have hframe := Linst.run_instructionFrame sevm devm .rev (by decide)
+    rw [hpost] at hframe
+    refine Or.inr ⟨post, heq.symm.trans hpost, ?_, ?_, ?_, ?_⟩
+    · rfl
+    · funext owner
+      exact (hframe.getStor owner).symm
+    · exact hframe.transientStorage.symm
+    · dsimp only [post]
+      change ((devm.setMach ⟨tail, devm.memory,
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
+          i.toNat sz.toNat).2.logs = devm.logs
+      let base := devm.setMach ⟨tail, devm.memory,
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩
+      change (base.memRead i.toNat sz.toNat).2.logs = devm.logs
+      have hread : (base.memRead i.toNat sz.toNat).2.logs = base.logs := by
+        unfold Devm.memRead
+        rfl
+      exact hread.trans (by rfl)
+
+/-- Invert an arbitrary constant-data reverter, including its final
+out-of-gas leg and its exact state frame. -/
+theorem runCompiledTo_revData_frame_inv
+    {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {blob image : Bytes} {ex : Execution}
+    (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
+    (hblob : blob.length < 2 ^ 256)
+    (hwords : 32 * (bytesWords blob).length < 2 ^ 256)
+    (run : Func.RunCompiledTo fs sevm pre (Func.revData blob) ex) :
+    (∃ d,
+      ex = .error (.halt (.outOfGas .none), d) ∧
+      Devm.getStor d = Devm.getStor pre ∧
+      d.transientStorage = pre.transientStorage ∧
+      d.logs = pre.logs) ∨
+    (∃ post,
+      ex = .error (.revert, post) ∧
+      post.output = blob ∧
+      Devm.getStor post = Devm.getStor pre ∧
+      post.transientStorage = pre.transientStorage ∧
+      post.logs = pre.logs) := by
+  have hbound : ∀ store ∈ (bytesWords blob).zipIdx,
+      32 * store.2 < 2 ^ 256 := by
+    intro store hstore
+    have hget : (bytesWords blob)[store.2]? = some store.1 :=
+      (List.mk_mem_zipIdx_iff_getElem?).mp hstore
+    have hindex : store.2 < (bytesWords blob).length :=
+      (List.getElem?_eq_some_iff.mp hget).1
+    omega
+  unfold Func.revData at run
+  obtain ⟨revertPre, htail, hstorPrefix, htransientPrefix,
+    hlogsPrefix, hmemory⟩ :=
+    runCompiledTo_prependStoresRev_frame_inv hbound run
+  obtain ⟨lengthPost, hpushLength, htail⟩ :=
+    runCompiledTo_next_inv htail
+  obtain ⟨windowPre, hpushZero, hrev⟩ := runCompiledTo_next_inv htail
+  have rpushLength := Ninst.Run.of_runCompiled hpushLength
+  have rpushZero := Ninst.Run.of_runCompiled hpushZero
+  have plength := of_run_pushB256 rpushLength
+  have pzero := of_run_pushB256 rpushZero
+  have hstack : windowPre.stack =
+      (0 : B256) :: Nat.toB256 blob.length :: revertPre.stack := by
+    rw [pzero.stack, plength.stack]
+    simp only [List.singleton_append]
+  have hstorWindow : Devm.getStor pre = Devm.getStor windowPre :=
+    hstorPrefix.trans
+      ((Ninst.Hinv.inv (f := Devm.getStor) rpushLength).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) rpushZero))
+  have htransientWindow :
+      pre.transientStorage = windowPre.transientStorage :=
+    htransientPrefix.trans
+      ((Ninst.Hinv.inv (f := Devm.transientStorage) rpushLength).trans
+        (Ninst.Hinv.inv (f := Devm.transientStorage) rpushZero))
+  have hlogsWindow : pre.logs = windowPre.logs :=
+    hlogsPrefix.trans (plength.logs.trans pzero.logs)
+  have hmemoryWindow : windowPre.memory =
+      Mem.writeStoresRev pre.memory (bytesWords blob).zipIdx :=
+    pzero.memory.symm.trans (plength.memory.symm.trans hmemory)
+  have hlast := runCompiledTo_last_inv hrev
+  rcases of_run_rev_window_frame hstack hlast with
+    ⟨d, hex, hstor, htransient, hlogs⟩ |
+      ⟨post, hex, houtput, hstor, htransient, hlogs⟩
+  · exact Or.inl ⟨d, hex, hstor.trans hstorWindow.symm,
+      htransient.trans htransientWindow.symm,
+      hlogs.trans hlogsWindow.symm⟩
+  · have hpayload : post.output = blob := by
+      rw [houtput, hmemoryWindow, B256.toNat_zero,
+        B256.toNat_toB256_of_lt hblob,
+        Mem.read_writeStoresRev_bytesWords hwf hreads]
+    exact Or.inr ⟨post, hex, hpayload, hstor.trans hstorWindow.symm,
+      htransient.trans htransientWindow.symm,
+      hlogs.trans hlogsWindow.symm⟩
+
+/-- Call-level wrapper for an auxiliary slot known to contain `Func.revData`.
+The conclusion remains explicitly tied to that call walk; no payload is
+inferred merely from an error flag. -/
+theorem runCompiledTo_call_revData_frame_inv
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {slot : Nat}
+    {blob image : Bytes} {ex : Execution}
+    (hget : fs[slot]? = some (Func.revData blob))
+    (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
+    (hblob : blob.length < 2 ^ 256)
+    (hwords : 32 * (bytesWords blob).length < 2 ^ 256)
+    (run : Func.RunCompiledTo fs sevm pre (.call slot) ex) :
+    (∃ d,
+      ex = .error (.halt (.outOfGas .none), d) ∧
+      Devm.getStor d = Devm.getStor pre ∧
+      d.transientStorage = pre.transientStorage ∧
+      d.logs = pre.logs) ∨
+    (∃ post,
+      ex = .error (.revert, post) ∧
+      post.output = blob ∧
+      Devm.getStor post = Devm.getStor pre ∧
+      post.transientStorage = pre.transientStorage ∧
+      post.logs = pre.logs) := by
+  obtain ⟨bodyPre, hburn, bodyRun⟩ := runCompiledTo_call_inv hget run
+  have hwfBody : Mem.Wf bodyPre.memory := by
+    rw [← hburn.memory]
+    exact hwf
+  have hreadsBody : Mem.Reads bodyPre.memory image := by
+    rw [← hburn.memory]
+    exact hreads
+  rcases runCompiledTo_revData_frame_inv hwfBody hreadsBody hblob hwords
+      bodyRun with
+    ⟨d, hex, hstor, htransient, hlogs⟩ |
+      ⟨post, hex, hpayload, hstor, htransient, hlogs⟩
+  · exact Or.inl ⟨d, hex,
+      hstor.trans (funext (getStor_eq_of_state_eq hburn.state)).symm,
+      htransient.trans hburn.transientStorage.symm,
+      hlogs.trans hburn.logs.symm⟩
+  · exact Or.inr ⟨post, hex, hpayload,
+      hstor.trans (funext (getStor_eq_of_state_eq hburn.state)).symm,
+      htransient.trans hburn.transientStorage.symm,
+      hlogs.trans hburn.logs.symm⟩
 
 /-- A known call to an empty-data `REVERT` body cannot produce `.ok`. -/
 theorem Func.RunCompiledTo.not_ok_call_rev

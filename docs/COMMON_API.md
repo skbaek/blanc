@@ -36,9 +36,11 @@ registry has identified the likely vocabulary.
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
 - Known stack steps without a tactic arm: `prefix_of_mul`, `prefix_of_div`,
-  `prefix_of_timestamp`, `prefix_of_xor`, and
+  `prefix_of_timestamp`, `prefix_of_xor`, `prefix_of_extcodesize_val`, and
   `prefix_of_argCheckNonAddress` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
+  The `EXTCODESIZE` helper pins the exact code-size word from the instruction's
+  input state and carries unchanged memory across address warming.
 - The common `fsig +++ dispatch` entry preserves logs and output by
   `fsig_logs` and `fsig_output` in `Blanc/CommonProofs.lean`.
 - Ordinary compiled success walk (`Func.RunCompiled`): `func_run` and the
@@ -57,7 +59,11 @@ registry has identified the likely vocabulary.
   `Func.RunCompiledTo.not_ok_call_revData`,
   `Func.RunCompiledTo.not_ok_call_rev`, and
   `Func.RunCompiledTo.not_ok_call_revSelector`; successful `STOP` identity is
-  `Func.RunCompiledTo.stop_eq`.  For a known branch-head prefix use
+  `Func.RunCompiledTo.stop_eq`.  For exact constant-data revert payloads and
+  their persistent/transient/log frame, use
+  `runCompiledTo_revData_frame_inv`; when the reverter is reached through a
+  known auxiliary call, use `runCompiledTo_call_revData_frame_inv` so the
+  payload conclusion remains tied to that call walk.  For a known branch-head prefix use
   `Func.RunCompiledTo.zero_branch_of_prefix` or
   `Func.RunCompiledTo.succ_branch_of_prefix`, both outcome-polymorphic.  A
   successful shared `nonpayable` wrapper is peeled by
@@ -93,10 +99,14 @@ registry has identified the likely vocabulary.
   use `stack_of_pushBurn`, `stack_of_popBurnBy`,
   `stack_of_diffBurn_one`, and `stack_of_diffBurn_two` against the known input
   stack equation.
-- **Solidity address-slot writes.** `Blanc.storeAddressWordAt` in
+- **Solidity address-slot reads and writes.** `Blanc.loadAddressWordAt` and
+  `Blanc.storeAddressWordAt` in
   [`Blanc/AddressSlot.lean`](../Blanc/AddressSlot.lean) implements the raw storage
-  behavior of an assignment through an `address`-typed storage reference: it
-  preserves the existing upper 96 bits and replaces only the low 160 bits.
+  behavior of an `address`-typed storage reference: loads discard the raw
+  upper 96 bits, while assignments preserve those bits and replace only the
+  low 160 bits.  The value-carrying inversions
+  `of_loadAddressWordAt_val` and `of_storeAddressWordAt_val` live in
+  [`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean).
   Use it when delegated code can make a nominal address slot raw-dirty; a plain
   full-word `SSTORE` is observably different in that state.
 - Calls, delegate calls, or child-frame resumption: go to E2.
@@ -413,6 +423,9 @@ shared declarations rather than restating them per family.
   for the concrete four-byte selector.
 - Read back a `Bytes.writeAt`: `Bytes.sliceD_writeAt` and the neighboring
   pointwise/write-layout laws in `Blanc/CommonProofs.lean`.
+- Reassemble adjacent padded windows with `List.sliceD_split`.  For the common
+  two-word event window, `Mem.read_two_word_writes` directly proves that stores
+  at offsets 0 and 32 read back as the exact 64-byte concatenation.
 - Decode an exact word without losing bytes with
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private
@@ -436,6 +449,12 @@ skip a write that lands wholly above or wholly below the read window.  At
 whole-word granularity prefer `Bytes.readWord_writeAt_self` and
 `Bytes.readWord_writeAt_of_disjoint`, which fix the 32-byte width and take the
 disjointness as a single `≤`-disjunction.
+
+For an exact event append from a fixed `logWith k x y` fragment, use
+`of_logWith_val`: it consumes the known signature-plus-indexed topic prefix and
+returns both the residual stack prefix and the precise `Log` appended from the
+pre-LOG memory window.  `of_logWith201_val` remains the convenient specialized
+form for the common ERC-20 three-topic, one-word event.
 
 ## T — settlement
 

@@ -5329,6 +5329,60 @@ lemma prefix_of_arg {e k xs} {s s' : Devm} :
     (Sevm.argWord e k :: xs <<+ s'.stack) :=
   prefix_of_cdl_val
 
+/-- `EXTCODESIZE` at a known stack top, with the exact code-size word read
+from the instruction's input state.  Address warming may change the state
+metadata, but memory is untouched. -/
+lemma prefix_of_extcodesize_val
+    {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
+    (hp : x :: xs <<+ s.stack)
+    (run : Ninst.Run e s Ninst.extcodesize r) :
+    ((s.getCode x.toAdr).size.toB256 :: xs <<+ r.stack) ∧
+      s.memory = r.memory := by
+  rcases of_run_reg run with ⟨pc, hrun⟩
+  simp only [Rinst.run, Rinst.runCore] at hrun
+  rcases Except.bind_eq_ok hrun with ⟨⟨adr, d1⟩, hpopAdr, hrun⟩
+  rw [Devm.popToAdr_def] at hpopAdr
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hpopAdr
+  rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;>
+    simp [hpop] at hpopAdr
+  rcases hpopAdr with ⟨rfl, rfl⟩
+  have hpop' := Devm.pop_of_pop hpop
+  have hx : x = word :=
+    (List.of_cons_pref_of_cons_pref hp
+      (pref_of_split hpop'.stack)).left
+  subst word
+  have htail : xs <<+ d0.stack := of_append_pref hpop'.stack hp
+  split at hrun
+  · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
+    have hst : s.state = d2.state :=
+      hpop'.state.trans (Devm.burn_of_chargeGas hgas).state
+    have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
+      unfold Devm.getCode Devm.getAcct
+      rw [hst]
+    refine ⟨?_, ?_⟩
+    · rw [← hcode]
+      exact append_pref (Devm.push_of_push hpush).stack
+        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+    · exact hpop'.memory.trans
+        ((Devm.burn_of_chargeGas hgas).memory.trans
+          (Devm.push_of_push hpush).memory)
+  · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
+    have hst : s.state = d2.state :=
+      hpop'.state.trans
+        ((show d0.state = (addAccessedAddress d0 x.toAdr).state from rfl).trans
+          (Devm.burn_of_chargeGas hgas).state)
+    have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
+      unfold Devm.getCode Devm.getAcct
+      rw [hst]
+    refine ⟨?_, ?_⟩
+    · rw [← hcode]
+      exact append_pref (Devm.push_of_push hpush).stack
+        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+    · exact hpop'.memory.trans
+        ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
+          ((Devm.burn_of_chargeGas hgas).memory.trans
+            (Devm.push_of_push hpush).memory))
+
 /-! ### Reading a described calldata layout
 
 The bridge between `Sevm.dataWord` — what the contract's `calldataload` actually
@@ -9961,6 +10015,23 @@ lemma Bytes.sliceD_zero_length {bs : Bytes} {n : Nat}
   rw [List.takeD_eq_take _ (by omega), ← h]
   exact List.take_length
 
+/-- Split a padded slice at an arbitrary width.  This is the list-level
+identity used when adjacent ABI words are proved separately and then
+reassembled into one event or call-data window. -/
+lemma List.sliceD_split {ξ : Type} (xs : List ξ) (d : ξ) :
+    ∀ (a m b : Nat),
+      xs.sliceD m (a + b) d =
+        xs.sliceD m a d ++ xs.sliceD (m + a) b d := by
+  intro a
+  induction a with
+  | zero => intro m b; simp [List.sliceD, List.takeD]
+  | succ a ih =>
+      intro m b
+      rw [show a + 1 + b = (a + b) + 1 by omega, List.sliceD_succ,
+        ih (m + 1) b, List.sliceD_succ xs m a d,
+        show m + (a + 1) = m + 1 + a by omega]
+      rfl
+
 /-- Writing at the end of the image is an append.  The shape every store in a
 frame that lays memory out once, upward and without gaps, takes. -/
 lemma Bytes.writeAt_length (bs xs : Bytes) :
@@ -10247,6 +10318,27 @@ lemma Mem.Reads.read {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (i n : Nat) :
   show Array.sliceD μ.data i n 0 = _
   rw [Array.sliceD_eq_map, List.sliceD_eq_map]
   exact List.map_congr_left (fun j _ => h (i + j))
+
+/-- Two adjacent whole-word stores determine the complete 64-byte readback,
+independently of the prior memory image.  `Mem.Wf` is needed only to transport
+the reader image through `Mem.write`; both halves of the resulting read are
+then self-windows. -/
+lemma Mem.read_two_word_writes {μ : Mem} {image : Bytes}
+    (hwf : Mem.Wf μ) (hreads : Mem.Reads μ image) (left right : B256) :
+    ((((μ.write 0 left.toBytes).write 32 right.toBytes).read 0 64).1) =
+      left.toBytes ++ right.toBytes := by
+  have hreadsLeft : Mem.Reads (μ.write 0 left.toBytes)
+      (Bytes.writeAt image 0 left.toBytes) :=
+    Mem.Reads.write hwf hreads 0 left.toBytes
+  have hreadsRight :
+      Mem.Reads ((μ.write 0 left.toBytes).write 32 right.toBytes)
+        (Bytes.writeAt (Bytes.writeAt image 0 left.toBytes)
+          32 right.toBytes) :=
+    Mem.Reads.write (Mem.Wf.write hwf 0 left.toBytes) hreadsLeft
+      32 right.toBytes
+  rw [Mem.Reads.read hreadsRight, show (64 : Nat) = 32 + 32 by omega,
+    List.sliceD_split]
+  congr 1
 
 /-- Reading back a nonempty byte string immediately after writing it at offset
 zero returns that byte string, independently of the old memory image.  Unlike
@@ -10750,6 +10842,49 @@ lemma of_run_log_val {e : Sevm} {s s' : Devm} {n : Fin 5}
       s.logs ++
         [⟨e.currentTarget, topics, (s.memory.read x.toNat y.toNat).1⟩]
     rw [← h_pre_logs, h_data]
+
+/-- Exact stack and log effect of any fixed-shape `logWith` fragment.
+
+The topic list includes the signature topic, hence its length is `k + 1`.
+This general form covers data-less one- and two-topic control-plane events as
+well as multiword unindexed data windows; specialized ERC-20 helpers remain
+available below. -/
+lemma of_logWith_val {e : Sevm} {s s' : Devm} {k : Fin 4}
+    {x y : B256} {topics : List B256} {xs : Stack}
+    (hlen : topics.length = k.val + 1)
+    (hp : topics ++ xs <<+ s.stack)
+    (h : Line.Run e s (logWith k x y) s') :
+    xs <<+ s'.stack ∧
+      s'.logs = s.logs ++
+        [⟨e.currentTarget, topics,
+          (s.memory.read (x * 32).toNat (y * 32).toNat).1⟩] := by
+  rcases Line.of_run_cons h with ⟨s₁, hsize, hrest₁⟩
+  rcases Line.of_run_cons hrest₁ with ⟨s₂, hoffset, hrest₂⟩
+  rcases Line.of_run_cons hrest₂ with ⟨s₃, hlog, hnil⟩
+  cases hnil
+  have hbsize := of_run_pushB256 hsize
+  have hboffset := of_run_pushB256 hoffset
+  have hp₁ : (y * 32) :: topics ++ xs <<+ s₁.stack :=
+    prefix_of_push (xs := [y * 32]) (ys := topics ++ xs) hbsize hp
+  have hp₂ : (x * 32) :: (y * 32) :: topics ++ xs <<+ s₂.stack :=
+    prefix_of_push (xs := [x * 32])
+      (ys := (y * 32) :: topics ++ xs) hboffset hp₁
+  rcases of_run_log_val hlog with
+    ⟨mi, sz, actualTopics, hactualLen, hpop, hlogs⟩
+  have hknown : ((x * 32) :: (y * 32) :: topics) <<+ s₂.stack := by
+    exact @pref_trans _ ((x * 32) :: (y * 32) :: topics)
+      (((x * 32) :: (y * 32) :: topics) ++ xs) _
+      ⟨xs, rfl⟩ (by simpa [List.append_assoc] using hp₂)
+  have heq : ((x * 32) :: (y * 32) :: topics) =
+      mi :: sz :: actualTopics :=
+    List.pref_unique (by simp [hlen, hactualLen]) hknown
+      (pref_of_split hpop)
+  simp only [List.cons.injEq] at heq
+  rcases heq with ⟨rfl, rfl, rfl⟩
+  constructor
+  · exact of_append_pref hpop (by simpa [List.append_assoc] using hp₂)
+  · rw [hlogs, ← hboffset.logs, ← hbsize.logs,
+      ← hboffset.memory, ← hbsize.memory]
 
 /-- Exact event effect of the canonical three-topic, one-word log fragment.
 
