@@ -1591,7 +1591,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes \u2014 the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its baseline, and its own implementation. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see \u2014 a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
+      "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes \u2014 the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its ignored host-local baseline (including absence before genesis), and its own implementation. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see \u2014 a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
       "order": 38,
       "verdict": {
         "expect_exit": 0,

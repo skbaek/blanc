@@ -287,8 +287,8 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–226 measured files; 226 represented; 865.764 s committed baseline | from a few seconds when nothing is affected to ~21 min cache-cold or `--full` historically (latest admission measured all 226 files in 909.9 s against the then-863.1 s committed total, 2026-08-30) |
-| `scripts/check-elab.sh --calibrate` | the measurement command for admitting a new row: every module with no committed row, plus a commit-seeded stratified sample of provably-unaffected modules held to the row threshold, refusing at `2.0x` and annotating at `1.5x`. Writes nothing to the baseline and nothing to the local cache | current baseline bands 102/69/38/17; latest admission measured 2 mandatory rows and drew no separate controls because all 224 existing rows were measured outright | latest admission measured all 226 files in 909.9 s; ordinary isolated admissions remain a small fraction of a whole-tree pass |
+| `scripts/check-elab.sh` | affected-module elaboration time vs the ignored host-local `scripts/baseline-elab.txt`; the first green run initializes a full baseline without comparison, and later runs represent every file while reusing unchanged recursive local-source/Lake fingerprints | 0–226 measured files; 226 represented; host-dependent local total | from a few seconds when nothing is affected to ~21 min cache-cold or first-run/`--full` historically |
+| `scripts/check-elab.sh --calibrate` | initializes every module with no local row while checking a commit-seeded stratified sample of provably-unaffected modules against this host's existing rows, refusing at `2.0x` and annotating at `1.5x`. It writes green new rows to the ignored baseline but nothing to the selection cache | sample bands recomputed from this host's current rows | ordinary isolated additions remain a small fraction of a whole-tree pass; with no local baseline it falls back to full genesis |
 
 No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
 sequential elaboration gate is the longest at roughly ten minutes; every gate
@@ -434,18 +434,17 @@ at the expected assertion count.
 
 ### Baselines and budgets
 
-`scripts/baseline-elab.txt`, the proof-debt, proof-module-size and
-proof-duplication baselines, and
-the two coverage budgets are **evidence, not knobs**. Absent explicit authority
-in a ready goal, a baseline, budget, or
-manifest count that must move for a gate to pass is a stop-and-report
-condition, not a step. A ready goal may pre-authorize an expected new-module
-row or bounded row refresh when it names the owner class, rationale,
-measurement procedure, and preservation rule for unrelated rows; the lead then
-performs and reports that admission as ordinary goal work. This does not
-authorize an unexplained regression, an unmeasured value, or broad rebasing.
-`check-elab.sh --calibrate` is the measurement command for such an
-admission. It measures every module with no committed row — those are the
+The proof-debt, proof-module-size and proof-duplication baselines and the two
+coverage budgets are **tracked evidence, not knobs**. Absent explicit authority
+in a ready goal, a tracked baseline, budget, or manifest count that must move
+for a gate to pass is a stop-and-report condition, not a step. The elaboration
+baseline is different: it is ignored host-local performance state, initialized
+from a green measurement in each checkout. `--rebase` may deliberately refresh
+that host's reference, but it never changes tracked repository evidence and
+must not be used to conceal an unexplained local regression.
+
+`check-elab.sh --calibrate` is the measurement command for a new local row. It
+measures every module with no local row — those are the
 measurement, and are never sampled — together with a stratified random sample
 of modules the fingerprint proves the change cannot have affected, drawn with a
 seed derived from the candidate commit. Those drawn modules are controls on the
@@ -455,22 +454,23 @@ the same `2.0x` and `+1.0s` threshold the rows are held to **refuses** the run,
 naming the control and its ratio, so an admission cannot be taken on a host that
 far out; at or above `1.5x` it is annotated and the run passes. The seed, the
 band boundaries, the drawn set and every control's ratio are written to
-`scripts/report-elab-calibration.txt` in the form the baseline comment expects,
-so a reviewer can recompute the draw from the commit and check it was not
+`scripts/report-elab-calibration.txt` as a reviewable evidence block, so a
+reviewer can recompute the draw from the commit and check it was not
 gamed. There is deliberately no seed flag, and `--force` is refused as it is
 for `--rebase`. A calibration run also writes **nothing** to the local
 measurement cache: the draw is a function of which modules that cache says are
 unaffected, so a run that updated it would make the module it just measured
-drawable next time, and the runs of a measurement triple would stop agreeing on
-what they measured. Re-running at the same commit therefore draws the same
-controls, and a refusal cannot be retried away. The mode does not write to
-`scripts/baseline-elab.txt` either; the row and its provenance comment are still
-appended deliberately, additions-only.
+drawable on retry and change the draw. Re-running a refused calibration at the
+same commit therefore draws the same controls, and the refusal cannot be
+retried away. On a green calibration the new
+rows are added to the ignored local baseline while existing row values are
+preserved. With no baseline at all, sampling has no reference population, so
+the command performs the same whole-tree genesis as a bare first run.
 
-`check-elab.sh --rebase` exists
-for deliberate, reported re-baselining and refuses to run against a tree that
-failed to elaborate; it is never the way to make a red gate green. `--rebase`
-implies a full measurement. Bare `check-elab.sh` is the normal checkpoint,
+`check-elab.sh --rebase` exists for deliberate, reported refresh of this host's
+ignored baseline and refuses to run against a tree that failed to elaborate; it
+is never the way to make a red gate green. `--rebase` implies a full
+measurement. Bare `check-elab.sh` is the normal checkpoint,
 pre-push, and merge-candidate command. `--full` is reserved for a deliberate
 complete performance survey, explicit user/reviewer demand for one-run
 whole-tree timing, or a change to the selector/cache/timing implementation.
@@ -538,8 +538,9 @@ lock is the last line of defense, not the coordination mechanism.
 | `scripts/check-elab.sh` | yes | yes |
 | every other ordinary gate invocation here | — (writes none) | no |
 
-Only `check-elab.sh` writes a report (`scripts/report-elab.txt`) and local cache
-state (`.lake/check-elab-state.json`). Both paths are ignored by Git. The rest
+Only `check-elab.sh` writes a report (`scripts/report-elab.txt`), host-local
+baseline (`scripts/baseline-elab.txt`), and local cache state
+(`.lake/check-elab-state.json`). All three paths are ignored by Git. The rest
 print to stdout and touch nothing, which is why they are safe to run at will.
 
 **Host constraint.** This host has limited memory and ~9 GB of swap, so

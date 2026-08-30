@@ -8,8 +8,10 @@
 # content-addressed cache fingerprints each file's entire repository-local
 # import closure and the shared Lean/Lake configuration. The default run skips
 # exactly the files whose fingerprints match a prior successful measurement;
-# --full measures every file. Every represented file is compared against the
-# committed reference time in scripts/baseline-elab.txt.
+# --full measures every file. Every represented file is compared against this
+# checkout's ignored host-local reference in scripts/baseline-elab.txt. A fresh
+# clone's first uncontended green run measures the full tree, initializes that
+# file, and performs no timing comparison.
 #
 # This gate exists because nothing else measures this axis. check-hygiene.sh,
 # check-integrity.sh, and the conformance tiers all say nothing about
@@ -26,12 +28,12 @@
 #   --full        measure every source file and refresh the local cache. Use for
 #                 deliberate or explicitly requested whole-tree evidence and
 #                 after changing this gate's selection/cache implementation.
-#   --rebase      accept the current times as the new committed baseline.
+#   --rebase      accept the current times as this host's new local baseline.
 #                 Refused if any file failed to elaborate — a baseline must
 #                 only ever record a green tree. Implies --full.
 #   --list        measure and print, compare nothing, write no baseline. Use
 #                 when investigating rather than gating. Implies --full.
-#   --calibrate   measure every module that has no committed row, plus a seeded
+#   --calibrate   measure every module that has no local row, plus a seeded
 #                 stratified sample of modules this change provably cannot have
 #                 affected, and hold that sample to the same threshold the rows
 #                 are held to. This is the sampled alternative to a whole-tree
@@ -115,7 +117,8 @@
 # nearly half the tree — so a uniform draw would almost never reach the tail,
 # which is exactly where sustained throughput and thermal anomalies show.
 #
-# A calibration run measures, reports, and caches nothing. The draw is a
+# A calibration run measures and reports but does not update the selection
+# cache. The draw is a
 # function of which modules this run believes are unaffected, and that belief
 # comes from the local cache; a run that wrote to it would move the ground under
 # its own successors, because the module it just measured would become
@@ -144,25 +147,23 @@
 #
 # SCOPE: THIS IS A LOCAL GATE, NOT A CI GATE
 #
-# The committed times are wall-clock measurements from one machine, so they are
-# machine-dependent in exactly the way `notimeout.md` objected to when it
-# abolished TIMEOUT as a fixture classification: a slower or noisier runner
-# would fail files that are in no way worse. Do not wire this into CI against a
-# baseline measured elsewhere. Either keep it a local pre-push check, or give CI
-# its own baseline measured on its own runner and rebased when that runner
-# changes. The 1.0s absolute floor and the 2x factor together absorb ordinary
-# same-machine variance, not cross-machine variance.
+# Wall-clock measurements are machine-dependent in exactly the way
+# `notimeout.md` objected to when it abolished TIMEOUT as a fixture
+# classification. The baseline therefore stays inside this Blanc checkout and
+# is ignored by Git. CI continues its existing correctness/build work and does
+# not consume this local performance history. The 1.0s absolute floor and the
+# 2x factor together absorb ordinary same-machine variance.
 #
 # BASELINE FORMAT
 #
 # Reports use STATUS<TAB>TIME<TAB>path<TAB>PROVENANCE, sorted by path, where
-# PROVENANCE is MEASURED or CACHED. The committed baseline retains its original
-# three-column format. STATUS is OK or ERROR. A source file with no baseline row
-# is a configuration error, not an unmeasured file: that is what forces a newly
-# added module to state its cost. Under --calibrate that same file is the
-# admission candidate rather than a violation — measuring it is the point of the
-# run. A baseline row whose file no longer exists is reported as a warning,
-# never a failure.
+# PROVENANCE is MEASURED or CACHED. The local baseline uses the three-column
+# STATUS<TAB>TIME<TAB>path form. STATUS is OK or ERROR. A source file with no
+# row is initialized after a green measurement rather than treated as a
+# regression: no host can compare a module it has never measured. Under
+# --calibrate it is also checked against sampled host controls. A --force
+# measurement is diagnostic only and never initializes a row. A baseline row
+# whose file no longer exists is reported as a warning.
 
 set -u
 
@@ -180,12 +181,14 @@ RCFILE=""
 PLANFILE=""
 MEASUREDFILE=""
 EXCLUDEFILE=""
+BASELINE_TMP=""
 cleanup() {
   gate_lock_release_all
   if [ -n "$RCFILE" ]; then rm -f "$RCFILE"; fi
   if [ -n "$PLANFILE" ]; then rm -f "$PLANFILE"; fi
   if [ -n "$MEASUREDFILE" ]; then rm -f "$MEASUREDFILE"; fi
   if [ -n "$EXCLUDEFILE" ]; then rm -f "$EXCLUDEFILE"; fi
+  if [ -n "$BASELINE_TMP" ]; then rm -f "$BASELINE_TMP"; fi
   return 0
 }
 trap cleanup EXIT
@@ -225,6 +228,7 @@ FORCE=0
 FULL=0
 SELF_TEST=0
 CALIBRATE=0
+BASELINE_GENESIS=0
 CANDIDATE_COMMIT=""
 CAL_RC=0
 CANDIDATE_NOTES=""
@@ -258,7 +262,7 @@ if [ "$REBASE" -eq 1 ] && [ "$LIST_ONLY" -eq 1 ]; then
   exit 2
 fi
 if [ "$REBASE" -eq 1 ] && [ "$FORCE" -eq 1 ]; then
-  echo "usage error: --force may not be combined with --rebase; a contended run must never become the committed reference" >&2
+  echo "usage error: --force may not be combined with --rebase; a contended run must never become the local reference" >&2
   exit 2
 fi
 if [ "$CALIBRATE" -eq 1 ] \
@@ -267,7 +271,7 @@ if [ "$CALIBRATE" -eq 1 ] \
   exit 2
 fi
 if [ "$CALIBRATE" -eq 1 ] && [ "$FORCE" -eq 1 ]; then
-  echo "usage error: --force may not be combined with --calibrate; a calibration run's numbers are pasted into the baseline as a new row, so a contended measurement must never become the committed reference" >&2
+  echo "usage error: --force may not be combined with --calibrate; a calibration run may initialize local rows, so a contended measurement must never become the reference" >&2
   exit 2
 fi
 
@@ -293,6 +297,23 @@ cd "$ROOT" || exit 2
 if [ ! -d "$SRC_DIR" ]; then
   echo "REGRESSION — elab: source tree not found: $ROOT/$SRC_DIR"
   exit 2
+fi
+
+if [ ! -f "$BASELINE" ] && [ "$LIST_ONLY" -eq 0 ] && [ "$REBASE" -eq 0 ]; then
+  if [ "$FORCE" -eq 1 ]; then
+    echo "SETUP — elab: no local baseline exists, and --force measurements cannot initialize one"
+    echo "REGRESSION — elab: local baseline genesis requires an uncontended run"
+    exit 2
+  fi
+  BASELINE_GENESIS=1
+  FULL=1
+  FULL_REASON="host-local baseline genesis requires a whole-tree measurement"
+  if [ "$CALIBRATE" -eq 1 ]; then
+    CALIBRATE=0
+    echo "NOTE — elab: --calibrate has no prior local rows to sample; measuring the full tree for baseline genesis"
+  else
+    echo "NOTE — elab: no host-local baseline at ${BASELINE#$ROOT/}; this green run will initialize it"
+  fi
 fi
 
 # The draw's seed comes from the candidate commit and from nothing else: there
@@ -443,7 +464,7 @@ if [ "$NMEASURE" -gt 0 ]; then
       exit 2
     fi
     if [ "$REBASE" -eq 1 ]; then
-      echo "usage error: --force may not be combined with --rebase; a contended run must never become the committed reference" >&2
+      echo "usage error: --force may not be combined with --rebase; a contended run must never become the local reference" >&2
       exit 2
     fi
     echo "WARNING — elab: measuring under language-server contention (--force); times are indicative only"
@@ -477,8 +498,23 @@ NERR="$(printf '%s' "$RESULTS" | awk -F'\t' '$1=="ERROR"' | grep -c .)"
 echo "---"
 echo "elab: $NMEASURE measured, $NSKIP provably unaffected, $TOTAL s measured; report: ${REPORT#$ROOT/}"
 if [ "$CALIBRATE" -eq 1 ]; then
-  echo "elab: of those, $NCANDIDATE mandatory (no committed row) and $NCONTROL drawn control(s)"
+  echo "elab: of those, $NCANDIDATE mandatory (no local row) and $NCONTROL drawn control(s)"
 fi
+
+write_baseline() {
+  BASELINE_TMP="$(mktemp "$SCRIPT_DIR/.baseline-elab.XXXXXX")"
+  {
+    echo "# Host-local elaboration-time baseline for Blanc — scripts/check-elab.sh"
+    echo "#"
+    echo "# STATUS<TAB>TIME<TAB>path. TIME is seconds to re-elaborate that file against"
+    echo "# already-built dependencies, measured sequentially on this host. Gitignored;"
+    echo "# initialized automatically and refreshed with scripts/check-elab.sh --rebase."
+    echo "# A file fails above both ${DRIFT_FACTOR}x its time here and that time plus ${DRIFT_FLOOR}s."
+    printf '%s\n' "$1"
+  } > "$BASELINE_TMP"
+  mv "$BASELINE_TMP" "$BASELINE"
+  BASELINE_TMP=""
+}
 
 cache_results() {
   local EXCLUSIONS="${1:-}"
@@ -527,6 +563,20 @@ if [ "$LIST_ONLY" -eq 1 ]; then
   exit 0
 fi
 
+# --- local baseline genesis -------------------------------------------------
+if [ "$BASELINE_GENESIS" -eq 1 ]; then
+  if [ "$NERR" -gt 0 ]; then
+    printf '%s' "$RESULTS" | awk -F'\t' '$1=="ERROR" {print "ELAB — does not elaborate: " $3}'
+    echo "REGRESSION — elab: refusing to initialize the local baseline with $NERR file(s) failing to elaborate"
+    exit 1
+  fi
+  GENESIS_ROWS="$(printf '%s\n' "$RESULTS" | awk -F'\t' 'BEGIN {OFS="\t"} NF {print $1, $2, $3}')"
+  cache_results || exit 2
+  write_baseline "$GENESIS_ROWS"
+  echo "OK — elab: host-local baseline initialized with $NFILES file(s), $TOTAL s total; no timing comparison on genesis"
+  exit 0
+fi
+
 # --- rebase -----------------------------------------------------------------
 if [ "$REBASE" -eq 1 ]; then
   if [ "$NERR" -gt 0 ]; then
@@ -534,24 +584,17 @@ if [ "$REBASE" -eq 1 ]; then
     echo "REGRESSION — elab: refusing to rebase with $NERR file(s) failing to elaborate"
     exit 1
   fi
-  {
-    echo "# Elaboration-time baseline for Blanc — scripts/check-elab.sh"
-    echo "#"
-    echo "# STATUS<TAB>TIME<TAB>path. TIME is seconds to re-elaborate that file against"
-    echo "# already-built dependencies, measured sequentially with no language server"
-    echo "# alive. A file fails the gate above both ${DRIFT_FACTOR}x its time here and that time"
-    echo "# plus ${DRIFT_FLOOR}s. Rewrite with: scripts/check-elab.sh --rebase"
-    printf '%s\n' "$RESULTS" | awk -F'\t' 'BEGIN {OFS="\t"} NF {print $1, $2, $3}'
-  } > "$BASELINE"
+  REBASE_ROWS="$(printf '%s\n' "$RESULTS" | awk -F'\t' 'BEGIN {OFS="\t"} NF {print $1, $2, $3}')"
   cache_results || exit 2
-  echo "OK — elab: baseline rebased with $NFILES file(s), $TOTAL s total"
+  write_baseline "$REBASE_ROWS"
+  echo "OK — elab: host-local baseline rebased with $NFILES file(s), $TOTAL s total"
   exit 0
 fi
 
 # --- compare ----------------------------------------------------------------
 if [ ! -f "$BASELINE" ]; then
-  echo "SETUP — elab: no baseline at ${BASELINE#$ROOT/}; create one with scripts/check-elab.sh --rebase"
-  echo "REGRESSION — elab: baseline not found"
+  echo "SETUP — elab: host-local baseline disappeared during the run: ${BASELINE#$ROOT/}"
+  echo "REGRESSION — elab: local baseline not found"
   exit 2
 fi
 
@@ -559,6 +602,8 @@ BASE_ROWS="$(grep -vE '^[[:space:]]*(#|$)' "$BASELINE")"
 
 VIOLATIONS=""
 NOTES=""
+NEW_ROWS=""
+NNEW=0
 EXCLUDEFILE="$(mktemp)"
 : > "$EXCLUDEFILE"
 
@@ -583,18 +628,20 @@ for f in $FILES; do
 
   BASE_ROW="$(printf '%s' "$BASE_ROWS" | awk -F'\t' -v p="$f" '$3==p {print; exit}')"
   if [ -z "$BASE_ROW" ]; then
-    if [ "$CALIBRATE" -eq 1 ] && in_list "$f" "$CANDIDATES"; then
-      # Measuring this file is the point of the run, so a missing row is
-      # expected here rather than a violation. It stays uncached like every
-      # other measurement this mode takes, so each run of a measurement triple
-      # re-measures it instead of reading back the first run's number.
-      CANDIDATE_NOTES="${CANDIDATE_NOTES}CANDIDATE — elab: $f: ${CUR_TIME}s (no committed row yet)
+    if [ "$FORCE" -eq 1 ]; then
+      NOTES="${NOTES}UNREFERENCED — elab: $f: ${CUR_TIME}s (--force measurement not recorded as a local reference)
 "
       continue
     fi
-    printf '%s\n' "$f" >> "$EXCLUDEFILE"
-    VIOLATIONS="${VIOLATIONS}ELAB — no baseline row (new module must state its cost): $f
+    NEW_ROWS="$NEW_ROWS $f"
+    NNEW=$((NNEW + 1))
+    if [ "$CALIBRATE" -eq 1 ] && in_list "$f" "$CANDIDATES"; then
+      CANDIDATE_NOTES="${CANDIDATE_NOTES}NEW — elab: $f: ${CUR_TIME}s (calibrated first measurement; pending a green local admission)
 "
+    else
+      NOTES="${NOTES}NEW — elab: $f: ${CUR_TIME}s (first measurement; pending a green local admission)
+"
+    fi
     continue
   fi
   BASE_TIME="$(printf '%s' "$BASE_ROW" | cut -f2)"
@@ -661,6 +708,7 @@ if [ -n "$VIOLATIONS" ]; then
   printf '%s' "$VIOLATIONS"
   NVIO="$(printf '%s' "$VIOLATIONS" | grep -c .)"
   BASE_TOTAL="$(printf '%s' "$BASE_ROWS" | awk -F'\t' 'NF{s+=$2} END {printf "%.1f", s}')"
+  for f in $NEW_ROWS; do printf '%s\n' "$f" >> "$EXCLUDEFILE"; done
   maybe_cache_results "$EXCLUDEFILE" || exit 2
   CAL_SUFFIX=""
   if [ "$CALIBRATE" -eq 1 ] && [ "$CAL_RC" -eq 1 ]; then
@@ -678,13 +726,32 @@ if [ "$CALIBRATE" -eq 1 ] && [ "$CAL_RC" -eq 1 ]; then
   exit 1
 fi
 
+if [ "$CALIBRATE" -eq 1 ]; then
+  if ! python3 "$SELECTOR" validate --plan "$PLANFILE" --report "$REPORT"; then
+    echo "REGRESSION — elab: calibration measurements became stale before local rows could be initialized"
+    exit 2
+  fi
+fi
+
 maybe_cache_results "$EXCLUDEFILE" || exit 2
+
+if [ "$NNEW" -gt 0 ]; then
+  MERGED_ROWS="$({
+    printf '%s\n' "$BASE_ROWS"
+    for f in $NEW_ROWS; do
+      printf '%s' "$RESULTS" | awk -F'\t' -v p="$f" 'BEGIN {OFS="\t"} $3==p {print $1, $2, $3; exit}'
+    done
+  } | sort -t "$(printf '\t')" -k3,3)"
+  write_baseline "$MERGED_ROWS"
+  BASE_TOTAL="$(printf '%s\n' "$MERGED_ROWS" | awk -F'\t' 'NF{s+=$2} END {printf "%.1f", s}')"
+  echo "NOTE — elab: initialized $NNEW new host-local baseline row(s)"
+fi
 
 if [ "$CALIBRATE" -eq 1 ]; then
   if [ "$NCONTROL" -eq 0 ]; then
-    echo "OK — elab calibration: $NCANDIDATE mandatory row(s) measured; no control was drawn because every module carrying a baseline row was measured and compared outright; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
+    echo "OK — elab calibration: $NCANDIDATE local row(s) initialized; no control was drawn because every module carrying a baseline row was measured and compared outright; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
   else
-    echo "OK — elab calibration: $NCANDIDATE mandatory row(s) measured, $NCONTROL drawn control(s) below ${DRIFT_FACTOR}x; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
+    echo "OK — elab calibration: $NCANDIDATE local row(s) initialized, $NCONTROL drawn control(s) below ${DRIFT_FACTOR}x; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
   fi
   exit 0
 fi
