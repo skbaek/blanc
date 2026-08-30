@@ -89,6 +89,7 @@ CONTRACTS = {
                    "ProxyPairOssifiableSurface",
                    "ProxyPairOssifiableProgram",
                    "ProxyPairOssifiableDeploy",
+                   "ProxyPairOssifiableArtifacts",
                    "ProxyPairImplementation", "ProxyPairExecution",
                    "ProxyPairCorrespondence", "ProxyPairAuthority"],
     "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",

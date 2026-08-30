@@ -1,0 +1,42 @@
+{
+  "_comment": "GENERATED Blanc OssifiableProxy artifact identities; byte lists and digest theorems live in Blanc/ProxyPairOssifiableArtifacts.lean",
+  "artifacts": {
+    "creationBaseline": {
+      "binding": "Prog.compile Blanc.ProxyPair.creationBaseline",
+      "byteLength": 1250,
+      "keccak256": "0x0491ccd2b08644a4ab82035555a96e51f6acaeee8a4008b31ecbb45c5668b570",
+      "leanDefinition": "Blanc.ProxyPair.creationBaselineArtifactBytes",
+      "sha256": "2f505763e0bf83ea72efe1f83ba03b338bdc90a31a050f83904f13168d6345e9"
+    },
+    "creationTemplate": {
+      "binding": "Blanc.ProxyPair.ossifiableCreationTemplate",
+      "byteLength": 3447,
+      "keccak256": "0x9be61463baa1d3da88b1ce49b47fe92e89523b797efa07c75f3af23388b8f704",
+      "leanDefinition": "Blanc.ProxyPair.creationTemplateArtifactBytes",
+      "sha256": "b595e789de8c8162fb0c8f1ba9137f8dde67a9c8aa69a4f7f645eb46c8a176cb"
+    },
+    "runtimeBaseline": {
+      "binding": "Prog.compile Blanc.ProxyPair.runtimeBaseline",
+      "byteLength": 2197,
+      "keccak256": "0xd104c4f72956ca5142d09d79ae73351af049f5f9f1f186c238d88c047dee16f6",
+      "leanDefinition": "Blanc.ProxyPair.runtimeBaselineArtifactBytes",
+      "sha256": "dc6fc8efefecbe3ab3d2105716d46e27d4221430fea82850b3a4d98fe9d820d0"
+    }
+  },
+  "format": "blanc.lido-ossifiable-proxy.artifacts",
+  "formatVersion": 1,
+  "generator": {
+    "evaluator": "scripts/eval-lido-ossifiable-proxy-artifacts.lean",
+    "evaluatorRows": [
+      "creation-template",
+      "returned-runtime"
+    ],
+    "generatedLean": "Blanc/ProxyPairOssifiableArtifacts.lean",
+    "networkFreeCheckCommand": "python3 scripts/lido-ossifiable-proxy-artifacts.py check",
+    "regenerationCommand": "python3 scripts/lido-ossifiable-proxy-artifacts.py generate --evaluator-output PATH"
+  },
+  "relations": {
+    "creationTemplate": "creationBaselineArtifactBytes ++ runtimeBaselineArtifactBytes",
+    "creationTemplateRuntimeSuffix": true
+  }
+}
