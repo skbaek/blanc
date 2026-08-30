@@ -35,7 +35,7 @@
   },
   "cacheInputs": {
     "repositoryFiles": {
-      "BEACON_DEPOSIT_DEVIATIONS.md": "4a619e4236446c3a46274e48cc75dc3b2c599ed96a8b2a3fbef19b1c4a2c0d31",
+      "BEACON_DEPOSIT_DEVIATIONS.md": "13643d8c2f33188cbd3a2f80a740c24d2b2caba0b2d753caace895fb7c65cb45",
       "scripts/check-beacon-deposit-current-mainnet.sh": "5e0109deda67611e0758f712192620b7aa1687bcd872ea36bd87b4d276184af5",
       "scripts/current-mainnet-target.json": "5e1901c2d36d768f10ef3633371a85d24e575d95783fa5b2aa5f52dbedc32ae0",
       "scripts/current_mainnet.py": "be578f54159f2c472bb8c866a8008a3bbafca3159da901418924b30a6bfd938b",
@@ -889,7 +889,7 @@
       "obligation": "a positive Blanc delta fails before manifest acceptance unless one exact marker exists on a completed non-PENDING deviation table row; the generator never auto-admits or edits a deviation",
       "positiveDeltas": [],
       "registryFile": "BEACON_DEPOSIT_DEVIATIONS.md",
-      "registrySha256": "4a619e4236446c3a46274e48cc75dc3b2c599ed96a8b2a3fbef19b1c4a2c0d31"
+      "registrySha256": "13643d8c2f33188cbd3a2f80a740c24d2b2caba0b2d753caace895fb7c65cb45"
     },
     "returndataBoundary": {
       "creditedOnBpo2Rows": false,

@@ -3,6 +3,7 @@ import Blanc.BeaconDepositEffects
 import Blanc.BeaconDepositErrorModel
 import Blanc.BeaconDepositGuardErrors
 import Blanc.ForwardNoRawSstore
+import Blanc.ForwardDispatchMiss
 
 /-!
 # Beacon deposit compiled error routes
@@ -42,6 +43,7 @@ theorem empty_calldata_runCompiledTo
           (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
   let pre :=
     base.setMach ⟨[], Mem.empty, G + emptyCalldataRuntimeGas⟩
@@ -128,8 +130,10 @@ theorem empty_calldata_runCompiledTo
     rw [hcode, code_compile]
   obtain ⟨execution, executionSafe⟩ :=
     Prog.exists_exec_noRawSstore hentry hmain hmainSafe hcompiled
+  simp only [pre, out] at execution executionSafe
   refine ⟨execution, ?_, executionSafe,
-    executionSafe.retainedStorageWrites_eq_nil, hcompiled⟩
+    executionSafe.retainedStorageWrites_eq_nil,
+    executionSafe.retainedStorageEffectTriples_eq_nil, hcompiled⟩
   simpa only [pre, out] using hprogram
 
 /-! ## Selector miss -/
@@ -693,6 +697,7 @@ theorem noMatchSelector_runCompiledTo
           (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
   let pre :=
     base.setMach ⟨[], Mem.empty, G + noMatchSelectorRuntimeGas⟩
@@ -760,7 +765,8 @@ theorem noMatchSelector_runCompiledTo
   obtain ⟨execution, executionSafe⟩ :=
     Prog.exists_exec_noRawSstore hentry hmainRun hmainRunSafe hcompiled
   refine ⟨execution, ?_, executionSafe,
-    executionSafe.retainedStorageWrites_eq_nil, hcompiled⟩
+    executionSafe.retainedStorageWrites_eq_nil,
+    executionSafe.retainedStorageEffectTriples_eq_nil, hcompiled⟩
   simpa only [pre, out] using hprogram
 
 /-! ## Malformed deposit ABI -/
@@ -864,6 +870,7 @@ theorem deposit_malformed_row_noRawSstore
               failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
   let out : Execution := .error (.revert,
     (base.setMach
@@ -884,7 +891,8 @@ theorem deposit_malformed_row_noRawSstore
         ⟨[], Mem.empty, (G + failure.endpointGas) + depositRouteGas⟩)
       runtime out := ⟨mid, hentry, hmain⟩
   refine ⟨execution, ?_, executionSafe,
-    executionSafe.retainedStorageWrites_eq_nil, hcompiled⟩
+    executionSafe.retainedStorageWrites_eq_nil,
+    executionSafe.retainedStorageEffectTriples_eq_nil, hcompiled⟩
   have hgas : (G + failure.endpointGas) + depositRouteGas =
       G + depositMalformedRuntimeGas failure := by
     simp only [depositMalformedRuntimeGas]
@@ -944,18 +952,20 @@ theorem deposit_malformed_noRawSstore
                 failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
         Exec.NoRawSstore execution ∧
         Exec.retainedStorageWrites execution = [] ∧
+        Exec.retainedStorageEffectTriples execution = [] ∧
         some sevm.code.toList = Prog.compile runtime := by
   obtain ⟨failure, hfailure⟩ := exists_depositAbiFailure hbad
-  obtain ⟨execution, hrun, hsafe, hwrites, hcompiled⟩ :=
+  obtain ⟨execution, hrun, hsafe, hwrites, htriples, hcompiled⟩ :=
     deposit_malformed_row_noRawSstore
       sevm base G failure hnonempty hdataBound hselector hfailure hcode
-  exact ⟨failure, hfailure, execution, hrun, hsafe, hwrites, hcompiled⟩
+  exact ⟨failure, hfailure, execution, hrun, hsafe, hwrites, htriples,
+    hcompiled⟩
 
 /-! ## Model-linked decoded-input errors -/
 
-/-- Public-route evidence for one decoded model error.  The exact revert
-payload and the empty retained write chronology belong to the same execution
-witness. -/
+/-- Public-route evidence for one decoded model error.  The exact revert,
+raw-SSTORE freedom, and empty retained chronology belong to the same selected
+execution witness. -/
 def DepositPublicErrorWitness
     (sevm : Sevm) (base : Devm) (G : Nat) (reason : Reason) : Prop :=
   ∃ runtimeCost post,
@@ -964,13 +974,15 @@ def DepositPublicErrorWitness
         (.error (.revert, post)),
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
-        runtime (.error (.revert, post)) ∧
+      runtime (.error (.revert, post)) ∧
       post.output = errorData (reasonString reason) ∧
+      Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime
 
-/-- Lift an exact endpoint error through the payable selector and derive its
-empty retained chronology from root-frame rollback. -/
+/-- Lift an exact raw-SSTORE-free endpoint error through the payable selector;
+the empty retained chronology is derived from that same exact execution. -/
 theorem deposit_error_public_of_endpoint
     {sevm : Sevm} {base : Devm} {G : Nat} {reason : Reason}
     (hnonempty : sevm.data.length.toB256 ≠ 0)
@@ -980,36 +992,30 @@ theorem deposit_error_public_of_endpoint
     DepositPublicErrorWitness sevm base G reason := by
   unfold DepositEndpointErrorWitness at endpoint
   unfold DepositPublicErrorWitness
-  obtain ⟨endpointCost, post, hendpoint, houtput⟩ := endpoint
-  have hroute := deposit_route_runCompiledTo
-    (K := G + endpointCost) hnonempty hselector hendpoint
+  obtain ⟨endpointCost, post, hendpoint, hendpointSafe, houtput⟩ := endpoint
+  obtain ⟨mid, hentry, hmain, hmainSafe⟩ :=
+    deposit_route_runCompiledTo_with_path
+      (K := G + endpointCost) hnonempty hselector hendpointSafe
   let runtimeCost := endpointCost + depositRouteGas
   have hgas : (G + endpointCost) + depositRouteGas =
       G + runtimeCost := by
     simp only [runtimeCost]
     omega
+  have hcompiled : some sevm.code.toList = Prog.compile runtime := by
+    rw [hcode, code_compile]
+  obtain ⟨execution, executionSafe⟩ :=
+    Prog.exists_exec_noRawSstore hentry hmain hmainSafe hcompiled
+  have hprogram0 : Prog.RunCompiledTo sevm
+      (base.setMach
+        ⟨[], Mem.empty, (G + endpointCost) + depositRouteGas⟩)
+      runtime (.error (.revert, post)) := ⟨mid, hentry, hmain⟩
   have hprogram : Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
       runtime (.error (.revert, post)) := by
-    simpa only [hgas] using hroute
-  have hcompiled : some sevm.code.toList = Prog.compile runtime := by
-    rw [hcode, code_compile]
-  have hexecution : exec ⟨0, sevm,
-        base.setMach ⟨[], Mem.empty, G + runtimeCost⟩⟩ =
-      .error (.revert, post) :=
-    Prog.exec_of_runCompiledTo hprogram hcompiled
-  obtain ⟨execution⟩ :=
-    (exec_iff_exec_eq 0 sevm
-      (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
-      (.error (.revert, post))).mpr hexecution
-  have hwrites : Exec.retainedStorageWrites execution = [] := by
-    unfold Exec.retainedStorageWrites
-    rw [Exec.retainedNodes_eq_nil_of_not_commits execution (by
-      simp only [Execution.commits]
-      decide)]
-    rfl
-  exact ⟨runtimeCost, post, execution, hprogram, houtput, hwrites,
-    hcompiled⟩
+    simpa only [hgas] using hprogram0
+  exact ⟨runtimeCost, post, execution, hprogram, houtput, executionSafe,
+    executionSafe.retainedStorageWrites_eq_nil,
+    executionSafe.retainedStorageEffectTriples_eq_nil, hcompiled⟩
 
 /-- Decoded calldata whose pure model fails the pubkey-length guard reaches
 the matching compiled `Error(string)` route and retains no storage write. -/

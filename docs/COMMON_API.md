@@ -540,6 +540,16 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
 
 - `MessageExecution.processMessage_eq_settle_exec` exposes the common frame
   settlement boundary.
+- For payable calls, use the exact-entry
+  `MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_codeEntry`
+  and `MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry`:
+  both retain the explicit `benv` produced by `Msg.benvAfterTransfer`, so they
+  do not silently replace the post-transfer entry world with the message
+  pre-state.  For an ordinary code address, derive that entry with
+  `MessageExecution.executeCode_enter_of_codeAddress_not_precompile`; it covers
+  normal messages with `disablePrecompiles = false`.  The older
+  `*_afterTransfer` adapters remain convenient when precompiles are explicitly
+  disabled.
 - `processMessage_clean_of_exec`, `processMessage_revert_of_exec`, and
   `processMessage_halt_of_exec` cover the three raw outcomes.
 - `settledRevert` and `settledHalt`, with their projection lemmas, name the
@@ -587,7 +597,12 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   when the compiled program is the exact prefix of creation code. The
   resulting list is exact execution order and intentionally retains successful
   no-op SSTOREs. An existing `NoRawSstorePath` converts directly with
-  `StorageEffectPath.of_noRawSstorePath`.
+  `StorageEffectPath.of_noRawSstorePath`; in the reverse direction, an exact
+  empty annotation converts with `StorageEffectPath.noRawSstorePath_of_nil`,
+  or directly from its packaged carrier with
+  `Func.StorageEffectRun.noRawSstorePath`.  The reverse direction is indexed by
+  the identical selected run, so it proves raw absence rather than inferring it
+  from final storage equality.
 - `ProcessMessage.clean_input_state_of_settle` exposes the clean raw input and
   exact state retained by a successful settlement.
 - `processCreateMessage.chargeCodeGas_bal_eq` and
@@ -732,6 +747,13 @@ For schedule-parametric block/history state boundaries and replay, use
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
 - Call crossings:
   [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean).
+- Exact failed binary-dispatch walks:
+  [`Blanc/ForwardDispatchMiss.lean`](../Blanc/ForwardDispatchMiss.lean).
+  `DispatchTree.HasSelector` names membership in the selector census,
+  `DispatchTree.dispatchMissGas` records the selector-dependent cost, and
+  `DispatchTree.dispatchMiss_runCompiledTo_with_path` constructs the exact
+  empty-revert walk together with raw-SSTORE freedom for the identical selected
+  proof.  It deliberately requires no safety property of an unselected sibling.
 
 ### C2. I need deployment/message correspondence
 

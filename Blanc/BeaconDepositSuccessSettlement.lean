@@ -24,7 +24,7 @@ at the message boundary.
 `hprocess` identifies the actual post-transfer entry frame.  `hfilled`
 certifies that its raw result is an execution rather than merely a value
 carried by the settlement relation. -/
-theorem deposit_success_settled_effects
+private theorem deposit_success_settled_effects_of_processMessage
     {msg : Msg} {sevm : Sevm} {base final settled : Devm}
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
@@ -170,5 +170,160 @@ theorem deposit_success_settled_effects
   rw [hsettledPost]
   exact ⟨hstack, hgas, hlogs, rfl, hcountStor, hstorage, hcodes,
     haddresses, houtput, herror, hcompile⟩
+
+/-- A successful model deposit drives the actual payable message entry to a
+clean settled result with the exact compiled storage and event effects.
+
+Unlike `deposit_success_settled_effects_of_processMessage`, this forward
+headline does not assume a successful `ProcessMessage`.  It identifies the
+compiled entry with the environment produced by `Msg.benvAfterTransfer`,
+derives the raw execution from `deposit_success_runCompiled`, and then uses
+the common post-transfer settlement adapter. -/
+theorem deposit_success_settled_effects
+    {msg : Msg} {benv : Benv} {codeAddress : Adr}
+    (sevm : Sevm) (base : Devm)
+    (pubkey withdrawalCredentials signature : Bytes)
+    (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
+    (stor : Stor) (keys : KeySet) (countCost n G : Nat)
+    (htransfer : msg.benvAfterTransfer = .ok benv)
+    (hcodeAddress : msg.codeAddress = some codeAddress)
+    (hnotPrecompile :
+      decide (benv.stat.rules.isPrecomp codeAddress) = false)
+    (hsevm : sevm = initSevm (msg.withBenv benv))
+    (hbase : base = initDevm (msg.withBenv benv))
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hOk : deposit Bytes.sha256
+      (accOfStor (Devm.getStor base sevm.currentTarget))
+      pubkey withdrawalCredentials signature depositDataRoot
+      sevm.value.toNat = .ok (s', ev))
+    (hstor : Devm.getStor
+      (afterSstore sevm (afterSload sevm base depositCountSlot)
+        depositCountSlot
+        (Nat.toB256
+          (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1))
+      sevm.currentTarget = stor)
+    (hkeys :
+      (afterSstore sevm (afterSload sevm base depositCountSlot)
+        depositCountSlot
+        (Nat.toB256
+          (accOfStor
+            (Devm.getStor base sevm.currentTarget)).count + 1)).accessedStorageKeys =
+        keys)
+    (hcount : sstoreCost sevm
+      (afterSload sevm base depositCountSlot) depositCountSlot
+      (Nat.toB256
+        (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) =
+      countCost)
+    (hheight : n < 32)
+    (hfirst : FirstLive
+      ((accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) n)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
+    (hbranchSentry : gCallStipend < G + 2 +
+      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+    (hbound :
+      (G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys) < 2 ^ 256)
+    (hcountSentry : gCallStipend <
+      ((G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys)) + 14 + countCost)
+    (hreconstructBound :
+      ((((G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys)) + 38 + countCost) + 59) +
+        1762 < 2 ^ 256)
+    (hcode : sevm.code.toList = code)
+    (hgasEntry : base.gasLeft =
+      depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+        ((accOfStor (Devm.getStor base sevm.currentTarget)).count + 1)
+        countCost G) :
+    ∃ settled,
+      processMessage msg = .ok settled ∧
+      settled.stack = [] ∧
+      settled.gasLeft = G ∧
+      settled.logs = base.logs ++
+        [depositEventLog sevm.currentTarget ev] ∧
+      CanonicalDepositEventData ev
+        (depositEventLog sevm.currentTarget ev).data ∧
+      stor =
+        (Devm.getStor base sevm.currentTarget).set depositCountSlot
+          (Nat.toB256
+            (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) ∧
+      (∀ a, Devm.getStor settled a =
+        if a = sevm.currentTarget then
+          stor.set (branchSlot n)
+            (accumulatedNode Bytes.sha256 (accOfStor stor).branch
+              0 n depositDataRoot)
+        else Devm.getStor base a) ∧
+      (∀ a, settled.getCode a = base.getCode a) ∧
+      settled.accessedAddresses = base.accessedAddresses ∧
+      settled.output = base.output ∧
+      settled.error = base.error ∧
+      some sevm.code.toList = Prog.compile runtime := by
+  rcases deposit_success_runCompiled sevm base pubkey withdrawalCredentials
+      signature depositDataRoot s' ev stor keys countCost n G hdataBound hdec
+      hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
+      hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
+      with ⟨post, hrun, hstack, hgas, hlogs, hcountStor, hstorage, hcodes,
+        haddresses, houtput, herror, hcompile⟩
+  have hentryState : base.setMach
+      ⟨[], Mem.empty,
+        depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+          ((accOfStor
+            (Devm.getStor base sevm.currentTarget)).count + 1)
+          countCost G⟩ = base := by
+    have hstackEntry : base.stack = [] := by
+      rw [hbase]
+      rfl
+    have hmemoryEntry : base.memory = Mem.empty := by
+      rw [hbase]
+      rfl
+    rw [← hstackEntry, ← hmemoryEntry, ← hgasEntry]
+    cases base
+    rfl
+  have hrunEntry : Prog.RunCompiledTo sevm base runtime (.ok post) := by
+    rw [hentryState] at hrun
+    exact Prog.RunCompiledTo.of_runCompiled hrun
+  have hexec : exec ⟨0, sevm, base⟩ = .ok post :=
+    Prog.exec_of_runCompiledTo hrunEntry hcompile
+  have hexecEntry :
+      exec (initEvm (msg.withBenv benv)) = .ok post := by
+    change exec
+      ⟨0, initSevm (msg.withBenv benv),
+        initDevm (msg.withBenv benv)⟩ = .ok post
+    rw [← hsevm, ← hbase]
+    exact hexec
+  have hpostError : post.error = none := by
+    rw [herror, hbase]
+    rfl
+  have hcodeEntry : executeCode.enter (msg.withBenv benv) =
+      .inl (initEvm (msg.withBenv benv)) :=
+    MessageExecution.executeCode_enter_of_codeAddress_not_precompile
+      msg benv codeAddress hcodeAddress hnotPrecompile
+  have hsettled : processMessage msg = .ok post :=
+    MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry
+      msg benv post htransfer hcodeEntry hexecEntry hpostError
+  exact ⟨post, hsettled, hstack, hgas, hlogs, rfl, hcountStor,
+    hstorage, hcodes, haddresses, houtput, herror, hcompile⟩
 
 end Blanc.BeaconDeposit

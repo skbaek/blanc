@@ -14,6 +14,68 @@ open Jaune
 
 namespace MessageExecution
 
+/-- A message with an ordinary code address enters the interpreter whenever
+that address is not a precompile.  This covers normal transaction messages
+with `disablePrecompiles = false`; the flag is deliberately not a premise. -/
+theorem executeCode_enter_of_codeAddress_not_precompile
+    (msg : Msg) (benv : Benv) (codeAddress : Adr)
+    (hcodeAddress : msg.codeAddress = some codeAddress)
+    (hnotPrecompile :
+      decide (benv.stat.rules.isPrecomp codeAddress) = false) :
+    executeCode.enter (msg.withBenv benv) =
+      .inl (initEvm (msg.withBenv benv)) := by
+  unfold executeCode.enter
+  simp only [Msg.withBenv, hcodeAddress, hnotPrecompile, Bool.and_false,
+    Bool.false_eq_true, ↓reduceIte]
+
+/-- After successful value transfer, an exact interpreter-entry equation is
+enough to expose `processMessage` as settlement of the raw execution from the
+actual post-transfer environment. -/
+theorem processMessage_eq_settle_exec_afterTransfer_of_codeEntry
+    (msg : Msg) (benv : Benv)
+    (hentry : msg.benvAfterTransfer = .ok benv)
+    (hcodeEntry : executeCode.enter (msg.withBenv benv) =
+      .inl (initEvm (msg.withBenv benv))) :
+    processMessage msg =
+      (Frame.ofCall msg).settle
+        (exec (initEvm (msg.withBenv benv))) := by
+  have henter :
+      (Frame.ofCall msg).enter =
+        .run (initEvm (msg.withBenv benv)) := by
+    unfold Frame.enter Frame.ofCall
+    rw [hentry]
+    simp only
+    rw [hcodeEntry]
+  unfold processMessage runFrame
+  rw [henter]
+
+/-- After a successful value-transfer entry, a message with precompiles
+disabled is the call frame's settlement of the raw execution from the actual
+post-transfer environment.  Unlike `processMessage_eq_settle_exec`, this form
+does not identify the post-transfer environment with the message's pre-state,
+so it is suitable for payable calls. -/
+theorem processMessage_eq_settle_exec_afterTransfer
+    (msg : Msg) (benv : Benv)
+    (hentry : msg.benvAfterTransfer = .ok benv)
+    (hdisable : msg.disablePrecompiles = true) :
+    processMessage msg =
+      (Frame.ofCall msg).settle
+        (exec (initEvm (msg.withBenv benv))) := by
+  have henter :
+      (Frame.ofCall msg).enter =
+        .run (initEvm (msg.withBenv benv)) := by
+    unfold Frame.enter Frame.ofCall
+    rw [hentry]
+    simp only
+    unfold executeCode.enter
+    have hdisable' :
+        (msg.withBenv benv).disablePrecompiles = true := by
+      simpa [Msg.withBenv] using hdisable
+    rw [hdisable']
+    cases (msg.withBenv benv).codeAddress <;> rfl
+  unfold processMessage runFrame
+  rw [henter]
+
 /-- Under the ordinary entry identity with precompiles disabled,
 `processMessage` is the call frame's settlement of the raw code execution. -/
 theorem processMessage_eq_settle_exec
@@ -59,6 +121,47 @@ theorem processMessage_clean_of_exec
     (herror : post.error = none) :
     processMessage msg = .ok post := by
   rw [processMessage_eq_settle_exec msg hentry hdisable, hexec]
+  simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
+    executeCode.handleError, processMessage.settle]
+  change (if post.error.isSome = true then
+    Except.ok (post.rollback msg.benv.state msg.tenv.transientStorage)
+    else Except.ok post) = Except.ok post
+  rw [herror]
+  rfl
+
+/-- A clean raw execution from the actual post-transfer message entry settles
+successfully to that same machine.  This is the payable-call counterpart of
+`processMessage_clean_of_exec`: the caller supplies the environment produced
+by value transfer rather than assuming entry-state identity. -/
+theorem processMessage_clean_of_exec_afterTransfer
+    (msg : Msg) (benv : Benv) (post : Devm)
+    (hentry : msg.benvAfterTransfer = .ok benv)
+    (hdisable : msg.disablePrecompiles = true)
+    (hexec : exec (initEvm (msg.withBenv benv)) = .ok post)
+    (herror : post.error = none) :
+    processMessage msg = .ok post := by
+  rw [processMessage_eq_settle_exec_afterTransfer msg benv hentry hdisable,
+    hexec]
+  simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
+    executeCode.handleError, processMessage.settle]
+  change (if post.error.isSome = true then
+    Except.ok (post.rollback msg.benv.state msg.tenv.transientStorage)
+    else Except.ok post) = Except.ok post
+  rw [herror]
+  rfl
+
+/-- A clean raw execution from an exact post-transfer interpreter entry
+settles successfully to the same clean machine. -/
+theorem processMessage_clean_of_exec_afterTransfer_of_codeEntry
+    (msg : Msg) (benv : Benv) (post : Devm)
+    (hentry : msg.benvAfterTransfer = .ok benv)
+    (hcodeEntry : executeCode.enter (msg.withBenv benv) =
+      .inl (initEvm (msg.withBenv benv)))
+    (hexec : exec (initEvm (msg.withBenv benv)) = .ok post)
+    (herror : post.error = none) :
+    processMessage msg = .ok post := by
+  rw [processMessage_eq_settle_exec_afterTransfer_of_codeEntry
+    msg benv hentry hcodeEntry, hexec]
   simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
     executeCode.handleError, processMessage.settle]
   change (if post.error.isSome = true then

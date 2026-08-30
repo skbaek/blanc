@@ -1708,7 +1708,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The 953-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
+      "note": "The 962-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
       "order": 40,
       "verdict": {
         "expect_exit": 0,
@@ -1739,7 +1739,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 common/WETH10/Lido claim statements: "
+          "^OK \u2014 claim statements: "
         ]
       }
     },

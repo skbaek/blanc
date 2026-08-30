@@ -78,6 +78,7 @@ import Blanc.BeaconDepositErrors
 import Blanc.BeaconDepositRootPublic
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositEffects
+import Blanc.BeaconDepositSelectorMiss
 import Blanc.BeaconDepositWriteSites
 
 #print axioms Blanc.weth_preserves_solvent
@@ -1000,13 +1001,22 @@ import Blanc.BeaconDepositWriteSites
 #print axioms Blanc.BeaconDeposit.deposit_error_runCompiledTo
 #print axioms Blanc.BeaconDeposit.deposit_malformed_noRawSstore
 #print axioms Blanc.BeaconDeposit.noMatchSelector_runCompiledTo
+#print axioms Blanc.BeaconDeposit.unmatched_selector_noRawSstore
 #print axioms Blanc.BeaconDeposit.supportsInterface_runCompiled
 #print axioms Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo
+#print axioms Blanc.BeaconDeposit.supportsInterface_runCompiled_noRawSstore
+#print axioms Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo_noRawSstore
+#print axioms Blanc.BeaconDeposit.supportsInterface_short_calldata_runCompiledTo_noRawSstore
 #print axioms Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled
 #print axioms Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo
+#print axioms Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled_noRawSstore
+#print axioms Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo_noRawSstore
 #print axioms Blanc.BeaconDeposit.getDepositCount_warm_runCompiled
 #print axioms Blanc.BeaconDeposit.getDepositCount_cold_runCompiled
 #print axioms Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo
+#print axioms Blanc.BeaconDeposit.getDepositCount_warm_runCompiled_noRawSstore
+#print axioms Blanc.BeaconDeposit.getDepositCount_cold_runCompiled_noRawSstore
+#print axioms Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo_noRawSstore
 #print axioms Blanc.BeaconDeposit.Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot
 #print axioms Blanc.BeaconDeposit.Exec.Deriv.beaconConstructor_sstore_coordinate
 #print axioms Blanc.BeaconDeposit.constructor_success_retainedStorageEffectTriples

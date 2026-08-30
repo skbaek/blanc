@@ -1058,7 +1058,7 @@ def RootMemoryCarrier.stageFinish
   exact ⟨storeLe64Image pair.image 32 oldCount,
     hinv.1, hinv.2, hsize, hinput⟩
 
-private theorem rootFinishPrefix_runCompiled
+theorem rootFinishPrefix_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {memory : Mem} {oldCount shiftedSize node height : B256}
     {G : Nat} {rest : Func}
@@ -1223,12 +1223,12 @@ private theorem rootFinishPrefix_runCompiled
       (by simp only [List.length_nil]; omega)) ?_
   simpa only [Devm.setMach_setMach] using hstore
 
-private def rootFinishPost
+def rootFinishPost
     (base : Devm) (memory : Mem) (digest : B256) (G : Nat) : Devm :=
   (base.setMach
     ⟨[], memory.write 0 digest.toBytes, G⟩).withOutput digest.toBytes
 
-private theorem rootFinishReturn_runCompiled
+theorem rootFinishReturn_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {digest : B256} {G : Nat}
     (hsize : memory.size = 672)

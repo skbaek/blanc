@@ -419,6 +419,90 @@ private theorem supportsInterfaceLeaf_runCompiledTo
   exact Func.runCompiledTo_branch_succ (w := (1 : B256)) (s := [])
     (G := G) (by decide) rfl hbranchRoom hbranchGas hbody
 
+/-- The selected supports-interface leaf preserves the endpoint's exact
+raw-SSTORE-free path. -/
+private theorem supportsInterfaceLeaf_runCompiledTo_with_path
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {out : Execution} {G : Nat}
+    {hbody : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], Mem.empty, G⟩)
+      (nonpayableEndpoint supportsInterfaceEndpoint) out}
+    (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
+    ∃ run : Func.RunCompiledTo fs sevm
+        (base.setMach
+          ⟨[supportsInterfaceSelector], Mem.empty, G + 20⟩)
+        supportsInterfaceLeaf out,
+      Func.RunCompiledTo.NoRawSstorePath run := by
+  let afterPush := base.setMach
+    ⟨[supportsInterfaceSelector, supportsInterfaceSelector],
+      Mem.empty, G + 17⟩
+  have hpushCost :
+      pushCost supportsInterfaceSelector.toBytes.sig = gVerylow := by
+    rw [supportsInterfaceSelector_eq]
+    decide +kernel
+  have hpush : Ninst.RunCompiled sevm
+      (base.setMach
+        ⟨[supportsInterfaceSelector], Mem.empty, G + 20⟩)
+      (pushB256 supportsInterfaceSelector) afterPush := by
+    convert
+      (Ninst.runCompiled_pushB256
+        (devm := base.setMach
+          ⟨[supportsInterfaceSelector], Mem.empty, G + 20⟩)
+        (G := G + 17) hpushCost
+        (by simp only [Devm.gasLeft_setMach, gVerylow])
+        (by
+          simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)) using 1
+    all_goals
+      simp only [afterPush, Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach]
+  let branchPre := base.setMach ⟨[(1 : B256)], Mem.empty, G + 14⟩
+  have heq : Ninst.RunCompiled sevm afterPush eq branchPre := by
+    convert
+      (Ninst.runCompiled_binary (r := .eq) (f := B256.eqCheck)
+        (devm := afterPush)
+        (cost := gVerylow) (G := G + 14) (v := 1)
+        (by rintro ⟨⟩) rfl rfl (by decide +kernel)
+        (by simp only [afterPush, Devm.gasLeft_setMach, gVerylow])
+        (by decide)) using 1
+    all_goals
+      simp only [afterPush, branchPre, Devm.setMach_setMach,
+        Devm.memory_setMach]
+  have hroom : branchPre.stack.length < 1024 := by
+    simp only [branchPre, Devm.stack_setMach, List.length_cons,
+      List.length_nil]
+    omega
+  have hpop : Devm.PopBurnBy [(1 : B256)]
+      (gVerylow + gHigh + gJumpdest) branchPre
+      (base.setMach ⟨[], Mem.empty, G⟩) := by
+    simpa only [branchPre, Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+      Devm.popBurnBy_setMach (devm := branchPre) (G := G)
+        (by simp only [branchPre, Devm.stack_setMach])
+        (by simp only [branchPre, Devm.gasLeft_setMach,
+          gVerylow, gHigh, gJumpdest])
+  let hbranch : Func.RunCompiledTo fs sevm branchPre
+      ((nonpayableEndpoint supportsInterfaceEndpoint) <?> Func.rev) out :=
+    .succ (by decide) hroom hpop hbody
+  let run : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[supportsInterfaceSelector], Mem.empty, G + 20⟩)
+      supportsInterfaceLeaf out := by
+    unfold supportsInterfaceLeaf
+    exact .next hpush (.next heq hbranch)
+  refine ⟨run, ?_⟩
+  exact Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+    (instructionRun := hpush)
+    (by intro impossible; cases impossible)
+    (by intro operation impossible; cases impossible)
+    (Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+      (instructionRun := heq)
+      (by intro impossible; cases impossible)
+      (by intro operation impossible; cases impossible)
+      (by
+        dsimp only [hbranch]
+        exact .succ (nonzero := by decide) (room := hroom)
+          (pop := hpop) hbodySafe))
+
 private theorem supportsInterfaceLeaf_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hbody : Func.RunCompiled fs sevm
@@ -482,6 +566,114 @@ private theorem supportsInterfaceRootDispatch_runCompiledTo
     (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
     (by
       simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hleaf)
+
+private theorem supportsInterfaceRootDispatch_runCompiledTo_with_path
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {out : Execution} {G : Nat}
+    {hleaf : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[supportsInterfaceSelector], Mem.empty, G + 20⟩)
+      supportsInterfaceLeaf out}
+    (hleafSafe : Func.RunCompiledTo.NoRawSstorePath hleaf) :
+    ∃ run : Func.RunCompiledTo fs sevm
+        (base.setMach
+          ⟨[supportsInterfaceSelector], Mem.empty, G + 43⟩)
+        supportsInterfaceRootDispatch out,
+      Func.RunCompiledTo.NoRawSstorePath run := by
+  let afterDup := base.setMach
+    ⟨[supportsInterfaceSelector, supportsInterfaceSelector],
+      Mem.empty, G + 40⟩
+  have hdup : Ninst.RunCompiled sevm
+      (base.setMach
+        ⟨[supportsInterfaceSelector], Mem.empty, G + 43⟩)
+      (dup 0) afterDup := by
+    convert
+      (Ninst.runCompiled_dup
+        (devm := base.setMach
+          ⟨[supportsInterfaceSelector], Mem.empty, G + 43⟩)
+        (n := 0) (w := supportsInterfaceSelector) (G := G + 40) rfl
+        (by simp only [Devm.gasLeft_setMach, gVerylow])
+        (by
+          simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)) using 1
+    all_goals
+      simp only [afterDup, Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach]
+  let afterPush := base.setMach
+    ⟨[depositSelector, supportsInterfaceSelector,
+      supportsInterfaceSelector], Mem.empty, G + 37⟩
+  have hpushCost : pushCost depositSelector.toBytes.sig = gVerylow := by
+    rw [depositSelector_eq]
+    decide +kernel
+  have hpush : Ninst.RunCompiled sevm afterDup
+      (pushB256 depositSelector) afterPush := by
+    simpa only [afterDup, afterPush, Devm.setMach_setMach,
+        Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256 (devm := afterDup)
+        (G := G + 37) hpushCost
+        (by simp only [afterDup, Devm.gasLeft_setMach, gVerylow])
+        (by
+          simp only [afterDup, Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  let branchPre := base.setMach
+    ⟨[(1 : B256), supportsInterfaceSelector], Mem.empty, G + 34⟩
+  have hgt : Ninst.RunCompiled sevm afterPush gt branchPre := by
+    convert
+      (Ninst.runCompiled_binary (r := .gt) (f := B256.gtCheck)
+        (devm := afterPush)
+        (cost := gVerylow) (G := G + 34) (v := 1)
+        (by rintro ⟨⟩) rfl rfl
+        (by
+          rw [supportsInterfaceSelector_eq, depositSelector_eq]
+          decide +kernel)
+        (by simp only [afterPush, Devm.gasLeft_setMach, gVerylow])
+        (by simp only [List.length_cons, List.length_nil]; omega)) using 1
+    all_goals
+      simp only [afterPush, branchPre, Devm.setMach_setMach,
+        Devm.memory_setMach]
+  let leafPre := base.setMach
+    ⟨[supportsInterfaceSelector], Mem.empty, G + 20⟩
+  have hroom : branchPre.stack.length < 1024 := by
+    simp only [branchPre, Devm.stack_setMach, List.length_cons,
+      List.length_nil]
+    omega
+  have hpop : Devm.PopBurnBy [(1 : B256)]
+      (gVerylow + gHigh + gJumpdest) branchPre leafPre := by
+    simpa only [branchPre, leafPre, Devm.setMach_setMach,
+        Devm.stack_setMach, Devm.memory_setMach] using
+      Devm.popBurnBy_setMach (devm := branchPre) (G := G + 20)
+        (by simp only [branchPre, Devm.stack_setMach])
+        (by simp only [branchPre, Devm.gasLeft_setMach,
+          gVerylow, gHigh, gJumpdest])
+  let hbranch : Func.RunCompiledTo fs sevm branchPre
+      (supportsInterfaceLeaf <?> dispatch supportsInterfaceRightTree) out :=
+    .succ (by decide) hroom hpop (by
+      simpa only [leafPre] using hleaf)
+  let run : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[supportsInterfaceSelector], Mem.empty, G + 43⟩)
+      supportsInterfaceRootDispatch out := by
+    unfold supportsInterfaceRootDispatch
+    exact .next hdup (.next hpush (.next hgt hbranch))
+  refine ⟨run, ?_⟩
+  exact Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+    (instructionRun := hdup)
+    (by intro impossible; cases impossible)
+    (by intro operation impossible; cases impossible)
+    (Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+      (instructionRun := hpush)
+      (by intro impossible; cases impossible)
+      (by intro operation impossible; cases impossible)
+      (Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+        (instructionRun := hgt)
+        (by intro impossible; cases impossible)
+        (by intro operation impossible; cases impossible)
+        (by
+          dsimp only [hbranch]
+          exact .succ (nonzero := by decide) (room := hroom)
+            (pop := hpop) (by
+              simpa only [leafPre] using hleafSafe))))
 
 private theorem supportsInterfaceRootDispatch_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
@@ -547,6 +739,113 @@ private theorem supportsInterfaceMain_runCompiledTo
   simp only [Devm.setMach_setMach]
   simpa only [Devm.memory_setMach, prepend] using hroot
 
+/-- The selected supports-interface main dispatch preserves the exact
+raw-SSTORE-free path through selector decoding. -/
+private theorem supportsInterfaceMain_runCompiledTo_with_path
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {out : Execution} {G : Nat}
+    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
+    {hroot : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨[supportsInterfaceSelector], Mem.empty, G + 43⟩)
+      supportsInterfaceRootDispatch out}
+    (hrootSafe : Func.RunCompiledTo.NoRawSstorePath hroot) :
+    ∃ run : Func.RunCompiledTo fs sevm
+        (base.setMach ⟨[], Mem.empty, G + 54⟩)
+        (Func.main tree) out,
+      Func.RunCompiledTo.NoRawSstorePath run := by
+  simp only [supportsInterfaceMain_eq]
+  let afterPushZero := base.setMach
+    ⟨[(0 : B256)], Mem.empty, G + 52⟩
+  have hpushZero : Ninst.RunCompiled sevm
+      (base.setMach ⟨[], Mem.empty, G + 54⟩)
+      (pushB256 0) afterPushZero := by
+    convert
+      (Ninst.runCompiled_pushB256 (c := gBase) (G := G + 52)
+        (devm := base.setMach ⟨[], Mem.empty, G + 54⟩)
+        pushCost_zero
+        (by simp only [Devm.gasLeft_setMach, gBase])
+        (by simp only [Devm.stack_setMach, List.length_nil]; omega)) using 1
+    all_goals
+      simp only [afterPushZero, Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach]
+  let afterLoad := base.setMach
+    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 49⟩
+  have hload : Ninst.RunCompiled sevm afterPushZero
+      calldataload afterLoad := by
+    convert
+      (Ninst.runCompiled_calldataload
+        (devm := afterPushZero)
+        (v := Sevm.dataWord sevm 0) (G := G + 49) rfl rfl
+        (by simp only [afterPushZero, Devm.gasLeft_setMach, gVerylow])
+        (by decide)) using 1
+    all_goals
+      simp only [afterPushZero, afterLoad, Devm.setMach_setMach,
+        Devm.memory_setMach]
+  let afterPush224 := base.setMach
+    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + 46⟩
+  have hpush224Cost : pushCost (224 : B256).toBytes.sig = gVerylow := by
+    decide +kernel
+  have hpush224 : Ninst.RunCompiled sevm afterLoad
+      (pushB256 224) afterPush224 := by
+    simpa only [afterLoad, afterPush224, Devm.setMach_setMach,
+        Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256 (devm := afterLoad)
+        (G := G + 46) hpush224Cost
+        (by simp only [afterLoad, Devm.gasLeft_setMach, gVerylow])
+        (by
+          simp only [afterLoad, Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  let rootPre := base.setMach
+    ⟨[supportsInterfaceSelector], Mem.empty, G + 43⟩
+  have h224 : (224 : B256).toNat = 224 := by
+    decide +kernel
+  have hselector' :
+      Sevm.dataWord sevm 0 >>> (224 : B256).toNat =
+        supportsInterfaceSelector := by
+    rw [h224]
+    exact hselector
+  have hshr : Ninst.RunCompiled sevm afterPush224 shr rootPre := by
+    convert
+      (Ninst.runCompiled_binary (r := .shr)
+        (devm := afterPush224)
+        (f := fun x y => y >>> x.toNat)
+        (cost := gVerylow) (G := G + 43)
+        (v := supportsInterfaceSelector)
+        (by rintro ⟨⟩) rfl rfl hselector'
+        (by simp only [afterPush224, Devm.gasLeft_setMach, gVerylow])
+        (by decide)) using 1
+    all_goals
+      simp only [afterPush224, rootPre, Devm.setMach_setMach,
+        Devm.memory_setMach]
+  let run : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], Mem.empty, G + 54⟩)
+      supportsInterfaceMain out := by
+    unfold supportsInterfaceMain fsig shiftRight cdl
+    exact .next hpushZero (.next hload (.next hpush224 (.next hshr (by
+      simpa only [rootPre, prepend] using hroot))))
+  refine ⟨run, ?_⟩
+  change Func.RunCompiledTo.NoRawSstorePath
+    (.next hpushZero (.next hload (.next hpush224 (.next hshr hroot))))
+  exact Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+    (instructionRun := hpushZero)
+    (by intro impossible; cases impossible)
+    (by intro operation impossible; cases impossible)
+    (Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+      (instructionRun := hload)
+      (by intro impossible; cases impossible)
+      (by intro operation impossible; cases impossible)
+      (Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+        (instructionRun := hpush224)
+        (by intro impossible; cases impossible)
+        (by intro operation impossible; cases impossible)
+        (Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+          (instructionRun := hshr)
+          (by intro impossible; cases impossible)
+          (by intro operation impossible; cases impossible)
+          hrootSafe)))
+
 private theorem supportsInterfaceMain_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hselector : Sevm.selector sevm = supportsInterfaceSelector)
@@ -599,6 +898,118 @@ private theorem supportsInterfaceRoute_runCompiledTo
           simp only [supportsInterfaceDispatchGas]
         simpa only [runtime, Devm.setMach_setMach, Devm.memory_setMach,
             hboundary] using hmain)
+
+/-- Exact supports-interface route construction retaining the selected
+raw-SSTORE-free main walk and its matching entry burn. -/
+private theorem supportsInterfaceRoute_runCompiledTo_with_path
+    {sevm : Sevm} {base : Devm} {out : Execution} {K : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
+    {hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], Mem.empty, K⟩)
+      (nonpayableEndpoint supportsInterfaceEndpoint) out}
+    (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
+    ∃ mid : Devm,
+      Devm.BurnBy gJumpdest
+        (base.setMach
+          ⟨[], Mem.empty, K + supportsInterfaceRouteGas⟩) mid ∧
+      ∃ mainRun : Func.RunCompiledTo (runtime.main :: runtime.aux)
+          sevm mid runtime.main out,
+        Func.RunCompiledTo.NoRawSstorePath mainRun := by
+  obtain ⟨hleaf, hleafSafe⟩ :=
+    supportsInterfaceLeaf_runCompiledTo_with_path hbodySafe
+  obtain ⟨hroot, hrootSafe⟩ :=
+    supportsInterfaceRootDispatch_runCompiledTo_with_path hleafSafe
+  obtain ⟨hmain, hmainSafe⟩ :=
+    supportsInterfaceMain_runCompiledTo_with_path hselector hrootSafe
+  let pre := base.setMach
+    ⟨[], Mem.empty, K + supportsInterfaceRouteGas⟩
+  let mid := base.setMach ⟨[], Mem.empty, K + 70⟩
+  let afterSize := base.setMach
+    ⟨[sevm.data.length.toB256], Mem.empty, K + 68⟩
+  let afterBranch := base.setMach ⟨[], Mem.empty, K + 54⟩
+  have hsize : Ninst.RunCompiled sevm mid calldatasize afterSize := by
+    simpa only [mid, afterSize, Devm.setMach_setMach,
+        Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushItem (sevm := sevm) (devm := mid)
+        (r := .calldatasize) (x := Nat.toB256 sevm.data.length)
+        (cost := gBase) (G := K + 68) (by rintro ⟨⟩) rfl
+        (by simp only [mid, Devm.gasLeft_setMach, gBase])
+        (by simp only [mid, Devm.stack_setMach, List.length_nil]; omega))
+  have hroom : afterSize.stack.length < 1024 := by
+    simp only [afterSize, Devm.stack_setMach, List.length_cons,
+      List.length_nil]
+    omega
+  have hpop : Devm.PopBurnBy [sevm.data.length.toB256]
+      (gVerylow + gHigh + gJumpdest) afterSize afterBranch := by
+    simpa only [afterSize, afterBranch, Devm.setMach_setMach,
+        Devm.stack_setMach, Devm.memory_setMach] using
+      Devm.popBurnBy_setMach (devm := afterSize) (G := K + 54)
+        (by simp only [afterSize, Devm.stack_setMach])
+        (by simp only [afterSize, Devm.gasLeft_setMach,
+          gVerylow, gHigh, gJumpdest])
+  let hbranch : Func.RunCompiledTo (runtime.main :: runtime.aux)
+      sevm afterSize (Func.main tree <?> Func.rev) out :=
+    .succ hnonempty hroom hpop (by
+      simpa only [afterBranch] using hmain)
+  let mainRun : Func.RunCompiledTo (runtime.main :: runtime.aux)
+      sevm mid runtime.main out := by
+    unfold runtime
+    exact .next hsize hbranch
+  have mainSafe : Func.RunCompiledTo.NoRawSstorePath mainRun := by
+    change Func.RunCompiledTo.NoRawSstorePath (.next hsize hbranch)
+    exact Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
+      (instructionRun := hsize)
+      (by intro impossible; cases impossible)
+      (by intro operation impossible; cases impossible)
+      (by
+        dsimp only [hbranch]
+        exact .succ (nonzero := hnonempty) (room := hroom)
+          (pop := hpop) (by
+            simpa only [afterBranch] using hmainSafe))
+  have hentry : Devm.BurnBy gJumpdest pre mid := by
+    simpa only [pre, mid, Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach, supportsInterfaceRouteGas, gJumpdest] using
+      Devm.burnBy_setMach_gas
+        (devm := pre) (G := K + 70)
+        (by simp only [pre, Devm.gasLeft_setMach,
+          supportsInterfaceRouteGas])
+  exact ⟨mid, hentry, mainRun, mainSafe⟩
+
+private theorem supportsInterfaceRoute_exists_exec_noRawSstore
+    {sevm : Sevm} {base : Devm} {out : Execution} {K : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
+    (hcode : sevm.code.toList = code)
+    {hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], Mem.empty, K⟩)
+      (nonpayableEndpoint supportsInterfaceEndpoint) out}
+    (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
+    ∃ execution : Exec 0 sevm
+        (base.setMach
+          ⟨[], Mem.empty, K + supportsInterfaceRouteGas⟩) out,
+      Prog.RunCompiledTo sevm
+          (base.setMach
+            ⟨[], Mem.empty, K + supportsInterfaceRouteGas⟩)
+          runtime out ∧
+      Exec.NoRawSstore execution ∧
+      Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
+      some sevm.code.toList = Prog.compile runtime := by
+  obtain ⟨mid, hentry, mainRun, mainSafe⟩ :=
+    supportsInterfaceRoute_runCompiledTo_with_path
+      hnonempty hselector hbodySafe
+  let programRun : Prog.RunCompiledTo sevm
+      (base.setMach
+        ⟨[], Mem.empty, K + supportsInterfaceRouteGas⟩)
+      runtime out := ⟨mid, hentry, mainRun⟩
+  have hcompiled : some sevm.code.toList = Prog.compile runtime := by
+    rw [hcode, code_compile]
+  obtain ⟨execution, executionSafe⟩ :=
+    Prog.exists_exec_noRawSstore hentry mainRun mainSafe hcompiled
+  exact ⟨execution, programRun, executionSafe,
+    executionSafe.retainedStorageWrites_eq_nil,
+    executionSafe.retainedStorageEffectTriples_eq_nil, hcompiled⟩
 
 /-! ## The concrete public selector route -/
 
@@ -684,6 +1095,77 @@ theorem supportsInterface_runCompiled
               hboundary] using hmain)
   · rw [hcode, code_compile]
 
+/-- Exact public `supportsInterface` execution with a selected-path
+raw-SSTORE certificate and empty retained storage-effect chronologies. -/
+theorem supportsInterface_runCompiled_noRawSstore
+    (sevm : Sevm) (base : Devm) (G : Nat)
+    (hdataLength : 36 ≤ sevm.data.length)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
+    (hcode : sevm.code.toList = code) :
+    ∃ post,
+      ∃ execution : Exec 0 sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas⟩)
+          (.ok post),
+        Prog.RunCompiledTo sevm
+            (base.setMach
+              ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas⟩)
+            runtime (.ok post) ∧
+        post.gasLeft = G ∧
+        Devm.output post = abiBoolReturn (supportsInterfaceArg sevm) ∧
+        Devm.WorldEq base post ∧
+        post.logs = base.logs ∧
+        Exec.NoRawSstore execution ∧
+        Exec.retainedStorageWrites execution = [] ∧
+        Exec.retainedStorageEffectTriples execution = [] ∧
+        some sevm.code.toList = Prog.compile runtime := by
+  rcases supportsInterfaceEndpoint_runCompiled
+      (runtime.main :: runtime.aux) sevm base G hdataLength hdataBound with
+    ⟨post, hendpoint, hgas, houtput, hworld, hlogs⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  have hbody :
+      Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+        (base.setMach ⟨[], Mem.empty, G + 82⟩)
+        (nonpayableEndpoint supportsInterfaceEndpoint) (.ok post) := by
+    have hwrapped := nonpayableEndpoint_zero_runCompiledTo
+      (fs := runtime.main :: runtime.aux) (sevm := sevm)
+      (base := routeBase) (G := G + supportsInterfaceEndpointGas)
+      (body := supportsInterfaceEndpoint) hvalue
+      (by simp only [routeBase, Devm.stack_setMach, List.length_nil]; omega)
+      (by
+        simpa only [routeBase, Devm.setMach_setMach, Devm.stack_setMach,
+            Devm.memory_setMach] using
+          (Func.RunCompiledTo.of_runCompiled hendpoint))
+    have hboundary :
+        G + supportsInterfaceEndpointGas + nonpayableEndpointZeroGas =
+          G + 82 := by
+      simp only [supportsInterfaceEndpointGas, nonpayableEndpointZeroGas]
+    simpa only [routeBase, Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach, hboundary] using hwrapped
+  have hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody :=
+    Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
+      (program := runtime) (members := []) hbody (by rfl) (by rfl)
+  have hlengthWordNe : sevm.data.length.toB256 ≠ 0 := by
+    intro hzero
+    have hnat := congrArg B256.toNat hzero
+    rw [B256.toNat_toB256_of_lt hdataBound] at hnat
+    simp only [B256.toNat_zero] at hnat
+    omega
+  obtain ⟨execution, hrun, executionSafe, hwrites, htriples,
+      hcompiled⟩ :=
+    supportsInterfaceRoute_exists_exec_noRawSstore
+      (base := base) (K := G + 82) hlengthWordNe hselector hcode hbodySafe
+  refine ⟨post, ?_⟩
+  have hboundary :
+      G + 82 + supportsInterfaceRouteGas =
+        G + supportsInterfaceRuntimeGas := by
+    simp only [supportsInterfaceRouteGas, supportsInterfaceRuntimeGas]
+  rw [← hboundary]
+  exact ⟨execution, hrun, hgas, houtput, hworld, hlogs, executionSafe,
+    hwrites, htriples, hcompiled⟩
+
 def supportsInterfaceNonzeroValueRuntimeGas : Nat := 91
 
 /-- A value-carrying interface query is rejected before the endpoint can
@@ -720,6 +1202,61 @@ theorem supportsInterface_nonzero_value_runCompiledTo
         supportsInterfaceNonzeroValueRuntimeGas]
     simpa only [hboundary] using hroute
   · rw [hcode, code_compile]
+
+/-- The selected nonpayable-revert route has no raw SSTORE and retains no
+storage effect. -/
+theorem supportsInterface_nonzero_value_runCompiledTo_noRawSstore
+    (sevm : Sevm) (base : Devm) (G : Nat)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hvalue : sevm.value ≠ 0)
+    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
+    (hcode : sevm.code.toList = code) :
+    ∃ execution : Exec 0 sevm
+        (base.setMach
+          ⟨[], Mem.empty, G + supportsInterfaceNonzeroValueRuntimeGas⟩)
+        (.error (.revert,
+          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+      Prog.RunCompiledTo sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + supportsInterfaceNonzeroValueRuntimeGas⟩)
+          runtime
+          (.error (.revert,
+            (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+      Exec.NoRawSstore execution ∧
+      Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
+      some sevm.code.toList = Prog.compile runtime := by
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  have hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (base.setMach
+        ⟨[], Mem.empty, G + nonpayableEndpointRevertGas⟩)
+      (nonpayableEndpoint supportsInterfaceEndpoint)
+      (.error (.revert,
+        (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) := by
+    simpa only [routeBase, Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+      (nonpayableEndpoint_nonzero_runCompiledTo
+        (fs := runtime.main :: runtime.aux) (sevm := sevm)
+        (base := routeBase) (G := G)
+        (body := supportsInterfaceEndpoint) hvalue
+        (by
+          simp only [routeBase, Devm.stack_setMach, List.length_nil]
+          omega))
+  have hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody :=
+    Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
+      (program := runtime) (members := []) hbody (by rfl) (by rfl)
+  obtain ⟨execution, hrun, executionSafe, hwrites, htriples,
+      hcompiled⟩ :=
+    supportsInterfaceRoute_exists_exec_noRawSstore
+      (base := base) (K := G + nonpayableEndpointRevertGas)
+      hnonempty hselector hcode hbodySafe
+  have hboundary :
+      G + nonpayableEndpointRevertGas + supportsInterfaceRouteGas =
+        G + supportsInterfaceNonzeroValueRuntimeGas := by
+    simp only [nonpayableEndpointRevertGas, supportsInterfaceRouteGas,
+      supportsInterfaceNonzeroValueRuntimeGas]
+  rw [← hboundary]
+  exact ⟨execution, hrun, executionSafe, hwrites, htriples, hcompiled⟩
 
 def supportsInterfaceShortCalldataRuntimeGas : Nat := 112
 
@@ -770,6 +1307,76 @@ theorem supportsInterface_short_calldata_runCompiledTo
         supportsInterfaceShortCalldataRuntimeGas]
     simpa only [hboundary] using hroute
   · rw [hcode, code_compile]
+
+/-- The selected short-calldata revert has no raw SSTORE and retains no
+storage effect. -/
+theorem supportsInterface_short_calldata_runCompiledTo_noRawSstore
+    (sevm : Sevm) (base : Devm) (G : Nat)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hshort : sevm.data.length < 36)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
+    (hcode : sevm.code.toList = code) :
+    ∃ execution : Exec 0 sevm
+        (base.setMach
+          ⟨[], Mem.empty, G + supportsInterfaceShortCalldataRuntimeGas⟩)
+        (.error (.revert,
+          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+      Prog.RunCompiledTo sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + supportsInterfaceShortCalldataRuntimeGas⟩)
+          runtime
+          (.error (.revert,
+            (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+      Exec.NoRawSstore execution ∧
+      Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
+      some sevm.code.toList = Prog.compile runtime := by
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  have hendpoint := supportsInterfaceEndpoint_short_runCompiledTo
+    (fs := runtime.main :: runtime.aux) (sevm := sevm)
+    (base := routeBase) (G := G) hshort
+    (by simp only [routeBase, Devm.stack_setMach, List.length_nil]; omega)
+  have hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (base.setMach
+        ⟨[], Mem.empty,
+          G + supportsInterfaceEndpointShortGas +
+            nonpayableEndpointZeroGas⟩)
+      (nonpayableEndpoint supportsInterfaceEndpoint)
+      (.error (.revert,
+        (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) := by
+    simpa only [routeBase, Devm.setMach_setMach, Devm.stack_setMach,
+        Devm.memory_setMach] using
+      (nonpayableEndpoint_zero_runCompiledTo
+        (fs := runtime.main :: runtime.aux) (sevm := sevm)
+        (base := routeBase)
+        (G := G + supportsInterfaceEndpointShortGas)
+        (body := supportsInterfaceEndpoint) hvalue
+        (by
+          simp only [routeBase, Devm.stack_setMach, List.length_nil]
+          omega)
+        (by
+          simpa only [routeBase, Devm.setMach_setMach,
+              Devm.stack_setMach, Devm.memory_setMach] using hendpoint))
+  have hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody :=
+    Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
+      (program := runtime) (members := []) hbody (by rfl) (by rfl)
+  obtain ⟨execution, hrun, executionSafe, hwrites, htriples,
+      hcompiled⟩ :=
+    supportsInterfaceRoute_exists_exec_noRawSstore
+      (base := base)
+      (K := G + supportsInterfaceEndpointShortGas +
+        nonpayableEndpointZeroGas)
+      hnonempty hselector hcode hbodySafe
+  have hboundary :
+      G + supportsInterfaceEndpointShortGas + nonpayableEndpointZeroGas +
+          supportsInterfaceRouteGas =
+        G + supportsInterfaceShortCalldataRuntimeGas := by
+    simp only [supportsInterfaceEndpointShortGas,
+      nonpayableEndpointZeroGas, supportsInterfaceRouteGas,
+      supportsInterfaceShortCalldataRuntimeGas]
+  rw [← hboundary]
+  exact ⟨execution, hrun, executionSafe, hwrites, htriples, hcompiled⟩
 
 private theorem supportsInterfaceAnswer_runCompiled
     (sevm : Sevm) (base : Devm) (G : Nat) (answer : Bool)

@@ -1,8 +1,13 @@
 import Blanc.BeaconDepositAbi
+import Blanc.BeaconDepositAbiStorageEffects
 import Blanc.BeaconDepositErrorModel
 import Blanc.BeaconDepositEvent
+import Blanc.BeaconDepositEventStorageEffects
 import Blanc.BeaconDepositGuards
+import Blanc.BeaconDepositGuardStorageEffects
+import Blanc.BeaconDepositReconstructStorageEffects
 import Blanc.BeaconDepositSuccessGuards
+import Blanc.ForwardNoRawSstore
 import Jaune.MulDiv
 
 /-!
@@ -25,10 +30,138 @@ differential lane owns public gas comparison. -/
 def DepositEndpointErrorWitness
     (sevm : Sevm) (base : Devm) (G : Nat) (reason : Reason) : Prop :=
   ∃ endpointCost post,
-    Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + endpointCost⟩)
-      depositEndpoint (.error (.revert, post)) ∧
+    ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+        (base.setMach ⟨[], Mem.empty, G + endpointCost⟩)
+        depositEndpoint (.error (.revert, post)),
+      Func.RunCompiledTo.NoRawSstorePath run ∧
     post.output = errorData (reasonString reason)
+
+private def reachableErrorSlots : List Nat :=
+  [emptyRevertSlot, pubkeyLengthErrorSlot, withdrawalLengthErrorSlot,
+    signatureLengthErrorSlot, valueTooLowErrorSlot,
+    valueNotGweiErrorSlot, valueTooHighErrorSlot,
+    rootMismatchErrorSlot, treeFullErrorSlot]
+
+private def afterValueTooHigh : Func :=
+  stageDepositEvent +++ depositAfterEvent
+
+private def afterValueNotGwei : Func :=
+  pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div ::: dup 0 :::
+    mstoreAt amountWord +++
+    pushB256 (Nat.toB256 (2 ^ 64 - 1)) ::: lt :::
+    ((.call valueTooHighErrorSlot) <?> afterValueTooHigh)
+
+private def afterValueTooLow : Func :=
+  pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: mod :::
+    ((.call valueNotGweiErrorSlot) <?> afterValueNotGwei)
+
+private def afterSignatureLength : Func :=
+  pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
+    ((.call valueTooLowErrorSlot) <?> afterValueTooLow)
+
+private def afterWithdrawalLength : Func :=
+  loadWord 5 +++ pushB256 96 ::: eq ::: iszero :::
+    ((.call signatureLengthErrorSlot) <?> afterSignatureLength)
+
+private def afterPubkeyLength : Func :=
+  loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
+    ((.call withdrawalLengthErrorSlot) <?> afterWithdrawalLength)
+
+private def pubkeyLengthSafeBody : Func :=
+  loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
+    ((.call pubkeyLengthErrorSlot) <?> Func.stop)
+
+private def withdrawalLengthSafeBody : Func :=
+  loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
+    ((.call pubkeyLengthErrorSlot) <?>
+      (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
+        ((.call withdrawalLengthErrorSlot) <?> Func.stop)))
+
+private def signatureLengthSafeBody : Func :=
+  loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
+    ((.call pubkeyLengthErrorSlot) <?>
+      (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
+        ((.call withdrawalLengthErrorSlot) <?>
+          (loadWord 5 +++ pushB256 96 ::: eq ::: iszero :::
+            ((.call signatureLengthErrorSlot) <?> Func.stop)))))
+
+private def valueTooLowSafeBody : Func :=
+  loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
+    ((.call pubkeyLengthErrorSlot) <?>
+      (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
+        ((.call withdrawalLengthErrorSlot) <?>
+          (loadWord 5 +++ pushB256 96 ::: eq ::: iszero :::
+            ((.call signatureLengthErrorSlot) <?>
+              (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
+                ((.call valueTooLowErrorSlot) <?> Func.stop)))))))
+
+private def valueNotGweiSafeBody : Func :=
+  loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
+    ((.call pubkeyLengthErrorSlot) <?>
+      (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
+        ((.call withdrawalLengthErrorSlot) <?>
+          (loadWord 5 +++ pushB256 96 ::: eq ::: iszero :::
+            ((.call signatureLengthErrorSlot) <?>
+              (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
+                ((.call valueTooLowErrorSlot) <?>
+                  (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: mod :::
+                    ((.call valueNotGweiErrorSlot) <?> Func.stop)))))))))
+
+private def valueTooHighSafeBody : Func :=
+  loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
+    ((.call pubkeyLengthErrorSlot) <?>
+      (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
+        ((.call withdrawalLengthErrorSlot) <?>
+          (loadWord 5 +++ pushB256 96 ::: eq ::: iszero :::
+            ((.call signatureLengthErrorSlot) <?>
+              (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
+                ((.call valueTooLowErrorSlot) <?>
+                  (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: mod :::
+                    ((.call valueNotGweiErrorSlot) <?>
+                      (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div :::
+                        dup 0 ::: mstoreAt amountWord +++
+                        pushB256 (Nat.toB256 (2 ^ 64 - 1)) ::: lt :::
+                        ((.call valueTooHighErrorSlot) <?>
+                          Func.stop)))))))))))
+
+/-- Replacing a successful-stop continuation after ABI validation is the same
+as replacing it in the validated body.  Keeping the body abstract prevents a
+large concrete endpoint equality from becoming one reduction tower. -/
+private theorem validateDepositAbi_replaceStopWith
+    (body replacement : Func) :
+    (validateDepositAbi body).replaceStopWith replacement =
+      validateDepositAbi (body.replaceStopWith replacement) := by
+  unfold validateDepositAbi validateDynamicTail arg
+  simp only [Func.replaceStopWith_prepend, Func.replaceStopWith]
+
+private def depositSuccessGuardsSafe : Func :=
+  let checkCap :=
+    pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
+    loadWord oldCountWord +++ lt ::: iszero :::
+    ((.call treeFullErrorSlot) <?> Func.stop)
+  loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
+  ((.call rootMismatchErrorSlot) <?> checkCap)
+
+private theorem depositSuccessGuardsSafe_error_storageEffectRun
+    {sevm : Sevm} {pre : Devm} {failure : EvmError × Devm}
+    (run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm pre
+      depositSuccessGuardsSafe (.error failure)) :
+    Func.StorageEffectRun (runtime.main :: runtime.aux) sevm pre
+      depositSuccessGuards (.error failure) [] := by
+  have safe : Func.RunCompiledTo.NoRawSstorePath run :=
+    Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
+      (program := runtime)
+      (members := [rootMismatchErrorSlot, treeFullErrorSlot]) run
+      (by decide +kernel) (by decide +kernel)
+  obtain ⟨targetRun, targetSafe⟩ :=
+    safe.replaceStopWith_of_error commitDeposit
+  have hsource :
+      depositSuccessGuardsSafe.replaceStopWith commitDeposit =
+        depositSuccessGuards := by
+    rfl
+  exact Func.StorageEffectRun.of_noRawSstorePath (run := by
+    simpa only [hsource] using targetRun) (by
+      simpa only [hsource] using targetSafe)
 
 /-- Exact constant-error cost at the 768-byte post-reconstruction memory
 boundary. -/
@@ -61,28 +194,43 @@ private theorem payload_length_bound
   exact B256.toNat_lt _
 
 /-- Lift an exact decoded-body error through the successful ABI decoder. -/
-private theorem depositEndpointErrorWitness_of_body
+private theorem depositEndpointErrorWitness_of_safeBody
     {sevm : Sevm} {base : Devm} {G bodyCost : Nat}
     {pubkey withdrawalCredentials signature : Bytes}
     {depositDataRoot : B256} {reason : Reason} {post : Devm}
+    {safeBody replacement : Func}
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
       signature depositDataRoot)
     (hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], depositDecodedMemory sevm.data, G + bodyCost⟩)
-      depositBody (.error (.revert, post)))
+      safeBody (.error (.revert, post)))
+    (hsource :
+      (validateDepositAbi safeBody).replaceStopWith replacement =
+        depositEndpoint)
+    (hstore : runtime.entrySstoreFree
+      (validateDepositAbi safeBody) reachableErrorSlots = true)
+    (hexec : runtime.reachableExecFree
+      (validateDepositAbi safeBody) reachableErrorSlots = true)
     (houtput : post.output = errorData (reasonString reason)) :
     DepositEndpointErrorWitness sevm base G reason := by
   unfold DepositEndpointErrorWitness
   have habi := validateDepositAbi_success_runCompiledTo
     (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
-    (G := G + bodyCost) (body := depositBody)
+    (G := G + bodyCost) (body := safeBody)
     hdataBound hdec hbody
-  refine ⟨bodyCost + 521, post, ?_, houtput⟩
+  have habiSafe : Func.RunCompiledTo.NoRawSstorePath habi :=
+    Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
+      (program := runtime) (members := reachableErrorSlots)
+      habi hstore hexec
+  obtain ⟨targetRun, targetSafe⟩ :=
+    habiSafe.replaceStopWith_of_error replacement
   have hgas : (G + bodyCost) + 521 = G + (bodyCost + 521) := by
     omega
-  simpa only [depositEndpoint, hgas] using habi
+  refine ⟨bodyCost + 521, post, ?_, ?_, houtput⟩
+  · simpa only [hsource, hgas] using targetRun
+  · simpa only [hsource, hgas] using targetSafe
 
 /-- Compose one post-reconstruction error through event staging and the six
 successful pre-hash guards.  The final guard is supplied at the fixed 768-byte
@@ -117,16 +265,16 @@ private theorem depositPostHashError_endpoint_runCompiledTo
         (depositDataNode Bytes.sha256 pubkey withdrawalCredentials signature
           (le64 amount.toNat)) →
       ∃ post,
-        Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+        Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
           (finalPost.setMach ⟨[], finalPost.memory,
             G + depositPostHashErrorGuardCost error + guardPrefixCost⟩)
-          depositSuccessGuards (.error (.revert, post)) ∧
+          depositSuccessGuards (.error (.revert, post)) [] ∧
         post.output = errorData (reasonString error.reason)) :
     DepositEndpointErrorWitness sevm base G error.reason := by
   let K := G + depositPostHashErrorGuardCost error + guardPrefixCost
   obtain ⟨logged, _hlogs, _hstorVal, _hstorMap, _hbal, hcode,
       _hloadedKeys, haddresses, _houtput, _herror, heventLift⟩ :=
-    stageDepositEvent_runCompiledTo
+    stageDepositEvent_storageEffectRun
       (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
       (amount := amount) (oldCount := oldCount) (G := K + 1779)
       (body := depositAfterEvent)
@@ -151,7 +299,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
     rw [haddresses, Blanc.afterSload_accessedAddresses]
     exact hwarm
   obtain ⟨finalPost, hregisters, _hreturn, _hmeta, hreconstructLift⟩ :=
-    reconstructDepositDataNode_runCompiledTo
+    reconstructDepositDataNode_storageEffectRun
       (fs := runtime.main :: runtime.aux) (sevm := sevm)
       (base := stagedBase) (pubkeyInput := pubkey ++ zeros 16)
       (signatureFirst := signature.take 64)
@@ -172,24 +320,25 @@ private theorem depositPostHashError_endpoint_runCompiledTo
     rw [← hnodeEq]
     exact hregisters.toInsertionStart
   obtain ⟨post, hguardRun, hpostOutput⟩ := hguard hstart
-  have hreconstructRun : Func.RunCompiledTo
+  have hreconstructRun : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
       (stagedBase.setMach ⟨[], stagedBase.memory, K + 1779⟩)
       (reconstructDepositDataNode depositSuccessGuards)
-      (.error (.revert, post)) := by
+      (.error (.revert, post)) [] := by
     exact hreconstructLift hguardRun
-  have heventRun : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+  have heventRun : Func.StorageEffectRun
+      (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], depositEventInputMemory sevm.data amount,
           (K + 1779) + 5799 + sloadCost sevm base depositCountSlot⟩)
       (stageDepositEvent +++ depositAfterEvent)
-      (.error (.revert, post)) := by
+      (.error (.revert, post)) [] := by
     apply heventLift
     rw [show depositAfterEvent =
       reconstructDepositDataNode depositSuccessGuards by rfl]
     simpa only [stagedBase, Devm.setMach_setMach, Devm.memory_setMach] using
       hreconstructRun
-  have hguards := depositGuards_runCompiledTo
+  have hguards := depositGuards_storageEffectRun
     (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
     (amount := amount)
     (G := (K + 1779) + 5799 + sloadCost sevm base depositCountSlot)
@@ -202,8 +351,19 @@ private theorem depositPostHashError_endpoint_runCompiledTo
           depositGuardsGas) = G + bodyCost := by
     simp only [K, bodyCost]
     omega
-  exact depositEndpointErrorWitness_of_body hdataBound hdec
-    (bodyCost := bodyCost) (by simpa only [hgas] using hguards) hpostOutput
+  have hbody : Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
+      (base.setMach
+        ⟨[], depositDecodedMemory sevm.data, G + bodyCost⟩)
+      depositBody (.error (.revert, post)) [] := by
+    simpa only [hgas] using hguards
+  have hendpoint := validateDepositAbi_success_storageEffectRun
+    (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
+    (G := G + bodyCost) hdataBound hdec hbody
+  have htotal : (G + bodyCost) + 521 = G + (bodyCost + 521) := by
+    omega
+  refine ⟨bodyCost + 521, post, ?_, ?_, hpostOutput⟩
+  · simpa only [depositEndpoint, htotal] using hendpoint.run
+  · simpa only [depositEndpoint, htotal] using hendpoint.noRawSstorePath
 
 /-- One failing decoded-length guard, including its exact catalogued
 `Error(string)` auxiliary. -/
@@ -411,7 +571,7 @@ private theorem depositAmountUpperGuard_failure_runCompiledTo
 auxiliary before the capacity guard. -/
 private theorem depositRootGuard_failure_runCompiledTo
     {sevm : Sevm} {base : Devm} {memory : Mem}
-    {oldCount node : B256} {G : Nat}
+    {oldCount node : B256} {G : Nat} {otherwise : Func}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hroot : Sevm.argWord sevm 3 ≠ node) :
     let guardBase := base.setMach ⟨[], memory, 0⟩
@@ -419,7 +579,8 @@ private theorem depositRootGuard_failure_runCompiledTo
       (base.setMach ⟨[], memory,
         (G + errorGuardCost guardBase
           (reasonString ReachableReason.depositDataRootMismatch.reason)) + 18⟩)
-      depositSuccessGuards
+      (loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
+        ((.call rootMismatchErrorSlot) <?> otherwise))
       (.error (.revert,
         (base.setMach ⟨[],
           Mem.writeStoresRev memory
@@ -439,7 +600,6 @@ private theorem depositRootGuard_failure_runCompiledTo
   have hread : Bytes.toB256 (memory.read 640 32).1 = node := hmem.readNode
   have hmemory : (memory.read 640 32).2 = memory := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le hmod hcovered)]
-  unfold depositSuccessGuards
   func_run (6) [3, 0, 1]
   case h_cost =>
     simp only [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel]
@@ -457,10 +617,7 @@ private theorem depositRootGuard_failure_runCompiledTo
     (reachableErrorGuard_exact_runCompiledTo
       (base := guardBase) (G := G) (w := (1 : B256))
       (stack := []) (img := hmem.image)
-      (otherwise :=
-        pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
-          loadWord oldCountWord +++ lt ::: iszero :::
-          ((.call treeFullErrorSlot) <?> commitDeposit))
+      (otherwise := otherwise)
       .depositDataRootMismatch (by decide) hmem.wf hmem.reads hmod
       (by decide +kernel) (by decide +kernel) (by decide))
 
@@ -562,8 +719,8 @@ theorem deposit_pubkeyLength_error_endpoint_runCompiledTo
       (errorData (reasonString ReachableReason.pubkeyLength.reason))
   have hguard : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory, (G + guardCost) + 15⟩)
-      depositBody (.error (.revert, post)) := by
-    unfold depositBody
+      pubkeyLengthSafeBody (.error (.revert, post)) := by
+    unfold pubkeyLengthSafeBody
     simpa only [memory, guardBase, guardCost, post,
         ReachableReason.slot] using
       (depositLengthGuard_failure_runCompiledTo
@@ -574,9 +731,11 @@ theorem deposit_pubkeyLength_error_endpoint_runCompiledTo
         .pubkeyLength hcarrier (by decide +kernel)
         (by rw [hcarrier.size_eq]; omega) hread hne
         (by decide +kernel) (by decide +kernel))
-  exact depositEndpointErrorWitness_of_body hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
     (bodyCost := guardCost + 15) (by
-      simpa only [Nat.add_assoc] using hguard) rfl
+      simpa only [Nat.add_assoc] using hguard)
+    (replacement := afterPubkeyLength) (by rfl)
+    (by decide +kernel) (by decide +kernel) rfl
 
 /-- The model's second reachable error passes the pubkey-length guard before
 selecting the withdrawal-credentials-length auxiliary. -/
@@ -627,8 +786,8 @@ theorem deposit_withdrawalCredentialsLength_error_endpoint_runCompiledTo
       ReachableReason.withdrawalCredentialsLength.reason))
   have hguard : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory, ((G + guardCost) + 15) + 28⟩)
-      depositBody (.error (.revert, post)) := by
-    unfold depositBody
+      withdrawalLengthSafeBody (.error (.revert, post)) := by
+    unfold withdrawalLengthSafeBody
     refine depositLengthGuard_runCompiledTo
       (word := 3) (expected := 48) (index := 96)
       (slot := pubkeyLengthErrorSlot) hcarrier (by decide +kernel)
@@ -644,9 +803,11 @@ theorem deposit_withdrawalCredentialsLength_error_endpoint_runCompiledTo
         (G := G) .withdrawalCredentialsLength hcarrier
         (by decide +kernel) (by rw [hcarrier.size_eq]; omega)
         hread1 hne (by decide +kernel) (by decide +kernel))
-  exact depositEndpointErrorWitness_of_body hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
     (bodyCost := guardCost + 43) (by
-      simpa only [Nat.add_assoc] using hguard) rfl
+      simpa only [Nat.add_assoc] using hguard)
+    (replacement := afterWithdrawalLength) (by rfl)
+    (by decide +kernel) (by decide +kernel) rfl
 
 /-- The model's third reachable error passes both earlier dynamic-length
 guards before selecting the signature-length auxiliary. -/
@@ -701,8 +862,8 @@ theorem deposit_signatureLength_error_endpoint_runCompiledTo
   have hguard : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], memory, (((G + guardCost) + 15) + 28) + 28⟩)
-      depositBody (.error (.revert, post)) := by
-    unfold depositBody
+      signatureLengthSafeBody (.error (.revert, post)) := by
+    unfold signatureLengthSafeBody
     refine depositLengthGuard_runCompiledTo
       (word := 3) (expected := 48) (index := 96)
       (slot := pubkeyLengthErrorSlot) hcarrier (by decide +kernel)
@@ -722,9 +883,11 @@ theorem deposit_signatureLength_error_endpoint_runCompiledTo
         (G := G) .signatureLength hcarrier (by decide +kernel)
         (by rw [hcarrier.size_eq]) hread2 hne
         (by decide +kernel) (by decide +kernel))
-  exact depositEndpointErrorWitness_of_body hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
     (bodyCost := guardCost + 71) (by
-      simpa only [Nat.add_assoc] using hguard) rfl
+      simpa only [Nat.add_assoc] using hguard)
+    (replacement := afterSignatureLength) (by rfl)
+    (by decide +kernel) (by decide +kernel) rfl
 
 /-- The model's fourth reachable error passes all decoded-length guards before
 selecting the lower-value auxiliary. -/
@@ -761,17 +924,19 @@ theorem deposit_valueTooLow_error_endpoint_runCompiledTo
       (errorData (reasonString ReachableReason.valueTooLow.reason))
   have hguard : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory, ((G + guardCost) + 8) + 84⟩)
-      depositBody (.error (.revert, post)) := by
-    unfold depositBody
+      valueTooLowSafeBody (.error (.revert, post)) := by
+    unfold valueTooLowSafeBody
     refine depositLengthGuards_runCompiledTo hcarrier hdec
       hpubkey hwithdrawal hsignature ?_
     simpa only [memory, guardBase, guardCost, post] using
       (depositValueLowerGuard_failure_runCompiledTo
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data) (G := G) hcarrier hlowerWord)
-  exact depositEndpointErrorWitness_of_body hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
     (bodyCost := guardCost + 92) (by
-      simpa only [Nat.add_assoc] using hguard) rfl
+      simpa only [Nat.add_assoc] using hguard)
+    (replacement := afterValueTooLow) (by rfl)
+    (by decide +kernel) (by decide +kernel) rfl
 
 /-- The model's fifth reachable error passes the lower bound before selecting
 the non-gwei-multiple auxiliary. -/
@@ -823,8 +988,8 @@ theorem deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo
   have hguard : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], memory, (((G + guardCost) + 10) + 21) + 84⟩)
-      depositBody (.error (.revert, post)) := by
-    unfold depositBody
+      valueNotGweiSafeBody (.error (.revert, post)) := by
+    unfold valueNotGweiSafeBody
     refine depositLengthGuards_runCompiledTo hcarrier hdec
       hpubkey hwithdrawal hsignature ?_
     refine depositValueLowerGuard_runCompiledTo
@@ -833,9 +998,11 @@ theorem deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo
       (depositGweiMultipleGuard_failure_runCompiledTo
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data) (G := G) hcarrier hremainderWord)
-  exact depositEndpointErrorWitness_of_body hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
     (bodyCost := guardCost + 115) (by
-      simpa only [Nat.add_assoc] using hguard) rfl
+      simpa only [Nat.add_assoc] using hguard)
+    (replacement := afterValueNotGwei) (by rfl)
+    (by decide +kernel) (by decide +kernel) rfl
 
 /-- The model's sixth reachable error passes the lower and gwei-multiple
 guards, stores the amount, then selects the uint64-upper-bound auxiliary. -/
@@ -895,8 +1062,8 @@ theorem deposit_valueTooHigh_error_endpoint_runCompiledTo
   have hguard : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory,
         ((((G + guardCost) + 73) + 23) + 21) + 84⟩)
-      depositBody (.error (.revert, post)) := by
-    unfold depositBody
+      valueTooHighSafeBody (.error (.revert, post)) := by
+    unfold valueTooHighSafeBody
     refine depositLengthGuards_runCompiledTo hcarrier hdec
       hpubkey hwithdrawal hsignature ?_
     refine depositValueLowerGuard_runCompiledTo
@@ -909,9 +1076,25 @@ theorem deposit_valueTooHigh_error_endpoint_runCompiledTo
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data) (amount := amount) (G := G)
         hcarrier rfl hupperWord)
-  exact depositEndpointErrorWitness_of_body hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
     (bodyCost := guardCost + 201) (by
-      simpa only [Nat.add_assoc] using hguard) rfl
+      simpa only [Nat.add_assoc] using hguard)
+    (replacement := afterValueTooHigh) (by
+      have hbody :
+          valueTooHighSafeBody.replaceStopWith afterValueTooHigh =
+            depositBody := by
+        unfold valueTooHighSafeBody afterValueTooHigh depositBody
+        simp only [Func.replaceStopWith_prepend, Func.stop,
+          Func.replaceStopWith]
+      calc
+        (validateDepositAbi valueTooHighSafeBody).replaceStopWith
+            afterValueTooHigh =
+          validateDepositAbi
+            (valueTooHighSafeBody.replaceStopWith afterValueTooHigh) :=
+          validateDepositAbi_replaceStopWith _ _
+        _ = validateDepositAbi depositBody := congrArg validateDepositAbi hbody
+        _ = depositEndpoint := rfl)
+    (by decide +kernel) (by decide +kernel) rfl
 
 /-- The model's seventh reachable error passes all pre-hash guards and then
 selects the reconstructed-root mismatch auxiliary. -/
@@ -995,9 +1178,20 @@ theorem deposit_depositDataRootMismatch_error_endpoint_runCompiledTo
   have hcost := depositPostHashErrorGuardCost_eq
     (base := finalPost) .depositDataRootMismatch hstart
   refine ⟨post, ?_, rfl⟩
-  simpa only [guardBase, post, hcost, Nat.add_assoc] using
-    (depositRootGuard_failure_runCompiledTo
-      (sevm := sevm) (base := finalPost) (G := G) hstart hrootFail)
+  have hsafe : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (finalPost.setMach ⟨[], finalPost.memory,
+        G + depositPostHashErrorGuardCost .depositDataRootMismatch + 18⟩)
+      depositSuccessGuardsSafe (.error (.revert, post)) := by
+    simpa only [depositSuccessGuardsSafe, guardBase, post, hcost,
+        Nat.add_assoc] using
+      (depositRootGuard_failure_runCompiledTo
+        (sevm := sevm) (base := finalPost) (G := G)
+        (otherwise :=
+          pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
+            loadWord oldCountWord +++ lt ::: iszero :::
+            ((.call treeFullErrorSlot) <?> Func.stop))
+        hstart hrootFail)
+  exact depositSuccessGuardsSafe_error_storageEffectRun hsafe
 
 /-- The model's eighth reachable error passes the reconstructed-root guard and
 then selects the tree-capacity auxiliary.  The count bound states that the
@@ -1092,12 +1286,17 @@ theorem deposit_merkleTreeFull_error_endpoint_runCompiledTo
     (base := finalPost) .merkleTreeFull hstart
   have hcapRun := depositCapGuard_failure_runCompiledTo
     (sevm := sevm) (base := finalPost) (G := G)
-    (otherwise := commitDeposit) hstart hcapWord
+    (otherwise := Func.stop) hstart hcapWord
   have hrootRun := depositRootGuard_runCompiledTo
     (fs := runtime.main :: runtime.aux) (sevm := sevm)
     (base := finalPost) hstart hrootPass hcapRun
   refine ⟨post, ?_, rfl⟩
-  simpa only [depositSuccessGuards, guardBase, post, hcost,
-      Nat.add_assoc] using hrootRun
+  have hsafe : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (finalPost.setMach ⟨[], finalPost.memory,
+        G + depositPostHashErrorGuardCost .merkleTreeFull + 46⟩)
+      depositSuccessGuardsSafe (.error (.revert, post)) := by
+    simpa only [depositSuccessGuardsSafe, guardBase, post, hcost,
+        Nat.add_assoc] using hrootRun
+  exact depositSuccessGuardsSafe_error_storageEffectRun hsafe
 
 end Blanc.BeaconDeposit

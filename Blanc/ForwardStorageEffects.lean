@@ -156,6 +156,64 @@ theorem Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath
   | @call pre post index body out lookup room burn tail tailSafe ih =>
       exact .call (lookup := lookup) (room := room) (burn := burn) ih
 
+/-- An exact empty storage-effect annotation is equivalently a selected-path
+raw-SSTORE-freedom certificate.  This reverse bridge lets a consumer use the
+`storage_effect_run` construction tactic for a neutral route and then return
+to the stronger raw-occurrence vocabulary without rebuilding the walk. -/
+theorem Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
+    {out : Execution} {run : Func.RunCompiledTo fs sevm pre body out}
+    (path : Func.RunCompiledTo.StorageEffectPath run []) :
+    Func.RunCompiledTo.NoRawSstorePath run := by
+  generalize effectsEq : ([] : List (Adr × B256 × B256)) = effects at path
+  induction path with
+  | @zero pre branchPre left right out effects room pop tail tailEffects ih =>
+      exact .zero (room := room) (pop := pop) (ih effectsEq)
+  | @succ pre branchPre word left right out effects nonzero room pop tail
+      tailEffects ih =>
+      exact .succ (nonzero := nonzero) (room := room) (pop := pop)
+        (ih effectsEq)
+  | @last pre terminal out terminalRun =>
+      exact .last (terminalRun := terminalRun)
+  | @next pre nextPre instruction body out effects instructionRun tail
+      instructionChildless tailEffects ih =>
+      have hparts :
+          (Ninst.storageEffectTriple? sevm pre instruction).toList = [] ∧
+            effects = [] := by
+        have hnil :
+            (Ninst.storageEffectTriple? sevm pre instruction).toList ++
+              effects = [] := effectsEq.symm
+        exact List.append_eq_nil_iff.mp hnil
+      have hnotSstore : instruction ≠ .reg .sstore := by
+        intro instructionEq
+        subst instructionEq
+        rcases instructionRun with ⟨slot, filled, instructionRun⟩
+        rcases pre with ⟨⟨stack, memory, gasLeft⟩, view, world⟩
+        cases stack with
+        | nil =>
+            have hrun := instructionRun 0
+            rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
+            rcases hrun with ⟨_, hrun⟩
+            simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
+              Devm.setMach] at hrun
+        | cons key rest =>
+            cases rest with
+            | nil =>
+                have hrun := instructionRun 0
+                rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
+                rcases hrun with ⟨_, hrun⟩
+                simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
+                  Devm.setMach] at hrun
+            | cons value tail =>
+                simp [Ninst.storageEffectTriple?, Devm.stack] at hparts
+      exact .next (instructionRun := instructionRun) hnotSstore
+        instructionChildless
+        (ih hparts.2.symm)
+  | @call pre callPre index body out effects lookup room burn tail tailEffects
+      ih =>
+      exact .call (lookup := lookup) (room := room) (burn := burn)
+        (ih effectsEq)
+
 /-- Package a selected compiled run with its exact retained storage-effect
 annotation so construction lemmas can thread both proofs together. -/
 structure Func.StorageEffectRun
@@ -172,6 +230,14 @@ theorem Func.StorageEffectRun.of_noRawSstorePath
     (safe : Func.RunCompiledTo.NoRawSstorePath run) :
     Func.StorageEffectRun fs sevm pre body out [] :=
   ⟨run, Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath safe⟩
+
+/-- Project an exact neutral storage-effect run back to raw-SSTORE freedom. -/
+theorem Func.StorageEffectRun.noRawSstorePath
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
+    {out : Execution}
+    (run : Func.StorageEffectRun fs sevm pre body out []) :
+    Func.RunCompiledTo.NoRawSstorePath run.run :=
+  run.path.noRawSstorePath_of_nil
 
 theorem Func.StorageEffectRun.last
     {fs : List Func} {sevm : Sevm} {pre : Devm} {terminal : Linst}

@@ -8,14 +8,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 
 if ! (cd "$ROOT" && lake env lean scripts/ClaimCheck.lean); then
-  echo "REGRESSION — common/WETH10/Lido claim statements: a pinned statement changed"
+  echo "REGRESSION — claim statements: a pinned statement changed"
   exit 1
 fi
 
 claim_count="$(grep -Ec '^[[:space:]]*(example|#check)([[:space:]]|$)' \
   "$ROOT/scripts/ClaimCheck.lean")"
-if [[ "$claim_count" -ne 288 ]]; then
-  echo "REGRESSION — claim inventory: expected 288 pins, found $claim_count"
+if [[ "$claim_count" -ne 289 ]]; then
+  echo "REGRESSION — claim inventory: expected 289 pins, found $claim_count"
   exit 1
 fi
 

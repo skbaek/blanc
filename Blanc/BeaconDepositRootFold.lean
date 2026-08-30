@@ -197,7 +197,7 @@ private lemma rootFold_error_setMach
     {base : Devm} {mach : Mach} :
     (base.setMach mach).error = base.error := rfl
 
-private def rootLoopCarrier_step_live
+def rootLoopCarrier_step_live
     {sevm : Sevm} {origin base callPost : Devm}
     {memory : Mem} {oldCount : B256} {s : RootLoopState} {stor : Stor}
     (carrier : RootLoopCarrier origin base memory oldCount s)
@@ -231,7 +231,7 @@ private def rootLoopCarrier_step_live
   · rw [houtput, rootAfterSload_output, carrier.output]
   · rw [herror, rootAfterSload_error, carrier.error]
 
-private def rootLoopCarrier_step_dead
+def rootLoopCarrier_step_dead
     {sevm : Sevm} {origin base callPost : Devm}
     {memory : Mem} {oldCount : B256} {s : RootLoopState} {stor : Stor}
     (carrier : RootLoopCarrier origin base memory oldCount s)

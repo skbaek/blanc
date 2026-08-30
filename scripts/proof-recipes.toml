@@ -281,14 +281,17 @@ review_date = "2026-08-29"
 id = "message-execution-settlement"
 status = "active"
 triggers = ["goal-shape:message-execution-settlement"]
-preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections."
-boundary = "The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
+preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge. For payable calls, use the `*_afterTransfer_of_codeEntry` adapters and derive ordinary non-precompile entry with `executeCode_enter_of_codeAddress_not_precompile`; this works for normal `disablePrecompiles = false` messages. Then use the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections."
+boundary = "The simplest forward bridge requires entry-state identity and disabled precompiles. The post-transfer exact-code-entry bridge instead accepts the interpreter-entry equation, which ordinary messages obtain from a non-precompile code address without changing `disablePrecompiles`. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
 owner_module = "Blanc/MessageExecution.lean"
 canonical_example = "Blanc/MessageExecution.lean:MessageExecution.processMessage_eq_settle_exec"
 symbols = [
   "module:Blanc/MessageExecution.lean",
   "module:Blanc/MessageExecutionInversion.lean",
   "declaration:MessageExecution.processMessage_eq_settle_exec",
+  "declaration:MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_codeEntry",
+  "declaration:MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry",
+  "declaration:MessageExecution.executeCode_enter_of_codeAddress_not_precompile",
   "declaration:MessageExecution.processMessage_clean_of_exec",
   "declaration:MessageExecution.processMessage_revert_of_exec",
   "declaration:MessageExecution.processMessage_halt_of_exec",
@@ -370,7 +373,7 @@ review_date = "2026-08-30"
 id = "exact-retained-storage-effects"
 status = "active"
 triggers = ["goal-shape:exact-retained-storage-effects"]
-preferred_path = "For a committing selected compiled walk, build `Func.RunCompiledTo.StorageEffectPath` in source order. For a long construction that must thread the indexed run and annotation together, use `Func.StorageEffectRun` and its source-shaped constructors; `next_effectNeutral` preserves the tail list across an ordinary non-SSTORE step, while `of_noRawSstorePath` packages an existing empty selected-path certificate. Use `storage_effect_run` to walk a childless neutral prefix with the `func_run` state/gas/hint engine; it hands external instructions, SSTOREs, internal calls, and terminals back to the caller. To replace a designated successful STOP with an exact-effect continuation, certify the selected neutral walk with `RunCompiledTo.SuccessfulStopPrefix.of_execFree` and apply `SuccessfulStopPrefix.splice`. Convert an existing raw-SSTORE-free certificate with `StorageEffectPath.of_noRawSstorePath`; otherwise supply `Ninst.ChildlessRunCompiled` at each synchronously resolved external step. Finish with `Prog.exists_exec_retainedStorageEffectTriples`, or `_appended` when the compiled program is only the exact prefix of a larger creation-code image. When composing an `Exec` directly, use `Exec.retainedStorageEffectTriples_cont`, `Exec.retainedStorageEffectTriples_doneOk`, and `Exec.retainedStorageEffectTriples_halt`."
+preferred_path = "For a committing selected compiled walk, build `Func.RunCompiledTo.StorageEffectPath` in source order. For a long construction that must thread the indexed run and annotation together, use `Func.StorageEffectRun` and its source-shaped constructors; `next_effectNeutral` preserves the tail list across an ordinary non-SSTORE step, while `of_noRawSstorePath` packages an existing empty selected-path certificate. Use `storage_effect_run` to walk a childless neutral prefix with the `func_run` state/gas/hint engine; it hands external instructions, SSTOREs, internal calls, and terminals back to the caller. To replace a designated successful STOP with an exact-effect continuation, certify the selected neutral walk with `RunCompiledTo.SuccessfulStopPrefix.of_execFree` and apply `SuccessfulStopPrefix.splice`. Convert an existing raw-SSTORE-free certificate with `StorageEffectPath.of_noRawSstorePath`; convert an exact empty annotation back to raw freedom with `StorageEffectPath.noRawSstorePath_of_nil` or `StorageEffectRun.noRawSstorePath`. Otherwise supply `Ninst.ChildlessRunCompiled` at each synchronously resolved external step. Finish with `Prog.exists_exec_retainedStorageEffectTriples`, or `_appended` when the compiled program is only the exact prefix of a larger creation-code image. When composing an `Exec` directly, use `Exec.retainedStorageEffectTriples_cont`, `Exec.retainedStorageEffectTriples_doneOk`, and `Exec.retainedStorageEffectTriples_halt`."
 boundary = "The certificate is exact retained chronology, including successful no-op SSTOREs. It requires a committing successful result and explicit childlessness at external steps; it does not infer child-frame absence from same-frame source classification or final storage equality."
 owner_module = "Blanc/ForwardStorageEffects.lean"
 canonical_example = "Blanc/ForwardStorageEffects.lean:Prog.exists_exec_retainedStorageEffectTriples"
@@ -380,8 +383,10 @@ symbols = [
   "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath",
   "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.next_of_not_exec",
   "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath",
+  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil",
   "declaration:Blanc.Func.StorageEffectRun",
   "declaration:Blanc.Func.StorageEffectRun.of_noRawSstorePath",
+  "declaration:Blanc.Func.StorageEffectRun.noRawSstorePath",
   "declaration:Blanc.Func.StorageEffectRun.last",
   "declaration:Blanc.Func.StorageEffectRun.next",
   "declaration:Blanc.Func.StorageEffectRun.next_effectNeutral",
@@ -402,6 +407,23 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
+
+[[recipe]]
+id = "binary-dispatch-miss"
+status = "active"
+triggers = ["goal-shape:raw-sstore-free-compiled-path"]
+preferred_path = "For an unmatched selector in a `DispatchTree`, prove `¬ tree.HasSelector selector` and apply `DispatchTree.dispatchMiss_runCompiledTo_with_path`. The result is the exact selector-dependent empty-revert `RunCompiledTo` paired with `NoRawSstorePath` for that identical proof; `DispatchTree.dispatchMissGas` names its exact cost."
+boundary = "This follows only the selected miss path. It does not inspect or certify unselected sibling bodies, prove a contract-specific selector census, or add the selector-extraction and program-main prefix around `dispatch tree`."
+owner_module = "Blanc/ForwardDispatchMiss.lean"
+canonical_example = "Blanc/ForwardDispatchMiss.lean:DispatchTree.dispatchMiss_runCompiledTo_with_path"
+symbols = [
+  "module:Blanc/ForwardDispatchMiss.lean",
+  "declaration:Blanc.DispatchTree.HasSelector",
+  "declaration:Blanc.DispatchTree.dispatchMissGas",
+  "declaration:Blanc.DispatchTree.dispatchMiss_runCompiledTo_with_path",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-31"
 
 [[recipe]]
 id = "accepted-boolean-settlement"
