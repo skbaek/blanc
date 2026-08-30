@@ -596,6 +596,55 @@ def Exec.retainedStorageEffectTriples
     (run : Exec pc sevm pre out) : List (Adr × B256 × B256) :=
   (Exec.retainedStorageWrites run).map Exec.StorageWrite.effectTriple
 
+/-- A committed continuing step contributes its recognized storage effect,
+followed by the retained effects of its tail. -/
+@[simp] theorem Exec.retainedStorageEffectTriples_cont
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post}
+    {out : Execution} (tail : Exec pc' sevm post out)
+    (committed : Execution.commits out = true) :
+    Exec.retainedStorageEffectTriples (.cont step tail) =
+      (Exec.Deriv.successfulSstore?
+        (⟨pc, sevm, pre, out, Exec.cont step tail⟩ : Exec.Deriv)).toList.map
+          Exec.StorageWrite.effectTriple ++
+        Exec.retainedStorageEffectTriples tail := by
+  rw [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
+    Exec.retainedNodes_eq_of_commits _ committed,
+    Exec.retainedNodesOfCommits]
+  rw [List.filterMap_cons]
+  rw [← Exec.retainedNodes_eq_of_commits tail committed]
+  cases h : Exec.Deriv.successfulSstore?
+      (⟨pc, sevm, pre, out, Exec.cont step tail⟩ : Exec.Deriv) <;>
+    simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites]
+
+/-- A synchronously resolved childless frame contributes no child-frame
+storage effects; retained effects resume at the same-frame tail. -/
+@[simp] theorem Exec.retainedStorageEffectTriples_doneOk
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Jaune.Frame} {resume : Resume}
+    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
+    {step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc'}
+    {entered : frame.enter = FrameEntry.done settled}
+    {resumed : resume.run settled = .ok post}
+    {out : Execution} (tail : Exec pc' sevm post out)
+    (committed : Execution.commits out = true) :
+    Exec.retainedStorageEffectTriples
+        (.doneOk step entered resumed tail) =
+      Exec.retainedStorageEffectTriples tail := by
+  simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
+    Exec.retainedNodes, committed, Exec.retainedNodesOfCommits,
+    Exec.Deriv.successfulSstore?]
+
+/-- A committed successful halt has no retained SSTORE driver node. -/
+@[simp] theorem Exec.retainedStorageEffectTriples_halt
+    {pc : Nat} {sevm : Sevm} {pre post : Devm}
+    {step : Evm.step ⟨pc, sevm, pre⟩ = .halt (.ok post)}
+    (committed : Execution.commits (.ok post) = true) :
+    Exec.retainedStorageEffectTriples (.halt step) = [] := by
+  simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
+    Exec.retainedNodes, committed, Exec.retainedNodesOfCommits,
+    Exec.Deriv.successfulSstore?]
+
 /-- Project the data fields of an exact successful SSTORE occurrence. -/
 def Exec.SuccessfulSstoreOccurrence.storageWrite
     {root : Exec.Deriv}

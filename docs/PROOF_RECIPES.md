@@ -229,6 +229,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/ExecutionNoninterference.lean`, `declaration:Exec.NoRetainedWriteTo`, `declaration:Exec.noRetainedWriteTo_of_not_commits`, `declaration:Exec.noRetainedWriteTo_of_no_execOccurrence`, `declaration:Exec.noRetainedWriteTo_of_sourceSites_no_exec`, `declaration:Exec.noRetainedWriteTo_of_frame_owners_ne`, `module:Blanc/ReachableExecFree.lean`, `declaration:Prog.reachableExecFree`, `declaration:Prog.reachableExecFree_iff`, `declaration:Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody`, `declaration:Exec.Deriv.SourceCursor.noExec_of_reachableExecFree`, `declaration:Exec.noRetainedWriteTo_of_no_sameFrame_execAt`, `declaration:Exec.noRetainedWriteTo_of_exactMain_reachableExecFree`
 - Review: `proof-infrastructure` on `2026-08-30`
 
+## `exact-retained-storage-effects`
+
+- Status: `active`
+- Triggers: `goal-shape:exact-retained-storage-effects`
+- Preferred path: For a successful selected compiled walk, build `Func.RunCompiled.StorageEffectPath` in source order. Use `StorageEffectPath.next_of_not_exec` for ordinary instructions, supply `Ninst.ChildlessRunCompiled` at each synchronously resolved external step, and finish with `Prog.exists_exec_retainedStorageEffectTriples`. When composing an `Exec` directly, use `Exec.retainedStorageEffectTriples_cont`, `Exec.retainedStorageEffectTriples_doneOk`, and `Exec.retainedStorageEffectTriples_halt`.
+- Boundary: The certificate is exact retained chronology, including successful no-op SSTOREs. It requires a committing successful result and explicit childlessness at external steps; it does not infer child-frame absence from same-frame source classification or final storage equality.
+- Owner module: [Blanc/ForwardStorageEffects.lean](../Blanc/ForwardStorageEffects.lean)
+- Canonical example: [Blanc/ForwardStorageEffects.lean](../Blanc/ForwardStorageEffects.lean) — `Prog.exists_exec_retainedStorageEffectTriples`
+- Registered symbols: `module:Blanc/ForwardStorageEffects.lean`, `declaration:Blanc.Ninst.storageEffectTriple?`, `declaration:Blanc.Func.RunCompiled.StorageEffectPath`, `declaration:Blanc.Func.RunCompiled.StorageEffectPath.next_of_not_exec`, `declaration:Blanc.Prog.exists_exec_retainedStorageEffectTriples`, `declaration:Blanc.Exec.retainedStorageEffectTriples_cont`, `declaration:Blanc.Exec.retainedStorageEffectTriples_doneOk`, `declaration:Blanc.Exec.retainedStorageEffectTriples_halt`
+- Review: `proof-infrastructure` on `2026-08-30`
+
 ## `devm-common-update-laws`
 
 - Status: `active`

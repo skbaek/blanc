@@ -538,6 +538,17 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   from complete frame settlement.
 - `Exec.descendantFrames`, `Exec.committedFrames`, and retained-node APIs
   traverse only effects that survive the relevant settlement boundary.
+- `Exec.retainedStorageEffectTriples_cont`,
+  `Exec.retainedStorageEffectTriples_doneOk`, and
+  `Exec.retainedStorageEffectTriples_halt` compose the proof-erased retained
+  `(owner, key, value)` chronology across ordinary, synchronously childless,
+  and terminal execution nodes.
+- For construction from a successful selected compiled walk, use
+  [`Blanc/ForwardStorageEffects.lean`](../Blanc/ForwardStorageEffects.lean):
+  annotate it with `Func.RunCompiled.StorageEffectPath` (ordinary non-external
+  steps use `StorageEffectPath.next_of_not_exec`) and finish with
+  `Prog.exists_exec_retainedStorageEffectTriples`. The resulting list is exact
+  execution order and intentionally retains successful no-op SSTOREs.
 - `ProcessMessage.clean_input_state_of_settle` exposes the clean raw input and
   exact state retained by a successful settlement.
 - `processCreateMessage.chargeCodeGas_bal_eq` and

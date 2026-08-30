@@ -179,6 +179,14 @@ def recipes : List Recipe := [
     boundary := "The noncommitting theorem proves retained-write absence by rollback, not raw instruction absence. `Prog.reachableExecFree` checks both arms and a finite lookup-resolved call-closed source component, but says nothing about unselected entries, child outcomes, commitment, gas, or liveness. The exact-main endpoint applies only to `program.main`; a selected dispatcher body needs the explicit actual-route cursor bridge. Do not infer childlessness merely from a static call flag."
   },
   {
+    id := "exact-retained-storage-effects"
+    status := "active"
+    triggers := ["goal-shape:exact-retained-storage-effects"]
+    preferredPath := "For a successful selected compiled walk, build `Func.RunCompiled.StorageEffectPath` in source order. Use `StorageEffectPath.next_of_not_exec` for ordinary instructions, supply `Ninst.ChildlessRunCompiled` at each synchronously resolved external step, and finish with `Prog.exists_exec_retainedStorageEffectTriples`. When composing an `Exec` directly, use `Exec.retainedStorageEffectTriples_cont`, `Exec.retainedStorageEffectTriples_doneOk`, and `Exec.retainedStorageEffectTriples_halt`."
+    symbols := ["module:Blanc/ForwardStorageEffects.lean", "declaration:Blanc.Ninst.storageEffectTriple?", "declaration:Blanc.Func.RunCompiled.StorageEffectPath", "declaration:Blanc.Func.RunCompiled.StorageEffectPath.next_of_not_exec", "declaration:Blanc.Prog.exists_exec_retainedStorageEffectTriples", "declaration:Blanc.Exec.retainedStorageEffectTriples_cont", "declaration:Blanc.Exec.retainedStorageEffectTriples_doneOk", "declaration:Blanc.Exec.retainedStorageEffectTriples_halt"]
+    boundary := "The certificate is exact retained chronology, including successful no-op SSTOREs. It requires a committing successful result and explicit childlessness at external steps; it does not infer child-frame absence from same-frame source classification or final storage equality."
+  },
+  {
     id := "devm-common-update-laws"
     status := "active"
     triggers := ["goal-shape:devm-common-update-law"]

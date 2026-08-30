@@ -251,6 +251,11 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.Ninst.ChildlessRunCompiled target
   | "goal-shape:retained-write-noninterference" =>
       return head == some `Blanc.Exec.NoRetainedWriteTo
+  | "goal-shape:exact-retained-storage-effects" =>
+      return proofRecipeContainsName
+          `Blanc.Exec.retainedStorageEffectTriples target ||
+        proofRecipeContainsName
+          `Blanc.Func.RunCompiled.StorageEffectPath target
   | "goal-shape:retained-wrapper-trace" =>
       return proofRecipeContainsName `Blanc.ExecutionTrace.RetainedXlot target ||
         proofRecipeContainsName `Blanc.ExecutionTrace.ProcessMessageTrace target ||
