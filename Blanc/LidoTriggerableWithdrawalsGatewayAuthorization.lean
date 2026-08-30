@@ -245,7 +245,7 @@ theorem grantRole_role_gate_exact :
                   [sstore] ++
                 mloadWord 1 ++ roleKeyFromMemory roleLookupAccountRegion ++
                   [sstore] ++
-                mloadWord 2 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
+                mloadWord 0 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
                 mloadWord 1 ++ enumKeyFromMemory enumAccountRegion ++ [sstore] ++
                 mloadWord 2 ++
                   [pushB256 1, add, pushB256 roleRecordLengthSlot, sstore] ++
