@@ -132,42 +132,6 @@ inductive RuntimeWriteAuthority
         site.pc = write.pc ∧ site.path.functionIndex = pauseAfterSetSlot) :
       RuntimeWriteAuthority dp frameRoot write .pauseExpiry
 
-private theorem Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
-    {root target : Exec.Deriv} {program : Prog}
-    {initialPath path : Prog.SourcePath} {initialSource : Func}
-    {instruction targetInstruction : Ninst} {tail : Func}
-    {initial : Exec.Deriv.SourceCursor root program
-      initialPath initialSource}
-    {cursor : Exec.Deriv.SourceCursor root program path
-      (.next instruction tail)}
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target targetInstruction cursor)
-    (instructionNe : instruction ≠ targetInstruction) :
-    ∃ _chronology : Exec.Deriv.SourceCursor.Chronology
-        initial cursor target,
-      ∃ tailCursor : Exec.Deriv.SourceCursor root program
-          ⟨path.functionIndex, path.steps ++ [.rest]⟩ tail,
-        Exec.Deriv.ParentStep tailCursor.node cursor.node ∧
-        Exec.Deriv.SourceCursor.Toward
-          initial target targetInstruction tailCursor := by
-  cases route with
-  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
-      exact (instructionNe instructionEq).elim
-  | next cursor chronology tailCursor edge rest =>
-      exact ⟨chronology, tailCursor, edge, rest⟩
-
-private theorem Exec.Deriv.SourceCursor.Toward.chronology
-    {root target : Exec.Deriv} {program : Prog}
-    {initialPath path : Prog.SourcePath} {initialSource source : Func}
-    {targetInstruction : Ninst}
-    {initial : Exec.Deriv.SourceCursor root program
-      initialPath initialSource}
-    {cursor : Exec.Deriv.SourceCursor root program path source}
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target targetInstruction cursor) :
-    Exec.Deriv.SourceCursor.Chronology initial cursor target := by
-  cases route <;> assumption
-
 /-- An exact internal-call cut retained on the target-directed source route. -/
 private inductive Exec.Deriv.SourceCursor.Toward.CallCut
     {root target : Exec.Deriv} {program : Prog}
@@ -517,56 +481,6 @@ private theorem Exec.Deriv.SourceCursor.instructionAt
     (by rcases path with ⟨functionIndex, steps⟩
         simp [Func.sourceSites])
 
-private theorem parentPrefixTrans
-    {root middle tail : Exec.Deriv}
-    (left : Exec.Deriv.ParentPrefix root middle)
-    (right : Exec.Deriv.ParentPrefix middle tail) :
-    Exec.Deriv.ParentPrefix root tail := by
-  induction left with
-  | refl => exact right
-  | step head rest ih => exact .step head (ih right)
-
-/-- Rebase a target-directed route onto an earlier cursor in the same frame. -/
-private theorem Exec.Deriv.SourceCursor.Toward.rebase
-    {root target : Exec.Deriv} {program : Prog}
-    {originPath basePath path : Prog.SourcePath}
-    {originSource baseSource source : Func}
-    {targetInstruction : Ninst}
-    {origin : Exec.Deriv.SourceCursor root program originPath originSource}
-    {base : Exec.Deriv.SourceCursor root program basePath baseSource}
-    {cursor : Exec.Deriv.SourceCursor root program path source}
-    (originToBase : Exec.Deriv.ParentPrefix origin.node base.node)
-    (route : Exec.Deriv.SourceCursor.Toward
-      base target targetInstruction cursor) :
-    Exec.Deriv.SourceCursor.Toward
-      origin target targetInstruction cursor := by
-  induction route with
-  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
-      exact .atTarget cursor
-        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
-          chronology.cursorToTarget⟩
-        site siteEq sourceMember targetEq instructionEq
-  | next cursor chronology tailCursor edge rest ih =>
-      exact .next cursor
-        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
-          chronology.cursorToTarget⟩
-        tailCursor edge ih
-  | branchLeft cursor chronology arm compilerPrefix rest ih =>
-      exact .branchLeft cursor
-        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
-          chronology.cursorToTarget⟩
-        arm compilerPrefix ih
-  | branchRight cursor chronology arm compilerPrefix rest ih =>
-      exact .branchRight cursor
-        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
-          chronology.cursorToTarget⟩
-        arm compilerPrefix ih
-  | call cursor chronology lookup bodyCursor compilerPrefix rest ih =>
-      exact .call cursor
-        ⟨parentPrefixTrans originToBase chronology.initialToCursor,
-          chronology.cursorToTarget⟩
-        lookup bodyCursor compilerPrefix ih
-
 private def RuntimeGuardOccurrence.ofCursor
     {frameRoot write : Exec.Deriv} {dp : DeployParams}
     {initialPath guardPath : Prog.SourcePath}
@@ -596,7 +510,7 @@ private def RuntimeGuardOccurrence.ofCursor
   exact
     { guard := guardCursor.node
       after := afterCursor.node
-      frameToGuard := parentPrefixTrans frameToInitial chronology.initialToCursor
+      frameToGuard := frameToInitial.trans chronology.initialToCursor
       guardToWrite := chronology.cursorToTarget
       edge := edge
       decoded := decoded
@@ -618,173 +532,8 @@ private def RuntimeEndpointOccurrence.ofCursor
   let chronology := Exec.Deriv.SourceCursor.Toward.chronology route
   { path := endpointPath
     cursor := endpointCursor
-    frameToCursor := parentPrefixTrans frameToInitial chronology.initialToCursor
+    frameToCursor := frameToInitial.trans chronology.initialToCursor
     cursorToWrite := chronology.cursorToTarget }
-
-private theorem Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
-    {root : Exec.Deriv} {program : Prog}
-    {path : Prog.SourcePath} {instruction : Ninst} {tail : Func}
-    (cursor : Exec.Deriv.SourceCursor root program path
-      (.next instruction tail))
-    {tailCursor : Exec.Deriv.SourceCursor root program
-      ⟨path.functionIndex, path.steps ++ [.rest]⟩ tail}
-    (edge : Exec.Deriv.ParentStep tailCursor.node cursor.node) :
-    Ninst.Run root.sevm cursor.pre instruction tailCursor.pre := by
-  rcases cursor with
-    ⟨cursorPc, cursorPre, current, parentPrefix, codeSlice,
-      codeBoundary, sourceIncluded⟩
-  rcases tailCursor with
-    ⟨tailPc, tailPre, tailCurrent, tailPrefix, tailSlice,
-      tailBoundary, tailIncluded⟩
-  change Exec.Deriv.ParentStep
-    ⟨tailPc, root.sevm, tailPre, root.exn, tailCurrent⟩
-    ⟨cursorPc, root.sevm, cursorPre, root.exn, current⟩ at edge
-  have sourceAt : Ninst.At root.sevm.code cursorPc instruction :=
-    Func.sourceSites_sound codeSlice codeBoundary
-      (functionIndex := path.functionIndex) (steps := path.steps)
-      (site := { path := path, pc := cursorPc, instruction := instruction })
-      (by rcases path with ⟨functionIndex, steps⟩
-          simp [Func.sourceSites])
-  cases edge with
-  | cont hstep next =>
-      have actual := (Evm.step_next sourceAt).symm.trans hstep
-      refine ⟨.none, trivial, cursorPc, ?_⟩
-      simp only [Ninst.StepRun, actual, Step.Run]
-      exact ⟨trivial, trivial⟩
-  | doneOk hstep henter hresume next =>
-      have actual := (Evm.step_next sourceAt).symm.trans hstep
-      refine ⟨.none, trivial, cursorPc, ?_⟩
-      simp only [Ninst.StepRun, actual, Step.Run]
-      exact ⟨_, RunFrame.of_done henter, hresume.symm⟩
-  | runOk hstep henter child hresume next =>
-      have actual := (Evm.step_next sourceAt).symm.trans hstep
-      refine ⟨.some ⟨_, _⟩, ⟨child⟩, cursorPc, ?_⟩
-      simp only [Ninst.StepRun, actual, Step.Run]
-      exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
-
-/-- Drop one source line while retaining its exact instruction run. -/
-private theorem Exec.Deriv.SourceCursor.Toward.dropLineRun
-    {dp : DeployParams} {root target : Exec.Deriv}
-    {initialPath path : Prog.SourcePath} {initialSource : Func}
-    {initial : Exec.Deriv.SourceCursor root (runtime dp)
-      initialPath initialSource}
-    {line : Line} {tail : Func}
-    {cursor : Exec.Deriv.SourceCursor root (runtime dp) path
-      (line +++ tail)}
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target (.reg .sstore) cursor)
-    (lineNe : ∀ instruction ∈ line,
-      instruction ≠ (.reg .sstore)) :
-    ∃ tailPath,
-      ∃ tailCursor : Exec.Deriv.SourceCursor root (runtime dp)
-          tailPath tail,
-        Line.Run root.sevm cursor.pre line tailCursor.pre ∧
-          Exec.Deriv.SourceCursor.Chronology
-              initial tailCursor target ∧
-            Exec.Deriv.SourceCursor.Toward
-              initial target (.reg .sstore) tailCursor := by
-  induction line generalizing path with
-  | nil =>
-      exact ⟨path, cursor, Line.Run.nil,
-        Exec.Deriv.SourceCursor.Toward.chronology route, route⟩
-  | cons instruction rest ih =>
-      change Exec.Deriv.SourceCursor root (runtime dp) path
-        (.next instruction (rest +++ tail)) at cursor
-      rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
-          (lineNe instruction (by simp)) with
-        ⟨chronology, restCursor, edge, restRoute⟩
-      rcases ih restRoute (fun candidate member =>
-          lineNe candidate (by simp [member])) with
-        ⟨tailPath, tailCursor, lineRun, tailChronology, tailRoute⟩
-      exact ⟨tailPath, tailCursor,
-        Line.Run.cons
-          (Exec.Deriv.SourceCursor.ninstRun_of_nextEdge cursor edge)
-          lineRun,
-        tailChronology, tailRoute⟩
-
-private theorem Exec.Deriv.ParentPrefix.advance_pushTowardSstore
-    {start target : Exec.Deriv} {xs : Bytes}
-    (reached : Exec.Deriv.ParentPrefix start target)
-    (pushAt : PushAt start.sevm.code start.pc xs)
-    (hne : xs ≠ [])
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
-    ∃ (inter : Devm)
-      (next : Exec (start.pc + xs.length + 1) start.sevm inter start.exn),
-      Exec.Deriv.ParentStep
-        ⟨start.pc + xs.length + 1, start.sevm, inter, start.exn, next⟩ start ∧
-      Exec.Deriv.ParentPrefix
-        ⟨start.pc + xs.length + 1, start.sevm, inter, start.exn, next⟩ target ∧
-      Devm.PushBurn [xs.toB256] start.devm inter := by
-  rcases start with ⟨pc, sevm, pre, out, run⟩
-  rcases pushAt with ⟨le, pushAt⟩
-  cases reached with
-  | refl =>
-      have impossible := Ninst.at_unique storeAt pushAt
-      cases impossible
-  | step edge rest =>
-      cases edge with
-      | cont hstep next =>
-          have hstatic :
-              Evm.step ⟨pc, sevm, pre⟩ =
-                Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
-            Evm.step_next pushAt
-          have sourceStep := hstatic.symm.trans hstep
-          rw [Ninst.step_push, if_neg hne] at sourceStep
-          obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont sourceStep
-          cases hpc
-          exact ⟨_, next, .cont hstep next, rest,
-            Devm.pushBurn_of_run hrun⟩
-      | doneOk hstep henter hresume next =>
-          have hstatic :
-              Evm.step ⟨pc, sevm, pre⟩ =
-                Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
-            Evm.step_next pushAt
-          exact (Step.ofExecution_ne_spawn (hstatic.symm.trans hstep)).elim
-      | runOk hstep henter child hresume next =>
-          have hstatic :
-              Evm.step ⟨pc, sevm, pre⟩ =
-                Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
-            Evm.step_next pushAt
-          exact (Step.ofExecution_ne_spawn (hstatic.symm.trans hstep)).elim
-
-private theorem Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
-    {start target : Exec.Deriv} {instruction : Jinst}
-    (reached : Exec.Deriv.ParentPrefix start target)
-    (jumpAt : Jinst.At start.sevm.code start.pc instruction)
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
-    ∃ (nextPc : Nat) (inter : Devm)
-      (next : Exec nextPc start.sevm inter start.exn),
-      Exec.Deriv.ParentStep
-        ⟨nextPc, start.sevm, inter, start.exn, next⟩ start ∧
-      Exec.Deriv.ParentPrefix
-        ⟨nextPc, start.sevm, inter, start.exn, next⟩ target ∧
-      Jinst.Run ⟨start.pc, start.sevm, start.devm⟩ instruction
-        (.ok ⟨nextPc, inter⟩) := by
-  rcases start with ⟨pc, sevm, pre, out, run⟩
-  dsimp at reached storeAt jumpAt
-  cases reached with
-  | refl => exact (storeAt.false_of_jinstAt jumpAt).elim
-  | step edge rest =>
-      cases edge with
-      | cont hstep next =>
-          have hstatic :
-              Evm.step ⟨pc, sevm, pre⟩ =
-                Step.ofJump (Jinst.run ⟨pc, sevm, pre⟩ instruction) :=
-            Evm.step_jump jumpAt
-          exact ⟨_, _, next, .cont hstep next, rest,
-            Step.ofJump_cont (hstatic.symm.trans hstep)⟩
-      | doneOk hstep henter hresume next =>
-          have hstatic :
-              Evm.step ⟨pc, sevm, pre⟩ =
-                Step.ofJump (Jinst.run ⟨pc, sevm, pre⟩ instruction) :=
-            Evm.step_jump jumpAt
-          exact (Step.ofJump_ne_spawn (hstatic.symm.trans hstep)).elim
-      | runOk hstep henter child hresume next =>
-          have hstatic :
-              Evm.step ⟨pc, sevm, pre⟩ =
-                Step.ofJump (Jinst.run ⟨pc, sevm, pre⟩ instruction) :=
-            Evm.step_jump jumpAt
-          exact (Step.ofJump_ne_spawn (hstatic.symm.trans hstep)).elim
 
 private theorem Exec.Deriv.SourceCursor.branchFlagTowardSstore
     {root target : Exec.Deriv} {program : Prog} {path : Prog.SourcePath}
@@ -804,78 +553,13 @@ private theorem Exec.Deriv.SourceCursor.branchFlagTowardSstore
         Exec.Deriv.ParentPrefix cursor.node arm.node ∧
           Exec.Deriv.ParentPrefix arm.node target ∧
             Devm.getStor cursor.pre = Devm.getStor arm.pre) := by
-  rcases subcode_compile_branch_jumpable cursor.codeSlice
-      cursor.codeBoundary with
-    ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
-      jumpdestAt, jumpable, rightSlice, rightBoundary⟩
-  rcases Exec.Deriv.ParentPrefix.advance_pushTowardSstore reached
-      ⟨_, pushAt⟩ (by simp) storeAt with
-    ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
-  rw [List.toB256_pair _ hloc] at pushBurn
-  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
-      afterPushReached jumpiAt storeAt with
-    ⟨nextPc, armPre, armExec, jumpEdge, armReached, jumpRun⟩
-  rcases of_jumpi_run jumpRun with
-    ⟨x, nextPcEq, popBurn⟩ | ⟨x, flag, nextPcEq, popBurn,
-      actualJumpable, nonzero⟩
-  · cases nextPcEq
-    let armCursor : Exec.Deriv.SourceCursor root program
-        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left :=
-      ⟨_, _, armExec, cursor.parentPrefix.snoc pushEdge |>.snoc jumpEdge,
-        leftSlice, leftBoundary, by
-          intro site member
-          apply cursor.sourceIncluded
-          simp only [Func.sourceSites, List.mem_append]
-          exact Or.inl member⟩
-    rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
-      ⟨hx, stack, pushBurn', popBurn'⟩
-    have zeroPop : Devm.PopBurn [(0 : B256)] cursor.pre armPre :=
-      Devm.popBurn_of_burn_of_popBurn
-        (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
-    exact Or.inl ⟨armCursor,
-      .step pushEdge (.step jumpEdge (.refl _)), armReached,
+  rcases cursor.branchFlagToward reached (by trivial) storeAt with
+    ⟨arm, branchToArm, armReached, zeroPop⟩ |
+      ⟨flag, nonzero, arm, branchToArm, armReached, flagPop⟩
+  · exact Or.inl ⟨arm, branchToArm, armReached,
       pref_of_split zeroPop.stack, PopBurn.Inv.inv zeroPop⟩
-  · have hloc256 : loc < 2 ^ 256 := by
-      apply Nat.lt_trans hloc
-      rw [Nat.pow_lt_pow_iff_right] <;> omega
-    have hxeq : loc = x.toNat := by
-      rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
-        ⟨hx, stack, pushBurn', popBurn'⟩
-      have hlocToNat : loc.toB256.toNat = loc :=
-        B256.toNat_toB256_of_lt hloc256
-      rw [← congrArg B256.toNat hx, hlocToNat]
-    have nextPcLoc : nextPc = loc := nextPcEq.trans hxeq.symm
-    cases nextPcLoc
-    rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
-        armReached jumpdestAt storeAt with
-      ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
-        jumpdestRun⟩
-    rcases of_jumpdest_run jumpdestRun with ⟨bodyPcEq, jumpdestBurn⟩
-    subst bodyPc
-    let armCursor : Exec.Deriv.SourceCursor root program
-        ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right :=
-      ⟨_, _, bodyExec,
-        cursor.parentPrefix.snoc pushEdge |>.snoc jumpEdge
-          |>.snoc jumpdestEdge,
-        rightSlice, rightBoundary, by
-          intro site member
-          apply cursor.sourceIncluded
-          simp only [Func.sourceSites, List.mem_append]
-          apply Or.inr
-          have hrightPc : loc + 1 = cursor.pc + compsize left + 5 := by
-            omega
-          rw [← hrightPc]
-          exact member⟩
-    rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
-      ⟨hx, stack, pushBurn', popBurn'⟩
-    have flagPop : Devm.PopBurn [flag] cursor.pre armPre :=
-      Devm.popBurn_of_burn_of_popBurn
-        (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
-    exact Or.inr ⟨flag, nonzero, pref_of_split flagPop.stack,
-      armCursor,
-      .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _))),
-      bodyReached,
-      (PopBurn.Inv.inv flagPop).trans (Burn.Inv.inv jumpdestBurn)⟩
+  · exact Or.inr ⟨flag, nonzero, pref_of_split flagPop.stack,
+      arm, branchToArm, armReached, PopBurn.Inv.inv flagPop⟩
 
 /-- Select the actually executed branch arm, preserving both its rebased route
 and the storage equality across compiler glue. -/
@@ -910,12 +594,12 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmStorage
   · have localRoute := arm.toward compiled armReached (by trivial) targetAt
     exact Or.inl ⟨arm,
       Exec.Deriv.SourceCursor.Toward.rebase
-        (parentPrefixTrans chronology.initialToCursor branchToArm) localRoute,
+        (chronology.initialToCursor.trans branchToArm) localRoute,
       storage, zeroPrefix⟩
   · have localRoute := arm.toward compiled armReached (by trivial) targetAt
     exact Or.inr ⟨flag, nonzero, flagPrefix, arm,
       Exec.Deriv.SourceCursor.Toward.rebase
-        (parentPrefixTrans chronology.initialToCursor branchToArm) localRoute,
+        (chronology.initialToCursor.trans branchToArm) localRoute,
       storage⟩
 
 private theorem linearDispatchWith_bodyCut
@@ -2841,11 +2525,11 @@ private theorem Exec.Deriv.SourceCursor.Toward.callBodyContinuation
     ⟨loc, body, getTable, locBound, pushAt, jumpAt⟩
   have reached :=
     (Exec.Deriv.SourceCursor.Toward.chronology route).cursorToTarget
-  rcases Exec.Deriv.ParentPrefix.advance_pushTowardSstore reached
-      pushAt (by simp) targetAt with
+  rcases Exec.Deriv.ParentPrefix.advance_pushToward reached
+      pushAt (by simp) (by trivial) targetAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ locBound] at pushBurn
-  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+  rcases Exec.Deriv.ParentPrefix.advance_jumpToward
       afterPushReached jumpAt targetAt with
     ⟨nextPc, beforeJumpdestPre, beforeJumpdest, jumpEdge,
       beforeJumpdestReached, jumpRun⟩
@@ -2871,7 +2555,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.callBodyContinuation
   rcases subcode_of_get?_eq_some compiled getTable with
     ⟨jumpdestAt, bodySlice⟩
   have bodyBoundary := Prog.jumpable_of_get?_table compiled getTable
-  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+  rcases Exec.Deriv.ParentPrefix.advance_jumpToward
       beforeJumpdestReached jumpdestAt targetAt with
     ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
       jumpdestRun⟩
@@ -2898,8 +2582,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.callBodyContinuation
   have cursorToBody : Exec.Deriv.ParentPrefix cursor.node bodyCursor.node :=
     .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _)))
   have initialToBody : Exec.Deriv.ParentPrefix initial.node bodyCursor.node :=
-    parentPrefixTrans
-      (Exec.Deriv.SourceCursor.Toward.chronology route).initialToCursor
+    (Exec.Deriv.SourceCursor.Toward.chronology route).initialToCursor.trans
       cursorToBody
   exact ⟨body, getBody, bodyCursor,
     Exec.Deriv.SourceCursor.Toward.rebase initialToBody bodyRoute,
@@ -2957,11 +2640,12 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmContinuation
     ⟨loc, locEq, locBound, pushAt, jumpiAt, leftSlice, leftBoundary,
       jumpdestAt, jumpable, rightSlice, rightBoundary⟩
   have chronology := Exec.Deriv.SourceCursor.Toward.chronology route
-  rcases Exec.Deriv.ParentPrefix.advance_pushTowardSstore
-      chronology.cursorToTarget ⟨_, pushAt⟩ (by simp) targetAt with
+  rcases Exec.Deriv.ParentPrefix.advance_pushToward
+      chronology.cursorToTarget ⟨_, pushAt⟩ (by simp) (by trivial)
+        targetAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ locBound] at pushBurn
-  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+  rcases Exec.Deriv.ParentPrefix.advance_jumpToward
       afterPushReached jumpiAt targetAt with
     ⟨nextPc, armPre, armExec, jumpEdge, armReached, jumpRun⟩
   rcases of_jumpi_run jumpRun with
@@ -2985,7 +2669,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmContinuation
     have cursorToArm : Exec.Deriv.ParentPrefix cursor.node armCursor.node :=
       .step pushEdge (.step jumpEdge (.refl _))
     have initialToArm : Exec.Deriv.ParentPrefix initial.node armCursor.node :=
-      parentPrefixTrans chronology.initialToCursor cursorToArm
+      chronology.initialToCursor.trans cursorToArm
     exact Or.inl ⟨armCursor,
       Exec.Deriv.SourceCursor.Toward.rebase initialToArm localRoute,
       armZero⟩
@@ -3000,7 +2684,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmContinuation
       rw [← congrArg B256.toNat headEq, locToNat]
     have nextPcLoc : nextPc = loc := nextPcEq.trans destinationEq.symm
     cases nextPcLoc
-    rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+    rcases Exec.Deriv.ParentPrefix.advance_jumpToward
         armReached jumpdestAt targetAt with
       ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
         jumpdestRun⟩
@@ -3029,7 +2713,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmContinuation
     have cursorToArm : Exec.Deriv.ParentPrefix cursor.node armCursor.node :=
       .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _)))
     have initialToArm : Exec.Deriv.ParentPrefix initial.node armCursor.node :=
-      parentPrefixTrans chronology.initialToCursor cursorToArm
+      chronology.initialToCursor.trans cursorToArm
     exact Or.inr ⟨armCursor,
       Exec.Deriv.SourceCursor.Toward.rebase initialToArm localRoute,
       armZero⟩
@@ -3153,11 +2837,11 @@ private theorem Exec.Deriv.SourceCursor.Toward.callBodyPauseMemory
     ⟨loc, body, getTable, locBound, pushAt, jumpAt⟩
   have reached :=
     (Exec.Deriv.SourceCursor.Toward.chronology route).cursorToTarget
-  rcases Exec.Deriv.ParentPrefix.advance_pushTowardSstore reached
-      pushAt (by simp) targetAt with
+  rcases Exec.Deriv.ParentPrefix.advance_pushToward reached
+      pushAt (by simp) (by trivial) targetAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ locBound] at pushBurn
-  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+  rcases Exec.Deriv.ParentPrefix.advance_jumpToward
       afterPushReached jumpAt targetAt with
     ⟨nextPc, beforeJumpdestPre, beforeJumpdest, jumpEdge,
       beforeJumpdestReached, jumpRun⟩
@@ -3183,7 +2867,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.callBodyPauseMemory
   rcases subcode_of_get?_eq_some compiled getTable with
     ⟨jumpdestAt, bodySlice⟩
   have bodyBoundary := Prog.jumpable_of_get?_table compiled getTable
-  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+  rcases Exec.Deriv.ParentPrefix.advance_jumpToward
       beforeJumpdestReached jumpdestAt targetAt with
     ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
       jumpdestRun⟩
@@ -3210,8 +2894,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.callBodyPauseMemory
   have cursorToBody : Exec.Deriv.ParentPrefix cursor.node bodyCursor.node :=
     .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _)))
   have initialToBody : Exec.Deriv.ParentPrefix initial.node bodyCursor.node :=
-    parentPrefixTrans
-      (Exec.Deriv.SourceCursor.Toward.chronology route).initialToCursor
+    (Exec.Deriv.SourceCursor.Toward.chronology route).initialToCursor.trans
       cursorToBody
   exact ⟨body, getBody, bodyCursor,
     Exec.Deriv.SourceCursor.Toward.rebase initialToBody bodyRoute,
@@ -3247,11 +2930,12 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmPauseMemory
     ⟨loc, locEq, locBound, pushAt, jumpiAt, leftSlice, leftBoundary,
       jumpdestAt, jumpable, rightSlice, rightBoundary⟩
   have chronology := Exec.Deriv.SourceCursor.Toward.chronology route
-  rcases Exec.Deriv.ParentPrefix.advance_pushTowardSstore
-      chronology.cursorToTarget ⟨_, pushAt⟩ (by simp) targetAt with
+  rcases Exec.Deriv.ParentPrefix.advance_pushToward
+      chronology.cursorToTarget ⟨_, pushAt⟩ (by simp) (by trivial)
+        targetAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ locBound] at pushBurn
-  rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+  rcases Exec.Deriv.ParentPrefix.advance_jumpToward
       afterPushReached jumpiAt targetAt with
     ⟨nextPc, armPre, armExec, jumpEdge, armReached, jumpRun⟩
   rcases of_jumpi_run jumpRun with
@@ -3275,7 +2959,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmPauseMemory
     have cursorToArm : Exec.Deriv.ParentPrefix cursor.node armCursor.node :=
       .step pushEdge (.step jumpEdge (.refl _))
     have initialToArm : Exec.Deriv.ParentPrefix initial.node armCursor.node :=
-      parentPrefixTrans chronology.initialToCursor cursorToArm
+      chronology.initialToCursor.trans cursorToArm
     rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
       ⟨headEq, stack, pushBurn', popBurn'⟩
     have zeroPop : Devm.PopBurn [(0 : B256)] cursor.pre armPre :=
@@ -3295,7 +2979,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmPauseMemory
       rw [← congrArg B256.toNat headEq, locToNat]
     have nextPcLoc : nextPc = loc := nextPcEq.trans destinationEq.symm
     cases nextPcLoc
-    rcases Exec.Deriv.ParentPrefix.advance_jumpTowardSstore
+    rcases Exec.Deriv.ParentPrefix.advance_jumpToward
         armReached jumpdestAt targetAt with
       ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
         jumpdestRun⟩
@@ -3324,7 +3008,7 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmPauseMemory
     have cursorToArm : Exec.Deriv.ParentPrefix cursor.node armCursor.node :=
       .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _)))
     have initialToArm : Exec.Deriv.ParentPrefix initial.node armCursor.node :=
-      parentPrefixTrans chronology.initialToCursor cursorToArm
+      chronology.initialToCursor.trans cursorToArm
     rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
       ⟨headEq, stack, pushBurn', popBurn'⟩
     have flagPop : Devm.PopBurn [flag] cursor.pre armPre :=

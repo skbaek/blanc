@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerPinnedTarget
 import Blanc.MessageExecutionInversion
+import Blanc.ReachableExecFree
 
 /-!
 # Test-scoped controls for the pinned-target protocol
@@ -84,6 +85,13 @@ theorem stubProgram_sourceSites_no_exec :
   have clean := (List.all_eq_true.mp allClean) site member
   cases instructionEq : site.instruction <;>
     simp [instructionEq] at clean ⊢
+
+/-- The selected stub main has no source `.exec` and no internal call edge.
+This is the route-local certificate used by the generic noninterference
+bridge; it does not require inspecting unrelated program entries. -/
+theorem stubProgram_reachableExecFree :
+    stubProgram.reachableExecFree stubProgram.main [] = true := by
+  decide +kernel
 
 private structure StubFrame (target : Adr) (calldata : Bytes)
     (sevm : Sevm) : Prop where
@@ -731,8 +739,8 @@ theorem stub_lidoPinnedPauseTarget
         codeAddress.trans msgCodeAddress, ?_⟩
       rw [codeEq]
       exact messageUses
-    exact Exec.noRetainedWriteTo_of_sourceSites_no_exec actualRun key
-      invocation different stubProgram_sourceSites_no_exec
+    exact Exec.noRetainedWriteTo_of_exactMain_reachableExecFree actualRun key
+      invocation different [] stubProgram_reachableExecFree
   · intro msg xl child selected currentTarget targetAddress codeAddress
       executes hasSelector member paused process settled
     simp only [List.mem_singleton] at member

@@ -318,6 +318,19 @@ OK	4.978	Blanc/ProxyPairExecution.lean
 OK	4.324	Blanc/ProxyPairImplementation.lean
 OK	1.316	Blanc/ProxyPairProgram.lean
 OK	1.455	Blanc/ProxyPairSlots.lean
+# 2026-08-30 additions-only admission of the two route-proof rows, measured
+# by `scripts/check-elab.sh --calibrate` at candidate commit
+# 6f80b26b64dc49b7f9d633f07e4dee60ba9ba791 (seed sha256
+# 6ab0b6caedb8d1082b77ed7fb2ed89d6170b82e1af245975b7a16b0d46a447a9;
+# baseline sha256 4b0a8f6b1384a545b344d266b89ece543291b7ba9c5fcfe1318e6d32f1b1883a;
+# source-set sha256 468b6f265608177c0fdb5cbcf46c6b2b9978089440fddf118980ad7eee6dedf8).
+# The cache-cold run measured all 224 existing rows plus both mandatory rows
+# outright in 909.9 s against the 863.1 s committed total, so no separate
+# controls were drawn and the run is its own host control. Immediate host
+# samples remained healthy (84% to 85% free, swap 251.5 MiB to 235.5 MiB,
+# no Lean process). No existing row is touched.
+OK	1.458	Blanc/ReachableExecFree.lean
+OK	1.206	Blanc/ReachableExecFreeControl.lean
 OK	1.630	Blanc/RevertPayload.lean
 OK	1.178	Blanc/Reverts.lean
 OK	1.398	Blanc/RootedExecution.lean

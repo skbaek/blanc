@@ -1634,7 +1634,7 @@ theorem Exec.Deriv.ParentPrefix.snoc
   | step head rest ih => exact .step head (ih edge)
 
 /-- Compose two finite same-frame prefixes. -/
-private theorem Exec.Deriv.ParentPrefix.trans
+theorem Exec.Deriv.ParentPrefix.trans
     {root middle tail : Exec.Deriv}
     (left : Exec.Deriv.ParentPrefix root middle)
     (right : Exec.Deriv.ParentPrefix middle tail) :
@@ -2113,7 +2113,7 @@ def NinstNonPush : Ninst → Prop
 
 /-- Cross an actually executed compiler PUSH only when the nominated non-PUSH
 source target lies later in the same-frame prefix. -/
-private theorem Exec.Deriv.ParentPrefix.advance_pushToward
+theorem Exec.Deriv.ParentPrefix.advance_pushToward
     {start target : Exec.Deriv} {xs : Bytes} {targetInstruction : Ninst}
     (reached : Exec.Deriv.ParentPrefix start target)
     (pushAt : PushAt start.sevm.code start.pc xs)
@@ -2162,7 +2162,7 @@ private theorem Exec.Deriv.ParentPrefix.advance_pushToward
 
 /-- Cross an actually executed compiler jump only when the nominated source
 target lies later in the same-frame prefix. -/
-private theorem Exec.Deriv.ParentPrefix.advance_jumpToward
+theorem Exec.Deriv.ParentPrefix.advance_jumpToward
     {start target : Exec.Deriv} {instruction : Jinst}
     {targetInstruction : Ninst}
     (reached : Exec.Deriv.ParentPrefix start target)
@@ -2641,6 +2641,99 @@ theorem Exec.Deriv.SourceCursor.branchToward
       (.step jumpEdge jumpNotStore
         (.step jumpdestEdge jumpdestNotStore (.refl _)))
 
+/-- Select the actual source branch arm while retaining the exact flag pop.
+This is the stack-aware counterpart of `branchToward`: it remains generic in
+the program and nominated non-PUSH source instruction, and assumes no final
+execution outcome. -/
+theorem Exec.Deriv.SourceCursor.branchFlagToward
+    {root target : Exec.Deriv} {program : Prog} {path : Prog.SourcePath}
+    {left right : Func} {targetInstruction : Ninst}
+    (cursor : Exec.Deriv.SourceCursor root program path (.branch left right))
+    (reached : Exec.Deriv.ParentPrefix cursor.node target)
+    (targetNonPush : NinstNonPush targetInstruction)
+    (instructionAt :
+      Ninst.At target.sevm.code target.pc targetInstruction) :
+    (∃ arm : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left,
+      Exec.Deriv.ParentPrefix cursor.node arm.node ∧
+        Exec.Deriv.ParentPrefix arm.node target ∧
+          Devm.PopBurn [(0 : B256)] cursor.pre arm.pre) ∨
+    (∃ flag : B256, flag ≠ 0 ∧
+      ∃ arm : Exec.Deriv.SourceCursor root program
+          ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right,
+        Exec.Deriv.ParentPrefix cursor.node arm.node ∧
+          Exec.Deriv.ParentPrefix arm.node target ∧
+            Devm.PopBurn [flag] cursor.pre arm.pre) := by
+  rcases subcode_compile_branch_jumpable cursor.codeSlice
+      cursor.codeBoundary with
+    ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
+      jumpdestAt, jumpable, rightSlice, rightBoundary⟩
+  rcases reached.advance_pushToward ⟨_, pushAt⟩ (by simp)
+      targetNonPush instructionAt with
+    ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
+  rw [List.toB256_pair _ hloc] at pushBurn
+  rcases afterPushReached.advance_jumpToward jumpiAt instructionAt with
+    ⟨nextPc, armPre, armExec, jumpEdge, armReached, jumpRun⟩
+  rcases of_jumpi_run jumpRun with
+    ⟨x, nextPcEq, popBurn⟩ | ⟨x, flag, nextPcEq, popBurn,
+      actualJumpable, nonzero⟩
+  · cases nextPcEq
+    let armCursor : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left :=
+      ⟨_, _, armExec, cursor.parentPrefix.snoc pushEdge |>.snoc jumpEdge,
+        leftSlice, leftBoundary, by
+          intro site member
+          apply cursor.sourceIncluded
+          simp only [Func.sourceSites, List.mem_append]
+          exact Or.inl member⟩
+    rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+      ⟨hx, stack, pushBurn', popBurn'⟩
+    have zeroPop : Devm.PopBurn [(0 : B256)] cursor.pre armPre :=
+      Devm.popBurn_of_burn_of_popBurn
+        (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
+    exact Or.inl ⟨armCursor,
+      .step pushEdge (.step jumpEdge (.refl _)), armReached, zeroPop⟩
+  · have hloc256 : loc < 2 ^ 256 := by
+      apply Nat.lt_trans hloc
+      rw [Nat.pow_lt_pow_iff_right] <;> omega
+    have hxeq : loc = x.toNat := by
+      rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+        ⟨hx, stack, pushBurn', popBurn'⟩
+      have hlocToNat : loc.toB256.toNat = loc :=
+        B256.toNat_toB256_of_lt hloc256
+      rw [← congrArg B256.toNat hx, hlocToNat]
+    have nextPcLoc : nextPc = loc := nextPcEq.trans hxeq.symm
+    cases nextPcLoc
+    rcases armReached.advance_jumpToward jumpdestAt instructionAt with
+      ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
+        jumpdestRun⟩
+    rcases of_jumpdest_run jumpdestRun with ⟨bodyPcEq, jumpdestBurn⟩
+    subst bodyPc
+    let armCursor : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right :=
+      ⟨_, _, bodyExec,
+        cursor.parentPrefix.snoc pushEdge |>.snoc jumpEdge
+          |>.snoc jumpdestEdge,
+        rightSlice, rightBoundary, by
+          intro site member
+          apply cursor.sourceIncluded
+          simp only [Func.sourceSites, List.mem_append]
+          apply Or.inr
+          have hrightPc : loc + 1 = cursor.pc + compsize left + 5 := by
+            omega
+          rw [← hrightPc]
+          exact member⟩
+    rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+      ⟨hx, stack, pushBurn', popBurn'⟩
+    have flagPop : Devm.PopBurn [flag] cursor.pre armPre :=
+      Devm.popBurn_of_burn_of_popBurn
+        (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
+    have bodyPop : Devm.PopBurn [flag] cursor.pre bodyPre :=
+      Devm.popBurn_of_popBurn_of_pop flagPop jumpdestBurn
+    exact Or.inr ⟨flag, nonzero, armCursor,
+      .step pushEdge (.step jumpEdge (.step jumpdestEdge (.refl _))),
+      bodyReached, bodyPop⟩
+
 /-- Follow the internal source call whose body contains the nominated reached
 source instruction. The target prefix supplies the successful
 PUSH/JUMP/JUMPDEST edges; the selected frame itself may finish with any
@@ -2986,6 +3079,234 @@ theorem Exec.Deriv.SourceCursor.toward
     ⟨.refl _, reached⟩
   exact Exec.Deriv.SourceCursor.toward_core cursor.node cursor cursor rfl
     compiled chronology nonPush instructionAt
+
+/-- Recover the chronology retained by any target-directed source route. -/
+theorem Exec.Deriv.SourceCursor.Toward.chronology
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {targetInstruction : Ninst}
+    {initial : Exec.Deriv.SourceCursor root program
+      initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor) :
+    Exec.Deriv.SourceCursor.Chronology initial cursor target := by
+  cases route <;> assumption
+
+/-- A target-directed route at a different source instruction must continue
+through the `.next` tail, retaining both the actual edge and the route. -/
+theorem Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {instruction targetInstruction : Ninst} {tail : Func}
+    {initial : Exec.Deriv.SourceCursor root program
+      initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path
+      (.next instruction tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor)
+    (instructionNe : instruction ≠ targetInstruction) :
+    ∃ _chronology : Exec.Deriv.SourceCursor.Chronology
+        initial cursor target,
+      ∃ tailCursor : Exec.Deriv.SourceCursor root program
+          ⟨path.functionIndex, path.steps ++ [.rest]⟩ tail,
+        Exec.Deriv.ParentStep tailCursor.node cursor.node ∧
+        Exec.Deriv.SourceCursor.Toward
+          initial target targetInstruction tailCursor := by
+  cases route with
+  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+      exact (instructionNe instructionEq).elim
+  | next cursor chronology tailCursor edge rest =>
+      exact ⟨chronology, tailCursor, edge, rest⟩
+
+/-- Rebase a target-directed route onto an earlier source cursor in the same
+actual frame. -/
+theorem Exec.Deriv.SourceCursor.Toward.rebase
+    {root target : Exec.Deriv} {program : Prog}
+    {originPath basePath path : Prog.SourcePath}
+    {originSource baseSource source : Func}
+    {targetInstruction : Ninst}
+    {origin : Exec.Deriv.SourceCursor root program originPath originSource}
+    {base : Exec.Deriv.SourceCursor root program basePath baseSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (originToBase : Exec.Deriv.ParentPrefix origin.node base.node)
+    (route : Exec.Deriv.SourceCursor.Toward
+      base target targetInstruction cursor) :
+    Exec.Deriv.SourceCursor.Toward
+      origin target targetInstruction cursor := by
+  induction route with
+  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
+      exact .atTarget cursor
+        ⟨originToBase.trans chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        site siteEq sourceMember targetEq instructionEq
+  | next cursor chronology tailCursor edge rest ih =>
+      exact .next cursor
+        ⟨originToBase.trans chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        tailCursor edge ih
+  | branchLeft cursor chronology arm compilerPrefix rest ih =>
+      exact .branchLeft cursor
+        ⟨originToBase.trans chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        arm compilerPrefix ih
+  | branchRight cursor chronology arm compilerPrefix rest ih =>
+      exact .branchRight cursor
+        ⟨originToBase.trans chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        arm compilerPrefix ih
+  | call cursor chronology lookup bodyCursor compilerPrefix rest ih =>
+      exact .call cursor
+        ⟨originToBase.trans chronology.initialToCursor,
+          chronology.cursorToTarget⟩
+        lookup bodyCursor compilerPrefix ih
+
+/-- Recover the exact instruction run carried by an actual source `.next`
+edge. The result remains valid for continuing, spawning, and resumed child
+steps. -/
+theorem Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
+    {root : Exec.Deriv} {program : Prog}
+    {path : Prog.SourcePath} {instruction : Ninst} {tail : Func}
+    (cursor : Exec.Deriv.SourceCursor root program path
+      (.next instruction tail))
+    {tailCursor : Exec.Deriv.SourceCursor root program
+      ⟨path.functionIndex, path.steps ++ [.rest]⟩ tail}
+    (edge : Exec.Deriv.ParentStep tailCursor.node cursor.node) :
+    Ninst.Run root.sevm cursor.pre instruction tailCursor.pre := by
+  rcases cursor with
+    ⟨cursorPc, cursorPre, current, parentPrefix, codeSlice,
+      codeBoundary, sourceIncluded⟩
+  rcases tailCursor with
+    ⟨tailPc, tailPre, tailCurrent, tailPrefix, tailSlice,
+      tailBoundary, tailIncluded⟩
+  change Exec.Deriv.ParentStep
+    ⟨tailPc, root.sevm, tailPre, root.exn, tailCurrent⟩
+    ⟨cursorPc, root.sevm, cursorPre, root.exn, current⟩ at edge
+  have sourceAt : Ninst.At root.sevm.code cursorPc instruction :=
+    Func.sourceSites_sound codeSlice codeBoundary
+      (functionIndex := path.functionIndex) (steps := path.steps)
+      (site := { path := path, pc := cursorPc, instruction := instruction })
+      (by rcases path with ⟨functionIndex, steps⟩
+          simp [Func.sourceSites])
+  cases edge with
+  | cont hstep next =>
+      have actual := (Evm.step_next sourceAt).symm.trans hstep
+      refine ⟨.none, trivial, cursorPc, ?_⟩
+      simp only [Ninst.StepRun, actual, Step.Run]
+      exact ⟨trivial, trivial⟩
+  | doneOk hstep henter hresume next =>
+      have actual := (Evm.step_next sourceAt).symm.trans hstep
+      refine ⟨.none, trivial, cursorPc, ?_⟩
+      simp only [Ninst.StepRun, actual, Step.Run]
+      exact ⟨_, RunFrame.of_done henter, hresume.symm⟩
+  | runOk hstep henter child hresume next =>
+      have actual := (Evm.step_next sourceAt).symm.trans hstep
+      refine ⟨.some ⟨_, _⟩, ⟨child⟩, cursorPc, ?_⟩
+      simp only [Ninst.StepRun, actual, Step.Run]
+      exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
+
+/-- Drop a source line that cannot contain the nominated target instruction,
+retaining its exact `Line.Run`, chronology, and target-directed route. -/
+theorem Exec.Deriv.SourceCursor.Toward.dropLineRun
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource : Func}
+    {targetInstruction : Ninst}
+    {initial : Exec.Deriv.SourceCursor root program
+      initialPath initialSource}
+    {line : Line} {tail : Func}
+    {cursor : Exec.Deriv.SourceCursor root program path (line +++ tail)}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor)
+    (lineNe : ∀ instruction ∈ line, instruction ≠ targetInstruction) :
+    ∃ tailPath,
+      ∃ tailCursor : Exec.Deriv.SourceCursor root program tailPath tail,
+        Line.Run root.sevm cursor.pre line tailCursor.pre ∧
+          Exec.Deriv.SourceCursor.Chronology
+              initial tailCursor target ∧
+            Exec.Deriv.SourceCursor.Toward
+              initial target targetInstruction tailCursor := by
+  induction line generalizing path with
+  | nil =>
+      exact ⟨path, cursor, Line.Run.nil, route.chronology, route⟩
+  | cons instruction rest ih =>
+      change Exec.Deriv.SourceCursor root program path
+        (.next instruction (rest +++ tail)) at cursor
+      rcases route.next_of_instruction_ne
+          (lineNe instruction (by simp)) with
+        ⟨chronology, restCursor, edge, restRoute⟩
+      rcases ih restRoute (fun candidate member =>
+          lineNe candidate (by simp [member])) with
+        ⟨tailPath, tailCursor, lineRun, tailChronology, tailRoute⟩
+      exact ⟨tailPath, tailCursor,
+        Line.Run.cons (cursor.ninstRun_of_nextEdge edge) lineRun,
+        tailChronology, tailRoute⟩
+
+/-- A known zero branch flag forces the actual target-directed route into the
+fall-through source arm and preserves the stack prefix below the flag. -/
+theorem Exec.Deriv.SourceCursor.Toward.selectBranchZero
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource left right : Func}
+    {targetInstruction : Ninst} {stack : Stack}
+    {initial : Exec.Deriv.SourceCursor root program
+      initialPath initialSource}
+    (cursor : Exec.Deriv.SourceCursor root program path (.branch left right))
+    (compiled : some root.sevm.code.toList = program.compile)
+    (targetNonPush : NinstNonPush targetInstruction)
+    (instructionAt :
+      Ninst.At target.sevm.code target.pc targetInstruction)
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor)
+    (flagPrefix : (0 : B256) :: stack <<+ cursor.pre.stack) :
+    ∃ arm : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left,
+      Exec.Deriv.SourceCursor.Toward
+          initial target targetInstruction arm ∧
+        stack <<+ arm.pre.stack := by
+  let chronology := route.chronology
+  rcases cursor.branchFlagToward chronology.cursorToTarget
+      targetNonPush instructionAt with
+    ⟨arm, branchToArm, armReached, zeroPop⟩ |
+      ⟨flag, nonzero, arm, branchToArm, armReached, flagPop⟩
+  · have localRoute := arm.toward compiled armReached
+      targetNonPush instructionAt
+    exact ⟨arm,
+      localRoute.rebase (chronology.initialToCursor.trans branchToArm),
+      (popBurn_pref zeroPop flagPrefix).2⟩
+  · exact (nonzero (popBurn_pref flagPop flagPrefix).1).elim
+
+/-- A known nonzero branch flag forces the actual target-directed route into
+the jumped source arm and preserves the stack prefix below the flag. -/
+theorem Exec.Deriv.SourceCursor.Toward.selectBranchSucc
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource left right : Func}
+    {targetInstruction : Ninst} {flag : B256} {stack : Stack}
+    {initial : Exec.Deriv.SourceCursor root program
+      initialPath initialSource}
+    (cursor : Exec.Deriv.SourceCursor root program path (.branch left right))
+    (compiled : some root.sevm.code.toList = program.compile)
+    (targetNonPush : NinstNonPush targetInstruction)
+    (instructionAt :
+      Ninst.At target.sevm.code target.pc targetInstruction)
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor)
+    (nonzero : flag ≠ 0)
+    (flagPrefix : flag :: stack <<+ cursor.pre.stack) :
+    ∃ arm : Exec.Deriv.SourceCursor root program
+        ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right,
+      Exec.Deriv.SourceCursor.Toward
+          initial target targetInstruction arm ∧
+        stack <<+ arm.pre.stack := by
+  let chronology := route.chronology
+  rcases cursor.branchFlagToward chronology.cursorToTarget
+      targetNonPush instructionAt with
+    ⟨arm, branchToArm, armReached, zeroPop⟩ |
+      ⟨actualFlag, actualNonzero, arm, branchToArm, armReached, flagPop⟩
+  · exact (nonzero (popBurn_pref zeroPop flagPrefix).1.symm).elim
+  · have localRoute := arm.toward compiled armReached
+      targetNonPush instructionAt
+    exact ⟨arm,
+      localRoute.rebase (chronology.initialToCursor.trans branchToArm),
+      (popBurn_pref flagPop flagPrefix).2⟩
 
 /-- Public target-directed completeness for any reached non-PUSH source
 instruction in an arbitrary-outcome raw source cursor. -/

@@ -56,7 +56,8 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
           "ExecutionMessageStateTrace", "ExecutionTransactionStateTrace",
           "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryStateTrace",
-          "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
+          "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "ReachableExecFree",
+          "ReachableExecFreeControl", "TransientSettlement",
           "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
 
 # Newly extracted common modules live in a separate additive row so concurrent
@@ -71,6 +72,7 @@ CONTRACTS = {
                        "BeaconDepositCore", "BeaconDepositEncoding",
                        "BeaconDeposit", "BeaconDepositErrorCatalog",
                        "BeaconDepositErrorModel",
+                       "BeaconDepositErrors",
                        "BeaconDepositCode", "BeaconDepositDeploy",
                        "BeaconDepositMemory", "BeaconDepositSha",
                        "BeaconDepositAbiMemory", "BeaconDepositAbi",

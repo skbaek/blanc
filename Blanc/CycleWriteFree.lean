@@ -65,7 +65,9 @@ theorem Func.localSstoreFree_iff {body : Func} :
       | push bytes size =>
           simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
 
-private theorem Func.callsIn_mem_iff {body : Func} {members : List Nat} :
+/-- Exact reflection for `Func.callsIn` when the executable predicate is
+membership in one finite call component. -/
+theorem Func.callsIn_mem_iff {body : Func} {members : List Nat} :
     body.callsIn (fun index => index ∈ members) = true ↔
       body.CallsIn (fun index => index ∈ members) := by
   induction body with

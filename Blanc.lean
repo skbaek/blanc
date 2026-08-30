@@ -22,6 +22,8 @@ import Blanc.RootedExecution
 import Blanc.ExecutionTerminal
 import Blanc.ExecutionNoninterference
 import Blanc.CycleWriteFree
+import Blanc.ReachableExecFree
+import Blanc.ReachableExecFreeControl
 import Blanc.TransientSettlement
 import Blanc.TransientInvariance
 import Blanc.LidoCircuitBreakerCore
