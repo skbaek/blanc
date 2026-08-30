@@ -5,7 +5,7 @@
       "algorithm": "sha256",
       "canonicalization": "json.dumps(parsed, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True).encode(\"utf-8\")",
       "scope": "the entire parsed document with /campaign/digest/value replaced by the empty string",
-      "value": "01d077f93dbebc327885f9ab03617bb88accbe920d9f5a966e2d5f3a5bbfe464"
+      "value": "d234fb691fdc3759cf35ee12cee60a73fbf4899d5edeaa05a956a465014cb7ca"
     },
     "format": "blanc.lido-ossifiable-proxy.performance-campaign",
     "formatVersion": 1,
@@ -775,7 +775,7 @@
       },
       "returnedRuntime": {
         "blanc": "exact runtime returned by successful CREATE of the candidate creation template with canonical-empty arguments and pinned by the result artifact",
-        "reference": "scripts/lido-ossifiable-proxy-reference.json#/artifacts/returnedRuntime"
+        "reference": "scripts/lido-ossifiable-proxy-reference.json#/artifacts/runtime"
       }
     },
     "blockEnvironment": {
