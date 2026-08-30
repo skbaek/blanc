@@ -188,6 +188,8 @@ theorem OssifiableConstructorDelegateBoundary.settled_child_exact
       Ninst.RunCompiled sevm callPre (.exec .delcall) callPost ∧
       Func.RunCompiledTo fs sevm callPost
         ossifiableConstructorDelegateTail out ∧
+      pre.state = callPre.state ∧
+      pre.logs = callPre.logs ∧
       ∀ spawn : DelegatecallSpawnDescriptor sevm callPre,
         spawn.parent.stack.length < 1024 →
           spawn.gasWord = gasWord ∧
@@ -203,8 +205,8 @@ theorem OssifiableConstructorDelegateBoundary.settled_child_exact
             Mem.Reads callPost.memory decodedImage := by
   rcases boundary with
     ⟨gasWord, callPre, callPost, callRun, tailRun, pCall,
-      wfCall, readsCall, _, _⟩
-  refine ⟨gasWord, callPre, callPost, callRun, tailRun, ?_⟩
+      wfCall, readsCall, state, logs⟩
+  refine ⟨gasWord, callPre, callPost, callRun, tailRun, state, logs, ?_⟩
   intro spawn room
   have knownPref :
       ([gasWord, implementation, 0x100, Nat.toB256 setupData.length,

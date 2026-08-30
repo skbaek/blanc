@@ -48,6 +48,7 @@ import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.ProxyPairCorrespondence
 import Blanc.ProxyPairAuthority
 import Blanc.ProxyPairOssifiableDeploymentFixture
+import Blanc.ProxyPairOssifiableConstructorNonempty
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
@@ -859,6 +860,8 @@ import Blanc.ProrataAttackTrace
 #print axioms Blanc.ProxyPair.ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
 #print axioms Blanc.ProxyPair.ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
 #print axioms Blanc.ProxyPair.processCreateMessage_ossifiable_emptySetup_success
+#print axioms Blanc.ProxyPair.ossifiableConstructorProgram_nonempty_success
+#print axioms Blanc.ProxyPair.processCreateMessage_ossifiable_failure_rollback
 #print axioms Blanc.ProxyPair.OssifiableCreateFixture.message_code
 #print axioms Blanc.ProxyPair.OssifiableCreateFixture.implementation_code
 #print axioms Blanc.ProxyPair.OssifiableCreateFixture.message_success

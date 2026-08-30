@@ -102,6 +102,7 @@ CONTRACTS = {
                    "ProxyPairOssifiableConstructorInitialize",
                    "ProxyPairOssifiableConstructorSetup",
                    "ProxyPairOssifiableConstructorExecution",
+                   "ProxyPairOssifiableConstructorNonempty",
                    "ProxyPairOssifiableConstructorForward",
                    "ProxyPairOssifiableConstructorInitializeForward",
                    "ProxyPairOssifiableConstructorDecodeForward",

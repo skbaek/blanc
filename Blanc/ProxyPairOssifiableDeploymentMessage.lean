@@ -394,4 +394,39 @@ theorem processCreateMessage_ossifiable_emptySetup_success
     rw [setCode_error]
     exact hchargedError
 
+/-! ## Failed whole-CREATE settlement -/
+
+/-- Any failed direct CREATE carrying the exact OssifiableProxy creation
+image restores the complete entry world.  The explicit projections make the
+deployment consequence concrete: neither ERC-1967 slot nor pre-existing code
+at the candidate target can survive from a failed constructor or failed code
+deposit. -/
+theorem processCreateMessage_ossifiable_failure_rollback
+    {msg : Msg} {post : Devm}
+    {implementation requestedAdmin : Adr} {setupData : Bytes}
+    (hcode : msg.code.toList =
+      ossifiableFullCreateInput implementation requestedAdmin setupData)
+    (process : processCreateMessage msg = .ok post)
+    (failed : post.error.isSome = true) :
+    post.state = msg.benv.state ∧
+      post.getStorVal msg.currentTarget implementationSlotLit =
+        (msg.benv.state.getStor msg.currentTarget).get
+          implementationSlotLit ∧
+      post.getStorVal msg.currentTarget adminSlotLit =
+        (msg.benv.state.getStor msg.currentTarget).get adminSlotLit ∧
+      post.getCode msg.currentTarget =
+        msg.benv.state.getCode msg.currentTarget := by
+  have _exactCreationImage := hcode
+  obtain ⟨trace⟩ :=
+    ExecutionTrace.exists_processCreateMessageTrace msg (.ok post) process
+  have state := ProcessCreateMessage.rollback_of_error trace.run failed
+  refine ⟨state, ?_, ?_, ?_⟩
+  · change
+      (post.state.getStor msg.currentTarget).get implementationSlotLit = _
+    rw [state]
+  · change (post.state.getStor msg.currentTarget).get adminSlotLit = _
+    rw [state]
+  · change post.state.getCode msg.currentTarget = _
+    rw [state]
+
 end Blanc.ProxyPair

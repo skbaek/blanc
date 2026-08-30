@@ -16,6 +16,7 @@ import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerDeploymentRoot
 import Blanc.ProxyPairOssifiableDeploymentFixture
+import Blanc.ProxyPairOssifiableConstructorNonempty
 import Blanc.ProrataAttackTrace
 
 /-!
@@ -3700,6 +3701,53 @@ example (msg : Msg) (implementation requestedAdmin : Adr)
     hrequestedNonzero himplementationCode haddressCold
     himplementationOriginal himplementationCold hadminOriginal hadminCold
     hstatic hgas hmax
+
+example {runtimeOffset runtimeLength : Nat}
+    {sevm : Sevm} {entry post : Devm} {tail : Stack}
+    {image runtimeBytes setupData : Bytes}
+    {implementation requestedAdmin : B256}
+    (hp : tail <<+ entry.stack)
+    (hwf : Mem.Wf entry.memory)
+    (hreads : Mem.Reads entry.memory image)
+    (hcoordinate : runtimeOffset + runtimeLength + 96 < 2 ^ 256)
+    (hcodeSize : sevm.code.size < 2 ^ 256)
+    (hspec :
+      ossifiableConstructorDecodeSpec sevm.code.toList
+        (runtimeOffset + runtimeLength) =
+          .accepted implementation requestedAdmin setupData)
+    (setupDataNonempty : setupData ≠ [])
+    (hruntime :
+      sevm.code.sliceD runtimeOffset runtimeLength
+        (Linst.toUInt8 .stop) = runtimeBytes)
+    (hruntimeLength : runtimeBytes.length = runtimeLength)
+    (hruntimeNonempty : runtimeBytes ≠ [])
+    (hoffsetBound : runtimeOffset < 2 ^ 256)
+    (hlengthBound : runtimeLength < 2 ^ 256)
+    (run : Prog.RunCompiledTo sevm entry
+      (ossifiableConstructorProgram runtimeOffset
+        (runtimeOffset + runtimeLength) runtimeLength) (.ok post)) :
+    OssifiableConstructorNonemptySuccessResult runtimeOffset runtimeLength
+      sevm entry post tail image runtimeBytes setupData implementation
+      requestedAdmin :=
+  ossifiableConstructorProgram_nonempty_success hp hwf hreads hcoordinate
+    hcodeSize hspec setupDataNonempty hruntime hruntimeLength
+    hruntimeNonempty hoffsetBound hlengthBound run
+
+example {msg : Msg} {post : Devm}
+    {implementation requestedAdmin : Adr} {setupData : Bytes}
+    (hcode : msg.code.toList =
+      ossifiableFullCreateInput implementation requestedAdmin setupData)
+    (process : processCreateMessage msg = .ok post)
+    (failed : post.error.isSome = true) :
+    post.state = msg.benv.state ∧
+      post.getStorVal msg.currentTarget implementationSlotLit =
+        (msg.benv.state.getStor msg.currentTarget).get
+          implementationSlotLit ∧
+      post.getStorVal msg.currentTarget adminSlotLit =
+        (msg.benv.state.getStor msg.currentTarget).get adminSlotLit ∧
+      post.getCode msg.currentTarget =
+        msg.benv.state.getCode msg.currentTarget :=
+  processCreateMessage_ossifiable_failure_rollback hcode process failed
 
 example :
     ∃ post, OssifiableEmptySetupCreateResult
