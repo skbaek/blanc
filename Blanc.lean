@@ -161,6 +161,7 @@ import Blanc.BeaconDepositRootMemory
 import Blanc.BeaconDepositRoot
 import Blanc.BeaconDepositRootFold
 import Blanc.BeaconDepositEffects
+import Blanc.BeaconDepositSuccessPublic
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositRootEffects
 import Blanc.BeaconDepositRootPublic

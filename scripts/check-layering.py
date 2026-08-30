@@ -90,6 +90,7 @@ CONTRACTS = {
                        "BeaconDepositRootFold", "BeaconDepositRootEffects",
                        "BeaconDepositRootPublic",
                        "BeaconDepositEffects",
+                       "BeaconDepositSuccessPublic",
                        "BeaconDepositCountEffects"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
