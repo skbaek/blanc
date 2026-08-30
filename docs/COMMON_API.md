@@ -140,6 +140,13 @@ For different offsets, sizes, stack tails, or payloads, use the general
 `Func.runCompiledTo_ret_word` in `ForwardCall` or
 `Func.runCompiledTo_rev` / `Func.runCompiledTo_rev_of` in `Reverts`.
 
+For a nonzero branch flag that tail-calls a constant `Error(string)`
+auxiliary, use `errorBodyCost`, `errorCallCost`, `errorGuardCost`, and
+`Func.runCompiledTo_errorGuard` in
+[`Blanc/RevertPayload.lean`](../Blanc/RevertPayload.lean). The cost remains a
+function of the entry state, so arbitrary aligned prior memory and its exact
+expansion charge are retained.
+
 For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 `ReturnsWord`, `of_storeReturnWord`, or the memory-side-condition-free
 `returnsWord_of_storeReturn` in

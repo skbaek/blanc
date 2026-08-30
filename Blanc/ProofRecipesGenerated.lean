@@ -211,6 +211,14 @@ def recipes : List Recipe := [
     boundary := "A `StateReplay` proves endpoint continuity and preserves exact provenance; it does not classify a transition as a contract deposit, withdrawal, or attack step. Apply that interpretation only in the contract-owned layer above the generic chronology."
   },
   {
+    id := "constant-error-guard"
+    status := "active"
+    triggers := ["goal-shape:constant-error-guard"]
+    preferredPath := "Use `Func.runCompiledTo_errorGuard` when a nonzero branch flag tail-calls an auxiliary equal to `Func.revWith reason`. Supply the auxiliary lookup, exact entry-state memory image and alignment, payload bounds, gas expressed through `errorGuardCost`, and stack room; the theorem returns the complete ABI `Error(string)` payload with exact final memory, stack, and gas."
+    symbols := ["module:Blanc/RevertPayload.lean", "declaration:Blanc.errorBodyCost", "declaration:Blanc.errorCallCost", "declaration:Blanc.errorGuardCost", "declaration:Blanc.Func.runCompiledTo_revWith", "declaration:Blanc.Func.runCompiledTo_errorGuard"]
+    boundary := "This proves the branch-and-internal-call walk only. It does not select a contract route, establish which flag is nonzero, authenticate a contract-specific reason/slot table, or turn the local revert into a public endpoint theorem. Keep `errorGuardCost` indexed by the actual entry state so memory expansion is not silently weakened."
+  },
+  {
     id := "one-word-source-return"
     status := "active"
     triggers := ["goal-head:ReturnsWord"]

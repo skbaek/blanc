@@ -273,6 +273,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/ExecutionStateTrace.lean`, `module:Blanc/ExecutionMessageStateTrace.lean`, `module:Blanc/ExecutionTransactionStateTrace.lean`, `module:Blanc/ExecutionBodyStateTrace.lean`, `module:Blanc/ExecutionHistoryStateTrace.lean`, `declaration:StateTransition`, `declaration:StateReplay`, `declaration:StateReplay.append`, `declaration:StateTransition.mapOrigin`, `declaration:StateReplay.mapOrigin`, `declaration:Exec.committedStateReplay`, `declaration:ExecutionTrace.MessageCallTrace.stateReplay`, `declaration:ExecutionTrace.TransactionStateChronology.stateReplay`, `declaration:ExecutionTrace.AppliedBodyStateChronology.stateReplay`, `declaration:ExecutionTrace.ConfiguredHistoryStateChronology.stateReplay`
 - Review: `proof-infrastructure` on `2026-08-30`
 
+## `constant-error-guard`
+
+- Status: `active`
+- Triggers: `goal-shape:constant-error-guard`
+- Preferred path: Use `Func.runCompiledTo_errorGuard` when a nonzero branch flag tail-calls an auxiliary equal to `Func.revWith reason`. Supply the auxiliary lookup, exact entry-state memory image and alignment, payload bounds, gas expressed through `errorGuardCost`, and stack room; the theorem returns the complete ABI `Error(string)` payload with exact final memory, stack, and gas.
+- Boundary: This proves the branch-and-internal-call walk only. It does not select a contract route, establish which flag is nonzero, authenticate a contract-specific reason/slot table, or turn the local revert into a public endpoint theorem. Keep `errorGuardCost` indexed by the actual entry state so memory expansion is not silently weakened.
+- Owner module: [Blanc/RevertPayload.lean](../Blanc/RevertPayload.lean)
+- Canonical example: [Blanc/RevertPayload.lean](../Blanc/RevertPayload.lean) — `Func.runCompiledTo_errorGuard`
+- Registered symbols: `module:Blanc/RevertPayload.lean`, `declaration:Blanc.errorBodyCost`, `declaration:Blanc.errorCallCost`, `declaration:Blanc.errorGuardCost`, `declaration:Blanc.Func.runCompiledTo_revWith`, `declaration:Blanc.Func.runCompiledTo_errorGuard`
+- Review: `proof-infrastructure` on `2026-08-30`
+
 ## `one-word-source-return`
 
 - Status: `active`

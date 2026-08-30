@@ -272,6 +272,11 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return head == some `Blanc.Func.RunCompiledTo &&
         (proofRecipeContainsName `Jaune.Linst.ret target ||
           proofRecipeContainsName `Jaune.Linst.rev target)
+  | "goal-shape:constant-error-guard" =>
+      return head == some `Blanc.Func.RunCompiledTo &&
+        proofRecipeContainsName `Blanc.Func.branch target &&
+        proofRecipeContainsName `Blanc.Func.call target &&
+        proofRecipeContainsName `Blanc.errorData target
   | "goal-shape:full-length-slice" =>
       return proofRecipeContainsName `Jaune.List.sliceD target
   | "goal-shape:runcompiled-family-compression" =>
