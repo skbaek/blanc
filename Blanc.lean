@@ -131,6 +131,7 @@ import Blanc.BeaconDepositCorrectness
 import Blanc.BeaconDepositCore
 import Blanc.BeaconDepositEncoding
 import Blanc.BeaconDeposit
+import Blanc.BeaconDepositErrorCatalog
 import Blanc.BeaconDepositCode
 import Blanc.BeaconDepositDeploy
 import Blanc.BeaconDepositMemory

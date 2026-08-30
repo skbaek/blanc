@@ -111,6 +111,16 @@ def DynamicTailDecodable (data : Bytes) (head : Nat) : Prop :=
     length < 2 ^ 32 ∧
     36 + offset + ceil32 length ≤ data.length
 
+/-- Structure-only decodability of a deposit call: the complete four-word
+head and all three dynamic tails are in bounds.  Unlike
+`DepositAbiDecodable`, this predicate chooses no payload or root witnesses, so
+its negation says exactly that the ABI validator must reject the calldata. -/
+structure DepositAbiStructureDecodable (data : Bytes) : Prop where
+  head : 132 ≤ data.length
+  pubkeyTail : DynamicTailDecodable data 0
+  withdrawalCredentialsTail : DynamicTailDecodable data 1
+  signatureTail : DynamicTailDecodable data 2
+
 /-- A complete decoded deposit call.  All three structural tail checks are
 members of this single predicate, so no source-level length guard can hide a
 malformed later tail. -/
@@ -125,6 +135,16 @@ structure DepositAbiDecodable
   withdrawalCredentials_eq : dynamicPayload data 1 = withdrawalCredentials
   signature_eq : dynamicPayload data 2 = signature
   root_eq : calldataWord data 100 = depositDataRoot
+
+/-- Forget the chosen payload and root witnesses while retaining the exact ABI
+structure accepted by the compiled validator. -/
+theorem DepositAbiDecodable.structure
+    {data pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256}
+    (h : DepositAbiDecodable data pubkey withdrawalCredentials signature
+      depositDataRoot) :
+    DepositAbiStructureDecodable data :=
+  ⟨h.head, h.pubkeyTail, h.withdrawalCredentialsTail, h.signatureTail⟩
 
 def firstDepositTailOffset : Nat := 4 * 32
 
