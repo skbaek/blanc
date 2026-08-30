@@ -104,6 +104,8 @@ CONTRACTS = {
                    "ProxyPairOssifiableConstructorExecution",
                    "ProxyPairOssifiableConstructorNonempty",
                    "ProxyPairOssifiableBothSlotFixture",
+                   "ProxyPairOssifiableBothSlotCreate",
+                   "ProxyPairOssifiableBothSlotDeployment",
                    "ProxyPairOssifiableConstructorForward",
                    "ProxyPairOssifiableConstructorInitializeForward",
                    "ProxyPairOssifiableConstructorDecodeForward",

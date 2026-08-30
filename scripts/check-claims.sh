@@ -13,8 +13,8 @@ fi
 
 claim_count="$(grep -Ec '^[[:space:]]*(example|#check)([[:space:]]|$)' \
   "$ROOT/scripts/ClaimCheck.lean")"
-if [[ "$claim_count" -ne 282 ]]; then
-  echo "REGRESSION — common/WETH10/Lido/proxy-pair claim inventory: expected 282 pins, found $claim_count"
+if [[ "$claim_count" -ne 284 ]]; then
+  echo "REGRESSION — common/WETH10/Lido/proxy-pair claim inventory: expected 284 pins, found $claim_count"
   exit 1
 fi
 

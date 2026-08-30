@@ -123,9 +123,12 @@ theorem setupMain_runCompiledTo
         postSetupImplementation.toB256 ∧
       post.getStorVal sevm.currentTarget adminSlotLit =
         postSetupAdmin.toB256 ∧
-      post.logs = base.logs := by
+      post.logs = base.logs ∧
+      post.accessedStorageKeys =
+        base.accessedStorageKeys.insert
+          (sevm.currentTarget, adminSlotLit) := by
   apply Exists.intro
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold setupMain setupBodyGas push1Zero
     func_run [100, 22100]
     · simp only [Devm.getStorVal_setMach]
@@ -159,6 +162,11 @@ theorem setupMain_runCompiledTo
   · simp only [Devm.withOutput_logs, Devm.memRead_logs,
       Devm.setMach_logs, Devm.sstoreBase_logs]
     rfl
+  · simp only [Devm.retPost_accessedStorageKeys,
+      Devm.setMach_accessedStorageKeys,
+      Devm.sstoreBase_accessedStorageKeys]
+    simp only [Devm.setMach_accessedStorageKeys,
+      Devm.sstoreWarmBase_accessedStorageKeys]
 
 /-! ## Closed proxy-storage child world -/
 
@@ -242,7 +250,7 @@ theorem message_success :
       post.getStorVal target adminSlotLit = postSetupAdmin.toB256 ∧
       post.logs = [] := by
   obtain ⟨post, walk, error, output, gas, implementationSlot,
-      adminSlot, logs⟩ :=
+      adminSlot, logs, _keys⟩ :=
     setupMain_runCompiledTo [] (initSevm message) (initDevm message) 1000
       (by rfl)
       (by

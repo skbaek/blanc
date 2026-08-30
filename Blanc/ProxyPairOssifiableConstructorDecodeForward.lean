@@ -231,6 +231,17 @@ private theorem decodeForwardLengthImage_length
     rw [List.length_sliceD])]
   exact hlength
 
+private theorem decodeForwardLengthImage_length_word
+    {sevm : Sevm} {lengthWord : B256}
+    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3543 =
+      lengthWord) :
+    Bytes.toB256 ((decodeForwardLengthImage sevm).sliceD 128 32 0) =
+      lengthWord := by
+  unfold decodeForwardLengthImage
+  rw [Bytes.sliceD_writeAt_inside _ _ 128 128 32 (by omega) (by
+    rw [List.length_sliceD])]
+  exact hlength
+
 private theorem decodeForwardLengthImage_pointer (sevm : Sevm) :
     Bytes.toB256 ((decodeForwardLengthImage sevm).sliceD 96 32 0) =
       Nat.toB256 3543 := by
@@ -721,6 +732,348 @@ private theorem decodeForwardHeadStage_runCompiled
     (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
     (decodeForwardAfterHeadCopy body) post
   exact hrest
+
+/-! ## Fixed one-word nonempty setup decoder -/
+
+/-- Decoder memory after copying the frozen one-word setup payload from the
+complete creation image into the constructor's `0x100` scratch window. -/
+def decodeForwardOneWordPayloadMemory (sevm : Sevm) : Mem :=
+  (decodeForwardLengthMemory sevm).write 0x100
+    (sevm.code.sliceD 3575 32 (Linst.toUInt8 .stop))
+
+/-- Proof-carrying byte image corresponding to
+`decodeForwardOneWordPayloadMemory`. -/
+def decodeForwardOneWordPayloadImage (sevm : Sevm) : Bytes :=
+  Bytes.writeAt (decodeForwardLengthImage sevm) 0x100
+    (sevm.code.toList.sliceD 3575 32 0)
+
+theorem decodeForwardOneWordPayloadMemory_size (sevm : Sevm) :
+    (decodeForwardOneWordPayloadMemory sevm).size = 288 := by
+  unfold decodeForwardOneWordPayloadMemory
+  have hlength := ByteArray.length_sliceD sevm.code 3575 32
+    (Linst.toUInt8 .stop)
+  have hne : sevm.code.sliceD 3575 32 (Linst.toUInt8 .stop) ≠ [] := by
+    intro hnil
+    rw [hnil] at hlength
+    simp at hlength
+  have hlt : (decodeForwardLengthMemory sevm).size < 0x100 +
+      (sevm.code.sliceD 3575 32 (Linst.toUInt8 .stop)).length := by
+    rw [decodeForwardLengthMemory_size, hlength]
+    decide
+  rw [Mem.size_write_of_lt hne hlt, hlength]
+  decide
+
+theorem decodeForwardOneWordPayloadMemory_wf (sevm : Sevm) :
+    Mem.Wf (decodeForwardOneWordPayloadMemory sevm) := by
+  exact Mem.Wf.write (decodeForwardLengthMemory_wf sevm) 0x100
+    (sevm.code.sliceD 3575 32 (Linst.toUInt8 .stop))
+
+theorem decodeForwardOneWordPayloadMemory_reads (sevm : Sevm) :
+    Mem.Reads (decodeForwardOneWordPayloadMemory sevm)
+      (decodeForwardOneWordPayloadImage sevm) := by
+  have hread := Mem.Reads.write (decodeForwardLengthMemory_wf sevm)
+    (decodeForwardLengthMemory_reads sevm) 0x100
+    (sevm.code.sliceD 3575 32 (Linst.toUInt8 .stop))
+  simpa [decodeForwardOneWordPayloadMemory,
+    decodeForwardOneWordPayloadImage, ByteArray.sliceD_eq,
+    show Linst.toUInt8 .stop = 0 by decide] using hread
+
+theorem decodeForwardOneWordPayloadImage_implementation
+    {sevm : Sevm} {implementation : Adr}
+    (himplementation :
+      ossifiableConstructorCodeWord sevm.code.toList 3447 =
+        implementation.toB256) :
+    Bytes.toB256
+        ((decodeForwardOneWordPayloadImage sevm).sliceD 0 32 0) =
+      implementation.toB256 := by
+  unfold decodeForwardOneWordPayloadImage
+  rw [Bytes.sliceD_writeAt_before _ _ 0 32 0x100 (by omega)]
+  exact decodeForwardLengthImage_implementation himplementation
+
+theorem decodeForwardOneWordPayloadImage_admin
+    {sevm : Sevm} {requestedAdmin : Adr}
+    (hadmin : ossifiableConstructorCodeWord sevm.code.toList 3479 =
+      requestedAdmin.toB256) :
+    Bytes.toB256
+        ((decodeForwardOneWordPayloadImage sevm).sliceD 32 32 0) =
+      requestedAdmin.toB256 := by
+  unfold decodeForwardOneWordPayloadImage
+  rw [Bytes.sliceD_writeAt_before _ _ 32 32 0x100 (by omega)]
+  exact decodeForwardLengthImage_admin hadmin
+
+theorem decodeForwardOneWordPayloadImage_length
+    {sevm : Sevm}
+    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3543 = 32) :
+    Bytes.toB256
+        ((decodeForwardOneWordPayloadImage sevm).sliceD 128 32 0) = 32 := by
+  unfold decodeForwardOneWordPayloadImage
+  rw [Bytes.sliceD_writeAt_before _ _ 128 32 0x100 (by omega)]
+  exact decodeForwardLengthImage_length_word hlength
+
+theorem decodeForwardOneWordPayloadImage_setup
+    {sevm : Sevm} {setupData : Bytes}
+    (hsetup : sevm.code.toList.sliceD 3575 32 0 = setupData) :
+    (decodeForwardOneWordPayloadImage sevm).sliceD 0x100 32 0 =
+      setupData := by
+  unfold decodeForwardOneWordPayloadImage
+  have hread := Bytes.sliceD_writeAt (decodeForwardLengthImage sevm)
+    (sevm.code.toList.sliceD 3575 32 0) 0x100
+  rw [List.length_sliceD] at hread
+  exact hread.trans hsetup
+
+private theorem decodeForwardOneWordHeadStage_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {body : Func} {G : Nat}
+    (hcodeSize : sevm.code.size = 3607)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+      (decodeForwardAfterHeadCopy body) post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], Mem.empty, G + 50⟩)
+      (ossifiableConstructorDecode 3447 body) post := by
+  change Func.RunCompiled fs sevm
+    (base.setMach ⟨[], Mem.empty, G + 50⟩)
+    (ossifiablePushCreationCoordinate 3543 ::: codesize ::: lt :::
+      ((.call 1) <?> decodeForwardAfterHead body)) post
+  simp only [ossifiablePushCreationCoordinate_shape]
+  func_run (3)
+  simp only [hcodeSize]
+  have hguard :
+      (Nat.toB256 3607 <? Nat.toB256 3543) = 0 := by
+    decide +kernel
+  rw [hguard]
+  func_run (1)
+  unfold decodeForwardAfterHead
+  simp only [ossifiablePushCreationCoordinate_shape]
+  func_run (4) [21]
+  · exact Devm.extCost_add_of_size
+      (a := gVerylow + gasCopy * ceilDiv 96 32) rfl (by decide)
+  simp only [show (0 : B256).toNat = 0 by decide,
+    show (Nat.toB256 3447).toNat = 3447 by decide,
+    show (96 : B256).toNat = 96 by decide,
+    show (0 : UInt8) = Linst.toUInt8 .stop by decide]
+  change Func.RunCompiled fs sevm
+    (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+    (decodeForwardAfterHeadCopy body) post
+  exact hrest
+
+private theorem decodeForwardOneWordLengthCompleteStage_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {body : Func} {G : Nat}
+    (hcodeSize : sevm.code.size = 3607)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G⟩)
+      (decodeForwardAfterLengthComplete body) post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G + 30⟩)
+      (decodeForwardAfterPointer body) post := by
+  have hv : Bytes.toB256
+      ((decodeForwardPointerMemory sevm).read 96 32).1 =
+        Nat.toB256 3543 := by
+    rw [Mem.Reads.read (decodeForwardPointerMemory_reads sevm)]
+    exact decodeForwardPointerImage_pointer sevm
+  have hm : ((decodeForwardPointerMemory sevm).read 96 32).2 =
+      decodeForwardPointerMemory sevm := by
+    exact Mem.read_snd_eq_self (by
+      rw [decodeForwardPointerMemory_size]
+      decide)
+  unfold decodeForwardAfterPointer decodeForwardLoadWord
+  func_run (6) [3, Nat.toB256 3575, 0]
+  all_goals try
+    rw [show (((3 : B256) * 32).toNat) = 96 by decide, hv]
+  all_goals try
+    rw [show (((3 : B256) * 32).toNat) = 96 by decide, hm]
+  all_goals try simp only [hcodeSize]
+  all_goals try decide +kernel
+  all_goals try
+    exact Devm.extCost_add_of_size
+      (a := gVerylow) (decodeForwardPointerMemory_size sevm) (by decide)
+  func_run (1)
+  simpa using hrest
+
+private theorem decodeForwardOneWordLengthBoundStage_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {body : Func} {G : Nat}
+    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3543 = 32)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+      (decodeForwardAfterLengthBound body) post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 25⟩)
+      (decodeForwardAfterLengthCopy body) post := by
+  have hv : Bytes.toB256
+      ((decodeForwardLengthMemory sevm).read 128 32).1 = 32 := by
+    rw [Mem.Reads.read (decodeForwardLengthMemory_reads sevm)]
+    exact decodeForwardLengthImage_length_word hlength
+  have hm : ((decodeForwardLengthMemory sevm).read 128 32).2 =
+      decodeForwardLengthMemory sevm := by
+    exact Mem.read_snd_eq_self (by
+      rw [decodeForwardLengthMemory_size]
+      decide)
+  unfold decodeForwardAfterLengthCopy decodeForwardLoadWord
+  func_run (4) [3, 0]
+  all_goals try
+    rw [show (((4 : B256) * 32).toNat) = 128 by decide, hv]
+  all_goals try
+    rw [show (((4 : B256) * 32).toNat) = 128 by decide, hm]
+  all_goals try decide +kernel
+  all_goals try
+    exact Devm.extCost_add_of_size
+      (a := gVerylow) (decodeForwardLengthMemory_size sevm) (by decide)
+  func_run (1)
+  simpa using hrest
+
+private theorem decodeForwardOneWordPayloadBoundStage_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {body : Func} {G : Nat}
+    (hcodeSize : sevm.code.size = 3607)
+    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3543 = 32)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+      (decodeForwardAfterPayloadBound body) post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 39⟩)
+      (decodeForwardAfterLengthBound body) post := by
+  have hv3 : Bytes.toB256
+      ((decodeForwardLengthMemory sevm).read 96 32).1 =
+        Nat.toB256 3543 := by
+    rw [Mem.Reads.read (decodeForwardLengthMemory_reads sevm)]
+    exact decodeForwardLengthImage_pointer sevm
+  have hv4 : Bytes.toB256
+      ((decodeForwardLengthMemory sevm).read 128 32).1 = 32 := by
+    rw [Mem.Reads.read (decodeForwardLengthMemory_reads sevm)]
+    exact decodeForwardLengthImage_length_word hlength
+  have hm3 : ((decodeForwardLengthMemory sevm).read 96 32).2 =
+      decodeForwardLengthMemory sevm := by
+    exact Mem.read_snd_eq_self (by
+      rw [decodeForwardLengthMemory_size]
+      decide)
+  have hm4 : ((decodeForwardLengthMemory sevm).read 128 32).2 =
+      decodeForwardLengthMemory sevm := by
+    exact Mem.read_snd_eq_self (by
+      rw [decodeForwardLengthMemory_size]
+      decide)
+  unfold decodeForwardAfterLengthBound decodeForwardLoadWord
+  func_run (9) [3, Nat.toB256 3575, 3, Nat.toB256 3607, 0]
+  all_goals try
+    rw [show (((3 : B256) * 32).toNat) = 96 by decide, hv3]
+  all_goals try
+    rw [show (((3 : B256) * 32).toNat) = 96 by decide, hm3]
+  all_goals try
+    rw [show (((4 : B256) * 32).toNat) = 128 by decide, hm4]
+  all_goals try simp only [hcodeSize]
+  all_goals try decide +kernel
+  all_goals try
+    simpa only [show (((4 : B256) * 32).toNat) = 128 by decide, hv4]
+      using (show (32 : B256) + Nat.toB256 3575 =
+        Nat.toB256 3607 by decide)
+  all_goals try
+    exact Devm.extCost_add_of_size
+      (a := gVerylow) (decodeForwardLengthMemory_size sevm) (by decide)
+  func_run (1)
+  simpa using hrest
+
+private theorem decodeForwardOneWordPayloadCopyStage_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {body : Func} {G : Nat}
+    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3543 = 32)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G⟩)
+      body post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 39⟩)
+      (decodeForwardAfterPayloadBound body) post := by
+  have hv3 : Bytes.toB256
+      ((decodeForwardLengthMemory sevm).read 96 32).1 =
+        Nat.toB256 3543 := by
+    rw [Mem.Reads.read (decodeForwardLengthMemory_reads sevm)]
+    exact decodeForwardLengthImage_pointer sevm
+  have hv4 : Bytes.toB256
+      ((decodeForwardLengthMemory sevm).read 128 32).1 = 32 := by
+    rw [Mem.Reads.read (decodeForwardLengthMemory_reads sevm)]
+    exact decodeForwardLengthImage_length_word hlength
+  have hm3 : ((decodeForwardLengthMemory sevm).read 96 32).2 =
+      decodeForwardLengthMemory sevm := by
+    exact Mem.read_snd_eq_self (by
+      rw [decodeForwardLengthMemory_size]
+      decide)
+  have hm4 : ((decodeForwardLengthMemory sevm).read 128 32).2 =
+      decodeForwardLengthMemory sevm := by
+    exact Mem.read_snd_eq_self (by
+      rw [decodeForwardLengthMemory_size]
+      decide)
+  have hsize3 :
+      (((decodeForwardLengthMemory sevm).read
+        (((3 : B256) * 32).toNat) 32).2).size = 160 := by
+    rw [show (((3 : B256) * 32).toNat) = 96 by decide, hm3,
+      decodeForwardLengthMemory_size]
+  unfold decodeForwardAfterPayloadBound decodeForwardLoadWord
+  func_run (8) [3, 3, Nat.toB256 3575, 18]
+  all_goals try
+    rw [show (((4 : B256) * 32).toNat) = 128 by decide, hv4]
+  all_goals try
+    rw [show (((4 : B256) * 32).toNat) = 128 by decide, hm4]
+  all_goals try rw [hm4]
+  all_goals try
+    simpa only [show (((3 : B256) * 32).toNat) = 96 by decide, hv3]
+      using (show (32 : B256) + Nat.toB256 3543 =
+        Nat.toB256 3575 by decide)
+  all_goals try
+    exact Devm.extCost_add_of_size
+      (a := gVerylow) (decodeForwardLengthMemory_size sevm) (by decide)
+  all_goals try
+    exact Devm.extCost_add_of_size
+      (a := gVerylow + gasCopy * ceilDiv 32 32) hsize3 (by decide)
+  simp only [show (((3 : B256) * 32).toNat) = 96 by decide, hm3,
+    show (32 : B256).toNat = 32 by decide,
+    show (Nat.toB256 3575).toNat = 3575 by decide,
+    show (256 : B256).toNat = 256 by decide,
+    show (0 : UInt8) = Linst.toUInt8 .stop by decide]
+  change Func.RunCompiled fs sevm
+    (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G⟩)
+    body post
+  exact hrest
+
+/-- Execute the strict canonical-coordinate decoder for an exact 32-byte
+setup payload, then hand control to an arbitrary already-proved initializer.
+The accepted decoder costs 315 gas: the empty decoder's 300 plus one copy word
+and the `160 → 288` memory expansion. -/
+theorem ossifiableConstructorDecode_oneWordSetup_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {body : Func} {implementation requestedAdmin : Adr} {G : Nat}
+    (hcodeSize : sevm.code.size = 3607)
+    (himplementation :
+      ossifiableConstructorCodeWord sevm.code.toList 3447 =
+        implementation.toB256)
+    (hrequested : ossifiableConstructorCodeWord sevm.code.toList 3479 =
+      requestedAdmin.toB256)
+    (hoffset : ossifiableConstructorCodeWord sevm.code.toList 3511 = 96)
+    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3543 = 32)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G⟩)
+      body post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], Mem.empty, G + 315⟩)
+      (ossifiableConstructorDecode 3447 body) post := by
+  have hcopy :=
+    decodeForwardOneWordPayloadCopyStage_runCompiled hlength hrest
+  have hpayload := decodeForwardOneWordPayloadBoundStage_runCompiled
+    hcodeSize hlength hcopy
+  have hlengthBound :=
+    decodeForwardOneWordLengthBoundStage_runCompiled hlength hpayload
+  have hlengthCopy := decodeForwardLengthCopyStage_runCompiled hlengthBound
+  have hlengthComplete :=
+    decodeForwardOneWordLengthCompleteStage_runCompiled hcodeSize hlengthCopy
+  have hpointer :=
+    decodeForwardPointerStoreStage_runCompiled hoffset hlengthComplete
+  have hoffsetBound :=
+    decodeForwardOffsetBoundStage_runCompiled hoffset hpointer
+  have hadmin := decodeForwardAdminStage_runCompiled hrequested hoffsetBound
+  have himplementation :=
+    decodeForwardImplementationStage_runCompiled himplementation hadmin
+  have hdecode :=
+    decodeForwardOneWordHeadStage_runCompiled hcodeSize himplementation
+  simpa only [Nat.add_assoc] using hdecode
 
 /-- Execute the strict canonical-coordinate decoder and the complete empty-data
 initializer.  The 300-gas prefix is the exact sum of its accepted guards,

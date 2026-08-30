@@ -50,6 +50,7 @@ import Blanc.ProxyPairAuthority
 import Blanc.ProxyPairOssifiableDeploymentFixture
 import Blanc.ProxyPairOssifiableConstructorNonempty
 import Blanc.ProxyPairOssifiableBothSlotFixture
+import Blanc.ProxyPairOssifiableBothSlotDeployment
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
@@ -869,6 +870,10 @@ import Blanc.ProrataAttackTrace
 #print axioms Blanc.ProxyPair.OssifiableBothSlotFixture.setupMain_compile
 #print axioms Blanc.ProxyPair.OssifiableBothSlotFixture.setupMain_runCompiledTo
 #print axioms Blanc.ProxyPair.OssifiableBothSlotFixture.message_success
+#print axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.program_success
+#print axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.bothSlotCreateMessageGas_eq
+#print axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.creationMessage_code
+#print axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.creationMessage_success
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.lidoTwgCode_compile
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.abiEncodeConstructorArgs_length
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.creation_template_runtime_suffix

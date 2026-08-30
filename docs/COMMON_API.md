@@ -408,12 +408,19 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 - `Devm.addAccessedStorageKey_setMach_setMach` cancels an obsolete machine
   component across an access-key update followed by the final `setMach`.
 - `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
-- `Devm.retPost_world`, `Devm.retPost_getStorVal`, and
-  `Devm.retPost_transientStorage` project through the common
+- `Devm.setStorVal_getCode` carries account code across a persistent storage
+  write. `Devm.setCode_logs`, `Devm.setCode_output`, and
+  `Devm.setCode_error` carry the frame observations that code installation
+  does not modify.
+- `Devm.retPost_world`, `Devm.retPost_getStorVal`,
+  `Devm.retPost_transientStorage`, and
+  `Devm.retPost_accessedStorageKeys` project through the common
   `setMach`/`memRead`/`withOutput` return post.
 - `Devm.sstoreBase_state`, `Devm.sstoreBase_error`,
-  `Devm.sstoreBase_transientStorage`, and `Devm.sstoreBase_logs` project the
-  common warm/refund/storage-write post.
+  `Devm.sstoreBase_transientStorage`, `Devm.sstoreBase_logs`, and
+  `Devm.sstoreBase_accessedStorageKeys` project the common
+  warm/refund/storage-write post; `Devm.sstoreWarmBase_accessedStorageKeys`
+  is the corresponding already-warm key-set projection.
 - `State.set_bal`, `State.setStor_bal`, `State.incrNonce_bal`, and
   `State.setCode_bal` in
   [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean)

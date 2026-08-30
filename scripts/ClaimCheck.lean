@@ -18,6 +18,7 @@ import Blanc.LidoCircuitBreakerDeploymentRoot
 import Blanc.ProxyPairOssifiableDeploymentFixture
 import Blanc.ProxyPairOssifiableConstructorNonempty
 import Blanc.ProxyPairOssifiableBothSlotFixture
+import Blanc.ProxyPairOssifiableBothSlotDeployment
 import Blanc.ProrataAttackTrace
 
 /-!
@@ -3767,6 +3768,87 @@ example :
         OssifiableBothSlotFixture.postSetupAdmin.toB256 ∧
       post.logs = [] :=
   OssifiableBothSlotFixture.message_success
+
+example {sevm : Sevm} {base : Devm}
+    (hvalue : sevm.value = 0)
+    (hinput : sevm.code.toList = ossifiableFullCreateInput
+      OssifiableBothSlotFixture.implementation
+      OssifiableBothSlotFixture.requestedAdmin
+      OssifiableBothSlotFixture.setupData)
+    (himplementationNonzero :
+      OssifiableBothSlotFixture.implementation ≠ 0)
+    (himplementationCode : base.getCode
+      OssifiableBothSlotFixture.implementation =
+        OssifiableBothSlotFixture.implementationCode)
+    (hcodeSizeNonzero : (base.getCode
+      OssifiableBothSlotFixture.implementation).size.toB256 ≠ 0)
+    (haddressCold : OssifiableBothSlotFixture.implementation ∉
+      base.accessedAddresses)
+    (himplementationRaw : base.getStorVal sevm.currentTarget
+      implementationSlotLit = 0)
+    (himplementationOriginal : getOrigStorVal sevm sevm.currentTarget
+      implementationSlotLit = 0)
+    (himplementationCold : (sevm.currentTarget, implementationSlotLit) ∉
+      base.accessedStorageKeys)
+    (hadminRaw : base.getStorVal sevm.currentTarget adminSlotLit = 0)
+    (hadminOriginal : getOrigStorVal sevm sevm.currentTarget
+      adminSlotLit = 0)
+    (hadminCold : (sevm.currentTarget, adminSlotLit) ∉
+      base.accessedStorageKeys)
+    (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0)
+    (hprecompile : sevm.benvStat.rules.isPrecomp
+      OssifiableBothSlotFixture.implementation = false) :
+    ∃ post,
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248⟩)
+        (ossifiableConstructorProgram 1250 3447 2197) post ∧
+      post.getStorVal sevm.currentTarget implementationSlotLit =
+        OssifiableBothSlotFixture.postSetupImplementation.toB256 ∧
+      post.getStorVal sevm.currentTarget adminSlotLit =
+        OssifiableBothSlotFixture.requestedAdmin.toB256 ∧
+      post.logs = base.logs ++
+        [ossifiableConstructorInitializationLog sevm
+          OssifiableBothSlotFixture.implementation] ++
+        [ossifiableConstructorAdminChangedLog sevm.currentTarget
+          OssifiableBothSlotFixture.postSetupAdmin.toB256
+          OssifiableBothSlotFixture.requestedAdmin] ∧
+      post.output = runtimeBaselineBytes ∧
+      post.gasLeft = 475563 ∧
+      post.error = base.error :=
+  OssifiableBothSlotCreateFixture.program_success hvalue hinput
+    himplementationNonzero himplementationCode hcodeSizeNonzero
+    haddressCold himplementationRaw himplementationOriginal
+    himplementationCold hadminRaw hadminOriginal hadminCold hstatic hdepth
+    hprecompile
+
+example :
+    ∃ post,
+      processCreateMessage
+          OssifiableBothSlotCreateFixture.creationMessage = .ok post ∧
+      post.getCode OssifiableBothSlotFixture.target =
+        ⟨⟨runtimeBaselineBytes⟩⟩ ∧
+      post.getStorVal OssifiableBothSlotFixture.target
+          implementationSlotLit =
+        OssifiableBothSlotFixture.postSetupImplementation.toB256 ∧
+      post.getStorVal OssifiableBothSlotFixture.target adminSlotLit =
+        OssifiableBothSlotFixture.requestedAdmin.toB256 ∧
+      post.logs =
+        [rawUpgradedLog OssifiableBothSlotFixture.target
+          OssifiableBothSlotFixture.implementation.toB256] ++
+        [ossifiableConstructorAdminChangedLog
+          OssifiableBothSlotFixture.target
+          OssifiableBothSlotFixture.postSetupAdmin.toB256
+          OssifiableBothSlotFixture.requestedAdmin] ∧
+      post.output = runtimeBaselineBytes ∧
+      post.gasLeft =
+        OssifiableBothSlotCreateFixture.creationMessage.gas -
+          OssifiableBothSlotCreateFixture.bothSlotCreateMessageGas ∧
+      post.error = .none := by
+  obtain ⟨post, result⟩ :=
+    OssifiableBothSlotCreateFixture.creationMessage_success
+  exact ⟨post, result.run, result.installed, result.implementationSlot,
+    result.adminSlot, result.logs, result.output, result.gasLeft,
+    result.error⟩
 
 end ProxyPair
 

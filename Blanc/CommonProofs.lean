@@ -9589,6 +9589,37 @@ lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
   show (Devm.getStor (devm.setStorVal adr key val) adr).get key = val
   rw [setStorVal_getStor_self, Stor.get_set_self]
 
+/-- Persistent storage writes preserve every account's code. -/
+lemma Devm.setStorVal_getCode (devm : Devm) (owner : Adr)
+    (key value : B256) (address : Adr) :
+    (devm.setStorVal owner key value).getCode address =
+      devm.getCode address := by
+  show ((devm.state.setStorVal owner key value).get address).code =
+    (devm.state.get address).code
+  unfold State.setStorVal
+  by_cases h : owner = address
+  · subst h
+    rw [State.get_set_self]
+  · rw [State.get_set_ne _ h]
+
+/-- Installing account code preserves the frame log sequence. -/
+lemma Devm.setCode_logs (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    (devm.setCode address code).logs = devm.logs := by
+  rfl
+
+/-- Installing account code preserves the frame output bytes. -/
+lemma Devm.setCode_output (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    (devm.setCode address code).output = devm.output := by
+  rfl
+
+/-- Installing account code preserves the frame error marker. -/
+lemma Devm.setCode_error (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    (devm.setCode address code).error = devm.error := by
+  rfl
+
 /-! ### Reusable projection cuts for compiled RETURN and SSTORE posts -/
 
 /-- A `setMach`/`memRead`/`withOutput` return post preserves the base world. -/
@@ -9620,6 +9651,15 @@ lemma Devm.retPost_transientStorage (devm : Devm) (stack : List B256)
   congrArg World.transientStorage
     (Devm.retPost_world devm stack gas index size output)
 
+/-- A `setMach`/`memRead`/`withOutput` return post preserves the warmed
+storage-key set. -/
+lemma Devm.retPost_accessedStorageKeys (devm : Devm) (stack : List B256)
+    (gas index size : Nat) (output : Bytes) :
+    ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+        ).withOutput output).accessedStorageKeys =
+      devm.accessedStorageKeys := by
+  rfl
+
 /-- The standard warm/refund/storage-write post has exactly the written
 persistent state. -/
 lemma Devm.sstoreBase_state (devm : Devm) (target : Adr) (key : B256)
@@ -9647,6 +9687,25 @@ lemma Devm.sstoreBase_logs (devm : Devm) (target : Adr) (key : B256)
     (refund : Int) (value : B256) :
     (((addAccessedStorageKey devm target key).withRefundCounter refund
       ).setStorVal target key value).logs = devm.logs := rfl
+
+/-- The standard warm/refund/storage-write post records exactly the written
+storage key in the warmed-key set. -/
+lemma Devm.sstoreBase_accessedStorageKeys
+    (devm : Devm) (target : Adr) (key : B256)
+    (refund : Int) (value : B256) :
+    (((addAccessedStorageKey devm target key).withRefundCounter refund
+      ).setStorVal target key value).accessedStorageKeys =
+        devm.accessedStorageKeys.insert (target, key) := by
+  rfl
+
+/-- A warm SSTORE skips the insertion step and therefore preserves the
+already-warmed storage-key set across its refund and persistent write. -/
+lemma Devm.sstoreWarmBase_accessedStorageKeys
+    (devm : Devm) (target : Adr) (key : B256)
+    (refund : Int) (value : B256) :
+    ((devm.withRefundCounter refund).setStorVal target key value
+      ).accessedStorageKeys = devm.accessedStorageKeys := by
+  rfl
 
 lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
     (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: xs <<+ s.stack) :

@@ -148,6 +148,8 @@ import Blanc.ProxyPairOssifiableBothSlotFixture
 import Blanc.ProxyPairOssifiableConstructorForward
 import Blanc.ProxyPairOssifiableConstructorInitializeForward
 import Blanc.ProxyPairOssifiableConstructorDecodeForward
+import Blanc.ProxyPairOssifiableBothSlotCreate
+import Blanc.ProxyPairOssifiableBothSlotDeployment
 import Blanc.ProxyPairOssifiableDeploymentFixture
 import Blanc.ProxyPairImplementation
 import Blanc.ProxyPairExecution

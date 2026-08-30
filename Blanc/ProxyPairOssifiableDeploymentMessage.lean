@@ -49,25 +49,11 @@ private theorem creationBaselineByteLength_exact :
     exact creationBaselineArtifactBytes_length
   exact creationBaselineBytes_length.symm.trans hbytes
 
-private theorem creationBaseline_eq_numericProgram :
+/-- Numeric constructor specialization used by complete appended-code walks. -/
+theorem creationBaseline_eq_numericProgram :
     creationBaseline = ossifiableConstructorProgram 1250 3447 2197 := by
   rw [creationBaseline_eq_constructorProgram,
     creationBaselineByteLength_exact, runtimeBaselineBytes_length_exact]
-
-private theorem setCode_logs (d : Devm) (address : Adr)
-    (code : ByteArray) :
-    (d.setCode address code).logs = d.logs := by
-  rfl
-
-private theorem setCode_output (d : Devm) (address : Adr)
-    (code : ByteArray) :
-    (d.setCode address code).output = d.output := by
-  rfl
-
-private theorem setCode_error (d : Devm) (address : Adr)
-    (code : ByteArray) :
-    (d.setCode address code).error = d.error := by
-  rfl
 
 private theorem runtimeBaselineBytes_cons :
     ∃ tail, runtimeBaselineBytes = Jinst.jumpdest.toUInt8 :: tail := by
@@ -77,7 +63,8 @@ private theorem runtimeBaselineBytes_cons :
     ⟨compiledMain, compiledAux, _hmain, _haux, hbytes⟩
   exact ⟨compiledMain ++ compiledAux, hbytes⟩
 
-private theorem chargeCodeGas_runtimeBaseline
+/-- Exact CREATE code-deposit step for the compiler-owned 2,197-byte runtime. -/
+theorem chargeCodeGas_runtimeBaseline
     {rules : ForkRules} {raw : Devm}
     (houtput : raw.output = runtimeBaselineBytes)
     (hgas : ossifiableRuntimeCodeDepositGas ≤ raw.gasLeft)
@@ -382,16 +369,16 @@ theorem processCreateMessage_ossifiable_emptySetup_success
     rw [State.setCode_get_stor]
     exact hchargedStorage
   · dsimp only [post]
-    rw [setCode_logs]
+    rw [Devm.setCode_logs]
     exact hchargedLogs
   · dsimp only [post]
-    rw [setCode_output]
+    rw [Devm.setCode_output]
     exact hchargedOutput
   · dsimp only [post]
     rw [Devm.setCode_gasLeft]
     exact hchargedGas
   · dsimp only [post]
-    rw [setCode_error]
+    rw [Devm.setCode_error]
     exact hchargedError
 
 /-! ## Failed whole-CREATE settlement -/

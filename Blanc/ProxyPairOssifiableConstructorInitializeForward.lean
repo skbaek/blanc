@@ -42,6 +42,19 @@ private theorem initialize_addLog_getStorVal
     (base.addLog entry).getStorVal target key =
       base.getStorVal target key := rfl
 
+private theorem initialize_refundCounter_setMach
+    (base : Devm) (mach : Mach) :
+    (base.setMach mach).refundCounter = base.refundCounter := rfl
+
+private theorem initialize_sstore_log_machine_collapse
+    (base : Devm) (before middle after : Mach) (refund : Int)
+    (target : Adr) (key value : B256) (entry : Log) :
+    (((((base.setMach before).withRefundCounter refund).setStorVal
+          target key value).setMach middle).addLog entry).setMach after =
+      (((base.withRefundCounter refund).setStorVal
+          target key value).addLog entry).setMach after := by
+  rfl
+
 private theorem initialize_setStorVal_getStorVal_ne
     (base : Devm) (target : Adr) {writtenKey readKey : B256}
     (value : B256) (hne : writtenKey ≠ readKey) :
@@ -86,6 +99,210 @@ private def initializePackedStore : Func :=
 
 private def initializeAccepted : Func :=
   dup 0 ::: initializePackedStore
+
+/-- The exact `Upgraded` entry appended by the successful implementation
+initialization prefix. -/
+def ossifiableConstructorInitializationLog
+    (sevm : Sevm) (implementation : Adr) : Log :=
+  ⟨sevm.currentTarget, [upgradedEventTopic, implementation.toB256], []⟩
+
+/-- Parent state after the implementation has passed `EXTCODESIZE`, its
+ERC-1967 slot has been warmed and written, and `Upgraded` has been appended.
+The setup branch starts from this state. -/
+def ossifiableConstructorInitializedBase
+    (base : Devm) (sevm : Sevm) (implementation : Adr) : Devm :=
+  ((((addAccessedStorageKey (addAccessedAddress base implementation)
+        sevm.currentTarget implementationSlotLit).withRefundCounter
+      base.refundCounter).setStorVal sevm.currentTarget
+    implementationSlotLit implementation.toB256).addLog
+      (ossifiableConstructorInitializationLog sevm implementation))
+
+private theorem
+    ossifiableConstructorInitializeImplementation_prefix_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {memory : Mem} {image : Bytes} {implementation : Adr} {G : Nat}
+    (hreads : Mem.Reads memory image)
+    (himplementation : Bytes.toB256 (image.sliceD 0 32 0) =
+      implementation.toB256)
+    (himplementationNonzero : implementation ≠ 0)
+    (hcodeSizeNonzero : (base.getCode implementation).size.toB256 ≠ 0)
+    (haddressCold : implementation ∉ base.accessedAddresses)
+    (himplementationRaw :
+      base.getStorVal sevm.currentTarget implementationSlotLit = 0)
+    (himplementationOriginal :
+      getOrigStorVal sevm sevm.currentTarget implementationSlotLit = 0)
+    (himplementationCold : (sevm.currentTarget, implementationSlotLit) ∉
+      base.accessedStorageKeys)
+    (halign : memory.size % 32 = 0)
+    (hword0 : 32 ≤ memory.size)
+    (hstatic : sevm.isStatic = false)
+    (hrest : Func.RunCompiled fs sevm
+      ((ossifiableConstructorInitializedBase base sevm implementation).setMach
+        ⟨[], memory, G⟩)
+      initializeLoadLength post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], memory, G + 25882⟩)
+      ossifiableConstructorInitializeImplementation post := by
+  have hmemory0 : (memory.read 0 32).2 = memory := by
+    exact Mem.read_snd_eq_self
+      (memExtSize_of_le halign (by omega))
+  have hreadZero : memory.read 0 0 = ([], memory) := by
+    simp [Mem.read, Mem.extend, memExtSize]
+    rfl
+  have hzeroWindow : 0 + 0 ≤ memory.size := by omega
+  have himplementationWordNonzero : implementation.toB256 ≠ 0 := by
+    intro hzero
+    apply himplementationNonzero
+    apply Adr.toB256_inj
+    rw [hzero]
+    decide
+  have hzeroImplementation : (0 : B256) ≠ implementation.toB256 :=
+    Ne.symm himplementationWordNonzero
+  have hrefund (rc : Int) :
+      sstoreNewRefundCounter implementation.toB256 0 0 rc = rc := by
+    simp [sstoreNewRefundCounter, hzeroImplementation,
+      himplementationWordNonzero]
+  have hnew :
+      ((((fun x y : B256 => y <<< x.toNat) 160
+        ((fun x : B256 => ~~~x) 0)).and 0).or implementation.toB256) =
+        implementation.toB256 := by
+    exact b256_and_zero_or _ _
+  rw [ossifiableConstructorInitializeImplementation_shape]
+  func_run (2) [3]
+  · rw [Devm.extCost_zero_of_le halign (by
+      simp only [show (0 : B256).toNat = 0 by rfl]
+      omega)]
+    norm_num [gVerylow]
+  simp only [show (0 : B256).toNat = 0 by rfl]
+  rw [Mem.Reads.read hreads, himplementation, hmemory0]
+  func_run (4) [0]
+  · simpa only [Devm.setMach_accessedAddresses, toAdr_toB256]
+      using haddressCold
+  · simp only [Devm.getCode_setMach, toAdr_toB256, B256.eqCheck,
+      hcodeSizeNonzero, ↓reduceIte]
+  simp only [initialize_addAccessedAddress_setMach_setMach, toAdr_toB256]
+  change Func.RunCompiled fs sevm _ initializeAccepted _
+  unfold initializeAccepted
+  func_run (1)
+  unfold initializePackedStore
+  apply Func.RunCompiled.next
+  · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 23252)
+    · decide +kernel
+    · simp only [Devm.gasLeft_setMach]
+      omega
+    · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      omega
+  func_run (1)
+  simp only [Devm.addAccessedStorageKey_setMach_setMach,
+    Devm.getStorVal_setMach, initialize_addAccessedAddress_getStorVal,
+    Devm.memory_setMach, Devm.stack_setMach]
+  rw [himplementationRaw]
+  unfold initializeHighMask
+  func_run (4)
+  unfold initializeMerge
+  func_run (2)
+  unfold initializeSstore
+  have hwarmImplementation :
+      (sevm.currentTarget, implementationSlotLit) ∈
+        (addAccessedStorageKey (addAccessedAddress base implementation)
+          sevm.currentTarget implementationSlotLit).accessedStorageKeys :=
+    Std.HashSet.mem_insert_self
+  func_run (2) [20000]
+  · simp only [Devm.getStorVal_setMach,
+      initialize_addAccessedStorageKey_getStorVal,
+      initialize_addAccessedAddress_getStorVal, himplementationRaw,
+      himplementationOriginal, hnew]
+    rw [sstoreValueCost,
+      if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
+      if_pos rfl]
+    norm_num [gasStorageSet]
+  simp only [hnew, Devm.getStorVal_setMach,
+    initialize_addAccessedStorageKey_getStorVal,
+    initialize_addAccessedAddress_getStorVal, himplementationRaw,
+    himplementationOriginal]
+  unfold initializeLog
+  func_run (4) [1125]
+  · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+    rw [Devm.extCost_zero_of_le halign hzeroWindow]
+    norm_num [gLog, gLogdata, gLogtopic]
+  simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+  rw [hreadZero, hrefund]
+  simp only [initialize_refundCounter_setMach,
+    initialize_sstore_log_machine_collapse, Nat.add_sub_cancel, prepend]
+  unfold ossifiableConstructorInitializedBase
+    ossifiableConstructorInitializationLog at hrest
+  exact hrest
+
+/-- Execute the successful implementation-initialization prefix and select the
+nonempty setup helper.  The prefix consumes exactly 25,914 gas before the
+delegate-setup body begins. -/
+theorem
+    ossifiableConstructorInitializeImplementation_nonempty_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm}
+    {memory : Mem} {image : Bytes} {implementation : Adr}
+    {length : B256} {G : Nat}
+    (hreads : Mem.Reads memory image)
+    (himplementation : Bytes.toB256 (image.sliceD 0 32 0) =
+      implementation.toB256)
+    (hlength : Bytes.toB256 (image.sliceD 128 32 0) = length)
+    (hlengthNonzero : length ≠ 0)
+    (himplementationNonzero : implementation ≠ 0)
+    (hcodeSizeNonzero : (base.getCode implementation).size.toB256 ≠ 0)
+    (haddressCold : implementation ∉ base.accessedAddresses)
+    (himplementationRaw :
+      base.getStorVal sevm.currentTarget implementationSlotLit = 0)
+    (himplementationOriginal :
+      getOrigStorVal sevm sevm.currentTarget implementationSlotLit = 0)
+    (himplementationCold : (sevm.currentTarget, implementationSlotLit) ∉
+      base.accessedStorageKeys)
+    (hsize : memory.size = 288)
+    (hstatic : sevm.isStatic = false)
+    (hsetup : fs[6]? = some ossifiableConstructorDelegateSetup)
+    (hrest : Func.RunCompiled fs sevm
+      ((ossifiableConstructorInitializedBase base sevm implementation).setMach
+        ⟨[], memory, G⟩)
+      ossifiableConstructorDelegateSetup post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], memory, G + 25914⟩)
+      ossifiableConstructorInitializeImplementation post := by
+  have hmemory128 : (memory.read 128 32).2 = memory := by
+    apply Mem.read_snd_eq_self
+    rw [hsize]
+    decide
+  have hload : Func.RunCompiled fs sevm
+      ((ossifiableConstructorInitializedBase base sevm implementation).setMach
+        ⟨[], memory, G + 32⟩)
+      initializeLoadLength post := by
+    unfold initializeLoadLength
+    func_run (2) [3]
+    · exact Devm.extCost_add_of_size hsize (by decide)
+    simp only [show (128 : B256).toNat = 128 by decide]
+    rw [Mem.Reads.read hreads, hlength, hmemory128]
+    unfold initializeSetupBranch
+    apply Func.runCompiled_branch_succ (G := G + 12) hlengthNonzero
+    · rfl
+    · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      decide
+    · simp only [Devm.gasLeft_setMach]
+      norm_num [gVerylow, gHigh, gJumpdest]
+      omega
+    · apply Func.runCompiled_call' (G := G) hsetup
+      · simp only [Devm.stack_setMach, List.length_nil]
+        decide
+      · simp only [Devm.gasLeft_setMach]
+        norm_num [gVerylow, gMid, gJumpdest]
+      · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+          Devm.stack_setMach] using hrest
+  have hpfx :=
+    ossifiableConstructorInitializeImplementation_prefix_runCompiled
+      (fs := fs) (sevm := sevm) (base := base) (post := post)
+      (memory := memory) (image := image) (implementation := implementation)
+      (G := G + 32) hreads himplementation himplementationNonzero
+      hcodeSizeNonzero haddressCold himplementationRaw
+      himplementationOriginal himplementationCold
+      (by omega) (by omega) hstatic hload
+  simpa only [Nat.add_assoc,
+    show 32 + 25882 = 25914 by decide] using hpfx
 
 /-- Execute the canonical empty-setup initialization path from the decoded
 five-word constructor image.  The theorem includes the implementation code
