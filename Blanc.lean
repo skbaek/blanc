@@ -143,6 +143,7 @@ import Blanc.ProxyPairOssifiableConstructorEffects
 import Blanc.ProxyPairOssifiableConstructorSetup
 import Blanc.ProxyPairOssifiableConstructorExecution
 import Blanc.ProxyPairOssifiableConstructorForward
+import Blanc.ProxyPairOssifiableConstructorInitializeForward
 import Blanc.ProxyPairImplementation
 import Blanc.ProxyPairExecution
 import Blanc.ProxyPairCorrespondence

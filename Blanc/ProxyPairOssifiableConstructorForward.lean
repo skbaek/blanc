@@ -15,7 +15,9 @@ namespace Blanc.ProxyPair
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-private theorem b256_and_zero_or (mask value : B256) :
+/-- A zero packed slot discards every preserved-mask bit before the new address
+word is merged. -/
+theorem b256_and_zero_or (mask value : B256) :
     (mask &&& 0) ||| value = value := by
   rcases mask with ⟨⟨mh0, mh1⟩, ⟨ml0, ml1⟩⟩
   rcases value with ⟨⟨vh0, vh1⟩, ⟨vl0, vl1⟩⟩
