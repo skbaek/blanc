@@ -635,11 +635,11 @@ storage effects; retained effects resume at the same-frame tail. -/
     Exec.retainedNodes, committed, Exec.retainedNodesOfCommits,
     Exec.Deriv.successfulSstore?]
 
-/-- A committed successful halt has no retained SSTORE driver node. -/
+/-- A committed halt has no retained SSTORE driver node. -/
 @[simp] theorem Exec.retainedStorageEffectTriples_halt
-    {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    {step : Evm.step ⟨pc, sevm, pre⟩ = .halt (.ok post)}
-    (committed : Execution.commits (.ok post) = true) :
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {step : Evm.step ⟨pc, sevm, pre⟩ = .halt out}
+    (committed : Execution.commits out = true) :
     Exec.retainedStorageEffectTriples (.halt step) = [] := by
   simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
     Exec.retainedNodes, committed, Exec.retainedNodesOfCommits,

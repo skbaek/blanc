@@ -545,10 +545,12 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   and terminal execution nodes.
 - For construction from a successful selected compiled walk, use
   [`Blanc/ForwardStorageEffects.lean`](../Blanc/ForwardStorageEffects.lean):
-  annotate it with `Func.RunCompiled.StorageEffectPath` (ordinary non-external
+  annotate it with `Func.RunCompiledTo.StorageEffectPath` (ordinary non-external
   steps use `StorageEffectPath.next_of_not_exec`) and finish with
   `Prog.exists_exec_retainedStorageEffectTriples`. The resulting list is exact
-  execution order and intentionally retains successful no-op SSTOREs.
+  execution order and intentionally retains successful no-op SSTOREs. An
+  existing `NoRawSstorePath` converts directly with
+  `StorageEffectPath.of_noRawSstorePath`.
 - `ProcessMessage.clean_input_state_of_settle` exposes the clean raw input and
   exact state retained by a successful settlement.
 - `processCreateMessage.chargeCodeGas_bal_eq` and

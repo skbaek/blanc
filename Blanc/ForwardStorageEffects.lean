@@ -4,8 +4,8 @@ import Blanc.ForwardNoRawSstore
 # Exact selected-path storage effects
 
 Construction-direction certificates for the complete retained SSTORE
-chronology of one successful compiled path.  Branches and internal calls follow
-the witness selected by `Func.RunCompiled`; external steps must be childless,
+chronology of one committing compiled path.  Branches and internal calls follow
+the witness selected by `Func.RunCompiledTo`; external steps must be childless,
 so a synchronously resolved precompile contributes no hidden child-frame
 writes.  A successful no-op SSTORE is retained intentionally.
 -/
@@ -68,73 +68,104 @@ private theorem Jinst.successfulSstore_effectTriples
       some (.jump instruction) := instructionAt
   simp [Exec.Deriv.successfulSstore?, decoded]
 
-/-- Exact retained storage-effect annotation for a selected successful source
+/-- Exact retained storage-effect annotation for a selected committing source
 walk.  Its list is in execution order. -/
-inductive Func.RunCompiled.StorageEffectPath :
+inductive Func.RunCompiledTo.StorageEffectPath :
     ∀ {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
-      {post : Devm}, Func.RunCompiled fs sevm pre body post →
+      {out : Execution}, Func.RunCompiledTo fs sevm pre body out →
         List (Adr × B256 × B256) → Prop
-  | zero {fs sevm pre branchPre left right post effects}
+  | zero {fs sevm pre branchPre left right out effects}
       {room : pre.stack.length < 1024}
       {pop : Devm.PopBurnBy [0] (gVerylow + gHigh) pre branchPre}
-      {tail : Func.RunCompiled fs sevm branchPre left post}
-      (tailEffects : Func.RunCompiled.StorageEffectPath tail effects) :
-      Func.RunCompiled.StorageEffectPath
+      {tail : Func.RunCompiledTo fs sevm branchPre left out}
+      (tailEffects : Func.RunCompiledTo.StorageEffectPath tail effects) :
+      Func.RunCompiledTo.StorageEffectPath
         (.zero (g := right) room pop tail) effects
-  | succ {fs sevm pre branchPre word left right post effects}
+  | succ {fs sevm pre branchPre word left right out effects}
       {nonzero : word ≠ 0}
       {room : pre.stack.length < 1024}
       {pop : Devm.PopBurnBy [word]
         (gVerylow + gHigh + gJumpdest) pre branchPre}
-      {tail : Func.RunCompiled fs sevm branchPre right post}
-      (tailEffects : Func.RunCompiled.StorageEffectPath tail effects) :
-      Func.RunCompiled.StorageEffectPath
+      {tail : Func.RunCompiledTo fs sevm branchPre right out}
+      (tailEffects : Func.RunCompiledTo.StorageEffectPath tail effects) :
+      Func.RunCompiledTo.StorageEffectPath
         (.succ (f := left) nonzero room pop tail) effects
-  | last {fs sevm pre terminal post}
-      {terminalRun : Linst.Run sevm pre terminal (.ok post)} :
-      Func.RunCompiled.StorageEffectPath
-        (Func.RunCompiled.last (fs := fs) terminalRun) []
-  | next {fs sevm pre nextPre instruction body post effects}
+  | last {fs sevm pre terminal out}
+      {terminalRun : Linst.Run sevm pre terminal out} :
+      Func.RunCompiledTo.StorageEffectPath
+        (Func.RunCompiledTo.last (fs := fs) terminalRun) []
+  | next {fs sevm pre nextPre instruction body out effects}
       {instructionRun : Ninst.RunCompiled sevm pre instruction nextPre}
-      {tail : Func.RunCompiled fs sevm nextPre body post}
+      {tail : Func.RunCompiledTo fs sevm nextPre body out}
       (instructionChildless :
         Ninst.ChildlessRunCompiled sevm pre instruction nextPre)
-      (tailEffects : Func.RunCompiled.StorageEffectPath tail effects) :
-      Func.RunCompiled.StorageEffectPath (.next instructionRun tail)
+      (tailEffects : Func.RunCompiledTo.StorageEffectPath tail effects) :
+      Func.RunCompiledTo.StorageEffectPath (.next instructionRun tail)
         ((Ninst.storageEffectTriple? sevm pre instruction).toList ++ effects)
-  | call {fs sevm pre callPre index body post effects}
+  | call {fs sevm pre callPre index body out effects}
       {lookup : fs[index]? = some body}
       {room : pre.stack.length < 1024}
       {burn : Devm.BurnBy (gVerylow + gMid + gJumpdest) pre callPre}
-      {tail : Func.RunCompiled fs sevm callPre body post}
-      (tailEffects : Func.RunCompiled.StorageEffectPath tail effects) :
-      Func.RunCompiled.StorageEffectPath (.call lookup room burn tail) effects
+      {tail : Func.RunCompiledTo fs sevm callPre body out}
+      (tailEffects : Func.RunCompiledTo.StorageEffectPath tail effects) :
+      Func.RunCompiledTo.StorageEffectPath (.call lookup room burn tail) effects
 
 /-- Ordinary non-external instructions are childless automatically. -/
-theorem Func.RunCompiled.StorageEffectPath.next_of_not_exec
+theorem Func.RunCompiledTo.StorageEffectPath.next_of_not_exec
     {fs : List Func} {sevm : Sevm} {pre nextPre : Devm}
-    {instruction : Ninst} {body : Func} {post : Devm}
+    {instruction : Ninst} {body : Func} {out : Execution}
     {instructionRun : Ninst.RunCompiled sevm pre instruction nextPre}
-    {tail : Func.RunCompiled fs sevm nextPre body post}
+    {tail : Func.RunCompiledTo fs sevm nextPre body out}
     {effects : List (Adr × B256 × B256)}
     (notExec : ∀ operation : Xinst, instruction ≠ .exec operation)
-    (tailEffects : Func.RunCompiled.StorageEffectPath tail effects) :
-    Func.RunCompiled.StorageEffectPath (.next instructionRun tail)
+    (tailEffects : Func.RunCompiledTo.StorageEffectPath tail effects) :
+    Func.RunCompiledTo.StorageEffectPath (.next instructionRun tail)
       ((Ninst.storageEffectTriple? sevm pre instruction).toList ++ effects) :=
   .next (instructionRun := instructionRun)
     (instructionRun.childless_of_not_exec notExec) tailEffects
 
+/-- Raw-SSTORE freedom is the empty exact storage-effect annotation for the
+same selected path. -/
+theorem Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
+    {out : Execution} {run : Func.RunCompiledTo fs sevm pre body out}
+    (safe : Func.RunCompiledTo.NoRawSstorePath run) :
+    Func.RunCompiledTo.StorageEffectPath run [] := by
+  induction safe with
+  | @zero pre post left right out room pop tail tailSafe ih =>
+      exact .zero (room := room) (pop := pop) ih
+  | @succ pre post word left right out nonzero room pop tail tailSafe ih =>
+      exact .succ (nonzero := nonzero) (room := room) (pop := pop) ih
+  | @last pre terminal out terminalRun =>
+      exact .last (terminalRun := terminalRun)
+  | @next certPre certPost instruction certBody certOut
+      instructionRun tail instructionNe instructionChildless tailSafe ih =>
+      have none :
+          Ninst.storageEffectTriple? sevm certPre instruction = none := by
+        cases instruction with
+        | push bytes bound => rfl
+        | exec operation => rfl
+        | reg operation =>
+            cases operation <;>
+              simp [Ninst.storageEffectTriple?] at instructionNe ⊢
+      simpa only [none, Option.toList_none, List.nil_append] using
+        (Func.RunCompiledTo.StorageEffectPath.next
+          (instructionRun := instructionRun)
+          instructionChildless ih)
+  | @call pre post index body out lookup room burn tail tailSafe ih =>
+      exact .call (lookup := lookup) (room := room) (burn := burn) ih
+
 private theorem Ninst.exists_exec_storageEffects
-    {pc : Nat} {sevm : Sevm} {pre nextPre post : Devm}
+    {pc : Nat} {sevm : Sevm} {pre nextPre : Devm} {out : Execution}
     {instruction : Ninst} {effects : List (Adr × B256 × B256)}
     (instructionAt : Ninst.At sevm.code pc instruction)
     (instructionRun :
       Ninst.ChildlessRunCompiled sevm pre instruction nextPre)
-    {tail : Exec (pc + instruction.size) sevm nextPre (.ok post)}
-    (committed : Execution.commits (.ok post) = true)
+    {tail : Exec (pc + instruction.size) sevm nextPre out}
+    (committed : Execution.commits out = true)
     (tailEffects : Exec.retainedStorageEffectTriples tail =
       effects) :
-    ∃ run : Exec pc sevm pre (.ok post),
+    ∃ run : Exec pc sevm pre out,
       Exec.retainedStorageEffectTriples run =
         (Ninst.storageEffectTriple? sevm pre instruction).toList ++ effects := by
   have evmStep : Evm.step ⟨pc, sevm, pre⟩ =
@@ -202,22 +233,22 @@ private theorem Ninst.exists_exec_storageEffects
           · rcases frameRun with ⟨raw, slotEq, settledEq⟩
             cases slotEq
 
-private theorem Func.RunCompiled.StorageEffectPath.exists_exec_core :
+private theorem Func.RunCompiledTo.StorageEffectPath.exists_exec_core :
     ∀ {main : Func} {aux : List Func} {sevm : Sevm} {fs : List Func}
-      {pre : Devm} {body : Func} {post : Devm}
-      {run : Func.RunCompiled fs sevm pre body post}
+      {pre : Devm} {body : Func} {out : Execution}
+      {run : Func.RunCompiledTo fs sevm pre body out}
       {effects : List (Adr × B256 × B256)},
-      Func.RunCompiled.StorageEffectPath run effects →
-      Execution.commits (.ok post) = true →
+      Func.RunCompiledTo.StorageEffectPath run effects →
+      Execution.commits out = true →
       some sevm.code.toList = Prog.compile ⟨main, aux⟩ →
       fs = main :: aux →
       ∀ pc,
         subcode sevm.code.toList pc
           (Func.compile (table 0 (main :: aux)) pc body) →
         noPushBefore sevm.code pc 32 = true →
-        ∃ execution : Exec pc sevm pre (.ok post),
+        ∃ execution : Exec pc sevm pre out,
           Exec.retainedStorageEffectTriples execution = effects := by
-  intro main aux sevm fs pre body post run effects certified
+  intro main aux sevm fs pre body out run effects certified
   induction certified with
   | @zero certPre branchPre left right certPost certEffects
       room pop tail tailEffects ih =>
@@ -256,10 +287,10 @@ private theorem Func.RunCompiled.StorageEffectPath.exists_exec_core :
         Jinst.successfulSstore_effectTriples rightRun jumpdestAt,
         rightEffects]
       rfl
-  | @last certPre terminal certPost terminalRun =>
+  | @last certPre terminal certOut terminalRun =>
       intro committed compiled tableEq pc sub noPush
       have terminalAt := Linst.at_of_slice sub
-      have step : Evm.step ⟨pc, sevm, certPre⟩ = .halt (.ok certPost) := by
+      have step : Evm.step ⟨pc, sevm, certPre⟩ = .halt certOut := by
         rw [Evm.step_last terminalAt]
         exact congrArg Step.halt terminalRun
       refine ⟨.halt step, ?_⟩
@@ -314,18 +345,18 @@ private theorem Func.RunCompiled.StorageEffectPath.exists_exec_core :
         bodyEffects]
       rfl
 
-/-- Whole-program successful execution bridge with exact retained storage
+/-- Whole-program committing execution bridge with exact retained storage
 effect chronology. -/
 theorem Prog.exists_exec_retainedStorageEffectTriples
-    {sevm : Sevm} {pre mid post : Devm} {program : Prog}
-    {mainRun : Func.RunCompiled (program.main :: program.aux)
-      sevm mid program.main post}
+    {sevm : Sevm} {pre mid : Devm} {out : Execution} {program : Prog}
+    {mainRun : Func.RunCompiledTo (program.main :: program.aux)
+      sevm mid program.main out}
     {effects : List (Adr × B256 × B256)}
     (entryBurn : Devm.BurnBy gJumpdest pre mid)
-    (mainEffects : Func.RunCompiled.StorageEffectPath mainRun effects)
-    (committed : Execution.commits (.ok post) = true)
+    (mainEffects : Func.RunCompiledTo.StorageEffectPath mainRun effects)
+    (committed : Execution.commits out = true)
     (compiled : some sevm.code.toList = program.compile) :
-    ∃ execution : Exec 0 sevm pre (.ok post),
+    ∃ execution : Exec 0 sevm pre out,
       Exec.retainedStorageEffectTriples execution = effects := by
   have compiled' : some sevm.code.toList =
       Prog.compile ⟨program.main, program.aux⟩ := compiled
@@ -338,7 +369,7 @@ theorem Prog.exists_exec_retainedStorageEffectTriples
     (Prog.jumpable_of_get?_table compiled' entryLookup).2
   have entryStep : Evm.step ⟨0, sevm, pre⟩ = .cont 1 mid :=
     Evm.jumpdest_cont jumpdestAt entryBurn
-  rcases Func.RunCompiled.StorageEffectPath.exists_exec_core mainEffects
+  rcases Func.RunCompiledTo.StorageEffectPath.exists_exec_core mainEffects
       committed compiled' rfl 1 mainSub mainNoPush with
     ⟨execution, effectEq⟩
   refine ⟨.cont entryStep execution, ?_⟩
