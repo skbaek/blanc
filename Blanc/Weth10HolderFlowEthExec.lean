@@ -137,17 +137,8 @@ theorem genericCreate_prepared_bal
       (((pre.withGasLeft
           (pre.gasLeft - except64th pre.gasLeft)).withReturnData
         []).incrNonce sevm.currentTarget) newAddress).state.bal =
-      pre.state.bal := by
-  have haccess := addAccessedAddress_instructionFrame
-    (((pre.withGasLeft
-        (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-      []).incrNonce sevm.currentTarget) newAddress
-  calc
-    _ = (((pre.withGasLeft
-          (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-        []).incrNonce sevm.currentTarget).state.bal :=
-      congrArg State.bal haccess.state.symm
-    _ = pre.state.bal := State.incrNonce_bal
+      pre.state.bal :=
+  _root_.Blanc.genericCreate_prepared_bal sevm pre newAddress
 
 /-- A zero-value message entry preserves the complete balance map, including
 the self-call case where caller and callee coincide. -/
@@ -1723,49 +1714,9 @@ theorem GenericCall.foreignNoneEthBound
     (hcaller : stv = true → caller ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state [] := by
-  unfold GenericCall genericCall.step at run
-  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
-  repeat' split at run
-  all_goals simp only [XStep.ofExcept, XStep.Run] at run
-  · cases run.2
-  · rename_i heq
-    have hpost := Except.ok.inj run.2
-    subst post
-    have hpush := Devm.push_instructionFrame 0
-      ((pre.withReturnData []).withGasLeft
-        ((pre.withReturnData []).gasLeft + gas))
-    rw [heq] at hpush
-    exact (EthStep.silent (ca := ca)
-      (congrArg (fun s : State => s.bal ca)
-        hpush.state.symm)).bound
-  · obtain ⟨result, hframe, hresume⟩ := run
-    cases result with
-    | error error =>
-        simp [Resume.run, liftToExecution] at hresume
-    | ok child =>
-        have hcallerNe :
-            (callMsg sevm (pre.withReturnData [])
-              gas
-              value caller target codeAddress stv istat
-              ((pre.memory.read ii is).1) code delegated
-            ).shouldTransferValue = true →
-              (callMsg sevm (pre.withReturnData [])
-                gas
-                value caller target codeAddress stv istat
-                ((pre.memory.read ii is).1) code delegated
-              ).caller ≠ ca := by
-          simpa [callMsg] using hcaller
-        have hbound := ProcessMessage.ethBound_of_none_conditions
-          hframe hcallerNe (by
-            change sum pre.state.bal < 2 ^ 256
-            exact hsum)
-        have hresumeBal : post.state.bal = child.state.bal :=
-          congrArg State.bal (Resume.call_state hresume.symm)
-        unfold EthBound at hbound ⊢
-        simp only [flowActionsEthMint, List.map_nil, List.sum_nil,
-          flowActionsEthRedemption, Nat.add_zero] at hbound ⊢
-        rw [hresumeBal]
-        exact hbound
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.GenericCall.targetBalanceMono_of_none
+      run hcaller hsum)
 
 /-- CREATE-family no-slot execution has the same foreign-source property.
 Nonce/access preparation and code-deposit settlement are balance-silent; the
@@ -1779,95 +1730,9 @@ theorem GenericCreate.foreignNoneEthBound
     (hforeign : sevm.currentTarget ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state [] := by
-  unfold GenericCreate genericCreate.step at run
-  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
-    Pure.pure, Except.pure] at run
-  repeat' split at run
-  all_goals simp only [XStep.ofExcept, XStep.Run] at run
-  · cases run.2
-  · cases run.2
-  · cases run.2
-  · rename_i heq
-    have hpost := Except.ok.inj run.2
-    subst post
-    have hpush := Devm.push_instructionFrame 0
-      (((pre.withGasLeft
-          (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-        []).withGasLeft
-          (((pre.withGasLeft
-              (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-            []).gasLeft + except64th pre.gasLeft))
-    rw [heq] at hpush
-    exact (EthStep.silent (ca := ca)
-      (congrArg (fun s : State => s.bal ca)
-        hpush.state.symm)).bound
-  · cases run.2
-  · rename_i heq
-    have hpost := Except.ok.inj run.2
-    subst post
-    have hpush := Devm.push_instructionFrame 0
-      (addAccessedAddress
-        (((pre.withGasLeft
-          (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-            []).incrNonce sevm.currentTarget) newAddress)
-    rw [heq] at hpush
-    have hbal := genericCreate_prepared_bal sevm pre newAddress
-    exact (EthStep.silent (ca := ca)
-      ((congrArg (fun s : State => s.bal ca)
-        hpush.state.symm).trans (congrFun hbal ca))).bound
-  · obtain ⟨result, hframe, hresume⟩ := run
-    cases result with
-    | error error =>
-        simp [Resume.run, liftToExecution] at hresume
-    | ok child =>
-        have hcallerNe :
-            (createMsg sevm
-              (addAccessedAddress
-                (((pre.withGasLeft
-                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-                  []).incrNonce sevm.currentTarget) newAddress)
-              (except64th pre.gasLeft) endowment newAddress
-              ((pre.memory.read mi ms).1)).shouldTransferValue = true →
-            (createMsg sevm
-              (addAccessedAddress
-                (((pre.withGasLeft
-                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-                  []).incrNonce sevm.currentTarget) newAddress)
-              (except64th pre.gasLeft) endowment newAddress
-              ((pre.memory.read mi ms).1)).caller ≠ ca := by
-          intro _
-          simpa [createMsg] using hforeign
-        have hsumParent :
-            sum (createMsg sevm
-              (addAccessedAddress
-                (((pre.withGasLeft
-                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-                  []).incrNonce sevm.currentTarget) newAddress)
-              (except64th pre.gasLeft) endowment newAddress
-              ((pre.memory.read mi ms).1)).benv.state.bal < 2 ^ 256 := by
-          change sum (addAccessedAddress
-            (((pre.withGasLeft
-                (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-              []).incrNonce sevm.currentTarget) newAddress).state.bal <
-                2 ^ 256
-          rw [genericCreate_prepared_bal]
-          exact hsum
-        have hbound := ProcessCreateMessage.ethBound_of_none_conditions
-          hframe hcallerNe hsumParent
-        have hresumeBal : post.state.bal = child.state.bal :=
-          congrArg State.bal (Resume.create_state hresume.symm)
-        unfold EthBound at hbound ⊢
-        simp only [flowActionsEthMint, List.map_nil, List.sum_nil,
-          flowActionsEthRedemption, Nat.add_zero] at hbound ⊢
-        rw [hresumeBal]
-        change
-          ((addAccessedAddress
-            (((pre.withGasLeft
-                (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-              []).incrNonce sevm.currentTarget) newAddress).state.bal ca).toNat ≤
-            (child.state.bal ca).toNat at hbound
-        rw [genericCreate_prepared_bal] at hbound
-        exact hbound
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.GenericCreate.targetBalanceMono_of_none
+      run hforeign hsum)
 
 /-- Contract-neutral no-child bound for any call-type opcode. -/
 theorem Xinst.foreignNoneEthBound
@@ -1876,40 +1741,9 @@ theorem Xinst.foreignNoneEthBound
     (hforeign : sevm.currentTarget ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state [] := by
-  unfold Xinst.Run at run
-  rcases Xinst.step_shape sevm pre x with
-    ⟨ex, hs, hframe⟩ |
-    ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
-    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isSt,
-      ii, isz, oi, osz, code, delegated, hprefix, _, hcal, _, hs⟩ <;>
-    rw [hs] at run
-  · obtain ⟨-, rfl⟩ := run
-    exact (EthStep.silent (ca := ca)
-      (congrArg (fun s : State => s.bal ca)
-        hframe.state.symm)).bound
-  · have hsumD : sum d.state.bal < 2 ^ 256 := by
-      rw [← hprefix.state]
-      exact hsum
-    have hbound := GenericCreate.foreignNoneEthBound
-      run hforeign hsumD
-    unfold EthBound at hbound ⊢
-    rw [hprefix.state]
-    exact hbound
-  · have hsumD : sum d.state.bal < 2 ^ 256 := by
-      rw [← hprefix.state]
-      exact hsum
-    have hcaller : stv = true → caller ≠ ca := by
-      intro hstv
-      rcases hcal with ⟨_, hcaller⟩ | ⟨hfalse, _⟩
-      · rw [hcaller]
-        exact hforeign
-      · rw [hstv] at hfalse
-        contradiction
-    have hbound := GenericCall.foreignNoneEthBound
-      run hcaller hsumD
-    unfold EthBound at hbound ⊢
-    rw [hprefix.state]
-    exact hbound
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.Xinst.targetBalanceMono_of_none
+      run hforeign hsum)
 
 /-- Contract-neutral recursive transport for an actual filled `Xinst` slot.
 The shape theorem removes the instruction prefix, and the exact-spawn lemmas
@@ -1989,26 +1823,9 @@ theorem Ninst.foreignNoneEthBound
     (hforeign : sevm.currentTarget ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state [] := by
-  cases n with
-  | reg r =>
-      simp only [Ninst.StepRun, Ninst.step_reg,
-        Step.run_ofExecution] at run
-      have hrun : Rinst.run ⟨pc, sevm, pre⟩ r = .ok post :=
-        run.2.symm
-      have hbal := Rinst.preserves_bal hrun
-      exact (EthStep.silent (ca := ca) (congrFun hbal.symm ca)).bound
-  | exec x =>
-      simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact Xinst.foreignNoneEthBound
-        (XStep.run_toStep.mp run) hforeign hsum
-  | push xs hxs =>
-      have hrel := Ninst.push_instructionFrame_effectRec
-        (hxs := hxs) (xl := .none) trivial run
-      have hframe : Devm.InstructionFrame pre post := by
-        simpa [Execution.Rel, Outcome.Rel] using hrel
-      exact (EthStep.silent (ca := ca)
-        (congrArg (fun s : State => s.bal ca)
-          hframe.state.symm)).bound
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.Ninst.targetBalanceMono_of_none
+      run hforeign hsum)
 
 /-- `SELFDESTRUCT` executed by a foreign account can only leave `ca`
 unchanged or credit it from the foreign source.  The latter is recorded as an
@@ -2019,77 +1836,9 @@ theorem Linst.foreignDestEthBound
     (hforeign : sevm.currentTarget ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state [] := by
-  dsimp [Linst.Run, Linst.run] at run
-  rcases Except.bind_eq_ok run with
-    ⟨⟨dest, devm1⟩, hpop, hrun1⟩
-  rcases Except.bind_eq_ok hrun1 with
-    ⟨devm2, hcharge, hrun2⟩
-  rcases Except.bind_eq_ok hrun2 with
-    ⟨_, hassert, hrun3⟩
-  rcases Except.bind_eq_ok hrun3 with
-    ⟨devm3, hsub, hrun4⟩
-  have hsubSome : devm2.subBal sevm.currentTarget
-      (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
-    cases heq : devm2.subBal sevm.currentTarget
-        (devm1.getAcct sevm.currentTarget).bal
-    · rw [heq] at hsub
-      contradiction
-    · rw [heq] at hsub
-      injection hsub with h
-      subst h
-      rfl
-  have hsubState : devm2.state.subBal sevm.currentTarget
-      (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-    dsimp [Devm.subBal, Option.bind] at hsubSome
-    cases heq : devm2.state.subBal sevm.currentTarget
-        (devm1.getAcct sevm.currentTarget).bal
-    · rw [heq] at hsubSome
-      contradiction
-    · rw [heq] at hsubSome
-      injection hsubSome with h
-      subst h
-      rfl
-  have hbal2 : devm2.state.bal = pre.state.bal := by
-    have hchargeBal : devm2.getBal =
-        (if dest ∉ devm1.accessedAddresses then
-          addAccessedAddress devm1 dest else devm1).getBal := by
-      funext a
-      by_cases hcold : dest ∉ devm1.accessedAddresses
-      · rw [if_pos hcold]
-        simpa [hcold] using chargeGas_getBal_eq hcharge a
-      · rw [if_neg hcold]
-        simpa [hcold] using chargeGas_getBal_eq hcharge a
-    have hpopBal : devm1.getBal = pre.getBal := by
-      funext a
-      exact Devm.popToAdr_getBal_eq hpop a
-    change devm2.getBal = pre.getBal
-    exact hchargeBal.trans (by split <;> exact hpopBal)
-  have hsum2 : sum devm2.state.bal < 2 ^ 256 := by
-    rw [hbal2]
-    exact hsum
-  let transferred := devm3.addBal dest
-    (devm1.getAcct sevm.currentTarget).bal
-  have hmove : EthBound ca devm2.state transferred.state [] := by
-    by_cases hdest : dest = ca
-    · subst dest
-      exact (EthStep.unclassifiedInward hforeign hsubState rfl hsum2).bound
-    · exact (EthStep.unrelatedTransfer hforeign hdest
-        hsubState rfl).bound
-  have hpostBal : post.state.bal ca = transferred.state.bal ca := by
-    dsimp only at hrun4
-    split at hrun4
-    · have heq := Except.ok.inj hrun4
-      rw [← heq]
-      change ((transferred.setBal sevm.currentTarget 0).state.bal ca) =
-        transferred.state.bal ca
-      show ((transferred.state.setBal sevm.currentTarget 0).get ca).bal =
-        (transferred.state.get ca).bal
-      rw [State.setBal_get_ne hforeign]
-    · have heq := Except.ok.inj hrun4
-      rw [← heq]
-  unfold EthBound at hmove ⊢
-  rw [← hbal2, hpostBal]
-  exact hmove
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.Linst.targetBalanceMono_of_foreign
+      run hforeign hsum)
 
 /-- Every terminal opcode run by a foreign frame is ETH-sound.  Return is
 balance-silent, revert cannot commit, and selfdestruct is handled above. -/
@@ -2099,31 +1848,9 @@ theorem Linst.foreignEthBound
     (hforeign : sevm.currentTarget ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state [] := by
-  cases l with
-  | stop =>
-      simp [Linst.Run, Linst.run] at run
-      subst post
-      exact EthBound.refl ca pre.state
-  | ret =>
-      have hframe := Linst.run_instructionFrame sevm pre .ret (by decide)
-      rw [run] at hframe
-      exact (EthStep.silent (ca := ca)
-        (congrArg (fun s : State => s.bal ca)
-          hframe.state.symm)).bound
-  | rev =>
-      unfold Linst.Run Linst.run at run
-      rcases hpop1 : pre.popToNat with error | ⟨index, devm1⟩
-      · simp [hpop1, bind, Except.bind] at run
-      · simp only [hpop1, bind, Except.bind] at run
-        rcases hpop2 : devm1.popToNat with error | ⟨size, devm2⟩
-        · simp [hpop2] at run
-        · simp only [hpop2] at run
-          rcases hcharge : chargeGas
-              (devm2.extCost [(index, size)]) devm2 with error | devm3
-          · simp [hcharge] at run
-          · simp [hcharge] at run
-  | dest =>
-      exact Linst.foreignDestEthBound run hforeign hsum
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.Linst.targetBalanceMono_of_foreign
+      run hforeign hsum)
 
 /-- Away from `ca`, the body list has no root action and is exactly the
 proper-descendant traversal. -/

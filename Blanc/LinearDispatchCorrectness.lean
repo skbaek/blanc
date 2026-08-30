@@ -225,7 +225,7 @@ def DispatchBodyWitness
       bodyPre.stack = tail ∧
       Devm.DispatchFramePreserved entry bodyPre
 
-theorem exists_selected_split
+private theorem exists_selected_split
     {α : Type} {entries : List α} {selected : α}
     (hmem : selected ∈ entries) :
     ∃ pre suffix, entries = pre ++ selected :: suffix := by
@@ -238,7 +238,7 @@ theorem exists_selected_split
       · rcases ih htail with ⟨pre, suffix, hs⟩
         exact ⟨head :: pre, suffix, by simp [hs]⟩
 
-theorem selectorUnique_prefix_ne
+private theorem selectorUnique_prefix_ne
     {pre suffix : List (B256 × Func)} {selected candidate : B256 × Func}
     (huniq : selectorUnique (pre ++ selected :: suffix))
     (hmem : candidate ∈ pre) :

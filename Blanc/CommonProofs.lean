@@ -5092,17 +5092,6 @@ lemma prefix_of_lt {e} {x y xs} {s s' : Devm} :
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
 
-/-- `MUL` replaces the top two words with their product above the known tail.
-Contract-neutral, so it sits with the rest of the binary-operator family. -/
-lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
-    Ninst.Run e s Ninst.mul s' →
-      (x :: y :: xs <<+ s.stack) → ((x * y) :: xs <<+ s'.stack) := by
-  intro run stackPrefix
-  refine prefix_of_diffBurn_two (· * ·) ?_ stackPrefix
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  exact Devm.diffBurn_of_applyBinary instructionRun
-
 lemma prefix_of_gt {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s gt s' → (x :: y :: xs <<+ s.stack) → ((x >? y) :: xs <<+ s'.stack) := by
   intro h0 h1
@@ -5204,6 +5193,22 @@ lemma prefix_of_sub {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s sub s' → (x :: y :: xs <<+ s.stack) → ((x - y) :: xs <<+ s'.stack) := by
   intro h0 h1
   refine prefix_of_diffBurn_two (· - ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s mul s' → (x :: y :: xs <<+ s.stack) → ((x * y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· * ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_div {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s div s' → (x :: y :: xs <<+ s.stack) → ((x / y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· / ·) ?_ h1
   rcases of_run_reg h0 with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
@@ -5479,7 +5484,7 @@ private lemma UInt16.low_concat8 (x y : UInt8) :
     Nat.mod_eq_of_lt (UInt8.toNat_lt y), Nat.zero_or]
 
 /-- Encoding eight bytes as a limb and decoding it again is exact. -/
-lemma UInt64.toBytes_ofBytes (a b c d e f g h : UInt8) :
+private lemma UInt64.toBytes_ofBytes (a b c d e f g h : UInt8) :
     (UInt64.ofBytes a b c d e f g h).toBytes = [a, b, c, d, e, f, g, h] := by
   rw [UInt64.ofBytes_eq_halves]
   simp only [UInt64.toBytes, UInt64.high_concat32, UInt64.low_concat32,
@@ -5491,7 +5496,7 @@ lemma UInt64.toBytes_ofBytes (a b c d e f g h : UInt8) :
 
 /-- The 32-byte codec is an exact round trip, in the concrete shape used by
 `Bytes.toBytes_toB256_of_length`. -/
-lemma Bytes.toBytes_toB256_32
+private lemma Bytes.toBytes_toB256_32
     (a00 a01 a02 a03 a04 a05 a06 a07
      a08 a09 a10 a11 a12 a13 a14 a15
      a16 a17 a18 a19 a20 a21 a22 a23
@@ -7220,6 +7225,47 @@ section DispatchLogFrame
 
 open scoped LogOutputHinv
 
+/-! The entry route is `fsig +++ dispatch`, so the same log/output projection
+a functional theorem carries through the dispatcher must first be carried
+through `fsig`.  `prefix_of_fsig` above says which word the selector prefix
+leaves on the stack; these two say what it leaves the event log and the output
+buffer.  Both are pure `Line.Run` frames over the four instructions of
+`cdl 0 ++ shiftRight 224`, and neither mentions a contract. -/
+
+/-- `fsig` emits no event. -/
+lemma fsig_logs {e : Sevm} {s t : Devm}
+    (run : Line.Run e s fsig t) : s.logs = t.logs := by
+  unfold fsig cdl shiftRight at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
+  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
+  cases hnil
+  have hshr : s3.logs = t.logs := by
+    rcases of_run_reg q4 with ⟨pc, hrun⟩
+    simp only [Rinst.run, Rinst.runCore] at hrun
+    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.logs
+  exact (of_run_pushB256 q1).logs.trans
+    ((Ninst.Hinv.inv (f := Devm.logs) q2).trans
+      ((of_run_pushB256 q3).logs.trans hshr))
+
+/-- `fsig` writes no output. -/
+lemma fsig_output {e : Sevm} {s t : Devm}
+    (run : Line.Run e s fsig t) : s.output = t.output := by
+  unfold fsig cdl shiftRight at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
+  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
+  cases hnil
+  have hshr : s3.output = t.output := by
+    rcases of_run_reg q4 with ⟨pc, hrun⟩
+    simp only [Rinst.run, Rinst.runCore] at hrun
+    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.output
+  exact (of_run_pushB256 q1).output.trans
+    ((Ninst.Hinv.inv (f := Devm.output) q2).trans
+      ((of_run_pushB256 q3).output.trans hshr))
+
 lemma reach_of_dispatchWith_leaf_logs {sig w : B256} {f p : Func}
     {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
     (h_mem : (sig, f) ∈ [(w, p)])
@@ -7535,26 +7581,6 @@ lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
     simp [hb]
   rw [h_empty_list] at hwa
   exact hwa rfl
-
-lemma State.set_bal {st : Jaune.State} {a : Adr} {ac : Acct}
-    (h : ac.bal = (st.get a).bal) : (st.set a ac).bal = st.bal := by
-  funext b
-  by_cases hb : b = a
-  · subst hb
-    show ((st.set b ac).get b).bal = (st.get b).bal
-    rw [State.get_set_self]
-    exact h
-  · show ((st.set a ac).get b).bal = (st.get b).bal
-    rw [State.get_set_ne _ (fun hc => hb hc.symm)]
-
-lemma State.setStor_bal {st : Jaune.State} {a : Adr} {s : Stor} :
-    (st.setStor a s).bal = st.bal := State.set_bal rfl
-
-lemma State.incrNonce_bal {st : Jaune.State} {a : Adr} :
-    (st.incrNonce a).bal = st.bal := State.set_bal rfl
-
-lemma State.setCode_bal {st : Jaune.State} {a : Adr} {cd : ByteArray} :
-    (st.setCode a cd).bal = st.bal := State.set_bal rfl
 
 -- The create-seeding step: wa ∉ msg.benv.createdAccounts and code is untouched.
 lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}

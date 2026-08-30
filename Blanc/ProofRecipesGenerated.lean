@@ -30,8 +30,8 @@ def recipes : List Recipe := [
     id := "linear-dispatch-selection"
     status := "active"
     triggers := ["goal-shape:linear-dispatch-selection"]
-    preferredPath := "For an existing `Func.RunCompiledTo` walk rooted at `Blanc.linearDispatchWith`, apply `dispatchBodyWitness_of_runCompiledTo` after supplying selector uniqueness, the selected entry, and the initial `selector :: tail` stack. The result is the exact selected-body walk plus stack removal and `DispatchFramePreserved`."
-    symbols := ["module:Blanc/LinearDispatch.lean", "module:Blanc/LinearDispatchCorrectness.lean", "declaration:Blanc.linearDispatchWith", "declaration:Blanc.selectorUnique", "declaration:Blanc.Devm.DispatchFramePreserved", "declaration:Blanc.DispatchBodyWitness", "declaration:Blanc.dispatchBodyWitness_of_runCompiledTo"]
+    preferredPath := "For an existing `Func.RunCompiledTo` walk rooted at `Blanc.linearDispatchWith`, apply `dispatchBodyWitness_of_runCompiledTo` after supplying selector uniqueness, the selected entry, and the initial `selector :: tail` stack. The result is the exact selected-body walk plus stack removal and `DispatchFramePreserved`; compose the public frame facts with `Devm.DispatchFramePreserved.trans` and the push/pop/diff-burn adapters."
+    symbols := ["module:Blanc/LinearDispatch.lean", "module:Blanc/LinearDispatchCorrectness.lean", "declaration:Blanc.linearDispatchWith", "declaration:Blanc.selectorUnique", "declaration:Blanc.Devm.DispatchFramePreserved", "declaration:Blanc.Devm.DispatchFramePreserved.trans", "declaration:Blanc.dispatchFrame_of_pushBurn", "declaration:Blanc.dispatchFrame_of_popBurnBy", "declaration:Blanc.dispatchFrame_of_diffBurn", "declaration:Blanc.DispatchBodyWitness", "declaration:Blanc.dispatchBodyWitness_of_runCompiledTo"]
     boundary := "The neutral theorem discharges only the dispatcher opcode inversions. It does not know a contract's selector census, calldata ABI, role storage, auxiliary rebasing, or selected-body semantics."
   },
   {
@@ -54,9 +54,9 @@ def recipes : List Recipe := [
     id := "stack-prefix-transport"
     status := "active"
     triggers := ["goal-shape:stack-prefix-line-run"]
-    preferredPath := "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals."
-    symbols := ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref", "declaration:prefix_of_timestamp", "declaration:prefix_of_xor"]
-    boundary := "`line_prefix` supports a finite instruction set and refuses instructions without a registered case."
+    preferredPath := "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm."
+    symbols := ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref", "declaration:prefix_of_mul", "declaration:prefix_of_div", "declaration:prefix_of_timestamp", "declaration:prefix_of_xor", "declaration:prefix_of_argCheckNonAddress"]
+    boundary := "`line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct `prefix_of_*` lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried."
   },
   {
     id := "state-context-cleanup"
@@ -77,10 +77,10 @@ def recipes : List Recipe := [
   {
     id := "function-observation-invariance"
     status := "active"
-    triggers := ["goal-head:Func.Inv"]
-    preferredPath := "Use `func_inv` to assemble the function invariant from registered line and terminal invariants."
-    symbols := ["tactic:func_inv", "declaration:Func.Inv"]
-    boundary := "It deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry."
+    triggers := ["goal-head:Func.Inv", "goal-head:Linst.Inv"]
+    preferredPath := "For `Func.Inv`, use `func_inv` to assemble the function invariant from registered line and terminal invariants. For a terminal `Linst.Inv`, use the registered instance directly with `exact Linst.Hinv.inv`."
+    symbols := ["tactic:func_inv", "declaration:Func.Inv", "declaration:Linst.Inv", "declaration:Linst.Hinv"]
+    boundary := "`func_inv` deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry. A missing terminal instance belongs in the lowest common shared module, not in a contract consumer."
   },
   {
     id := "call-boundary-outcomes"
@@ -140,11 +140,11 @@ def recipes : List Recipe := [
   },
   {
     id := "fixed-byte-offsets"
-    status := "partial"
+    status := "active"
     triggers := ["goal-shape:fixed-byte-offset"]
-    preferredPath := "Use the existing `Mem.Wf` and `Mem.Reads` APIs; I8 proposes the missing `writeAt`/`sliceD` extension. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost."
-    symbols := ["declaration:Mem.Wf", "declaration:Mem.Reads"]
-    boundary := "The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained. A later pilot promoted the whole local parameterized tail proof to a top-level private theorem: the owner median moved only from 48.11 to 46.85 s (-2.62%) and the same dominant 46.568 s kernel check remained. Both pilots were exactly reverted, and their profiler-independent owner medians remain the verdicts. Reopen only for a change whose serialized owner median improves by the licensed win rule; persistence of the trailing kernel row is not a mechanism criterion."
+    preferredPath := "Use `Bytes.sliceD_writeAt` for the written window, `Bytes.sliceD_writeAt_before` or `Bytes.sliceD_writeAt_after` for disjoint neighboring windows, and `Bytes.readWord_writeAt_self` or `Bytes.readWord_writeAt_of_disjoint` for word reads. For padded or abstract memory, start from `Mem.Wf` and `Mem.Reads`. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost."
+    symbols := ["module:Blanc/CommonProofs.lean", "declaration:Bytes.sliceD_writeAt", "declaration:Bytes.sliceD_writeAt_before", "declaration:Bytes.sliceD_writeAt_after", "declaration:Bytes.readWord_writeAt_self", "declaration:Bytes.readWord_writeAt_of_disjoint", "declaration:Mem.Wf", "declaration:Mem.Reads"]
+    boundary := "These laws cover byte-array writes and fixed-width word reads. They do not turn arbitrary compiled-emitter `List.drop` identities into a shared API. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1%, and a later top-level private tail theorem moved the owner median only from 48.11 to 46.85 s (-2.62%); both pilots were reverted. Reopen that separate emitter route only for a change whose serialized owner median improves by the licensed win rule."
   },
   {
     id := "frame-root-carrying-execution"
@@ -158,8 +158,8 @@ def recipes : List Recipe := [
     id := "message-execution-settlement"
     status := "active"
     triggers := ["goal-shape:message-execution-settlement"]
-    preferredPath := "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and `processMessage_entry_stack` for the separate empty-stack projection."
-    symbols := ["module:Blanc/MessageExecution.lean", "module:Blanc/MessageExecutionInversion.lean", "declaration:MessageExecution.processMessage_eq_settle_exec", "declaration:MessageExecution.processMessage_clean_of_exec", "declaration:MessageExecution.processMessage_revert_of_exec", "declaration:MessageExecution.processMessage_halt_of_exec", "declaration:MessageExecution.processMessage_clean_rawPost", "declaration:MessageExecution.processMessage_entry_facts", "declaration:MessageExecution.processMessage_entry_stack", "declaration:MessageExecution.settledRevert", "declaration:MessageExecution.settledHalt", "declaration:Msg.initDevm_stack", "declaration:Msg.initSevm_data"]
+    preferredPath := "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections."
+    symbols := ["module:Blanc/MessageExecution.lean", "module:Blanc/MessageExecutionInversion.lean", "declaration:MessageExecution.processMessage_eq_settle_exec", "declaration:MessageExecution.processMessage_clean_of_exec", "declaration:MessageExecution.processMessage_revert_of_exec", "declaration:MessageExecution.processMessage_halt_of_exec", "declaration:MessageExecution.processMessage_clean_rawPost", "declaration:MessageExecution.processMessage_entry_facts", "declaration:MessageExecution.processMessage_entry_stack", "declaration:MessageExecution.processMessage_entry_memory", "declaration:MessageExecution.settledRevert", "declaration:MessageExecution.settledHalt", "declaration:Msg.initDevm_stack", "declaration:Msg.initSevm_data"]
     boundary := "The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
   },
   {
@@ -193,6 +193,30 @@ def recipes : List Recipe := [
     preferredPath := "When a padded `sliceD` begins at zero and its requested width is the source length, rewrite with `Bytes.sliceD_zero_length` instead of reproving the take/drop normalization locally."
     symbols := ["module:Blanc/CommonProofs.lean", "declaration:Bytes.sliceD_zero_length"]
     boundary := "The theorem needs exact equality between source length and requested width. It does not characterize nonzero offsets or shorter/longer windows."
+  },
+  {
+    id := "retained-wrapper-trace"
+    status := "active"
+    triggers := ["goal-shape:retained-wrapper-trace"]
+    preferredPath := "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state."
+    symbols := ["module:Blanc/ExecutionTrace.lean", "module:Blanc/ExecutionHistory.lean", "declaration:ExecutionTrace.RetainedXlot", "declaration:ExecutionTrace.exists_retainedXlot_of_filled", "declaration:ExecutionTrace.ProcessMessageTrace", "declaration:ExecutionTrace.exists_processMessageTrace", "declaration:ExecutionTrace.ProcessCreateMessageTrace", "declaration:ExecutionTrace.exists_processCreateMessageTrace", "declaration:ExecutionTrace.MessageCallTrace", "declaration:ExecutionTrace.exists_messageCallTrace", "declaration:ExecutionTrace.TransactionTrace", "declaration:ExecutionTrace.exists_transactionTrace", "declaration:ExecutionTrace.ApplyTransactionsTrace", "declaration:ExecutionTrace.exists_applyTransactionsTrace", "declaration:ExecutionTrace.SystemMessageTrace", "declaration:ExecutionTrace.exists_systemMessageTrace", "declaration:ExecutionTrace.RequestsTrace", "declaration:ExecutionTrace.exists_requestsTrace", "declaration:ExecutionTrace.AppliedBodyTrace", "declaration:ExecutionTrace.exists_appliedBodyTrace", "declaration:ExecutionTrace.ConfiguredBlockTrace", "declaration:ExecutionTrace.exists_configuredBlockTrace_of_transition", "declaration:ExecutionTrace.ConfiguredHistoryTrace", "declaration:ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing"]
+    boundary := "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay."
+  },
+  {
+    id := "retained-state-replay"
+    status := "active"
+    triggers := ["goal-head:StateReplay"]
+    preferredPath := "Build the chronology at the narrowest retained layer and finish with its `stateReplay` theorem. Use `Exec.committedStateReplay` for a recursive execution, then the message, transaction, body, block, or history chronology module to retain wrapper boundaries in their exact execution order. Compose or relabel an existing replay with `StateReplay.append`, `StateReplay.mapOrigin`, and `StateTransition.mapOrigin`."
+    symbols := ["module:Blanc/ExecutionStateTrace.lean", "module:Blanc/ExecutionMessageStateTrace.lean", "module:Blanc/ExecutionTransactionStateTrace.lean", "module:Blanc/ExecutionBodyStateTrace.lean", "module:Blanc/ExecutionHistoryStateTrace.lean", "declaration:StateTransition", "declaration:StateReplay", "declaration:StateReplay.append", "declaration:StateTransition.mapOrigin", "declaration:StateReplay.mapOrigin", "declaration:Exec.committedStateReplay", "declaration:ExecutionTrace.MessageCallTrace.stateReplay", "declaration:ExecutionTrace.TransactionStateChronology.stateReplay", "declaration:ExecutionTrace.AppliedBodyStateChronology.stateReplay", "declaration:ExecutionTrace.ConfiguredHistoryStateChronology.stateReplay"]
+    boundary := "A `StateReplay` proves endpoint continuity and preserves exact provenance; it does not classify a transition as a contract deposit, withdrawal, or attack step. Apply that interpretation only in the contract-owned layer above the generic chronology."
+  },
+  {
+    id := "one-word-source-return"
+    status := "active"
+    triggers := ["goal-head:ReturnsWord"]
+    preferredPath := "For the source fragment `mstoreAt 0 +++ returnMemoryRange 0 32`, use `of_storeReturnWord` when a `Mem.Wf`/`Mem.Reads` image is already available, or `returnsWord_of_storeReturn` when no memory side condition is in context. Both prove `ReturnsWord` from the known stack head and preserve code."
+    symbols := ["module:Blanc/Ladder.lean", "declaration:ReturnsWord", "declaration:of_storeReturnWord", "declaration:returnsWord_of_storeReturn"]
+    boundary := "This is the source-level one-word ABI observation. For a compiled terminal walk use `Func.runCompiledTo_ret_word_at_zero`; for other offsets, sizes, or payloads use the general return APIs."
   },
 ]
 

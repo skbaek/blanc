@@ -51,14 +51,19 @@ import sys
 
 SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "Compiled", "DeploymentCompiled", "DeploymentMessage", "Forward", "Reverts", "ForwardCall",
-          "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecutionSettlement",
+          "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
+          "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
+          "ExecutionMessageStateTrace", "ExecutionTransactionStateTrace",
+          "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryStateTrace",
           "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "TransientSettlement",
           "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
 
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
-           "RootedExecution"]
+           "RootedExecution",
+           "ExecutionMessageEffects", "ExecutionTransactionEffects",
+           "ExecutionBodyEffects", "ExecutionHistoryEffects"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness"],
@@ -82,6 +87,16 @@ CONTRACTS = {
     "proxy-pair": ["ProxyPairSlots", "ProxyPairProgram",
                    "ProxyPairImplementation", "ProxyPairExecution",
                    "ProxyPairCorrespondence", "ProxyPairAuthority"],
+    "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",
+                "ProrataAccountingExec", "ProrataAccountingTransaction",
+                "ProrataAccountingBody", "ProrataAccountingHistory",
+                "ProrataRealizedAccounting",
+                "ProrataFunctional",
+                "ProrataDeposit", "ProrataRead", "ProrataWithdraw",
+                "ProrataConsistency", "ProrataCompiledEffects", "ProrataInvariant",
+                "ProrataPreservation", "ProrataSound", "ProrataDeploymentRoot",
+                "ProrataAttackModel", "ProrataAttackPath",
+                "ProrataAttackTrace"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],

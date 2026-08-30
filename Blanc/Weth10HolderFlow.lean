@@ -1,4 +1,5 @@
 import Blanc.ExecutionSettlement
+import Blanc.ExecutionTrace
 import Blanc.Weth10HolderFlowAlgebra
 import Blanc.Weth10Redeemable
 import Blanc.Weth10Erc677Functional
@@ -620,28 +621,96 @@ def Exec.flowObservations (dp : DeployParams) (ca : Adr)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) : List FlowObservation :=
   (Exec.flowActions dp ca run).map FlowAction.observation
+/-! ## Contract-neutral retained-trace compatibility
 
-/-- A Type-valued version of a filled recursive execution slot.  Unlike
-`Xlot.Filled`, this retains the concrete `Exec` value that the accounting fold
-and its successor provenance analysis consume. -/
-inductive RetainedXlot : Xlot → Type
-  | none : RetainedXlot .none
-  | some {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-      (run : Exec pc sevm pre out) :
-      RetainedXlot (.some ⟨⟨pc, sevm, pre⟩, out⟩)
+The carriers and replay proofs are owned by `Blanc.ExecutionTrace`.  These
+aliases preserve the established WETH10 type, helper, and existence-theorem
+surface used by repository consumers while the observation folds below remain
+contract-local.  Generated constructor/projection declarations belong to the
+shared types; ordinary pattern matching and field notation remain unchanged. -/
 
-theorem RetainedXlot.toFilled {xl : Xlot} : RetainedXlot xl → xl.Filled
-  | .none => trivial
-  | .some run => ⟨run⟩
+abbrev RetainedXlot := ExecutionTrace.RetainedXlot
+
+namespace RetainedXlot
+
+abbrev none : Blanc.Weth10.RetainedXlot .none :=
+  ExecutionTrace.RetainedXlot.none
+abbrev some {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    Blanc.Weth10.RetainedXlot (.some ⟨⟨pc, sevm, pre⟩, out⟩) :=
+  ExecutionTrace.RetainedXlot.some run
+
+theorem toFilled {xl : Xlot} :
+    Blanc.Weth10.RetainedXlot xl → xl.Filled :=
+  ExecutionTrace.RetainedXlot.toFilled
+
+end RetainedXlot
+
+abbrev ProcessMessageTrace := ExecutionTrace.ProcessMessageTrace
+abbrev ProcessCreateMessageTrace := ExecutionTrace.ProcessCreateMessageTrace
+abbrev MessageCallTrace := ExecutionTrace.MessageCallTrace
+abbrev TransactionTrace := ExecutionTrace.TransactionTrace
+abbrev ApplyTransactionsTrace := ExecutionTrace.ApplyTransactionsTrace
+abbrev SystemMessageTrace := ExecutionTrace.SystemMessageTrace
+abbrev RequestsTrace := ExecutionTrace.RequestsTrace
+abbrev AppliedBodyTrace := ExecutionTrace.AppliedBodyTrace
 
 theorem exists_retainedXlot_of_filled {xl : Xlot}
-    (h : xl.Filled) : Nonempty (RetainedXlot xl) := by
-  cases xl with
-  | none => exact ⟨.none⟩
-  | some slot =>
-      rcases slot with ⟨evm, out⟩
-      rcases h with ⟨run⟩
-      exact ⟨.some run⟩
+    (h : xl.Filled) : Nonempty (RetainedXlot xl) :=
+  ExecutionTrace.exists_retainedXlot_of_filled h
+
+theorem exists_processMessageTrace
+    (msg : Msg) (out : Except (EvmError × State × AdrSet × Tra) Devm)
+    (h : processMessage msg = out) :
+    Nonempty (ProcessMessageTrace msg out) :=
+  ExecutionTrace.exists_processMessageTrace msg out h
+
+theorem exists_processCreateMessageTrace
+    (msg : Msg) (out : Except (EvmError × State × AdrSet × Tra) Devm)
+    (h : processCreateMessage msg = out) :
+    Nonempty (ProcessCreateMessageTrace msg out) :=
+  ExecutionTrace.exists_processCreateMessageTrace msg out h
+
+theorem exists_messageCallTrace {msg : Msg} {state : State}
+    {out : MsgCallOutput}
+    (h : processMessageCall msg = .ok ⟨state, out⟩) :
+    Nonempty (MessageCallTrace msg state out) :=
+  ExecutionTrace.exists_messageCallTrace h
+
+theorem exists_transactionTrace
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (h : processTransaction benv bout tx index = .ok (state, bout')) :
+    Nonempty (TransactionTrace benv bout tx index state bout') :=
+  ExecutionTrace.exists_transactionTrace h
+
+theorem exists_applyTransactionsTrace
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout)) :
+    Nonempty (ApplyTransactionsTrace txs benv bout finalBenv finalBout) :=
+  ExecutionTrace.exists_applyTransactionsTrace h
+
+theorem exists_systemMessageTrace
+    {benv : Benv} {target : Adr} {data : Bytes}
+    {state : State} {out : MsgCallOutput}
+    (h : processUncheckedSystemTransaction benv target data =
+      .ok (state, out)) :
+    Nonempty (SystemMessageTrace benv target data state out) :=
+  ExecutionTrace.exists_systemMessageTrace h
+
+theorem exists_requestsTrace
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (h : processGeneralPurposeRequests benv bout = .ok (state, bout')) :
+    Nonempty (RequestsTrace benv bout state bout') :=
+  ExecutionTrace.exists_requestsTrace h
+
+theorem exists_appliedBodyTrace
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (h : applyBody benv txs wds = .ok (state, bout)) :
+    Nonempty (AppliedBodyTrace benv txs wds state bout) :=
+  ExecutionTrace.exists_appliedBodyTrace h
 
 def RetainedXlot.flowActions (dp : DeployParams) (ca : Adr)
     {xl : Xlot} : RetainedXlot xl → List FlowAction
@@ -650,91 +719,9 @@ def RetainedXlot.flowActions (dp : DeployParams) (ca : Adr)
 
 def RetainedXlot.flowObservations (dp : DeployParams) (ca : Adr)
     {xl : Xlot} : RetainedXlot xl → List FlowObservation
-  | retained => (retained.flowActions dp ca).map FlowAction.observation
-
-/-- An exact retained execution of Jaune's raw call-message core. -/
-structure ProcessMessageTrace (msg : Msg)
-    (out : Except (EvmError × State × AdrSet × Tra) Devm) where
-  slot : Xlot
-  retained : RetainedXlot slot
-  run : ProcessMessage msg slot out
-
-theorem exists_processMessageTrace
-    (msg : Msg) (out : Except (EvmError × State × AdrSet × Tra) Devm)
-    (h : processMessage msg = out) :
-    Nonempty (ProcessMessageTrace msg out) := by
-  obtain ⟨xl, hfilled, hrun⟩ := of_processMessage msg out h
-  rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
-  exact ⟨⟨xl, retained, hrun⟩⟩
-
-/-- An exact retained execution of Jaune's raw create-message core. -/
-structure ProcessCreateMessageTrace (msg : Msg)
-    (out : Except (EvmError × State × AdrSet × Tra) Devm) where
-  slot : Xlot
-  retained : RetainedXlot slot
-  run : ProcessCreateMessage msg slot out
-
-theorem exists_processCreateMessageTrace
-    (msg : Msg) (out : Except (EvmError × State × AdrSet × Tra) Devm)
-    (h : processCreateMessage msg = out) :
-    Nonempty (ProcessCreateMessageTrace msg out) := by
-  obtain ⟨xl, hfilled, hrun⟩ := of_processCreateMessage msg out h
-  rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
-  exact ⟨⟨xl, retained, hrun⟩⟩
-
-/-- The collision test used by the create arm of `processMessageCall`. -/
-def messageCreateCollision (msg : Msg) : Bool :=
-  accountHasCodeOrNonce msg.benv.state msg.currentTarget ||
-    accountHasStorage msg.benv.state msg.currentTarget
-
-/-- The exact EIP-7702 preparation prefix used by the call arm. -/
-def messageCallDelegation (msg : Msg) : Except EvmError (Msg × Nat) :=
-  if msg.tenv.stat.auths.isEmpty then
-    .ok ⟨msg, 0⟩
-  else do
-    let ⟨delegated, refund⟩ ← setDelegation msg
-    .ok ⟨delegated, refund.toNat⟩
-
-/-- The actual message executed after resolving an EIP-7702 code delegation. -/
-def messageCallExecutionMessage (msg : Msg) : Msg :=
-  match getDelegatedCodeAddress msg.code with
-  | none => msg
-  | some dca =>
-      { msg with
-        disablePrecompiles := true
-        accessedAddresses := msg.accessedAddresses.insert dca
-        code := msg.benv.state.getCode dca
-        codeAddress := some dca }
-
-/-- Proof-carrying trace of Jaune's settled message-call wrapper.  The three
-constructors match its collision, create-execution, and call-execution arms;
-the retained core is tied to the exact deterministic wrapper result. -/
-inductive MessageCallTrace (msg : Msg) (state : State)
-    (out : MsgCallOutput) : Type
-  | createCollision
-      (h_target : msg.target.isNone = true)
-      (h_collision : messageCreateCollision msg = true)
-      (h_result : processMessageCall msg = .ok ⟨state, out⟩) :
-      MessageCallTrace msg state out
-  | createRun
-      (h_target : msg.target.isNone = true)
-      (h_collision : messageCreateCollision msg = false)
-      (evm : Devm)
-      (h_core : processCreateMessage msg = .ok evm)
-      (trace : ProcessCreateMessageTrace msg (.ok evm))
-      (h_result : processMessageCall msg = .ok ⟨state, out⟩) :
-      MessageCallTrace msg state out
-  | callRun
-      (h_target : msg.target.isNone = false)
-      (delegated : Msg) (refund : Nat)
-      (h_delegation : messageCallDelegation msg = .ok ⟨delegated, refund⟩)
-      (execMsg : Msg)
-      (h_execMsg : execMsg = messageCallExecutionMessage delegated)
-      (evm : Devm)
-      (h_core : processMessage execMsg = .ok evm)
-      (trace : ProcessMessageTrace execMsg (.ok evm))
-      (h_result : processMessageCall msg = .ok ⟨state, out⟩) :
-      MessageCallTrace msg state out
+  | retained =>
+      (Blanc.Weth10.RetainedXlot.flowActions dp ca retained).map
+        FlowAction.observation
 
 def MessageCallTrace.flowActions (dp : DeployParams) (ca : Adr)
     {msg : Msg} {state : State} {out : MsgCallOutput} :
@@ -742,220 +729,33 @@ def MessageCallTrace.flowActions (dp : DeployParams) (ca : Adr)
   | .createCollision .. => []
   | .createRun _ _ evm _ trace _ =>
       if evm.error.isSome then []
-      else trace.retained.flowActions dp ca
+      else Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained
   | .callRun _ _ _ _ _ _ _ _ trace _ =>
-      trace.retained.flowActions dp ca
+      Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained
 
 def MessageCallTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {msg : Msg} {state : State} {out : MsgCallOutput} :
     MessageCallTrace msg state out → List FlowObservation
-  | trace => (trace.flowActions dp ca).map FlowAction.observation
+  | trace =>
+      (Blanc.Weth10.MessageCallTrace.flowActions dp ca trace).map
+        FlowAction.observation
 
-/-- Every successful settled message-call wrapper admits a retained trace of
-the exact raw execution core it ran. -/
-theorem exists_messageCallTrace {msg : Msg} {state : State}
-    {out : MsgCallOutput}
-    (h : processMessageCall msg = .ok ⟨state, out⟩) :
-    Nonempty (MessageCallTrace msg state out) := by
-  have h_result := h
-  unfold processMessageCall at h
-  split at h
-  · rename_i htarget
-    unfold processMessageCall.create at h
-    dsimp only at h
-    split at h
-    · rename_i hcollision
-      exact ⟨.createCollision htarget (by
-        simpa [messageCreateCollision] using hcollision) h_result⟩
-    · rename_i hcollision
-      obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-      have hcore := Except.bimap_id_eq_ok hevm
-      rcases exists_processCreateMessageTrace msg (.ok evm) hcore with
-        ⟨trace⟩
-      exact ⟨.createRun htarget (by
-        simpa [messageCreateCollision] using hcollision)
-        evm hcore trace h_result⟩
-  · rename_i htarget
-    have htargetFalse : msg.target.isNone = false := by
-      cases ht : msg.target.isNone <;> simp_all
-    unfold processMessageCall.call at h
-    split at h
-    · rename_i hauth
-      obtain ⟨x0, hx0, h⟩ := Except.bind_eq_ok h
-      cases hx0
-      dsimp only at h
-      split at h
-      · rename_i hcode
-        obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-        have hcore0 := Except.bimap_id_eq_ok hevm
-        have hcore :
-            processMessage (messageCallExecutionMessage msg) = .ok evm := by
-          simpa [messageCallExecutionMessage, hcode] using hcore0
-        rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
-        exact ⟨.callRun htargetFalse msg 0 (by
-          simp [messageCallDelegation, hauth])
-          (messageCallExecutionMessage msg) rfl evm hcore trace h_result⟩
-      · rename_i hcode
-        obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-        have hcore0 := Except.bimap_id_eq_ok hevm
-        have hcore :
-            processMessage (messageCallExecutionMessage msg) = .ok evm := by
-          simpa [messageCallExecutionMessage, hcode] using hcore0
-        rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
-        exact ⟨.callRun htargetFalse msg 0 (by
-          simp [messageCallDelegation, hauth])
-          (messageCallExecutionMessage msg) rfl evm hcore trace h_result⟩
-    · rename_i hauth
-      obtain ⟨w, hw, h⟩ := Except.bind_eq_ok h
-      obtain ⟨delegated, refundWord⟩ := w
-      obtain ⟨x0, hx0, h⟩ := Except.bind_eq_ok h
-      cases hx0
-      dsimp only at h
-      split at h
-      · rename_i hcode
-        obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-        have hcore0 := Except.bimap_id_eq_ok hevm
-        have hcore : processMessage
-            (messageCallExecutionMessage delegated) = .ok evm := by
-          simpa [messageCallExecutionMessage, hcode] using hcore0
-        rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
-        exact ⟨.callRun htargetFalse delegated refundWord.toNat (by
-          simp [messageCallDelegation, hauth, hw])
-          (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
-      · rename_i hcode
-        obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-        have hcore0 := Except.bimap_id_eq_ok hevm
-        have hcore : processMessage
-            (messageCallExecutionMessage delegated) = .ok evm := by
-          simpa [messageCallExecutionMessage, hcode] using hcore0
-        rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
-        exact ⟨.callRun htargetFalse delegated refundWord.toNat (by
-          simp [messageCallDelegation, hauth, hw])
-          (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
-
-/-! ## Transaction traces -/
-
-def transactionPreludeBout
-    (bout : BlockOutput) (tx : Tx) (index : Nat) : BlockOutput :=
-  { bout with
-    transactionsTrie := bout.transactionsTrie.insert
-      (BLT.bytes index.toBytes).toBytes tx }
-
-def transactionBlobGasFee (benv : Benv) (tx : Tx) : Nat :=
-  if tx.isTypeThree then
-    calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
-  else 0
-
-def transactionTenv (benv : Benv) (tx : Tx) (index : Nat)
-    (sender : Adr) (effectiveGasPrice intrinsicGas : Nat)
-    (blobVersionedHashes : List B256) : Tenv :=
-  { transientStorage := .empty
-    stat :=
-      { origin := sender
-        gasPrice := effectiveGasPrice
-        gas := tx.gas - intrinsicGas
-        accessListAddresses :=
-          .ofList (benv.stat.coinbase :: tx.accessList.map Prod.fst)
-        accessListStorageKeys :=
-          .ofList (tx.accessList.map (fun ⟨adr, keys⟩ =>
-            keys.map (⟨adr, ·⟩))).flatten
-        blobVersionedHashes := blobVersionedHashes
-        auths := tx.auths
-        indexInBlock := index
-        txHash := getTxHash tx } }
-
-/-- A successful transaction together with the exact prepared message and its
-retained recursive execution.  Validation, sender recovery/fee checking,
-up-front debit, and message preparation are all replay equations, so an
-unrelated or forged message trace cannot inhabit this type. -/
-structure TransactionTrace (benv : Benv) (bout : BlockOutput)
-    (tx : Tx) (index : Nat) (state : State) (bout' : BlockOutput) where
-  intrinsicGas : Nat
-  calldataFloorGasCost : Nat
-  sender : Adr
-  effectiveGasPrice : Nat
-  blobVersionedHashes : List B256
-  txBlobGasUsed : Nat
-  debitState : State
-  msg : Msg
-  messageState : State
-  messageOut : MsgCallOutput
-  validation : validateTransaction benv.stat.rules tx =
-    .ok (intrinsicGas, calldataFloorGasCost)
-  checked : checkTransaction benv.beginTransaction
-    (transactionPreludeBout bout tx index) tx =
-      .ok (sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed)
-  debit : (benv.state.incrNonce sender).subBal sender
-    (tx.gas * effectiveGasPrice +
-      transactionBlobGasFee benv tx).toB256 = some debitState
-  prepared : prepareMessage
-    { benv.beginTransaction with state := debitState }
-    (transactionTenv benv.beginTransaction tx index sender
-      effectiveGasPrice intrinsicGas blobVersionedHashes) tx = .ok msg
-  message : MessageCallTrace msg messageState messageOut
-  result : processTransaction benv bout tx index = .ok (state, bout')
 
 def TransactionTrace.flowActions (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout') :
     List FlowAction :=
-  trace.message.flowActions dp ca
+  Blanc.Weth10.MessageCallTrace.flowActions dp ca trace.message
 
 def TransactionTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout') :
     List FlowObservation :=
-  (trace.flowActions dp ca).map FlowAction.observation
+  (Blanc.Weth10.TransactionTrace.flowActions dp ca trace).map
+    FlowAction.observation
 
-/-- Every successful transaction admits an exact retained message trace. -/
-theorem exists_transactionTrace
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (h : processTransaction benv bout tx index = .ok (state, bout')) :
-    Nonempty (TransactionTrace benv bout tx index state bout') := by
-  have h_result := h
-  unfold processTransaction at h
-  dsimp only at h
-  obtain ⟨prelude, hprelude, h⟩ := Except.bind_eq_ok h
-  cases hprelude
-  obtain ⟨validated, hvalidated, h⟩ := Except.bind_eq_ok h
-  obtain ⟨intrinsicGas, calldataFloorGasCost⟩ := validated
-  rw [Except.mapError_eq_ok_iff] at hvalidated
-  obtain ⟨checked, hchecked, h⟩ := Except.bind_eq_ok h
-  obtain ⟨sender, effectiveGasPrice, blobVersionedHashes,
-    txBlobGasUsed⟩ := checked
-  obtain ⟨debitState, hdebit, h⟩ := Except.bind_eq_ok h
-  have hdebit' := Option.toExcept_eq_ok hdebit
-  obtain ⟨msg, hprepared, h⟩ := Except.bind_eq_ok h
-  obtain ⟨messageResult, hmessage, _⟩ := Except.bind_eq_ok h
-  obtain ⟨messageState, messageOut⟩ := messageResult
-  rw [Except.mapError_eq_ok_iff] at hmessage
-  rcases exists_messageCallTrace hmessage with ⟨messageTrace⟩
-  exact ⟨⟨intrinsicGas, calldataFloorGasCost, sender,
-    effectiveGasPrice, blobVersionedHashes, txBlobGasUsed, debitState,
-    msg, messageState, messageOut,
-    by simpa [Benv.beginTransaction] using hvalidated,
-    by simpa [transactionPreludeBout] using hchecked,
-    by simpa [transactionBlobGasFee, Benv.beginTransaction] using hdebit',
-    by simpa [transactionTenv, Benv.beginTransaction] using hprepared,
-    messageTrace, h_result⟩⟩
-
-/-- Exact retained replay of the decoded transaction list. -/
-inductive ApplyTransactionsTrace :
-    List (Nat × Tx) → Benv → BlockOutput → Benv → BlockOutput → Type
-  | nil (benv : Benv) (bout : BlockOutput) :
-      ApplyTransactionsTrace [] benv bout benv bout
-  | cons {index : Nat} {tx : Tx} {txs : List (Nat × Tx)}
-      {benv : Benv} {bout : BlockOutput}
-      {txState : State} {txBout : BlockOutput}
-      {finalBenv : Benv} {finalBout : BlockOutput}
-      (head : TransactionTrace benv bout tx index txState txBout)
-      (tail : ApplyTransactionsTrace txs (benv.withState txState) txBout
-        finalBenv finalBout) :
-      ApplyTransactionsTrace ((index, tx) :: txs) benv bout
-        finalBenv finalBout
 
 def ApplyTransactionsTrace.flowActions (dp : DeployParams) (ca : Adr) :
     {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
@@ -964,7 +764,8 @@ def ApplyTransactionsTrace.flowActions (dp : DeployParams) (ca : Adr) :
       List FlowAction
   | _, _, _, _, _, .nil _ _ => []
   | _, _, _, _, _, .cons head tail =>
-      head.flowActions dp ca ++ tail.flowActions dp ca
+      Blanc.Weth10.TransactionTrace.flowActions dp ca head ++
+        Blanc.Weth10.ApplyTransactionsTrace.flowActions dp ca tail
 
 def ApplyTransactionsTrace.flowObservations (dp : DeployParams) (ca : Adr) :
     {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
@@ -972,209 +773,56 @@ def ApplyTransactionsTrace.flowObservations (dp : DeployParams) (ca : Adr) :
     ApplyTransactionsTrace txs benv bout finalBenv finalBout →
       List FlowObservation
   | _, _, _, _, _, trace =>
-      (trace.flowActions dp ca).map FlowAction.observation
-
-theorem exists_applyTransactionsTrace
-    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput}
-    (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout)) :
-    Nonempty (ApplyTransactionsTrace txs benv bout finalBenv finalBout) := by
-  induction txs generalizing benv bout with
-  | nil =>
-      simp only [applyTransactions] at h
-      cases h
-      exact ⟨.nil finalBenv finalBout⟩
-  | cons head txs ih =>
-      obtain ⟨index, tx⟩ := head
-      simp only [applyTransactions] at h
-      obtain ⟨txResult, htx, htail⟩ := Except.bind_eq_ok h
-      obtain ⟨txState, txBout⟩ := txResult
-      rcases exists_transactionTrace htx with ⟨headTrace⟩
-      rcases ih htail with ⟨tailTrace⟩
-      exact ⟨.cons headTrace tailTrace⟩
-
-/-! ## System-message and body traces -/
-
-def systemTransactionMessage
-    (benv : Benv) (target : Adr) (data : Bytes) : Msg :=
-  let active := benv.beginTransaction
-  processSystemTransactionMsg active (processSystemTransactionTenv active)
-    target data (benv.state.getCode target)
-
-/-- Exact retained root for one of Prague's system transactions. -/
-structure SystemMessageTrace (benv : Benv) (target : Adr) (data : Bytes)
-    (state : State) (out : MsgCallOutput) where
-  message : MessageCallTrace
-    (systemTransactionMessage benv target data) state out
-  run : processUncheckedSystemTransaction benv target data = .ok (state, out)
+      (Blanc.Weth10.ApplyTransactionsTrace.flowActions dp ca trace).map
+        FlowAction.observation
 
 def SystemMessageTrace.flowActions (dp : DeployParams) (ca : Adr)
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out) :
     List FlowAction :=
-  trace.message.flowActions dp ca
+  Blanc.Weth10.MessageCallTrace.flowActions dp ca trace.message
 
 def SystemMessageTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out) :
     List FlowObservation :=
-  (trace.flowActions dp ca).map FlowAction.observation
+  (Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace).map
+    FlowAction.observation
 
-theorem exists_systemMessageTrace
-    {benv : Benv} {target : Adr} {data : Bytes}
-    {state : State} {out : MsgCallOutput}
-    (h : processUncheckedSystemTransaction benv target data =
-      .ok (state, out)) :
-    Nonempty (SystemMessageTrace benv target data state out) := by
-  have hmessage : processMessageCall
-      (systemTransactionMessage benv target data) = .ok (state, out) := by
-    simpa [processUncheckedSystemTransaction, processSystemTransaction,
-      systemTransactionMessage] using h
-  rcases exists_messageCallTrace hmessage with ⟨trace⟩
-  exact ⟨⟨trace, h⟩⟩
-
-/-- Retained execution evidence for the two checked request-system calls at
-the tail of `applyBody`. -/
-structure RequestsTrace (benv : Benv) (bout : BlockOutput)
-    (state : State) (bout' : BlockOutput) where
-  depositRequests : Bytes
-  parsed : parseDepositRequests bout = .ok depositRequests
-  withdrawalState : State
-  withdrawalOut : MsgCallOutput
-  withdrawalRun : processCheckedSystemTransaction benv
-    withdrawalRequestPredeployAddress [] =
-      .ok (withdrawalState, withdrawalOut)
-  withdrawal : SystemMessageTrace benv
-    withdrawalRequestPredeployAddress [] withdrawalState withdrawalOut
-  consolidationState : State
-  consolidationOut : MsgCallOutput
-  consolidationRun : processCheckedSystemTransaction
-    (benv.withState withdrawalState)
-    consolidationRequestPredeployAddress [] =
-      .ok (consolidationState, consolidationOut)
-  consolidation : SystemMessageTrace (benv.withState withdrawalState)
-    consolidationRequestPredeployAddress []
-    consolidationState consolidationOut
-  run : processGeneralPurposeRequests benv bout = .ok (state, bout')
 
 def RequestsTrace.flowActions (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout') : List FlowAction :=
-  trace.withdrawal.flowActions dp ca ++
-    trace.consolidation.flowActions dp ca
+  Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace.withdrawal ++
+    Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace.consolidation
 
 def RequestsTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout') : List FlowObservation :=
-  (trace.flowActions dp ca).map FlowAction.observation
+  (Blanc.Weth10.RequestsTrace.flowActions dp ca trace).map
+    FlowAction.observation
 
-theorem exists_requestsTrace
-    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
-    (h : processGeneralPurposeRequests benv bout = .ok (state, bout')) :
-    Nonempty (RequestsTrace benv bout state bout') := by
-  have h_result := h
-  unfold processGeneralPurposeRequests at h
-  obtain ⟨deposits, hdeposits, h⟩ := Except.bind_eq_ok h
-  dsimp only at h
-  split at h <;>
-    (obtain ⟨⟨withdrawalState, withdrawalOut⟩, hwithdrawal, h⟩ :=
-      Except.bind_eq_ok h
-     have hwithdrawal' :=
-       processCheckedSystemTransaction_to_unchecked hwithdrawal
-     rcases exists_systemMessageTrace hwithdrawal' with ⟨withdrawalTrace⟩
-     dsimp only at h
-     split at h <;>
-       (obtain ⟨⟨consolidationState, consolidationOut⟩,
-          hconsolidation, _⟩ := Except.bind_eq_ok h
-        have hconsolidation' :=
-          processCheckedSystemTransaction_to_unchecked hconsolidation
-        rcases exists_systemMessageTrace hconsolidation' with
-          ⟨consolidationTrace⟩
-        exact ⟨⟨deposits, hdeposits,
-          withdrawalState, withdrawalOut, hwithdrawal, withdrawalTrace,
-          consolidationState, consolidationOut,
-          hconsolidation, consolidationTrace, h_result⟩⟩))
-
-/-- Complete retained execution evidence for a successful Prague block body.
-This includes the two pre-transaction system calls, every decoded normal
-transaction, and the two checked request-system calls. -/
-structure AppliedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
-    (wds : List Withdrawal) (state : State) (bout : BlockOutput) where
-  run : applyBody benv txs wds = .ok (state, bout)
-  beaconState : State
-  beaconOut : MsgCallOutput
-  beacon : SystemMessageTrace benv beaconRootsAddress
-    benv.stat.parentBeaconBlockRoot.toBytes beaconState beaconOut
-  lastHash : B256
-  lastHashRun :
-    ((benv.withState beaconState).stat.blockHashes.getLast?).toExcept
-      (TransitionError.internal
-        (.invariant (.text "block hashes is empty"))) = .ok lastHash
-  historyState : State
-  historyOut : MsgCallOutput
-  history : SystemMessageTrace (benv.withState beaconState)
-    historyStorageAddress lastHash.toBytes historyState historyOut
-  decodedTxs : List Tx
-  decodeRun : txs.mapM decodeTx = .ok decodedTxs
-  transactionBenv : Benv
-  transactionBout : BlockOutput
-  transactions : ApplyTransactionsTrace decodedTxs.putIndex
-    ((benv.withState beaconState).withState historyState) .init
-    transactionBenv transactionBout
-  requests : RequestsTrace
-    (transactionBenv.withState
-      (processWithdrawalsState transactionBenv.state wds))
-    (transactionBout.withWithdrawalsTrie
-      (processWithdrawalsTrie transactionBout.withdrawalsTrie wds))
-    state bout
 
 def AppliedBodyTrace.flowActions (dp : DeployParams) (ca : Adr)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
     (trace : AppliedBodyTrace benv txs wds state bout) :
     List FlowAction :=
-  trace.beacon.flowActions dp ca ++
-    trace.history.flowActions dp ca ++
-    trace.transactions.flowActions dp ca ++
-    trace.requests.flowActions dp ca
+  Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace.beacon ++
+    Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace.history ++
+    Blanc.Weth10.ApplyTransactionsTrace.flowActions dp ca
+      trace.transactions ++
+    Blanc.Weth10.RequestsTrace.flowActions dp ca trace.requests
 
 def AppliedBodyTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
     (trace : AppliedBodyTrace benv txs wds state bout) :
     List FlowObservation :=
-  (trace.flowActions dp ca).map FlowAction.observation
-
-theorem exists_appliedBodyTrace
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (h : applyBody benv txs wds = .ok (state, bout)) :
-    Nonempty (AppliedBodyTrace benv txs wds state bout) := by
-  have h_result := h
-  rw [applyBody] at h
-  simp only at h
-  rcases Except.bind_eq_ok h with
-    ⟨⟨beaconState, beaconOut⟩, hbeacon, h⟩
-  rcases Except.bind_eq_ok h with ⟨lastHash, hlastHash, h⟩
-  rcases Except.bind_eq_ok h with
-    ⟨⟨historyState, historyOut⟩, hhistory, h⟩
-  rcases Except.bind_eq_ok h with ⟨decodedTxs, hdecoded, h⟩
-  rcases Except.bind_eq_ok h with
-    ⟨⟨transactionBenv, transactionBout⟩, htransactions, hrequests⟩
-  dsimp only at hhistory htransactions hrequests
-  rw [Except.mapError_eq_ok_iff] at hbeacon hhistory
-  rcases exists_systemMessageTrace hbeacon with ⟨beaconTrace⟩
-  rcases exists_systemMessageTrace hhistory with ⟨historyTrace⟩
-  rcases exists_applyTransactionsTrace htransactions with
-    ⟨transactionsTrace⟩
-  dsimp [processWithdrawals] at hrequests
-  rcases exists_requestsTrace hrequests with ⟨requestsTrace⟩
-  exact ⟨⟨h_result, beaconState, beaconOut, beaconTrace,
-    lastHash, hlastHash, historyState, historyOut, historyTrace,
-    decodedTxs, hdecoded, transactionBenv, transactionBout,
-    transactionsTrace, requestsTrace⟩⟩
+  (Blanc.Weth10.AppliedBodyTrace.flowActions dp ca trace).map
+    FlowAction.observation
 
 /-! ## Full applied-block history -/
 
@@ -1195,9 +843,11 @@ structure AccountedBlock
     (initBenv pragueRules pre block.header)
     block.txs block.wds bodyState blockOutput
   actions : List FlowAction
-  actions_eq : actions = bodyTrace.flowActions dp ca
+  actions_eq : actions =
+    Blanc.Weth10.AppliedBodyTrace.flowActions dp ca bodyTrace
   observations : List FlowObservation
-  observations_eq : observations = bodyTrace.flowObservations dp ca
+  observations_eq : observations =
+    Blanc.Weth10.AppliedBodyTrace.flowObservations dp ca bodyTrace
   postEq : post = ⟨appendBlock pre.blocks block, bodyState, pre.chainId⟩
 
 theorem AccountedBlock.exists_of_transition
@@ -1230,9 +880,10 @@ theorem AccountedBlock.exists_of_transition
     blockOutput := blockOutput
     bodyRun := hBody
     bodyTrace := bodyTrace
-    actions := bodyTrace.flowActions dp ca
+    actions := Blanc.Weth10.AppliedBodyTrace.flowActions dp ca bodyTrace
     actions_eq := rfl
-    observations := bodyTrace.flowObservations dp ca
+    observations :=
+      Blanc.Weth10.AppliedBodyTrace.flowObservations dp ca bodyTrace
     observations_eq := rfl
     postEq := (Except.ok.inj hFinal).symm
   }⟩
@@ -1326,3 +977,36 @@ theorem exists_accountedHistory_of_reachUsing
 end Weth10
 
 end Blanc
+
+/- The shared carrier changes the namespace Lean consults for dot notation.
+These contract-owned compatibility abbreviations keep the historical WETH10
+fold syntax working without moving a WETH-specific observation into the
+contract-neutral trace module. -/
+abbrev Blanc.ExecutionTrace.RetainedXlot.flowActions :=
+  Blanc.Weth10.RetainedXlot.flowActions
+abbrev Blanc.ExecutionTrace.RetainedXlot.flowObservations :=
+  Blanc.Weth10.RetainedXlot.flowObservations
+abbrev Blanc.ExecutionTrace.MessageCallTrace.flowActions :=
+  Blanc.Weth10.MessageCallTrace.flowActions
+abbrev Blanc.ExecutionTrace.MessageCallTrace.flowObservations :=
+  Blanc.Weth10.MessageCallTrace.flowObservations
+abbrev Blanc.ExecutionTrace.TransactionTrace.flowActions :=
+  Blanc.Weth10.TransactionTrace.flowActions
+abbrev Blanc.ExecutionTrace.TransactionTrace.flowObservations :=
+  Blanc.Weth10.TransactionTrace.flowObservations
+abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.flowActions :=
+  Blanc.Weth10.ApplyTransactionsTrace.flowActions
+abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.flowObservations :=
+  Blanc.Weth10.ApplyTransactionsTrace.flowObservations
+abbrev Blanc.ExecutionTrace.SystemMessageTrace.flowActions :=
+  Blanc.Weth10.SystemMessageTrace.flowActions
+abbrev Blanc.ExecutionTrace.SystemMessageTrace.flowObservations :=
+  Blanc.Weth10.SystemMessageTrace.flowObservations
+abbrev Blanc.ExecutionTrace.RequestsTrace.flowActions :=
+  Blanc.Weth10.RequestsTrace.flowActions
+abbrev Blanc.ExecutionTrace.RequestsTrace.flowObservations :=
+  Blanc.Weth10.RequestsTrace.flowObservations
+abbrev Blanc.ExecutionTrace.AppliedBodyTrace.flowActions :=
+  Blanc.Weth10.AppliedBodyTrace.flowActions
+abbrev Blanc.ExecutionTrace.AppliedBodyTrace.flowObservations :=
+  Blanc.Weth10.AppliedBodyTrace.flowObservations
