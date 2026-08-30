@@ -146,7 +146,7 @@ def wrappingPauseForUnpaused : Func :=
 def wrappingPauseFor : Func :=
   requireStaticArgs 1 <| onlyRole pauseRole <|
     ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero]) +++
-      (wrappingPauseForUnpaused <?> .call pausedExpectedSlot)
+      (wrappingPauseForUnpaused <?> .call resumedExpectedSlot)
 
 /-- The production selector table begins with `selPauseFor`.  Replacing that
 head and retaining its tail keeps the mutation local and leaves the trigger and

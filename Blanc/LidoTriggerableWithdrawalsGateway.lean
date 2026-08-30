@@ -344,7 +344,7 @@ def pauseForUnpaused : Func :=
 def pauseFor : Func :=
   requireStaticArgs 1 <| onlyRole pauseRole <|
     ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero]) +++
-      (pauseForUnpaused <?> .call pausedExpectedSlot)
+      (pauseForUnpaused <?> .call resumedExpectedSlot)
 
 def pauseUntilSentinel : Func :=
   ([pushB256 pauseInfinitely, pushB256 resumeSinceSlot, sstore] ++
@@ -369,14 +369,14 @@ def pauseUntilUnpaused : Func :=
 def pauseUntil : Func :=
   requireStaticArgs 1 <| onlyRole pauseRole <|
     ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero]) +++
-      (pauseUntilUnpaused <?> .call pausedExpectedSlot)
+      (pauseUntilUnpaused <?> .call resumedExpectedSlot)
 
 def resume : Func :=
   onlyRole resumeRole <|
     ([pushB256 resumeSinceSlot, sload, timestamp, lt]) +++
       ((([timestamp, pushB256 resumeSinceSlot, sstore] ++
           emitNoData (signatureHash "Resumed" [])) +++ Func.stop)
-        <?> .call resumedExpectedSlot)
+        <?> .call pausedExpectedSlot)
 
 def grantRole : Func :=
   requireStaticArgs 2 <| canonicalArg 1 <| onlyRole defaultAdminRole <|
