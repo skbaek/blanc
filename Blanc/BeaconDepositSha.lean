@@ -13,7 +13,7 @@ log, output, and error facts needed by its continuations.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- Exact successful cost of the contract's `sha64` wrapper.
 

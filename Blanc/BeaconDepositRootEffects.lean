@@ -10,7 +10,7 @@ Exact selector-tree routing and compiled effects for `get_deposit_root()`.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- Exact successful internal execution of `get_deposit_root`. -/
 theorem getDepositRootEndpoint_runCompiled

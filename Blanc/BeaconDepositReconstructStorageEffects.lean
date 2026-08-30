@@ -1,11 +1,12 @@
-import Blanc.BeaconDepositReconstructMemory
+import Blanc.BeaconDepositReconstruct
+import Blanc.BeaconDepositStorageEffects
 
 /-!
-# Beacon deposit reconstruction compiled carriers
+# Exact storage effects through Beacon deposit reconstruction
 
-The seven-hash deposit-data reconstruction alternates direct SHA-256 windows
-with pairs staged in memory words `0` and `1`.  This module first isolates the
-exact-cost `MLOAD`/`MSTORE` fragment used by every staged word.
+Storage-neutral companions of the reconstruction carriers.  The selected
+SHA-256 calls are childless, so every stage preserves the exact retained
+effect list supplied by its continuation.
 -/
 
 namespace Blanc.BeaconDeposit
@@ -13,99 +14,28 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-/-- The real sequence of zero-value state transfers made by successive
-successful SHA-256 precompile calls. -/
-inductive ReconstructZeroTransferChain (sevm : Sevm) :
-    State -> State -> Prop where
-  | refl (state : State) : ReconstructZeroTransferChain sevm state state
-  | step {origin before stmid after : State}
-      (previous : ReconstructZeroTransferChain sevm origin before)
-      (sub : before.subBal sevm.currentTarget 0 = some stmid)
-      (add : after = stmid.addBal 2 0) :
-      ReconstructZeroTransferChain sevm origin after
-
-/-- Cumulative non-machine state preserved across reconstruction hashes.
-
-`returnData` is intentionally absent: every successful precompile call replaces
-it with the current digest.  The world-state field records the exact transfer
-chain instead of asserting a stronger state equality than Jaune exposes.
--/
-structure ReconstructMetaCarrier
-    (sevm : Sevm) (origin current : Devm) : Prop where
-  storage : forall a, Devm.getStor current a = Devm.getStor origin a
-  code : forall a, current.getCode a = origin.getCode a
-  accessedAddresses :
-    current.accessedAddresses = origin.accessedAddresses
-  accessedStorageKeys :
-    current.accessedStorageKeys = origin.accessedStorageKeys
-  logs : current.logs = origin.logs
-  output : current.output = origin.output
-  error : current.error = origin.error
-  state : ReconstructZeroTransferChain sevm origin.state current.state
-
-/-- Initial cumulative metadata carrier. -/
-theorem ReconstructMetaCarrier.refl (sevm : Sevm) (base : Devm) :
-    ReconstructMetaCarrier sevm base base :=
-  ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, rfl,
-    ReconstructZeroTransferChain.refl base.state⟩
-
-/-- Extend cumulative metadata by one successful SHA-256 call. -/
-theorem ReconstructMetaCarrier.afterHash
-    {sevm : Sevm} {origin base post : Devm}
-    (h : ReconstructMetaCarrier sevm origin base)
-    (hstorage : forall a, Devm.getStor post a = Devm.getStor base a)
-    (hcode : forall a, post.getCode a = base.getCode a)
-    (haddresses : post.accessedAddresses = base.accessedAddresses)
-    (hkeys : post.accessedStorageKeys = base.accessedStorageKeys)
-    (hlogs : post.logs = base.logs)
-    (houtput : post.output = base.output)
-    (herror : post.error = base.error)
-    (htransfer : exists stmid,
-      base.state.subBal sevm.currentTarget 0 = some stmid /\
-      post.state = stmid.addBal 2 0) :
-    ReconstructMetaCarrier sevm origin post := by
-  obtain ⟨stmid, hsub, hstate⟩ := htransfer
-  refine ⟨fun a => (hstorage a).trans (h.storage a),
-    fun a => (hcode a).trans (h.code a),
-    haddresses.trans h.accessedAddresses,
-    hkeys.trans h.accessedStorageKeys,
-    hlogs.trans h.logs, houtput.trans h.output, herror.trans h.error, ?_⟩
-  exact ReconstructZeroTransferChain.step h.state hsub hstate
-
-/-- Machine-only changes preserve cumulative reconstruction metadata. -/
-theorem ReconstructMetaCarrier.setMach
-    {sevm : Sevm} {origin current : Devm}
-    (h : ReconstructMetaCarrier sevm origin current) (mach : Mach) :
-    ReconstructMetaCarrier sevm origin (current.setMach mach) :=
-  ⟨h.storage, h.code, h.accessedAddresses, h.accessedStorageKeys,
-    h.logs, h.output, h.error, h.state⟩
-
-/-- Exact cost of loading one memory word and storing it at another word. -/
-def reconstructLoadStoreCost (sourceWord targetWord : B256) : Nat :=
-  pushCost ((sourceWord * 32).toBytes.sig) + 3 +
-    pushCost ((targetWord * 32).toBytes.sig) + 3
-
-/-- Execute one covered-memory `loadWord`/`mstoreAt` staging fragment. -/
-theorem reconstructLoadStore_runCompiledTo
+/-- Exact-effect companion of `reconstructLoadStore_runCompiledTo`. -/
+theorem reconstructLoadStore_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {sourceWord targetWord value : B256}
     {stack : List B256} {K : Nat} {rest : Func} {ex : Execution}
+    {effects : List (Adr × B256 × B256)}
     (hmod : memory.size % 32 = 0)
     (hsourceFit : (sourceWord * 32).toNat + 32 <= memory.size)
     (htargetFit : (targetWord * 32).toNat + 32 <= memory.size)
     (hread : Bytes.toB256
       (memory.read (sourceWord * 32).toNat 32).1 = value)
     (hroom : stack.length < 1023)
-    (htail : Func.RunCompiledTo fs sevm
+    (htail : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack,
           memory.write (targetWord * 32).toNat value.toBytes, K⟩)
-      rest ex) :
-    Func.RunCompiledTo fs sevm
+      rest ex effects) :
+    Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack, memory,
           K + reconstructLoadStoreCost sourceWord targetWord⟩)
-      (loadWord sourceWord +++ mstoreAt targetWord +++ rest) ex := by
+      (loadWord sourceWord +++ mstoreAt targetWord +++ rest) ex effects := by
   let csource := pushCost ((sourceWord * 32).toBytes.sig)
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
   have hreadMemory :
@@ -113,7 +43,7 @@ theorem reconstructLoadStore_runCompiledTo
     apply Mem.read_snd_eq_self
     exact memExtSize_of_le hmod hsourceFit
   simp only [loadWord, mstoreAt, prepend]
-  refine Func.RunCompiledTo.next
+  apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256
       (w := sourceWord * 32) (c := csource)
       (G := K + 3 + ctarget + 3)
@@ -122,11 +52,17 @@ theorem reconstructLoadStore_runCompiledTo
         simp only [Devm.gasLeft_setMach, reconstructLoadStoreCost,
           csource, ctarget]
         omega)
-      (by simp only [Devm.stack_setMach]; omega)) ?_
+      (by simp only [Devm.stack_setMach]; omega))
+    (by rintro ⟨⟩)
+    (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
-  refine Func.RunCompiledTo.next
+  apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mload_of
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨(sourceWord * 32) :: stack, memory,
+          K + 3 + ctarget + 3⟩)
       (i := sourceWord * 32) (v := value) (s := stack)
       (c := 3) (G := K + ctarget + 3) (M := memory)
       rfl
@@ -140,59 +76,60 @@ theorem reconstructLoadStore_runCompiledTo
         rw [hext]
         decide)
       hread hreadMemory
-      (by
-        simp only [Devm.gasLeft_setMach]
-        omega)
-      (by omega)) ?_
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by omega))
+    (by rintro ⟨⟩)
+    (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach]
-  refine Func.RunCompiledTo.next
+  apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256
       (w := targetWord * 32) (c := ctarget) (G := K + 3)
       rfl
-      (by
-        simp only [Devm.gasLeft_setMach]
-        omega)
+      (by simp only [Devm.gasLeft_setMach]; omega)
       (by
         simp only [Devm.stack_setMach, List.length_cons]
-        omega)) ?_
+        omega))
+    (by rintro ⟨⟩)
+    (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
-  refine Func.RunCompiledTo.next
+  apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mstore_of
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨(targetWord * 32) :: value :: stack, memory, K + 3⟩)
       (i := targetWord * 32) (v := value) (s := stack)
       (G := K) (e := 0)
       rfl
       (Devm.extCost_zero_of_le hmod htargetFit)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
-      rfl) ?_
+      rfl)
+    (by rintro ⟨⟩)
+    (by rintro operation ⟨⟩)
   simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
 
-/-- Exact cost of pushing one word and storing it at a memory word. -/
-def reconstructPushStoreCost (value targetWord : B256) : Nat :=
-  pushCost value.toBytes.sig +
-    pushCost ((targetWord * 32).toBytes.sig) + 3
-
-/-- Execute one covered-memory `pushB256`/`mstoreAt` staging fragment. -/
-theorem reconstructPushStore_runCompiledTo
+/-- Exact-effect companion of `reconstructPushStore_runCompiledTo`. -/
+theorem reconstructPushStore_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {value targetWord : B256}
     {stack : List B256} {K : Nat} {rest : Func} {ex : Execution}
+    {effects : List (Adr × B256 × B256)}
     (hmod : memory.size % 32 = 0)
     (htargetFit : (targetWord * 32).toNat + 32 ≤ memory.size)
     (hroom : stack.length < 1023)
-    (htail : Func.RunCompiledTo fs sevm
+    (htail : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack,
           memory.write (targetWord * 32).toNat value.toBytes, K⟩)
-      rest ex) :
-    Func.RunCompiledTo fs sevm
+      rest ex effects) :
+    Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack, memory, K + reconstructPushStoreCost value targetWord⟩)
-      (pushB256 value ::: mstoreAt targetWord +++ rest) ex := by
+      (Ninst.pushB256 value ::: mstoreAt targetWord +++ rest) ex effects := by
   let cvalue := pushCost value.toBytes.sig
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
   simp only [mstoreAt, prepend]
-  refine Func.RunCompiledTo.next
+  apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256
       (w := value) (c := cvalue) (G := K + ctarget + 3)
       rfl
@@ -200,69 +137,45 @@ theorem reconstructPushStore_runCompiledTo
         simp only [Devm.gasLeft_setMach, reconstructPushStoreCost,
           cvalue, ctarget]
         omega)
-      (by simp only [Devm.stack_setMach]; omega)) ?_
+      (by simp only [Devm.stack_setMach]; omega))
+    (by rintro ⟨⟩)
+    (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
-  refine Func.RunCompiledTo.next
+  apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256
       (w := targetWord * 32) (c := ctarget) (G := K + 3)
       rfl
-      (by
-        simp only [Devm.gasLeft_setMach]
-        omega)
+      (by simp only [Devm.gasLeft_setMach]; omega)
       (by
         simp only [Devm.stack_setMach, List.length_cons]
-        omega)) ?_
+        omega))
+    (by rintro ⟨⟩)
+    (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
-  refine Func.RunCompiledTo.next
+  apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mstore_of
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨(targetWord * 32) :: value :: stack, memory, K + 3⟩)
       (i := targetWord * 32) (v := value) (s := stack)
       (G := K) (e := 0)
       rfl
       (Devm.extCost_zero_of_le hmod htargetFit)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
-      rfl) ?_
+      rfl)
+    (by rintro ⟨⟩)
+    (by rintro operation ⟨⟩)
   simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
 
-@[simp] theorem reconstructPushStoreCost_zero_one :
-    reconstructPushStoreCost 0 1 = 8 := by
-  decide +kernel
-
-@[simp] theorem reconstructLoadStoreCost_node_zero :
-    reconstructLoadStoreCost nodeWord 0 = 11 := by
-  decide +kernel
-
-@[simp] theorem reconstructLoadStoreCost_intermediate_zero :
-    reconstructLoadStoreCost intermediateWord 0 = 11 := by
-  decide +kernel
-
-@[simp] theorem reconstructLoadStoreCost_intermediate_one :
-    reconstructLoadStoreCost intermediateWord 1 = 12 := by
-  decide +kernel
-
-@[simp] theorem reconstructLoadStoreCost_second_one :
-    reconstructLoadStoreCost secondIntermediateWord 1 = 12 := by
-  decide +kernel
-
-@[simp] theorem reconstructLoadStoreCost_fifteen_zero :
-    reconstructLoadStoreCost 15 0 = 11 := by
-  decide +kernel
-
-@[simp] theorem reconstructLoadStoreCost_nine_one :
-    reconstructLoadStoreCost 9 1 = 12 := by
-  decide +kernel
-
-@[simp] theorem reconstructLoadStoreCost_eleven_zero :
-    reconstructLoadStoreCost 11 0 = 11 := by
-  decide +kernel
-
-/-- Run the direct pubkey SHA-256 site and establish the node register. -/
-theorem reconstructPubkeySha_runCompiledTo
+/-- Exact-effect companion of `reconstructPubkeySha_runCompiledTo`. -/
+theorem reconstructPubkeySha_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount : B256} {stack : List B256}
     {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (source : ReconstructSourceMemoryCarrier base.memory pubkeyInput
       signatureFirst signatureTail withdrawal amountPadded oldCount amount 704)
     (hmetaBase : ReconstructMetaCarrier sevm origin base)
@@ -283,11 +196,12 @@ theorem reconstructPubkeySha_runCompiledTo
       callPost.returnData = (Bytes.sha256 pubkeyInput).toBytes ∧
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨stack, base.memory, K + 238⟩)
-          (sha64 6 nodeWord success) ex := by
+          (sha64 6 nodeWord success) ex effects := by
   have hinput : ((6 : B256) * 32).toNat = 192 := by
     decide +kernel
   have houtput : (nodeWord * 32).toNat = 640 := by
@@ -307,10 +221,11 @@ theorem reconstructPubkeySha_runCompiledTo
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo
+    sha64_success_prefix_storageEffectRun
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 6) (outputWord := nodeWord)
       (stack := stack) (success := success) (K := K)
+      (effects := effects)
       hcovered hnodelegBase hwarmBase hpre hdepth hbound hroom
   have hmemory' : callPost.memory = base.memory.write 640
       (Bytes.sha256 pubkeyInput).toBytes := by
@@ -333,13 +248,14 @@ theorem reconstructPubkeySha_runCompiledTo
   have hwhole := hlift htail
   simpa only [sha64SuccessCost_six_node] using hwhole
 
-/-- Run the direct first-signature SHA-256 site, including the exact first
-memory expansion, and establish the intermediate register. -/
-theorem reconstructSignatureFirstSha_runCompiledTo
+/-- Exact-effect companion of
+`reconstructSignatureFirstSha_runCompiledTo`. -/
+theorem reconstructSignatureFirstSha_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node : B256} {stack : List B256}
     {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (hnode : ReconstructNodeMemoryCarrier base.memory pubkeyInput
       signatureFirst signatureTail withdrawal amountPadded oldCount amount
       node 704)
@@ -362,11 +278,12 @@ theorem reconstructSignatureFirstSha_runCompiledTo
       callPost.returnData = (Bytes.sha256 signatureFirst).toBytes ∧
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨stack, base.memory, K + 242⟩)
-          (sha64 13 intermediateWord success) ex := by
+          (sha64 13 intermediateWord success) ex effects := by
   have hinput : ((13 : B256) * 32).toNat = 416 := by
     decide +kernel
   have houtput : (intermediateWord * 32).toNat = 704 := by
@@ -386,10 +303,11 @@ theorem reconstructSignatureFirstSha_runCompiledTo
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo_ext
+    sha64_success_prefix_storageEffectRun_ext
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 13) (outputWord := intermediateWord)
       (stack := stack) (success := success) (K := K) (ext := 4)
+      (effects := effects)
       hext hnodelegBase hwarmBase hpre hdepth hbound hroom
   have hmemory' : callPost.memory =
       (base.memory.extends (reconstructionShaWindows 13 intermediateWord)).write
@@ -423,62 +341,14 @@ theorem reconstructSignatureFirstSha_runCompiledTo
   have hwhole := hlift htail
   simpa only [sha64SuccessCost_thirteen_intermediate] using hwhole
 
-/-- The third SHA site's staged pair: the fixed-width signature tail followed
-by one zero word. -/
-def reconstructSignatureSecondStagedMemory
-    (memory : Mem) (signatureTail : Bytes) : Mem :=
-  (memory.write 0 (Bytes.toB256 signatureTail).toBytes).write
-    32 (0 : B256).toBytes
-
-/-- Digest produced by the third reconstruction SHA site. -/
-def reconstructSignatureSecondDigest (signatureTail : Bytes) : B256 :=
-  Bytes.sha256
-    ((Bytes.toB256 signatureTail).toBytes ++ (0 : B256).toBytes)
-
-/-- The seven reconstruction sites compute the model's deposit-data node when
-their fixed-width byte inputs come from the decoded deposit arguments. -/
-theorem reconstructedDepositNode_eq_model
-    (pubkey withdrawalCredentials signature amountLE : Bytes)
-    (hwithdrawal : withdrawalCredentials.length = 32)
-    (hamount : amountLE.length = 8)
-    (hsignature : signature.length = 96) :
-    let pubkeyInput := pubkey ++ zeros 16
-    let signatureFirst := signature.take 64
-    let signatureTail := signature.drop 64
-    let amountPadded := amountLE ++ zeros 24
-    let pubkeyNode := Bytes.sha256 pubkeyInput
-    let signatureFirstNode := Bytes.sha256 signatureFirst
-    let signatureSecondNode :=
-      reconstructSignatureSecondDigest signatureTail
-    let signatureNode :=
-      hashPair Bytes.sha256 signatureFirstNode signatureSecondNode
-    let pubkeyWithdrawalNode :=
-      hashPair Bytes.sha256 pubkeyNode (Bytes.toB256 withdrawalCredentials)
-    let amountSignatureNode :=
-      hashPair Bytes.sha256 (Bytes.toB256 amountPadded) signatureNode
-    hashPair Bytes.sha256 pubkeyWithdrawalNode amountSignatureNode =
-      depositDataNode Bytes.sha256 pubkey withdrawalCredentials signature
-        amountLE := by
-  have hsignatureTail : (signature.drop 64).length = 32 := by
-    simp only [List.length_drop]
-    omega
-  have hamountPadded : (amountLE ++ zeros 24).length = 32 := by
-    simp [List.length_append, hamount, zeros]
-  have hzero : (0 : B256).toBytes = zeros 32 := by
-    decide +kernel
-  simp only [reconstructSignatureSecondDigest, depositDataNode, pubkeyRoot,
-    signatureRoot, hashPair]
-  rw [Bytes.toBytes_toB256_of_length hsignatureTail,
-    Bytes.toBytes_toB256_of_length hwithdrawal,
-    Bytes.toBytes_toB256_of_length hamountPadded, hzero]
-
-/-- Stage the fixed-width signature tail and zero padding, run the exact second
-memory expansion, and establish all three reconstruction registers. -/
-theorem reconstructSignatureSecondSha_runCompiledTo
+/-- Exact-effect companion of
+`reconstructSignatureSecondSha_runCompiledTo`. -/
+theorem reconstructSignatureSecondSha_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate : B256} {stack : List B256}
     {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (hintermediate : ReconstructIntermediateMemoryCarrier base.memory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate 736)
@@ -502,13 +372,14 @@ theorem reconstructSignatureSecondSha_runCompiledTo
         (reconstructSignatureSecondDigest signatureTail).toBytes ∧
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨stack, base.memory, K + 259⟩)
           (loadWord 15 +++ mstoreAt 0 +++
-            pushB256 0 ::: mstoreAt 1 +++
-            sha64 0 secondIntermediateWord success) ex := by
+            Ninst.pushB256 0 ::: mstoreAt 1 +++
+            sha64 0 secondIntermediateWord success) ex effects := by
   let tailWord := Bytes.toB256 signatureTail
   let stagedMemory :=
     reconstructSignatureSecondStagedMemory base.memory signatureTail
@@ -540,10 +411,11 @@ theorem reconstructSignatureSecondSha_runCompiledTo
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo_ext
+    sha64_success_prefix_storageEffectRun_ext
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := secondIntermediateWord)
       (stack := stack) (success := success) (K := K) (ext := 3)
+      (effects := effects)
       hext hnodelegSha hwarmSha hpre hdepth hbound hroom
   have hmemory' : callPost.memory =
       (stagedMemory.extends
@@ -583,9 +455,9 @@ theorem reconstructSignatureSecondSha_runCompiledTo
   · simpa only [stagedMemory] using hmemory'
   intro ex htail
   have hshaBase := hlift htail
-  have hsha : Func.RunCompiledTo fs sevm
+  have hsha : Func.StorageEffectRun fs sevm
       (base.setMach ⟨stack, stagedMemory, K + 240⟩)
-      (sha64 0 secondIntermediateWord success) ex := by
+      (sha64 0 secondIntermediateWord success) ex effects := by
     simpa only [shaBase, Devm.setMach_setMach, Devm.memory_setMach,
       sha64SuccessCost_zero_secondIntermediate] using hshaBase
   let firstMemory :=
@@ -598,11 +470,11 @@ theorem reconstructSignatureSecondSha_runCompiledTo
         (Bytes.toB256 signatureTail).toBytes
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
-  have hzeroStage : Func.RunCompiledTo fs sevm
+  have hzeroStage : Func.StorageEffectRun fs sevm
       (base.setMach ⟨stack, firstMemory, K + 248⟩)
-      (pushB256 0 ::: mstoreAt 1 +++
-        sha64 0 secondIntermediateWord success) ex := by
-    have h := reconstructPushStore_runCompiledTo
+      (Ninst.pushB256 0 ::: mstoreAt 1 +++
+        sha64 0 secondIntermediateWord success) ex effects := by
+    have h := reconstructPushStore_storageEffectRun
       (base := base) (memory := firstMemory)
       (value := 0) (targetWord := 1) (stack := stack)
       (K := K + 240) (rest := sha64 0 secondIntermediateWord success)
@@ -614,12 +486,12 @@ theorem reconstructSignatureSecondSha_runCompiledTo
           reconstructSignatureSecondStagedMemory,
           show ((1 : B256) * 32).toNat = 32 by decide +kernel] using hsha)
     simpa only [reconstructPushStoreCost_zero_one] using h
-  have hwhole := reconstructLoadStore_runCompiledTo
+  have hwhole := reconstructLoadStore_storageEffectRun
     (base := base) (memory := base.memory)
     (sourceWord := 15) (targetWord := 0)
     (value := Bytes.toB256 signatureTail) (stack := stack)
     (K := K + 248)
-    (rest := pushB256 0 ::: mstoreAt 1 +++
+    (rest := Ninst.pushB256 0 ::: mstoreAt 1 +++
       sha64 0 secondIntermediateWord success)
     (by rw [hintermediate.node.source.size_eq])
     (by rw [hintermediate.node.source.size_eq]; decide +kernel)
@@ -628,18 +500,14 @@ theorem reconstructSignatureSecondSha_runCompiledTo
     (by omega) hzeroStage
   simpa only [reconstructLoadStoreCost_fifteen_zero] using hwhole
 
-/-- Two digest words staged in memory words `0` and `1`. -/
-def reconstructPairStagedMemory
-    (memory : Mem) (left right : B256) : Mem :=
-  (memory.write 0 left.toBytes).write 32 right.toBytes
-
-/-- Execute any covered steady-state staged-pair SHA site. -/
-theorem reconstructPairSha_runCompiledTo
+/-- Exact-effect companion of `reconstructPairSha_runCompiledTo`. -/
+theorem reconstructPairSha_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {leftWord rightWord outputWord left right : B256}
     {stack : List B256} {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (hregisters : ReconstructRegistersMemoryCarrier base.memory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate second 768)
@@ -665,9 +533,10 @@ theorem reconstructPairSha_runCompiledTo
       callPost.returnData = (hashPair Bytes.sha256 left right).toBytes ∧
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach
             ⟨stack, base.memory,
               K + sha64SuccessCost 0 outputWord +
@@ -675,7 +544,7 @@ theorem reconstructPairSha_runCompiledTo
                 reconstructLoadStoreCost leftWord 0⟩)
           (loadWord leftWord +++ mstoreAt 0 +++
             loadWord rightWord +++ mstoreAt 1 +++
-            sha64 0 outputWord success) ex := by
+            sha64 0 outputWord success) ex effects := by
   let stagedMemory := reconstructPairStagedMemory base.memory left right
   let shaBase := base.setMach ⟨stack, stagedMemory, K⟩
   have hpair : ReconstructPairMemoryCarrier stagedMemory
@@ -708,10 +577,11 @@ theorem reconstructPairSha_runCompiledTo
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo
+    sha64_success_prefix_storageEffectRun
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := outputWord)
       (stack := stack) (success := success) (K := K)
+      (effects := effects)
       hcovered hnodelegSha hwarmSha hpre hdepth hbound hroom
   have hmemory' : callPost.memory = stagedMemory.write
       (outputWord * 32).toNat (hashPair Bytes.sha256 left right).toBytes := by
@@ -730,10 +600,10 @@ theorem reconstructPairSha_runCompiledTo
   · simpa only [stagedMemory] using hmemory'
   intro ex htail
   have hshaBase := hlift htail
-  have hsha : Func.RunCompiledTo fs sevm
+  have hsha : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack, stagedMemory, K + sha64SuccessCost 0 outputWord⟩)
-      (sha64 0 outputWord success) ex := by
+      (sha64 0 outputWord success) ex effects := by
     simpa only [shaBase, Devm.setMach_setMach, Devm.memory_setMach] using
       hshaBase
   let firstMemory := base.memory.write 0 left.toBytes
@@ -744,14 +614,14 @@ theorem reconstructPairSha_runCompiledTo
       hregisters.writeBeforeSources 0 left.toBytes
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
-  have hrightStage : Func.RunCompiledTo fs sevm
+  have hrightStage : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack, firstMemory,
           K + sha64SuccessCost 0 outputWord +
             reconstructLoadStoreCost rightWord 1⟩)
       (loadWord rightWord +++ mstoreAt 1 +++
-        sha64 0 outputWord success) ex := by
-    apply reconstructLoadStore_runCompiledTo
+        sha64 0 outputWord success) ex effects := by
+    apply reconstructLoadStore_storageEffectRun
       (base := base) (memory := firstMemory)
       (sourceWord := rightWord) (targetWord := 1)
       (value := right) (stack := stack)
@@ -766,7 +636,7 @@ theorem reconstructPairSha_runCompiledTo
     · omega
     · simpa only [firstMemory, stagedMemory, reconstructPairStagedMemory,
         show ((1 : B256) * 32).toNat = 32 by decide +kernel] using hsha
-  exact reconstructLoadStore_runCompiledTo
+  exact reconstructLoadStore_storageEffectRun
     (base := base) (memory := base.memory)
     (sourceWord := leftWord) (targetWord := 0)
     (value := left) (stack := stack)
@@ -779,12 +649,13 @@ theorem reconstructPairSha_runCompiledTo
     (by rw [hregisters.intermediate.node.source.size_eq]; decide +kernel)
     hleftRead (by omega) hrightStage
 
-/-- Combine the two signature-half digests into the signature root. -/
-theorem reconstructSignatureRootSha_runCompiledTo
+/-- Exact-effect signature-root reconstruction. -/
+theorem reconstructSignatureRootSha_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {stack : List B256} {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (hregisters : ReconstructRegistersMemoryCarrier base.memory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate second 768)
@@ -804,13 +675,14 @@ theorem reconstructSignatureRootSha_runCompiledTo
         (hashPair Bytes.sha256 intermediate second).toBytes ∧
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨stack, base.memory, K + 260⟩)
           (loadWord intermediateWord +++ mstoreAt 0 +++
             loadWord secondIntermediateWord +++ mstoreAt 1 +++
-            sha64 0 intermediateWord success) ex := by
+            sha64 0 intermediateWord success) ex effects := by
   let firstMemory := base.memory.write 0 intermediate.toBytes
   have hfirstCarrier : ReconstructRegistersMemoryCarrier firstMemory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
@@ -820,12 +692,13 @@ theorem reconstructSignatureRootSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
-    reconstructPairSha_runCompiledTo
+    reconstructPairSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := origin) (base := base)
       (hregisters := hregisters) (hmetaBase := hmetaBase)
       (leftWord := intermediateWord) (rightWord := secondIntermediateWord)
       (outputWord := intermediateWord) (left := intermediate) (right := second)
       (stack := stack) (success := success) (K := K)
+      (effects := effects)
       hnodeleg hwarm hpre hdepth hbound
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
       hregisters.intermediate.readIntermediate hfirstCarrier.readSecond hroom
@@ -844,12 +717,13 @@ theorem reconstructSignatureRootSha_runCompiledTo
     reconstructLoadStoreCost_second_one,
     reconstructLoadStoreCost_intermediate_zero] using hwhole
 
-/-- Combine the pubkey root with the withdrawal-credentials word. -/
-theorem reconstructPubkeyWithdrawalSha_runCompiledTo
+/-- Exact-effect pubkey/withdrawal reconstruction. -/
+theorem reconstructPubkeyWithdrawalSha_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {stack : List B256} {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (hregisters : ReconstructRegistersMemoryCarrier base.memory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate second 768)
@@ -870,13 +744,14 @@ theorem reconstructPubkeyWithdrawalSha_runCompiledTo
         (hashPair Bytes.sha256 node (Bytes.toB256 withdrawal)).toBytes ∧
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨stack, base.memory, K + 260⟩)
           (loadWord nodeWord +++ mstoreAt 0 +++
             loadWord 9 +++ mstoreAt 1 +++
-            sha64 0 nodeWord success) ex := by
+            sha64 0 nodeWord success) ex effects := by
   let firstMemory := base.memory.write 0 node.toBytes
   have hfirstCarrier : ReconstructRegistersMemoryCarrier firstMemory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
@@ -886,13 +761,14 @@ theorem reconstructPubkeyWithdrawalSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
-    reconstructPairSha_runCompiledTo
+    reconstructPairSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := origin) (base := base)
       (hregisters := hregisters) (hmetaBase := hmetaBase)
       (leftWord := nodeWord) (rightWord := 9)
       (outputWord := nodeWord) (left := node)
       (right := Bytes.toB256 withdrawal)
       (stack := stack) (success := success) (K := K)
+      (effects := effects)
       hnodeleg hwarm hpre hdepth hbound
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
       hregisters.intermediate.node.readNode
@@ -912,12 +788,13 @@ theorem reconstructPubkeyWithdrawalSha_runCompiledTo
     reconstructLoadStoreCost_nine_one,
     reconstructLoadStoreCost_node_zero] using hwhole
 
-/-- Combine the padded amount word with the signature root. -/
-theorem reconstructAmountSignatureSha_runCompiledTo
+/-- Exact-effect amount/signature reconstruction. -/
+theorem reconstructAmountSignatureSha_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {stack : List B256} {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (hregisters : ReconstructRegistersMemoryCarrier base.memory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate second 768)
@@ -938,13 +815,14 @@ theorem reconstructAmountSignatureSha_runCompiledTo
         (hashPair Bytes.sha256 (Bytes.toB256 amountPadded) intermediate).toBytes ∧
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨stack, base.memory, K + 260⟩)
           (loadWord 11 +++ mstoreAt 0 +++
             loadWord intermediateWord +++ mstoreAt 1 +++
-            sha64 0 intermediateWord success) ex := by
+            sha64 0 intermediateWord success) ex effects := by
   let amountWord := Bytes.toB256 amountPadded
   let firstMemory := base.memory.write 0 amountWord.toBytes
   have hfirstCarrier : ReconstructRegistersMemoryCarrier firstMemory
@@ -955,13 +833,14 @@ theorem reconstructAmountSignatureSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
-    reconstructPairSha_runCompiledTo
+    reconstructPairSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := origin) (base := base)
       (hregisters := hregisters) (hmetaBase := hmetaBase)
       (leftWord := 11) (rightWord := intermediateWord)
       (outputWord := intermediateWord) (left := amountWord)
       (right := intermediate)
       (stack := stack) (success := success) (K := K)
+      (effects := effects)
       hnodeleg hwarm hpre hdepth hbound
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
       hregisters.intermediate.node.source.readAmountPadded
@@ -983,13 +862,13 @@ theorem reconstructAmountSignatureSha_runCompiledTo
     reconstructLoadStoreCost_intermediate_one,
     reconstructLoadStoreCost_eleven_zero] using hwhole
 
-/-- Combine the pubkey/withdrawal and amount/signature branches into the final
-deposit-data node. -/
-theorem reconstructFinishSha_runCompiledTo
+/-- Exact-effect final root reconstruction. -/
+theorem reconstructFinishSha_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {stack : List B256} {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (hregisters : ReconstructRegistersMemoryCarrier base.memory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate second 768)
@@ -1009,13 +888,14 @@ theorem reconstructFinishSha_runCompiledTo
         (hashPair Bytes.sha256 node intermediate).toBytes ∧
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨stack, base.memory, K + 260⟩)
           (loadWord nodeWord +++ mstoreAt 0 +++
             loadWord intermediateWord +++ mstoreAt 1 +++
-            sha64 0 nodeWord success) ex := by
+            sha64 0 nodeWord success) ex effects := by
   let firstMemory := base.memory.write 0 node.toBytes
   have hfirstCarrier : ReconstructRegistersMemoryCarrier firstMemory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
@@ -1025,12 +905,13 @@ theorem reconstructFinishSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
-    reconstructPairSha_runCompiledTo
+    reconstructPairSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := origin) (base := base)
       (hregisters := hregisters) (hmetaBase := hmetaBase)
       (leftWord := nodeWord) (rightWord := intermediateWord)
       (outputWord := nodeWord) (left := node) (right := intermediate)
       (stack := stack) (success := success) (K := K)
+      (effects := effects)
       hnodeleg hwarm hpre hdepth hbound
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
       hregisters.intermediate.node.readNode
@@ -1050,13 +931,14 @@ theorem reconstructFinishSha_runCompiledTo
     reconstructLoadStoreCost_intermediate_one,
     reconstructLoadStoreCost_node_zero] using hwhole
 
-/-- The complete seven-site compiled reconstruction, with exact gas and the
-final deposit-data node left in word 20. -/
-theorem reconstructDepositDataNode_runCompiledTo
+/-- The complete seven-site reconstruction threads its continuation's exact
+retained storage effects unchanged. -/
+theorem reconstructDepositDataNode_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount : B256} {stack : List B256}
     {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
     (source : ReconstructSourceMemoryCarrier base.memory pubkeyInput
       signatureFirst signatureTail withdrawal amountPadded oldCount amount 704)
     (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
@@ -1084,11 +966,12 @@ theorem reconstructDepositDataNode_runCompiledTo
       finalPost.returnData = depositNode.toBytes ∧
       ReconstructMetaCarrier sevm base finalPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (finalPost.setMach ⟨stack, finalPost.memory, K⟩) success ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (finalPost.setMach ⟨stack, finalPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨stack, base.memory, K + 1779⟩)
-          (reconstructDepositDataNode success) ex := by
+          (reconstructDepositDataNode success) ex effects := by
   let pubkeyNode := Bytes.sha256 pubkeyInput
   let signatureFirstNode := Bytes.sha256 signatureFirst
   let signatureSecondNode :=
@@ -1119,65 +1002,67 @@ theorem reconstructDepositDataNode_runCompiledTo
     sha64 0 intermediateWord pubkeyAndWithdrawal
   let signatureSecondHalf :=
     loadWord 15 +++ mstoreAt 0 +++
-    pushB256 0 ::: mstoreAt 1 +++
+    Ninst.pushB256 0 ::: mstoreAt 1 +++
     sha64 0 secondIntermediateWord signatureRoot
   have hmeta0 := ReconstructMetaCarrier.refl sevm base
   obtain ⟨post1, _hstack1, _hmemory1, hnode1, _hgas1, _hreturn1,
       hmeta1, hlift1⟩ :=
-    reconstructPubkeySha_runCompiledTo
+    reconstructPubkeySha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := base) (base := base)
       (source := source) (hmetaBase := hmeta0)
       (stack := stack)
       (success := sha64 13 intermediateWord signatureSecondHalf)
-      (K := K + 1541)
+      (K := K + 1541) (effects := effects)
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hnode1⟩ := hnode1
   obtain ⟨post2, _hstack2, _hmemory2, hintermediate2,
       _hgas2, _hreturn2, hmeta2, hlift2⟩ :=
-    reconstructSignatureFirstSha_runCompiledTo
+    reconstructSignatureFirstSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := base) (base := post1)
       (hnode := hnode1) (hmetaBase := hmeta1)
       (stack := stack) (success := signatureSecondHalf)
-      (K := K + 1299)
+      (K := K + 1299) (effects := effects)
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hintermediate2⟩ := hintermediate2
   obtain ⟨post3, _hmemory3, hregisters3, _hreturn3,
       hmeta3, hlift3⟩ :=
-    reconstructSignatureSecondSha_runCompiledTo
+    reconstructSignatureSecondSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := base) (base := post2)
       (hintermediate := hintermediate2) (hmetaBase := hmeta2)
       (stack := stack) (success := signatureRoot)
-      (K := K + 1040)
+      (K := K + 1040) (effects := effects)
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hregisters3⟩ := hregisters3
   obtain ⟨post4, hregisters4, _hreturn4, hmeta4, hlift4⟩ :=
-    reconstructSignatureRootSha_runCompiledTo
+    reconstructSignatureRootSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := base) (base := post3)
       (hregisters := hregisters3) (hmetaBase := hmeta3)
       (stack := stack) (success := pubkeyAndWithdrawal)
-      (K := K + 780)
+      (K := K + 780) (effects := effects)
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hregisters4⟩ := hregisters4
   obtain ⟨post5, hregisters5, _hreturn5, hmeta5, hlift5⟩ :=
-    reconstructPubkeyWithdrawalSha_runCompiledTo
+    reconstructPubkeyWithdrawalSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := base) (base := post4)
       (hregisters := hregisters4) (hmetaBase := hmeta4)
       (stack := stack) (success := amountAndSignature)
-      (K := K + 520)
+      (K := K + 520) (effects := effects)
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hregisters5⟩ := hregisters5
   obtain ⟨post6, hregisters6, _hreturn6, hmeta6, hlift6⟩ :=
-    reconstructAmountSignatureSha_runCompiledTo
+    reconstructAmountSignatureSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := base) (base := post5)
       (hregisters := hregisters5) (hmetaBase := hmeta5)
       (stack := stack) (success := finish) (K := K + 260)
+      (effects := effects)
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hregisters6⟩ := hregisters6
   obtain ⟨finalPost, hregisters7, hreturn7, hmeta7, hlift7⟩ :=
-    reconstructFinishSha_runCompiledTo
+    reconstructFinishSha_storageEffectRun
       (fs := fs) (sevm := sevm) (origin := base) (base := post6)
       (hregisters := hregisters6) (hmetaBase := hmeta6)
       (stack := stack) (success := success) (K := K)
+      (effects := effects)
       hnodeleg hwarm hpre hdepth (by omega) hroom
   refine ⟨finalPost, ?_, ?_, hmeta7, ?_⟩
   · simpa only [pubkeyNode, signatureFirstNode, signatureSecondNode,

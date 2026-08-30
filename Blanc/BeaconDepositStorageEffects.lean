@@ -13,7 +13,7 @@ not merely the final storage delta.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 private theorem sha64_success_suffix_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm} {K : Nat}
@@ -101,23 +101,26 @@ private theorem sha64_success_suffix_storageEffectRun
 /-- The successful fixed-width SHA-256 wrapper is storage-effect neutral and
 threads the exact effects of its continuation.  The `STATICCALL` step keeps
 its explicit childless witness. -/
-theorem sha64_success_prefix_storageEffectRun
+theorem sha64_success_prefix_storageEffectRun_ext
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {inputWord outputWord : B256} {stack : List B256}
-    {success : Func} {K : Nat}
+    {success : Func} {K ext : Nat}
     {effects : List (Adr × B256 × B256)}
-    (hcovered : memExtsSize base.memory.size
+    (hext : base.extCost
       [⟨(inputWord * 32).toNat, 64⟩,
-        ⟨(outputWord * 32).toNat, 32⟩] = base.memory.size)
+        ⟨(outputWord * 32).toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ base.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hdepth : sevm.depth ≠ 0)
-    (hbound : K + 221 < 2 ^ 256)
+    (hbound : K + 221 + ext < 2 ^ 256)
     (hroom : stack.length < 1019) :
     ∃ callPost,
       callPost.stack = 1 :: stack ∧
-      callPost.memory = base.memory.write (outputWord * 32).toNat
+      callPost.memory = (base.memory.extends
+        [⟨(inputWord * 32).toNat, 64⟩,
+          ⟨(outputWord * 32).toNat, 32⟩]).write
+        (outputWord * 32).toNat
         (Bytes.sha256
           (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes ∧
       callPost.gasLeft = K + 37 ∧
@@ -141,30 +144,23 @@ theorem sha64_success_prefix_storageEffectRun
         Func.StorageEffectRun fs sevm
           (base.setMach
             ⟨stack, base.memory,
-              K + sha64SuccessCost inputWord outputWord⟩)
+              K + sha64SuccessCost inputWord outputWord + ext⟩)
           (sha64 inputWord outputWord success) ex effects := by
-  have hext : (base.setMach
-      ⟨stack, base.memory, K + 221⟩).extCost
-        [⟨(inputWord * 32).toNat, 64⟩,
-          ⟨(outputWord * 32).toNat, 32⟩] = 0 := by
-    simp only [Devm.extCost, Devm.memory_setMach, hcovered]
-    omega
   let callPre := base.setMach
-    ⟨Nat.toB256 (K + 221) :: (2 : B256) ::
+    ⟨Nat.toB256 (K + 221 + ext) :: (2 : B256) ::
       (inputWord * 32) :: (64 : B256) ::
       (outputWord * 32) :: (32 : B256) :: stack,
-      base.memory, K + 221⟩
+      base.memory, K + 221 + ext⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
     Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
-      (s := stack) (G := K + 221) (ext := 0)
+      (s := stack) (G := K + 221 + ext) (ext := ext)
       (by simp only [callPre, Devm.stack_setMach])
       (by simp only [callPre, Devm.gasLeft_setMach])
-      (by simpa only [callPre, Devm.setMach_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach] using hext)
+      (by simpa only [callPre, Devm.extCost, Devm.memory_setMach] using hext)
       (by simpa only [callPre, Devm.getCode_setMach] using hnodeleg)
       (by
         change (2 : Adr) ∈ base.accessedAddresses
@@ -172,11 +168,13 @@ theorem sha64_success_prefix_storageEffectRun
       hpre hdepth (by omega) hbound (by omega)
   have hgas' : callPost.gasLeft = K + 37 := by omega
   have hmemory' :
-      callPost.memory = base.memory.write (outputWord * 32).toNat
+      callPost.memory = (base.memory.extends
+        [⟨(inputWord * 32).toNat, 64⟩,
+          ⟨(outputWord * 32).toNat, 32⟩]).write
+        (outputWord * 32).toNat
         (Bytes.sha256
           (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes := by
-    simpa only [callPre, Devm.memory_setMach,
-      Mem.extends_covered hcovered] using hmemory
+    simpa only [callPre, Devm.memory_setMach] using hmemory
   have hreturn' :
       callPost.returnData =
         (Bytes.sha256
@@ -244,9 +242,9 @@ theorem sha64_success_prefix_storageEffectRun
       (sevm := sevm)
       (devm := base.setMach
         ⟨stack, base.memory,
-          K + sha64SuccessCost inputWord outputWord⟩)
+          K + sha64SuccessCost inputWord outputWord + ext⟩)
       (w := (32 : B256)) (c := c32)
-      (G := K + (cout + c64 + cin + c2 + 223))
+      (G := K + (cout + c64 + cin + c2 + 223) + ext)
       rfl
       (by
         simp only [Devm.gasLeft_setMach, sha64SuccessCost,
@@ -258,7 +256,7 @@ theorem sha64_success_prefix_storageEffectRun
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256
       (w := outputWord * 32) (c := cout)
-      (G := K + (c64 + cin + c2 + 223)) rfl
+      (G := K + (c64 + cin + c2 + 223) + ext) rfl
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
@@ -266,7 +264,7 @@ theorem sha64_success_prefix_storageEffectRun
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256
       (w := (64 : B256)) (c := c64)
-      (G := K + (cin + c2 + 223)) rfl
+      (G := K + (cin + c2 + 223) + ext) rfl
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
@@ -274,22 +272,22 @@ theorem sha64_success_prefix_storageEffectRun
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256
       (w := inputWord * 32) (c := cin)
-      (G := K + (c2 + 223)) rfl
+      (G := K + (c2 + 223) + ext) rfl
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256
-      (w := (2 : B256)) (c := c2) (G := K + 223) rfl
+      (w := (2 : B256)) (c := c2) (G := K + 223 + ext) rfl
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_gas
-      (G := K + 221)
-      (by simp only [Devm.gasLeft_setMach, gBase])
+      (G := K + 221 + ext)
+      (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach]
@@ -306,6 +304,60 @@ theorem sha64_success_prefix_storageEffectRun
   rw [hpost] at suffix
   simpa only [callPre, Devm.stack_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach] using suffix
+
+/-- Covered-memory compatibility form of
+`sha64_success_prefix_storageEffectRun_ext`. -/
+theorem sha64_success_prefix_storageEffectRun
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {inputWord outputWord : B256} {stack : List B256}
+    {success : Func} {K : Nat}
+    {effects : List (Adr × B256 × B256)}
+    (hcovered : memExtsSize base.memory.size
+      [⟨(inputWord * 32).toNat, 64⟩,
+        ⟨(outputWord * 32).toNat, 32⟩] = base.memory.size)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hbound : K + 221 < 2 ^ 256)
+    (hroom : stack.length < 1019) :
+    ∃ callPost,
+      callPost.stack = 1 :: stack ∧
+      callPost.memory = base.memory.write (outputWord * 32).toNat
+        (Bytes.sha256
+          (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes ∧
+      callPost.gasLeft = K + 37 ∧
+      callPost.returnData =
+        (Bytes.sha256
+          (base.memory.data.sliceD (inputWord * 32).toNat 64 0)).toBytes ∧
+      (∀ a, Devm.getStor callPost a = Devm.getStor base a) ∧
+      (∀ a, callPost.getCode a = base.getCode a) ∧
+      callPost.accessedAddresses = base.accessedAddresses ∧
+      callPost.accessedStorageKeys = base.accessedStorageKeys ∧
+      callPost.logs = base.logs ∧
+      callPost.output = base.output ∧
+      callPost.error = base.error ∧
+      (∃ stmid,
+        base.state.subBal sevm.currentTarget 0 = some stmid ∧
+        callPost.state = stmid.addBal 2 0) ∧
+      ∀ {ex : Execution},
+        Func.StorageEffectRun fs sevm
+          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          success ex effects →
+        Func.StorageEffectRun fs sevm
+          (base.setMach
+            ⟨stack, base.memory,
+              K + sha64SuccessCost inputWord outputWord⟩)
+          (sha64 inputWord outputWord success) ex effects := by
+  have hext : base.extCost
+      [⟨(inputWord * 32).toNat, 64⟩,
+        ⟨(outputWord * 32).toNat, 32⟩] = 0 := by
+    simp only [Devm.extCost, hcovered]
+    omega
+  simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
+    (sha64_success_prefix_storageEffectRun_ext
+      (ext := 0) (effects := effects) hext hnodeleg hwarm hpre hdepth
+      (by simpa using hbound) hroom)
 
 /-- Shift the insertion size, increment its height, and re-enter the loop
 without adding a retained storage effect. -/

@@ -14,7 +14,7 @@ suffixes below.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-! ## Structure-only malformed-input partition -/
 
@@ -143,7 +143,10 @@ theorem exists_depositAbiFailure
       exact ⟨DepositAbiFailure.tail0 stage, hhead, hstage⟩
   · exact ⟨DepositAbiFailure.head, hhead⟩
 
-private def validateDynamicTailAfterArg
+/-- ABI dynamic-tail validation after the head offset word has been loaded.
+Exposed as the contract-local proof boundary shared by successful and failing
+compiled walks. -/
+def validateDynamicTailAfterArg
     (offsetWord lengthWord : B256) (body : Func) : Func :=
   let accept : Func :=
     mstoreAt lengthWord +++ mstoreAt offsetWord +++ body
@@ -790,13 +793,15 @@ def DepositAbiFailure.finalMemory
   | .tail1 _ => depositDecodedTail0Memory data
   | .tail2 _ => depositDecodedTail1Memory data
 
-private theorem depositDecodedTail0Memory_size (data : Bytes) :
+/-- Exact scratch-memory size after staging the first decoded dynamic tail. -/
+theorem depositDecodedTail0Memory_size (data : Bytes) :
     (depositDecodedTail0Memory data).size = 128 := by
   unfold depositDecodedTail0Memory
   rw [Mem.size_write_word_at, Mem.size_write_word_at]
   decide +kernel
 
-private theorem depositDecodedTail1Memory_size (data : Bytes) :
+/-- Exact scratch-memory size after staging the first two decoded dynamic tails. -/
+theorem depositDecodedTail1Memory_size (data : Bytes) :
     (depositDecodedTail1Memory data).size = 160 := by
   unfold depositDecodedTail1Memory
   rw [Mem.size_write_word_at, Mem.size_write_word_at,
@@ -963,7 +968,9 @@ private theorem depositTail2Stores_success_runCompiledTo
     show G + 6 + 3 + gVerylow + 3 = G + 15 by
       simp only [gVerylow]] using hstore
 
-private theorem validateDynamicTail_eq
+/-- Split dynamic-tail validation into its two-instruction argument load and
+the proof-facing post-load validator. -/
+theorem validateDynamicTail_eq
     (head offsetWord lengthWord : B256) (body : Func) :
     validateDynamicTail head offsetWord lengthWord body =
       arg head +++

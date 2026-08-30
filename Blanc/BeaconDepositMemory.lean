@@ -16,7 +16,7 @@ invariants.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 private def lowBytes : Nat → B256 → Bytes
   | 0, _ => []

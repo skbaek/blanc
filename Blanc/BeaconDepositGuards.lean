@@ -10,7 +10,7 @@ as small continuation-polymorphic certificates and composed backward.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- Gas consumed by the six successful deposit guards. -/
 def depositGuardsGas : Nat := 214

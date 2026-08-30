@@ -11,7 +11,7 @@ result states the exact event and two-cell storage effect at runtime altitude.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- Exact successful runtime gas.  The selector route contributes 93 gas on
 top of the endpoint's fixed 8,456-gas overhead and variable storage charges. -/

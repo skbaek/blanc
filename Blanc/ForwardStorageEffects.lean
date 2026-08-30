@@ -260,6 +260,316 @@ theorem Func.StorageEffectRun.call
   ⟨.call lookup room burn tail.run,
     .call (lookup := lookup) (room := room) (burn := burn) tail.path⟩
 
+/-- Tactic-facing zero-branch wrapper for `StorageEffectRun`. -/
+lemma Func.storageEffectRun_branch_zero
+    {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {f g : Func} {ex : Execution} {effects : List (Adr × B256 × B256)}
+    {s : List B256} {G : Nat}
+    (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
+    (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
+    (h_arm : Func.StorageEffectRun fs sevm
+      (devm.setMach ⟨s, devm.memory, G⟩) f ex effects) :
+    Func.StorageEffectRun fs sevm devm (.branch f g) ex effects :=
+  .zero h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
+
+/-- Tactic-facing nonzero-branch wrapper for `StorageEffectRun`. -/
+lemma Func.storageEffectRun_branch_succ
+    {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {f g : Func} {ex : Execution} {effects : List (Adr × B256 × B256)}
+    {w : B256} {s : List B256} {G : Nat}
+    (h_ne : w ≠ 0) (h_stk : devm.stack = w :: s)
+    (h_room : devm.stack.length < 1024)
+    (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
+    (h_arm : Func.StorageEffectRun fs sevm
+      (devm.setMach ⟨s, devm.memory, G⟩) g ex effects) :
+    Func.StorageEffectRun fs sevm devm (.branch f g) ex effects :=
+  .succ h_ne h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
+
+/-! ## `storage_effect_run` — exact-effect neutral walk -/
+
+section StorageEffectTactic
+
+open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic
+
+namespace Forward
+
+/-- Retarget a six-argument exact-effect relation after a structural rule has
+named its successor state. -/
+def retargetStorageEffect (g : MVarId) (state : Expr) : MetaM MVarId := do
+  let t ← instantiateMVars (← g.getType)
+  match t.getAppFnArgs with
+  | (``Blanc.Func.StorageEffectRun, #[fs, sevm, _, f, post, effects]) =>
+      g.change (mkAppN (mkConst ``Blanc.Func.StorageEffectRun)
+        #[fs, sevm, state, f, post, effects])
+  | _ => return g
+
+/-- Exact-effect analogue of `funcWalk` for neutral prefixes.  It shares the
+instruction evaluator, hints, gas accounting, and resource profiling with
+`func_run`; an external instruction or SSTORE is deliberately handed back to
+the caller as the residual exact-effect goal. -/
+partial def storageEffectWalk (g : MVarId) : ForwardM Unit := g.withContext do
+  if let some b := (← get).budget then
+    if (← get).step ≥ b then
+      modify fun c => { c with side := c.side.push g }
+      return
+  let t := (← instantiateMVars (← g.getType)).consumeMData
+  match t.getAppFnArgs with
+  | (``Blanc.Func.StorageEffectRun, #[fs, sevm, d, f, post, effects]) => do
+    let f' ← whnf f
+    let g ← g.change (mkAppN (mkConst ``Blanc.Func.StorageEffectRun)
+      #[fs, sevm, d, f', post, effects])
+    let (base, stk, mem, gas) ← parseState d
+    let (gb, goff) ← parseGas gas
+    match f'.getAppFnArgs with
+    | (``Blanc.Func.next, #[instruction, rest]) => do
+      let instruction' ← whnfR instruction
+      let isExec := instruction'.getAppFn.constName? == some ``Jaune.Ninst.exec
+      let isSstore := match instruction'.getAppFnArgs with
+        | (``Jaune.Ninst.reg, #[operation]) =>
+            operation.getAppFn.constName? == some ``Jaune.Rinst.sstore
+        | _ => false
+      if isExec || isSstore then
+        modify fun c => { c with side := c.side.push g, step := c.step + 1 }
+        return
+      let gs ← applyLemma g ``Func.StorageEffectRun.next_effectNeutral
+        [(0, fs), (1, sevm), (2, d), (4, instruction), (5, rest),
+          (6, post), (7, effects)] [8, 9, 10, 11]
+      match gs with
+      | [instructionGoal, notStore, notExec, tailGoal] =>
+          ninstStep instructionGoal
+          let neStore ← `(tactic| (rintro impossible; cases impossible))
+          let neStore' ← `(tactic| decide)
+          let neExec ← `(tactic|
+            (intro operation impossible; cases impossible))
+          discharge notStore [neStore, neStore']
+          discharge notExec [neExec]
+          storageEffectWalk tailGoal
+      | _ =>
+          throwError
+            "storage_effect_run: `.next` left an unexpected obligation set"
+    | (``Blanc.Func.branch, #[left, right]) => do
+      modify fun c => { c with step := c.step + 1 }
+      let ([word], stackTail) ← popStack 1 stk
+        | throwError "storage_effect_run: BRANCH"
+      let takesZero ←
+        if word.nat? == some 0 then pure true
+        else if (word.nat?).isSome then pure false
+        else pure false
+      if takesZero then
+        let gas' ← mkGas gb goff 13
+        let successor ← mkState base stackTail mem gas'
+        let gs ← applyLemma g ``Func.storageEffectRun_branch_zero
+          [(0, fs), (1, sevm), (2, d), (3, left), (4, right),
+            (5, post), (6, effects), (7, stackTail), (8, gas')]
+          [9, 10, 11, 12]
+        match gs with
+        | [stackGoal, roomGoal, gasGoal, armGoal] =>
+            discharge stackGoal (← rflTacs)
+            dischargeProfiled .room roomGoal (← roomTacs)
+            dischargeProfiled .gas gasGoal (← gasTacs)
+            storageEffectWalk
+              (← retargetStorageEffect armGoal successor)
+        | _ =>
+            throwError
+              "storage_effect_run: `.zero` left an unexpected obligation set"
+      else
+        let gas' ← mkGas gb goff 14
+        let successor ← mkState base stackTail mem gas'
+        let gs ← applyLemma g ``Func.storageEffectRun_branch_succ
+          [(0, fs), (1, sevm), (2, d), (3, left), (4, right),
+            (5, post), (6, effects), (7, word), (8, stackTail),
+            (9, gas')] [10, 11, 12, 13, 14]
+        let dec ← `(tactic| decide)
+        let deck ← `(tactic| decide +kernel)
+        match gs with
+        | [nonzero, stackGoal, roomGoal, gasGoal, armGoal] =>
+            unless (← tryTacOn nonzero dec) || (← tryTacOn nonzero deck) do
+              throwError m!"storage_effect_run: cannot decide branch word{indentExpr word}"
+            discharge stackGoal (← rflTacs)
+            dischargeProfiled .room roomGoal (← roomTacs)
+            dischargeProfiled .gas gasGoal (← gasTacs)
+            storageEffectWalk
+              (← retargetStorageEffect armGoal successor)
+        | _ =>
+            throwError
+              "storage_effect_run: `.succ` left an unexpected obligation set"
+    | (``Blanc.Func.call, #[_]) =>
+        modify fun c => { c with side := c.side.push g, step := c.step + 1 }
+    | (``Blanc.Func.last, #[_]) =>
+        modify fun c => { c with side := c.side.push g }
+    | _ =>
+        throwError m!"storage_effect_run: cannot see the shape of{indentExpr f'}"
+  | _ =>
+      throwError
+        "storage_effect_run: goal is not `Func.StorageEffectRun`"
+
+def storageEffectRunMain (hints : List Term) (budget : Option Nat := none) :
+    TacticM Unit := do
+  let g ← getMainGoal
+  let (_, context) ← (storageEffectWalk g).run
+    { rel := toSpec, hints := hints, side := #[], step := 0, budget := budget }
+  if context.step == 0 then
+    throwError "storage_effect_run: applied no rule; nothing was proved"
+  unless context.hints.isEmpty do
+    throwError "storage_effect_run: unused hint(s)"
+  replaceMainGoal context.side.toList
+
+end Forward
+
+/-- Walk a childless, non-SSTORE exact-effect prefix with `func_run`'s state,
+gas, hint, and side-condition engine. -/
+syntax (name := storageEffectRun)
+  "storage_effect_run" (ppSpace "(" num ")")?
+  (ppSpace "[" term,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| storage_effect_run $[($n)]? $[[$hs,*]]?) =>
+    Forward.storageEffectRunMain
+      (match hs with
+        | some hs => hs.getElems.toList
+        | none => [])
+      (n.map (·.getNat))
+
+end StorageEffectTactic
+
+/-! ## Splicing a successful neutral prefix -/
+
+/-- Every selected successful terminal of this source-shaped prefix is its
+designated `STOP`; the prefix contains no internal-call leaf.  Combined with
+the existing local SSTORE/exec-free predicates, this is the reusable static
+side of an exact-effect continuation splice. -/
+def Func.SuccessStopOnly : Func → Prop
+  | .branch left right => left.SuccessStopOnly ∧ right.SuccessStopOnly
+  | .last .stop => True
+  | .last _ => False
+  | .next _ body => body.SuccessStopOnly
+  | .call _ => False
+
+/-- A selected compiled path that reaches the designated successful `STOP`,
+retaining the childlessness and non-SSTORE facts needed to graft an arbitrary
+exact-effect continuation at that boundary. -/
+inductive Func.RunCompiledTo.SuccessfulStopPrefix :
+    ∀ {fs : List Func} {sevm : Sevm} {pre : Devm} {source : Func}
+      {stopPost : Devm},
+      Func.RunCompiledTo fs sevm pre source (.ok stopPost) → Prop
+  | zero {fs sevm pre branchPre left right stopPost}
+      {room : pre.stack.length < 1024}
+      {pop : Devm.PopBurnBy [0] (gVerylow + gHigh) pre branchPre}
+      {tail : Func.RunCompiledTo fs sevm branchPre left (.ok stopPost)}
+      (tailPrefix : Func.RunCompiledTo.SuccessfulStopPrefix tail) :
+      Func.RunCompiledTo.SuccessfulStopPrefix
+        (.zero (g := right) room pop tail)
+  | succ {fs sevm pre branchPre word left right stopPost}
+      {nonzero : word ≠ 0}
+      {room : pre.stack.length < 1024}
+      {pop : Devm.PopBurnBy [word]
+        (gVerylow + gHigh + gJumpdest) pre branchPre}
+      {tail : Func.RunCompiledTo fs sevm branchPre right (.ok stopPost)}
+      (tailPrefix : Func.RunCompiledTo.SuccessfulStopPrefix tail) :
+      Func.RunCompiledTo.SuccessfulStopPrefix
+        (.succ (f := left) nonzero room pop tail)
+  | last {fs sevm pre}
+      {terminalRun : Linst.Run sevm pre .stop (.ok pre)} :
+      Func.RunCompiledTo.SuccessfulStopPrefix
+        (Func.RunCompiledTo.last (fs := fs) terminalRun)
+  | next {fs sevm pre nextPre instruction body stopPost}
+      {instructionRun : Ninst.RunCompiled sevm pre instruction nextPre}
+      {tail : Func.RunCompiledTo fs sevm nextPre body (.ok stopPost)}
+      (instructionNe : instruction ≠ .reg .sstore)
+      (instructionChildless :
+        Ninst.ChildlessRunCompiled sevm pre instruction nextPre)
+      (tailPrefix : Func.RunCompiledTo.SuccessfulStopPrefix tail) :
+      Func.RunCompiledTo.SuccessfulStopPrefix
+        (.next instructionRun tail)
+
+/-- Static executable/local checks plus `SuccessStopOnly` certify any selected
+successful walk through a neutral prefix. -/
+theorem Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree
+    {fs : List Func} {sevm : Sevm} {pre stopPost : Devm}
+    {source : Func}
+    (run : Func.RunCompiledTo fs sevm pre source (.ok stopPost))
+    (execFree : funcExecFree source)
+    (storeFree : source.LocalSstoreFree)
+    (stopOnly : source.SuccessStopOnly) :
+    Func.RunCompiledTo.SuccessfulStopPrefix run := by
+  induction source generalizing pre stopPost with
+  | branch left right leftIH rightIH =>
+      cases run with
+      | zero room pop tail =>
+          exact .zero (room := room) (pop := pop)
+            (leftIH tail execFree.1 storeFree.1 stopOnly.1)
+      | succ nonzero room pop tail =>
+          exact .succ (nonzero := nonzero) (room := room) (pop := pop)
+            (rightIH tail execFree.2 storeFree.2 stopOnly.2)
+  | last terminal =>
+      cases run with
+      | last terminalRun =>
+          cases terminal <;> simp [Func.SuccessStopOnly] at stopOnly
+          have hpost : stopPost = pre := by
+            simpa [Linst.Run, Linst.run] using terminalRun.symm
+          subst stopPost
+          exact Func.RunCompiledTo.SuccessfulStopPrefix.last
+            (terminalRun := terminalRun)
+  | next instruction body ih =>
+      cases run with
+      | next instructionRun tail =>
+          cases instruction with
+          | reg operation =>
+              exact .next (instructionRun := instructionRun) storeFree.1
+                (instructionRun.childless_of_not_exec (by
+                  intro external impossible
+                  cases impossible))
+                (ih tail (by simpa [funcExecFree] using execFree)
+                  storeFree.2 stopOnly)
+          | push bytes size =>
+              exact .next (instructionRun := instructionRun) storeFree.1
+                (instructionRun.childless_of_not_exec (by
+                  intro external impossible
+                  cases impossible))
+                (ih tail (by simpa [funcExecFree] using execFree)
+                  storeFree.2 stopOnly)
+          | exec operation =>
+              simp [funcExecFree] at execFree
+  | call index =>
+      simp [Func.SuccessStopOnly] at stopOnly
+
+/-- Replace the designated successful `STOP` reached by a neutral prefix with
+an arbitrary exact-effect continuation.  The continuation's effect list is
+preserved exactly. -/
+theorem Func.RunCompiledTo.SuccessfulStopPrefix.splice
+    {fs : List Func} {sevm : Sevm} {pre stopPost : Devm}
+    {source replacement : Func} {out : Execution}
+    {effects : List (Adr × B256 × B256)}
+    {run : Func.RunCompiledTo fs sevm pre source (.ok stopPost)}
+    (certificate : Func.RunCompiledTo.SuccessfulStopPrefix run)
+    (tail : Func.StorageEffectRun fs sevm stopPost replacement out effects) :
+    Func.StorageEffectRun fs sevm pre
+      (source.replaceStopWith replacement) out effects := by
+  induction certificate with
+  | zero tailPrefix ih =>
+      simpa only [Func.replaceStopWith] using
+        (Func.StorageEffectRun.zero (by assumption) (by assumption) (ih tail))
+  | succ tailPrefix ih =>
+      simpa only [Func.replaceStopWith] using
+        (Func.StorageEffectRun.succ (by assumption) (by assumption)
+          (by assumption) (ih tail))
+  | last =>
+      simpa only [Func.replaceStopWith] using tail
+  | @next prefixPre nextPre instruction body prefixPost
+      instructionRun prefixTail instructionNe instructionChildless
+      tailPrefix ih =>
+      have none :
+          Ninst.storageEffectTriple? sevm prefixPre instruction = none := by
+        cases instruction with
+        | push bytes bound => rfl
+        | exec operation => rfl
+        | reg operation =>
+            cases operation <;>
+              simp [Ninst.storageEffectTriple?] at instructionNe ⊢
+      simpa only [Func.replaceStopWith, none, Option.toList_none,
+          List.nil_append] using
+        (Func.StorageEffectRun.next instructionChildless (ih tail))
+
 private theorem Ninst.exists_exec_storageEffects
     {pc : Nat} {sevm : Sevm} {pre nextPre : Devm} {out : Execution}
     {instruction : Ninst} {effects : List (Adr × B256 × B256)}

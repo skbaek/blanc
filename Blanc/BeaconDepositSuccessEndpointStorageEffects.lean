@@ -1,40 +1,19 @@
-import Blanc.BeaconDepositAbi
-import Blanc.BeaconDepositCorrectness
-import Blanc.BeaconDepositEvent
-import Blanc.BeaconDepositGuards
-import Blanc.BeaconDepositSuccessGuards
-import Blanc.ForwardStorageAccess
-import Jaune.MulDiv
+import Blanc.BeaconDepositAbiStorageEffects
+import Blanc.BeaconDepositEventStorageEffects
+import Blanc.BeaconDepositGuardStorageEffects
+import Blanc.BeaconDepositSuccess
+import Blanc.BeaconDepositSuccessStorageEffects
 
-/-!
-# Beacon deposit successful endpoint
-
-Composition of the ABI decoder, six source guards, event emission, data-node
-reconstruction, count commit, and the unique first-live branch write.
--/
+/-! # Exact retained storage effects for a successful Beacon deposit endpoint -/
 
 namespace Blanc.BeaconDeposit
 
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-/-- Exact successful endpoint gas, including the variable selected storage
-charges and excluding the public selector route. -/
-def depositEndpointSuccessGas
-    (sevm : Sevm) (base : Devm) (stor : Stor) (keys : KeySet)
-    (node : B256) (n size countCost G : Nat) : Nat :=
-  ((((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n node) +
-        insertionDeadGas sevm.currentTarget stor n
-          (insertionNatState 0 size node keys)) +
-      38 + countCost) + 1838) +
-    5799 + sloadCost sevm base depositCountSlot) +
-  depositGuardsGas) + 521
-
-/-- A model-successful deposit runs the complete compiled endpoint.  The
-exhibited carriers retain the event boundary, reconstruction metadata, and
-insertion state needed by the public effect theorem. -/
-theorem depositEndpoint_success_runCompiledTo
+/-- A model-successful deposit endpoint retains exactly the deposit-count write
+and then its unique first-live branch write. -/
+theorem depositEndpoint_success_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {pubkey withdrawalCredentials signature : Bytes}
     {depositDataRoot : B256} {s s' : Acc} {ev : DepositEvent}
@@ -121,7 +100,7 @@ theorem depositEndpoint_success_runCompiledTo
         (insertionLoopIter sevm.currentTarget stor n
           (insertionNatState 0 (s.count + 1)
             depositDataRoot keys))) ∧
-      Func.RunCompiledTo fs sevm
+      Func.StorageEffectRun fs sevm
         (base.setMach
           ⟨[], Mem.empty,
             depositEndpointSuccessGas sevm base stor keys depositDataRoot
@@ -131,7 +110,11 @@ theorem depositEndpoint_success_runCompiledTo
           ((afterSstore sevm finalBase (branchSlot n)
             (accumulatedNode Bytes.sha256 (accOfStor stor).branch
               0 n depositDataRoot)).setMach
-            ⟨[], finalMemory, G⟩)) := by
+            ⟨[], finalMemory, G⟩))
+        [(sevm.currentTarget, depositCountSlot, Nat.toB256 s.count + 1),
+          (sevm.currentTarget, branchSlot n,
+            accumulatedNode Bytes.sha256 (accOfStor stor).branch
+              0 n depositDataRoot)] := by
   obtain ⟨hpubkey, hwithdrawal, hsignature, hlowerNat, hgweiNat,
       hupperNat, hrootModel, hcapNat, _hnewCount, hevent, _hinsert⟩ :=
     deposit_ok_spec Bytes.sha256 s pubkey withdrawalCredentials signature
@@ -194,10 +177,15 @@ theorem depositEndpoint_success_runCompiledTo
       38 + countCost) + 1838)
   obtain ⟨logged, hlogs, hstorVal, hstorMap, hbal, hcode, hloadedKeys,
       haddresses, houtput, herror, heventLift⟩ :=
-    stageDepositEvent_runCompiledTo
+    stageDepositEvent_storageEffectRun
       (fs := fs) (sevm := sevm) (base := base)
       (amount := amount) (oldCount := oldCount) (G := suffixGas)
       (body := depositAfterEvent)
+      (effects :=
+        [(sevm.currentTarget, depositCountSlot, oldCount + 1),
+          (sevm.currentTarget, branchSlot n,
+            accumulatedNode Bytes.sha256 (accOfStor stor).branch
+              0 n depositDataRoot)])
       hdec.pubkeyTail hdec.withdrawalCredentialsTail hdec.signatureTail
       (by simpa only [oldCount] using hcountValue) hstatic
   let stagedBase := logged.setMach
@@ -249,7 +237,7 @@ theorem depositEndpoint_success_runCompiledTo
     rw [haddresses, Blanc.afterSload_accessedAddresses]
     exact hwarm
   obtain ⟨mid, finalBase, finalMemory, hmeta, hfinal, hsuffix⟩ :=
-    depositSuccessSuffix_runCompiledTo
+    depositSuccessSuffix_storageEffectRun
       (fs := fs) (sevm := sevm) (base := stagedBase)
       (pubkey := pubkey) (withdrawalCredentials := withdrawalCredentials)
       (signature := signature) (amountLE := le64 amount.toNat)
@@ -260,7 +248,7 @@ theorem depositEndpoint_success_runCompiledTo
       hstatic hrootArg hcapWord hshift hheight (by omega) hfirst hstor'
       hkeys' hcount' hbranchSentry hbound hcountSentry hreconstructBound
       hinsertionContinuation hinsertionLoop
-  have heventRun : Func.RunCompiledTo fs sevm
+  have heventRun : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[], depositEventInputMemory sevm.data amount,
           suffixGas + 5799 + sloadCost sevm base depositCountSlot⟩)
@@ -268,19 +256,23 @@ theorem depositEndpoint_success_runCompiledTo
       (.ok
         ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
-            0 n depositDataRoot)).setMach ⟨[], finalMemory, G⟩)) := by
+            0 n depositDataRoot)).setMach ⟨[], finalMemory, G⟩))
+      [(sevm.currentTarget, depositCountSlot, oldCount + 1),
+        (sevm.currentTarget, branchSlot n,
+          accumulatedNode Bytes.sha256 (accOfStor stor).branch
+            0 n depositDataRoot)] := by
     apply heventLift
     rw [show depositAfterEvent =
       reconstructDepositDataNode depositSuccessGuards by rfl]
     simpa only [stagedBase, Devm.setMach_setMach, Devm.memory_setMach,
       suffixGas] using hsuffix
-  have hguards := depositGuards_runCompiledTo
+  have hguards := depositGuards_storageEffectRun
     (fs := fs) (sevm := sevm) (base := base)
     (amount := amount)
     (G := suffixGas + 5799 + sloadCost sevm base depositCountSlot)
     hdec hpubkey hwithdrawal hsignature rfl hlowerWord hgweiWord hupperWord
     heventRun
-  have habi := validateDepositAbi_success_runCompiledTo
+  have habi := validateDepositAbi_success_storageEffectRun
     (fs := fs) (sevm := sevm) (base := base)
     (G := suffixGas + 5799 + sloadCost sevm base depositCountSlot +
       depositGuardsGas)
@@ -289,7 +281,7 @@ theorem depositEndpoint_success_runCompiledTo
     hbal, hcode, hloadedKeys, haddresses, houtput, herror, hmeta, hfinal, ?_⟩
   · rw [Blanc.afterSload_logs, hstaged] at hlogs
     exact hlogs
-  · simpa only [depositEndpoint, depositEndpointSuccessGas, suffixGas] using
-      habi
+  · simpa only [depositEndpoint, depositEndpointSuccessGas, suffixGas,
+      oldCount] using habi
 
 end Blanc.BeaconDeposit

@@ -17,7 +17,7 @@ auxiliary.  Every walk ends at the catalogued `Error(string)` payload.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- Exact endpoint-level evidence for one catalogued model error.  The gas
 witness is existential because C3 fixes the revert and payload, while the

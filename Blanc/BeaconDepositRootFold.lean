@@ -14,7 +14,7 @@ than reopening word/natural conversions inside every opcode walk.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- The machine-visible state at one `rootLoop` entry. -/
 structure RootLoopState where

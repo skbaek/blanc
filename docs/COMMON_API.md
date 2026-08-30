@@ -151,7 +151,9 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
   compiled walk directly when the shared executable entry/component checkers
   certify both same-frame SSTORE freedom and absence of child-entering
   instructions; recursive internal-call components are supported.
-- `Func.replaceStopWith` replaces successful `STOP` leaves, while
+- `Func.replaceStopWith` replaces successful `STOP` leaves and
+  `Func.replaceStopWith_prepend` pushes that replacement through an
+  instruction-only prefix, while
   `NoRawSstorePath.replaceStopWith_of_error` transports an exact error-ending
   path and its certificate across that replacement.  Use this when a checker
   can certify a prefix only with a harmless success continuation: the error
@@ -550,7 +552,14 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   use `Func.StorageEffectRun` with `of_noRawSstorePath` for an already
   certified empty path and its `last`, `next`, `next_effectNeutral`, `zero`,
   `succ`, and `call` constructors; ordinary non-external steps can otherwise
-  use `StorageEffectPath.next_of_not_exec`.  Finish with
+  use `StorageEffectPath.next_of_not_exec`.  The `storage_effect_run` tactic
+  walks a childless non-SSTORE prefix with `func_run`'s state, gas, hint, and
+  side-condition engine, deliberately returning an external instruction,
+  SSTORE, internal call, or terminal to the caller.  To replace a designated
+  successful `STOP` by an exact-effect continuation, certify the selected
+  neutral walk with `RunCompiledTo.SuccessfulStopPrefix.of_execFree` and use
+  `SuccessfulStopPrefix.splice`; `Func.SuccessStopOnly` rules out other
+  successful terminal shapes and internal-call leaves.  Finish with
   `Prog.exists_exec_retainedStorageEffectTriples`, or its `_appended` variant
   when the compiled program is the exact prefix of creation code. The
   resulting list is exact execution order and intentionally retains successful

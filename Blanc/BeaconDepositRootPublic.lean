@@ -11,7 +11,7 @@ re-expanded while the public carrier is elaborated.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- The exact compiled public root query at zero value. -/
 theorem getDepositRoot_zero_runCompiled

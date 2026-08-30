@@ -1,37 +1,34 @@
-import Blanc.BeaconDepositInsertBridge
-import Blanc.ForwardStorageAccess
+import Blanc.BeaconDepositReconstructStorageEffects
+import Blanc.BeaconDepositInsertCommit
+import Blanc.BeaconDepositSuccessGuards
 
-/-! # Beacon deposit successful root and capacity guards -/
+/-!
+# Exact storage effects through the Beacon deposit success suffix
+
+The post-reconstruction guards are storage-neutral.  Composing them with the
+exact reconstruction and commit carriers therefore exposes the successful
+deposit chronology without weakening it to a final-state delta.
+-/
 
 namespace Blanc.BeaconDeposit
 
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-/-- The successful suffix after deposit-data reconstruction: check the supplied
-root, check the tree-capacity bound, then commit the deposit. -/
-def depositSuccessGuards : Func :=
-  let checkCap :=
-    pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
-    loadWord oldCountWord +++ lt ::: iszero :::
-    ((.call treeFullErrorSlot) <?> commitDeposit)
-  loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
-  ((.call rootMismatchErrorSlot) <?> checkCap)
-
-/-- The reconstructed-root equality guard passes in exactly 31 gas and leaves
-an arbitrary post-root continuation. -/
-theorem depositRootGuard_runCompiledTo
+/-- Exact-effect companion of `depositRootGuard_runCompiledTo`. -/
+theorem depositRootGuard_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {oldCount node : B256}
     {G : Nat} {rest : Func} {ex : Execution}
+    {effects : List (Adr × B256 × B256)}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hroot : Sevm.argWord sevm 3 = node)
-    (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
-    Func.RunCompiledTo fs sevm
+    (htail : Func.StorageEffectRun fs sevm
+      (base.setMach ⟨[], memory, G⟩) rest ex effects) :
+    Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 31⟩)
       (loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
-        ((.call rootMismatchErrorSlot) <?> rest)) ex := by
+        ((.call rootMismatchErrorSlot) <?> rest)) ex effects := by
   have hmod : memory.size % 32 = 0 := by
     rw [hmem.size_eq]
   have hcovered : 640 + 32 ≤ memory.size := by
@@ -40,35 +37,101 @@ theorem depositRootGuard_runCompiledTo
   have hread : Bytes.toB256 (memory.read 640 32).1 = node := hmem.readNode
   have hmemory : (memory.read 640 32).2 = memory := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le hmod hcovered)]
-  func_run (7) [3, 1, 0]
-  case h_cost =>
-    simp only [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel]
-    rw [Devm.extCost_zero_of_le hmod hcovered]
-    norm_num [gVerylow]
-  case h_val =>
-    change Sevm.argWord sevm 3 =? (memory.read 640 32).1.toB256 = 1
-    rw [hroot, hread]
-    simp [B256.eqCheck]
-  case h_arm =>
-    rw [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
-      hmemory]
-    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+  simp only [loadWord, arg, cdl, prepend,
+    show (nodeWord * 32 : B256) = 640 by decide +kernel,
+    show 32 * (3 : B256) + 4 = 100 by decide +kernel]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_pushB256 (w := 640) (c := gVerylow) (G := G + 28)
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [Devm.stack_setMach, List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_mload_of
+      (sevm := sevm)
+      (devm := base.setMach ⟨[640], memory, G + 28⟩)
+      (i := 640) (v := node) (s := []) (c := gVerylow)
+      (G := G + 25) (M := memory) rfl
+      (by
+        rw [show (640 : B256).toNat = 640 by decide +kernel]
+        rw [Devm.extCost_zero_of_le hmod hcovered]
+        rfl)
+      hread hmemory
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_pushB256 (w := 100) (c := gVerylow) (G := G + 22)
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_calldataload
+      (sevm := sevm)
+      (devm := base.setMach ⟨100 :: node :: [], memory, G + 22⟩)
+      (x := 100) (v := Sevm.argWord sevm 3) (s := node :: [])
+      (G := G + 19) rfl
+      (by rfl)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [List.length_cons, List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_binary
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨Sevm.argWord sevm 3 :: node :: [], memory, G + 19⟩)
+      (r := .eq) (f := B256.eqCheck) (cost := gVerylow)
+      (x := Sevm.argWord sevm 3) (y := node) (v := 1) (s := [])
+      (G := G + 16) (by rintro ⟨⟩) rfl rfl
+      (by rw [hroot]; simp [B256.eqCheck])
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_unary
+      (sevm := sevm)
+      (devm := base.setMach ⟨[1], memory, G + 16⟩)
+      (r := .iszero) (f := (B256.eqCheck · 0))
+      (cost := gVerylow) (x := 1) (v := 0) (s := [])
+      (G := G + 13) (by rintro ⟨⟩) rfl rfl rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach]
+  apply Func.StorageEffectRun.zero
+    (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      omega)
+    (Devm.popBurnBy_setMach (s := []) (G := G)
+      (by simp only [Devm.stack_setMach])
+      (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
+  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
 
-/-- The tree-capacity guard passes in exactly 28 gas and leaves an arbitrary
-post-cap continuation. -/
-theorem depositCapGuard_runCompiledTo
+/-- Exact-effect companion of `depositCapGuard_runCompiledTo`. -/
+theorem depositCapGuard_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {oldCount node : B256}
     {G : Nat} {rest : Func} {ex : Execution}
+    {effects : List (Adr × B256 × B256)}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
-    (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
-    Func.RunCompiledTo fs sevm
+    (htail : Func.StorageEffectRun fs sevm
+      (base.setMach ⟨[], memory, G⟩) rest ex effects) :
+    Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 28⟩)
-      (pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
+      (Ninst.pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
         loadWord oldCountWord +++ lt ::: iszero :::
-        ((.call treeFullErrorSlot) <?> rest)) ex := by
+        ((.call treeFullErrorSlot) <?> rest)) ex effects := by
   have hmod : memory.size % 32 = 0 := by
     rw [hmem.size_eq]
   have hcovered : 576 + 32 ≤ memory.size := by
@@ -78,47 +141,102 @@ theorem depositCapGuard_runCompiledTo
     hmem.readOldCount
   have hmemory : (memory.read 576 32).2 = memory := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le hmod hcovered)]
-  func_run (6) [3, 1, 0]
-  case h_cost =>
-    rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel]
-    rw [Devm.extCost_zero_of_le hmod hcovered]
-    norm_num [gVerylow]
-  case h_val =>
-    rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
-      hread]
-    rw [B256.ltCheck, if_pos hcap]
-  case h_arm =>
-    rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
-      hmemory]
-    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+  simp only [loadWord, prepend,
+    show (oldCountWord * 32 : B256) = 576 by decide +kernel]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_pushB256
+      (w := Nat.toB256 (2 ^ 32 - 1)) (c := gVerylow) (G := G + 25)
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [Devm.stack_setMach, List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_pushB256 (w := 576) (c := gVerylow) (G := G + 22)
+      (by decide +kernel)
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by
+        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_mload_of
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨576 :: Nat.toB256 (2 ^ 32 - 1) :: [], memory, G + 22⟩)
+      (i := 576) (v := oldCount)
+      (s := Nat.toB256 (2 ^ 32 - 1) :: [])
+      (c := gVerylow) (G := G + 19) (M := memory) rfl
+      (by
+        rw [show (576 : B256).toNat = 576 by decide +kernel]
+        rw [Devm.extCost_zero_of_le hmod hcovered]
+        rfl)
+      hread hmemory
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [List.length_cons, List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_binary
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨oldCount :: Nat.toB256 (2 ^ 32 - 1) :: [], memory, G + 19⟩)
+      (r := .lt) (f := B256.ltCheck) (cost := gVerylow)
+      (x := oldCount) (y := Nat.toB256 (2 ^ 32 - 1))
+      (v := 1) (s := []) (G := G + 16)
+      (by rintro ⟨⟩) rfl rfl
+      (by rw [B256.ltCheck, if_pos hcap])
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach]
+  apply Func.StorageEffectRun.next_effectNeutral
+    (Ninst.runCompiled_unary
+      (sevm := sevm)
+      (devm := base.setMach ⟨[1], memory, G + 16⟩)
+      (r := .iszero) (f := (B256.eqCheck · 0))
+      (cost := gVerylow) (x := 1) (v := 0) (s := [])
+      (G := G + 13) (by rintro ⟨⟩) rfl rfl rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow])
+      (by simp only [List.length_nil]; omega))
+    (by rintro ⟨⟩) (by rintro operation ⟨⟩)
+  simp only [Devm.setMach_setMach]
+  apply Func.StorageEffectRun.zero
+    (by
+      simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+      omega)
+    (Devm.popBurnBy_setMach (s := []) (G := G)
+      (by simp only [Devm.stack_setMach])
+      (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
+  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
 
-/-- When both post-reconstruction guards hold, their compiled path reaches the
-commit program without changing memory or world state and consumes exactly
-59 gas. -/
-theorem depositSuccessGuards_runCompiledTo
+/-- Both successful post-reconstruction guards preserve exact chronology. -/
+theorem depositSuccessGuards_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {oldCount node : B256}
     {G : Nat} {ex : Execution}
+    {effects : List (Adr × B256 × B256)}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hroot : Sevm.argWord sevm 3 = node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
-    (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) commitDeposit ex) :
-    Func.RunCompiledTo fs sevm
+    (htail : Func.StorageEffectRun fs sevm
+      (base.setMach ⟨[], memory, G⟩) commitDeposit ex effects) :
+    Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 59⟩)
-      depositSuccessGuards ex := by
-  have hcapRun := depositCapGuard_runCompiledTo hmem hcap htail
-  have hrootRun := depositRootGuard_runCompiledTo hmem hroot hcapRun
+      depositSuccessGuards ex effects := by
+  have hcapRun := depositCapGuard_storageEffectRun hmem hcap htail
+  have hrootRun := depositRootGuard_storageEffectRun hmem hroot hcapRun
   simpa only [depositSuccessGuards, Nat.add_assoc] using hrootRun
 
-/-- Reconstruct the deposit-data node from the decoded deposit arguments and
-run both post-reconstruction guards.  The reconstructed node is exactly the
-model's `depositDataNode`, and the composed path reaches `commitDeposit` after
-exactly `1779 + 59 = 1838` gas. -/
-theorem reconstructDepositDataNode_successGuards_runCompiledTo
+/-- Exact-effect reconstruction followed by both successful post-hash guards. -/
+theorem reconstructDepositDataNode_successGuards_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {pubkey withdrawalCredentials signature amountLE : Bytes}
     {oldCount amount : B256} {G : Nat}
+    {effects : List (Adr × B256 × B256)}
     (source : ReconstructSourceMemoryCarrier base.memory
       (pubkey ++ zeros 16) (signature.take 64) (signature.drop 64)
       withdrawalCredentials (amountLE ++ zeros 24) oldCount amount 704)
@@ -143,15 +261,16 @@ theorem reconstructDepositDataNode_successGuards_runCompiledTo
           amountLE).toBytes ∧
       ReconstructMetaCarrier sevm base finalPost ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm
-          (finalPost.setMach ⟨[], finalPost.memory, G⟩) commitDeposit ex →
-        Func.RunCompiledTo fs sevm
+        Func.StorageEffectRun fs sevm
+          (finalPost.setMach ⟨[], finalPost.memory, G⟩)
+          commitDeposit ex effects →
+        Func.StorageEffectRun fs sevm
           (base.setMach ⟨[], base.memory, G + 1838⟩)
-          (reconstructDepositDataNode depositSuccessGuards) ex := by
+          (reconstructDepositDataNode depositSuccessGuards) ex effects := by
   have hnodeEq := reconstructedDepositNode_eq_model pubkey
     withdrawalCredentials signature amountLE hwithdrawal hamount hsignature
   obtain ⟨finalPost, hregisters, hreturn, hmeta, hlift⟩ :=
-    reconstructDepositDataNode_runCompiledTo
+    reconstructDepositDataNode_storageEffectRun
       (fs := fs) (sevm := sevm) (base := base)
       (pubkeyInput := pubkey ++ zeros 16)
       (signatureFirst := signature.take 64)
@@ -160,6 +279,7 @@ theorem reconstructDepositDataNode_successGuards_runCompiledTo
       (amountPadded := amountLE ++ zeros 24)
       (oldCount := oldCount) (amount := amount) (stack := [])
       (success := depositSuccessGuards) (K := G + 59)
+      (effects := effects)
       source hnodeleg hwarm hpre hdepth hbound (by simp)
   obtain ⟨hcarrier⟩ := hregisters
   refine ⟨finalPost, ⟨?_⟩, ?_, hmeta, ?_⟩
@@ -168,19 +288,16 @@ theorem reconstructDepositDataNode_successGuards_runCompiledTo
   · rw [← hnodeEq]
     exact hreturn
   · intro ex htail
-    have hguards := depositSuccessGuards_runCompiledTo
+    have hguards := depositSuccessGuards_storageEffectRun
       (fs := fs) (sevm := sevm) (base := finalPost)
       (memory := finalPost.memory) (G := G)
       hcarrier.toInsertionStart (hroot.trans hnodeEq.symm) hcap htail
     have hgas : G + 59 + 1779 = G + 1838 := by omega
     simpa only [hgas] using hlift hguards
 
-/-- The complete post-decode success suffix: reconstruct the deposit-data node,
-pass the root and capacity guards, increment the deposit count, and run the
-insertion through its unique first-live branch store.  Every premise is stated
-over the pre-reconstruction state; the reconstruction metadata carrier and the
-selected-`SSTORE` projections transfer them to the commit stage. -/
-theorem depositSuccessSuffix_runCompiledTo
+/-- The complete post-decode success suffix retains exactly the count write
+followed by the unique first-live branch write. -/
+theorem depositSuccessSuffix_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {pubkey withdrawalCredentials signature amountLE : Bytes}
     {oldCount amount node : B256} {stor : Stor} {keys : KeySet}
@@ -237,7 +354,7 @@ theorem depositSuccessSuffix_runCompiledTo
         finalBase finalMemory oldCount
         (insertionLoopIter sevm.currentTarget stor n
           (insertionNatState 0 size node keys))) ∧
-      Func.RunCompiledTo fs sevm
+      Func.StorageEffectRun fs sevm
         (base.setMach
           ⟨[], base.memory,
             ((((G + 46 +
@@ -248,14 +365,24 @@ theorem depositSuccessSuffix_runCompiledTo
         (reconstructDepositDataNode depositSuccessGuards)
         (.ok ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
-            0 n node)).setMach ⟨[], finalMemory, G⟩)) := by
+            0 n node)).setMach ⟨[], finalMemory, G⟩))
+        [(sevm.currentTarget, depositCountSlot, oldCount + 1),
+          (sevm.currentTarget, branchSlot n,
+            accumulatedNode Bytes.sha256 (accOfStor stor).branch
+              0 n node)] := by
   subst hnode
   obtain ⟨mid, hcarrier, _hreturn, hmeta, hlift⟩ :=
-    reconstructDepositDataNode_successGuards_runCompiledTo
+    reconstructDepositDataNode_successGuards_storageEffectRun
       (fs := fs) (sevm := sevm) (base := base)
       (pubkey := pubkey) (withdrawalCredentials := withdrawalCredentials)
       (signature := signature) (amountLE := amountLE)
       (oldCount := oldCount) (amount := amount)
+      (effects :=
+        [(sevm.currentTarget, depositCountSlot, oldCount + 1),
+          (sevm.currentTarget, branchSlot n,
+            accumulatedNode Bytes.sha256 (accOfStor stor).branch 0 n
+              (depositDataNode Bytes.sha256 pubkey withdrawalCredentials
+                signature amountLE))])
       (G :=
         (((G + 46 + insertionFirstLiveStoreCost sevm stor keys 0 n
               (depositDataNode Bytes.sha256 pubkey withdrawalCredentials
@@ -295,7 +422,7 @@ theorem depositSuccessSuffix_runCompiledTo
       (hmeta.storage sevm.currentTarget)]
     exact hcount
   obtain ⟨finalBase, finalMemory, hfinal, hcommit⟩ :=
-    commitDeposit_firstLive_exists_runCompiledTo
+    commitDeposit_firstLive_exists_storageEffectRun
       (fs := fs) (sevm := sevm) (base := mid) (memory := mid.memory)
       (oldCount := oldCount) (n := n) (size := size) (G := G)
       hstart hshift hstorMid hkeysMid hheight hsize hfirst hnodelegMid

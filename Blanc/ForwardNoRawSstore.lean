@@ -365,6 +365,16 @@ def Func.replaceStopWith (source replacement : Func) : Func :=
       .next instruction (body.replaceStopWith replacement)
   | .call index => .call index
 
+/-- `replaceStopWith` commutes with an instruction-only prefix. -/
+theorem Func.replaceStopWith_prepend
+    (line : Line) (source replacement : Func) :
+    (line +++ source).replaceStopWith replacement =
+      line +++ source.replaceStopWith replacement := by
+  induction line with
+  | nil => rfl
+  | cons instruction line ih =>
+      simp only [prepend, Func.replaceStopWith, ih]
+
 /-- An error-ending selected path cannot reach a successful-stop leaf.
 Therefore every such dead leaf may be replaced while preserving the exact
 intermediate states, final error, and raw-SSTORE certificate. -/

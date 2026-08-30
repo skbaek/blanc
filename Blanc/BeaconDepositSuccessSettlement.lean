@@ -14,7 +14,7 @@ case.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- A retained direct-message execution whose model deposit succeeds settles
 to the exact compiled poststate.  The theorem exposes the model-prescribed

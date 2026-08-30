@@ -15,7 +15,7 @@ generic result.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-! ## The interface word actually observed by the runtime -/
 
@@ -886,31 +886,37 @@ theorem supportsInterface_ffffffff_runCompiled
 
 /-! ## The deposit selector path -/
 
-private def depositLeafRoute : Func :=
+/-- Deposit selector leaf used by the ordinary and exact-effect route proofs. -/
+def depositLeafRoute : Func :=
   pushB256 depositSelector ::: eq ::: (depositEndpoint <?> Func.rev)
 
-private def depositRightTree : DispatchTree :=
+/-- Right-hand dispatcher subtree bypassed by the selected deposit path. -/
+def depositRightTree : DispatchTree :=
   .fork
     (.leaf getDepositCountSelector
       (nonpayableEndpoint getDepositCountEndpoint))
     (.leaf getDepositRootSelector
       (nonpayableEndpoint getDepositRootEndpoint))
 
-private def depositMiddleDispatch : Func :=
+/-- Middle comparison layer on the selected deposit dispatcher path. -/
+def depositMiddleDispatch : Func :=
   dup 0 ::: pushB256 getDepositCountSelector ::: gt :::
     (depositLeafRoute <?> dispatch depositRightTree)
 
-private def depositRootDispatch : Func :=
+/-- Root comparison layer on the selected deposit dispatcher path. -/
+def depositRootDispatch : Func :=
   dup 0 ::: pushB256 depositSelector ::: gt :::
     (dispatch
       (.leaf supportsInterfaceSelector
         (nonpayableEndpoint supportsInterfaceEndpoint)) <?>
       depositMiddleDispatch)
 
-private def depositMainRoute : Func :=
+/-- Instruction-only selector extraction followed by the deposit dispatcher path. -/
+def depositMainRoute : Func :=
   fsig +++ depositRootDispatch
 
-private theorem depositMainRoute_eq :
+/-- The compiled runtime main function unfolds to the reusable deposit route. -/
+theorem depositMainRoute_eq :
     Func.main tree = depositMainRoute := by
   rfl
 

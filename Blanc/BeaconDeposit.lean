@@ -11,7 +11,7 @@ finite EVM program that implements the four-selector runtime.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-! ## Stable auxiliary coordinates -/
 

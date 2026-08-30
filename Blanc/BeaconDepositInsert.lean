@@ -10,7 +10,7 @@ loop, its branch/node SHA-256 step, and the terminal first-live branch store.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 private theorem insertionLoopBit_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}

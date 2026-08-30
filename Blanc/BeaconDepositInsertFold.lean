@@ -13,7 +13,7 @@ terminal live store remains a separate selected-cost step.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-- The machine-visible state at one insertion-loop entry. -/
 structure InsertionLoopState where

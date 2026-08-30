@@ -12,7 +12,7 @@ compiled walk remains an independently measurable proof unit.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 /-! ## Exact deposit-count endpoint -/
 
 def getDepositCountEndpointWarmGas : Nat := 253

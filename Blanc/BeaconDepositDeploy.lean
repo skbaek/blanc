@@ -14,7 +14,7 @@ the same shape even though the runtime offset changes.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-! ## Independent constructor coordinates -/
 

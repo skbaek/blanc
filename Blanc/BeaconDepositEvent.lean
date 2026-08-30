@@ -15,7 +15,7 @@ walk outcome-polymorphic.
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 private def eventPayloadMemory (data : Bytes) (amount : B256) : Mem :=
   let M0 := depositEventInputMemory data amount

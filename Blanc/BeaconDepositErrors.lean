@@ -17,7 +17,7 @@ empty retained write list on the exact reverting execution.  C5 classifies raw
 namespace Blanc.BeaconDeposit
 
 open Jaune
-open Jaune.Ninst Ninst
+open Jaune.Ninst Blanc.Ninst
 
 /-! ## Empty calldata -/
 
