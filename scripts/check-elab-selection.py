@@ -357,7 +357,7 @@ def read_state(path: Path) -> tuple[dict[str, Any] | None, str | None]:
 
 
 def read_baseline(path: Path) -> dict[str, float]:
-    """Parse the committed baseline into path -> seconds.
+    """Parse the host-local baseline into path -> seconds.
 
     The baseline is a provenance ledger with rows embedded: comment blocks sit
     between row groups, not only at the top, so comments are skipped wherever
@@ -521,11 +521,11 @@ def make_plan(
     calibration: dict[str, Any] | None = None
     if calibration_commit is not None:
         if baseline_path is None:
-            raise SelectionError("calibration needs the committed baseline")
+            raise SelectionError("calibration needs the host-local baseline")
         baseline = read_baseline(baseline_path)
         # `affected` may alias `files` on a full run; never append through it.
         affected = list(affected)
-        # A module with no committed row is the measurement, not a control, so
+        # A module with no local row is the measurement, not a control, so
         # it is measured whatever the cache believes about it.
         mandatory = [relative for relative in files if relative not in baseline]
         for relative in mandatory:
@@ -535,9 +535,9 @@ def make_plan(
         # Drawable means the fingerprint proves this file cannot have moved.
         # That is exactly the set this run is not measuring, which is why a
         # calibration run may not write to the cache: caching the module it just
-        # measured would make that module drawable next time, so the runs of a
-        # measurement triple would not agree on what they measured and a refusal
-        # could be retried away. See commit_state's refusal.
+        # measured would make that module drawable next time, so a retry of a
+        # refused calibration would not agree on what it measured and the
+        # refusal could be retried away. See commit_state's refusal.
         drawable = set(cached)
         calibration = draw_calibration(
             baseline,
@@ -673,35 +673,23 @@ def merge_results(plan: dict[str, Any], measured_path: Path, report_path: Path) 
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def commit_state(
+def validate_results(
     plan: dict[str, Any],
     report_path: Path,
-    state_path: Path,
     excluded: set[str] | None = None,
-) -> None:
+) -> dict[str, dict[str, str]]:
     excluded = excluded or set()
-    if plan.get("calibration") is not None:
-        # The draw is a function of which files this run believes are unaffected,
-        # and that belief comes from this cache. A calibration run that wrote to
-        # it would move the ground under its own successors: the module it just
-        # measured would become cache-valid, hence drawable, and the next run of
-        # the same measurement triple would draw a different sample — so a triple
-        # would not measure one set and a refusal could be retried away. A
-        # calibration run therefore measures, reports, and records nothing.
-        raise SelectionError(
-            "a calibration run must not advance the cache its own draw depends on"
-        )
     rows = read_result_rows(report_path)
     files = set(plan["files"])
     if set(rows) != files:
         raise SelectionError("complete result set does not match the current Lean source set")
     if not excluded <= files:
-        raise SelectionError(f"cache exclusion names unknown files: {sorted(excluded - files)}")
+        raise SelectionError(f"result exclusion names unknown files: {sorted(excluded - files)}")
     if any(
         row["status"] != "OK" and relative not in excluded
         for relative, row in rows.items()
     ):
-        raise SelectionError("refusing to cache a result containing elaboration errors")
+        raise SelectionError("refusing a result set containing unexcluded elaboration errors")
 
     # Do not attach measurements to stale fingerprints if an editor changed a
     # source or configuration file while the sequential gate was running.
@@ -724,8 +712,29 @@ def commit_state(
     ):
         raise SelectionError(
             "Lean sources or shared configuration changed during measurement; "
-            "refusing stale cache state"
+            "refusing stale measurement results"
         )
+    return rows
+
+
+def commit_state(
+    plan: dict[str, Any],
+    report_path: Path,
+    state_path: Path,
+    excluded: set[str] | None = None,
+) -> None:
+    excluded = excluded or set()
+    if plan.get("calibration") is not None:
+        # The draw is a function of which files this run believes are unaffected,
+        # and that belief comes from this cache. A calibration run that wrote to
+        # it would move the ground under its own successors: the module it just
+        # measured would become cache-valid, hence drawable, and a retry of the
+        # same refused calibration would draw a different sample. A calibration
+        # run therefore never advances the selection cache.
+        raise SelectionError(
+            "a calibration run must not advance the cache its own draw depends on"
+        )
+    rows = validate_results(plan, report_path, excluded)
 
     state = {
         "version": STATE_VERSION,
@@ -1161,7 +1170,7 @@ def self_test() -> int:
         assert "Blanc/D.lean" in plan["affected"]
         assert "Blanc/D.lean" not in plan["cached"]
         assert "Blanc/D.lean" not in calibration["selected"]
-        controls += 1  # a module with no committed row is mandatory, and never a control
+        controls += 1  # a module with no local row is mandatory, and never a control
 
         assert {"Blanc/A.lean", "Blanc.lean"} <= set(plan["affected"])
         assert not {"Blanc/A.lean", "Blanc.lean"} & set(calibration["selected"])
@@ -1172,8 +1181,8 @@ def self_test() -> int:
         assert "Blanc/Removed.lean" not in calibration["selected"]
         controls += 1  # a baseline row whose file is gone is never drawn
 
-        # Two plans over the same unchanged state must agree: that is what
-        # makes the runs of a measurement triple measure one set.
+        # Two plans over the same unchanged state must agree: that is what makes
+        # a refused calibration reproducible before any row is initialized.
         repeat = make_plan(
             root, state_path, "Lean test",
             baseline_path=baseline_path, calibration_commit=commit_a,
@@ -1188,6 +1197,7 @@ def self_test() -> int:
         controls += 1  # rows measured instead of drawn are recorded, so the population is checkable
 
         write_rows(report_path, fake_rows(plan))
+        validate_results(plan, report_path)
         try:
             commit_state(plan, report_path, state_path)
         except SelectionError as error:
@@ -1249,7 +1259,7 @@ def calibration_verdict(
     warn_factor: float,
     floor: float,
 ) -> dict[str, Any]:
-    """Adjudicate the drawn controls against their committed baseline rows.
+    """Adjudicate the drawn controls against their host-local baseline rows.
 
     A control carries the same factor and the same absolute floor as a row.
     Dropping the floor would make the cheapest band refuse on ordinary
@@ -1315,7 +1325,7 @@ def calibration_block(
     warn_factor: float,
     floor: float,
 ) -> str:
-    """Render the paste-ready evidence block for the baseline comment.
+    """Render the reviewable evidence block for a calibration run.
 
     Generated rather than transcribed, because a reviewer must be able to
     recompute the draw from the commit and check it was not gamed.
@@ -1438,7 +1448,7 @@ def command_calibrate_verdict(args: argparse.Namespace) -> int:
     block = calibration_block(
         calibration, summary, rows, args.fail_factor, args.warn_factor, args.floor
     )
-    print("--- calibration evidence (paste into the baseline comment) ---")
+    print("--- calibration evidence ---")
     for line in block.split("\n"):
         print(f"# {line}".rstrip())
     print("--- end calibration evidence ---")
@@ -1492,6 +1502,17 @@ def command_plan(args: argparse.Namespace) -> int:
             f"provably-unaffected control(s), seed {calibration['seed'][:12]} "
             f"from commit {calibration['commit'][:12]}"
         )
+    return 0
+
+
+def command_validate(args: argparse.Namespace) -> int:
+    validate_results(
+        read_plan(args.plan),
+        args.report,
+        set(args.exclude_file.read_text(encoding="utf-8").splitlines())
+        if args.exclude_file
+        else None,
+    )
     return 0
 
 
@@ -1551,6 +1572,12 @@ def build_parser() -> argparse.ArgumentParser:
             else None,
         )
     )
+
+    validate = subparsers.add_parser("validate")
+    validate.add_argument("--plan", type=Path, required=True)
+    validate.add_argument("--report", type=Path, required=True)
+    validate.add_argument("--exclude-file", type=Path)
+    validate.set_defaults(function=command_validate)
 
     verdict = subparsers.add_parser("calibrate-verdict")
     verdict.add_argument("--plan", type=Path, required=True)
