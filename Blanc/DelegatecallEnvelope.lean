@@ -88,6 +88,31 @@ def DelegatecallSpawnDescriptor.parent
     d.inputOffsetWord.toNat d.inputSizeWord.toNat
     d.outputOffsetWord.toNat d.outputSizeWord.toNat
 
+/-- Delegation resolution only changes access metadata; its retained machine
+memory is exactly the call state's machine memory. -/
+theorem DelegatecallSpawnDescriptor.afterAccess_memory
+    {sevm : Sevm} {callPre : Devm}
+    (d : DelegatecallSpawnDescriptor sevm callPre) :
+    d.afterAccess.memory = callPre.memory := by
+  have delegationMemory :
+      (accessDelegation
+        (addAccessedAddress
+          (callPre.setMach
+            ⟨d.stackTail, callPre.memory, callPre.gasLeft⟩)
+          d.codeWord.toAdr)
+        d.codeWord.toAdr).2.2.2.2.memory = callPre.memory := by
+    dsimp only [accessDelegation]
+    cases getDelegatedCodeAddress
+      ((addAccessedAddress
+        (callPre.setMach
+          ⟨d.stackTail, callPre.memory, callPre.gasLeft⟩)
+        d.codeWord.toAdr).state.getCode d.codeWord.toAdr) <;> rfl
+  have resolvedMemory := congrArg
+    (fun result : Bool × Adr × ByteArray × Nat × Devm =>
+      result.2.2.2.2.memory)
+    d.delegationEq
+  exact resolvedMemory.symm.trans delegationMemory
+
 /-- The actual child message produced by the descriptor. -/
 def DelegatecallSpawnDescriptor.child
     {sevm : Sevm} {callPre : Devm}
@@ -147,6 +172,14 @@ def DelegatecallSpawnDescriptor.resume
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.code = d.code :=
+  rfl
+
+@[simp] theorem DelegatecallSpawnDescriptor.child_data
+    {sevm : Sevm} {callPre : Devm}
+    (d : DelegatecallSpawnDescriptor sevm callPre) :
+    d.child.data =
+      (d.parent.memory.read d.inputOffsetWord.toNat
+        d.inputSizeWord.toNat).1 :=
   rfl
 
 /-- The exact `.delcall` step that spawns the descriptor's child frame and
@@ -301,6 +334,67 @@ theorem DelegatecallSpawnDescriptor.settled_of_runCompiled
             rfl
           · rw [← postEq, status]
             rfl
+
+/-- The resumed parent memory is exactly the suspended parent's extended
+memory followed by the requested output-window write. -/
+theorem DelegatecallSettledBoundary.memory
+    {sevm : Sevm} {callPre child post : Devm}
+    {d : DelegatecallSpawnDescriptor sevm callPre}
+    (settled : DelegatecallSettledBoundary d child post) :
+    post.memory = d.parent.memory.write d.outputOffsetWord.toNat
+      (child.output.take d.outputSizeWord.toNat) := by
+  rcases settled with ⟨_, resume, _, _, _, _, _⟩
+  have key : ∀ parentChild : Devm,
+      parentChild.memory = d.parent.memory → ∀ status : B256,
+      (Devm.push status parentChild >>= fun pushed =>
+        (.ok (pushed.memWrite d.outputOffsetWord.toNat
+          (child.output.take d.outputSizeWord.toNat)) : Execution)) = .ok post →
+      post.memory = d.parent.memory.write d.outputOffsetWord.toNat
+        (child.output.take d.outputSizeWord.toNat) := by
+    intro parentChild parentMemory status pushedRun
+    rcases pushEq : Devm.push status parentChild with error | pushed <;>
+      rw [pushEq] at pushedRun
+    · cases pushedRun
+    · injection pushedRun with postEq
+      subst postEq
+      have pushedMemory := (Devm.push_of_push pushEq).memory
+      show pushed.memory.write d.outputOffsetWord.toNat
+          (child.output.take d.outputSizeWord.toNat) = _
+      rw [← pushedMemory, parentMemory]
+  unfold DelegatecallSpawnDescriptor.resume Resume.run liftToExecution at resume
+  dsimp only [bind, Except.bind] at resume
+  split at resume
+  · exact key (incorporateChildOnError d.parent child child.output) rfl 0 resume
+  · exact key (incorporateChildOnSuccess d.parent child child.output) rfl 1 resume
+
+/-- A zero-sized call output window leaves the suspended parent's memory
+unchanged, independent of the child's returndata. -/
+theorem DelegatecallSettledBoundary.memory_eq_parent_of_outputSize_zero
+    {sevm : Sevm} {callPre child post : Devm}
+    {d : DelegatecallSpawnDescriptor sevm callPre}
+    (settled : DelegatecallSettledBoundary d child post)
+    (outputSize : d.outputSizeWord = 0) :
+    post.memory = d.parent.memory := by
+  have memory := settled.memory
+  rw [outputSize] at memory
+  simpa only [show ((0 : B256)).toNat = 0 from rfl, List.take_zero,
+    Mem.write] using memory
+
+/-- A settled call with no output copy preserves every proof-carrying memory
+image from its call state.  The suspended parent may extend memory for the
+input/output ranges, but extension preserves both well-formedness and reads. -/
+theorem DelegatecallSettledBoundary.memory_image_of_outputSize_zero
+    {sevm : Sevm} {callPre child post : Devm} {image : Bytes}
+    {d : DelegatecallSpawnDescriptor sevm callPre}
+    (settled : DelegatecallSettledBoundary d child post)
+    (outputSize : d.outputSizeWord = 0)
+    (memoryWf : Mem.Wf callPre.memory)
+    (memoryReads : Mem.Reads callPre.memory image) :
+    Mem.Wf post.memory ∧ Mem.Reads post.memory image := by
+  rw [settled.memory_eq_parent_of_outputSize_zero outputSize,
+    DelegatecallSpawnDescriptor.parent, callSpawnParent_memory,
+    d.afterAccess_memory]
+  exact ⟨Mem.Wf.extends _ memoryWf, Mem.Reads.extends _ memoryReads⟩
 
 theorem DelegatedChildCertificate.process
     {msg : Msg}

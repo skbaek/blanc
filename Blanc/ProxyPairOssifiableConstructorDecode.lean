@@ -1321,6 +1321,12 @@ inductive OssifiableConstructorDecodeRoute
     (argsOffset : Nat) (tail : Stack) (image : Bytes)
     (out : Execution) : Prop where
   | accepted (implementation requestedAdmin : B256) (setupData : Bytes)
+      (implementationWord :
+        ossifiableConstructorCodeWord sevm.code.toList argsOffset =
+          implementation)
+      (requestedAdminWord :
+        ossifiableConstructorCodeWord sevm.code.toList (argsOffset + 32) =
+          requestedAdmin)
       (implementationClean : addressMask &&& implementation = 0)
       (requestedAdminClean : addressMask &&& requestedAdmin = 0)
       (setupLengthBound : ¬ ossifiableConstructorAbiMaxUint64 <
@@ -2137,7 +2143,7 @@ private theorem ossifiableConstructorDecode_finishClassification
               (ossifiableConstructorCodeWord sevm.code.toList
                 (argsOffset + 64))).toNat).toNat
           0)
-        himplementationClean hadminClean hlengthBound rfl
+        rfl rfl himplementationClean hadminClean hlengthBound rfl
         (by unfold List.sliceD; exact List.takeD_length _ _ _)
         hspec boundary
 

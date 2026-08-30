@@ -140,8 +140,9 @@ For an exact `DELEGATECALL` boundary, use
 `DelegatecallSpawnDescriptor` records the real stack, memory-extension,
 delegation-resolution, access-charge, EIP-150 split, depth, and precompile
 equations; its `parent`, `child`, and `resume` are the actual Jaune constructors,
-`.step` recovers the exact `.delcall` spawn, and `.crossing` discharges the
-entered child frame.  A
+`.afterAccess_memory` records that delegation resolution preserves the call
+memory, `.step` recovers the exact `.delcall` spawn, `.child_data` exposes the
+exact input-memory window, and `.crossing` discharges the entered child frame.  A
 `DelegatedChildCertificate` retains the recursive child trace without assuming
 an outer result; `.process` recovers its relational `ProcessMessage` witness and
 `.result` recovers the exact total `processMessage` equation.  When the proof
@@ -156,8 +157,12 @@ certificate with the exact resume equation and derives the actual compiled
 that has already settled back into an ordinary parent state,
 `DelegatecallSpawnDescriptor.settled_of_runCompiled` packages the retained
 child as a `DelegatecallSettledBoundary`, including the exact returndata,
-status-word stack, state, transient-storage, and log equations.  On its failure
-arm, `DelegatedChildCertificate.rollback_of_error` recovers the child-entry
+status-word stack, state, transient-storage, and log equations.  Its `.memory`
+theorem exposes the exact resumed output write; for calls with a zero output
+window, use `.memory_eq_parent_of_outputSize_zero` or the stronger
+`.memory_image_of_outputSize_zero` to carry `Mem.Wf` and `Mem.Reads` across the
+parent extension and empty resume write.  On its failure arm,
+`DelegatedChildCertificate.rollback_of_error` recovers the child-entry
 state and transient storage before the caller classifies or bubbles the payload.
 Keep direct-call
 comparison separate through
