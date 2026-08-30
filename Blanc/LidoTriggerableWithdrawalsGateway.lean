@@ -400,16 +400,16 @@ def clearRemovedLookup : Line :=
   [pushB256 0] ++ roleKeyFromMemory roleLookupAccountRegion ++ [sstore]
 
 def clearRoleMembershipLast : Func :=
-  (mloadWord 2 ++ [pushB256 1, sub] ++ mstoreAt 4 ++
+  ([pushB256 1] ++ mloadWord 2 ++ [sub] ++ mstoreAt 4 ++
    [pushB256 0] ++ enumKeyFromMemoryAt 4 enumRoleRegion ++ [sstore] ++
    [pushB256 0] ++ enumKeyFromMemoryAt 4 enumAccountRegion ++ [sstore] ++
    clearRemovedLookup ++
-   mloadWord 3 ++ [pushB256 1, sub, pushB256 roleRecordLengthSlot, sstore] ++
+   [pushB256 1] ++ mloadWord 3 ++ [sub, pushB256 roleRecordLengthSlot, sstore] ++
    emitRoleRevoked) +++ Func.stop
 
 def clearRoleMembershipSwap : Func :=
-  (mloadWord 3 ++ [pushB256 1, sub] ++ mstoreAt 4 ++
-   mloadWord 2 ++ [pushB256 1, sub] ++ mstoreAt 5 ++
+  ([pushB256 1] ++ mloadWord 3 ++ [sub] ++ mstoreAt 4 ++
+   [pushB256 1] ++ mloadWord 2 ++ [sub] ++ mstoreAt 5 ++
    enumKeyFromMemoryAt 4 enumRoleRegion ++ [sload] ++ mstoreAt 6 ++
    enumKeyFromMemoryAt 4 enumAccountRegion ++ [sload] ++ mstoreAt 7 ++
    mloadWord 6 ++ enumKeyFromMemoryAt 5 enumRoleRegion ++ [sstore] ++
@@ -418,7 +418,7 @@ def clearRoleMembershipSwap : Func :=
    [pushB256 0] ++ enumKeyFromMemoryAt 4 enumRoleRegion ++ [sstore] ++
    [pushB256 0] ++ enumKeyFromMemoryAt 4 enumAccountRegion ++ [sstore] ++
    clearRemovedLookup ++
-   mloadWord 3 ++ [pushB256 1, sub, pushB256 roleRecordLengthSlot, sstore] ++
+   [pushB256 1] ++ mloadWord 3 ++ [sub, pushB256 roleRecordLengthSlot, sstore] ++
    emitRoleRevoked) +++ Func.stop
 
 def clearRoleMembership : Func :=
