@@ -82,6 +82,16 @@ def main() -> int:
         manifest["artifacts"]["reference"]["runtime"]["sha256"] = "0" * 64
         refresh_sections(manifest, "artifacts")
 
+    def artifact_program_identity(manifest: dict[str, Any]) -> None:
+        manifest["artifacts"]["proof"]["artifactProgramCommit"] = "0" * 40
+        manifest["documentFill"]["evidence"]["artifactProgramCommit"] = "0" * 40
+        refresh_sections(manifest, "artifacts", "documentFill")
+
+    def proof_certificate_identity(manifest: dict[str, Any]) -> None:
+        manifest["artifacts"]["proof"]["proofCertificateCommit"] = "0" * 40
+        manifest["documentFill"]["evidence"]["proofCertificateCommit"] = "0" * 40
+        refresh_sections(manifest, "artifacts", "documentFill")
+
     def oracle(manifest: dict[str, Any]) -> None:
         manifest["oracle"]["eelsCommit"] = "0" * 40
         refresh_sections(manifest, "oracle")
@@ -140,6 +150,25 @@ def main() -> int:
         manifest["documentFill"]["evidence"]["gas"]["rows"][0]["coordinate"] = row["coordinate"]
         refresh_sections(manifest, "resourceEvidence", "documentFill")
 
+    def gas_completeness(manifest: dict[str, Any]) -> None:
+        rows = manifest["resourceEvidence"]["namedGasRows"]
+        target = next(row for row in rows if row["gasKey"] == "DEFAULT_ADMIN_ROLE_VIEW")
+        duplicate = next(row for row in rows if row["gasKey"] == "CONSTRUCTOR_SUCCESS")
+        for key in ("coordinate", "reference", "blanc", "delta"):
+            target[key] = duplicate[key]
+        manifest["documentFill"]["evidence"]["gas"]["rows"] = copy.deepcopy(rows)
+        refresh_sections(manifest, "resourceEvidence", "documentFill")
+
+    def gas_boilerplate(manifest: dict[str, Any]) -> None:
+        item = manifest["documentFill"]["evidence"]["gas"]["positiveDeviations"][0]
+        item["defense"] = "Published finite-corpus increase retained for explicit review."
+        refresh_sections(manifest, "documentFill")
+
+    def exclusion_boundary(manifest: dict[str, Any]) -> None:
+        manifest["coverage"]["criterion"] = manifest["coverage"]["criterion"].replace(
+            "empty/unknown/short dispatch", "empty/unknown dispatch", 1)
+        refresh_sections(manifest, "coverage")
+
     def template_identity(manifest: dict[str, Any]) -> None:
         manifest["documentFill"]["templates"]["compatibility"] = "0" * 64
         refresh_sections(manifest, "documentFill")
@@ -149,6 +178,8 @@ def main() -> int:
 
     mutations.extend([
         ("artifact-identity", identity),
+        ("artifact-program-identity", artifact_program_identity),
+        ("proof-certificate-identity", proof_certificate_identity),
         ("eels-oracle", oracle),
         ("case-manifest-deletion", row_deletion),
         ("deviation-field-widening", deviation_widening),
@@ -158,6 +189,9 @@ def main() -> int:
         ("router-selector-semantic", router_selector_semantic),
         ("extra-semantic-claim", extra_semantic_claim),
         ("resource-coordinate", resource_coordinate),
+        ("gas-completeness", gas_completeness),
+        ("gas-boilerplate", gas_boilerplate),
+        ("exclusion-boundary", exclusion_boundary),
         ("document-template-identity", template_identity),
         ("section-digest", section_digest),
     ])
@@ -183,7 +217,9 @@ def main() -> int:
         rejected += 1
 
     print(f"PASS — Lido TWG differential falsifiers: {rejected} "
-          "channel/identity/manifest/semantic corruptions rejected")
+          "channel/identity/manifest/semantic corruptions rejected; "
+          "artifact-program, proof-certificate, gas-completeness, gas-disposition, "
+          "and exclusion-boundary controls bite")
     return 0
 
 

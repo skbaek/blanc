@@ -2,7 +2,7 @@
 
 > **Published evidence status:** the registry is synchronized to the validated
 > B1 lock and generated B2 manifest. All five known behavioral differences are
-> accepted and defended below; all 20 positive named-path gas deltas are
+> accepted and defended below; all 48 positive named-path gas deltas are
 > published as measured priced costs. The family gate rejects marker drift,
 > any unknown mismatch allowlist, or any future known difference that is not
 > repaired or entered here.
@@ -19,7 +19,7 @@ The normative identities, public boundary, and finite coverage criterion are
 in
 [`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md).
 
-<!-- LIDO-TWG-DEVIATION-POLICY {"schema":1,"closure":"complete","knownBehavioralRows":5,"acceptedBehavioralRows":5,"repairedBehavioralRows":0,"pendingBehavioralRows":0,"positiveGasRows":20,"unknownMismatchAllowlist":false} -->
+<!-- LIDO-TWG-DEVIATION-POLICY {"schema":1,"closure":"complete","knownBehavioralRows":5,"acceptedBehavioralRows":5,"repairedBehavioralRows":0,"pendingBehavioralRows":0,"positiveGasRows":48,"unknownMismatchAllowlist":false} -->
 
 ## Behavioral deviations and dispositions
 
@@ -113,12 +113,12 @@ Other accepted low-level freedoms, subject to the same behavioral boundary:
   instruction selection, and source organization;
 - exact raw persistent-memory/transient-memory coordinates internal to a call;
 - compiler control-flow structure and private helper decomposition; and
-- exact gas and access-list warming, except that every measured public-path
-  increase is itself a behavioral deviation requiring a stable row.
+- exact gas and access-list warming, except that every measured positive
+  public final-action cost requires its own accepted gas-cost disposition.
 
 ## Code-size comparison
 
-<!-- LIDO-TWG-CODE-SIZE {"referenceLock":"8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f","blancCommit":"35a196fd50192aa269d6cb07699ea0910ad3c468","manifest":"a4e7a9b553ceda869f97c30a85214ae599171960fd54db43244ebc7cb43ac4f8"} -->
+<!-- LIDO-TWG-CODE-SIZE {"referenceLock":"8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f","artifactProgramCommit":"35a196fd50192aa269d6cb07699ea0910ad3c468","proofCertificateCommit":"a0e04e7a69558b8744ced81ea4a3defdfc478d36","manifest":"4dea3481b12f12a751af1bdae602a8e5d6d7055f6359795fdd89950b3e0ae4d4"} -->
 
 All lengths are byte counts over the exact hex decoded by the named gates.
 Negative delta means Blanc is smaller. The creation template has no direct
@@ -135,45 +135,76 @@ EIP-170/EIP-3860 headroom, where applicable:
 
 ## Named-path gas comparison
 
-<!-- LIDO-TWG-GAS-MEASUREMENT {"eelsCommit":"4198b9c5996713b268aed602739d5aa40e277694","manifest":"a4e7a9b553ceda869f97c30a85214ae599171960fd54db43244ebc7cb43ac4f8","boundaryDefinition":"direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds","rowCount":23,"positiveDeltaRows":20} -->
+<!-- LIDO-TWG-GAS-MEASUREMENT {"eelsCommit":"4198b9c5996713b268aed602739d5aa40e277694","manifest":"4dea3481b12f12a751af1bdae602a8e5d6d7055f6359795fdd89950b3e0ae4d4","boundaryDefinition":"direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds","rowCount":51,"positiveDeltaRows":48} -->
 
-Every cell below comes from the same ordered resource vector. `Reference` and
-`Blanc` use one boundary definition, recorded verbatim as
-`direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds`. Positive delta means Blanc is dearer
-and is entered under a stable `TWG-Gnn` deviation row; sums and averages do
-not hide it.
+Every cell below comes from the same ordered 186-boundary resource vector.
+`Reference` and `Blanc` use one boundary definition, recorded verbatim as
+`direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds`. Positive delta means Blanc is dearer and owns
+an accepted, substantive gas-cost disposition below; sums and averages do not
+hide any positive public final-action cost. These cost rows do not add
+behavioral deviations beyond `TWG-D01` through `TWG-D05`.
 
-| Stable path | Compared world and outcome | Reference gas | Blanc gas | Delta | Manifest coordinate |
+| Stable path | Measured case boundary | Reference gas | Blanc gas | Delta | Manifest coordinate |
 |---|---|---:|---:|---:|---|
-| `constructor-success` | successful complete CREATE, official parameter world | `1744364` | `3400489` | `1656125` | `constructor-success#0:constructor` |
-| `pauseFor-finite` | authorized resumed → finite pause | `26352` | `29772` | `3420` | `pause-for-finite#2:action` |
-| `pauseFor-sentinel` | authorized resumed → infinite sentinel | `26225` | `29741` | `3516` | `pause-for-sentinel#2:action` |
-| `pauseUntil-finite` | authorized resumed → inclusive finite expiry | `26392` | `30019` | `3627` | `pause-until-finite#2:action` |
-| `pauseUntil-sentinel` | authorized resumed → infinite sentinel | `26243` | `29963` | `3720` | `pause-until-sentinel#2:action` |
-| `resume` | authorized paused → resumed | `8538` | `12498` | `3960` | `resume-authorized#4:action` |
-| `isPaused-resumed` | canonical false query | `2385` | `2220` | `-165` | `view-is-paused-resumed#1:action` |
-| `isPaused-paused` | canonical true query | `2385` | `2220` | `-165` | `view-is-paused-paused#3:action` |
-| `grantRole-fresh` | authorized fresh membership | `96496` | `124650` | `28154` | `grant-role-fresh#1:action` |
-| `revokeRole-existing` | authorized existing membership | `28381` | `39316` | `10935` | `revoke-role-existing#2:action` |
-| `renounceRole-self` | self-renounce existing membership | `23754` | `32928` | `9174` | `renounce-role-self#2:action` |
-| `getRoleMember` | successful populated-role ordinal | `4841` | `9363` | `4522` | `get-role-member#2:action` |
-| `getRoleMemberCount` | populated role after history | `2614` | `7400` | `4786` | `get-role-member-count#2:action` |
-| `setExitRequestLimit` | authorized configuration update | `11114` | `31141` | `20027` | `set-limit-valid#2:action` |
-| `getExitRequestLimitFullInfo-same-frame` | no whole-frame refill | `3208` | `11470` | `8262` | `get-limit-same-frame#1:action` |
-| `getExitRequestLimitFullInfo-refilled` | elapsed whole-frame refill/cap | `3567` | `11633` | `8066` | `get-limit-refilled#3:action` |
-| `trigger-empty` | empty validator array rejection | `5398` | `9164` | `3766` | `trigger-empty#2:action` |
-| `trigger-single-no-refund` | one validator, exact fee | `233284` | `242996` | `9712` | `trigger-single-exact-fee#2:action` |
-| `trigger-single-explicit-refund` | one validator, excess to named recipient | `267754` | `277367` | `9613` | `trigger-explicit-refund#2:action` |
-| `trigger-single-sender-refund` | one validator, zero recipient falls back to sender | `240258` | `249876` | `9618` | `trigger-sender-refund#2:action` |
-| `trigger-multiple` | multi-validator fee/encoding/router path | `235133` | `244208` | `9075` | `trigger-multiple#2:action` |
-| `trigger-limit-exceeded` | authorized resumed quota rejection | `8215` | `19907` | `11692` | `trigger-limit-exceeded#2:action` |
-| `role-gate-unauthorized` | representative `TWG-D01` failure | `32304` | `2270` | `-30034` | `role-negative-pause-for#1:action` |
+| `constructor-success` | successful complete CREATE in `constructor-success` | `1744364` | `3400489` | `1656125` | `constructor-success#0:constructor` |
+| `pauseFor-finite` | final `action` boundary in `pause-for-finite` | `26352` | `29772` | `3420` | `pause-for-finite#2:action` |
+| `pauseFor-sentinel` | final `action` boundary in `pause-for-sentinel` | `26225` | `29741` | `3516` | `pause-for-sentinel#2:action` |
+| `pauseUntil-finite` | final `action` boundary in `pause-until-finite` | `26392` | `30019` | `3627` | `pause-until-finite#2:action` |
+| `pauseUntil-sentinel` | final `action` boundary in `pause-until-sentinel` | `26243` | `29963` | `3720` | `pause-until-sentinel#2:action` |
+| `resume` | final `action` boundary in `resume-authorized` | `8538` | `12498` | `3960` | `resume-authorized#4:action` |
+| `isPaused-resumed` | final `action` boundary in `view-is-paused-resumed` | `2385` | `2220` | `-165` | `view-is-paused-resumed#1:action` |
+| `isPaused-paused` | final `action` boundary in `view-is-paused-paused` | `2385` | `2220` | `-165` | `view-is-paused-paused#3:action` |
+| `grantRole-fresh` | final `action` boundary in `grant-role-fresh` | `96496` | `124650` | `28154` | `grant-role-fresh#1:action` |
+| `revokeRole-existing` | final `action` boundary in `revoke-role-existing` | `28381` | `39316` | `10935` | `revoke-role-existing#2:action` |
+| `renounceRole-self` | final `action` boundary in `renounce-role-self` | `23754` | `32928` | `9174` | `renounce-role-self#2:action` |
+| `getRoleMember` | final `action` boundary in `get-role-member` | `4841` | `9363` | `4522` | `get-role-member#2:action` |
+| `getRoleMemberCount` | final `action` boundary in `get-role-member-count` | `2614` | `7400` | `4786` | `get-role-member-count#2:action` |
+| `setExitRequestLimit` | final `action` boundary in `set-limit-valid` | `11114` | `31141` | `20027` | `set-limit-valid#2:action` |
+| `getExitRequestLimitFullInfo-same-frame` | final `action` boundary in `get-limit-same-frame` | `3208` | `11470` | `8262` | `get-limit-same-frame#1:action` |
+| `getExitRequestLimitFullInfo-refilled` | final `action` boundary in `get-limit-refilled` | `3567` | `11633` | `8066` | `get-limit-refilled#3:action` |
+| `trigger-empty` | final `action` boundary in `trigger-empty` | `5398` | `9164` | `3766` | `trigger-empty#2:action` |
+| `trigger-single-no-refund` | final `action` boundary in `trigger-single-exact-fee` | `233284` | `242996` | `9712` | `trigger-single-exact-fee#2:action` |
+| `trigger-single-explicit-refund` | final `action` boundary in `trigger-explicit-refund` | `267754` | `277367` | `9613` | `trigger-explicit-refund#2:action` |
+| `trigger-single-sender-refund` | final `action` boundary in `trigger-sender-refund` | `240258` | `249876` | `9618` | `trigger-sender-refund#2:action` |
+| `trigger-multiple` | final `action` boundary in `trigger-multiple` | `235133` | `244208` | `9075` | `trigger-multiple#2:action` |
+| `trigger-limit-exceeded` | final `action` boundary in `trigger-limit-exceeded` | `8215` | `19907` | `11692` | `trigger-limit-exceeded#2:action` |
+| `role-gate-unauthorized` | final `action` boundary in `role-negative-pause-for` | `32304` | `2270` | `-30034` | `role-negative-pause-for#1:action` |
+| `defaultAdminRole` | final `action` boundary in `view-default-admin-role` | `284` | `422` | `138` | `view-default-admin-role#1:action` |
+| `pauseInfinitely` | final `action` boundary in `view-pause-infinitely` | `309` | `379` | `70` | `view-pause-infinitely#1:action` |
+| `supportsInterface` | final `action` boundary in `view-supports-interface` | `412` | `560` | `148` | `view-supports-interface#1:action` |
+| `hasRole` | final `action` boundary in `view-has-role` | `2731` | `6953` | `4222` | `view-has-role#1:action` |
+| `getResumeSinceTimestamp` | final `action` boundary in `view-resume-timestamp` | `2474` | `2501` | `27` | `view-resume-timestamp#1:action` |
+| `grantRole-duplicate` | final `action` boundary in `grant-role-duplicate` | `9810` | `13465` | `3655` | `grant-role-duplicate#2:action` |
+| `revokeRole-missing` | final `action` boundary in `revoke-role-missing` | `9889` | `11311` | `1422` | `revoke-role-missing#1:action` |
+| `renounceRole-wrong-account` | final `action` boundary in `renounce-role-wrong-account` | `543` | `621` | `78` | `renounce-role-wrong-account#1:action` |
+| `getRoleMember-oob` | final `action` boundary in `get-role-member-oob` | `2587` | `5069` | `2482` | `get-role-member-oob#1:action` |
+| `role-enumeration-cross-role-order` | final `action` boundary in `role-enumeration-cross-role-order` | `4841` | `11658` | `6817` | `role-enumeration-cross-role-order#7:action` |
+| `role-flat-key-collision-refusal` | final `action` boundary in `role-flat-key-collision-refusal` | `2731` | `6953` | `4222` | `role-flat-key-collision-refusal#3:action` |
+| `pauseFor-when-paused` | final `action` boundary in `pause-for-when-paused` | `5000` | `8690` | `3690` | `pause-for-when-paused#3:action` |
+| `pauseUntil-when-paused` | final `action` boundary in `pause-until-when-paused` | `5023` | `8910` | `3887` | `pause-until-when-paused#3:action` |
+| `pauseFor-zero-duration` | final `action` boundary in `pause-zero-duration` | `5026` | `8714` | `3688` | `pause-zero-duration#2:action` |
+| `pauseUntil-past` | final `action` boundary in `pause-until-past` | `5057` | `8936` | `3879` | `pause-until-past#2:action` |
+| `resume-when-resumed` | final `action` boundary in `resume-when-resumed` | `4853` | `8864` | `4011` | `resume-when-resumed#2:action` |
+| `setExitRequestLimit-max-too-large` | final `action` boundary in `set-limit-max-too-large` | `5503` | `6834` | `1331` | `set-limit-max-too-large#2:action` |
+| `setExitRequestLimit-frame-too-large` | final `action` boundary in `set-limit-frame-too-large` | `5529` | `6859` | `1330` | `set-limit-frame-too-large#2:action` |
+| `setExitRequestLimit-exits-above-max` | final `action` boundary in `set-limit-exits-above-max` | `5555` | `6887` | `1332` | `set-limit-exits-above-max#2:action` |
+| `setExitRequestLimit-zero-frame` | final `action` boundary in `set-limit-zero-frame` | `5572` | `6909` | `1337` | `set-limit-zero-frame#2:action` |
+| `trigger-insufficient-fee` | final `action` boundary in `trigger-insufficient-fee` | `18562` | `29239` | `10677` | `trigger-insufficient-fee#2:action` |
+| `trigger-paused` | final `action` boundary in `trigger-paused` | `5281` | `9099` | `3818` | `trigger-paused#4:action` |
+| `trigger-zero-value` | final `action` boundary in `trigger-zero-value` | `5367` | `9142` | `3775` | `trigger-zero-value#2:action` |
+| `trigger-locator-revert` | final `action` boundary in `trigger-locator-revert` | `15081` | `26190` | `11109` | `trigger-locator-revert#2:action` |
+| `trigger-fee-query-revert` | final `action` boundary in `trigger-fee-query-revert` | `18191` | `29089` | `10898` | `trigger-fee-query-revert#2:action` |
+| `trigger-vault-revert` | final `action` boundary in `trigger-vault-revert` | `27481` | `38232` | `10751` | `trigger-vault-revert#2:action` |
+| `trigger-router-revert` | final `action` boundary in `trigger-router-revert` | `142363` | `152163` | `9800` | `trigger-router-revert#2:action` |
+| `trigger-refund-revert` | final `action` boundary in `trigger-refund-revert` | `242729` | `252358` | `9629` | `trigger-refund-revert#2:action` |
 
-Every remaining selector also has at least one measured adequate boundary in
-the complete vector. Machine summary:
+The full table is mechanically complete for all 47 positive final `action`
+boundaries among the 63 public cases plus the positive successful constructor.
+The two `isPaused` rows and representative unauthorized role-gate row remain as
+three useful negative controls. Machine summary:
 `24/24 census selectors each own at least one direct action boundary`.
 
-### Positive-delta registry
+### Positive-cost disposition registry
 
 <!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G01","gasKey":"CONSTRUCTOR_SUCCESS","path":"constructor-success","delta":1656125,"status":"accepted"} -->
 <!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G02","gasKey":"PAUSE_FOR_FINITE","path":"pauseFor-finite","delta":3420,"status":"accepted"} -->
@@ -195,35 +226,92 @@ the complete vector. Machine summary:
 <!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G18","gasKey":"TRIGGER_SENDER_REFUND","path":"trigger-single-sender-refund","delta":9618,"status":"accepted"} -->
 <!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G19","gasKey":"TRIGGER_MULTIPLE","path":"trigger-multiple","delta":9075,"status":"accepted"} -->
 <!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G20","gasKey":"TRIGGER_LIMIT","path":"trigger-limit-exceeded","delta":11692,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G21","gasKey":"DEFAULT_ADMIN_ROLE_VIEW","path":"defaultAdminRole","delta":138,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G22","gasKey":"PAUSE_INFINITELY_VIEW","path":"pauseInfinitely","delta":70,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G23","gasKey":"SUPPORTS_INTERFACE","path":"supportsInterface","delta":148,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G24","gasKey":"HAS_ROLE","path":"hasRole","delta":4222,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G25","gasKey":"GET_RESUME_TIMESTAMP","path":"getResumeSinceTimestamp","delta":27,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G26","gasKey":"GRANT_ROLE_DUPLICATE","path":"grantRole-duplicate","delta":3655,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G27","gasKey":"REVOKE_ROLE_MISSING","path":"revokeRole-missing","delta":1422,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G28","gasKey":"RENOUNCE_ROLE_WRONG_ACCOUNT","path":"renounceRole-wrong-account","delta":78,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G29","gasKey":"GET_ROLE_MEMBER_OOB","path":"getRoleMember-oob","delta":2482,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G30","gasKey":"ROLE_ENUMERATION_CROSS_ROLE","path":"role-enumeration-cross-role-order","delta":6817,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G31","gasKey":"ROLE_COLLISION_REFUSAL","path":"role-flat-key-collision-refusal","delta":4222,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G32","gasKey":"PAUSE_FOR_WHEN_PAUSED","path":"pauseFor-when-paused","delta":3690,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G33","gasKey":"PAUSE_UNTIL_WHEN_PAUSED","path":"pauseUntil-when-paused","delta":3887,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G34","gasKey":"PAUSE_ZERO_DURATION","path":"pauseFor-zero-duration","delta":3688,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G35","gasKey":"PAUSE_UNTIL_PAST","path":"pauseUntil-past","delta":3879,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G36","gasKey":"RESUME_WHEN_RESUMED","path":"resume-when-resumed","delta":4011,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G37","gasKey":"SET_LIMIT_MAX_TOO_LARGE","path":"setExitRequestLimit-max-too-large","delta":1331,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G38","gasKey":"SET_LIMIT_FRAME_TOO_LARGE","path":"setExitRequestLimit-frame-too-large","delta":1330,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G39","gasKey":"SET_LIMIT_EXITS_ABOVE_MAX","path":"setExitRequestLimit-exits-above-max","delta":1332,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G40","gasKey":"SET_LIMIT_ZERO_FRAME","path":"setExitRequestLimit-zero-frame","delta":1337,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G41","gasKey":"TRIGGER_INSUFFICIENT_FEE","path":"trigger-insufficient-fee","delta":10677,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G42","gasKey":"TRIGGER_PAUSED","path":"trigger-paused","delta":3818,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G43","gasKey":"TRIGGER_ZERO_VALUE","path":"trigger-zero-value","delta":3775,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G44","gasKey":"TRIGGER_LOCATOR_REVERT","path":"trigger-locator-revert","delta":11109,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G45","gasKey":"TRIGGER_FEE_QUERY_REVERT","path":"trigger-fee-query-revert","delta":10898,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G46","gasKey":"TRIGGER_VAULT_REVERT","path":"trigger-vault-revert","delta":10751,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G47","gasKey":"TRIGGER_ROUTER_REVERT","path":"trigger-router-revert","delta":9800,"status":"accepted"} -->
+<!-- LIDO-TWG-GAS-DEVIATION {"id":"TWG-G48","gasKey":"TRIGGER_REFUND_REVERT","path":"trigger-refund-revert","delta":9629,"status":"accepted"} -->
 
 | Stable ID | Path | Delta | Defense | Evidence |
 |---|---|---:|---|---|
-| `TWG-G01` | `constructor-success` | `1656125` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate constructor-success#0:constructor |
-| `TWG-G02` | `pauseFor-finite` | `3420` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate pause-for-finite#2:action |
-| `TWG-G03` | `pauseFor-sentinel` | `3516` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate pause-for-sentinel#2:action |
-| `TWG-G04` | `pauseUntil-finite` | `3627` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate pause-until-finite#2:action |
-| `TWG-G05` | `pauseUntil-sentinel` | `3720` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate pause-until-sentinel#2:action |
-| `TWG-G06` | `resume` | `3960` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate resume-authorized#4:action |
-| `TWG-G07` | `grantRole-fresh` | `28154` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate grant-role-fresh#1:action |
-| `TWG-G08` | `revokeRole-existing` | `10935` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate revoke-role-existing#2:action |
-| `TWG-G09` | `renounceRole-self` | `9174` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate renounce-role-self#2:action |
-| `TWG-G10` | `getRoleMember` | `4522` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate get-role-member#2:action |
-| `TWG-G11` | `getRoleMemberCount` | `4786` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate get-role-member-count#2:action |
-| `TWG-G12` | `setExitRequestLimit` | `20027` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate set-limit-valid#2:action |
-| `TWG-G13` | `getExitRequestLimitFullInfo-same-frame` | `8262` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate get-limit-same-frame#1:action |
-| `TWG-G14` | `getExitRequestLimitFullInfo-refilled` | `8066` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate get-limit-refilled#3:action |
-| `TWG-G15` | `trigger-empty` | `3766` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate trigger-empty#2:action |
-| `TWG-G16` | `trigger-single-no-refund` | `9712` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate trigger-single-exact-fee#2:action |
-| `TWG-G17` | `trigger-single-explicit-refund` | `9613` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate trigger-explicit-refund#2:action |
-| `TWG-G18` | `trigger-single-sender-refund` | `9618` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate trigger-sender-refund#2:action |
-| `TWG-G19` | `trigger-multiple` | `9075` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate trigger-multiple#2:action |
-| `TWG-G20` | `trigger-limit-exceeded` | `11692` | Published finite-corpus increase retained for explicit review in the TWG gas registry. | manifest resource coordinate trigger-limit-exceeded#2:action |
+| `TWG-G01` | `constructor-success` | `1656125` | Accepted deployment cost for explicit constructor validation, tagged role/limit initialization, and runtime code deposit; no deployment-gas improvement is claimed. | manifest resource coordinate constructor-success#0:constructor; deployment initialization and code-deposit boundary |
+| `TWG-G02` | `pauseFor-finite` | `3420` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate pause-for-finite#2:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G03` | `pauseFor-sentinel` | `3516` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate pause-for-sentinel#2:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G04` | `pauseUntil-finite` | `3627` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate pause-until-finite#2:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G05` | `pauseUntil-sentinel` | `3720` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate pause-until-sentinel#2:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G06` | `resume` | `3960` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate resume-authorized#4:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G07` | `grantRole-fresh` | `28154` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate grant-role-fresh#1:action; full-identity role lookup/enumeration boundary |
+| `TWG-G08` | `revokeRole-existing` | `10935` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate revoke-role-existing#2:action; full-identity role lookup/enumeration boundary |
+| `TWG-G09` | `renounceRole-self` | `9174` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate renounce-role-self#2:action; full-identity role lookup/enumeration boundary |
+| `TWG-G10` | `getRoleMember` | `4522` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate get-role-member#2:action; full-identity role lookup/enumeration boundary |
+| `TWG-G11` | `getRoleMemberCount` | `4786` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate get-role-member-count#2:action; full-identity role lookup/enumeration boundary |
+| `TWG-G12` | `setExitRequestLimit` | `20027` | Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned. | manifest resource coordinate set-limit-valid#2:action; exit-limit projection and validation boundary |
+| `TWG-G13` | `getExitRequestLimitFullInfo-same-frame` | `8262` | Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned. | manifest resource coordinate get-limit-same-frame#1:action; exit-limit projection and validation boundary |
+| `TWG-G14` | `getExitRequestLimitFullInfo-refilled` | `8066` | Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned. | manifest resource coordinate get-limit-refilled#3:action; exit-limit projection and validation boundary |
+| `TWG-G15` | `trigger-empty` | `3766` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-empty#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G16` | `trigger-single-no-refund` | `9712` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-single-exact-fee#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G17` | `trigger-single-explicit-refund` | `9613` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-explicit-refund#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G18` | `trigger-single-sender-refund` | `9618` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-sender-refund#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G19` | `trigger-multiple` | `9075` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-multiple#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G20` | `trigger-limit-exceeded` | `11692` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-limit-exceeded#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G21` | `defaultAdminRole` | `138` | Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed. | manifest resource coordinate view-default-admin-role#1:action; constant, interface, role, or pause-state read boundary |
+| `TWG-G22` | `pauseInfinitely` | `70` | Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed. | manifest resource coordinate view-pause-infinitely#1:action; constant, interface, role, or pause-state read boundary |
+| `TWG-G23` | `supportsInterface` | `148` | Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed. | manifest resource coordinate view-supports-interface#1:action; constant, interface, role, or pause-state read boundary |
+| `TWG-G24` | `hasRole` | `4222` | Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed. | manifest resource coordinate view-has-role#1:action; constant, interface, role, or pause-state read boundary |
+| `TWG-G25` | `getResumeSinceTimestamp` | `27` | Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed. | manifest resource coordinate view-resume-timestamp#1:action; constant, interface, role, or pause-state read boundary |
+| `TWG-G26` | `grantRole-duplicate` | `3655` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate grant-role-duplicate#2:action; full-identity role lookup/enumeration boundary |
+| `TWG-G27` | `revokeRole-missing` | `1422` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate revoke-role-missing#1:action; full-identity role lookup/enumeration boundary |
+| `TWG-G28` | `renounceRole-wrong-account` | `78` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate renounce-role-wrong-account#1:action; full-identity role lookup/enumeration boundary |
+| `TWG-G29` | `getRoleMember-oob` | `2482` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate get-role-member-oob#1:action; full-identity role lookup/enumeration boundary |
+| `TWG-G30` | `role-enumeration-cross-role-order` | `6817` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate role-enumeration-cross-role-order#7:action; full-identity role lookup/enumeration boundary |
+| `TWG-G31` | `role-flat-key-collision-refusal` | `4222` | Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02–D05 separately delimit observable differences. | manifest resource coordinate role-flat-key-collision-refusal#3:action; full-identity role lookup/enumeration boundary |
+| `TWG-G32` | `pauseFor-when-paused` | `3690` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate pause-for-when-paused#3:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G33` | `pauseUntil-when-paused` | `3887` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate pause-until-when-paused#3:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G34` | `pauseFor-zero-duration` | `3688` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate pause-zero-duration#2:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G35` | `pauseUntil-past` | `3879` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate pause-until-past#2:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G36` | `resume-when-resumed` | `4011` | Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed. | manifest resource coordinate resume-when-resumed#2:action; pause/resume authorization and tagged-state boundary |
+| `TWG-G37` | `setExitRequestLimit-max-too-large` | `1331` | Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned. | manifest resource coordinate set-limit-max-too-large#2:action; exit-limit projection and validation boundary |
+| `TWG-G38` | `setExitRequestLimit-frame-too-large` | `1330` | Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned. | manifest resource coordinate set-limit-frame-too-large#2:action; exit-limit projection and validation boundary |
+| `TWG-G39` | `setExitRequestLimit-exits-above-max` | `1332` | Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned. | manifest resource coordinate set-limit-exits-above-max#2:action; exit-limit projection and validation boundary |
+| `TWG-G40` | `setExitRequestLimit-zero-frame` | `1337` | Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned. | manifest resource coordinate set-limit-zero-frame#2:action; exit-limit projection and validation boundary |
+| `TWG-G41` | `trigger-insufficient-fee` | `10677` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-insufficient-fee#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G42` | `trigger-paused` | `3818` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-paused#4:action; trigger dependency/value/rollback boundary |
+| `TWG-G43` | `trigger-zero-value` | `3775` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-zero-value#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G44` | `trigger-locator-revert` | `11109` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-locator-revert#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G45` | `trigger-fee-query-revert` | `10898` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-fee-query-revert#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G46` | `trigger-vault-revert` | `10751` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-vault-revert#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G47` | `trigger-router-revert` | `9800` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-router-revert#2:action; trigger dependency/value/rollback boundary |
+| `TWG-G48` | `trigger-refund-revert` | `9629` | Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed. | manifest resource coordinate trigger-refund-revert#2:action; trigger dependency/value/rollback boundary |
 
-All 20 positive coordinates are accepted as measured priced costs of the
-proof-oriented Blanc design. Their stable IDs, exact deltas, and manifest
-coordinates make the cost reviewable path by path. The generated defense text
-“retained for explicit review” means published for continuing public scrutiny,
-not awaiting disposition: all 20 marker statuses are `accepted`. Aggregate code-size or
+All 48 positive coordinates are accepted as measured priced costs of the
+proof-oriented Blanc design. The exact path, delta, resource coordinate, and one
+of six substantive review rationales are pinned row by row; no generic
+“retained for review” defense remains. Their `TWG-Gnn` identifiers are gas-cost
+dispositions, not behavioral mismatch IDs. `TWG-D01` through `TWG-D05` remain
+the complete known behavioral-deviation inventory, and aggregate code-size or
 gas savings are not a stance for any individual dearer path.
 
 ## Explicit equivalence exclusions and nonclaims
@@ -236,6 +324,9 @@ These are boundaries, not deviation defenses:
 - exhaustive semantic equivalence or completeness of this registry;
 - exact behavior for malformed/noncanonical input shapes not named inside the
   compatibility corpus;
+- zero/unlimited exit-limit mode and partial-frame refill/consumption behavior;
+- nested malformed dynamic ABI, empty/unknown/short dispatch, trailing
+  calldata, and recognized-selector nonpayability;
 - exact arbitrary-world gas, access lists, callback-observed `gasleft()`, OOG
   thresholds, or universal gas dominance;
 - proxy/delegatecall/library use;

@@ -30,6 +30,7 @@ COMPATIBILITY_TOOL = REPO / "scripts" / "lido-twg-compatibility.py"
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 JAUNE_PIN = "949cf97ee1956828a3ac0eb12a62c438656ba76e"
 BLANC_ARTIFACT_COMMIT = "35a196fd50192aa269d6cb07699ea0910ad3c468"
+BLANC_PROOF_COMMIT = "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
 REFERENCE_WORLD = "differential-corpus"
 DEFAULT_GAS_LIMIT = 20_000_000
 UINT256_MAX = (1 << 256) - 1
@@ -113,7 +114,39 @@ GAS_CASES = [
     ("TRIGGER_MULTIPLE", "trigger-multiple", "trigger-multiple"),
     ("TRIGGER_LIMIT", "trigger-limit-exceeded", "trigger-limit-exceeded"),
     ("ROLE_UNAUTHORIZED", "role-gate-unauthorized", "role-negative-pause-for"),
+    ("DEFAULT_ADMIN_ROLE_VIEW", "defaultAdminRole", "view-default-admin-role"),
+    ("PAUSE_INFINITELY_VIEW", "pauseInfinitely", "view-pause-infinitely"),
+    ("SUPPORTS_INTERFACE", "supportsInterface", "view-supports-interface"),
+    ("HAS_ROLE", "hasRole", "view-has-role"),
+    ("GET_RESUME_TIMESTAMP", "getResumeSinceTimestamp", "view-resume-timestamp"),
+    ("GRANT_ROLE_DUPLICATE", "grantRole-duplicate", "grant-role-duplicate"),
+    ("REVOKE_ROLE_MISSING", "revokeRole-missing", "revoke-role-missing"),
+    ("RENOUNCE_ROLE_WRONG_ACCOUNT", "renounceRole-wrong-account", "renounce-role-wrong-account"),
+    ("GET_ROLE_MEMBER_OOB", "getRoleMember-oob", "get-role-member-oob"),
+    ("ROLE_ENUMERATION_CROSS_ROLE", "role-enumeration-cross-role-order", "role-enumeration-cross-role-order"),
+    ("ROLE_COLLISION_REFUSAL", "role-flat-key-collision-refusal", "role-flat-key-collision-refusal"),
+    ("PAUSE_FOR_WHEN_PAUSED", "pauseFor-when-paused", "pause-for-when-paused"),
+    ("PAUSE_UNTIL_WHEN_PAUSED", "pauseUntil-when-paused", "pause-until-when-paused"),
+    ("PAUSE_ZERO_DURATION", "pauseFor-zero-duration", "pause-zero-duration"),
+    ("PAUSE_UNTIL_PAST", "pauseUntil-past", "pause-until-past"),
+    ("RESUME_WHEN_RESUMED", "resume-when-resumed", "resume-when-resumed"),
+    ("SET_LIMIT_MAX_TOO_LARGE", "setExitRequestLimit-max-too-large", "set-limit-max-too-large"),
+    ("SET_LIMIT_FRAME_TOO_LARGE", "setExitRequestLimit-frame-too-large", "set-limit-frame-too-large"),
+    ("SET_LIMIT_EXITS_ABOVE_MAX", "setExitRequestLimit-exits-above-max", "set-limit-exits-above-max"),
+    ("SET_LIMIT_ZERO_FRAME", "setExitRequestLimit-zero-frame", "set-limit-zero-frame"),
+    ("TRIGGER_INSUFFICIENT_FEE", "trigger-insufficient-fee", "trigger-insufficient-fee"),
+    ("TRIGGER_PAUSED", "trigger-paused", "trigger-paused"),
+    ("TRIGGER_ZERO_VALUE", "trigger-zero-value", "trigger-zero-value"),
+    ("TRIGGER_LOCATOR_REVERT", "trigger-locator-revert", "trigger-locator-revert"),
+    ("TRIGGER_FEE_QUERY_REVERT", "trigger-fee-query-revert", "trigger-fee-query-revert"),
+    ("TRIGGER_VAULT_REVERT", "trigger-vault-revert", "trigger-vault-revert"),
+    ("TRIGGER_ROUTER_REVERT", "trigger-router-revert", "trigger-router-revert"),
+    ("TRIGGER_REFUND_REVERT", "trigger-refund-revert", "trigger-refund-revert"),
 ]
+
+RETAINED_NONPOSITIVE_GAS_CASES = {
+    "view-is-paused-resumed", "view-is-paused-paused", "role-negative-pause-for",
+}
 
 BOUNDARY_DEFINITION = (
     "direct EELS Prague message gas used, computed as message gas minus "
@@ -733,9 +766,13 @@ def parse_artifacts(text: str) -> Dict[str, object]:
 def validate_identities(lock: Mapping, census: Mapping, artifacts: Mapping) -> int:
     checks = 0
     expect(subprocess.run(
-        ["git", "merge-base", "--is-ancestor", BLANC_ARTIFACT_COMMIT, "HEAD"],
+        ["git", "merge-base", "--is-ancestor", BLANC_ARTIFACT_COMMIT, BLANC_PROOF_COMMIT],
         cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0,
-        "pinned Blanc artifact commit is not an ancestor of the candidate")
+        "pinned Blanc artifact program is not an ancestor of the proof certificate")
+    expect(subprocess.run(
+        ["git", "merge-base", "--is-ancestor", BLANC_PROOF_COMMIT, "HEAD"],
+        cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0,
+        "pinned Blanc proof certificate is not an ancestor of the candidate")
     checks += 1
     functions = census["selectors"]
     expected_selectors = [row["selector"] for row in functions]
@@ -1171,7 +1208,70 @@ def named_gas_rows(resources: Sequence[Mapping]) -> List[Mapping[str, object]]:
             "reference": chosen["referenceGas"], "blanc": chosen["blancGas"],
             "delta": chosen["delta"],
         })
+    final_actions = {
+        str(case): rows[-1] for case, rows in by_case.items()
+        if case != "constructor-success" and rows[-1]["label"] == "action"
+    }
+    expect(len(final_actions) == 63,
+           "public final-action inventory must contain exactly the 63 non-constructor rows")
+    expected_positive = {
+        str(row["coordinate"]) for row in final_actions.values() if row["delta"] > 0
+    }
+    constructor = by_case["constructor-success"][0]
+    expect(constructor["label"] == "constructor" and constructor["delta"] > 0,
+           "successful constructor positive-cost boundary differs")
+    expected_positive.add(str(constructor["coordinate"]))
+    actual_positive = {str(row["coordinate"]) for row in result if row["delta"] > 0}
+    expect(actual_positive == expected_positive and len(actual_positive) == 48,
+           "named gas rows do not cover every positive public final action plus constructor")
+    actual_nonpositive = {
+        str(row["coordinate"]).split("#", 1)[0]
+        for row in result if row["delta"] <= 0
+    }
+    expect(actual_nonpositive == RETAINED_NONPOSITIVE_GAS_CASES,
+           "named gas rows do not retain the exact three negative review controls")
     return result
+
+
+def gas_cost_disposition(row: Mapping[str, object]) -> Tuple[str, str]:
+    case = str(row["coordinate"]).split("#", 1)[0]
+    if case == "constructor-success":
+        return (
+            "Accepted deployment cost for explicit constructor validation, tagged role/limit "
+            "initialization, and runtime code deposit; no deployment-gas improvement is claimed.",
+            "deployment initialization and code-deposit boundary",
+        )
+    if case.startswith("trigger-"):
+        return (
+            "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback "
+            "choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "trigger dependency/value/rollback boundary",
+        )
+    if case.startswith("set-limit-") or case.startswith("get-limit-"):
+        return (
+            "Accepted exit-limit cost for explicit five-field projection, validation, checked "
+            "consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "exit-limit projection and validation boundary",
+        )
+    if case.startswith("pause-") or case.startswith("resume-"):
+        return (
+            "Accepted pause-control cost for explicit authorization, sentinel/error-polarity "
+            "checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "pause/resume authorization and tagged-state boundary",
+        )
+    if (case.startswith("grant-role") or case.startswith("revoke-role") or
+            case.startswith("renounce-role") or case.startswith("get-role-member") or
+            case.startswith("role-")):
+        return (
+            "Accepted role-state cost for full-identity collision checks and global enumeration "
+            "maintenance or scanning; TWG-D02–D05 separately delimit observable differences.",
+            "full-identity role lookup/enumeration boundary",
+        )
+    return (
+        "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged "
+        "representation; exact output semantics are pinned and no gas improvement is claimed.",
+        "constant, interface, role, or pause-state read boundary",
+    )
 
 
 def compatibility_contract() -> Mapping[str, object]:
@@ -1198,16 +1298,18 @@ def build_document_fill(contract: Mapping, cases: Sequence[Case], resources: Seq
     positives = []
     for row in named:
         if row["delta"] > 0:
+            defense, review_group = gas_cost_disposition(row)
             positives.append({
                 "id": f"TWG-G{len(positives) + 1:02d}", "gasKey": row["gasKey"],
-                "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-                "evidence": f"manifest resource coordinate {row['coordinate']}",
+                "defense": defense,
+                "evidence": f"manifest resource coordinate {row['coordinate']}; {review_group}",
             })
     template = artifacts["creation-template"]
     full = template + constructor_suffix(PARAMS)
     runtime = patch_blanc_runtime(artifacts, LOCATOR)
     fill["evidence"] = {
-        "blancCommit": BLANC_ARTIFACT_COMMIT,
+        "artifactProgramCommit": BLANC_ARTIFACT_COMMIT,
+        "proofCertificateCommit": BLANC_PROOF_COMMIT,
         "artifacts": {
             "creationTemplate": {"byteLength": len(template), "sha256": sha256(template)},
             "fullCreateInput": {"byteLength": len(full), "sha256": sha256(full)},
@@ -1217,10 +1319,10 @@ def build_document_fill(contract: Mapping, cases: Sequence[Case], resources: Seq
         "gas": {"boundaryDefinition": BOUNDARY_DEFINITION,
                 "rows": named, "positiveDeviations": positives},
         "summaries": {
-            "B2_CALLDATA_SCOPE_SUMMARY": "canonical ABI rows plus named dirty-address constructor rejection; arbitrary malformed calldata is excluded",
+            "B2_CALLDATA_SCOPE_SUMMARY": "canonical ABI endpoint rows plus named dirty-address constructor rejection; nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability are untested and excluded",
             "B2_CODE_SIZE_HEADROOM_SUMMARY": f"runtime {len(runtime)} bytes ({24576-len(runtime)} EIP-170 headroom); full CREATE {len(full)} bytes ({49152-len(full)} EIP-3860 headroom)",
             "B2_CONSTRUCTOR_COVERAGE_SUMMARY": "complete CREATE success plus zero admin, dirty admin, value, and four exit-limit validation failures",
-            "B2_COVERAGE_SUMMARY": f"{len(cases)} rows cover 24/24 selectors, constructor, five reachable emitted event kinds plus RoleAdminChanged non-emission, pause sentinel and exact error-polarity arms, roles, limit, and trigger mocks",
+            "B2_COVERAGE_SUMMARY": f"{len(cases)} named rows cover 24/24 selectors, constructor, five reachable emitted event kinds plus RoleAdminChanged non-emission, pause sentinel/error-polarity arms, roles, configured-limit consumption/exceeded/whole-frame refill, and trigger mocks; zero/unlimited and partial-frame limit behavior plus the excluded dispatch/calldata arms are untested",
             "B2_D01_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D01"),
             "B2_D01_SIZE_ATTRIBUTION": "seven exact unauthorized-role returndata rows; status, rollback, state, ETH, logs, and calls agree",
             "B2_D02_RESOURCE_ATTRIBUTION": "wrong-account renounce action gas is pinned in the complete resource vector",
@@ -1302,11 +1404,16 @@ def build_manifest(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, M
                 "locatorOffsets": artifacts["offsets"]["locator"],
                 "patchControlsValid": True,
             },
+            "proof": {
+                "artifactProgramCommit": BLANC_ARTIFACT_COMMIT,
+                "proofCertificateCommit": BLANC_PROOF_COMMIT,
+                "certificate": "first compile-valid pinned-target certificate",
+            },
             "positiveIdentityChecks": identity_checks,
         },
         "projection": projection,
         "coverage": {
-            "criterion": "every census selector plus constructor; both pause sentinel arms and both exact error polarities; seven role negatives; roles/enumeration; limit configure/consume/exceeded/refill; trigger fee/value/router/refund/ETH/events",
+            "criterion": "71 named rows: every census selector plus constructor; both pause sentinel arms and both exact error polarities; seven role negatives; roles/enumeration; configured-limit validation/consume/exceeded/whole-frame refill; trigger fee/value/router/refund/ETH/events; excludes zero/unlimited and partial-frame limits, nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability",
             "selectorCount": len(selector_rows),
             "selectors": [{"signature": row["signature"], "selector": row["selector"],
                            "rows": selector_rows[row["signature"]]}

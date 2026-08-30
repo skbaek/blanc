@@ -22,6 +22,11 @@
       }
     },
     "positiveIdentityChecks": 10,
+    "proof": {
+      "artifactProgramCommit": "35a196fd50192aa269d6cb07699ea0910ad3c468",
+      "certificate": "first compile-valid pinned-target certificate",
+      "proofCertificateCommit": "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
+    },
     "reference": {
       "creationTemplate": {
         "byteLength": 10096,
@@ -52,7 +57,7 @@
     "selectorCount": 24
   },
   "coverage": {
-    "criterion": "every census selector plus constructor; both pause sentinel arms and both exact error polarities; seven role negatives; roles/enumeration; limit configure/consume/exceeded/refill; trigger fee/value/router/refund/ETH/events",
+    "criterion": "71 named rows: every census selector plus constructor; both pause sentinel arms and both exact error polarities; seven role negatives; roles/enumeration; configured-limit validation/consume/exceeded/whole-frame refill; trigger fee/value/router/refund/ETH/events; excludes zero/unlimited and partial-frame limits, nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability",
     "deviations": [
       {
         "fields": [
@@ -392,6 +397,7 @@
     "censusSha256": "60ef98c19d78b2e1068e23501a30e7159471f95b25b6b4c1d4dadaebc22083eb",
     "eelsCommit": "4198b9c5996713b268aed602739d5aa40e277694",
     "evidence": {
+      "artifactProgramCommit": "35a196fd50192aa269d6cb07699ea0910ad3c468",
       "artifacts": {
         "creationTemplate": {
           "byteLength": 17976,
@@ -406,7 +412,6 @@
           "sha256": "2a4d45a407f79c896735072ba7f825927a857ec93f4c9c9abeff3e7905ebdb08"
         }
       },
-      "blancCommit": "35a196fd50192aa269d6cb07699ea0910ad3c468",
       "counts": {
         "cases": 71,
         "resourceBoundaries": 186
@@ -415,124 +420,292 @@
         "boundaryDefinition": "direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds",
         "positiveDeviations": [
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate constructor-success#0:constructor",
+            "defense": "Accepted deployment cost for explicit constructor validation, tagged role/limit initialization, and runtime code deposit; no deployment-gas improvement is claimed.",
+            "evidence": "manifest resource coordinate constructor-success#0:constructor; deployment initialization and code-deposit boundary",
             "gasKey": "CONSTRUCTOR_SUCCESS",
             "id": "TWG-G01"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate pause-for-finite#2:action",
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate pause-for-finite#2:action; pause/resume authorization and tagged-state boundary",
             "gasKey": "PAUSE_FOR_FINITE",
             "id": "TWG-G02"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate pause-for-sentinel#2:action",
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate pause-for-sentinel#2:action; pause/resume authorization and tagged-state boundary",
             "gasKey": "PAUSE_FOR_SENTINEL",
             "id": "TWG-G03"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate pause-until-finite#2:action",
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate pause-until-finite#2:action; pause/resume authorization and tagged-state boundary",
             "gasKey": "PAUSE_UNTIL_FINITE",
             "id": "TWG-G04"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate pause-until-sentinel#2:action",
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate pause-until-sentinel#2:action; pause/resume authorization and tagged-state boundary",
             "gasKey": "PAUSE_UNTIL_SENTINEL",
             "id": "TWG-G05"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate resume-authorized#4:action",
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate resume-authorized#4:action; pause/resume authorization and tagged-state boundary",
             "gasKey": "RESUME",
             "id": "TWG-G06"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate grant-role-fresh#1:action",
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate grant-role-fresh#1:action; full-identity role lookup/enumeration boundary",
             "gasKey": "GRANT_ROLE",
             "id": "TWG-G07"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate revoke-role-existing#2:action",
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate revoke-role-existing#2:action; full-identity role lookup/enumeration boundary",
             "gasKey": "REVOKE_ROLE",
             "id": "TWG-G08"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate renounce-role-self#2:action",
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate renounce-role-self#2:action; full-identity role lookup/enumeration boundary",
             "gasKey": "RENOUNCE_ROLE",
             "id": "TWG-G09"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate get-role-member#2:action",
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate get-role-member#2:action; full-identity role lookup/enumeration boundary",
             "gasKey": "GET_ROLE_MEMBER",
             "id": "TWG-G10"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate get-role-member-count#2:action",
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate get-role-member-count#2:action; full-identity role lookup/enumeration boundary",
             "gasKey": "GET_ROLE_MEMBER_COUNT",
             "id": "TWG-G11"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate set-limit-valid#2:action",
+            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "evidence": "manifest resource coordinate set-limit-valid#2:action; exit-limit projection and validation boundary",
             "gasKey": "SET_LIMIT",
             "id": "TWG-G12"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate get-limit-same-frame#1:action",
+            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "evidence": "manifest resource coordinate get-limit-same-frame#1:action; exit-limit projection and validation boundary",
             "gasKey": "GET_LIMIT_SAME_FRAME",
             "id": "TWG-G13"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate get-limit-refilled#3:action",
+            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "evidence": "manifest resource coordinate get-limit-refilled#3:action; exit-limit projection and validation boundary",
             "gasKey": "GET_LIMIT_REFILLED",
             "id": "TWG-G14"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate trigger-empty#2:action",
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-empty#2:action; trigger dependency/value/rollback boundary",
             "gasKey": "TRIGGER_EMPTY",
             "id": "TWG-G15"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate trigger-single-exact-fee#2:action",
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-single-exact-fee#2:action; trigger dependency/value/rollback boundary",
             "gasKey": "TRIGGER_SINGLE_EXACT",
             "id": "TWG-G16"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate trigger-explicit-refund#2:action",
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-explicit-refund#2:action; trigger dependency/value/rollback boundary",
             "gasKey": "TRIGGER_EXPLICIT_REFUND",
             "id": "TWG-G17"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate trigger-sender-refund#2:action",
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-sender-refund#2:action; trigger dependency/value/rollback boundary",
             "gasKey": "TRIGGER_SENDER_REFUND",
             "id": "TWG-G18"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate trigger-multiple#2:action",
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-multiple#2:action; trigger dependency/value/rollback boundary",
             "gasKey": "TRIGGER_MULTIPLE",
             "id": "TWG-G19"
           },
           {
-            "defense": "Published finite-corpus increase retained for explicit review in the TWG gas registry.",
-            "evidence": "manifest resource coordinate trigger-limit-exceeded#2:action",
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-limit-exceeded#2:action; trigger dependency/value/rollback boundary",
             "gasKey": "TRIGGER_LIMIT",
             "id": "TWG-G20"
+          },
+          {
+            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate view-default-admin-role#1:action; constant, interface, role, or pause-state read boundary",
+            "gasKey": "DEFAULT_ADMIN_ROLE_VIEW",
+            "id": "TWG-G21"
+          },
+          {
+            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate view-pause-infinitely#1:action; constant, interface, role, or pause-state read boundary",
+            "gasKey": "PAUSE_INFINITELY_VIEW",
+            "id": "TWG-G22"
+          },
+          {
+            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate view-supports-interface#1:action; constant, interface, role, or pause-state read boundary",
+            "gasKey": "SUPPORTS_INTERFACE",
+            "id": "TWG-G23"
+          },
+          {
+            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate view-has-role#1:action; constant, interface, role, or pause-state read boundary",
+            "gasKey": "HAS_ROLE",
+            "id": "TWG-G24"
+          },
+          {
+            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate view-resume-timestamp#1:action; constant, interface, role, or pause-state read boundary",
+            "gasKey": "GET_RESUME_TIMESTAMP",
+            "id": "TWG-G25"
+          },
+          {
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate grant-role-duplicate#2:action; full-identity role lookup/enumeration boundary",
+            "gasKey": "GRANT_ROLE_DUPLICATE",
+            "id": "TWG-G26"
+          },
+          {
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate revoke-role-missing#1:action; full-identity role lookup/enumeration boundary",
+            "gasKey": "REVOKE_ROLE_MISSING",
+            "id": "TWG-G27"
+          },
+          {
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate renounce-role-wrong-account#1:action; full-identity role lookup/enumeration boundary",
+            "gasKey": "RENOUNCE_ROLE_WRONG_ACCOUNT",
+            "id": "TWG-G28"
+          },
+          {
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate get-role-member-oob#1:action; full-identity role lookup/enumeration boundary",
+            "gasKey": "GET_ROLE_MEMBER_OOB",
+            "id": "TWG-G29"
+          },
+          {
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate role-enumeration-cross-role-order#7:action; full-identity role lookup/enumeration boundary",
+            "gasKey": "ROLE_ENUMERATION_CROSS_ROLE",
+            "id": "TWG-G30"
+          },
+          {
+            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
+            "evidence": "manifest resource coordinate role-flat-key-collision-refusal#3:action; full-identity role lookup/enumeration boundary",
+            "gasKey": "ROLE_COLLISION_REFUSAL",
+            "id": "TWG-G31"
+          },
+          {
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate pause-for-when-paused#3:action; pause/resume authorization and tagged-state boundary",
+            "gasKey": "PAUSE_FOR_WHEN_PAUSED",
+            "id": "TWG-G32"
+          },
+          {
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate pause-until-when-paused#3:action; pause/resume authorization and tagged-state boundary",
+            "gasKey": "PAUSE_UNTIL_WHEN_PAUSED",
+            "id": "TWG-G33"
+          },
+          {
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate pause-zero-duration#2:action; pause/resume authorization and tagged-state boundary",
+            "gasKey": "PAUSE_ZERO_DURATION",
+            "id": "TWG-G34"
+          },
+          {
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate pause-until-past#2:action; pause/resume authorization and tagged-state boundary",
+            "gasKey": "PAUSE_UNTIL_PAST",
+            "id": "TWG-G35"
+          },
+          {
+            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "evidence": "manifest resource coordinate resume-when-resumed#2:action; pause/resume authorization and tagged-state boundary",
+            "gasKey": "RESUME_WHEN_RESUMED",
+            "id": "TWG-G36"
+          },
+          {
+            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "evidence": "manifest resource coordinate set-limit-max-too-large#2:action; exit-limit projection and validation boundary",
+            "gasKey": "SET_LIMIT_MAX_TOO_LARGE",
+            "id": "TWG-G37"
+          },
+          {
+            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "evidence": "manifest resource coordinate set-limit-frame-too-large#2:action; exit-limit projection and validation boundary",
+            "gasKey": "SET_LIMIT_FRAME_TOO_LARGE",
+            "id": "TWG-G38"
+          },
+          {
+            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "evidence": "manifest resource coordinate set-limit-exits-above-max#2:action; exit-limit projection and validation boundary",
+            "gasKey": "SET_LIMIT_EXITS_ABOVE_MAX",
+            "id": "TWG-G39"
+          },
+          {
+            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "evidence": "manifest resource coordinate set-limit-zero-frame#2:action; exit-limit projection and validation boundary",
+            "gasKey": "SET_LIMIT_ZERO_FRAME",
+            "id": "TWG-G40"
+          },
+          {
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-insufficient-fee#2:action; trigger dependency/value/rollback boundary",
+            "gasKey": "TRIGGER_INSUFFICIENT_FEE",
+            "id": "TWG-G41"
+          },
+          {
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-paused#4:action; trigger dependency/value/rollback boundary",
+            "gasKey": "TRIGGER_PAUSED",
+            "id": "TWG-G42"
+          },
+          {
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-zero-value#2:action; trigger dependency/value/rollback boundary",
+            "gasKey": "TRIGGER_ZERO_VALUE",
+            "id": "TWG-G43"
+          },
+          {
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-locator-revert#2:action; trigger dependency/value/rollback boundary",
+            "gasKey": "TRIGGER_LOCATOR_REVERT",
+            "id": "TWG-G44"
+          },
+          {
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-fee-query-revert#2:action; trigger dependency/value/rollback boundary",
+            "gasKey": "TRIGGER_FEE_QUERY_REVERT",
+            "id": "TWG-G45"
+          },
+          {
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-vault-revert#2:action; trigger dependency/value/rollback boundary",
+            "gasKey": "TRIGGER_VAULT_REVERT",
+            "id": "TWG-G46"
+          },
+          {
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-router-revert#2:action; trigger dependency/value/rollback boundary",
+            "gasKey": "TRIGGER_ROUTER_REVERT",
+            "id": "TWG-G47"
+          },
+          {
+            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "evidence": "manifest resource coordinate trigger-refund-revert#2:action; trigger dependency/value/rollback boundary",
+            "gasKey": "TRIGGER_REFUND_REVERT",
+            "id": "TWG-G48"
           }
         ],
         "rows": [
@@ -719,14 +892,239 @@
             "gasKey": "ROLE_UNAUTHORIZED",
             "path": "role-gate-unauthorized",
             "reference": 32304
+          },
+          {
+            "blanc": 422,
+            "coordinate": "view-default-admin-role#1:action",
+            "delta": 138,
+            "gasKey": "DEFAULT_ADMIN_ROLE_VIEW",
+            "path": "defaultAdminRole",
+            "reference": 284
+          },
+          {
+            "blanc": 379,
+            "coordinate": "view-pause-infinitely#1:action",
+            "delta": 70,
+            "gasKey": "PAUSE_INFINITELY_VIEW",
+            "path": "pauseInfinitely",
+            "reference": 309
+          },
+          {
+            "blanc": 560,
+            "coordinate": "view-supports-interface#1:action",
+            "delta": 148,
+            "gasKey": "SUPPORTS_INTERFACE",
+            "path": "supportsInterface",
+            "reference": 412
+          },
+          {
+            "blanc": 6953,
+            "coordinate": "view-has-role#1:action",
+            "delta": 4222,
+            "gasKey": "HAS_ROLE",
+            "path": "hasRole",
+            "reference": 2731
+          },
+          {
+            "blanc": 2501,
+            "coordinate": "view-resume-timestamp#1:action",
+            "delta": 27,
+            "gasKey": "GET_RESUME_TIMESTAMP",
+            "path": "getResumeSinceTimestamp",
+            "reference": 2474
+          },
+          {
+            "blanc": 13465,
+            "coordinate": "grant-role-duplicate#2:action",
+            "delta": 3655,
+            "gasKey": "GRANT_ROLE_DUPLICATE",
+            "path": "grantRole-duplicate",
+            "reference": 9810
+          },
+          {
+            "blanc": 11311,
+            "coordinate": "revoke-role-missing#1:action",
+            "delta": 1422,
+            "gasKey": "REVOKE_ROLE_MISSING",
+            "path": "revokeRole-missing",
+            "reference": 9889
+          },
+          {
+            "blanc": 621,
+            "coordinate": "renounce-role-wrong-account#1:action",
+            "delta": 78,
+            "gasKey": "RENOUNCE_ROLE_WRONG_ACCOUNT",
+            "path": "renounceRole-wrong-account",
+            "reference": 543
+          },
+          {
+            "blanc": 5069,
+            "coordinate": "get-role-member-oob#1:action",
+            "delta": 2482,
+            "gasKey": "GET_ROLE_MEMBER_OOB",
+            "path": "getRoleMember-oob",
+            "reference": 2587
+          },
+          {
+            "blanc": 11658,
+            "coordinate": "role-enumeration-cross-role-order#7:action",
+            "delta": 6817,
+            "gasKey": "ROLE_ENUMERATION_CROSS_ROLE",
+            "path": "role-enumeration-cross-role-order",
+            "reference": 4841
+          },
+          {
+            "blanc": 6953,
+            "coordinate": "role-flat-key-collision-refusal#3:action",
+            "delta": 4222,
+            "gasKey": "ROLE_COLLISION_REFUSAL",
+            "path": "role-flat-key-collision-refusal",
+            "reference": 2731
+          },
+          {
+            "blanc": 8690,
+            "coordinate": "pause-for-when-paused#3:action",
+            "delta": 3690,
+            "gasKey": "PAUSE_FOR_WHEN_PAUSED",
+            "path": "pauseFor-when-paused",
+            "reference": 5000
+          },
+          {
+            "blanc": 8910,
+            "coordinate": "pause-until-when-paused#3:action",
+            "delta": 3887,
+            "gasKey": "PAUSE_UNTIL_WHEN_PAUSED",
+            "path": "pauseUntil-when-paused",
+            "reference": 5023
+          },
+          {
+            "blanc": 8714,
+            "coordinate": "pause-zero-duration#2:action",
+            "delta": 3688,
+            "gasKey": "PAUSE_ZERO_DURATION",
+            "path": "pauseFor-zero-duration",
+            "reference": 5026
+          },
+          {
+            "blanc": 8936,
+            "coordinate": "pause-until-past#2:action",
+            "delta": 3879,
+            "gasKey": "PAUSE_UNTIL_PAST",
+            "path": "pauseUntil-past",
+            "reference": 5057
+          },
+          {
+            "blanc": 8864,
+            "coordinate": "resume-when-resumed#2:action",
+            "delta": 4011,
+            "gasKey": "RESUME_WHEN_RESUMED",
+            "path": "resume-when-resumed",
+            "reference": 4853
+          },
+          {
+            "blanc": 6834,
+            "coordinate": "set-limit-max-too-large#2:action",
+            "delta": 1331,
+            "gasKey": "SET_LIMIT_MAX_TOO_LARGE",
+            "path": "setExitRequestLimit-max-too-large",
+            "reference": 5503
+          },
+          {
+            "blanc": 6859,
+            "coordinate": "set-limit-frame-too-large#2:action",
+            "delta": 1330,
+            "gasKey": "SET_LIMIT_FRAME_TOO_LARGE",
+            "path": "setExitRequestLimit-frame-too-large",
+            "reference": 5529
+          },
+          {
+            "blanc": 6887,
+            "coordinate": "set-limit-exits-above-max#2:action",
+            "delta": 1332,
+            "gasKey": "SET_LIMIT_EXITS_ABOVE_MAX",
+            "path": "setExitRequestLimit-exits-above-max",
+            "reference": 5555
+          },
+          {
+            "blanc": 6909,
+            "coordinate": "set-limit-zero-frame#2:action",
+            "delta": 1337,
+            "gasKey": "SET_LIMIT_ZERO_FRAME",
+            "path": "setExitRequestLimit-zero-frame",
+            "reference": 5572
+          },
+          {
+            "blanc": 29239,
+            "coordinate": "trigger-insufficient-fee#2:action",
+            "delta": 10677,
+            "gasKey": "TRIGGER_INSUFFICIENT_FEE",
+            "path": "trigger-insufficient-fee",
+            "reference": 18562
+          },
+          {
+            "blanc": 9099,
+            "coordinate": "trigger-paused#4:action",
+            "delta": 3818,
+            "gasKey": "TRIGGER_PAUSED",
+            "path": "trigger-paused",
+            "reference": 5281
+          },
+          {
+            "blanc": 9142,
+            "coordinate": "trigger-zero-value#2:action",
+            "delta": 3775,
+            "gasKey": "TRIGGER_ZERO_VALUE",
+            "path": "trigger-zero-value",
+            "reference": 5367
+          },
+          {
+            "blanc": 26190,
+            "coordinate": "trigger-locator-revert#2:action",
+            "delta": 11109,
+            "gasKey": "TRIGGER_LOCATOR_REVERT",
+            "path": "trigger-locator-revert",
+            "reference": 15081
+          },
+          {
+            "blanc": 29089,
+            "coordinate": "trigger-fee-query-revert#2:action",
+            "delta": 10898,
+            "gasKey": "TRIGGER_FEE_QUERY_REVERT",
+            "path": "trigger-fee-query-revert",
+            "reference": 18191
+          },
+          {
+            "blanc": 38232,
+            "coordinate": "trigger-vault-revert#2:action",
+            "delta": 10751,
+            "gasKey": "TRIGGER_VAULT_REVERT",
+            "path": "trigger-vault-revert",
+            "reference": 27481
+          },
+          {
+            "blanc": 152163,
+            "coordinate": "trigger-router-revert#2:action",
+            "delta": 9800,
+            "gasKey": "TRIGGER_ROUTER_REVERT",
+            "path": "trigger-router-revert",
+            "reference": 142363
+          },
+          {
+            "blanc": 252358,
+            "coordinate": "trigger-refund-revert#2:action",
+            "delta": 9629,
+            "gasKey": "TRIGGER_REFUND_REVERT",
+            "path": "trigger-refund-revert",
+            "reference": 242729
           }
         ]
       },
+      "proofCertificateCommit": "a0e04e7a69558b8744ced81ea4a3defdfc478d36",
       "summaries": {
-        "B2_CALLDATA_SCOPE_SUMMARY": "canonical ABI rows plus named dirty-address constructor rejection; arbitrary malformed calldata is excluded",
+        "B2_CALLDATA_SCOPE_SUMMARY": "canonical ABI endpoint rows plus named dirty-address constructor rejection; nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability are untested and excluded",
         "B2_CODE_SIZE_HEADROOM_SUMMARY": "runtime 15948 bytes (8628 EIP-170 headroom); full CREATE 18136 bytes (31016 EIP-3860 headroom)",
         "B2_CONSTRUCTOR_COVERAGE_SUMMARY": "complete CREATE success plus zero admin, dirty admin, value, and four exit-limit validation failures",
-        "B2_COVERAGE_SUMMARY": "71 rows cover 24/24 selectors, constructor, five reachable emitted event kinds plus RoleAdminChanged non-emission, pause sentinel and exact error-polarity arms, roles, limit, and trigger mocks",
+        "B2_COVERAGE_SUMMARY": "71 named rows cover 24/24 selectors, constructor, five reachable emitted event kinds plus RoleAdminChanged non-emission, pause sentinel/error-polarity arms, roles, configured-limit consumption/exceeded/whole-frame refill, and trigger mocks; zero/unlimited and partial-frame limit behavior plus the excluded dispatch/calldata arms are untested",
         "B2_D01_ROW_SET": "role-negative-grant, role-negative-revoke, role-negative-pause-for, role-negative-pause-until, role-negative-resume, role-negative-set-limit, role-negative-trigger",
         "B2_D01_SIZE_ATTRIBUTION": "seven exact unauthorized-role returndata rows; status, rollback, state, ETH, logs, and calls agree",
         "B2_D02_RESOURCE_ATTRIBUTION": "wrong-account renounce action gas is pinned in the complete resource vector",
@@ -3033,6 +3431,230 @@
         "gasKey": "ROLE_UNAUTHORIZED",
         "path": "role-gate-unauthorized",
         "reference": 32304
+      },
+      {
+        "blanc": 422,
+        "coordinate": "view-default-admin-role#1:action",
+        "delta": 138,
+        "gasKey": "DEFAULT_ADMIN_ROLE_VIEW",
+        "path": "defaultAdminRole",
+        "reference": 284
+      },
+      {
+        "blanc": 379,
+        "coordinate": "view-pause-infinitely#1:action",
+        "delta": 70,
+        "gasKey": "PAUSE_INFINITELY_VIEW",
+        "path": "pauseInfinitely",
+        "reference": 309
+      },
+      {
+        "blanc": 560,
+        "coordinate": "view-supports-interface#1:action",
+        "delta": 148,
+        "gasKey": "SUPPORTS_INTERFACE",
+        "path": "supportsInterface",
+        "reference": 412
+      },
+      {
+        "blanc": 6953,
+        "coordinate": "view-has-role#1:action",
+        "delta": 4222,
+        "gasKey": "HAS_ROLE",
+        "path": "hasRole",
+        "reference": 2731
+      },
+      {
+        "blanc": 2501,
+        "coordinate": "view-resume-timestamp#1:action",
+        "delta": 27,
+        "gasKey": "GET_RESUME_TIMESTAMP",
+        "path": "getResumeSinceTimestamp",
+        "reference": 2474
+      },
+      {
+        "blanc": 13465,
+        "coordinate": "grant-role-duplicate#2:action",
+        "delta": 3655,
+        "gasKey": "GRANT_ROLE_DUPLICATE",
+        "path": "grantRole-duplicate",
+        "reference": 9810
+      },
+      {
+        "blanc": 11311,
+        "coordinate": "revoke-role-missing#1:action",
+        "delta": 1422,
+        "gasKey": "REVOKE_ROLE_MISSING",
+        "path": "revokeRole-missing",
+        "reference": 9889
+      },
+      {
+        "blanc": 621,
+        "coordinate": "renounce-role-wrong-account#1:action",
+        "delta": 78,
+        "gasKey": "RENOUNCE_ROLE_WRONG_ACCOUNT",
+        "path": "renounceRole-wrong-account",
+        "reference": 543
+      },
+      {
+        "blanc": 5069,
+        "coordinate": "get-role-member-oob#1:action",
+        "delta": 2482,
+        "gasKey": "GET_ROLE_MEMBER_OOB",
+        "path": "getRoleMember-oob",
+        "reference": 2587
+      },
+      {
+        "blanc": 11658,
+        "coordinate": "role-enumeration-cross-role-order#7:action",
+        "delta": 6817,
+        "gasKey": "ROLE_ENUMERATION_CROSS_ROLE",
+        "path": "role-enumeration-cross-role-order",
+        "reference": 4841
+      },
+      {
+        "blanc": 6953,
+        "coordinate": "role-flat-key-collision-refusal#3:action",
+        "delta": 4222,
+        "gasKey": "ROLE_COLLISION_REFUSAL",
+        "path": "role-flat-key-collision-refusal",
+        "reference": 2731
+      },
+      {
+        "blanc": 8690,
+        "coordinate": "pause-for-when-paused#3:action",
+        "delta": 3690,
+        "gasKey": "PAUSE_FOR_WHEN_PAUSED",
+        "path": "pauseFor-when-paused",
+        "reference": 5000
+      },
+      {
+        "blanc": 8910,
+        "coordinate": "pause-until-when-paused#3:action",
+        "delta": 3887,
+        "gasKey": "PAUSE_UNTIL_WHEN_PAUSED",
+        "path": "pauseUntil-when-paused",
+        "reference": 5023
+      },
+      {
+        "blanc": 8714,
+        "coordinate": "pause-zero-duration#2:action",
+        "delta": 3688,
+        "gasKey": "PAUSE_ZERO_DURATION",
+        "path": "pauseFor-zero-duration",
+        "reference": 5026
+      },
+      {
+        "blanc": 8936,
+        "coordinate": "pause-until-past#2:action",
+        "delta": 3879,
+        "gasKey": "PAUSE_UNTIL_PAST",
+        "path": "pauseUntil-past",
+        "reference": 5057
+      },
+      {
+        "blanc": 8864,
+        "coordinate": "resume-when-resumed#2:action",
+        "delta": 4011,
+        "gasKey": "RESUME_WHEN_RESUMED",
+        "path": "resume-when-resumed",
+        "reference": 4853
+      },
+      {
+        "blanc": 6834,
+        "coordinate": "set-limit-max-too-large#2:action",
+        "delta": 1331,
+        "gasKey": "SET_LIMIT_MAX_TOO_LARGE",
+        "path": "setExitRequestLimit-max-too-large",
+        "reference": 5503
+      },
+      {
+        "blanc": 6859,
+        "coordinate": "set-limit-frame-too-large#2:action",
+        "delta": 1330,
+        "gasKey": "SET_LIMIT_FRAME_TOO_LARGE",
+        "path": "setExitRequestLimit-frame-too-large",
+        "reference": 5529
+      },
+      {
+        "blanc": 6887,
+        "coordinate": "set-limit-exits-above-max#2:action",
+        "delta": 1332,
+        "gasKey": "SET_LIMIT_EXITS_ABOVE_MAX",
+        "path": "setExitRequestLimit-exits-above-max",
+        "reference": 5555
+      },
+      {
+        "blanc": 6909,
+        "coordinate": "set-limit-zero-frame#2:action",
+        "delta": 1337,
+        "gasKey": "SET_LIMIT_ZERO_FRAME",
+        "path": "setExitRequestLimit-zero-frame",
+        "reference": 5572
+      },
+      {
+        "blanc": 29239,
+        "coordinate": "trigger-insufficient-fee#2:action",
+        "delta": 10677,
+        "gasKey": "TRIGGER_INSUFFICIENT_FEE",
+        "path": "trigger-insufficient-fee",
+        "reference": 18562
+      },
+      {
+        "blanc": 9099,
+        "coordinate": "trigger-paused#4:action",
+        "delta": 3818,
+        "gasKey": "TRIGGER_PAUSED",
+        "path": "trigger-paused",
+        "reference": 5281
+      },
+      {
+        "blanc": 9142,
+        "coordinate": "trigger-zero-value#2:action",
+        "delta": 3775,
+        "gasKey": "TRIGGER_ZERO_VALUE",
+        "path": "trigger-zero-value",
+        "reference": 5367
+      },
+      {
+        "blanc": 26190,
+        "coordinate": "trigger-locator-revert#2:action",
+        "delta": 11109,
+        "gasKey": "TRIGGER_LOCATOR_REVERT",
+        "path": "trigger-locator-revert",
+        "reference": 15081
+      },
+      {
+        "blanc": 29089,
+        "coordinate": "trigger-fee-query-revert#2:action",
+        "delta": 10898,
+        "gasKey": "TRIGGER_FEE_QUERY_REVERT",
+        "path": "trigger-fee-query-revert",
+        "reference": 18191
+      },
+      {
+        "blanc": 38232,
+        "coordinate": "trigger-vault-revert#2:action",
+        "delta": 10751,
+        "gasKey": "TRIGGER_VAULT_REVERT",
+        "path": "trigger-vault-revert",
+        "reference": 27481
+      },
+      {
+        "blanc": 152163,
+        "coordinate": "trigger-router-revert#2:action",
+        "delta": 9800,
+        "gasKey": "TRIGGER_ROUTER_REVERT",
+        "path": "trigger-router-revert",
+        "reference": 142363
+      },
+      {
+        "blanc": 252358,
+        "coordinate": "trigger-refund-revert#2:action",
+        "delta": 9629,
+        "gasKey": "TRIGGER_REFUND_REVERT",
+        "path": "trigger-refund-revert",
+        "reference": 242729
       }
     ],
     "vectorSha256": "59a1ba9b46850429033181a91bf4c12f5f63e32c3b3924e930d0b4910b4a5ad5"
@@ -7430,13 +8052,13 @@
   ],
   "schema": 1,
   "sectionDigests": {
-    "artifacts": "59a9ed3bbdf471a0acb28c840551d1290d71d189bd404e8df1e3cb09827a3545",
+    "artifacts": "f32db3dc135e6f350caacb8cb6766128b9fb8b1a1311fc2f5947405e2e6644fc",
     "counts": "e4f63ea5111fbefde907c41e3ead639b3b2c40513ba8992d326dd6a5723a538d",
-    "coverage": "2fe1d9f3ea6746f04c143a65bd0f8ae10f95b6d4ba3d1fbe463c7ce27c96f9df",
-    "documentFill": "e7229f236558498600f7f511544dc2164e675ab477fcedbaa0e3f4da840dc182",
+    "coverage": "064f97b9979136800291a8d5917cb2e1aa665d6b80fd367d9ba30918e95f1695",
+    "documentFill": "265cd97398eb1d12412b35b81c53175f0cc681de6c142aa29dfb6ea103394e57",
     "oracle": "93bef5c99cce1b76cd347e3c0dbb1cd69f361189d2c9be2ccf03d5b277b15892",
     "projection": "d44df671ee050ddbf29add52fb66feecb374479da348819ac5f5cc58e5da4300",
-    "resourceEvidence": "8cb5190c182cfc5f73591e0d77289362ff61d72aea646489d2a5495b5c578102",
+    "resourceEvidence": "ce49bf74a6bb65314e0d78d30fc1adae561b339e2ed7def740f3b68f74af969b",
     "rows": "bae00a44f2785e08c2dfbd7b80e842e3152c9a441c2eb9475634503cddbb31e2"
   }
 }

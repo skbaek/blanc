@@ -34,13 +34,14 @@ prose, own artifact identities and finite observations.
 | Reference creation bytes | `10256` bytes; SHA-256 `0e7dd55e589cf6bd38b2ebae7581ff169a354f9399087ecb6b8940f56bacc7e7` |
 | Reference runtime | `8128` bytes; SHA-256 `12c9d210f25202cf535622f93ba5237181512cc23970f2da08434f77e68d3a7b` |
 | Selection-time mainnet snapshot | account `0xDC00116a0D3E064427dA2600449cfD2566B3037B`; block `25866991`; code hash `0xbf27dab01ae7fb4507657a02d975bd38aeea9eaba4498225da3a0ee5f815f123`; role/pause snapshot `b22333b245132e24f43328f46030b09f2ccf805ad3937382d1636a849626cc23` |
-| Blanc completion commit | `35a196fd50192aa269d6cb07699ea0910ad3c468` |
+| Blanc artifact/runtime program commit | `35a196fd50192aa269d6cb07699ea0910ad3c468` |
+| First compile-valid pinned-target proof certificate | `a0e04e7a69558b8744ced81ea4a3defdfc478d36` |
 | Jaune pin | `949cf97ee1956828a3ac0eb12a62c438656ba76e` |
 | Blanc creation template | `17976` bytes; SHA-256 `1c7a59c47cb97dbd8da1ccd02ed2913d553d18e6f353c640b308ce47b638eeb1` |
 | Blanc complete CREATE input | `18136` bytes; SHA-256 `8091507f8753791e74a3ba7704436dac4bc7db3fcbf973a97b5296934432347a` |
 | Blanc runtime | `15948` bytes; SHA-256 `2a4d45a407f79c896735072ba7f825927a857ec93f4c9c9abeff3e7905ebdb08` |
 | EELS oracle | `ethereum/execution-specs` commit `4198b9c5996713b268aed602739d5aa40e277694`, Prague |
-| Differential manifest | schema `1`; SHA-256 `a4e7a9b553ceda869f97c30a85214ae599171960fd54db43244ebc7cb43ac4f8` |
+| Differential manifest | schema `1`; SHA-256 `4dea3481b12f12a751af1bdae602a8e5d6d7055f6359795fdd89950b3e0ae4d4` |
 | Differential result | `PASS`; `71` cases, `186` measured resource boundaries |
 
 The mainnet snapshot is provenance and selection-time context. It is not a
@@ -54,8 +55,9 @@ criterion, which the generated manifest and its gate establish:
 
 1. every one of the 24 census selectors is exercised on both exact artifacts;
 2. the constructor is executed through each artifact's complete CREATE input;
-3. all six event families are checked for exact emitter, topics, data, order,
-   and rollback where they can arise;
+3. all five reachable emitted event families are checked for exact emitter,
+   topics, data, order, and rollback, while `RoleAdminChanged` owns an exact
+   non-emission row because this gateway never calls `_setRoleAdmin`;
 4. pause/resume coverage contains resumed and paused worlds, finite
    `pauseFor`, `pauseFor(2^256 - 1)`, finite inclusive `pauseUntil`,
    `pauseUntil(2^256 - 1)`, truthful paused/resumed queries, and authorization
@@ -63,24 +65,27 @@ criterion, which the generated manifest and its gate establish:
 5. AccessControl coverage contains membership, admin lookup, grant, revoke,
    self-renounce, wrong-account renounce, enumeration, removal histories, and
    the five known difference classes `TWG-D01` through `TWG-D05`;
-6. limit coverage contains initial configuration, reconfiguration,
-   consumption, exceeded quota, zero/unlimited mode, partial-frame behavior,
-   whole-frame refill, capping, and checked arithmetic boundaries;
-7. trigger coverage contains empty, singleton, and multi-validator arrays;
-   nested dynamic-ABI failures; fee multiplication; exact vault value;
+6. limit coverage contains initial configuration, valid reconfiguration,
+   validation failures, consumption, exceeded quota, same-frame observation,
+   whole-frame refill, capping, and the named checked arithmetic boundaries;
+7. trigger coverage contains canonical empty, singleton, and multi-validator
+   arrays; fee multiplication; exact vault value;
    locator, vault, and router observations; no-refund, explicit-recipient
    refund, zero-recipient-to-sender refund, refund failure, rollback, and ETH
    balance preservation;
-8. dispatch coverage contains empty/unknown/short calldata, trailing canonical
-   calldata, recognized-selector nonpayability, canonical address words, and
-   every noncanonical input shape that this document includes rather than
-   excludes; and
+8. dispatch/calldata coverage is limited to the recognized selectors and
+   canonical ABI words used by the named endpoint rows, plus the named dirty
+   constructor-address rejection; and
 9. every compared status, returndata, logical-state, ETH, log, and external-call
    channel has a bounded falsifier that changes only that channel and is caught
    for the expected reason.
 
+The deliberately untested dispatch/calldata boundary is exact: nested
+malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and
+recognized-selector nonpayability are untested and excluded.
+
 The exact generated coverage result is
-`71 rows cover 24/24 selectors, constructor, five reachable emitted event kinds plus RoleAdminChanged non-emission, pause sentinel and exact error-polarity arms, roles, limit, and trigger mocks`. Agreement means agreement on those chosen
+`71 named rows cover 24/24 selectors, constructor, five reachable emitted event kinds plus RoleAdminChanged non-emission, pause sentinel/error-polarity arms, roles, configured-limit consumption/exceeded/whole-frame refill, and trigger mocks; zero/unlimited and partial-frame limit behavior plus the excluded dispatch/calldata arms are untested`. Agreement means agreement on those chosen
 rows and observations only. It is not a proof, a liveness result, or an
 exhaustive equivalence claim.
 
@@ -125,38 +130,38 @@ census. The adjacent endpoint sections state the claimed behavior.
 <!-- LIDO-TWG-ENDPOINT {"signature":"PAUSE_ROLE()","selector":"0x389ed267"} -->
 ### `PAUSE_ROLE()`
 
-Nonpayable constant getter. Returns
+The canonical zero-value corpus row returns
 `0x139c2898040ef16910dc9f44dc697df79363da767d8bc92f2e310312b816e46d`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"RESUME_ROLE()","selector":"0x2de03aa1"} -->
 ### `RESUME_ROLE()`
 
-Nonpayable constant getter. Returns
+The canonical zero-value corpus row returns
 `0x2fc10cc8ae19568712f7a176fb4978616a610650813c9d05326c34abb62749c7`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"ADD_FULL_WITHDRAWAL_REQUEST_ROLE()","selector":"0xa0cbdf14"} -->
 ### `ADD_FULL_WITHDRAWAL_REQUEST_ROLE()`
 
-Nonpayable constant getter. Returns
+The canonical zero-value corpus row returns
 `0x15fac8ba7fe8dd5344b88c1915452ce66976f270d1cd793c3b0ab579cecd33c0`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"TW_EXIT_LIMIT_MANAGER_ROLE()","selector":"0x2d44866b"} -->
 ### `TW_EXIT_LIMIT_MANAGER_ROLE()`
 
-Nonpayable constant getter. Returns
+The canonical zero-value corpus row returns
 `0x03c30da9b9e4d4789ac88a294d39a63058ca4a498804c2aa823e381df59d0cf4`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"TWR_LIMIT_POSITION()","selector":"0x76b0023e"} -->
 ### `TWR_LIMIT_POSITION()`
 
-Nonpayable constant getter. Returns the reference's public named-slot word
+The canonical zero-value corpus row returns the reference's public named-slot word
 `0x3a69583d449251314fd68e4e68fe89ca455d27f2701d2fdee1b16c585fc4e2d6`.
 This does not imply that Blanc stores its logical limit state at that raw slot.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"VERSION()","selector":"0xffa1ad74"} -->
 ### `VERSION()`
 
-Nonpayable constant getter. Returns `1`.
+The canonical zero-value corpus row returns `1`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"resume()","selector":"0x046f7da2"} -->
 ### `resume()`
@@ -210,7 +215,7 @@ frameDurationInSec)`. `TWG-D01` governs the authorization payload.
 <!-- LIDO-TWG-ENDPOINT {"signature":"getExitRequestLimitFullInfo()","selector":"0xb6b764b2"} -->
 ### `getExitRequestLimitFullInfo()`
 
-Nonpayable view. Returns five ABI words: maximum exit requests, exits per
+The canonical zero-value corpus row returns five ABI words: maximum exit requests, exits per
 frame, frame duration, stored previous limit, and the current calculated
 limit. The current value uses the same checked frame-refill calculation as the
 mutating paths without committing storage.
@@ -218,29 +223,29 @@ mutating paths without committing storage.
 <!-- LIDO-TWG-ENDPOINT {"signature":"PAUSE_INFINITELY()","selector":"0xa302ee38"} -->
 ### `PAUSE_INFINITELY()`
 
-Nonpayable constant getter. Returns `2^256 - 1`.
+The canonical zero-value corpus row returns `2^256 - 1`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"isPaused()","selector":"0xb187bd26"} -->
 ### `isPaused()`
 
-Nonpayable view. Returns canonical ABI `true` exactly when
+The canonical zero-value corpus row returns ABI `true` exactly when
 `block.timestamp < resumeSince`, otherwise canonical `false`, with no state,
 ETH, log, or external-call effect.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"getResumeSinceTimestamp()","selector":"0x589ff76c"} -->
 ### `getResumeSinceTimestamp()`
 
-Nonpayable view. Returns the logical resume-since projection unchanged.
+The canonical zero-value corpus row returns the logical resume-since projection unchanged.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"DEFAULT_ADMIN_ROLE()","selector":"0xa217fddf"} -->
 ### `DEFAULT_ADMIN_ROLE()`
 
-Nonpayable constant getter. Returns the zero `bytes32` word.
+The canonical zero-value corpus row returns the zero `bytes32` word.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"supportsInterface(bytes4)","selector":"0x01ffc9a7"} -->
 ### `supportsInterface(bytes4)`
 
-Nonpayable view. Supports ERC-165, `IAccessControl`, and
+The canonical zero-value corpus row exercises ERC-165, `IAccessControl`, and
 `IAccessControlEnumerable`, and returns canonical false for other canonical
 interface identifiers. Decoder-edge coverage is bounded by the calldata scope
 below.
@@ -248,14 +253,14 @@ below.
 <!-- LIDO-TWG-ENDPOINT {"signature":"hasRole(bytes32,address)","selector":"0x91d14854"} -->
 ### `hasRole(bytes32,address)`
 
-Nonpayable view. Returns canonical membership. Blanc verifies the full stored
+The canonical zero-value corpus row returns membership. Blanc verifies the full stored
 role/account identity rather than aliasing a flat-key collision; see
 `TWG-D05`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"getRoleAdmin(bytes32)","selector":"0x248a9ca3"} -->
 ### `getRoleAdmin(bytes32)`
 
-Nonpayable view. Returns `DEFAULT_ADMIN_ROLE` for the frozen source's role
+The canonical zero-value corpus row returns `DEFAULT_ADMIN_ROLE` for the frozen source's role
 configuration.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"grantRole(bytes32,address)","selector":"0x2f2ff15d"} -->
@@ -284,14 +289,14 @@ are `TWG-D04` and `TWG-D05`.
 <!-- LIDO-TWG-ENDPOINT {"signature":"getRoleMember(bytes32,uint256)","selector":"0x9010d07c"} -->
 ### `getRoleMember(bytes32,uint256)`
 
-Nonpayable view. Returns the member at the requested zero-based ordinal in the
+The canonical zero-value corpus row returns the member at the requested zero-based ordinal in the
 implementation's enumeration order. Out-of-bounds error data differs under
 `TWG-D03`, and histories may expose the ordering difference `TWG-D04`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"getRoleMemberCount(bytes32)","selector":"0xca15c873"} -->
 ### `getRoleMemberCount(bytes32)`
 
-Nonpayable view. Returns the exact membership count for the role. The logical
+The canonical zero-value corpus row returns the exact membership count for the role. The logical
 count is compared even though the two implementations use different raw
 storage and enumeration structures.
 
@@ -361,13 +366,12 @@ ETH, logs, or call observations.
 <!-- LIDO-TWG-CROSSCUT dispatch-calldata -->
 ### Dispatch, nonpayability, and calldata
 
-Only `triggerFullWithdrawals` is payable. Empty, unknown, and recognized but
-short calldata revert. Canonical static and dynamic encodings are inside the
-corpus; the exact included/excluded malformed-input matrix is
-`canonical ABI rows plus named dirty-address constructor rejection; arbitrary malformed calldata is excluded`. Trailing calldata and noncanonical
-dynamic offset arrangements are claimed only where a named corpus row checks
-them. Malformed callback/dependency return data is a separate external-call
-obligation and is not silently excluded with input calldata.
+The finite corpus uses canonical ABI encodings for its named recognized-selector
+rows and separately checks the dirty-address constructor rejection. Its exact
+scope is `canonical ABI endpoint rows plus named dirty-address constructor rejection; nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability are untested and excluded`.
+Those excluded dispatch/calldata arms have no B2 equivalence claim. Malformed
+callback/dependency return data is a separate external-call obligation and is
+not silently classified as input-calldata coverage.
 
 <!-- LIDO-TWG-CROSSCUT pause-sentinel -->
 ### Pause projection and infinite sentinel
@@ -400,9 +404,10 @@ no theorem or fixture may assume global injectivity of the low-252-bit key.
 
 The logical projection contains maximum, previous limit, previous timestamp,
 frame duration, and exits per frame. Current limit is calculated from elapsed
-whole frames, capped by the maximum, with the source's checked arithmetic and
-zero/unlimited behavior. Raw packed/reference slots and Blanc's five flat
-words are not compared.
+whole frames, capped by the maximum, with the named checked-arithmetic rows.
+The corpus observes configured same-frame and whole-frame worlds; zero/unlimited
+mode and partial-frame behavior are untested and excluded. Raw
+packed/reference slots and Blanc's five flat words are not compared.
 
 <!-- LIDO-TWG-CROSSCUT trigger-choreography -->
 ### Trigger choreography and dependencies
@@ -441,19 +446,25 @@ enabledness, or behavior outside the coverage criterion.
 ### Code size and named-path gas
 
 The machine-filled comparison tables live in the deviation registry. Exact gas
-identity and universal dominance are not claimed. Every measured externally
-callable path with a positive Blanc-minus-reference delta must be repaired or
-entered as its own behavioral deviation; aggregate savings cannot hide it.
+identity and universal dominance are not claimed. Every measured positive
+public final-action delta and the successful constructor cost must be repaired
+or receive its own accepted gas-cost disposition; aggregate savings cannot
+hide it. These `TWG-Gnn` cost rows do not expand the behavioral-deviation
+inventory beyond `TWG-D01` through `TWG-D05`.
 
 <!-- LIDO-TWG-CROSSCUT formal-proof-boundary -->
 ### Formal Blanc boundary
 
-At `35a196fd50192aa269d6cb07699ea0910ad3c468`, the exact compiled Blanc family has proved
-pause-face, authorization, protected-surface, and `PinnedPauseTarget`
-properties within `[propext, Classical.choice, Quot.sound]`. The bundle's
-CircuitBreaker-cell noninterference is derived from selected-route
-childlessness, not assumed. These are Blanc-only theorems and say nothing
-about the deployed Solidity runtime.
+The runtime/artifact program is frozen at
+`35a196fd50192aa269d6cb07699ea0910ad3c468`. The first compile-valid
+pinned-target certificate is commit
+`a0e04e7a69558b8744ced81ea4a3defdfc478d36`, which certifies that exact
+program's pause-face, authorization, protected-surface, and
+`PinnedPauseTarget` properties within
+`[propext, Classical.choice, Quot.sound]`. The bundle's CircuitBreaker-cell
+noninterference is derived from selected-route childlessness, not assumed.
+These are Blanc-only theorems and say nothing about the deployed Solidity
+runtime.
 
 <!-- LIDO-TWG-CROSSCUT deployment-boundary -->
 ### Direct installation, not deployment-root verification
@@ -468,7 +479,10 @@ Solidity account invariant.
 
 The published finite claim is:
 
-> At Blanc commit `35a196fd50192aa269d6cb07699ea0910ad3c468`, Jaune pin
+> For the exact Blanc runtime/artifact program at
+> `35a196fd50192aa269d6cb07699ea0910ad3c468`, certified by the first
+> compile-valid pinned-target proof commit
+> `a0e04e7a69558b8744ced81ea4a3defdfc478d36`, Jaune pin
 > `949cf97ee1956828a3ac0eb12a62c438656ba76e`, reference lock
 > `8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f`, and EELS commit
 > `4198b9c5996713b268aed602739d5aa40e277694`, the exact compiled Blanc

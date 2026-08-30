@@ -109,7 +109,42 @@ GAS_ROWS = [
     ("TRIGGER_MULTIPLE", "trigger-multiple"),
     ("TRIGGER_LIMIT", "trigger-limit-exceeded"),
     ("ROLE_UNAUTHORIZED", "role-gate-unauthorized"),
+    ("DEFAULT_ADMIN_ROLE_VIEW", "defaultAdminRole"),
+    ("PAUSE_INFINITELY_VIEW", "pauseInfinitely"),
+    ("SUPPORTS_INTERFACE", "supportsInterface"),
+    ("HAS_ROLE", "hasRole"),
+    ("GET_RESUME_TIMESTAMP", "getResumeSinceTimestamp"),
+    ("GRANT_ROLE_DUPLICATE", "grantRole-duplicate"),
+    ("REVOKE_ROLE_MISSING", "revokeRole-missing"),
+    ("RENOUNCE_ROLE_WRONG_ACCOUNT", "renounceRole-wrong-account"),
+    ("GET_ROLE_MEMBER_OOB", "getRoleMember-oob"),
+    ("ROLE_ENUMERATION_CROSS_ROLE", "role-enumeration-cross-role-order"),
+    ("ROLE_COLLISION_REFUSAL", "role-flat-key-collision-refusal"),
+    ("PAUSE_FOR_WHEN_PAUSED", "pauseFor-when-paused"),
+    ("PAUSE_UNTIL_WHEN_PAUSED", "pauseUntil-when-paused"),
+    ("PAUSE_ZERO_DURATION", "pauseFor-zero-duration"),
+    ("PAUSE_UNTIL_PAST", "pauseUntil-past"),
+    ("RESUME_WHEN_RESUMED", "resume-when-resumed"),
+    ("SET_LIMIT_MAX_TOO_LARGE", "setExitRequestLimit-max-too-large"),
+    ("SET_LIMIT_FRAME_TOO_LARGE", "setExitRequestLimit-frame-too-large"),
+    ("SET_LIMIT_EXITS_ABOVE_MAX", "setExitRequestLimit-exits-above-max"),
+    ("SET_LIMIT_ZERO_FRAME", "setExitRequestLimit-zero-frame"),
+    ("TRIGGER_INSUFFICIENT_FEE", "trigger-insufficient-fee"),
+    ("TRIGGER_PAUSED", "trigger-paused"),
+    ("TRIGGER_ZERO_VALUE", "trigger-zero-value"),
+    ("TRIGGER_LOCATOR_REVERT", "trigger-locator-revert"),
+    ("TRIGGER_FEE_QUERY_REVERT", "trigger-fee-query-revert"),
+    ("TRIGGER_VAULT_REVERT", "trigger-vault-revert"),
+    ("TRIGGER_ROUTER_REVERT", "trigger-router-revert"),
+    ("TRIGGER_REFUND_REVERT", "trigger-refund-revert"),
 ]
+
+BLANC_ARTIFACT_COMMIT = "35a196fd50192aa269d6cb07699ea0910ad3c468"
+BLANC_PROOF_COMMIT = "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
+CALLDATA_EXCLUSION_TEXT = (
+    "nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and "
+    "recognized-selector nonpayability are untested and excluded"
+)
 
 LOCK_TOKENS = {
     "B1_MAINNET_BLOCK",
@@ -145,7 +180,8 @@ SUMMARY_TOKENS = {
     "B2_PROJECTION_SCHEMA_SHA256",
 }
 DERIVED_MANIFEST_TOKENS = {
-    "B2_BLANC_COMMIT",
+    "B2_BLANC_ARTIFACT_PROGRAM_COMMIT",
+    "B2_BLANC_PROOF_CERTIFICATE_COMMIT",
     "B2_BLANC_CREATION_TEMPLATE_BYTES",
     "B2_BLANC_CREATION_TEMPLATE_SHA256",
     "B2_BLANC_FULL_CREATE_BYTES",
@@ -348,6 +384,10 @@ def parse_compatibility(text: str, census: dict[str, Any]) -> dict[str, Any]:
     expect(visible_rows == expected_visible,
            "visible 24-selector table differs from the exact ordered census")
     check_heading_inventory(text, COMPATIBILITY_HEADINGS, "compatibility document")
+    normalized_text = " ".join(text.split())
+    expect(normalized_text.count(CALLDATA_EXCLUSION_TEXT) >= 2,
+           "compatibility document does not repeat the exact machine summary and explicit "
+           "dispatch/calldata exclusion boundary")
     return {
         "endpoints": endpoint_markers,
         "events": event_markers,
@@ -397,8 +437,11 @@ def parse_deviations(text: str) -> dict[str, Any]:
     expect(implementations == IMPLEMENTATION_DIFFERENCES,
            "implementation-difference inventory must be exactly TWG-I01 storage-layout")
     expect(len(code_sizes) == 1 and set(code_sizes[0]) == {
-        "referenceLock", "blancCommit", "manifest",
+        "referenceLock", "artifactProgramCommit", "proofCertificateCommit", "manifest",
     }, "code-size marker inventory/shape differs")
+    expect(code_sizes[0]["artifactProgramCommit"] == BLANC_ARTIFACT_COMMIT and
+           code_sizes[0]["proofCertificateCommit"] == BLANC_PROOF_COMMIT,
+           "code-size marker does not bind the exact artifact-program/proof-certificate pair")
     expect(len(measurements) == 1 and set(measurements[0]) == {
         "eelsCommit", "manifest", "boundaryDefinition", "rowCount", "positiveDeltaRows",
     }, "gas-measurement marker inventory/shape differs")
@@ -408,6 +451,9 @@ def parse_deviations(text: str) -> dict[str, Any]:
                and row.get("status") == "accepted"
                and type(row.get("delta")) is int and row["delta"] > 0,
                f"positive-gas marker {index} has wrong shape/order")
+    expect(type(policies[0].get("positiveGasRows")) is int and
+           policies[0]["positiveGasRows"] == len(gas_deviations),
+           "positive-gas policy count does not match the exact marker inventory")
     check_heading_inventory(text, DEVIATION_HEADINGS, "deviation registry")
     return {
         "policy": policies[0],
@@ -640,11 +686,19 @@ def validate_manifest_contract(
         }, "B2 documentFill template digests differ from the current placeholder documents")
     evidence = fill["evidence"]
     expect(isinstance(evidence, dict) and set(evidence) == {
-        "blancCommit", "artifacts", "counts", "summaries", "gas",
+        "artifactProgramCommit", "proofCertificateCommit", "artifacts", "counts",
+        "summaries", "gas",
     }, "B2 documentFill evidence field inventory differs")
-    blanc_commit = evidence["blancCommit"]
-    expect(isinstance(blanc_commit, str) and re.fullmatch(r"[0-9a-f]{40}", blanc_commit),
-           "B2 Blanc commit is not a full lowercase Git commit")
+    artifact_commit = evidence["artifactProgramCommit"]
+    proof_commit = evidence["proofCertificateCommit"]
+    expect(isinstance(artifact_commit, str) and re.fullmatch(r"[0-9a-f]{40}", artifact_commit),
+           "B2 Blanc artifact-program commit is not a full lowercase Git commit")
+    expect(isinstance(proof_commit, str) and re.fullmatch(r"[0-9a-f]{40}", proof_commit),
+           "B2 Blanc proof-certificate commit is not a full lowercase Git commit")
+    expect(artifact_commit == BLANC_ARTIFACT_COMMIT,
+           "B2 Blanc artifact-program commit differs from the frozen identity")
+    expect(proof_commit == BLANC_PROOF_COMMIT,
+           "B2 Blanc proof-certificate commit differs from the frozen identity")
     artifacts = evidence["artifacts"]
     expect(isinstance(artifacts, dict) and set(artifacts) == {
         "creationTemplate", "fullCreateInput", "runtime",
@@ -704,7 +758,8 @@ def validate_manifest_contract(
     values: dict[str, Any] = {
         "B2_MANIFEST_SCHEMA": manifest.get("schema"),
         "B2_MANIFEST_SHA256": sha256(raw),
-        "B2_BLANC_COMMIT": blanc_commit,
+        "B2_BLANC_ARTIFACT_PROGRAM_COMMIT": artifact_commit,
+        "B2_BLANC_PROOF_CERTIFICATE_COMMIT": proof_commit,
         "B2_BLANC_CREATION_TEMPLATE_BYTES": creation["byteLength"],
         "B2_BLANC_CREATION_TEMPLATE_SHA256": creation["sha256"],
         "B2_BLANC_FULL_CREATE_BYTES": full["byteLength"],
@@ -740,7 +795,7 @@ def contract_message() -> str:
         "required B2 manifest contract: documentFill schema 1 with exact fields "
         "referenceLockSha256, referenceWorld='differential-corpus', censusSha256, "
         "eelsCommit, jauneCommit, templates"
-        "{compatibility,deviations}, and evidence{blancCommit, artifacts"
+        "{compatibility,deviations}, and evidence{artifactProgramCommit,proofCertificateCommit, artifacts"
         "{creationTemplate,fullCreateInput,runtime}, counts{cases,resourceBoundaries}, "
         f"summaries{{{','.join(sorted(SUMMARY_TOKENS))}}}, gas"
         "{boundaryDefinition,rows,positiveDeviations}}; ordered gas rows: " + gas
@@ -857,7 +912,8 @@ def check_rendered_values(
            "positive-gas markers differ from the B2 ordered vector")
     expect(parsed["codeSize"] == {
         "referenceLock": values["B1_REFERENCE_LOCK_SHA256"],
-        "blancCommit": values["B2_BLANC_COMMIT"],
+        "artifactProgramCommit": values["B2_BLANC_ARTIFACT_PROGRAM_COMMIT"],
+        "proofCertificateCommit": values["B2_BLANC_PROOF_CERTIFICATE_COMMIT"],
         "manifest": values["B2_MANIFEST_SHA256"],
     }, "code-size marker differs from B1/B2 identities")
     expect(parsed["gasMeasurement"] == {
@@ -874,7 +930,8 @@ def check_rendered_values(
         f"| Solidity compiler | `{values['B1_SOLC_VERSION']}`; artifact SHA-256 `{values['B1_SOLC_ARTIFACT_SHA256']}` |",
         f"| Reference creation bytes | `{values['B1_REFERENCE_FULL_CREATE_BYTES']}` bytes; SHA-256 `{values['B1_REFERENCE_FULL_CREATE_SHA256']}` |",
         f"| Reference runtime | `{values['B1_REFERENCE_RUNTIME_BYTES']}` bytes; SHA-256 `{values['B1_REFERENCE_RUNTIME_SHA256']}` |",
-        f"| Blanc completion commit | `{values['B2_BLANC_COMMIT']}` |",
+        f"| Blanc artifact/runtime program commit | `{values['B2_BLANC_ARTIFACT_PROGRAM_COMMIT']}` |",
+        f"| First compile-valid pinned-target proof certificate | `{values['B2_BLANC_PROOF_CERTIFICATE_COMMIT']}` |",
         f"| Blanc creation template | `{values['B2_BLANC_CREATION_TEMPLATE_BYTES']}` bytes; SHA-256 `{values['B2_BLANC_CREATION_TEMPLATE_SHA256']}` |",
         f"| Blanc complete CREATE input | `{values['B2_BLANC_FULL_CREATE_BYTES']}` bytes; SHA-256 `{values['B2_BLANC_FULL_CREATE_SHA256']}` |",
         f"| Blanc runtime | `{values['B2_BLANC_RUNTIME_BYTES']}` bytes; SHA-256 `{values['B2_BLANC_RUNTIME_SHA256']}` |",
@@ -959,7 +1016,8 @@ def schema_contract(args: argparse.Namespace, compatibility_raw: bytes,
                 "deviations": sha256(deviations_raw),
             },
             "evidence": {
-                "blancCommit": "<40 lowercase hex Git commit>",
+                "artifactProgramCommit": "<40 lowercase hex Git commit>",
+                "proofCertificateCommit": "<40 lowercase hex Git commit>",
                 "artifacts": {
                     "creationTemplate": artifact,
                     "fullCreateInput": artifact,
@@ -1042,6 +1100,43 @@ def self_test(compatibility: str, deviations: str, census: dict[str, Any]) -> No
     else:
         fail("malformed-marker falsifier did not bite")
 
+    mutated = deviations.replace(BLANC_ARTIFACT_COMMIT, "0" * 40, 1)
+    try:
+        parse_deviations(mutated)
+    except CompatibilityError:
+        pass
+    else:
+        fail("artifact-program identity falsifier did not bite")
+
+    mutated = deviations.replace(BLANC_PROOF_COMMIT, "0" * 40, 1)
+    try:
+        parse_deviations(mutated)
+    except CompatibilityError:
+        pass
+    else:
+        fail("proof-certificate identity falsifier did not bite")
+
+    first_gas_marker = next(
+        line for line in deviations.splitlines()
+        if line.startswith("<!-- LIDO-TWG-GAS-DEVIATION ")
+    )
+    mutated = deviations.replace(first_gas_marker + "\n", "", 1)
+    try:
+        parse_deviations(mutated)
+    except CompatibilityError:
+        pass
+    else:
+        fail("positive-gas completeness falsifier did not bite")
+
+    mutated = compatibility.replace(
+        "empty/unknown/short dispatch", "empty/unknown dispatch", 1)
+    try:
+        parse_compatibility(mutated, census)
+    except CompatibilityError:
+        pass
+    else:
+        fail("dispatch/calldata exclusion falsifier did not bite")
+
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
@@ -1072,7 +1167,7 @@ def main() -> int:
             return 0
         if args.command == "self-test":
             self_test(compatibility, deviations, census)
-            print("OK — Lido TWG compatibility parser: endpoint, cross-cut, deviation-status, and malformed-marker falsifiers bite")
+            print("OK — Lido TWG compatibility parser: endpoint, cross-cut, deviation-status, identity-pair, gas-completeness, exclusion-boundary, and malformed-marker falsifiers bite")
             return 0
         if args.command == "check":
             blockers = completion_blockers(

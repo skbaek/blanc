@@ -22,12 +22,18 @@ census selectors and complete-constructor rows. Cross-cut rows cover:
 - all seven role-gated negative entries, grant/revoke/renounce, membership,
   count, enumeration, and the two hostile role-layout histories;
 - limit configuration validation, consumption, insufficient quota, same-frame
-  behavior, whole-frame restoration, and capping;
+  observation, whole-frame restoration, and capping;
 - mock locator, withdrawal-vault, staking-router, and refund-recipient worlds,
   including fee multiplication, exact vault value, router notification,
   explicit and zero-recipient refunds, rollback, gateway ETH preservation,
   dependency failure bubbling, and relevant events; and
-- the exact 23 named gas rows consumed by the claim-document synchronizer.
+- the exact 51 named gas rows consumed by the claim-document synchronizer:
+  every positive final action among the 63 public cases, the successful
+  constructor, and three retained negative review controls.
+
+The 71-row corpus does not test or claim zero/unlimited or partial-frame limit
+behavior, nested malformed dynamic ABI, empty/unknown/short dispatch, trailing
+calldata, or recognized-selector nonpayability.
 
 ## Logical projection and channels
 

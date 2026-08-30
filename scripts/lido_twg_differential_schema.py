@@ -20,6 +20,7 @@ COMPATIBILITY = ROOT / "scripts" / "lido-twg-compatibility.py"
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 JAUNE_PIN = "949cf97ee1956828a3ac0eb12a62c438656ba76e"
 BLANC_ARTIFACT_COMMIT = "35a196fd50192aa269d6cb07699ea0910ad3c468"
+BLANC_PROOF_COMMIT = "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
 EVENT_TOPICS = {
     "ExitRequestsLimitSet": "0x3119d910326e0f179e121df55f23f45b8a5022ff10c73c02aabf2b48ae36070a",
     "Paused": "0x32fb7c9891bc4f963c7de9f1186d2a7755c7d6e9f4604dabe1d8bb3027c2f49e",
@@ -185,6 +186,57 @@ GAS_ROWS = (
     ("TRIGGER_MULTIPLE", "trigger-multiple"),
     ("TRIGGER_LIMIT", "trigger-limit-exceeded"),
     ("ROLE_UNAUTHORIZED", "role-gate-unauthorized"),
+    ("DEFAULT_ADMIN_ROLE_VIEW", "defaultAdminRole"),
+    ("PAUSE_INFINITELY_VIEW", "pauseInfinitely"),
+    ("SUPPORTS_INTERFACE", "supportsInterface"),
+    ("HAS_ROLE", "hasRole"),
+    ("GET_RESUME_TIMESTAMP", "getResumeSinceTimestamp"),
+    ("GRANT_ROLE_DUPLICATE", "grantRole-duplicate"),
+    ("REVOKE_ROLE_MISSING", "revokeRole-missing"),
+    ("RENOUNCE_ROLE_WRONG_ACCOUNT", "renounceRole-wrong-account"),
+    ("GET_ROLE_MEMBER_OOB", "getRoleMember-oob"),
+    ("ROLE_ENUMERATION_CROSS_ROLE", "role-enumeration-cross-role-order"),
+    ("ROLE_COLLISION_REFUSAL", "role-flat-key-collision-refusal"),
+    ("PAUSE_FOR_WHEN_PAUSED", "pauseFor-when-paused"),
+    ("PAUSE_UNTIL_WHEN_PAUSED", "pauseUntil-when-paused"),
+    ("PAUSE_ZERO_DURATION", "pauseFor-zero-duration"),
+    ("PAUSE_UNTIL_PAST", "pauseUntil-past"),
+    ("RESUME_WHEN_RESUMED", "resume-when-resumed"),
+    ("SET_LIMIT_MAX_TOO_LARGE", "setExitRequestLimit-max-too-large"),
+    ("SET_LIMIT_FRAME_TOO_LARGE", "setExitRequestLimit-frame-too-large"),
+    ("SET_LIMIT_EXITS_ABOVE_MAX", "setExitRequestLimit-exits-above-max"),
+    ("SET_LIMIT_ZERO_FRAME", "setExitRequestLimit-zero-frame"),
+    ("TRIGGER_INSUFFICIENT_FEE", "trigger-insufficient-fee"),
+    ("TRIGGER_PAUSED", "trigger-paused"),
+    ("TRIGGER_ZERO_VALUE", "trigger-zero-value"),
+    ("TRIGGER_LOCATOR_REVERT", "trigger-locator-revert"),
+    ("TRIGGER_FEE_QUERY_REVERT", "trigger-fee-query-revert"),
+    ("TRIGGER_VAULT_REVERT", "trigger-vault-revert"),
+    ("TRIGGER_ROUTER_REVERT", "trigger-router-revert"),
+    ("TRIGGER_REFUND_REVERT", "trigger-refund-revert"),
+)
+
+RETAINED_NONPOSITIVE_GAS_CASES = {
+    "view-is-paused-resumed", "view-is-paused-paused", "role-negative-pause-for",
+}
+CALLDATA_SCOPE_SUMMARY = (
+    "canonical ABI endpoint rows plus named dirty-address constructor rejection; nested "
+    "malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and "
+    "recognized-selector nonpayability are untested and excluded"
+)
+COVERAGE_SUMMARY = (
+    "71 named rows cover 24/24 selectors, constructor, five reachable emitted event kinds "
+    "plus RoleAdminChanged non-emission, pause sentinel/error-polarity arms, roles, "
+    "configured-limit consumption/exceeded/whole-frame refill, and trigger mocks; "
+    "zero/unlimited and partial-frame limit behavior plus the excluded dispatch/calldata "
+    "arms are untested"
+)
+COVERAGE_CRITERION = (
+    "71 named rows: every census selector plus constructor; both pause sentinel arms and "
+    "both exact error polarities; seven role negatives; roles/enumeration; configured-limit "
+    "validation/consume/exceeded/whole-frame refill; trigger fee/value/router/refund/ETH/events; "
+    "excludes zero/unlimited and partial-frame limits, nested malformed dynamic ABI, "
+    "empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability"
 )
 
 SUMMARY_KEYS = {
@@ -314,6 +366,47 @@ def validate_evidence(value: Any, label: str) -> None:
         exact_sha(value[key], f"{label}.{key}")
 
 
+def expected_gas_disposition(row: Mapping) -> tuple[str, str]:
+    case = str(row["coordinate"]).split("#", 1)[0]
+    if case == "constructor-success":
+        return (
+            "Accepted deployment cost for explicit constructor validation, tagged role/limit "
+            "initialization, and runtime code deposit; no deployment-gas improvement is claimed.",
+            "deployment initialization and code-deposit boundary",
+        )
+    if case.startswith("trigger-"):
+        return (
+            "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback "
+            "choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
+            "trigger dependency/value/rollback boundary",
+        )
+    if case.startswith("set-limit-") or case.startswith("get-limit-"):
+        return (
+            "Accepted exit-limit cost for explicit five-field projection, validation, checked "
+            "consumption, or whole-frame refill; the measured behavior is independently pinned.",
+            "exit-limit projection and validation boundary",
+        )
+    if case.startswith("pause-") or case.startswith("resume-"):
+        return (
+            "Accepted pause-control cost for explicit authorization, sentinel/error-polarity "
+            "checks, and tagged-state update or rollback; no gas improvement is claimed.",
+            "pause/resume authorization and tagged-state boundary",
+        )
+    if (case.startswith("grant-role") or case.startswith("revoke-role") or
+            case.startswith("renounce-role") or case.startswith("get-role-member") or
+            case.startswith("role-")):
+        return (
+            "Accepted role-state cost for full-identity collision checks and global enumeration "
+            "maintenance or scanning; TWG-D02–D05 separately delimit observable differences.",
+            "full-identity role lookup/enumeration boundary",
+        )
+    return (
+        "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged "
+        "representation; exact output semantics are pinned and no gas improvement is claimed.",
+        "constant, interface, role, or pause-state read boundary",
+    )
+
+
 def validate_document_fill(fill: Any, manifest: Mapping, contract: Mapping) -> None:
     expect(isinstance(fill, dict) and set(fill) == set(contract),
            "documentFill top-level keys differ from compatibility contract")
@@ -324,10 +417,13 @@ def validate_document_fill(fill: Any, manifest: Mapping, contract: Mapping) -> N
            "documentFill source-template digests differ")
     evidence = fill["evidence"]
     expect(isinstance(evidence, dict) and set(evidence) == {
-        "blancCommit", "artifacts", "counts", "gas", "summaries"},
+        "artifactProgramCommit", "proofCertificateCommit", "artifacts", "counts",
+        "gas", "summaries"},
         "documentFill evidence fields differ")
-    expect(evidence["blancCommit"] == BLANC_ARTIFACT_COMMIT,
-           "documentFill Blanc artifact commit differs")
+    expect(evidence["artifactProgramCommit"] == BLANC_ARTIFACT_COMMIT,
+           "documentFill Blanc artifact-program commit differs")
+    expect(evidence["proofCertificateCommit"] == BLANC_PROOF_COMMIT,
+           "documentFill Blanc proof-certificate commit differs")
     expect(evidence["artifacts"] == {
         "creationTemplate": manifest["artifacts"]["blanc"]["creationTemplate"],
         "fullCreateInput": manifest["artifacts"]["blanc"]["fullCreateInput"],
@@ -344,6 +440,10 @@ def validate_document_fill(fill: Any, manifest: Mapping, contract: Mapping) -> N
         safe_string(value, f"documentFill summaries.{key}")
     expect(summaries["B2_DIFFERENTIAL_VERDICT"] == "PASS",
            "documentFill verdict is not PASS")
+    expect(summaries["B2_CALLDATA_SCOPE_SUMMARY"] == CALLDATA_SCOPE_SUMMARY,
+           "documentFill calldata scope is not the exact narrowed 71-row boundary")
+    expect(summaries["B2_COVERAGE_SUMMARY"] == COVERAGE_SUMMARY,
+           "documentFill coverage summary is not the exact narrowed 71-row boundary")
     expect(summaries["B2_PROJECTION_SCHEMA_SHA256"] == digest(manifest["projection"]) and
            summaries["B2_D05_PROJECTION_SHA256"] == digest(manifest["projection"]),
            "documentFill projection digest differs")
@@ -366,6 +466,45 @@ def validate_document_fill(fill: Any, manifest: Mapping, contract: Mapping) -> N
                f"positive gas deviation {index} identity differs")
         safe_string(item["defense"], f"positive gas deviation {index} defense")
         safe_string(item["evidence"], f"positive gas deviation {index} evidence")
+        defense, review_group = expected_gas_disposition(row)
+        expect(item["defense"] == defense and item["evidence"] ==
+               f"manifest resource coordinate {row['coordinate']}; {review_group}",
+               f"positive gas deviation {index} lacks the exact substantive cost disposition")
+
+    boundaries = manifest["resourceEvidence"]["boundaries"]
+    public_names = [row["name"] for row in manifest["rows"] if row["family"] != "constructor"]
+    expect(len(public_names) == 63 and len(set(public_names)) == 63,
+           "public case inventory must contain exactly 63 unique non-constructor rows")
+    final_actions = []
+    for name in public_names:
+        candidates = [row for row in boundaries
+                      if row["case"] == name and row["label"] == "action"]
+        expect(len(candidates) == 1,
+               f"public case {name} must own exactly one final action boundary")
+        final_actions.append(candidates[0])
+    positive_coordinates = {
+        row["coordinate"] for row in final_actions if row["delta"] > 0
+    }
+    expect(len(positive_coordinates) == 47,
+           "positive public final-action inventory must contain exactly 47 rows")
+    constructor = [row for row in boundaries
+                   if row["case"] == "constructor-success" and row["label"] == "constructor"]
+    expect(len(constructor) == 1 and constructor[0]["delta"] > 0,
+           "successful constructor positive-cost boundary differs")
+    positive_coordinates.add(constructor[0]["coordinate"])
+    named_positive_coordinates = {
+        row["coordinate"] for row in gas["rows"] if row["delta"] > 0
+    }
+    expect(named_positive_coordinates == positive_coordinates and
+           len(named_positive_coordinates) == 48,
+           "named gas rows must cover all 47 positive public actions plus constructor")
+    retained_nonpositive = {
+        row["coordinate"].split("#", 1)[0]
+        for row in gas["rows"] if row["delta"] <= 0
+    }
+    expect(retained_nonpositive == RETAINED_NONPOSITIVE_GAS_CASES and
+           len(gas["rows"]) == 51,
+           "named gas rows must retain exactly three negative controls for 51 total rows")
 
 
 def validate_manifest(manifest: Any) -> None:
@@ -385,7 +524,7 @@ def validate_manifest(manifest: Any) -> None:
     lock = strict_json(LOCK.read_bytes(), "reference lock")
     artifacts = manifest["artifacts"]
     expect(isinstance(artifacts, dict) and set(artifacts) == {
-        "reference", "blanc", "positiveIdentityChecks"}, "artifact keys differ")
+        "reference", "blanc", "proof", "positiveIdentityChecks"}, "artifact keys differ")
     reference = artifacts["reference"]
     blanc = artifacts["blanc"]
     expect(isinstance(reference, dict) and set(reference) == {
@@ -418,6 +557,19 @@ def validate_manifest(manifest: Any) -> None:
            "Blanc artifacts exceed EIP limits")
     expect(artifacts["positiveIdentityChecks"] == 10,
            "positive artifact identity check count differs")
+    expect(artifacts["proof"] == {
+        "artifactProgramCommit": BLANC_ARTIFACT_COMMIT,
+        "proofCertificateCommit": BLANC_PROOF_COMMIT,
+        "certificate": "first compile-valid pinned-target certificate",
+    }, "Blanc proof/program identity split differs")
+    expect(subprocess.run(
+        ["git", "merge-base", "--is-ancestor", BLANC_ARTIFACT_COMMIT, BLANC_PROOF_COMMIT],
+        cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0,
+        "Blanc artifact program is not an ancestor of the proof certificate")
+    expect(subprocess.run(
+        ["git", "merge-base", "--is-ancestor", BLANC_PROOF_COMMIT, "HEAD"],
+        cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0,
+        "Blanc proof certificate is not an ancestor of the candidate")
 
     projection = manifest["projection"]
     expect(isinstance(projection, dict) and set(projection) == {
@@ -589,6 +741,8 @@ def validate_manifest(manifest: Any) -> None:
         "coverage keys differ")
     expect(coverage["selectorCount"] == 24 and coverage["selectorCount"] == len(census["selectors"]),
            "selector coverage count differs")
+    expect(coverage["criterion"] == COVERAGE_CRITERION,
+           "coverage criterion is not the exact narrowed 71-row boundary")
     expected_selectors = []
     for census_row in census["selectors"]:
         names = [row["name"] for row in rows if row["selector"] == census_row["signature"]]
