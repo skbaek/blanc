@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate/check the OssifiableProxy compatibility skeleton from its lock."""
+"""Generate the reference skeleton or check the filled compatibility contract."""
 from __future__ import annotations
 
 import argparse
@@ -255,12 +255,33 @@ def check(lock: dict[str, Any], lock_sha256: str) -> None:
     crosscuts = [match.group(1) for line in lines if (match := CROSSCUT_RE.fullmatch(line))]
     if crosscuts != CROSSCUTS:
         raise CompatibilityError(f"cross-cut markers differ\nexpected: {CROSSCUTS}\nfound: {crosscuts}")
+    evidence_rows = []
+    for line in lines:
+        if not line.startswith("|") or line.startswith("|---") or line.startswith("| Field"):
+            continue
+        cells = [cell.strip() for cell in line.split("|")[1:-1]]
+        if len(cells) != 3:
+            raise CompatibilityError(f"malformed compatibility table row: {line}")
+        evidence_rows.append(cells[2])
+    if len(evidence_rows) != 41:
+        raise CompatibilityError(
+            f"compatibility evidence-row count differs: {len(evidence_rows)} != 41"
+        )
+    if any(not evidence or evidence == "planned" for evidence in evidence_rows):
+        raise CompatibilityError("compatibility table retains an unfilled evidence cell")
+    if sum(line.startswith("Blanc port evidence:") for line in lines) != len(CROSSCUTS):
+        raise CompatibilityError("cross-cut evidence paragraph count differs")
     normalized = " ".join("\n".join(lines).split())
+    if re.search(r"\b(?:planned|pending)\b", normalized, flags=re.IGNORECASE):
+        raise CompatibilityError("compatibility contract retains draft evidence language")
     required = [
         "constructor(address,address,bytes)", "nonpayable", "Fallback and receive are payable",
         "admin zero raises `ProxyIsOssified()` before caller comparison",
         "functional interoperability surface", "BeaconUpgraded(address)", "ABI-only declaration",
         "three-event behavioral surface", "Source offsets", "gas are reference or measurement facts",
+        "ossifiableConstructorProgram_value_rejected", "processMessage_forwardingEnvelope",
+        "upgradeToAndCall_decoded_route_of_program", "ossifyMutation_success_irreversible",
+        "K01–K18", "V01–V07", "F00–F16",
     ]
     for phrase in required:
         if phrase not in normalized:
@@ -281,7 +302,10 @@ def main() -> int:
         print(f"REGRESSION — Lido OssifiableProxy compatibility: {exc}", file=sys.stderr)
         return 1
     if arguments.command == "check":
-        print("OK — Lido OssifiableProxy compatibility: constructor + 9 runtime endpoints + 13 cross-cuts synchronized")
+        print(
+            "OK — Lido OssifiableProxy compatibility: constructor + 9 runtime "
+            "endpoints + 13 cross-cuts evidence-filled and synchronized"
+        )
     return 0
 
 

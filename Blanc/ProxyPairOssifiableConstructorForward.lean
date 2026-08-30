@@ -26,11 +26,11 @@ theorem b256_and_zero_or (mask value : B256) :
     rw [UInt64.and_zero, UInt64.zero_or]
 
 private def stageReturnEnd : Func :=
-  ossifiablePushCreationCoordinate 2197 ::: pushB256 0 ::: Func.ret
+  ossifiablePushCreationCoordinate 2188 ::: pushB256 0 ::: Func.ret
 
 private def stageCopy : Func :=
-  ossifiablePushCreationCoordinate 2197 :::
-    ossifiablePushCreationCoordinate 1250 :::
+  ossifiablePushCreationCoordinate 2188 :::
+    ossifiablePushCreationCoordinate 1249 :::
     pushB256 0 ::: codecopy ::: stageReturnEnd
 
 private def stageSstore : Func :=
@@ -64,35 +64,35 @@ private def stageOldStore : Func :=
   mstoreAt 5 +++ stageRequestedStore
 
 private def stageClean : Func :=
-  Ninst.not ::: Ninst.and ::: stageOldStore
+  Ninst.and ::: stageOldStore
 
 private def stageMask : Func :=
-  pushB256 160 ::: shl ::: stageClean
+  pushB256 96 ::: shr ::: stageClean
 
 private theorem stageReturnEnd_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {runtimeBytes : Bytes} {G : Nat}
     (hsize : memory.size = 2208)
-    (houtput : (memory.read 0 2197).1 = runtimeBytes)
+    (houtput : (memory.read 0 2188).1 = runtimeBytes)
     (hgas : 10 ≤ G) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G⟩) stageReturnEnd
       ((((base.setMach ⟨[], memory, G - 5⟩).memRead
-        0 2197).2).withOutput runtimeBytes) := by
+        0 2188).2).withOutput runtimeBytes) := by
   unfold stageReturnEnd
   simp only [ossifiablePushCreationCoordinate_shape]
   func_run (2)
   apply Func.runCompiled_ret_word
     (devm := base.setMach
-      ⟨[(0 : B256), Nat.toB256 2197], memory, G - 5⟩)
-    (i := 0) (sz := Nat.toB256 2197) (s := [])
+      ⟨[(0 : B256), Nat.toB256 2188], memory, G - 5⟩)
+    (i := 0) (sz := Nat.toB256 2188) (s := [])
     (out := runtimeBytes) (G := G - 5) (e := 0)
   · rfl
   · exact Devm.extCost_zero_of_le
       (by rw [hsize])
       (by
         simp only [show B256.toNat (0 : B256) = 0 by rfl,
-          B256.toNat_toB256_of_lt (show 2197 < 2 ^ 256 by decide)]
+          B256.toNat_toB256_of_lt (show 2188 < 2 ^ 256 by decide)]
         rw [hsize]
         omega)
   · simp only [Devm.gasLeft_setMach]
@@ -100,45 +100,45 @@ private theorem stageReturnEnd_runCompiled
   · rw [Devm.memRead_fst]
     simpa only [Devm.memory_setMach,
       show (0 : B256).toNat = 0 by rfl,
-      B256.toNat_toB256_of_lt (show 2197 < 2 ^ 256 by decide)]
+      B256.toNat_toB256_of_lt (show 2188 < 2 ^ 256 by decide)]
       using houtput
 
 private theorem stageCopy_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {runtimeBytes : Bytes} {G n copyCost : Nat}
     (hsize : memory.size = n)
-    (hsmall : n < 2197)
+    (hsmall : n < 2188)
     (hcopyCost :
-      gVerylow + gasCopy * ceilDiv 2197 32 +
-        (calculateMemoryGasCost (memExtSize n 0 2197) -
+      gVerylow + gasCopy * ceilDiv 2188 32 +
+        (calculateMemoryGasCost (memExtSize n 0 2188) -
           calculateMemoryGasCost n) = copyCost)
-    (hcode : sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+    (hcode : sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
       runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = 2197)
+    (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hgas : copyCost + 18 ≤ G) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G⟩) stageCopy
       ((((base.setMach
           ⟨[], memory.write 0 runtimeBytes, G - (copyCost + 13)⟩).memRead
-            0 2197).2).withOutput runtimeBytes) := by
+            0 2188).2).withOutput runtimeBytes) := by
   let copiedMemory : Mem := memory.write 0 runtimeBytes
   have hsizeCopied : copiedMemory.size = 2208 := by
     unfold copiedMemory
     rw [Mem.size_write_of_length hruntimeLength (by omega), hsize,
       if_neg (by omega)]
     decide
-  have houtputCopied : (copiedMemory.read 0 2197).1 = runtimeBytes := by
+  have houtputCopied : (copiedMemory.read 0 2188).1 = runtimeBytes := by
     unfold copiedMemory
     rw [← hruntimeLength]
     exact Mem.read_write_zero memory hruntimeNonempty
   have hcopy : memory.write (B256.toNat (0 : B256))
-      (sevm.code.sliceD (Nat.toB256 1250).toNat
-        (Nat.toB256 2197).toNat (0 : UInt8)) = copiedMemory := by
+      (sevm.code.sliceD (Nat.toB256 1249).toNat
+        (Nat.toB256 2188).toNat (0 : UInt8)) = copiedMemory := by
     unfold copiedMemory
     simpa only [show B256.toNat (0 : B256) = 0 by rfl,
-      B256.toNat_toB256_of_lt (show 1250 < 2 ^ 256 by decide),
-      B256.toNat_toB256_of_lt (show 2197 < 2 ^ 256 by decide),
+      B256.toNat_toB256_of_lt (show 1249 < 2 ^ 256 by decide),
+      B256.toNat_toB256_of_lt (show 2188 < 2 ^ 256 by decide),
       show Linst.toUInt8 .stop = (0 : UInt8) by rfl]
       using congrArg (fun bytes => memory.write 0 bytes) hcode
   unfold stageCopy
@@ -157,9 +157,9 @@ private theorem stageCopy_runCompiled
       (M := copiedMemory)
     · rfl
     · simp only [show (0 : B256).toNat = 0 by rfl,
-        B256.toNat_toB256_of_lt (show 2197 < 2 ^ 256 by decide)]
+        B256.toNat_toB256_of_lt (show 2188 < 2 ^ 256 by decide)]
       exact Devm.extCost_add_of_size
-        (a := gVerylow + gasCopy * ceilDiv 2197 32) hsize hcopyCost
+        (a := gVerylow + gasCopy * ceilDiv 2188 32) hsize hcopyCost
     · simpa only [Devm.memory_setMach,
         show Linst.toUInt8 .stop = (0 : UInt8) by rfl] using hcopy
     · simp only [Devm.gasLeft_setMach]
@@ -181,9 +181,9 @@ private theorem stageMask_complete
       base.accessedStorageKeys)
     (hsize : memory.size = 160)
     (hstatic : sevm.isStatic = false)
-    (hcode : sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+    (hcode : sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
       runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = 2197)
+    (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hgas : 100000 ≤ G) :
     ∃ post,
@@ -191,11 +191,10 @@ private theorem stageMask_complete
         (base.setMach ⟨[~~~(0 : B256), oldRaw], memory, G⟩)
         stageMask post ∧
       post.output = runtimeBytes ∧
-      post.gasLeft = G - 21876 ∧
+      post.gasLeft = G - 21873 ∧
       post.error = base.error := by
   let cleaned : B256 :=
-    ((fun x : B256 => ~~~x)
-      ((fun x y : B256 => y <<< x.toNat) 160 (~~~(0 : B256)))).and oldRaw
+    ((fun x y : B256 => y >>> x.toNat) 96 (~~~(0 : B256))).and oldRaw
   let memory1 : Mem := memory.write 160 cleaned.toBytes
   have hsize1 : memory1.size = 192 := by
     unfold memory1
@@ -265,7 +264,7 @@ private theorem stageMask_complete
   · unfold stageMask
     func_run (2)
     unfold stageClean
-    func_run (2)
+    func_run (1)
     unfold stageOldStore
     func_run (2) [3]
     · exact Devm.extCost_of_size hsize (by decide)
@@ -276,13 +275,13 @@ private theorem stageMask_complete
       show (32 : B256).toNat = 32 by decide] at hvalue1 hmemory1 ⊢
     rw [hvalue1, hmemory1]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[requested], memory1, G - 27⟩)
+      (base.setMach ⟨[requested], memory1, G - 24⟩)
       (mstoreAt 6 +++ stageLog) _
     func_run (2) [3]
     · exact Devm.extCost_of_size hsize1 (by decide)
     simp only [prepend, show ((6 : B256) * 32).toNat = 192 by decide]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory2, G - 36⟩) stageLog _
+      (base.setMach ⟨[], memory2, G - 33⟩) stageLog _
     unfold stageLog
     func_run (4) [1262]
     · exact Devm.extCost_add_of_size hsize2 (by decide)
@@ -291,7 +290,7 @@ private theorem stageMask_complete
       show ((2 : B256) * 32).toNat = 64 by decide]
     rw [hlogData, hlogMemory]
     change Func.RunCompiled fs sevm
-      ((base.addLog adminLog).setMach ⟨[], memory2, G - 1307⟩)
+      ((base.addLog adminLog).setMach ⟨[], memory2, G - 1304⟩)
       stageAdminTest _
     unfold stageAdminTest
     func_run (3) [3, 0]
@@ -323,7 +322,7 @@ private theorem stageMask_complete
       norm_num [gasStorageSet]
     exact stageCopy_runCompiled
       (fs := fs) (sevm := sevm) (memory := memory2)
-      (runtimeBytes := runtimeBytes) (G := G - 21458)
+      (runtimeBytes := runtimeBytes) (G := G - 21455)
       (n := 224) (copyCost := 405)
       hsize2 (by omega) (by decide) hcode hruntimeLength
       hruntimeNonempty (by omega)
@@ -348,9 +347,9 @@ private theorem stageMask_dirtyCovered_complete
       base.accessedStorageKeys)
     (hsize : memory.size = 288)
     (hstatic : sevm.isStatic = false)
-    (hcode : sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+    (hcode : sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
       runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = 2197)
+    (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hgas : 100000 ≤ G) :
     ∃ post,
@@ -358,11 +357,10 @@ private theorem stageMask_dirtyCovered_complete
         (base.setMach ⟨[~~~(0 : B256), oldRaw], memory, G⟩)
         stageMask post ∧
       post.output = runtimeBytes ∧
-      post.gasLeft = G - 1964 ∧
+      post.gasLeft = G - 1961 ∧
       post.error = base.error := by
   let cleaned : B256 :=
-    ((fun x : B256 => ~~~x)
-      ((fun x y : B256 => y <<< x.toNat) 160 (~~~(0 : B256)))).and oldRaw
+    ((fun x y : B256 => y >>> x.toNat) 96 (~~~(0 : B256))).and oldRaw
   let memory1 : Mem := memory.write 160 cleaned.toBytes
   have hsize1 : memory1.size = 288 := by
     unfold memory1
@@ -427,7 +425,7 @@ private theorem stageMask_dirtyCovered_complete
   · unfold stageMask
     func_run (2)
     unfold stageClean
-    func_run (2)
+    func_run (1)
     unfold stageOldStore
     func_run (2) [0]
     · exact Devm.extCost_of_size hsize (by decide)
@@ -438,13 +436,13 @@ private theorem stageMask_dirtyCovered_complete
       show (32 : B256).toNat = 32 by decide] at hvalue1 hmemory1 ⊢
     rw [hvalue1, hmemory1]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[requested], memory1, G - 24⟩)
+      (base.setMach ⟨[requested], memory1, G - 21⟩)
       (mstoreAt 6 +++ stageLog) _
     func_run (2) [0]
     · exact Devm.extCost_of_size hsize1 (by decide)
     simp only [prepend, show ((6 : B256) * 32).toNat = 192 by decide]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory2, G - 30⟩) stageLog _
+      (base.setMach ⟨[], memory2, G - 27⟩) stageLog _
     unfold stageLog
     func_run (4) [1262]
     · exact Devm.extCost_add_of_size hsize2 (by decide)
@@ -453,7 +451,7 @@ private theorem stageMask_dirtyCovered_complete
       show ((2 : B256) * 32).toNat = 64 by decide]
     rw [hlogData, hlogMemory]
     change Func.RunCompiled fs sevm
-      ((base.addLog adminLog).setMach ⟨[], memory2, G - 1301⟩)
+      ((base.addLog adminLog).setMach ⟨[], memory2, G - 1298⟩)
       stageAdminTest _
     unfold stageAdminTest
     func_run (3) [3, 0]
@@ -486,7 +484,7 @@ private theorem stageMask_dirtyCovered_complete
       norm_num [gasWarmAccess]
     exact stageCopy_runCompiled
       (fs := fs) (sevm := sevm) (memory := memory2)
-      (runtimeBytes := runtimeBytes) (G := G - 1552)
+      (runtimeBytes := runtimeBytes) (G := G - 1549)
       (n := 288) (copyCost := 399)
       hsize2 (by omega) (by decide) hcode hruntimeLength
       hruntimeNonempty (by omega)
@@ -514,17 +512,17 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_runCompiled
       base.accessedStorageKeys)
     (hsize : memory.size = 160)
     (hstatic : sevm.isStatic = false)
-    (hcode : sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+    (hcode : sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
       runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = 2197)
+    (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hgas : 102108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], memory, G⟩)
-        (ossifiableConstructorAfterSetup 1250 2197) post ∧
+        (ossifiableConstructorAfterSetup 1249 2188) post ∧
       post.output = runtimeBytes ∧
-      post.gasLeft = G - 23984 ∧
+      post.gasLeft = G - 23981 ∧
       post.error = base.error := by
   let warmBase : Devm :=
     addAccessedStorageKey base sevm.currentTarget adminSlotLit
@@ -564,7 +562,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_runCompiled
 /-- Construct the successful post-setup path when the child has already
 written a canonical nonzero admin word.  The slot and 288-byte decoder memory
 are warm/covered, so the final admin write is a 100-gas dirty `SSTORE`; the
-complete path consumes exactly 2,072 gas. -/
+complete path consumes exactly 2,069 gas. -/
 theorem ossifiableConstructorAfterSetup_dirtyAdmin_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {image runtimeBytes : Bytes}
@@ -581,17 +579,17 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_runCompiled
       base.accessedStorageKeys)
     (hsize : memory.size = 288)
     (hstatic : sevm.isStatic = false)
-    (hcode : sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+    (hcode : sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
       runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = 2197)
+    (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hgas : 100108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], memory, G⟩)
-        (ossifiableConstructorAfterSetup 1250 2197) post ∧
+        (ossifiableConstructorAfterSetup 1249 2188) post ∧
       post.output = runtimeBytes ∧
-      post.gasLeft = G - 2072 ∧
+      post.gasLeft = G - 2069 ∧
       post.error = base.error := by
   have hrequestedWordNonzero : requestedAdmin.toB256 ≠ 0 := by
     intro hzero
@@ -643,16 +641,16 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
       base.accessedStorageKeys)
     (hsize : memory.size = 288)
     (hstatic : sevm.isStatic = false)
-    (hcode : sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+    (hcode : sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
       runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = 2197)
+    (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hZeroAdmin : fs[4]? = some (Func.revData zeroAdminErrorData))
     (hgas : 100108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], memory, G⟩)
-        (ossifiableConstructorAfterSetup 1250 2197) post ∧
+        (ossifiableConstructorAfterSetup 1249 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         (Devm.getStor base sevm.currentTarget).set adminSlotLit
           requestedAdmin.toB256 ∧
@@ -660,7 +658,7 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
         [ossifiableConstructorAdminChangedLog sevm.currentTarget oldRaw
           requestedAdmin] ∧
       post.output = runtimeBytes ∧
-      post.gasLeft = G - 2072 ∧
+      post.gasLeft = G - 2069 ∧
       post.error = base.error := by
   rcases ossifiableConstructorAfterSetup_dirtyAdmin_runCompiled
       (fs := fs) (sevm := sevm) (base := base)
@@ -671,7 +669,7 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
       hgas with
     ⟨post, run, houtput, hgasPost, herrorPost⟩
   have effects := ossifiableConstructorAfterSetup_success
-    (runtimeOffset := 1250) (runtimeLength := 2197)
+    (runtimeOffset := 1249) (runtimeLength := 2188)
     (fs := fs) (sevm := sevm)
     (pre := base.setMach ⟨[], memory, G⟩) (post := post)
     (tail := []) (image := image) (runtimeBytes := runtimeBytes)
@@ -710,16 +708,16 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
       base.accessedStorageKeys)
     (hsize : memory.size = 160)
     (hstatic : sevm.isStatic = false)
-    (hcode : sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+    (hcode : sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
       runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = 2197)
+    (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hZeroAdmin : fs[4]? = some (Func.revData zeroAdminErrorData))
     (hgas : 102108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], memory, G⟩)
-        (ossifiableConstructorAfterSetup 1250 2197) post ∧
+        (ossifiableConstructorAfterSetup 1249 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         (Devm.getStor base sevm.currentTarget).set adminSlotLit
           requestedAdmin.toB256 ∧
@@ -727,7 +725,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
         [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
           requestedAdmin] ∧
       post.output = runtimeBytes ∧
-      post.gasLeft = G - 23984 ∧
+      post.gasLeft = G - 23981 ∧
       post.error = base.error := by
   rcases ossifiableConstructorAfterSetup_zeroAdmin_runCompiled
       (fs := fs) (sevm := sevm) (base := base)
@@ -737,7 +735,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
       hstatic hcode hruntimeLength hruntimeNonempty hgas with
     ⟨post, run, houtput, hgasPost, herrorPost⟩
   have effects := ossifiableConstructorAfterSetup_success
-    (runtimeOffset := 1250) (runtimeLength := 2197)
+    (runtimeOffset := 1249) (runtimeLength := 2188)
     (fs := fs) (sevm := sevm)
     (pre := base.setMach ⟨[], memory, G⟩) (post := post)
     (tail := []) (image := image) (runtimeBytes := runtimeBytes)

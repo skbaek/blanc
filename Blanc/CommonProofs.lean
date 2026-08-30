@@ -6642,6 +6642,7 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.eq := by show_hinv_logs_binary
 scoped instance : Rinst.Hinv Devm.logs Rinst.gt := by show_hinv_logs_binary
 scoped instance : Rinst.Hinv Devm.logs Rinst.lt := by show_hinv_logs_binary
 scoped instance : Rinst.Hinv Devm.logs Rinst.shl := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.shr := by show_hinv_logs_binary
 scoped instance : Rinst.Hinv Devm.logs Rinst.iszero := by show_hinv_logs_unary
 scoped instance : Rinst.Hinv Devm.logs Rinst.not := by show_hinv_logs_unary
 
@@ -6652,6 +6653,7 @@ scoped instance : Rinst.Hinv Devm.output Rinst.eq := by show_hinv_output_binary
 scoped instance : Rinst.Hinv Devm.output Rinst.gt := by show_hinv_output_binary
 scoped instance : Rinst.Hinv Devm.output Rinst.lt := by show_hinv_output_binary
 scoped instance : Rinst.Hinv Devm.output Rinst.shl := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.shr := by show_hinv_output_binary
 scoped instance : Rinst.Hinv Devm.output Rinst.iszero := by show_hinv_output_unary
 scoped instance : Rinst.Hinv Devm.output Rinst.not := by show_hinv_output_unary
 

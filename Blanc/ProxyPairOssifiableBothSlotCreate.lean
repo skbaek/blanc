@@ -23,17 +23,17 @@ private def createInput : Bytes :=
   ossifiableFullCreateInput implementation requestedAdmin setupData
 
 private theorem creationTemplate_length :
-    ossifiableCreationTemplate.length = 3447 := by
+    ossifiableCreationTemplate.length = 3437 := by
   rw [ossifiableCreationTemplate_eq_artifact,
     creationTemplateArtifactBytes_length]
 
-private theorem creationPrefix_length : creationBaselineBytes.length = 1250 := by
+private theorem creationPrefix_length : creationBaselineBytes.length = 1249 := by
   have heq : creationBaselineArtifactBytes = creationBaselineBytes :=
     Option.some.inj
       (creationBaselineArtifact_compile.symm.trans creationBaseline_compile)
   rw [← heq, creationBaselineArtifactBytes_length]
 
-private theorem runtimeBytes_length : runtimeBaselineBytes.length = 2197 := by
+private theorem runtimeBytes_length : runtimeBaselineBytes.length = 2188 := by
   have heq : runtimeBaselineArtifactBytes = runtimeBaselineBytes :=
     Option.some.inj
       (runtimeBaselineArtifact_compile.symm.trans runtimeBaseline_compile)
@@ -53,13 +53,13 @@ private theorem createInput_shape :
   simp only [ceil32, Nat.reduceSub, List.replicate_zero,
     List.append_nil, List.append_assoc]
 
-private theorem createInput_length : createInput.length = 3607 := by
+private theorem createInput_length : createInput.length = 3597 := by
   rw [createInput_shape]
   simp only [List.length_append, creationTemplate_length,
     B256.length_toBytes, setupData_length]
 
 private theorem createInput_runtime :
-    createInput.sliceD 1250 2197 0 = runtimeBaselineBytes := by
+    createInput.sliceD 1249 2188 0 = runtimeBaselineBytes := by
   unfold createInput ossifiableFullCreateInput ossifiableCreationTemplate
     List.sliceD
   simp only [List.append_assoc]
@@ -67,7 +67,7 @@ private theorem createInput_runtime :
   rw [List.takeD_eq_take _ (by
       simp only [List.length_append, runtimeBytes_length]
       omega),
-    show 2197 = runtimeBaselineBytes.length from runtimeBytes_length.symm,
+    show 2188 = runtimeBaselineBytes.length from runtimeBytes_length.symm,
     List.take_length_append]
 
 private theorem bytesWord_of_append
@@ -82,7 +82,7 @@ private theorem bytesWord_of_append
     B256.toB256_toBytes]
 
 private theorem createInput_implementation :
-    ossifiableConstructorCodeWord createInput 3447 =
+    ossifiableConstructorCodeWord createInput 3437 =
       implementation.toB256 := by
   unfold ossifiableConstructorCodeWord
   apply bytesWord_of_append (pre := ossifiableCreationTemplate)
@@ -90,7 +90,7 @@ private theorem createInput_implementation :
   · simpa only [List.append_assoc] using createInput_shape
 
 private theorem createInput_admin :
-    ossifiableConstructorCodeWord createInput 3479 =
+    ossifiableConstructorCodeWord createInput 3469 =
       requestedAdmin.toB256 := by
   unfold ossifiableConstructorCodeWord
   apply bytesWord_of_append
@@ -100,7 +100,7 @@ private theorem createInput_admin :
   · simpa only [List.append_assoc] using createInput_shape
 
 private theorem createInput_offset :
-    ossifiableConstructorCodeWord createInput 3511 = 96 := by
+    ossifiableConstructorCodeWord createInput 3501 = 96 := by
   unfold ossifiableConstructorCodeWord
   apply bytesWord_of_append
     (pre := ossifiableCreationTemplate ++ implementation.toB256.toBytes ++
@@ -110,7 +110,7 @@ private theorem createInput_offset :
   · simpa only [List.append_assoc] using createInput_shape
 
 private theorem createInput_setupLength :
-    ossifiableConstructorCodeWord createInput 3543 = 32 := by
+    ossifiableConstructorCodeWord createInput 3533 = 32 := by
   unfold ossifiableConstructorCodeWord
   apply bytesWord_of_append
     (pre := ossifiableCreationTemplate ++ implementation.toB256.toBytes ++
@@ -121,12 +121,12 @@ private theorem createInput_setupLength :
       show Nat.toB256 32 = (32 : B256) by decide] using createInput_shape
 
 private theorem createInput_setup :
-    createInput.sliceD 3575 32 0 = setupData := by
+    createInput.sliceD 3565 32 0 = setupData := by
   let inputPrefix : Bytes :=
     ossifiableCreationTemplate ++ implementation.toB256.toBytes ++
       requestedAdmin.toB256.toBytes ++ (96 : B256).toBytes ++
         (Nat.toB256 32).toBytes
-  have hprefix : inputPrefix.length = 3575 := by
+  have hprefix : inputPrefix.length = 3565 := by
     simp only [inputPrefix, List.length_append, creationTemplate_length,
       B256.length_toBytes]
   have hshape : createInput = inputPrefix ++ setupData := by
@@ -465,10 +465,10 @@ private theorem callAndTail_success
     (hprecompile :
       sevm.benvStat.rules.isPrecomp implementation = false)
     (hruntime :
-      sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+      sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes) :
     ∃ post,
-      Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
+      Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
         (callPre sevm base memory)
         ((.exec .delcall) ::: ossifiableConstructorDelegateTail) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
@@ -480,7 +480,7 @@ private theorem callAndTail_success
         [ossifiableConstructorAdminChangedLog sevm.currentTarget
           postSetupAdmin.toB256 requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
-      post.gasLeft = 475563 ∧
+      post.gasLeft = 475566 ∧
       post.error = base.error := by
   have hwarm : implementation ∈
       (ossifiableConstructorInitializedBase base sevm implementation
@@ -579,7 +579,7 @@ private theorem callAndTail_success
   have hnew : addressSlotWriteWord postSetupAdmin.toB256
       requestedAdmin.toB256 = requestedAdmin.toB256 := by
     decide +kernel
-  have hruntimeLength : runtimeBaselineBytes.length = 2197 := by
+  have hruntimeLength : runtimeBaselineBytes.length = 2188 := by
     have heq : runtimeBaselineArtifactBytes = runtimeBaselineBytes :=
       Option.some.inj
         (runtimeBaselineArtifact_compile.symm.trans runtimeBaseline_compile)
@@ -592,7 +592,7 @@ private theorem callAndTail_success
     simp at hlength
   obtain ⟨post, hafterRun, hstorage, hlogs, houtput, hgas, herror⟩ :=
     ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
-      (fs := ossifiableConstructorFunctions 1250 2197)
+      (fs := ossifiableConstructorFunctions 1249 2188)
       (sevm := sevm) (base := resumed) (memory := memory)
       (image := image) (runtimeBytes := runtimeBaselineBytes)
       (oldRaw := postSetupAdmin.toB256)
@@ -600,9 +600,9 @@ private theorem callAndTail_success
       hwf hreads hrequested hrequestedNonzero hresumedAdmin
       hpostSetupAdminNonzero hnew hadminOriginal hresumedAdminWarm hsize
       hstatic hruntime hruntimeLength hruntimeNonempty
-      (ossifiableConstructorFunctions_zeroAdmin 1250 2197) (by decide)
+      (ossifiableConstructorFunctions_zeroAdmin 1249 2188) (by decide)
   have htail : Func.RunCompiled
-      (ossifiableConstructorFunctions 1250 2197) sevm callPost
+      (ossifiableConstructorFunctions 1249 2188) sevm callPost
       ossifiableConstructorDelegateTail post := by
     unfold ossifiableConstructorDelegateTail
     apply Func.runCompiled_branch_succ (G := 477647)
@@ -614,7 +614,7 @@ private theorem callAndTail_success
     · simp only [callPost, Devm.gasLeft_setMach]
       norm_num [gVerylow, gHigh, gJumpdest]
     · apply Func.runCompiled_call' (G := 477635)
-        (ossifiableConstructorFunctions_afterSetup 1250 2197)
+        (ossifiableConstructorFunctions_afterSetup 1249 2188)
       · simp only [callPost, Devm.setMach_setMach, Devm.stack_setMach,
           List.length_nil]
         decide
@@ -661,10 +661,10 @@ private theorem delegateSetup_success
     (hprecompile :
       sevm.benvStat.rules.isPrecomp implementation = false)
     (hruntime :
-      sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+      sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes) :
     ∃ post,
-      Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
+      Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
         ((ossifiableConstructorInitializedBase base sevm implementation
           ).setMach ⟨[], memory, 499999⟩)
         ossifiableConstructorDelegateSetup post ∧
@@ -677,7 +677,7 @@ private theorem delegateSetup_success
         [ossifiableConstructorAdminChangedLog sevm.currentTarget
           postSetupAdmin.toB256 requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
-      post.gasLeft = 475563 ∧
+      post.gasLeft = 475566 ∧
       post.error = base.error := by
   have hmemory128 : (memory.read 128 32).2 = memory := by
     apply Mem.read_snd_eq_self
@@ -750,10 +750,10 @@ private theorem initialize_success
     (hprecompile :
       sevm.benvStat.rules.isPrecomp implementation = false)
     (hruntime :
-      sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+      sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes) :
     ∃ post,
-      Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
+      Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
         (base.setMach ⟨[], memory, 525913⟩)
         ossifiableConstructorInitializeImplementation post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
@@ -765,7 +765,7 @@ private theorem initialize_success
         [ossifiableConstructorAdminChangedLog sevm.currentTarget
           postSetupAdmin.toB256 requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
-      post.gasLeft = 475563 ∧
+      post.gasLeft = 475566 ∧
       post.error = base.error := by
   obtain ⟨post, hsetup, himplementationPost, hadminPost, hlogsPost,
       houtputPost, hgasPost, herrorPost⟩ :=
@@ -774,13 +774,13 @@ private theorem initialize_success
       hadminOriginal hadminCold hstatic hdepth hprecompile hruntime
   have hrun :=
     ossifiableConstructorInitializeImplementation_nonempty_runCompiled
-      (fs := ossifiableConstructorFunctions 1250 2197)
+      (fs := ossifiableConstructorFunctions 1249 2188)
       (sevm := sevm) (base := base) (post := post) (memory := memory)
       (image := image) (implementation := implementation) (length := 32)
       (G := 499999) hreads himplementation hlength (by decide)
       himplementationNonzero hcodeSizeNonzero haddressCold
       himplementationRaw himplementationOriginal himplementationCold hsize
-      hstatic (ossifiableConstructorFunctions_delegateSetup 1250 2197)
+      hstatic (ossifiableConstructorFunctions_delegateSetup 1249 2188)
       hsetup
   refine ⟨post, ?_, himplementationPost, hadminPost, hlogsPost,
     houtputPost, hgasPost, herrorPost⟩
@@ -788,15 +788,15 @@ private theorem initialize_success
 
 private theorem decodeInitialize_success
     {sevm : Sevm} {base : Devm}
-    (hcodeSize : sevm.code.size = 3607)
+    (hcodeSize : sevm.code.size = 3597)
     (himplementation :
-      ossifiableConstructorCodeWord sevm.code.toList 3447 =
+      ossifiableConstructorCodeWord sevm.code.toList 3437 =
         implementation.toB256)
-    (hrequested : ossifiableConstructorCodeWord sevm.code.toList 3479 =
+    (hrequested : ossifiableConstructorCodeWord sevm.code.toList 3469 =
       requestedAdmin.toB256)
-    (hoffset : ossifiableConstructorCodeWord sevm.code.toList 3511 = 96)
-    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3543 = 32)
-    (hsetup : sevm.code.toList.sliceD 3575 32 0 = setupData)
+    (hoffset : ossifiableConstructorCodeWord sevm.code.toList 3501 = 96)
+    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 32)
+    (hsetup : sevm.code.toList.sliceD 3565 32 0 = setupData)
     (himplementationNonzero : implementation ≠ 0)
     (himplementationCode : base.getCode implementation = implementationCode)
     (hcodeSizeNonzero : (base.getCode implementation).size.toB256 ≠ 0)
@@ -817,12 +817,12 @@ private theorem decodeInitialize_success
     (hprecompile :
       sevm.benvStat.rules.isPrecomp implementation = false)
     (hruntime :
-      sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+      sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes) :
     ∃ post,
-      Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
+      Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
         (base.setMach ⟨[], Mem.empty, 526228⟩)
-        (ossifiableConstructorDecode 3447
+        (ossifiableConstructorDecode 3437
           ossifiableConstructorInitializeImplementation) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         postSetupImplementation.toB256 ∧
@@ -833,7 +833,7 @@ private theorem decodeInitialize_success
         [ossifiableConstructorAdminChangedLog sevm.currentTarget
           postSetupAdmin.toB256 requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
-      post.gasLeft = 475563 ∧
+      post.gasLeft = 475566 ∧
       post.error = base.error := by
   let memory := decodeForwardOneWordPayloadMemory sevm
   let image := decodeForwardOneWordPayloadImage sevm
@@ -860,7 +860,7 @@ private theorem decodeInitialize_success
       himplementationOriginal himplementationCold hadminRaw hadminOriginal
       hadminCold hstatic hdepth hprecompile hruntime
   have hrun := ossifiableConstructorDecode_oneWordSetup_runCompiled
-    (fs := ossifiableConstructorFunctions 1250 2197)
+    (fs := ossifiableConstructorFunctions 1249 2188)
     (sevm := sevm) (base := base) (post := post)
     (body := ossifiableConstructorInitializeImplementation)
     (implementation := implementation) (requestedAdmin := requestedAdmin)
@@ -873,15 +873,15 @@ private theorem decodeInitialize_success
 private theorem program_success_from_layout
     {sevm : Sevm} {base : Devm}
     (hvalue : sevm.value = 0)
-    (hcodeSize : sevm.code.size = 3607)
+    (hcodeSize : sevm.code.size = 3597)
     (himplementation :
-      ossifiableConstructorCodeWord sevm.code.toList 3447 =
+      ossifiableConstructorCodeWord sevm.code.toList 3437 =
         implementation.toB256)
-    (hrequested : ossifiableConstructorCodeWord sevm.code.toList 3479 =
+    (hrequested : ossifiableConstructorCodeWord sevm.code.toList 3469 =
       requestedAdmin.toB256)
-    (hoffset : ossifiableConstructorCodeWord sevm.code.toList 3511 = 96)
-    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3543 = 32)
-    (hsetup : sevm.code.toList.sliceD 3575 32 0 = setupData)
+    (hoffset : ossifiableConstructorCodeWord sevm.code.toList 3501 = 96)
+    (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 32)
+    (hsetup : sevm.code.toList.sliceD 3565 32 0 = setupData)
     (himplementationNonzero : implementation ≠ 0)
     (himplementationCode : base.getCode implementation = implementationCode)
     (hcodeSizeNonzero : (base.getCode implementation).size.toB256 ≠ 0)
@@ -902,11 +902,11 @@ private theorem program_success_from_layout
     (hprecompile :
       sevm.benvStat.rules.isPrecomp implementation = false)
     (hruntime :
-      sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+      sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes) :
     ∃ post,
       Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248⟩)
-        (ossifiableConstructorProgram 1250 3447 2197) post ∧
+        (ossifiableConstructorProgram 1249 3437 2188) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         postSetupImplementation.toB256 ∧
       post.getStorVal sevm.currentTarget adminSlotLit =
@@ -916,7 +916,7 @@ private theorem program_success_from_layout
         [ossifiableConstructorAdminChangedLog sevm.currentTarget
           postSetupAdmin.toB256 requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
-      post.gasLeft = 475563 ∧
+      post.gasLeft = 475566 ∧
       post.error = base.error := by
   obtain ⟨post, hdecode, himplementationPost, hadminPost, hlogsPost,
       houtputPost, hgasPost, herrorPost⟩ :=
@@ -926,9 +926,9 @@ private theorem program_success_from_layout
       himplementationOriginal himplementationCold hadminRaw hadminOriginal
       hadminCold hstatic hdepth hprecompile hruntime
   have hmain : Func.RunCompiled
-      (ossifiableConstructorFunctions 1250 2197) sevm
+      (ossifiableConstructorFunctions 1249 2188) sevm
       (base.setMach ⟨[], Mem.empty, 526247⟩)
-      (ossifiableConstructorProgram 1250 3447 2197).main post := by
+      (ossifiableConstructorProgram 1249 3437 2188).main post := by
     rw [ossifiableConstructorProgram_main_shape]
     func_run (3) [1]
     all_goals try norm_num [gBase, gVerylow, gHigh, gJumpdest]
@@ -971,7 +971,7 @@ theorem program_success
       sevm.benvStat.rules.isPrecomp implementation = false) :
     ∃ post,
       Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248⟩)
-        (ossifiableConstructorProgram 1250 3447 2197) post ∧
+        (ossifiableConstructorProgram 1249 3437 2188) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         postSetupImplementation.toB256 ∧
       post.getStorVal sevm.currentTarget adminSlotLit =
@@ -981,34 +981,34 @@ theorem program_success
         [ossifiableConstructorAdminChangedLog sevm.currentTarget
           postSetupAdmin.toB256 requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
-      post.gasLeft = 475563 ∧
+      post.gasLeft = 475566 ∧
       post.error = base.error := by
-  have hcodeSize : sevm.code.size = 3607 := by
+  have hcodeSize : sevm.code.size = 3597 := by
     rw [ByteArray.size_eq_length_toList, hinput]
     simpa only [createInput] using createInput_length
   have himplementation :
-      ossifiableConstructorCodeWord sevm.code.toList 3447 =
+      ossifiableConstructorCodeWord sevm.code.toList 3437 =
         implementation.toB256 := by
     rw [hinput]
     simpa only [createInput] using createInput_implementation
   have hrequested :
-      ossifiableConstructorCodeWord sevm.code.toList 3479 =
+      ossifiableConstructorCodeWord sevm.code.toList 3469 =
         requestedAdmin.toB256 := by
     rw [hinput]
     simpa only [createInput] using createInput_admin
   have hoffset :
-      ossifiableConstructorCodeWord sevm.code.toList 3511 = 96 := by
+      ossifiableConstructorCodeWord sevm.code.toList 3501 = 96 := by
     rw [hinput]
     simpa only [createInput] using createInput_offset
   have hlength :
-      ossifiableConstructorCodeWord sevm.code.toList 3543 = 32 := by
+      ossifiableConstructorCodeWord sevm.code.toList 3533 = 32 := by
     rw [hinput]
     simpa only [createInput] using createInput_setupLength
-  have hsetup : sevm.code.toList.sliceD 3575 32 0 = setupData := by
+  have hsetup : sevm.code.toList.sliceD 3565 32 0 = setupData := by
     rw [hinput]
     simpa only [createInput] using createInput_setup
   have hruntime :
-      sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+      sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes := by
     simpa [ByteArray.sliceD_eq,
       show Linst.toUInt8 .stop = 0 by decide, hinput, createInput] using

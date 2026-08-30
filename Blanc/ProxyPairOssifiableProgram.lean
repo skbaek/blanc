@@ -57,7 +57,7 @@ private def loadScratchWord (word : B256) : Line :=
 
 /-- Canonicalize a word known to have an address in its low 160 bits. -/
 private def cleanAddressWord : Line :=
-  pushAddressMask ++ [Ninst.not, Ninst.and]
+  [pushB256 0, Ninst.not, pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and]
 
 private def returnTopWord : Func :=
   mstoreAt 0 +++ returnMemoryRange 0 32

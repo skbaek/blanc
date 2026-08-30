@@ -251,6 +251,9 @@ def compatibility_falsifiers(temporary: Path) -> int:
         "signature-mutation": original.replace("proxy__getAdmin()", "proxy__getAdmin(uint256)", 1),
         "crosscut-deletion": original.replace("<!-- OSSIFIABLE-PROXY-CROSSCUT selector-dispatch -->\n", "", 1),
         "lock-digest-drift": original.replace("<!-- OSSIFIABLE-PROXY-LOCK ", "<!-- OSSIFIABLE-PROXY-LOCK 0", 1),
+        "draft-evidence": original.replace(
+            "`getAdmin_body_of_program`; G01, G02, G07", "planned", 1
+        ),
     }
     for name, contents in cases.items():
         path = temporary / f"compat-{name}.md"

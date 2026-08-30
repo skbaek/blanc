@@ -3658,7 +3658,7 @@ example {sevm : Sevm} {base : Devm}
     (hgas : 200000 ≤ G) :
     ∃ post,
       Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
-        (ossifiableConstructorProgram 1250 3447 2197) post ∧
+        (ossifiableConstructorProgram 1249 3437 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
           implementation.toB256).set adminSlotLit requestedAdmin.toB256 ∧
@@ -3667,7 +3667,7 @@ example {sevm : Sevm} {base : Devm}
         [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
           requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
-      post.gasLeft = G - 49897 ∧
+      post.gasLeft = G - 49894 ∧
       post.error = base.error :=
   ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
     hvalue hinput himplementationNonzero hrequestedNonzero hcodeSizeNonzero
@@ -3695,7 +3695,7 @@ example (msg : Msg) (implementation requestedAdmin : Adr)
       (msg.currentTarget, adminSlotLit) ∉ msg.accessedStorageKeys)
     (hstatic : msg.isStatic = false)
     (hgas : ossifiableCreateMessageGas ≤ msg.gas)
-    (hmax : 2197 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    (hmax : 2188 ≤ msg.benv.stat.rules.code.maxCodeSize) :
     ∃ post,
       OssifiableEmptySetupCreateResult msg implementation requestedAdmin post :=
   processCreateMessage_ossifiable_emptySetup_success msg implementation
@@ -3801,7 +3801,7 @@ example {sevm : Sevm} {base : Devm}
       OssifiableBothSlotFixture.implementation = false) :
     ∃ post,
       Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248⟩)
-        (ossifiableConstructorProgram 1250 3447 2197) post ∧
+        (ossifiableConstructorProgram 1249 3437 2188) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         OssifiableBothSlotFixture.postSetupImplementation.toB256 ∧
       post.getStorVal sevm.currentTarget adminSlotLit =
@@ -3813,7 +3813,7 @@ example {sevm : Sevm} {base : Devm}
           OssifiableBothSlotFixture.postSetupAdmin.toB256
           OssifiableBothSlotFixture.requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
-      post.gasLeft = 475563 ∧
+      post.gasLeft = 475566 ∧
       post.error = base.error :=
   OssifiableBothSlotCreateFixture.program_success hvalue hinput
     himplementationNonzero himplementationCode hcodeSizeNonzero

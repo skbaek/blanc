@@ -18,13 +18,13 @@ open Jaune
 open Jaune.Ninst Blanc.Ninst
 
 /-- Exact gas consumed by the complete canonical empty-setup creation code. -/
-def ossifiableConstructorExecutionGas : Nat := 50217
+def ossifiableConstructorExecutionGas : Nat := 50214
 
-/-- Exact EIP-2 code-deposit charge for the 2,197-byte runtime. -/
-def ossifiableRuntimeCodeDepositGas : Nat := 439400
+/-- Exact EIP-2 code-deposit charge for the 2,188-byte runtime. -/
+def ossifiableRuntimeCodeDepositGas : Nat := 437600
 
 /-- Direct CREATE-message execution plus runtime code deposit. -/
-def ossifiableCreateMessageGas : Nat := 489617
+def ossifiableCreateMessageGas : Nat := 487814
 
 theorem ossifiableCreateMessageGas_eq :
     ossifiableCreateMessageGas =
@@ -32,7 +32,7 @@ theorem ossifiableCreateMessageGas_eq :
   rfl
 
 private theorem runtimeBaselineBytes_length_exact :
-    runtimeBaselineBytes.length = 2197 := by
+    runtimeBaselineBytes.length = 2188 := by
   have heq : runtimeBaselineArtifactBytes = runtimeBaselineBytes :=
     Option.some.inj
       (runtimeBaselineArtifact_compile.symm.trans runtimeBaseline_compile)
@@ -40,18 +40,18 @@ private theorem runtimeBaselineBytes_length_exact :
   exact runtimeBaselineArtifactBytes_length
 
 private theorem creationBaselineByteLength_exact :
-    creationBaselineByteLength = 1250 := by
+    creationBaselineByteLength = 1249 := by
   have heq : creationBaselineArtifactBytes = creationBaselineBytes :=
     Option.some.inj
       (creationBaselineArtifact_compile.symm.trans creationBaseline_compile)
-  have hbytes : creationBaselineBytes.length = 1250 := by
+  have hbytes : creationBaselineBytes.length = 1249 := by
     rw [← heq]
     exact creationBaselineArtifactBytes_length
   exact creationBaselineBytes_length.symm.trans hbytes
 
 /-- Numeric constructor specialization used by complete appended-code walks. -/
 theorem creationBaseline_eq_numericProgram :
-    creationBaseline = ossifiableConstructorProgram 1250 3447 2197 := by
+    creationBaseline = ossifiableConstructorProgram 1249 3437 2188 := by
   rw [creationBaseline_eq_constructorProgram,
     creationBaselineByteLength_exact, runtimeBaselineBytes_length_exact]
 
@@ -63,12 +63,12 @@ private theorem runtimeBaselineBytes_cons :
     ⟨compiledMain, compiledAux, _hmain, _haux, hbytes⟩
   exact ⟨compiledMain ++ compiledAux, hbytes⟩
 
-/-- Exact CREATE code-deposit step for the compiler-owned 2,197-byte runtime. -/
+/-- Exact CREATE code-deposit step for the compiler-owned 2,188-byte runtime. -/
 theorem chargeCodeGas_runtimeBaseline
     {rules : ForkRules} {raw : Devm}
     (houtput : raw.output = runtimeBaselineBytes)
     (hgas : ossifiableRuntimeCodeDepositGas ≤ raw.gasLeft)
-    (hmax : 2197 ≤ rules.code.maxCodeSize) :
+    (hmax : 2188 ≤ rules.code.maxCodeSize) :
     processCreateMessage.chargeCodeGas rules raw =
       .ok (raw.setMach
         ⟨raw.stack, raw.memory,
@@ -83,7 +83,7 @@ theorem chargeCodeGas_runtimeBaseline
   simp only [List.length_cons, hlength, gasCodeDeposit]
   rw [chargeGas_eq_ok hgas]
   change
-    ((if rules.code.maxCodeSize < 2197 then
+    ((if rules.code.maxCodeSize < 2188 then
       Except.error ⟨.halt (.outOfGas .none), _⟩
     else Except.ok _) : Execution) = Except.ok _
   rw [if_neg (by omega)]
@@ -106,8 +106,8 @@ structure OssifiableEmptySetupCreateResult
   error : post.error = .none
 
 /-- A zero-value direct CREATE message carrying the canonical ABI tuple
-constructively executes the compiled constructor, pays the exact 439,400-gas
-runtime deposit, and installs the exact 2,197-byte runtime.  The freshly
+constructively executes the compiled constructor, pays the exact 437,600-gas
+runtime deposit, and installs the exact 2,188-byte runtime.  The freshly
 cleared target receives exactly the two ERC-1967 writes and their source-order
 logs. -/
 theorem processCreateMessage_ossifiable_emptySetup_success
@@ -133,7 +133,7 @@ theorem processCreateMessage_ossifiable_emptySetup_success
       (msg.currentTarget, adminSlotLit) ∉ msg.accessedStorageKeys)
     (hstatic : msg.isStatic = false)
     (hgas : ossifiableCreateMessageGas ≤ msg.gas)
-    (hmax : 2197 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    (hmax : 2188 ≤ msg.benv.stat.rules.code.maxCodeSize) :
     ∃ post,
       OssifiableEmptySetupCreateResult msg implementation requestedAdmin post := by
   let prepared := processCreateMessage.msg msg

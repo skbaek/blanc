@@ -51,7 +51,7 @@ private def constructorLoadWord (word : B256) : Line :=
   [pushB256 (word * 32), mload]
 
 private def constructorCleanAddressWord : Line :=
-  pushAddressMask ++ [Ninst.not, Ninst.and]
+  [pushB256 0, Ninst.not, pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and]
 
 /-- Layout coordinates are emitted at a fixed width.  The provisional and final
 constructor passes therefore have identical compiler shape even though their
@@ -350,9 +350,9 @@ theorem ossifiableConstructorAfterSetup_shape
     (runtimeOffset runtimeLength : Nat) :
     ossifiableConstructorAfterSetup runtimeOffset runtimeLength =
       [pushB256 adminSlotLit, sload] +++
-        (pushAddressMask +++
-          (Ninst.not ::: Ninst.and :::
-            mstoreAt 5 +++
+        ([pushB256 0, Ninst.not, pushB256 (Nat.toB256 96), Ninst.shr,
+            Ninst.and] +++
+          (mstoreAt 5 +++
             [pushB256 32, mload] +++ mstoreAt 6 +++
             pushB256 adminChangedEventTopic ::: logWith 0 5 2 +++
             [pushB256 32, mload] +++ iszero :::

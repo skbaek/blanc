@@ -83,11 +83,11 @@ private theorem creationState_target_fresh :
   rfl
 
 /-- Exact constructor-plus-code-deposit cost of this both-slot fixture. -/
-def bothSlotCreateMessageGas : Nat := 490085
+def bothSlotCreateMessageGas : Nat := 488282
 
-/-- The total is the 50,685-gas constructor plus 439,400-gas deposit. -/
+/-- The total is the 50,682-gas constructor plus 437,600-gas deposit. -/
 theorem bothSlotCreateMessageGas_eq :
-    bothSlotCreateMessageGas = 50685 + ossifiableRuntimeCodeDepositGas := by
+    bothSlotCreateMessageGas = 50682 + ossifiableRuntimeCodeDepositGas := by
   rfl
 
 /-- Settled observations retained by the concrete both-slot CREATE. -/
@@ -288,7 +288,7 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
     dsimp only [charged]
     rw [Devm.setMach_output]
     exact hrawOutput
-  have hchargedGas : charged.gasLeft = 36163 := by
+  have hchargedGas : charged.gasLeft = 37966 := by
     dsimp only [charged, ossifiableRuntimeCodeDepositGas]
     rw [Devm.gasLeft_setMach, hrawGas]
   have hchargedError : charged.error = .none := by

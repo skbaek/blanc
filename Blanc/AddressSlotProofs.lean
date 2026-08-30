@@ -54,6 +54,11 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
     addressSlotReadWord address.toB256 = address.toB256 := by
   rw [addressSlotReadWord_eq_toAdr_toB256, toAdr_toB256]
 
+private theorem shr96_ones_eq_not_addressMask :
+    (~~~ (0 : B256)) >>> (96 : Nat).toB256.toNat = ~~~ addressMask := by
+  rw [B256.toNat_toB256, Nat.lo_eq_of_lt (by omega)]
+  rfl
+
 /-- Exact value and frame effect of `loadAddressWordAt`. -/
 theorem of_loadAddressWordAt_val
     {sevm : Sevm} {pre post : Devm} {slot : B256} {tail : Stack}
@@ -70,16 +75,19 @@ theorem of_loadAddressWordAt_val
   rcases Line.of_run_cons loadLine with ⟨slotPost, qslot, loadLine⟩
   rcases Line.of_run_cons loadLine with ⟨_, qload, hnil⟩
   cases hnil
-  obtain ⟨maskPost, maskLine, cleanTail⟩ :=
-    of_run_append pushAddressMask cleanLine
-  rcases Line.of_run_cons cleanTail with ⟨notPost, qnot, cleanTail⟩
-  rcases Line.of_run_cons cleanTail with ⟨_, qand, hnil⟩
+  rcases Line.of_run_cons cleanLine with ⟨zeroPost, qzero, cleanLine⟩
+  rcases Line.of_run_cons cleanLine with ⟨notPost, qnot, cleanLine⟩
+  rcases Line.of_run_cons cleanLine with ⟨shiftPost, qshift, cleanLine⟩
+  rcases Line.of_run_cons cleanLine with ⟨andPost, qshr, cleanLine⟩
+  rcases Line.of_run_cons cleanLine with ⟨_, qand, hnil⟩
   cases hnil
   have pSlot := prefix_of_push (of_run_pushB256 qslot) hp
   obtain ⟨raw, pRaw, hRaw⟩ := prefix_of_sload qload pSlot
-  have pMask := of_push_addressMask pRaw maskLine
-  have pNot := prefix_of_not qnot pMask
-  have pAddress := prefix_of_and qand pNot
+  have pZero := prefix_of_push (of_run_pushB256 qzero) pRaw
+  have pNot := prefix_of_not qnot pZero
+  have pShift := prefix_of_push (of_run_pushB256 qshift) pNot
+  have pShr := prefix_of_shr qshr pShift
+  have pAddress := prefix_of_and qand pShr
   have slotStor : Devm.getStor pre = Devm.getStor slotPost :=
     Ninst.Hinv.inv (f := Devm.getStor) qslot
   have hraw : raw = pre.getStorVal sevm.currentTarget slot := by
@@ -87,7 +95,8 @@ theorem of_loadAddressWordAt_val
     change (Devm.getStor slotPost sevm.currentTarget).get slot =
       (Devm.getStor pre sevm.currentTarget).get slot
     rw [← congrFun slotStor sevm.currentTarget]
-  refine ⟨by simpa [addressSlotReadWord, hraw] using pAddress, ?_, ?_, ?_⟩
+  refine ⟨by simpa [addressSlotReadWord, hraw,
+      shr96_ones_eq_not_addressMask] using pAddress, ?_, ?_, ?_⟩
   · exact (Line.of_inv Devm.memory (by line_inv) run).symm
   · exact (Line.of_inv Devm.logs (by line_inv) run).symm
   · exact (Line.of_inv Devm.getStor (by line_inv) run).symm

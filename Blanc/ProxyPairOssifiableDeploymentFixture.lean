@@ -113,7 +113,7 @@ theorem message_success :
     exact Std.HashSet.not_mem_emptyWithCapacity
   · rfl
   · norm_num [ossifiableCreateMessageGas, message]
-  · change 2197 ≤ pragueRules.code.maxCodeSize
+  · change 2188 ≤ pragueRules.code.maxCodeSize
     decide
 
 end Blanc.ProxyPair.OssifiableCreateFixture

@@ -25,9 +25,13 @@ def addressSlotWriteWord (raw newAddress : B256) : B256 :=
   (addressMask &&& raw) ||| newAddress
 
 /-- Read an address-typed storage word, discarding the raw upper ninety-six
-bits exactly as Solidity does when an `address` value is loaded. -/
+bits exactly as Solidity does when an `address` value is loaded.  The all-ones
+word is shifted right once to materialize the low-160-bit mask; this is one
+byte shorter than constructing the complementary high-bit mask and inverting
+it. -/
 def loadAddressWordAt (slot : B256) : Line :=
-  [pushB256 slot, sload] ++ pushAddressMask ++ [Ninst.not, Ninst.and]
+  [pushB256 slot, sload, pushB256 0, Ninst.not,
+    pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and]
 
 /-- Store an address-typed word in `slot` with Solidity's packed-field
 semantics.  Given `newAddress :: stack`, this preserves the slot's upper

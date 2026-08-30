@@ -198,9 +198,34 @@ theorem selector_of_proxyUpgradeToAndCallCalldata
 /-! ## Authorization precedence at endpoint altitude -/
 
 /-- Solidity's address-typed view of an arbitrary raw storage word.  This is
-the exact word left by the runtime's `pushAddressMask; NOT; AND` schedule. -/
+the exact word left by the runtime's low-160-bit `SHR; AND` schedule. -/
 def canonicalAddressWord (word : B256) : B256 :=
   (~~~ addressMask) &&& word
+
+private theorem lowAddressMask_eq :
+    (~~~ (0 : B256)) >>> (96 : Nat).toB256.toNat = ~~~ addressMask := by
+  rw [B256.toNat_toB256, Nat.lo_eq_of_lt (by omega)]
+  rfl
+
+private theorem prefix_of_lowAddressClean
+    {sevm : Sevm} {pre post : Devm} {word : B256} {tail : Stack}
+    (hp : word :: tail <<+ pre.stack)
+    (run : Line.Run sevm pre
+      [pushB256 0, Ninst.not, pushB256 (Nat.toB256 96), Ninst.shr,
+        Ninst.and] post) :
+    canonicalAddressWord word :: tail <<+ post.stack := by
+  rcases Line.of_run_cons run with ⟨zeroPost, qzero, run⟩
+  rcases Line.of_run_cons run with ⟨notPost, qnot, run⟩
+  rcases Line.of_run_cons run with ⟨shiftPost, qshift, run⟩
+  rcases Line.of_run_cons run with ⟨andPost, qshr, run⟩
+  rcases Line.of_run_cons run with ⟨_, qand, hnil⟩
+  cases hnil
+  have pZero := prefix_of_push (of_run_pushB256 qzero) hp
+  have pNot := prefix_of_not qnot pZero
+  have pShift := prefix_of_push (of_run_pushB256 qshift) pNot
+  have pShr := prefix_of_shr qshr pShift
+  have pAnd := prefix_of_and qand pShr
+  simpa only [canonicalAddressWord, lowAddressMask_eq] using pAnd
 
 def storedAdminWord (devm : Devm) (owner : Adr) : B256 :=
   canonicalAddressWord (devm.getStorVal owner adminSlotLit)
@@ -213,8 +238,8 @@ schedule.  The product definitions below are tied back to this schedule by
 definitional equalities, so the route theorem cannot silently describe a
 different authorization order. -/
 def activeAdminControl (body : Func) : Func :=
-  ([pushB256 adminSlotLit, sload] ++ pushAddressMask ++
-      [Ninst.not, Ninst.and]) +++
+  ([pushB256 adminSlotLit, sload, pushB256 0, Ninst.not,
+      pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and]) +++
     (dup 0 ::: iszero :::
       ((.call proxyIsOssifiedErrorSlot) <?>
         (caller ::: eq ::: (body <?> (.call notAdminErrorSlot)))))
@@ -273,17 +298,10 @@ theorem activeAdminControl_route
   rcases Line.of_run_cons headLine with ⟨slotPost, qslot, headLine⟩
   rcases Line.of_run_cons headLine with ⟨_, qload, hnil⟩
   cases hnil
-  obtain ⟨maskPost, maskLine, cleanTail⟩ :=
-    of_run_append pushAddressMask cleanLine
-  rcases Line.of_run_cons cleanTail with ⟨notPost, qnot, cleanTail⟩
-  rcases Line.of_run_cons cleanTail with ⟨_, qand, hnil⟩
-  cases hnil
   have pSlot := prefix_of_push (of_run_pushB256 qslot) hp
   obtain ⟨rawAdmin, pRawAdmin, hRawAdmin⟩ :=
     prefix_of_sload qload pSlot
-  have pMask := of_push_addressMask pRawAdmin maskLine
-  have pNot := prefix_of_not qnot pMask
-  have pAdmin0 := prefix_of_and qand pNot
+  have pAdmin0 := prefix_of_lowAddressClean pRawAdmin cleanLine
   have pAdmin : storedAdminWord pre sevm.currentTarget :: tail <<+
       guardPre.stack := by
     have slotStor : Devm.getStor pre = Devm.getStor slotPost :=
@@ -699,28 +717,29 @@ theorem proxyUpgradeToAndCallCalldata_setupSlice
 
 theorem getAdmin_control_shape :
     getAdmin =
-      ([pushB256 adminSlotLit, sload] ++ pushAddressMask ++
-        [Ninst.not, Ninst.and]) +++
+      ([pushB256 adminSlotLit, sload, pushB256 0, Ninst.not,
+        pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and]) +++
       (mstoreAt 0 +++ returnMemoryRange 0 32) := by
   rfl
 
 theorem getImplementation_control_shape :
     getImplementation =
-      ([pushB256 implementationSlotLit, sload] ++ pushAddressMask ++
-        [Ninst.not, Ninst.and]) +++
+      ([pushB256 implementationSlotLit, sload, pushB256 0, Ninst.not,
+        pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and]) +++
       (mstoreAt 0 +++ returnMemoryRange 0 32) := by
   rfl
 
 theorem getIsOssified_control_shape :
     getIsOssified =
-      ([pushB256 adminSlotLit, sload] ++ pushAddressMask ++
-        [Ninst.not, Ninst.and, Ninst.iszero]) +++
+      ([pushB256 adminSlotLit, sload, pushB256 0, Ninst.not,
+        pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and,
+        Ninst.iszero]) +++
       (mstoreAt 0 +++ returnMemoryRange 0 32) := by
   rfl
 
 def changeAdminMutation : Func :=
-  ([pushB256 adminSlotLit, sload] ++ pushAddressMask ++
-      [Ninst.not, Ninst.and]) +++
+  ([pushB256 adminSlotLit, sload, pushB256 0, Ninst.not,
+      pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and]) +++
     (mstoreAt 0 +++
       arg 0 +++ mstoreAt 1 +++
       pushB256 adminChangedEventTopic ::: logWith 0 0 2 +++
@@ -753,7 +772,8 @@ theorem upgradeToAndCall_control_shape :
 
 def ossifyMutation : Func :=
   [pushB256 adminSlotLit, sload] +++
-  (pushAddressMask +++ (Ninst.not ::: Ninst.and ::: mstoreAt 0 +++
+  ([pushB256 0, Ninst.not, pushB256 (Nat.toB256 96), Ninst.shr,
+      Ninst.and] +++ (mstoreAt 0 +++
     pushB256 0 ::: storeAddressWordAt adminSlotLit +++
     pushB256 0 ::: mstoreAt 1 +++
     pushB256 adminChangedEventTopic ::: logWith 0 0 2 +++
@@ -779,24 +799,17 @@ theorem getAdmin_successful_body_returns
   rw [getAdmin_control_shape] at sourceRun
   obtain ⟨returnPre, readLine, returnRun⟩ :=
     of_run_prepend
-      ([pushB256 adminSlotLit, sload] ++ pushAddressMask ++
-        [Ninst.not, Ninst.and]) _ sourceRun
+      [pushB256 adminSlotLit, sload, pushB256 0, Ninst.not,
+        pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and] _ sourceRun
   obtain ⟨loadPost, headLine, cleanLine⟩ :=
     of_run_append [pushB256 adminSlotLit, sload] readLine
   rcases Line.of_run_cons headLine with ⟨slotPost, qslot, headLine⟩
   rcases Line.of_run_cons headLine with ⟨_, qload, hnil⟩
   cases hnil
-  obtain ⟨maskPost, maskLine, cleanTail⟩ :=
-    of_run_append pushAddressMask cleanLine
-  rcases Line.of_run_cons cleanTail with ⟨notPost, qnot, cleanTail⟩
-  rcases Line.of_run_cons cleanTail with ⟨_, qand, hnil⟩
-  cases hnil
   have pSlot := prefix_of_push (of_run_pushB256 qslot) hp
   obtain ⟨rawAdmin, pRawAdmin, hRawAdmin⟩ :=
     prefix_of_sload qload pSlot
-  have pMask := of_push_addressMask pRawAdmin maskLine
-  have pNot := prefix_of_not qnot pMask
-  have pAdmin0 := prefix_of_and qand pNot
+  have pAdmin0 := prefix_of_lowAddressClean pRawAdmin cleanLine
   have pAdmin : storedAdminWord pre sevm.currentTarget :: tail <<+
       returnPre.stack := by
     have slotStor : Devm.getStor pre = Devm.getStor slotPost :=
@@ -821,24 +834,18 @@ theorem getImplementation_successful_body_returns
   rw [getImplementation_control_shape] at sourceRun
   obtain ⟨returnPre, readLine, returnRun⟩ :=
     of_run_prepend
-      ([pushB256 implementationSlotLit, sload] ++ pushAddressMask ++
-        [Ninst.not, Ninst.and]) _ sourceRun
+      [pushB256 implementationSlotLit, sload, pushB256 0, Ninst.not,
+        pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and] _ sourceRun
   obtain ⟨loadPost, headLine, cleanLine⟩ :=
     of_run_append [pushB256 implementationSlotLit, sload] readLine
   rcases Line.of_run_cons headLine with ⟨slotPost, qslot, headLine⟩
   rcases Line.of_run_cons headLine with ⟨_, qload, hnil⟩
   cases hnil
-  obtain ⟨maskPost, maskLine, cleanTail⟩ :=
-    of_run_append pushAddressMask cleanLine
-  rcases Line.of_run_cons cleanTail with ⟨notPost, qnot, cleanTail⟩
-  rcases Line.of_run_cons cleanTail with ⟨_, qand, hnil⟩
-  cases hnil
   have pSlot := prefix_of_push (of_run_pushB256 qslot) hp
   obtain ⟨rawImplementation, pRawImplementation, hRawImplementation⟩ :=
     prefix_of_sload qload pSlot
-  have pMask := of_push_addressMask pRawImplementation maskLine
-  have pNot := prefix_of_not qnot pMask
-  have pImplementation0 := prefix_of_and qand pNot
+  have pImplementation0 :=
+    prefix_of_lowAddressClean pRawImplementation cleanLine
   have pImplementation :
       storedImplementationWord pre sevm.currentTarget :: tail <<+
         returnPre.stack := by
@@ -867,25 +874,24 @@ theorem getIsOssified_successful_body_returns
   rw [getIsOssified_control_shape] at sourceRun
   obtain ⟨returnPre, readLine, returnRun⟩ :=
     of_run_prepend
-      ([pushB256 adminSlotLit, sload] ++ pushAddressMask ++
-        [Ninst.not, Ninst.and, Ninst.iszero]) _ sourceRun
+      [pushB256 adminSlotLit, sload, pushB256 0, Ninst.not,
+        pushB256 (Nat.toB256 96), Ninst.shr, Ninst.and,
+        Ninst.iszero] _ sourceRun
   obtain ⟨loadPost, headLine, cleanLine⟩ :=
     of_run_append [pushB256 adminSlotLit, sload] readLine
   rcases Line.of_run_cons headLine with ⟨slotPost, qslot, headLine⟩
   rcases Line.of_run_cons headLine with ⟨_, qload, hnil⟩
   cases hnil
-  obtain ⟨maskPost, maskLine, cleanTail⟩ :=
-    of_run_append pushAddressMask cleanLine
-  rcases Line.of_run_cons cleanTail with ⟨notPost, qnot, cleanTail⟩
-  rcases Line.of_run_cons cleanTail with ⟨adminPost, qand, cleanTail⟩
+  obtain ⟨adminPost, cleanAddressLine, cleanTail⟩ :=
+    of_run_append
+      [pushB256 0, Ninst.not, pushB256 (Nat.toB256 96), Ninst.shr,
+        Ninst.and] cleanLine
   rcases Line.of_run_cons cleanTail with ⟨_, qzero, hnil⟩
   cases hnil
   have pSlot := prefix_of_push (of_run_pushB256 qslot) hp
   obtain ⟨rawAdmin, pRawAdmin, hRawAdmin⟩ :=
     prefix_of_sload qload pSlot
-  have pMask := of_push_addressMask pRawAdmin maskLine
-  have pNot := prefix_of_not qnot pMask
-  have pAdmin0 := prefix_of_and qand pNot
+  have pAdmin0 := prefix_of_lowAddressClean pRawAdmin cleanAddressLine
   have pAdmin : storedAdminWord pre sevm.currentTarget :: tail <<+
       adminPost.stack := by
     have slotStor : Devm.getStor pre = Devm.getStor slotPost :=

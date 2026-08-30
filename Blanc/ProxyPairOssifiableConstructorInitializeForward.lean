@@ -337,13 +337,13 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       base.accessedStorageKeys)
     (hsize : memory.size = 160)
     (hstatic : sevm.isStatic = false)
-    (hcode : sevm.code.sliceD 1250 2197 (Linst.toUInt8 .stop) =
+    (hcode : sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
       runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = 2197)
+    (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hgas : 200000 ≤ G) :
     ∃ post,
-      Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
+      Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
         (base.setMach ⟨[], memory, G⟩)
         ossifiableConstructorInitializeImplementation post ∧
       Devm.getStor post sevm.currentTarget =
@@ -354,7 +354,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
         [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
           requestedAdmin] ∧
       post.output = runtimeBytes ∧
-      post.gasLeft = G - 49897 ∧
+      post.gasLeft = G - 49894 ∧
       post.error = base.error := by
   have hmemory0 : (memory.read 0 32).2 = memory := by
     apply Mem.read_snd_eq_self
@@ -417,14 +417,14 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     have hk := congrArg Prod.snd hp
     exact (by decide : implementationSlotLit ≠ adminSlotLit) hk
   have htail := ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
-    (fs := ossifiableConstructorFunctions 1250 2197)
+    (fs := ossifiableConstructorFunctions 1249 2188)
     (sevm := sevm) (base := initializedBase) (memory := memory)
     (image := image) (runtimeBytes := runtimeBytes)
     (requestedAdmin := requestedAdmin) (G := G - 25913)
     hwf hreads hrequested hrequestedNonzero hadminRawInitialized
     hadminOriginal hadminColdInitialized hsize hstatic hcode
     hruntimeLength hruntimeNonempty
-    (ossifiableConstructorFunctions_zeroAdmin 1250 2197) (by omega)
+    (ossifiableConstructorFunctions_zeroAdmin 1249 2188) (by omega)
   rcases htail with
     ⟨post, htailRun, htailStorage, htailLogs, htailOutput, htailGas,
       htailError⟩
@@ -440,7 +440,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     · simp only [Devm.getCode_setMach, toAdr_toB256, B256.eqCheck,
         hcodeSizeNonzero, ↓reduceIte]
     simp only [initialize_addAccessedAddress_setMach_setMach, toAdr_toB256]
-    change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm _
+    change Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm _
       initializeAccepted _
     unfold initializeAccepted
     func_run (1)
@@ -487,7 +487,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       norm_num [gLog, gLogdata, gLogtopic]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     rw [hreadZero]
-    change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm _
+    change Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm _
       initializeLoadLength _
     unfold initializeLoadLength
     func_run (2) [3]
@@ -499,9 +499,9 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     unfold initializeAfterSetupCall
     func_run (1)
     rw [hrefund]
-    change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
+    change Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
       (initializedBase.setMach ⟨[], memory, G - 25913⟩)
-      (ossifiableConstructorAfterSetup 1250 2197) post
+      (ossifiableConstructorAfterSetup 1249 2188) post
     exact htailRun
   · rw [htailStorage]
     unfold initializedBase
