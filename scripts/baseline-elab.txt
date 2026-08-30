@@ -50,6 +50,13 @@
 # cold-root artifact at 3.522 s on the old root; the exact warm gate then
 # measured Blanc.lean at 1.255 s. Its 1.129 s row and every other existing row
 # therefore remain untouched.
+#
+# 2026-08-30 bounded refresh of Blanc/PinnedPauseTarget.lean, explicitly
+# pre-authorized by lido-twg-port-v1 for the S1 wave and its shared account-
+# boundary API.  Bare `scripts/check-elab.sh` at candidate a2499ec measured
+# 203 affected modules in 876.9 s; this edited owner measured 3.574 s against
+# its 1.117 s row.  The refresh records that measured value only; every other
+# existing row is byte-preserved.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
@@ -206,7 +213,7 @@ OK	1.109	Blanc/LinearDispatch.lean
 OK	1.261	Blanc/LinearDispatchCorrectness.lean
 OK	1.291	Blanc/MessageExecution.lean
 OK	1.125	Blanc/MessageExecutionInversion.lean
-OK	1.117	Blanc/PinnedPauseTarget.lean
+OK	3.574	Blanc/PinnedPauseTarget.lean
 OK	0.594	Blanc/ProofRecipesGenerated.lean
 OK	1.670	Blanc/Prorata.lean
 OK	1.393	Blanc/ProrataAccounting.lean
