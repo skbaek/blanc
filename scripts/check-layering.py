@@ -76,6 +76,8 @@ CONTRACTS = {
                        "BeaconDepositErrors",
                        "BeaconDepositCode", "BeaconDepositDeploy",
                        "BeaconDepositWriteSites",
+                       "BeaconDepositConstructorStorageEffects",
+                       "BeaconDepositConstructorEffects",
                        "BeaconDepositBridge",
                        "BeaconDepositMemory", "BeaconDepositSha",
                        "BeaconDepositAbiMemory", "BeaconDepositAbi",
@@ -107,6 +109,7 @@ CONTRACTS = {
                        "BeaconDepositSuccessPublic",
                        "BeaconDepositSuccessEndpointStorageEffects",
                        "BeaconDepositSuccessChronology",
+                       "BeaconDepositBridgeCompiled",
                        "BeaconDepositSuccessSettlement",
                        "BeaconDepositCountEffects"],
     "lido-twg": [

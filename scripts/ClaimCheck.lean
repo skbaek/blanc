@@ -16,6 +16,14 @@ import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerDeploymentRoot
 import Blanc.ProrataAttackTrace
+import Blanc.BeaconDepositConstructorEffects
+import Blanc.BeaconDepositBridgeCompiled
+import Blanc.BeaconDepositSuccessSettlement
+import Blanc.BeaconDepositSuccessChronology
+import Blanc.BeaconDepositErrors
+import Blanc.BeaconDepositRootPublic
+import Blanc.BeaconDepositCountEffects
+import Blanc.BeaconDepositEffects
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -3742,5 +3750,28 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
   victim_loss_bound trace hmoves hdeposit hexit
 
 end Prorata
+
+namespace BeaconDeposit
+
+/-! ## Beacon deposit — compiled P1–P6 flagships.
+
+These declaration pins keep the artifact, total behavior partition, public
+views, complete retained chronology, and compiled/model bridge in the claims
+inventory.  Their exact axiom sets are independently pinned by `check.sh`. -/
+
+#check code_compile
+#check constructorInitPrefix_compile
+#check deposit_success_settled_effects
+#check deposit_error_runCompiledTo
+#check deposit_malformed_noRawSstore
+#check noMatchSelector_runCompiledTo
+#check supportsInterface_runCompiled
+#check getDepositRoot_zero_runCompiled
+#check getDepositCount_warm_runCompiled
+#check deposit_success_retainedStorageEffectTriples
+#check constructor_success_retainedStorageEffectTriples
+#check deposit_success_artifactInv
+
+end BeaconDeposit
 
 end Blanc

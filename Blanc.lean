@@ -183,6 +183,8 @@ import Blanc.BeaconDepositRouteStorageEffects
 import Blanc.BeaconDepositSuccessPublic
 import Blanc.BeaconDepositSuccessEndpointStorageEffects
 import Blanc.BeaconDepositSuccessChronology
+import Blanc.BeaconDepositConstructorEffects
+import Blanc.BeaconDepositBridgeCompiled
 import Blanc.BeaconDepositSuccessSettlement
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositRootEffects

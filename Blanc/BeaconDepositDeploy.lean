@@ -23,56 +23,75 @@ def constructorBubbleRevertSlot : Nat := 2
 def constructorZeroHashLoopSlot : Nat := 3
 def constructorZeroHashContinuationSlot : Nat := 4
 
-private def constructorNodeWord : B256 := 2
+/-- Constructor scratch-memory word that carries the current zero-hash node. -/
+def constructorNodeWord : B256 := 2
 
 /-- Use fixed-width `PUSH2` for current constructor coordinates without ever
 truncating a future value that outgrows two bytes. -/
-private def constructorPushWord (word : B256) : Ninst :=
+def constructorPushWord (word : B256) : Ninst :=
   let value := word.toNat
   if value < 2 ^ 16 then
     Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
   else
     Ninst.push word.toBytes (by rw [B256.length_toBytes])
 
-private def constructorPushWords : List B256 → Line :=
+/-- Fixed-width constructor pushes for a source-order word list. -/
+def constructorPushWords : List B256 → Line :=
   List.map constructorPushWord
 
-/-- Exact compiled semantics of the constructor's fixed-width `PUSH2` form.
-The bound is the same non-truncation guard used by `constructorPushWord`. -/
+/-- Exact compiled semantics of the constructor's fixed-width form, including
+the full-width fallback when a future coordinate no longer fits in `PUSH2`. -/
 theorem Ninst.runCompiled_constructorPushWord
     {sevm : Sevm} {devm : Devm} {word : B256} {G : Nat}
-    (fit : word.toNat < 2 ^ 16)
     (gas : devm.gasLeft = G + gVerylow)
     (room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (constructorPushWord word)
       (devm.setMach ⟨word :: devm.stack, devm.memory, G⟩) := by
-  let bytes : Bytes :=
-    [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8]
-  have cost : pushCost bytes = gVerylow := by
-    simp [bytes, pushCost]
-  have pushed : Bytes.toB256 bytes = word := by
-    change Bytes.toB256
-      [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8] = word
-    rw [List.toB256_pair word.toNat fit, Jaune.toB256_toNat]
-  have run := Ninst.runCompiled_pushBytes
-    (sevm := sevm) (devm := devm) (xs := bytes)
-    (le := by simp [bytes]) (c := gVerylow) (G := G)
-    cost gas room
-  rw [constructorPushWord, if_pos fit]
-  simpa only [bytes, pushed] using run
+  by_cases fit : word.toNat < 2 ^ 16
+  · let bytes : Bytes :=
+      [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8]
+    have cost : pushCost bytes = gVerylow := by
+      simp [bytes, pushCost]
+    have pushed : Bytes.toB256 bytes = word := by
+      change Bytes.toB256
+        [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8] = word
+      rw [List.toB256_pair word.toNat fit, Jaune.toB256_toNat]
+    have run := Ninst.runCompiled_pushBytes
+      (sevm := sevm) (devm := devm) (xs := bytes)
+      (le := by simp [bytes]) (c := gVerylow) (G := G)
+      cost gas room
+    rw [constructorPushWord, if_pos fit]
+    simpa only [bytes, pushed] using run
+  · have run := Ninst.runCompiled_pushBytes
+      (sevm := sevm) (devm := devm) (xs := word.toBytes)
+      (le := by rw [B256.length_toBytes])
+      (c := gVerylow) (G := G)
+      (by
+        have hne : word.toBytes ≠ [] := by
+          intro empty
+          have lengths := congrArg List.length empty
+          simp only [B256.length_toBytes, List.length_nil] at lengths
+          omega
+        simp [pushCost, hne]) gas room
+    rw [constructorPushWord, if_neg fit]
+    simpa only [B256.toB256_toBytes] using run
 
-private def constructorLoadWord (word : B256) : Line :=
+/-- Load one constructor scratch word. -/
+def constructorLoadWord (word : B256) : Line :=
   [constructorPushWord (word * 32), mload]
 
-private def constructorStoreWord (word : B256) : Line :=
+/-- Store one constructor scratch word. -/
+def constructorStoreWord (word : B256) : Line :=
   [constructorPushWord (word * 32), mstore]
 
-private def constructorRetdataShorterThan (size : B256) : Line :=
+/-- Constructor-local returndata length comparison. -/
+def constructorRetdataShorterThan (size : B256) : Line :=
   [constructorPushWord size, retdatasize, lt]
 
 /-! ## Zero-hash materialization -/
 
-private def constructorSha64
+/-- Constructor-local fixed-width SHA-256 wrapper. -/
+def constructorSha64
     (inputWord outputWord : B256) (success : Func) : Func :=
   constructorPushWords [32, outputWord * 32, 64, inputWord * 32, 2] +++
   gas ::: statcall ::: iszero :::
@@ -80,7 +99,8 @@ private def constructorSha64
     (constructorRetdataShorterThan 32 +++
       ((.call constructorEmptyRevertSlot) <?> success)))
 
-private def constructorFinish
+/-- Copy and return the appended runtime from creation code. -/
+def constructorFinish
     (runtimeOffset runtimeLength : Nat) : Func :=
   constructorPushWords
       [Nat.toB256 runtimeLength, Nat.toB256 runtimeOffset, 0] +++
@@ -88,12 +108,14 @@ private def constructorFinish
     constructorPushWords [Nat.toB256 runtimeLength, 0] +++
     Func.ret
 
-private def constructorZeroHashContinuation : Func :=
+/-- Store the newly computed zero hash and advance the loop height. -/
+def constructorZeroHashContinuation : Func :=
   constructorLoadWord constructorNodeWord +++
   dup 1 ::: constructorPushWord (zeroHashBase + 1) ::: add ::: sstore :::
   constructorPushWord 1 ::: add ::: .call constructorZeroHashLoopSlot
 
-private def constructorZeroHashLoop
+/-- Tail-recursive constructor loop that materializes zero hashes 1 through 31. -/
+def constructorZeroHashLoop
     (runtimeOffset runtimeLength : Nat) : Func :=
   dup 0 ::: constructorPushWord 31 ::: swap 0 ::: lt :::
   (((constructorLoadWord constructorNodeWord ++ constructorStoreWord 0 ++
@@ -102,12 +124,14 @@ private def constructorZeroHashLoop
         (.call constructorZeroHashContinuationSlot)) <?>
     constructorFinish runtimeOffset runtimeLength)
 
-private def constructorStart : Func :=
+/-- Initialize constructor scratch memory and enter the zero-hash loop. -/
+def constructorStart : Func :=
   ([constructorPushWord 0] ++ constructorStoreWord constructorNodeWord ++
     [constructorPushWord 0]) +++
   .call constructorZeroHashLoopSlot
 
-private def constructorProgramAt
+/-- Constructor program parameterized by its appended-runtime coordinates. -/
+def constructorProgramAt
     (runtimeOffset runtimeLength : Nat) : Prog :=
   { main := nonpayable constructorStart
     aux := [Func.rev, Func.revReturnData,
@@ -216,6 +240,16 @@ theorem creationCode_drop_runtimeOffset :
     creationCode.drop constructorRuntimeOffset = code := by
   rw [← constructorInitPrefix_length_eq_provisionalOffset]
   exact creationCode_drop_prefix
+
+/-- The constructor's CODECOPY window is exactly the appended runtime. -/
+theorem creationCode_slice_runtime :
+    creationCode.sliceD constructorRuntimeOffset codeSize 0 = code := by
+  rw [← constructorInitPrefix_length_eq_provisionalOffset]
+  unfold creationCode List.sliceD
+  rw [List.drop_length_append' rfl]
+  apply Bytes.sliceD_zero_length
+  change code.length = codeSize
+  exact constructorAppendedRuntime_length_exact.trans codeSize_exact.symm
 
 /-! ## Exact constructor source-site inventory -/
 

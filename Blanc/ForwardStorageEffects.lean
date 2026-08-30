@@ -303,15 +303,15 @@ def retargetStorageEffect (g : MVarId) (state : Expr) : MetaM MVarId := do
         #[fs, sevm, state, f, post, effects])
   | _ => return g
 
-/-- Exact-effect analogue of `funcWalk` for neutral prefixes.  It shares the
-instruction evaluator, hints, gas accounting, and resource profiling with
-`func_run`; an external instruction or SSTORE is deliberately handed back to
-the caller as the residual exact-effect goal. -/
-partial def storageEffectWalk (g : MVarId) : ForwardM Unit := g.withContext do
+/-- One iterative step of the exact-effect neutral walk.  Returning `some`
+names the unique selected successor; returning `none` hands the current
+residual goal back to the caller. -/
+private def storageEffectStep (g : MVarId) : ForwardM (Option MVarId) :=
+    g.withContext do
   if let some b := (← get).budget then
     if (← get).step ≥ b then
       modify fun c => { c with side := c.side.push g }
-      return
+      return none
   let t := (← instantiateMVars (← g.getType)).consumeMData
   match t.getAppFnArgs with
   | (``Blanc.Func.StorageEffectRun, #[fs, sevm, d, f, post, effects]) => do
@@ -330,7 +330,7 @@ partial def storageEffectWalk (g : MVarId) : ForwardM Unit := g.withContext do
         | _ => false
       if isExec || isSstore then
         modify fun c => { c with side := c.side.push g, step := c.step + 1 }
-        return
+        return none
       let gs ← applyLemma g ``Func.StorageEffectRun.next_effectNeutral
         [(0, fs), (1, sevm), (2, d), (4, instruction), (5, rest),
           (6, post), (7, effects)] [8, 9, 10, 11]
@@ -343,7 +343,7 @@ partial def storageEffectWalk (g : MVarId) : ForwardM Unit := g.withContext do
             (intro operation impossible; cases impossible))
           discharge notStore [neStore, neStore']
           discharge notExec [neExec]
-          storageEffectWalk tailGoal
+          return some tailGoal
       | _ =>
           throwError
             "storage_effect_run: `.next` left an unexpected obligation set"
@@ -367,8 +367,7 @@ partial def storageEffectWalk (g : MVarId) : ForwardM Unit := g.withContext do
             discharge stackGoal (← rflTacs)
             dischargeProfiled .room roomGoal (← roomTacs)
             dischargeProfiled .gas gasGoal (← gasTacs)
-            storageEffectWalk
-              (← retargetStorageEffect armGoal successor)
+            return some (← retargetStorageEffect armGoal successor)
         | _ =>
             throwError
               "storage_effect_run: `.zero` left an unexpected obligation set"
@@ -388,20 +387,31 @@ partial def storageEffectWalk (g : MVarId) : ForwardM Unit := g.withContext do
             discharge stackGoal (← rflTacs)
             dischargeProfiled .room roomGoal (← roomTacs)
             dischargeProfiled .gas gasGoal (← gasTacs)
-            storageEffectWalk
-              (← retargetStorageEffect armGoal successor)
+            return some (← retargetStorageEffect armGoal successor)
         | _ =>
             throwError
               "storage_effect_run: `.succ` left an unexpected obligation set"
     | (``Blanc.Func.call, #[_]) =>
         modify fun c => { c with side := c.side.push g, step := c.step + 1 }
+        return none
     | (``Blanc.Func.last, #[_]) =>
         modify fun c => { c with side := c.side.push g }
+        return none
     | _ =>
         throwError m!"storage_effect_run: cannot see the shape of{indentExpr f'}"
   | _ =>
       throwError
         "storage_effect_run: goal is not `Func.StorageEffectRun`"
+
+/-- Exact-effect analogue of `funcWalk` for neutral prefixes.  It shares the
+instruction evaluator, hints, gas accounting, and resource profiling with
+`func_run`; an external instruction or SSTORE is deliberately handed back to
+the caller as the residual exact-effect goal.  The selected walk is linear,
+so an explicit iterative cursor avoids a partial metaprogram definition. -/
+def storageEffectWalk (g : MVarId) : ForwardM Unit := do
+  let mut current := some g
+  while let some next := current do
+    current ← storageEffectStep next
 
 def storageEffectRunMain (hints : List Term) (budget : Option Nat := none) :
     TacticM Unit := do

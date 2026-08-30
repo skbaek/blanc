@@ -41,6 +41,61 @@ def constructorStorageEffectTriples
     let height := index + 1
     (owner, zeroHashSlot height, zeroHash Bytes.sha256 height)
 
+/-- Constructor chronology for `remaining` iterations, beginning immediately
+above `height`.  This recursion-facing form is extensionally the public
+source-order list at height zero. -/
+def constructorStorageEffectTriplesFrom
+    (owner : Adr) : Nat → Nat → List (Adr × B256 × B256)
+  | _, 0 => []
+  | height, remaining + 1 =>
+      (owner, zeroHashSlot (height + 1),
+          zeroHash Bytes.sha256 (height + 1)) ::
+        constructorStorageEffectTriplesFrom owner (height + 1) remaining
+
+@[simp] theorem constructorStorageEffectTriplesFrom_zero
+    (owner : Adr) (height : Nat) :
+    constructorStorageEffectTriplesFrom owner height 0 = [] :=
+  rfl
+
+@[simp] theorem constructorStorageEffectTriplesFrom_succ
+    (owner : Adr) (height remaining : Nat) :
+    constructorStorageEffectTriplesFrom owner height (remaining + 1) =
+      (owner, zeroHashSlot (height + 1),
+          zeroHash Bytes.sha256 (height + 1)) ::
+        constructorStorageEffectTriplesFrom owner (height + 1) remaining :=
+  rfl
+
+theorem constructorStorageEffectTriplesFrom_eq_range
+    (owner : Adr) (height remaining : Nat) :
+    constructorStorageEffectTriplesFrom owner height remaining =
+      (List.range remaining).map fun index =>
+        (owner, zeroHashSlot (height + index + 1),
+          zeroHash Bytes.sha256 (height + index + 1)) := by
+  induction remaining generalizing height with
+  | zero => rfl
+  | succ remaining ih =>
+      rw [constructorStorageEffectTriplesFrom_succ,
+        List.range_succ_eq_map, List.map_cons, ih]
+      apply congrArg₂ List.cons
+      · rw [show height + 0 + 1 = height + 1 by omega]
+      · rw [List.map_map]
+        apply List.map_congr_left
+        intro index _
+        simp only [Function.comp_apply]
+        rw [show height + 1 + index + 1 =
+          height + Nat.succ index + 1 by omega]
+
+/-- The recursion-facing chronology at the constructor's initial height is the
+same thirty-one-element vocabulary exported by `constructorStorageEffectTriples`. -/
+theorem constructorStorageEffectTriplesFrom_initial (owner : Adr) :
+    constructorStorageEffectTriplesFrom owner 0 31 =
+      constructorStorageEffectTriples owner := by
+  rw [constructorStorageEffectTriplesFrom_eq_range]
+  unfold constructorStorageEffectTriples
+  apply List.map_congr_left
+  intro index _
+  rw [show 0 + index + 1 = index + 1 by omega]
+
 theorem depositStorageEffectTriples_length
     (owner : Adr) (stor : Stor) (height : Nat) (depositDataRoot : B256) :
     (depositStorageEffectTriples owner stor height depositDataRoot).length = 2 :=
