@@ -20,6 +20,7 @@ namespace Blanc
 
 open Jaune
 open Jaune.Ninst Blanc.Ninst
+open scoped LogOutputHinv
 
 namespace ProxyPair
 
@@ -230,6 +231,8 @@ inductive ActiveAdminRoute
       (stack : storedAdminWord pre sevm.currentTarget :: tail <<+
         callPre.stack)
       (storage : Devm.getStor pre = Devm.getStor callPre)
+      (memory : pre.memory = callPre.memory)
+      (logs : pre.logs = callPre.logs)
   | authorized (bodyPre : Devm)
       (adminNonzero : storedAdminWord pre sevm.currentTarget ≠ 0)
       (adminEqCaller : storedAdminWord pre sevm.currentTarget =
@@ -237,6 +240,8 @@ inductive ActiveAdminRoute
       (bodyRun : Func.RunCompiledTo fs sevm bodyPre body out)
       (stack : tail <<+ bodyPre.stack)
       (storage : Devm.getStor pre = Devm.getStor bodyPre)
+      (memory : pre.memory = bodyPre.memory)
+      (logs : pre.logs = bodyPre.logs)
   | unauthorized (callPre : Devm)
       (adminNonzero : storedAdminWord pre sevm.currentTarget ≠ 0)
       (adminNeCaller : storedAdminWord pre sevm.currentTarget ≠
@@ -245,6 +250,8 @@ inductive ActiveAdminRoute
         (.call notAdminErrorSlot) out)
       (stack : tail <<+ callPre.stack)
       (storage : Devm.getStor pre = Devm.getStor callPre)
+      (memory : pre.memory = callPre.memory)
+      (logs : pre.logs = callPre.logs)
 
 /-- Exact, arbitrary-outcome inversion of the active-admin schedule. -/
 theorem activeAdminControl_route
@@ -257,6 +264,10 @@ theorem activeAdminControl_route
   obtain ⟨guardPre, guardLine, run⟩ := runCompiledTo_prepend_inv run
   have guardStor : Devm.getStor pre = Devm.getStor guardPre :=
     Line.of_inv Devm.getStor (by line_inv) guardLine
+  have guardMemory : pre.memory = guardPre.memory :=
+    Line.of_inv Devm.memory (by line_inv) guardLine
+  have guardLogs : pre.logs = guardPre.logs :=
+    Line.of_inv Devm.logs (by line_inv) guardLine
   obtain ⟨loadPost, headLine, cleanLine⟩ :=
     of_run_append [pushB256 adminSlotLit, sload] guardLine
   rcases Line.of_run_cons headLine with ⟨slotPost, qslot, headLine⟩
@@ -302,7 +313,19 @@ theorem activeAdminControl_route
           ((Ninst.Hinv.inv (f := Devm.getStor)
             (Ninst.Run.of_runCompiled qzero)).trans
             (funext (getStor_eq_of_state_eq hpop.state))))
-    exact .ossified callPre hzero callRun pCall callStor
+    have callMemory : pre.memory = callPre.memory :=
+      guardMemory.trans
+        ((Ninst.Hinv.inv (f := Devm.memory)
+          (Ninst.Run.of_runCompiled qdup)).trans
+          ((Ninst.Hinv.inv (f := Devm.memory)
+            (Ninst.Run.of_runCompiled qzero)).trans hpop.memory))
+    have callLogs : pre.logs = callPre.logs :=
+      guardLogs.trans
+        ((Ninst.Hinv.inv (f := Devm.logs)
+          (Ninst.Run.of_runCompiled qdup)).trans
+          ((Ninst.Hinv.inv (f := Devm.logs)
+            (Ninst.Run.of_runCompiled qzero)).trans hpop.logs))
+    exact .ossified callPre hzero callRun pCall callStor callMemory callLogs
   · have pZero : (0 : B256) ::
         storedAdminWord pre sevm.currentTarget :: tail <<+ testPre.stack := by
       simpa [B256.eqCheck, hzero] using pTest
@@ -326,6 +349,28 @@ theorem activeAdminControl_route
                 (Ninst.Run.of_runCompiled qcaller)).trans
                 (Ninst.Hinv.inv (f := Devm.getStor)
                   (Ninst.Run.of_runCompiled qeq))))))
+    have prefixMemory : pre.memory = callerTest.memory :=
+      guardMemory.trans
+        ((Ninst.Hinv.inv (f := Devm.memory)
+          (Ninst.Run.of_runCompiled qdup)).trans
+          ((Ninst.Hinv.inv (f := Devm.memory)
+            (Ninst.Run.of_runCompiled qzero)).trans
+            (houterPop.memory.trans
+              ((Ninst.Hinv.inv (f := Devm.memory)
+                (Ninst.Run.of_runCompiled qcaller)).trans
+                (Ninst.Hinv.inv (f := Devm.memory)
+                  (Ninst.Run.of_runCompiled qeq))))))
+    have prefixLogs : pre.logs = callerTest.logs :=
+      guardLogs.trans
+        ((Ninst.Hinv.inv (f := Devm.logs)
+          (Ninst.Run.of_runCompiled qdup)).trans
+          ((Ninst.Hinv.inv (f := Devm.logs)
+            (Ninst.Run.of_runCompiled qzero)).trans
+            (houterPop.logs.trans
+              ((Ninst.Hinv.inv (f := Devm.logs)
+                (Ninst.Run.of_runCompiled qcaller)).trans
+                (Ninst.Hinv.inv (f := Devm.logs)
+                  (Ninst.Run.of_runCompiled qeq))))))
     by_cases heq : storedAdminWord pre sevm.currentTarget =
         sevm.caller.toB256
     · have pOne : (1 : B256) :: tail <<+ callerTest.stack := by
@@ -335,12 +380,14 @@ theorem activeAdminControl_route
           (by decide : (1 : B256) ≠ 0) pOne callerBranch
       exact .authorized bodyPre hzero heq bodyRun pBody
         (prefixStor.trans (funext (getStor_eq_of_state_eq hpop.state)))
+        (prefixMemory.trans hpop.memory) (prefixLogs.trans hpop.logs)
     · have pZero : (0 : B256) :: tail <<+ callerTest.stack := by
         simpa [B256.eqCheck, Ne.symm heq] using pEq
       obtain ⟨callPre, hpop, callRun, pCall⟩ :=
         Func.RunCompiledTo.zero_branch_of_prefix pZero callerBranch
       exact .unauthorized callPre hzero heq callRun pCall
         (prefixStor.trans (funext (getStor_eq_of_state_eq hpop.state)))
+        (prefixMemory.trans hpop.memory) (prefixLogs.trans hpop.logs)
 
 /-- Once the stored admin is zero, the active-admin schedule can only reach
 the `ProxyIsOssified` boundary.  Caller equality is deliberately absent. -/
@@ -353,10 +400,10 @@ theorem ActiveAdminRoute.ossified_of_admin_zero
       Func.RunCompiledTo fs sevm callPre
         (.call proxyIsOssifiedErrorSlot) out := by
   cases route with
-  | ossified callPre _ callRun _ _ => exact ⟨callPre, callRun⟩
-  | authorized _ adminNonzero _ _ _ _ =>
+  | ossified callPre _ callRun _ _ _ _ => exact ⟨callPre, callRun⟩
+  | authorized _ adminNonzero _ _ _ _ _ _ =>
       exact (adminNonzero adminZero).elim
-  | unauthorized _ adminNonzero _ _ _ _ =>
+  | unauthorized _ adminNonzero _ _ _ _ _ _ =>
       exact (adminNonzero adminZero).elim
 
 /-- A live matching admin forces the protected body arm. -/
@@ -371,11 +418,11 @@ theorem ActiveAdminRoute.authorized_of_live_caller
       Func.RunCompiledTo fs sevm bodyPre body out ∧
       tail <<+ bodyPre.stack := by
   cases route with
-  | ossified _ adminZero _ _ _ =>
+  | ossified _ adminZero _ _ _ _ _ =>
       exact (adminNonzero adminZero).elim
-  | authorized bodyPre _ _ bodyRun stack _ =>
+  | authorized bodyPre _ _ bodyRun stack _ _ _ =>
       exact ⟨bodyPre, bodyRun, stack⟩
-  | unauthorized _ _ adminNeCaller _ _ _ =>
+  | unauthorized _ _ adminNeCaller _ _ _ _ _ =>
       exact (adminNeCaller adminEqCaller).elim
 
 /-- A live mismatching admin forces the `NotAdmin` boundary. -/
@@ -389,11 +436,11 @@ theorem ActiveAdminRoute.notAdmin_of_live_mismatch
     ∃ callPre,
       Func.RunCompiledTo fs sevm callPre (.call notAdminErrorSlot) out := by
   cases route with
-  | ossified _ adminZero _ _ _ =>
+  | ossified _ adminZero _ _ _ _ _ =>
       exact (adminNonzero adminZero).elim
-  | authorized _ _ adminEqCaller _ _ _ =>
+  | authorized _ _ adminEqCaller _ _ _ _ _ =>
       exact (adminNeCaller adminEqCaller).elim
-  | unauthorized callPre _ _ callRun _ _ => exact ⟨callPre, callRun⟩
+  | unauthorized callPre _ _ callRun _ _ _ _ => exact ⟨callPre, callRun⟩
 
 /-! ## Canonical static-address decoder -/
 
@@ -453,6 +500,83 @@ theorem decodeAddressArg0Control_body
       ((Line.of_inv Devm.getStor (by line_inv) addressLine).trans
         (funext (getStor_eq_of_state_eq haddressPop.state)))⟩
 
+/-! ## `upgradeToAndCall` proof-facing decoder and setup tail -/
+
+/-- Product-local names for the four scratch words used by the compiled
+`upgradeToAndCall` decoder.  These are proof coordinates, not common ABI
+vocabulary. -/
+def upgradeToAndCallImplementationWord : B256 := 0
+def upgradeToAndCallSetupLengthWord : B256 := 1
+def upgradeToAndCallForceWord : B256 := 2
+def upgradeToAndCallOffsetWord : B256 := 3
+
+/-- The decoded setup bytes begin immediately above the four scratch words. -/
+def upgradeToAndCallSetupMemoryBase : B256 := 0x80
+
+def upgradeToAndCallAbiMaxUint64 : B256 := 0xffffffffffffffff
+
+def loadUpgradeToAndCallWord (word : B256) : Line :=
+  [pushB256 (word * 32), mload]
+
+/-- Public proof vocabulary for the runtime's private `(address,bytes,bool)`
+decoder.  The definition is intentionally product-local and definitionally
+equal to the executable schedule. -/
+def decodeUpgradeToAndCallControl (body : Func) : Func :=
+  pushB256 100 ::: calldatasize ::: lt :::
+  ((.call emptyRevertSlot) <?>
+    (arg 0 +++ checkNonAddress +++
+     ((.call emptyRevertSlot) <?>
+       (arg 0 +++ mstoreAt upgradeToAndCallImplementationWord +++
+        pushB256 upgradeToAndCallAbiMaxUint64 ::: arg 1 +++ gt :::
+        ((.call emptyRevertSlot) <?>
+          (arg 1 +++ mstoreAt upgradeToAndCallOffsetWord +++
+           loadUpgradeToAndCallWord upgradeToAndCallOffsetWord +++
+             pushB256 36 ::: add ::: calldatasize ::: lt :::
+           ((.call emptyRevertSlot) <?>
+             (loadUpgradeToAndCallWord upgradeToAndCallOffsetWord +++
+                pushB256 4 ::: add ::: calldataload :::
+                mstoreAt upgradeToAndCallSetupLengthWord +++
+              pushB256 upgradeToAndCallAbiMaxUint64 :::
+                loadUpgradeToAndCallWord upgradeToAndCallSetupLengthWord +++
+                gt :::
+              ((.call allocationPanicSlot) <?>
+                (loadUpgradeToAndCallWord upgradeToAndCallOffsetWord +++
+                   pushB256 36 ::: add :::
+                 loadUpgradeToAndCallWord upgradeToAndCallSetupLengthWord +++
+                   add :::
+                 calldatasize ::: lt :::
+                 ((.call emptyRevertSlot) <?>
+                   (loadUpgradeToAndCallWord
+                        upgradeToAndCallSetupLengthWord +++
+                    loadUpgradeToAndCallWord upgradeToAndCallOffsetWord +++
+                      pushB256 36 ::: add :::
+                    pushB256 upgradeToAndCallSetupMemoryBase :::
+                      calldatacopy :::
+                    arg 2 +++ dup 0 ::: iszero ::: iszero ::: eq :::
+                    ((arg 2 +++ mstoreAt upgradeToAndCallForceWord +++ body) <?>
+                      (.call emptyRevertSlot))))))))))))))
+
+/-- The exact decoded setup call.  The output window is empty; child
+returndata is retained only in `returnData` for the following failure arm. -/
+def upgradeToAndCallDelegateSetup : Func :=
+  pushB256 0 :::
+  pushB256 0 :::
+  loadUpgradeToAndCallWord upgradeToAndCallSetupLengthWord +++
+  pushB256 upgradeToAndCallSetupMemoryBase :::
+  loadUpgradeToAndCallWord upgradeToAndCallImplementationWord +++
+  gas ::: delcall :::
+  (Func.stop <?>
+    (retdatasize :::
+      (Func.revReturnData <?> (.call emptyDelegatecallErrorSlot))))
+
+/-- The three setup branches: nonempty data calls unconditionally; empty data
+calls exactly when the decoded force word is nonzero. -/
+def upgradeToAndCallAfter : Func :=
+  loadUpgradeToAndCallWord upgradeToAndCallSetupLengthWord +++
+  (upgradeToAndCallDelegateSetup <?>
+    (loadUpgradeToAndCallWord upgradeToAndCallForceWord +++
+      (upgradeToAndCallDelegateSetup <?> Func.stop)))
+
 theorem proxyChangeAdminCalldata_length (newAdmin : Adr) :
     (proxyChangeAdminCalldata newAdmin).length = 36 := by
   simp [proxyChangeAdminCalldata, abiSelectorBytes_length,
@@ -484,6 +608,92 @@ theorem proxyUpgradeToCalldata_arg0
   · rw [abiSelectorBytes_length]
     rfl
   · simpa [proxyUpgradeToCalldata] using hdata
+
+theorem proxyUpgradeToAndCallCalldata_length
+    (newImplementation : Adr) (setupCalldata : Bytes) (forceCall : Bool) :
+    (proxyUpgradeToAndCallCalldata newImplementation setupCalldata forceCall).length =
+      132 + ceil32 setupCalldata.length := by
+  have hceil := Nat.le_ceil32 setupCalldata.length
+  simp [proxyUpgradeToAndCallCalldata, abiBytesTail,
+    abiSelectorBytes_length, B256.length_toBytes]
+  omega
+
+theorem proxyUpgradeToAndCallCalldata_arg0
+    {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
+    {forceCall : Bool}
+    (hdata : sevm.data = proxyUpgradeToAndCallCalldata
+      newImplementation setupCalldata forceCall) :
+    Sevm.argWord sevm 0 = newImplementation.toB256 := by
+  change Sevm.dataWord sevm 4 = newImplementation.toB256
+  apply dataWord_of_append
+    (pre := abiSelectorBytes proxyUpgradeToAndCallSelector)
+  · rw [abiSelectorBytes_length]
+    rfl
+  · simpa [proxyUpgradeToAndCallCalldata, List.append_assoc] using hdata
+
+theorem proxyUpgradeToAndCallCalldata_arg1
+    {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
+    {forceCall : Bool}
+    (hdata : sevm.data = proxyUpgradeToAndCallCalldata
+      newImplementation setupCalldata forceCall) :
+    Sevm.argWord sevm 1 = 96 := by
+  change Sevm.dataWord sevm 36 = (96 : B256)
+  apply dataWord_of_append
+    (pre := abiSelectorBytes proxyUpgradeToAndCallSelector ++
+      newImplementation.toB256.toBytes)
+  · simp [abiSelectorBytes_length, B256.length_toBytes]
+    decide +kernel
+  · simpa [proxyUpgradeToAndCallCalldata, List.append_assoc] using hdata
+
+theorem proxyUpgradeToAndCallCalldata_arg2
+    {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
+    {forceCall : Bool}
+    (hdata : sevm.data = proxyUpgradeToAndCallCalldata
+      newImplementation setupCalldata forceCall) :
+    Sevm.argWord sevm 2 = if forceCall then 1 else 0 := by
+  change Sevm.dataWord sevm 68 = (if forceCall then 1 else 0)
+  apply dataWord_of_append
+    (pre := abiSelectorBytes proxyUpgradeToAndCallSelector ++
+      newImplementation.toB256.toBytes ++ (96 : B256).toBytes)
+  · simp [abiSelectorBytes_length, B256.length_toBytes]
+    decide +kernel
+  · simpa [proxyUpgradeToAndCallCalldata, List.append_assoc] using hdata
+
+theorem proxyUpgradeToAndCallCalldata_setupLength
+    {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
+    {forceCall : Bool}
+    (hdata : sevm.data = proxyUpgradeToAndCallCalldata
+      newImplementation setupCalldata forceCall) :
+    Sevm.dataWord sevm 100 = Nat.toB256 setupCalldata.length := by
+  apply dataWord_of_append
+    (pre := abiSelectorBytes proxyUpgradeToAndCallSelector ++
+      newImplementation.toB256.toBytes ++ (96 : B256).toBytes ++
+      (if forceCall then (1 : B256) else 0).toBytes)
+  · simp [abiSelectorBytes_length, B256.length_toBytes]
+    decide +kernel
+  · simpa [proxyUpgradeToAndCallCalldata, abiBytesTail,
+      List.append_assoc] using hdata
+
+theorem proxyUpgradeToAndCallCalldata_setupSlice
+    {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
+    {forceCall : Bool}
+    (hdata : sevm.data = proxyUpgradeToAndCallCalldata
+      newImplementation setupCalldata forceCall) :
+    sevm.data.sliceD 132 setupCalldata.length 0 = setupCalldata := by
+  have hd : sevm.data =
+      (abiSelectorBytes proxyUpgradeToAndCallSelector ++
+        newImplementation.toB256.toBytes ++ (96 : B256).toBytes ++
+        (if forceCall then (1 : B256) else 0).toBytes ++
+        (Nat.toB256 setupCalldata.length).toBytes) ++
+      (setupCalldata ++
+        List.replicate (ceil32 setupCalldata.length - setupCalldata.length) 0) := by
+    simpa [proxyUpgradeToAndCallCalldata, abiBytesTail,
+      List.append_assoc] using hdata
+  rw [hd, List.sliceD,
+    List.drop_length_append' (by
+      simp [abiSelectorBytes_length, B256.length_toBytes]),
+    List.takeD_eq_take _ (by simp [List.length_append]),
+    List.take_length_append' rfl]
 
 /-! ## Exact source-shape locks used by route consumers -/
 
@@ -533,6 +743,12 @@ theorem changeAdmin_control_shape :
 theorem upgradeTo_control_shape :
     upgradeTo = decodeAddressArg0Control
       (activeAdminControl (upgradeImplementationControl Func.stop)) := by
+  rfl
+
+theorem upgradeToAndCall_control_shape :
+    upgradeToAndCall = decodeUpgradeToAndCallControl
+      (activeAdminControl
+        (upgradeImplementationControl upgradeToAndCallAfter)) := by
   rfl
 
 def ossifyMutation : Func :=

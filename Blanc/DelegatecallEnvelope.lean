@@ -190,6 +190,117 @@ structure DelegatedChildCertificate
     (out : MessageResult) : Type where
   trace : ExecutionTrace.ProcessMessageTrace msg out
 
+/-- Invert a successful compiled `DELEGATECALL` step into the exact retained
+child execution and the continuation equation that produced the parent post.
+The child outcome remains arbitrary: ordinary success and revert settlement
+are both represented by `MessageResult`. -/
+theorem DelegatecallSpawnDescriptor.certificate_of_runCompiled
+    {sevm : Sevm} {callPre post : Devm}
+    (d : DelegatecallSpawnDescriptor sevm callPre)
+    (run : Ninst.RunCompiled sevm callPre (.exec .delcall) post) :
+    ∃ childOut : MessageResult,
+      Nonempty (DelegatedChildCertificate d.child childOut) ∧
+        d.resume.run childOut = .ok post := by
+  rcases run with ⟨xl, hfilled, hstep⟩
+  have hx := hstep 0
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, d.step] at hx
+  rcases hx with ⟨childOut, hframe, hresume⟩
+  rcases ExecutionTrace.exists_retainedXlot_of_filled hfilled with
+    ⟨retained⟩
+  exact ⟨childOut, ⟨⟨⟨xl, retained, hframe⟩⟩⟩, hresume.symm⟩
+
+/-- A successful compiled `DELEGATECALL` step has necessarily resumed an
+ordinary settled child.  This boundary records the exact retained child and
+the parent observations needed by post-call branches, without choosing the
+child's success or failure arm. -/
+inductive DelegatecallSettledBoundary
+    {sevm : Sevm} {callPre : Devm}
+    (d : DelegatecallSpawnDescriptor sevm callPre)
+    (child post : Devm) : Prop
+  | intro (certificate : Nonempty
+        (DelegatedChildCertificate d.child (.ok child)))
+      (resume : d.resume.run (.ok child) = .ok post)
+      (returnData : post.returnData = child.output)
+      (stack : post.stack =
+        (if child.error.isSome then 0 else 1) :: d.parent.stack)
+      (state : post.state = child.state)
+      (transientStorage :
+        post.transientStorage = child.transientStorage)
+      (logs : post.logs =
+        if child.error.isSome then d.parent.logs
+        else d.parent.logs ++ child.logs)
+
+/-- Invert an actual successful compiled call step through Jaune's resume.
+The only extra premise is the parent's own status-word stack headroom. -/
+theorem DelegatecallSpawnDescriptor.settled_of_runCompiled
+    {sevm : Sevm} {callPre post : Devm}
+    (d : DelegatecallSpawnDescriptor sevm callPre)
+    (run : Ninst.RunCompiled sevm callPre (.exec .delcall) post)
+    (parentStackRoom : d.parent.stack.length < 1024) :
+    ∃ child, DelegatecallSettledBoundary d child post := by
+  rcases d.certificate_of_runCompiled run with
+    ⟨childOut, certificate, resume⟩
+  cases childOut with
+  | error failure =>
+      have impossible : False := Resume.call_run_error
+        (parent := d.parent)
+        (oi := d.outputOffsetWord.toNat)
+        (os := d.outputSizeWord.toNat)
+        (by simpa [DelegatecallSpawnDescriptor.resume] using resume)
+      exact impossible.elim
+  | ok child =>
+      cases status : child.error.isSome with
+      | false =>
+          have expected := Resume.run_call_ok
+            (parent := d.parent) (child := child)
+            (oi := d.outputOffsetWord.toNat)
+            (os := d.outputSizeWord.toNat)
+            status parentStackRoom
+          have expected' : d.resume.run (.ok child) =
+              .ok (((incorporateChildOnSuccess d.parent child child.output).setMach
+                ⟨1 :: d.parent.stack, d.parent.memory,
+                  d.parent.gasLeft + child.gasLeft⟩).memWrite
+                    d.outputOffsetWord.toNat
+                    (child.output.take d.outputSizeWord.toNat)) := by
+            simpa [DelegatecallSpawnDescriptor.resume] using expected
+          have postEq := Except.ok.inj (expected'.symm.trans resume)
+          refine ⟨child, .intro certificate resume ?_ ?_ ?_ ?_ ?_⟩
+          · rw [← postEq]
+            rfl
+          · rw [← postEq, status]
+            rfl
+          · rw [← postEq]
+            rfl
+          · rw [← postEq]
+            rfl
+          · rw [← postEq, status]
+            rfl
+      | true =>
+          have expected := Resume.run_call_err
+            (parent := d.parent) (child := child)
+            (oi := d.outputOffsetWord.toNat)
+            (os := d.outputSizeWord.toNat)
+            status parentStackRoom
+          have expected' : d.resume.run (.ok child) =
+              .ok (((incorporateChildOnError d.parent child child.output).setMach
+                ⟨0 :: d.parent.stack, d.parent.memory,
+                  d.parent.gasLeft + child.gasLeft⟩).memWrite
+                    d.outputOffsetWord.toNat
+                    (child.output.take d.outputSizeWord.toNat)) := by
+            simpa [DelegatecallSpawnDescriptor.resume] using expected
+          have postEq := Except.ok.inj (expected'.symm.trans resume)
+          refine ⟨child, .intro certificate resume ?_ ?_ ?_ ?_ ?_⟩
+          · rw [← postEq]
+            rfl
+          · rw [← postEq, status]
+            rfl
+          · rw [← postEq]
+            rfl
+          · rw [← postEq]
+            rfl
+          · rw [← postEq, status]
+            rfl
+
 theorem DelegatedChildCertificate.process
     {msg : Msg}
     {out : MessageResult}
@@ -205,6 +316,18 @@ theorem DelegatedChildCertificate.result
     (certificate : DelegatedChildCertificate msg out) :
     processMessage msg = out :=
   certificate.trace.result
+
+/-- A retained settled child with its error flag set has the exact child-entry
+world restored.  This is the reusable child-side half of atomic call failure;
+the caller's own message settlement remains a separate outer-frame fact. -/
+theorem DelegatedChildCertificate.rollback_of_error
+    {msg : Msg} {child : Devm}
+    (certificate : DelegatedChildCertificate msg (.ok child))
+    (failed : child.error.isSome = true) :
+    child.state = msg.benv.state ∧
+      child.transientStorage = msg.tenv.transientStorage := by
+  apply ProcessMessage.rollback_of_error certificate.process
+  rw [failed]
 
 /-- A genuine direct target execution message.  The implementation owns its
 storage and receives value through the ordinary transfer-enabled entry path;

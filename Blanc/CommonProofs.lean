@@ -6154,6 +6154,7 @@ macro_rules
 
 instance : Rinst.Hinv Devm.state Rinst.calldatasize := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.calldataload := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.calldatacopy := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.lt := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.gt := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.add := by show_hinv_state
@@ -10608,6 +10609,28 @@ lemma of_run_mstoreAt_val {e : Sevm} {s s' : Devm} {k x xs}
   rcases prefix_of_mstore_val qm (prefix_of_push hpb hp) with ⟨hs, hm⟩
   exact ⟨hs, by rw [hm, ← hpb.memory]⟩
 
+/-- A fixed-word `MSTORE` step with the proof-carrying memory image advanced
+in lockstep.  This is the shared scratch-decoder wrapper around
+`of_run_mstoreAt_val`, `Mem.Wf.write`, and `Mem.Reads.write`. -/
+theorem of_run_mstoreAt_image
+    {e : Sevm} {pre post : Devm} {word value : B256}
+    {tail : Stack} {image : Bytes}
+    (hp : value :: tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (run : Line.Run e pre (mstoreAt word) post) :
+    tail <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory
+        (Bytes.writeAt image (word * 32).toNat value.toBytes) ∧
+      pre.state = post.state := by
+  obtain ⟨stack, memory⟩ := of_run_mstoreAt_val run hp
+  refine ⟨stack, ?_, ?_, Line.of_inv Devm.state (by line_inv) run⟩
+  · rw [memory]
+    exact hwf.write _ _
+  · rw [memory]
+    exact Mem.Reads.write hwf hreads _ _
+
 /-- `CALLDATACOPY` at a *known* stack top: the value-carrying companion of
 `prefix_of_calldatacopy`, with the three popped operands pinned to the words the
 walk already knows are there. -/
@@ -11029,6 +11052,43 @@ lemma prefix_of_mload_val {e} {x : B256} {xs bs} {s s' : Devm}
   subst hx
   rw [Mem.Reads.read hr x.toNat 32] at h3
   exact ⟨append_pref h3 (of_append_pref h2 h1), hm, hrd⟩
+
+/-- Load one fixed scratch word against a proof-carrying memory image.  The
+caller supplies the image equation for that word; the line preserves the image
+and state while pushing the named value. -/
+theorem of_run_loadWordAt_image
+    {e : Sevm} {pre post : Devm} {word value : B256}
+    {tail : Stack} {image : Bytes}
+    (hp : tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (hvalue : Bytes.toB256
+      (image.sliceD (word * 32).toNat 32 0) = value)
+    (run : Line.Run e pre [pushB256 (word * 32), mload] post) :
+    value :: tail <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory image ∧
+      pre.state = post.state := by
+  rcases Line.of_run_cons run with ⟨afterPush, pushRun, run⟩
+  rcases Line.of_run_cons run with ⟨_, loadRun, hnil⟩
+  cases hnil
+  have pushed := of_run_pushB256 pushRun
+  have pPush := prefix_of_push pushed hp
+  have pushWf : Mem.Wf afterPush.memory := by
+    rw [← pushed.memory]
+    exact hwf
+  have pushReads : Mem.Reads afterPush.memory image := by
+    rw [← pushed.memory]
+    exact hreads
+  obtain ⟨loaded, memory, _⟩ :=
+    prefix_of_mload_val loadRun pPush pushReads
+  refine ⟨?_, ?_, ?_, Line.of_inv Devm.state (by line_inv)
+    (Line.Run.cons pushRun (Line.Run.cons loadRun Line.Run.nil))⟩
+  · simpa [hvalue] using loaded
+  · rw [memory]
+    exact pushWf.extend _ _
+  · rw [memory]
+    exact pushReads.extend _ _
 
 /-- `retdataShorterThan n`, with its flag: the fragment pushes exactly the
 comparison `retdatasize <? n` and touches nothing else. -/

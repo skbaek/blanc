@@ -141,7 +141,18 @@ equations; its `parent`, `child`, and `resume` are the actual Jaune constructors
 entered child frame.  A
 `DelegatedChildCertificate` retains the recursive child trace without assuming
 an outer result; `.process` recovers its relational `ProcessMessage` witness and
-`.result` recovers the exact total `processMessage` equation.  Keep direct-call
+`.result` recovers the exact total `processMessage` equation.  When the proof
+starts from an already-successful compiled `DELEGATECALL` step,
+`DelegatecallSpawnDescriptor.certificate_of_runCompiled` inverts that step into
+the arbitrary retained child outcome and the exact resume equation instead of
+requiring the consumer to reconstruct the recursive slot.  For a compiled step
+that has already settled back into an ordinary parent state,
+`DelegatecallSpawnDescriptor.settled_of_runCompiled` packages the retained
+child as a `DelegatecallSettledBoundary`, including the exact returndata,
+status-word stack, state, transient-storage, and log equations.  On its failure
+arm, `DelegatedChildCertificate.rollback_of_error` recovers the child-entry
+state and transient storage before the caller classifies or bubbles the payload.
+Keep direct-call
 comparison separate through
 `DirectToDelegatedContext` and the implementation-specific
 `DirectTargetTransport`; this interface explicitly exposes gas, depth, access,
@@ -474,6 +485,9 @@ shared declarations rather than restating them per family.
   lemmas live in [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean).
 - `Func.runCompiledTo_mstore_step` and other compiled memory steps live in the
   forward construction modules.
+- For scratch decoders that carry a proof image, use
+  `of_run_mstoreAt_image` and `of_run_loadWordAt_image` to advance the stack,
+  `Mem.Wf`, `Mem.Reads`, and the state equation together.
 
 A scratch-word walk that writes several fixed slots and reads them back needs
 both disjointness halves: `Bytes.sliceD_writeAt` reads exactly what was just
