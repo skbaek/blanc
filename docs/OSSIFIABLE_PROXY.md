@@ -64,7 +64,8 @@ The main proof owners are:
   [`Blanc/ProxyPairOssifiableUpgradeToAndCall.lean`](../Blanc/ProxyPairOssifiableUpgradeToAndCall.lean),
   which cover all seven named entries, compiler nonpayability, authorization
   precedence, exact errors/logs, packed slot effects, setup settlement,
-  rollback, and irreversible ossification; and
+  rollback, and ossification irreversible through the administrative control
+  entries; and
 - the `ProxyPairOssifiableConstructor*`,
   [`Blanc/ProxyPairOssifiableBothSlotCreate.lean`](../Blanc/ProxyPairOssifiableBothSlotCreate.lean),
   and
@@ -94,8 +95,11 @@ The optimized candidate executes all 85 rows in fresh pinned EELS Prague
 worlds with 85/85 semantic agreements and zero skipped rows. Seven independent
 falsifier families exercise reference substitution, selector routing,
 event/error bytes, state projection, rollback, child-call observation, and
-corpus/result mutation. This is finite agreement on the published inputs, not
-universal equivalence or verification of the deployed Solidity artifact.
+corpus/result mutation. The ordered child-call projection freezes caller, code
+address, input, storage owner, value, and outcome, but does not compare child
+gas. This is finite agreement on the published inputs, not universal
+equivalence, a same-budget claim for GAS-sensitive children, or verification of
+the deployed Solidity artifact.
 
 ## Efficiency evidence
 
@@ -140,9 +144,13 @@ The BPO2 replay does not alter or double-count the primary Prague score.
 
 [`OSSIFIABLE_PROXY_DEVIATIONS.md`](../OSSIFIABLE_PROXY_DEVIATIONS.md) records
 the constructor memory schedule, redundant Solidity implementation-code check,
-discarded successful setup returndata, and intrinsic direct/delegated context
-delta. No ordinary-behavior deviation is accepted or known. Any later mismatch
-must be repaired or dispositioned there before the claim can move.
+discarded successful setup returndata, intrinsic direct/delegated context
+delta, and the reference-versus-Blanc forwarded-child gas difference. That
+last difference can change an arbitrary GAS-sensitive implementation or setup
+child's behavior and is the one accepted known ordinary-behavior deviation;
+the 85 fixed rows agree on their published gas-excluding projection. No other
+ordinary-behavior deviation is accepted or known. Any later mismatch must be
+repaired or dispositioned there before the claim can move.
 
 The exact completion-candidate identity, immutable result digests,
 independent-review verdicts, ordered gate verdicts, and downstream composition

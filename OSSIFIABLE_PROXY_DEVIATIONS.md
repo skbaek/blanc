@@ -10,19 +10,31 @@ The registry is intentionally non-exhaustive. Newly discovered observable
 differences must be repaired or added here with a disposition; they may not be
 silently excluded from the port claim.
 
-## True ordinary-behavior deviations
+## Known ordinary-behavior deviation
 
-None are accepted or currently known. Blanc is intended to agree on the full
-ordinary-call and direct-CREATE surface frozen in
-`OSSIFIABLE_PROXY_COMPATIBILITY.md`, including malformed ABI boundaries,
+One observable deviation is accepted and declared. Blanc's cheaper wrapper and
+setup schedules can leave a different amount of gas at the `GAS` immediately
+before `DELEGATECALL`, so EIP-150 can give the delegated child a different gas
+budget than the Solidity reference. A GAS-sensitive implementation or setup
+child can therefore choose a different status, output, log, or storage effect
+even when both outer calls have otherwise adequate gas. G-5 records the priced
+project stance; it is distinct from G-4's direct-target-versus-delegated-child
+transport boundary.
+
+Apart from G-5, no ordinary-behavior deviation is accepted or currently known.
+Blanc is intended to agree on the ordinary-call and direct-CREATE surface frozen
+in `OSSIFIABLE_PROXY_COMPATIBILITY.md`, including malformed ABI boundaries,
 functional ERC-1967 slot words, authorization precedence, setup rollback,
 event and error bytes, fallback/receive routing, and complete delegated
-returndata.
+returndata, subject to the exact evidence boundary below.
 
 This is not a universal-equivalence claim. The committed 85-case corpus has
 executed with 85/85 semantic agreements and zero skipped rows at the optimized
-Blanc checkpoint. That finite agreement is evidence on the published inputs;
-it is not proof or verification of the deployed Solidity artifact.
+Blanc checkpoint. Those rows agree on their published projection; the ordered
+child-call projection does not compare child gas. That finite agreement is
+evidence on the published inputs, not proof or verification of the deployed
+Solidity artifact and not evidence that an arbitrary GAS-sensitive child sees
+the same budget.
 
 ## Accepted low-level implementation differences
 
@@ -44,11 +56,14 @@ artifacts. It does not reproduce or verify the deployed Solidity bytecode.
 Both ERC-1967 storage words are excluded from these freedoms: they are a
 functional interoperability surface and are matched exactly.
 
-## Known gas and exceptional-boundary differences
+## Known gas, exceptional-boundary, and child-budget differences
 
 These rows are observable through gas, out-of-gas boundaries, warm-set state,
-or transaction receipts. They do not authorize a different successful or
-ordinary reverting result when both candidates have adequate gas.
+transaction receipts, or delegated-child behavior. G-1 through G-3 do not by
+themselves authorize a different successful or ordinary reverting result for
+the fixed compared child under adequate gas. G-5 is the explicit exception:
+an arbitrary GAS-sensitive child may behave differently because its forwarded
+budget may differ.
 
 | ID | Reference behavior | Blanc behavior | Observable consequence | Stance | Evidence |
 |---|---|---|---|---|---|
@@ -56,6 +71,7 @@ ordinary reverting result when both candidates have adequate gas.
 | G-2 | OpenZeppelin's upgrade-with-call path checks that the new implementation has code when storing it and performs a second contract check in the inherited low-level delegatecall helper. | Blanc performs the semantically effective pre-write code check once and then delegates to the same resolved implementation without the redundant second check. | Successful and no-code branches use different gas and address-warming schedules; an OOG boundary can differ. No intervening external execution can remove code between the two reference checks. | Measured semantic-preserving implementation choice. All applicable differential rows agree; C5–C8, N4, and N5 are strict Blanc wins in the frozen matrix. | `Blanc/ProxyPairOssifiableProgram.lean`; U01–U07 and X01–X20; the frozen 25-cell matrix. |
 | G-3 | The inherited Solidity helper materializes successful setup returndata before the constructor later discards it. | Blanc discards successful setup returndata directly after the child reports success. Revert data is still copied and either bubbled exactly or replaced by the inherited empty-data reason. | Successful nonempty setup has a different returndata-copy/memory cost and can cross a different OOG boundary; final installed state, logs, and runtime are unchanged with adequate gas. | Measured semantic-preserving implementation choice. Setup success/failure and rollback rows agree; A4, C7, C8, and N5 are strict Blanc wins. | `Blanc/ProxyPairOssifiableProgram.lean`; K02–K05 and X01–X11; the frozen 25-cell matrix. |
 | G-4 | A direct call to the implementation and the proxy's delegated child enter with different gas, depth, access sets, transfer flag, code address, current target, and storage owner. | Blanc states those differences explicitly and does not assert whole-message direct/delegated equivalence for arbitrary code. | GAS-, depth-, access-, transfer-, code-address-, or storage-owner-sensitive implementation properties require a separate transport proof; some direct and proxied executions can intentionally differ. | Boundary clarification, not a port deviation: this is intrinsic to proxy delegation and is exposed rather than normalized away. | `Blanc/DelegatecallEnvelope.lean`; `Blanc/ProxyPairOssifiableForwarding.lean`. |
+| G-5 | The Solidity proxy executes its own compiler-generated dispatch, checks, decoding, memory, and returndata schedule before reading `GAS` for fallback/receive or constructor/runtime setup `DELEGATECALL`. | Blanc executes its shorter compiled schedule before the corresponding `GAS`; in particular, it omits the redundant second implementation-code check and can discard successful setup returndata earlier. | The EIP-150 child budget can differ. A GAS-sensitive delegated implementation or setup child can branch differently and thereby change status, output, logs, or proxy-owned storage even when both outer calls have ample gas. The fixed 85 rows agree on their declared projection but do not compare child gas. | Accepted priced consequence of the measured smaller/cheaper implementation. Deployers whose implementation behavior depends on exact `gasleft()` must discharge a budget-sensitive compatibility argument or choose a fixed-gas wrapper; no cross-artifact universal equivalence is claimed. | `Blanc/ProxyPairProgram.lean`; `Blanc/ProxyPairOssifiableProgram.lean`; `Blanc/ProxyPairOssifiableForwarding.lean`; F00–F16, K02–K05, X01–X11; the frozen 25-cell matrix. |
 
 The frozen 25-cell campaign reports 25 strict Blanc wins and no ties, losses,
 or incomparables after the planned address-mask optimization. Every cell's
@@ -76,8 +92,9 @@ The completed claim will not include:
 - an arbitrary-block deployment root, the historical CREATE address derivation,
   current mainnet admin/implementation state, or transaction propagation;
 - delegatecall-as-library use of the proxy runtime, CREATE2/factory deployment,
-  UUPS/beacon/transparent-proxy behavior, or any selector outside the frozen
-  seven-entry surface; or
+  UUPS/beacon/transparent-proxy behavior, or additional named proxy/control
+  selectors outside the frozen seven-entry surface; unmatched selectors and
+  0–3-byte calldata remain covered by fallback; or
 - a later Lido target composition, upgrade relation, migration theorem, or
   one-proxy-many-implementations arrangement.
 

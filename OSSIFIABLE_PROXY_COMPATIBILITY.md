@@ -109,7 +109,7 @@ candidate and immutable-result identities live in the Plans completion report.
 |---|---|---|
 | Selector / dispatch key | `empty calldata` | `runtimeSelectors_miss_of_data_nil`; F00, F05 |
 | State mutability | `payable` | `processMessage_forwardingEnvelope`; F00, F05 |
-| Nonzero call value | accepted | delegated child preserves proxy-context value and ETH transfer; F05 |
+| Nonzero call value | accepted | the caller-to-proxy message transfers ETH; the delegated child inherits `msg.value` without a second transfer; F05 |
 | Classification | functional interface | the same complete forwarding settlement as fallback; F00, F05 |
 
 ## Cross-cutting behavior
