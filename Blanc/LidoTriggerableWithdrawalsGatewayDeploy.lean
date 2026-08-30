@@ -170,10 +170,8 @@ private def provisionalConstructorPrefix : Bytes :=
 
 /-- Exact source program compiled into the creation prefix. -/
 def lidoTwgConstructorProgram : Prog :=
-  let prefixLength := provisionalConstructorPrefix.length
-  constructorProgram prefixLength
-    (prefixLength + runtimeTemplateCode.length)
-    runtimeTemplateCode.length
+  CreationArtifact.finalizedConstructorProgram constructorProgram
+    provisionalConstructorPrefix runtimeTemplateCode
 
 def lidoTwgInitPrefix : Bytes :=
   (Prog.compile lidoTwgConstructorProgram).getD []

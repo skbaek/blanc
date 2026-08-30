@@ -643,6 +643,10 @@ Use [`Blanc/CreationArtifact.lean`](../Blanc/CreationArtifact.lean):
   `CreationArtifact.immutableWordOffsetsValid` derive and fail-closed validate
   complete fixed-width immutable words.
 - `CreationArtifact.patchWord` applies one validated 32-byte patch.
+- `CreationArtifact.finalizedConstructorProgram` closes a family-owned
+  layout-parametric constructor over its compiled provisional prefix and
+  parameter-neutral runtime template without restating the shared coordinate
+  calculation in each contract namespace.
 
 Contract families still own their marker worlds and the interpretation of
 each generated span.  These declarations are executable byte/layout

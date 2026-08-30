@@ -54,5 +54,16 @@ identity. -/
 def patchWord (code : Bytes) (offset : Nat) (value : B256) : Bytes :=
   code.take offset ++ value.toBytes ++ code.drop (offset + 32)
 
+/-- Close a layout-parametric constructor program over the compiled
+provisional prefix and the parameter-neutral runtime template.  Contract
+families own the constructor body and artifacts; this helper owns only the
+shared coordinate calculation. -/
+def finalizedConstructorProgram
+    (constructorProgram : Nat → Nat → Nat → Prog)
+    (provisionalPrefix runtimeTemplate : Bytes) : Prog :=
+  let prefixLength := provisionalPrefix.length
+  constructorProgram prefixLength
+    (prefixLength + runtimeTemplate.length) runtimeTemplate.length
+
 end CreationArtifact
 end Blanc

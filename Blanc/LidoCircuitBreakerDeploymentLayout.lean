@@ -15,6 +15,7 @@ open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
 
+open CreationArtifact
 open DeploymentProof
 
 /-! ## Stable reduction interface for the private constructor
