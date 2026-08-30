@@ -67,6 +67,21 @@ OK	6.143	Blanc/CommonProofs.lean
 OK	1.717	Blanc/Compiled.lean
 OK	1.212	Blanc/CompiledWalkInversion.lean
 OK	2.076	Blanc/Conserved.lean
+# 2026-08-30 lido-twg-port-v1 Phase-B additions-only admission, measured by
+# `scripts/check-elab.sh --calibrate` at candidate commit
+# a0e04e7a69558b8744ced81ea4a3defdfc478d36 (seed sha256
+# d83c3c1f1088b2da79acb0b73191ebb78903e40db2cef736a8ce4ce73db22802;
+# baseline sha256 96422fa749cc79cf9ef8a5526a0358e9093641f55536f6f4f7baa828f094785e;
+# source-set sha256
+# 8c0ed205a20367bbe4dfb6f633e63b0c0b2220f020656c403cae071f95dd2819).
+# The prerequisite bare pass measured 214 affected modules in 942.8 s and
+# proved 15 unaffected; its only red rows were these three missing additions.
+# Calibration measured the three mandatory rows plus 12 commit-seeded controls
+# in 112.6 s. Controls ranged 0.90x-1.07x (median 1.039), with none at the
+# 1.50x annotation threshold. Quiet-host samples remained healthy (84% to 82%
+# free, swap 1624.94 MiB to 1608.94 MiB, no Lean process). No existing row is
+# touched.
+OK	1.392	Blanc/CreationArtifact.lean
 OK	1.248	Blanc/CycleWriteFree.lean
 OK	1.136	Blanc/DeploymentCompiled.lean
 OK	1.205	Blanc/DeploymentMessage.lean
@@ -197,7 +212,9 @@ OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
 OK	7.373	Blanc/LidoTriggerableWithdrawalsGateway.lean
 OK	1.181	Blanc/LidoTriggerableWithdrawalsGatewayA2.lean
 OK	1.258	Blanc/LidoTriggerableWithdrawalsGatewayAuthorization.lean
+OK	1.194	Blanc/LidoTriggerableWithdrawalsGatewayCode.lean
 OK	5.393	Blanc/LidoTriggerableWithdrawalsGatewayCore.lean
+OK	1.239	Blanc/LidoTriggerableWithdrawalsGatewayDeploy.lean
 OK	1.192	Blanc/LidoTriggerableWithdrawalsGatewayIsPaused.lean
 OK	1.283	Blanc/LidoTriggerableWithdrawalsGatewayPauseFor.lean
 OK	1.145	Blanc/LidoTriggerableWithdrawalsGatewayPauseQuery.lean
