@@ -56,6 +56,8 @@ jobs:
         run: scripts/check-lido-ossifiable-proxy-reference.sh
       - name: Lido OssifiableProxy performance contract (static)
         run: scripts/check-lido-ossifiable-proxy-performance.sh
+      - name: Lido OssifiableProxy generated artifacts (offline)
+        run: scripts/check-lido-ossifiable-proxy-artifacts.sh
       # The Lido dispatcher and both differential matrices remain mandatory
       # local candidate gates. The narrowly provisioned EELS checkout below is
       # owned by the deployment-root singleton replay only.
