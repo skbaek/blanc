@@ -240,6 +240,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/ForwardStorageEffects.lean`, `declaration:Blanc.Ninst.storageEffectTriple?`, `declaration:Blanc.Func.RunCompiledTo.StorageEffectPath`, `declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.next_of_not_exec`, `declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath`, `declaration:Blanc.Func.StorageEffectRun`, `declaration:Blanc.Func.StorageEffectRun.of_noRawSstorePath`, `declaration:Blanc.Func.StorageEffectRun.last`, `declaration:Blanc.Func.StorageEffectRun.next`, `declaration:Blanc.Func.StorageEffectRun.next_effectNeutral`, `declaration:Blanc.Func.StorageEffectRun.zero`, `declaration:Blanc.Func.StorageEffectRun.succ`, `declaration:Blanc.Func.StorageEffectRun.call`, `declaration:Blanc.Func.storageEffectRun_branch_zero`, `declaration:Blanc.Func.storageEffectRun_branch_succ`, `declaration:Blanc.Func.SuccessStopOnly`, `declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix`, `declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree`, `declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix.splice`, `declaration:Blanc.Prog.exists_exec_retainedStorageEffectTriples`, `declaration:Blanc.Prog.exists_exec_retainedStorageEffectTriples_appended`, `declaration:Blanc.Exec.retainedStorageEffectTriples_cont`, `declaration:Blanc.Exec.retainedStorageEffectTriples_doneOk`, `declaration:Blanc.Exec.retainedStorageEffectTriples_halt`
 - Review: `proof-infrastructure` on `2026-08-30`
 
+## `accepted-boolean-settlement`
+
+- Status: `active`
+- Triggers: `goal-shape:accepted-bool-word`
+- Preferred path: For a clean full-word ABI output, use `acceptedBoolWord_iff_of_output` instead of repeating the slice/read normalization. Remove a successful execution wrapper with `acceptedBoolExecution_ok_iff`, and specialize rejected-answer executions with `boolQueryExecutionFailure_ok_iff`.
+- Boundary: These adapters identify one already-clean 32-byte boolean observation. They do not prove message settlement, output production, or that the returned word is canonical zero or one.
+- Owner module: [Blanc/PinnedPauseTarget.lean](../Blanc/PinnedPauseTarget.lean)
+- Canonical example: [Blanc/PinnedPauseTarget.lean](../Blanc/PinnedPauseTarget.lean) — `acceptedBoolWord_iff_of_output`
+- Registered symbols: `module:Blanc/PinnedPauseTarget.lean`, `declaration:acceptedBoolWord_iff_of_output`, `declaration:acceptedBoolExecution_ok_iff`, `declaration:boolQueryExecutionFailure_ok_iff`
+- Review: `proof-infrastructure` on `2026-08-30`
+
 ## `devm-common-update-laws`
 
 - Status: `active`

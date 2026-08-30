@@ -458,30 +458,6 @@ private lemma of_returnWord
       (B256.length_toBytes word).symm,
     Bytes.sliceD_writeAt]
 
-private lemma acceptedBoolWord_iff
-    {post : Devm} {word result : B256}
-    (errorClean : post.error = none)
-    (outputEq : post.output = word.toBytes) :
-    AcceptedBoolWord post result ↔ word = result := by
-  have sliceEq : word.toBytes.sliceD 0 word.toBytes.length 0 =
-      word.toBytes := by
-    simpa [Bytes.writeAt] using
-      (Bytes.sliceD_writeAt ([] : Bytes) word.toBytes 0)
-  have headEq : Bytes.toB256 (post.output.sliceD 0 32 0) = word := by
-    rw [outputEq,
-      show (32 : Nat) = word.toBytes.length from
-        (B256.length_toBytes word).symm,
-      sliceEq, B256.toB256_toBytes]
-  constructor
-  · intro accepted
-    exact headEq.symm.trans accepted.2.2
-  · intro wordEq
-    refine ⟨?_, ?_, ?_⟩
-    · rw [errorClean]
-      rfl
-    · rw [outputEq, B256.length_toBytes]
-    · exact headEq.trans wordEq
-
 /-- The compiled control's static query returns canonical true exactly for a
 paused entry state and canonical false otherwise. -/
 theorem stub_isPaused_truthful
@@ -603,7 +579,7 @@ theorem stub_isPaused_truthful
         AcceptedBoolWord post result ↔
           (sevm.benvStat.time <?
             pausedUntil target (pre.state.getStor target)) = result :=
-      acceptedBoolWord_iff (result := result) postClean outputEq
+      acceptedBoolWord_iff_of_output (result := result) postClean outputEq
     have wordOneIff :
         (sevm.benvStat.time <?
           pausedUntil target (pre.state.getStor target)) = 1 ↔
@@ -1726,7 +1702,7 @@ theorem wrongBool_paused_query_execution (w : WrongBoolFixture) :
     rw [w.settle] at runFrame
     exact runFrame
   have notAccepted : ¬ AcceptedBoolWord w.child 1 := by
-    rw [acceptedBoolWord_iff (word := (2 : B256))
+    rw [acceptedBoolWord_iff_of_output (word := (2 : B256))
       (result := (1 : B256)) w.clean w.output]
     decide
   have settledClean : w.child.error.isSome = false := by
@@ -1760,10 +1736,10 @@ theorem wrongBoolReturnShape_falsifier :
       ((default : Devm).withOutput ((2 : B256).toBytes)) := by
   unfold BoolQueryFailure
   constructor
-  · rw [acceptedBoolWord_iff (word := (2 : B256))
+  · rw [acceptedBoolWord_iff_of_output (word := (2 : B256))
       (result := (0 : B256)) (by rfl) (by rfl)]
     decide
-  · rw [acceptedBoolWord_iff (word := (2 : B256))
+  · rw [acceptedBoolWord_iff_of_output (word := (2 : B256))
       (result := (1 : B256)) (by rfl) (by rfl)]
     decide
 

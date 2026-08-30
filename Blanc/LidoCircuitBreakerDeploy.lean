@@ -184,10 +184,8 @@ abbrev DeploymentProof.provisionalConstructorPrefixForProof : Bytes :=
 this source owner public lets inventory gates count its actual syntax rather
 than trusting a parallel hand-authored list. -/
 def lidoCircuitBreakerConstructorProgram : Prog :=
-  let prefixLength := provisionalConstructorPrefix.length
-  constructorProgram prefixLength
-    (prefixLength + runtimeTemplateCode.length)
-    runtimeTemplateCode.length
+  CreationArtifact.finalizedConstructorProgram constructorProgram
+    provisionalConstructorPrefix runtimeTemplateCode
 
 /-- Constructor instructions.  Layout-dependent coordinates use PUSH2 while
 they fit; the exact full-width fallback prevents silent truncation if a future
@@ -453,7 +451,8 @@ theorem constructor_program_site_counts_exact :
   unfold constructorProgramSiteCounts
   rw [← constructorProgramEffectCounts_eq]
   simp [constructorProgramEffectCounts,
-    lidoCircuitBreakerConstructorProgram, constructorProgram,
+    lidoCircuitBreakerConstructorProgram,
+    CreationArtifact.finalizedConstructorProgram, constructorProgram,
     constructorBody, constructorEventScratch,
     loadArgumentIndex, storeByteOffset,
     constructorError, constructorFuncEffectCounts,

@@ -132,7 +132,7 @@ private theorem pauseForGuard_effect
       sevm pre
         (([Ninst.pushB256 resumeSinceSlot, Ninst.sload, Ninst.timestamp,
           Ninst.lt, Ninst.iszero]) +++
-          (pauseForUnpaused <?> .call pausedExpectedSlot)) (.ok post)) :
+          (pauseForUnpaused <?> .call resumedExpectedSlot)) (.ok post)) :
     post.getStorVal sevm.currentTarget resumeSinceSlot =
       Blanc.pauseForProjection sevm.benvStat.time duration := by
   obtain ⟨guardTest, guardLine, guardBranch⟩ :=
@@ -159,9 +159,9 @@ private theorem pauseForGuard_effect
     rcases runCompiledTo_branch_inv guardBranch with hzero | hsucc
     · rcases hzero with ⟨_, -, -, errorRun⟩
       have hget :
-          ((runtime dp).main :: (runtime dp).aux)[pausedExpectedSlot]? =
-            some (runtimeError "PausedExpected") := by
-        simp [runtime, aux, baseAux, pausedExpectedSlot]
+          ((runtime dp).main :: (runtime dp).aux)[resumedExpectedSlot]? =
+            some (runtimeError "ResumedExpected") := by
+        simp [runtime, aux, baseAux, resumedExpectedSlot]
       exact (Func.RunCompiledTo.not_ok_call_revSelector
         (by simpa [runtimeError] using hget) errorRun).elim
     · rcases hsucc with

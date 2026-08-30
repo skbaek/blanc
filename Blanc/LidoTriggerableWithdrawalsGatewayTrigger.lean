@@ -693,6 +693,28 @@ def rebaseLocalCalls (delta : Nat) : Func → Func
   | .next op rest => .next op (rebaseLocalCalls delta rest)
   | .call slot => .call (delta + slot)
 
+/-- Local-call rebasing commutes with the constant-store prefix used by
+`Func.revData`.  The prefix contains no local calls, so only its tail can
+change. -/
+theorem rebaseLocalCalls_prependStoresRev (delta : Nat)
+    (stores : List (B256 × Nat)) (rest : Func) :
+    rebaseLocalCalls delta (prependStoresRev stores rest) =
+      prependStoresRev stores (rebaseLocalCalls delta rest) := by
+  induction stores generalizing rest with
+  | nil => rfl
+  | cons iw iws ih =>
+      simp only [prependStoresRev]
+      rw [ih]
+      rfl
+
+/-- Constant-data reverters contain no local calls, so rebasing is the
+identity on them. -/
+theorem rebaseLocalCalls_revData (delta : Nat) (blob : Bytes) :
+    rebaseLocalCalls delta (Func.revData blob) = Func.revData blob := by
+  unfold Func.revData
+  rw [rebaseLocalCalls_prependStoresRev]
+  rfl
+
 def rebasedTrigger (delta : Nat) (dp : DeployParams) : Func :=
   rebaseLocalCalls delta (triggerFullWithdrawals dp)
 

@@ -765,6 +765,7 @@ expression. -/
 theorem stubPause_sentinel_execution :
     ∃ post,
       exec (initEvm stubPauseSentinelMsg) = .ok post ∧
+      post.error = none ∧
       post.getStorVal stubPauseSentinelTarget pausedUntilSlot =
         pauseInfiniteSentinel ∧
       post.getStorVal stubPauseSentinelTarget pausedUntilSlot ≠
@@ -796,7 +797,7 @@ theorem stubPause_sentinel_execution :
           decide +kernel
         simp [pauseInfiniteSentinel, sstoreValueCost, gasStorageSet,
           gasColdSload, hmax])
-  refine ⟨post, hexec, ?_, ?_⟩
+  refine ⟨post, hexec, herr, ?_, ?_⟩
   · simpa [stubPauseSentinelMsg, initSevm, pauseForProjection] using hstored
   · rw [show post.getStorVal stubPauseSentinelTarget pausedUntilSlot =
       pauseInfiniteSentinel by

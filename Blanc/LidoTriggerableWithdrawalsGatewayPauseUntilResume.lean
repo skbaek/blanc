@@ -162,7 +162,7 @@ private theorem pauseUntilGuard_effect
     (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
       sevm pre
         (([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero]) +++
-          (pauseUntilUnpaused <?> .call pausedExpectedSlot)) (.ok post)) :
+          (pauseUntilUnpaused <?> .call resumedExpectedSlot)) (.ok post)) :
     ¬ sevm.benvStat.time <
         root.getStorVal sevm.currentTarget resumeSinceSlot ∧
       ¬ expiry < sevm.benvStat.time ∧
@@ -207,9 +207,9 @@ private theorem pauseUntilGuard_effect
     rcases runCompiledTo_branch_inv guardBranch with hzero | hsucc
     · rcases hzero with ⟨_, -, -, errorRun⟩
       have hget :
-          ((runtime dp).main :: (runtime dp).aux)[pausedExpectedSlot]? =
-            some (runtimeError "PausedExpected") := by
-        simp [runtime, aux, baseAux, pausedExpectedSlot]
+          ((runtime dp).main :: (runtime dp).aux)[resumedExpectedSlot]? =
+            some (runtimeError "ResumedExpected") := by
+        simp [runtime, aux, baseAux, resumedExpectedSlot]
       exact (Func.RunCompiledTo.not_ok_call_revSelector
         (by simpa [runtimeError] using hget) errorRun).elim
     · rcases hsucc with
@@ -492,7 +492,7 @@ private theorem resumeGuard_effect
         (([pushB256 resumeSinceSlot, sload, timestamp, lt]) +++
           ((([timestamp, pushB256 resumeSinceSlot, sstore] ++
               emitNoData (signatureHash "Resumed" [])) +++ Func.stop)
-            <?> .call resumedExpectedSlot)) (.ok post)) :
+            <?> .call pausedExpectedSlot)) (.ok post)) :
     sevm.benvStat.time <
         root.getStorVal sevm.currentTarget resumeSinceSlot ∧
       post.getStorVal sevm.currentTarget resumeSinceSlot =
@@ -536,9 +536,9 @@ private theorem resumeGuard_effect
     rcases runCompiledTo_branch_inv guardBranch with hzero | hsucc
     · rcases hzero with ⟨_, -, -, errorRun⟩
       have hget :
-          ((runtime dp).main :: (runtime dp).aux)[resumedExpectedSlot]? =
-            some (runtimeError "ResumedExpected") := by
-        simp [runtime, aux, baseAux, resumedExpectedSlot]
+          ((runtime dp).main :: (runtime dp).aux)[pausedExpectedSlot]? =
+            some (runtimeError "PausedExpected") := by
+        simp [runtime, aux, baseAux, pausedExpectedSlot]
       exact (Func.RunCompiledTo.not_ok_call_revSelector
         (by simpa [runtimeError] using hget) errorRun).elim
     · rcases hsucc with ⟨word, successPre, hnz, hstack, hpop, successRun⟩

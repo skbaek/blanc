@@ -205,14 +205,14 @@ theorem pauseFor_role_gate_exact :
     pauseFor =
       (requireStaticArgs 1 <| onlyRole pauseRole <|
         ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero] +++
-          (pauseForUnpaused <?> .call pausedExpectedSlot))) :=
+          (pauseForUnpaused <?> .call resumedExpectedSlot))) :=
   rfl
 
 theorem pauseUntil_role_gate_exact :
     pauseUntil =
       (requireStaticArgs 1 <| onlyRole pauseRole <|
         ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero] +++
-          (pauseUntilUnpaused <?> .call pausedExpectedSlot))) :=
+          (pauseUntilUnpaused <?> .call resumedExpectedSlot))) :=
   rfl
 
 theorem resume_role_gate_exact :
@@ -221,7 +221,7 @@ theorem resume_role_gate_exact :
         ([pushB256 resumeSinceSlot, sload, timestamp, lt] +++
           ((([timestamp, pushB256 resumeSinceSlot, sstore] ++
               emitNoData (signatureHash "Resumed" [])) +++ Func.stop)
-            <?> .call resumedExpectedSlot))) :=
+            <?> .call pausedExpectedSlot))) :=
   rfl
 
 theorem setExitRequestLimit_role_gate_exact :
@@ -245,7 +245,7 @@ theorem grantRole_role_gate_exact :
                   [sstore] ++
                 mloadWord 1 ++ roleKeyFromMemory roleLookupAccountRegion ++
                   [sstore] ++
-                mloadWord 2 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
+                mloadWord 0 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
                 mloadWord 1 ++ enumKeyFromMemory enumAccountRegion ++ [sstore] ++
                 mloadWord 2 ++
                   [pushB256 1, add, pushB256 roleRecordLengthSlot, sstore] ++

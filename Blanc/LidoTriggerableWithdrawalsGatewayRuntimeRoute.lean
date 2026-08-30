@@ -243,6 +243,37 @@ private theorem runtimePrefix_dispatchFrame
                 ((dispatchFrame_of_pushBurn (of_run_pushB256 qpush224)).trans
                   (dispatchFrame_of_diffBurn qshrDiff))))))))
 
+/-- A successful exact runtime walk must pass the leading short-calldata
+guard.  This derives the guard word from the walk itself, so it also covers
+mathematically oversized calldata whose natural length would wrap as a
+`B256`. -/
+theorem runtime_guard_zero_of_prog_run_ok
+    {dp : DeployParams} {sevm : Sevm} {entry post : Devm}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) (.ok post)) :
+    B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0 := by
+  obtain ⟨mid, hburn, hmain⟩ := hprog
+  change Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm mid
+    ([Ninst.pushB256 4, Ninst.calldatasize, Ninst.lt] +++
+      (Func.rev <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp))))
+      (.ok post) at hmain
+  obtain ⟨afterGuard, guardRun, branchRun⟩ :=
+    runCompiledTo_prepend_inv hmain
+  rcases Line.of_run_cons guardRun with ⟨afterPush, pushRun, guardRun⟩
+  rcases Line.of_run_cons guardRun with ⟨afterSize, sizeRun, guardRun⟩
+  rcases Line.of_run_cons guardRun with ⟨_afterLt, ltRun, nilRun⟩
+  cases nilRun
+  have pMid : ([] : Stack) <<+ mid.stack := nil_pref
+  have pPush := prefix_of_push (of_run_pushB256 pushRun) pMid
+  have pSize := prefix_of_push (of_run_calldatasize sizeRun) pPush
+  have pGuard := prefix_of_lt ltRun pSize
+  obtain ⟨_dispatchPre, guardZero, _pop, _dispatchRun, _tail⟩ :=
+    Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix
+      (fun revRun => by
+        rcases runCompiledTo_rev_inv revRun with ⟨_rawPost, impossible, _output⟩
+        cases impossible)
+      pGuard branchRun
+  exact guardZero
+
 /-- An exact program run from an empty operand stack reaches the selected
 runtime body with that stack restored, while every entry-frame field except
 gas and stack is preserved from the actual `Prog.RunCompiledTo` prestate. -/

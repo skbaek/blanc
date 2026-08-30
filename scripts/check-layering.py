@@ -49,7 +49,7 @@ import sys
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
+SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
@@ -116,6 +116,8 @@ CONTRACTS = {
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
         "LidoTriggerableWithdrawalsGateway",
+        "LidoTriggerableWithdrawalsGatewayCode",
+        "LidoTriggerableWithdrawalsGatewayDeploy",
         "LidoTriggerableWithdrawalsGatewayPinnedTargetControl",
         "LidoTriggerableWithdrawalsGatewayRuntimeRoute",
         "LidoTriggerableWithdrawalsGatewayPinnedTargetInterface",

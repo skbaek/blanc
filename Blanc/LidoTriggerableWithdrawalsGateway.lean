@@ -4,10 +4,8 @@ import Blanc.LinearDispatch
 /-!
   Source-level Blanc runtime for the Triggerable Withdrawals Gateway.
 
-  All selectors have an executable dispatch entry.  The nested
-  `ValidatorExitData[]` success encoder is intentionally kept behind one
-  explicit empty-revert auxiliary arm until the dedicated ABI module is
-  added; no other selector is weakened or made payable by that placeholder.
+  All selectors have an executable dispatch entry, including the nested
+  `ValidatorExitData[]` decoder and outbound trigger choreography.
   AccessControlEnumerable is represented with full role/account/index lookup
   records and global role/account arrays; lookup mismatches refuse rather
   than alias, and removal uses swap-pop with moved-index repair.
@@ -315,11 +313,11 @@ def isPaused : Func :=
 
 def supportsInterface : Func :=
   requireStaticArgs 1 <|
-    ((arg 0 ++ [pushB256 0x01ffc9a7, eq]) +++
+    ((argBytes4 0 ++ [pushB256 0x01ffc9a7, eq]) +++
       (([pushB256 1] +++ returnWord) <?>
-        ((arg 0 ++ [pushB256 0x7965db0b, eq]) +++
+        ((argBytes4 0 ++ [pushB256 0x7965db0b, eq]) +++
           (([pushB256 1] +++ returnWord) <?>
-            ((arg 0 ++ [pushB256 0x5a05180f, eq]) +++
+            ((argBytes4 0 ++ [pushB256 0x5a05180f, eq]) +++
               (([pushB256 1] +++ returnWord) <?>
                 ([pushB256 0] +++ returnWord)))))))
 
@@ -346,7 +344,7 @@ def pauseForUnpaused : Func :=
 def pauseFor : Func :=
   requireStaticArgs 1 <| onlyRole pauseRole <|
     ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero]) +++
-      (pauseForUnpaused <?> .call pausedExpectedSlot)
+      (pauseForUnpaused <?> .call resumedExpectedSlot)
 
 def pauseUntilSentinel : Func :=
   ([pushB256 pauseInfinitely, pushB256 resumeSinceSlot, sstore] ++
@@ -371,14 +369,14 @@ def pauseUntilUnpaused : Func :=
 def pauseUntil : Func :=
   requireStaticArgs 1 <| onlyRole pauseRole <|
     ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero]) +++
-      (pauseUntilUnpaused <?> .call pausedExpectedSlot)
+      (pauseUntilUnpaused <?> .call resumedExpectedSlot)
 
 def resume : Func :=
   onlyRole resumeRole <|
     ([pushB256 resumeSinceSlot, sload, timestamp, lt]) +++
       ((([timestamp, pushB256 resumeSinceSlot, sstore] ++
           emitNoData (signatureHash "Resumed" [])) +++ Func.stop)
-        <?> .call resumedExpectedSlot)
+        <?> .call pausedExpectedSlot)
 
 def grantRole : Func :=
   requireStaticArgs 2 <| canonicalArg 1 <| onlyRole defaultAdminRole <|
@@ -389,7 +387,7 @@ def grantRole : Func :=
             roleKeyFromMemory roleLookupIndexRegion ++ [sstore] ++
           mloadWord 0 ++ roleKeyFromMemory roleLookupRoleRegion ++ [sstore] ++
           mloadWord 1 ++ roleKeyFromMemory roleLookupAccountRegion ++ [sstore] ++
-          mloadWord 2 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
+          mloadWord 0 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
           mloadWord 1 ++ enumKeyFromMemory enumAccountRegion ++ [sstore] ++
           mloadWord 2 ++ [pushB256 1, add, pushB256 roleRecordLengthSlot, sstore] ++
           emitRoleGranted) +++ Func.stop)
@@ -402,16 +400,16 @@ def clearRemovedLookup : Line :=
   [pushB256 0] ++ roleKeyFromMemory roleLookupAccountRegion ++ [sstore]
 
 def clearRoleMembershipLast : Func :=
-  (mloadWord 2 ++ [pushB256 1, sub] ++ mstoreAt 4 ++
+  ([pushB256 1] ++ mloadWord 2 ++ [sub] ++ mstoreAt 4 ++
    [pushB256 0] ++ enumKeyFromMemoryAt 4 enumRoleRegion ++ [sstore] ++
    [pushB256 0] ++ enumKeyFromMemoryAt 4 enumAccountRegion ++ [sstore] ++
    clearRemovedLookup ++
-   mloadWord 3 ++ [pushB256 1, sub, pushB256 roleRecordLengthSlot, sstore] ++
+   [pushB256 1] ++ mloadWord 3 ++ [sub, pushB256 roleRecordLengthSlot, sstore] ++
    emitRoleRevoked) +++ Func.stop
 
 def clearRoleMembershipSwap : Func :=
-  (mloadWord 3 ++ [pushB256 1, sub] ++ mstoreAt 4 ++
-   mloadWord 2 ++ [pushB256 1, sub] ++ mstoreAt 5 ++
+  ([pushB256 1] ++ mloadWord 3 ++ [sub] ++ mstoreAt 4 ++
+   [pushB256 1] ++ mloadWord 2 ++ [sub] ++ mstoreAt 5 ++
    enumKeyFromMemoryAt 4 enumRoleRegion ++ [sload] ++ mstoreAt 6 ++
    enumKeyFromMemoryAt 4 enumAccountRegion ++ [sload] ++ mstoreAt 7 ++
    mloadWord 6 ++ enumKeyFromMemoryAt 5 enumRoleRegion ++ [sstore] ++
@@ -420,7 +418,7 @@ def clearRoleMembershipSwap : Func :=
    [pushB256 0] ++ enumKeyFromMemoryAt 4 enumRoleRegion ++ [sstore] ++
    [pushB256 0] ++ enumKeyFromMemoryAt 4 enumAccountRegion ++ [sstore] ++
    clearRemovedLookup ++
-   mloadWord 3 ++ [pushB256 1, sub, pushB256 roleRecordLengthSlot, sstore] ++
+   [pushB256 1] ++ mloadWord 3 ++ [sub, pushB256 roleRecordLengthSlot, sstore] ++
    emitRoleRevoked) +++ Func.stop
 
 def clearRoleMembership : Func :=
@@ -531,8 +529,8 @@ def baseAux : List Func :=
    runtimeError "InsufficientFee" [.uint256, .uint256],
    runtimeError "FeeRefundFailed",
    Func.rev,
-   Func.rev,
-   Func.rev,
+   roleMemberLoop,
+   roleCountLoop,
    Func.rev,
    runtimeError "TooLargeMaxExitRequestsLimit",
    runtimeError "TooLargeFrameDuration",

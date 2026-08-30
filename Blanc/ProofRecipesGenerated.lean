@@ -187,6 +187,14 @@ def recipes : List Recipe := [
     boundary := "The certificate is exact retained chronology, including successful no-op SSTOREs. It requires a committing successful result and explicit childlessness at external steps; it does not infer child-frame absence from same-frame source classification or final storage equality."
   },
   {
+    id := "accepted-boolean-settlement"
+    status := "active"
+    triggers := ["goal-shape:accepted-bool-word"]
+    preferredPath := "For a clean full-word ABI output, use `acceptedBoolWord_iff_of_output` instead of repeating the slice/read normalization. Remove a successful execution wrapper with `acceptedBoolExecution_ok_iff`, and specialize rejected-answer executions with `boolQueryExecutionFailure_ok_iff`."
+    symbols := ["module:Blanc/PinnedPauseTarget.lean", "declaration:acceptedBoolWord_iff_of_output", "declaration:acceptedBoolExecution_ok_iff", "declaration:boolQueryExecutionFailure_ok_iff"]
+    boundary := "These adapters identify one already-clean 32-byte boolean observation. They do not prove message settlement, output production, or that the returned word is canonical zero or one."
+  },
+  {
     id := "devm-common-update-laws"
     status := "active"
     triggers := ["goal-shape:devm-common-update-law"]
