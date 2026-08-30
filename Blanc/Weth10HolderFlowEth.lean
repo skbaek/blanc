@@ -1,3 +1,6 @@
+import Blanc.ExecutionMessageEffects
+import Blanc.ExecutionTransactionEffects
+import Blanc.ExecutionBodyEffects
 import Blanc.Weth10HolderFlowAuthenticity
 
 /-!
@@ -16,6 +19,10 @@ namespace Blanc
 open Jaune
 
 namespace Weth10
+
+open _root_.Blanc.ExecutionTrace
+  (messageCreateCollision messageCallDelegation messageCallExecutionMessage
+    systemTransactionMessage)
 
 /-- ETH entering WETH10 and represented by an ordinary mint action. -/
 def FlowAtom.ethMint : FlowAtom → Nat
@@ -728,33 +735,13 @@ theorem processWithdrawalsState_ethBound
   induction withdrawals generalizing state with
   | nil => exact EthBound.refl ca state
   | cons withdrawal withdrawals ih =>
-      have hsum : wdsum (withdrawal :: withdrawals) =
-          withdrawal.amount.toNat * 10 ^ 9 + wdsum withdrawals := by
-        simp [wdsum]
-      rw [hsum] at hbound
+      obtain ⟨hheadBound, htailBound⟩ :=
+        ExecutionTrace.withdrawalCredit_bounds hbound
       let value := withdrawal.amount * (10 ^ 9).toB256
-      have hvalue : value.toNat = withdrawal.amount.toNat * 10 ^ 9 := by
-        have h9 : (10 : Nat) ^ 9 ↾ 256 = 10 ^ 9 :=
-          Nat.lo_eq_of_lt (by omega)
-        rw [B256.toNat_mul, B256.toNat_toB256,
-          h9, Nat.lo_eq_of_lt (by omega)]
-      have hheadBound : sum state.bal + value.toNat < 2 ^ 256 := by
-        rw [hvalue]
-        exact lt_of_le_of_lt
-          (Nat.add_le_add_left
-            (Nat.le_add_right
-              (withdrawal.amount.toNat * 10 ^ 9) (wdsum withdrawals))
-            (sum state.bal))
-          hbound
       let next := state.addBal withdrawal.recipient value
       have hhead : EthBound ca state next [] :=
         (EthStep.externalCredit (ca := ca) (post := next)
           rfl hheadBound).bound
-      have hsumNext : sum next.bal = sum state.bal + value.toNat := by
-        exact sum_addBal_eq state withdrawal.recipient value hheadBound
-      have htailBound : sum next.bal + wdsum withdrawals < 2 ^ 256 := by
-        rw [hsumNext, hvalue]
-        omega
       have htail := ih next htailBound
       have hcombined := hhead.trans htail
       simpa [processWithdrawalsState, next, value] using hcombined
@@ -786,16 +773,9 @@ theorem TransactionTrace.sender_ne_ca
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    trace.sender ≠ ca := by
-  have hinv : (backedSpec weth10 dp).BenvInv ca benv :=
-    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
-  have hinvBegin :
-      (backedSpec weth10 dp).BenvInv ca benv.beginTransaction := by
-    refine ⟨?_, ?_⟩
-    · simpa [Benv.beginTransaction] using hinv.state
-    · simpa [Benv.beginTransaction] using hinv.ca
-  exact ContractSpec.checkTransaction_sender_ne_of_inv
-    (c := backedSpec weth10 dp) trace.checked hinvBegin
+    trace.sender ≠ ca :=
+  ExecutionTrace.TransactionTrace.sender_ne (c := backedSpec weth10 dp) trace
+    ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated
 
 theorem TransactionTrace.debitState_bal_ca
     {dp : DeployParams} {ca : Adr}
@@ -804,20 +784,9 @@ theorem TransactionTrace.debitState_bal_ca
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    trace.debitState.bal ca = benv.state.bal ca := by
-  have hsender := trace.sender_ne_ca hstable hnotCreated
-  rcases State.of_subBal trace.debit with ⟨_, hdebit⟩
-  rw [hdebit]
-  show (((benv.state.incrNonce trace.sender).setBal trace.sender _).get ca).bal = _
-  rw [State.setBal_get_ne hsender]
-  rw [State.incrNonce_get_bal]
-  rfl
-
-theorem MessageCallTrace.result
-    {msg : Msg} {state : State} {out : MsgCallOutput}
-    (trace : MessageCallTrace msg state out) :
-    processMessageCall msg = .ok (state, out) := by
-  cases trace <;> assumption
+    trace.debitState.bal ca = benv.state.bal ca :=
+  ExecutionTrace.TransactionTrace.debitState_bal_eq trace
+    (TransactionTrace.sender_ne_ca trace hstable hnotCreated)
 
 theorem TransactionTrace.accountsToDelete_ne_ca
     {dp : DeployParams} {ca : Adr}
@@ -827,113 +796,16 @@ theorem TransactionTrace.accountsToDelete_ne_ca
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     ∀ address ∈ trace.messageOut.accountsToDelete.toList,
-      address ≠ ca := by
-  let spec := backedSpec weth10 dp
-  have hsender := trace.sender_ne_ca hstable hnotCreated
-  have hinitial : spec.StateInv ca benv.state :=
-    ⟨hstable.code, hstable.sumNof, hstable.backed⟩
-  have hdebit : spec.StateInv ca trace.debitState :=
-    ContractSpec.StateInv.subBal (c := spec) hsender trace.debit
-      (ContractSpec.StateInv.incrNonce hinitial)
-  have horigin :
-      (transactionTenv benv.beginTransaction tx index trace.sender
-        trace.effectiveGasPrice trace.intrinsicGas
-        trace.blobVersionedHashes).stat.origin ≠ ca := by
-    simpa [transactionTenv] using hsender
-  have hmsg : spec.MsgInv ca trace.msg :=
-    ContractSpec.prepareMessage_preserves_inv trace.prepared hdebit
-      (by simpa [Benv.beginTransaction] using hnotCreated) horigin
-  exact (ContractSpec.processMessageCall_preserves_inv
-    (c := spec) (backedSpec_preserves dp ca)
-    trace.message.result hmsg).2
+      address ≠ ca :=
+  ExecutionTrace.TransactionTrace.accountsToDelete_ne trace
+    (backedSpec_preserves dp ca)
+    ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated
 
 theorem foldl_destroyAccount_bal_eq
     {ca : Adr} {state : State} {addresses : List Adr}
     (hne : ∀ address ∈ addresses, address ≠ ca) :
-    (addresses.foldl destroyAccount state).bal ca = state.bal ca := by
-  induction addresses generalizing state with
-  | nil => rfl
-  | cons address addresses ih =>
-      rw [List.foldl_cons, ih]
-      · have hget : (Jaune.destroyAccount state address).get ca =
-            state.get ca :=
-          State.get_erase_ne (Ne.symm (hne address (by simp)))
-        exact congrArg Acct.bal hget
-      · intro tail htail
-        exact hne tail (by simp [htail])
-
-/-- Exact post-message transaction settlement form.  This exposes the two
-gas credits and the final account-deletion fold without re-executing or
-approximating the transaction. -/
-theorem TransactionTrace.exists_finalStateForm
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout') :
-    ∃ refundCounter : Nat,
-      Int.toNat? trace.messageOut.refundCounter = some refundCounter ∧
-      state =
-        trace.messageOut.accountsToDelete.toList.foldl destroyAccount
-          ((trace.messageState.addBal trace.sender
-              ((tx.gas -
-                  max (tx.gas - trace.messageOut.gasLeft -
-                    min ((tx.gas - trace.messageOut.gasLeft) / 5)
-                      refundCounter)
-                    trace.calldataFloorGasCost) *
-                trace.effectiveGasPrice).toB256).addBal
-            benv.stat.coinbase
-              (max (tx.gas - trace.messageOut.gasLeft -
-                  min ((tx.gas - trace.messageOut.gasLeft) / 5)
-                    refundCounter)
-                  trace.calldataFloorGasCost *
-                (trace.effectiveGasPrice -
-                  benv.stat.baseFeePerGas)).toB256) := by
-  have hrun := trace.result
-  unfold processTransaction at hrun
-  simp only [Benv.beginTransaction] at hrun
-  rcases Except.bind_eq_ok hrun with ⟨prelude, hprelude, hrun⟩
-  have hpreludeEq := Except.ok.inj hprelude
-  subst prelude
-  rcases Except.bind_eq_ok hrun with ⟨validated, hvalidated, hrun⟩
-  rcases validated with ⟨intrinsicGas, calldataFloorGasCost⟩
-  rw [Except.mapError_eq_ok_iff] at hvalidated
-  have hvalidatedEq : intrinsicGas = trace.intrinsicGas ∧
-      calldataFloorGasCost = trace.calldataFloorGasCost := by
-    exact Prod.mk.inj (Except.ok.inj (hvalidated.symm.trans trace.validation))
-  rcases hvalidatedEq with ⟨rfl, rfl⟩
-  rcases Except.bind_eq_ok hrun with ⟨checked, hchecked, hrun⟩
-  rcases checked with
-    ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩
-  have hcheckedEq := Except.ok.inj (hchecked.symm.trans trace.checked)
-  simp only [Prod.mk.injEq] at hcheckedEq
-  rcases hcheckedEq with ⟨rfl, rfl, rfl, rfl⟩
-  rcases Except.bind_eq_ok hrun with ⟨debitState, hdebit, hrun⟩
-  have hdebitSome := Option.toExcept_eq_ok hdebit
-  have hdebitEq : debitState = trace.debitState := by
-    have htraceDebit := trace.debit
-    simp only [transactionBlobGasFee] at htraceDebit
-    rw [htraceDebit] at hdebitSome
-    exact Option.some.inj hdebitSome.symm
-  subst debitState
-  rcases Except.bind_eq_ok hrun with ⟨msg, hprepared, hrun⟩
-  have hmsgEq : msg = trace.msg := Except.ok.inj
-    (hprepared.symm.trans trace.prepared)
-  subst msg
-  rcases Except.bind_eq_ok hrun with ⟨messageResult, hmessage, hrun⟩
-  rcases messageResult with ⟨messageState, messageOut⟩
-  rw [Except.mapError_eq_ok_iff] at hmessage
-  have htraceMessage : processMessageCall trace.msg =
-      .ok (trace.messageState, trace.messageOut) := by
-    cases trace.message <;> assumption
-  have hmessageEq : messageState = trace.messageState ∧
-      messageOut = trace.messageOut := by
-    exact Prod.mk.inj (Except.ok.inj
-      (hmessage.symm.trans htraceMessage))
-  rcases hmessageEq with ⟨rfl, rfl⟩
-  rcases Except.bind_eq_ok hrun with ⟨refundCounter, hrefund, hrun⟩
-  have hrefundSome := Option.toExcept_eq_ok hrefund
-  simp only at hrun
-  have hfinal := Except.ok.inj hrun
-  exact ⟨refundCounter, hrefundSome, (Prod.mk.inj hfinal).1.symm⟩
+    (addresses.foldl destroyAccount state).bal ca = state.bal ca :=
+  congrArg Acct.bal (ExecutionTrace.foldl_destroyAccount_get_eq hne)
 
 /-- Refund and priority-fee settlement, followed by the transaction's account
 deletions, cannot lower the installed WETH10 account.  This is proved from
@@ -947,74 +819,43 @@ theorem TransactionTrace.postMessage_ethBound
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     EthBound ca trace.messageState state [] := by
-  rcases trace.exists_finalStateForm with
-    ⟨refundCounter, _hrefund, hstate⟩
-  let used := max
-    (tx.gas - trace.messageOut.gasLeft -
-      min ((tx.gas - trace.messageOut.gasLeft) / 5) refundCounter)
-    trace.calldataFloorGasCost
-  let refundNat := (tx.gas - used) * trace.effectiveGasPrice
-  let tipNat := used *
-    (trace.effectiveGasPrice - benv.stat.baseFeePerGas)
-  let refund : B256 := refundNat.toB256
-  let tip : B256 := tipNat.toB256
-  let refunded := trace.messageState.addBal trace.sender refund
-  let credited := refunded.addBal benv.stat.coinbase tip
-  have hfeeLt := checkTransaction_upfront_lt_modulus trace.checked
-  simp only [Benv.beginTransaction] at hfeeLt
-  have hfloor :=
-    validateTransaction_calldataFloorGasCost_le_gas trace.validation
-  have husedLe : used ≤ tx.gas := by
-    unfold used
-    apply max_le
-    · omega
-    · exact hfloor
-  have hcreditsLe :
-      refundNat + tipNat ≤ tx.gas * trace.effectiveGasPrice := by
-    unfold refundNat tipNat
-    apply le_trans (Nat.add_le_add_left
-      (Nat.mul_le_mul_left _
-        (Nat.sub_le trace.effectiveGasPrice benv.stat.baseFeePerGas)) _)
-    rw [← Nat.add_mul, Nat.sub_add_cancel husedLe]
-  have hrefundLe : refund.toNat ≤ refundNat := by
-    exact toB256_toNat_le refundNat
-  have htipLe : tip.toNat ≤ tipNat := by
-    exact toB256_toNat_le tipNat
-  have hdebitSum := State.balSum_subBal trace.debit
-  dsimp only [State.balSum, transactionBlobGasFee] at hdebitSum
-  rw [State.incrNonce_bal] at hdebitSum
-  have hfeeExact := B256.toNat_toB256_of_lt hfeeLt
-  rw [hfeeExact] at hdebitSum
-  have hmessageSum := processMessageCall_sum_le trace.message.result
-  rw [prepareMessage_benv trace.prepared] at hmessageSum
-  change sum trace.messageState.bal ≤ sum trace.debitState.bal at hmessageSum
-  have hbaseSum : sum benv.state.bal < 2 ^ 256 := hstable.sumNof
-  have hrefundBound :
-      sum trace.messageState.bal + refund.toNat < 2 ^ 256 := by
-    omega
+  rcases ExecutionTrace.TransactionTrace.exists_stateChronology trace with
+    ⟨chronology⟩
+  obtain ⟨hrefundBound, htipBound⟩ :=
+    ExecutionTrace.TransactionTrace.settlement_sum_bounds trace
+      chronology.refundCounter hstable.sumNof
   have hrefundStep :
-      EthBound ca trace.messageState refunded [] :=
-    (EthStep.externalCredit (ca := ca) (post := refunded)
+      EthBound ca trace.messageState
+        (trace.refundedState chronology.refundCounter) [] :=
+    (EthStep.externalCredit (ca := ca) (pre := trace.messageState)
+      (post := trace.refundedState chronology.refundCounter)
+      (recipient := trace.sender)
+      (value := trace.refundValue chronology.refundCounter)
       rfl hrefundBound).bound
-  have hrefundedSum :
-      sum refunded.bal = sum trace.messageState.bal + refund.toNat := by
-    exact sum_addBal_eq _ _ _ hrefundBound
-  have htipBound : sum refunded.bal + tip.toNat < 2 ^ 256 := by
-    rw [hrefundedSum]
-    omega
-  have htipStep : EthBound ca refunded credited [] :=
-    (EthStep.externalCredit (ca := ca) (post := credited)
+  have htipStep :
+      EthBound ca (trace.refundedState chronology.refundCounter)
+        (trace.coinbaseState chronology.refundCounter) [] :=
+    (EthStep.externalCredit (ca := ca)
+      (pre := trace.refundedState chronology.refundCounter)
+      (post := trace.coinbaseState chronology.refundCounter)
+      (recipient := benv.stat.coinbase)
+      (value := trace.coinbaseValue chronology.refundCounter)
       rfl htipBound).bound
-  have hcredits : EthBound ca trace.messageState credited [] := by
+  have hcredits :
+      EthBound ca trace.messageState
+        (trace.coinbaseState chronology.refundCounter) [] := by
     simpa using hrefundStep.trans htipStep
-  have hdelete := trace.accountsToDelete_ne_ca hstable hnotCreated
+  have hdelete := TransactionTrace.accountsToDelete_ne_ca trace
+    hstable hnotCreated
   have hdeleteBal :
-      (trace.messageOut.accountsToDelete.toList.foldl
-        destroyAccount credited).bal ca = credited.bal ca :=
+      (trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+        (trace.coinbaseState chronology.refundCounter)).bal ca =
+        (trace.coinbaseState chronology.refundCounter).bal ca :=
     foldl_destroyAccount_bal_eq hdelete
-  have hstateBalRaw := congrArg (fun w : State => w.bal ca) hstate
-  have hstateBal : state.bal ca = credited.bal ca :=
-    hstateBalRaw.trans hdeleteBal
+  have hstateBal :
+      state.bal ca = (trace.coinbaseState chronology.refundCounter).bal ca :=
+    (congrArg (fun w : State => w.bal ca) chronology.finalState_eq).trans
+      hdeleteBal
   simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption,
     hstateBal] using hcredits
 
@@ -1158,22 +999,9 @@ theorem ProcessMessage.ethBound_of_none_conditions
     (hcaller : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (hsum : sum msg.benv.state.bal < 2 ^ 256) :
     EthBound ca msg.benv.state post.state [] := by
-  rcases ProcessMessage.none_ok_state_cases hprocess with hrollback |
-    ⟨benv, htransfer, hpost⟩
-  · rw [hrollback]
-    exact EthBound.refl ca msg.benv.state
-  · rw [hpost]
-    cases hvalue : msg.shouldTransferValue with
-    | false =>
-        exact (EthStep.of_benvAfterTransfer_noTransfer
-          hvalue htransfer).bound
-    | true =>
-        by_cases htarget : msg.currentTarget = ca
-        · exact (EthStep.of_benvAfterTransfer_unclassifiedInward hvalue
-            (hcaller hvalue) htarget hsum
-            htransfer).bound
-        · exact (EthStep.of_benvAfterTransfer_unrelated hvalue
-            (hcaller hvalue) htarget htransfer).bound
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none
+      hprocess hcaller hsum)
 
 theorem ProcessMessage.ethBound_of_none
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
@@ -1295,7 +1123,7 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
     (hsound : CommittedExecEthSound dp ca)
     (runReady : MessageRunReady dp ca msg) :
     EthBound ca msg.benv.state post.state
-      (trace.retained.flowActions dp ca) := by
+      (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained) := by
   rcases trace with ⟨slot, retained, hprocess⟩
   cases retained with
   | none =>
@@ -1306,10 +1134,8 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
 
 theorem processCreateMessage_msg_bal_eq (msg : Msg) :
     (processCreateMessage.msg msg).benv.state.bal =
-      msg.benv.state.bal := by
-  change ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
-    msg.currentTarget).bal = msg.benv.state.bal
-  rw [State.incrNonce_bal, State.setStor_bal]
+      msg.benv.state.bal :=
+  Blanc.processCreateMessage_msg_bal_eq msg
 
 theorem MessageReady.processCreateMessage_msg
     {dp : DeployParams} {ca : Adr} {msg : Msg}
@@ -1351,28 +1177,15 @@ theorem ne_ca_of_messageCreateCollision_false
     {dp : DeployParams} {ca : Adr} {msg : Msg}
     (ready : MessageReady dp ca msg)
     (hcollision : messageCreateCollision msg = false) :
-    msg.currentTarget ≠ ca := by
-  have hcodeNe : (msg.benv.state.getCode ca).toList ≠ [] :=
-    fun hempty => Prog.compile_ne_nil
-      (ready.backed.state.code.symm.trans (congrArg some hempty))
-  unfold messageCreateCollision at hcollision
-  rw [Bool.or_eq_false_iff] at hcollision
-  exact ne_wa_of_not_hasCodeOrNonce hcodeNe hcollision.1
+    msg.currentTarget ≠ ca :=
+  ContractSpec.StateInv.ne_of_messageCreateCollision_false
+    ready.backed.state hcollision
 
 theorem processCreateMessage.chargeCodeGas_bal_eq
     {rules : ForkRules} {pre post : Devm}
     (h : processCreateMessage.chargeCodeGas rules pre = .ok post) :
-    post.state.bal = pre.state.bal := by
-  unfold processCreateMessage.chargeCodeGas at h
-  dsimp only at h
-  split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
-    split at hrest
-    · cases hrest
-    · cases hrest
-      funext address
-      exact chargeGas_getBal_eq hcharge address
+    post.state.bal = pre.state.bal :=
+  _root_.Blanc.processCreateMessage.chargeCodeGas_bal_eq h
 
 theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
     {msg : Msg} {slot : Xlot} {post : Devm}
@@ -1380,57 +1193,9 @@ theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
     (herror : post.error.isSome = false) :
     ∃ inner : Devm,
       ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
-      post.state.bal = inner.state.bal := by
-  rcases ProcessCreateMessage.iff_processMessage.mp hprocess with
-    ⟨result, hinner, hsettle⟩
-  cases result with
-  | error error =>
-      simp [processCreateMessage.settle] at hsettle
-  | ok inner =>
-      unfold processCreateMessage.settle at hsettle
-      simp only [bind, Except.bind] at hsettle
-      by_cases hinnerNone : inner.error.isNone = true
-      · rw [if_pos hinnerNone] at hsettle
-        cases hcharge :
-          processCreateMessage.chargeCodeGas
-            msg.benv.stat.rules inner with
-        | error error =>
-            rw [hcharge] at hsettle
-            rcases error with ⟨error, charged⟩
-            cases error with
-            | halt reason =>
-                have heq := Except.ok.inj hsettle
-                rw [heq] at herror
-                simp [processCreateMessage.exceptionalHalt,
-                  Devm.error, Devm.setMeta] at herror
-            | revert => cases hsettle
-            | crypto reason => cases hsettle
-            | internal reason => cases hsettle
-        | ok charged =>
-            rw [hcharge] at hsettle
-            have heq := Except.ok.inj hsettle
-            refine ⟨inner, hinner, ?_⟩
-            calc
-              post.state.bal =
-                  (charged.setCode msg.currentTarget
-                    ⟨⟨charged.output⟩⟩).state.bal :=
-                congrArg (fun d : Devm => d.state.bal) heq
-              _ = charged.state.bal := by
-                rw [show (charged.setCode msg.currentTarget
-                  ⟨⟨charged.output⟩⟩).state =
-                    charged.state.setCode msg.currentTarget
-                      ⟨⟨charged.output⟩⟩ from rfl,
-                  State.setCode_bal]
-              _ = inner.state.bal :=
-                processCreateMessage.chargeCodeGas_bal_eq hcharge
-      · rw [if_neg hinnerNone] at hsettle
-        have heq := Except.ok.inj hsettle
-        rw [heq] at herror
-        simp [Devm.rollback, Devm.setWorld, Devm.error] at herror
-        apply False.elim
-        apply hinnerNone
-        rw [show inner.error = none from herror]
-        rfl
+      post.state.bal = inner.state.bal :=
+  _root_.Blanc.ProcessCreateMessage.ok_state_eq_inner_of_no_error
+    hprocess herror
 
 /-- CREATE settlement around a no-interpreter-slot constructor is also ETH
 sound under the explicit foreign-caller entry conditions.  Code-deposit
@@ -1442,28 +1207,9 @@ theorem ProcessCreateMessage.ethBound_of_none_conditions
     (hcaller : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (hsum : sum msg.benv.state.bal < 2 ^ 256) :
     EthBound ca msg.benv.state post.state [] := by
-  let trace : ProcessCreateMessageTrace msg (.ok post) :=
-    ⟨.none, .none, hprocess⟩
-  cases herror : post.error.isSome with
-  | true =>
-      rw [ProcessCreateMessage.rollback_of_error trace.run herror]
-      exact EthBound.refl ca msg.benv.state
-  | false =>
-      rcases ProcessCreateMessage.ok_state_eq_inner_of_no_error
-        trace.run herror with ⟨inner, hinner, hpost⟩
-      have hcallerSeed :
-          (processCreateMessage.msg msg).shouldTransferValue = true →
-            (processCreateMessage.msg msg).caller ≠ ca := by
-        simpa [processCreateMessage.msg, Msg.withBenv] using hcaller
-      have hsumSeed :
-          sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
-        rw [processCreateMessage_msg_bal_eq]
-        exact hsum
-      have hbound := ProcessMessage.ethBound_of_none_conditions
-        hinner hcallerSeed hsumSeed
-      unfold EthBound at hbound ⊢
-      rw [hpost, ← congrFun (processCreateMessage_msg_bal_eq msg) ca]
-      exact hbound
+  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
+    (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none
+      hprocess hcaller hsum)
 
 /-- Create settlement contributes retained raw actions only when code-deposit
 settlement also commits.  The error arm proves the outer rollback exactly. -/
@@ -1476,7 +1222,8 @@ theorem ProcessCreateMessageTrace.ethBound_of_committedExecSound
     (htargetNe : msg.currentTarget ≠ ca) :
     EthBound ca msg.benv.state post.state
       (if post.error.isSome then []
-       else trace.retained.flowActions dp ca) := by
+       else Blanc.Weth10.RetainedXlot.flowActions dp ca
+         trace.retained) := by
   cases herror : post.error.isSome with
   | true =>
       simp only [↓reduceIte]
@@ -1568,12 +1315,6 @@ theorem messageCallDelegation_target_eq
     simp only [Except.ok.injEq, Prod.mk.injEq] at hrest
     rcases hrest with ⟨rfl, rfl⟩
     exact (setDelegation_fields hset).2.1
-
-theorem messageCallExecutionMessage_bal_eq (msg : Msg) :
-    (messageCallExecutionMessage msg).benv.state.bal =
-      msg.benv.state.bal := by
-  unfold messageCallExecutionMessage
-  split <;> rfl
 
 theorem messageCallExecutionMessage_target_eq (msg : Msg) :
     (messageCallExecutionMessage msg).target = msg.target := by
@@ -1715,13 +1456,14 @@ theorem CommittedExecEthSound.messageEthSound
       unfold MessageCallTrace.EthAccounted
       have htargetNe := ne_ca_of_messageCreateCollision_false
         ready hcollision
-      have hbound := trace.ethBound_of_committedExecSound
-        hsound ready htarget htargetNe
+      have hbound :=
+        ProcessCreateMessageTrace.ethBound_of_committedExecSound trace
+          hsound ready htarget htargetNe
       have hstate := processMessageCall_createRun_state_eq
         htarget hcollision hcore hresult
       change EthBound ca msg.benv.state state
         (if evm.error.isSome then []
-         else trace.retained.flowActions dp ca)
+         else Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)
       unfold EthBound at hbound ⊢
       rw [hstate]
       exact hbound
@@ -1738,15 +1480,16 @@ theorem CommittedExecEthSound.messageEthSound
         exact htarget
       have runReadyExec := readyExecMsg.runReady_of_call htargetExec
       have hbound : EthBound ca execMsg.benv.state evm.state
-          (trace.retained.flowActions dp ca) :=
-        trace.ethBound_of_committedExecSound hsound runReadyExec
+          (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained) :=
+        ProcessMessageTrace.ethBound_of_committedExecSound trace hsound
+          runReadyExec
       have hstate := processMessageCall_callRun_state_eq
         htarget hdelegation hexecMsg hcore hresult
       have hpre : execMsg.benv.state.bal = msg.benv.state.bal := by
-        rw [hexecMsg, messageCallExecutionMessage_bal_eq,
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_bal_eq,
           messageCallDelegation_bal_eq hdelegation]
       change EthBound ca msg.benv.state state
-        (trace.retained.flowActions dp ca)
+        (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)
       unfold EthBound at hbound ⊢
       rw [hstate, ← congrFun hpre ca]
       exact hbound
@@ -1758,38 +1501,11 @@ theorem TransactionTrace.messageReady
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    MessageReady dp ca trace.msg := by
-  have hsender := trace.sender_ne_ca hstable hnotCreated
-  have hbackedInitial :
-      (backedSpec weth10 dp).StateInv ca benv.state :=
-    ⟨hstable.code, hstable.sumNof, hstable.backed⟩
-  have hflashInitial :
-      (flashExactSpec dp 0).StateInv ca benv.state :=
-    ⟨hstable.code, trivial, hstable.flashZero⟩
-  have hbackedDebit :
-      (backedSpec weth10 dp).StateInv ca trace.debitState :=
-    ContractSpec.StateInv.subBal (c := backedSpec weth10 dp)
-      hsender trace.debit
-      (ContractSpec.StateInv.incrNonce hbackedInitial)
-  have hflashDebit :
-      (flashExactSpec dp 0).StateInv ca trace.debitState :=
-    ContractSpec.StateInv.subBal (c := flashExactSpec dp 0)
-      hsender trace.debit
-      (ContractSpec.StateInv.incrNonce hflashInitial)
-  have horigin :
-      (transactionTenv benv.beginTransaction tx index trace.sender
-        trace.effectiveGasPrice trace.intrinsicGas
-        trace.blobVersionedHashes).stat.origin ≠ ca := by
-    simpa [transactionTenv] using hsender
-  have hnotBegin : ca ∉ benv.beginTransaction.createdAccounts := by
-    simpa [Benv.beginTransaction] using hnotCreated
-  have hbackedMsg : (backedSpec weth10 dp).MsgInv ca trace.msg :=
-    ContractSpec.prepareMessage_preserves_inv trace.prepared
-      hbackedDebit hnotBegin horigin
-  have hflashMsg : (flashExactSpec dp 0).MsgInv ca trace.msg :=
-    ContractSpec.prepareMessage_preserves_inv trace.prepared
-      hflashDebit hnotBegin horigin
-  exact ⟨hbackedMsg, hflashMsg⟩
+    MessageReady dp ca trace.msg :=
+  ⟨ExecutionTrace.TransactionTrace.msgInv (c := backedSpec weth10 dp) trace
+      ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated,
+    ExecutionTrace.TransactionTrace.msgInv (c := flashExactSpec dp 0) trace
+      ⟨hstable.code, trivial, hstable.flashZero⟩ hnotCreated⟩
 
 theorem TransactionTrace.message_stable_and_safe
     {dp : DeployParams} {ca : Adr}
@@ -1801,7 +1517,7 @@ theorem TransactionTrace.message_stable_and_safe
     Stable dp ca trace.msg.benv.state ∧
       ca ∉ trace.msg.benv.createdAccounts ∧
       (trace.msg.shouldTransferValue = true → trace.msg.caller ≠ ca) := by
-  have ready := trace.messageReady hstable hnotCreated
+  have ready := TransactionTrace.messageReady trace hstable hnotCreated
   exact ⟨ready.stable, ready.backed.nodel.ca, ready.backed.ne⟩
 
 /-- The actual transaction wrapper contributes only its exact message
@@ -1815,17 +1531,19 @@ theorem TransactionTrace.ethBound
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    EthBound ca benv.state state (trace.flowActions dp ca) := by
+    EthBound ca benv.state state
+      (Blanc.Weth10.TransactionTrace.flowActions dp ca trace) := by
   have hdebit : EthBound ca benv.state trace.debitState [] :=
     (EthStep.silent (ca := ca)
-      (trace.debitState_bal_ca hstable hnotCreated)).bound
-  have hready := trace.messageReady hstable hnotCreated
+      (TransactionTrace.debitState_bal_ca trace hstable hnotCreated)).bound
+  have hready := TransactionTrace.messageReady trace hstable hnotCreated
   have hmsg := hmessage trace.message hready
   unfold MessageCallTrace.EthAccounted at hmsg
   rw [prepareMessage_benv trace.prepared] at hmsg
   change EthBound ca trace.debitState trace.messageState
-    (trace.message.flowActions dp ca) at hmsg
-  have hsettled := trace.postMessage_ethBound hstable hnotCreated
+    (Blanc.Weth10.MessageCallTrace.flowActions dp ca trace.message) at hmsg
+  have hsettled :=
+    TransactionTrace.postMessage_ethBound trace hstable hnotCreated
   have htotal := (hdebit.trans hmsg).trans hsettled
   simpa [TransactionTrace.flowActions] using htotal
 
@@ -1833,44 +1551,14 @@ theorem SystemMessageTrace.messageReady
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
-    (trace : SystemMessageTrace benv target data state out)
+    (_trace : SystemMessageTrace benv target data state out)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    MessageReady dp ca (systemTransactionMessage benv target data) := by
-  have one :
-      ∀ (spec : ContractSpec),
-        spec.StateInv ca benv.state →
-        spec.MsgInv ca (systemTransactionMessage benv target data) := by
-    intro spec hinv
-    have hstate : spec.StateInv ca
-        (systemTransactionMessage benv target data).benv.state := by
-      simpa [systemTransactionMessage, processSystemTransactionMsg,
-        Benv.beginTransaction] using hinv
-    refine ⟨hstate, ?_, ?_, ?_, ?_, ?_⟩
-    · refine ⟨?_, ?_⟩
-      · simpa [systemTransactionMessage, processSystemTransactionMsg,
-          Benv.beginTransaction] using hnotCreated
-      · exact fun hempty => Prog.compile_ne_nil
-          (hstate.code.symm.trans (congrArg some hempty))
-    · intro _ hcurrent
-      have htarget : target = ca := by
-        simpa [systemTransactionMessage, processSystemTransactionMsg] using
-          hcurrent
-      subst target
-      simpa [systemTransactionMessage, processSystemTransactionMsg,
-        Benv.beginTransaction] using hstate.code
-    · intro _ hcurrent
-      have htarget : target = ca := by
-        simpa [systemTransactionMessage, processSystemTransactionMsg] using
-          hcurrent
-      subst target
-      simp [systemTransactionMessage, processSystemTransactionMsg]
-    · intro htransfer
-      simp [systemTransactionMessage, processSystemTransactionMsg] at htransfer
-    · intro _ _
-      simp [systemTransactionMessage, processSystemTransactionMsg]
-  exact ⟨one _ ⟨hstable.code, hstable.sumNof, hstable.backed⟩,
-    one _ ⟨hstable.code, trivial, hstable.flashZero⟩⟩
+    MessageReady dp ca (systemTransactionMessage benv target data) :=
+  ⟨ExecutionTrace.systemTransactionMessage_msgInv
+      ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated,
+    ExecutionTrace.systemTransactionMessage_msgInv
+      ⟨hstable.code, trivial, hstable.flashZero⟩ hnotCreated⟩
 
 theorem SystemMessageTrace.ethBound
     {dp : DeployParams} {ca : Adr}
@@ -1880,8 +1568,9 @@ theorem SystemMessageTrace.ethBound
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    EthBound ca benv.state state (trace.flowActions dp ca) := by
-  have hready := trace.messageReady hstable hnotCreated
+    EthBound ca benv.state state
+      (Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace) := by
+  have hready := SystemMessageTrace.messageReady trace hstable hnotCreated
   have hmsg := hmessage trace.message hready
   unfold MessageCallTrace.EthAccounted at hmsg
   simpa [SystemMessageTrace.flowActions, systemTransactionMessage,
@@ -1897,20 +1586,10 @@ theorem SystemMessageTrace.stable_and_sum_le
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     Stable dp ca state ∧ sum state.bal ≤ sum benv.state.bal := by
-  have hbackedInput :
-      (backedSpec weth10 dp).BenvInv ca benv :=
+  have hbacked := trace.stateInv_and_sum_le (backedSpec_preserves dp ca)
     ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
-  have hflashInput :
-      (flashExactSpec dp 0).BenvInv ca benv :=
+  have hflash := trace.stateInv_and_sum_le (flashExactSpec_preserves dp ca 0)
     ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
-  have hbacked :=
-    ContractSpec.processUncheckedSystemTransaction_preserves_inv_sum_le
-      ca (backedSpec_preserves dp ca) benv target data state out
-      trace.run hbackedInput
-  have hflash :=
-    ContractSpec.processUncheckedSystemTransaction_preserves_inv_sum_le
-      ca (flashExactSpec_preserves dp ca 0) benv target data state out
-      trace.run hflashInput
   exact ⟨⟨hbacked.1.code, hbacked.1.side, hbacked.1.inv,
     hflash.1.inv⟩, hbacked.2⟩
 
@@ -1929,22 +1608,15 @@ theorem ApplyTransactionsTrace.sum_le
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
-    sum finalBenv.state.bal ≤ sum benv.state.bal := by
-  induction trace with
-  | nil => exact le_rfl
-  | cons head tail ih =>
-      have hhead := processTransaction_sum_le head.result
-      exact le_trans (by simpa [Benv.withState] using ih) hhead
+    sum finalBenv.state.bal ≤ sum benv.state.bal :=
+  ExecutionTrace.ApplyTransactionsTrace.sum_le trace
 
 theorem ApplyTransactionsTrace.createdAccounts_eq
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
-    finalBenv.createdAccounts = benv.createdAccounts := by
-  induction trace with
-  | nil => rfl
-  | cons head tail ih =>
-      simpa [Benv.withState] using ih
+    finalBenv.createdAccounts = benv.createdAccounts :=
+  ExecutionTrace.ApplyTransactionsTrace.createdAccounts_eq trace
 
 theorem ApplyTransactionsTrace.stable
     {dp : DeployParams} {ca : Adr}
@@ -1954,11 +1626,12 @@ theorem ApplyTransactionsTrace.stable
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     Stable dp ca finalBenv.state := by
-  induction trace with
-  | nil => exact hstable
-  | cons head tail ih =>
-      have hnext := head.stable hstable hnotCreated
-      exact ih hnext (by simpa [Benv.withState] using hnotCreated)
+  have hbacked := trace.benvInv (backedSpec_preserves dp ca) hstable.sumNof
+    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
+  have hflash := trace.benvInv (flashExactSpec_preserves dp ca 0)
+    hstable.sumNof ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
+  exact ⟨hbacked.state.code, hbacked.state.side, hbacked.state.inv,
+    hflash.state.inv⟩
 
 theorem ApplyTransactionsTrace.ethBound
     (dp : DeployParams) (ca : Adr)
@@ -1968,7 +1641,8 @@ theorem ApplyTransactionsTrace.ethBound
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) →
     Stable dp ca benv.state →
     ca ∉ benv.createdAccounts →
-    EthBound ca benv.state finalBenv.state (trace.flowActions dp ca)
+    EthBound ca benv.state finalBenv.state
+      (Blanc.Weth10.ApplyTransactionsTrace.flowActions dp ca trace)
   | _, _, _, _, _, .nil benv _bout, _, _ =>
       EthBound.refl ca benv.state
   | _, _, _, _, _, .cons head tail, hstable, hnotCreated =>
@@ -1978,32 +1652,6 @@ theorem ApplyTransactionsTrace.ethBound
           (TransactionTrace.stable head hstable hnotCreated)
           (by simpa [Benv.withState] using hnotCreated))
 
-theorem RequestsTrace.state_eq_consolidationState
-    {benv : Benv} {bout : BlockOutput}
-    {state : State} {bout' : BlockOutput}
-    (trace : RequestsTrace benv bout state bout') :
-    state = trace.consolidationState := by
-  have hconsolidation :
-      processCheckedSystemTransaction
-        { state := trace.withdrawalState
-          createdAccounts := benv.createdAccounts
-          stat := benv.stat }
-        consolidationRequestPredeployAddress [] =
-          .ok (trace.consolidationState, trace.consolidationOut) := by
-    simpa only [Benv.withState] using trace.consolidationRun
-  have hrun := trace.run
-  unfold processGeneralPurposeRequests at hrun
-  rw [trace.parsed] at hrun
-  simp only [bind, Except.bind] at hrun
-  split at hrun <;>
-    (rw [trace.withdrawalRun] at hrun
-     dsimp only at hrun
-     split at hrun <;>
-       (rw [hconsolidation] at hrun
-        dsimp only at hrun
-        split at hrun <;>
-          exact (Prod.mk.inj (Except.ok.inj hrun)).1.symm))
-
 theorem RequestsTrace.ethBound
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {bout : BlockOutput}
@@ -2012,17 +1660,19 @@ theorem RequestsTrace.ethBound
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
-    EthBound ca benv.state state (trace.flowActions dp ca) := by
+    EthBound ca benv.state state
+      (Blanc.Weth10.RequestsTrace.flowActions dp ca trace) := by
   have hwithdrawal :=
-    trace.withdrawal.ethBound hmessage hstable hnotCreated
+    SystemMessageTrace.ethBound trace.withdrawal hmessage hstable hnotCreated
   have hwithdrawalMeta :=
-    trace.withdrawal.stable_and_sum_le hstable hnotCreated
+    SystemMessageTrace.stable_and_sum_le trace.withdrawal hstable hnotCreated
   have hconsolidation :=
-    trace.consolidation.ethBound hmessage hwithdrawalMeta.1
+    SystemMessageTrace.ethBound trace.consolidation hmessage
+      hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hboth := hwithdrawal.trans hconsolidation
   simpa [RequestsTrace.flowActions, Benv.withState,
-    trace.state_eq_consolidationState] using hboth
+    ExecutionTrace.RequestsTrace.state_eq_consolidationState trace] using hboth
 
 theorem RequestsTrace.stable_and_sum_le
     {dp : DeployParams} {ca : Adr}
@@ -2032,19 +1682,12 @@ theorem RequestsTrace.stable_and_sum_le
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts) :
     Stable dp ca state ∧ sum state.bal ≤ sum benv.state.bal := by
-  have hwithdrawal :=
-    trace.withdrawal.stable_and_sum_le hstable hnotCreated
-  have hconsolidation :=
-    trace.consolidation.stable_and_sum_le hwithdrawal.1
-      (by simpa [Benv.withState] using hnotCreated)
-  have hstate := trace.state_eq_consolidationState
-  constructor
-  · simpa [hstate] using hconsolidation.1
-  · have hsum :
-        sum trace.consolidationState.bal ≤ sum benv.state.bal :=
-      le_trans (by simpa [Benv.withState] using hconsolidation.2)
-        hwithdrawal.2
-    simpa [hstate] using hsum
+  have hbacked := trace.stateInv_and_sum_le (backedSpec_preserves dp ca)
+    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
+  have hflash := trace.stateInv_and_sum_le (flashExactSpec_preserves dp ca 0)
+    ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
+  exact ⟨⟨hbacked.1.code, hbacked.1.side, hbacked.1.inv,
+    hflash.1.inv⟩, hbacked.2⟩
 
 /-! ## Block-body and history lifts -/
 
@@ -2061,22 +1704,23 @@ theorem AppliedBodyTrace.ethBound
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)
     (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256) :
-    EthBound ca benv.state state (trace.flowActions dp ca) := by
+    EthBound ca benv.state state
+      (Blanc.Weth10.AppliedBodyTrace.flowActions dp ca trace) := by
   have hbeacon :=
-    trace.beacon.ethBound hmessage hstable hnotCreated
+    SystemMessageTrace.ethBound trace.beacon hmessage hstable hnotCreated
   have hbeaconMeta :=
-    trace.beacon.stable_and_sum_le hstable hnotCreated
+    SystemMessageTrace.stable_and_sum_le trace.beacon hstable hnotCreated
   have hhistoryMeta :=
-    trace.history.stable_and_sum_le hbeaconMeta.1
+    SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hhistory :=
-    trace.history.ethBound hmessage hbeaconMeta.1
+    SystemMessageTrace.ethBound trace.history hmessage hbeaconMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have htransactions :=
     ApplyTransactionsTrace.ethBound dp ca hmessage trace.transactions
       hhistoryMeta.1
       (by simpa [Benv.withState] using hnotCreated)
-  have htxSum := trace.transactions.sum_le
+  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
@@ -2092,16 +1736,17 @@ theorem AppliedBodyTrace.ethBound
     processWithdrawalsState_ethBound ca trace.transactionBenv.state wds
       hwithdrawalBound
   have htransactionsStable :=
-    trace.transactions.stable hhistoryMeta.1
+    ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
       (by simpa [Benv.withState] using hnotCreated)
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
   have htransactionNotCreated :
       ca ∉ trace.transactionBenv.createdAccounts := by
-    rw [trace.transactions.createdAccounts_eq]
+    rw [ApplyTransactionsTrace.createdAccounts_eq trace.transactions]
     simpa [Benv.withState] using hnotCreated
-  have hrequests := trace.requests.ethBound hmessage hwithdrawalsStable
+  have hrequests := RequestsTrace.ethBound trace.requests hmessage
+    hwithdrawalsStable
     (by simpa [Benv.withState] using htransactionNotCreated)
   have htotal :=
     (((hbeacon.trans hhistory).trans htransactions).trans hwithdrawals).trans
@@ -2117,7 +1762,7 @@ theorem AccountedBlock.ethBound
     (hstable : Stable dp ca pre.state) :
     EthBound ca pre.state post.state accounted.actions := by
   have hbody :=
-    accounted.bodyTrace.ethBound hmessage hstable
+    AppliedBodyTrace.ethBound accounted.bodyTrace hmessage hstable
       (by simp [initBenv]) accounted.bound
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq

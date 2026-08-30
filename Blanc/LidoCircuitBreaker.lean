@@ -1,5 +1,6 @@
 import Blanc.CycleWriteFree
 import Blanc.LidoCircuitBreakerCore
+import Blanc.LinearDispatch
 
 /-!
 Production Lido CircuitBreaker v1.0.0 runtime.
@@ -410,14 +411,6 @@ def funcs (dp : DeployParams) : List (B256 × Func) :=
 language.  Its four equality chains share one entry guard and are separated by
 three balanced pivots, yielding the measured 5/4/4/4 Pareto topology without
 direct calls or jumps to selector destinations. -/
-
-def linearDispatchWith (k : Nat) :
-    List (B256 × Func) → Func
-  | [] => .call k
-  | [(word, body)] => pushB256 word ::: eq ::: (body <?> .call k)
-  | (word, body) :: rest =>
-      dup 0 ::: pushB256 word ::: eq :::
-        ((pop ::: body) <?> linearDispatchWith k rest)
 
 def splitDispatch (pivot : B256) (left right : Func) : Func :=
   dup 0 ::: pushB256 pivot ::: gt ::: (left <?> right)

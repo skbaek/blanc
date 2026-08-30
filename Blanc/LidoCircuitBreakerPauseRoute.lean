@@ -253,16 +253,6 @@ theorem prefix_of_calldatasize {e : Sevm} {s s' : Devm} {xs : Stack}
     e.data.length.toB256 :: xs <<+ s'.stack :=
   prefix_of_push (of_run_calldatasize run) hp
 
-/-- `arg k ++ checkNonAddress`, the composite `canonicalAddressArg` guards on:
-the masked word is zero exactly when the argument's head word is
-address-shaped. -/
-theorem prefix_of_argCheckNonAddress {e : Sevm} {s s' : Devm} {k : B256}
-    {xs : Stack} (hp : xs <<+ s.stack)
-    (run : Line.Run e s (arg k ++ checkNonAddress) s') :
-    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ValidAdr (Sevm.argWord e k)) := by
-  rcases of_run_append (arg k) run with ⟨_mid, r1, r2⟩
-  exact of_check_non_address (prefix_of_arg hp r1) r2
-
 /-! ## The dispatcher crossing -/
 
 /-- `Devm.getCode` depends only on the state, so a state-preserving relation

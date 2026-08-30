@@ -177,6 +177,9 @@ theorem ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
         have hstream : RetainedXlot.attributionStream dp ca
             (RetainedXlot.some run) = [] := by
           simpa only [RetainedXlot.attributionStream] using hactions
+        change AllowanceRegionEffect ca parent post
+          (Blanc.Weth10.RetainedXlot.attributionStream dp ca
+            (RetainedXlot.some run))
         rw [hstream]
         exact AllowanceRegionEffect.of_getStorCode_eq hstorage hcodeEq
 
@@ -1383,6 +1386,9 @@ theorem ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
         have hstream : RetainedXlot.attributionStream dp ca
             (RetainedXlot.some run) = [] := by
           simpa only [RetainedXlot.attributionStream] using hactions
+        change AllowanceRegionEffectSound ca parent post
+          (Blanc.Weth10.RetainedXlot.attributionStream dp ca
+            (RetainedXlot.some run))
         rw [hstream]
         exact AllowanceRegionEffectSound.of_getStorCode_eq hstorage hcodeEq
 

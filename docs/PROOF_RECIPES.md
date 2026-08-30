@@ -19,6 +19,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `tactic:func_run`, `declaration:Func.RunCompiled`, `declaration:Func.RunCompiledTo`, `declaration:Func.ExecTo`, `declaration:Func.ExecWitness`
 - Review: `proof-infrastructure` on `2026-08-25`
 
+## `linear-dispatch-selection`
+
+- Status: `active`
+- Triggers: `goal-shape:linear-dispatch-selection`
+- Preferred path: For an existing `Func.RunCompiledTo` walk rooted at `Blanc.linearDispatchWith`, apply `dispatchBodyWitness_of_runCompiledTo` after supplying selector uniqueness, the selected entry, and the initial `selector :: tail` stack. The result is the exact selected-body walk plus stack removal and `DispatchFramePreserved`; compose the public frame facts with `Devm.DispatchFramePreserved.trans` and the push/pop/diff-burn adapters.
+- Boundary: The neutral theorem discharges only the dispatcher opcode inversions. It does not know a contract's selector census, calldata ABI, role storage, auxiliary rebasing, or selected-body semantics.
+- Owner module: [Blanc/LinearDispatchCorrectness.lean](../Blanc/LinearDispatchCorrectness.lean)
+- Canonical example: [Blanc/LinearDispatchCorrectness.lean](../Blanc/LinearDispatchCorrectness.lean) — `dispatchBodyWitness_of_runCompiledTo`
+- Registered symbols: `module:Blanc/LinearDispatch.lean`, `module:Blanc/LinearDispatchCorrectness.lean`, `declaration:Blanc.linearDispatchWith`, `declaration:Blanc.selectorUnique`, `declaration:Blanc.Devm.DispatchFramePreserved`, `declaration:Blanc.Devm.DispatchFramePreserved.trans`, `declaration:Blanc.dispatchFrame_of_pushBurn`, `declaration:Blanc.dispatchFrame_of_popBurnBy`, `declaration:Blanc.dispatchFrame_of_diffBurn`, `declaration:Blanc.DispatchBodyWitness`, `declaration:Blanc.dispatchBodyWitness_of_runCompiledTo`
+- Review: `proof-infrastructure` on `2026-08-29`
+
 ## `line-run-split`
 
 - Status: `active`
@@ -45,11 +56,11 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:stack-prefix-line-run`
-- Preferred path: Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals.
-- Boundary: `line_prefix` supports a finite instruction set and refuses instructions without a registered case.
+- Preferred path: Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm.
+- Boundary: `line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct `prefix_of_*` lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried.
 - Owner module: [Blanc/Tactics.lean](../Blanc/Tactics.lean)
 - Canonical example: [Blanc/Weth10HolderFlowCompiled.lean](../Blanc/Weth10HolderFlowCompiled.lean) — `recognized_of_run_dispatchWith`
-- Registered symbols: `tactic:line_prefix`, `tactic:generalize_line_prefix`, `tactic:show_pref`
+- Registered symbols: `tactic:line_prefix`, `tactic:generalize_line_prefix`, `tactic:show_pref`, `declaration:prefix_of_mul`, `declaration:prefix_of_div`, `declaration:prefix_of_timestamp`, `declaration:prefix_of_xor`, `declaration:prefix_of_argCheckNonAddress`
 - Review: `proof-infrastructure` on `2026-08-20`
 
 ## `state-context-cleanup`
@@ -77,12 +88,12 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 ## `function-observation-invariance`
 
 - Status: `active`
-- Triggers: `goal-head:Func.Inv`
-- Preferred path: Use `func_inv` to assemble the function invariant from registered line and terminal invariants.
-- Boundary: It deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry.
+- Triggers: `goal-head:Func.Inv`, `goal-head:Linst.Inv`
+- Preferred path: For `Func.Inv`, use `func_inv` to assemble the function invariant from registered line and terminal invariants. For a terminal `Linst.Inv`, use the registered instance directly with `exact Linst.Hinv.inv`.
+- Boundary: `func_inv` deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry. A missing terminal instance belongs in the lowest common shared module, not in a contract consumer.
 - Owner module: [Blanc/Tactics.lean](../Blanc/Tactics.lean)
 - Canonical example: [Blanc/Solvent.lean](../Blanc/Solvent.lean) — `approve_preserves_bal`
-- Registered symbols: `tactic:func_inv`, `declaration:Func.Inv`
+- Registered symbols: `tactic:func_inv`, `declaration:Func.Inv`, `declaration:Linst.Inv`, `declaration:Linst.Hinv`
 - Review: `proof-infrastructure` on `2026-08-20`
 
 ## `call-boundary-outcomes`
@@ -165,13 +176,13 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 ## `fixed-byte-offsets`
 
-- Status: `partial`
+- Status: `active`
 - Triggers: `goal-shape:fixed-byte-offset`
-- Preferred path: Use the existing `Mem.Wf` and `Mem.Reads` APIs; I8 proposes the missing `writeAt`/`sliceD` extension. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost.
-- Boundary: The current memory layer is live, but no gate may demand the proposed extension before it lands. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, `blanc_suggest` correctly missed the emitter-drop goal, and a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1% while the same 41.25 s kernel check remained. A later pilot promoted the whole local parameterized tail proof to a top-level private theorem: the owner median moved only from 48.11 to 46.85 s (-2.62%) and the same dominant 46.568 s kernel check remained. Both pilots were exactly reverted, and their profiler-independent owner medians remain the verdicts. Reopen only for a change whose serialized owner median improves by the licensed win rule; persistence of the trailing kernel row is not a mechanism criterion.
-- Owner module: [Blanc/CommonCore.lean](../Blanc/CommonCore.lean)
-- Canonical example: [Blanc/Weth10HolderFlowCompiled.lean](../Blanc/Weth10HolderFlowCompiled.lean) — `exists_acceptedValueCallTrace_same_slot`
-- Registered symbols: `declaration:Mem.Wf`, `declaration:Mem.Reads`
+- Preferred path: Use `Bytes.sliceD_writeAt` for the written window, `Bytes.sliceD_writeAt_before` or `Bytes.sliceD_writeAt_after` for disjoint neighboring windows, and `Bytes.readWord_writeAt_self` or `Bytes.readWord_writeAt_of_disjoint` for word reads. For padded or abstract memory, start from `Mem.Wf` and `Mem.Reads`. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost.
+- Boundary: These laws cover byte-array writes and fixed-width word reads. They do not turn arbitrary compiled-emitter `List.drop` identities into a shared API. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1%, and a later top-level private tail theorem moved the owner median only from 48.11 to 46.85 s (-2.62%); both pilots were reverted. Reopen that separate emitter route only for a change whose serialized owner median improves by the licensed win rule.
+- Owner module: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean)
+- Canonical example: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean) — `Bytes.readWord_writeAt_of_disjoint`
+- Registered symbols: `module:Blanc/CommonProofs.lean`, `declaration:Bytes.sliceD_writeAt`, `declaration:Bytes.sliceD_writeAt_before`, `declaration:Bytes.sliceD_writeAt_after`, `declaration:Bytes.readWord_writeAt_self`, `declaration:Bytes.readWord_writeAt_of_disjoint`, `declaration:Mem.Wf`, `declaration:Mem.Reads`
 - Review: `proof-infrastructure` on `2026-08-21`
 
 ## `frame-root-carrying-execution`
@@ -189,11 +200,22 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:message-execution-settlement`
-- Preferred path: Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site.
-- Boundary: The bridge requires entry-state identity and disabled precompiles. It describes ordinary call-message settlement, not CREATE settlement or retained-frame filtering.
+- Preferred path: Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections.
+- Boundary: The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement.
 - Owner module: [Blanc/MessageExecution.lean](../Blanc/MessageExecution.lean)
 - Canonical example: [Blanc/MessageExecution.lean](../Blanc/MessageExecution.lean) — `MessageExecution.processMessage_eq_settle_exec`
-- Registered symbols: `module:Blanc/MessageExecution.lean`, `declaration:MessageExecution.processMessage_eq_settle_exec`, `declaration:MessageExecution.processMessage_clean_of_exec`, `declaration:MessageExecution.processMessage_revert_of_exec`, `declaration:MessageExecution.processMessage_halt_of_exec`, `declaration:MessageExecution.settledRevert`, `declaration:MessageExecution.settledHalt`, `declaration:Msg.initDevm_stack`, `declaration:Msg.initSevm_data`
+- Registered symbols: `module:Blanc/MessageExecution.lean`, `module:Blanc/MessageExecutionInversion.lean`, `declaration:MessageExecution.processMessage_eq_settle_exec`, `declaration:MessageExecution.processMessage_clean_of_exec`, `declaration:MessageExecution.processMessage_revert_of_exec`, `declaration:MessageExecution.processMessage_halt_of_exec`, `declaration:MessageExecution.processMessage_clean_rawPost`, `declaration:MessageExecution.processMessage_entry_facts`, `declaration:MessageExecution.processMessage_entry_stack`, `declaration:MessageExecution.processMessage_entry_memory`, `declaration:MessageExecution.settledRevert`, `declaration:MessageExecution.settledHalt`, `declaration:Msg.initDevm_stack`, `declaration:Msg.initSevm_data`
+- Review: `proof-infrastructure` on `2026-08-29`
+
+## `retained-write-noninterference`
+
+- Status: `active`
+- Triggers: `goal-shape:retained-write-noninterference`
+- Preferred path: For `Exec.NoRetainedWriteTo`, split first on `Execution.commits out = true`. Close the rollback arm with `Exec.noRetainedWriteTo_of_not_commits`; on a committing execution use `Exec.noRetainedWriteTo_of_sourceSites_no_exec` for a source-childless program, `Exec.noRetainedWriteTo_of_no_execOccurrence` for an occurrence-level proof, or `Exec.noRetainedWriteTo_of_frame_owners_ne` when entered child frames have distinct storage owners.
+- Boundary: The noncommitting theorem proves retained-write absence by rollback, not raw instruction absence. The committing routes still need exact invocation/source or entered-frame ownership evidence; do not infer childlessness merely from a static call flag.
+- Owner module: [Blanc/ExecutionNoninterference.lean](../Blanc/ExecutionNoninterference.lean)
+- Canonical example: [Blanc/ExecutionNoninterference.lean](../Blanc/ExecutionNoninterference.lean) — `Exec.noRetainedWriteTo_of_not_commits`
+- Registered symbols: `module:Blanc/ExecutionNoninterference.lean`, `declaration:Exec.NoRetainedWriteTo`, `declaration:Exec.noRetainedWriteTo_of_not_commits`, `declaration:Exec.noRetainedWriteTo_of_no_execOccurrence`, `declaration:Exec.noRetainedWriteTo_of_sourceSites_no_exec`, `declaration:Exec.noRetainedWriteTo_of_frame_owners_ne`
 - Review: `proof-infrastructure` on `2026-08-29`
 
 ## `devm-common-update-laws`
@@ -228,3 +250,36 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean) — `Bytes.sliceD_zero_length`
 - Registered symbols: `module:Blanc/CommonProofs.lean`, `declaration:Bytes.sliceD_zero_length`
 - Review: `proof-infrastructure` on `2026-08-29`
+
+## `retained-wrapper-trace`
+
+- Status: `active`
+- Triggers: `goal-shape:retained-wrapper-trace`
+- Preferred path: Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state.
+- Boundary: These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay.
+- Owner module: [Blanc/ExecutionTrace.lean](../Blanc/ExecutionTrace.lean)
+- Canonical example: [Blanc/ExecutionTrace.lean](../Blanc/ExecutionTrace.lean) — `ExecutionTrace.exists_messageCallTrace`
+- Registered symbols: `module:Blanc/ExecutionTrace.lean`, `module:Blanc/ExecutionHistory.lean`, `declaration:ExecutionTrace.RetainedXlot`, `declaration:ExecutionTrace.exists_retainedXlot_of_filled`, `declaration:ExecutionTrace.ProcessMessageTrace`, `declaration:ExecutionTrace.exists_processMessageTrace`, `declaration:ExecutionTrace.ProcessCreateMessageTrace`, `declaration:ExecutionTrace.exists_processCreateMessageTrace`, `declaration:ExecutionTrace.MessageCallTrace`, `declaration:ExecutionTrace.exists_messageCallTrace`, `declaration:ExecutionTrace.TransactionTrace`, `declaration:ExecutionTrace.exists_transactionTrace`, `declaration:ExecutionTrace.ApplyTransactionsTrace`, `declaration:ExecutionTrace.exists_applyTransactionsTrace`, `declaration:ExecutionTrace.SystemMessageTrace`, `declaration:ExecutionTrace.exists_systemMessageTrace`, `declaration:ExecutionTrace.RequestsTrace`, `declaration:ExecutionTrace.exists_requestsTrace`, `declaration:ExecutionTrace.AppliedBodyTrace`, `declaration:ExecutionTrace.exists_appliedBodyTrace`, `declaration:ExecutionTrace.ConfiguredBlockTrace`, `declaration:ExecutionTrace.exists_configuredBlockTrace_of_transition`, `declaration:ExecutionTrace.ConfiguredHistoryTrace`, `declaration:ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing`
+- Review: `proof-infrastructure` on `2026-08-30`
+
+## `retained-state-replay`
+
+- Status: `active`
+- Triggers: `goal-head:StateReplay`
+- Preferred path: Build the chronology at the narrowest retained layer and finish with its `stateReplay` theorem. Use `Exec.committedStateReplay` for a recursive execution, then the message, transaction, body, block, or history chronology module to retain wrapper boundaries in their exact execution order. Compose or relabel an existing replay with `StateReplay.append`, `StateReplay.mapOrigin`, and `StateTransition.mapOrigin`.
+- Boundary: A `StateReplay` proves endpoint continuity and preserves exact provenance; it does not classify a transition as a contract deposit, withdrawal, or attack step. Apply that interpretation only in the contract-owned layer above the generic chronology.
+- Owner module: [Blanc/ExecutionStateTrace.lean](../Blanc/ExecutionStateTrace.lean)
+- Canonical example: [Blanc/ExecutionStateTrace.lean](../Blanc/ExecutionStateTrace.lean) — `Exec.committedStateReplay`
+- Registered symbols: `module:Blanc/ExecutionStateTrace.lean`, `module:Blanc/ExecutionMessageStateTrace.lean`, `module:Blanc/ExecutionTransactionStateTrace.lean`, `module:Blanc/ExecutionBodyStateTrace.lean`, `module:Blanc/ExecutionHistoryStateTrace.lean`, `declaration:StateTransition`, `declaration:StateReplay`, `declaration:StateReplay.append`, `declaration:StateTransition.mapOrigin`, `declaration:StateReplay.mapOrigin`, `declaration:Exec.committedStateReplay`, `declaration:ExecutionTrace.MessageCallTrace.stateReplay`, `declaration:ExecutionTrace.TransactionStateChronology.stateReplay`, `declaration:ExecutionTrace.AppliedBodyStateChronology.stateReplay`, `declaration:ExecutionTrace.ConfiguredHistoryStateChronology.stateReplay`
+- Review: `proof-infrastructure` on `2026-08-30`
+
+## `one-word-source-return`
+
+- Status: `active`
+- Triggers: `goal-head:ReturnsWord`
+- Preferred path: For the source fragment `mstoreAt 0 +++ returnMemoryRange 0 32`, use `of_storeReturnWord` when a `Mem.Wf`/`Mem.Reads` image is already available, or `returnsWord_of_storeReturn` when no memory side condition is in context. Both prove `ReturnsWord` from the known stack head and preserve code.
+- Boundary: This is the source-level one-word ABI observation. For a compiled terminal walk use `Func.runCompiledTo_ret_word_at_zero`; for other offsets, sizes, or payloads use the general return APIs.
+- Owner module: [Blanc/Ladder.lean](../Blanc/Ladder.lean)
+- Canonical example: [Blanc/Ladder.lean](../Blanc/Ladder.lean) — `returnsWord_of_storeReturn`
+- Registered symbols: `module:Blanc/Ladder.lean`, `declaration:ReturnsWord`, `declaration:of_storeReturnWord`, `declaration:returnsWord_of_storeReturn`
+- Review: `proof-infrastructure` on `2026-08-30`

@@ -5124,6 +5124,55 @@ lemma prefix_of_or {e} {x y xs} {s s' : Devm} :
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
 
+/-- Bitwise conjunction on EVM words is commutative. -/
+theorem B256.and_comm (x y : B256) : x &&& y = y &&& x := by
+  rcases x with ⟨⟨xh0, xh1⟩, ⟨xl0, xl1⟩⟩
+  rcases y with ⟨⟨yh0, yh1⟩, ⟨yl0, yl1⟩⟩
+  apply Prod.ext <;> apply Prod.ext <;> exact UInt64.and_comm _ _
+
+/-- Bitwise exclusive-or on EVM words is commutative. -/
+theorem B256.xor_comm (x y : B256) : x ^^^ y = y ^^^ x := by
+  rcases x with ⟨⟨xh0, xh1⟩, ⟨xl0, xl1⟩⟩
+  rcases y with ⟨⟨yh0, yh1⟩, ⟨yl0, yl1⟩⟩
+  apply Prod.ext <;> apply Prod.ext <;> exact UInt64.xor_comm _ _
+
+/-- Reapplying the same bitwise mask does not change an EVM word. -/
+theorem B256.and_idem_right (x mask : B256) :
+    (x &&& mask) &&& mask = x &&& mask := by
+  rcases x with ⟨xh, xl⟩
+  rcases mask with ⟨mh, ml⟩
+  change ⟨(xh &&& mh) &&& mh, (xl &&& ml) &&& ml⟩ =
+    (⟨xh &&& mh, xl &&& ml⟩ : B256)
+  apply Prod.ext
+  · rcases xh with ⟨xh0, xh1⟩
+    rcases mh with ⟨mh0, mh1⟩
+    change ⟨(xh0 &&& mh0) &&& mh0, (xh1 &&& mh1) &&& mh1⟩ =
+      (⟨xh0 &&& mh0, xh1 &&& mh1⟩ : B128)
+    apply Prod.ext
+    · change (xh0 &&& mh0) &&& mh0 = xh0 &&& mh0
+      rw [UInt64.and_assoc, UInt64.and_self]
+    · change (xh1 &&& mh1) &&& mh1 = xh1 &&& mh1
+      rw [UInt64.and_assoc, UInt64.and_self]
+  · rcases xl with ⟨xl0, xl1⟩
+    rcases ml with ⟨ml0, ml1⟩
+    change ⟨(xl0 &&& ml0) &&& ml0, (xl1 &&& ml1) &&& ml1⟩ =
+      (⟨xl0 &&& ml0, xl1 &&& ml1⟩ : B128)
+    apply Prod.ext
+    · change (xl0 &&& ml0) &&& ml0 = xl0 &&& ml0
+      rw [UInt64.and_assoc, UInt64.and_self]
+    · change (xl1 &&& ml1) &&& ml1 = xl1 &&& ml1
+      rw [UInt64.and_assoc, UInt64.and_self]
+
+/-- `XOR` replaces the two known stack heads by their exclusive-or. -/
+lemma prefix_of_xor {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s xor s' → (x :: y :: xs <<+ s.stack) →
+      ((x ^^^ y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two B256.xor ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
 lemma prefix_of_and {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s and s' → (x :: y :: xs <<+ s.stack) → ((x &&& y) :: xs <<+ s'.stack) := by
   intro h0 h1
@@ -5148,9 +5197,34 @@ lemma prefix_of_sub {e} {x y xs} {s s' : Devm} :
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
 
+lemma prefix_of_mul {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s mul s' → (x :: y :: xs <<+ s.stack) → ((x * y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· * ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_div {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s div s' → (x :: y :: xs <<+ s.stack) → ((x / y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· / ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
 lemma prefix_of_push {xs ys} {s s' : Devm} :
     Devm.PushBurn xs s s' → (ys <<+ s.stack) → ((xs ++ ys) <<+ s'.stack) :=
   λ h0 h1 => append_pref h0.stack h1
+
+/-- `TIMESTAMP` pushes the current block time above any known stack prefix. -/
+lemma prefix_of_timestamp {e : Sevm} {s s' : Devm} {xs : Stack}
+    (hp : xs <<+ s.stack) (h : Ninst.Run e s timestamp s') :
+    e.benvStat.time :: xs <<+ s'.stack := by
+  change Ninst.Run e s (.reg .timestamp) s' at h
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact prefix_of_push (Devm.pushBurn_of_pushItem run) hp
 
 /-- `DUP n` at a stack whose top `n + 1` words are already known: the word it
 pushes is the one the walk knows sits at index `n`.
@@ -5294,6 +5368,317 @@ lemma prefix_of_fsig {e xs} {s s' : Devm} :
 
 lemma abiSelectorBytes_length (sel : B256) : (abiSelectorBytes sel).length = 4 := by
   simp [abiSelectorBytes, B256.length_toBytes]
+
+private lemma UInt64.high_concat32 (x y : UInt32) :
+    ((((x.toUInt64 <<< 32) ||| y.toUInt64) >>> 32).toUInt32) = x := by
+  rw [← UInt32.toNat_inj]
+  rw [UInt64.toNat_toUInt32, UInt64.toNat_shiftRight]
+  simp only [UInt64.toNat_or, UInt64.toNat_shiftLeft_lo]
+  have widen (z : UInt32) : z.toUInt64.toNat = z.toNat := rfl
+  have n32 : UInt64.toNat 32 % 64 = 32 := rfl
+  rw [widen, widen, n32]
+  have hx : x.toNat <<< 32 < 2 ^ 64 := by
+    rw [Nat.shiftLeft_eq]
+    have := UInt32.toNat_lt x
+    norm_num at this ⊢
+    omega
+  unfold Nat.lo
+  rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
+    Nat.shiftLeft_shiftRight,
+    Nat.shiftRight_eq_zero y.toNat 32 (UInt32.toNat_lt y), Nat.or_zero,
+    Nat.mod_eq_of_lt (UInt32.toNat_lt x)]
+
+private lemma UInt64.low_concat32 (x y : UInt32) :
+    (((x.toUInt64 <<< 32) ||| y.toUInt64).toUInt32) = y := by
+  rw [← UInt32.toNat_inj]
+  rw [UInt64.toNat_toUInt32]
+  simp only [UInt64.toNat_or, UInt64.toNat_shiftLeft_lo]
+  have widen (z : UInt32) : z.toUInt64.toNat = z.toNat := rfl
+  have n32 : UInt64.toNat 32 % 64 = 32 := rfl
+  rw [widen, widen, n32]
+  have hx : x.toNat <<< 32 < 2 ^ 64 := by
+    rw [Nat.shiftLeft_eq]
+    have := UInt32.toNat_lt x
+    norm_num at this ⊢
+    omega
+  unfold Nat.lo
+  rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
+  simp only [Nat.shiftLeft_eq]
+  rw [Nat.mul_comm, Nat.mul_mod_right,
+    Nat.mod_eq_of_lt (UInt32.toNat_lt y), Nat.zero_or]
+
+private lemma UInt32.high_concat16 (x y : UInt16) :
+    ((((x.toUInt32 <<< 16) ||| y.toUInt32) >>> 16).toUInt16) = x := by
+  rw [← UInt16.toNat_inj]
+  rw [UInt32.toNat_toUInt16, UInt32.toNat_shiftRight]
+  simp only [UInt32.toNat_or, UInt32.toNat_shiftLeft_lo]
+  have widen (z : UInt16) : z.toUInt32.toNat = z.toNat := rfl
+  have n16 : UInt32.toNat 16 % 32 = 16 := rfl
+  rw [widen, widen, n16]
+  have hx : x.toNat <<< 16 < 2 ^ 32 := by
+    rw [Nat.shiftLeft_eq]
+    have := UInt16.toNat_lt x
+    norm_num at this ⊢
+    omega
+  unfold Nat.lo
+  rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
+    Nat.shiftLeft_shiftRight,
+    Nat.shiftRight_eq_zero y.toNat 16 (UInt16.toNat_lt y), Nat.or_zero,
+    Nat.mod_eq_of_lt (UInt16.toNat_lt x)]
+
+private lemma UInt32.low_concat16 (x y : UInt16) :
+    (((x.toUInt32 <<< 16) ||| y.toUInt32).toUInt16) = y := by
+  rw [← UInt16.toNat_inj]
+  rw [UInt32.toNat_toUInt16]
+  simp only [UInt32.toNat_or, UInt32.toNat_shiftLeft_lo]
+  have widen (z : UInt16) : z.toUInt32.toNat = z.toNat := rfl
+  have n16 : UInt32.toNat 16 % 32 = 16 := rfl
+  rw [widen, widen, n16]
+  have hx : x.toNat <<< 16 < 2 ^ 32 := by
+    rw [Nat.shiftLeft_eq]
+    have := UInt16.toNat_lt x
+    norm_num at this ⊢
+    omega
+  unfold Nat.lo
+  rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
+  simp only [Nat.shiftLeft_eq]
+  rw [Nat.mul_comm, Nat.mul_mod_right,
+    Nat.mod_eq_of_lt (UInt16.toNat_lt y), Nat.zero_or]
+
+private lemma UInt16.high_concat8 (x y : UInt8) :
+    ((((x.toUInt16 <<< 8) ||| y.toUInt16) >>> 8).toUInt8) = x := by
+  rw [← UInt8.toNat_inj]
+  rw [UInt16.toNat_toUInt8, UInt16.toNat_shiftRight]
+  simp only [UInt16.toNat_or, UInt16.toNat_shiftLeft_lo]
+  have widen (z : UInt8) : z.toUInt16.toNat = z.toNat := rfl
+  have n8 : UInt16.toNat 8 % 16 = 8 := rfl
+  rw [widen, widen, n8]
+  have hx : x.toNat <<< 8 < 2 ^ 16 := by
+    rw [Nat.shiftLeft_eq]
+    have := UInt8.toNat_lt x
+    norm_num at this ⊢
+    omega
+  unfold Nat.lo
+  rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
+    Nat.shiftLeft_shiftRight,
+    Nat.shiftRight_eq_zero y.toNat 8 (UInt8.toNat_lt y), Nat.or_zero,
+    Nat.mod_eq_of_lt (UInt8.toNat_lt x)]
+
+private lemma UInt16.low_concat8 (x y : UInt8) :
+    (((x.toUInt16 <<< 8) ||| y.toUInt16).toUInt8) = y := by
+  rw [← UInt8.toNat_inj]
+  rw [UInt16.toNat_toUInt8]
+  simp only [UInt16.toNat_or, UInt16.toNat_shiftLeft_lo]
+  have widen (z : UInt8) : z.toUInt16.toNat = z.toNat := rfl
+  have n8 : UInt16.toNat 8 % 16 = 8 := rfl
+  rw [widen, widen, n8]
+  have hx : x.toNat <<< 8 < 2 ^ 16 := by
+    rw [Nat.shiftLeft_eq]
+    have := UInt8.toNat_lt x
+    norm_num at this ⊢
+    omega
+  unfold Nat.lo
+  rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
+  simp only [Nat.shiftLeft_eq]
+  rw [Nat.mul_comm, Nat.mul_mod_right,
+    Nat.mod_eq_of_lt (UInt8.toNat_lt y), Nat.zero_or]
+
+/-- Encoding eight bytes as a limb and decoding it again is exact. -/
+private lemma UInt64.toBytes_ofBytes (a b c d e f g h : UInt8) :
+    (UInt64.ofBytes a b c d e f g h).toBytes = [a, b, c, d, e, f, g, h] := by
+  rw [UInt64.ofBytes_eq_halves]
+  simp only [UInt64.toBytes, UInt64.high_concat32, UInt64.low_concat32,
+    UInt32.toBytes]
+  rw [UInt32.ofBytes_eq_halves, UInt32.ofBytes_eq_halves]
+  simp only [UInt32.high_concat16, UInt32.low_concat16, UInt16.toBytes,
+    UInt16.ofBytes, UInt16.high_concat8, UInt16.low_concat8]
+  simp
+
+/-- The 32-byte codec is an exact round trip, in the concrete shape used by
+`Bytes.toBytes_toB256_of_length`. -/
+private lemma Bytes.toBytes_toB256_32
+    (a00 a01 a02 a03 a04 a05 a06 a07
+     a08 a09 a10 a11 a12 a13 a14 a15
+     a16 a17 a18 a19 a20 a21 a22 a23
+     a24 a25 a26 a27 a28 a29 a30 a31 : UInt8) :
+    (Bytes.toB256
+      [a00, a01, a02, a03, a04, a05, a06, a07,
+       a08, a09, a10, a11, a12, a13, a14, a15,
+       a16, a17, a18, a19, a20, a21, a22, a23,
+       a24, a25, a26, a27, a28, a29, a30, a31]).toBytes =
+      [a00, a01, a02, a03, a04, a05, a06, a07,
+       a08, a09, a10, a11, a12, a13, a14, a15,
+       a16, a17, a18, a19, a20, a21, a22, a23,
+       a24, a25, a26, a27, a28, a29, a30, a31] := by
+  simp only [Bytes.toB256]
+  rw [Bytes.toB256_go_eight_cons, Bytes.toB256_go_eight_cons,
+      Bytes.toB256_go_eight_cons, Bytes.toB256_go_eight_cons]
+  simp only [Bytes.toB256.go, B256.toBytes, B128.toBytes, List.append_assoc,
+    UInt64.toBytes_ofBytes]
+  simp
+
+/-- `Bytes.toB256` loses no information on an exact word. -/
+lemma Bytes.toBytes_toB256_of_length {xs : Bytes} (h : xs.length = 32) :
+    (Bytes.toB256 xs).toBytes = xs := by
+  rcases xs with _ | ⟨a00, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a01, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a02, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a03, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a04, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a05, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a06, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a07, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a08, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a09, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a10, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a11, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a12, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a13, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a14, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a15, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a16, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a17, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a18, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a19, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a20, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a21, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a22, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a23, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a24, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a25, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a26, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a27, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a28, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a29, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a30, xs⟩
+  · simp at h
+  rcases xs with _ | ⟨a31, xs⟩
+  · simp at h
+  cases xs with
+  | nil =>
+      simpa using (Bytes.toBytes_toB256_32 a00 a01 a02 a03 a04 a05 a06 a07
+        a08 a09 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23
+        a24 a25 a26 a27 a28 a29 a30 a31)
+  | cons a32 xs => simp at h
+
+private lemma Bytes.toB256_uint32_toBytes (x : UInt32) :
+    Bytes.toB256 x.toBytes = x.toB256 := by
+  have highZero : (x.toUInt64 >>> 32).toUInt32 = 0 := by
+    rw [← UInt32.toNat_inj, UInt64.toNat_toUInt32,
+      UInt64.toNat_shiftRight]
+    change (x.toNat >>> 32) % 4294967296 = 0
+    rw [Nat.shiftRight_eq_zero _ _ (UInt32.toNat_lt x)]
+  have roundtrip := B256.toB256_toBytes
+    (⟨⟨(0 : UInt64), 0⟩, ⟨0, x.toUInt64⟩⟩ : B256)
+  change Bytes.toB256 x.toBytes =
+    (⟨⟨(0 : UInt64), 0⟩, ⟨0, x.toUInt64⟩⟩ : B256)
+  simpa [UInt32.toB256, B256.toBytes, B128.toBytes, UInt64.toBytes,
+    UInt32.toBytes, UInt16.toBytes, highZero,
+    Bytes.toB256_zero_cons] using roundtrip
+
+private lemma shiftRight_224_eq_toB256_take_four (x : B256) :
+    x >>> 224 = Bytes.toB256 (x.toBytes.take 4) := by
+  rcases x with ⟨⟨x3, x2⟩, ⟨x1, x0⟩⟩
+  have firstFour :
+      (B256.toBytes (⟨⟨x3, x2⟩, ⟨x1, x0⟩⟩ : B256)).take 4 =
+        (x3 >>> 32).toUInt32.toBytes := by
+    simp only [B256.toBytes, B128.toBytes, UInt64.toBytes]
+    simp only [List.append_assoc]
+    rw [List.take_length_append' (UInt32.length_toBytes _).symm]
+  rw [firstFour, Bytes.toB256_uint32_toBytes]
+  change B256.shiftRight (⟨⟨_, _⟩, ⟨_, _⟩⟩ : B256) 224 = _
+  simp only [B256.shiftRight]
+  change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
+  simp only [B128.shiftRight]
+  norm_num
+  congr 3
+  have hlt : (x3 >>> 32).toNat < 4294967296 := by
+    rw [UInt64.toNat_shiftRight]
+    change x3.toNat >>> 32 < 4294967296
+    rw [Nat.shiftRight_eq_div_pow]
+    norm_num
+    have hx := UInt64.toNat_lt x3
+    omega
+  rw [← UInt64.toNat_inj]
+  change (x3 >>> 32).toNat = (x3 >>> 32).toUInt32.toNat
+  rw [UInt64.toUInt32_toNat, Nat.mod_eq_of_lt hlt]
+
+/-- Taking a shorter prefix after a padded take is the shorter padded take. -/
+lemma List.take_takeD_of_le {alpha} (xs : List alpha) (m n : Nat)
+    (default : alpha) (le : m ≤ n) :
+    (List.takeD n xs default).take m = List.takeD m xs default := by
+  induction m generalizing n xs with
+  | zero => rfl
+  | succ m ih =>
+      cases n with
+      | zero => omega
+      | succ n =>
+          cases xs with
+          | nil =>
+              simp only [List.takeD, List.tail, List.take, List.cons.injEq]
+              exact ⟨trivial, ih [] n (by omega)⟩
+          | cons x xs =>
+              simp only [List.takeD, List.tail, List.take, List.cons.injEq]
+              exact ⟨trivial, ih xs n (by omega)⟩
+
+/-- Calldata beginning with a canonical ABI selector has that selector under
+`Sevm.selector`, independently of its tail.  The explicit canonicality premise
+is essential: `abiSelectorBytes` keeps only the low four bytes of an arbitrary
+`B256`, whereas `Sevm.selector` is itself a four-byte word. -/
+theorem selector_eq_of_data_eq_abiSelectorBytes_append
+    {sevm : Sevm} {selected : B256} {tail : Bytes}
+    (canonical : Bytes.toB256 (abiSelectorBytes selected) = selected)
+    (data : sevm.data = abiSelectorBytes selected ++ tail) :
+    Sevm.selector sevm = selected := by
+  let word := sevm.data.sliceD 0 32 0
+  have wordLength : word.length = 32 := by
+    exact List.takeD_length _ _ _
+  have roundtrip : (Bytes.toB256 word).toBytes = word :=
+    Bytes.toBytes_toB256_of_length wordLength
+  have firstFour :
+      (Bytes.toB256 word).toBytes.take 4 = abiSelectorBytes selected := by
+    rw [roundtrip]
+    unfold word
+    simp only [List.sliceD, List.drop_zero]
+    rw [List.take_takeD_of_le _ _ _ _ (by omega)]
+    rw [List.takeD_eq_take _ (by
+      simp [data, abiSelectorBytes_length])]
+    rw [data, List.take_append_of_le_length]
+    · exact List.take_of_length_le (by rw [abiSelectorBytes_length])
+    · rw [abiSelectorBytes_length]
+  rw [Sevm.selector, Sevm.dataWord]
+  change Bytes.toB256 word >>> 224 = selected
+  rw [shiftRight_224_eq_toB256_take_four, firstFour, canonical]
 
 /-! The three head words and the offset word of a `flashLoan`-shaped call.
 
@@ -5678,6 +6063,51 @@ instance : Rinst.Hinv Devm.state Rinst.callvalue :=
 instance : Rinst.Hinv Devm.state Rinst.iszero :=
   ⟨Rinst.preserves_state (by intro h; cases h) (by intro h; cases h)⟩
 
+instance : Rinst.Hinv Devm.state Rinst.mstore :=
+  ⟨Rinst.preserves_state (by intro h; cases h) (by intro h; cases h)⟩
+
+instance : Rinst.Hinv Devm.state Rinst.mload :=
+  ⟨Rinst.preserves_state (by intro h; cases h) (by intro h; cases h)⟩
+
+/-- The whole persistent world state is preserved by every register
+instruction except the two store forms; these are the cases the compiled
+walks in this repository actually step through. -/
+syntax "show_hinv_state" : tactic
+macro_rules
+  | `(tactic| show_hinv_state) =>
+    `(tactic| exact ⟨Rinst.preserves_state (by intro h; cases h)
+        (by intro h; cases h)⟩)
+
+instance : Rinst.Hinv Devm.state Rinst.calldatasize := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.calldataload := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.lt := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.gt := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.add := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.mul := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.sub := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.and := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.or := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.not := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.eq := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.shl := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.shr := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.div := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.mod := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.exp := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.slt := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.sgt := by show_hinv_state
+
+/-- An observation preserved as a whole family is preserved at each index.  A
+walk that only tracks one account's balance states its invariant as the
+projection `fun d => d.getBal a`, so the family instances above are exposed at
+that shape rather than restated per contract. -/
+instance {a : Adr} {o : Rinst} : Rinst.Hinv (fun d => Devm.getBal d a) o :=
+  ⟨by intro pc sevm pre post hrun; exact congrFun (Rinst.preserves_bal hrun) a⟩
+
+instance {a : Adr} {i : Ninst} [Ninst.Hinv Devm.getBal i] :
+    Ninst.Hinv (fun d => Devm.getBal d a) i :=
+  ⟨by intros e s s' h; exact congrFun (Ninst.Hinv.inv h) a⟩
+
 instance {o : Rinst} : Rinst.Hinv Devm.getCode o := ⟨by
   intro pc sevm pre post run
   funext a
@@ -5957,6 +6387,13 @@ instance : Rinst.Hinv Devm.memory Rinst.or := by show_hinv_mem_binary
 instance : Rinst.Hinv Devm.memory Rinst.xor := by show_hinv_mem_binary
 instance : Rinst.Hinv Devm.memory Rinst.shl := by show_hinv_mem_binary
 instance : Rinst.Hinv Devm.memory Rinst.shr := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.mul := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.div := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.mod := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.sdiv := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.smod := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.slt := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.sgt := by show_hinv_mem_binary
 instance : Rinst.Hinv Devm.memory Rinst.not := by show_hinv_mem_unary
 instance : Rinst.Hinv Devm.memory Rinst.iszero := by show_hinv_mem_unary
 instance : Rinst.Hinv Devm.memory Rinst.address := by show_hinv_mem_push
@@ -6788,6 +7225,47 @@ section DispatchLogFrame
 
 open scoped LogOutputHinv
 
+/-! The entry route is `fsig +++ dispatch`, so the same log/output projection
+a functional theorem carries through the dispatcher must first be carried
+through `fsig`.  `prefix_of_fsig` above says which word the selector prefix
+leaves on the stack; these two say what it leaves the event log and the output
+buffer.  Both are pure `Line.Run` frames over the four instructions of
+`cdl 0 ++ shiftRight 224`, and neither mentions a contract. -/
+
+/-- `fsig` emits no event. -/
+lemma fsig_logs {e : Sevm} {s t : Devm}
+    (run : Line.Run e s fsig t) : s.logs = t.logs := by
+  unfold fsig cdl shiftRight at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
+  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
+  cases hnil
+  have hshr : s3.logs = t.logs := by
+    rcases of_run_reg q4 with ⟨pc, hrun⟩
+    simp only [Rinst.run, Rinst.runCore] at hrun
+    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.logs
+  exact (of_run_pushB256 q1).logs.trans
+    ((Ninst.Hinv.inv (f := Devm.logs) q2).trans
+      ((of_run_pushB256 q3).logs.trans hshr))
+
+/-- `fsig` writes no output. -/
+lemma fsig_output {e : Sevm} {s t : Devm}
+    (run : Line.Run e s fsig t) : s.output = t.output := by
+  unfold fsig cdl shiftRight at run
+  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
+  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
+  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
+  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
+  cases hnil
+  have hshr : s3.output = t.output := by
+    rcases of_run_reg q4 with ⟨pc, hrun⟩
+    simp only [Rinst.run, Rinst.runCore] at hrun
+    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.output
+  exact (of_run_pushB256 q1).output.trans
+    ((Ninst.Hinv.inv (f := Devm.output) q2).trans
+      ((of_run_pushB256 q3).output.trans hshr))
+
 lemma reach_of_dispatchWith_leaf_logs {sig w : B256} {f p : Func}
     {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
     (h_mem : (sig, f) ∈ [(w, p)])
@@ -7103,26 +7581,6 @@ lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
     simp [hb]
   rw [h_empty_list] at hwa
   exact hwa rfl
-
-lemma State.set_bal {st : Jaune.State} {a : Adr} {ac : Acct}
-    (h : ac.bal = (st.get a).bal) : (st.set a ac).bal = st.bal := by
-  funext b
-  by_cases hb : b = a
-  · subst hb
-    show ((st.set b ac).get b).bal = (st.get b).bal
-    rw [State.get_set_self]
-    exact h
-  · show ((st.set a ac).get b).bal = (st.get b).bal
-    rw [State.get_set_ne _ (fun hc => hb hc.symm)]
-
-lemma State.setStor_bal {st : Jaune.State} {a : Adr} {s : Stor} :
-    (st.setStor a s).bal = st.bal := State.set_bal rfl
-
-lemma State.incrNonce_bal {st : Jaune.State} {a : Adr} :
-    (st.incrNonce a).bal = st.bal := State.set_bal rfl
-
-lemma State.setCode_bal {st : Jaune.State} {a : Adr} {cd : ByteArray} :
-    (st.setCode a cd).bal = st.bal := State.set_bal rfl
 
 -- The create-seeding step: wa ∉ msg.benv.createdAccounts and code is untouched.
 lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}
@@ -9000,6 +9458,17 @@ lemma of_check_non_address {e : Sevm} {s s' : Devm} {x xs}
     revert h_and; revert sm; line_prefix
   refine ⟨_, h_pfx2, Iff.symm validAdr_iff⟩
 
+/-- `arg k ++ checkNonAddress`, the composite an address-shaped argument guard
+tests: the masked word is zero exactly when the argument's head word is
+address-shaped.  Contract-neutral, so it lives here rather than in the first
+family that needed it. -/
+theorem prefix_of_argCheckNonAddress {e : Sevm} {s s' : Devm} {k : B256}
+    {xs : Stack} (hp : xs <<+ s.stack)
+    (run : Line.Run e s (arg k ++ checkNonAddress) s') :
+    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ValidAdr (Sevm.argWord e k)) := by
+  rcases of_run_append (arg k) run with ⟨_mid, r1, r2⟩
+  exact of_check_non_address (prefix_of_arg hp r1) r2
+
 lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
     (x :: xs <<+ s.stack) →
     Line.Run e s checkAddress s' →
@@ -9734,6 +10203,42 @@ lemma Bytes.sliceD_writeAt_before
   rw [Bytes.getD_writeAt]
   rw [if_neg]
   omega
+
+/-- The mirror of `Bytes.sliceD_writeAt_before`: a write that lands entirely
+below the read window leaves it alone.  Scratch-word walks need both halves,
+because later writes may sit on either side of an earlier word. -/
+lemma Bytes.sliceD_writeAt_after
+    (bs xs : Bytes) (start len n : Nat)
+    (h : n + xs.length ≤ start) :
+    (Bytes.writeAt bs n xs).sliceD start len 0 =
+      bs.sliceD start len 0 := by
+  rw [List.sliceD_eq_map, List.sliceD_eq_map]
+  apply List.map_congr_left
+  intro i hi
+  have hi' := List.mem_range.mp hi
+  rw [Bytes.getD_writeAt]
+  rw [if_neg]
+  omega
+
+/-- Reading back the 32-byte word just written at `n`.  Scratch-word walks
+store and reload whole words, so this is the shape they need rather than the
+length-polymorphic `Bytes.sliceD_writeAt`. -/
+lemma Bytes.readWord_writeAt_self (bs : Bytes) (n : Nat) (v : B256) :
+    Bytes.toB256 ((Bytes.writeAt bs n v.toBytes).sliceD n 32 0) = v := by
+  rw [show (32 : Nat) = v.toBytes.length from (B256.length_toBytes v).symm,
+    Bytes.sliceD_writeAt]
+  exact B256.toB256_toBytes v
+
+/-- A 32-byte word write that misses the 32-byte read window entirely, on
+either side, leaves it alone. -/
+lemma Bytes.readWord_writeAt_of_disjoint (bs : Bytes) (start n : Nat)
+    (v : B256) (h : start + 32 ≤ n ∨ n + 32 ≤ start) :
+    (Bytes.writeAt bs n v.toBytes).sliceD start 32 0 =
+      bs.sliceD start 32 0 := by
+  rcases h with h | h
+  · exact Bytes.sliceD_writeAt_before bs v.toBytes start 32 n h
+  · exact Bytes.sliceD_writeAt_after bs v.toBytes start 32 n
+      (by rw [B256.length_toBytes]; exact h)
 
 /-- What a `CALL`, `LOG` or `MLOAD` reads out of a memory whose image is known:
 exactly the corresponding slice of the image, zero-padded past its end. -/

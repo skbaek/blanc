@@ -91,6 +91,40 @@ def PausedAt (pausedUntil : Adr → Stor → B256)
     (state : State) (target : Adr) (timestamp : B256) : Prop :=
   timestamp < pausedUntil target (state.getStor target)
 
+/-- The all-ones duration requests an unbounded pause.  Every other duration
+is measured from the current block timestamp, matching Lido's public pause
+protocol without making the shared target bundle Lido-specific. -/
+def pauseInfiniteSentinel : B256 := B256.max
+
+def pauseForProjection (time duration : B256) : B256 :=
+  if duration = pauseInfiniteSentinel then pauseInfiniteSentinel
+  else time + duration
+
+/-- The branch-free encoding of `pauseForProjection`: multiplying the timestamp
+by the negated sentinel test selects the sentinel arm without a jump.  Every
+faithful `PausableUntil` port compiles the pause word this way, so the identity
+is stated once here beside the projection rather than per contract family. -/
+theorem compact_pause_word_eq_projection (time duration : B256) :
+    time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration =
+      pauseForProjection time duration := by
+  by_cases infinite : duration = pauseInfiniteSentinel
+  · subst duration
+    have one_ne_zero : (1 : B256) ≠ 0 := by decide
+    simp [pauseForProjection, B256.eqCheck, one_ne_zero]
+    have mulZero : time * (0 : B256) = 0 := by
+      change (time.toNat * 0).toB256 = 0
+      rw [Nat.mul_zero]
+      rfl
+    rw [mulZero]
+    rfl
+  · have reverse : pauseInfiniteSentinel ≠ duration := Ne.symm infinite
+    simp [pauseForProjection, B256.eqCheck, infinite, reverse]
+    have mulOne : time * (1 : B256) = time := by
+      change (time.toNat * 1).toB256 = time
+      rw [Nat.mul_one]
+      exact toB256_toNat time
+    rw [mulOne]
+
 /-- Calldata has the selected ABI function selector and an arbitrary tail. -/
 def HasSelector (msg : Msg) (selected : B256) : Prop :=
   ∃ tail, msg.data = abiSelectorBytes selected ++ tail
@@ -125,8 +159,9 @@ structure PinnedPauseTarget
     (pausedUntil : Adr → Stor → B256)
     (circuitBreakerCells : List B256)
     (protectedSurface : List B256) : Prop where
-  /-- A successful exact `pauseFor(duration)` call stores precisely the
-  entry timestamp plus the requested duration in the abstract projection. -/
+  /-- A successful exact `pauseFor(duration)` call stores the shared pause
+  projection: the all-ones sentinel is preserved and finite durations are
+  measured from the entry timestamp. -/
   pauseFor_effect : ∀ {msg : Msg} {xl : Xlot} {post : Devm}
       {duration : B256},
     ExactTargetCall circuitBreaker target (pauseCalldata duration) false msg →
@@ -134,7 +169,7 @@ structure PinnedPauseTarget
     ProcessMessage msg xl (.ok post) →
     post.error.isSome = false →
     pausedUntil target (post.state.getStor target) =
-      msg.benv.stat.time + duration
+      pauseForProjection msg.benv.stat.time duration
 
   /-- Partial correctness for an exact static query.  Every clean settled
   result preserves the projection and accepts canonical true iff the account

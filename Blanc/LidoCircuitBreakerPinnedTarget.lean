@@ -125,7 +125,7 @@ def PinnedTargetPauseWitness (sevm : Sevm) (target : Adr) (program : Prog)
     callPost.returnData = child.output ∧
     child.error.isSome = false ∧
     pausedUntil target (child.state.getStor target) =
-      sevm.benvStat.time + duration ∧
+      pauseForProjection sevm.benvStat.time duration ∧
     pausedUntil target (final.state.getStor target) =
       pausedUntil target (child.state.getStor target)
 

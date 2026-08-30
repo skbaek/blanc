@@ -10,38 +10,6 @@ open scoped LogOutputHinv
 
 namespace Weth10
 
-private lemma fsig_logs {e : Sevm} {s t : Devm}
-    (run : Line.Run e s fsig t) : s.logs = t.logs := by
-  unfold fsig cdl shiftRight at run
-  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
-  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
-  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
-  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
-  cases hnil
-  have hshr : s3.logs = t.logs := by
-    rcases of_run_reg q4 with ⟨pc, hrun⟩
-    simp only [Rinst.run, Rinst.runCore] at hrun
-    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.logs
-  exact (of_run_pushB256 q1).logs.trans
-    ((Ninst.Hinv.inv (f := Devm.logs) q2).trans
-      ((of_run_pushB256 q3).logs.trans hshr))
-
-private lemma fsig_output {e : Sevm} {s t : Devm}
-    (run : Line.Run e s fsig t) : s.output = t.output := by
-  unfold fsig cdl shiftRight at run
-  rcases Line.of_run_cons run with ⟨s1, q1, run⟩
-  rcases Line.of_run_cons run with ⟨s2, q2, run⟩
-  rcases Line.of_run_cons run with ⟨s3, q3, run⟩
-  rcases Line.of_run_cons run with ⟨s4, q4, hnil⟩
-  cases hnil
-  have hshr : s3.output = t.output := by
-    rcases of_run_reg q4 with ⟨pc, hrun⟩
-    simp only [Rinst.run, Rinst.runCore] at hrun
-    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.output
-  exact (of_run_pushB256 q1).output.trans
-    ((Ninst.Hinv.inv (f := Devm.output) q2).trans
-      ((of_run_pushB256 q3).output.trans hshr))
-
 private lemma entryFlag_logs {e : Sevm} {s t : Devm}
     (run : Line.Run e s [calldatasize, iszero] t) : s.logs = t.logs := by
   rcases Line.of_run_cons run with ⟨s1, q1, run⟩
@@ -466,51 +434,6 @@ theorem of_exec_nonpayableObservation
     hbal.symm.trans hbal0, hcode.symm.trans hcode0⟩
 
 /-! ## Return observations -/
-
-/-- A successful one-word view result is stated at the machine output field,
-not as a residual stack word: RETURN reads its bytes from memory. -/
-def ReturnsWord (w : B256) (d : Devm) : Prop :=
-  Devm.output d = w.toBytes
-
-/-- Store the known stack head at memory word zero and return that complete
-word. This is the common tail of constant getters and storage getters. -/
-lemma of_storeReturnWord {fs : List Func} {sevm : Sevm} {s r : Devm}
-    {w : B256} {img : Bytes} {xs}
-    (hp : w :: xs <<+ s.stack)
-    (h_wf : Mem.Wf s.memory)
-    (h_reads : Mem.Reads s.memory img)
-    (h : Func.Run fs sevm s (mstoreAt 0 +++ returnMemoryRange 0 32) r) :
-    ReturnsWord w r ∧ Devm.getCode s = Devm.getCode r := by
-  rcases of_run_prepend (mstoreAt 0) _ h with ⟨s2, h2, h⟩
-  rcases of_run_mstoreAt_val h2 hp with ⟨hp2, hm2⟩
-  have hwf2 : Mem.Wf s2.memory := by
-    rw [hm2]
-    exact h_wf.write _ _
-  have hrd2 : Mem.Reads s2.memory (Bytes.writeAt img 0 w.toBytes) := by
-    rw [hm2]
-    exact Mem.Reads.write h_wf h_reads 0 _
-  rcases of_run_prepend (pushList [32, 0]) _ h with ⟨s3, h3, h⟩
-  rcases Line.of_run_cons h3 with ⟨u1, q1, h3'⟩
-  rcases Line.of_run_cons h3' with ⟨u2, q2, hnil⟩
-  cases hnil
-  have hu1 : (32 : B256) :: xs <<+ u1.stack :=
-    prefix_of_push (of_run_pushB256 q1) hp2
-  have hu2 : (0 : B256) :: (32 : B256) :: xs <<+ s3.stack :=
-    prefix_of_push (of_run_pushB256 q2) hu1
-  have hm3 : s2.memory = s3.memory :=
-    Line.of_inv Devm.memory (by line_inv) h3
-  have hgc : Devm.getCode s = Devm.getCode s3 :=
-    (Line.of_inv Devm.getCode (by line_inv) h2).trans
-      (Line.of_inv Devm.getCode (by line_inv) h3)
-  refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
-  show Devm.output r = _
-  rw [(of_run_ret_val hu2 h).1,
-    show (0 : B256).toNat = 0 from rfl,
-    show (32 : B256).toNat = 32 from rfl,
-    Mem.Reads.read (hm3 ▸ hrd2) 0 32,
-    show (32 : Nat) = w.toBytes.length from
-      (B256.length_toBytes w).symm,
-    Bytes.sliceD_writeAt]
 
 /-- The exact output of WETH10's shared one-word return fragment. The initial
 memory image is arbitrary: the fragment overwrites the complete returned

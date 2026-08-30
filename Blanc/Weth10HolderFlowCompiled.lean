@@ -1278,11 +1278,11 @@ theorem Exec.Deriv.ParentStepActions.selected_eq_retained_of_call
     (filled : xl.Filled)
     (step : Ninst.StepRun pc sevm pre Ninst.call xl (.ok post))
     (retained : RetainedXlot xl)
-    (commits : retained.RawCommits)
+    (commits : Blanc.Weth10.RetainedXlot.RawCommits retained)
     (edge : Exec.Deriv.ParentStepActions dp ca
       ⟨nextPc, sevm, post, out, continuation⟩
       ⟨pc, sevm, pre, out, current⟩ selected) :
-    selected = retained.flowActions dp ca := by
+    selected = Blanc.Weth10.RetainedXlot.flowActions dp ca retained := by
   cases edge with
   | cont hstep next =>
       have hs := (Evm.step_next hat).symm.trans hstep
@@ -1342,13 +1342,14 @@ theorem Exec.Frame.CompiledCursor.alignCommittedCallStep
     (rawStep : Ninst.StepRun rawPc frame.sevm cursor.pre
       Ninst.call rawSlot (.ok rawPost))
     (retained : RetainedXlot rawSlot)
-    (commits : retained.RawCommits) :
+    (commits : Blanc.Weth10.RetainedXlot.RawCommits retained) :
     ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final,
       tailCursor.pre = rawPost ∧
       Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call
         cursor.pre rawPost rawSlot ∧
       tailCursor.actions =
-        cursor.actions ++ retained.flowActions dp ca := by
+        cursor.actions ++
+          Blanc.Weth10.RetainedXlot.flowActions dp ca retained := by
   rcases cursor.alignExecStep rawFilled rawStep with
     ⟨tailCursor, selected, hpre, occurrence, edge, hactions⟩
   have hat : Ninst.At frame.sevm.code cursor.pc Ninst.call :=
@@ -2666,10 +2667,10 @@ def Exec.Frame.CompiledTokenCallbackChronology
       (Sevm.tailLen frame.sevm dataArg) inputSize
       (Sevm.tailBytes frame.sevm dataArg) input pre post callPre callPost
       parent child xl pc ∧
-    retained.RawCommits ∧
+    Blanc.Weth10.RetainedXlot.RawCommits retained ∧
     Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre callPost xl ∧
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
-      prefixActions ++ retained.flowActions dp ca
+      prefixActions ++ Blanc.Weth10.RetainedXlot.flowActions dp ca retained
 
 /-- Construct the exact callback chronology directly from the original
 compiled cursor.  The terminal Boolean decoder proves that no unaccounted
@@ -2718,7 +2719,7 @@ theorem Exec.Frame.CompiledCursor.compiledTokenCallbackChronology
           hmessage, hclean, _hresume, _hcallPostState, _hreturnData,
           _hmemory, _hcallPostStack, _hbool⟩
       obtain ⟨retained⟩ := exists_retainedXlot_of_filled hfilled
-      have hcommits : retained.RawCommits := by
+      have hcommits : Blanc.Weth10.RetainedXlot.RawCommits retained := by
         cases retained with
         | none => trivial
         | some retainedRun =>
@@ -2733,9 +2734,11 @@ theorem Exec.Frame.CompiledCursor.compiledTokenCallbackChronology
         pc, retained, hraw, hcommits, occurrence, ?_⟩
       calc
         Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = tailCursor.actions := hdesc
-        _ = callCursor.actions ++ retained.flowActions dp ca :=
+        _ = callCursor.actions ++
+            Blanc.Weth10.RetainedXlot.flowActions dp ca retained :=
           htailActions
-        _ = cursor.actions ++ retained.flowActions dp ca := by
+        _ = cursor.actions ++
+            Blanc.Weth10.RetainedXlot.flowActions dp ca retained := by
           rw [hcallActions]
 
 /-- Exact selector-level chronology for `depositToAndCall`.  The literal
@@ -3195,7 +3198,7 @@ def Exec.Frame.CompiledValueRedemptionChronology
         callPre guardPost),
     BurnCallPrefix frame.sevm pre callPre guardPost owner amount target ∧
     trace.slot = trace.retained.slot ∧
-    trace.retained.retained.RawCommits ∧
+    Blanc.Weth10.RetainedXlot.RawCommits trace.retained.retained ∧
     Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre trace.callPost
       trace.retained.slot ∧
     Devm.getStor guardPost = Devm.getStor frame.post ∧
@@ -3203,7 +3206,8 @@ def Exec.Frame.CompiledValueRedemptionChronology
     Devm.getCode guardPost = Devm.getCode frame.post ∧
     guardPost.logs = frame.post.logs ∧
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
-      prefixActions ++ trace.retained.retained.flowActions dp ca
+      prefixActions ++ Blanc.Weth10.RetainedXlot.flowActions dp ca
+        trace.retained.retained
 
 /-- Rebase only the call-free entry observations of an exact redemption
 chronology.  The accepted child, source occurrence, and chronological ledger
@@ -3291,7 +3295,7 @@ private theorem ProcessMessageTrace.rawCommits_of_clean
     {msg : Msg} {child : Devm}
     (trace : ProcessMessageTrace msg (.ok child))
     (hclean : child.error.isSome = false) :
-    trace.retained.RawCommits := by
+    Blanc.Weth10.RetainedXlot.RawCommits trace.retained := by
   rcases trace with ⟨slot, retained, hprocess⟩
   cases retained with
   | none => trivial
@@ -3459,11 +3463,12 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
         (source.word frame.sevm).toAdr
         (Sevm.argWord frame.sevm amountArg) target ∧
       trace.slot = trace.retained.slot ∧
-      trace.retained.retained.RawCommits ∧
+      Blanc.Weth10.RetainedXlot.RawCommits trace.retained.retained ∧
       Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre trace.callPost
         trace.retained.slot ∧
       successCursor.actions = cursor.actions ++
-        trace.retained.retained.flowActions dp ca ∧
+        Blanc.Weth10.RetainedXlot.flowActions dp ca
+          trace.retained.retained ∧
       Mem.Wf successCursor.pre.memory ∧
       Mem.Reads successCursor.pre.memory
         (Bytes.writeAt img 0 (Sevm.argWord frame.sevm amountArg).toBytes) := by
@@ -3589,8 +3594,9 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
   rcases exists_acceptedValueCallTrace_same_slot accepted
       hwfCall hreadsCall with
     ⟨trace, htraceSlot, hwfTerminal, hreadsTerminal⟩
-  have hcommits : trace.retained.retained.RawCommits :=
-    trace.retained.rawCommits_of_clean trace.child_clean
+  have hcommits :
+      Blanc.Weth10.RetainedXlot.RawCommits trace.retained.retained :=
+    ProcessMessageTrace.rawCommits_of_clean trace.retained trace.child_clean
   have traceStep : Ninst.StepRun trace.pc frame.sevm callCursor.pre
       Ninst.call trace.retained.slot (.ok trace.callPost) := by
     simpa only [htraceSlot] using trace.step
@@ -3610,7 +3616,8 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
     Ninst.stepRun_pc_irrel (pc' := callCursor.pc)
       (by simp [Ninst.pcFree]) actualStep
   have hselected : actualSelected =
-      trace.retained.retained.flowActions dp ca :=
+      Blanc.Weth10.RetainedXlot.flowActions dp ca
+        trace.retained.retained :=
     _actualEdge.selected_eq_retained_of_call hcallAt actualFilled
       actualStepAt trace.retained.retained hcommits
   have hstorAfterDebitCall : Devm.getStor afterDebitCursor.pre =
@@ -3671,15 +3678,18 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
       (hownerActions.trans (hdebitActions.trans
         (hsuccessActions.trans hcheckActions))))
   have hsuccessActionsExact : terminalCursor.actions =
-      cursor.actions ++ trace.retained.retained.flowActions dp ca := by
+      cursor.actions ++ Blanc.Weth10.RetainedXlot.flowActions dp ca
+        trace.retained.retained := by
     calc
       terminalCursor.actions = guardBranchCursor.actions := hterminalActions
       _ = testCursor.actions := htestGuardActions
       _ = callCursor.actions ++ actualSelected := htestActions
       _ = callCursor.actions ++
-          trace.retained.retained.flowActions dp ca := by rw [hselected]
+          Blanc.Weth10.RetainedXlot.flowActions dp ca
+            trace.retained.retained := by rw [hselected]
       _ = cursor.actions ++
-          trace.retained.retained.flowActions dp ca := by
+          Blanc.Weth10.RetainedXlot.flowActions dp ca
+            trace.retained.retained := by
         rw [hcallPrefixActions]
   exact ⟨callCursor.pre, terminalCursor, trace, burn, htraceSlot,
     hcommits, traceOccurrence, hsuccessActionsExact,
@@ -3747,7 +3757,8 @@ theorem Exec.Frame.CompiledCursor.compiledValueRedemptionChronology
   have hdesc := successCursor.finishTerminalChildlessLine
     hsuccessChildless
   have hdescExact : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
-      cursor.actions ++ trace.retained.retained.flowActions dp ca :=
+      cursor.actions ++ Blanc.Weth10.RetainedXlot.flowActions dp ca
+        trace.retained.retained :=
     hdesc.trans hsuccessActions
   exact ⟨callPre, successCursor.pre, trace, burn, htraceSlot,
     hcommits, occurrence, hpostStor, hpostBal, hpostCode, hpostLogs,
@@ -3778,12 +3789,13 @@ theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
         frame.sevm.caller (Sevm.argWord frame.sevm 1)
         frame.sevm.caller.toB256 ∧
       trace.slot = trace.retained.slot ∧
-      trace.retained.retained.RawCommits ∧
+      Blanc.Weth10.RetainedXlot.RawCommits trace.retained.retained ∧
       Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre trace.callPost
         trace.retained.slot ∧
       successCursor.pre = guardPost ∧
       successCursor.actions = cursor.actions ++
-        trace.retained.retained.flowActions dp ca ∧
+        Blanc.Weth10.RetainedXlot.flowActions dp ca
+          trace.retained.retained ∧
       Mem.Wf successCursor.pre.memory ∧
       Mem.Reads successCursor.pre.memory
         (Bytes.writeAt img 0 (Sevm.argWord frame.sevm 1).toBytes) := by

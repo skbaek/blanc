@@ -5092,16 +5092,6 @@ private theorem registerAfterSetTarget
               exact ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
                 by simpa using functionIndex⟩
 
-private theorem prefix_of_timestamp
-    {sevm : Sevm} {pre post : Devm} {xs : Stack}
-    (stackPrefix : xs <<+ pre.stack)
-    (run : Ninst.Run sevm pre Ninst.timestamp post) :
-    sevm.benvStat.time :: xs <<+ post.stack := by
-  change Ninst.Run sevm pre (.reg .timestamp) post at run
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  exact prefix_of_push (Devm.pushBurn_of_pushItem instructionRun) stackPrefix
-
 private theorem heartbeatBodyAuthority
     {dp : DeployParams} {frameRoot write : Exec.Deriv}
     {initialPath path : Prog.SourcePath} {initialSource : Func}
