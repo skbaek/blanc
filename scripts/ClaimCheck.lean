@@ -17,6 +17,7 @@ import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerDeploymentRoot
 import Blanc.ProxyPairOssifiableDeploymentFixture
 import Blanc.ProxyPairOssifiableConstructorNonempty
+import Blanc.ProxyPairOssifiableBothSlotFixture
 import Blanc.ProrataAttackTrace
 
 /-!
@@ -3754,6 +3755,18 @@ example :
       OssifiableCreateFixture.message OssifiableCreateFixture.implementation
       OssifiableCreateFixture.admin post :=
   OssifiableCreateFixture.message_success
+
+example :
+    ∃ post,
+      processMessage OssifiableBothSlotFixture.message = .ok post ∧
+      post.error = .none ∧
+      post.output = [] ∧
+      post.getStorVal OssifiableBothSlotFixture.target implementationSlotLit =
+        OssifiableBothSlotFixture.postSetupImplementation.toB256 ∧
+      post.getStorVal OssifiableBothSlotFixture.target adminSlotLit =
+        OssifiableBothSlotFixture.postSetupAdmin.toB256 ∧
+      post.logs = [] :=
+  OssifiableBothSlotFixture.message_success
 
 end ProxyPair
 

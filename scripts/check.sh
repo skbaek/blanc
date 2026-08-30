@@ -1103,6 +1103,9 @@ Blanc.ProxyPair.processCreateMessage_ossifiable_failure_rollback|$STANDARD
 Blanc.ProxyPair.OssifiableCreateFixture.message_code|$STANDARD
 Blanc.ProxyPair.OssifiableCreateFixture.implementation_code|$STANDARD
 Blanc.ProxyPair.OssifiableCreateFixture.message_success|$STANDARD
+Blanc.ProxyPair.OssifiableBothSlotFixture.setupMain_compile|$STANDARD
+Blanc.ProxyPair.OssifiableBothSlotFixture.setupMain_runCompiledTo|$STANDARD
+Blanc.ProxyPair.OssifiableBothSlotFixture.message_success|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.lidoTwgCode_compile|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.abiEncodeConstructorArgs_length|propext
 Blanc.LidoTriggerableWithdrawalsGateway.creation_template_runtime_suffix|$STANDARD
