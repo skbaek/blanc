@@ -136,6 +136,14 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
+- For an actual target-directed source route, use
+  `Exec.Deriv.SourceCursor.Toward.chronology`,
+  `next_of_instruction_ne`, `rebase`, `dropLineRun`,
+  `selectBranchZero`, and `selectBranchSucc`.  The supporting
+  `ParentPrefix.trans`, `advance_pushToward`, `advance_jumpToward`,
+  `SourceCursor.branchFlagToward`, and `ninstRun_of_nextEdge` retain the exact
+  same-frame chronology and stack effects across compiler glue; they do not
+  assert liveness or a final execution outcome.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 
@@ -255,6 +263,18 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
   `Exec.noRetainedWriteTo_of_frame_owners_ne` are the committing routes.
 - Write-freedom across cycles:
   [`Blanc/CycleWriteFree.lean`](../Blanc/CycleWriteFree.lean).
+  Its public `Func.callsIn_mem_iff` reflects the shared internal-call checker.
+- Route-local source-`.exec` freedom across finite call-closed components:
+  [`Blanc/ReachableExecFree.lean`](../Blanc/ReachableExecFree.lean).
+  Use `Prog.reachableExecFree` / `Prog.reachableExecFree_iff` for the
+  executable certificate, `SourceCursor.noExec_of_reachableExecFree` for an
+  already-selected actual source cursor, and
+  `Exec.noRetainedWriteTo_of_exactMain_reachableExecFree` for an exact main
+  invocation.  A calldata-selected dispatcher consumer can first use
+  `Toward.linearDispatchWith_selectedBody`, then the same cursor theorem.
+  The certificate checks both branch arms and a finite, lookup-resolved,
+  call-closed component; it deliberately says nothing about unselected
+  entries, child outcomes, commitment, gas, or liveness.
 - Transient-state invariance and settlement:
   [`Blanc/TransientInvariance.lean`](../Blanc/TransientInvariance.lean) and
   [`Blanc/TransientSettlement.lean`](../Blanc/TransientSettlement.lean).

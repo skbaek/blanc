@@ -10,6 +10,8 @@ import Blanc.ExecutionOccurrence
 import Blanc.ExecutionNoninterference
 import Blanc.SourceAttainment
 import Blanc.CycleWriteFree
+import Blanc.ReachableExecFree
+import Blanc.ReachableExecFreeControl
 import Blanc.TransientSettlement
 import Blanc.Reverts
 import Blanc.FmintLive
@@ -64,6 +66,7 @@ import Blanc.LidoCircuitBreakerPinnedTargetStubWalk
 import Blanc.LidoCircuitBreakerPinnedTargetStubCrossing
 import Blanc.LidoCircuitBreakerPinnedTargetCompositionControl
 import Blanc.LidoTriggerableWithdrawalsGatewayAuthorization
+import Blanc.LidoTriggerableWithdrawalsGatewayPinnedTarget
 import Blanc.ProrataAttackTrace
 
 #print axioms Blanc.weth_preserves_solvent
@@ -910,3 +913,16 @@ import Blanc.ProrataAttackTrace
 #print axioms Blanc.Prorata.attacker_open_context
 #print axioms Blanc.Prorata.attacker_no_profit
 #print axioms Blanc.Prorata.victim_loss_bound
+#print axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
+#print axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
+#print axioms Blanc.Func.localExecFree_iff
+#print axioms Blanc.Prog.componentExecFree_iff
+#print axioms Blanc.Prog.reachableExecFree_iff
+#print axioms Blanc.Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
+#print axioms Blanc.Exec.Deriv.SourceCursor.noExec_of_reachableExecFree
+#print axioms Blanc.Exec.noExecOccurrence_of_no_sameFrame_execAt
+#print axioms Blanc.Exec.noRetainedWriteTo_of_no_sameFrame_execAt
+#print axioms Blanc.Exec.noExecOccurrence_of_exactMain_reachableExecFree
+#print axioms Blanc.Exec.noRetainedWriteTo_of_exactMain_reachableExecFree
+#print axioms Blanc.ReachableExecFreeControl.routeControlProgram_not_reachableExecFree
+#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_circuitBreaker_noninterference

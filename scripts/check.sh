@@ -1153,7 +1153,20 @@ Blanc.Prorata.prorataTraceRealizes_exists_of_reachUsing|$STANDARD
 Blanc.Prorata.prorata_realized_dust_trace_exact|$STANDARD
 Blanc.Prorata.attacker_open_context|$STANDARD
 Blanc.Prorata.attacker_no_profit|$STANDARD
-Blanc.Prorata.victim_loss_bound|$STANDARD"
+Blanc.Prorata.victim_loss_bound|$STANDARD
+Blanc.Exec.Deriv.SourceCursor.branchFlagToward|$STANDARD
+Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero|$STANDARD
+Blanc.Func.localExecFree_iff|propext, Quot.sound
+Blanc.Prog.componentExecFree_iff|propext, Quot.sound
+Blanc.Prog.reachableExecFree_iff|propext, Quot.sound
+Blanc.Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody|$STANDARD
+Blanc.Exec.Deriv.SourceCursor.noExec_of_reachableExecFree|$STANDARD
+Blanc.Exec.noExecOccurrence_of_no_sameFrame_execAt|$STANDARD
+Blanc.Exec.noRetainedWriteTo_of_no_sameFrame_execAt|$STANDARD
+Blanc.Exec.noExecOccurrence_of_exactMain_reachableExecFree|$STANDARD
+Blanc.Exec.noRetainedWriteTo_of_exactMain_reachableExecFree|$STANDARD
+Blanc.ReachableExecFreeControl.routeControlProgram_not_reachableExecFree|propext, Quot.sound
+Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_circuitBreaker_noninterference|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
