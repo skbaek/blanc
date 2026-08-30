@@ -15,23 +15,6 @@ lemma Bytes.length_writeAt
     List.length_drop]
   omega
 
-/-- A write ending before a requested slice leaves that later slice
-unchanged. -/
-lemma Bytes.sliceD_writeAt_after
-    (bs xs : Bytes) (start len n : Nat)
-    (h : n + xs.length ≤ start) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  rw [Bytes.getD_writeAt]
-  split
-  · rename_i hinside
-    have hi' := List.mem_range.mp hi
-    omega
-  · rfl
-
 /-- A padded slice of a sum of widths is the first padded slice followed by
 the adjacent second padded slice. -/
 theorem List.sliceD_add {ξ : Type} (xs : List ξ) (d : ξ) :
@@ -93,15 +76,6 @@ lemma Bytes.sliceD_stagedPair
         List.getElem?_eq_getElem hir]
       simp only [B256.length_toBytes]
       rfl
-
-/-- Slicing an image from zero at its exact length returns the image. -/
-lemma Bytes.sliceD_zero_length {bs : Bytes} {n : Nat}
-    (h : bs.length = n) : bs.sliceD 0 n 0 = bs := by
-  subst n
-  unfold List.sliceD
-  simp only [List.drop_zero]
-  rw [List.takeD_eq_take _ (Nat.le_refl _)]
-  exact List.take_length
 
 /-- A padded slice selecting an exact middle segment of a concatenation
 returns that segment. -/

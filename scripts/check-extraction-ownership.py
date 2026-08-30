@@ -5,15 +5,22 @@ The sole ownership map is execution-settlement-lift-manifest.json.  It checks
 that every listed declaration is genuinely declared by the common module, that
 no listed donor declaration or common-owner basename shadow survives in the
 historical WETH10 donor family or the Lido family, that neither family contains
-an alias/export command, and that Weth10HolderFlow imports the common module
-directly.  It deliberately does not try to recognize propositionally
-equivalent declarations under unrelated names; that remains an independent
-review obligation.
+an alias/export command, and that Weth10HolderFlow imports the
+common module directly.  The 21 exact compatibility abbreviations approved
+when the retained trace carrier moved are required; any drift or added
+alias/export still fails.  A contract module may consume a common declaration
+but must never re-provide one, so no export is approved: each consumer imports
+and opens `Blanc.ExecutionTrace` directly.  It deliberately does not try to
+recognize propositionally equivalent declarations under unrelated names; that
+remains an independent review obligation.
 
-``--negative-controls`` runs six controls: the historical donor alias, a Lido
-common-owner basename shadow, a Lido alias, a missing common declaration, a
-missing direct import, and distinct trailing-`?` declaration parsing. Each must fail with its own
-diagnostic tag, so a green control run proves the relevant channel is live.
+``--negative-controls`` runs nine controls: the historical donor alias, an
+unexpected donor export, a Lido common-owner basename shadow, a Lido alias, a
+missing common declaration, a missing direct import, and distinct trailing-`?`
+declaration parsing, plus removal of the WETH flow compatibility block and
+right-hand-side drift in the attribution compatibility block.  Each must fail
+with its own diagnostic tag, so a green control run proves the relevant
+channel is live.
 """
 
 from __future__ import annotations
@@ -43,6 +50,56 @@ DECL_RE = re.compile(
 IMPORT_RE = re.compile(rf"^\s*import\s+({IDENT})(?:\s|$)")
 ALIAS_COMMAND_RE = re.compile(r"\balias\b")
 EXPORT_COMMAND_RE = re.compile(r"\bexport\b")
+APPROVED_TRACE_COMPAT_ABBREVS = {
+    "Blanc/Weth10HolderFlow.lean": """abbrev Blanc.ExecutionTrace.RetainedXlot.flowActions :=
+  Blanc.Weth10.RetainedXlot.flowActions
+abbrev Blanc.ExecutionTrace.RetainedXlot.flowObservations :=
+  Blanc.Weth10.RetainedXlot.flowObservations
+abbrev Blanc.ExecutionTrace.MessageCallTrace.flowActions :=
+  Blanc.Weth10.MessageCallTrace.flowActions
+abbrev Blanc.ExecutionTrace.MessageCallTrace.flowObservations :=
+  Blanc.Weth10.MessageCallTrace.flowObservations
+abbrev Blanc.ExecutionTrace.TransactionTrace.flowActions :=
+  Blanc.Weth10.TransactionTrace.flowActions
+abbrev Blanc.ExecutionTrace.TransactionTrace.flowObservations :=
+  Blanc.Weth10.TransactionTrace.flowObservations
+abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.flowActions :=
+  Blanc.Weth10.ApplyTransactionsTrace.flowActions
+abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.flowObservations :=
+  Blanc.Weth10.ApplyTransactionsTrace.flowObservations
+abbrev Blanc.ExecutionTrace.SystemMessageTrace.flowActions :=
+  Blanc.Weth10.SystemMessageTrace.flowActions
+abbrev Blanc.ExecutionTrace.SystemMessageTrace.flowObservations :=
+  Blanc.Weth10.SystemMessageTrace.flowObservations
+abbrev Blanc.ExecutionTrace.RequestsTrace.flowActions :=
+  Blanc.Weth10.RequestsTrace.flowActions
+abbrev Blanc.ExecutionTrace.RequestsTrace.flowObservations :=
+  Blanc.Weth10.RequestsTrace.flowObservations
+abbrev Blanc.ExecutionTrace.AppliedBodyTrace.flowActions :=
+  Blanc.Weth10.AppliedBodyTrace.flowActions
+abbrev Blanc.ExecutionTrace.AppliedBodyTrace.flowObservations :=
+  Blanc.Weth10.AppliedBodyTrace.flowObservations""",
+    "Blanc/Weth10Attribution.lean": """abbrev Blanc.ExecutionTrace.RetainedXlot.attributionStream :=
+  Blanc.Weth10.RetainedXlot.attributionStream
+abbrev Blanc.ExecutionTrace.MessageCallTrace.attributionStream :=
+  Blanc.Weth10.MessageCallTrace.attributionStream
+abbrev Blanc.ExecutionTrace.TransactionTrace.attributionStream :=
+  Blanc.Weth10.TransactionTrace.attributionStream
+abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.attributionStream :=
+  Blanc.Weth10.ApplyTransactionsTrace.attributionStream
+abbrev Blanc.ExecutionTrace.SystemMessageTrace.attributionStream :=
+  Blanc.Weth10.SystemMessageTrace.attributionStream
+abbrev Blanc.ExecutionTrace.RequestsTrace.attributionStream :=
+  Blanc.Weth10.RequestsTrace.attributionStream
+abbrev Blanc.ExecutionTrace.AppliedBodyTrace.attributionStream :=
+  Blanc.Weth10.AppliedBodyTrace.attributionStream""",
+}
+APPROVED_TRACE_COMPAT_DECLS = {
+    (path, line.split()[1])
+    for path, block in APPROVED_TRACE_COMPAT_ABBREVS.items()
+    for line in block.splitlines()
+    if line.startswith("abbrev ")
+}
 
 
 @dataclass(frozen=True)
@@ -150,9 +207,10 @@ def imports(path: Path) -> set[str]:
 
 
 def donor_aliases_or_exports(path: Path, donors: set[str]) -> list[tuple[str, int, str]]:
-    """Reject every alias/export command in a donor module, fail closed.
+    """Reject every alias/export command in a donor module.
 
-    The audited WETH donor set contains no legitimate alias or export command.
+    The audited WETH donor set contains no legitimate alias or export command:
+    a contract module consumes common declarations, it never re-provides them.
     Rejecting either command keyword token anywhere outside comments avoids
     unsound approximations of Lean's command wrappers, modifiers, multiline,
     root-qualified, and ancestor-relative name grammar. A future string or
@@ -231,16 +289,37 @@ def audit(root: Path) -> list[str]:
         donor_files = sorted(set(donor_files))
         donors = {row.donor for row in config.mappings}
         common_basenames = {row.common.rsplit(".", 1)[-1] for row in config.mappings}
+        seen_trace_compat: set[tuple[str, str]] = set()
         for path in donor_files:
             rel = path.relative_to(root).as_posix()
             for name, (kind, line) in declarations(path).items():
-                if name in donors:
+                if name.startswith("Blanc.ExecutionTrace."):
+                    compat = (rel, name)
+                    seen_trace_compat.add(compat)
+                    if compat not in APPROVED_TRACE_COMPAT_DECLS or kind != "abbrev":
+                        errors.append(
+                            f"TRACE-COMPAT-ABBREV — {rel}:{line}: "
+                            f"unapproved {kind} {name}"
+                        )
+                elif name in donors:
                     errors.append(f"DONOR-SURVIVOR — {rel}:{line}: {kind} {name}")
                 elif name.rsplit(".", 1)[-1] in common_basenames:
                     errors.append(f"CONTRACT-SHADOW — {rel}:{line}: {kind} {name}")
             for name, line, form in donor_aliases_or_exports(path, donors):
                 tag = "CONTRACT-ALIAS" if rel.startswith("Blanc/Lido") else "DONOR-SURVIVOR"
                 errors.append(f"{tag} — {rel}:{line}: {form} {name}")
+        for rel, block in APPROVED_TRACE_COMPAT_ABBREVS.items():
+            path = root / rel
+            source = path.read_text(encoding="utf-8") if path.is_file() else ""
+            if source.count(block) != 1:
+                errors.append(
+                    f"TRACE-COMPAT-ABBREV — {rel} must contain its exact "
+                    "approved Blanc.ExecutionTrace compatibility block"
+                )
+        for rel, name in sorted(APPROVED_TRACE_COMPAT_DECLS - seen_trace_compat):
+            errors.append(
+                f"TRACE-COMPAT-ABBREV — {rel}: missing approved abbrev {name}"
+            )
         direct_path = root / config.direct_module
         if not direct_path.is_file():
             errors.append(f"DIRECT-IMPORT-MISSING — required consumer module missing: {config.direct_module}")
@@ -259,6 +338,39 @@ def mutate_donor_alias(root: Path) -> None:
             "alias commits := Blanc.Execution.commits\n"
             "end Blanc.Weth10.Execution\n"
         )
+
+
+def mutate_donor_export(root: Path) -> None:
+    path = root / "Blanc/Weth10HolderFlow.lean"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("\nexport Blanc.Execution (commits)\n")
+
+
+def mutate_trace_compat_flow_missing(root: Path) -> None:
+    rel = "Blanc/Weth10HolderFlow.lean"
+    path = root / rel
+    block = APPROVED_TRACE_COMPAT_ABBREVS[rel]
+    text = path.read_text(encoding="utf-8")
+    if text.count(block) != 1:
+        raise ValueError("negative control could not uniquely find flow compatibility block")
+    path.write_text(text.replace(block, "-- removed flow compatibility block", 1), encoding="utf-8")
+
+
+def mutate_trace_compat_attribution_drift(root: Path) -> None:
+    rel = "Blanc/Weth10Attribution.lean"
+    path = root / rel
+    block = APPROVED_TRACE_COMPAT_ABBREVS[rel]
+    text = path.read_text(encoding="utf-8")
+    if text.count(block) != 1:
+        raise ValueError(
+            "negative control could not uniquely find attribution compatibility block"
+        )
+    drifted = block.replace(
+        "Blanc.Weth10.RetainedXlot.attributionStream",
+        "Blanc.Weth10.MessageCallTrace.attributionStream",
+        1,
+    )
+    path.write_text(text.replace(block, drifted, 1), encoding="utf-8")
 
 
 def mutate_common_missing(root: Path) -> None:
@@ -302,6 +414,11 @@ def mutate_direct_import_missing(root: Path) -> None:
 def negative_controls(root: Path) -> list[str]:
     controls = [
         ("donor-alias", "DONOR-SURVIVOR", mutate_donor_alias),
+        ("donor-export", "DONOR-SURVIVOR", mutate_donor_export),
+        ("trace-flow-compat-missing", "TRACE-COMPAT-ABBREV",
+         mutate_trace_compat_flow_missing),
+        ("trace-attribution-compat-drift", "TRACE-COMPAT-ABBREV",
+         mutate_trace_compat_attribution_drift),
         ("lido-shadow", "CONTRACT-SHADOW", mutate_lido_shadow),
         ("lido-alias", "CONTRACT-ALIAS", mutate_lido_alias),
         ("common-missing", "COMMON-MISSING", mutate_common_missing),
@@ -368,9 +485,9 @@ def main() -> int:
                 print(control)
             print(f"REGRESSION — extraction ownership: {len(controls)} negative control(s) failed")
             return 1
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido shadows and aliases absent; direct import present; 6/6 negative controls live")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present; 9/9 negative controls live")
     else:
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido shadows and aliases absent; direct import present")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present")
     return 0
 
 

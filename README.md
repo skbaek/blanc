@@ -91,6 +91,20 @@ This repo contains the following files:
   same-frame `ParentPrefix`, exact invocation identity, and compiler-structural
   source cursors. Raw occurrences include terminal errors and work later
   reverted; settlement survival is a separate refinement.
+- [ExecutionTrace.lean](Blanc/ExecutionTrace.lean),
+  [ExecutionHistory.lean](Blanc/ExecutionHistory.lean), and
+  [ExecutionPath.lean](Blanc/ExecutionPath.lean): exact retained wrapper
+  carriers from messages through configured histories, plus stable paths to
+  settlement-retained frames.
+- [ExecutionStateTrace.lean](Blanc/ExecutionStateTrace.lean) and its
+  `ExecutionMessageStateTrace`, `ExecutionTransactionStateTrace`,
+  `ExecutionBodyStateTrace`, and `ExecutionHistoryStateTrace` layers: ordered,
+  provenance-carrying world-state replays across those retained wrappers.
+- `ExecutionMessageEffects`, `ExecutionTransactionEffects`,
+  `ExecutionBodyEffects`, and `ExecutionHistoryEffects`: contract-neutral
+  storage, balance, and `ContractSpec` invariant transports for each retained
+  wrapper layer. The [common API registry](docs/COMMON_API.md) is the
+  need-first index for the carriers, chronologies, and effect families.
 - [CycleWriteFree.lean](Blanc/CycleWriteFree.lean): a total finite-component
   certificate and arbitrary-outcome theorem for **same-frame source-level
   SSTORE-occurrence freedom**. It scans selected bodies structurally, treats
@@ -388,6 +402,23 @@ Before beginning a manual multi-step walk or inversion, consult the generated
 `blanc_suggest` tactic at the goal. The index and the tactic's lookup table are
 both generated from `scripts/proof-recipes.toml`; edit that registry and
 regenerate the surfaces rather than editing either generated file by hand.
+`blanc_suggest` prints each matching recipe's validated registered symbols as
+well as its route and boundary.
+
+For need-first declaration discovery that does not depend on a goal matcher,
+start at the branching [common API registry](docs/COMMON_API.md). Follow its
+execution, invariance, state-update, memory, settlement, or compilation branch
+before adding a contract-local helper; the leaves point to shared modules and
+named declarations rather than sibling-contract examples.
+
+The registry also carries the standing **common-library-first workflow** for
+any needed declaration with a generic shape: search before rolling your own,
+use or generalize what a shared module already provides, hoist a
+contract-local original to the common library before using it, build a
+genuinely new generic declaration in a shared module rather than the contract
+that first needs it, and close every common-library change with the registry
+and recipe discoverability updates in the same change. Follow it there rather
+than restating it elsewhere.
 
 ## Proof-performance conventions: defeq, wide-record updates, state towers, and walk term size
 
@@ -754,9 +785,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 715 named results and
+   current source inventory pins the exact axiom set of 844 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `715/715` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `844/844` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -784,7 +815,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **715** top theorems. `scripts/check.sh`'s
+current source inventory contains **844** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the

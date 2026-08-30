@@ -1072,7 +1072,7 @@ theorem ProcessMessageTrace.storageSegmentDelta
       some msg.code.toList = Prog.compile (weth10 dp))
     (hbelow : StorageSegmentTraceBelow dp ca depth) :
     Nonempty (StorageSegmentEffect ca parent post
-      (trace.retained.flowActions dp ca)) := by
+      (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)) := by
   rcases trace with ⟨slot, retained, hprocess⟩
   cases retained with
   | none =>
@@ -1176,7 +1176,7 @@ theorem ProcessMessageTrace.storageSegmentDelta
         have hcodeEq : parent.getCode ca = post.getCode ca :=
           congrArg (fun state : State => state.getCode ca)
             (hparent.trans hpostState.symm)
-        rw [RetainedXlot.flowActions, hactions]
+        simp only [Blanc.Weth10.RetainedXlot.flowActions, hactions]
         exact ⟨StorageSegmentEffect.of_getStorCode_eq hstorage hcodeEq⟩
 
 /-- A filled CALL message is retained exactly when its complete frame
@@ -1348,7 +1348,8 @@ theorem ProcessCreateMessageTrace.storageSegmentDelta
     (hbelow : StorageSegmentTraceBelow dp ca depth) :
     Nonempty (StorageSegmentEffect ca parent post
       (if post.error.isSome then []
-       else trace.retained.flowActions dp ca)) := by
+       else Blanc.Weth10.RetainedXlot.flowActions dp ca
+         trace.retained)) := by
   cases herror : post.error.isSome with
   | true =>
       simp only [↓reduceIte]
@@ -2273,7 +2274,7 @@ theorem ProcessMessageTrace.storageSegmentDelta_of_forallDeeperAt
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
     Nonempty (StorageSegmentEffect ca parent post
-      (trace.retained.flowActions dp ca)) := by
+      (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)) := by
   rcases trace with ⟨slot, retained, hprocess⟩
   cases retained with
   | none =>
@@ -2375,7 +2376,7 @@ theorem ProcessMessageTrace.storageSegmentDelta_of_forallDeeperAt
         have hcodeEq : parent.getCode ca = post.getCode ca :=
           congrArg (fun state : State => state.getCode ca)
             (hparent.trans hpostState.symm)
-        rw [RetainedXlot.flowActions, hactions]
+        simp only [Blanc.Weth10.RetainedXlot.flowActions, hactions]
         exact ⟨StorageSegmentEffect.of_getStorCode_eq hstorage hcodeEq⟩
 
 /-- A callback that targets the installed WETH10 address executes the
@@ -2822,7 +2823,8 @@ theorem AcceptedValueCallTrace.storageSegmentEffect
       (fun pc sevm childPre out _ =>
         Exec.CoreStorageSound dp ca pc sevm childPre out)) :
     Nonempty (StorageSegmentEffect ca callPre guardPost
-      (trace.retained.retained.flowActions dp ca)) := by
+      (Blanc.Weth10.RetainedXlot.flowActions dp ca
+        trace.retained.retained)) := by
   have hparent : callPre.state = trace.childMessage.benv.state := by
     rw [trace.childMessage_eq]
     simpa only [callMsg] using trace.parent_state.symm
@@ -4605,7 +4607,8 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption
       source amount target)
     (hguardStor : Devm.getStor guardPost = Devm.getStor frame.post)
     (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
-      trace.retained.retained.flowActions dp ca)
+      Blanc.Weth10.RetainedXlot.flowActions dp ca
+        trace.retained.retained)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
@@ -4651,7 +4654,8 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRed
       source amount target)
     (hguardStor : Devm.getStor guardPost = Devm.getStor frame.post)
     (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
-      trace.retained.retained.flowActions dp ca)
+      Blanc.Weth10.RetainedXlot.flowActions dp ca
+        trace.retained.retained)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :

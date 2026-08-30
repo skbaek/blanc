@@ -1,9 +1,12 @@
 import Blanc.Semantics
+import Jaune.Transaction
 
 /-!
 Contract-neutral committed-execution and complete frame-settlement traversal.
 Child retention is decided by full frame settlement, including CREATE code
-deposit, rather than raw execution success.
+deposit, rather than raw execution success.  This module also owns the small
+checked-to-unchecked system-transaction bridge shared by invariant and retained
+trace consumers.
 -/
 
 namespace Blanc
@@ -61,6 +64,30 @@ private theorem processMessage_clean_input
           change pre.error.isNone = true at hclean
           rw [herror] at hclean
           simp at hclean
+
+/-- A clean successful message settlement retains a clean successful raw
+input and changes no world state after that input.  This is the common
+settlement seam for consumers that need the exact retained endpoint rather
+than merely the fact that the frame commits. -/
+theorem ProcessMessage.clean_input_state_of_settle
+    {msg : Msg}
+    {input : Except (EvmError × State × AdrSet × Tra) Devm}
+    {post : Devm}
+    (hresult : processMessage.settle msg input = .ok post)
+    (hclean : post.error.isSome = false) :
+    ∃ raw : Devm, input = .ok raw ∧ raw.error.isSome = false ∧
+      post.state = raw.state := by
+  have postNone : post.error.isNone = true := by
+    cases herror : post.error <;> simp_all
+  rcases processMessage_clean_input hresult postNone with
+    ⟨raw, rfl, rawNone⟩
+  have rawSome : raw.error.isSome = false := by
+    cases herror : raw.error <;> simp_all
+  refine ⟨raw, rfl, rawSome, ?_⟩
+  unfold processMessage.settle at hresult
+  dsimp only [bind, Except.bind] at hresult
+  rw [if_neg (by simp [rawSome])] at hresult
+  exact congrArg Devm.state (Except.ok.inj hresult).symm
 
 private theorem processCreateMessage_clean_input
     {msg : Msg}
@@ -274,5 +301,161 @@ theorem Frame.settlementCommits_ofCall_of_raw_commits
             processMessage.settle, Bind.bind, Except.bind, herror]
       | some error =>
           simp [Execution.commits, herror] at hraw
+
+/-- Updating one account without changing its balance preserves the complete
+world-balance map. -/
+lemma State.set_bal {st : Jaune.State} {a : Adr} {ac : Acct}
+    (h : ac.bal = (st.get a).bal) : (st.set a ac).bal = st.bal := by
+  funext b
+  by_cases hb : b = a
+  · subst hb
+    show ((st.set b ac).get b).bal = (st.get b).bal
+    rw [State.get_set_self]
+    exact h
+  · show ((st.set a ac).get b).bal = (st.get b).bal
+    rw [State.get_set_ne _ (fun hc => hb hc.symm)]
+
+lemma State.setStor_bal {st : Jaune.State} {a : Adr} {s : Stor} :
+    (st.setStor a s).bal = st.bal := State.set_bal rfl
+
+lemma State.incrNonce_bal {st : Jaune.State} {a : Adr} :
+    (st.incrNonce a).bal = st.bal := State.set_bal rfl
+
+lemma State.setCode_bal {st : Jaune.State} {a : Adr} {cd : ByteArray} :
+    (st.setCode a cd).bal = st.bal := State.set_bal rfl
+
+/-- CREATE's nonce and access-list preparation leaves the complete world
+balance map unchanged. -/
+theorem genericCreate_prepared_bal
+    (sevm : Sevm) (pre : Devm) (newAddress : Adr) :
+    (addAccessedAddress
+      (((pre.withGasLeft
+          (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+        []).incrNonce sevm.currentTarget) newAddress).state.bal =
+      pre.state.bal := by
+  change (pre.state.incrNonce sevm.currentTarget).bal = pre.state.bal
+  exact State.incrNonce_bal
+
+/-- CREATE's nonce/access-list preparation preserves persistent storage at
+every address. -/
+theorem genericCreate_prepared_getStor
+    (sevm : Sevm) (pre : Devm) (newAddress : Adr) :
+    (addAccessedAddress
+        (((pre.withGasLeft
+            (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+          []).incrNonce sevm.currentTarget) newAddress).state.getStor =
+      pre.state.getStor := by
+  funext address
+  change (pre.state.incrNonce sevm.currentTarget).getStor address =
+    pre.state.getStor address
+  simp only [State.incrNonce, State.getStor]
+  by_cases target : sevm.currentTarget = address
+  · subst target
+    rw [State.get_set_self]
+  · rw [State.get_set_ne _ target]
+
+/-- CREATE message preparation clears the prospective account storage and
+increments its nonce, but leaves the complete world-balance map unchanged. -/
+theorem processCreateMessage_msg_bal_eq (msg : Msg) :
+    (processCreateMessage.msg msg).benv.state.bal =
+      msg.benv.state.bal := by
+  change ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+    msg.currentTarget).bal = msg.benv.state.bal
+  rw [State.incrNonce_bal, State.setStor_bal]
+
+/-- CREATE code-deposit gas charging changes only machine state. -/
+theorem processCreateMessage.chargeCodeGas_bal_eq
+    {rules : ForkRules} {pre post : Devm}
+    (h : processCreateMessage.chargeCodeGas rules pre = .ok post) :
+    post.state.bal = pre.state.bal := by
+  unfold processCreateMessage.chargeCodeGas at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
+    split at hrest
+    · cases hrest
+    · cases hrest
+      rw [chargeGas_def] at hcharge
+      split at hcharge
+      · contradiction
+      · cases hcharge
+        rfl
+
+/-- A clean successful CREATE settlement exposes its successful inner message
+and preserves that inner result's complete balance map. -/
+theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
+    {msg : Msg} {slot : Xlot} {post : Devm}
+    (hprocess : ProcessCreateMessage msg slot (.ok post))
+    (herror : post.error.isSome = false) :
+    ∃ inner : Devm,
+      ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
+      post.state.bal = inner.state.bal := by
+  rcases ProcessCreateMessage.iff_processMessage.mp hprocess with
+    ⟨result, hinner, hsettle⟩
+  cases result with
+  | error error =>
+      simp [processCreateMessage.settle, Bind.bind, Except.bind] at hsettle
+  | ok inner =>
+      unfold processCreateMessage.settle at hsettle
+      simp only [bind, Except.bind] at hsettle
+      by_cases hinnerNone : inner.error.isNone = true
+      · rw [if_pos hinnerNone] at hsettle
+        cases hcharge :
+          processCreateMessage.chargeCodeGas
+            msg.benv.stat.rules inner with
+        | error error =>
+            rw [hcharge] at hsettle
+            rcases error with ⟨error, charged⟩
+            cases error with
+            | halt reason =>
+                have heq := Except.ok.inj hsettle
+                rw [heq] at herror
+                simp [processCreateMessage.exceptionalHalt,
+                  Devm.error, Devm.setMeta] at herror
+            | revert => cases hsettle
+            | crypto reason => cases hsettle
+            | internal reason => cases hsettle
+        | ok charged =>
+            rw [hcharge] at hsettle
+            have heq := Except.ok.inj hsettle
+            refine ⟨inner, hinner, ?_⟩
+            calc
+              post.state.bal =
+                  (charged.setCode msg.currentTarget
+                    ⟨⟨charged.output⟩⟩).state.bal :=
+                congrArg (fun d : Devm => d.state.bal) heq
+              _ = charged.state.bal := by
+                rw [show (charged.setCode msg.currentTarget
+                  ⟨⟨charged.output⟩⟩).state =
+                    charged.state.setCode msg.currentTarget
+                      ⟨⟨charged.output⟩⟩ from rfl,
+                  State.setCode_bal]
+              _ = inner.state.bal :=
+                processCreateMessage.chargeCodeGas_bal_eq hcharge
+      · rw [if_neg hinnerNone] at hsettle
+        have heq := Except.ok.inj hsettle
+        rw [heq] at herror
+        simp [Devm.rollback, Devm.setWorld, Devm.error] at herror
+        apply False.elim
+        apply hinnerNone
+        rw [show inner.error = none from herror]
+        rfl
+
+/-- A successful checked system transaction exposes the same successful raw
+message result used by generic invariant and retained-trace consumers. -/
+lemma processCheckedSystemTransaction_to_unchecked {benv : Benv}
+    {target : Adr} {data : Bytes} {st : Jaune.State} {out : MsgCallOutput}
+    (h : processCheckedSystemTransaction benv target data = .ok ⟨st, out⟩) :
+    processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
+  dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
+  split at h
+  · cases h
+  · rcases Except.bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
+    split at h2
+    · cases h2
+    · obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h2)
+      rw [Except.mapError_eq_ok_iff] at h1
+      subst h3; subst h4; exact h1
 
 end Blanc

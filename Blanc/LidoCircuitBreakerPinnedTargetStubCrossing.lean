@@ -38,12 +38,6 @@ private lemma accessDelegation_worldMeta {devm d1 : Devm} {a dadr : Adr}
   rcases accessDelegation_devm h with hd | hd <;> subst hd <;>
     exact ⟨rfl, rfl⟩
 
-private lemma memWrite_memory (d : Devm) (i : Nat) (v : Bytes) :
-    (d.memWrite i v).memory = d.memory.write i v := rfl
-
-private lemma memWrite_gasLeft (d : Devm) (i : Nat) (v : Bytes) :
-    (d.memWrite i v).gasLeft = d.gasLeft := rfl
-
 private lemma state_subBal_stor {st stmid : State} {sender a : Adr}
     {value : B256} (h : st.subBal sender value = some stmid) :
     (stmid.get a).stor = (st.get a).stor := by
@@ -75,7 +69,7 @@ private lemma runCompiled_call_zero_value_stubPause
     (h_depth : sevm.depth ≠ 0)
     (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
     (h_code : code = stubCode)
-    (h_mcs : 22166 ≤ mcs)
+    (h_mcs : 22185 ≤ mcs)
     (h_data : ((d1.memory.extends
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).read
         iiw.toNat isw.toNat).1 = pauseForCalldata duration)
@@ -83,7 +77,7 @@ private lemma runCompiled_call_zero_value_stubPause
     (h_original : getOrigStorVal sevm cw.toAdr pausedUntilSlot = 0)
     (h_cold : (cw.toAdr, pausedUntilSlot) ∉ d1.accessedStorageKeys)
     (h_dynamic : sevm.isStatic = false)
-    (h_new : sevm.benvStat.time + duration ≠ 0)
+    (h_new : pauseForProjection sevm.benvStat.time duration ≠ 0)
     (h_room : s.length < 1024) :
     ∃ post,
       Ninst.RunCompiled sevm devm (.exec .call) post ∧
@@ -91,7 +85,7 @@ private lemma runCompiled_call_zero_value_stubPause
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
           oiw.toNat [] ∧
-      post.gasLeft = d1.gasLeft - (mcc + ext) + (mcs - 22166) ∧
+      post.gasLeft = d1.gasLeft - (mcc + ext) + (mcs - 22185) ∧
       post.error = devm.error ∧
       post.output = devm.output ∧
       post.returnData = [] ∧
@@ -104,11 +98,11 @@ private lemma runCompiled_call_zero_value_stubPause
           k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ d1.accessedAddresses) ∧
       post.getStorVal cw.toAdr pausedUntilSlot =
-        sevm.benvStat.time + duration ∧
+        pauseForProjection sevm.benvStat.time duration ∧
       ∃ stmid,
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = (stmid.addBal cw.toAdr 0).setStorVal cw.toAdr
-          pausedUntilSlot (sevm.benvStat.time + duration) := by
+          pausedUntilSlot (pauseForProjection sevm.benvStat.time duration) := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := callSpawnMsg sevm p mcs cw.toAdr dadr
@@ -156,19 +150,19 @@ private lemma runCompiled_call_zero_value_stubPause
       (getOrigStorVal (initSevm (msg.withBenv benv')) cw.toAdr
         pausedUntilSlot)
       ((initDevm (msg.withBenv benv')).getStorVal cw.toAdr pausedUntilSlot)
-      ((initSevm (msg.withBenv benv')).benvStat.time + duration) =
+      (pauseForProjection ((initSevm (msg.withBenv benv')).benvStat.time) duration) =
         22100 := by
     rw [hchildOriginal, hchildCurrent]
     change gasColdSload + sstoreValueCost 0 0
-      (sevm.benvStat.time + duration) = 22100
+      (pauseForProjection sevm.benvStat.time duration) = 22100
     rw [sstoreValueCost,
       if_pos ⟨rfl, fun h => h_new h.symm⟩, if_pos rfl]
     norm_num [gasColdSload, gasStorageSet]
   obtain ⟨out, hexec, herr, hout, hgasOut, hmetaOut, hworldOut,
     heffectOut⟩ :=
-    stubPause_exec (msg.withBenv benv') duration (mcs - 22166)
+    stubPause_exec (msg.withBenv benv') duration (mcs - 22185)
       (by change code = stubCode; exact h_code) hchildData
-      (by change mcs = mcs - 22166 + 22166; omega)
+      (by change mcs = mcs - 22185 + 22185; omega)
       hchildCold (by change sevm.isStatic = false; exact h_dynamic)
       hchildCost
   have hlogsOut : out.logs = [] := by
@@ -184,7 +178,7 @@ private lemma runCompiled_call_zero_value_stubPause
         (initDevm (msg.withBenv benv')) duration).refundCounter from
       congrArg (fun view => view.refundCounter) hmetaOut]
     rw [stubPausePost_refundCounter]
-    change sstoreNewRefundCounter (sevm.benvStat.time + duration)
+    change sstoreNewRefundCounter (pauseForProjection sevm.benvStat.time duration)
       (getOrigStorVal (initSevm (msg.withBenv benv')) cw.toAdr
         pausedUntilSlot)
       ((initDevm (msg.withBenv benv')).getStorVal cw.toAdr pausedUntilSlot)
@@ -226,7 +220,7 @@ private lemma runCompiled_call_zero_value_stubPause
     rfl
   have hstateOut : out.state =
       (stmid.addBal cw.toAdr 0).setStorVal cw.toAdr pausedUntilSlot
-        (sevm.benvStat.time + duration) := by
+        (pauseForProjection sevm.benvStat.time duration) := by
     rw [show out.state =
       (stubPausePost (initSevm (msg.withBenv benv'))
         (initDevm (msg.withBenv benv')) duration).state from
@@ -275,13 +269,13 @@ private lemma runCompiled_call_zero_value_stubPause
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
-  · rw [memWrite_memory, Devm.memory_setMach, hout]
+  · rw [Devm.memWrite_memory, Devm.memory_setMach, hout]
     simp only [List.take_nil]
     rw [show p.memory = d1.memory.extends
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] from
         callSpawnParent_memory]
     rw [hd1mem]
-  · rw [memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
+  · rw [Devm.memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
     rw [show p.gasLeft = d1.gasLeft - (mcc + ext) from
       callSpawnParent_gasLeft]
   · change d1.error = devm.error
@@ -338,7 +332,7 @@ private lemma runCompiled_call_zero_value_stubPause
     exact hstateOut
 
 /-- Resolve the warm, non-delegated parent `CALL` completely.  The parent
-charge is the warm access `100` plus the compiled stub's `22166`. -/
+charge is the warm access `100` plus the compiled stub's `22185`. -/
 private lemma stubPause_call_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw duration : B256}
     {s : List B256} {G : Nat}
@@ -356,10 +350,10 @@ private lemma stubPause_call_crossing
     (horiginal : getOrigStorVal sevm target.toAdr pausedUntilSlot = 0)
     (hcold : (target.toAdr, pausedUntilSlot) ∉ devm.accessedStorageKeys)
     (hdynamic : sevm.isStatic = false)
-    (hnew : sevm.benvStat.time + duration ≠ 0)
+    (hnew : pauseForProjection sevm.benvStat.time duration ≠ 0)
     (hdepth : sevm.depth ≠ 0)
     (hnp : sevm.benvStat.rules.isPrecomp target.toAdr = false)
-    (hfloor : 22617 ≤ G) (hbound : G < 2 ^ 256)
+    (hfloor : 22637 ≤ G) (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
       Ninst.RunCompiled sevm devm (.exec .call) post ∧
@@ -367,7 +361,7 @@ private lemma stubPause_call_crossing
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
           oiw.toNat [] ∧
-      post.gasLeft = G - 22266 ∧
+      post.gasLeft = G - 22285 ∧
       post.error = devm.error ∧
       post.output = devm.output ∧
       post.returnData = [] ∧
@@ -381,17 +375,17 @@ private lemma stubPause_call_crossing
       (∀ a, a ∈ post.accessedAddresses ↔
         a ∈ devm.accessedAddresses) ∧
       post.getStorVal target.toAdr pausedUntilSlot =
-        sevm.benvStat.time + duration ∧
+        pauseForProjection sevm.benvStat.time duration ∧
       ∃ stmid,
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = (stmid.addBal target.toAdr 0).setStorVal target.toAdr
-          pausedUntilSlot (sevm.benvStat.time + duration) := by
+          pausedUntilSlot (pauseForProjection sevm.benvStat.time duration) := by
   have hnodel : getDelegatedCodeAddress
       ((devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
         target.toAdr) = none := by
     rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
         target.toAdr = devm.getCode target.toAdr from rfl, hcode]
-    have hsize : stubCode.size = 47 := by
+    have hsize : stubCode.size = 53 := by
       decide +kernel
     unfold getDelegatedCodeAddress
     rw [if_neg]
@@ -428,8 +422,8 @@ private lemma stubPause_call_crossing
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft 0
         gasWarmAccess = ⟨mcc, mcs⟩ := ⟨_, _, rfl⟩
   obtain ⟨hmcs, hcross, hgasout⟩ :
-      22166 ≤ mcs ∧ mcc + 0 ≤ G ∧
-        G - (mcc + 0) + (mcs - 22166) = G - 22266 := by
+      22185 ≤ mcs ∧ mcc + 0 ≤ G ∧
+        G - (mcc + 0) + (mcs - 22185) = G - 22285 := by
     have hGnat : (Nat.toB256 G).toNat = G :=
       B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
@@ -660,12 +654,12 @@ private lemma runCompiled_statcall_stubQuery
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
-  · rw [memWrite_memory, Devm.memory_setMach, hout]
+  · rw [Devm.memWrite_memory, Devm.memory_setMach, hout]
     rw [show p.memory = d1.memory.extends
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] from
         callSpawnParent_memory]
     rw [hd1mem]
-  · rw [memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
+  · rw [Devm.memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
     rw [show p.gasLeft = d1.gasLeft - (mcc + ext) from
       callSpawnParent_gasLeft]
   · change d1.error = devm.error
@@ -758,7 +752,7 @@ private lemma stubQuery_statcall_crossing
         target.toAdr) = none := by
     rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
         target.toAdr = devm.getCode target.toAdr from rfl, hcode]
-    have hsize : stubCode.size = 47 := by
+    have hsize : stubCode.size = 53 := by
       decide +kernel
     unfold getDelegatedCodeAddress
     rw [if_neg]
@@ -986,7 +980,7 @@ private theorem installedCodeGuard_runCompiled
     (htail : Func.RunCompiled fs sevm
       (devm.setMach ⟨[], M, G⟩) tail post) :
     Func.RunCompiled fs sevm
-      (devm.setMach ⟨[(47 : B256), target], M, G + 18⟩)
+      (devm.setMach ⟨[(53 : B256), target], M, G + 18⟩)
       (Ninst.iszero :::
         ((Func.call emptyRevertSlot) <?> (Ninst.pop ::: tail))) post := by
   func_run (3) [0]
@@ -1014,15 +1008,16 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     (horiginal : getOrigStorVal sevm target.toAdr pausedUntilSlot = 0)
     (hcold : (target.toAdr, pausedUntilSlot) ∉ base.accessedStorageKeys)
     (hdynamic : sevm.isStatic = false)
-    (hnew : sevm.benvStat.time + duration ≠ 0)
-    (hpaused : sevm.benvStat.time < sevm.benvStat.time + duration)
+    (hnew : pauseForProjection sevm.benvStat.time duration ≠ 0)
+    (hpaused : sevm.benvStat.time < pauseForProjection sevm.benvStat.time duration)
     (hdepth : sevm.depth ≠ 0)
     (hnp : sevm.benvStat.rules.isPrecomp target.toAdr = false)
+    (hgasfloor : 19 ≤ Gb)
     (hbound : Gb + 22663 < 2 ^ 256) :
     ∃ mid : Devm,
       mid.stack = [] ∧
       mid.memory = pauseDecodedMemory M duration ∧
-      mid.gasLeft = Gb ∧
+      mid.gasLeft = Gb - 19 ∧
       mid.error = base.error ∧
       mid.output = base.output ∧
       mid.returnData = (1 : B256).toBytes ∧
@@ -1036,11 +1031,11 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       (∀ a, a ∈ mid.accessedAddresses ↔
         (a = target.toAdr ∨ a ∈ base.accessedAddresses)) ∧
       mid.getStorVal target.toAdr pausedUntilSlot =
-        sevm.benvStat.time + duration ∧
+        pauseForProjection sevm.benvStat.time duration ∧
       (∃ st₁ st₂ : State,
         base.state.subBal sevm.currentTarget 0 = some st₁ ∧
         ((st₁.addBal target.toAdr 0).setStorVal target.toAdr
-          pausedUntilSlot (sevm.benvStat.time + duration)).subBal
+          pausedUntilSlot (pauseForProjection sevm.benvStat.time duration)).subBal
             sevm.currentTarget 0 = some st₂ ∧
         mid.state = st₂.addBal target.toAdr 0) ∧
       ∀ post : Devm,
@@ -1174,8 +1169,8 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       ((pauseDecodedMemory M duration).read 0 32).2 =
         pauseDecodedMemory M duration := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le (by omega) (by omega))]
-  have hstubSize : stubCode.size.toB256 = (47 : B256) := by
-    have hs : stubCode.size = 47 := by decide +kernel
+  have hstubSize : stubCode.size.toB256 = (53 : B256) := by
+    have hs : stubCode.size = 53 := by decide +kernel
     rw [hs]
     decide +kernel
   obtain ⟨post1, hrun1, hstk1, hmem1, hgas1, herr1, hout1, hret1, hlogs1,
@@ -1217,7 +1212,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         rw [temporalAccountAccessBase_accessedStorageKeys]
         exact hcold)
       hdynamic hnew hdepth hnp (by omega) hbound (by simp)
-  have hgas1' : post1.gasLeft = Gb + 397 := by
+  have hgas1' : post1.gasLeft = Gb + 378 := by
     rw [hgas1]
     omega
   have hmem1' : post1.memory =
@@ -1229,7 +1224,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     rfl
   have heta1 : post1 = post1.setMach ⟨[1],
       (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-      Gb + 397⟩ := by
+      Gb + 378⟩ := by
     rw [← hstk1, ← hmem1', ← hgas1']
     rfl
   have hcode1 : post1.state.getCode target.toAdr = stubCode := by
@@ -1244,20 +1239,20 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     hstate2⟩ :=
     stubQuery_statcall_crossing (sevm := sevm)
       (devm := post1.setMach
-        ⟨[Nat.toB256 (Gb + 353), target, 284, 4, 0, 32],
+        ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
-          Gb + 353⟩)
+          Gb + 334⟩)
       (target := target) (iiw := 284) (isw := 4) (oiw := 0) (osw := 32)
-      (storedUntil := sevm.benvStat.time + duration)
-      (s := []) (G := Gb + 353)
+      (storedUntil := pauseForProjection sevm.benvStat.time duration)
+      (s := []) (G := Gb + 334)
       rfl rfl
       (by
         show (post1.setMach
-          ⟨[Nat.toB256 (Gb + 353), target, 284, 4, 0, 32],
+          ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
             ((M.write 256 pauseForSelector.toBytes).write 288
               duration.toBytes).write 256 isPausedSelector.toBytes,
-            Gb + 353⟩).extCost _ = 0
+            Gb + 334⟩).extCost _ = 0
         exact Devm.extCost_covered (by rw [hsize3]; decide))
       (by
         show post1.state.getCode target.toAdr = stubCode
@@ -1273,7 +1268,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         apply (hask1 (target.toAdr, pausedUntilSlot)).mpr
         exact Or.inl rfl)
       hpaused hdepth hnp (by omega) (by omega) (by simp)
-  have hgas2' : post2.gasLeft = Gb + 81 := by
+  have hgas2' : post2.gasLeft = Gb + 62 := by
     rw [hgas2]
     omega
   have hmem2' : post2.memory = pauseDecodedMemory M duration := by
@@ -1285,7 +1280,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       Mem.extends_covered (by rw [hsize3]; decide)]
     rfl
   have heta2 : post2 = post2.setMach ⟨[1], pauseDecodedMemory M duration,
-      Gb + 81⟩ := by
+      Gb + 62⟩ := by
     rw [← hstk2, ← hmem2', ← hgas2']
     rfl
   have hltFlag : (Nat.toB256 post2.returnData.length <? (32 : B256)) =
@@ -1346,17 +1341,17 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     exact hsub1
   have hsub2' :
       ((st₁.addBal target.toAdr 0).setStorVal target.toAdr pausedUntilSlot
-        (sevm.benvStat.time + duration)).subBal sevm.currentTarget 0 =
+        (pauseForProjection sevm.benvStat.time duration)).subBal sevm.currentTarget 0 =
           some st₂ := by
     rw [← hstate1]
     exact hsub2
-  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb⟩,
+  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 19⟩,
     rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
     haskB, haaB, ?_, ⟨st₁, st₂, hsub1', hsub2', hstate2⟩, ?_⟩
   · simpa only [Devm.getStorVal_setMach] using heffect2
   intro post hwalk
   have hC : Func.RunCompiled fs sevm
-      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 81⟩)
+      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 62⟩)
       (Ninst.iszero :::
         ((Func.call bubbleRevertSlot) <?> decodePausedResult)) post := by
     have hisz : ((pauseDecodedMemory M duration).read 0 32).1.toB256 =? 0 =
@@ -1367,26 +1362,29 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         ((pauseDecodedMemory M duration).read 0 32).1.toB256 = 1 := by
       rw [hdecodedValue]
       decide
+    have hG61 : 61 ≤ Gb + 62 := by omega
+    have hG64 : 64 ≤ Gb + 62 := by omega
+    have hG67 : 67 ≤ Gb + 62 := by omega
     func_run (14) [0, 0, 3, 0, 1]
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
       norm_num [gVerylow]
     case h_arm =>
-      have hg : Gb + 81 - 81 = Gb := by omega
+      have hg : Gb + 62 - 81 = Gb - 19 := by omega
       rw [hg, show ((0 : B256) * 32).toNat = 0 from by decide,
         hdecodedMemory]
       exact hwalk
   have hQueryPost : Func.RunCompiled fs sevm
-      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 81⟩)
+      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 62⟩)
       installedQueryPost post := by
     simpa only [installedQueryPost] using hC
   have hQueryCross : Func.RunCompiled fs sevm
       (post1.setMach
-        ⟨[Nat.toB256 (Gb + 353), target, 284, 4, 0, 32],
+        ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
-          Gb + 353⟩)
+          Gb + 334⟩)
       (Ninst.statcall ::: installedQueryPost) post := by
     refine Func.RunCompiled.next hrun2 ?_
     rw [heta2]
@@ -1394,7 +1392,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
   have hQueryStage : Func.RunCompiled fs sevm
       (post1.setMach
         ⟨[], ((M.write 256 pauseForSelector.toBytes).write 288
-          duration.toBytes).write 256 isPausedSelector.toBytes, Gb + 372⟩)
+          duration.toBytes).write 256 isPausedSelector.toBytes, Gb + 353⟩)
       installedQueryStage post := by
     unfold installedQueryStage
     func_run (7) [3]
@@ -1406,31 +1404,31 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       norm_num [gVerylow]
     case a =>
       rw [htargetValue3]
-      have hg : Gb + 372 - 19 = Gb + 353 := by omega
+      have hg : Gb + 353 - 19 = Gb + 334 := by omega
       rw [hg]
       exact hQueryCross
   have hQueryWrite : Func.RunCompiled fs sevm
       (post1.setMach ⟨[],
         (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-        Gb + 381⟩)
+        Gb + 362⟩)
       installedQueryWrite post := by
     unfold installedQueryWrite
     have h := installedQueryWrite_runCompiled fs sevm post1
       isPausedSelector
       ((M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes)
-      (Gb + 372) installedQueryStage post (by decide +kernel) halign2
+      (Gb + 353) installedQueryStage post (by decide +kernel) halign2
       (by omega) hQueryStage
-    simpa only [show Gb + 372 + 9 = Gb + 381 by omega] using h
+    simpa only [show Gb + 353 + 9 = Gb + 362 by omega] using h
   have hB : Func.RunCompiled fs sevm
       (post1.setMach ⟨[1],
         (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-        Gb + 397⟩)
+        Gb + 378⟩)
       installedQueryPrelude post := by
     unfold installedQueryPrelude
     have h := installedQueryGuard_runCompiled fs sevm post1
       ((M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes)
-      (Gb + 381) installedQueryWrite post hQueryWrite
-    simpa only [show Gb + 381 + 16 = Gb + 397 by omega] using h
+      (Gb + 362) installedQueryWrite post hQueryWrite
+    simpa only [show Gb + 362 + 16 = Gb + 378 by omega] using h
   have hA2 : Func.RunCompiled fs sevm
       ((temporalAccountAccessBase base target.toAdr).setMach
         ⟨[stubCode.size.toB256, target], M, Gb + 22722⟩)

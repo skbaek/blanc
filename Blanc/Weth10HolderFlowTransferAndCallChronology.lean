@@ -32,13 +32,14 @@ def Exec.Frame.CompiledTransferAndCallZeroChronology
       frame.sevm.caller (Sevm.argWord frame.sevm 1)
       frame.sevm.caller.toB256 ∧
     trace.slot = trace.retained.slot ∧
-    trace.retained.retained.RawCommits ∧
+    Blanc.Weth10.RetainedXlot.RawCommits trace.retained.retained ∧
     Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre trace.callPost
       trace.retained.slot ∧
     Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame
       onTokenTransferSelector 0 2 (Sevm.argWord frame.sevm 1)
       callbackPre frame.post
-      (trace.retained.retained.flowActions dp ca)
+      (Blanc.Weth10.RetainedXlot.flowActions dp ca
+        trace.retained.retained)
 
 /-- Exact raw-nonzero `transferAndCall` chronology.  The recipient remains
 the normalized low-160-bit address, while the callback keeps the unmodified
@@ -710,16 +711,20 @@ theorem Exec.Frame.compiledTransferAndCallZeroChronology
         _ = wrapperCursor.actions := hbodyActions
         _ = [] := hwrapperActions
     have hcallbackActionsExact : callbackCursor.actions =
-        trace.retained.retained.flowActions dp ca := by
+        Blanc.Weth10.RetainedXlot.flowActions dp ca
+          trace.retained.retained := by
       calc
         callbackCursor.actions = zeroCursor.actions ++
-            trace.retained.retained.flowActions dp ca := hcallbackActions
-        _ = trace.retained.retained.flowActions dp ca := by
+            Blanc.Weth10.RetainedXlot.flowActions dp ca
+              trace.retained.retained := hcallbackActions
+        _ = Blanc.Weth10.RetainedXlot.flowActions dp ca
+              trace.retained.retained := by
           rw [hzeroActionsNil, List.nil_append]
     have hchron' : Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame
         onTokenTransferSelector 0 2 (Sevm.argWord frame.sevm 1)
         callbackCursor.pre frame.post
-        (trace.retained.retained.flowActions dp ca) := by
+        (Blanc.Weth10.RetainedXlot.flowActions dp ca
+          trace.retained.retained) := by
       simpa only [hcallbackActionsExact] using hchron
     have hstorOwn : Devm.getStor frame.pre =
         Devm.getStor zeroCursor.pre :=

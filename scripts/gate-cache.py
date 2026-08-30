@@ -600,7 +600,8 @@ def traversable_population(root: Path, spec: dict[str, Any]) -> None:
     """Refuse a population containing something a tree walk cannot read.
 
     One gate's verdict depends on the whole worktree being *copyable*: its
-    negative controls `shutil.copytree` the tree six times, unguarded, so a
+    negative controls make one seed copy and nine case copies through ten
+    unguarded `shutil.copytree` calls, so a
     dangling symlink or an unreadable file anywhere makes it fail.  Neither of
     the two obvious declarations catches that.  Content hashing the tree
     invalidates the gate on every unrelated edit; membership invalidates it on

@@ -22,6 +22,21 @@ def Exec.NoRetainedWriteTo
   ∀ write ∈ Exec.retainedStorageWrites run,
     write.matches owner key ≠ true
 
+/-- A noncommitting invocation retains no storage write at all, hence cannot
+retain a write to any selected persistent cell.  This is the rollback-first
+route to `NoRetainedWriteTo`; committing executions use the childless or
+frame-owner routes below. -/
+theorem Exec.noRetainedWriteTo_of_not_commits
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (notCommitted : Execution.commits out ≠ true)
+    (owner : Adr) (key : B256) :
+    Exec.NoRetainedWriteTo run owner key := by
+  intro write member
+  have nodes := Exec.retainedNodes_eq_nil_of_not_commits run notCommitted
+  exact False.elim (by
+    simp [Exec.retainedStorageWrites, nodes] at member)
+
 private theorem Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo
     {owner : Adr} {key : B256} {writes : List Exec.StorageWrite}
     (initial : B256)

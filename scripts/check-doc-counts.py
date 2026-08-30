@@ -69,6 +69,7 @@ CONSUMERS = [
         "scripts/GATES.md",
         [
             re.compile(r"\|\s*(\d{2,5})\s+theorems\s*\|"),
+            re.compile(r"repository audit\s+(\d{2,5})\s+pins"),
         ],
     ),
     (

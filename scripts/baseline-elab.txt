@@ -78,6 +78,20 @@
 # evidence is preserved in scripts/report-elab-calibration.txt. The source-set
 # digest pins the pending additive C9 register state present beside the seeding
 # commit. No existing row is touched.
+#
+# 2026-08-29 additions-only admission of the five executed proxy-pair core
+# rows, measured by `scripts/check-elab.sh --calibrate` at candidate commit
+# 25595fa610e4ac644623ca79babf3d5a127bd727 (seed
+# 1787ef75ae32fe54a1588253bdb979bb1fb46fb8f9cbf283bf12b36e06a48fa1;
+# baseline sha256 7949f5758b4c2a317d7a34947bb634762759cc31356fcd00cfab192c06693596;
+# source-set sha256 09490be658554b6bd3741e5d2e8aef2ceb77265e440e5fde410b161040eeab4e).
+# Five mandatory rows and 12 deterministic controls measured in 91.9 s;
+# control median 1.121x, spread 1.11x-1.20x, none reaching the 1.50x
+# annotation tier. A preceding six-round balanced root control measured warm
+# medians old/two-leaf/exact = 1.268/1.270/1.264 s and reproduced the known
+# cold-root artifact at 3.522 s on the old root; the exact warm gate then
+# measured Blanc.lean at 1.255 s. Its 1.129 s row and every other existing row
+# therefore remain untouched.
 OK	1.129	Blanc.lean
 OK	1.109	Blanc/BalanceAlgebra.lean
 OK	1.200	Blanc/Basic.lean
@@ -121,6 +135,7 @@ OK	1.347	Blanc/BytesWrite.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
 OK	1.717	Blanc/Compiled.lean
+OK	1.212	Blanc/CompiledWalkInversion.lean
 OK	2.076	Blanc/Conserved.lean
 OK	1.248	Blanc/CycleWriteFree.lean
 OK	1.136	Blanc/DeploymentCompiled.lean
@@ -130,6 +145,43 @@ OK	2.175	Blanc/ExecDeterminism.lean
 OK	1.107	Blanc/ExecutionNoninterference.lean
 OK	6.426	Blanc/ExecutionOccurrence.lean
 OK	1.346	Blanc/ExecutionSettlement.lean
+# 2026-08-29 additions-only admission of three common execution-helper rows,
+# measured by `scripts/check-elab.sh --calibrate` from seeding commit
+# 98b49945128b38e009431d4280fe8703ed845e7f; seed sha256
+# 65f7dd264b6807c9addc17fee60184f7673c0478e8ab2428160fd69062c1dd70;
+# baseline sha256 d7ae621056b06bf5eb2a668175a2d02d05c2a5420e3a9e709e53456b5a3d9e0e;
+# source-set sha256 0ff2f30b017dbe642536ef218510c5c0200daa36e8f7906aa644c63128a4baa8.
+# With no local timing cache, the fallback measured all 171 modules outright
+# in 941.7 s versus the 772.1 s committed total, so the run is its own host
+# control. No existing row is touched; the other admitted rows are
+# `Blanc/MessageExecution.lean` and `Blanc/RootedExecution.lean` below.
+#
+# 2026-08-30 prorata-etude-v1 additions-only admission at candidate commit
+# dc512bcdac4fceecf2fe7bc902e42a426c178803. One `scripts/check-elab.sh --calibrate` run measured all 205 modules
+# outright in 881.5 s against the 776.0 s committed total; the gate drew no
+# control because every module carrying a baseline row was measured and
+# compared directly, so the run is its own host control. The host was sampled
+# immediately before and after and was identical (79% free, swap 1882 MiB,
+# no Lean server resident), so the timing is uncontended. No existing row is
+# touched. The 34 new rows are this goal's own modules: 22 `Prorata*` and 12
+# contract-neutral `Execution*` modules hoisted under the user's 2026-08-30
+# shared-hoist authority. The goal's admission class 2 names "the new
+# `Prorata*` modules"; extending it to the shared modules this goal itself
+# created is recorded here and in the completion report rather than left
+# silent.
+OK	1.224	Blanc/ExecutionBodyEffects.lean
+OK	1.272	Blanc/ExecutionBodyStateTrace.lean
+OK	1.190	Blanc/ExecutionHistory.lean
+OK	1.182	Blanc/ExecutionHistoryEffects.lean
+OK	1.193	Blanc/ExecutionHistoryStateTrace.lean
+OK	1.344	Blanc/ExecutionMessageEffects.lean
+OK	1.198	Blanc/ExecutionMessageStateTrace.lean
+OK	1.394	Blanc/ExecutionPath.lean
+OK	1.532	Blanc/ExecutionStateTrace.lean
+OK	1.253	Blanc/ExecutionTerminal.lean
+OK	1.537	Blanc/ExecutionTrace.lean
+OK	1.237	Blanc/ExecutionTransactionEffects.lean
+OK	1.251	Blanc/ExecutionTransactionStateTrace.lean
 OK	1.834	Blanc/FlashSpec.lean
 OK	2.816	Blanc/Fmint.lean
 OK	4.277	Blanc/FmintCode.lean
@@ -200,11 +252,75 @@ OK	1.586	Blanc/LidoCircuitBreakerSuccess.lean
 OK	1.219	Blanc/LidoCircuitBreakerUnregisterAttainment.lean
 OK	5.129	Blanc/LidoCircuitBreakerUnregisterRegistration.lean
 OK	2.966	Blanc/LidoCircuitBreakerUnregisterWorld.lean
+# 2026-08-30 lido-twg-port-v1 additions-only admission, measured by
+# `scripts/check-elab.sh --calibrate` after merging PRORATA main into the
+# Lido TWG candidate. The reproducible seed commit was
+# c40654d53cc3499900e887daaf94ac6e2cef8ab3 (seed sha256
+# b2992a72be22b76e84d4867d52f393e7f555d75811f994819ba4080cc4f6e3fe;
+# baseline sha256 65c850164db3ba851bd69920d2849e572fc3b5d7b92d7fa19a8575906c4d2e10;
+# merged source-set sha256
+# eb5b80d5b15228649a89b756798d1c8e6f50e95c5d5edfd889931994182f5211).
+# The shared Lean/Lake environment changed, so the gate measured all 224
+# modules outright in 911.1 s against the 823.6 s committed total and drew no
+# separate control; the run is its own host control. The quiet-host samples
+# immediately before/after reported 69%/72% free, 92.38 MiB swap used, and no
+# Lean process. No existing row is touched. The 19 new rows are the 15
+# `LidoTriggerableWithdrawalsGateway*` modules and four contract-neutral
+# proof surfaces this goal introduced: `CompiledWalkInversion`,
+# `LinearDispatch`, `LinearDispatchCorrectness`, and
+# `MessageExecutionInversion`.
+OK	7.373	Blanc/LidoTriggerableWithdrawalsGateway.lean
+OK	1.181	Blanc/LidoTriggerableWithdrawalsGatewayA2.lean
+OK	1.258	Blanc/LidoTriggerableWithdrawalsGatewayAuthorization.lean
+OK	5.393	Blanc/LidoTriggerableWithdrawalsGatewayCore.lean
+OK	1.192	Blanc/LidoTriggerableWithdrawalsGatewayIsPaused.lean
+OK	1.283	Blanc/LidoTriggerableWithdrawalsGatewayPauseFor.lean
+OK	1.145	Blanc/LidoTriggerableWithdrawalsGatewayPauseQuery.lean
+OK	1.486	Blanc/LidoTriggerableWithdrawalsGatewayPauseUntilResume.lean
+OK	1.125	Blanc/LidoTriggerableWithdrawalsGatewayPinnedTarget.lean
+OK	1.178	Blanc/LidoTriggerableWithdrawalsGatewayPinnedTargetControl.lean
+OK	1.128	Blanc/LidoTriggerableWithdrawalsGatewayPinnedTargetInterface.lean
+OK	1.254	Blanc/LidoTriggerableWithdrawalsGatewayRoleRoute.lean
+OK	2.479	Blanc/LidoTriggerableWithdrawalsGatewayRuntimeRoute.lean
+OK	5.898	Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean
+OK	1.440	Blanc/LidoTriggerableWithdrawalsGatewayTriggerAuthorizationRoute.lean
+OK	1.109	Blanc/LinearDispatch.lean
+OK	1.261	Blanc/LinearDispatchCorrectness.lean
+OK	1.291	Blanc/MessageExecution.lean
+OK	1.125	Blanc/MessageExecutionInversion.lean
 OK	1.117	Blanc/PinnedPauseTarget.lean
 OK	0.594	Blanc/ProofRecipesGenerated.lean
+OK	1.670	Blanc/Prorata.lean
+OK	1.393	Blanc/ProrataAccounting.lean
+OK	1.216	Blanc/ProrataAccountingBody.lean
+OK	1.371	Blanc/ProrataAccountingExec.lean
+OK	1.222	Blanc/ProrataAccountingHistory.lean
+OK	1.200	Blanc/ProrataAccountingTransaction.lean
+OK	1.311	Blanc/ProrataArithmetic.lean
+OK	1.786	Blanc/ProrataAttackModel.lean
+OK	1.602	Blanc/ProrataAttackPath.lean
+OK	1.346	Blanc/ProrataAttackTrace.lean
+OK	1.856	Blanc/ProrataCode.lean
+OK	1.183	Blanc/ProrataCompiledEffects.lean
+OK	1.166	Blanc/ProrataConsistency.lean
+OK	1.161	Blanc/ProrataDeploymentRoot.lean
+OK	1.455	Blanc/ProrataDeposit.lean
+OK	2.573	Blanc/ProrataFunctional.lean
+OK	1.240	Blanc/ProrataInvariant.lean
+OK	1.211	Blanc/ProrataPreservation.lean
+OK	1.489	Blanc/ProrataRead.lean
+OK	1.459	Blanc/ProrataRealizedAccounting.lean
+OK	1.495	Blanc/ProrataSound.lean
+OK	1.597	Blanc/ProrataWithdraw.lean
+OK	1.356	Blanc/ProxyPairAuthority.lean
+OK	3.016	Blanc/ProxyPairCorrespondence.lean
+OK	4.978	Blanc/ProxyPairExecution.lean
+OK	4.324	Blanc/ProxyPairImplementation.lean
+OK	1.316	Blanc/ProxyPairProgram.lean
 OK	1.455	Blanc/ProxyPairSlots.lean
 OK	1.630	Blanc/RevertPayload.lean
 OK	1.178	Blanc/Reverts.lean
+OK	1.398	Blanc/RootedExecution.lean
 OK	1.597	Blanc/Semantics.lean
 OK	1.965	Blanc/Solvent.lean
 OK	1.553	Blanc/SourceAttainment.lean

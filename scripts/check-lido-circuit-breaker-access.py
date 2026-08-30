@@ -82,6 +82,9 @@ OWNERS = {
     # cooperative callee would supply -- is as load-bearing as what they carry.
     "callBoundary": ROOT / "Blanc/LidoCircuitBreakerCallBoundary.lean",
     "observation": ROOT / "Blanc/LidoCircuitBreakerObservation.lean",
+    # Contract-neutral compiled-walk inversions are pinned under their shared
+    # owner, not under the CircuitBreaker's observation consumer.
+    "compiledWalk": ROOT / "Blanc/CompiledWalkInversion.lean",
     "success": ROOT / "Blanc/LidoCircuitBreakerSuccess.lean",
     # Stage 6 lifted to the public pause entry, plus its concrete non-vacuity
     # world.  These are additive altitude owners of the same hostile-world
@@ -124,6 +127,7 @@ MODULES = {
     "preControl": "Blanc.LidoCircuitBreakerPreControl",
     "callBoundary": "Blanc.LidoCircuitBreakerCallBoundary",
     "observation": "Blanc.LidoCircuitBreakerObservation",
+    "compiledWalk": "Blanc.CompiledWalkInversion",
     "success": "Blanc.LidoCircuitBreakerSuccess",
     "publicPause": "Blanc.LidoCircuitBreakerPublicPause",
     "publicPauseControl": "Blanc.LidoCircuitBreakerPublicPauseControl",
@@ -962,15 +966,9 @@ ROLES = {
         "pause_externalBoundary":
             "a85d61145a4f802704234fd2dae7e78629a73c2283377a2831fc3d0ebd76608c",
     },
-    # The observation cut: what the CircuitBreaker does with the target's
-    # answer.  Every outcome is indexed to a projection of the child's
-    # output, never to the word memory happened to hold, and the
-    # short-return arm draws no conclusion about that word at all.
-    "observation": {
-        "pauseStat_stagedWord_survives":
-            "851cfb0593ea694d4bff6b1fd2b6c2ab3a6f42983ec8aae8b769167e54d9fe84",
-        "pauseStat_window_holdsAnswer":
-            "b6147d863384ce4e0cb3df0b0aaf9c334f29cbb48a60801a5947bae3623d9142",
+    # Shared inversion facts for arbitrary compiled walks.  These declarations
+    # are rooted at `Blanc`, not nested under a contract-family namespace.
+    "compiledWalk": {
         "runCompiledTo_next_inv":
             "df77fdecaedf00c38e5d5bc385431712e65d7aa1b2c8064646fbcda13442f799",
         "runCompiledTo_branch_inv":
@@ -981,6 +979,22 @@ ROLES = {
             "6c3c0a7264e74aa0af713f1d29377cbd7c2a09ebf56c677d88e56bd4a495ded2",
         "iszero_stack_inv":
             "906557b6157bed0f18371fc7fb7eed0eb6e6330d2dbf533927ca45787c0bdd60",
+        "runCompiledTo_last_inv":
+            "212935a36e629c97d8b84cb3ab7a7fd42afae88e77446e72c87b9a609408fe39",
+        "runCompiledTo_rev_inv":
+            "4a7305a9f3950009b6f46121a7e9ba19cd748d3b23c6ce849fde3a17b60c3823",
+        "runCompiledTo_revSelector_inv":
+            "1a6c71f3ccbf28859fc5f4943ce70a8f3d9172db5db5298bc074d8a2dec4a4d7",
+    },
+    # The observation cut: what the CircuitBreaker does with the target's
+    # answer.  Every outcome is indexed to a projection of the child's
+    # output, never to the word memory happened to hold, and the
+    # short-return arm draws no conclusion about that word at all.
+    "observation": {
+        "pauseStat_stagedWord_survives":
+            "851cfb0593ea694d4bff6b1fd2b6c2ab3a6f42983ec8aae8b769167e54d9fe84",
+        "pauseStat_window_holdsAnswer":
+            "b6147d863384ce4e0cb3df0b0aaf9c334f29cbb48a60801a5947bae3623d9142",
         "pauseObservation_arms":
             "f65847961b539aec689255a7894acd4f4b11b7cb43342e6de47aba6228433362",
         "pauseObservation_failureArm_bubbles":
@@ -997,12 +1011,6 @@ ROLES = {
             "d3b48bef5db1230359b40947514a7d8cba3f1ba3cf2d7b69d599149b50014097",
         "pauseDecode_arms":
             "8f8e6421e31e8608159adc50ae600ac248141981cce9a0cdb2de70d65ac11006",
-        "runCompiledTo_last_inv":
-            "212935a36e629c97d8b84cb3ab7a7fd42afae88e77446e72c87b9a609408fe39",
-        "runCompiledTo_rev_inv":
-            "4a7305a9f3950009b6f46121a7e9ba19cd748d3b23c6ce849fde3a17b60c3823",
-        "runCompiledTo_revSelector_inv":
-            "1a6c71f3ccbf28859fc5f4943ce70a8f3d9172db5db5298bc074d8a2dec4a4d7",
         "runtime_emptyRevertSlot":
             "4a4f3ec95f01060c2d9d806322baa7566fe4df9686e86f3ba0b89c653b61d4af",
         "runtime_pauseFailedErrorSlot":
@@ -1605,6 +1613,11 @@ def compile_fixture() -> None:
     if run.returncode:
         fail("fixture failed to compile:\n" + run.stdout)
 
+def qualified_role_name(key: str, name: str) -> str:
+    """Return the declaration's actual namespace for the owner being probed."""
+    namespace = "Blanc" if key == "compiledWalk" else "Blanc.LidoCircuitBreaker"
+    return namespace + "." + name
+
 def axiom_checks() -> None:
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".lean", prefix="access-axioms-", dir=ROOT,
@@ -1613,11 +1626,9 @@ def axiom_checks() -> None:
         temporary = Path(handle.name)
         for module in MODULES.values():
             handle.write("import " + module + "\n")
-        for names in ROLES.values():
+        for key, names in ROLES.items():
             for name in names:
-                handle.write(
-                    "#print axioms Blanc.LidoCircuitBreaker." + name + "\n"
-                )
+                handle.write("#print axioms " + qualified_role_name(key, name) + "\n")
     try:
         run = subprocess.run(
             ["lake", "env", "lean", str(temporary.relative_to(ROOT))],
@@ -1628,9 +1639,9 @@ def axiom_checks() -> None:
         temporary.unlink(missing_ok=True)
     if run.returncode:
         fail("axiom probe failed:\n" + run.stdout)
-    for names in ROLES.values():
+    for key, names in ROLES.items():
         for name in names:
-            qualified = "Blanc.LidoCircuitBreaker." + name
+            qualified = qualified_role_name(key, name)
             expected = AXIOM_EXCEPTIONS.get(name, STANDARD_AXIOMS)
             match = re.search(
                 r"'" + re.escape(qualified) +

@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerPinnedTarget
+import Blanc.MessageExecutionInversion
 
 /-!
 # Test-scoped controls for the pinned-target protocol
@@ -19,10 +20,14 @@ def pausedUntilSlot : B256 := 0
 def pausedUntil (_target : Adr) (stor : Stor) : B256 :=
   stor.get pausedUntilSlot
 
-/-- `pauseFor(uint256)`: store `block.timestamp + duration`. -/
+/-- `pauseFor(uint256)`: preserve the infinite sentinel, otherwise store
+`block.timestamp + duration`.  The compact straight-line selector avoids a
+branch while keeping the public projection exact. -/
 def stubPauseLine : Line :=
-  arg 0 ++ [Ninst.timestamp, Ninst.add, Ninst.pushB256 pausedUntilSlot,
-    Ninst.sstore]
+  arg 0 ++
+    [Ninst.dup 0, Ninst.pushB256 0, Ninst.not, Ninst.eq, Ninst.iszero,
+      Ninst.timestamp, Ninst.mul, Ninst.add,
+      Ninst.pushB256 pausedUntilSlot, Ninst.sstore]
 
 def stubPause : Func := stubPauseLine +++ Func.stop
 
@@ -84,83 +89,6 @@ private structure StubFrame (target : Adr) (calldata : Bytes)
     (sevm : Sevm) : Prop where
   currentTarget : sevm.currentTarget = target
   data : sevm.data = calldata
-
-private lemma shiftRight224_of_take4_eq_protected (x : B256)
-    (h : x.toBytes.take 4 = [0x3d, 0x7b, 0x36, 0x9a]) :
-    x >>> 224 = (0x3d7b369a : B256) := by
-  rcases x with ⟨⟨x3, x2⟩, ⟨x1, x0⟩⟩
-  simp [B256.toBytes, B128.toBytes, UInt64.toBytes, UInt32.toBytes,
-    UInt16.toBytes, List.take] at h
-  change B256.shiftRight (⟨⟨_, _⟩, ⟨_, _⟩⟩ : B256) 224 = _
-  simp only [B256.shiftRight]
-  change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
-  simp only [B128.shiftRight]
-  norm_num
-  congr 3
-  change x3 >>> (32 : UInt64) = (1031485082 : UInt64)
-  rcases h with ⟨h0, h1, h2, h3⟩
-  have h1' :
-      ((x3 >>> 32).toUInt32 >>> 16).toUInt16.toUInt8 = 123 := by
-    simpa using h1
-  have h2' :
-      ((x3 >>> 32).toUInt32.toUInt16 >>> 8).toUInt8 = 54 := by
-    simpa using h2
-  have h3' : (x3 >>> 32).toUInt32.toUInt16.toUInt8 = 154 := by
-    simpa using h3
-  have hbytes :
-      (x3 >>> 32).toUInt32.toBytes = [61, 123, 54, 154] := by
-    simp only [UInt32.toBytes, UInt16.toBytes]
-    rw [h0, h1', h2', h3']
-    rfl
-  have hy32 : (x3 >>> 32).toUInt32 = (1031485082 : UInt32) := by
-    have converted := congrArg Bytes.toUInt32 hbytes
-    rw [toUInt32_toBytes] at converted
-    exact converted
-  have hlt : (x3 >>> 32).toNat < 4294967296 := by
-    rw [UInt64.toNat_shiftRight]
-    change x3.toNat >>> 32 < 4294967296
-    rw [Nat.shiftRight_eq_div_pow]
-    norm_num
-    have hx := UInt64.toNat_lt x3
-    omega
-  rw [← UInt64.toNat_inj]
-  have hyNat := congrArg UInt32.toNat hy32
-  simp only [UInt64.toUInt32_toNat, Nat.mod_eq_of_lt hlt] at hyNat
-  exact hyNat.trans rfl
-
-private theorem selector_eq_protected_of_data {sevm : Sevm} {tail : Bytes}
-    (hdata : sevm.data = abiSelectorBytes stubProtectedSelector ++ tail) :
-    Sevm.selector sevm = stubProtectedSelector := by
-  have protectedEq : stubProtectedSelector = (0x3d7b369a : B256) := by
-    decide +kernel
-  have protectedBytes :
-      abiSelectorBytes (0x3d7b369a : B256) =
-        [0x3d, 0x7b, 0x36, 0x9a] := rfl
-  rw [protectedEq, protectedBytes] at hdata
-  let word := sevm.data.sliceD 0 32 0
-  have wordLength : word.length = 32 := by
-    exact List.takeD_length _ _ _
-  have roundtrip : (Bytes.toB256 word).toBytes = word :=
-    Bytes.toBytes_toB256_of_length wordLength
-  have firstFour :
-      (Bytes.toB256 word).toBytes.take 4 =
-        [0x3d, 0x7b, 0x36, 0x9a] := by
-    rw [roundtrip]
-    unfold word
-    rw [hdata]
-    rfl
-  rw [protectedEq]
-  exact shiftRight224_of_take4_eq_protected _ firstFour
-
-private lemma prefix_of_timestamp
-    {sevm : Sevm} {pre post : Devm} {xs : Stack}
-    (stackPrefix : xs <<+ pre.stack)
-    (run : Ninst.Run sevm pre Ninst.timestamp post) :
-    sevm.benvStat.time :: xs <<+ post.stack := by
-  change Ninst.Run sevm pre (.reg .timestamp) post at run
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  exact prefix_of_push (Devm.pushBurn_of_pushItem instructionRun) stackPrefix
 
 private lemma mem_reads_self (memory : Mem) :
     Mem.Reads memory memory.data.toList := by
@@ -257,7 +185,7 @@ theorem stub_pauseFor_effect
     (uses : some sevm.code.toList = Prog.compile stubProgram)
     (run : Exec 0 sevm pre (.ok post)) :
     pausedUntil target (post.state.getStor target) =
-      sevm.benvStat.time + duration := by
+      pauseForProjection sevm.benvStat.time duration := by
   rcases stubMain_run_of_exec run uses with ⟨entry, -, mainRun⟩
   rcases stubBase_run_of_main target mainRun with
     ⟨entry, baseRun, -, -⟩
@@ -297,7 +225,19 @@ theorem stub_pauseFor_effect
     rcases of_run_append (arg 0) pauseLineRun with
       ⟨afterArg, argRun, pauseLineRun⟩
     rcases Line.of_run_cons pauseLineRun with
+      ⟨afterDup, dupRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterZero, zeroRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterNot, notRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterEq, eqRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterIszero, iszeroRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
       ⟨afterTime, timeRun, pauseLineRun⟩
+    rcases Line.of_run_cons pauseLineRun with
+      ⟨afterMul, mulRun, pauseLineRun⟩
     rcases Line.of_run_cons pauseLineRun with
       ⟨afterAdd, addRun, pauseLineRun⟩
     rcases Line.of_run_cons pauseLineRun with
@@ -314,14 +254,41 @@ theorem stub_pauseFor_effect
         rfl
       · simpa [pauseForCalldata] using frame.data
     rw [argEq] at argPrefix
-    have timePrefix : sevm.benvStat.time :: duration :: [] <<+
+    have dupPrefix : duration :: duration :: [] <<+ afterDup.stack :=
+      prefix_of_dup_val dupRun (by show_nth) argPrefix
+    have zeroPrefix : (0 : B256) :: duration :: duration :: [] <<+
+        afterZero.stack :=
+      prefix_of_push (of_run_pushB256 zeroRun) dupPrefix
+    have notPrefix : pauseInfiniteSentinel :: duration :: duration :: [] <<+
+        afterNot.stack := by
+      have zeroNot : ~~~ (0 : B256) = pauseInfiniteSentinel := rfl
+      rw [← zeroNot]
+      exact prefix_of_not notRun zeroPrefix
+    have eqPrefix : (pauseInfiniteSentinel =? duration) :: duration :: [] <<+
+        afterEq.stack :=
+      prefix_of_eq eqRun notPrefix
+    have iszeroPrefix :
+        ((pauseInfiniteSentinel =? duration) =? 0) :: duration :: [] <<+
+          afterIszero.stack :=
+      prefix_of_iszero iszeroRun eqPrefix
+    have timePrefix : sevm.benvStat.time ::
+        ((pauseInfiniteSentinel =? duration) =? 0) :: duration :: [] <<+
         afterTime.stack :=
-      prefix_of_timestamp argPrefix timeRun
-    have sumPrefix : (sevm.benvStat.time + duration) :: [] <<+
+      prefix_of_timestamp iszeroPrefix timeRun
+    have mulPrefix :
+        (sevm.benvStat.time *
+          ((pauseInfiniteSentinel =? duration) =? 0)) :: duration :: [] <<+
+            afterMul.stack :=
+      prefix_of_mul mulRun timePrefix
+    have sumPrefix :
+        (sevm.benvStat.time *
+          ((pauseInfiniteSentinel =? duration) =? 0) + duration) :: [] <<+
         afterAdd.stack :=
-      prefix_of_add addRun timePrefix
+      prefix_of_add addRun mulPrefix
     have keyPrefix : pausedUntilSlot ::
-        (sevm.benvStat.time + duration) :: [] <<+ beforeStore.stack :=
+        (sevm.benvStat.time *
+          ((pauseInfiniteSentinel =? duration) =? 0) + duration) :: [] <<+
+            beforeStore.stack :=
       prefix_of_push (of_run_pushB256 keyRun) sumPrefix
     have effect := sstore_getStor_set storeRun keyPrefix
     rw [frame.currentTarget] at effect
@@ -329,8 +296,9 @@ theorem stub_pauseFor_effect
       (Func.of_inv Devm.getStor Devm.getStor (by func_inv) stopRun) target
     unfold pausedUntil
     change (Devm.getStor post target).get pausedUntilSlot =
-      sevm.benvStat.time + duration
-    rw [← stopStor, effect, Stor.get_set_self]
+      pauseForProjection sevm.benvStat.time duration
+    rw [← stopStor, effect, Stor.get_set_self,
+      compact_pause_word_eq_projection]
 
 /-- The Lido one-word return fragment returns the stack head and preserves the
 entry error field.  Its full overwrite makes the initial memory image
@@ -655,72 +623,6 @@ theorem stub_isPaused_truthful
     rw [dispatchZero] at flagEq
     exact (flagNonzero flagEq).elim
 
-/-- A clean settled message exposes the successful raw post without changing
-its state or output. -/
-private theorem cleanProcess_rawPost
-    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    {raw : Execution}
-    (process : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) (.ok post))
-    (clean : post.error.isSome = false) :
-    ∃ rawPost, raw = .ok rawPost ∧ rawPost.error = none ∧
-      post.state = rawPost.state ∧ post.output = rawPost.output := by
-  have settles :=
-    ProcessMessage.settlementCommits_of_some_ok_clean process clean
-  have commits : Execution.commits raw = true :=
-    Frame.raw_commits_of_settlementCommits settles
-  cases raw with
-  | error err => simp [Execution.commits] at commits
-  | ok rawPost =>
-      cases errorEq : rawPost.error with
-      | some err => simp [Execution.commits, errorEq] at commits
-      | none =>
-          refine ⟨rawPost, rfl, errorEq, ?_, ?_⟩
-          · exact ProcessMessage.ok_state_eq_committedPost process commits
-          · have settleEq := (RunFrame.some_inv process).2
-            simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-              executeCode.handleError, processMessage.settle, errorEq] at settleEq
-            exact congrArg Devm.output settleEq
-
-/-- Facts inherited by the retained code frame from its exact message entry. -/
-private theorem processEntry_facts
-    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {raw : Execution} {ex : TargetMessageResult} (target : Adr)
-    (process : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
-    pc = 0 ∧ sevm.code = msg.code ∧
-      sevm.currentTarget = msg.currentTarget ∧
-      sevm.codeAddress = msg.codeAddress ∧ sevm.data = msg.data ∧
-      sevm.benvStat.time = msg.benv.stat.time ∧
-      pre.state.getStor target = msg.benv.state.getStor target ∧
-      Mem.Wf pre.memory := by
-  have enter := (RunFrame.some_inv process).1
-  have pcZero := Frame.enter_run_pc enter
-  have codeEq := Frame.enter_run_code enter
-  have current := Frame.enter_run_currentTarget enter
-  have memory := Blanc.Frame.enter_run_memory enter
-  rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
-  change msg.benvAfterTransfer = .ok benv at transfer
-  have data := congrArg (fun evm : Evm => evm.sta.data) evmEq
-  have codeAddress := congrArg (fun evm : Evm => evm.sta.codeAddress) evmEq
-  have time := congrArg (fun evm : Evm => evm.sta.benvStat.time) evmEq
-  have state := congrArg (fun evm : Evm => evm.dyna.state) evmEq
-  dsimp [Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv] at codeEq current codeAddress data time memory
-  change pre.state = benv.state at state
-  have statEq : benv.stat = msg.benv.stat := by
-    by_cases transfers : msg.shouldTransferValue = true
-    · obtain ⟨middle, sub, rfl⟩ :=
-        of_benvAfterTransfer transfers transfer
-      rfl
-    · rw [of_benvAfterTransfer_no transfers transfer]
-  have storage : pre.state.getStor target =
-      msg.benv.state.getStor target := by
-    rw [state, benvAfterTransfer_getStor_eq transfer]
-  refine ⟨pcZero, codeEq, current, codeAddress, data,
-    time.trans (congrArg BenvStat.time statEq), storage, ?_⟩
-  rw [memory]
-  exact Mem.wf_empty
-
 /-- The compiled stub discharges the complete Lido specialization, including
 one nonempty protected selector whose clean paused execution must revert. -/
 theorem stub_lidoPinnedPauseTarget
@@ -738,11 +640,11 @@ theorem stub_lidoPinnedPauseTarget
     rcases executes with
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
     subst xl
-    rcases processEntry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     subst pc
-    rcases cleanProcess_rawPost process clean with
+    rcases MessageExecution.processMessage_clean_rawPost process clean with
       ⟨rawPost, rfl, rawClean, stateEq, outputEq⟩
     have frame : StubFrame target (pauseForCalldata duration) sevm :=
       ⟨current.trans exactCall.currentTarget, data.trans exactCall.data⟩
@@ -757,11 +659,11 @@ theorem stub_lidoPinnedPauseTarget
     rcases executes with
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
     subst xl
-    rcases processEntry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     subst pc
-    rcases cleanProcess_rawPost process clean with
+    rcases MessageExecution.processMessage_clean_rawPost process clean with
       ⟨rawPost, rfl, rawClean, stateEq, outputEq⟩
     have frame : StubFrame target isPausedCalldata sevm :=
       ⟨current.trans exactCall.currentTarget, data.trans exactCall.data⟩
@@ -811,7 +713,7 @@ theorem stub_lidoPinnedPauseTarget
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨witnessRun⟩⟩
     subst xl
     intro actualRun
-    rcases processEntry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     have msgCurrent : msg.currentTarget = target := by
@@ -839,21 +741,29 @@ theorem stub_lidoPinnedPauseTarget
     · rcases executes with
         ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨witnessRun⟩⟩
       subst xl
-      rcases processEntry_facts target process with
+      rcases MessageExecution.processMessage_entry_facts target process with
         ⟨pcZero, codeEq, current, entryCodeAddress, data, time,
           entryStorage, memoryWf⟩
       subst pc
       have clean : child.error.isSome = false := by
         rw [childClean]
         rfl
-      rcases cleanProcess_rawPost process clean with
+      rcases MessageExecution.processMessage_clean_rawPost process clean with
         ⟨rawPost, rfl, rawClean, stateEq, outputEq⟩
       have uses : some sevm.code.toList = Prog.compile stubProgram := by
         rw [codeEq]
         exact messageUses
       rcases hasSelector with ⟨tail, messageData⟩
+      have canonical :
+          Bytes.toB256 (abiSelectorBytes stubProtectedSelector) =
+            stubProtectedSelector := by
+        have protectedEq : stubProtectedSelector = (0x3d7b369a : B256) := by
+          decide +kernel
+        rw [protectedEq]
+        rfl
       have selectorEq : Sevm.selector sevm = stubProtectedSelector :=
-        selector_eq_protected_of_data (data.trans messageData)
+        Blanc.selector_eq_of_data_eq_abiSelectorBytes_append canonical
+          (data.trans messageData)
       rcases stubMain_run_of_exec witnessRun uses with
         ⟨entry, burnBy, mainRun⟩
       exact (not_stubMain_run_of_protected selectorEq mainRun).elim
@@ -875,7 +785,9 @@ theorem stub_successful_pause_composition
     (executes : MessageExecutesProgram msg xl stubProgram)
     (process : ProcessMessage msg xl (.ok post))
     (clean : post.error.isSome = false)
-    (strictGrowth : msg.benv.stat.time < msg.benv.stat.time + duration) :
+    (strictGrowth :
+      msg.benv.stat.time <
+        pauseForProjection msg.benv.stat.time duration) :
     PausedAt pausedUntil post.state target msg.benv.stat.time ∧
       ∀ key ∈ [countSlot pauser.toB256, heartbeatIntervalSlot],
         TargetInvocationNoRetainedWriteTo xl circuitBreaker key := by

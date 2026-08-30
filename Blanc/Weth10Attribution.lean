@@ -332,16 +332,16 @@ def MessageCallTrace.attributionStream (dp : DeployParams) (ca : Adr)
   | .createCollision .. => []
   | .createRun _ _ evm _ trace _ =>
       if evm.error.isSome then []
-      else trace.retained.attributionStream dp ca
+      else Blanc.Weth10.RetainedXlot.attributionStream dp ca trace.retained
   | .callRun _ _ _ _ _ _ _ _ trace _ =>
-      trace.retained.attributionStream dp ca
+      Blanc.Weth10.RetainedXlot.attributionStream dp ca trace.retained
 
 def TransactionTrace.attributionStream (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout') :
     List CountedFrame :=
-  trace.message.attributionStream dp ca
+  Blanc.Weth10.MessageCallTrace.attributionStream dp ca trace.message
 
 def ApplyTransactionsTrace.attributionStream (dp : DeployParams) (ca : Adr) :
     {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
@@ -350,36 +350,39 @@ def ApplyTransactionsTrace.attributionStream (dp : DeployParams) (ca : Adr) :
       List CountedFrame
   | _, _, _, _, _, .nil _ _ => []
   | _, _, _, _, _, .cons head tail =>
-      head.attributionStream dp ca ++ tail.attributionStream dp ca
+      Blanc.Weth10.TransactionTrace.attributionStream dp ca head ++
+        Blanc.Weth10.ApplyTransactionsTrace.attributionStream dp ca tail
 
 def SystemMessageTrace.attributionStream (dp : DeployParams) (ca : Adr)
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out) :
     List CountedFrame :=
-  trace.message.attributionStream dp ca
+  Blanc.Weth10.MessageCallTrace.attributionStream dp ca trace.message
 
 def RequestsTrace.attributionStream (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout') : List CountedFrame :=
-  trace.withdrawal.attributionStream dp ca ++
-    trace.consolidation.attributionStream dp ca
+  Blanc.Weth10.SystemMessageTrace.attributionStream dp ca trace.withdrawal ++
+    Blanc.Weth10.SystemMessageTrace.attributionStream dp ca
+      trace.consolidation
 
 def AppliedBodyTrace.attributionStream (dp : DeployParams) (ca : Adr)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
     (trace : AppliedBodyTrace benv txs wds state bout) :
     List CountedFrame :=
-  trace.beacon.attributionStream dp ca ++
-    trace.history.attributionStream dp ca ++
-    trace.transactions.attributionStream dp ca ++
-    trace.requests.attributionStream dp ca
+  Blanc.Weth10.SystemMessageTrace.attributionStream dp ca trace.beacon ++
+    Blanc.Weth10.SystemMessageTrace.attributionStream dp ca trace.history ++
+    Blanc.Weth10.ApplyTransactionsTrace.attributionStream dp ca
+      trace.transactions ++
+    Blanc.Weth10.RequestsTrace.attributionStream dp ca trace.requests
 
 def AccountedBlock.attributionStream (dp : DeployParams) (ca : Adr)
     {chainId : UInt64} {pre post : BlockChain}
     (accounted : AccountedBlock chainId dp ca pre post) :
     List CountedFrame :=
-  accounted.bodyTrace.attributionStream dp ca
+  Blanc.Weth10.AppliedBodyTrace.attributionStream dp ca accounted.bodyTrace
 
 /-- The complete chronological attribution ledger of an accounted history:
 one record per counted committed exact WETH10 invocation, in committed
@@ -1473,3 +1476,21 @@ theorem nonDormantLedger_not_noAuthorizingActBy
 end Weth10
 
 end Blanc
+
+/- Dot-notation compatibility for the shared retained carriers.  The
+implementations remain WETH-owned and this module is still required before
+these abbreviations exist. -/
+abbrev Blanc.ExecutionTrace.RetainedXlot.attributionStream :=
+  Blanc.Weth10.RetainedXlot.attributionStream
+abbrev Blanc.ExecutionTrace.MessageCallTrace.attributionStream :=
+  Blanc.Weth10.MessageCallTrace.attributionStream
+abbrev Blanc.ExecutionTrace.TransactionTrace.attributionStream :=
+  Blanc.Weth10.TransactionTrace.attributionStream
+abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.attributionStream :=
+  Blanc.Weth10.ApplyTransactionsTrace.attributionStream
+abbrev Blanc.ExecutionTrace.SystemMessageTrace.attributionStream :=
+  Blanc.Weth10.SystemMessageTrace.attributionStream
+abbrev Blanc.ExecutionTrace.RequestsTrace.attributionStream :=
+  Blanc.Weth10.RequestsTrace.attributionStream
+abbrev Blanc.ExecutionTrace.AppliedBodyTrace.attributionStream :=
+  Blanc.Weth10.AppliedBodyTrace.attributionStream

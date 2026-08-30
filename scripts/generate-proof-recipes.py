@@ -701,6 +701,7 @@ def render_lean(registry: Registry) -> str:
         "  status : String",
         "  triggers : List String",
         "  preferredPath : String",
+        "  symbols : List String",
         "  boundary : String",
         "  deriving Repr, Inhabited",
         "",
@@ -709,6 +710,7 @@ def render_lean(registry: Registry) -> str:
     ]
     for recipe in registry.recipes:
         trigger_text = ", ".join(lean_string(trigger) for trigger in recipe.triggers)
+        symbol_text = ", ".join(lean_string(symbol) for symbol in recipe.symbols)
         out.extend(
             [
                 "  {",
@@ -716,6 +718,7 @@ def render_lean(registry: Registry) -> str:
                 f"    status := {lean_string(recipe.status)}",
                 f"    triggers := [{trigger_text}]",
                 f"    preferredPath := {lean_string(recipe.preferred_path)}",
+                f"    symbols := [{symbol_text}]",
                 f"    boundary := {lean_string(recipe.boundary)}",
                 "  },",
             ]

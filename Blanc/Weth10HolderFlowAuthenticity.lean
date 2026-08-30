@@ -267,7 +267,7 @@ def RetainedXlot.AllFramesRoot :
 theorem ProcessMessageTrace.allFramesRoot
     {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (trace : ProcessMessageTrace msg out) :
-    trace.retained.AllFramesRoot := by
+    Blanc.Weth10.RetainedXlot.AllFramesRoot trace.retained := by
   rcases trace with ⟨slot, retained, hrun⟩
   cases retained with
   | none => simp [RetainedXlot.AllFramesRoot]
@@ -282,7 +282,7 @@ theorem ProcessMessageTrace.allFramesRoot
 theorem ProcessCreateMessageTrace.allFramesRoot
     {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (trace : ProcessCreateMessageTrace msg out) :
-    trace.retained.AllFramesRoot := by
+    Blanc.Weth10.RetainedXlot.AllFramesRoot trace.retained := by
   rcases trace with ⟨slot, retained, hrun⟩
   cases retained with
   | none => simp [RetainedXlot.AllFramesRoot]

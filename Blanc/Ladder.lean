@@ -105,6 +105,20 @@ lemma Stor.decrease_set (s : Stor) (a : Adr) (v : B256) :
     show s.get b.toB256 = (s.set a.toB256 _).get b.toB256
     exact (Stor.get_set_ne _ (fun hc => hb (Adr.toB256_inj hc)) _).symm
 
+/-- Read-after-write at an address-shaped key, seen through `Stor.rest`.
+
+The bare halves of `Stor.increase_set` / `Stor.decrease_set`, for a caller
+that books an exact movement of its own rather than an `Increase`/`Decrease`
+relation: a ledger write is visible at its own row, and only there. -/
+lemma Stor.rest_set_self (s : Stor) (a : Adr) (v : B256) :
+    Stor.rest (s.set a.toB256 v) a = v :=
+  Stor.get_set_self _ _ _
+
+/-- A ledger write at one address-shaped key is invisible at every other. -/
+lemma Stor.rest_set_ne (s : Stor) {a b : Adr} (ne : b ≠ a) (v : B256) :
+    Stor.rest (s.set a.toB256 v) b = Stor.rest s b :=
+  Stor.get_set_ne _ (fun hc => ne (Adr.toB256_inj hc).symm) _
+
 lemma frel_of_frel {ξ υ} {x : ξ} {r s : υ → υ → Prop} {f g : ξ → υ}
     (h : r (f x) (g x) → s (f x) (g x)) (h' : Frel x r f g) : Frel x s f g := by
   intro x'; constructor <;> intro hx
@@ -207,6 +221,52 @@ lemma sum_add_assoc {k v} {f g : Adr → B256}
     (Adr.toNat_lt_size _)
     nof
     (Nat.succ_le_of_lt <| Adr.toNat_lt_size _)
+
+/-- One row rises by exactly `m` and no other row moves, so `Σ` rises by `m`.
+
+The `Nat`-level reading of `sum_add_assoc`, for a caller holding an exact
+per-row `Nat` equation rather than a `B256`-valued `Increase`.  No overflow
+side condition is asked for: the post row is itself a word, so it witnesses
+that the rise fits. -/
+lemma sum_eq_add_of_row_add {f g : Adr → B256} {x : Adr} {m : Nat}
+    (row : (g x).toNat = (f x).toNat + m)
+    (rest : ∀ b : Adr, b ≠ x → g b = f b) :
+    sum g = sum f + m := by
+  have g_lt := B256.toNat_lt (g x)
+  have word : (Nat.toB256 m).toNat = m :=
+    B256.toNat_toB256_of_lt (by omega)
+  have nof : B256.Nof (f x) (Nat.toB256 m) := by
+    show (f x).toNat + (Nat.toB256 m).toNat < 2 ^ 256
+    rw [word, ← row]; exact g_lt
+  have inc : Increase x (Nat.toB256 m) f g := by
+    intro b
+    refine ⟨?_, fun hb => (rest b (Ne.symm hb)).symm⟩
+    rintro rfl
+    exact B256.toNat_inj _ _
+      (by rw [B256.toNat_add_eq_of_nof _ _ nof, word, row])
+  have := sum_add_assoc inc nof
+  omega
+
+/-- One row falls by exactly `m` from a row that covers it and no other row
+moves, so `Σ` falls by `m`: the `Nat`-level reading of `sum_sub_assoc`. -/
+lemma sum_eq_sub_of_row_sub {f g : Adr → B256} {x : Adr} {m : Nat}
+    (cover : m ≤ (f x).toNat)
+    (row : (g x).toNat = (f x).toNat - m)
+    (rest : ∀ b : Adr, b ≠ x → g b = f b) :
+    sum g = sum f - m := by
+  have f_lt := B256.toNat_lt (f x)
+  have word : (Nat.toB256 m).toNat = m :=
+    B256.toNat_toB256_of_lt (by omega)
+  have le : Nat.toB256 m ≤ f x := by
+    rw [B256.le_iff_toNat_le_toNat, word]; exact cover
+  have dec : Decrease x (Nat.toB256 m) f g := by
+    intro b
+    refine ⟨?_, fun hb => (rest b (Ne.symm hb)).symm⟩
+    rintro rfl
+    exact B256.toNat_inj _ _
+      (by rw [B256.toNat_sub_eq_of_le _ _ le, word, row])
+  have := sum_sub_assoc dec le
+  omega
 
 lemma add_le_sumBelow (f : Adr → B256) {x y : Adr} {n}
     (x_lt : x.toNat < y.toNat) (y_lt : y.toNat < n) :
@@ -802,6 +862,17 @@ lemma code_eq_of_exec {p : Prog} {sevm' : Sevm} {devm' child : Devm} {wa : Adr}
 More WETH-free material moved down from `Solvent.lean` unchanged: the
 `Linst.Hinv` instances for the balance and storage projections, and the
 sub-execution entry/exit case analyses the ladder above consumes. -/
+
+instance : Linst.Hinv Devm.getCode Devm.getCode Linst.stop := by
+  constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
+
+instance : Linst.Hinv Devm.getCode Devm.getCode Linst.rev := by
+  constructor; intros e s r h
+  simp only [Linst.Run, Linst.run] at h
+  rcases Except.bind_eq_ok h with ⟨v1, h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
+  rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
+  contradiction
 
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
@@ -1634,6 +1705,100 @@ lemma of_returnTrue_shared {fs : List Func} {sevm : Sevm} {s r : Devm}
     show (32 : Nat) = (1 : B256).toBytes.length from
       (B256.length_toBytes 1).symm,
     Bytes.sliceD_writeAt]
+
+/-! ### Shared one-word return observation
+
+The `AbiReturnsTrue` pair above is the constant-`1` case of a shape every
+contract with a `uint256` view or a value-returning entry point ends in: store
+the known stack head at memory word zero, then `RETURN` that complete word.
+Nothing here names a contract, so the general form belongs beside it rather
+than once per contract. -/
+
+/-- A one-word ABI result is observed at the terminal output bytes, not as a
+residual stack word: `RETURN` reads its bytes from memory. -/
+def ReturnsWord (w : B256) (d : Devm) : Prop :=
+  Devm.output d = w.toBytes
+
+/-- Store the known stack head at memory word zero and return that complete
+word.  This is the common tail of constant getters, storage getters and
+value-returning entry points.  The entry memory image is arbitrary because the
+write covers the complete returned window. -/
+lemma of_storeReturnWord {fs : List Func} {sevm : Sevm} {s r : Devm}
+    {w : B256} {img : Bytes} {xs}
+    (hp : w :: xs <<+ s.stack)
+    (h_wf : Mem.Wf s.memory)
+    (h_reads : Mem.Reads s.memory img)
+    (h : Func.Run fs sevm s (mstoreAt 0 +++ returnMemoryRange 0 32) r) :
+    ReturnsWord w r ∧ Devm.getCode s = Devm.getCode r := by
+  rcases of_run_prepend (mstoreAt 0) _ h with ⟨s2, h2, h⟩
+  rcases of_run_mstoreAt_val h2 hp with ⟨hp2, hm2⟩
+  have hwf2 : Mem.Wf s2.memory := by
+    rw [hm2]
+    exact h_wf.write _ _
+  have hrd2 : Mem.Reads s2.memory (Bytes.writeAt img 0 w.toBytes) := by
+    rw [hm2]
+    exact Mem.Reads.write h_wf h_reads 0 _
+  rcases of_run_prepend (pushList [32, 0]) _ h with ⟨s3, h3, h⟩
+  rcases Line.of_run_cons h3 with ⟨u1, q1, h3'⟩
+  rcases Line.of_run_cons h3' with ⟨u2, q2, hnil⟩
+  cases hnil
+  have hu1 : (32 : B256) :: xs <<+ u1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp2
+  have hu2 : (0 : B256) :: (32 : B256) :: xs <<+ s3.stack :=
+    prefix_of_push (of_run_pushB256 q2) hu1
+  have hm3 : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv) h3
+  have hgc : Devm.getCode s = Devm.getCode s3 :=
+    (Line.of_inv Devm.getCode (by line_inv) h2).trans
+      (Line.of_inv Devm.getCode (by line_inv) h3)
+  refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
+  show Devm.output r = _
+  rw [(of_run_ret_val hu2 h).1,
+    show (0 : B256).toNat = 0 from rfl,
+    show (32 : B256).toNat = 32 from rfl,
+    Mem.Reads.read (hm3 ▸ hrd2) 0 32,
+    show (32 : Nat) = w.toBytes.length from
+      (B256.length_toBytes w).symm,
+    Bytes.sliceD_writeAt]
+
+/-- The same fragment with no memory side condition at all.  A caller that
+holds a `Mem.Wf` / `Mem.Reads` image should prefer `of_storeReturnWord`, whose
+proof rewrites through that image; a caller that holds neither gets the same
+conclusion here, because `Mem.read_write_zero` reads the just-written word back
+off the raw write without knowing anything about the rest of memory. -/
+lemma returnsWord_of_storeReturn
+    {fs : List Func} {sevm : Sevm} {s r : Devm} {w : B256} {xs}
+    (hp : w :: xs <<+ s.stack)
+    (h : Func.Run fs sevm s (mstoreAt 0 +++ returnMemoryRange 0 32) r) :
+    ReturnsWord w r ∧ Devm.getCode s = Devm.getCode r := by
+  rcases of_run_prepend (mstoreAt 0) _ h with ⟨s2, h2, h⟩
+  rcases of_run_mstoreAt_val h2 hp with ⟨hp2, hm2⟩
+  rcases of_run_prepend (pushList [32, 0]) _ h with ⟨s3, h3, h⟩
+  rcases Line.of_run_cons h3 with ⟨u1, q1, h3'⟩
+  rcases Line.of_run_cons h3' with ⟨u2, q2, hnil⟩
+  cases hnil
+  have hu1 : (32 : B256) :: xs <<+ u1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp2
+  have hu2 : (0 : B256) :: (32 : B256) :: xs <<+ s3.stack :=
+    prefix_of_push (of_run_pushB256 q2) hu1
+  have hm3 : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv) h3
+  have hne : w.toBytes ≠ [] := by
+    intro hnil
+    have hlen := B256.length_toBytes w
+    rw [hnil] at hlen
+    simp at hlen
+  have hcode : Devm.getCode s = Devm.getCode s3 :=
+    (Line.of_inv Devm.getCode (by line_inv) h2).trans
+      (Line.of_inv Devm.getCode (by line_inv) h3)
+  refine ⟨?_, hcode.trans (of_run_ret_val hu2 h).2⟩
+  show Devm.output r = w.toBytes
+  rw [(of_run_ret_val hu2 h).1, ← hm3, hm2,
+    show ((0 : B256) * 32).toNat = 0 from by decide,
+    show (0 : B256).toNat = 0 from rfl,
+    show (32 : B256).toNat = 32 from rfl,
+    show (32 : Nat) = w.toBytes.length from (B256.length_toBytes w).symm,
+    Mem.read_write_zero _ hne]
 
 /-- **The value-carrying `CALL` inversion.**  A successful `call` step whose
 seven operands are known either pushed the failure flag `0` — the depth guard,
@@ -2782,6 +2947,448 @@ theorem Linst.getStor_eq
       exact (preToOne.trans (charged.trans
         (transferredEq.trans postEq))).symm
 
+/-! ## Clean childless settlement and pointwise balance monotonicity -/
+
+/-- A clean no-slot message with a successful transfer ends at that exact
+entry world.  Empty interpreted slots therefore hide no later world-state
+change; the only executable no-slot branch is a synchronous precompile. -/
+theorem ProcessMessage.none_ok_state_eq_entry_of_clean
+    {msg : Msg} {entry : Benv} {post : Devm}
+    (run : ProcessMessage msg .none (.ok post))
+    (transfer : msg.benvAfterTransfer = .ok entry)
+    (clean : post.error.isSome = false) :
+    post.state = entry.state := by
+  obtain ⟨result, body, settle⟩ := ProcessMessage.iff_body.mp run
+  rcases ProcessMessage.clean_input_state_of_settle settle.symm clean with
+    ⟨raw, result_eq, _, postState⟩
+  unfold FrameBody at body
+  rw [transfer, result_eq] at body
+  change ExecuteCode (msg.withBenv entry) .none (.ok raw) at body
+  unfold ExecuteCode at body
+  cases entered : executeCode.enter (msg.withBenv entry) with
+  | inl evm =>
+      rw [entered] at body
+      rcases body with ⟨execution, slot, _⟩
+      cases slot
+  | inr execution =>
+      rw [entered] at body
+      rcases executeCode.enter_inr entered with ⟨address, execution_eq⟩
+      have handled : executeCode.handleError
+          (executePrecomp (initEvm (msg.withBenv entry)) address) =
+          .ok raw := by
+        rw [← execution_eq, ← body.2]
+      exact postState.trans
+        (executeCode.handle_precompile_ok_state handled)
+
+/-- A successful call/message with no interpreter child cannot lower the
+balance of an address distinct from every actual value-transfer caller. -/
+theorem ProcessMessage.targetBalanceMono_of_none
+    {ca : Adr} {msg : Msg} {post : Devm}
+    (run : ProcessMessage msg .none (.ok post))
+    (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
+    (sum_nof : sum msg.benv.state.bal < 2 ^ 256) :
+    (msg.benv.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
+  rcases ProcessMessage.none_ok_state_cases run with rollback |
+      ⟨entry, transfer, post_eq⟩
+  · rw [rollback]
+  · rw [post_eq]
+    cases shouldTransfer : msg.shouldTransferValue with
+    | false =>
+        have noTransfer : ¬ msg.shouldTransferValue = true := by
+          simp [shouldTransfer]
+        have entry_eq := of_benvAfterTransfer_no noTransfer transfer
+        subst entry
+        exact Nat.le_refl _
+    | true =>
+        rcases of_benvAfterTransfer shouldTransfer transfer with
+          ⟨debit, sub, rfl⟩
+        by_cases target_eq : msg.currentTarget = ca
+        · subst ca
+          change (msg.benv.state.bal msg.currentTarget).toNat ≤
+            ((debit.addBal msg.currentTarget msg.value).bal
+              msg.currentTarget).toNat
+          rw [of_transfer_bal_target sub (caller_ne shouldTransfer) sum_nof]
+          omega
+        · change (msg.benv.state.bal ca).toNat ≤
+            ((debit.addBal msg.currentTarget msg.value).bal ca).toNat
+          rw [of_transfer_bal_other sub (caller_ne shouldTransfer) target_eq]
+
+/-- CREATE settlement around a no-interpreter constructor preserves the same
+foreign-source monotonicity.  Failed creation rolls back; successful code
+deposit changes code only after the inner no-slot message has settled. -/
+theorem ProcessCreateMessage.targetBalanceMono_of_none
+    {ca : Adr} {msg : Msg} {post : Devm}
+    (run : ProcessCreateMessage msg .none (.ok post))
+    (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
+    (sum_nof : sum msg.benv.state.bal < 2 ^ 256) :
+    (msg.benv.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
+  cases errored : post.error.isSome with
+  | true =>
+      rw [ProcessCreateMessage.rollback_of_error run errored]
+  | false =>
+      rcases ProcessCreateMessage.ok_state_eq_inner_of_no_error
+          run errored with ⟨inner, innerRun, postBalance⟩
+      have callerSeed :
+          (processCreateMessage.msg msg).shouldTransferValue = true →
+            (processCreateMessage.msg msg).caller ≠ ca := by
+        simpa [processCreateMessage.msg, Msg.withBenv] using caller_ne
+      have sumSeed :
+          sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
+        rw [processCreateMessage_msg_bal_eq]
+        exact sum_nof
+      have innerMono := ProcessMessage.targetBalanceMono_of_none
+        innerRun callerSeed sumSeed
+      rw [postBalance,
+        ← congrFun (processCreateMessage_msg_bal_eq msg) ca]
+      exact innerMono
+
+/-- A no-interpreter CALL-family instruction whose actual transfer caller is
+distinct from `ca` cannot lower `ca`'s balance. -/
+theorem GenericCall.targetBalanceMono_of_none
+    {ca : Adr} {sevm : Sevm} {pre : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv istat : Bool}
+    {ii is oi os : Nat} {code : ByteArray} {delegated : Bool}
+    {post : Devm}
+    (run : GenericCall sevm pre gas value caller target codeAddress
+      stv istat ii is oi os code delegated .none (.ok post))
+    (caller_ne : stv = true → caller ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256) :
+    (pre.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
+  unfold GenericCall genericCall.step at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  · cases run.2
+  · rename_i state_eq
+    have post_eq := Except.ok.inj run.2
+    subst post
+    have pushed := Devm.push_instructionFrame 0
+      ((pre.withReturnData []).withGasLeft
+        ((pre.withReturnData []).gasLeft + gas))
+    rw [state_eq] at pushed
+    exact Nat.le_of_eq
+      (congrArg (fun state : State => (state.bal ca).toNat)
+        pushed.state)
+  · obtain ⟨result, frameRun, resumeRun⟩ := run
+    cases result with
+    | error error =>
+        simp [Resume.run, liftToExecution] at resumeRun
+    | ok child =>
+        have callerNe :
+            (callMsg sevm (pre.withReturnData [])
+              gas value caller target codeAddress stv istat
+              ((pre.memory.read ii is).1) code delegated
+            ).shouldTransferValue = true →
+              (callMsg sevm (pre.withReturnData [])
+                gas value caller target codeAddress stv istat
+                ((pre.memory.read ii is).1) code delegated
+              ).caller ≠ ca := by
+          simpa [callMsg] using caller_ne
+        have childMono := ProcessMessage.targetBalanceMono_of_none
+          frameRun callerNe sum_nof
+        have postState : post.state = child.state :=
+          Resume.call_state resumeRun.symm
+        rw [postState]
+        exact childMono
+
+/-- A no-interpreter CREATE-family instruction whose creator is distinct from
+`ca` cannot lower `ca`'s balance. -/
+theorem GenericCreate.targetBalanceMono_of_none
+    {ca : Adr} {sevm : Sevm} {pre : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
+    {post : Devm}
+    (run : GenericCreate sevm pre endowment newAddress mi ms
+      .none (.ok post))
+    (target_ne : sevm.currentTarget ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256) :
+    (pre.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
+  unfold GenericCreate genericCreate.step at run
+  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
+    Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  · cases run.2
+  · cases run.2
+  · cases run.2
+  · rename_i state_eq
+    have post_eq := Except.ok.inj run.2
+    subst post
+    have pushed := Devm.push_instructionFrame 0
+      (((pre.withGasLeft
+          (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+        []).withGasLeft
+          (((pre.withGasLeft
+              (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+            []).gasLeft + except64th pre.gasLeft))
+    rw [state_eq] at pushed
+    exact Nat.le_of_eq
+      (congrArg (fun state : State => (state.bal ca).toNat)
+        pushed.state)
+  · cases run.2
+  · rename_i state_eq
+    have post_eq := Except.ok.inj run.2
+    subst post
+    have pushed := Devm.push_instructionFrame 0
+      (addAccessedAddress
+        (((pre.withGasLeft
+          (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+            []).incrNonce sevm.currentTarget) newAddress)
+    rw [state_eq] at pushed
+    rw [← congrFun (genericCreate_prepared_bal sevm pre newAddress) ca]
+    exact Nat.le_of_eq
+      (congrArg (fun state : State => (state.bal ca).toNat)
+        pushed.state)
+  · obtain ⟨result, frameRun, resumeRun⟩ := run
+    cases result with
+    | error error =>
+        simp [Resume.run, liftToExecution] at resumeRun
+    | ok child =>
+        have callerNe :
+            (createMsg sevm
+              (addAccessedAddress
+                (((pre.withGasLeft
+                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+                  []).incrNonce sevm.currentTarget) newAddress)
+              (except64th pre.gasLeft) endowment newAddress
+              ((pre.memory.read mi ms).1)).shouldTransferValue = true →
+            (createMsg sevm
+              (addAccessedAddress
+                (((pre.withGasLeft
+                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+                  []).incrNonce sevm.currentTarget) newAddress)
+              (except64th pre.gasLeft) endowment newAddress
+              ((pre.memory.read mi ms).1)).caller ≠ ca := by
+          intro _
+          simpa [createMsg] using target_ne
+        have sumParent :
+            sum (createMsg sevm
+              (addAccessedAddress
+                (((pre.withGasLeft
+                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+                  []).incrNonce sevm.currentTarget) newAddress)
+              (except64th pre.gasLeft) endowment newAddress
+              ((pre.memory.read mi ms).1)).benv.state.bal < 2 ^ 256 := by
+          change sum (addAccessedAddress
+            (((pre.withGasLeft
+                (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+              []).incrNonce sevm.currentTarget) newAddress).state.bal <
+                2 ^ 256
+          rw [genericCreate_prepared_bal]
+          exact sum_nof
+        have childMono := ProcessCreateMessage.targetBalanceMono_of_none
+          frameRun callerNe sumParent
+        have postState : post.state = child.state :=
+          Resume.create_state resumeRun.symm
+        rw [postState]
+        change
+          ((addAccessedAddress
+            (((pre.withGasLeft
+                (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+              []).incrNonce sevm.currentTarget) newAddress).state.bal ca).toNat ≤
+            (child.state.bal ca).toNat at childMono
+        rw [genericCreate_prepared_bal] at childMono
+        exact childMono
+
+/-- Every successful no-interpreter executable instruction in a frame whose
+current target differs from `ca` cannot lower `ca`'s balance. -/
+theorem Xinst.targetBalanceMono_of_none
+    {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (run : Xinst.Run sevm pre x .none (.ok post))
+    (target_ne : sevm.currentTarget ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256) :
+    (pre.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
+  unfold Xinst.Run at run
+  rcases Xinst.step_shape sevm pre x with
+    ⟨ex, step_eq, frame⟩ |
+    ⟨d, endowment, newAddress, mi, ms, framePrefix, step_eq⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+      ii, inputSize, oi, outputSize, code, delegated, framePrefix, _, callerShape,
+      _, step_eq⟩ <;>
+    rw [step_eq] at run
+  · obtain ⟨-, rfl⟩ := run
+    exact Nat.le_of_eq
+      (congrArg (fun state : State => (state.bal ca).toNat) frame.state)
+  · have sumD : sum d.state.bal < 2 ^ 256 := by
+      rw [← framePrefix.state]
+      exact sum_nof
+    have mono := GenericCreate.targetBalanceMono_of_none
+      run target_ne sumD
+    rw [framePrefix.state]
+    exact mono
+  · have sumD : sum d.state.bal < 2 ^ 256 := by
+      rw [← framePrefix.state]
+      exact sum_nof
+    have callerNe : stv = true → caller ≠ ca := by
+      intro transfer
+      rcases callerShape with ⟨_, caller_eq⟩ | ⟨no_transfer, _⟩
+      · rw [caller_eq]
+        exact target_ne
+      · rw [transfer] at no_transfer
+        contradiction
+    have mono := GenericCall.targetBalanceMono_of_none
+      run callerNe sumD
+    rw [framePrefix.state]
+    exact mono
+
+/-- Every successful nonrecursive instruction in a foreign frame cannot lower
+the observed account's balance. -/
+theorem Ninst.targetBalanceMono_of_none
+    {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (run : Ninst.StepRun pc sevm pre n .none (.ok post))
+    (target_ne : sevm.currentTarget ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256) :
+    (pre.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
+  cases n with
+  | reg regular =>
+      simp only [Ninst.StepRun, Ninst.step_reg,
+        Step.run_ofExecution] at run
+      have regularRun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
+        run.2.symm
+      exact Nat.le_of_eq (congrArg B256.toNat
+        (congrFun (Rinst.preserves_bal regularRun) ca))
+  | exec executable =>
+      simp only [Ninst.StepRun, Ninst.step_exec] at run
+      exact Xinst.targetBalanceMono_of_none
+        (XStep.run_toStep.mp run) target_ne sum_nof
+  | push bytes bound =>
+      have frame := Ninst.push_instructionFrame_effectRec
+        (hxs := bound) (xl := .none) trivial run
+      exact Nat.le_of_eq
+        (congrArg (fun state : State => (state.bal ca).toNat) frame.state)
+
+/-- Every successful nonrecursive instruction in a foreign frame preserves
+the observed account's persistent storage. -/
+theorem Ninst.foreignNone_getStor_eq
+    {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (run : Ninst.StepRun pc sevm pre n .none (.ok post))
+    (target_ne : sevm.currentTarget ≠ ca) :
+    Devm.getStor post ca = Devm.getStor pre ca := by
+  cases n with
+  | reg regular =>
+      simp only [Ninst.StepRun, Ninst.step_reg,
+        Step.run_ofExecution] at run
+      have regularRun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
+        run.2.symm
+      by_cases store : regular = .sstore
+      · subst regular
+        exact sstore_preserves_getStor_ne regularRun target_ne
+      · exact (congrFun (Rinst.preserves_stor store regularRun) ca).symm
+  | exec executable =>
+      simp only [Ninst.StepRun, Ninst.step_exec] at run
+      exact congrFun (Xinst.none_getStor_eq (XStep.run_toStep.mp run)) ca
+  | push bytes bound =>
+      have frame := Ninst.push_instructionFrame_effectRec
+        (hxs := bound) (xl := .none) trivial run
+      exact (frame.getStor ca).symm
+
+/-- A successful terminal instruction executed by an account other than `ca`
+cannot lower `ca`'s balance.  The only world-changing arm is SELFDESTRUCT,
+which either leaves `ca` unrelated or credits it from the foreign source. -/
+theorem Linst.targetBalanceMono_of_foreign
+    {ca : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (run : Linst.Run sevm pre l (.ok post))
+    (target_ne : sevm.currentTarget ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256) :
+    (pre.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
+  cases l with
+  | stop =>
+      simp [Linst.Run, Linst.run] at run
+      subst post
+      exact Nat.le_refl _
+  | ret =>
+      have frame := Linst.run_instructionFrame sevm pre .ret (by decide)
+      rw [run] at frame
+      exact Nat.le_of_eq
+        (congrArg (fun state : State => (state.bal ca).toNat) frame.state)
+  | rev =>
+      unfold Linst.Run Linst.run at run
+      rcases firstPop : pre.popToNat with error | ⟨index, devm1⟩
+      · simp [firstPop, bind, Except.bind] at run
+      · simp only [firstPop, bind, Except.bind] at run
+        rcases secondPop : devm1.popToNat with error | ⟨size, devm2⟩
+        · simp [secondPop] at run
+        · simp only [secondPop] at run
+          rcases charged : chargeGas
+              (devm2.extCost [(index, size)]) devm2 with error | devm3
+          · simp [charged] at run
+          · simp [charged] at run
+  | dest =>
+      dsimp [Linst.Run, Linst.run] at run
+      rcases Except.bind_eq_ok run with
+        ⟨⟨destination, devm1⟩, popped, rest⟩
+      rcases Except.bind_eq_ok rest with
+        ⟨devm2, charged, rest⟩
+      rcases Except.bind_eq_ok rest with
+        ⟨_, asserted, rest⟩
+      rcases Except.bind_eq_ok rest with
+        ⟨devm3, subtracted, final⟩
+      have subtractedSome : devm2.subBal sevm.currentTarget
+          (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
+        cases equal : devm2.subBal sevm.currentTarget
+            (devm1.getAcct sevm.currentTarget).bal
+        · rw [equal] at subtracted
+          contradiction
+        · rw [equal] at subtracted
+          injection subtracted with state_eq
+          subst state_eq
+          rfl
+      have subtractedState : devm2.state.subBal sevm.currentTarget
+          (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
+        dsimp [Devm.subBal, Option.bind] at subtractedSome
+        cases equal : devm2.state.subBal sevm.currentTarget
+            (devm1.getAcct sevm.currentTarget).bal
+        · rw [equal] at subtractedSome
+          contradiction
+        · rw [equal] at subtractedSome
+          injection subtractedSome with state_eq
+          subst state_eq
+          rfl
+      have chargedBalance : devm2.state.bal = pre.state.bal := by
+        have afterCharge : devm2.getBal =
+            (if destination ∉ devm1.accessedAddresses then
+              addAccessedAddress devm1 destination else devm1).getBal := by
+          funext address
+          by_cases cold : destination ∉ devm1.accessedAddresses
+          · rw [if_pos cold]
+            simpa [cold] using chargeGas_getBal_eq charged address
+          · rw [if_neg cold]
+            simpa [cold] using chargeGas_getBal_eq charged address
+        have afterPop : devm1.getBal = pre.getBal := by
+          funext address
+          exact Devm.popToAdr_getBal_eq popped address
+        change devm2.getBal = pre.getBal
+        exact afterCharge.trans (by split <;> exact afterPop)
+      have sumCharged : sum devm2.state.bal < 2 ^ 256 := by
+        rw [chargedBalance]
+        exact sum_nof
+      let transferred := devm3.addBal destination
+        (devm1.getAcct sevm.currentTarget).bal
+      have transferMono :
+          (devm2.state.bal ca).toNat ≤
+            (transferred.state.bal ca).toNat := by
+        change (devm2.state.bal ca).toNat ≤
+          ((devm3.state.addBal destination
+            (devm1.getAcct sevm.currentTarget).bal).bal ca).toNat
+        by_cases destination_eq : destination = ca
+        · subst destination
+          rw [of_transfer_bal_target subtractedState target_ne sumCharged]
+          omega
+        · rw [of_transfer_bal_other subtractedState target_ne destination_eq]
+      have postBalance : post.state.bal ca = transferred.state.bal ca := by
+        dsimp only [transferred] at final ⊢
+        split at final
+        · have state_eq := Except.ok.inj final
+          rw [← state_eq]
+          change ((transferred.setBal sevm.currentTarget 0).state.bal ca) =
+            transferred.state.bal ca
+          show ((transferred.state.setBal sevm.currentTarget 0).get ca).bal =
+            (transferred.state.get ca).bal
+          rw [State.setBal_get_ne target_ne]
+        · have state_eq := Except.ok.inj final
+          rw [← state_eq]
+      rw [← chargedBalance, postBalance]
+      exact transferMono
+
 /-! ## Static propagation across a spawned frame -/
 
 /-- A `CALL`-family child inherits its parent's static flag: `callMsg` sets
@@ -2982,6 +3589,44 @@ theorem genericCreate_step_spawn_exact
   all_goals obtain ⟨rfl, rfl⟩ := hspawn
   all_goals exact ⟨rfl, rfl⟩
 
+/-- Every recursive instruction child either receives the parent's current
+target as its caller or keeps that target as its own execution context.  This
+is the common caller-separation fact behind direct callbacks into a distinct
+installed contract. -/
+theorem Xinst.step_spawn_caller_eq_parent_or_target_eq_parent
+    {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {frame : Frame} {resume : Resume}
+    (spawn : Xinst.step sevm devm x = .spawn frame resume) :
+    frame.inner.caller = sevm.currentTarget ∨
+      frame.inner.currentTarget = sevm.currentTarget := by
+  rcases Xinst.step_shape sevm devm x with ⟨execution, shape, -⟩ |
+      ⟨d, endowment, newAddress, mi, ms, -, shape⟩ |
+      ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+        ii, isz, oi, osz, code, delegated, -, -, callKind, -, shape⟩ <;>
+    rw [shape] at spawn
+  · cases spawn
+  · rcases genericCreate_step_spawn_exact spawn with ⟨rfl, -⟩
+    exact Or.inl rfl
+  · rcases genericCall_step_spawn_exact spawn with ⟨rfl, -⟩
+    rcases callKind with ⟨-, caller_eq⟩ | ⟨-, target_eq⟩
+    · exact Or.inl caller_eq
+    · exact Or.inr target_eq
+
+/-- A child aimed at `ca` from a parent executing elsewhere cannot itself
+have `ca` as caller. -/
+theorem Xinst.step_spawn_caller_ne_of_target_eq
+    {ca : Adr} {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {frame : Frame} {resume : Resume}
+    (spawn : Xinst.step sevm devm x = .spawn frame resume)
+    (parent_ne : sevm.currentTarget ≠ ca)
+    (target_eq : frame.inner.currentTarget = ca) :
+    frame.inner.caller ≠ ca := by
+  rcases Xinst.step_spawn_caller_eq_parent_or_target_eq_parent spawn with
+      caller_eq | child_eq
+  · rw [caller_eq]
+    exact parent_ne
+  · exact (parent_ne (child_eq.symm.trans target_eq)).elim
+
 /-- A recursive CREATE spawn passed the collision check, so the target's
 persistent storage was empty before fresh-account preparation. -/
 theorem genericCreate_step_spawn_getStor_empty
@@ -3056,6 +3701,19 @@ lemma post_of_pre {ca : Adr} {sevm : Sevm} {devm : Devm}
   by_cases hc : sevm.currentTarget = ca
   · exact c.inv_forget (h.inv.left hc)
   · exact h.inv.right hc
+
+/-- A frame postcondition depends only on persistent world state. -/
+lemma Post.of_state_eq {ca : Adr} {sevm sevm' : Sevm} {child post : Devm}
+    (h : c.Post ca sevm' child) (hstate : post.state = child.state) :
+    c.Post ca sevm post := by
+  refine ⟨?_, ?_⟩
+  · have hbal : post.getBal = child.getBal :=
+      funext (getBal_eq_of_state_eq hstate)
+    rw [hbal]
+    exact h.side
+  · show c.Inv (Devm.getStor post ca) 0 (post.getBal ca)
+    rw [getStor_eq_of_state_eq hstate ca, getBal_eq_of_state_eq hstate ca]
+    exact h.inv
 
 lemma Pre.state_eq {wa sevm devm devm'}
     (h_pc : c.Pre wa sevm devm) (h_eq : devm'.state = devm.state) :
@@ -3268,6 +3926,46 @@ lemma Xinst.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} 
     · exact h_ne
     · rw [hsf] at hstv; cases hstv
 
+/-- A successful nonrecursive instruction in a foreign frame preserves the
+contract precondition.  This packages the register/push/executable split used
+by proof-indexed interpreter recursions. -/
+lemma Ninst.none_preserves_precond
+    {wa : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm} {n : Ninst}
+    (run : Ninst.StepRun pc sevm pre n .none (.ok inter))
+    (target_ne : sevm.currentTarget ≠ wa)
+    (precondition : c.Pre wa sevm pre) :
+    c.Pre wa sevm inter := by
+  cases n with
+  | push xs le =>
+      simp only [Ninst.StepRun, Ninst.step_push,
+        Step.run_ofExecution] at run
+      rcases Except.bind_eq_ok run.2.symm with
+        ⟨charged, charge, pushed⟩
+      exact precondition.state_eq
+        (((Devm.burn_of_chargeGas charge).state).trans
+          ((Devm.push_of_push pushed).state)).symm
+  | reg r =>
+      have registerRun : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
+        simp only [Ninst.StepRun, Ninst.step_reg,
+          Step.run_ofExecution] at run
+        exact run.2.symm
+      by_cases store : r = Rinst.sstore
+      · subst store
+        have frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
+        rw [registerRun] at frame
+        refine Pre.of_eqs precondition (frame.getCode_eq wa).symm ?_
+          (sstore_preserves_getStor_ne registerRun target_ne)
+        funext address
+        exact (frame.getBal_eq address).symm
+      · exact Pre.of_eqs precondition
+          (Rinst.preserves_getCode registerRun wa)
+          (Rinst.preserves_bal registerRun).symm
+          (congrFun (Rinst.preserves_stor store registerRun) wa).symm
+  | exec x =>
+      apply Xinst.none_preserves_precond (x := x) _ target_ne precondition
+      simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
+        Xinst.Run] using run
+
 
 
 -- the precondition carries over to the initial state of a sub-execution
@@ -3317,6 +4015,51 @@ lemma Pre.child_of_transfer {ca : Adr} {sevm sevm' : Sevm} {devm devm' : Devm}
     show c.Inv (Devm.getStor devm' ca) 0 (devm'.getBal ca)
     rw [h_stor', h_bal']
     exact c.inv_transfer h_sub h_ne h_side_st h_inv_st
+
+/-- The child-frame precondition after an outbound value transfer from the
+contract.  The caller supplies the invariant at the debited balance; the
+contract record's receive law covers the self-call case. -/
+lemma Pre.child_of_outbound_transfer
+    {ca target : Adr} {sevm' : Sevm} {devm' : Devm}
+    {st st_mid : Jaune.State} {value : B256}
+    (h_code : some (st.getCode ca).toList = Prog.compile c.prog)
+    (h_side : c.Side st.bal)
+    (h_inv : c.Inv (st.getStor ca) 0 (st.bal ca - value))
+    (h_sub : st.subBal ca value = some st_mid)
+    (h_state : devm'.state = st_mid.addBal target value)
+    (h_ct : sevm'.currentTarget = target)
+    (h_value : sevm'.value = value) :
+    c.Pre ca sevm' devm' := by
+  rcases of_state_transfer_fields (callee := target) h_sub with
+    ⟨h_t_stor, h_t_code, h_le, h_t_self, h_t_ne⟩
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · show some (devm'.state.get ca).code.toList = Prog.compile c.prog
+    rw [h_state, h_t_code ca]
+    exact h_code
+  · show c.Side devm'.state.bal
+    rw [h_state]
+    exact c.side_transfer h_sub h_side
+  · intro h_target
+    have h_target' : target = ca := h_ct.symm.trans h_target
+    have hbal : ((st_mid.addBal target value).get ca).bal =
+        (st.get ca).bal := h_t_self h_target'
+    show c.Inv (Devm.getStor devm' ca) sevm'.value (devm'.getBal ca)
+    change c.Inv (devm'.state.get ca).stor sevm'.value
+      (devm'.state.get ca).bal
+    rw [h_state, h_value, h_t_stor ca, hbal]
+    apply c.inv_recv h_inv
+    have h_le_nat := B256.toNat_le_toNat h_le
+    change (st.bal ca).toNat = (st.bal ca - value).toNat + value.toNat
+    rw [B256.toNat_sub_eq_of_le _ _ h_le]
+    omega
+  · intro h_target
+    have h_target' : target ≠ ca := fun h => h_target (h_ct.trans h)
+    have hbal : ((st_mid.addBal target value).get ca).bal =
+        (st.get ca).bal - value := h_t_ne h_target'
+    show c.Inv (Devm.getStor devm' ca) 0 (devm'.getBal ca)
+    change c.Inv (devm'.state.get ca).stor 0 (devm'.state.get ca).bal
+    rw [h_state, h_t_stor ca, hbal]
+    exact h_inv
 
 -- the precondition carries over to the initial state of a sub-execution
 -- started without a balance transfer
@@ -6001,20 +6744,6 @@ lemma applyTransactions_sum_le
     rw [applyTransactions] at h_run
     obtain ⟨⟨st, bout''⟩, h1, h2⟩ := Except.bind_eq_ok h_run
     exact le_trans (ih h2) (processTransaction_sum_le h1)
-
-lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} {data : Bytes}
-    {st : Jaune.State} {out : MsgCallOutput}
-    (h : processCheckedSystemTransaction benv target data = .ok ⟨st, out⟩) :
-    processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
-  dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
-  split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
-    split at h2
-    · cases h2
-    · obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h2)
-      rw [Except.mapError_eq_ok_iff] at h1
-      subst h3; subst h4; exact h1
 
 /-! ## Chain-level reachability
 

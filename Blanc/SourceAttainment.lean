@@ -35,7 +35,7 @@
 -- `apply`d, because proof irrelevance leaves their data arguments unassigned,
 -- so every route is built through the `routeTo_*` kit.
 
-import Blanc.Reverts
+import Blanc.CompiledWalkInversion
 import Blanc.ExecutionOccurrence
 
 namespace Blanc
@@ -653,16 +653,6 @@ theorem Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin
                   have bodyEq := Option.some.inj (hlookup.symm.trans lookup)
                   subst bodyEq
                   exact ih rest certified
-
-/-- `REVERT` cannot produce a successful outcome, however its operand reads
-fail.  The `.ok` half of `Linst.not_commits_of_run_rev`'s case analysis. -/
-theorem Linst.not_run_rev_ok {sevm : Sevm} {devm post : Devm}
-    (run : Linst.Run sevm devm .rev (.ok post)) : False := by
-  simp only [Linst.Run, Linst.run] at run
-  rcases Except.bind_eq_ok run with ⟨_v1, _h1, h2⟩
-  rcases Except.bind_eq_ok h2 with ⟨_v2, _h3, h4⟩
-  rcases Except.bind_eq_ok h4 with ⟨_v3, _h5, h6⟩
-  contradiction
 
 /-- A certified-reverting body has no successful walk.  Same induction as
 `Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin`, with the outcome

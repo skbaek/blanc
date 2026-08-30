@@ -903,40 +903,6 @@ private theorem pauseSuccess_trace_dichotomy
       exact ⟨zeroPre, hcountStack, hcountPop, hpushZero⟩
     · exact ⟨fun _ => rfl, fun hcontra => absurd hcountZero hcontra⟩
 
-private theorem prependStoresRev_not_ok
-    {fs : List Func} {sevm : Sevm} {rest : Func}
-    (terminal : ∀ {pre post : Devm},
-      Func.RunCompiledTo fs sevm pre rest (.ok post) → False)
-    (iws : List (B256 × Nat)) :
-    ∀ {pre post : Devm},
-      Func.RunCompiledTo fs sevm pre (prependStoresRev iws rest) (.ok post) →
-        False := by
-  induction iws generalizing rest with
-  | nil =>
-      intro pre post run
-      exact terminal (by simpa [prependStoresRev] using run)
-  | cons iw iws ih =>
-      intro pre post run
-      apply ih (rest := prependStore iw.1 iw.2 rest)
-      · intro innerPre innerPost innerRun
-        unfold prependStore at innerRun
-        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
-        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
-        obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
-        exact terminal innerRun
-      · simpa [prependStoresRev] using run
-
-private theorem revData_not_ok
-    {fs : List Func} {sevm : Sevm} {pre post : Devm} {blob : Bytes}
-    (run : Func.RunCompiledTo fs sevm pre (Func.revData blob) (.ok post)) :
-    False := by
-  unfold Func.revData at run
-  apply prependStoresRev_not_ok (iws := (bytesWords blob).zipIdx) ?_ run
-  intro innerPre innerPost innerRun
-  obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
-  obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
-  exact Linst.not_run_rev_ok (runCompiledTo_last_inv innerRun)
-
 /-- A successful `pauseSuccess` changes no persistent-storage cell other than
 the caller's expiry slot at the CircuitBreaker account.  The theorem is
 pointwise over both the account and key so composition proofs can frame the
@@ -1025,7 +991,7 @@ theorem pauseSuccess_ok_getStorVal_eq_of_ne
                 (Devm.PopBurn.of_popBurnBy hcheckedPop)))))
       · exact hfinish
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv hpanic hpanicRun
-      exact (revData_not_ok hbody).elim
+      exact (Func.RunCompiledTo.not_ok_revData hbody).elim
   · obtain ⟨finishPre, hpush, hfinish⟩ :=
       runCompiledTo_next_inv hzeroArm
     apply finishCell
@@ -1109,7 +1075,7 @@ theorem pauseSuccess_ok_getStor_eq_of_owner_ne
                 (Devm.PopBurn.of_popBurnBy hcheckedPop)))))
       · exact hfinish
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv hpanic hpanicRun
-      exact (revData_not_ok hbody).elim
+      exact (Func.RunCompiledTo.not_ok_revData hbody).elim
   · obtain ⟨finishPre, hpush, hfinish⟩ :=
       runCompiledTo_next_inv hzeroArm
     apply finishStor

@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerPauseJoin
 import Blanc.TransientSettlement
+import Blanc.CompiledWalkInversion
 
 /-!
 # What the CircuitBreaker sends: the pause's two outgoing messages
@@ -997,31 +998,6 @@ The ordering claim itself.  `Func.RunCompiledTo` rather than
 that it does not happen.  Both outcomes are in scope here, and which one occurs
 is read off the derivation rather than assumed. -/
 
-/-- `Func.RunCompiledTo` at a `.next` node, as an existential. -/
-private lemma runCompiledTo_next_inv {fs : List Func} {sevm : Sevm}
-    {devm : Devm} {i : Ninst} {f : Func} {ex : Execution}
-    (h : Func.RunCompiledTo fs sevm devm (Func.next i f) ex) :
-    ∃ mid, Ninst.RunCompiled sevm devm i mid ∧
-      Func.RunCompiledTo fs sevm mid f ex := by
-  cases h with | next hn hrest => exact ⟨_, hn, hrest⟩
-
-/-- `Func.RunCompiledTo` at a `.branch` node: the word the branch pops decides
-the arm, and the two arms are named by the word rather than by fiat. -/
-private lemma runCompiledTo_branch_inv {fs : List Func} {sevm : Sevm}
-    {devm : Devm} {f g : Func} {ex : Execution}
-    (h : Func.RunCompiledTo fs sevm devm (Func.branch f g) ex) :
-    (∃ armPre, devm.stack = 0 :: armPre.stack ∧
-        Devm.PopBurnBy [0] (gVerylow + gHigh) devm armPre ∧
-        Func.RunCompiledTo fs sevm armPre f ex) ∨
-      (∃ (w : B256) (armPre : Devm), w ≠ 0 ∧
-        devm.stack = w :: armPre.stack ∧
-        Devm.PopBurnBy [w] (gVerylow + gHigh + gJumpdest) devm armPre ∧
-        Func.RunCompiledTo fs sevm armPre g ex) := by
-  cases h with
-  | zero hroom hpop harm => exact Or.inl ⟨_, hpop.stack, hpop, harm⟩
-  | succ hne hroom hpop harm =>
-    exact Or.inr ⟨_, _, hne, hpop.stack, hpop, harm⟩
-
 /-- **The pause's post-CALL branch, inverted: both arms.**  A walk of the
 `ISZERO` and the branch that follows the pause's `CALL` takes the bubble arm
 exactly when the child errored, and the observation arm exactly when it did
@@ -1095,18 +1071,6 @@ is what `pauseCall_flag_dichotomy` shows takes exactly the two values and
 split C6 asks for, not a premise about the callee: the sibling theorem below
 states the other case, and neither is assumed away. -/
 
-/-- `Func.RunCompiledTo` at a `.call` node, against a known table entry. -/
-private lemma runCompiledTo_call_inv {fs : List Func} {sevm : Sevm}
-    {devm : Devm} {k : Nat} {f : Func} {ex : Execution}
-    (h_get : fs[k]? = some f)
-    (h : Func.RunCompiledTo fs sevm devm (Func.call k) ex) :
-    ∃ mid, Devm.BurnBy (gVerylow + gMid + gJumpdest) devm mid ∧
-      Func.RunCompiledTo fs sevm mid f ex := by
-  cases h with
-  | call hget hroom hburn hrest =>
-    cases Option.some.inj (hget.symm.trans h_get)
-    exact ⟨_, hburn, hrest⟩
-
 /-- The CircuitBreaker's own table binds `bubbleRevertSlot` to
 `Func.revReturnData`, so the lookup premise the bubble theorems carry is
 discharged by the program itself rather than left to a consumer. -/
@@ -1160,20 +1124,6 @@ theorem pauseCall_failureArm_bubbles {fs : List Func} {sevm : Sevm}
 Only here does the pause reach its second message.  The staging line and the
 `STATICCALL` are inside the branch's zero arm, so a derivation that gets to the
 `.statcall` instruction has already produced the CALL's success flag. -/
-
-/-- A walk of a `Line`-prefixed body splits at the line's end. -/
-private lemma runCompiledTo_prepend_inv {fs : List Func} {sevm : Sevm}
-    {l : Line} {f : Func} {ex : Execution} :
-    ∀ {devm : Devm}, Func.RunCompiledTo fs sevm devm (l +++ f) ex →
-      ∃ mid, Line.Run sevm devm l mid ∧
-        Func.RunCompiledTo fs sevm mid f ex := by
-  induction l with
-  | nil => exact fun h => ⟨_, Line.Run.nil, h⟩
-  | cons i l ih =>
-    intro devm h
-    obtain ⟨mid, hn, hrest⟩ := runCompiledTo_next_inv h
-    obtain ⟨fin, hline, hf⟩ := ih hrest
-    exact ⟨fin, Line.Run.cons (Ninst.Run.of_runCompiled hn) hline, hf⟩
 
 /-- **The CALL's success arm is the only route to the STATICCALL.**  When the
 flag the CALL pushed is `1` the branch's zero arm is taken, the walk runs
