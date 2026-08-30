@@ -288,11 +288,11 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:constant-error-guard`
-- Preferred path: Use `Func.runCompiledTo_errorGuard` when a nonzero branch flag tail-calls an auxiliary equal to `Func.revWith reason`. Supply the auxiliary lookup, exact entry-state memory image and alignment, payload bounds, gas expressed through `errorGuardCost`, and stack room; the theorem returns the complete ABI `Error(string)` payload with exact final memory, stack, and gas.
-- Boundary: This proves the branch-and-internal-call walk only. It does not select a contract route, establish which flag is nonzero, authenticate a contract-specific reason/slot table, or turn the local revert into a public endpoint theorem. Keep `errorGuardCost` indexed by the actual entry state so memory expansion is not silently weakened.
+- Preferred path: Use `Func.runCompiledTo_errorGuard` when a nonzero branch flag tail-calls an auxiliary equal to `Func.revWith reason`. Supply the auxiliary lookup, exact entry-state memory image and alignment, payload bounds, gas expressed through `errorGuardCost`, and stack room; the theorem returns the complete ABI `Error(string)` payload with exact final memory, stack, and gas. When an existential carrier exposes a different state with the same memory size, transport that exact cost with `errorGuardCost_congr_memory_size`.
+- Boundary: This proves the branch-and-internal-call walk only. It does not select a contract route, establish which flag is nonzero, authenticate a contract-specific reason/slot table, or turn the local revert into a public endpoint theorem. Keep `errorGuardCost` indexed by the actual entry state, or transport it only across a proved memory-size equality, so memory expansion is not silently weakened.
 - Owner module: [Blanc/RevertPayload.lean](../Blanc/RevertPayload.lean)
 - Canonical example: [Blanc/RevertPayload.lean](../Blanc/RevertPayload.lean) — `Func.runCompiledTo_errorGuard`
-- Registered symbols: `module:Blanc/RevertPayload.lean`, `declaration:Blanc.errorBodyCost`, `declaration:Blanc.errorCallCost`, `declaration:Blanc.errorGuardCost`, `declaration:Blanc.Func.runCompiledTo_revWith`, `declaration:Blanc.Func.runCompiledTo_errorGuard`
+- Registered symbols: `module:Blanc/RevertPayload.lean`, `declaration:Blanc.errorBodyCost`, `declaration:Blanc.errorCallCost`, `declaration:Blanc.errorGuardCost`, `declaration:Blanc.errorGuardCost_congr_memory_size`, `declaration:Blanc.Func.runCompiledTo_revWith`, `declaration:Blanc.Func.runCompiledTo_errorGuard`
 - Review: `proof-infrastructure` on `2026-08-30`
 
 ## `one-word-source-return`

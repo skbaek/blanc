@@ -1,15 +1,17 @@
 import Blanc.BeaconDepositAbi
 import Blanc.BeaconDepositEffects
 import Blanc.BeaconDepositErrorModel
+import Blanc.BeaconDepositGuardErrors
 import Blanc.ForwardNoRawSstore
 
 /-!
 # Beacon deposit compiled error routes
 
 Exact public-route witnesses for malformed ABI input, selector misses, and the
-eight reachable source-model errors.  Every public revert theorem in this file
-is paired with raw-chronology `SSTORE` freedom; rollback and an empty retained
-write list are consequences, never substitutes for that path certificate.
+eight reachable source-model errors.  Malformed-input and selector-miss routes
+carry raw-chronology `SSTORE` freedom; decoded model errors carry the C3-required
+empty retained write list on the exact reverting execution.  C5 classifies raw
+`SSTORE` occurrences independently of rollback.
 -/
 
 namespace Blanc.BeaconDeposit
@@ -948,5 +950,314 @@ theorem deposit_malformed_noRawSstore
     deposit_malformed_row_noRawSstore
       sevm base G failure hnonempty hdataBound hselector hfailure hcode
   exact ⟨failure, hfailure, execution, hrun, hsafe, hwrites, hcompiled⟩
+
+/-! ## Model-linked decoded-input errors -/
+
+/-- Public-route evidence for one decoded model error.  The exact revert
+payload and the empty retained write chronology belong to the same execution
+witness. -/
+def DepositPublicErrorWitness
+    (sevm : Sevm) (base : Devm) (G : Nat) (reason : Reason) : Prop :=
+  ∃ runtimeCost post,
+    ∃ execution : Exec 0 sevm
+        (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+        (.error (.revert, post)),
+      Prog.RunCompiledTo sevm
+        (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+        runtime (.error (.revert, post)) ∧
+      post.output = errorData (reasonString reason) ∧
+      Exec.retainedStorageWrites execution = [] ∧
+      some sevm.code.toList = Prog.compile runtime
+
+/-- Lift an exact endpoint error through the payable selector and derive its
+empty retained chronology from root-frame rollback. -/
+theorem deposit_error_public_of_endpoint
+    {sevm : Sevm} {base : Devm} {G : Nat} {reason : Reason}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hcode : sevm.code.toList = code)
+    (endpoint : DepositEndpointErrorWitness sevm base G reason) :
+    DepositPublicErrorWitness sevm base G reason := by
+  unfold DepositEndpointErrorWitness at endpoint
+  unfold DepositPublicErrorWitness
+  obtain ⟨endpointCost, post, hendpoint, houtput⟩ := endpoint
+  have hroute := deposit_route_runCompiledTo
+    (K := G + endpointCost) hnonempty hselector hendpoint
+  let runtimeCost := endpointCost + depositRouteGas
+  have hgas : (G + endpointCost) + depositRouteGas =
+      G + runtimeCost := by
+    simp only [runtimeCost]
+    omega
+  have hprogram : Prog.RunCompiledTo sevm
+      (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+      runtime (.error (.revert, post)) := by
+    simpa only [hgas] using hroute
+  have hcompiled : some sevm.code.toList = Prog.compile runtime := by
+    rw [hcode, code_compile]
+  have hexecution : exec ⟨0, sevm,
+        base.setMach ⟨[], Mem.empty, G + runtimeCost⟩⟩ =
+      .error (.revert, post) :=
+    Prog.exec_of_runCompiledTo hprogram hcompiled
+  obtain ⟨execution⟩ :=
+    (exec_iff_exec_eq 0 sevm
+      (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+      (.error (.revert, post))).mpr hexecution
+  have hwrites : Exec.retainedStorageWrites execution = [] := by
+    unfold Exec.retainedStorageWrites
+    rw [Exec.retainedNodes_eq_nil_of_not_commits execution (by
+      simp only [Execution.commits]
+      decide)]
+    rfl
+  exact ⟨runtimeCost, post, execution, hprogram, houtput, hwrites,
+    hcompiled⟩
+
+/-- Decoded calldata whose pure model fails the pubkey-length guard reaches
+the matching compiled `Error(string)` route and retains no storage write. -/
+theorem deposit_pubkeyLength_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat =
+        .error .pubkey_length)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G .pubkey_length := by
+  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  exact deposit_pubkeyLength_error_endpoint_runCompiledTo
+    hdataBound hdec herror
+
+/-- Decoded calldata whose pure model fails the withdrawal-credentials-length
+guard reaches that exact public compiled error route. -/
+theorem deposit_withdrawalCredentialsLength_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat =
+        .error .withdrawal_credentials_length)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G
+      .withdrawal_credentials_length := by
+  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  exact deposit_withdrawalCredentialsLength_error_endpoint_runCompiledTo
+    hdataBound hdec herror
+
+/-- Decoded calldata whose pure model fails the signature-length guard reaches
+that exact public compiled error route. -/
+theorem deposit_signatureLength_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat =
+        .error .signature_length)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G .signature_length := by
+  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  exact deposit_signatureLength_error_endpoint_runCompiledTo
+    hdataBound hdec herror
+
+/-- Decoded calldata whose pure model fails the lower-value guard reaches that
+exact public compiled error route. -/
+theorem deposit_valueTooLow_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat =
+        .error .value_too_low)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G .value_too_low := by
+  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  exact deposit_valueTooLow_error_endpoint_runCompiledTo
+    hdataBound hdec herror
+
+/-- Decoded calldata whose pure model fails the gwei-multiple guard reaches
+that exact public compiled error route. -/
+theorem deposit_valueNotGweiMultiple_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat =
+        .error .value_not_gwei_multiple)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G .value_not_gwei_multiple := by
+  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  exact deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo
+    hdataBound hdec herror
+
+/-- Decoded calldata whose pure model exceeds the uint64 amount bound reaches
+that exact public compiled error route. -/
+theorem deposit_valueTooHigh_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat =
+        .error .value_too_high)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G .value_too_high := by
+  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  exact deposit_valueTooHigh_error_endpoint_runCompiledTo
+    hdataBound hdec herror
+
+/-- Decoded calldata whose reconstructed data root differs from the supplied
+root reaches that exact public compiled error route. -/
+theorem deposit_depositDataRootMismatch_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hcountValue :
+      base.getStorVal sevm.currentTarget depositCountSlot =
+        Nat.toB256 state.count)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
+    (hbound :
+      (G + depositPostHashErrorGuardCost .depositDataRootMismatch + 18) +
+        1762 < 2 ^ 256)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat =
+        .error .deposit_data_root_mismatch)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G
+      .deposit_data_root_mismatch := by
+  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  exact deposit_depositDataRootMismatch_error_endpoint_runCompiledTo
+    hdataBound hdec hcountValue hnodeleg hwarm hpre hdepth hstatic hbound
+    herror
+
+/-- Decoded calldata at the source cap boundary reaches the exact public
+tree-full error route. -/
+theorem deposit_merkleTreeFull_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hcountBound : state.count < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hcountValue :
+      base.getStorVal sevm.currentTarget depositCountSlot =
+        Nat.toB256 state.count)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
+    (hbound :
+      (G + depositPostHashErrorGuardCost .merkleTreeFull + 46) + 1762 <
+        2 ^ 256)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat =
+        .error .merkle_tree_full)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G .merkle_tree_full := by
+  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  exact deposit_merkleTreeFull_error_endpoint_runCompiledTo
+    hdataBound hcountBound hdec hcountValue hnodeleg hwarm hpre hdepth
+    hstatic hbound herror
+
+/-- The eight public error theorems form a total compiled partition over every
+decoded pure-model error.  The impossible `assert_false` label is eliminated
+by `deposit_error_reachable`. -/
+theorem deposit_error_runCompiledTo
+    {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat} {reason : Reason}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hcountBound : state.count < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hcountValue :
+      base.getStorVal sevm.currentTarget depositCountSlot =
+        Nat.toB256 state.count)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
+    (hrootBound :
+      (G + depositPostHashErrorGuardCost .depositDataRootMismatch + 18) +
+        1762 < 2 ^ 256)
+    (hcapBound :
+      (G + depositPostHashErrorGuardCost .merkleTreeFull + 46) + 1762 <
+        2 ^ 256)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat = .error reason)
+    (hcode : sevm.code.toList = code) :
+    DepositPublicErrorWitness sevm base G reason := by
+  obtain ⟨error, rfl⟩ := deposit_error_reachable Bytes.sha256 state pubkey
+    withdrawalCredentials signature depositDataRoot sevm.value.toNat reason
+    herror
+  cases error with
+  | pubkeyLength =>
+      exact deposit_pubkeyLength_error_runCompiledTo hnonempty hdataBound
+        hselector hdec herror hcode
+  | withdrawalCredentialsLength =>
+      exact deposit_withdrawalCredentialsLength_error_runCompiledTo
+        hnonempty hdataBound hselector hdec herror hcode
+  | signatureLength =>
+      exact deposit_signatureLength_error_runCompiledTo hnonempty hdataBound
+        hselector hdec herror hcode
+  | valueTooLow =>
+      exact deposit_valueTooLow_error_runCompiledTo hnonempty hdataBound
+        hselector hdec herror hcode
+  | valueNotGweiMultiple =>
+      exact deposit_valueNotGweiMultiple_error_runCompiledTo hnonempty
+        hdataBound hselector hdec herror hcode
+  | valueTooHigh =>
+      exact deposit_valueTooHigh_error_runCompiledTo hnonempty hdataBound
+        hselector hdec herror hcode
+  | depositDataRootMismatch =>
+      exact deposit_depositDataRootMismatch_error_runCompiledTo
+        hnonempty hdataBound hselector hdec hcountValue hnodeleg hwarm hpre
+        hdepth hstatic hrootBound herror hcode
+  | merkleTreeFull =>
+      exact deposit_merkleTreeFull_error_runCompiledTo hnonempty hdataBound
+        hcountBound hselector hdec hcountValue hnodeleg hwarm hpre hdepth
+        hstatic hcapBound herror hcode
 
 end Blanc.BeaconDeposit

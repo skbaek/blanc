@@ -72,6 +72,7 @@ CONTRACTS = {
                        "BeaconDepositCore", "BeaconDepositEncoding",
                        "BeaconDeposit", "BeaconDepositErrorCatalog",
                        "BeaconDepositErrorModel",
+                       "BeaconDepositGuardErrors",
                        "BeaconDepositErrors",
                        "BeaconDepositCode", "BeaconDepositDeploy",
                        "BeaconDepositMemory", "BeaconDepositSha",

@@ -85,6 +85,36 @@ theorem reachableErrorGuard_runCompiledTo
   exact Func.runCompiledTo_errorGuard (reachableError_lookup error)
     h_ne h_stack hwf hr halign h_blob h_words h_gas h_room
 
+/-- Gas-normalized form of `reachableErrorGuard_runCompiledTo` for a guard
+entered from an ordinary `setMach` state.  The arbitrary `otherwise` arm is
+unreachable on the nonzero flag. -/
+theorem reachableErrorGuard_exact_runCompiledTo
+    {sevm : Sevm} {base : Devm} {G : Nat} {w : B256}
+    {stack : List B256} {img : Bytes} {otherwise : Func}
+    (error : ReachableReason)
+    (h_ne : w ≠ 0)
+    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
+    (halign : base.memory.size % 32 = 0)
+    (h_blob : (errorData (reasonString error.reason)).length < 2 ^ 256)
+    (h_words : 32 *
+      (bytesWords (errorData (reasonString error.reason))).length < 2 ^ 256)
+    (h_room : stack.length < 1022) :
+    Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨w :: stack, base.memory,
+        G + errorGuardCost base (reasonString error.reason)⟩)
+      ((.call error.slot) <?> otherwise)
+      (.error (.revert,
+        (base.setMach ⟨stack,
+          Mem.writeStoresRev base.memory
+            (bytesWords (errorData (reasonString error.reason))).zipIdx,
+          G⟩).withOutput (errorData (reasonString error.reason)))) := by
+  exact Func.runCompiledTo_errorGuard (reachableError_lookup error)
+    h_ne rfl hwf hr halign h_blob h_words (by
+      simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
+        errorBodyCost, Devm.extCost, Devm.memory_setMach]) (by
+      simp only [Devm.stack_setMach, List.length_cons]
+      omega)
+
 /-- The selected catalogue guard and its constant-error callee contain no raw
 `SSTORE`.  The nonzero flag rules out the continuation arm before the proof
 enters the table body. -/

@@ -192,7 +192,9 @@ auxiliary, use `errorBodyCost`, `errorCallCost`, `errorGuardCost`, and
 `Func.runCompiledTo_errorGuard` in
 [`Blanc/RevertPayload.lean`](../Blanc/RevertPayload.lean). The cost remains a
 function of the entry state, so arbitrary aligned prior memory and its exact
-expansion charge are retained.
+expansion charge are retained.  When an existential carrier exposes a
+different entry state with the same memory size, transport the exact cost with
+`errorGuardCost_congr_memory_size`.
 
 For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 `ReturnsWord`, `of_storeReturnWord`, or the memory-side-condition-free

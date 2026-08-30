@@ -18,6 +18,80 @@ def depositSuccessGuards : Func :=
   loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
   ((.call rootMismatchErrorSlot) <?> checkCap)
 
+/-- The reconstructed-root equality guard passes in exactly 31 gas and leaves
+an arbitrary post-root continuation. -/
+theorem depositRootGuard_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {oldCount node : B256}
+    {G : Nat} {rest : Func} {ex : Execution}
+    (hmem : InsertionStartMemoryCarrier memory oldCount node)
+    (hroot : Sevm.argWord sevm 3 = node)
+    (htail : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], memory, G⟩) rest ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], memory, G + 31⟩)
+      (loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
+        ((.call rootMismatchErrorSlot) <?> rest)) ex := by
+  have hmod : memory.size % 32 = 0 := by
+    rw [hmem.size_eq]
+  have hcovered : 640 + 32 ≤ memory.size := by
+    rw [hmem.size_eq]
+    omega
+  have hread : Bytes.toB256 (memory.read 640 32).1 = node := hmem.readNode
+  have hmemory : (memory.read 640 32).2 = memory := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le hmod hcovered)]
+  func_run (7) [3, 1, 0]
+  case h_cost =>
+    simp only [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel]
+    rw [Devm.extCost_zero_of_le hmod hcovered]
+    norm_num [gVerylow]
+  case h_val =>
+    change Sevm.argWord sevm 3 =? (memory.read 640 32).1.toB256 = 1
+    rw [hroot, hread]
+    simp [B256.eqCheck]
+  case h_arm =>
+    rw [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
+      hmemory]
+    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+
+/-- The tree-capacity guard passes in exactly 28 gas and leaves an arbitrary
+post-cap continuation. -/
+theorem depositCapGuard_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {oldCount node : B256}
+    {G : Nat} {rest : Func} {ex : Execution}
+    (hmem : InsertionStartMemoryCarrier memory oldCount node)
+    (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
+    (htail : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], memory, G⟩) rest ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], memory, G + 28⟩)
+      (pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
+        loadWord oldCountWord +++ lt ::: iszero :::
+        ((.call treeFullErrorSlot) <?> rest)) ex := by
+  have hmod : memory.size % 32 = 0 := by
+    rw [hmem.size_eq]
+  have hcovered : 576 + 32 ≤ memory.size := by
+    rw [hmem.size_eq]
+    omega
+  have hread : Bytes.toB256 (memory.read 576 32).1 = oldCount :=
+    hmem.readOldCount
+  have hmemory : (memory.read 576 32).2 = memory := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le hmod hcovered)]
+  func_run (6) [3, 1, 0]
+  case h_cost =>
+    rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel]
+    rw [Devm.extCost_zero_of_le hmod hcovered]
+    norm_num [gVerylow]
+  case h_val =>
+    rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
+      hread]
+    rw [B256.ltCheck, if_pos hcap]
+  case h_arm =>
+    rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
+      hmemory]
+    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+
 /-- When both post-reconstruction guards hold, their compiled path reaches the
 commit program without changing memory or world state and consumes exactly
 59 gas. -/
@@ -33,50 +107,9 @@ theorem depositSuccessGuards_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], memory, G + 59⟩)
       depositSuccessGuards ex := by
-  have hmod : memory.size % 32 = 0 := by
-    rw [hmem.size_eq]
-  have hnodeCovered : 640 + 32 ≤ memory.size := by
-    rw [hmem.size_eq]
-    omega
-  have holdCovered : 576 + 32 ≤ memory.size := by
-    rw [hmem.size_eq]
-    omega
-  have hnodeRead : Bytes.toB256 (memory.read 640 32).1 = node :=
-    hmem.readNode
-  have hnodeMem : (memory.read 640 32).2 = memory := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le hmod hnodeCovered)]
-  have holdRead : Bytes.toB256 (memory.read 576 32).1 = oldCount :=
-    hmem.readOldCount
-  have holdMem : (memory.read 576 32).2 = memory := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le hmod holdCovered)]
-  unfold depositSuccessGuards
-  func_run (13) [3, 1, 0, 3, 1, 0]
-  case h_cost =>
-    simp only [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel]
-    rw [Devm.extCost_zero_of_le hmod hnodeCovered]
-    norm_num [gVerylow]
-  case h_val =>
-    change Sevm.argWord sevm 3 =? (memory.read 640 32).1.toB256 = 1
-    rw [hroot, hnodeRead]
-    simp [B256.eqCheck]
-  case h_cost =>
-    rw [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
-      hnodeMem,
-      show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel]
-    rw [Devm.extCost_zero_of_le hmod holdCovered]
-    norm_num [gVerylow]
-  case h_val =>
-    rw [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
-      hnodeMem,
-      show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
-      holdRead]
-    rw [B256.ltCheck, if_pos hcap]
-  case h_arm =>
-    rw [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
-      hnodeMem,
-      show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
-      holdMem]
-    simpa only [Nat.add_sub_cancel] using htail
+  have hcapRun := depositCapGuard_runCompiledTo hmem hcap htail
+  have hrootRun := depositRootGuard_runCompiledTo hmem hroot hcapRun
+  simpa only [depositSuccessGuards, Nat.add_assoc] using hrootRun
 
 /-- Reconstruct the deposit-data node from the decoded deposit arguments and
 run both post-reconstruction guards.  The reconstructed node is exactly the

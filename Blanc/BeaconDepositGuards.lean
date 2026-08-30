@@ -15,7 +15,7 @@ open Jaune.Ninst Ninst
 /-- Gas consumed by the six successful deposit guards. -/
 def depositGuardsGas : Nat := 214
 
-private theorem depositLengthWord_of_payload
+theorem depositLengthWord_of_payload
     {data payload : Bytes} {head len : Nat}
     (heq : dynamicPayload data head = payload) (hlen : payload.length = len) :
     depositLengthWord data head = Nat.toB256 len := by
@@ -24,7 +24,7 @@ private theorem depositLengthWord_of_payload
   simp only [depositLengthWord, h]
 
 /-- One successful decoded-length guard. -/
-private theorem depositLengthGuard_runCompiledTo
+theorem depositLengthGuard_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {data : Bytes} {word expected : B256}
     {index slot G : Nat} {rest : Func} {ex : Execution}
@@ -75,8 +75,61 @@ private theorem depositLengthGuard_runCompiledTo
   case h_arm =>
     simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
 
+/-- The three successful decoded-length guards, with an arbitrary
+continuation after the signature check. -/
+theorem depositLengthGuards_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {data : Bytes} {G : Nat}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {rest : Func} {ex : Execution}
+    (hcarrier : DepositDecodedMemoryCarrier memory data)
+    (hdec : DepositAbiDecodable data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hpubkey : pubkey.length = 48)
+    (hwithdrawal : withdrawalCredentials.length = 32)
+    (hsignature : signature.length = 96)
+    (htail : Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], memory, G⟩) rest ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach ⟨[], memory, G + 84⟩)
+      (loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
+        ((.call pubkeyLengthErrorSlot) <?>
+          (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
+            ((.call withdrawalLengthErrorSlot) <?>
+              (loadWord 5 +++ pushB256 96 ::: eq ::: iszero :::
+                ((.call signatureLengthErrorSlot) <?> rest)))))) ex := by
+  have hlen0 : depositLengthWord data 0 = 48 :=
+    depositLengthWord_of_payload hdec.pubkey_eq hpubkey
+  have hlen1 : depositLengthWord data 1 = 32 :=
+    depositLengthWord_of_payload hdec.withdrawalCredentials_eq hwithdrawal
+  have hlen2 : depositLengthWord data 2 = 96 :=
+    depositLengthWord_of_payload hdec.signature_eq hsignature
+  have hread0 : Bytes.toB256 (memory.read 96 32).1 = 48 := by
+    rw [hcarrier.read_length0, B256.toB256_toBytes, hlen0]
+  have hread1 : Bytes.toB256 (memory.read 128 32).1 = 32 := by
+    rw [hcarrier.read_length1, B256.toB256_toBytes, hlen1]
+  have hread2 : Bytes.toB256 (memory.read 160 32).1 = 96 := by
+    rw [hcarrier.read_length2, B256.toB256_toBytes, hlen2]
+  have hsignatureRun := depositLengthGuard_runCompiledTo
+    (word := 5) (expected := 96) (index := 160)
+    (slot := signatureLengthErrorSlot) hcarrier (by decide +kernel)
+    (by rw [hcarrier.size_eq]) hread2
+    (by decide +kernel) (by decide +kernel) htail
+  have hwithdrawalRun := depositLengthGuard_runCompiledTo
+    (word := 4) (expected := 32) (index := 128)
+    (slot := withdrawalLengthErrorSlot) hcarrier (by decide +kernel)
+    (by rw [hcarrier.size_eq]; omega) hread1
+    (by decide +kernel) (by decide +kernel) hsignatureRun
+  have hpubkeyRun := depositLengthGuard_runCompiledTo
+    (word := 3) (expected := 48) (index := 96)
+    (slot := pubkeyLengthErrorSlot) hcarrier (by decide +kernel)
+    (by rw [hcarrier.size_eq]; omega) hread0
+    (by decide +kernel) (by decide +kernel) hwithdrawalRun
+  have hgas : ((G + 28) + 28) + 28 = G + 84 := by omega
+  simpa only [hgas] using hpubkeyRun
+
 /-- The lower-value guard passes in exactly 21 gas. -/
-private theorem depositValueLowerGuard_runCompiledTo
+theorem depositValueLowerGuard_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {memory : Mem}
     {G slot : Nat} {rest : Func} {ex : Execution}
     (hlower : Nat.toB256 oneEther ≤ sevm.value)
@@ -92,7 +145,7 @@ private theorem depositValueLowerGuard_runCompiledTo
     simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
 
 /-- The exact-gwei-multiple guard passes in exactly 23 gas. -/
-private theorem depositGweiMultipleGuard_runCompiledTo
+theorem depositGweiMultipleGuard_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {memory : Mem}
     {G slot : Nat} {rest : Func} {ex : Execution}
     (hgwei : sevm.value % Nat.toB256 oneGwei = 0)
@@ -108,7 +161,7 @@ private theorem depositGweiMultipleGuard_runCompiledTo
     simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
 
 /-- The upper-value guard retains the amount and passes in exactly 86 gas. -/
-private theorem depositAmountUpperGuard_runCompiledTo
+theorem depositAmountUpperGuard_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {data : Bytes} {amount : B256}
     {G slot : Nat} {rest : Func} {ex : Execution}
@@ -160,18 +213,6 @@ theorem depositGuards_runCompiledTo
   let memory := depositDecodedMemory sevm.data
   have hcarrier : DepositDecodedMemoryCarrier memory sevm.data := by
     exact depositDecodedMemory_carrier sevm.data
-  have hlen0 : depositLengthWord sevm.data 0 = 48 :=
-    depositLengthWord_of_payload hdec.pubkey_eq hpubkey
-  have hlen1 : depositLengthWord sevm.data 1 = 32 :=
-    depositLengthWord_of_payload hdec.withdrawalCredentials_eq hwithdrawal
-  have hlen2 : depositLengthWord sevm.data 2 = 96 :=
-    depositLengthWord_of_payload hdec.signature_eq hsignature
-  have hread0 : Bytes.toB256 (memory.read 96 32).1 = 48 := by
-    rw [hcarrier.read_length0, B256.toB256_toBytes, hlen0]
-  have hread1 : Bytes.toB256 (memory.read 128 32).1 = 32 := by
-    rw [hcarrier.read_length1, B256.toB256_toBytes, hlen1]
-  have hread2 : Bytes.toB256 (memory.read 160 32).1 = 96 := by
-    rw [hcarrier.read_length2, B256.toB256_toBytes, hlen2]
   have hbody' : Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], memory.write 672 amount.toBytes, G⟩)
       (stageDepositEvent +++ depositAfterEvent) ex := by
@@ -182,21 +223,9 @@ theorem depositGuards_runCompiledTo
     (slot := valueNotGweiErrorSlot) hgwei hupperRun
   have hlowerRun := depositValueLowerGuard_runCompiledTo
     (slot := valueTooLowErrorSlot) hlower hgweiRun
-  have hsignatureRun := depositLengthGuard_runCompiledTo
-    (word := 5) (expected := 96) (index := 160)
-    (slot := signatureLengthErrorSlot) hcarrier (by decide +kernel)
-    (by rw [hcarrier.size_eq]) hread2
-    (by decide +kernel) (by decide +kernel) hlowerRun
-  have hwithdrawalRun := depositLengthGuard_runCompiledTo
-    (word := 4) (expected := 32) (index := 128)
-    (slot := withdrawalLengthErrorSlot) hcarrier (by decide +kernel)
-    (by rw [hcarrier.size_eq]; omega) hread1
-    (by decide +kernel) (by decide +kernel) hsignatureRun
-  have hpubkeyRun := depositLengthGuard_runCompiledTo
-    (word := 3) (expected := 48) (index := 96)
-    (slot := pubkeyLengthErrorSlot) hcarrier (by decide +kernel)
-    (by rw [hcarrier.size_eq]; omega) hread0
-    (by decide +kernel) (by decide +kernel) hwithdrawalRun
-  simpa only [memory, depositGuardsGas, depositBody] using hpubkeyRun
+  have hlengthRun := depositLengthGuards_runCompiledTo
+    (base := base) (memory := memory) hcarrier hdec hpubkey hwithdrawal
+    hsignature hlowerRun
+  simpa only [memory, depositGuardsGas, depositBody] using hlengthRun
 
 end Blanc.BeaconDeposit

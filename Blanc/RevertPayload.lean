@@ -606,6 +606,16 @@ auxiliary. -/
 def errorGuardCost (devm : Devm) (reason : String) : Nat :=
   gVerylow + gHigh + gJumpdest + errorCallCost devm reason
 
+/-- Constant-error guard cost depends on the entry memory only through its
+size.  This lets an existential post-state reuse a cost fixed against any
+same-sized representative without weakening the exact expansion charge. -/
+theorem errorGuardCost_congr_memory_size
+    {left right : Devm} {reason : String}
+    (hsize : left.memory.size = right.memory.size) :
+    errorGuardCost left reason = errorGuardCost right reason := by
+  simp only [errorGuardCost, errorCallCost, errorBodyCost, Devm.extCost,
+    hsize]
+
 /-- All per-store expansion charges telescope to the single complete aligned
 window charge. -/
 lemma storesRevCost_zipIdx (M : Mem) (ws : List B256) (k : Nat)
