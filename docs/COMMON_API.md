@@ -90,7 +90,12 @@ registry has identified the likely vocabulary.
   recover the exact selected body or fallback call, and return a
   `DispatchFramePreserved` witness before any contract-specific ABI, role, or
   storage reasoning.  Compose adjacent witnesses with
-  `Devm.DispatchFramePreserved.trans`.  When a family builds its own dispatcher
+  `Devm.DispatchFramePreserved.trans`.  To build a dispatcher fallback forward
+  from a residual arbitrary-outcome body witness, use
+  `Func.execWitness_linearDispatchWith_fallback`; its
+  `linearDispatchFallbackCost` budget pays every `DUP`, `PUSH`, `EQ`, branch,
+  and internal-call charge and removes the selector without requiring an
+  already-built dispatcher walk.  When a family builds its own dispatcher
   walk it can also consume the frame steps directly:
   `dispatchFrame_of_burnBy`, `dispatchFrame_of_pushBurn`,
   `dispatchFrame_of_popBurnBy`, and `dispatchFrame_of_diffBurn` carry a
@@ -118,6 +123,10 @@ registry has identified the likely vocabulary.
 Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
 
 - `Func.ExecWitness` / `Prog.ExecWitness` package raw call outcomes.
+- `Prog.ExecWitness.intro` pays the compiled program's leading `JUMPDEST` for
+  a caller-named success or fatal-error witness; use
+  `Func.ExecWitness.prepend_fsig` and `fsigCost` to construct the shared
+  four-instruction selector prefix before the residual function.
 - `Func.ExecSat` / `Prog.ExecSat` package predicates over outcomes.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
 - `Func.exec_of_runCompiledTo` and its program bridge recover an `Exec`

@@ -610,4 +610,208 @@ theorem dispatchFallbackWitness_of_runCompiledTo
     dispatch_miss_nonempty entries entry hnonempty hmiss hwalk hstack
   exact ⟨fallbackPre, hfallback, hfallbackStack, hframe⟩
 
+/-! ## Constructing the fallback route
+
+The witnesses above invert an already-existing dispatcher walk.  Prefix
+proofs need the dual direction: given the fallback body's witness, construct
+the selector-miss route to it.  The cost below is exact for a nonempty table;
+the empty case records the internal-call cost for completeness, although the
+constructor deliberately requires a nonempty table because only that route
+consumes the selector. -/
+
+/-- Exact gas burned by an all-miss traversal of `linearDispatchWith`.
+
+For every non-final row the traversal executes `DUP1`, `PUSH`, `EQ`, and the
+zero arm of the structured branch.  The final row omits `DUP1`, consumes the
+selector in `EQ`, takes the zero arm, and pays the fallback internal call. -/
+def linearDispatchFallbackCost : List (B256 × Func) → Nat
+  | [] => gVerylow + gMid + gJumpdest
+  | [(word, _)] =>
+      pushCost word.toBytes.sig + gVerylow +
+        (gVerylow + gHigh) + (gVerylow + gMid + gJumpdest)
+  | (word, _) :: rest =>
+      gVerylow + pushCost word.toBytes.sig + gVerylow +
+        (gVerylow + gHigh) + linearDispatchFallbackCost rest
+
+/-- Construct an arbitrary-outcome witness for the all-miss route through a
+nonempty linear dispatcher.  The caller supplies only the selector misses,
+the fallback table lookup, and the fallback body's witness at the exact
+post-dispatch state; every dispatcher opcode and its exact gas charge are
+derived here. -/
+theorem Func.execWitness_linearDispatchWith_fallback
+    {fs : List Func} {sevm : Sevm} {entry : Devm}
+    {fallback : Nat} {entries : List (B256 × Func)}
+    {selector : B256} {tail : Stack} {fallbackBody : Func}
+    {ex : Execution} {G : Nat}
+    (hnonempty : entries ≠ [])
+    (hmiss : ∀ candidate ∈ entries, candidate.1 ≠ selector)
+    (hstack : entry.stack = selector :: tail)
+    (hgas : entry.gasLeft = G + linearDispatchFallbackCost entries)
+    (hroom : tail.length < 1022)
+    (hget : fs[fallback]? = some fallbackBody)
+    (hbody : Func.ExecWitness fs sevm
+      (entry.setMach ⟨tail, entry.memory, G⟩) fallbackBody ex) :
+    Func.ExecWitness fs sevm entry
+      (Blanc.linearDispatchWith fallback entries) ex := by
+  induction entries generalizing entry G with
+  | nil => exact (hnonempty rfl).elim
+  | cons head rest ih =>
+      rcases head with ⟨word, body⟩
+      have hne : word ≠ selector :=
+        hmiss (word, body) (by simp)
+      cases rest with
+      | nil =>
+          let callCost := gVerylow + gMid + gJumpdest
+          let branchCost := gVerylow + gHigh
+          let pushGas := pushCost word.toBytes.sig
+          let afterPush := entry.setMach
+            ⟨word :: selector :: tail, entry.memory,
+              G + callCost + branchCost + gVerylow⟩
+          let afterEq := entry.setMach
+            ⟨(0 : B256) :: tail, entry.memory,
+              G + callCost + branchCost⟩
+          let afterBranch := entry.setMach
+            ⟨tail, entry.memory, G + callCost⟩
+          have hpush : Ninst.RunCompiled sevm entry
+              (Ninst.pushB256 word) afterPush := by
+            simpa only [afterPush, hstack] using
+              (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := entry)
+                (w := word) (c := pushGas)
+                (G := G + callCost + branchCost + gVerylow)
+                (by rfl) (by
+                  simp only [linearDispatchFallbackCost] at hgas
+                  dsimp only [pushGas, branchCost, callCost]
+                  omega)
+                (by rw [hstack]; simp only [List.length_cons]; omega))
+          have heq : Ninst.RunCompiled sevm afterPush (.reg .eq)
+              afterEq := by
+            simpa only [afterPush, afterEq, Devm.setMach_setMach,
+              Devm.stack_setMach, Devm.memory_setMach,
+              Devm.gasLeft_setMach] using
+              (Ninst.runCompiled_binary (sevm := sevm) (devm := afterPush)
+                (r := .eq) (f := (fun x y => x =? y))
+                (cost := gVerylow) (x := word) (y := selector)
+                (v := (0 : B256)) (s := tail)
+                (G := G + callCost + branchCost)
+                (by rintro ⟨⟩) rfl rfl
+                (by simp [B256.eqCheck, hne]) (by
+                  dsimp only [afterPush, branchCost]
+                  simp only [Devm.gasLeft_setMach]) (by omega))
+          have hfallback : Func.ExecWitness fs sevm afterBranch
+              (.call fallback) ex := by
+            refine Func.execWitness_call' (G := G) hget ?_ ?_ ?_
+            · dsimp only [afterBranch]
+              simp only [Devm.stack_setMach]
+              omega
+            · dsimp only [afterBranch, callCost]
+              simp only [Devm.gasLeft_setMach]
+            · simpa only [afterBranch, Devm.setMach_setMach,
+                Devm.stack_setMach, Devm.memory_setMach,
+                Devm.gasLeft_setMach] using hbody
+          have hbranch : Func.ExecWitness fs sevm afterEq
+              (.branch (.call fallback) body) ex := by
+            refine Func.execWitness_branch_zero ?_ ?_ ?_ hfallback
+            · dsimp only [afterEq]
+              simp only [Devm.stack_setMach]
+            · dsimp only [afterEq]
+              simp only [Devm.stack_setMach, List.length_cons]
+              omega
+            · dsimp only [afterEq, afterBranch, branchCost]
+              simp only [Devm.gasLeft_setMach]
+          change Func.ExecWitness fs sevm entry
+            (Ninst.pushB256 word ::: Ninst.eq :::
+              .branch (.call fallback) body) ex
+          exact Func.ExecWitness.next hpush
+            (Func.ExecWitness.next heq hbranch)
+      | cons next rest' =>
+          let remaining := (next :: rest')
+          let branchCost := gVerylow + gHigh
+          let pushGas := pushCost word.toBytes.sig
+          let restCost := linearDispatchFallbackCost remaining
+          let afterDup := entry.setMach
+            ⟨selector :: selector :: tail, entry.memory,
+              G + restCost + branchCost + gVerylow + pushGas⟩
+          let afterPush := entry.setMach
+            ⟨word :: selector :: selector :: tail, entry.memory,
+              G + restCost + branchCost + gVerylow⟩
+          let afterEq := entry.setMach
+            ⟨(0 : B256) :: selector :: tail, entry.memory,
+              G + restCost + branchCost⟩
+          let afterBranch := entry.setMach
+            ⟨selector :: tail, entry.memory, G + restCost⟩
+          have hdup : Ninst.RunCompiled sevm entry (.reg (.dup 0))
+              afterDup := by
+            simpa only [afterDup, hstack] using
+              (Ninst.runCompiled_dup (sevm := sevm) (devm := entry)
+                (n := 0) (w := selector)
+                (G := G + restCost + branchCost + gVerylow + pushGas)
+                (by rw [hstack]; rfl) (by
+                  simp only [linearDispatchFallbackCost] at hgas
+                  dsimp only [restCost, remaining, branchCost, pushGas]
+                  omega)
+                (by rw [hstack]; simp only [List.length_cons]; omega))
+          have hpush : Ninst.RunCompiled sevm afterDup
+              (Ninst.pushB256 word) afterPush := by
+            simpa only [afterDup, afterPush, Devm.setMach_setMach,
+              Devm.stack_setMach, Devm.memory_setMach,
+              Devm.gasLeft_setMach] using
+              (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := afterDup)
+                (w := word) (c := pushGas)
+                (G := G + restCost + branchCost + gVerylow)
+                (by rfl) (by
+                  dsimp only [afterDup]
+                  simp only [Devm.gasLeft_setMach])
+                (by
+                  dsimp only [afterDup]
+                  simp only [Devm.stack_setMach, List.length_cons]
+                  omega))
+          have heq : Ninst.RunCompiled sevm afterPush (.reg .eq)
+              afterEq := by
+            simpa only [afterPush, afterEq, Devm.setMach_setMach,
+              Devm.stack_setMach, Devm.memory_setMach,
+              Devm.gasLeft_setMach] using
+              (Ninst.runCompiled_binary (sevm := sevm) (devm := afterPush)
+                (r := .eq) (f := (fun x y => x =? y))
+                (cost := gVerylow) (x := word) (y := selector)
+                (v := (0 : B256)) (s := selector :: tail)
+                (G := G + restCost + branchCost)
+                (by rintro ⟨⟩) rfl rfl
+                (by simp [B256.eqCheck, hne]) (by
+                  dsimp only [afterPush, branchCost]
+                  simp only [Devm.gasLeft_setMach]) (by
+                    simp only [List.length_cons]
+                    omega))
+          have hrest : Func.ExecWitness fs sevm afterBranch
+              (Blanc.linearDispatchWith fallback remaining) ex := by
+            apply ih (entry := afterBranch) (G := G)
+            · exact List.cons_ne_nil _ _
+            · intro candidate hcandidate
+              exact hmiss candidate
+                (List.mem_cons_of_mem (word, body) hcandidate)
+            · dsimp only [afterBranch]
+              simp only [Devm.stack_setMach]
+            · dsimp only [afterBranch, restCost, remaining]
+              simp only [Devm.gasLeft_setMach]
+            · simpa only [afterBranch, Devm.setMach_setMach,
+                Devm.stack_setMach, Devm.memory_setMach,
+                Devm.gasLeft_setMach] using hbody
+          have hbranch : Func.ExecWitness fs sevm afterEq
+              (.branch (Blanc.linearDispatchWith fallback remaining)
+                (Ninst.pop ::: body)) ex := by
+            refine Func.execWitness_branch_zero ?_ ?_ ?_ hrest
+            · dsimp only [afterEq]
+              simp only [Devm.stack_setMach]
+            · dsimp only [afterEq]
+              simp only [Devm.stack_setMach, List.length_cons]
+              omega
+            · dsimp only [afterEq, afterBranch, branchCost]
+              simp only [Devm.gasLeft_setMach]
+          change Func.ExecWitness fs sevm entry
+            (Ninst.dup 0 ::: Ninst.pushB256 word ::: Ninst.eq :::
+              .branch (Blanc.linearDispatchWith fallback remaining)
+                (Ninst.pop ::: body)) ex
+          exact Func.ExecWitness.next hdup
+            (Func.ExecWitness.next hpush
+              (Func.ExecWitness.next heq hbranch))
+
 end Blanc

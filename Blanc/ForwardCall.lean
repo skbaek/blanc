@@ -2497,6 +2497,20 @@ lemma Prog.execSat_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
   refine ⟨ex, ?_, hp⟩
   cases ex <;> exact ⟨_, Devm.burnBy_setMach_gas h_gas, hw⟩
 
+/-- The program entry preserves a caller-named outcome witness.  This is the
+fixed-outcome counterpart of `Prog.execSat_intro`: it pays the leading
+`JUMPDEST`, then hands the exact same success-or-error witness to the main
+function.  Prefix routes use this form when their residual call already fixes
+the eventual outcome. -/
+lemma Prog.ExecWitness.intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
+    {ex : Execution} {G : Nat}
+    (h_gas : devm.gasLeft = G + gJumpdest)
+    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G⟩)
+    (h_main : Func.ExecWitness (p.main :: p.aux) sevm mid p.main ex) :
+    Prog.ExecWitness sevm devm p ex := by
+  subst h_mid
+  cases ex <;> exact ⟨_, Devm.burnBy_setMach_gas h_gas, h_main⟩
+
 /-- A segment of ordinary instructions, threaded through the existential: the
 transformer premise is a fixed-outcome witness implication, which is exactly
 the shape the registered `ExecWitness` relation lets `func_run` prove directly:
@@ -2518,6 +2532,92 @@ lemma Func.ExecWitness.next {fs : List Func} {sevm : Sevm} {devm : Devm}
   cases ex with
   | ok post => exact Func.RunCompiled.next h_n h_f
   | error err => exact Func.execTo_next h_n h_f
+
+/-- Exact compiler-sensitive gas charge of the shared four-instruction
+selector extractor `fsig`. -/
+def fsigCost : Nat :=
+  pushCost (0 : B256).toBytes.sig + gVerylow +
+    pushCost (224 : B256).toBytes.sig + gVerylow
+
+/-- Prepend the shared `fsig` selector extractor to an arbitrary-outcome
+witness.  The resulting stack word is derived from the message data rather
+than supplied as a premise, and every instruction's exact gas charge is paid
+here. -/
+theorem Func.ExecWitness.prepend_fsig
+    {fs : List Func} {sevm : Sevm} {entry : Devm}
+    {tail : Stack} {body : Func} {ex : Execution} {G : Nat}
+    (hstack : entry.stack = tail)
+    (hgas : entry.gasLeft = G + fsigCost)
+    (hroom : tail.length < 1023)
+    (hbody : Func.ExecWitness fs sevm
+      (entry.setMach ⟨Sevm.selector sevm :: tail, entry.memory, G⟩)
+      body ex) :
+    Func.ExecWitness fs sevm entry (fsig +++ body) ex := by
+  let push224Cost := pushCost (224 : B256).toBytes.sig
+  let afterPush0 := entry.setMach
+    ⟨(0 : B256) :: tail, entry.memory,
+      G + gVerylow + push224Cost + gVerylow⟩
+  let afterLoad := entry.setMach
+    ⟨Sevm.dataWord sevm 0 :: tail, entry.memory,
+      G + gVerylow + push224Cost⟩
+  let afterPush224 := entry.setMach
+    ⟨(224 : B256) :: Sevm.dataWord sevm 0 :: tail, entry.memory,
+      G + gVerylow⟩
+  let afterShr := entry.setMach
+    ⟨Sevm.selector sevm :: tail, entry.memory, G⟩
+  have hpush0 : Ninst.RunCompiled sevm entry (Ninst.pushB256 0)
+      afterPush0 := by
+    simpa only [afterPush0, hstack] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := entry)
+        (w := 0) (c := pushCost (0 : B256).toBytes.sig)
+        (G := G + gVerylow + push224Cost + gVerylow)
+        rfl (by
+          dsimp only [fsigCost, push224Cost] at hgas ⊢
+          omega)
+        (by rw [hstack]; omega))
+  have hload : Ninst.RunCompiled sevm afterPush0 Ninst.calldataload
+      afterLoad := by
+    simpa only [afterPush0, afterLoad, Devm.setMach_setMach,
+      Devm.stack_setMach, Devm.memory_setMach,
+      Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_calldataload (sevm := sevm) (devm := afterPush0)
+        (x := 0) (v := Sevm.dataWord sevm 0) (s := tail)
+        (G := G + gVerylow + push224Cost) rfl rfl
+        (by dsimp only [afterPush0]; simp only [Devm.gasLeft_setMach])
+        (by omega))
+  have hpush224 : Ninst.RunCompiled sevm afterLoad
+      (Ninst.pushB256 224) afterPush224 := by
+    simpa only [afterLoad, afterPush224, Devm.setMach_setMach,
+      Devm.stack_setMach, Devm.memory_setMach,
+      Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := afterLoad)
+        (w := 224) (c := push224Cost) (G := G + gVerylow)
+        rfl (by dsimp only [afterLoad]; simp only [Devm.gasLeft_setMach])
+        (by
+          dsimp only [afterLoad]
+          simp only [Devm.stack_setMach, List.length_cons]
+          omega))
+  have hshr : Ninst.RunCompiled sevm afterPush224 Ninst.shr afterShr := by
+    simpa only [afterPush224, afterShr, Devm.setMach_setMach,
+      Devm.stack_setMach, Devm.memory_setMach,
+      Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_binary (sevm := sevm) (devm := afterPush224)
+        (r := .shr) (f := (fun x y => y >>> x.toNat))
+        (cost := gVerylow) (x := (224 : B256))
+        (y := Sevm.dataWord sevm 0) (v := Sevm.selector sevm)
+        (s := tail) (G := G) (by rintro ⟨⟩) rfl rfl
+        (by rfl) (by
+          dsimp only [afterPush224]
+          simp only [Devm.gasLeft_setMach]) (by omega))
+  have htail : Func.ExecWitness fs sevm afterShr body ex := by
+    simpa only [afterShr] using hbody
+  change Func.ExecWitness fs sevm entry
+    (Ninst.pushB256 0 ::: Ninst.calldataload ::: Ninst.pushB256 224 :::
+      Ninst.shr ::: body) ex
+  exact Func.ExecWitness.next hpush0
+    (Func.ExecWitness.next hload
+      (Func.ExecWitness.next hpush224
+        (Func.ExecWitness.next hshr htail)))
 
 /-- The zero branch preserves the outcome-aware witness.  These structural
 rules register `ExecWitness` with the shared `func_run` walk without splitting

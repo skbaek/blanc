@@ -1,4 +1,5 @@
 import Blanc.ProxyPairOssifiableProgram
+import Blanc.LinearDispatchCorrectness
 import Blanc.DelegatecallEnvelope
 import Blanc.ExecutionMessageEffects
 import Blanc.MessageExecution
@@ -718,6 +719,334 @@ theorem forwarding_atCall_execSat
             (Func.RunCompiledTo.next callRun tailRun)
           exact failed_tail_relation outer context child certificate status gas
 
+/-! ## Constructive runtime prefix -/
+
+/-- The word pushed by `CALLDATASIZE` in the forwarding fallback. -/
+def ossifiableFallbackSizeWord (sevm : Sevm) : B256 :=
+  Nat.toB256 sevm.data.length
+
+/-- Memory after the fallback copies all calldata to offset zero. -/
+def ossifiableFallbackCopiedMemory (sevm : Sevm) (entry : Devm) : Mem :=
+  entry.memory.write 0 sevm.data
+
+/-- Exact dynamic charge of the fallback's complete calldata copy. -/
+def ossifiableFallbackCopyCost (sevm : Sevm) (entry : Devm) : Nat :=
+  gVerylow + gasCopy * ceilDiv sevm.data.length 32 +
+    entry.extCost [⟨0, sevm.data.length⟩]
+
+/-- Exact warm/cold charge of the ERC-1967 implementation-slot read. -/
+def ossifiableFallbackSloadCost (sevm : Sevm) (entry : Devm) : Nat :=
+  if (⟨sevm.currentTarget, implementationSlotLit⟩ : Adr × B256) ∈
+      entry.accessedStorageKeys
+    then gasWarmAccess
+    else gasColdSload
+
+/-- Exact charge before the fallback reaches its `DELEGATECALL`.  Immediate
+push charges remain compiler-sensitive; the calldata-copy and storage-read
+charges retain their genuine memory and warmth dependence. -/
+def ossifiableFallbackPrefixCost (sevm : Sevm) (entry : Devm) : Nat :=
+  gBase +
+  pushCost (0 : B256).toBytes.sig +
+  pushCost (0 : B256).toBytes.sig +
+  ossifiableFallbackCopyCost sevm entry +
+  pushCost (0 : B256).toBytes.sig +
+  pushCost (0 : B256).toBytes.sig +
+  gBase +
+  pushCost (0 : B256).toBytes.sig +
+  pushCost implementationSlotLit.toBytes.sig +
+  ossifiableFallbackSloadCost sevm entry +
+  gBase
+
+/-- Primitive resources for the actual fallback prefix.  It contains neither
+an execution witness nor a statement about the child or wrapper result. -/
+structure OssifiableFallbackPrefixBudget (sevm : Sevm) (entry : Devm) where
+  callGas : Nat
+  dataLength : sevm.data.length < 2 ^ 256
+  entryStack : entry.stack = []
+  gasBudget : entry.gasLeft =
+    callGas + ossifiableFallbackPrefixCost sevm entry
+
+/-- State immediately before the implementation-slot `SLOAD`. -/
+def OssifiableFallbackPrefixBudget.beforeSload
+    {sevm : Sevm} {entry : Devm}
+    (budget : OssifiableFallbackPrefixBudget sevm entry) : Devm :=
+  entry.setMach
+    ⟨implementationSlotLit :: 0 :: ossifiableFallbackSizeWord sevm ::
+        0 :: 0 :: [],
+      ossifiableFallbackCopiedMemory sevm entry,
+      budget.callGas + gBase + ossifiableFallbackSloadCost sevm entry⟩
+
+/-- Warmth-sensitive base state produced by the implementation-slot read. -/
+def OssifiableFallbackPrefixBudget.afterSloadBase
+    {sevm : Sevm} {entry : Devm}
+    (budget : OssifiableFallbackPrefixBudget sevm entry) : Devm :=
+  if (⟨sevm.currentTarget, implementationSlotLit⟩ : Adr × B256) ∈
+      budget.beforeSload.accessedStorageKeys
+    then budget.beforeSload
+    else addAccessedStorageKey budget.beforeSload sevm.currentTarget
+      implementationSlotLit
+
+/-- The exact `DELEGATECALL` pre-state derived from the prefix resources. -/
+def OssifiableFallbackPrefixBudget.callPre
+    {sevm : Sevm} {entry : Devm}
+    (budget : OssifiableFallbackPrefixBudget sevm entry) : Devm :=
+  budget.afterSloadBase.setMach
+    ⟨budget.callGas.toB256 ::
+        entry.getStorVal sevm.currentTarget implementationSlotLit ::
+        0 :: ossifiableFallbackSizeWord sevm :: 0 :: 0 :: [],
+      ossifiableFallbackCopiedMemory sevm entry,
+      budget.callGas⟩
+
+/-- Construct the complete fallback prefix from primitive resources and hand
+the caller's arbitrary-outcome witness to the exact `DELEGATECALL` state. -/
+theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
+    {fs : List Func} {sevm : Sevm} {entry : Devm}
+    (budget : OssifiableFallbackPrefixBudget sevm entry)
+    {ex : Execution}
+    (tail : Func.ExecWitness fs sevm budget.callPre
+      (delcall ::: proxyReturnTail) ex) :
+    Func.ExecWitness fs sevm entry proxyFallback ex := by
+  let sizeWord := ossifiableFallbackSizeWord sevm
+  let copied := ossifiableFallbackCopiedMemory sevm entry
+  let copyCost := ossifiableFallbackCopyCost sevm entry
+  let sloadCost := ossifiableFallbackSloadCost sevm entry
+  let zeroCost := pushCost (0 : B256).toBytes.sig
+  let slotPushCost := pushCost implementationSlotLit.toBytes.sig
+  let G := budget.callGas
+  let r10 := G + gBase
+  let r9 := r10 + sloadCost
+  let r8 := r9 + slotPushCost
+  let r7 := r8 + zeroCost
+  let r6 := r7 + gBase
+  let r5 := r6 + zeroCost
+  let r4 := r5 + zeroCost
+  let r3 := r4 + copyCost
+  let r2 := r3 + zeroCost
+  let r1 := r2 + zeroCost
+  have sizeRoundtrip : sizeWord.toNat = sevm.data.length := by
+    dsimp only [sizeWord, ossifiableFallbackSizeWord]
+    exact B256.toNat_toB256_of_lt budget.dataLength
+  have copiedSlice : sevm.data.sliceD 0 sizeWord.toNat 0 = sevm.data := by
+    rw [sizeRoundtrip]
+    exact Bytes.sliceD_zero_length rfl
+  let s1 := entry.setMach
+    ⟨sizeWord :: [], entry.memory, r1⟩
+  let s2 := entry.setMach
+    ⟨(0 : B256) :: sizeWord :: [], entry.memory, r2⟩
+  let s3 := entry.setMach
+    ⟨(0 : B256) :: 0 :: sizeWord :: [], entry.memory, r3⟩
+  let s4 := entry.setMach
+    ⟨[], copied, r4⟩
+  let s5 := entry.setMach
+    ⟨[(0 : B256)], copied, r5⟩
+  let s6 := entry.setMach
+    ⟨[(0 : B256), 0], copied, r6⟩
+  let s7 := entry.setMach
+    ⟨[sizeWord, 0, 0], copied, r7⟩
+  let s8 := entry.setMach
+    ⟨[(0 : B256), sizeWord, 0, 0], copied, r8⟩
+  have h1 : Ninst.RunCompiled sevm entry calldatasize s1 := by
+    simpa only [s1, budget.entryStack] using
+      (Ninst.runCompiled_pushItem (sevm := sevm) (devm := entry)
+        (r := .calldatasize) (x := sizeWord) (cost := gBase)
+        (G := r1)
+        (by rintro ⟨⟩) rfl (by
+          have hbudget := budget.gasBudget
+          dsimp only [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10,
+            G, zeroCost, copyCost, slotPushCost, sloadCost,
+            ossifiableFallbackPrefixCost] at hbudget ⊢
+          omega) (by rw [budget.entryStack]; decide))
+  have h2 : Ninst.RunCompiled sevm s1 (pushB256 0) s2 := by
+    simpa only [s1, s2, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s1)
+        (w := 0) (c := zeroCost)
+        (G := r2)
+        rfl (by
+          dsimp only [s1, r1]
+          simp only [Devm.gasLeft_setMach])
+        (by
+          dsimp only [s1]
+          simp only [Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  have h3 : Ninst.RunCompiled sevm s2 (pushB256 0) s3 := by
+    simpa only [s2, s3, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s2)
+        (w := 0) (c := zeroCost)
+        (G := r3)
+        rfl (by
+          dsimp only [s2, r2]
+          simp only [Devm.gasLeft_setMach])
+        (by
+          dsimp only [s2]
+          simp only [Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  have h4 : Ninst.RunCompiled sevm s3 calldatacopy s4 := by
+    simpa only [s3, s4, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_calldatacopy_of (sevm := sevm) (devm := s3)
+        (di := 0) (si := 0) (sz := sizeWord) (s := [])
+        (c := copyCost)
+        (G := r4) (M := copied) rfl (by
+            dsimp only [copyCost, ossifiableFallbackCopyCost]
+            simp only [s3, Devm.extCost, Devm.memory_setMach,
+              sizeRoundtrip, B256.toNat_zero]) (by
+            dsimp only [s3, copied, ossifiableFallbackCopiedMemory]
+            simp only [Devm.memory_setMach, B256.toNat_zero, copiedSlice])
+          (by
+            dsimp only [s3, r3]
+            simp only [Devm.gasLeft_setMach]))
+  have h5 : Ninst.RunCompiled sevm s4 (pushB256 0) s5 := by
+    simpa only [s4, s5, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s4)
+        (w := 0) (c := zeroCost)
+        (G := r5) rfl (by
+          dsimp only [s4, r4]
+          simp only [Devm.gasLeft_setMach])
+        (by
+          dsimp only [s4]
+          simp only [Devm.stack_setMach, List.length_nil]
+          omega))
+  have h6 : Ninst.RunCompiled sevm s5 (pushB256 0) s6 := by
+    simpa only [s5, s6, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s5)
+        (w := 0) (c := zeroCost)
+        (G := r6)
+        rfl (by
+          dsimp only [s5, r5]
+          simp only [Devm.gasLeft_setMach])
+        (by
+          dsimp only [s5]
+          simp only [Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  have h7 : Ninst.RunCompiled sevm s6 calldatasize s7 := by
+    simpa only [s6, s7, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s6)
+        (r := .calldatasize) (x := sizeWord) (cost := gBase)
+        (G := r7)
+        (by rintro ⟨⟩) rfl
+        (by
+          dsimp only [s6, r6]
+          simp only [Devm.gasLeft_setMach]) (by
+          dsimp only [s6]
+          simp only [Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  have h8 : Ninst.RunCompiled sevm s7 (pushB256 0) s8 := by
+    simpa only [s7, s8, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s7)
+        (w := 0) (c := zeroCost)
+        (G := r8) rfl
+        (by
+          dsimp only [s7, r7]
+          simp only [Devm.gasLeft_setMach]) (by
+          dsimp only [s7]
+          simp only [Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  have h9 : Ninst.RunCompiled sevm s8
+      (pushB256 implementationSlotLit) budget.beforeSload := by
+    simpa only [s8, OssifiableFallbackPrefixBudget.beforeSload,
+      sizeWord, copied, G, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s8)
+        (w := implementationSlotLit) (c := slotPushCost)
+        (G := r9) rfl
+        (by
+          dsimp only [s8, r8]
+          simp only [Devm.gasLeft_setMach]) (by
+          dsimp only [s8]
+          simp only [Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  let afterSload := budget.afterSloadBase.setMach
+    ⟨entry.getStorVal sevm.currentTarget implementationSlotLit :: 0 ::
+        sizeWord :: 0 :: 0 :: [], budget.beforeSload.memory, r10⟩
+  have h10 : Ninst.RunCompiled sevm budget.beforeSload sload
+      afterSload := by
+    have hstack : budget.beforeSload.stack =
+        implementationSlotLit :: 0 :: sizeWord :: 0 :: 0 :: [] := by
+      rfl
+    have hbase :
+        (if (sevm.currentTarget, implementationSlotLit) ∈
+            budget.beforeSload.accessedStorageKeys
+          then budget.beforeSload
+          else addAccessedStorageKey budget.beforeSload sevm.currentTarget
+            implementationSlotLit) = budget.afterSloadBase := by
+      rfl
+    have hkeys : budget.beforeSload.accessedStorageKeys =
+        entry.accessedStorageKeys := by
+      rfl
+    have hcost :
+        (if (sevm.currentTarget, implementationSlotLit) ∈
+            budget.beforeSload.accessedStorageKeys
+          then gasWarmAccess else gasColdSload) = sloadCost := by
+      rw [hkeys]
+      rfl
+    have hvalue : budget.beforeSload.getStorVal sevm.currentTarget
+        implementationSlotLit =
+        entry.getStorVal sevm.currentTarget implementationSlotLit := by
+      rfl
+    have hgas : budget.beforeSload.gasLeft = r10 + sloadCost := by
+      rfl
+    simpa only [afterSload] using
+      (Ninst.runCompiled_sload_of (sevm := sevm)
+        (devm := budget.beforeSload) (base := budget.afterSloadBase)
+        (k := implementationSlotLit)
+        (v := entry.getStorVal sevm.currentTarget implementationSlotLit)
+        (s := (0 : B256) :: sizeWord :: 0 :: 0 :: [])
+        (c := sloadCost) (G := r10) hstack hbase hcost hvalue hgas (by
+          simp only [List.length_cons, List.length_nil]
+          omega))
+  have h11 : Ninst.RunCompiled sevm afterSload gas budget.callPre := by
+    have hmemory : budget.beforeSload.memory = copied := by
+      rfl
+    simpa only [afterSload, OssifiableFallbackPrefixBudget.callPre,
+      sizeWord, copied, G, Devm.setMach_setMach, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach, hmemory] using
+      (Ninst.runCompiled_gas (sevm := sevm) (devm := afterSload)
+        (G := G) (by
+          dsimp only [afterSload, r10]
+          simp only [Devm.gasLeft_setMach]) (by
+          dsimp only [afterSload]
+          simp only [Devm.stack_setMach, List.length_cons,
+            List.length_nil]
+          omega))
+  change Func.ExecWitness fs sevm entry
+    (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
+      pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
+      pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+      proxyReturnTail) ex
+  exact Func.ExecWitness.next h1
+    (Func.ExecWitness.next h2
+      (Func.ExecWitness.next h3
+        (Func.ExecWitness.next h4
+          (Func.ExecWitness.next h5
+            (Func.ExecWitness.next h6
+              (Func.ExecWitness.next h7
+                (Func.ExecWitness.next h8
+                  (Func.ExecWitness.next h9
+                    (Func.ExecWitness.next h10
+                      (Func.ExecWitness.next h11 tail))))))))))
+
+/-- A primitive prefix certificate cannot claim less gas than the exact
+calldata-copy, storage-read, and operand-construction charge. -/
+theorem OssifiableFallbackPrefixBudget.rejects_insufficient_prefix
+    {sevm : Sevm} {entry : Devm}
+    (budget : OssifiableFallbackPrefixBudget sevm entry)
+    (insufficient : entry.gasLeft <
+      ossifiableFallbackPrefixCost sevm entry) : False := by
+  rw [budget.gasBudget] at insufficient
+  omega
+
 /-! ## Selector-miss witnesses -/
 
 /-- A census-level non-membership fact has exactly the orientation required by
@@ -797,13 +1126,20 @@ theorem runtimeSelectors_miss_of_shortData (sevm : Sevm)
         · simp [data0, data1, data2, data3] at short
           omega
 
+/-- Exact state at which the selector-miss dispatcher enters `proxyFallback`. -/
+def ossifiableRuntimeFallbackEntry
+    (outer : Msg) (afterTransfer : Benv) (gas : Nat) : Devm :=
+  (initDevm (outer.withBenv afterTransfer)).setMach
+    ⟨[], (initDevm (outer.withBenv afterTransfer)).memory, gas⟩
+
 /-- Exact outer-runtime route to the named delegatecall descriptor.  The
-`prefix` transformer is execution evidence, not an assumed wrapper result. -/
+runtime prefix is represented only by primitive gas/length/state resources;
+the actual compiled execution witness is constructed below. -/
 structure OssifiableForwardingRoute
     (outer : Msg) (afterTransfer : Benv)
     (callPre : Devm)
     (d : DelegatecallSpawnDescriptor
-      (initSevm (outer.withBenv afterTransfer)) callPre) : Prop where
+      (initSevm (outer.withBenv afterTransfer)) callPre) where
   transfer : outer.benvAfterTransfer = .ok afterTransfer
   target : outer.target = some outer.currentTarget
   codeAddress : outer.codeAddress = some outer.currentTarget
@@ -833,15 +1169,94 @@ structure OssifiableForwardingRoute
     d.parent.state outer.benv.state
   parentTransient : MessageTransientEqualAt outer.currentTarget
     d.parent.transientStorage outer.tenv.transientStorage
+  fallbackGas : Nat
+  entryGas : (initDevm (outer.withBenv afterTransfer)).gasLeft =
+    fallbackGas +
+      linearDispatchFallbackCost runtimeBaselineEntries + fsigCost +
+      gJumpdest
+  prefixBudget : OssifiableFallbackPrefixBudget
+    (initSevm (outer.withBenv afterTransfer))
+    (ossifiableRuntimeFallbackEntry outer afterTransfer fallbackGas)
+  callPreEq : prefixBudget.callPre = callPre
   compileLink : some
     (initSevm (outer.withBenv afterTransfer)).code.toList =
       Prog.compile runtimeBaseline
-  compiledPrefix : ∀ raw,
-    Func.ExecWitness ossifiableRuntimeFunctions
-        (initSevm (outer.withBenv afterTransfer)) callPre
-        (delcall ::: proxyReturnTail) raw →
-      Prog.ExecWitness (initSevm (outer.withBenv afterTransfer))
-        (initDevm (outer.withBenv afterTransfer)) runtimeBaseline raw
+
+/-- Construct the program-entry-to-`DELEGATECALL` witness from the shared
+`JUMPDEST`, `fsig`, selector-miss, internal-call, calldata-copy, `SLOAD`, and
+`GAS` rules.  No execution witness is a field of the route. -/
+theorem OssifiableForwardingRoute.compiledPrefix
+    {outer : Msg} {afterTransfer : Benv} {callPre : Devm}
+    {d : DelegatecallSpawnDescriptor
+      (initSevm (outer.withBenv afterTransfer)) callPre}
+    (route : OssifiableForwardingRoute outer afterTransfer callPre d)
+    {raw : Execution}
+    (rawWitness : Func.ExecWitness ossifiableRuntimeFunctions
+      (initSevm (outer.withBenv afterTransfer)) callPre
+      (delcall ::: proxyReturnTail) raw) :
+    Prog.ExecWitness (initSevm (outer.withBenv afterTransfer))
+      (initDevm (outer.withBenv afterTransfer)) runtimeBaseline raw := by
+  let sevm := initSevm (outer.withBenv afterTransfer)
+  let initial := initDevm (outer.withBenv afterTransfer)
+  let dispatchCost := linearDispatchFallbackCost runtimeBaselineEntries
+  let afterJump := initial.setMach
+    ⟨[], initial.memory,
+      route.fallbackGas + dispatchCost + fsigCost⟩
+  let afterFsig := initial.setMach
+    ⟨Sevm.selector sevm :: [], initial.memory,
+      route.fallbackGas + dispatchCost⟩
+  have htail : Func.ExecWitness ossifiableRuntimeFunctions sevm
+      route.prefixBudget.callPre (delcall ::: proxyReturnTail) raw := by
+    simpa only [sevm, route.callPreEq] using rawWitness
+  have hfallback : Func.ExecWitness ossifiableRuntimeFunctions sevm
+      (ossifiableRuntimeFallbackEntry outer afterTransfer route.fallbackGas)
+      proxyFallback raw :=
+    route.prefixBudget.execWitness_proxyFallback htail
+  have hmiss : ∀ candidate ∈ runtimeBaselineEntries,
+      candidate.1 ≠ Sevm.selector sevm := by
+    intro candidate member
+    apply route.selectorMiss candidate.1
+    rw [← runtimeBaselineEntries_selectors]
+    exact List.mem_map_of_mem member
+  have hdispatch : Func.ExecWitness ossifiableRuntimeFunctions sevm afterFsig
+      (linearDispatchWith fallbackSlot runtimeBaselineEntries) raw := by
+    apply Func.execWitness_linearDispatchWith_fallback
+      (G := route.fallbackGas) (tail := [])
+      (fallbackBody := proxyFallback)
+    · decide
+    · exact hmiss
+    · dsimp only [afterFsig]
+      simp only [Devm.stack_setMach]
+    · dsimp only [afterFsig, dispatchCost]
+      simp only [Devm.gasLeft_setMach]
+    · decide
+    · rfl
+    · simpa only [afterFsig, ossifiableRuntimeFallbackEntry, initial,
+        Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+        Devm.gasLeft_setMach] using hfallback
+  have hmain : Func.ExecWitness ossifiableRuntimeFunctions sevm afterJump
+      runtimeBaselineMain raw := by
+    have h := Func.ExecWitness.prepend_fsig
+      (fs := ossifiableRuntimeFunctions) (sevm := sevm)
+      (entry := afterJump) (tail := [])
+      (body := linearDispatchWith fallbackSlot runtimeBaselineEntries)
+      (G := route.fallbackGas + dispatchCost)
+      (by dsimp only [afterJump]; simp only [Devm.stack_setMach])
+      (by dsimp only [afterJump]; simp only [Devm.gasLeft_setMach])
+      (by decide)
+      (by simpa only [afterJump, afterFsig, Devm.setMach_setMach,
+          Devm.stack_setMach, Devm.memory_setMach,
+          Devm.gasLeft_setMach] using hdispatch)
+    simpa only [runtimeBaselineMain] using h
+  apply Prog.ExecWitness.intro
+    (p := runtimeBaseline)
+    (G := route.fallbackGas + dispatchCost + fsigCost)
+    (mid := afterJump)
+  · have hentry := route.entryGas
+    dsimp only [initial, dispatchCost] at hentry ⊢
+    omega
+  · rfl
+  · simpa only [runtimeBaseline, ossifiableRuntimeFunctions, sevm] using hmain
 
 /-- Frame entry is derived from transfer success, the exact selected code
 address, and a fork-relative non-precompile fact.  It does not require the
@@ -1023,7 +1438,7 @@ theorem processMessage_forwardingEnvelope
   have program : Prog.ExecSat
       (initSevm (outer.withBenv afterTransfer))
       (initDevm (outer.withBenv afterTransfer)) runtimeBaseline P :=
-    ⟨raw, route.compiledPrefix raw rawWitness, observation⟩
+    ⟨raw, route.compiledPrefix rawWitness, observation⟩
   have executed : P (exec (initEvm (outer.withBenv afterTransfer))) := by
     exact Prog.execSat_out program route.compileLink
   refine ⟨(Frame.ofCall outer).settle
