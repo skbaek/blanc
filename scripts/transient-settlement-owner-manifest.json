@@ -77,7 +77,7 @@
     "lakefile.lean": "1e183fa01ba53015be897721557b8e9733e4f3075e54c866e45e093aa86017ec",
     "lake-manifest.json": "87378886d42253ce75ab0b4b1b5d1774684c10f8118d611f4978d8aca49fad91"
   },
-  "wethPublicHeaderAggregate": "a1fcc92c0ceb64dfb071ec11f5f128b0f3c5944f8cc01b7a525f0fb4295a9aac",
+  "wethPublicHeaderAggregate": "61a7af7191b9da17bc91fd63d9809ec7b45e63b2a3800878c2a73441cf872c57",
   "requiredSharedClassification": "TransientSettlement",
   "forbiddenTraceFamily": [
     "ProcessMessageTrace",
@@ -98,7 +98,7 @@
   ],
   "frozenAssuranceFiles": {
     "Blanc/ExecutionSettlement.lean": "0e01d0a0ce1a571af2af61bc2af4bf5405bbade4b792879fb199ce468e7a5582",
-    "Blanc/ExecutionOccurrence.lean": "929ea452292d3250d093a2b2ea82dfde79d65b4e7170306bd8ca4787c5753a4d",
+    "Blanc/ExecutionOccurrence.lean": "0d980ae3794e37dd78698330adc539b7261ce1d926d3ebae46577a1acdf2404b",
     "Blanc/CycleWriteFree.lean": "6df69e846e5c165acb8ad12bedd7cb97503e9ee3eda8bee9553e3a8c8c706dac",
     "scripts/ExecutionSettlementRegression.lean": "d1e4fc1aeb4e31a9188af49a9df1ce2bf23b87571544f7f31e0af1abcea74c2f",
     "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",
