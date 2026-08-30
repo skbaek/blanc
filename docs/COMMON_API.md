@@ -410,6 +410,10 @@ repeat their byte-slice normalization in a contract family.
 
 ### M1. The goal is a `sliceD` normalization
 
+- Read a fixed-size ABI `bytes4` head word with `argBytes4` in
+  [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean).  It right-aligns the
+  ABI's left-aligned four significant bytes before an integer comparison;
+  use ordinary `arg` for integer/address head words.
 - Full source from offset zero: `Bytes.sliceD_zero_length` in
   `Blanc/CommonProofs.lean`.
 - Recover a selector from calldata described as
@@ -627,6 +631,23 @@ For schedule-parametric block/history state boundaries and replay, use
   [`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean).
 - Source attainment and source-step provenance:
   [`Blanc/SourceAttainment.lean`](../Blanc/SourceAttainment.lean).
+
+### C3. I need a parameter-neutral runtime or creation template
+
+Use [`Blanc/CreationArtifact.lean`](../Blanc/CreationArtifact.lean):
+
+- `CreationArtifact.differingByteOffsets` and
+  `CreationArtifact.contiguousRunStarts` derive changed compiler spans.
+- `CreationArtifact.wordByteOffsets`,
+  `CreationArtifact.immutableWordOffsets`, and
+  `CreationArtifact.immutableWordOffsetsValid` derive and fail-closed validate
+  complete fixed-width immutable words.
+- `CreationArtifact.patchWord` applies one validated 32-byte patch.
+
+Contract families still own their marker worlds and the interpretation of
+each generated span.  These declarations are executable byte/layout
+operations rather than proposition-shaped proof endpoints, so they do not
+have a goal-triggered recipe.
 
 ## Common-library-first workflow
 

@@ -21,6 +21,12 @@ When a Blanc contract reimplements an existing one, what that port does and
 does not claim — and the deviation-registry discipline that backs it — is
 governed by [PORTING.md](PORTING.md).
 
+The TriggerableWithdrawalsGateway port's finite differential boundary and
+known observable differences are recorded in
+[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md)
+and
+[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md).
+
 This repo contains the following files:
 
 - [Basic.lean](Blanc/Basic.lean): Blanc's own prefix/split algebra over lists

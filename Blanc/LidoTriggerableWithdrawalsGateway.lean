@@ -4,10 +4,8 @@ import Blanc.LinearDispatch
 /-!
   Source-level Blanc runtime for the Triggerable Withdrawals Gateway.
 
-  All selectors have an executable dispatch entry.  The nested
-  `ValidatorExitData[]` success encoder is intentionally kept behind one
-  explicit empty-revert auxiliary arm until the dedicated ABI module is
-  added; no other selector is weakened or made payable by that placeholder.
+  All selectors have an executable dispatch entry, including the nested
+  `ValidatorExitData[]` decoder and outbound trigger choreography.
   AccessControlEnumerable is represented with full role/account/index lookup
   records and global role/account arrays; lookup mismatches refuse rather
   than alias, and removal uses swap-pop with moved-index repair.
@@ -315,11 +313,11 @@ def isPaused : Func :=
 
 def supportsInterface : Func :=
   requireStaticArgs 1 <|
-    ((arg 0 ++ [pushB256 0x01ffc9a7, eq]) +++
+    ((argBytes4 0 ++ [pushB256 0x01ffc9a7, eq]) +++
       (([pushB256 1] +++ returnWord) <?>
-        ((arg 0 ++ [pushB256 0x7965db0b, eq]) +++
+        ((argBytes4 0 ++ [pushB256 0x7965db0b, eq]) +++
           (([pushB256 1] +++ returnWord) <?>
-            ((arg 0 ++ [pushB256 0x5a05180f, eq]) +++
+            ((argBytes4 0 ++ [pushB256 0x5a05180f, eq]) +++
               (([pushB256 1] +++ returnWord) <?>
                 ([pushB256 0] +++ returnWord)))))))
 

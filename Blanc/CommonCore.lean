@@ -189,6 +189,14 @@ def cdl (x : B256) : Line := [pushB256 x, calldataload]
 --     to state, because it has only ever had one contract to satisfy.
 def arg (k : B256) : Line := cdl ((32 * k) + 4)
 
+/-- Read an ABI `bytes4` head word and right-align its four significant bytes.
+
+Unlike integer and address arguments, fixed-size byte strings are left-aligned
+in their 32-byte ABI word.  Contract dispatchers comparing a `bytes4` value to
+an ordinary four-byte constant therefore need this projection rather than a
+bare `arg`. -/
+def argBytes4 (k : B256) : Line := arg k ++ [pushB256 224, shr]
+
 /-- The 32-byte calldata word at byte offset `i` — what `calldataload i` pushes.
 
 Defined to be exactly the expression `Rinst.runCore .calldataload` evaluates
