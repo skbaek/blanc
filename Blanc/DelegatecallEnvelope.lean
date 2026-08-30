@@ -1,6 +1,7 @@
 import Blanc.ForwardCall
 import Blanc.ExecutionTrace
 import Blanc.MessageResult
+import Blanc.MessageExecution
 
 /-!
 # Contract-neutral `DELEGATECALL` envelope vocabulary
@@ -316,6 +317,27 @@ theorem DelegatedChildCertificate.result
     (certificate : DelegatedChildCertificate msg out) :
     processMessage msg = out :=
   certificate.trace.result
+
+/-- Construct the actual compiled `DELEGATECALL` step from a retained child
+execution and the exact parent-resume equation.  This is the forward
+counterpart of `certificate_of_runCompiled`: the descriptor still derives the
+child message, so the caller cannot substitute an unrelated execution. -/
+theorem DelegatecallSpawnDescriptor.runCompiled_of_certificate
+    {sevm : Sevm} {callPre post : Devm}
+    (d : DelegatecallSpawnDescriptor sevm callPre)
+    {childOut : MessageResult}
+    (certificate : DelegatedChildCertificate d.child childOut)
+    (resume : d.resume.run childOut = .ok post) :
+    Ninst.RunCompiled sevm callPre (.exec .delcall) post := by
+  rcases d.crossing with
+    ⟨henter, _currentTarget, _codeAddress, _caller, _value, crossing⟩
+  have hsettle :
+      (Frame.ofCall d.child).settle (exec (initEvm d.child)) = childOut :=
+    (MessageExecution.processMessage_eq_settle_exec_of_enter
+      d.child (initEvm d.child) henter).symm.trans certificate.result
+  apply crossing post
+  rw [hsettle]
+  exact resume
 
 /-- A retained settled child with its error flag set has the exact child-entry
 world restored.  This is the reusable child-side half of atomic call failure;

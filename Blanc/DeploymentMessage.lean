@@ -82,6 +82,28 @@ theorem processCreateMessage_ok_of_processMessage_and_charge
   unfold processCreateMessage.settle
   simp [herror, hcharge]
 
+/-- An inner creation frame whose error marker is set bypasses code charging
+and settles successfully with its entry world and transient storage restored.
+Raw output, logs, and the error marker are intentionally retained by Jaune's
+`Devm.rollback`; callers that need transaction-observable failed-CREATE logs
+must use the outer call-settlement theorem instead. -/
+theorem processCreateMessage_ok_of_processMessage_error
+    (msg : Msg) {inner : Devm}
+    (hprocess :
+      processMessage (processCreateMessage.msg msg) = .ok inner)
+    (herror : inner.error.isSome = true) :
+    processCreateMessage msg =
+      .ok (inner.rollback msg.benv.state msg.tenv.transientStorage) := by
+  rw [processCreateMessage_eq, hprocess]
+  unfold processCreateMessage.settle
+  simp only [bind, Except.bind]
+  have hnotNone : inner.error.isNone ≠ true := by
+    intro hnone
+    rw [Option.isNone_iff_eq_none] at hnone
+    rw [hnone] at herror
+    cases herror
+  rw [if_neg hnotNone]
+
 /-! ## Contract-neutral protocol-deployment plumbing -/
 
 private theorem deploymentListCompare_eq_compareLex {α : Type u} [Ord α]

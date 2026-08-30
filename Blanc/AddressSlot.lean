@@ -14,6 +14,16 @@ namespace Blanc
 open Jaune
 open Jaune.Ninst Ninst
 
+/-- Contract-neutral low-160-bit projection used by Solidity `address` reads. -/
+def addressSlotReadWord (raw : B256) : B256 :=
+  (~~~ addressMask) &&& raw
+
+/-- Contract-neutral packed-field update used by Solidity `address` writes.
+The caller supplies an address-shaped `newAddress`; the executable instruction
+sequence preserves `raw`'s upper ninety-six bits. -/
+def addressSlotWriteWord (raw newAddress : B256) : B256 :=
+  (addressMask &&& raw) ||| newAddress
+
 /-- Read an address-typed storage word, discarding the raw upper ninety-six
 bits exactly as Solidity does when an `address` value is loaded. -/
 def loadAddressWordAt (slot : B256) : Line :=

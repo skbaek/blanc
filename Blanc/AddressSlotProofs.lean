@@ -15,13 +15,52 @@ open Jaune
 open Jaune.Ninst Ninst
 open scoped LogOutputHinv
 
+/-- The low-160-bit address-slot projection is exactly the ordinary `B256`
+address conversion followed by re-encoding. -/
+theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
+    addressSlotReadWord raw = raw.toAdr.toB256 := by
+  have lowMask (x : UInt64) :
+      (0x00000000ffffffff : UInt64) &&& x =
+        x.toUInt32.toUInt64 := by
+    apply UInt64.toNat_inj.mp
+    simp only [UInt64.toNat_and, UInt64.toNat_toUInt32,
+      UInt32.toNat_toUInt64]
+    rw [Nat.and_comm]
+    change x.toNat &&& 2 ^ 32 - 1 = x.toNat % 2 ^ 32
+    exact Nat.and_two_pow_sub_one_eq_mod _ _
+  have andMax (x : UInt64) : UInt64.max &&& x = x := by
+    apply UInt64.toBitVec_inj.mp
+    simp only [UInt64.toBitVec_and]
+    have hmax : UInt64.max.toBitVec = BitVec.allOnes 64 := by rfl
+    rw [hmax]
+    exact BitVec.allOnes_and
+  have b128AndMax (x : B128) : B128.max &&& x = x := by
+    apply Prod.ext <;> apply andMax
+  have hmask : (~~~ addressMask) =
+      (⟨⟨0, 0x00000000ffffffff⟩, B128.max⟩ : B256) := by
+    decide +kernel
+  unfold addressSlotReadWord
+  rw [hmask]
+  rcases raw with ⟨⟨high, middle⟩, low⟩
+  simp only [B256.toAdr, Adr.toB256, B256.and_eq_and_prod_and,
+    B128.and_eq_and_prod_and, UInt64.zero_and]
+  apply Prod.ext
+  · apply Prod.ext
+    · rfl
+    · exact lowMask middle
+  · exact b128AndMax low
+
+@[simp] theorem addressSlotReadWord_toB256 (address : Adr) :
+    addressSlotReadWord address.toB256 = address.toB256 := by
+  rw [addressSlotReadWord_eq_toAdr_toB256, toAdr_toB256]
+
 /-- Exact value and frame effect of `loadAddressWordAt`. -/
 theorem of_loadAddressWordAt_val
     {sevm : Sevm} {pre post : Devm} {slot : B256} {tail : Stack}
     (hp : tail <<+ pre.stack)
     (run : Line.Run sevm pre (loadAddressWordAt slot) post) :
-    ((~~~ addressMask) &&&
-        pre.getStorVal sevm.currentTarget slot) :: tail <<+ post.stack ∧
+    addressSlotReadWord
+        (pre.getStorVal sevm.currentTarget slot) :: tail <<+ post.stack ∧
       post.memory = pre.memory ∧
       post.logs = pre.logs ∧
       Devm.getStor post = Devm.getStor pre := by
@@ -48,7 +87,7 @@ theorem of_loadAddressWordAt_val
     change (Devm.getStor slotPost sevm.currentTarget).get slot =
       (Devm.getStor pre sevm.currentTarget).get slot
     rw [← congrFun slotStor sevm.currentTarget]
-  refine ⟨by simpa [hraw] using pAddress, ?_, ?_, ?_⟩
+  refine ⟨by simpa [addressSlotReadWord, hraw] using pAddress, ?_, ?_, ?_⟩
   · exact (Line.of_inv Devm.memory (by line_inv) run).symm
   · exact (Line.of_inv Devm.logs (by line_inv) run).symm
   · exact (Line.of_inv Devm.getStor (by line_inv) run).symm
@@ -66,8 +105,8 @@ theorem of_storeAddressWordAt_val
     tail <<+ post.stack ∧
       Devm.getStor post sevm.currentTarget =
         (Devm.getStor pre sevm.currentTarget).set slot
-          ((addressMask &&& pre.getStorVal sevm.currentTarget slot) |||
-            newAddress) ∧
+          (addressSlotWriteWord
+            (pre.getStorVal sevm.currentTarget slot) newAddress) ∧
       post.memory = pre.memory ∧
       post.logs = pre.logs := by
   unfold storeAddressWordAt at run
@@ -109,6 +148,7 @@ theorem of_storeAddressWordAt_val
     rw [← congrFun slotStor sevm.currentTarget]
   refine ⟨pFinal, ?_, ?_, ?_⟩
   · rw [hstore, ← congrFun hprefixStor sevm.currentTarget, hraw]
+    rfl
   · exact (Line.of_inv Devm.memory (by line_inv) run).symm
   · exact (Line.of_inv Devm.logs (by line_inv) run).symm
 

@@ -21,7 +21,7 @@ namespace ProxyPair
 
 def addressSlotUpdateRaw
     (pre : Devm) (owner : Adr) (slot newAddress : B256) : B256 :=
-  (addressMask &&& pre.getStorVal owner slot) ||| newAddress
+  addressSlotWriteWord (pre.getStorVal owner slot) newAddress
 
 def rawAdminChangedLog
     (proxy : Adr) (previousAdmin newAdmin : B256) : Log :=
@@ -1348,7 +1348,8 @@ theorem changeAdminMutation_success
     of_loadAddressWordAt_val hp readRun
   have pPrevious' : storedAdminWord pre sevm.currentTarget :: tail <<+
       readPost.stack := by
-    simpa [storedAdminWord, canonicalAddressWord] using pPrevious
+    simpa only [storedAdminWord, canonicalAddressWord,
+      addressSlotReadWord] using pPrevious
   obtain ⟨oldPost, oldStoreRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨pOld, hmemoryOld⟩ :=
     of_run_mstoreAt_val oldStoreRun pPrevious'
@@ -1504,7 +1505,8 @@ theorem ossifyMutation_success
     of_loadAddressWordAt_val hp readRun
   have pPrevious' : storedAdminWord pre sevm.currentTarget :: tail <<+
       readPost.stack := by
-    simpa [storedAdminWord, canonicalAddressWord] using pPrevious
+    simpa only [storedAdminWord, canonicalAddressWord,
+      addressSlotReadWord] using pPrevious
   obtain ⟨oldPost, oldStoreRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨pOld, hmemoryOld⟩ :=
     of_run_mstoreAt_val oldStoreRun pPrevious'
@@ -1619,7 +1621,7 @@ theorem storedAdminWord_zero_of_ossifyMutation_success
   change (~~~ addressMask) &&&
       (Devm.getStor post sevm.currentTarget).get adminSlotLit = 0
   rw [effect.1, Stor.get_set_self]
-  simpa only [addressSlotUpdateRaw] using
+  simpa only [addressSlotUpdateRaw, addressSlotWriteWord] using
     complement_and_masked_or_zero_eq_zero addressMask
       (pre.getStorVal sevm.currentTarget adminSlotLit)
 

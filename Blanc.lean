@@ -137,6 +137,7 @@ import Blanc.ProxyPairOssifiableControl
 import Blanc.ProxyPairOssifiableControlEffects
 import Blanc.ProxyPairOssifiableUpgradeToAndCall
 import Blanc.ProxyPairOssifiableConstructor
+import Blanc.ProxyPairOssifiableConstructorEffects
 import Blanc.ProxyPairImplementation
 import Blanc.ProxyPairExecution
 import Blanc.ProxyPairCorrespondence

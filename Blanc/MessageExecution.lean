@@ -66,6 +66,21 @@ theorem processMessage_eq_settle_exec_afterTransfer_of_notPrecompile
     (frameEnter_eq_run_afterTransfer_of_notPrecompile
       msg afterTransfer codeAddress hentry hcode hnotPrecompile)
 
+/-- A successful transfer enters the supplied creation code directly when the
+message has no separate code address.  This is independent of the precompile
+switch because there is no address to classify as a precompile. -/
+theorem processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress
+    (msg : Msg) (afterTransfer : Benv)
+    (hentry : msg.benvAfterTransfer = .ok afterTransfer)
+    (hcodeAddress : msg.codeAddress = .none) :
+    processMessage msg =
+      (Frame.ofCall msg).settle
+        (exec (initEvm (msg.withBenv afterTransfer))) := by
+  unfold processMessage runFrame Frame.enter Frame.ofCall
+  rw [hentry]
+  unfold executeCode.enter
+  simp only [Msg.withBenv, hcodeAddress]
+
 /-- When value transfer prepares a distinct entry environment and precompiles
 are disabled, `processMessage` settles the raw execution started from that
 actual transferred environment. -/
@@ -165,6 +180,19 @@ theorem processMessage_revert_of_exec_afterTransfer
     processMessage msg = .ok (settledRevert msg raw) := by
   rw [processMessage_eq_settle_exec_afterTransfer
     msg afterTransfer hentry hdisable, hexec]
+  rfl
+
+/-- A raw REVERT from creation code with no separate code address settles to
+`settledRevert`, without requiring the message to disable precompiles. -/
+theorem processMessage_revert_of_exec_afterTransfer_of_noCodeAddress
+    (msg : Msg) (afterTransfer : Benv) (raw : Devm)
+    (hentry : msg.benvAfterTransfer = .ok afterTransfer)
+    (hcodeAddress : msg.codeAddress = .none)
+    (hexec : exec (initEvm (msg.withBenv afterTransfer)) =
+      .error (.revert, raw)) :
+    processMessage msg = .ok (settledRevert msg raw) := by
+  rw [processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress
+    msg afterTransfer hentry hcodeAddress, hexec]
   rfl
 
 /-- A raw REVERT settles to `settledRevert`. -/

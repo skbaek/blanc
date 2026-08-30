@@ -268,26 +268,26 @@ inductive OssifiableImplementationValidation where
 
 def ossifiableImplementationValidation
     (code : ByteArray) : OssifiableImplementationValidation :=
-  if code.size = 0 then .noCode else .accepted
+  if code.size.toB256 = 0 then .noCode else .accepted
 
 @[simp] theorem ossifiableImplementationValidation_noCode
-    {code : ByteArray} (h : code.size = 0) :
+    {code : ByteArray} (h : code.size.toB256 = 0) :
     ossifiableImplementationValidation code = .noCode := by
   simp [ossifiableImplementationValidation, h]
 
 @[simp] theorem ossifiableImplementationValidation_accepted
-    {code : ByteArray} (h : code.size ≠ 0) :
+    {code : ByteArray} (h : code.size.toB256 ≠ 0) :
     ossifiableImplementationValidation code = .accepted := by
   simp [ossifiableImplementationValidation, h]
 
 /-- The exact raw word produced by Solidity address assignment. -/
 def ossifiableConstructorAddressWrite
     (raw : B256) (newAddress : Adr) : B256 :=
-  (addressMask &&& raw) ||| newAddress.toB256
+  addressSlotWriteWord raw newAddress.toB256
 
 /-- The exact low-160-bit word observed by an address-typed read. -/
 def ossifiableConstructorAddressRead (raw : B256) : B256 :=
-  (~~~ addressMask) &&& raw
+  addressSlotReadWord raw
 
 /-- Product-owned phase spec.  A later executable proof supplies this witness
 after the `EXTCODESIZE` accepting arm; the fields state the exact address-slot
@@ -296,7 +296,7 @@ installation. -/
 structure OssifiableConstructorImplementationEffect
     (proxy implementation : Adr) (implementationCode : ByteArray)
     (rawBefore rawAfter : B256) (logsBefore logsAfter : List Log) : Prop where
-  codeNonempty : implementationCode.size ≠ 0
+  codeSizeWordNonzero : implementationCode.size.toB256 ≠ 0
   implementationWrite :
     rawAfter = ossifiableConstructorAddressWrite rawBefore implementation
   upgradedAppended :
@@ -305,12 +305,12 @@ structure OssifiableConstructorImplementationEffect
 theorem ossifiableConstructorImplementationEffect_intro
     (proxy implementation : Adr) (implementationCode : ByteArray)
     (rawBefore : B256) (logsBefore : List Log)
-    (codeNonempty : implementationCode.size ≠ 0) :
+    (codeSizeWordNonzero : implementationCode.size.toB256 ≠ 0) :
     OssifiableConstructorImplementationEffect proxy implementation
       implementationCode rawBefore
       (ossifiableConstructorAddressWrite rawBefore implementation)
       logsBefore (logsBefore ++ [upgradedLog proxy implementation]) := by
-  exact ⟨codeNonempty, rfl, rfl⟩
+  exact ⟨codeSizeWordNonzero, rfl, rfl⟩
 
 /-! ## Empty/nonempty setup split -/
 
@@ -432,7 +432,7 @@ constructor's write formula; they are not replaced by a full-word SSTORE. -/
 theorem ossifiableConstructorAdminWrite_preservesDirtyUpper_formula
     (postSetupRaw : B256) (requestedAdmin : Adr) :
     ossifiableConstructorAddressWrite postSetupRaw requestedAdmin =
-      (addressMask &&& postSetupRaw) ||| requestedAdmin.toB256 := by
+      addressSlotWriteWord postSetupRaw requestedAdmin.toB256 := by
   rfl
 
 /-- The event reads the post-setup word and cleans it before encoding. -/

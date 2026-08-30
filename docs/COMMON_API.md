@@ -109,7 +109,10 @@ registry has identified the likely vocabulary.
   [`Blanc/AddressSlot.lean`](../Blanc/AddressSlot.lean) implements the raw storage
   behavior of an `address`-typed storage reference: loads discard the raw
   upper 96 bits, while assignments preserve those bits and replace only the
-  low 160 bits.  The value-carrying inversions
+  low 160 bits.  Use `addressSlotReadWord` and `addressSlotWriteWord` for the
+  matching pure word projections; `addressSlotReadWord_eq_toAdr_toB256` ties
+  the low-word projection to the ordinary address conversion.  The
+  value-carrying inversions
   `of_loadAddressWordAt_val` and `of_storeAddressWordAt_val` live in
   [`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean).
   Use it when delegated code can make a nominal address slot raw-dirty; a plain
@@ -146,6 +149,10 @@ starts from an already-successful compiled `DELEGATECALL` step,
 `DelegatecallSpawnDescriptor.certificate_of_runCompiled` inverts that step into
 the arbitrary retained child outcome and the exact resume equation instead of
 requiring the consumer to reconstruct the recursive slot.  For a compiled step
+being constructed from an already-retained child trace, use
+`DelegatecallSpawnDescriptor.runCompiled_of_certificate`; it combines the
+certificate with the exact resume equation and derives the actual compiled
+`.delcall` step for the descriptor's own child.  For a compiled step
 that has already settled back into an ordinary parent state,
 `DelegatecallSpawnDescriptor.settled_of_runCompiled` packages the retained
 child as a `DelegatecallSettledBoundary`, including the exact returndata,
@@ -469,7 +476,9 @@ shared declarations rather than restating them per family.
   pointwise/write-layout laws in `Blanc/CommonProofs.lean`.
 - Reassemble adjacent padded windows with `List.sliceD_split`.  For the common
   two-word event window, `Mem.read_two_word_writes` directly proves that stores
-  at offsets 0 and 32 read back as the exact 64-byte concatenation.
+  at offsets 0 and 32 read back as the exact 64-byte concatenation;
+  `Bytes.read_two_word_writes_at` and `Mem.read_two_word_writes_at` provide the
+  same fact at an arbitrary starting offset.
 - Decode an exact word without losing bytes with
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private
@@ -487,7 +496,19 @@ shared declarations rather than restating them per family.
   forward construction modules.
 - For scratch decoders that carry a proof image, use
   `of_run_mstoreAt_image` and `of_run_loadWordAt_image` to advance the stack,
-  `Mem.Wf`, `Mem.Reads`, and the state equation together.
+  `Mem.Wf`, `Mem.Reads`, and the state equation together.  When the proof also
+  carries event chronology, `of_run_loadWordAt_logs` supplies the exact
+  successful two-instruction log-silence fact; `MLOAD` deliberately has no
+  broader `Ninst.Hinv` instance for logs.
+- For creation-code guards, `of_run_codesize` exposes the complete code-image
+  length pushed by `CODESIZE`.
+- For creation-code copies, `of_run_codecopy_mem` and
+  `prefix_of_codecopy_val` expose the exact code slice written at the three
+  known operands.  `of_run_codecopy_image` additionally advances the stack,
+  `Mem.Wf`, `Mem.Reads`, persistent-state equality, and log equality in one
+  proof-carrying decoder step.  `of_run_codecopy_logs` is the corresponding
+  standalone successful-run log-silence fact, without widening the global
+  instruction invariance class.
 
 A scratch-word walk that writes several fixed slots and reads them back needs
 both disjointness halves: `Bytes.sliceD_writeAt` reads exactly what was just
@@ -500,8 +521,10 @@ disjointness as a single `≤`-disjunction.
 For an exact event append from a fixed `logWith k x y` fragment, use
 `of_logWith_val`: it consumes the known signature-plus-indexed topic prefix and
 returns both the residual stack prefix and the precise `Log` appended from the
-pre-LOG memory window.  `of_logWith201_val` remains the convenient specialized
-form for the common ERC-20 three-topic, one-word event.
+pre-LOG memory window.  `of_logWith_image` transports `Mem.Wf` and a
+proof-carrying `Mem.Reads` image across that same fixed fragment.
+`of_logWith201_val` remains the convenient specialized form for the common
+ERC-20 three-topic, one-word event.
 
 ## T — settlement
 
@@ -700,9 +723,17 @@ For schedule-parametric block/history state boundaries and replay, use
 ### C2. I need deployment/message correspondence
 
 - Generic deployment compilation:
-  [`Blanc/DeploymentCompiled.lean`](../Blanc/DeploymentCompiled.lean).
+  [`Blanc/DeploymentCompiled.lean`](../Blanc/DeploymentCompiled.lean).  Use
+  `Prog.exec_of_runCompiled_appended` for successful creation prefixes and
+  `Prog.exec_of_runCompiledTo_appended` when the retained compiled walk ends in
+  an arbitrary success or failure outcome while runtime/ABI bytes follow it.
 - Generic deployment-message facts:
-  [`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean).
+  [`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean).  An inner
+  creation error crosses through
+  `processCreateMessage_ok_of_processMessage_error`; a raw creation-code
+  REVERT with no separate code address crosses through
+  `MessageExecution.processMessage_revert_of_exec_afterTransfer_of_noCodeAddress`
+  without changing the message's precompile switch.
 - Source attainment and source-step provenance:
   [`Blanc/SourceAttainment.lean`](../Blanc/SourceAttainment.lean).
 

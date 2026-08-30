@@ -279,6 +279,48 @@ def ossifiablePushCreationCoordinate (value : Nat) : Ninst :=
 @[simp] theorem ossifiableConstructorZeroAdminErrorSlot_eq :
     constructorZeroAdminErrorSlot = 4 := rfl
 
+@[simp] theorem ossifiableConstructorFunctions_emptyRevert
+    (runtimeOffset runtimeLength : Nat) :
+    (ossifiableConstructorFunctions runtimeOffset runtimeLength)[1]? =
+      some Func.rev := by
+  rfl
+
+@[simp] theorem ossifiableConstructorFunctions_noCode
+    (runtimeOffset runtimeLength : Nat) :
+    (ossifiableConstructorFunctions runtimeOffset runtimeLength)[2]? =
+      some (Func.revData noCodeImplementationErrorData) := by
+  rfl
+
+@[simp] theorem ossifiableConstructorFunctions_emptyDelegatecall
+    (runtimeOffset runtimeLength : Nat) :
+    (ossifiableConstructorFunctions runtimeOffset runtimeLength)[3]? =
+      some (Func.revData emptyDelegatecallErrorData) := by
+  rfl
+
+@[simp] theorem ossifiableConstructorFunctions_zeroAdmin
+    (runtimeOffset runtimeLength : Nat) :
+    (ossifiableConstructorFunctions runtimeOffset runtimeLength)[4]? =
+      some (Func.revData zeroAdminErrorData) := by
+  rfl
+
+@[simp] theorem ossifiableConstructorFunctions_afterSetup
+    (runtimeOffset runtimeLength : Nat) :
+    (ossifiableConstructorFunctions runtimeOffset runtimeLength)[5]? =
+      some (ossifiableConstructorAfterSetup runtimeOffset runtimeLength) := by
+  rfl
+
+@[simp] theorem ossifiableConstructorFunctions_delegateSetup
+    (runtimeOffset runtimeLength : Nat) :
+    (ossifiableConstructorFunctions runtimeOffset runtimeLength)[6]? =
+      some ossifiableConstructorDelegateSetup := by
+  rfl
+
+@[simp] theorem ossifiableConstructorFunctions_allocationPanic
+    (runtimeOffset runtimeLength : Nat) :
+    (ossifiableConstructorFunctions runtimeOffset runtimeLength)[7]? =
+      some (Func.revData allocationPanicData) := by
+  rfl
+
 theorem ossifiableConstructorInitializeImplementation_shape :
     ossifiableConstructorInitializeImplementation =
       [pushB256 0, mload] +++
@@ -288,6 +330,20 @@ theorem ossifiableConstructorInitializeImplementation_shape :
             pushB256 upgradedEventTopic ::: logWith 1 0 0 +++
             [pushB256 128, mload] +++
             ((.call 6) <?> (.call 5)))) := by
+  rfl
+
+theorem ossifiableConstructorDelegateSetup_shape :
+    ossifiableConstructorDelegateSetup =
+      pushB256 0 :::
+        pushB256 0 :::
+        [pushB256 128, mload] +++
+        pushB256 0x100 :::
+        [pushB256 0, mload] +++
+        gas :::
+        delcall :::
+        ((.call 5) <?>
+          (retdatasize :::
+            (Func.revReturnData <?> (.call 3)))) := by
   rfl
 
 theorem ossifiableConstructorAfterSetup_shape

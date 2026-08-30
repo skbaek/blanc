@@ -4711,6 +4711,15 @@ lemma of_run_calldatasize {e : Sevm} {s s' : Devm}
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.pushBurn_of_pushItem run
 
+/-- Value-carrying inversion for `CODESIZE`.  Constructor decoders compare the
+complete creation-code image, not merely the compiled executable prefix. -/
+lemma of_run_codesize {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s codesize s') :
+    Devm.PushBurn [e.code.size.toB256] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.pushBurn_of_pushItem run
+
 lemma of_run_mstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mstore s') :
     ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
@@ -6155,6 +6164,8 @@ macro_rules
 instance : Rinst.Hinv Devm.state Rinst.calldatasize := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.calldataload := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.calldatacopy := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.codesize := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.codecopy := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.lt := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.gt := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.add := by show_hinv_state
@@ -10340,26 +10351,50 @@ lemma Mem.Reads.read {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (i n : Nat) :
   rw [Array.sliceD_eq_map, List.sliceD_eq_map]
   exact List.map_congr_left (fun j _ => h (i + j))
 
-/-- Two adjacent whole-word stores determine the complete 64-byte readback,
-independently of the prior memory image.  `Mem.Wf` is needed only to transport
-the reader image through `Mem.write`; both halves of the resulting read are
-then self-windows. -/
+/-- Two adjacent whole-word writes determine their 64-byte image window. -/
+lemma Bytes.read_two_word_writes_at (image : Bytes) (start : Nat)
+    (left right : B256) :
+    (Bytes.writeAt (Bytes.writeAt image start left.toBytes)
+      (start + 32) right.toBytes).sliceD start 64 0 =
+        left.toBytes ++ right.toBytes := by
+  rw [show (64 : Nat) = 32 + 32 by omega, List.sliceD_split]
+  congr 1
+  · rw [Bytes.sliceD_writeAt_before _ _ start 32 (start + 32) (by omega),
+      show (32 : Nat) = left.toBytes.length from
+        (B256.length_toBytes left).symm,
+      Bytes.sliceD_writeAt]
+  · rw [show (32 : Nat) = right.toBytes.length from
+        (B256.length_toBytes right).symm,
+      Bytes.sliceD_writeAt]
+
+/-- Two adjacent whole-word stores at an arbitrary memory offset determine the
+complete 64-byte readback independently of the prior image.  `Mem.Wf` is
+needed only to transport the reader image through the two writes. -/
+lemma Mem.read_two_word_writes_at {μ : Mem} {image : Bytes}
+    (hwf : Mem.Wf μ) (hreads : Mem.Reads μ image) (start : Nat)
+    (left right : B256) :
+    ((((μ.write start left.toBytes).write (start + 32) right.toBytes).read
+      start 64).1) =
+      left.toBytes ++ right.toBytes := by
+  have hreadsLeft : Mem.Reads (μ.write start left.toBytes)
+      (Bytes.writeAt image start left.toBytes) :=
+    Mem.Reads.write hwf hreads start left.toBytes
+  have hreadsRight :
+      Mem.Reads
+        ((μ.write start left.toBytes).write (start + 32) right.toBytes)
+        (Bytes.writeAt (Bytes.writeAt image start left.toBytes)
+          (start + 32) right.toBytes) :=
+    Mem.Reads.write (Mem.Wf.write hwf start left.toBytes) hreadsLeft
+      (start + 32) right.toBytes
+  rw [Mem.Reads.read hreadsRight,
+    Bytes.read_two_word_writes_at]
+
+/-- Offset-zero specialization retained for existing event proofs. -/
 lemma Mem.read_two_word_writes {μ : Mem} {image : Bytes}
     (hwf : Mem.Wf μ) (hreads : Mem.Reads μ image) (left right : B256) :
     ((((μ.write 0 left.toBytes).write 32 right.toBytes).read 0 64).1) =
       left.toBytes ++ right.toBytes := by
-  have hreadsLeft : Mem.Reads (μ.write 0 left.toBytes)
-      (Bytes.writeAt image 0 left.toBytes) :=
-    Mem.Reads.write hwf hreads 0 left.toBytes
-  have hreadsRight :
-      Mem.Reads ((μ.write 0 left.toBytes).write 32 right.toBytes)
-        (Bytes.writeAt (Bytes.writeAt image 0 left.toBytes)
-          32 right.toBytes) :=
-    Mem.Reads.write (Mem.Wf.write hwf 0 left.toBytes) hreadsLeft
-      32 right.toBytes
-  rw [Mem.Reads.read hreadsRight, show (64 : Nat) = 32 + 32 by omega,
-    List.sliceD_split]
-  congr 1
+  simpa using Mem.read_two_word_writes_at hwf hreads 0 left right
 
 /-- Reading back a nonempty byte string immediately after writing it at offset
 zero returns that byte string, independently of the old memory image.  Unlike
@@ -10476,6 +10511,55 @@ lemma of_run_calldatacopy_mem {e : Sevm} {s s' : Devm}
     exact hp
   · rw [← eq, hmem]
     rfl
+
+/-- `CODECOPY` writes the exact code-image slice named by its three operands at
+the popped destination offset.  This is the creation-code companion of
+`of_run_calldatacopy_mem`. -/
+lemma of_run_codecopy_mem {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s codecopy s') :
+    ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack ∧
+      s'.memory = s.memory.write x.toNat
+        (e.code.sliceD y.toNat z.toNat (Linst.toUInt8 .stop)) := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨ci, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
+  rcases Devm.pop_of_popToNat_val h3 with ⟨z, p3, rfl⟩
+  have hb := Devm.burn_of_chargeGas h4
+  injection h5 with eq
+  have hmem : s.memory = s₄.memory :=
+    ((p1.memory.trans p2.memory).trans p3.memory).trans hb.memory
+  refine ⟨x, y, z, ?_, ?_⟩
+  · have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
+    rw [← eq,
+      show (Devm.memWrite s₄ x.toNat _).stack = s₄.stack from rfl,
+      ← hb.stack]
+    exact hp
+  · rw [← eq, hmem]
+    rfl
+
+/-- `CODECOPY` is log-silent.  Like `MLOAD`, it has no global `Ninst.Hinv`
+instance for logs, so constructor-return proofs use this exact successful-run
+fact instead of assuming a broader instruction class. -/
+lemma of_run_codecopy_logs {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s codecopy s') : s.logs = s'.logs := by
+  rcases of_run_reg h with ⟨_, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨_, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨_, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨_, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨_, p1⟩
+  rcases Devm.pop_of_popToNat h2 with ⟨_, p2⟩
+  rcases Devm.pop_of_popToNat h3 with ⟨_, p3⟩
+  have burned := Devm.burn_of_chargeGas h4
+  injection h5 with stateEq
+  rw [← stateEq]
+  exact ((p1.logs.trans p2.logs).trans p3.logs).trans burned.logs
 
 /-- `LOG` only *extends* memory: it reads a window and records it, and the
 backing array is untouched.  That is enough to carry both `Mem.Wf` and a
@@ -10645,6 +10729,44 @@ lemma prefix_of_calldatacopy_val {e} {x y z xs} {s s' : Devm}
   refine ⟨?_, by rw [hx, hy, hz]; exact hm⟩
   rw [hx, hy, hz] at h1
   exact of_append_pref h2 h1
+
+/-- `CODECOPY` at a known stack top, retaining the exact written code slice. -/
+lemma prefix_of_codecopy_val {e} {x y z xs} {s s' : Devm}
+    (h0 : Ninst.Run e s codecopy s') (h1 : x :: y :: z :: xs <<+ s.stack) :
+    (xs <<+ s'.stack) ∧
+      s'.memory = s.memory.write x.toNat
+        (e.code.sliceD y.toNat z.toNat (Linst.toUInt8 .stop)) := by
+  rcases of_run_codecopy_mem h0 with ⟨x', y', z', h2, hm⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
+    with ⟨hx, hy, ws, h, h'⟩
+  rcases List.of_cons_pref_of_cons_pref h h' with ⟨hz, -⟩
+  refine ⟨?_, by rw [hx, hy, hz]; exact hm⟩
+  rw [hx, hy, hz] at h1
+  exact of_append_pref h2 h1
+
+/-- Exact proof-carrying image update for a successful `CODECOPY`.  Besides the
+three-word stack burn, this retains memory well-formedness, the updated image,
+and the persistent-state/log frame needed to compose constructor decoders. -/
+theorem of_run_codecopy_image
+    {e : Sevm} {pre post : Devm} {dst src size : B256}
+    {tail : Stack} {image : Bytes}
+    (hp : dst :: src :: size :: tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (run : Ninst.Run e pre codecopy post) :
+    tail <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory
+        (Bytes.writeAt image dst.toNat
+          (e.code.sliceD src.toNat size.toNat (Linst.toUInt8 .stop))) ∧
+      pre.state = post.state ∧
+      pre.logs = post.logs := by
+  obtain ⟨pstack, memory⟩ := prefix_of_codecopy_val run hp
+  refine ⟨pstack, ?_, ?_, Ninst.Hinv.inv run, of_run_codecopy_logs run⟩
+  · rw [memory]
+    exact Mem.Wf.write hwf _ _
+  · rw [memory]
+    exact Mem.Reads.write hwf hreads _ _
 
 /-- **What `forwardArgTail` does**, both effects at once: it leaves argument
 `k`'s declared tail length on the stack, writes that length into memory word
@@ -10929,6 +11051,27 @@ lemma of_logWith_val {e : Sevm} {s s' : Devm} {k : Fin 4}
   · rw [hlogs, ← hboffset.logs, ← hbsize.logs,
       ← hboffset.memory, ← hbsize.memory]
 
+/-- A fixed-shape `logWith` preserves any proof-carrying memory image and its
+well-formedness; its only memory effect is the read-window extension performed
+by `LOG`. -/
+lemma of_logWith_image {e : Sevm} {s s' : Devm} {k : Fin 4}
+    {x y : B256} {image : Bytes}
+    (hwf : Mem.Wf s.memory) (hreads : Mem.Reads s.memory image)
+    (h : Line.Run e s (logWith k x y) s') :
+    Mem.Wf s'.memory ∧ Mem.Reads s'.memory image := by
+  rcases Line.of_run_cons h with ⟨s₁, hsize, hrest₁⟩
+  rcases Line.of_run_cons hrest₁ with ⟨s₂, hoffset, hrest₂⟩
+  rcases Line.of_run_cons hrest₂ with ⟨_, hlog, hnil⟩
+  cases hnil
+  have hbsize := of_run_pushB256 hsize
+  have hboffset := of_run_pushB256 hoffset
+  obtain ⟨mi, sz, hmemory⟩ := of_run_log_mem hlog
+  constructor
+  · rw [hmemory, ← hboffset.memory, ← hbsize.memory]
+    exact hwf.extend mi sz
+  · rw [hmemory, ← hboffset.memory, ← hbsize.memory]
+    exact hreads.extend mi sz
+
 /-- Exact event effect of the canonical three-topic, one-word log fragment.
 
 `logWith 2 0 1` is the common shape of ERC-20 `Transfer` and `Approval`:
@@ -11089,6 +11232,27 @@ theorem of_run_loadWordAt_image
     exact pushWf.extend _ _
   · rw [memory]
     exact pushReads.extend _ _
+
+/-- A fixed scratch-word load is log-silent.  `MLOAD` has no global
+`Ninst.Hinv` instance for logs, so expose the exact two-instruction fact at
+the shared line altitude instead of reproving its register walk in every
+constructor or decoder. -/
+theorem of_run_loadWordAt_logs
+    {e : Sevm} {pre post : Devm} {word : B256}
+    (run : Line.Run e pre [pushB256 (word * 32), mload] post) :
+    pre.logs = post.logs := by
+  rcases Line.of_run_cons run with ⟨afterPush, pushRun, run⟩
+  rcases Line.of_run_cons run with ⟨_, loadRun, hnil⟩
+  cases hnil
+  rcases of_run_reg loadRun with ⟨_, regRun⟩
+  simp only [Rinst.run, Rinst.runCore] at regRun
+  rcases Except.bind_eq_ok regRun with ⟨⟨_, popPost⟩, popRun, regRun⟩
+  rcases Except.bind_eq_ok regRun with ⟨burnPost, burnRun, pushResult⟩
+  rcases Devm.pop_of_popToNat popRun with ⟨_, popped⟩
+  have burned := Devm.burn_of_chargeGas burnRun
+  have pushed := Devm.push_of_push pushResult
+  exact (of_run_pushB256 pushRun).logs.trans
+    (((popped.logs.trans burned.logs).trans rfl).trans pushed.logs)
 
 /-- `retdataShorterThan n`, with its flag: the fragment pushes exactly the
 comparison `retdatasize <? n` and touches nothing else. -/
