@@ -91,6 +91,57 @@ lemma Ninst.runCompiled_exec_run {sevm : Sevm} {devm : Devm} {x : Xinst}
   rw [h_step]
   exact ⟨_, RunFrame.of_run h_enter, h_res.symm⟩
 
+/-- A successful compiled instruction step whose recursive execution slot is
+definitionally empty.  This is stronger than `RunCompiled` and is the common
+boundary needed by callers that reason about raw child-frame chronology. -/
+def Ninst.ChildlessRunCompiled
+    (sevm : Sevm) (pre : Devm) (instruction : Ninst) (post : Devm) : Prop :=
+  ∀ pc, Ninst.StepRun pc sevm pre instruction .none (.ok post)
+
+/-- Forgetting childlessness yields the ordinary compiled-step witness. -/
+theorem Ninst.ChildlessRunCompiled.toRunCompiled
+    {sevm : Sevm} {pre post : Devm} {instruction : Ninst}
+    (run : Ninst.ChildlessRunCompiled sevm pre instruction post) :
+    Ninst.RunCompiled sevm pre instruction post :=
+  ⟨.none, trivial, run⟩
+
+/-- A syntactically non-external compiled instruction necessarily uses the
+empty recursive slot. -/
+theorem Ninst.RunCompiled.childless_of_not_exec
+    {sevm : Sevm} {pre post : Devm} {instruction : Ninst}
+    (run : Ninst.RunCompiled sevm pre instruction post)
+    (notExec : ∀ operation : Xinst, instruction ≠ .exec operation) :
+    Ninst.ChildlessRunCompiled sevm pre instruction post := by
+  rcases run with ⟨slot, filled, steps⟩
+  cases instruction with
+  | reg operation =>
+      have stepRun := steps 0
+      rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at stepRun
+      rw [stepRun.1] at steps
+      exact steps
+  | push bytes length =>
+      have stepRun := steps 0
+      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at stepRun
+      rw [stepRun.1] at steps
+      exact steps
+  | exec operation => exact (notExec operation rfl).elim
+
+/-- A spawning instruction whose frame resolves synchronously has a childless
+compiled-step witness.  Enabled precompiles are the principal consumer. -/
+theorem Ninst.childlessRunCompiled_exec_doneFrame
+    {sevm : Sevm} {pre post : Devm} {operation : Xinst}
+    {frame : Frame} {resume : Resume}
+    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
+    (step : Xinst.step sevm pre operation = .spawn frame resume)
+    (enter : frame.enter = .done settled)
+    (resumeOk : resume.run settled = .ok post) :
+    Ninst.ChildlessRunCompiled sevm pre (.exec operation) post := by
+  intro pc
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+  show XStep.Run (Xinst.step sevm pre operation) _ _
+  rw [step]
+  exact ⟨settled, RunFrame.of_done enter, resumeOk.symm⟩
+
 /-- A spawning instruction whose frame **does not enter** — the value transfer
 failed, or the callee is a precompile.  No child machine exists, the slot is
 `.none`, and `Filled` is `True`. -/
@@ -1935,6 +1986,38 @@ lemma Frame.enter_run_of_nonprecompile {f : Frame} {benv : Benv} {adr : Adr}
     simp
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   exact (hn h.2).elim
+
+/-- A `STATICCALL` whose frame resolves without entering, preserving the
+definitionally empty child slot.  Enabled precompiles are the principal
+consumer. -/
+lemma Ninst.childlessRunCompiled_statcall_doneFrame
+    {sevm : Sevm} {devm : Devm}
+    {gw tw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat} {devm' : Devm}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost tw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
+    (h_enter : (Frame.ofCall (statcallSpawnMsg sevm
+      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs tw.toAdr dadr iiw.toNat isw.toNat code dp)).enter = .done r)
+    (h_res : Resume.run
+      (.call (callSpawnParent d1 (mcc + ext)
+        iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat)
+      r = .ok devm') :
+    Ninst.ChildlessRunCompiled sevm devm (.exec .statcall) devm' :=
+  Ninst.childlessRunCompiled_exec_doneFrame
+    (Xinst.step_statcall_spawn h_stk h_ext h_del h_acc h_split h_gas h_depth)
+    h_enter h_res
 
 /-- A `STATICCALL` whose frame resolves without entering, packaged as one
 `Ninst.RunCompiled` premise.  Enabled precompiles are the principal consumer:

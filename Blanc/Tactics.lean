@@ -247,7 +247,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
   | "goal-shape:raw-sstore-free-compiled-path" =>
       return proofRecipeContainsName
           `Blanc.Func.RunCompiledTo.NoRawSstorePath target ||
-        proofRecipeContainsName `Blanc.Exec.NoRawSstore target
+        proofRecipeContainsName `Blanc.Exec.NoRawSstore target ||
+        proofRecipeContainsName `Blanc.Ninst.ChildlessRunCompiled target
   | "goal-shape:retained-write-noninterference" =>
       return head == some `Blanc.Exec.NoRetainedWriteTo
   | "goal-shape:retained-wrapper-trace" =>

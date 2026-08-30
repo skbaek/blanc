@@ -86,56 +86,6 @@ theorem Exec.NoRawSstore.instruction_ne_sstore
   rw [← instructionEq]
   exact occurrence.decoded
 
-/-- A successful compiled instruction step whose recursive execution slot is
-definitionally empty. -/
-def Ninst.ChildlessRunCompiled
-    (sevm : Sevm) (pre : Devm) (instruction : Ninst) (post : Devm) : Prop :=
-  ∀ pc, Ninst.StepRun pc sevm pre instruction .none (.ok post)
-
-/-- Forgetting childlessness yields the ordinary compiled-step witness. -/
-theorem Ninst.ChildlessRunCompiled.toRunCompiled
-    {sevm : Sevm} {pre post : Devm} {instruction : Ninst}
-    (run : Ninst.ChildlessRunCompiled sevm pre instruction post) :
-    Ninst.RunCompiled sevm pre instruction post :=
-  ⟨.none, trivial, run⟩
-
-/-- A syntactically non-external compiled instruction necessarily uses the
-empty recursive slot. -/
-theorem Ninst.RunCompiled.childless_of_not_exec
-    {sevm : Sevm} {pre post : Devm} {instruction : Ninst}
-    (run : Ninst.RunCompiled sevm pre instruction post)
-    (notExec : ∀ operation : Xinst, instruction ≠ .exec operation) :
-    Ninst.ChildlessRunCompiled sevm pre instruction post := by
-  rcases run with ⟨slot, filled, steps⟩
-  cases instruction with
-  | reg operation =>
-      have stepRun := steps 0
-      rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at stepRun
-      rw [stepRun.1] at steps
-      exact steps
-  | push bytes length =>
-      have stepRun := steps 0
-      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at stepRun
-      rw [stepRun.1] at steps
-      exact steps
-  | exec operation => exact (notExec operation rfl).elim
-
-/-- A spawning instruction whose frame resolves synchronously has a childless
-compiled-step witness.  Enabled precompiles are the principal consumer. -/
-theorem Ninst.childlessRunCompiled_exec_doneFrame
-    {sevm : Sevm} {pre post : Devm} {operation : Xinst}
-    {frame : Frame} {resume : Resume}
-    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
-    (step : Xinst.step sevm pre operation = .spawn frame resume)
-    (enter : frame.enter = .done settled)
-    (resumeOk : resume.run settled = .ok post) :
-    Ninst.ChildlessRunCompiled sevm pre (.exec operation) post := by
-  intro pc
-  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
-  show XStep.Run (Xinst.step sevm pre operation) _ _
-  rw [step]
-  exact ⟨settled, RunFrame.of_done enter, resumeOk.symm⟩
-
 /-- A certificate over one selected compiled source path.  Branches and
 internal source calls recurse only into the chosen body.  Each explicit
 instruction must have both a non-SSTORE decode and a childless compiled step. -/

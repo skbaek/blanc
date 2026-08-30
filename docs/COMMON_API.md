@@ -106,6 +106,11 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
 - `Func.ExecWitness` / `Prog.ExecWitness` package raw call outcomes.
 - `Func.ExecSat` / `Prog.ExecSat` package predicates over outcomes.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
+- `Ninst.ChildlessRunCompiled` strengthens one compiled instruction with a
+  definitionally empty recursive slot; `.toRunCompiled` forgets that fact,
+  while `childlessRunCompiled_exec_doneFrame` and
+  `childlessRunCompiled_statcall_doneFrame` construct it for synchronously
+  resolved frames.
 - `Func.exec_of_runCompiledTo` and its program bridge recover an `Exec`
   derivation from a completed arbitrary-outcome compiled walk.
 
@@ -137,6 +142,10 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
 - `NoRawSstorePath.of_execFree` discharges an execution-free, locally
   SSTORE-free body; `NoRawSstorePath.of_revWith` is the symbolic
   constant-error specialization.
+- For a warm fixed-width SHA-256 precompile crossing, use
+  `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
+  [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary
+  `runCompiled_*` projection intentionally forgets the empty child slot.
 - `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
   `Exec.NoRawSstore`; its consequences exclude every successful raw SSTORE and
   force `retainedStorageWrites = []` for that same witness.
