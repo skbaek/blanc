@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Generator for Blanc's fmint fixture suite (`~/plans/fmint-code.md` Step 2;
-program source of truth `~/plans/flashmint-proposal.md`): EEST
+"""Generator for Blanc's fmint fixture suite
+(`scripts/fixtures/fmint/README.md`), whose program and compiled-byte
+authorities are `Blanc/Fmint.lean` and `Blanc/FmintCode.lean`: EEST
 `blockchain_tests` fixtures at network Prague whose fmint account carries
 `Blanc.fmintCode` -- the exact bytes `Blanc.fmintCode_compile` witnesses as
 `Prog.compile Fmint.fmint`'s output -- and whose expectations come from the
 pinned frozen EELS oracle's `t8n`, never hand-computed. This is the same
-external-adjudication discipline `gen-weth-fixtures.py` established
-(`~/plans/weth-evidence.md`), and this script is deliberately a SEPARATE,
+external-adjudication discipline documented by
+`scripts/fixtures/weth/README.md`, and this script is deliberately a SEPARATE,
 self-contained generator rather than a parameterisation of that one -- the
 same reason `gen-fmint-code.lean` is separate from `gen-weth-code.lean`: a
 regeneration of one contract's fixtures must never be able to touch the
@@ -28,7 +29,8 @@ they are this fixture's own *input*, exactly the WETH suite's
 `attacker_bytecode`/`prober_bytecode` precedent, not something a borrower's
 semantics determines.
 
-ONE BORROWER IS NOT A BLANC PROGRAM (`~/plans/fmint-evidence.md` Step 3).
+ONE BORROWER IS NOT A BLANC PROGRAM (see "The Solidity-compiled borrower" in
+`scripts/fixtures/fmint/README.md`).
 Because every other borrower decodes `onFlashLoan`'s arguments with the same
 machinery that encoded them, the callback ABI has so far been adjudicated by
 a decoder that shares its authorship with the encoder under test. Case 11
@@ -63,8 +65,9 @@ are differential plus a golden regression lock, NOT evidence that the D6
 event set is the right one: wrong-but-consistent `logWith` sites would agree
 in both implementations and regenerate quietly.
 
-CLOSED, by `Expectations.expect_logs` below (`~/plans/fmint-evidence.md`
-Step 2). Every case now declares the log sequence D6 says it must produce --
+CLOSED, by `Expectations.expect_logs` below and the fixture README's "How this
+suite commits to events" contract. Every case now declares the log sequence D6
+says it must produce --
 per transaction, in emission order, empty sequences included -- written from
 the specification and each case's own scenario, and checked against the
 oracle's top-level `logsHash` (an exact keccak-of-RLP commitment to the
@@ -144,8 +147,9 @@ PROBER_ADDR = "0x" + "b0b".rjust(40, "0")
 
 GAS_PRICE = 10
 
-# RETIRED 2026-08-05 by the `Func.rev` normalization (`~/plans/fmint-hygiene.md`
-# Step 1, fixed decision 4). Two constants lived here:
+# RETIRED 2026-08-05 by the `Func.rev` normalization documented under "On
+# `.rev`'s stack-garbage cost" in `scripts/fixtures/fmint/README.md`. Two
+# constants lived here:
 #
 #   PROBE_GAS = 200_000           -- already dead; no trigger in this file used it
 #   FLASHLOAN_PROBE_GAS = 3e6     -- passed as `gas=` at nine reverting triggers
@@ -270,7 +274,8 @@ def abi_call(sig, *args):
 #                 return size, so `n_words` is fixed per call, not guessed)
 #
 # REJECTED trigger (`reverts_because` set) -- the discriminating failure-shape
-# record added by `~/plans/fmint-hygiene.md` Step 2:
+# record documented under "What the clean-failure triple discriminates" in
+# `scripts/fixtures/fmint/README.md`:
 #
 #   base + 0      the CALL's success flag  (0)
 #   base + 1      executed marker, written unconditionally right after the
@@ -587,7 +592,8 @@ def _slots(m):
 
 # ---- D6's event set, spelled out from the specification ----------------
 #
-# THE SPEC-DERIVED EXPECTED-LOG LAYER (`~/plans/fmint-evidence.md` Step 2).
+# THE SPEC-DERIVED EXPECTED-LOG LAYER (documented under "How this suite commits
+# to events" in `scripts/fixtures/fmint/README.md`).
 # Everything below states what fmint is SUPPOSED to emit, read off proposal
 # D6 as adjudicated in `FMINT_DEVIATIONS.md` rows 12-14 and off each case's
 # own scenario -- never off a committed fixture, never off `res`, never off a
@@ -917,13 +923,14 @@ def get_fmint_code_hex():
         os.unlink(scratch)
     hexstr = out.strip().strip('"')
     # 2514 = 2 x 1257 bytes. Was 2434 (1217 bytes) until the `Func.rev`
-    # normalization (`~/plans/fmint-hygiene.md`) put two `PUSH0`s ahead of
-    # each of fmint's twenty rev sites.
+    # normalization documented in `scripts/fixtures/fmint/README.md` put two
+    # `PUSH0`s ahead of each of fmint's twenty rev sites.
     #
-    # WHY THIS STAYS A LENGTH ASSERT, adjudicated by `~/plans/fmint-evidence.md`
-    # Step 1 (which strengthened the *coverage checkers'* account
-    # identification from length+prefix to byte-equality, and asked whether
-    # this site should follow). It should not, for two reasons.
+    # WHY THIS STAYS A LENGTH ASSERT, adjudicated by the fixture README's
+    # "Provenance and shape" contract (which strengthened the *coverage
+    # checkers'* account identification from length+prefix to byte-equality,
+    # and asked whether this site should follow). It should not, for two
+    # reasons.
     #
     # This is not an identification of an unknown account -- it is a sanity
     # check on a subprocess's stdout. What can actually go wrong here is
@@ -1928,9 +1935,9 @@ def case_guards():
     # a selector matching no leaf routes to `.call fallbackSlot` and lands on
     # the shared `Func.rev` -- the same definition every guard above reverts
     # through, reached by the one path that is not a guard at all. This is the
-    # probe class `~/plans/fmint-hygiene.md` Step 2 names first: before the
-    # normalization it was the pure stack-UNDERFLOW shape, since a dispatcher
-    # miss leaves nothing on the stack for a bare `REVERT` to pop.
+    # probe class the fixture README's clean-failure section names first:
+    # before the normalization it was the pure stack-UNDERFLOW shape, since a
+    # dispatcher miss leaves nothing on the stack for a bare `REVERT` to pop.
     miss_sel = int.from_bytes(selector("blancFmintNoSuchFunction()"), "big")
     assert miss_sel not in SELECTORS, (
         f"0x{miss_sel:08x} is one of fmint's twelve dispatch selectors -- "
@@ -2152,8 +2159,8 @@ def case_erc20_views_and_transferFrom():
 
 
 def case_solc_borrower():
-    """The one borrower Blanc did not compile (`~/plans/fmint-evidence.md`
-    Step 3).
+    """The one borrower Blanc did not compile (see "The Solidity-compiled
+    borrower" in `scripts/fixtures/fmint/README.md`).
 
     WHAT THIS CASE IS FOR, precisely. It is NOT a second end-state test:
     under fee = 0 a successful loan returns fmint's storage to its pre-state,

@@ -13,7 +13,8 @@ It is the reference semantics; the brute-force harness
 re-checks every witness transcript through this class to guarantee fidelity.
 
 --------------------------------------------------------------------------
-Model summary (see AGENTS.md packet spec for the authoritative statement)
+Model summary (this module is the reference semantics; checked results are in
+scripts/prorata-oracle-findings.md)
 --------------------------------------------------------------------------
 Parameters: offset O >= 1 (virtual shares), MAXA, MAXS, MAXB (guard caps).
 State: S (total shares), B (contract ETH balance), ledger: addr -> shares.
