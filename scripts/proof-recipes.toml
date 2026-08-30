@@ -331,6 +331,23 @@ review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
 
 [[recipe]]
+id = "accepted-boolean-settlement"
+status = "active"
+triggers = ["goal-shape:accepted-bool-word"]
+preferred_path = "For a clean full-word ABI output, use `acceptedBoolWord_iff_of_output` instead of repeating the slice/read normalization. Remove a successful execution wrapper with `acceptedBoolExecution_ok_iff`, and specialize rejected-answer executions with `boolQueryExecutionFailure_ok_iff`."
+boundary = "These adapters identify one already-clean 32-byte boolean observation. They do not prove message settlement, output production, or that the returned word is canonical zero or one."
+owner_module = "Blanc/PinnedPauseTarget.lean"
+canonical_example = "Blanc/PinnedPauseTarget.lean:acceptedBoolWord_iff_of_output"
+symbols = [
+  "module:Blanc/PinnedPauseTarget.lean",
+  "declaration:acceptedBoolWord_iff_of_output",
+  "declaration:acceptedBoolExecution_ok_iff",
+  "declaration:boolQueryExecutionFailure_ok_iff",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-30"
+
+[[recipe]]
 id = "devm-common-update-laws"
 status = "active"
 triggers = ["goal-shape:devm-common-update-law"]

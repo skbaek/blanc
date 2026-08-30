@@ -111,6 +111,29 @@ theorem runtime_rebasedTriggerAfterValidation_get (dp : DeployParams) :
     Trigger.rebasedLocalAuxWithRoleFailure,
     Trigger.localAuxWithRoleFailure, triggerAuxDelta]
 
+/-- The top-level ABI validator's rebased failure arm is the runtime's fixed
+empty-data reverter. -/
+theorem runtime_rebasedTriggerMalformedAbi_get (dp : DeployParams) :
+    ((runtime dp).main :: (runtime dp).aux)[
+        triggerAuxDelta + Trigger.malformedAbiSlot]? = some Func.rev := by
+  simp [runtime, aux, baseAux, Trigger.rebasedLocalAuxWithRoleFailure,
+    Trigger.localAuxWithRoleFailure, triggerAuxDelta,
+    Trigger.malformedAbiSlot, Trigger.rebaseLocalCalls, Func.rev]
+
+private theorem rebasedTriggerArithmeticPanic_call_not_ok
+    {dp : DeployParams} {sevm : Sevm} {pre post : Devm}
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre (.call (triggerAuxDelta + Trigger.arithmeticPanicSlot))
+        (.ok post)) : False := by
+  have hget : ((runtime dp).main :: (runtime dp).aux)[
+      triggerAuxDelta + Trigger.arithmeticPanicSlot]? =
+        some (Func.revData (Trigger.panicData 0x11)) := by
+    simp [runtime, aux, baseAux, Trigger.rebasedLocalAuxWithRoleFailure,
+      Trigger.localAuxWithRoleFailure, triggerAuxDelta,
+      Trigger.arithmeticPanicSlot, Trigger.arithmeticPanicRevert,
+      Trigger.rebaseLocalCalls_revData]
+  exact Func.RunCompiledTo.not_ok_call_revData hget run
+
 /-- Rebasing only renumbers local calls, so it passes through a prepended
 line untouched.  The walk needs this to expose a `+++` head that
 `runCompiledTo_prepend_inv` can match under the rebase wrapper. -/
@@ -1029,6 +1052,193 @@ theorem triggerFullWithdrawals_reaches_afterValidation
     state1.trans (state2.trans (state3.trans (state4.trans
       (state5.trans (state6.trans state7)))))⟩
 
+/-- Every successful top-level trigger-validator walk reaches
+`afterValidation`, for arbitrary selector-tail calldata.  No ABI value is
+assumed: success itself excludes each fixed malformed-ABI reverter arm.  The
+validator only changes stack, gas, and scratch memory, so entry state is
+preserved to the role boundary. -/
+theorem triggerFullWithdrawals_ok_reaches_afterValidation
+    {dp : DeployParams} {sevm : Sevm} {pre post : Devm}
+    (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
+      sevm pre (triggerFullWithdrawals dp) (.ok post)) :
+    ∃ bodyPre,
+      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm bodyPre
+        (Trigger.rebaseLocalCalls triggerAuxDelta Trigger.afterValidation)
+        (.ok post) ∧
+      pre.state = bodyPre.state := by
+  have malformed := runtime_rebasedTriggerMalformedAbi_get dp
+  rw [triggerFullWithdrawals_rebasedValidator_exact, validateCalldata_eq] at run
+  obtain ⟨g1, q1, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨g2, q2, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨guard1, q3, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨afterSize, pop1, run⟩ :=
+    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+  have state1 : pre.state = afterSize.state :=
+    (Ninst.Hinv.inv (f := Devm.state) (Ninst.Run.of_runCompiled q1)).trans
+      ((Ninst.Hinv.inv (f := Devm.state)
+        (Ninst.Run.of_runCompiled q2)).trans
+        ((Ninst.Hinv.inv (f := Devm.state)
+          (Ninst.Run.of_runCompiled q3)).trans pop1.state))
+
+  unfold validatorAfterSize at run
+  obtain ⟨size1, qsize, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨size2, storeSize, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨size3, argAddress, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨guard2, checkAddress, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨afterAddress, pop2, run⟩ :=
+    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+  have state2 : afterSize.state = afterAddress.state :=
+    (Ninst.Hinv.inv (f := Devm.state)
+      (Ninst.Run.of_runCompiled qsize)).trans
+      ((Line.of_inv Devm.state (by line_inv) storeSize).trans
+        ((Line.of_inv Devm.state (by line_inv) argAddress).trans
+          ((Line.of_inv Devm.state (by line_inv) checkAddress).trans
+            pop2.state)))
+
+  unfold validatorAfterAddress at run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨address1, argRefund, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨address2, storeRefund, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨address3, argExitType, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨address4, storeExitType, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨address5, qmax, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨address6, argOffset, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨guard3, qgt, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨afterOffset, pop3, run⟩ :=
+    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+  have state3 : afterAddress.state = afterOffset.state :=
+    (Line.of_inv Devm.state (by line_inv) argRefund).trans
+      ((Line.of_inv Devm.state (by line_inv) storeRefund).trans
+        ((Line.of_inv Devm.state (by line_inv) argExitType).trans
+          ((Line.of_inv Devm.state (by line_inv) storeExitType).trans
+            ((Ninst.Hinv.inv (f := Devm.state)
+              (Ninst.Run.of_runCompiled qmax)).trans
+              ((Line.of_inv Devm.state (by line_inv) argOffset).trans
+                ((Ninst.Hinv.inv (f := Devm.state)
+                  (Ninst.Run.of_runCompiled qgt)).trans pop3.state))))))
+
+  unfold validatorAfterOffset at run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨offset1, argOffsetA, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨offset2, storeOffset, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨offset3, argOffsetB, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨offset4, qfour, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨offset5, qaddA, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨offset6, storePointer, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨offset7, loadPointer, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨offset8, qthirtyTwo, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨offset9, qaddB, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨offset10, loadSize, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨guard4, qltA, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨afterHeader, pop4, run⟩ :=
+    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+  have state4 : afterOffset.state = afterHeader.state :=
+    (Line.of_inv Devm.state (by line_inv) argOffsetA).trans
+      ((Line.of_inv Devm.state (by line_inv) storeOffset).trans
+        ((Line.of_inv Devm.state (by line_inv) argOffsetB).trans
+          ((Ninst.Hinv.inv (f := Devm.state)
+            (Ninst.Run.of_runCompiled qfour)).trans
+            ((Ninst.Hinv.inv (f := Devm.state)
+              (Ninst.Run.of_runCompiled qaddA)).trans
+              ((Line.of_inv Devm.state (by line_inv) storePointer).trans
+                ((Line.of_inv Devm.state (by line_inv) loadPointer).trans
+                  ((Ninst.Hinv.inv (f := Devm.state)
+                    (Ninst.Run.of_runCompiled qthirtyTwo)).trans
+                    ((Ninst.Hinv.inv (f := Devm.state)
+                      (Ninst.Run.of_runCompiled qaddB)).trans
+                      ((Line.of_inv Devm.state (by line_inv) loadSize).trans
+                        ((Ninst.Hinv.inv (f := Devm.state)
+                          (Ninst.Run.of_runCompiled qltA)).trans
+                          pop4.state))))))))))
+
+  unfold validatorAfterHeader at run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨header1, loadCountData, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨header2, storeCount, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨header3, qmaxCount, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨header4, loadCount, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨guard5, qgtCount, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨afterCount, pop5, run⟩ :=
+    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+  have state5 : afterHeader.state = afterCount.state :=
+    (Line.of_inv Devm.state (by line_inv) loadCountData).trans
+      ((Line.of_inv Devm.state (by line_inv) storeCount).trans
+        ((Ninst.Hinv.inv (f := Devm.state)
+          (Ninst.Run.of_runCompiled qmaxCount)).trans
+          ((Line.of_inv Devm.state (by line_inv) loadCount).trans
+            ((Ninst.Hinv.inv (f := Devm.state)
+              (Ninst.Run.of_runCompiled qgtCount)).trans pop5.state))))
+
+  unfold validatorAfterCount at run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨count1, loadLengthPtr, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨count2, qword, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨count3, qaddBase, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨count4, storeBase, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨count5, loadBase, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨count6, loadRequests, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨count7, qword2, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨count8, qmul, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨count9, qaddEnd, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨count10, loadCalldataSize, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨guard6, qltBounds, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨afterBounds, pop6, run⟩ :=
+    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+  have state6 : afterCount.state = afterBounds.state :=
+    (Line.of_inv Devm.state (by line_inv) loadLengthPtr).trans
+      ((Ninst.Hinv.inv (f := Devm.state)
+        (Ninst.Run.of_runCompiled qword)).trans
+        ((Ninst.Hinv.inv (f := Devm.state)
+          (Ninst.Run.of_runCompiled qaddBase)).trans
+          ((Line.of_inv Devm.state (by line_inv) storeBase).trans
+            ((Line.of_inv Devm.state (by line_inv) loadBase).trans
+              ((Line.of_inv Devm.state (by line_inv) loadRequests).trans
+                ((Ninst.Hinv.inv (f := Devm.state)
+                  (Ninst.Run.of_runCompiled qword2)).trans
+                  ((Ninst.Hinv.inv (f := Devm.state)
+                    (Ninst.Run.of_runCompiled qmul)).trans
+                    ((Ninst.Hinv.inv (f := Devm.state)
+                      (Ninst.Run.of_runCompiled qaddEnd)).trans
+                      ((Line.of_inv Devm.state (by line_inv)
+                        loadCalldataSize).trans
+                        ((Ninst.Hinv.inv (f := Devm.state)
+                          (Ninst.Run.of_runCompiled qltBounds)).trans
+                          pop6.state))))))))))
+
+  unfold validatorAfterBounds at run
+  obtain ⟨bounds1, qzeroA, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨bounds2, storeIndex, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bounds3, qzeroB, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨bounds4, storePubkeys, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bounds5, qzeroC, run⟩ := runCompiledTo_next_inv run
+  simp only [rebaseLocalCalls_prepend] at run
+  obtain ⟨bounds6, storeRouter, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bodyPre, burn, bodyRun⟩ :=
+    runCompiledTo_call_inv (runtime_rebasedTriggerAfterValidation_get dp) run
+  have state7 : afterBounds.state = bodyPre.state :=
+    (Ninst.Hinv.inv (f := Devm.state)
+      (Ninst.Run.of_runCompiled qzeroA)).trans
+      ((Line.of_inv Devm.state (by line_inv) storeIndex).trans
+        ((Ninst.Hinv.inv (f := Devm.state)
+          (Ninst.Run.of_runCompiled qzeroB)).trans
+          ((Line.of_inv Devm.state (by line_inv) storePubkeys).trans
+            ((Ninst.Hinv.inv (f := Devm.state)
+              (Ninst.Run.of_runCompiled qzeroC)).trans
+              ((Line.of_inv Devm.state (by line_inv) storeRouter).trans
+                burn.state)))))
+  exact ⟨bodyPre, bodyRun,
+    state1.trans (state2.trans (state3.trans (state4.trans
+      (state5.trans (state6.trans state7)))))⟩
+
 /-! ## Exact flat-role classification -/
 
 /-- The two semantic destinations of the trigger's role guard.  All three
@@ -1632,6 +1842,85 @@ theorem triggerAfterValidation_authorized_paused_reverts
     exact triggerAuthorizedContinuation_paused_reverts bodyStack bodyBalance
       bodyPaused bodyRun
   · exact (lacksRole hasRole).elim
+
+/-- No selected `triggerFullWithdrawals` invocation can finish successfully
+while the entry pause projection is live.  Success forces every top-level ABI
+guard to fall through, the role guard to choose its authorized arm, and the
+balance guard to pass; the existing paused continuation theorem then reaches
+`ResumedExpected()`.  The statement intentionally accepts an arbitrary
+selector tail, including malformed and nonempty-array inputs. -/
+theorem triggerFullWithdrawals_selected_paused_not_ok
+    {dp : DeployParams} {sevm : Sevm} {entry post : Devm} {tail : Bytes}
+    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) (.ok post))
+    (hentryStack : entry.stack = [])
+    (hdata : sevm.data =
+      abiSelectorBytes selTriggerFullWithdrawals ++ tail)
+    (hpaused : B256.ltCheck sevm.benvStat.time
+      (entry.getStorVal sevm.currentTarget resumeSinceSlot) ≠ 0) : False := by
+  have hguard := runtime_guard_zero_of_prog_run_ok hprog
+  have hselector : Sevm.selector sevm = selTriggerFullWithdrawals :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (by rfl) hdata
+  obtain ⟨dispatchPre, dispatchRun, _dispatchStack, dispatchFrame⟩ :=
+    dispatcher_body_of_prog_run_empty_frame (body := triggerFullWithdrawals dp)
+      hprog hentryStack hguard hselector (by simp [funcs])
+  obtain ⟨afterValidationPre, afterValidationRun, validatorState⟩ :=
+    triggerFullWithdrawals_ok_reaches_afterValidation dispatchRun
+  have entryState : entry.state = afterValidationPre.state :=
+    dispatchFrame.state.trans validatorState
+  rw [rebasedTriggerAfterValidation_exact] at afterValidationRun
+  rcases triggerCoreFlatRoleGuard_route (tail := ([] : Stack)) nil_pref
+      afterValidationRun with
+    ⟨authorizedPre, _hasRole, authorizedRun, _authorizedStack,
+      authorizedStor, _authorizedBal⟩ |
+    ⟨_callPre, _lacksRole, callRun, _callStack, _callStor, _callBal⟩
+  · have balanceRun := authorizedRun
+    unfold rebasedTriggerAuthorizedContinuation Trigger.rebaseLocalCalls at balanceRun
+    obtain ⟨callvaluePost, qcallvalue, balanceRun⟩ :=
+      runCompiledTo_next_inv balanceRun
+    obtain ⟨balancePost, qbalance, balanceRun⟩ :=
+      runCompiledTo_next_inv balanceRun
+    obtain ⟨balanceTest, qlt, balanceBranch⟩ :=
+      runCompiledTo_next_inv balanceRun
+    have rcallvalue := Ninst.Run.of_runCompiled qcallvalue
+    have rbalance := Ninst.Run.of_runCompiled qbalance
+    have rlt := Ninst.Run.of_runCompiled qlt
+    have pCallvalue :=
+      prefix_of_push (of_run_callvalue rcallvalue) (nil_pref :
+        ([] : Stack) <<+ authorizedPre.stack)
+    have pBalance0 :=
+      prefix_of_push (of_run_selfbalance rbalance) pCallvalue
+    have balancePreserved :
+        authorizedPre.getBal sevm.currentTarget =
+          callvaluePost.getBal sevm.currentTarget :=
+      Ninst.Hinv.inv (f := fun d => d.getBal sevm.currentTarget) rcallvalue
+    have pBalance :
+        authorizedPre.getBal sevm.currentTarget :: sevm.value :: [] <<+
+          balancePost.stack := by
+      simpa [← balancePreserved] using pBalance0
+    have pBalanceTest := prefix_of_lt rlt pBalance
+    obtain ⟨_afterBalance, balanceZero, _balancePop, _restRun, _tail⟩ :=
+      Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix
+        (fun panicRun => rebasedTriggerArithmeticPanic_call_not_ok panicRun)
+        pBalanceTest balanceBranch
+    have entryStor : Devm.getStor entry = Devm.getStor authorizedPre :=
+      (funext (getStor_eq_of_state_eq entryState)).trans authorizedStor
+    have resumeSincePreserved :
+        entry.getStorVal sevm.currentTarget resumeSinceSlot =
+          authorizedPre.getStorVal sevm.currentTarget resumeSinceSlot :=
+      congrArg (fun stor : Stor => stor.get resumeSinceSlot)
+        (congrFun entryStor sevm.currentTarget)
+    have authorizedPaused : B256.ltCheck sevm.benvStat.time
+        (authorizedPre.getStorVal sevm.currentTarget resumeSinceSlot) ≠ 0 := by
+      rw [← resumeSincePreserved]
+      exact hpaused
+    have impossible := triggerAuthorizedContinuation_paused_reverts
+      (nil_pref : ([] : Stack) <<+ authorizedPre.stack) balanceZero
+      authorizedPaused authorizedRun
+    rcases impossible with ⟨_d, outcome⟩ | ⟨_revertPost, outcome, _output⟩ <;>
+      cases outcome
+  · have impossible := rebasedTriggerRoleFailure_call_reverts_exact callRun
+    rcases impossible with ⟨_d, outcome⟩ | ⟨_revertPost, outcome, _output⟩ <;>
+      cases outcome
 
 /-! ## Canonical empty-array validator route
 

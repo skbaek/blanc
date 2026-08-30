@@ -1,5 +1,8 @@
 import Blanc.LidoTriggerableWithdrawalsGatewayPinnedTargetInterface
 import Blanc.LidoTriggerableWithdrawalsGatewayRuntimeRoute
+import Blanc.LidoTriggerableWithdrawalsGatewayPauseFor
+import Blanc.LidoTriggerableWithdrawalsGatewayIsPaused
+import Blanc.LidoTriggerableWithdrawalsGatewayAuthorization
 import Blanc.MessageExecutionInversion
 import Blanc.ReachableExecFree
 
@@ -11,21 +14,15 @@ runtime must discharge.  It intentionally imports no Circuit Breaker module:
 the calldata builders, storage projection, and protected selector are the
 gateway family's own definitions.
 
-The final `PinnedPauseTarget` constructor is deliberately absent from this
-checkpoint until the concrete A2 runtime proofs exist.  In particular, this
-module does not introduce a structure of assumed semantic witnesses and does
-not reflect an executable fixture into theorem evidence.  This module now
-discharges the CircuitBreaker-cell noninterference clause from actual `Exec`
-chronology and retained `ProcessMessage` slots.  The remaining bundle
-declarations still require source-derived proofs:
+The public constructor below is assembled only from source-derived A2 walks
+and actual retained-message inversion.  It does not introduce a structure of
+assumed semantic witnesses and does not reflect an executable fixture into
+theorem evidence.  CircuitBreaker-cell noninterference follows the actual
+calldata-selected route, while the protected trigger clause treats arbitrary
+selector tails: a clean raw success must pass the ABI and role guards before
+the live pause forces `ResumedExpected()`.
 
-* a clean exact `pauseFor` execution stores `pauseForProjection`;
-* a clean exact `isPaused` execution preserves `resumeSinceSlot` and returns
-  the canonical boolean for its entry projection;
-* a selected trigger execution cannot settle cleanly while the entry
-  projection is paused, including malformed and unauthorized calldata paths.
-
-Once those source-derived facts are available, the intended public theorem is
+The resulting public theorem is
 
 ```
 theorem pinnedPauseTarget
@@ -49,6 +46,11 @@ namespace Blanc
 open Jaune
 
 namespace LidoTriggerableWithdrawalsGateway
+
+private theorem runtime_pcFree (dp : DeployParams) :
+    (runtime dp).pcFree = true := by
+  rw [show (runtime dp).pcFree = (runtime ⟨0⟩).pcFree by rfl]
+  decide +kernel
 
 /-! ## Route-local exec-freedom certificates -/
 
@@ -222,7 +224,137 @@ private theorem noExec_of_selectedRuntimeEntry
   exact bodyCursor.noExec_of_reachableExecFree compiled members accepted
     bodyRoute.chronology.cursorToTarget x execAt
 
-/-! ## Pinned-target clause (iii) -/
+/-! ## Pinned-target account clauses -/
+
+/-- Clause (i): an actual clean settled pause call exposes the successful raw
+runtime walk, whose A2 pause theorem writes the family-faithful finite or
+infinite projection. -/
+theorem pinnedPauseTarget_pauseFor_effect
+    (dp : DeployParams) (circuitBreaker gateway : Adr)
+    {msg : Msg} {xl : Xlot} {post : Devm} {duration : B256}
+    (exactCall : ExactTargetCall circuitBreaker gateway
+      (pauseForCalldata duration) false msg)
+    (executes : MessageExecutesProgram msg xl (runtime dp))
+    (process : ProcessMessage msg xl (.ok post))
+    (clean : post.error.isSome = false) :
+    pausedUntil gateway (post.state.getStor gateway) =
+      pauseForProjection msg.benv.stat.time duration := by
+  rcases executes with
+    ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
+  subst xl
+  rcases MessageExecution.processMessage_entry_facts gateway process with
+    ⟨pcZero, codeEq, current, _codeAddress, data, time,
+      _entryStorage, _memoryWf⟩
+  subst pc
+  rcases MessageExecution.processMessage_clean_rawPost process clean with
+    ⟨rawPost, rfl, _rawClean, stateEq, _outputEq⟩
+  have uses : some sevm.code.toList = Prog.compile (runtime dp) := by
+    rw [codeEq]
+    exact messageUses
+  have compiled : Prog.RunCompiledTo sevm pre (runtime dp) (.ok rawPost) :=
+    Prog.RunCompiledTo.of_runCompiled
+      (Prog.runCompiled_of_exec sevm pre (runtime dp) rawPost
+        (runtime_pcFree dp) run uses)
+  have effect := pauseFor_ok_authorized_effect compiled
+    (MessageExecution.processMessage_entry_stack process)
+    (data.trans exactCall.data)
+  rw [stateEq]
+  change rawPost.getStorVal gateway resumeSinceSlot =
+    pauseForProjection msg.benv.stat.time duration
+  simpa [current.trans exactCall.currentTarget, time] using effect.2.2
+
+/-- Clause (ii): the exact clean static query preserves the pause projection
+and returns the canonical word corresponding to the entry-time predicate. -/
+theorem pinnedPauseTarget_isPaused_truthful
+    (dp : DeployParams) (circuitBreaker gateway : Adr)
+    {msg : Msg} {xl : Xlot} {ex : TargetMessageResult}
+    (exactCall : ExactTargetCall circuitBreaker gateway
+      isPausedCalldata true msg)
+    (executes : MessageExecutesProgram msg xl (runtime dp))
+    (process : ProcessMessage msg xl ex)
+    (post : Devm) (exEq : ex = .ok post)
+    (clean : post.error.isSome = false) :
+    pausedUntil gateway (post.state.getStor gateway) =
+        pausedUntil gateway (msg.benv.state.getStor gateway) ∧
+      (AcceptedBoolExecution ex 1 ↔
+        PausedAt pausedUntil msg.benv.state gateway msg.benv.stat.time) ∧
+      (¬ PausedAt pausedUntil msg.benv.state gateway msg.benv.stat.time →
+        AcceptedBoolExecution ex 0 ∨ BoolQueryExecutionFailure ex) := by
+  subst ex
+  rcases executes with
+    ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
+  subst xl
+  rcases MessageExecution.processMessage_entry_facts gateway process with
+    ⟨pcZero, codeEq, current, _codeAddress, data, time,
+      entryStorage, memoryWf⟩
+  subst pc
+  rcases MessageExecution.processMessage_clean_rawPost process clean with
+    ⟨rawPost, rfl, rawClean, stateEq, outputEq⟩
+  have uses : some sevm.code.toList = Prog.compile (runtime dp) := by
+    rw [codeEq]
+    exact messageUses
+  have compiled : Prog.RunCompiledTo sevm pre (runtime dp) (.ok rawPost) :=
+    Prog.RunCompiledTo.of_runCompiled
+      (Prog.runCompiled_of_exec sevm pre (runtime dp) rawPost
+        (runtime_pcFree dp) run uses)
+  rcases isPaused_exact_of_prog_run compiled
+      (MessageExecution.processMessage_entry_stack process)
+      (data.trans exactCall.data) memoryWf with
+    ⟨_valueZero, storageEq, rawOutput⟩
+  have postClean : post.error = none := by
+    cases errorEq : post.error with
+    | none => rfl
+    | some err => simp [errorEq] at clean
+  let rawPaused : Prop :=
+    sevm.benvStat.time <
+      pre.getStorVal sevm.currentTarget resumeSinceSlot
+  have postOutput : post.output =
+      (if rawPaused then (1 : B256) else 0).toBytes := by
+    exact outputEq.trans rawOutput
+  have pausedEq : rawPaused ↔
+      PausedAt pausedUntil msg.benv.state gateway msg.benv.stat.time := by
+    unfold rawPaused PausedAt pausedUntil
+    rw [← time]
+    change sevm.benvStat.time <
+        (pre.state.getStor sevm.currentTarget).get resumeSinceSlot ↔
+      sevm.benvStat.time <
+        (msg.benv.state.getStor gateway).get resumeSinceSlot
+    rw [current.trans exactCall.currentTarget, entryStorage]
+  have acceptedIff (word : B256) :
+      AcceptedBoolExecution (.ok post) word ↔
+        (if rawPaused then (1 : B256) else 0) = word :=
+    (acceptedBoolExecution_ok_iff post word).trans
+      (acceptedBoolWord_iff_of_output postClean postOutput)
+  refine ⟨?_, ?_, ?_⟩
+  · rw [stateEq]
+    unfold pausedUntil
+    change rawPost.getStorVal gateway resumeSinceSlot =
+      (msg.benv.state.getStor gateway).get resumeSinceSlot
+    calc
+      rawPost.getStorVal gateway resumeSinceSlot =
+          rawPost.getStorVal sevm.currentTarget resumeSinceSlot := by
+        rw [current.trans exactCall.currentTarget]
+      _ = pre.getStorVal sevm.currentTarget resumeSinceSlot := storageEq
+      _ = (msg.benv.state.getStor gateway).get resumeSinceSlot := by
+        change (pre.state.getStor sevm.currentTarget).get resumeSinceSlot =
+          (msg.benv.state.getStor gateway).get resumeSinceSlot
+        rw [current.trans exactCall.currentTarget, entryStorage]
+  · exact (acceptedIff 1).trans <| by
+      constructor
+      · intro wordEq
+        by_cases raw : rawPaused
+        · exact pausedEq.mp raw
+        · simp only [if_neg raw] at wordEq
+          exfalso
+          exact (show (0 : B256) ≠ 1 by decide) wordEq
+      · intro paused
+        have raw := pausedEq.mpr paused
+        simp [raw]
+  · intro notPaused
+    left
+    apply (acceptedIff 0).mpr
+    have notRaw : ¬ rawPaused := fun paused => notPaused (pausedEq.mp paused)
+    simp [notRaw]
 
 /-- Exact pause and query messages executing the concrete TWG runtime retain
 no successful write to any nominated CircuitBreaker cell.  The proof splits
@@ -302,6 +434,96 @@ theorem pinnedPauseTarget_circuitBreaker_noninterference
             (isPaused_reachableExecFree dp) sameFrame x execAt
   · exact Exec.noRetainedWriteTo_of_not_commits actualRun committed
       circuitBreaker key
+
+/-- Clause (iv): a nonexceptional selected trigger call cannot settle cleanly
+while the entry projection is paused.  The clean arm exposes a successful raw
+runtime walk, contradicting the arbitrary-tail trigger theorem; the remaining
+ordinary arm is already exactly `.revert`. -/
+theorem pinnedPauseTarget_protectedSurface_reverts
+    (dp : DeployParams) (gateway : Adr)
+    {msg : Msg} {xl : Xlot} {child : Devm} {selected : B256}
+    (currentTarget : msg.currentTarget = gateway)
+    (_targetAddress : msg.target = some gateway)
+    (_codeAddress : msg.codeAddress = some gateway)
+    (executes : MessageExecutesProgram msg xl (runtime dp))
+    (hasSelector : HasSelector msg selected)
+    (member : selected ∈ protectedSurface)
+    (paused : PausedAt pausedUntil msg.benv.state gateway
+      msg.benv.stat.time)
+    (process : ProcessMessage msg xl (.ok child))
+    (settled : SettledNormallyOrReverted child) :
+    child.error = some .revert := by
+  simp only [protectedSurface, List.mem_singleton] at member
+  subst selected
+  rcases settled with childClean | childRevert
+  · have clean : child.error.isSome = false := by
+      rw [childClean]
+      rfl
+    rcases executes with
+      ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
+    subst xl
+    rcases MessageExecution.processMessage_entry_facts gateway process with
+      ⟨pcZero, codeEq, current, _entryCodeAddress, data, time,
+        entryStorage, _memoryWf⟩
+    subst pc
+    rcases MessageExecution.processMessage_clean_rawPost process clean with
+      ⟨rawPost, rfl, _rawClean, _stateEq, _outputEq⟩
+    have uses : some sevm.code.toList = Prog.compile (runtime dp) := by
+      rw [codeEq]
+      exact messageUses
+    have compiled : Prog.RunCompiledTo sevm pre (runtime dp) (.ok rawPost) :=
+      Prog.RunCompiledTo.of_runCompiled
+        (Prog.runCompiled_of_exec sevm pre (runtime dp) rawPost
+          (runtime_pcFree dp) run uses)
+    rcases hasSelector with ⟨tail, messageData⟩
+    have selectedData : sevm.data =
+        abiSelectorBytes selTriggerFullWithdrawals ++ tail :=
+      data.trans messageData
+    have rawPaused : sevm.benvStat.time <
+        pre.getStorVal sevm.currentTarget resumeSinceSlot := by
+      unfold PausedAt pausedUntil at paused
+      change sevm.benvStat.time <
+        (pre.state.getStor sevm.currentTarget).get resumeSinceSlot
+      rw [time, current.trans currentTarget, entryStorage]
+      exact paused
+    have rawPausedCheck : B256.ltCheck sevm.benvStat.time
+        (pre.getStorVal sevm.currentTarget resumeSinceSlot) ≠ 0 := by
+      rw [B256.ltCheck, if_pos rawPaused]
+      decide
+    exact (triggerFullWithdrawals_selected_paused_not_ok compiled
+      (MessageExecution.processMessage_entry_stack process) selectedData
+      rawPausedCheck).elim
+  · exact childRevert
+
+/-- The compiled Triggerable Withdrawals Gateway discharges the complete
+family-neutral pinned pause-target account protocol. -/
+theorem pinnedPauseTarget
+    (dp : DeployParams) (circuitBreaker gateway : Adr)
+    (circuitBreakerCells : List B256)
+    (different : gateway ≠ circuitBreaker) :
+    PinnedPauseTarget circuitBreaker gateway (runtime dp)
+      pauseForCalldata isPausedCalldata pausedUntil
+      circuitBreakerCells protectedSurface := by
+  refine {
+    pauseFor_effect := ?_
+    isPaused_truthful := ?_
+    circuitBreaker_noninterference := ?_
+    protectedSurface_reverts := ?_
+  }
+  · intro msg xl post duration exactCall executes process clean
+    exact pinnedPauseTarget_pauseFor_effect dp circuitBreaker gateway
+      exactCall executes process clean
+  · intro msg xl ex exactCall executes process post exEq clean
+    exact pinnedPauseTarget_isPaused_truthful dp circuitBreaker gateway
+      exactCall executes process post exEq clean
+  · intro msg xl ex inbound executes process key member
+    exact pinnedPauseTarget_circuitBreaker_noninterference dp circuitBreaker
+      gateway circuitBreakerCells different inbound executes process key member
+  · intro msg xl child selected current targetAddress codeAddress executes
+      hasSelector member paused process settled
+    exact pinnedPauseTarget_protectedSurface_reverts dp gateway current
+      targetAddress codeAddress executes hasSelector member paused process
+      settled
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc

@@ -45,6 +45,10 @@ registry has identified the likely vocabulary.
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
+- For TWG trigger packets, local-call rebasing commutes with constant-store
+  prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` and is the identity
+  on constant-data reverters by `Trigger.rebaseLocalCalls_revData` in
+  [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
 - Invert an existing arbitrary-outcome compiled walk:
   [`Blanc/CompiledWalkInversion.lean`](../Blanc/CompiledWalkInversion.lean).
   Use `runCompiledTo_next_inv`, `runCompiledTo_branch_inv`,
@@ -60,6 +64,13 @@ registry has identified the likely vocabulary.
   `Func.RunCompiledTo.stop_eq`.  For a known branch-head prefix use
   `Func.RunCompiledTo.zero_branch_of_prefix` or
   `Func.RunCompiledTo.succ_branch_of_prefix`, both outcome-polymorphic.  A
+  successful branch whose jumped arm is a fixed empty-data reverter can be
+  collapsed directly with `Func.RunCompiledTo.zero_branch_of_ok_call_rev`;
+  it returns the fall-through walk and branch pop.  Use the neighboring
+  `_of_prefix` form when the forced zero head and preserved known tail are
+  also needed.  For any separately established nonreturning right arm, use
+  `Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok` and its prefix form
+  instead of adding a reverter-specific branch lemma.  A
   successful shared `nonpayable` wrapper is peeled by
   `Func.RunCompiledTo.nonpayable_body_of_ok`, which also derives zero value and
   preserves the known stack tail and storage.  If zero value is already known
@@ -386,6 +397,14 @@ sentinel and identify the branch-free compiled pause word
 `time * ((sentinel =? duration) =? 0) + duration` with its source projection.
 Every faithful `PausableUntil` port compiles that arithmetic, so consume these
 shared declarations rather than restating them per family.
+
+At the settled account boundary, use `acceptedBoolWord_iff_of_output` to turn
+a clean full-word output equation into `AcceptedBoolWord`,
+`acceptedBoolExecution_ok_iff` to remove an `.ok` execution wrapper, and
+`boolQueryExecutionFailure_ok_iff` for the corresponding rejected-answer
+predicate.  These adapters live beside the protocol in
+[`Blanc/PinnedPauseTarget.lean`](../Blanc/PinnedPauseTarget.lean); do not
+repeat their byte-slice normalization in a contract family.
 
 ## M — bytes and memory
 
