@@ -91,6 +91,7 @@ CONTRACTS = {
                        "BeaconDepositRootPublic",
                        "BeaconDepositEffects",
                        "BeaconDepositSuccessPublic",
+                       "BeaconDepositSuccessSettlement",
                        "BeaconDepositCountEffects"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
