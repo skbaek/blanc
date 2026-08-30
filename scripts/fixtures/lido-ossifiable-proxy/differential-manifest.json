@@ -18,7 +18,7 @@
       "algorithm": "sha256",
       "canonicalization": "json.dumps(parsed, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True).encode(\"utf-8\")",
       "scope": "the entire parsed document with /campaign/digest/value replaced by the empty string",
-      "value": "538e9dd3c6f2e1c52a4dd559f6b48dd9f0d75eb478b11a7299170ecde904e7ab"
+      "value": "509ff7b8b65a73d7875d187216656b7a73af290735f28db7f07a2ab4cab59427"
     },
     "fixedCaseCount": 85,
     "fixedOrder": [
@@ -109,17 +109,18 @@
       "V07"
     ],
     "format": "blanc.lido-ossifiable-proxy.differential-campaign",
-    "formatVersion": 2,
+    "formatVersion": 3,
     "frozenDate": "2026-08-30",
-    "lifecycleStage": "corrected-frozen-corpus-before-first-differential-result",
+    "lifecycleStage": "corrected-frozen-corpus-after-first-differential-result",
     "name": "Lido OssifiableProxy frozen semantic differential corpus",
     "resultsIncluded": false,
     "runnerIncluded": false,
     "supersedes": {
-      "campaignDigest": "6ddf76545a556a2e5d10f10b18ffa07fcf8dbadaa1d31d55b3a8d8b967ba5c1e",
-      "formatVersion": 1,
-      "reason": "The imported result-free performance authority advanced to format version 2 to repair its malformed fallback-256 hex before any run. The 85 differential rows, order, projections, and local fixtures are unchanged.",
-      "resultsGenerated": false
+      "campaignDigest": "538e9dd3c6f2e1c52a4dd559f6b48dd9f0d75eb478b11a7299170ecde904e7ab",
+      "diagnosticResultDigest": "253a90181a3cda5490b04bd726af282aa1cc26c8405f39a190d8ba980ff0c7a0",
+      "formatVersion": 2,
+      "reason": "The first complete 85-row run at Blanc 138ae0c6cc41d6cd5e764070c084b1fa2e259a47 exposed one shared expected-fixture typo: v2 encoded `ERC1967: new implentation is not a contract`, omitting the two bytes `em`, while both the locked Solidity artifact and Blanc returned the identical correct `implementation` payload in K08, U03, and X11. Version 3 changes only that shared expected blob and its derived identity; the 85 worlds, rows, order, projections, reference/Blanc artifacts, and scoring contract are unchanged.",
+      "resultsGenerated": true
     }
   },
   "sharedPerformanceManifest": {
@@ -500,10 +501,10 @@
         "classification": "exact-returndata"
       },
       "no-code-implementation": {
-        "byteLength": 130,
+        "byteLength": 132,
         "description": "exact revert payload: no-code-implementation",
-        "hex": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002d455243313936373a206e657720696d706c656e746174696f6e206973206e6f74206120636f6e747261637400000000000000000000000000000000000000",
-        "sha256": "4052fe21e8a75f614fcd3141192048caa1281048577f9ddcc6a1d940b60ec028",
+        "hex": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002d455243313936373a206e657720696d706c656d656e746174696f6e206973206e6f74206120636f6e747261637400000000000000000000000000000000000000",
+        "sha256": "3030f046064f23ae4f8ba6c27db4195237cb0a89e98c1199dbb2889819d19579",
         "classification": "exact-returndata"
       },
       "zero-admin": {

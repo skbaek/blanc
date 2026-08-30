@@ -1,12 +1,29 @@
 # OssifiableProxy frozen differential corpus
 
-This directory freezes the semantic input corpus for G4-7. It contains definitions only: no runner, results, score data, schema, proof, gate, or implemented falsifier.
+This directory freezes the semantic input corpus for G4-7. The manifest itself
+contains definitions only and embeds no result or score data; its runner,
+schema, checker, and independent falsifiers live under `scripts/`.
 
-Current format version 2 supersedes result-free version 1 digest `6ddf76545a556a2e5d10f10b18ffa07fcf8dbadaa1d31d55b3a8d8b967ba5c1e`. The only authority change is the imported performance manifest's pre-result correction of its malformed `fallback-256` hex; all 85 rows, their order, projections, and local fixtures are unchanged.
+Current format version 3 supersedes version 2 digest
+`538e9dd3c6f2e1c52a4dd559f6b48dd9f0d75eb478b11a7299170ecde904e7ab`.
+The first complete v2 run at Blanc
+`138ae0c6cc41d6cd5e764070c084b1fa2e259a47` executed all 85 rows and exposed
+one shared expected-fixture typo: v2 encoded `implentation`, while both the
+locked Solidity artifact and Blanc returned the identical correct
+`implementation` revert payload in K08, U03, and X11. Its immutable diagnostic
+result digest is
+`253a90181a3cda5490b04bd726af282aa1cc26c8405f39a190d8ba980ff0c7a0`.
+Version 3 changes only those missing two expected bytes and the derived blob
+and campaign digests. All 85 worlds, rows, order, projection channels,
+reference/Blanc artifacts, and performance authority remain unchanged.
 
 The corpus imports `scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json` at corrected campaign digest `d257394b6eb56b02072b68037896a863e96a42f405690423024bc6b432f34eaa`. Shared addresses, accounts, environment, access sets, constructor tuples, and common mocks resolve there. The local manifest adds only the malformed/boundary inputs, special proxy state, and exact mock bytecode needed by these rows. Solidity is bound to `scripts/lido-ossifiable-proxy-reference.json` (document SHA-256 `1c9f380f2475e5a54eb870e4f41ceeb09a0f9c227271ad14900fe82b0df1b688`) and its `/artifacts/creationTemplate` and `/artifacts/runtime` keys. Blanc is bound prospectively to `scripts/eval-lido-ossifiable-proxy-artifacts.lean`; a later result must pin the exact evaluated commit and emitted artifact digests.
 
-Manifest canonical SHA-256: `538e9dd3c6f2e1c52a4dd559f6b48dd9f0d75eb478b11a7299170ecde904e7ab`. The digest covers the parsed document with `/campaign/digest/value` set to the empty string, canonicalized with sorted keys and compact separators. The denominator and order are fixed at 85 rows.
+Manifest canonical SHA-256:
+`509ff7b8b65a73d7875d187216656b7a73af290735f28db7f07a2ab4cab59427`.
+The digest covers the parsed document with `/campaign/digest/value` set to the
+empty string, canonicalized with sorted keys and compact separators. The
+denominator and order are fixed at 85 rows.
 
 ## Coverage map
 

@@ -18,7 +18,7 @@ from typing import Any, Dict, Iterable, Mapping, NoReturn, Sequence
 
 
 MANIFEST_FORMAT = "blanc.lido-ossifiable-proxy.differential-campaign"
-MANIFEST_DIGEST = "538e9dd3c6f2e1c52a4dd559f6b48dd9f0d75eb478b11a7299170ecde904e7ab"
+MANIFEST_DIGEST = "509ff7b8b65a73d7875d187216656b7a73af290735f28db7f07a2ab4cab59427"
 PERFORMANCE_FORMAT = "blanc.lido-ossifiable-proxy.performance-campaign"
 PERFORMANCE_DIGEST = "d257394b6eb56b02072b68037896a863e96a42f405690423024bc6b432f34eaa"
 REFERENCE_LOCK_SHA256 = "1c9f380f2475e5a54eb870e4f41ceeb09a0f9c227271ad14900fe82b0df1b688"
@@ -76,7 +76,7 @@ EXPECTED_ERROR_SHA256 = {
     "NotAdmin": "ac92a971c4828f995041749977d7d057bbbd1c3174d667d01ec294313e2bd6af",
     "ProxyIsOssified": "d30f42d8327a91798a5ab12d2dac1bdd5b931e2dd11c6ba30fe92a2deaa0c33f",
     "low-level-delegate-call": "48da7bfa4e4e712bda72586b558153f64d353d661b99b24e57cfae30c3fb2b63",
-    "no-code-implementation": "4052fe21e8a75f614fcd3141192048caa1281048577f9ddcc6a1d940b60ec028",
+    "no-code-implementation": "3030f046064f23ae4f8ba6c27db4195237cb0a89e98c1199dbb2889819d19579",
     "zero-admin": "719f8d1895b691e7eb1c7afd7ba663d553a3113b422c49b721e988ead02f8620",
     "Panic-0x41": "b63ea3d4907b780ee7bc15204003100a355d341f3727840a25471ed52f74ec48",
 }
@@ -562,7 +562,7 @@ def validate_manifest(
         "identities", "projectionContract", "sharedPerformanceManifest", "worldContract",
     }, "manifest")
     campaign = manifest.get("campaign", {})
-    if campaign.get("format") != MANIFEST_FORMAT or campaign.get("formatVersion") != 2 or \
+    if campaign.get("format") != MANIFEST_FORMAT or campaign.get("formatVersion") != 3 or \
             campaign.get("fixedCaseCount") != CASE_COUNT or campaign.get("resultsIncluded") is not False or \
             campaign.get("runnerIncluded") is not False:
         reject("manifest campaign envelope drifted")
