@@ -1,0 +1,1320 @@
+{
+  "campaign": {
+    "authority": "~/plans/proxy-pair-ossifiable-port-goal.md#frozen-efficiency-campaign",
+    "digest": {
+      "algorithm": "sha256",
+      "canonicalization": "json.dumps(parsed, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True).encode(\"utf-8\")",
+      "scope": "the entire parsed document with /campaign/digest/value replaced by the empty string",
+      "value": "01d077f93dbebc327885f9ab03617bb88accbe920d9f5a966e2d5f3a5bbfe464"
+    },
+    "format": "blanc.lido-ossifiable-proxy.performance-campaign",
+    "formatVersion": 1,
+    "frozenDate": "2026-08-30",
+    "lifecycleStage": "frozen-before-first-full-port-blanc-result",
+    "measurementsIncluded": false,
+    "name": "Lido OssifiableProxy frozen 25-cell efficiency campaign"
+  },
+  "cells": [
+    {
+      "group": "artifact/deployment",
+      "id": "A1",
+      "ordinal": 1,
+      "scalar": "returned-runtime-byte-length",
+      "world": {
+        "artifactBinding": "returnedRuntime",
+        "constructorTuple": "canonical-empty",
+        "kind": "artifact",
+        "referenceByteLength": 2497,
+        "referenceKeccak256": "0x9bc25fa4b2f98d56db4aa4156a6dc98360ccd4ef9c7bc7f891797b0024272100"
+      }
+    },
+    {
+      "group": "artifact/deployment",
+      "id": "A2",
+      "ordinal": 2,
+      "scalar": "creation-template-byte-length",
+      "world": {
+        "abiConstructorArgumentsExcluded": true,
+        "artifactBinding": "creationTemplate",
+        "kind": "artifact",
+        "referenceByteLength": 4207,
+        "referenceKeccak256": "0x015bbc23707827310841f6f536b755f9c67ea516844a7684c85b97d39bdf0ffd"
+      }
+    },
+    {
+      "group": "artifact/deployment",
+      "id": "A3",
+      "ordinal": 3,
+      "scalar": "direct-create-gas-used",
+      "world": {
+        "accessSet": "create-entry",
+        "caller": "creator",
+        "callerNonce": "0",
+        "constructorTuple": "canonical-empty",
+        "expected": "create-empty-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-create-message",
+        "messageData": "empty",
+        "target": "proxy-target",
+        "targetInitiallyAbsent": true,
+        "value": "zero"
+      }
+    },
+    {
+      "group": "artifact/deployment",
+      "id": "A4",
+      "ordinal": 4,
+      "scalar": "direct-create-gas-used",
+      "world": {
+        "accessSet": "create-entry",
+        "caller": "creator",
+        "callerNonce": "0",
+        "constructorTuple": "canonical-nonempty-setup",
+        "expected": "create-nonempty-setup-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "setup-nonempty"
+          }
+        ],
+        "kind": "direct-create-message",
+        "messageData": "empty",
+        "target": "proxy-target",
+        "targetInitiallyAbsent": true,
+        "value": "zero"
+      }
+    },
+    {
+      "group": "forwarding",
+      "id": "F1",
+      "ordinal": 5,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "forwarding-cold",
+        "calldata": "fallback-32",
+        "caller": "forwarding-caller",
+        "expected": "fallback-echo-success-32",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "echo-success"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "forwarding",
+      "id": "F2",
+      "ordinal": 6,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "forwarding-warm",
+        "calldata": "fallback-32",
+        "caller": "forwarding-caller",
+        "expected": "fallback-echo-success-32",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "echo-success"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "forwarding",
+      "id": "F3",
+      "ordinal": 7,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "forwarding-cold",
+        "calldata": "fallback-32",
+        "caller": "forwarding-caller",
+        "expected": "fallback-empty-revert-32",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "empty-revert"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "forwarding",
+      "id": "F4",
+      "ordinal": 8,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "forwarding-warm",
+        "calldata": "fallback-32",
+        "caller": "forwarding-caller",
+        "expected": "fallback-empty-revert-32",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "empty-revert"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "forwarding",
+      "id": "F5",
+      "ordinal": 9,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "forwarding-cold",
+        "calldata": "fallback-256",
+        "caller": "forwarding-caller",
+        "expected": "fallback-echo-success-256",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "echo-success"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "forwarding",
+      "id": "F6",
+      "ordinal": 10,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "forwarding-cold",
+        "calldata": "fallback-256",
+        "caller": "forwarding-caller",
+        "expected": "fallback-echo-revert-256",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "echo-revert"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "forwarding",
+      "id": "F7",
+      "ordinal": 11,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "forwarding-cold",
+        "calldata": "empty",
+        "caller": "forwarding-caller",
+        "expected": "receive-empty-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "echo-success"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "receive-value"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C1",
+      "ordinal": 12,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "get-admin",
+        "caller": "control-admin",
+        "expected": "get-admin-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C2",
+      "ordinal": 13,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "get-implementation",
+        "caller": "control-admin",
+        "expected": "get-implementation-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C3",
+      "ordinal": 14,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "get-is-ossified",
+        "caller": "control-admin",
+        "expected": "get-is-ossified-false",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C4",
+      "ordinal": 15,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "change-admin-new",
+        "caller": "control-admin",
+        "expected": "change-admin-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C5",
+      "ordinal": 16,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "upgrade-new",
+        "caller": "control-admin",
+        "expected": "upgrade-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          },
+          {
+            "address": "new-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C6",
+      "ordinal": 17,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "upgrade-and-call-empty-false",
+        "caller": "control-admin",
+        "expected": "upgrade-empty-false-skip",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          },
+          {
+            "address": "new-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C7",
+      "ordinal": 18,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "upgrade-and-call-nonempty-false",
+        "caller": "control-admin",
+        "expected": "upgrade-nonempty-setup-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          },
+          {
+            "address": "new-implementation",
+            "code": "setup-nonempty"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C8",
+      "ordinal": 19,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "upgrade-and-call-empty-true",
+        "caller": "control-admin",
+        "expected": "upgrade-empty-forced-setup-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          },
+          {
+            "address": "new-implementation",
+            "code": "setup-empty"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "control",
+      "id": "C9",
+      "ordinal": 20,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "ossify",
+        "caller": "control-admin",
+        "expected": "ossify-success",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "negative",
+      "id": "N1",
+      "ordinal": 21,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-outsider-cold",
+        "calldata": "upgrade-new",
+        "caller": "forwarding-caller",
+        "expected": "not-admin-revert",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          },
+          {
+            "address": "new-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "negative",
+      "id": "N2",
+      "ordinal": 22,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-outsider-cold",
+        "calldata": "upgrade-new",
+        "caller": "forwarding-caller",
+        "expected": "ossified-precedence-revert",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          },
+          {
+            "address": "new-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "ossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "negative",
+      "id": "N3",
+      "ordinal": 23,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "change-admin-zero",
+        "caller": "control-admin",
+        "expected": "zero-admin-string-revert",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "negative",
+      "id": "N4",
+      "ordinal": 24,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "absentAccounts": [
+          "no-code-implementation"
+        ],
+        "accessSet": "control-admin-cold",
+        "calldata": "upgrade-no-code",
+        "caller": "control-admin",
+        "expected": "no-code-string-revert",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    },
+    {
+      "group": "negative",
+      "id": "N5",
+      "ordinal": 25,
+      "scalar": "direct-call-gas-used",
+      "world": {
+        "accessSet": "control-admin-cold",
+        "calldata": "upgrade-and-call-nonempty-false",
+        "caller": "control-admin",
+        "expected": "upgrade-child-revert-rollback",
+        "gasAllowance": "adequate-message-gas",
+        "implementationAccounts": [
+          {
+            "address": "canonical-implementation",
+            "code": "stop"
+          },
+          {
+            "address": "new-implementation",
+            "code": "echo-revert"
+          }
+        ],
+        "kind": "direct-call-message",
+        "proxyState": "unossified",
+        "target": "proxy-target",
+        "value": "zero"
+      }
+    }
+  ],
+  "fixtures": {
+    "accountTemplates": {
+      "caller": {
+        "balance": "1000000000000000000000000",
+        "code": "0x",
+        "nonce": "0",
+        "storage": {}
+      },
+      "mock-implementation": {
+        "balance": "0",
+        "code": "resolved from the cell's mock implementation fixture",
+        "nonce": "1",
+        "storage": {}
+      }
+    },
+    "accessSets": {
+      "control-admin-cold": {
+        "accessedAddresses": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002",
+          "0x0000000000000000000000000000000000000003",
+          "0x0000000000000000000000000000000000000004",
+          "0x0000000000000000000000000000000000000005",
+          "0x0000000000000000000000000000000000000006",
+          "0x0000000000000000000000000000000000000007",
+          "0x0000000000000000000000000000000000000008",
+          "0x0000000000000000000000000000000000000009",
+          "0x000000000000000000000000000000000000000a",
+          "0x000000000000000000000000000000000000000b",
+          "0x000000000000000000000000000000000000000c",
+          "0x000000000000000000000000000000000000000d",
+          "0x000000000000000000000000000000000000000e",
+          "0x000000000000000000000000000000000000000f",
+          "0x0000000000000000000000000000000000000010",
+          "0x0000000000000000000000000000000000000011",
+          "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf",
+          "0xcccccccccccccccccccccccccccccccccccccccc",
+          "0xf2e246bb76df876cef8b38ae84130f4f55de395b"
+        ],
+        "accessedStorageKeys": []
+      },
+      "control-outsider-cold": {
+        "accessedAddresses": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002",
+          "0x0000000000000000000000000000000000000003",
+          "0x0000000000000000000000000000000000000004",
+          "0x0000000000000000000000000000000000000005",
+          "0x0000000000000000000000000000000000000006",
+          "0x0000000000000000000000000000000000000007",
+          "0x0000000000000000000000000000000000000008",
+          "0x0000000000000000000000000000000000000009",
+          "0x000000000000000000000000000000000000000a",
+          "0x000000000000000000000000000000000000000b",
+          "0x000000000000000000000000000000000000000c",
+          "0x000000000000000000000000000000000000000d",
+          "0x000000000000000000000000000000000000000e",
+          "0x000000000000000000000000000000000000000f",
+          "0x0000000000000000000000000000000000000010",
+          "0x0000000000000000000000000000000000000011",
+          "0x2b5ad5c4795c026514f8317c7a215e218dccd6cf",
+          "0xcccccccccccccccccccccccccccccccccccccccc",
+          "0xf2e246bb76df876cef8b38ae84130f4f55de395b"
+        ],
+        "accessedStorageKeys": []
+      },
+      "create-entry": {
+        "accessedAddresses": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002",
+          "0x0000000000000000000000000000000000000003",
+          "0x0000000000000000000000000000000000000004",
+          "0x0000000000000000000000000000000000000005",
+          "0x0000000000000000000000000000000000000006",
+          "0x0000000000000000000000000000000000000007",
+          "0x0000000000000000000000000000000000000008",
+          "0x0000000000000000000000000000000000000009",
+          "0x000000000000000000000000000000000000000a",
+          "0x000000000000000000000000000000000000000b",
+          "0x000000000000000000000000000000000000000c",
+          "0x000000000000000000000000000000000000000d",
+          "0x000000000000000000000000000000000000000e",
+          "0x000000000000000000000000000000000000000f",
+          "0x0000000000000000000000000000000000000010",
+          "0x0000000000000000000000000000000000000011",
+          "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf",
+          "0xcccccccccccccccccccccccccccccccccccccccc",
+          "0xf2e246bb76df876cef8b38ae84130f4f55de395b"
+        ],
+        "accessedStorageKeys": []
+      },
+      "forwarding-cold": {
+        "accessedAddresses": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002",
+          "0x0000000000000000000000000000000000000003",
+          "0x0000000000000000000000000000000000000004",
+          "0x0000000000000000000000000000000000000005",
+          "0x0000000000000000000000000000000000000006",
+          "0x0000000000000000000000000000000000000007",
+          "0x0000000000000000000000000000000000000008",
+          "0x0000000000000000000000000000000000000009",
+          "0x000000000000000000000000000000000000000a",
+          "0x000000000000000000000000000000000000000b",
+          "0x000000000000000000000000000000000000000c",
+          "0x000000000000000000000000000000000000000d",
+          "0x000000000000000000000000000000000000000e",
+          "0x000000000000000000000000000000000000000f",
+          "0x0000000000000000000000000000000000000010",
+          "0x0000000000000000000000000000000000000011",
+          "0x2b5ad5c4795c026514f8317c7a215e218dccd6cf",
+          "0xcccccccccccccccccccccccccccccccccccccccc",
+          "0xf2e246bb76df876cef8b38ae84130f4f55de395b"
+        ],
+        "accessedStorageKeys": []
+      },
+      "forwarding-warm": {
+        "accessedAddresses": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002",
+          "0x0000000000000000000000000000000000000003",
+          "0x0000000000000000000000000000000000000004",
+          "0x0000000000000000000000000000000000000005",
+          "0x0000000000000000000000000000000000000006",
+          "0x0000000000000000000000000000000000000007",
+          "0x0000000000000000000000000000000000000008",
+          "0x0000000000000000000000000000000000000009",
+          "0x000000000000000000000000000000000000000a",
+          "0x000000000000000000000000000000000000000b",
+          "0x000000000000000000000000000000000000000c",
+          "0x000000000000000000000000000000000000000d",
+          "0x000000000000000000000000000000000000000e",
+          "0x000000000000000000000000000000000000000f",
+          "0x0000000000000000000000000000000000000010",
+          "0x0000000000000000000000000000000000000011",
+          "0x2b5ad5c4795c026514f8317c7a215e218dccd6cf",
+          "0x6f6541c2203196feedd14cd2c09550da1cbeda31",
+          "0xcccccccccccccccccccccccccccccccccccccccc",
+          "0xf2e246bb76df876cef8b38ae84130f4f55de395b"
+        ],
+        "accessedStorageKeys": [
+          {
+            "address": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+            "key": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
+          }
+        ]
+      }
+    },
+    "addresses": {
+      "canonical-admin": "0x8ea83ad72396f1e0cd2f8e72b1461db8eb6af7b5",
+      "canonical-implementation": "0x6f6541c2203196feedd14cd2c09550da1cbeda31",
+      "coinbase": "0xcccccccccccccccccccccccccccccccccccccccc",
+      "control-admin": "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf",
+      "creator": "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf",
+      "forwarding-caller": "0x2b5ad5c4795c026514f8317c7a215e218dccd6cf",
+      "new-admin": "0x6813eb9362372eef6200f3b1dbc3f819671cba69",
+      "new-implementation": "0x1111111111111111111111111111111111111111",
+      "no-code-implementation": "0x2222222222222222222222222222222222222222",
+      "proxy-target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+      "proxyTargetDerivation": "last20(keccak256(rlp([0x7e5f4552091a69125d5dfcb7b8c2659029395bdf, 0])))",
+      "zero": "0x0000000000000000000000000000000000000000"
+    },
+    "artifactBindings": {
+      "creationTemplate": {
+        "blanc": "exact creation-template bytes emitted by the candidate Lean evaluator and pinned by the result artifact",
+        "reference": "scripts/lido-ossifiable-proxy-reference.json#/artifacts/creationTemplate"
+      },
+      "returnedRuntime": {
+        "blanc": "exact runtime returned by successful CREATE of the candidate creation template with canonical-empty arguments and pinned by the result artifact",
+        "reference": "scripts/lido-ossifiable-proxy-reference.json#/artifacts/returnedRuntime"
+      }
+    },
+    "blockEnvironment": {
+      "baseFeePerGas": "0",
+      "blockGasLimit": "30000000",
+      "blockHashes": [
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "chainId": "1",
+      "coinbase": "0xcccccccccccccccccccccccccccccccccccccccc",
+      "excessBlobGas": "0",
+      "number": "20000000",
+      "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": "1700000000"
+    },
+    "calldata": {
+      "change-admin-new": {
+        "byteLength": 36,
+        "hex": "0x773f5be80000000000000000000000006813eb9362372eef6200f3b1dbc3f819671cba69"
+      },
+      "change-admin-zero": {
+        "byteLength": 36,
+        "hex": "0x773f5be80000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "empty": {
+        "byteLength": 0,
+        "hex": "0x"
+      },
+      "fallback-256": {
+        "byteLength": 256,
+        "hex": "0xfeedface000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeff0f1f2f3f4f5f6f7f8f9fafb"
+      },
+      "fallback-32": {
+        "byteLength": 32,
+        "hex": "0xfeedface0123456789abcdef0123456789abcdef0123456789abcdef01234567"
+      },
+      "get-admin": {
+        "byteLength": 4,
+        "hex": "0x916f1fd7"
+      },
+      "get-implementation": {
+        "byteLength": 4,
+        "hex": "0xad729a71"
+      },
+      "get-is-ossified": {
+        "byteLength": 4,
+        "hex": "0x13351258"
+      },
+      "ossify": {
+        "byteLength": 4,
+        "hex": "0xadcbc237"
+      },
+      "setup-data-32": {
+        "byteLength": 32,
+        "hex": "0x4f535349464941424c455f50524f58595f53455455505f563100000000000000"
+      },
+      "upgrade-and-call-empty-false": {
+        "byteLength": 132,
+        "hex": "0xd2f6ed4d0000000000000000000000001111111111111111111111111111111111111111000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "upgrade-and-call-empty-true": {
+        "byteLength": 132,
+        "hex": "0xd2f6ed4d0000000000000000000000001111111111111111111111111111111111111111000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "upgrade-and-call-nonempty-false": {
+        "byteLength": 164,
+        "hex": "0xd2f6ed4d00000000000000000000000011111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000204f535349464941424c455f50524f58595f53455455505f563100000000000000"
+      },
+      "upgrade-new": {
+        "byteLength": 36,
+        "hex": "0x3ebdd0eb0000000000000000000000001111111111111111111111111111111111111111"
+      },
+      "upgrade-no-code": {
+        "byteLength": 36,
+        "hex": "0x3ebdd0eb0000000000000000000000002222222222222222222222222222222222222222"
+      }
+    },
+    "constructorTuples": {
+      "canonical-empty": {
+        "abiArgumentsByteLength": 128,
+        "abiArgumentsHex": "0x0000000000000000000000006f6541c2203196feedd14cd2c09550da1cbeda310000000000000000000000008ea83ad72396f1e0cd2f8e72b1461db8eb6af7b500000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+        "admin": "0x8ea83ad72396f1e0cd2f8e72b1461db8eb6af7b5",
+        "data": "0x",
+        "implementation": "0x6f6541c2203196feedd14cd2c09550da1cbeda31",
+        "types": [
+          "address",
+          "address",
+          "bytes"
+        ]
+      },
+      "canonical-nonempty-setup": {
+        "abiArgumentsByteLength": 160,
+        "abiArgumentsHex": "0x0000000000000000000000006f6541c2203196feedd14cd2c09550da1cbeda310000000000000000000000008ea83ad72396f1e0cd2f8e72b1461db8eb6af7b5000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000204f535349464941424c455f50524f58595f53455455505f563100000000000000",
+        "admin": "0x8ea83ad72396f1e0cd2f8e72b1461db8eb6af7b5",
+        "data": "0x4f535349464941424c455f50524f58595f53455455505f563100000000000000",
+        "implementation": "0x6f6541c2203196feedd14cd2c09550da1cbeda31",
+        "types": [
+          "address",
+          "address",
+          "bytes"
+        ]
+      }
+    },
+    "events": {
+      "AdminChanged(address,address)": {
+        "indexed": [
+          false,
+          false
+        ],
+        "topic0": "0x7e644d79422f17c01e4894b5f4f588d331ebfa28653d42ae832dc59e38c9798f"
+      },
+      "ProxyOssified()": {
+        "indexed": [],
+        "topic0": "0x158b204828f9326d9bb3c2be9336986c14911b4a72b93d1801f207aac3c68b9f"
+      },
+      "Upgraded(address)": {
+        "indexed": [
+          true
+        ],
+        "topic0": "0xbc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b"
+      }
+    },
+    "expectedSemantics": {
+      "change-admin-success": {
+        "childCalls": [],
+        "logs": [
+          "AdminChanged(control-admin,new-admin)"
+        ],
+        "returndata": "0x",
+        "status": "success",
+        "storage": "admin=new-admin; implementation unchanged; all other storage unchanged"
+      },
+      "create-empty-success": {
+        "childCalls": [],
+        "logs": [
+          "Upgraded(canonical-implementation)",
+          "AdminChanged(zero,canonical-admin)"
+        ],
+        "returndata": "own-returned-runtime",
+        "status": "success",
+        "storage": "implementation=canonical-implementation; admin=canonical-admin; fixture-slot=zero; all other storage zero"
+      },
+      "create-nonempty-setup-success": {
+        "childCalls": [
+          "DELEGATECALL code=canonical-implementation storageOwner=proxy-target input=setup-data-32 value=zero status=success returndata=empty"
+        ],
+        "logs": [
+          "Upgraded(canonical-implementation)",
+          "AdminChanged(zero,canonical-admin)"
+        ],
+        "returndata": "own-returned-runtime",
+        "status": "success",
+        "storage": "implementation=canonical-implementation; admin=canonical-admin; fixture-slot=setup-data-32; all other storage zero"
+      },
+      "fallback-echo-revert-256": {
+        "childCalls": [
+          "DELEGATECALL code=canonical-implementation storageOwner=proxy-target input=fallback-256 value=zero status=revert returndata=fallback-256"
+        ],
+        "logs": [],
+        "returndata": "fallback-256",
+        "status": "revert",
+        "storage": "unchanged"
+      },
+      "fallback-echo-success-256": {
+        "childCalls": [
+          "DELEGATECALL code=canonical-implementation storageOwner=proxy-target input=fallback-256 value=zero status=success returndata=fallback-256"
+        ],
+        "logs": [],
+        "returndata": "fallback-256",
+        "status": "success",
+        "storage": "unchanged"
+      },
+      "fallback-echo-success-32": {
+        "childCalls": [
+          "DELEGATECALL code=canonical-implementation storageOwner=proxy-target input=fallback-32 value=zero status=success returndata=fallback-32"
+        ],
+        "logs": [],
+        "returndata": "fallback-32",
+        "status": "success",
+        "storage": "unchanged"
+      },
+      "fallback-empty-revert-32": {
+        "childCalls": [
+          "DELEGATECALL code=canonical-implementation storageOwner=proxy-target input=fallback-32 value=zero status=revert returndata=empty"
+        ],
+        "logs": [],
+        "returndata": "0x",
+        "status": "revert",
+        "storage": "unchanged"
+      },
+      "get-admin-success": {
+        "childCalls": [],
+        "logs": [],
+        "returndata": "0x0000000000000000000000007e5f4552091a69125d5dfcb7b8c2659029395bdf",
+        "status": "success",
+        "storage": "unchanged"
+      },
+      "get-implementation-success": {
+        "childCalls": [],
+        "logs": [],
+        "returndata": "0x0000000000000000000000006f6541c2203196feedd14cd2c09550da1cbeda31",
+        "status": "success",
+        "storage": "unchanged"
+      },
+      "get-is-ossified-false": {
+        "childCalls": [],
+        "logs": [],
+        "returndata": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "status": "success",
+        "storage": "unchanged"
+      },
+      "no-code-string-revert": {
+        "childCalls": [],
+        "logs": [],
+        "returndata": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002d455243313936373a206e657720696d706c656d656e746174696f6e206973206e6f74206120636f6e747261637400000000000000000000000000000000000000",
+        "status": "revert",
+        "storage": "unchanged"
+      },
+      "not-admin-revert": {
+        "childCalls": [],
+        "logs": [],
+        "returndata": "0x7bfa4b9f",
+        "status": "revert",
+        "storage": "unchanged"
+      },
+      "ossified-precedence-revert": {
+        "childCalls": [],
+        "logs": [],
+        "returndata": "0xb83646a9",
+        "status": "revert",
+        "storage": "unchanged; ProxyIsOssified precedes caller mismatch"
+      },
+      "ossify-success": {
+        "childCalls": [],
+        "logs": [
+          "AdminChanged(control-admin,zero)",
+          "ProxyOssified()"
+        ],
+        "returndata": "0x",
+        "status": "success",
+        "storage": "admin=zero; implementation unchanged; all other storage unchanged"
+      },
+      "receive-empty-success": {
+        "childCalls": [
+          "DELEGATECALL code=canonical-implementation storageOwner=proxy-target input=empty value=receive-value status=success returndata=empty"
+        ],
+        "eth": "forwarding-caller decreases by receive-value; proxy-target increases by receive-value",
+        "logs": [],
+        "returndata": "0x",
+        "status": "success",
+        "storage": "unchanged"
+      },
+      "upgrade-child-revert-rollback": {
+        "childCalls": [
+          "DELEGATECALL code=new-implementation storageOwner=proxy-target input=setup-data-32 value=zero status=revert returndata=setup-data-32"
+        ],
+        "logs": [],
+        "returndata": "setup-data-32",
+        "status": "revert",
+        "storage": "exactly prestate: implementation=canonical-implementation; admin=control-admin; fixture-slot=zero; Upgraded log and implementation write rolled back"
+      },
+      "upgrade-empty-false-skip": {
+        "childCalls": [],
+        "logs": [
+          "Upgraded(new-implementation)"
+        ],
+        "returndata": "0x",
+        "status": "success",
+        "storage": "implementation=new-implementation; admin unchanged; all other storage unchanged"
+      },
+      "upgrade-empty-forced-setup-success": {
+        "childCalls": [
+          "DELEGATECALL code=new-implementation storageOwner=proxy-target input=empty value=zero status=success returndata=empty"
+        ],
+        "logs": [
+          "Upgraded(new-implementation)"
+        ],
+        "returndata": "0x",
+        "status": "success",
+        "storage": "implementation=new-implementation; admin unchanged; fixture-slot=empty-setup-value; all other storage unchanged"
+      },
+      "upgrade-nonempty-setup-success": {
+        "childCalls": [
+          "DELEGATECALL code=new-implementation storageOwner=proxy-target input=setup-data-32 value=zero status=success returndata=empty"
+        ],
+        "logs": [
+          "Upgraded(new-implementation)"
+        ],
+        "returndata": "0x",
+        "status": "success",
+        "storage": "implementation=new-implementation; admin unchanged; fixture-slot=setup-data-32; all other storage unchanged"
+      },
+      "upgrade-success": {
+        "childCalls": [],
+        "logs": [
+          "Upgraded(new-implementation)"
+        ],
+        "returndata": "0x",
+        "status": "success",
+        "storage": "implementation=new-implementation; admin unchanged; all other storage unchanged"
+      },
+      "zero-admin-string-revert": {
+        "childCalls": [],
+        "logs": [],
+        "returndata": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000026455243313936373a206e65772061646d696e20697320746865207a65726f20616464726573730000000000000000000000000000000000000000000000000000",
+        "status": "revert",
+        "storage": "unchanged"
+      }
+    },
+    "mockImplementations": {
+      "echo-revert": {
+        "byteLength": 10,
+        "description": "copy all calldata to memory and REVERT with that exact byte string",
+        "hex": "0x366000600037366000fd",
+        "sha256": "353b92c3568189e5831e2798c2d56dd203c8de3c7ce1d7e8868cd619b744cb40"
+      },
+      "echo-success": {
+        "byteLength": 10,
+        "description": "copy all calldata to memory and RETURN that exact byte string",
+        "hex": "0x366000600037366000f3",
+        "sha256": "3f6a0d3102592dac3d1b4a03fc382cfcf77134bc4fa9969beedb62d89814e1a8"
+      },
+      "empty-revert": {
+        "byteLength": 5,
+        "description": "REVERT with empty returndata",
+        "hex": "0x60006000fd",
+        "sha256": "7983a150a0ee2eded2dfbbbc1d3520dc76d1819d96612a466ed49c2371da4bc9"
+      },
+      "setup-empty": {
+        "byteLength": 72,
+        "description": "store empty-setup-value in fixture-slot under DELEGATECALL and return empty",
+        "hex": "0x7f4f535349464941424c455f50524f58595f454d5054595f5631000000000000007f4f535349464941424c455f50524f58595f464958545552455f534c4f540000005560006000f3",
+        "sha256": "e28aff0ac84d97a7376d988bbd51b4d4b0b40d4d4ad4ea888dd1459bc580c2ab"
+      },
+      "setup-nonempty": {
+        "byteLength": 42,
+        "description": "store CALLDATALOAD(0) in fixture-slot under DELEGATECALL and return empty",
+        "hex": "0x6000357f4f535349464941424c455f50524f58595f464958545552455f534c4f540000005560006000f3",
+        "sha256": "b5111d269899e14e4d377b9267f2a7161700bb6067f34f8f2be06225dff374da"
+      },
+      "stop": {
+        "byteLength": 1,
+        "description": "one-byte STOP code used by A3 and code-existence-only control worlds",
+        "hex": "0x00",
+        "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+      }
+    },
+    "proxyStates": {
+      "ossified": {
+        "accountBalance": "0",
+        "accountNonce": "1",
+        "code": "side-specific returnedRuntime artifact",
+        "storageDefault": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "storageOverrides": {
+          "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": "0x0000000000000000000000006f6541c2203196feedd14cd2c09550da1cbeda31",
+          "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "unossified": {
+        "accountBalance": "0",
+        "accountNonce": "1",
+        "code": "side-specific returnedRuntime artifact",
+        "storageDefault": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "storageOverrides": {
+          "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": "0x0000000000000000000000006f6541c2203196feedd14cd2c09550da1cbeda31",
+          "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103": "0x0000000000000000000000007e5f4552091a69125d5dfcb7b8c2659029395bdf"
+        }
+      }
+    },
+    "setupFixtures": {
+      "empty": {
+        "calldata": "empty",
+        "implementationCode": "setup-empty",
+        "storageOwner": "proxy-target",
+        "write": {
+          "key": "0x4f535349464941424c455f50524f58595f464958545552455f534c4f54000000",
+          "value": "0x4f535349464941424c455f50524f58595f454d5054595f563100000000000000"
+        }
+      },
+      "nonempty": {
+        "calldata": "setup-data-32",
+        "implementationCode": "setup-nonempty",
+        "storageOwner": "proxy-target",
+        "write": {
+          "key": "0x4f535349464941424c455f50524f58595f464958545552455f534c4f54000000",
+          "value": "0x4f535349464941424c455f50524f58595f53455455505f563100000000000000"
+        }
+      }
+    },
+    "transactionEnvironment": {
+      "accessListAddresses": [],
+      "accessListStorageKeys": [],
+      "authorizations": [],
+      "blobVersionedHashes": [],
+      "callerBalance": "1000000000000000000000000",
+      "gasPrice": "0",
+      "indexInBlock": null,
+      "origin": "same as the cell caller",
+      "transientStorage": {},
+      "txHash": null
+    },
+    "values": {
+      "adequate-message-gas": "20000000",
+      "empty-setup-value": "0x4f535349464941424c455f50524f58595f454d5054595f563100000000000000",
+      "fixture-slot": "0x4f535349464941424c455f50524f58595f464958545552455f534c4f54000000",
+      "receive-value": "1",
+      "setup-data-32": "0x4f535349464941424c455f50524f58595f53455455505f563100000000000000",
+      "zero": "0"
+    }
+  },
+  "identities": {
+    "blanc": {
+      "campaignBaseCommit": "226bfad05b8bdd4623b600ca36fb527f003d85dc",
+      "candidateArtifactIdentity": "not a campaign input: each immutable baseline/final result must pin the exact candidate commit and evaluator-emitted artifact digests"
+    },
+    "execution": {
+      "defaultRoot": "~/execution-specs",
+      "eelsCommit": "4198b9c5996713b268aed602739d5aa40e277694",
+      "callEntrypoint": "ethereum.prague.vm.interpreter.process_message_call",
+      "createEntrypoint": "ethereum.prague.vm.interpreter.process_create_message",
+      "fork": "Prague",
+      "network": false,
+      "python": "venv/bin/python",
+      "pythonPath": "src",
+      "requiredEnvironment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": "${EELS_ROOT}/src"
+      },
+      "rootEnv": "EELS_ROOT"
+    },
+    "reference": {
+      "compiler": {
+        "build": "commit.e5eed63a",
+        "evmVersion": "istanbul",
+        "keccak256": "0xbc470ab3442e78bb4d3f16c01c39b2f160f4f34eb4373efed11c234e1c7f6ca0",
+        "listSha256": "0ee86d7e0a30f0d90593ff64dfb56d192c514c8e33feebeb54446be55b12e5ad",
+        "longVersion": "0.8.9+commit.e5eed63a",
+        "optimizerEnabled": true,
+        "optimizerRuns": 200,
+        "path": "solc-emscripten-wasm32-v0.8.9+commit.e5eed63a.js",
+        "platform": "emscripten-wasm32",
+        "sha256": "0x5b25f987aae32a0275fdc6c1be36cc47cf126024a04dafd8e4be39a1d1d1422c",
+        "viaIR": false
+      },
+      "referenceLock": "scripts/lido-ossifiable-proxy-reference.json",
+      "release": "lidofinance/core-v4.0.0",
+      "releaseCommit": "17005714f151e5502c559932319a3f2f74ac2436",
+      "sourceBlob": "d4ccec05c453b15cc17023e3950e44341a66a4a4",
+      "sourcePath": "contracts/0.8.9/proxy/OssifiableProxy.sol",
+      "sourceSha256": "3fb48bc4a40c887dd581178d05316745c1b1c393a8e64787ef2a7075f1e7ce6d"
+    }
+  },
+  "measurementContract": {
+    "artifactScalars": {
+      "creation-template-byte-length": "number of exact creation-template bytes before appending ABI constructor arguments",
+      "returned-runtime-byte-length": "number of exact runtime bytes returned by successful CREATE with canonical-empty arguments"
+    },
+    "callScalar": {
+      "formula": "message.gas - output.gas_left",
+      "name": "direct-call-gas-used",
+      "refundAccounting": "pre-refund",
+      "transactionIntrinsicGasIncluded": false
+    },
+    "createScalar": {
+      "createCodeDepositGasIncluded": true,
+      "formula": "message.gas - output.gas_left",
+      "initCodeExecutionIncluded": true,
+      "name": "direct-create-gas-used",
+      "refundAccounting": "pre-refund",
+      "transactionIntrinsicGasIncluded": false
+    },
+    "freshWorldPerSidePerCell": true,
+    "gasAllowance": "20000000",
+    "messageFlags": {
+      "codeAddress": "null for direct CREATE; proxy-target for direct calls",
+      "currentTarget": "proxy-target",
+      "depth": "0",
+      "disablePrecompiles": false,
+      "isStatic": false,
+      "shouldTransferValue": true,
+      "target": "empty bytes for direct CREATE; proxy-target for direct calls"
+    },
+    "primaryFork": "Prague",
+    "semanticProjection": [
+      "outer status",
+      "exact outer returndata",
+      "proxy logical storage including ERC-1967 and fixture slots",
+      "ETH balances",
+      "ordered exact logs",
+      "DELEGATECALL code address, proxy storage owner, caller, value, calldata, status, and returndata",
+      "CREATE returned runtime and installed-code identity for deployment cells"
+    ],
+    "sideSymmetry": "within a cell, Solidity and Blanc receive the identical resolved block environment, transaction environment, caller, target, value, calldata or constructor tuple, mock accounts and bytecode, logical prestate, message access sets, and gas allowance; only the side-owned candidate artifact and representation-specific storage encoding may differ",
+    "warmColdRule": "forwarding-warm is forwarding-cold plus exactly canonical-implementation in accessedAddresses and (proxy-target, implementation-slot) in accessedStorageKeys; there is no other state or environment change"
+  },
+  "schema": 1,
+  "scoreContract": {
+    "classification": {
+      "incomparable": "instrumentation failure or proved semantic mismatch; counts as a non-win",
+      "loss": "Blanc named scalar is greater than the reference named scalar",
+      "strict-win": "Blanc named scalar is less than the reference named scalar",
+      "tie": "Blanc named scalar equals the reference named scalar; counts as a non-win"
+    },
+    "denominator": 25,
+    "fixedOrder": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "F1",
+      "F2",
+      "F3",
+      "F4",
+      "F5",
+      "F6",
+      "F7",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5",
+      "C6",
+      "C7",
+      "C8",
+      "C9",
+      "N1",
+      "N2",
+      "N3",
+      "N4",
+      "N5"
+    ],
+    "minimumStrictWins": 13,
+    "reportAllCells": true,
+    "semanticAgreementRequiredBeforeScoring": true,
+    "unit": {
+      "A1": "bytes",
+      "A2": "bytes",
+      "A3-N5": "gas"
+    }
+  }
+}
