@@ -1098,6 +1098,105 @@ def upgradeImplementationCommit (continuation : Func) : Func :=
   dup 0 ::: storeAddressWordAt implementationSlotLit +++
     pushB256 upgradedEventTopic ::: logWith 1 0 0 +++ continuation
 
+/-- Reusable boundary after the shared packed implementation write and exact
+`Upgraded` append.  Runtime upgrades and constructor initialization enter the
+same fragment with the implementation word at the stack head; this boundary
+keeps their different continuations out of the common effect proof. -/
+inductive UpgradeImplementationWordCommitBoundary
+    (fs : List Func) (sevm : Sevm) (pre : Devm) (continuation : Func)
+    (tail : Stack) (implementation : B256) (out : Execution) : Prop where
+  | intro (next : Devm)
+      (run : Func.RunCompiledTo fs sevm next continuation out)
+      (stack : tail <<+ next.stack)
+      (storage : Devm.getStor next sevm.currentTarget =
+        (Devm.getStor pre sevm.currentTarget).set implementationSlotLit
+          (addressSlotUpdateRaw pre sevm.currentTarget
+            implementationSlotLit implementation))
+      (logs : next.logs = pre.logs ++
+        [rawUpgradedLog sevm.currentTarget implementation])
+      (memory : next.memory = pre.memory)
+
+theorem upgradeImplementationWordCommit_boundary
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {continuation : Func}
+    {tail : Stack} {implementation : B256} {out : Execution}
+    (hp : implementation :: tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (upgradeImplementationCommit continuation) out) :
+    UpgradeImplementationWordCommitBoundary fs sevm pre continuation tail
+      implementation out := by
+  unfold upgradeImplementationCommit at run
+  obtain ⟨dupPost, qdup, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨storePost, storeRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨topicPost, qtopic, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨next, logRun, nextRun⟩ := runCompiledTo_prepend_inv run
+  have dupRun := Ninst.Run.of_runCompiled qdup
+  have topicPush := of_run_pushB256 (Ninst.Run.of_runCompiled qtopic)
+  have pDup := prefix_of_dup_val dupRun (Stack.Nth.head _ _) hp
+  obtain ⟨pStore, hstore, hstoreMemory, hstoreLogs⟩ :=
+    of_storeAddressWordAt_val pDup storeRun
+  have pTopic := prefix_of_push topicPush pStore
+  obtain ⟨pNext, hlog⟩ := of_logWith_val (k := 1) (x := 0) (y := 0)
+    (topics := [upgradedEventTopic, implementation])
+    (by simp) (by simpa using pTopic) logRun
+  have preToDupStor : Devm.getStor pre = Devm.getStor dupPost :=
+    Ninst.Hinv.inv (f := Devm.getStor) dupRun
+  have storeToNextStor : Devm.getStor storePost = Devm.getStor next :=
+    (Ninst.Hinv.inv (f := Devm.getStor)
+      (Ninst.Run.of_runCompiled qtopic)).trans
+      (Line.of_inv Devm.getStor (by line_inv) logRun)
+  have preToTopicLogs : pre.logs = topicPost.logs :=
+    (Ninst.Hinv.inv (f := Devm.logs) dupRun).trans
+      (hstoreLogs.symm.trans topicPush.logs)
+  rcases Line.of_run_cons logRun with ⟨sizePost, qsize, logTail⟩
+  rcases Line.of_run_cons logTail with ⟨offsetPost, qoffset, logTail⟩
+  rcases Line.of_run_cons logTail with ⟨_, qlog, hnil⟩
+  cases hnil
+  have sizePush := of_run_pushB256 qsize
+  have offsetPush := of_run_pushB256 qoffset
+  have hzeroWord : (0 * 32 : B256) = 0 := by decide +kernel
+  rw [hzeroWord] at sizePush offsetPush
+  have pSize := prefix_of_push sizePush pTopic
+  have pOffset := prefix_of_push offsetPush pSize
+  rcases of_run_log_mem_val qlog with
+    ⟨mi, sz, topics, htopics, hpop, hlogMemoryRaw⟩
+  have hknown :
+      ([0, 0, upgradedEventTopic, implementation] : List B256) <<+
+        offsetPost.stack := by
+    exact @pref_trans _
+      [0, 0, upgradedEventTopic, implementation]
+      ([0, 0, upgradedEventTopic, implementation] ++ tail) _
+      ⟨tail, rfl⟩ (by simpa using pOffset)
+  have heq :
+      ([0, 0, upgradedEventTopic, implementation] : List B256) =
+        mi :: sz :: topics :=
+    List.pref_unique (by simp [htopics]) hknown (pref_of_split hpop)
+  simp only [List.cons.injEq] at heq
+  rcases heq with ⟨rfl, rfl, rfl⟩
+  have logMemory : next.memory = topicPost.memory := by
+    rw [hlogMemoryRaw, ← offsetPush.memory, ← sizePush.memory]
+    rfl
+  have nextMemory : next.memory = pre.memory :=
+    logMemory.trans
+      (topicPush.memory.symm.trans
+        (hstoreMemory.trans
+          (Ninst.Hinv.inv (f := Devm.memory) dupRun).symm))
+  refine ⟨next, nextRun, pNext, ?_, ?_, nextMemory⟩
+  · rw [← congrFun storeToNextStor sevm.currentTarget, hstore]
+    change
+      (Devm.getStor dupPost sevm.currentTarget).set implementationSlotLit
+          ((addressMask &&&
+              (Devm.getStor dupPost sevm.currentTarget).get
+                implementationSlotLit) ||| implementation) =
+        (Devm.getStor pre sevm.currentTarget).set implementationSlotLit
+          ((addressMask &&&
+              (Devm.getStor pre sevm.currentTarget).get
+                implementationSlotLit) ||| implementation)
+    rw [← congrFun preToDupStor sevm.currentTarget]
+  · rw [hlog, ← preToTopicLogs]
+    have hzero : ((0 : B256) * 32).toNat = 0 := by rfl
+    have hempty : (topicPost.memory.read 0 0).1 = [] := by rfl
+    simp [rawUpgradedLog, hzero, hempty]
+
 theorem upgradeImplementationControl_split_shape (continuation : Func) :
     upgradeImplementationControl continuation =
       arg 0 +++ dup 0 ::: extcodesize ::: iszero :::

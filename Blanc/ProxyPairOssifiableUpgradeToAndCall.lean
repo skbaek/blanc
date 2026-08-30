@@ -48,90 +48,11 @@ theorem upgradeImplementationCommit_boundary
     (run : Func.RunCompiledTo fs sevm pre
       (upgradeImplementationCommit continuation) out) :
     UpgradeImplementationCommitBoundary fs sevm pre continuation tail out := by
-  unfold upgradeImplementationCommit at run
-  obtain ⟨dupPost, qdup, run⟩ := runCompiledTo_next_inv run
-  obtain ⟨storePost, storeRun, run⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨topicPost, qtopic, run⟩ := runCompiledTo_next_inv run
-  obtain ⟨logPost, logRun, continuationRun⟩ :=
-    runCompiledTo_prepend_inv run
-  have pDup := prefix_of_dup_val
-    (Ninst.Run.of_runCompiled qdup) (Stack.Nth.head _ _) hp
-  obtain ⟨pStore, hstore, hstoreMemory, hstoreLogs⟩ :=
-    of_storeAddressWordAt_val pDup storeRun
-  have topicPush := of_run_pushB256 (Ninst.Run.of_runCompiled qtopic)
-  have pTopic := prefix_of_push topicPush pStore
-  obtain ⟨pLogged, hlog⟩ := of_logWith_val
-    (k := 1) (x := 0) (y := 0)
-    (topics := [upgradedEventTopic, Sevm.argWord sevm 0])
-    (by simp) (by simpa using pTopic) logRun
-  have preToDupStor : Devm.getStor pre = Devm.getStor dupPost :=
-    Ninst.Hinv.inv (f := Devm.getStor) (Ninst.Run.of_runCompiled qdup)
-  have storeToLogStor : Devm.getStor storePost = Devm.getStor logPost :=
-    (Ninst.Hinv.inv (f := Devm.getStor)
-      (Ninst.Run.of_runCompiled qtopic)).trans
-      (Line.of_inv Devm.getStor (by line_inv) logRun)
-  have preToTopicLogs : pre.logs = topicPost.logs :=
-    (Ninst.Hinv.inv (f := Devm.logs)
-      (Ninst.Run.of_runCompiled qdup)).trans
-      (hstoreLogs.symm.trans topicPush.logs)
-  have finalStorage :
-      Devm.getStor logPost sevm.currentTarget =
-        (Devm.getStor pre sevm.currentTarget).set implementationSlotLit
-          (addressSlotUpdateRaw pre sevm.currentTarget
-            implementationSlotLit (Sevm.argWord sevm 0)) := by
-    rw [← congrFun storeToLogStor sevm.currentTarget, hstore]
-    change
-      (Devm.getStor dupPost sevm.currentTarget).set implementationSlotLit
-          ((addressMask &&&
-              (Devm.getStor dupPost sevm.currentTarget).get
-                implementationSlotLit) ||| Sevm.argWord sevm 0) =
-        (Devm.getStor pre sevm.currentTarget).set implementationSlotLit
-          ((addressMask &&&
-              (Devm.getStor pre sevm.currentTarget).get
-                implementationSlotLit) ||| Sevm.argWord sevm 0)
-    rw [← congrFun preToDupStor sevm.currentTarget]
-  have finalLogs : logPost.logs = pre.logs ++
-      [rawUpgradedLog sevm.currentTarget (Sevm.argWord sevm 0)] := by
-    rw [hlog, ← preToTopicLogs]
-    have hzero : ((0 : B256) * 32).toNat = 0 := by rfl
-    have hempty : (topicPost.memory.read 0 0).1 = [] := by rfl
-    simp [rawUpgradedLog, hzero, hempty]
-  rcases Line.of_run_cons logRun with ⟨sizePost, qsize, logTail⟩
-  rcases Line.of_run_cons logTail with ⟨offsetPost, qoffset, logTail⟩
-  rcases Line.of_run_cons logTail with ⟨_, qlog, hnil⟩
-  cases hnil
-  have sizePush := of_run_pushB256 qsize
-  have offsetPush := of_run_pushB256 qoffset
-  have hzeroWord : (0 * 32 : B256) = 0 := by decide +kernel
-  rw [hzeroWord] at sizePush offsetPush
-  have pSize := prefix_of_push sizePush pTopic
-  have pOffset := prefix_of_push offsetPush pSize
-  rcases of_run_log_mem_val qlog with
-    ⟨mi, sz, topics, htopics, hpop, hlogMemoryRaw⟩
-  have hknown :
-      ([0, 0, upgradedEventTopic, Sevm.argWord sevm 0] : List B256) <<+
-        offsetPost.stack := by
-    exact @pref_trans _
-      [0, 0, upgradedEventTopic, Sevm.argWord sevm 0]
-      ([0, 0, upgradedEventTopic, Sevm.argWord sevm 0] ++ tail) _
-      ⟨tail, rfl⟩ (by simpa using pOffset)
-  have heq :
-      ([0, 0, upgradedEventTopic, Sevm.argWord sevm 0] : List B256) =
-        mi :: sz :: topics :=
-    List.pref_unique (by simp [htopics]) hknown (pref_of_split hpop)
-  simp only [List.cons.injEq] at heq
-  rcases heq with ⟨rfl, rfl, rfl⟩
-  have logMemory : logPost.memory = topicPost.memory := by
-    rw [hlogMemoryRaw, ← offsetPush.memory, ← sizePush.memory]
-    rfl
-  have finalMemory : logPost.memory = pre.memory :=
-    logMemory.trans
-      (topicPush.memory.symm.trans
-        (hstoreMemory.trans
-          (Ninst.Hinv.inv (f := Devm.memory)
-            (Ninst.Run.of_runCompiled qdup)).symm))
-  exact .intro logPost continuationRun pLogged finalStorage finalLogs
-    finalMemory
+  rcases upgradeImplementationWordCommit_boundary hp run with
+    ⟨continuationPre, continuationRun, pContinuation, storage, logs,
+      memory⟩
+  exact .intro continuationPre continuationRun pContinuation storage logs
+    memory
 
 /-- A code-present implementation-control walk necessarily crosses the exact
 commit boundary and reaches its arbitrary continuation. -/

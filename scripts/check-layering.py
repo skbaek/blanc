@@ -96,6 +96,8 @@ CONTRACTS = {
                    "ProxyPairOssifiableControlEffects",
                    "ProxyPairOssifiableUpgradeToAndCall",
                    "ProxyPairOssifiableConstructor",
+                   "ProxyPairOssifiableConstructorDecode",
+                   "ProxyPairOssifiableConstructorInitialize",
                    "ProxyPairOssifiableConstructorEffects",
                    "ProxyPairOssifiableDeployment",
                    "ProxyPairImplementation", "ProxyPairExecution",

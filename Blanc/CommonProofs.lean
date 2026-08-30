@@ -10292,6 +10292,30 @@ lemma List.sliceD_eq_map {ξ : Type} (ys : List ξ) (d : ξ) :
     show ys.getD (m + 1 + j) d = ys.getD (m + (j + 1)) d
     rw [show m + (j + 1) = m + 1 + j from by omega]
 
+/-- Pointwise read inside a padded slice, while the requested index remains
+inside that slice's declared width. -/
+lemma Bytes.getD_sliceD_of_lt
+    (bs : Bytes) (start len i : Nat) (hi : i < len) :
+    (bs.sliceD start len 0).getD i 0 = bs.getD (start + i) 0 := by
+  rw [List.sliceD_eq_map]
+  simp [List.getD_eq_getElem?_getD, hi]
+
+/-- A subwindow wholly inside a padded slice is the corresponding slice of the
+original image.  This is the word-projection rule for a multiword ABI copy. -/
+lemma Bytes.sliceD_sliceD_of_le
+    (bs : Bytes) (start width offset len : Nat)
+    (h : offset + len ≤ width) :
+    (bs.sliceD start width 0).sliceD offset len 0 =
+      bs.sliceD (start + offset) len 0 := by
+  rw [List.sliceD_eq_map (bs.sliceD start width 0) 0 len offset,
+    List.sliceD_eq_map bs 0 len (start + offset)]
+  apply List.map_congr_left
+  intro i hi
+  have hi' := List.mem_range.mp hi
+  rw [Bytes.getD_sliceD_of_lt _ _ _ _ (by omega)]
+  congr 1
+  omega
+
 /-- A write starting after a requested slice leaves that earlier slice
 unchanged. -/
 lemma Bytes.sliceD_writeAt_before
@@ -10321,6 +10345,22 @@ lemma Bytes.sliceD_writeAt_after
   have hi' := List.mem_range.mp hi
   rw [Bytes.getD_writeAt]
   rw [if_neg]
+  omega
+
+/-- A padded read wholly inside a written window reads the corresponding
+subwindow of the payload.  Constructor decoders use this after copying a
+multiword ABI head and then loading its individual words. -/
+lemma Bytes.sliceD_writeAt_inside
+    (bs xs : Bytes) (n start len : Nat)
+    (hstart : n ≤ start) (hend : start + len ≤ n + xs.length) :
+    (Bytes.writeAt bs n xs).sliceD start len 0 =
+      xs.sliceD (start - n) len 0 := by
+  rw [List.sliceD_eq_map, List.sliceD_eq_map]
+  apply List.map_congr_left
+  intro i hi
+  have hi' := List.mem_range.mp hi
+  rw [Bytes.getD_writeAt, if_pos (by omega)]
+  congr 1
   omega
 
 /-- Reading back the 32-byte word just written at `n`.  Scratch-word walks

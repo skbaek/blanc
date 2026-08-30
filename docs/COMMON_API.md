@@ -511,12 +511,15 @@ shared declarations rather than restating them per family.
   instruction invariance class.
 
 A scratch-word walk that writes several fixed slots and reads them back needs
-both disjointness halves: `Bytes.sliceD_writeAt` reads exactly what was just
-written, while `Bytes.sliceD_writeAt_before` and `Bytes.sliceD_writeAt_after`
-skip a write that lands wholly above or wholly below the read window.  At
-whole-word granularity prefer `Bytes.readWord_writeAt_self` and
-`Bytes.readWord_writeAt_of_disjoint`, which fix the 32-byte width and take the
-disjointness as a single `≤`-disjunction.
+three window cases.  `Bytes.sliceD_writeAt_inside` projects a subwindow wholly
+inside the payload just written, while `Bytes.sliceD_writeAt_before` and
+`Bytes.sliceD_writeAt_after` skip a write that lands wholly above or wholly
+below the read window; `Bytes.sliceD_writeAt` remains the exact whole-payload
+readback.  For a copied padded window, `Bytes.getD_sliceD_of_lt` projects one
+in-range byte and `Bytes.sliceD_sliceD_of_le` projects any wholly contained
+subwindow back to the original image.  At whole-word granularity prefer
+`Bytes.readWord_writeAt_self` and `Bytes.readWord_writeAt_of_disjoint`, which
+fix the 32-byte width and take the disjointness as a single `≤`-disjunction.
 
 For an exact event append from a fixed `logWith k x y` fragment, use
 `of_logWith_val`: it consumes the known signature-plus-indexed topic prefix and
