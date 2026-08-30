@@ -146,6 +146,19 @@ theorem DepositAbiDecodable.structure
     DepositAbiStructureDecodable data :=
   ⟨h.head, h.pubkeyTail, h.withdrawalCredentialsTail, h.signatureTail⟩
 
+/-- Choose the canonical payload and root projections from a structurally
+decodable deposit call.  Together with `DepositAbiDecodable.structure`, this
+is the exact decoded-versus-malformed exhaustiveness bridge. -/
+theorem DepositAbiStructureDecodable.toDepositAbiDecodable
+    {data : Bytes} (h : DepositAbiStructureDecodable data) :
+    DepositAbiDecodable data
+      (dynamicPayload data 0)
+      (dynamicPayload data 1)
+      (dynamicPayload data 2)
+      (calldataWord data 100) :=
+  ⟨h.head, h.pubkeyTail, h.withdrawalCredentialsTail, h.signatureTail,
+    rfl, rfl, rfl, rfl⟩
+
 def firstDepositTailOffset : Nat := 4 * 32
 
 def secondDepositTailOffset (pubkey : Bytes) : Nat :=
