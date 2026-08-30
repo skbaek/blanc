@@ -138,65 +138,6 @@ theorem dispatcher_body_of_prog_run
 `dispatcher_body_of_prog_run`, this form starts with the program entry's empty
 stack and carries the whole dispatch frame back to that entry. -/
 
-private theorem stack_of_pushBurn_exact {x : B256} {a b : Devm} {xs : Stack}
-    (h : Devm.PushBurn [x] a b) (ha : a.stack = xs) :
-    b.stack = x :: xs := by
-  simpa [Devm.PushBurn, Stack.Push, Split, ha] using h.stack
-
-private theorem stack_of_popBurnBy_exact {x : B256} {cost : Nat}
-    {a b : Devm} {xs : Stack} (h : Devm.PopBurnBy [x] cost a b)
-    (ha : a.stack = x :: xs) : b.stack = xs := by
-  simpa [Devm.PopBurnBy, Stack.Pop, Split, ha] using h.stack.symm
-
-private theorem stack_of_diffBurn_one_exact
-    {f : B256 → B256} {a b : Devm} {x : B256} {xs : Stack}
-    (h : ∃ x', Stack.Diff [x'] [f x'] a.stack b.stack)
-    (ha : a.stack = x :: xs) : b.stack = f x :: xs := by
-  rcases h with ⟨x', mid, hpop, hpush⟩
-  simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
-  have hpre : x :: xs = x' :: mid := by
-    simpa [ha, List.cons_append, List.nil_append] using hpop
-  have hx : x = x' := (List.cons.inj hpre).1
-  have htail : xs = mid := (List.cons.inj hpre).2
-  subst x'
-  subst mid
-  simpa [List.cons_append, List.nil_append] using hpush
-
-private theorem stack_of_diffBurn_two_exact
-    {f : B256 → B256 → B256} {a b : Devm}
-    {x y : B256} {xs : Stack}
-    (h : ∃ x' y', Stack.Diff [x', y'] [f x' y'] a.stack b.stack)
-    (ha : a.stack = x :: y :: xs) : b.stack = f x y :: xs := by
-  rcases h with ⟨x', y', mid, hpop, hpush⟩
-  simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
-  have hpre : x :: y :: xs = x' :: y' :: mid := by
-    simpa [ha, List.cons_append, List.nil_append] using hpop
-  have hx : x = x' := (List.cons.inj hpre).1
-  have hy : y = y' := (List.cons.inj (List.cons.inj hpre).2).1
-  have htail : xs = mid := (List.cons.inj (List.cons.inj hpre).2).2
-  subst x'
-  subst y'
-  subst mid
-  simpa [List.cons_append, List.nil_append] using hpush
-
-private theorem dispatchFrame_of_burnBy {cost : Nat} {a b : Devm}
-    (h : Devm.BurnBy cost a b) : Devm.DispatchFramePreserved a b := by
-  constructor
-  · trivial
-  · exact h.memory
-  · trivial
-  · exact h.logs
-  · exact h.refundCounter
-  · exact h.output
-  · exact h.accountsToDelete
-  · exact h.returnData
-  · exact h.error
-  · exact h.accessedAddresses
-  · exact h.accessedStorageKeys
-  · exact h.state
-  · exact h.createdAccounts
-  · exact h.transientStorage
-
 private theorem runtimePrefix_dispatchFrame
     {entry mid afterGuard dispatchEntry afterSig : Devm}
     {sevm : Sevm}
@@ -274,10 +215,10 @@ theorem dispatcher_body_of_prog_run_empty_frame
     rw [← hburn.stack]
     exact hentryStack
   have hpushStack : afterPush.stack = (4 : B256) :: [] :=
-    stack_of_pushBurn_exact (of_run_pushB256 hpush) hmidStack
+    stack_of_pushBurn (of_run_pushB256 hpush) hmidStack
   have hsizeStack : afterSize.stack =
       sevm.data.length.toB256 :: (4 : B256) :: [] :=
-    stack_of_pushBurn_exact (of_run_calldatasize hsize) hpushStack
+    stack_of_pushBurn (of_run_calldatasize hsize) hpushStack
   have hltDiff : ∃ x y, Stack.Diff [x, y] [B256.ltCheck x y]
       afterSize.stack afterGuard.stack := by
     rcases of_run_reg hlt with ⟨_, hr⟩
@@ -285,7 +226,7 @@ theorem dispatcher_body_of_prog_run_empty_frame
     rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
     exact ⟨x, y, hdiff.stack⟩
   have hguardStack : afterGuard.stack = (0 : B256) :: [] := by
-    have hs := stack_of_diffBurn_two_exact hltDiff hsizeStack
+    have hs := stack_of_diffBurn_two hltDiff hsizeStack
     simpa [hguard] using hs
   obtain ⟨dispatchEntry, hpop, hzero⟩ : ∃ dispatchEntry,
       Devm.PopBurnBy [0] (gVerylow + gHigh) afterGuard dispatchEntry ∧
@@ -300,7 +241,7 @@ theorem dispatcher_body_of_prog_run_empty_frame
         (List.cons.inj (hguardStack.symm.trans hstack)).1
       exact False.elim (hw hbad.symm)
   have hdispatchEntryStack : dispatchEntry.stack = [] :=
-    stack_of_popBurnBy_exact hpop hguardStack
+    stack_of_popBurnBy hpop hguardStack
   obtain ⟨afterSig, hsig, hdispatch⟩ := runCompiledTo_prepend_inv hzero
   have hsigFrame := hsig
   unfold fsig cdl shiftRight at hsig
@@ -310,14 +251,14 @@ theorem dispatcher_body_of_prog_run_empty_frame
   rcases Line.of_run_cons hsig with ⟨_sigDone, qshr, hsigNil⟩
   cases hsigNil
   have hsigPushStack : sigPush.stack = (0 : B256) :: [] :=
-    stack_of_pushBurn_exact (of_run_pushB256 qpush0) hdispatchEntryStack
+    stack_of_pushBurn (of_run_pushB256 qpush0) hdispatchEntryStack
   have hloadDiff : ∃ x, Stack.Diff [x] [Sevm.dataWord sevm x]
       sigPush.stack sigLoad.stack := of_run_calldataload_val qload
   have hsigLoadStack : sigLoad.stack = Sevm.dataWord sevm 0 :: [] :=
-    stack_of_diffBurn_one_exact hloadDiff hsigPushStack
+    stack_of_diffBurn_one hloadDiff hsigPushStack
   have hsigShiftStack : sigShift.stack =
       (224 : B256) :: Sevm.dataWord sevm 0 :: [] :=
-    stack_of_pushBurn_exact (of_run_pushB256 qpush224) hsigLoadStack
+    stack_of_pushBurn (of_run_pushB256 qpush224) hsigLoadStack
   have hshrDiff : ∃ x y, Stack.Diff [x, y]
       [y >>> x.toNat] sigShift.stack afterSig.stack := by
     rcases of_run_reg qshr with ⟨_, hr⟩
@@ -325,7 +266,7 @@ theorem dispatcher_body_of_prog_run_empty_frame
     rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
     exact ⟨x, y, hdiff.stack⟩
   have hafterSigStack : afterSig.stack = selector :: [] := by
-    have hs := stack_of_diffBurn_two_exact hshrDiff hsigShiftStack
+    have hs := stack_of_diffBurn_two hshrDiff hsigShiftStack
     rw [← hselector]
     exact hs
   have hwitness := dispatchBodyWitness_of_runCompiledTo

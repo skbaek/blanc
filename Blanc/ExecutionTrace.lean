@@ -35,6 +35,37 @@ theorem exists_retainedXlot_of_filled {xl : Xlot}
       rcases slot with ⟨evm, out⟩
       rcases h with ⟨run⟩
       exact ⟨.some run⟩
+
+/-- A retained recursive slot pins the executable result selected by a frame.
+Kept private because the public consumers are the two exact trace carriers
+below. -/
+private theorem runFrame_result_of_retained
+    {frame : Frame} {slot : Xlot}
+    {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (retained : RetainedXlot slot)
+    (run : RunFrame frame slot out) :
+    runFrame frame = out := by
+  cases henter : frame.enter with
+  | done result =>
+      simp only [RunFrame, henter] at run
+      unfold runFrame
+      rw [henter]
+      exact run.2.symm
+  | run evm =>
+      simp only [RunFrame, henter] at run
+      rcases run with ⟨raw, slotEq, resultEq⟩
+      have filled := retained.toFilled
+      rw [slotEq] at filled
+      simp only [Xlot.Filled] at filled
+      have execResult : exec evm = raw := by
+        simpa using
+          (exec_iff_exec_eq evm.pc evm.sta evm.dyna raw).mp filled
+      unfold runFrame
+      rw [henter]
+      simp only
+      rw [execResult]
+      exact resultEq.symm
+
 /-- An exact retained execution of Jaune's raw call-message core. -/
 structure ProcessMessageTrace (msg : Msg)
     (out : Except (EvmError × State × AdrSet × Tra) Devm) where
@@ -50,6 +81,16 @@ theorem exists_processMessageTrace
   rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
   exact ⟨⟨xl, retained, hrun⟩⟩
 
+/-- Recover the exact deterministic `processMessage` equation retained by the
+trace. -/
+theorem ProcessMessageTrace.result
+    {msg : Msg}
+    {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessMessageTrace msg out) :
+    processMessage msg = out := by
+  simpa only [processMessage] using
+    (runFrame_result_of_retained trace.retained trace.run)
+
 /-- An exact retained execution of Jaune's raw create-message core. -/
 structure ProcessCreateMessageTrace (msg : Msg)
     (out : Except (EvmError × State × AdrSet × Tra) Devm) where
@@ -64,6 +105,16 @@ theorem exists_processCreateMessageTrace
   obtain ⟨xl, hfilled, hrun⟩ := of_processCreateMessage msg out h
   rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
   exact ⟨⟨xl, retained, hrun⟩⟩
+
+/-- Recover the exact deterministic `processCreateMessage` equation retained
+by the trace. -/
+theorem ProcessCreateMessageTrace.result
+    {msg : Msg}
+    {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessCreateMessageTrace msg out) :
+    processCreateMessage msg = out := by
+  simpa only [processCreateMessage] using
+    (runFrame_result_of_retained trace.retained trace.run)
 
 /-- The collision test used by the create arm of `processMessageCall`. -/
 def messageCreateCollision (msg : Msg) : Bool :=

@@ -148,6 +148,19 @@ def DelegatecallSpawnDescriptor.resume
     d.child.code = d.code :=
   rfl
 
+/-- The exact `.delcall` step that spawns the descriptor's child frame and
+resume continuation. -/
+theorem DelegatecallSpawnDescriptor.step
+    {sevm : Sevm} {callPre : Devm}
+    (d : DelegatecallSpawnDescriptor sevm callPre) :
+    Xinst.step sevm callPre .delcall =
+      .spawn (Frame.ofCall d.child) d.resume := by
+  simpa [DelegatecallSpawnDescriptor.parent,
+    DelegatecallSpawnDescriptor.child,
+    DelegatecallSpawnDescriptor.resume] using
+    (Xinst.step_delcall_spawn d.stackEq d.extensionEq d.delegationEq
+      d.accessEq d.splitEq d.affordable d.depthHeadroom)
+
 /-- The shared crossing theorem specialized to the named descriptor. -/
 theorem DelegatecallSpawnDescriptor.crossing
     {sevm : Sevm} {callPre : Devm}
@@ -183,6 +196,15 @@ theorem DelegatedChildCertificate.process
     (certificate : DelegatedChildCertificate msg out) :
     ProcessMessage msg certificate.trace.slot out :=
   certificate.trace.run
+
+/-- Recover the exact total `processMessage` equation retained by the delegated
+child certificate. -/
+theorem DelegatedChildCertificate.result
+    {msg : Msg}
+    {out : MessageResult}
+    (certificate : DelegatedChildCertificate msg out) :
+    processMessage msg = out :=
+  certificate.trace.result
 
 /-- A genuine direct target execution message.  The implementation owns its
 storage and receives value through the ordinary transfer-enabled entry path;

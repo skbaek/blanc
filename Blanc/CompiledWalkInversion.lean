@@ -268,6 +268,30 @@ theorem runCompiledTo_rev_inv {fs : List Func} {sevm : Sevm} {devm : Devm}
     rw [p2.stack, p1.stack]; rfl
   exact of_run_rev_empty hstk hrev
 
+/-- A compiled walk of `nonpayable body` at nonzero call value takes the
+empty-revert arm. No premise about `body` is admitted, so the compiler guard
+precedes every decoder, authorization check, and body effect. -/
+theorem Func.RunCompiledTo.nonpayable_revert_of_value_nonzero
+    {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {body : Func} {tail : Stack}
+    (valueNonzero : sevm.value ≠ 0)
+    (hp : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre (nonpayable body) out) :
+    ∃ post,
+      out = .error (.revert, post) ∧
+      post.output = [] := by
+  unfold nonpayable at run
+  obtain ⟨valuePost, qvalue, run⟩ := runCompiledTo_next_inv run
+  obtain ⟨testPre, qzero, branchRun⟩ := runCompiledTo_next_inv run
+  have pValue := prefix_of_push
+    (of_run_callvalue (Ninst.Run.of_runCompiled qvalue)) hp
+  have pTest := prefix_of_iszero (Ninst.Run.of_runCompiled qzero) pValue
+  have pZero : (0 : B256) :: tail <<+ testPre.stack := by
+    simpa [B256.eqCheck, valueNonzero] using pTest
+  obtain ⟨revertPre, _, revertRun, _⟩ :=
+    Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
+  exact runCompiledTo_rev_inv revertRun
+
 private lemma of_run_rev_window {sevm : Sevm} {devm : Devm} {i sz : B256}
     {s : List B256} {ex : Execution}
     (h_stk : devm.stack = i :: sz :: s)

@@ -65,6 +65,10 @@ registry has identified the likely vocabulary.
   preserves the known stack tail and storage.  If zero value is already known
   but the terminal outcome is arbitrary, use
   `Func.RunCompiledTo.nonpayable_body_of_value_zero`.
+  To invert the rejecting arm instead, use
+  `Func.RunCompiledTo.nonpayable_revert_of_value_nonzero`: a nonzero call
+  value forces the wrapper's empty-revert path before any premise about the
+  protected body is needed.
   This remains COMMON_API-only: the same `Func.RunCompiledTo` head is also the
   reliable trigger for construction recipes, so an automatic recipe would
   conflate constructing and inverting a walk.
@@ -82,9 +86,13 @@ registry has identified the likely vocabulary.
   storage reasoning.  Compose adjacent witnesses with
   `Devm.DispatchFramePreserved.trans`.  When a family builds its own dispatcher
   walk it can also consume the frame steps directly:
-  `dispatchFrame_of_pushBurn`, `dispatchFrame_of_popBurnBy`, and
-  `dispatchFrame_of_diffBurn` carry a `DispatchFramePreserved` across one push,
-  one burning pop, and a stack difference respectively.
+  `dispatchFrame_of_burnBy`, `dispatchFrame_of_pushBurn`,
+  `dispatchFrame_of_popBurnBy`, and `dispatchFrame_of_diffBurn` carry a
+  `DispatchFramePreserved` across one burn, push, burning pop, and stack
+  difference respectively.  When the route also needs the exact operand stack,
+  use `stack_of_pushBurn`, `stack_of_popBurnBy`,
+  `stack_of_diffBurn_one`, and `stack_of_diffBurn_two` against the known input
+  stack equation.
 - **Solidity address-slot writes.** `Blanc.storeAddressWordAt` in
   [`Blanc/AddressSlot.lean`](../Blanc/AddressSlot.lean) implements the raw storage
   behavior of an assignment through an `address`-typed storage reference: it
@@ -110,9 +118,12 @@ For an exact `DELEGATECALL` boundary, use
 `DelegatecallSpawnDescriptor` records the real stack, memory-extension,
 delegation-resolution, access-charge, EIP-150 split, depth, and precompile
 equations; its `parent`, `child`, and `resume` are the actual Jaune constructors,
-and `.crossing` discharges the entered child frame.  A
+`.step` recovers the exact `.delcall` spawn, and `.crossing` discharges the
+entered child frame.  A
 `DelegatedChildCertificate` retains the recursive child trace without assuming
-an outer result.  Keep direct-call comparison separate through
+an outer result; `.process` recovers its relational `ProcessMessage` witness and
+`.result` recovers the exact total `processMessage` equation.  Keep direct-call
+comparison separate through
 `DirectToDelegatedContext` and the implementation-specific
 `DirectTargetTransport`; this interface explicitly exposes gas, depth, access,
 transfer, code-address, and storage-owner changes.
@@ -173,8 +184,9 @@ and constructor families cover every modelled wrapper layer:
   `Exec` selected by a filled slot.
 - `ExecutionTrace.ProcessMessageTrace`, `ProcessCreateMessageTrace`, and
   `MessageCallTrace`, with their `exists_*Trace` theorems, retain raw message,
-  CREATE, and message-call execution. `MessageCallTrace.result` recovers the
-  wrapper result.
+  CREATE, and message-call execution. `ProcessMessageTrace.result`,
+  `ProcessCreateMessageTrace.result`, and `MessageCallTrace.result` recover the
+  exact deterministic wrapper equations retained by those carriers.
 - `ExecutionTrace.messageCreateCollision`, `messageCallDelegation`, and
   `messageCallExecutionMessage` name the three message-call routing cuts.
 - `ExecutionTrace.transactionPreludeBout`, `transactionBlobGasFee`, and
@@ -431,10 +443,17 @@ disjointness as a single `≤`-disjunction.
 
 Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
 
-- `MessageExecution.processMessage_eq_settle_exec` exposes the common frame
-  settlement boundary.
-- `processMessage_clean_of_exec`, `processMessage_revert_of_exec`, and
-  `processMessage_halt_of_exec` cover the three raw outcomes.
+- `MessageExecution.processMessage_eq_settle_exec_of_enter` exposes the generic
+  frame-settlement boundary from an exact successful `Frame.enter` equation;
+  use it for delegated children and any other retained entry. The derived
+  `processMessage_eq_settle_exec_afterTransfer` names the actual environment
+  produced by value transfer when precompiles are disabled, and
+  `processMessage_eq_settle_exec` is its identity-entry specialization.
+- `processMessage_clean_of_exec_afterTransfer`,
+  `processMessage_revert_of_exec_afterTransfer`, and
+  `processMessage_halt_of_exec_afterTransfer` cover the three raw outcomes from
+  that actual entry environment. The unsuffixed adapters specialize them to
+  entry-state identity.
 - `settledRevert` and `settledHalt`, with their projection lemmas, name the
   canonical settled error machines.
 - For the inversion direction, use

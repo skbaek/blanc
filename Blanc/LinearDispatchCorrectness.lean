@@ -43,6 +43,25 @@ theorem Devm.DispatchFramePreserved.trans {a b c : Devm}
   · exact hab.createdAccounts.trans hbc.createdAccounts
   · exact hab.transientStorage.trans hbc.transientStorage
 
+/-- A pure gas burn preserves every dispatch-frame field except gas. -/
+theorem dispatchFrame_of_burnBy {cost : Nat} {a b : Devm}
+    (h : Devm.BurnBy cost a b) : Devm.DispatchFramePreserved a b := by
+  constructor
+  · trivial
+  · exact h.memory
+  · trivial
+  · exact h.logs
+  · exact h.refundCounter
+  · exact h.output
+  · exact h.accountsToDelete
+  · exact h.returnData
+  · exact h.error
+  · exact h.accessedAddresses
+  · exact h.accessedStorageKeys
+  · exact h.state
+  · exact h.createdAccounts
+  · exact h.transientStorage
+
 theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
     (h : Devm.PushBurn xs a b) : Devm.DispatchFramePreserved a b := by
   constructor
@@ -133,15 +152,50 @@ private theorem eqFrame {e : Sevm} {a b : Devm}
   rcases Devm.diffBurn_of_applyBinary hr with ⟨_, _, hdiff⟩
   exact dispatchFrame_of_diffBurn hdiff
 
-private theorem stack_of_pushBurn {x : B256} {a b : Devm} {xs : Stack}
+/-- Resolve the exact stack produced by a singleton push-and-burn. -/
+theorem stack_of_pushBurn {x : B256} {a b : Devm} {xs : Stack}
     (h : Devm.PushBurn [x] a b) (ha : a.stack = xs) :
     b.stack = x :: xs := by
   simpa [Devm.PushBurn, Stack.Push, Split, ha] using h.stack
 
-private theorem stack_of_popBurnBy {x : B256} {cost : Nat} {a b : Devm}
+/-- Resolve the exact stack produced by a singleton pop-and-burn. -/
+theorem stack_of_popBurnBy {x : B256} {cost : Nat} {a b : Devm}
     {xs : Stack} (h : Devm.PopBurnBy [x] cost a b)
     (ha : a.stack = x :: xs) : b.stack = xs := by
   simpa [Devm.PopBurnBy, Stack.Pop, Split, ha] using h.stack.symm
+
+/-- Resolve a unary value-carrying stack difference against a known stack. -/
+theorem stack_of_diffBurn_one
+    {f : B256 → B256} {a b : Devm} {x : B256} {xs : Stack}
+    (h : ∃ x', Stack.Diff [x'] [f x'] a.stack b.stack)
+    (ha : a.stack = x :: xs) : b.stack = f x :: xs := by
+  rcases h with ⟨x', mid, hpop, hpush⟩
+  simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
+  have hpre : x :: xs = x' :: mid := by
+    simpa [ha, List.cons_append, List.nil_append] using hpop
+  have hx : x = x' := (List.cons.inj hpre).1
+  have htail : xs = mid := (List.cons.inj hpre).2
+  subst x'
+  subst mid
+  simpa [List.cons_append, List.nil_append] using hpush
+
+/-- Resolve a binary value-carrying stack difference against a known stack. -/
+theorem stack_of_diffBurn_two
+    {f : B256 → B256 → B256} {a b : Devm}
+    {x y : B256} {xs : Stack}
+    (h : ∃ x' y', Stack.Diff [x', y'] [f x' y'] a.stack b.stack)
+    (ha : a.stack = x :: y :: xs) : b.stack = f x y :: xs := by
+  rcases h with ⟨x', y', mid, hpop, hpush⟩
+  simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
+  have hpre : x :: y :: xs = x' :: y' :: mid := by
+    simpa [ha, List.cons_append, List.nil_append] using hpop
+  have hx : x = x' := (List.cons.inj hpre).1
+  have hy : y = y' := (List.cons.inj (List.cons.inj hpre).2).1
+  have htail : xs = mid := (List.cons.inj (List.cons.inj hpre).2).2
+  subst x'
+  subst y'
+  subst mid
+  simpa [List.cons_append, List.nil_append] using hpush
 
 private theorem stack_of_popBurn {x : B256} {a b : Devm} {xs : Stack}
     (h : Devm.PopBurn [x] a b) (ha : a.stack = x :: xs) : b.stack = xs := by

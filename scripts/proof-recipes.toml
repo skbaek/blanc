@@ -147,19 +147,22 @@ review_date = "2026-08-20"
 id = "call-boundary-outcomes"
 status = "active"
 triggers = ["goal-head:Func.ExecSat", "goal-head:Prog.ExecSat", "goal-head:Func.ExecWitness"]
-preferred_path = "Use the `ForwardCall` module and the live `ExecSat`/`ExecWitness` layer to cross calls or package multiple outcomes."
+preferred_path = "Use the `ForwardCall` module and the live `ExecSat`/`ExecWitness` layer to cross calls or package multiple outcomes. At a proof-carrying `DELEGATECALL` boundary, use `DelegatecallSpawnDescriptor.step` for the exact spawn and `.crossing` for the entered child's successful continuation instead of reconstructing the descriptor fields at the consumer."
 boundary = "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone."
 owner_module = "Blanc/ForwardCall.lean"
 canonical_example = "Blanc/Weth10Redeemable.lean:withdrawTo_progExecSat"
 symbols = [
   "module:Blanc/ForwardCall.lean",
+  "module:Blanc/DelegatecallEnvelope.lean",
   "declaration:Func.ExecSat",
   "declaration:Prog.ExecSat",
   "declaration:Func.ExecWitness",
   "declaration:Prog.ExecWitness",
+  "declaration:DelegatecallSpawnDescriptor.step",
+  "declaration:DelegatecallSpawnDescriptor.crossing",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-20"
+review_date = "2026-08-30"
 
 [[recipe]]
 id = "devm-projection-bridge"
@@ -283,16 +286,21 @@ review_date = "2026-08-29"
 id = "message-execution-settlement"
 status = "active"
 triggers = ["goal-shape:message-execution-settlement"]
-preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec` for the raw-to-settled bridge, then the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections."
-boundary = "The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
+preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec_of_enter` when an exact successful `Frame.enter` equation is already retained, including for delegated children. Use `processMessage_eq_settle_exec_afterTransfer` when value transfer prepared a distinct entry environment and precompiles are disabled, then its clean/revert/halt `_afterTransfer` adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. Use the unsuffixed `processMessage_eq_settle_exec` and outcome adapters for the identity-entry specialization. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections."
+boundary = "The generic enter bridge requires only the exact successful entry equation. The post-transfer bridge additionally names the successful post-transfer environment and requires disabled precompiles; the unsuffixed specialization also requires entry-state identity. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
 owner_module = "Blanc/MessageExecution.lean"
 canonical_example = "Blanc/MessageExecution.lean:MessageExecution.processMessage_eq_settle_exec"
 symbols = [
   "module:Blanc/MessageExecution.lean",
   "module:Blanc/MessageExecutionInversion.lean",
+  "declaration:MessageExecution.processMessage_eq_settle_exec_of_enter",
+  "declaration:MessageExecution.processMessage_eq_settle_exec_afterTransfer",
   "declaration:MessageExecution.processMessage_eq_settle_exec",
+  "declaration:MessageExecution.processMessage_clean_of_exec_afterTransfer",
   "declaration:MessageExecution.processMessage_clean_of_exec",
+  "declaration:MessageExecution.processMessage_revert_of_exec_afterTransfer",
   "declaration:MessageExecution.processMessage_revert_of_exec",
+  "declaration:MessageExecution.processMessage_halt_of_exec_afterTransfer",
   "declaration:MessageExecution.processMessage_halt_of_exec",
   "declaration:MessageExecution.processMessage_clean_rawPost",
   "declaration:MessageExecution.processMessage_entry_facts",
@@ -304,7 +312,7 @@ symbols = [
   "declaration:Msg.initSevm_data",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-29"
+review_date = "2026-08-30"
 
 [[recipe]]
 id = "retained-write-noninterference"
@@ -380,21 +388,27 @@ review_date = "2026-08-29"
 id = "retained-wrapper-trace"
 status = "active"
 triggers = ["goal-shape:retained-wrapper-trace"]
-preferred_path = "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state."
+preferred_path = "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `ProcessMessageTrace.result` or `ProcessCreateMessageTrace.result` to recover the exact deterministic core-wrapper equation, and `DelegatedChildCertificate.result` at a retained delegated-child boundary. Use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state."
 boundary = "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay."
 owner_module = "Blanc/ExecutionTrace.lean"
 canonical_example = "Blanc/ExecutionTrace.lean:ExecutionTrace.exists_messageCallTrace"
 symbols = [
   "module:Blanc/ExecutionTrace.lean",
   "module:Blanc/ExecutionHistory.lean",
+  "module:Blanc/DelegatecallEnvelope.lean",
   "declaration:ExecutionTrace.RetainedXlot",
   "declaration:ExecutionTrace.exists_retainedXlot_of_filled",
   "declaration:ExecutionTrace.ProcessMessageTrace",
   "declaration:ExecutionTrace.exists_processMessageTrace",
+  "declaration:ExecutionTrace.ProcessMessageTrace.result",
   "declaration:ExecutionTrace.ProcessCreateMessageTrace",
   "declaration:ExecutionTrace.exists_processCreateMessageTrace",
+  "declaration:ExecutionTrace.ProcessCreateMessageTrace.result",
   "declaration:ExecutionTrace.MessageCallTrace",
   "declaration:ExecutionTrace.exists_messageCallTrace",
+  "declaration:DelegatedChildCertificate",
+  "declaration:DelegatedChildCertificate.process",
+  "declaration:DelegatedChildCertificate.result",
   "declaration:ExecutionTrace.TransactionTrace",
   "declaration:ExecutionTrace.exists_transactionTrace",
   "declaration:ExecutionTrace.ApplyTransactionsTrace",

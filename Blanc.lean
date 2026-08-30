@@ -129,6 +129,9 @@ import Blanc.ProxyPairOssifiableSurface
 import Blanc.ProxyPairOssifiableProgram
 import Blanc.ProxyPairOssifiableDeploy
 import Blanc.ProxyPairOssifiableArtifacts
+import Blanc.ProxyPairOssifiableForwarding
+import Blanc.ProxyPairOssifiableControl
+import Blanc.ProxyPairOssifiableConstructor
 import Blanc.ProxyPairImplementation
 import Blanc.ProxyPairExecution
 import Blanc.ProxyPairCorrespondence

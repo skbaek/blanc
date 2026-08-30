@@ -224,6 +224,107 @@ theorem creationBaselineBytes_length :
     creationBaselineBytes.length = creationBaselineByteLength := by
   decide +kernel
 
+/-! ## Product-owned constructor proof surface
+
+The executable helpers above stay private implementation details.  These thin
+aliases are the deliberately small public surface used by the constructor
+proof: they name phase boundaries without duplicating the constructor or
+exporting its scratch-table implementation as general Blanc vocabulary. -/
+
+/-- The exact function table used by creation-code phase proofs. -/
+def ossifiableConstructorFunctions
+    (runtimeOffset runtimeLength : Nat) : List Func :=
+  (constructorProgram runtimeOffset
+      (runtimeOffset + runtimeLength) runtimeLength).main ::
+    (constructorProgram runtimeOffset
+      (runtimeOffset + runtimeLength) runtimeLength).aux
+
+/-- Strict appended-argument decoding followed by `body`. -/
+def ossifiableConstructorDecode (argsOffset : Nat) (body : Func) : Func :=
+  decodeConstructorArguments argsOffset body
+
+/-- Implementation validation/write/`Upgraded`, including the setup split. -/
+def ossifiableConstructorInitializeImplementation : Func :=
+  constructorInitializeImplementation
+
+/-- Nonempty setup delegatecall and failure normalization. -/
+def ossifiableConstructorDelegateSetup : Func :=
+  constructorDelegateSetup
+
+/-- Post-setup admin read/log/check/write and runtime return. -/
+def ossifiableConstructorAfterSetup
+    (runtimeOffset runtimeLength : Nat) : Func :=
+  constructorAfterSetup runtimeOffset runtimeLength
+
+/-- The complete constructor program with named proof-facing coordinates. -/
+def ossifiableConstructorProgram
+    (runtimeOffset argsOffset runtimeLength : Nat) : Prog :=
+  constructorProgram runtimeOffset argsOffset runtimeLength
+
+/-- Fixed-width creation-coordinate push used by the constructor compiler. -/
+def ossifiablePushCreationCoordinate (value : Nat) : Ninst :=
+  pushCreationCoordinate value
+
+@[simp] theorem ossifiablePushCreationCoordinate_shape (value : Nat) :
+    ossifiablePushCreationCoordinate value =
+      Ninst.push (Nat.toB256 value).toBytes (by rw [B256.length_toBytes]) := by
+  rfl
+
+@[simp] theorem ossifiableConstructorAfterSetupSlot_eq :
+    constructorAfterSetupSlot = 5 := rfl
+
+@[simp] theorem ossifiableConstructorDelegateSetupSlot_eq :
+    constructorDelegateSetupSlot = 6 := rfl
+
+@[simp] theorem ossifiableConstructorZeroAdminErrorSlot_eq :
+    constructorZeroAdminErrorSlot = 4 := rfl
+
+theorem ossifiableConstructorInitializeImplementation_shape :
+    ossifiableConstructorInitializeImplementation =
+      [pushB256 0, mload] +++
+        dup 0 ::: extcodesize ::: iszero :::
+        ((.call 2) <?>
+          (dup 0 ::: storeAddressWordAt implementationSlotLit +++
+            pushB256 upgradedEventTopic ::: logWith 1 0 0 +++
+            [pushB256 128, mload] +++
+            ((.call 6) <?> (.call 5)))) := by
+  rfl
+
+theorem ossifiableConstructorAfterSetup_shape
+    (runtimeOffset runtimeLength : Nat) :
+    ossifiableConstructorAfterSetup runtimeOffset runtimeLength =
+      [pushB256 adminSlotLit, sload] +++
+        (pushAddressMask +++
+          (Ninst.not ::: Ninst.and :::
+            mstoreAt 5 +++
+            [pushB256 32, mload] +++ mstoreAt 6 +++
+            pushB256 adminChangedEventTopic ::: logWith 0 5 2 +++
+            [pushB256 32, mload] +++ iszero :::
+            ((.call 4) <?>
+              ([pushB256 32, mload] +++
+                storeAddressWordAt adminSlotLit +++
+                ossifiablePushCreationCoordinate runtimeLength :::
+                  ossifiablePushCreationCoordinate runtimeOffset :::
+                  pushB256 0 ::: codecopy :::
+                ossifiablePushCreationCoordinate runtimeLength :::
+                  pushB256 0 ::: Func.ret)))) := by
+  rfl
+
+theorem creationBaseline_eq_constructorProgram :
+    creationBaseline =
+      ossifiableConstructorProgram creationBaselineByteLength
+        (creationBaselineByteLength + runtimeBaselineBytes.length)
+        runtimeBaselineBytes.length := by
+  rfl
+
+theorem ossifiableConstructorProgram_main_shape
+    (runtimeOffset argsOffset runtimeLength : Nat) :
+    (ossifiableConstructorProgram runtimeOffset argsOffset runtimeLength).main =
+      callvalue ::: iszero :::
+        (ossifiableConstructorDecode argsOffset
+          ossifiableConstructorInitializeImplementation <?> (.call 1)) := by
+  rfl
+
 /-! ## Complete creation-input helpers -/
 
 /-- Prefix plus the exact runtime returned by a successful constructor. -/

@@ -26,6 +26,16 @@ theorem implementationSlotLit_eq_slot :
 
 /-! ## Selector-free fallback -/
 
+/-- Copy the complete delegated returndata, then return on a nonzero child
+status and revert on zero.  The forwarding program and the full Lido runtime
+share this exact tail. -/
+def proxyReturnTail : Func :=
+  pushB256 0 ::: retdatasize ::: pushB256 0 ::: pushB256 0 :::
+  retdatacopy ::: retdatasize ::: swap 1 :::
+  Func.branch
+    (Func.last .rev)
+    (Func.last .ret)
+
 def proxyFallback : Func :=
   -- Copy the whole calldata to memory[0 .. cds).
   calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
@@ -40,13 +50,7 @@ def proxyFallback : Func :=
   -- Retain one zero beneath the status word while copying returndata.  A
   -- second RETURNDATASIZE is cheaper than DUP and leaves the shared
   -- RETURN/REVERT offset outside the two branch arms.
-  pushB256 0 ::: retdatasize ::: pushB256 0 ::: pushB256 0 :::
-  retdatacopy ::: retdatasize :::
-  -- Bring the DELEGATECALL success word above the retained (offset, size).
-  swap 1 :::
-  Func.branch
-    (Func.last .rev)
-    (Func.last .ret)
+  proxyReturnTail
 
 def proxyProg : Prog := ⟨proxyFallback, []⟩
 

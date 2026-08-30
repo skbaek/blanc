@@ -251,11 +251,7 @@ theorem proxyMsgRevert_caller : proxyMsgRevert.caller = callerAdr := rfl
 /-! The continuation after the actual delegatecall.  Keeping this as a local
 function lets the prefix walk be checked independently of the child resume. -/
 def proxySuccessTail : Func :=
-  pushB256 0 ::: retdatasize ::: pushB256 0 ::: pushB256 0 :::
-  retdatacopy ::: retdatasize ::: swap 1 :::
-  Func.branch
-    (Func.last .rev)
-    (Func.last .ret)
+  proxyReturnTail
 
 theorem proxyFallback_eq_prefix :
     proxyFallback =
@@ -788,7 +784,7 @@ private theorem proxy_success_func_run :
           (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
           htail :=
         rootedRunCompiledTo_of_execFree (run := htail) (by
-          simp [proxySuccessTail, funcExecFree, Ninst.pushB256])
+          simp [proxySuccessTail, proxyReturnTail, funcExecFree, Ninst.pushB256])
       have known : proxyRootedRun [proxyFallback]
           (initSevm proxyMsgSuccess) proxyCallPreSuccess
           (delcall ::: proxySuccessTail) (.ok final) := by
@@ -1363,7 +1359,7 @@ private theorem proxy_revert_func_run :
           (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
           htail :=
         rootedRunCompiledTo_of_execFree (run := htail) (by
-          simp [proxySuccessTail, funcExecFree, Ninst.pushB256])
+          simp [proxySuccessTail, proxyReturnTail, funcExecFree, Ninst.pushB256])
       have known : proxyRootedRun [proxyFallback]
           (initSevm proxyMsgRevert) proxyCallPreRevert
           (delcall ::: proxySuccessTail) (.error (.revert, final)) := by
