@@ -4,6 +4,7 @@ import Blanc.Ladder
 import Blanc.BalanceAlgebra
 import Blanc.ExecutionSettlement
 import Blanc.MessageExecution
+import Blanc.MessageResult
 import Blanc.MessageExecutionInversion
 import Blanc.ExecutionPath
 import Blanc.ExecutionStateTrace
@@ -106,7 +107,9 @@ import Blanc.Reverts
 import Blanc.RevertPayload
 import Blanc.CompiledWalkInversion
 import Blanc.LinearDispatch
+import Blanc.AddressSlot
 import Blanc.ForwardCall
+import Blanc.DelegatecallEnvelope
 import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowResult
 import Blanc.Weth10HolderFlowWriteCompleteness

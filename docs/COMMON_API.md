@@ -72,9 +72,12 @@ registry has identified the likely vocabulary.
   [`Blanc/LinearDispatch.lean`](../Blanc/LinearDispatch.lean) defines the
   shared `Blanc.linearDispatchWith` and `Blanc.selectorUnique`; the companion
   [`Blanc/LinearDispatchCorrectness.lean`](../Blanc/LinearDispatchCorrectness.lean)
-  owns `dispatchBodyWitness_of_runCompiledTo`.  Supply selector uniqueness,
-  selected-entry membership, the initial `selector :: tail` stack, and the
-  exact `RunCompiledTo` walk; it returns the exact selected-body walk and a
+  owns `dispatchBodyWitness_of_runCompiledTo` for hits and
+  `dispatchFallbackWitness_of_runCompiledTo` for misses.  For a hit, supply
+  selector uniqueness and selected-entry membership; for a miss, supply a
+  nonempty entry list and exclusion from every entry.  Both take the initial
+  `selector :: tail` stack and exact `RunCompiledTo` walk, remove the selector,
+  recover the exact selected body or fallback call, and return a
   `DispatchFramePreserved` witness before any contract-specific ABI, role, or
   storage reasoning.  Compose adjacent witnesses with
   `Devm.DispatchFramePreserved.trans`.  When a family builds its own dispatcher
@@ -82,6 +85,12 @@ registry has identified the likely vocabulary.
   `dispatchFrame_of_pushBurn`, `dispatchFrame_of_popBurnBy`, and
   `dispatchFrame_of_diffBurn` carry a `DispatchFramePreserved` across one push,
   one burning pop, and a stack difference respectively.
+- **Solidity address-slot writes.** `Blanc.storeAddressWordAt` in
+  [`Blanc/AddressSlot.lean`](../Blanc/AddressSlot.lean) implements the raw storage
+  behavior of an assignment through an `address`-typed storage reference: it
+  preserves the existing upper 96 bits and replaces only the low 160 bits.
+  Use it when delegated code can make a nominal address slot raw-dirty; a plain
+  full-word `SSTORE` is observably different in that state.
 - Calls, delegate calls, or child-frame resumption: go to E2.
 - A predicate must hold for every entered child root: go to E3.
 - Only the terminal RETURN/REVERT remains: go to E4.
@@ -95,6 +104,18 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
 - `Func.exec_of_runCompiledTo` and its program bridge recover an `Exec`
   derivation from a completed arbitrary-outcome compiled walk.
+
+For an exact `DELEGATECALL` boundary, use
+[`Blanc/DelegatecallEnvelope.lean`](../Blanc/DelegatecallEnvelope.lean).
+`DelegatecallSpawnDescriptor` records the real stack, memory-extension,
+delegation-resolution, access-charge, EIP-150 split, depth, and precompile
+equations; its `parent`, `child`, and `resume` are the actual Jaune constructors,
+and `.crossing` discharges the entered child frame.  A
+`DelegatedChildCertificate` retains the recursive child trace without assuming
+an outer result.  Keep direct-call comparison separate through
+`DirectToDelegatedContext` and the implementation-specific
+`DirectTargetTransport`; this interface explicitly exposes gas, depth, access,
+transfer, code-address, and storage-owner changes.
 
 If the property concerns which child roots were entered rather than only the
 terminal result, continue to E3.
@@ -441,6 +462,12 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   `ProcessCreateMessage.ok_state_eq_inner_of_no_error` expose the
   balance-neutral CREATE settlement seam; `processCheckedSystemTransaction_to_unchecked`
   recovers the unchecked successful system-message result.
+- [`Blanc/MessageResult.lean`](../Blanc/MessageResult.lean) supplies the
+  contract-neutral `MessageResult`, pointwise persistent/transient storage
+  projections, and `ChildToWrapperSettledAt`.  The latter states the exact
+  delegated-child-to-wrapper status normalization, complete output copy, and
+  log rule: clean-child logs commit, while failed-child logs are discarded.
+  Gas and warm-access bookkeeping are intentionally outside that relation.
 - For exact retained wrapper carriers continue to E6; for their ordered state
   chronology continue to E8.
 

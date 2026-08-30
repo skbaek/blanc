@@ -225,6 +225,19 @@ def DispatchBodyWitness
       bodyPre.stack = tail ∧
       Devm.DispatchFramePreserved entry bodyPre
 
+/-- An exact miss through a nonempty linear dispatcher reaches its fallback
+call.  The final selector comparison consumes the selector word, while every
+machine field except stack and gas is preserved along the dispatch route. -/
+def DispatchFallbackWitness
+    (fs : List Func) (sevm : Sevm) (entry : Devm)
+    (_entries : List (B256 × Func))
+    (_selector : B256) (tail : Stack) (fallback : Nat)
+    (out : Execution) : Prop :=
+  ∃ fallbackPre,
+    Func.RunCompiledTo fs sevm fallbackPre (.call fallback) out ∧
+      fallbackPre.stack = tail ∧
+      Devm.DispatchFramePreserved entry fallbackPre
+
 private theorem exists_selected_split
     {α : Type} {entries : List α} {selected : α}
     (hmem : selected ∈ entries) :
@@ -426,5 +439,121 @@ theorem dispatchBodyWitness_of_runCompiledTo
   obtain ⟨bodyPre, hbody, hbodyStack, hframe⟩ :=
     dispatch_select_prefix pre suffix entry hbefore hwalk hstack
   exact ⟨bodyPre, hmember, hbody, hbodyStack, hframe⟩
+
+private theorem dispatch_miss_nonempty
+    {fs : List Func} {sevm : Sevm}
+    {fallback : Nat} {selector : B256} {tail : Stack}
+    {out : Execution} :
+    ∀ (entries : List (B256 × Func)) (entry : Devm),
+      entries ≠ [] →
+      (∀ candidate ∈ entries, candidate.1 ≠ selector) →
+      Func.RunCompiledTo fs sevm entry
+        (Blanc.linearDispatchWith fallback entries) out →
+      entry.stack = selector :: tail →
+      ∃ fallbackPre,
+        Func.RunCompiledTo fs sevm fallbackPre (.call fallback) out ∧
+          fallbackPre.stack = tail ∧
+          Devm.DispatchFramePreserved entry fallbackPre := by
+  intro entries
+  induction entries with
+  | nil =>
+      intro entry hnonempty
+      exact (hnonempty rfl).elim
+  | cons head rest ih =>
+      intro entry _ hmiss hrun hstack
+      rcases head with ⟨headSelector, headBody⟩
+      have hne : headSelector ≠ selector :=
+        hmiss (headSelector, headBody) (by simp)
+      cases rest with
+      | nil =>
+          change Func.RunCompiledTo fs sevm entry
+            ([Ninst.pushB256 headSelector, Ninst.eq] +++
+              (headBody <?> .call fallback)) out at hrun
+          obtain ⟨afterLine, hline, hbranch⟩ :=
+            runCompiledTo_prepend_inv hrun
+          rcases Line.of_run_cons hline with
+            ⟨afterPush, hpush, hrest⟩
+          rcases Line.of_run_cons hrest with
+            ⟨afterEq, heq, hnil⟩
+          have hlineEq : afterLine = afterEq := by cases hnil; rfl
+          subst afterLine
+          have hpushStack :
+              afterPush.stack = headSelector :: selector :: tail :=
+            stack_of_pushBurn (of_run_pushB256 hpush) hstack
+          have hflagStack :
+              afterEq.stack = (headSelector =? selector) :: tail :=
+            stack_of_eqRun heq hpushStack
+          have hflag : afterEq.stack = (0 : B256) :: tail := by
+            rw [hflagStack]
+            simp [B256.eqCheck, hne]
+          have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
+            (pushFrame hpush).trans (eqFrame heq)
+          rcases runCompiledTo_branch_inv hbranch with
+            ⟨armPre, _, hpop, harm⟩ |
+            ⟨w, armPre, hw, hwstack, _, _⟩
+          · exact ⟨armPre, harm, stack_of_popBurnBy hpop hflag,
+              hlineFrame.trans (dispatchFrame_of_popBurnBy hpop)⟩
+          · have hwzero : w = 0 :=
+              (List.cons.inj (hflag.symm.trans hwstack)).1.symm
+            exact (hw hwzero).elim
+      | cons next rest' =>
+          have hrun' : Func.RunCompiledTo fs sevm entry
+              (Ninst.dup 0 ::: Ninst.pushB256 headSelector ::: Ninst.eq :::
+                ((Ninst.pop ::: headBody) <?>
+                  Blanc.linearDispatchWith fallback (next :: rest'))) out := by
+            simpa [Blanc.linearDispatchWith] using hrun
+          obtain ⟨afterDup, afterPush, afterEq, hdup, hpush, heq, hbranch⟩ :=
+            runCompiledTo_three_inv hrun'
+          have hdupStack :
+              afterDup.stack = selector :: selector :: tail :=
+            stack_of_dup hdup hstack
+          have hpushStack :
+              afterPush.stack = headSelector :: selector :: selector :: tail :=
+            stack_of_pushBurn (of_run_pushB256 hpush) hdupStack
+          have hflagStack :
+              afterEq.stack = (headSelector =? selector) :: selector :: tail :=
+            stack_of_eqRun heq hpushStack
+          have hflag :
+              afterEq.stack = (0 : B256) :: selector :: tail := by
+            rw [hflagStack]
+            simp [B256.eqCheck, hne]
+          have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
+            (dupFrame hdup).trans
+              ((pushFrame hpush).trans (eqFrame heq))
+          rcases runCompiledTo_branch_inv hbranch with
+            ⟨armPre, _, hpop, harm⟩ |
+            ⟨w, armPre, hw, hwstack, _, _⟩
+          · have harmStack : armPre.stack = selector :: tail :=
+              stack_of_popBurnBy hpop hflag
+            obtain ⟨fallbackPre, hfallback, hfallbackStack,
+                hfallbackFrame⟩ :=
+              ih armPre (by simp)
+                (fun candidate hmem =>
+                  hmiss candidate (List.mem_cons_of_mem _ hmem))
+                harm harmStack
+            exact ⟨fallbackPre, hfallback, hfallbackStack,
+              hlineFrame.trans
+                ((dispatchFrame_of_popBurnBy hpop).trans
+                  hfallbackFrame)⟩
+          · have hwzero : w = 0 :=
+              (List.cons.inj (hflag.symm.trans hwstack)).1.symm
+            exact (hw hwzero).elim
+
+/-- An arbitrary-outcome compiled walk whose selector misses every entry of a
+nonempty linear dispatcher reaches the exact fallback call, with the selector
+removed and the dispatch frame preserved outside stack and gas. -/
+theorem dispatchFallbackWitness_of_runCompiledTo
+    {fs : List Func} {sevm : Sevm} {entry : Devm}
+    {fallback : Nat} {entries : List (B256 × Func)}
+    {selector : B256} {tail : Stack} {out : Execution}
+    (hnonempty : entries ≠ [])
+    (hmiss : ∀ candidate ∈ entries, candidate.1 ≠ selector)
+    (hstack : entry.stack = selector :: tail)
+    (hwalk : Func.RunCompiledTo fs sevm entry
+      (Blanc.linearDispatchWith fallback entries) out) :
+    DispatchFallbackWitness fs sevm entry entries selector tail fallback out := by
+  obtain ⟨fallbackPre, hfallback, hfallbackStack, hframe⟩ :=
+    dispatch_miss_nonempty entries entry hnonempty hmiss hwalk hstack
+  exact ⟨fallbackPre, hfallback, hfallbackStack, hframe⟩
 
 end Blanc

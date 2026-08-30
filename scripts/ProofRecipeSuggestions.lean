@@ -39,6 +39,20 @@ example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
   intro run
   exact dispatchBodyWitness_of_runCompiledTo unique member stack run
 
+-- EXPECT: linear-dispatch-selection
+example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {fallback : Nat} {entries : List (B256 × Func)} {selector : B256}
+    {tail : Stack}
+    (nonempty : entries ≠ [])
+    (miss : ∀ candidate ∈ entries, candidate.1 ≠ selector)
+    (stack : pre.stack = selector :: tail) :
+    Func.RunCompiledTo fs sevm pre
+      (Blanc.linearDispatchWith fallback entries) out →
+      DispatchFallbackWitness fs sevm pre entries selector tail fallback out := by
+  blanc_suggest
+  intro run
+  exact dispatchFallbackWitness_of_runCompiledTo nonempty miss stack run
+
 -- EXPECT: line-run-split
 example {sevm : Sevm} {pre post : Devm} {line : Line} :
     Line.Run sevm pre line post → True := by
