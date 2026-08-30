@@ -50,6 +50,14 @@ registry has identified the likely vocabulary.
   `Func.runCompiledTo_log_step_ext` and its exhibited-state form
   `Func.runCompiledTo_log_step_exists` in
   [`Blanc/ForwardLog.lean`](../Blanc/ForwardLog.lean).
+- Selected storage access uses the neutral `sloadCost` / `afterSload` and
+  `sstoreCost` / `afterSstore` carriers in
+  [`Blanc/ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean).
+  Its projection API includes unchanged storage on a non-target account,
+  code, addresses, logs, output, and error; the target-storage and key-set
+  equations expose the selected write and warm/cold access update.  The lower
+  one-write primitive is `setStorVal_getStor_ne` in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
 - Invert an existing arbitrary-outcome compiled walk:
   [`Blanc/CompiledWalkInversion.lean`](../Blanc/CompiledWalkInversion.lean).
   Use `runCompiledTo_next_inv`, `runCompiledTo_branch_inv`,

@@ -776,12 +776,6 @@ lemma Jinst.preserves_state
           simp only [h_gas_not] at run
           contradiction
 
-lemma setStorVal_getStor_ne {devm : Devm} {adr a : Adr} {key val : B256} (h : adr ≠ a) :
-    Devm.getStor (devm.setStorVal adr key val) a = Devm.getStor devm a := by
-  simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
-    Devm.setWorld, State.setStorVal]
-  simp only [Devm.state, State.get_set_ne _ h]
-
 lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Adr}
     (run : Rinst.run ⟨pc, sevm, s⟩ .sstore = .ok s')
     (h_ne : sevm.currentTarget ≠ a) :

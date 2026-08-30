@@ -122,6 +122,35 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   · rw [setStorVal_getStor_self, Devm.withRefundCounter_getStor,
       addAccessedStorageKey_getStor]
 
+@[simp] theorem afterSstore_getStor_ne
+    (sevm : Sevm) (base : Devm) (key value : B256) (address : Adr)
+    (haddress : sevm.currentTarget ≠ address) :
+    Devm.getStor (afterSstore sevm base key value) address =
+      Devm.getStor base address := by
+  unfold afterSstore
+  split
+  · rw [setStorVal_getStor_ne haddress, Devm.withRefundCounter_getStor]
+  · rw [setStorVal_getStor_ne haddress, Devm.withRefundCounter_getStor,
+      addAccessedStorageKey_getStor]
+
+@[simp] theorem afterSstore_logs
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstore sevm base key value).logs = base.logs := by
+  unfold afterSstore
+  split <;> rfl
+
+@[simp] theorem afterSstore_output
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstore sevm base key value).output = base.output := by
+  unfold afterSstore
+  split <;> rfl
+
+@[simp] theorem afterSstore_error
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstore sevm base key value).error = base.error := by
+  unfold afterSstore
+  split <;> rfl
+
 /-- The selected `SSTORE` charge depends on the pre-state only through its
 accessed-key set and the target's storage, so any two states agreeing on both
 are charged identically. -/
