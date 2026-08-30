@@ -43,6 +43,24 @@ private def pushLayoutNat (value : Nat) : Ninst :=
 private def loadArgumentIndex (index : Nat) : Line :=
   [pushDeployWord (Nat.toB256 (32 * index)), mload]
 
+private def constructorArgumentWords : Nat := constructorArgumentBytes / 32
+private def constructorArgumentCacheBase : Nat := constructorArgumentWords
+private def constructorAdminScratchBase : Nat :=
+  constructorArgumentCacheBase + constructorArgumentWords
+private def constructorLimitEventScratchBase : Nat :=
+  constructorAdminScratchBase + 3
+
+private def cachedArgumentWord (index : Nat) : Nat :=
+  constructorArgumentCacheBase + index
+
+private def loadCachedArgumentIndex (index : Nat) : Line :=
+  mloadWord (Nat.toB256 (cachedArgumentWord index))
+
+private def cacheConstructorArguments : Line :=
+  (List.range constructorArgumentWords).flatMap fun index =>
+    loadArgumentIndex index ++
+      mstoreAt (Nat.toB256 (cachedArgumentWord index))
+
 private def storeByteOffset (offset : Nat) : Line :=
   [pushDeployWord (Nat.toB256 offset), mstore]
 
@@ -55,32 +73,47 @@ private def patchLocatorLine (runtimeBase : Nat) : Line :=
     loadArgumentIndex 1 ++ storeByteOffset (runtimeBase + offset)
 
 private def initializeAdminRole : Line :=
-  -- Memory words zero and one become the role/account key throughout this
-  -- sequence; word two is the zero-based global enumeration index.
-  [pushB256 defaultAdminRole] ++ mstoreAt 0 ++
-  loadArgumentIndex 0 ++ mstoreAt 1 ++
-  [pushB256 0] ++ mstoreAt 2 ++
-  [pushB256 1] ++ roleKeyFromMemory roleLookupIndexRegion ++ [sstore] ++
-  mloadWord 0 ++ roleKeyFromMemory roleLookupRoleRegion ++ [sstore] ++
-  mloadWord 1 ++ roleKeyFromMemory roleLookupAccountRegion ++ [sstore] ++
-  mloadWord 0 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
-  mloadWord 1 ++ enumKeyFromMemory enumAccountRegion ++ [sstore] ++
+  -- Keep the decoded ABI head at words zero through four intact for the
+  -- locator patch.  Constructor-only key/event scratch lives above the
+  -- cached five-word argument copy and is overwritten by the runtime copy.
+  let roleWord := constructorAdminScratchBase
+  let accountWord := constructorAdminScratchBase + 1
+  let indexWord := constructorAdminScratchBase + 2
+  [pushB256 defaultAdminRole] ++ mstoreAt (Nat.toB256 roleWord) ++
+  loadCachedArgumentIndex 0 ++ mstoreAt (Nat.toB256 accountWord) ++
+  [pushB256 0] ++ mstoreAt (Nat.toB256 indexWord) ++
+  [pushB256 1] ++
+    roleKeyFromMemoryAt roleWord accountWord roleLookupIndexRegion ++ [sstore] ++
+  mloadWord (Nat.toB256 roleWord) ++
+    roleKeyFromMemoryAt roleWord accountWord roleLookupRoleRegion ++ [sstore] ++
+  mloadWord (Nat.toB256 accountWord) ++
+    roleKeyFromMemoryAt roleWord accountWord roleLookupAccountRegion ++ [sstore] ++
+  mloadWord (Nat.toB256 roleWord) ++
+    enumKeyFromMemoryAt indexWord enumRoleRegion ++ [sstore] ++
+  mloadWord (Nat.toB256 accountWord) ++
+    enumKeyFromMemoryAt indexWord enumAccountRegion ++ [sstore] ++
   [pushB256 1, pushB256 roleRecordLengthSlot, sstore] ++
-  emitRoleGranted
+  [caller] ++ mloadWord (Nat.toB256 accountWord) ++
+    mloadWord (Nat.toB256 roleWord) ++
+    [pushB256 (signatureHash "RoleGranted" [.bytes 32, .address, .address])] ++
+    logWith 3 0 0
 
 private def initializeExitRequestLimit : Line :=
-  loadArgumentIndex 2 ++ [pushB256 maxExitRequestsLimitSlot, sstore] ++
-  loadArgumentIndex 2 ++ [pushB256 prevExitRequestsLimitSlot, sstore] ++
+  loadCachedArgumentIndex 2 ++ [pushB256 maxExitRequestsLimitSlot, sstore] ++
+  loadCachedArgumentIndex 2 ++ [pushB256 prevExitRequestsLimitSlot, sstore] ++
   [timestamp, pushB256 (Nat.toB256 (2 ^ 32 - 1)), and,
     pushB256 prevTimestampSlot, sstore] ++
-  loadArgumentIndex 4 ++ [pushB256 frameDurationInSecSlot, sstore] ++
-  loadArgumentIndex 3 ++ [pushB256 exitsPerFrameSlot, sstore] ++
-  loadArgumentIndex 2 ++ mstoreAt 2 ++
-  loadArgumentIndex 3 ++ mstoreAt 3 ++
-  loadArgumentIndex 4 ++ mstoreAt 4 ++
+  loadCachedArgumentIndex 4 ++ [pushB256 frameDurationInSecSlot, sstore] ++
+  loadCachedArgumentIndex 3 ++ [pushB256 exitsPerFrameSlot, sstore] ++
+  loadCachedArgumentIndex 2 ++
+    mstoreAt (Nat.toB256 constructorLimitEventScratchBase) ++
+  loadCachedArgumentIndex 3 ++
+    mstoreAt (Nat.toB256 (constructorLimitEventScratchBase + 1)) ++
+  loadCachedArgumentIndex 4 ++
+    mstoreAt (Nat.toB256 (constructorLimitEventScratchBase + 2)) ++
   [pushB256 (signatureHash "ExitRequestsLimitSet"
     [.uint256, .uint256, .uint256])] ++
-  logWith 0 2 3
+  logWith 0 (Nat.toB256 constructorLimitEventScratchBase) 3
 
 private def constructorBody
     (runtimeOffset argsOffset runtimeLength : Nat) : Func :=
@@ -90,6 +123,7 @@ private def constructorBody
   ((.call 1) <?>
     (pushLayoutNat constructorArgumentBytes ::: pushLayoutNat argsOffset :::
       pushLayoutNat 0 ::: codecopy :::
+      cacheConstructorArguments +++
       -- ABI address words are canonical before source-level checks.
       loadArgumentIndex 0 +++ checkNonAddress +++
       ((.call 1) <?>
@@ -108,13 +142,13 @@ private def constructorBody
                       ((.call 5) <?>
                         (loadArgumentIndex 4 +++ iszero :::
                           ((.call 6) <?>
-                            (pushLayoutNat runtimeLength :::
-                              pushLayoutNat runtimeOffset :::
-                              pushLayoutNat constructorRuntimeBase :::
-                              codecopy :::
-                              (patchLocatorLine constructorRuntimeBase ++
-                                initializeAdminRole ++
+                            ((initializeAdminRole ++
                                 initializeExitRequestLimit ++
+                                [pushLayoutNat runtimeLength,
+                                  pushLayoutNat runtimeOffset,
+                                  pushLayoutNat constructorRuntimeBase,
+                                  codecopy] ++
+                                patchLocatorLine constructorRuntimeBase ++
                                 [pushLayoutNat runtimeLength,
                                   pushLayoutNat constructorRuntimeBase]) +++
                               Func.ret))))))))))))))

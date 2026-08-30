@@ -67,6 +67,7 @@ import Blanc.LidoCircuitBreakerPinnedTargetStubCrossing
 import Blanc.LidoCircuitBreakerPinnedTargetCompositionControl
 import Blanc.LidoTriggerableWithdrawalsGatewayAuthorization
 import Blanc.LidoTriggerableWithdrawalsGatewayPinnedTarget
+import Blanc.LidoTriggerableWithdrawalsGatewayDeploy
 import Blanc.ProrataAttackTrace
 
 #print axioms Blanc.weth_preserves_solvent
@@ -853,6 +854,10 @@ import Blanc.ProrataAttackTrace
 #print axioms Blanc.ProxyPair.implGuarded_entrySstoreFree_rejected
 #print axioms Blanc.ProxyPair.proxyProg_success_successfulSstore_sourceSite
 #print axioms Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite
+#print axioms Blanc.LidoTriggerableWithdrawalsGateway.lidoTwgCode_compile
+#print axioms Blanc.LidoTriggerableWithdrawalsGateway.abiEncodeConstructorArgs_length
+#print axioms Blanc.LidoTriggerableWithdrawalsGateway.creation_template_runtime_suffix
+#print axioms Blanc.LidoTriggerableWithdrawalsGateway.full_create_input_length
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseFor_absent_role_reverts
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseUntil_absent_role_reverts
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.resume_absent_role_reverts
