@@ -350,8 +350,8 @@ def read_manifest() -> dict[str, object]:
     ]:
         raise ValueError("manifest contract globs drifted")
     owners = value["owners"]
-    if not isinstance(owners, list) or len(owners) != 18:
-        raise ValueError("manifest must contain exactly 18 owners")
+    if not isinstance(owners, list) or len(owners) != 19:
+        raise ValueError("manifest must contain exactly 19 owners")
     for index, row in enumerate(owners, 1):
         if not isinstance(row, dict) or set(row) != {"declaration", "kind"}:
             raise ValueError(f"owner row {index} has the wrong schema")
@@ -670,7 +670,8 @@ def main() -> int:
         f"{len(MUTANTS)} diagnostic-pinned Lean mutants; "
         f"{len(REQUIRED_POSITIVE_THEOREMS)} required positive proofs + "
         f"{len(REQUIRED_POSITIVE_THEOREMS)} deletion controls; "
-        f"18 public owners + 7 exact signatures + {owner_controls} parser controls; "
+        f"{len(manifest['owners'])} public owners + 7 exact signatures + "
+        f"{owner_controls} parser controls; "
         "1 exact legacy exemption"
     )
     return 0
