@@ -521,6 +521,9 @@ NAMED_ROOTS = {
                 "scripts/reference/lido-circuit-breaker"),
     "lidolock": ("LIDO_CIRCUIT_BREAKER_REFERENCE_LOCK",
                  "scripts/lido-circuit-breaker-reference.json"),
+    "twgref": ("LIDO_TWG_REFERENCE_DIR", "scripts/reference/lido-twg"),
+    "twglock": ("LIDO_TWG_REFERENCE_LOCK",
+                "scripts/lido-twg-reference.json"),
 }
 
 

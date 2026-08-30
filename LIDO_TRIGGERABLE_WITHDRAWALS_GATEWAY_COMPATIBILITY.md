@@ -1,10 +1,10 @@
 # Lido TriggerableWithdrawalsGateway compatibility contract
 
-> **Draft status:** incomplete until every `{{MACHINE:...}}` token below is
-> replaced from the validated B1 reference lock or the generated B2
-> differential manifest. A passing source build is not permission to fill a
-> token by hand. The reference and differential gates must reject this
-> document while any token remains.
+> **Published evidence status:** the identities, counts, comparisons, and
+> finite observations below are filled from the validated B1 reference lock
+> and generated B2 differential manifest. The synchronization gate rejects
+> marker drift, non-dispositioned deviations, or a mismatch with either evidence
+> source.
 
 This document freezes the public conformance boundary for Blanc's port of
 Lido's `TriggerableWithdrawalsGateway`. It is read with [`PORTING.md`](PORTING.md):
@@ -27,21 +27,21 @@ prose, own artifact identities and finite observations.
 
 | Item | Locked identity |
 |---|---|
-| Reference-lock schema | `{{MACHINE:B1_REFERENCE_LOCK_SCHEMA}}` |
-| Reference-lock SHA-256 | `{{MACHINE:B1_REFERENCE_LOCK_SHA256}}` |
+| Reference-lock schema | `1` |
+| Reference-lock SHA-256 | `8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f` |
 | Source commit | `17005714f151e5502c559932319a3f2f74ac2436` |
-| Solidity compiler | `{{MACHINE:B1_SOLC_VERSION}}`; artifact SHA-256 `{{MACHINE:B1_SOLC_ARTIFACT_SHA256}}` |
-| Reference creation bytes | `{{MACHINE:B1_REFERENCE_FULL_CREATE_BYTES}}` bytes; SHA-256 `{{MACHINE:B1_REFERENCE_FULL_CREATE_SHA256}}` |
-| Reference runtime | `{{MACHINE:B1_REFERENCE_RUNTIME_BYTES}}` bytes; SHA-256 `{{MACHINE:B1_REFERENCE_RUNTIME_SHA256}}` |
-| Selection-time mainnet snapshot | account `0xDC00116a0D3E064427dA2600449cfD2566B3037B`; block `{{MACHINE:B1_MAINNET_BLOCK}}`; code hash `{{MACHINE:B1_MAINNET_CODE_HASH}}`; role/pause snapshot `{{MACHINE:B1_MAINNET_ROLE_PAUSE_SNAPSHOT_SHA256}}` |
-| Blanc completion commit | `{{MACHINE:B2_BLANC_COMMIT}}` |
+| Solidity compiler | `0.8.9`; artifact SHA-256 `5b25f987aae32a0275fdc6c1be36cc47cf126024a04dafd8e4be39a1d1d1422c` |
+| Reference creation bytes | `10256` bytes; SHA-256 `0e7dd55e589cf6bd38b2ebae7581ff169a354f9399087ecb6b8940f56bacc7e7` |
+| Reference runtime | `8128` bytes; SHA-256 `12c9d210f25202cf535622f93ba5237181512cc23970f2da08434f77e68d3a7b` |
+| Selection-time mainnet snapshot | account `0xDC00116a0D3E064427dA2600449cfD2566B3037B`; block `25866991`; code hash `0xbf27dab01ae7fb4507657a02d975bd38aeea9eaba4498225da3a0ee5f815f123`; role/pause snapshot `b22333b245132e24f43328f46030b09f2ccf805ad3937382d1636a849626cc23` |
+| Blanc completion commit | `35a196fd50192aa269d6cb07699ea0910ad3c468` |
 | Jaune pin | `949cf97ee1956828a3ac0eb12a62c438656ba76e` |
-| Blanc creation template | `{{MACHINE:B2_BLANC_CREATION_TEMPLATE_BYTES}}` bytes; SHA-256 `{{MACHINE:B2_BLANC_CREATION_TEMPLATE_SHA256}}` |
-| Blanc complete CREATE input | `{{MACHINE:B2_BLANC_FULL_CREATE_BYTES}}` bytes; SHA-256 `{{MACHINE:B2_BLANC_FULL_CREATE_SHA256}}` |
-| Blanc runtime | `{{MACHINE:B2_BLANC_RUNTIME_BYTES}}` bytes; SHA-256 `{{MACHINE:B2_BLANC_RUNTIME_SHA256}}` |
+| Blanc creation template | `17976` bytes; SHA-256 `1c7a59c47cb97dbd8da1ccd02ed2913d553d18e6f353c640b308ce47b638eeb1` |
+| Blanc complete CREATE input | `18136` bytes; SHA-256 `8091507f8753791e74a3ba7704436dac4bc7db3fcbf973a97b5296934432347a` |
+| Blanc runtime | `15948` bytes; SHA-256 `2a4d45a407f79c896735072ba7f825927a857ec93f4c9c9abeff3e7905ebdb08` |
 | EELS oracle | `ethereum/execution-specs` commit `4198b9c5996713b268aed602739d5aa40e277694`, Prague |
-| Differential manifest | schema `{{MACHINE:B2_MANIFEST_SCHEMA}}`; SHA-256 `{{MACHINE:B2_MANIFEST_SHA256}}` |
-| Differential result | `{{MACHINE:B2_DIFFERENTIAL_VERDICT}}`; `{{MACHINE:B2_CASE_COUNT}}` cases, `{{MACHINE:B2_RESOURCE_BOUNDARY_COUNT}}` measured resource boundaries |
+| Differential manifest | schema `1`; SHA-256 `a4e7a9b553ceda869f97c30a85214ae599171960fd54db43244ebc7cb43ac4f8` |
+| Differential result | `PASS`; `71` cases, `186` measured resource boundaries |
 
 The mainnet snapshot is provenance and selection-time context. It is not a
 proof of the deployed Solidity account, a claim that its role state persists,
@@ -49,8 +49,8 @@ or a premise of the Blanc theorems.
 
 ## Coverage criterion
 
-The compatibility corpus is complete only when the generated manifest and its
-gate establish all of the following:
+The published compatibility corpus is defined by the following finite
+criterion, which the generated manifest and its gate establish:
 
 1. every one of the 24 census selectors is exercised on both exact artifacts;
 2. the constructor is executed through each artifact's complete CREATE input;
@@ -80,7 +80,7 @@ gate establish all of the following:
    for the expected reason.
 
 The exact generated coverage result is
-`{{MACHINE:B2_COVERAGE_SUMMARY}}`. Agreement means agreement on those chosen
+`71 rows cover 24/24 selectors, constructor, five reachable emitted event kinds plus RoleAdminChanged non-emission, pause sentinel and exact error-polarity arms, roles, limit, and trigger mocks`. Agreement means agreement on those chosen
 rows and observations only. It is not a proof, a liveness result, or an
 exhaustive equivalence claim.
 
@@ -306,7 +306,7 @@ CREATE inputs. It must cover exact source-order rejection rows and a successful
 world with `DEFAULT_ADMIN_ROLE` granted to `admin`, the initial five-word
 logical limit projection, and the ordered `RoleGranted` then
 `ExitRequestsLimitSet` logs. The installed-runtime and full constructor result
-are owned by `{{MACHINE:B2_CONSTRUCTOR_COVERAGE_SUMMARY}}`.
+are owned by `complete CREATE success plus zero admin, dirty admin, value, and four exit-limit validation failures`.
 
 There is no TWG deployment-root theorem in this goal. Constructor fixtures do
 not establish transaction inclusion, arbitrary deployment shapes, CREATE2,
@@ -364,7 +364,7 @@ ETH, logs, or call observations.
 Only `triggerFullWithdrawals` is payable. Empty, unknown, and recognized but
 short calldata revert. Canonical static and dynamic encodings are inside the
 corpus; the exact included/excluded malformed-input matrix is
-`{{MACHINE:B2_CALLDATA_SCOPE_SUMMARY}}`. Trailing calldata and noncanonical
+`canonical ABI rows plus named dirty-address constructor rejection; arbitrary malformed calldata is excluded`. Trailing calldata and noncanonical
 dynamic offset arrangements are claimed only where a named corpus row checks
 them. Malformed callback/dependency return data is a separate external-call
 obligation and is not silently excluded with input calldata.
@@ -431,8 +431,8 @@ layout are deliberately outside equivalence. See `TWG-I01`.
 <!-- LIDO-TWG-CROSSCUT finite-evidence -->
 ### Finite evidence
 
-The B2 corpus has `{{MACHINE:B2_CASE_COUNT}}` cases and
-`{{MACHINE:B2_RESOURCE_BOUNDARY_COUNT}}` resource boundaries. It establishes
+The B2 corpus has `71` cases and
+`186` resource boundaries. It establishes
 only the manifest-listed observations in the manifest-listed worlds. Passing
 every row is not proof of the reference, exhaustive equality, future
 enabledness, or behavior outside the coverage criterion.
@@ -448,7 +448,7 @@ entered as its own behavioral deviation; aggregate savings cannot hide it.
 <!-- LIDO-TWG-CROSSCUT formal-proof-boundary -->
 ### Formal Blanc boundary
 
-At `{{MACHINE:B2_BLANC_COMMIT}}`, the exact compiled Blanc family has proved
+At `35a196fd50192aa269d6cb07699ea0910ad3c468`, the exact compiled Blanc family has proved
 pause-face, authorization, protected-surface, and `PinnedPauseTarget`
 properties within `[propext, Classical.choice, Quot.sound]`. The bundle's
 CircuitBreaker-cell noninterference is derived from selected-route
@@ -466,12 +466,11 @@ Solidity account invariant.
 
 ## Strongest honest port claim
 
-After every machine token has been filled and the hostile review has accepted
-the result, the claim is:
+The published finite claim is:
 
-> At Blanc commit `{{MACHINE:B2_BLANC_COMMIT}}`, Jaune pin
+> At Blanc commit `35a196fd50192aa269d6cb07699ea0910ad3c468`, Jaune pin
 > `949cf97ee1956828a3ac0eb12a62c438656ba76e`, reference lock
-> `{{MACHINE:B1_REFERENCE_LOCK_SHA256}}`, and EELS commit
+> `8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f`, and EELS commit
 > `4198b9c5996713b268aed602739d5aa40e277694`, the exact compiled Blanc
 > TriggerableWithdrawalsGateway implements the frozen 24-selector and
 > six-event surface. Lean proves its stated pause-face, authorization, and

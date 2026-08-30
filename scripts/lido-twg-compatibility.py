@@ -994,8 +994,16 @@ def schema_contract(args: argparse.Namespace, compatibility_raw: bytes,
 def self_test(compatibility: str, deviations: str, census: dict[str, Any]) -> None:
     parse_compatibility(compatibility, census)
     parsed = parse_deviations(deviations)
-    expect(completion_blockers(machine_tokens(compatibility, deviations), parsed),
-           "draft unexpectedly passes the completion blocker")
+    accepted_d01 = \
+        '<!-- LIDO-TWG-DEVIATION {"id":"TWG-D01","status":"accepted","class":"returndata"} -->'
+    unresolved_d01 = accepted_d01.replace('"accepted"', '"unresolved"')
+    expect(accepted_d01 in deviations,
+           "completed TWG-D01 marker is absent from self-test input")
+    draft = deviations.replace(accepted_d01, unresolved_d01, 1)
+    draft_parsed = parse_deviations(draft)
+    blockers = completion_blockers(machine_tokens(compatibility, draft), draft_parsed)
+    expect(blockers == ["unresolved deviation markers remain: TWG-D01"],
+           f"synthetic unresolved draft did not hit the exact completion blocker: {blockers}")
 
     first = census["selectors"][0]["selector"]
     mutated = compatibility.replace(first, "0x00000000", 1)
@@ -1018,7 +1026,7 @@ def self_test(compatibility: str, deviations: str, census: dict[str, Any]) -> No
     else:
         fail("cross-cut duplication falsifier did not bite")
 
-    mutated = deviations.replace('"status":"unresolved"', '"status":"unknown"', 1)
+    mutated = deviations.replace('"status":"accepted"', '"status":"unknown"', 1)
     try:
         parse_deviations(mutated)
     except CompatibilityError:
