@@ -531,11 +531,14 @@ import Blanc.ProrataAttackTrace
 #print axioms Blanc.Prog.jumpable_of_get?_table_appended
 #print axioms Blanc.Func.exec_of_runCompiled_appended_core
 #print axioms Blanc.Prog.exec_of_runCompiled_appended
+#print axioms Blanc.Func.exec_of_runCompiledTo_appended_core
+#print axioms Blanc.Prog.exec_of_runCompiledTo_appended
 #print axioms Blanc.processCreateMessage_msg_getStor_currentTarget
 #print axioms Blanc.benvAfterTransfer_exists_zero
 #print axioms Blanc.benvAfterTransfer_stat
 #print axioms Blanc.processMessage_ok_of_exec
 #print axioms Blanc.processCreateMessage_ok_of_processMessage_and_charge
+#print axioms Blanc.processCreateMessage_ok_of_processMessage_error
 #print axioms Blanc.processUncheckedSystemTransaction_deploymentSystemProgram
 #print axioms Blanc.processCheckedSystemTransaction_deploymentSystemProgram
 #print axioms Blanc.canonicalDeploymentSystemPrefix

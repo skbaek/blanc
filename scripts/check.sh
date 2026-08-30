@@ -767,11 +767,14 @@ Blanc.subcode_of_get?_eq_some_appended|$STANDARD
 Blanc.Prog.jumpable_of_get?_table_appended|$STANDARD
 Blanc.Func.exec_of_runCompiled_appended_core|$STANDARD
 Blanc.Prog.exec_of_runCompiled_appended|$STANDARD
+Blanc.Func.exec_of_runCompiledTo_appended_core|$STANDARD
+Blanc.Prog.exec_of_runCompiledTo_appended|$STANDARD
 Blanc.processCreateMessage_msg_getStor_currentTarget|$STANDARD
 Blanc.benvAfterTransfer_exists_zero|$STANDARD
 Blanc.benvAfterTransfer_stat|$STANDARD
 Blanc.processMessage_ok_of_exec|$STANDARD
 Blanc.processCreateMessage_ok_of_processMessage_and_charge|$STANDARD
+Blanc.processCreateMessage_ok_of_processMessage_error|$STANDARD
 Blanc.processUncheckedSystemTransaction_deploymentSystemProgram|$STANDARD
 Blanc.processCheckedSystemTransaction_deploymentSystemProgram|$STANDARD
 Blanc.canonicalDeploymentSystemPrefix|$STANDARD
