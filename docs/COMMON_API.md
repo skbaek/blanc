@@ -441,6 +441,10 @@ shared declarations rather than restating them per family.
   `selector_eq_of_data_eq_abiSelectorBytes_append`; discharge its explicit
   canonicality premise `Bytes.toB256 (abiSelectorBytes selected) = selected`
   for the concrete four-byte selector.
+- Normalize arbitrary, including 0–3-byte, calldata with
+  `Sevm.selector_eq_toB256_takeD_four`: it identifies the selector with the
+  first four bytes padded on the right with zeros.  Its limb bridge is
+  `shiftRight_224_eq_toB256_take_four`.
 - Read back a `Bytes.writeAt`: `Bytes.sliceD_writeAt` and the neighboring
   pointwise/write-layout laws in `Blanc/CommonProofs.lean`.
 - Reassemble adjacent padded windows with `List.sliceD_split`.  For the common
@@ -484,7 +488,12 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
 
 - `MessageExecution.processMessage_eq_settle_exec_of_enter` exposes the generic
   frame-settlement boundary from an exact successful `Frame.enter` equation;
-  use it for delegated children and any other retained entry. The derived
+  use it for delegated children and any other retained entry.
+  `frameEnter_eq_run_afterTransfer_of_notPrecompile` derives that entry from a
+  successful transfer, exact code address, and fork-relative non-precompile
+  fact without requiring `disablePrecompiles = true`; its settlement-level
+  companion is
+  `processMessage_eq_settle_exec_afterTransfer_of_notPrecompile`. The derived
   `processMessage_eq_settle_exec_afterTransfer` names the actual environment
   produced by value transfer when precompiles are disabled, and
   `processMessage_eq_settle_exec` is its identity-entry specialization.

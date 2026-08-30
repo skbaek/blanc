@@ -24,6 +24,48 @@ theorem processMessage_eq_settle_exec_of_enter
   unfold processMessage runFrame
   rw [henter]
 
+/-- A successful transfer enters ordinary EVM code whenever the selected code
+address is not a precompile under the active fork.  Unlike the convenient
+`disablePrecompiles` adapter below, this is the bridge used by ordinary
+messages whose precompile switch remains enabled. -/
+theorem frameEnter_eq_run_afterTransfer_of_notPrecompile
+    (msg : Msg) (afterTransfer : Benv) (codeAddress : Adr)
+    (hentry : msg.benvAfterTransfer = .ok afterTransfer)
+    (hcode : msg.codeAddress = some codeAddress)
+    (hnotPrecompile :
+      ¬ afterTransfer.stat.rules.isPrecomp codeAddress) :
+    (Frame.ofCall msg).enter =
+      .run (initEvm (msg.withBenv afterTransfer)) := by
+  have hcode' :
+      (msg.withBenv afterTransfer).codeAddress = some codeAddress := hcode
+  have hnotPrecompile' :
+      ¬ (msg.withBenv afterTransfer).benv.stat.rules.isPrecomp
+        codeAddress := hnotPrecompile
+  have henter : executeCode.enter (msg.withBenv afterTransfer) =
+      .inl (initEvm (msg.withBenv afterTransfer)) := by
+    unfold executeCode.enter
+    rw [hcode']
+    simp [hnotPrecompile']
+  unfold Frame.enter Frame.ofCall
+  rw [hentry]
+  simp only
+  rw [henter]
+
+/-- The corresponding `processMessage` bridge for an ordinary non-precompile
+entry after value transfer. -/
+theorem processMessage_eq_settle_exec_afterTransfer_of_notPrecompile
+    (msg : Msg) (afterTransfer : Benv) (codeAddress : Adr)
+    (hentry : msg.benvAfterTransfer = .ok afterTransfer)
+    (hcode : msg.codeAddress = some codeAddress)
+    (hnotPrecompile :
+      ¬ afterTransfer.stat.rules.isPrecomp codeAddress) :
+    processMessage msg =
+      (Frame.ofCall msg).settle
+        (exec (initEvm (msg.withBenv afterTransfer))) :=
+  processMessage_eq_settle_exec_of_enter msg _
+    (frameEnter_eq_run_afterTransfer_of_notPrecompile
+      msg afterTransfer codeAddress hentry hcode hnotPrecompile)
+
 /-- When value transfer prepares a distinct entry environment and precompiles
 are disabled, `processMessage` settles the raw execution started from that
 actual transferred environment. -/

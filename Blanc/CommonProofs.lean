@@ -5660,7 +5660,9 @@ private lemma Bytes.toB256_uint32_toBytes (x : UInt32) :
     UInt32.toBytes, UInt16.toBytes, highZero,
     Bytes.toB256_zero_cons] using roundtrip
 
-private lemma shiftRight_224_eq_toB256_take_four (x : B256) :
+/-- Shifting a word down by 224 bits is its first four big-endian bytes,
+repacked as a `B256`. -/
+lemma shiftRight_224_eq_toB256_take_four (x : B256) :
     x >>> 224 = Bytes.toB256 (x.toBytes.take 4) := by
   rcases x with ⟨⟨x3, x2⟩, ⟨x1, x0⟩⟩
   have firstFour :
@@ -5704,6 +5706,24 @@ lemma List.take_takeD_of_le {alpha} (xs : List alpha) (m n : Nat)
           | cons x xs =>
               simp only [List.takeD, List.tail, List.take, List.cons.injEq]
               exact ⟨trivial, ih xs n (by omega)⟩
+
+/-- `Sevm.selector` is exactly the first four calldata bytes, padded on the
+right with zeros when calldata is short. -/
+theorem Sevm.selector_eq_toB256_takeD_four (sevm : Sevm) :
+    Sevm.selector sevm = Bytes.toB256 (sevm.data.takeD 4 0) := by
+  let word := sevm.data.sliceD 0 32 0
+  have wordLength : word.length = 32 := List.takeD_length _ _ _
+  have roundtrip : (Bytes.toB256 word).toBytes = word :=
+    Bytes.toBytes_toB256_of_length wordLength
+  have firstFour :
+      (Bytes.toB256 word).toBytes.take 4 = sevm.data.takeD 4 0 := by
+    rw [roundtrip]
+    unfold word
+    simp only [List.sliceD, List.drop_zero]
+    exact List.take_takeD_of_le sevm.data 4 32 0 (by omega)
+  rw [Sevm.selector, Sevm.dataWord]
+  change Bytes.toB256 word >>> 224 = _
+  rw [shiftRight_224_eq_toB256_take_four, firstFour]
 
 /-- Calldata beginning with a canonical ABI selector has that selector under
 `Sevm.selector`, independently of its tail.  The explicit canonicality premise
