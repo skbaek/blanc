@@ -129,6 +129,22 @@ Use [`Blanc/RootedExecution.lean`](../Blanc/RootedExecution.lean):
 For retained or settlement-filtered children, do not encode the filter into
 this raw-root bridge; continue to T2.
 
+For raw `SSTORE` exclusion on one exact selected compiled path, use
+[`Blanc/ForwardNoRawSstore.lean`](../Blanc/ForwardNoRawSstore.lean):
+
+- `Func.RunCompiledTo.NoRawSstorePath` mirrors the chosen branches and
+  internal calls and requires explicit childlessness at external instructions.
+- `NoRawSstorePath.of_execFree` discharges an execution-free, locally
+  SSTORE-free body; `NoRawSstorePath.of_revWith` is the symbolic
+  constant-error specialization.
+- `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
+  `Exec.NoRawSstore`; its consequences exclude every successful raw SSTORE and
+  force `retainedStorageWrites = []` for that same witness.
+
+This is construction-direction evidence. A late revert may already have
+executed an SSTORE, so neither rollback nor an empty retained-write list can
+replace the selected-path certificate.
+
 ### E4. I need a common terminal walk
 
 Use [`Blanc/ExecutionTerminal.lean`](../Blanc/ExecutionTerminal.lean):

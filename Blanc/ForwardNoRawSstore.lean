@@ -1,5 +1,6 @@
-import Blanc.ForwardCall
-import Blanc.ExecutionOccurrence
+import Blanc.CycleWriteFree
+import Blanc.RevertPayload
+import Blanc.RootedExecution
 
 /-!
 Contract-neutral construction-direction certificates for proving that a
@@ -190,6 +191,82 @@ theorem Func.RunCompiledTo.NoRawSstorePath.next_of_not_exec
     Func.RunCompiledTo.NoRawSstorePath (.next instructionRun tail) :=
   .next (instructionRun := instructionRun) instructionNe
     (instructionRun.childless_of_not_exec notExec) tailSafe
+
+/-- An execution-free, locally SSTORE-free source body gives a selected-path
+raw certificate for any of its compiled walks.  `funcExecFree` excludes both
+external instructions and internal calls; `LocalSstoreFree` excludes the
+remaining same-frame `SSTORE` heads. -/
+theorem Func.RunCompiledTo.NoRawSstorePath.of_execFree
+    {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {body : Func} {out : Execution}
+    (run : Func.RunCompiledTo fs sevm pre body out)
+    (execFree : funcExecFree body)
+    (storeFree : body.LocalSstoreFree) :
+    Func.RunCompiledTo.NoRawSstorePath run := by
+  induction run with
+  | zero room pop tail ih =>
+      exact .zero (room := room) (pop := pop)
+        (ih execFree.1 storeFree.1)
+  | succ nonzero room pop tail ih =>
+      exact .succ (nonzero := nonzero) (room := room) (pop := pop)
+        (ih execFree.2 storeFree.2)
+  | last terminalRun =>
+      exact .last (terminalRun := terminalRun)
+  | next instructionRun tail ih =>
+      rename_i _ instruction _ _ _
+      cases instruction with
+      | reg operation =>
+          exact .next (instructionRun := instructionRun) storeFree.1
+            (instructionRun.childless_of_not_exec (by
+              intro external impossible
+              cases impossible))
+            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+      | push bytes size =>
+          exact .next (instructionRun := instructionRun) storeFree.1
+            (instructionRun.childless_of_not_exec (by
+              intro external impossible
+              cases impossible))
+            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+      | exec operation =>
+          simp [funcExecFree] at execFree
+  | call lookup room burn tail ih =>
+      simp [funcExecFree] at execFree
+
+private theorem prependStoresRev_execFree
+    (iws : List (B256 × Nat)) (rest : Func)
+    (hrest : funcExecFree rest) :
+    funcExecFree (prependStoresRev iws rest) := by
+  induction iws generalizing rest with
+  | nil => exact hrest
+  | cons iw iws ih =>
+      apply ih
+      simpa [prependStore, Ninst.pushB256, funcExecFree] using hrest
+
+private theorem prependStoresRev_localSstoreFree
+    (iws : List (B256 × Nat)) (rest : Func)
+    (hrest : rest.LocalSstoreFree) :
+    (prependStoresRev iws rest).LocalSstoreFree := by
+  induction iws generalizing rest with
+  | nil => exact hrest
+  | cons iw iws ih =>
+      apply ih
+      simpa [prependStore, Ninst.pushB256, Func.LocalSstoreFree] using hrest
+
+/-- Every compiled constant `Error(string)` body is raw-SSTORE-free.  The
+reason remains symbolic: the proof traverses the reverse-store constructor
+rather than reducing the payload's computed word list. -/
+theorem Func.RunCompiledTo.NoRawSstorePath.of_revWith
+    {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {reason : String} {out : Execution}
+    (run : Func.RunCompiledTo fs sevm pre (Func.revWith reason) out) :
+    Func.RunCompiledTo.NoRawSstorePath run := by
+  apply Func.RunCompiledTo.NoRawSstorePath.of_execFree run
+  · unfold Func.revWith Func.revData
+    apply prependStoresRev_execFree
+    simp [Ninst.pushB256, funcExecFree]
+  · unfold Func.revWith Func.revData
+    apply prependStoresRev_localSstoreFree
+    simp [Ninst.pushB256, Func.LocalSstoreFree]
 
 /-- Prepend one decoded childless instruction to a raw-SSTORE-free execution.
 The `.exec` case admits synchronous `.done` and synchronously resolved

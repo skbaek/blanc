@@ -207,6 +207,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/MessageExecution.lean`, `module:Blanc/MessageExecutionInversion.lean`, `declaration:MessageExecution.processMessage_eq_settle_exec`, `declaration:MessageExecution.processMessage_clean_of_exec`, `declaration:MessageExecution.processMessage_revert_of_exec`, `declaration:MessageExecution.processMessage_halt_of_exec`, `declaration:MessageExecution.processMessage_clean_rawPost`, `declaration:MessageExecution.processMessage_entry_facts`, `declaration:MessageExecution.processMessage_entry_stack`, `declaration:MessageExecution.processMessage_entry_memory`, `declaration:MessageExecution.settledRevert`, `declaration:MessageExecution.settledHalt`, `declaration:Msg.initDevm_stack`, `declaration:Msg.initSevm_data`
 - Review: `proof-infrastructure` on `2026-08-29`
 
+## `raw-sstore-free-compiled-path`
+
+- Status: `active`
+- Triggers: `goal-shape:raw-sstore-free-compiled-path`
+- Preferred path: Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body and `NoRawSstorePath.of_revWith` for a symbolic constant-error body; finish with `Prog.exists_exec_noRawSstore`.
+- Boundary: This is raw construction-direction chronology, not rollback reasoning. An empty retained-write list or reverted terminal state does not prove the certificate because an earlier raw SSTORE may have executed and then rolled back. Entered child frames require their own evidence; synchronously resolved childless precompiles may use the explicit done-frame constructor.
+- Owner module: [Blanc/ForwardNoRawSstore.lean](../Blanc/ForwardNoRawSstore.lean)
+- Canonical example: [Blanc/ForwardNoRawSstore.lean](../Blanc/ForwardNoRawSstore.lean) — `Func.RunCompiledTo.NoRawSstorePath.of_execFree`
+- Registered symbols: `module:Blanc/ForwardNoRawSstore.lean`, `declaration:Blanc.Exec.NoRawSstore`, `declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath`, `declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_execFree`, `declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_revWith`, `declaration:Blanc.Prog.exists_exec_noRawSstore`, `declaration:Blanc.Exec.NoRawSstore.no_successfulSstoreOccurrence`, `declaration:Blanc.Exec.NoRawSstore.retainedStorageWrites_eq_nil`
+- Review: `proof-infrastructure` on `2026-08-30`
+
 ## `retained-write-noninterference`
 
 - Status: `active`

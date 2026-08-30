@@ -305,6 +305,27 @@ review_owner = "proof-infrastructure"
 review_date = "2026-08-29"
 
 [[recipe]]
+id = "raw-sstore-free-compiled-path"
+status = "active"
+triggers = ["goal-shape:raw-sstore-free-compiled-path"]
+preferred_path = "Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body and `NoRawSstorePath.of_revWith` for a symbolic constant-error body; finish with `Prog.exists_exec_noRawSstore`."
+boundary = "This is raw construction-direction chronology, not rollback reasoning. An empty retained-write list or reverted terminal state does not prove the certificate because an earlier raw SSTORE may have executed and then rolled back. Entered child frames require their own evidence; synchronously resolved childless precompiles may use the explicit done-frame constructor."
+owner_module = "Blanc/ForwardNoRawSstore.lean"
+canonical_example = "Blanc/ForwardNoRawSstore.lean:Func.RunCompiledTo.NoRawSstorePath.of_execFree"
+symbols = [
+  "module:Blanc/ForwardNoRawSstore.lean",
+  "declaration:Blanc.Exec.NoRawSstore",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_execFree",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_revWith",
+  "declaration:Blanc.Prog.exists_exec_noRawSstore",
+  "declaration:Blanc.Exec.NoRawSstore.no_successfulSstoreOccurrence",
+  "declaration:Blanc.Exec.NoRawSstore.retainedStorageWrites_eq_nil",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-30"
+
+[[recipe]]
 id = "retained-write-noninterference"
 status = "active"
 triggers = ["goal-shape:retained-write-noninterference"]

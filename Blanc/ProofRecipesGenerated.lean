@@ -163,6 +163,14 @@ def recipes : List Recipe := [
     boundary := "The forward bridge requires entry-state identity and disabled precompiles. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
   },
   {
+    id := "raw-sstore-free-compiled-path"
+    status := "active"
+    triggers := ["goal-shape:raw-sstore-free-compiled-path"]
+    preferredPath := "Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body and `NoRawSstorePath.of_revWith` for a symbolic constant-error body; finish with `Prog.exists_exec_noRawSstore`."
+    symbols := ["module:Blanc/ForwardNoRawSstore.lean", "declaration:Blanc.Exec.NoRawSstore", "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath", "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_execFree", "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_revWith", "declaration:Blanc.Prog.exists_exec_noRawSstore", "declaration:Blanc.Exec.NoRawSstore.no_successfulSstoreOccurrence", "declaration:Blanc.Exec.NoRawSstore.retainedStorageWrites_eq_nil"]
+    boundary := "This is raw construction-direction chronology, not rollback reasoning. An empty retained-write list or reverted terminal state does not prove the certificate because an earlier raw SSTORE may have executed and then rolled back. Entered child frames require their own evidence; synchronously resolved childless precompiles may use the explicit done-frame constructor."
+  },
+  {
     id := "retained-write-noninterference"
     status := "active"
     triggers := ["goal-shape:retained-write-noninterference"]
