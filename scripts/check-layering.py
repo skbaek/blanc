@@ -83,6 +83,7 @@ CONTRACTS = {
                        "BeaconDepositGuardMemory", "BeaconDepositGuards",
                        "BeaconDepositReconstructMemory", "BeaconDepositReconstruct",
                        "BeaconDepositInsertMemory", "BeaconDepositInsert",
+                       "BeaconDepositStorageEffects",
                        "BeaconDepositInsertFold", "BeaconDepositInsertNat",
                        "BeaconDepositInsertStateProjections",
                        "BeaconDepositInsertIterHeight", "BeaconDepositInsertIterSize",

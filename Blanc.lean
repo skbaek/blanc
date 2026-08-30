@@ -152,6 +152,7 @@ import Blanc.BeaconDepositReconstructMemory
 import Blanc.BeaconDepositReconstruct
 import Blanc.BeaconDepositInsertMemory
 import Blanc.BeaconDepositInsert
+import Blanc.BeaconDepositStorageEffects
 import Blanc.BeaconDepositInsertFold
 import Blanc.BeaconDepositInsertNat
 import Blanc.BeaconDepositInsertStateProjections

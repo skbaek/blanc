@@ -545,11 +545,16 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   and terminal execution nodes.
 - For construction from a successful selected compiled walk, use
   [`Blanc/ForwardStorageEffects.lean`](../Blanc/ForwardStorageEffects.lean):
-  annotate it with `Func.RunCompiledTo.StorageEffectPath` (ordinary non-external
-  steps use `StorageEffectPath.next_of_not_exec`) and finish with
-  `Prog.exists_exec_retainedStorageEffectTriples`. The resulting list is exact
-  execution order and intentionally retains successful no-op SSTOREs. An
-  existing `NoRawSstorePath` converts directly with
+  annotate it with `Func.RunCompiledTo.StorageEffectPath`.  When construction
+  must thread the run and annotation together through a long CPS-style walk,
+  use `Func.StorageEffectRun` with `of_noRawSstorePath` for an already
+  certified empty path and its `last`, `next`, `next_effectNeutral`, `zero`,
+  `succ`, and `call` constructors; ordinary non-external steps can otherwise
+  use `StorageEffectPath.next_of_not_exec`.  Finish with
+  `Prog.exists_exec_retainedStorageEffectTriples`, or its `_appended` variant
+  when the compiled program is the exact prefix of creation code. The
+  resulting list is exact execution order and intentionally retains successful
+  no-op SSTOREs. An existing `NoRawSstorePath` converts directly with
   `StorageEffectPath.of_noRawSstorePath`.
 - `ProcessMessage.clean_input_state_of_settle` exposes the clean raw input and
   exact state retained by a successful settlement.

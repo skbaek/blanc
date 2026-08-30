@@ -255,7 +255,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeContainsName
           `Blanc.Exec.retainedStorageEffectTriples target ||
         proofRecipeContainsName
-          `Blanc.Func.RunCompiledTo.StorageEffectPath target
+          `Blanc.Func.RunCompiledTo.StorageEffectPath target ||
+        proofRecipeContainsName `Blanc.Func.StorageEffectRun target
   | "goal-shape:retained-wrapper-trace" =>
       return proofRecipeContainsName `Blanc.ExecutionTrace.RetainedXlot target ||
         proofRecipeContainsName `Blanc.ExecutionTrace.ProcessMessageTrace target ||
