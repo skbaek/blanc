@@ -762,8 +762,17 @@ theorem ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
         (base.setMach ⟨[], Mem.empty, G + 300⟩)
         (ossifiableConstructorDecode 3447
           ossifiableConstructorInitializeImplementation) post ∧
-      post.output = runtimeBytes := by
-  obtain ⟨post, hbody, houtput⟩ :=
+      Devm.getStor post sevm.currentTarget =
+        ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
+          implementation.toB256).set adminSlotLit requestedAdmin.toB256 ∧
+      post.logs = base.logs ++
+        [rawUpgradedLog sevm.currentTarget implementation.toB256] ++
+        [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
+          requestedAdmin] ∧
+      post.output = runtimeBytes ∧
+      post.gasLeft = G - 49897 ∧
+      post.error = base.error := by
+  obtain ⟨post, hbody, hstorage, hlogs, houtput, hgasPost, herrorPost⟩ :=
     ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       (sevm := sevm) (base := base)
       (memory := decodeForwardLengthMemory sevm)
@@ -796,7 +805,7 @@ theorem ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
   have himplementation :=
     decodeForwardImplementationStage_runCompiled himplementation hadmin
   have hdecode := decodeForwardHeadStage_runCompiled hcodeSize himplementation
-  refine ⟨post, ?_, houtput⟩
+  refine ⟨post, ?_, hstorage, hlogs, houtput, hgasPost, herrorPost⟩
   simpa only [Nat.add_assoc] using hdecode
 
 private theorem decodeForwardProgramMainStage_runCompiled
@@ -853,8 +862,17 @@ theorem ossifiableConstructorProgram_emptySetup_runCompiled
     ∃ post,
       Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
         (ossifiableConstructorProgram 1250 3447 2197) post ∧
-      post.output = runtimeBytes := by
-  obtain ⟨post, hdecode, houtput⟩ :=
+      Devm.getStor post sevm.currentTarget =
+        ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
+          implementation.toB256).set adminSlotLit requestedAdmin.toB256 ∧
+      post.logs = base.logs ++
+        [rawUpgradedLog sevm.currentTarget implementation.toB256] ++
+        [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
+          requestedAdmin] ∧
+      post.output = runtimeBytes ∧
+      post.gasLeft = G - 49897 ∧
+      post.error = base.error := by
+  obtain ⟨post, hdecode, hstorage, hlogs, houtput, hgasPost, herrorPost⟩ :=
     ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
       hcodeSize himplementation hrequested
       hoffset hlength himplementationNonzero hrequestedNonzero
@@ -863,7 +881,7 @@ theorem ossifiableConstructorProgram_emptySetup_runCompiled
       hadminCold hstatic hcode hruntimeLength hruntimeNonempty hgas
   have hmain :=
     decodeForwardProgramMainStage_runCompiled hvalue hdecode
-  refine ⟨post, ?_, houtput⟩
+  refine ⟨post, ?_, hstorage, hlogs, houtput, hgasPost, herrorPost⟩
   apply Prog.runCompiled_intro (G := G + 319)
   · norm_num [gJumpdest]
   · rfl
@@ -1022,6 +1040,65 @@ private theorem ossifiableEmptyDataCreateInput_length
     List.take_length_append]
   exact B256.toB256_toBytes _
 
+private theorem ossifiableEmptyDataCreateInput_decodeSpec
+    (implementation admin : Adr) :
+    ossifiableConstructorDecodeSpec
+        (ossifiableEmptyDataCreateInput implementation admin) 3447 =
+      .accepted implementation.toB256 admin.toB256 [] := by
+  have himplementationClean :
+      addressMask &&& implementation.toB256 = 0 :=
+    validAdr_iff.mp ⟨implementation, rfl⟩
+  have hadminClean : addressMask &&& admin.toB256 = 0 :=
+    validAdr_iff.mp ⟨admin, rfl⟩
+  have hpointer :
+      (ossifiableConstructorDataPointer 3447 (96 : B256)).toNat = 3543 := by
+    decide +kernel
+  have hstart :
+      (ossifiableConstructorDataStart 3447 (96 : B256)).toNat = 3575 := by
+    decide +kernel
+  have hfinish :
+      (ossifiableConstructorDataEnd 3447 (96 : B256) 0).toNat = 3575 := by
+    decide +kernel
+  have haccepted := ossifiableConstructorDecodeSpec_accepted
+    (code := ossifiableEmptyDataCreateInput implementation admin)
+    (argsOffset := 3447)
+    (by rw [ossifiableEmptyDataCreateInput_length_exact]; omega)
+    (by
+      rw [ossifiableEmptyDataCreateInput_implementation]
+      exact himplementationClean)
+    (by
+      rw [show 3447 + 32 = 3479 by omega,
+        ossifiableEmptyDataCreateInput_admin]
+      exact hadminClean)
+    (by
+      rw [show 3447 + 64 = 3511 by omega,
+        ossifiableEmptyDataCreateInput_offset]
+      decide +kernel)
+    (by
+      rw [show 3447 + 64 = 3511 by omega,
+        ossifiableEmptyDataCreateInput_offset]
+      change
+        (ossifiableConstructorDataStart 3447 (96 : B256)).toNat ≤
+          (ossifiableEmptyDataCreateInput implementation admin).length
+      rw [hstart, ossifiableEmptyDataCreateInput_length_exact])
+    (by
+      rw [show 3447 + 64 = 3511 by omega,
+        ossifiableEmptyDataCreateInput_offset, hpointer,
+        ossifiableEmptyDataCreateInput_length]
+      decide +kernel)
+    (by
+      rw [show 3447 + 64 = 3511 by omega,
+        ossifiableEmptyDataCreateInput_offset, hpointer,
+        ossifiableEmptyDataCreateInput_length, hfinish,
+        ossifiableEmptyDataCreateInput_length_exact])
+  rw [ossifiableEmptyDataCreateInput_implementation,
+    show 3447 + 32 = 3479 by omega,
+    ossifiableEmptyDataCreateInput_admin,
+    show 3447 + 64 = 3511 by omega,
+    ossifiableEmptyDataCreateInput_offset, hpointer,
+    ossifiableEmptyDataCreateInput_length, hstart] at haccepted
+  simpa only [List.sliceD, B256.toNat_zero, List.takeD_zero] using haccepted
+
 /-- Specialize the forward constructor theorem to the exact complete
 `creation-template ++ abi.encode(implementation, admin, bytes(""))` input.
 The returned bytes are the compiler-owned 2,197-byte runtime. -/
@@ -1051,7 +1128,16 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
     ∃ post,
       Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
         (ossifiableConstructorProgram 1250 3447 2197) post ∧
-      post.output = runtimeBaselineBytes := by
+      Devm.getStor post sevm.currentTarget =
+        ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
+          implementation.toB256).set adminSlotLit requestedAdmin.toB256 ∧
+      post.logs = base.logs ++
+        [rawUpgradedLog sevm.currentTarget implementation.toB256] ++
+        [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
+          requestedAdmin] ∧
+      post.output = runtimeBaselineBytes ∧
+      post.gasLeft = G - 49897 ∧
+      post.error = base.error := by
   have hcodeSize : sevm.code.size = 3575 := by
     rw [ByteArray.size_eq_length_toList, hinput,
       ossifiableEmptyDataCreateInput_length_exact]
@@ -1090,5 +1176,52 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
     himplementationRaw himplementationOriginal himplementationCold
     hadminRaw hadminOriginal hadminCold hstatic hcode
     runtimeBaselineBytes_length_exact hruntimeNonempty hgas
+
+/-- Exact semantic observations carried by the same constructive canonical
+constructor walk.  The decoder's accepted value fixes the setup payload to
+empty, so the execution-derived prepared route supplies the two ERC-1967
+writes and source-ordered logs without consulting the total evaluator. -/
+theorem ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
+    {sevm : Sevm} {base : Devm}
+    {implementation requestedAdmin : Adr} {G : Nat}
+    (hvalue : sevm.value = 0)
+    (hinput : sevm.code.toList =
+      ossifiableEmptyDataCreateInput implementation requestedAdmin)
+    (himplementationNonzero : implementation ≠ 0)
+    (hrequestedNonzero : requestedAdmin ≠ 0)
+    (hcodeSizeNonzero : (base.getCode implementation).size.toB256 ≠ 0)
+    (haddressCold : implementation ∉ base.accessedAddresses)
+    (himplementationRaw :
+      base.getStorVal sevm.currentTarget implementationSlotLit = 0)
+    (himplementationOriginal :
+      getOrigStorVal sevm sevm.currentTarget implementationSlotLit = 0)
+    (himplementationCold : (sevm.currentTarget, implementationSlotLit) ∉
+      base.accessedStorageKeys)
+    (hadminRaw : base.getStorVal sevm.currentTarget adminSlotLit = 0)
+    (hadminOriginal :
+      getOrigStorVal sevm sevm.currentTarget adminSlotLit = 0)
+    (hadminCold : (sevm.currentTarget, adminSlotLit) ∉
+      base.accessedStorageKeys)
+    (hstatic : sevm.isStatic = false)
+    (hgas : 200000 ≤ G) :
+    ∃ post,
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
+        (ossifiableConstructorProgram 1250 3447 2197) post ∧
+      Devm.getStor post sevm.currentTarget =
+        ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
+          implementation.toB256).set adminSlotLit
+            requestedAdmin.toB256 ∧
+      post.logs = base.logs ++
+        [rawUpgradedLog sevm.currentTarget implementation.toB256] ++
+        [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
+          requestedAdmin] ∧
+      post.output = runtimeBaselineBytes ∧
+      post.gasLeft = G - 49897 ∧
+      post.error = base.error :=
+  ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
+    hvalue hinput himplementationNonzero hrequestedNonzero
+    hcodeSizeNonzero haddressCold himplementationRaw
+    himplementationOriginal himplementationCold hadminRaw hadminOriginal
+    hadminCold hstatic hgas
 
 end Blanc.ProxyPair

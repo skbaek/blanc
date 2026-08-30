@@ -15,6 +15,7 @@ import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerDeploymentRoot
+import Blanc.ProxyPairOssifiableDeploymentFixture
 import Blanc.ProrataAttackTrace
 
 /-!
@@ -3627,6 +3628,86 @@ example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
   DeploymentRoot.reachable_countConservation hroot hreach
 
 end LidoCircuitBreaker
+
+namespace ProxyPair
+
+example {sevm : Sevm} {base : Devm}
+    {implementation requestedAdmin : Adr} {G : Nat}
+    (hvalue : sevm.value = 0)
+    (hinput : sevm.code.toList =
+      ossifiableEmptyDataCreateInput implementation requestedAdmin)
+    (himplementationNonzero : implementation ≠ 0)
+    (hrequestedNonzero : requestedAdmin ≠ 0)
+    (hcodeSizeNonzero : (base.getCode implementation).size.toB256 ≠ 0)
+    (haddressCold : implementation ∉ base.accessedAddresses)
+    (himplementationRaw :
+      base.getStorVal sevm.currentTarget implementationSlotLit = 0)
+    (himplementationOriginal :
+      getOrigStorVal sevm sevm.currentTarget implementationSlotLit = 0)
+    (himplementationCold : (sevm.currentTarget, implementationSlotLit) ∉
+      base.accessedStorageKeys)
+    (hadminRaw : base.getStorVal sevm.currentTarget adminSlotLit = 0)
+    (hadminOriginal :
+      getOrigStorVal sevm sevm.currentTarget adminSlotLit = 0)
+    (hadminCold : (sevm.currentTarget, adminSlotLit) ∉
+      base.accessedStorageKeys)
+    (hstatic : sevm.isStatic = false)
+    (hgas : 200000 ≤ G) :
+    ∃ post,
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
+        (ossifiableConstructorProgram 1250 3447 2197) post ∧
+      Devm.getStor post sevm.currentTarget =
+        ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
+          implementation.toB256).set adminSlotLit requestedAdmin.toB256 ∧
+      post.logs = base.logs ++
+        [rawUpgradedLog sevm.currentTarget implementation.toB256] ++
+        [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
+          requestedAdmin] ∧
+      post.output = runtimeBaselineBytes ∧
+      post.gasLeft = G - 49897 ∧
+      post.error = base.error :=
+  ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
+    hvalue hinput himplementationNonzero hrequestedNonzero hcodeSizeNonzero
+    haddressCold himplementationRaw himplementationOriginal
+    himplementationCold hadminRaw hadminOriginal hadminCold hstatic hgas
+
+example (msg : Msg) (implementation requestedAdmin : Adr)
+    (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = .none)
+    (hcode : msg.code.toList =
+      ossifiableEmptyDataCreateInput implementation requestedAdmin)
+    (himplementationNonzero : implementation ≠ 0)
+    (hrequestedNonzero : requestedAdmin ≠ 0)
+    (himplementationCode :
+      (msg.benv.state.getCode implementation).size.toB256 ≠ 0)
+    (haddressCold : implementation ∉ msg.accessedAddresses)
+    (himplementationOriginal :
+      (msg.benv.stat.origState.get msg.currentTarget).stor.get
+        implementationSlotLit = 0)
+    (himplementationCold :
+      (msg.currentTarget, implementationSlotLit) ∉ msg.accessedStorageKeys)
+    (hadminOriginal :
+      (msg.benv.stat.origState.get msg.currentTarget).stor.get adminSlotLit = 0)
+    (hadminCold :
+      (msg.currentTarget, adminSlotLit) ∉ msg.accessedStorageKeys)
+    (hstatic : msg.isStatic = false)
+    (hgas : ossifiableCreateMessageGas ≤ msg.gas)
+    (hmax : 2197 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    ∃ post,
+      OssifiableEmptySetupCreateResult msg implementation requestedAdmin post :=
+  processCreateMessage_ossifiable_emptySetup_success msg implementation
+    requestedAdmin hvalue hcodeAddress hcode himplementationNonzero
+    hrequestedNonzero himplementationCode haddressCold
+    himplementationOriginal himplementationCold hadminOriginal hadminCold
+    hstatic hgas hmax
+
+example :
+    ∃ post, OssifiableEmptySetupCreateResult
+      OssifiableCreateFixture.message OssifiableCreateFixture.implementation
+      OssifiableCreateFixture.admin post :=
+  OssifiableCreateFixture.message_success
+
+end ProxyPair
 
 namespace Prorata
 

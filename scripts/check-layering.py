@@ -105,6 +105,8 @@ CONTRACTS = {
                    "ProxyPairOssifiableConstructorDecodeForward",
                    "ProxyPairOssifiableConstructorEffects",
                    "ProxyPairOssifiableDeployment",
+                   "ProxyPairOssifiableDeploymentMessage",
+                   "ProxyPairOssifiableDeploymentFixture",
                    "ProxyPairImplementation", "ProxyPairExecution",
                    "ProxyPairCorrespondence", "ProxyPairAuthority"],
     "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",

@@ -129,7 +129,16 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
         (base.setMach ⟨[], memory, G⟩)
         ossifiableConstructorInitializeImplementation post ∧
-      post.output = runtimeBytes := by
+      Devm.getStor post sevm.currentTarget =
+        ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
+          implementation.toB256).set adminSlotLit requestedAdmin.toB256 ∧
+      post.logs = base.logs ++
+        [rawUpgradedLog sevm.currentTarget implementation.toB256] ++
+        [ossifiableConstructorAdminChangedLog sevm.currentTarget 0
+          requestedAdmin] ∧
+      post.output = runtimeBytes ∧
+      post.gasLeft = G - 49897 ∧
+      post.error = base.error := by
   have hmemory0 : (memory.read 0 32).2 = memory := by
     apply Mem.read_snd_eq_self
     rw [hsize]
@@ -190,90 +199,105 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     intro hp
     have hk := congrArg Prod.snd hp
     exact (by decide : implementationSlotLit ≠ adminSlotLit) hk
-  have htail := ossifiableConstructorAfterSetup_zeroAdmin_runCompiled
+  have htail := ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
     (fs := ossifiableConstructorFunctions 1250 2197)
     (sevm := sevm) (base := initializedBase) (memory := memory)
     (image := image) (runtimeBytes := runtimeBytes)
     (requestedAdmin := requestedAdmin) (G := G - 25913)
     hwf hreads hrequested hrequestedNonzero hadminRawInitialized
     hadminOriginal hadminColdInitialized hsize hstatic hcode
-    hruntimeLength hruntimeNonempty (by omega)
-  eapply Exists.intro
-  constructor
-  rw [ossifiableConstructorInitializeImplementation_shape]
-  func_run (2) [3]
-  · exact Devm.extCost_add_of_size (a := gVerylow) hsize (by decide)
-  simp only [show (0 : B256).toNat = 0 by rfl]
-  rw [Mem.Reads.read hreads, himplementation, hmemory0]
-  func_run (4) [0]
-  · simpa only [Devm.setMach_accessedAddresses, toAdr_toB256]
-      using haddressCold
-  · simp only [Devm.getCode_setMach, toAdr_toB256, B256.eqCheck,
-      hcodeSizeNonzero, ↓reduceIte]
-  simp only [initialize_addAccessedAddress_setMach_setMach, toAdr_toB256]
-  change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm _
-    initializeAccepted _
-  unfold initializeAccepted
-  func_run (1)
-  unfold initializePackedStore
-  apply Func.RunCompiled.next
-  · apply Ninst.runCompiled_pushB256 (c := 3) (G := G - 2630)
-    · decide +kernel
-    · simp only [Devm.gasLeft_setMach]
-      omega
-    · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
-      omega
-  func_run (1)
-  simp only [Devm.addAccessedStorageKey_setMach_setMach,
-    Devm.getStorVal_setMach, initialize_addAccessedAddress_getStorVal,
-    Devm.memory_setMach, Devm.stack_setMach]
-  rw [himplementationRaw]
-  unfold initializeHighMask
-  func_run (4)
-  unfold initializeMerge
-  func_run (2)
-  unfold initializeSstore
-  have hwarmImplementation :
-      (sevm.currentTarget, implementationSlotLit) ∈
-        (addAccessedStorageKey (addAccessedAddress base implementation)
-          sevm.currentTarget implementationSlotLit).accessedStorageKeys :=
-    Std.HashSet.mem_insert_self
-  func_run (2) [20000]
-  · simp only [Devm.getStorVal_setMach,
+    hruntimeLength hruntimeNonempty
+    (ossifiableConstructorFunctions_zeroAdmin 1250 2197) (by omega)
+  rcases htail with
+    ⟨post, htailRun, htailStorage, htailLogs, htailOutput, htailGas,
+      htailError⟩
+  refine ⟨post, ?_, ?_, ?_, htailOutput, ?_, ?_⟩
+  · rw [ossifiableConstructorInitializeImplementation_shape]
+    func_run (2) [3]
+    · exact Devm.extCost_add_of_size (a := gVerylow) hsize (by decide)
+    simp only [show (0 : B256).toNat = 0 by rfl]
+    rw [Mem.Reads.read hreads, himplementation, hmemory0]
+    func_run (4) [0]
+    · simpa only [Devm.setMach_accessedAddresses, toAdr_toB256]
+        using haddressCold
+    · simp only [Devm.getCode_setMach, toAdr_toB256, B256.eqCheck,
+        hcodeSizeNonzero, ↓reduceIte]
+    simp only [initialize_addAccessedAddress_setMach_setMach, toAdr_toB256]
+    change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm _
+      initializeAccepted _
+    unfold initializeAccepted
+    func_run (1)
+    unfold initializePackedStore
+    apply Func.RunCompiled.next
+    · apply Ninst.runCompiled_pushB256 (c := 3) (G := G - 2630)
+      · decide +kernel
+      · simp only [Devm.gasLeft_setMach]
+        omega
+      · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+        omega
+    func_run (1)
+    simp only [Devm.addAccessedStorageKey_setMach_setMach,
+      Devm.getStorVal_setMach, initialize_addAccessedAddress_getStorVal,
+      Devm.memory_setMach, Devm.stack_setMach]
+    rw [himplementationRaw]
+    unfold initializeHighMask
+    func_run (4)
+    unfold initializeMerge
+    func_run (2)
+    unfold initializeSstore
+    have hwarmImplementation :
+        (sevm.currentTarget, implementationSlotLit) ∈
+          (addAccessedStorageKey (addAccessedAddress base implementation)
+            sevm.currentTarget implementationSlotLit).accessedStorageKeys :=
+      Std.HashSet.mem_insert_self
+    func_run (2) [20000]
+    · simp only [Devm.getStorVal_setMach,
+        initialize_addAccessedStorageKey_getStorVal,
+        initialize_addAccessedAddress_getStorVal, himplementationRaw,
+        himplementationOriginal, hnew]
+      rw [sstoreValueCost,
+        if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
+        if_pos rfl]
+      norm_num [gasStorageSet]
+    simp only [hnew, Devm.getStorVal_setMach,
       initialize_addAccessedStorageKey_getStorVal,
       initialize_addAccessedAddress_getStorVal, himplementationRaw,
-      himplementationOriginal, hnew]
-    rw [sstoreValueCost,
-      if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
-      if_pos rfl]
-    norm_num [gasStorageSet]
-  simp only [hnew, Devm.getStorVal_setMach,
-    initialize_addAccessedStorageKey_getStorVal,
-    initialize_addAccessedAddress_getStorVal, himplementationRaw,
-    himplementationOriginal]
-  unfold initializeLog
-  func_run (4) [1125]
-  · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-    rw [Devm.extCost_zero_of_le halign hzeroWindow]
-    norm_num [gLog, gLogdata, gLogtopic]
-  simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-  rw [hreadZero]
-  change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm _
-    initializeLoadLength _
-  unfold initializeLoadLength
-  func_run (2) [3]
-  · exact Devm.extCost_add_of_size hsize (by decide)
-  simp only [show (128 : B256).toNat = 128 by decide]
-  rw [Mem.Reads.read hreads, hlength, hmemory128]
-  unfold initializeSetupBranch
-  func_run (1)
-  unfold initializeAfterSetupCall
-  func_run (1)
-  rw [hrefund]
-  change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
-    (initializedBase.setMach ⟨[], memory, G - 25913⟩)
-    (ossifiableConstructorAfterSetup 1250 2197) _
-  exact htail.choose_spec.1
-  exact htail.choose_spec.2
+      himplementationOriginal]
+    unfold initializeLog
+    func_run (4) [1125]
+    · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+      rw [Devm.extCost_zero_of_le halign hzeroWindow]
+      norm_num [gLog, gLogdata, gLogtopic]
+    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+    rw [hreadZero]
+    change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm _
+      initializeLoadLength _
+    unfold initializeLoadLength
+    func_run (2) [3]
+    · exact Devm.extCost_add_of_size hsize (by decide)
+    simp only [show (128 : B256).toNat = 128 by decide]
+    rw [Mem.Reads.read hreads, hlength, hmemory128]
+    unfold initializeSetupBranch
+    func_run (1)
+    unfold initializeAfterSetupCall
+    func_run (1)
+    rw [hrefund]
+    change Func.RunCompiled (ossifiableConstructorFunctions 1250 2197) sevm
+      (initializedBase.setMach ⟨[], memory, G - 25913⟩)
+      (ossifiableConstructorAfterSetup 1250 2197) post
+    exact htailRun
+  · rw [htailStorage]
+    unfold initializedBase
+    rw [Devm.addLog_getStor, setStorVal_getStor_self,
+      Devm.withRefundCounter_getStor, addAccessedStorageKey_getStor]
+    rfl
+  · rw [htailLogs]
+    unfold initializedBase initializationLog rawUpgradedLog
+    rfl
+  · rw [htailGas]
+    omega
+  · calc
+      post.error = initializedBase.error := htailError
+      _ = base.error := rfl
 
 end Blanc.ProxyPair

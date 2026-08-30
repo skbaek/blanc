@@ -47,6 +47,7 @@ import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.ProxyPairCorrespondence
 import Blanc.ProxyPairAuthority
+import Blanc.ProxyPairOssifiableDeploymentFixture
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
@@ -853,6 +854,13 @@ import Blanc.ProrataAttackTrace
 #print axioms Blanc.ProxyPair.implGuarded_entrySstoreFree_rejected
 #print axioms Blanc.ProxyPair.proxyProg_success_successfulSstore_sourceSite
 #print axioms Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite
+#print axioms Blanc.ProxyPair.ossifiableCreateMessageGas_eq
+#print axioms Blanc.ProxyPair.ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
+#print axioms Blanc.ProxyPair.ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
+#print axioms Blanc.ProxyPair.processCreateMessage_ossifiable_emptySetup_success
+#print axioms Blanc.ProxyPair.OssifiableCreateFixture.message_code
+#print axioms Blanc.ProxyPair.OssifiableCreateFixture.implementation_code
+#print axioms Blanc.ProxyPair.OssifiableCreateFixture.message_success
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseFor_absent_role_reverts
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseUntil_absent_role_reverts
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.resume_absent_role_reverts
