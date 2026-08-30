@@ -61,7 +61,8 @@ SHARED = ["Basic", "Semantics", "CommonCore", "ProofRecipesGenerated", "Tactics"
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
-           "RootedExecution",
+           "RootedExecution", "AddressSlot", "MessageResult",
+           "DelegatecallEnvelope",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects"]
 
@@ -85,6 +86,9 @@ CONTRACTS = {
         "LidoTriggerableWithdrawalsGatewayPinnedTarget",
     ],
     "proxy-pair": ["ProxyPairSlots", "ProxyPairProgram",
+                   "ProxyPairOssifiableSurface",
+                   "ProxyPairOssifiableProgram",
+                   "ProxyPairOssifiableDeploy",
                    "ProxyPairImplementation", "ProxyPairExecution",
                    "ProxyPairCorrespondence", "ProxyPairAuthority"],
     "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",

@@ -179,10 +179,24 @@ def noCodeImplementationErrorData : Bytes :=
 def emptyDelegatecallErrorData : Bytes :=
   errorData "Address: low-level delegate call failed"
 
+/-- Solidity's ABI decoder uses the memory-allocation panic when a dynamic
+byte-array length exceeds its `uint64` implementation bound. -/
+def allocationPanicData : Bytes :=
+  [0x4e, 0x48, 0x7b, 0x71] ++ (0x41 : B256).toBytes
+
+theorem allocationPanicData_eq_signature :
+    allocationPanicData =
+      (signatureHash "Panic" [.uint256]).toBytes.take 4 ++
+        (0x41 : B256).toBytes := by
+  decide +kernel
+
 theorem inheritedErrorData_lengths :
     zeroAdminErrorData.length = 132 ∧
     noCodeImplementationErrorData.length = 132 ∧
     emptyDelegatecallErrorData.length = 132 := by
+  decide +kernel
+
+theorem allocationPanicData_length : allocationPanicData.length = 36 := by
   decide +kernel
 
 /-! ## Canonical endpoint calldata and return encodings

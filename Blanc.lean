@@ -125,6 +125,9 @@ import Blanc.BeaconDepositModel
 import Blanc.BeaconDepositCorrectness
 import Blanc.ProxyPairSlots
 import Blanc.ProxyPairProgram
+import Blanc.ProxyPairOssifiableSurface
+import Blanc.ProxyPairOssifiableProgram
+import Blanc.ProxyPairOssifiableDeploy
 import Blanc.ProxyPairImplementation
 import Blanc.ProxyPairExecution
 import Blanc.ProxyPairCorrespondence
