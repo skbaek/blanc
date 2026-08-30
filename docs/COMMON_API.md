@@ -45,6 +45,11 @@ registry has identified the likely vocabulary.
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
+- A selected `LOG` step that exposes unchanged storage, balances, code,
+  access sets, output, and error while threading an arbitrary continuation:
+  `Func.runCompiledTo_log_step_ext` and its exhibited-state form
+  `Func.runCompiledTo_log_step_exists` in
+  [`Blanc/ForwardLog.lean`](../Blanc/ForwardLog.lean).
 - Invert an existing arbitrary-outcome compiled walk:
   [`Blanc/CompiledWalkInversion.lean`](../Blanc/CompiledWalkInversion.lean).
   Use `runCompiledTo_next_inv`, `runCompiledTo_branch_inv`,

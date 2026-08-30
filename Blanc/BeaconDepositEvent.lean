@@ -922,6 +922,8 @@ private theorem emitDepositEvent_runCompiledTo
       (∀ a : Adr, logged.getCode a = base.getCode a) ∧
       logged.accessedStorageKeys = base.accessedStorageKeys ∧
       logged.accessedAddresses = base.accessedAddresses ∧
+      logged.output = base.output ∧
+      logged.error = base.error ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (logged.setMach ⟨[], memory, G⟩) body ex →
@@ -929,7 +931,7 @@ private theorem emitDepositEvent_runCompiledTo
           (base.setMach ⟨[], memory, G + 5366⟩)
           (([pushB256 depositEventTopic] ++ logWith 0 0 18) +++ body) ex := by
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
-      hlift⟩ :=
+      houtput, herror, hlift⟩ :=
     Func.runCompiledTo_log_step_exists (fs := fs) (sevm := sevm)
       (devm := base.setMach
         ⟨[0 * 32, 18 * 32, depositEventTopic], memory, G + 5358⟩)
@@ -970,7 +972,10 @@ private theorem emitDepositEvent_runCompiledTo
   change (∀ a : Adr, logged.getCode a = base.getCode a) at hcode
   change logged.accessedStorageKeys = base.accessedStorageKeys at haccess
   change logged.accessedAddresses = base.accessedAddresses at haddresses
-  refine ⟨logged, ?_, hstor, hstorMap, hbal, hcode, haccess, haddresses, ?_⟩
+  change logged.output = base.output at houtput
+  change logged.error = base.error at herror
+  refine ⟨logged, ?_, hstor, hstorMap, hbal, hcode, haccess, haddresses,
+    houtput, herror, ?_⟩
   · simpa only [depositEventLog] using hlogs
   intro ex htail
   unfold logWith
@@ -1023,6 +1028,10 @@ private theorem stageEventCountLog_runCompiledTo
         (afterSload sevm base depositCountSlot).accessedStorageKeys ∧
       logged.accessedAddresses =
         (afterSload sevm base depositCountSlot).accessedAddresses ∧
+      logged.output =
+        (afterSload sevm base depositCountSlot).output ∧
+      logged.error =
+        (afterSload sevm base depositCountSlot).error ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (logged.setMach
@@ -1049,10 +1058,11 @@ private theorem stageEventCountLog_runCompiledTo
     simpa only [M19, M18, M17, eventMemory_eq] using
       depositEventMemory_carrier sevm.data amount oldCount
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
-      hlift⟩ :=
+      houtput, herror, hlift⟩ :=
     emitDepositEvent_runCompiledTo
       (base := afterSload sevm base depositCountSlot) (G := G) hstatic hfinal
-  refine ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses, ?_⟩
+  refine ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
+    houtput, herror, ?_⟩
   intro ex htail
   have hlog := hlift (by
     simpa only [M19, M18, M17, ← eventMemory_eq] using htail)
@@ -1150,6 +1160,10 @@ theorem stageDepositEvent_runCompiledTo
         (afterSload sevm base depositCountSlot).accessedStorageKeys ∧
       logged.accessedAddresses =
         (afterSload sevm base depositCountSlot).accessedAddresses ∧
+      logged.output =
+        (afterSload sevm base depositCountSlot).output ∧
+      logged.error =
+        (afterSload sevm base depositCountSlot).error ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (logged.setMach
@@ -1161,10 +1175,11 @@ theorem stageDepositEvent_runCompiledTo
               G + 5799 + sloadCost sevm base depositCountSlot⟩)
           (stageDepositEvent +++ body) ex := by
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
-      hlift⟩ :=
+      houtput, herror, hlift⟩ :=
     stageEventCountLog_runCompiledTo
       (fs := fs) (amount := amount) (body := body) (G := G) hvalue hstatic
-  refine ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses, ?_⟩
+  refine ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
+    houtput, herror, ?_⟩
   intro ex htail
   have hsuffix := hlift htail
   have hheaders := stageEventHeaders_runCompiledTo

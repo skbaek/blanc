@@ -35,6 +35,8 @@ lemma Func.runCompiledTo_log_step_ext {fs : List Func} {sevm : Sevm}
       (∀ a : Adr, base.getCode a = devm.getCode a) →
       base.accessedStorageKeys = devm.accessedStorageKeys →
       base.accessedAddresses = devm.accessedAddresses →
+      base.output = devm.output →
+      base.error = devm.error →
       devm.gasLeft = G + c →
       Func.RunCompiledTo fs sevm (base.setMach ⟨s, M', G⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (Func.next (.reg (.log n)) rest) ex := by
@@ -43,7 +45,7 @@ lemma Func.runCompiledTo_log_step_ext {fs : List Func} {sevm : Sevm}
     (Ninst.runCompiled_log_of (G := devm.gasLeft - c) h_stk h_len h_static
       h_cost h_data h_img (by omega)) ?_
   exact h_next _ _ rfl (fun _ _ => rfl) (fun _ => rfl) (fun _ => rfl)
-    (fun _ => rfl) rfl rfl (by omega)
+    (fun _ => rfl) rfl rfl rfl rfl (by omega)
 
 /-- Existential form of the same rule: the post-log state is exhibited, so a
 walk that must produce a concrete outcome downstream can compose with it.  The
@@ -69,11 +71,14 @@ lemma Func.runCompiledTo_log_step_exists {fs : List Func} {sevm : Sevm}
       (∀ a : Adr, logged.getCode a = devm.getCode a) ∧
       logged.accessedStorageKeys = devm.accessedStorageKeys ∧
       logged.accessedAddresses = devm.accessedAddresses ∧
+      logged.output = devm.output ∧
+      logged.error = devm.error ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm (logged.setMach ⟨s, M', G⟩) rest ex →
         Func.RunCompiledTo fs sevm devm (Func.next (.reg (.log n)) rest) ex := by
   refine ⟨devm.addLog ⟨sevm.currentTarget, topics, payload⟩, rfl,
-    fun _ _ => rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, rfl, rfl, ?_⟩
+    fun _ _ => rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, rfl, rfl,
+    rfl, rfl, ?_⟩
   intro ex htail
   subst h_mem
   exact Func.RunCompiledTo.next
