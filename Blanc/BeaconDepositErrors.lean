@@ -763,6 +763,42 @@ theorem noMatchSelector_runCompiledTo
 
 /-! ## Malformed deposit ABI -/
 
+/-- A selected malformed validator row can be certified against a harmless
+successful `STOP` continuation and then replayed with the production deposit
+body.  Because the selected outcome is an error, that continuation is dead. -/
+private theorem depositMalformedEndpoint_runCompiledTo_with_path
+    {sevm : Sevm} {base : Devm} {G : Nat}
+    (failure : DepositAbiFailure)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hfailure : failure.Holds sevm.data) :
+    ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+        (base.setMach ⟨[], Mem.empty, G + failure.endpointGas⟩)
+        depositEndpoint
+        (.error (.revert,
+          (base.setMach
+            ⟨failure.finalStack sevm.data,
+              failure.finalMemory sevm.data, G⟩).withOutput [])),
+      Func.RunCompiledTo.NoRawSstorePath run := by
+  let safeSource := validateDepositAbi Func.stop
+  let safeRun : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], Mem.empty, G + failure.endpointGas⟩)
+      safeSource
+      (.error (.revert,
+        (base.setMach
+          ⟨failure.finalStack sevm.data,
+            failure.finalMemory sevm.data, G⟩).withOutput [])) :=
+    validateDepositAbi_failure_runCompiledTo failure (by rfl)
+      hdataBound hfailure
+  have safePath : Func.RunCompiledTo.NoRawSstorePath safeRun := by
+    apply Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
+      (program := runtime) (members := [emptyRevertSlot]) safeRun
+    · rfl
+    · rfl
+  have hsource : safeSource.replaceStopWith depositBody = depositEndpoint := by
+    rfl
+  simpa only [hsource] using
+    (safePath.replaceStopWith_of_error depositBody)
+
 /-- Exact public gas for one of the thirteen malformed deposit-ABI rows. -/
 def depositMalformedRuntimeGas (failure : DepositAbiFailure) : Nat :=
   failure.endpointGas + depositRouteGas
@@ -799,6 +835,60 @@ theorem deposit_malformed_row_runCompiledTo
     simpa only [hgas] using hroute
   · rw [hcode, code_compile]
 
+/-- The identical selected malformed public route has no raw `SSTORE`
+occurrence.  The retained-write conclusion is derived from that exact
+execution witness rather than from rollback. -/
+theorem deposit_malformed_row_noRawSstore
+    (sevm : Sevm) (base : Devm) (G : Nat) (failure : DepositAbiFailure)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hfailure : DepositAbiFailure.Holds sevm.data failure)
+    (hcode : sevm.code.toList = code) :
+    ∃ execution : Exec 0 sevm
+        (base.setMach
+          ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+        (.error (.revert,
+          (base.setMach
+            ⟨failure.finalStack sevm.data,
+              failure.finalMemory sevm.data, G⟩).withOutput [])),
+      Prog.RunCompiledTo sevm
+        (base.setMach
+          ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+        runtime
+        (.error (.revert,
+          (base.setMach
+            ⟨failure.finalStack sevm.data,
+              failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
+      Exec.NoRawSstore execution ∧
+      Exec.retainedStorageWrites execution = [] ∧
+      some sevm.code.toList = Prog.compile runtime := by
+  let out : Execution := .error (.revert,
+    (base.setMach
+      ⟨failure.finalStack sevm.data,
+        failure.finalMemory sevm.data, G⟩).withOutput [])
+  obtain ⟨hbody, hbodySafe⟩ :=
+    depositMalformedEndpoint_runCompiledTo_with_path
+      failure hdataBound hfailure
+  obtain ⟨mid, hentry, hmain, hmainSafe⟩ :=
+    deposit_route_runCompiledTo_with_path
+      (K := G + failure.endpointGas) hnonempty hselector hbodySafe
+  have hcompiled : some sevm.code.toList = Prog.compile runtime := by
+    rw [hcode, code_compile]
+  obtain ⟨execution, executionSafe⟩ :=
+    Prog.exists_exec_noRawSstore hentry hmain hmainSafe hcompiled
+  have hprogram : Prog.RunCompiledTo sevm
+      (base.setMach
+        ⟨[], Mem.empty, (G + failure.endpointGas) + depositRouteGas⟩)
+      runtime out := ⟨mid, hentry, hmain⟩
+  refine ⟨execution, ?_, executionSafe,
+    executionSafe.retainedStorageWrites_eq_nil, hcompiled⟩
+  have hgas : (G + failure.endpointGas) + depositRouteGas =
+      G + depositMalformedRuntimeGas failure := by
+    simp only [depositMalformedRuntimeGas]
+    omega
+  simpa only [out, hgas] using hprogram
+
 /-- Structural ABI invalidity selects one of the thirteen exact public revert
 rows.  The witness records the source-order first failing guard. -/
 theorem deposit_malformed_runCompiledTo
@@ -823,5 +913,40 @@ theorem deposit_malformed_runCompiledTo
   obtain ⟨hrun, hcompiled⟩ := deposit_malformed_row_runCompiledTo
     sevm base G failure hnonempty hdataBound hselector hfailure hcode
   exact ⟨failure, hfailure, hrun, hcompiled⟩
+
+/-- Structural ABI invalidity selects an exact malformed public execution with
+raw-SSTORE freedom and therefore an empty retained write chronology. -/
+theorem deposit_malformed_noRawSstore
+    (sevm : Sevm) (base : Devm) (G : Nat)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hbad : ¬ DepositAbiStructureDecodable sevm.data)
+    (hcode : sevm.code.toList = code) :
+    ∃ failure : DepositAbiFailure,
+      DepositAbiFailure.Holds sevm.data failure ∧
+      ∃ execution : Exec 0 sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+          (.error (.revert,
+            (base.setMach
+              ⟨failure.finalStack sevm.data,
+                failure.finalMemory sevm.data, G⟩).withOutput [])),
+        Prog.RunCompiledTo sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+          runtime
+          (.error (.revert,
+            (base.setMach
+              ⟨failure.finalStack sevm.data,
+                failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
+        Exec.NoRawSstore execution ∧
+        Exec.retainedStorageWrites execution = [] ∧
+        some sevm.code.toList = Prog.compile runtime := by
+  obtain ⟨failure, hfailure⟩ := exists_depositAbiFailure hbad
+  obtain ⟨execution, hrun, hsafe, hwrites, hcompiled⟩ :=
+    deposit_malformed_row_noRawSstore
+      sevm base G failure hnonempty hdataBound hselector hfailure hcode
+  exact ⟨failure, hfailure, execution, hrun, hsafe, hwrites, hcompiled⟩
 
 end Blanc.BeaconDeposit

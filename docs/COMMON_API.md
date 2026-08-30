@@ -151,6 +151,11 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
   compiled walk directly when the shared executable entry/component checkers
   certify both same-frame SSTORE freedom and absence of child-entering
   instructions; recursive internal-call components are supported.
+- `Func.replaceStopWith` replaces successful `STOP` leaves, while
+  `NoRawSstorePath.replaceStopWith_of_error` transports an exact error-ending
+  path and its certificate across that replacement.  Use this when a checker
+  can certify a prefix only with a harmless success continuation: the error
+  proof establishes that the replaced continuation was not entered.
 - For a warm fixed-width SHA-256 precompile crossing, use
   `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
   [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary

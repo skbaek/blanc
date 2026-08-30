@@ -351,6 +351,78 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
   exact Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree_core
     run storeFree execFree storeCalls execCalls storeClosed execClosed
 
+/-- Replace every syntactic successful-stop leaf in a source function.  This
+is useful for constructing a selected failing prefix against a harmless
+continuation before reinstating the production continuation. -/
+def Func.replaceStopWith (source replacement : Func) : Func :=
+  match source with
+  | .branch left right =>
+      .branch (left.replaceStopWith replacement)
+        (right.replaceStopWith replacement)
+  | .last .stop => replacement
+  | .last terminal => .last terminal
+  | .next instruction body =>
+      .next instruction (body.replaceStopWith replacement)
+  | .call index => .call index
+
+/-- An error-ending selected path cannot reach a successful-stop leaf.
+Therefore every such dead leaf may be replaced while preserving the exact
+intermediate states, final error, and raw-SSTORE certificate. -/
+theorem Func.RunCompiledTo.NoRawSstorePath.replaceStopWith_of_not_ok
+    {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {source : Func} {out : Execution}
+    {run : Func.RunCompiledTo fs sevm pre source out}
+    (safe : Func.RunCompiledTo.NoRawSstorePath run)
+    (replacement : Func) (notOk : ∀ post, out ≠ .ok post) :
+    ∃ targetRun : Func.RunCompiledTo fs sevm pre
+        (source.replaceStopWith replacement) out,
+      Func.RunCompiledTo.NoRawSstorePath targetRun := by
+  induction safe with
+  | zero tailSafe ih =>
+      rcases ih notOk with ⟨tail, tailSafe⟩
+      exact ⟨.zero (by assumption) (by assumption) tail,
+        .zero (room := by assumption) (pop := by assumption) tailSafe⟩
+  | succ tailSafe ih =>
+      rcases ih notOk with ⟨tail, tailSafe⟩
+      exact ⟨.succ (by assumption) (by assumption) (by assumption) tail,
+        .succ (nonzero := by assumption) (room := by assumption)
+          (pop := by assumption) tailSafe⟩
+  | last =>
+      rename_i pre' terminal out' terminalRun
+      cases terminal with
+      | stop =>
+          exact (notOk pre' terminalRun.symm).elim
+      | ret =>
+          exact ⟨.last terminalRun, .last (terminalRun := terminalRun)⟩
+      | rev =>
+          exact ⟨.last terminalRun, .last (terminalRun := terminalRun)⟩
+      | dest =>
+          exact ⟨.last terminalRun, .last (terminalRun := terminalRun)⟩
+  | next instructionNe instructionChildless tailSafe ih =>
+      rcases ih notOk with ⟨tail, tailSafe⟩
+      exact ⟨.next (by assumption) tail,
+        .next (instructionRun := by assumption)
+          instructionNe instructionChildless tailSafe⟩
+  | call tailSafe =>
+      exact ⟨.call (by assumption) (by assumption) (by assumption)
+          (by assumption),
+        .call (lookup := by assumption) (room := by assumption)
+          (burn := by assumption) tailSafe⟩
+
+/-- Error-ending specialization of `replaceStopWith_of_not_ok`. -/
+theorem Func.RunCompiledTo.NoRawSstorePath.replaceStopWith_of_error
+    {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {source : Func} {failure : EvmError × Devm}
+    {run : Func.RunCompiledTo fs sevm pre source (.error failure)}
+    (safe : Func.RunCompiledTo.NoRawSstorePath run)
+    (replacement : Func) :
+    ∃ targetRun : Func.RunCompiledTo fs sevm pre
+        (source.replaceStopWith replacement) (.error failure),
+      Func.RunCompiledTo.NoRawSstorePath targetRun := by
+  exact safe.replaceStopWith_of_not_ok replacement (by
+    intro post impossible
+    cases impossible)
+
 /-- Prepend one decoded childless instruction to a raw-SSTORE-free execution.
 The `.exec` case admits synchronous `.done` and synchronously resolved
 `.spawn` steps, but rejects an entered child frame by the empty-slot witness. -/
