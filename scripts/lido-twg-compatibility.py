@@ -145,6 +145,9 @@ CALLDATA_EXCLUSION_TEXT = (
     "nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and "
     "recognized-selector nonpayability are untested and excluded"
 )
+INTERFACE_ID_EXCLUSION_TEXT = (
+    "supportsInterface IDs other than 0x5a05180f are untested and excluded"
+)
 
 LOCK_TOKENS = {
     "B1_MAINNET_BLOCK",
@@ -388,6 +391,9 @@ def parse_compatibility(text: str, census: dict[str, Any]) -> dict[str, Any]:
     expect(normalized_text.count(CALLDATA_EXCLUSION_TEXT) >= 2,
            "compatibility document does not repeat the exact machine summary and explicit "
            "dispatch/calldata exclusion boundary")
+    expect(normalized_text.count(INTERFACE_ID_EXCLUSION_TEXT) >= 2,
+           "compatibility document does not repeat the exact supportsInterface coverage "
+           "boundary")
     return {
         "endpoints": endpoint_markers,
         "events": event_markers,
@@ -1136,6 +1142,15 @@ def self_test(compatibility: str, deviations: str, census: dict[str, Any]) -> No
         pass
     else:
         fail("dispatch/calldata exclusion falsifier did not bite")
+
+    mutated = compatibility.replace(
+        "supportsInterface IDs other than 0x5a05180f", "other supportsInterface IDs", 1)
+    try:
+        parse_compatibility(mutated, census)
+    except CompatibilityError:
+        pass
+    else:
+        fail("supportsInterface identifier exclusion falsifier did not bite")
 
 
 def parser() -> argparse.ArgumentParser:

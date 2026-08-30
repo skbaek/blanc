@@ -245,10 +245,10 @@ The canonical zero-value corpus row returns the zero `bytes32` word.
 <!-- LIDO-TWG-ENDPOINT {"signature":"supportsInterface(bytes4)","selector":"0x01ffc9a7"} -->
 ### `supportsInterface(bytes4)`
 
-The canonical zero-value corpus row exercises ERC-165, `IAccessControl`, and
-`IAccessControlEnumerable`, and returns canonical false for other canonical
-interface identifiers. Decoder-edge coverage is bounded by the calldata scope
-below.
+The canonical zero-value corpus row calls exactly
+`supportsInterface(0x5a05180f)` (`IAccessControlEnumerable`) and observes
+canonical `true`. `supportsInterface IDs other than 0x5a05180f are untested and
+excluded`. Decoder-edge coverage is bounded by the calldata scope below.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"hasRole(bytes32,address)","selector":"0x91d14854"} -->
 ### `hasRole(bytes32,address)`
@@ -372,6 +372,8 @@ scope is `canonical ABI endpoint rows plus named dirty-address constructor rejec
 Those excluded dispatch/calldata arms have no B2 equivalence claim. Malformed
 callback/dependency return data is a separate external-call obligation and is
 not silently classified as input-calldata coverage.
+`supportsInterface IDs other than 0x5a05180f are untested and excluded` from
+the endpoint claim for the same finite-evidence reason.
 
 <!-- LIDO-TWG-CROSSCUT pause-sentinel -->
 ### Pause projection and infinite sentinel
