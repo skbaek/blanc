@@ -147,6 +147,10 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
 - `NoRawSstorePath.of_prepend_nonexec` prepends an instruction-only line when
   every instruction is non-external and distinct from raw `SSTORE`; its tail
   certificate may depend on the intermediate compiled state.
+- `NoRawSstorePath.of_entrySstoreFree_reachableExecFree` converts an exact
+  compiled walk directly when the shared executable entry/component checkers
+  certify both same-frame SSTORE freedom and absence of child-entering
+  instructions; recursive internal-call components are supported.
 - For a warm fixed-width SHA-256 precompile crossing, use
   `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
   [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary
@@ -154,6 +158,10 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
 - `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
   `Exec.NoRawSstore`; its consequences exclude every successful raw SSTORE and
   force `retainedStorageWrites = []` for that same witness.
+- `Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree` is the
+  occurrence-direction counterpart for an existing exact `Exec`: reachable
+  exec freedom collapses child frames, then the same-frame entry certificate
+  excludes every raw SSTORE node.
 
 This is construction-direction evidence. A late revert may already have
 executed an SSTORE, so neither rollback nor an empty retained-write list can

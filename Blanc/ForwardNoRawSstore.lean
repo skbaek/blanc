@@ -1,4 +1,5 @@
 import Blanc.CycleWriteFree
+import Blanc.ReachableExecFree
 import Blanc.RevertPayload
 import Blanc.RootedExecution
 
@@ -280,6 +281,76 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_prepend_nonexec
                 intro next reached operation
                 exact notExec next (by simp [reached]) operation))
 
+private theorem
+    Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree_core :
+    ∀ {program : Prog} {sevm : Sevm} {pre : Devm}
+      {source : Func} {out : Execution} {members : List Nat}
+      (run : Func.RunCompiledTo (program.main :: program.aux)
+        sevm pre source out),
+      source.LocalSstoreFree →
+      source.LocalExecFree →
+      source.CallsIn (fun index => index ∈ members) →
+      source.CallsIn (fun index => index ∈ members) →
+      program.ClosedSstoreFree members →
+      program.ClosedExecFree members →
+      Func.RunCompiledTo.NoRawSstorePath run := by
+  intro program sevm pre source out members run
+  induction run with
+  | zero room pop tail ih =>
+      intro storeFree execFree storeCalls execCalls storeClosed execClosed
+      exact .zero (room := room) (pop := pop)
+        (ih storeFree.1 execFree.1 storeCalls.1 execCalls.1
+          storeClosed execClosed)
+  | succ nonzero room pop tail ih =>
+      intro storeFree execFree storeCalls execCalls storeClosed execClosed
+      exact .succ (nonzero := nonzero) (room := room) (pop := pop)
+        (ih storeFree.2 execFree.2 storeCalls.2 execCalls.2
+          storeClosed execClosed)
+  | last terminalRun =>
+      intro _ _ _ _ _ _
+      exact .last (terminalRun := terminalRun)
+  | next instructionRun tail ih =>
+      intro storeFree execFree storeCalls execCalls storeClosed execClosed
+      exact .next (instructionRun := instructionRun) storeFree.1
+        (instructionRun.childless_of_not_exec execFree.1)
+        (ih storeFree.2 execFree.2 storeCalls execCalls
+          storeClosed execClosed)
+  | @call pre post index body out lookup room burn tail ih =>
+      intro _ _ storeCalls execCalls storeClosed execClosed
+      rcases storeClosed index storeCalls with
+        ⟨storeBody, storeLookup, storeFree, storeBodyCalls⟩
+      unfold Prog.function? at storeLookup
+      have storeBodyEq : body = storeBody :=
+        Option.some.inj (lookup.symm.trans storeLookup)
+      subst storeBody
+      rcases execClosed index execCalls with
+        ⟨execBody, execLookup, execFree, execBodyCalls⟩
+      unfold Prog.function? at execLookup
+      have execBodyEq : body = execBody :=
+        Option.some.inj (lookup.symm.trans execLookup)
+      subst execBody
+      exact .call (lookup := lookup) (room := room) (burn := burn)
+        (ih storeFree execFree storeBodyCalls execBodyCalls
+          storeClosed execClosed)
+
+/-- An exact compiled walk over one finite call-closed source component is a
+selected-path raw-SSTORE certificate when the executable local/component
+checkers exclude both source SSTORE and every child-entering instruction. -/
+theorem Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
+    {program : Prog} {sevm : Sevm} {pre : Devm}
+    {source : Func} {out : Execution} {members : List Nat}
+    (run : Func.RunCompiledTo (program.main :: program.aux)
+      sevm pre source out)
+    (storeAccepted : program.entrySstoreFree source members = true)
+    (execAccepted : program.reachableExecFree source members = true) :
+    Func.RunCompiledTo.NoRawSstorePath run := by
+  rcases Prog.entrySstoreFree_sound storeAccepted with
+    ⟨storeFree, storeCalls, storeClosed⟩
+  rcases Prog.reachableExecFree_sound execAccepted with
+    ⟨execFree, execCalls, execClosed⟩
+  exact Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree_core
+    run storeFree execFree storeCalls execCalls storeClosed execClosed
+
 /-- Prepend one decoded childless instruction to a raw-SSTORE-free execution.
 The `.exec` case admits synchronous `.done` and synchronously resolved
 `.spawn` steps, but rejects an entered child frame by the empty-slot witness. -/
@@ -488,6 +559,36 @@ theorem Prog.exists_exec_noRawSstore
     fun storeAt => storeAt.false_of_jinstAt jumpdestAt
   exact ⟨.cont entryStep mainExecution,
     .cont entrySafe mainExecutionSafe⟩
+
+/-- Occurrence-direction bridge for an already exhibited exact main
+invocation. Reachable exec freedom first collapses the raw chronology to the
+outer frame; the finite same-frame SSTORE certificate then excludes every
+raw reached SSTORE node. -/
+theorem Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) {program : Prog}
+    {storageTarget codeAddress : Adr}
+    (invocation :
+      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+        program storageTarget codeAddress)
+    (storeMembers execMembers : List Nat)
+    (storeAccepted :
+      program.entrySstoreFree program.main storeMembers = true)
+    (execAccepted :
+      program.reachableExecFree program.main execMembers = true) :
+    Exec.NoRawSstore run := by
+  have noExec :=
+    Exec.noExecOccurrence_of_exactMain_reachableExecFree
+      run invocation execMembers execAccepted
+  have noDescendants : Exec.rawFrameDescendants run = [] :=
+    Exec.rawFrameDescendants_eq_nil_of_no_execOccurrence run noExec
+  intro node reached storeAt
+  have sameFrame : Exec.Deriv.ParentPrefix
+      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) node :=
+    Exec.Deriv.parentPrefix_of_mem_rawNodes_of_rawFrameDescendants_eq_nil
+      noDescendants reached
+  exact Exec.Deriv.noSstore_of_exactMain_entrySstoreFree
+    invocation storeMembers storeAccepted sameFrame storeAt
 
 /-- Raw-SSTORE freedom excludes every successful SSTORE occurrence in the
 same exact execution derivation. -/
