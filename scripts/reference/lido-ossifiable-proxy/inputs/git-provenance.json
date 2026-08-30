@@ -1,0 +1,32 @@
+{
+  "lido": {
+    "commit": "17005714f151e5502c559932319a3f2f74ac2436",
+    "files": {
+      "contracts/0.8.9/proxy/OssifiableProxy.sol": "d4ccec05c453b15cc17023e3950e44341a66a4a4",
+      "contracts/COMPILERS.md": "4a7cc445ea7854a6f25931d213ab66ad037cb6ae",
+      "deployed-mainnet.json": "1aa9165e97936ef1020ac873115ba35c3b94dd28",
+      "hardhat.config.ts": "8156497feda3a05d0142d53cc99f9212ea3f3ee1",
+      "package.json": "2d9084a710482ff6957241ba4d64eb42b15bc8dc",
+      "yarn.lock": "b5939dc1dfac88bcdb4786c7c99344e4fb556a5e"
+    },
+    "repository": "https://github.com/lidofinance/core",
+    "tag": "v4.0.0"
+  },
+  "openzeppelin": {
+    "commit": "6bd6b76d1156e20e45d1016f355d154141c7e5b9",
+    "files": {
+      "contracts/proxy/ERC1967/ERC1967Proxy.sol": "64e9d9f6f317c3bd1135a122822965508cbdd3fa",
+      "contracts/proxy/ERC1967/ERC1967Upgrade.sol": "036782fc7a0f288c6adf717dfde889ef416f8f68",
+      "contracts/proxy/Proxy.sol": "81351613004d76bdaceacbee9d02f68a0d69e4b9",
+      "contracts/proxy/beacon/IBeacon.sol": "fba3ee2ab4546832599b0498c4945c9f81d50791",
+      "contracts/utils/Address.sol": "9e5e887409ff86e2c0db7abf9b30ba4640e46ce1",
+      "contracts/utils/StorageSlot.sol": "28239dbc35a2c45a91958e1b654143a7690b2a2b"
+    },
+    "packageAlias": "@openzeppelin/contracts-v4.4",
+    "packageResolution": "npm:@openzeppelin/contracts@4.4.1",
+    "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+    "tag": "v4.4.1",
+    "yarnChecksum": "10c0/cbff5f130deaa17fade3de7c97a2e755dcc556a97bfc821e04db05f8698c2e5bab109563c1c239211d4fabe96603859ac15ef207f87f648d4c3f1bd3ad645078"
+  },
+  "schema": 1
+}
