@@ -7,6 +7,13 @@ frozen before the first full-port Blanc result; changing any world, fixture,
 cell order, scalar, denominator, or score rule requires an explicit successor
 format and review rather than an in-place result-driven edit.
 
+Current format version 2 supersedes result-free version 1 digest
+`d234fb691fdc3759cf35ee12cee60a73fbf4899d5edeaa05a956a465014cb7ca`.
+Independent fixture validation found that `fallback-256` had 511 hex nibbles;
+before any measurement, version 2 inserted the uniquely missing `e` nibble to
+restore the declared `feedface || bytes(0x00..0xfb)` 256-byte sequence. No
+cell, world, scalar, order, denominator, or score rule changed.
+
 The manifest digest is SHA-256 over canonical JSON with the digest value set
 to the empty string. Canonical JSON is UTF-8, lexicographically sorted object
 keys, `,` and `:` separators, and ASCII escaping. The JSON is normative; this
