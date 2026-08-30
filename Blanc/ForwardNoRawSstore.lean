@@ -218,6 +218,35 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_revWith
     apply prependStoresRev_localSstoreFree
     simp [Ninst.pushB256, Func.LocalSstoreFree]
 
+/-- A selected nonzero guard, internal call, and `Func.rev` auxiliary are
+raw-SSTORE-free.  The stack facts rule out the continuation arm before the
+certificate enters the table body. -/
+theorem Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard
+    {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {slot G : Nat} {w : B256} {stack : List B256} {otherwise : Func}
+    {run : Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
+      (.error (.revert,
+        (devm.setMach ⟨stack, devm.memory, G⟩).withOutput []))}
+    (h_get : fs[slot]? = some Func.rev)
+    (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack) :
+    Func.RunCompiledTo.NoRawSstorePath run := by
+  cases run with
+  | zero room pop tail =>
+      have heads := h_stack.symm.trans pop.stack
+      have hzero : w = 0 := List.cons.inj heads |>.1
+      exact (h_ne hzero).elim
+  | succ nonzero room pop tail =>
+      cases tail with
+      | call lookup callRoom burn revertRun =>
+          have bodyEq := Option.some.inj (lookup.symm.trans h_get)
+          subst bodyEq
+          exact .succ (nonzero := nonzero) (room := room) (pop := pop)
+            (.call (lookup := lookup) (room := callRoom) (burn := burn)
+              (Func.RunCompiledTo.NoRawSstorePath.of_execFree revertRun
+                (by simp [Func.rev, Ninst.pushB256, funcExecFree])
+                (by simp [Func.rev, Ninst.pushB256,
+                  Func.LocalSstoreFree])))
+
 /-- Prepend one decoded childless instruction to a raw-SSTORE-free execution.
 The `.exec` case admits synchronous `.done` and synchronously resolved
 `.spawn` steps, but rejects an entered child frame by the empty-slot witness. -/

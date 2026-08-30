@@ -142,6 +142,8 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
 - `NoRawSstorePath.of_execFree` discharges an execution-free, locally
   SSTORE-free body; `NoRawSstorePath.of_revWith` is the symbolic
   constant-error specialization.
+- `NoRawSstorePath.of_emptyRevertGuard` certifies a selected nonzero guard
+  whose internal auxiliary is the common empty `Func.rev` body.
 - For a warm fixed-width SHA-256 precompile crossing, use
   `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
   [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary
@@ -164,6 +166,10 @@ Use [`Blanc/ExecutionTerminal.lean`](../Blanc/ExecutionTerminal.lean):
 For different offsets, sizes, stack tails, or payloads, use the general
 `Func.runCompiledTo_ret_word` in `ForwardCall` or
 `Func.runCompiledTo_rev` / `Func.runCompiledTo_rev_of` in `Reverts`.
+
+For a nonzero branch flag that tail-calls an empty-revert auxiliary, use
+`emptyRevertGuardCost` and `Func.runCompiledTo_emptyRevertGuard` in
+[`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
 
 For a nonzero branch flag that tail-calls a constant `Error(string)`
 auxiliary, use `errorBodyCost`, `errorCallCost`, `errorGuardCost`, and
