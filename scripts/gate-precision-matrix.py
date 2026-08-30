@@ -51,12 +51,15 @@ def fresh_set(build: bool = False) -> set[str]:
 @contextmanager
 def edited(relative: str, mutate):
     path = ROOT / relative
-    original = path.read_bytes()
+    original = path.read_bytes() if path.exists() else None
     try:
         mutate(path)
         yield
     finally:
-        path.write_bytes(original)
+        if original is None:
+            path.unlink(missing_ok=True)
+        else:
+            path.write_bytes(original)
 
 
 @contextmanager
@@ -186,9 +189,10 @@ finally:
 with external_dirt(Path("/Users/agent/execution-specs"), ".gate-cache-precision-control"):
     control("M8 dirty pinned EELS checkout", EELS, fresh_set(), ALL - EELS)
 
-# M9 -- the elaboration gate's own baseline.
+# M9 -- the elaboration gate's own ignored host-local baseline. `edited`
+# creates and removes it when this checkout has not run baseline genesis yet.
 with edited("scripts/baseline-elab.txt", append("\n")):
-    control("M9 elaboration baseline", {"elab"}, fresh_set(), ALL - {"elab"})
+    control("M9 host-local elaboration baseline", {"elab"}, fresh_set(), ALL - {"elab"})
 
 # M10 -- the pinned Jaune revision.  Two gates read the manifest directly: the
 # elaboration gate treats it as shared Lean/Lake configuration, and the

@@ -171,6 +171,14 @@ def recipes : List Recipe := [
     boundary := "The noncommitting theorem proves retained-write absence by rollback, not raw instruction absence. `Prog.reachableExecFree` checks both arms and a finite lookup-resolved call-closed source component, but says nothing about unselected entries, child outcomes, commitment, gas, or liveness. The exact-main endpoint applies only to `program.main`; a selected dispatcher body needs the explicit actual-route cursor bridge. Do not infer childlessness merely from a static call flag."
   },
   {
+    id := "accepted-boolean-settlement"
+    status := "active"
+    triggers := ["goal-shape:accepted-bool-word"]
+    preferredPath := "For a clean full-word ABI output, use `acceptedBoolWord_iff_of_output` instead of repeating the slice/read normalization. Remove a successful execution wrapper with `acceptedBoolExecution_ok_iff`, and specialize rejected-answer executions with `boolQueryExecutionFailure_ok_iff`."
+    symbols := ["module:Blanc/PinnedPauseTarget.lean", "declaration:acceptedBoolWord_iff_of_output", "declaration:acceptedBoolExecution_ok_iff", "declaration:boolQueryExecutionFailure_ok_iff"]
+    boundary := "These adapters identify one already-clean 32-byte boolean observation. They do not prove message settlement, output production, or that the returned word is canonical zero or one."
+  },
+  {
     id := "devm-common-update-laws"
     status := "active"
     triggers := ["goal-shape:devm-common-update-law"]

@@ -16,21 +16,15 @@ fixed timestamp `10` that word is `9`, and the following query returns false.
 All remaining selector entries and the complete auxiliary table are inherited
 from the production runtime.
 
-The `Option` values in this file are executable regression observations only.
-They are deliberately not reflected into theorem evidence.  In particular,
-this module contains no `Nonempty` theorem, no `Exec` obtained by evaluating
-`exec`, and no `PinnedPauseTarget` instance or negation.  The later A3 proof
-integration must supply all of the following from actual source walks:
-
-* production pause and query `Prog.RunCompiledTo` witnesses;
-* their compiled-code `Exec` witnesses and explicit retained message slots;
-* clean `processMessage` equations and matching `ProcessMessage` relations;
-* preservation of the installed code between the two messages; and
-* a clause-(i)-only contradiction for `wrappingPauseRuntime`, using its actual
-  clean pause execution and the stored wrapping word.
-
-Keeping those declarations absent until their source walks exist prevents an
-executable fixture from masquerading as proof of anti-vacuity.
+The `Option` values in this file are executable regression controls, not
+theorem evidence: each can return `none`, the production predicate checks both
+clean executions and code preservation, and the mutant is rejected solely by
+its clean clause-(i) storage mismatch.  They therefore supply the finite
+anti-vacuity and measurable-bite channel for the separately source-derived A3
+bundle theorem.  This module deliberately contains no `Nonempty` theorem, no
+`Exec` reflected from evaluator output, and no `PinnedPauseTarget` instance or
+negation; the quantified proof remains in the family-owned pinned-target
+module.
 -/
 
 namespace Blanc.LidoTriggerableWithdrawalsGateway.PinnedTargetControl
@@ -152,7 +146,7 @@ def wrappingPauseForUnpaused : Func :=
 def wrappingPauseFor : Func :=
   requireStaticArgs 1 <| onlyRole pauseRole <|
     ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero]) +++
-      (wrappingPauseForUnpaused <?> .call pausedExpectedSlot)
+      (wrappingPauseForUnpaused <?> .call resumedExpectedSlot)
 
 /-- The production selector table begins with `selPauseFor`.  Replacing that
 head and retaining its tail keeps the mutation local and leaves the trigger and

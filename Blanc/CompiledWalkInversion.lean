@@ -666,6 +666,81 @@ theorem Func.RunCompiledTo.not_ok_call_rev
   rcases runCompiledTo_rev_inv bodyRun with ⟨_, impossible, -⟩
   cases impossible
 
+/-- A successful compiled branch must use its zero/fall-through arm when the
+jumped arm has separately been proved unable to return `.ok`. -/
+theorem Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {left right : Func}
+    (rightNotOk : ∀ {armPre},
+      Func.RunCompiledTo fs sevm armPre right (.ok post) → False)
+    (run : Func.RunCompiledTo fs sevm pre
+      (Func.branch left right) (.ok post)) :
+    ∃ armPre,
+      Devm.PopBurnBy [0] (gVerylow + gHigh) pre armPre ∧
+      Func.RunCompiledTo fs sevm armPre left (.ok post) := by
+  rcases runCompiledTo_branch_inv run with
+    ⟨armPre, _stack, pop, armRun⟩ |
+    ⟨_word, _armPre, _nonzero, _stack, _pop, rightRun⟩
+  · exact ⟨armPre, pop, armRun⟩
+  · exact (rightNotOk rightRun).elim
+
+/-- A successful compiled branch whose jumped arm is a fixed empty-data
+reverter must continue through the zero/fall-through arm. -/
+theorem Func.RunCompiledTo.zero_branch_of_ok_call_rev
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {rest : Func} {slot : Nat}
+    (hget : fs[slot]? = some Func.rev)
+    (run : Func.RunCompiledTo fs sevm pre
+      (Func.branch rest (.call slot)) (.ok post)) :
+    ∃ armPre,
+      Devm.PopBurnBy [0] (gVerylow + gHigh) pre armPre ∧
+      Func.RunCompiledTo fs sevm armPre rest (.ok post) := by
+  exact Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok
+    (fun rightRun => Func.RunCompiledTo.not_ok_call_rev hget rightRun) run
+
+/-- Prefix-retaining form of
+`zero_branch_of_ok_of_right_not_ok`. -/
+theorem Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {left right : Func} {flag : B256} {xs : Stack}
+    (rightNotOk : ∀ {armPre},
+      Func.RunCompiledTo fs sevm armPre right (.ok post) → False)
+    (hp : flag :: xs <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (Func.branch left right) (.ok post)) :
+    ∃ armPre,
+      flag = 0 ∧
+      Devm.PopBurnBy [0] (gVerylow + gHigh) pre armPre ∧
+      Func.RunCompiledTo fs sevm armPre left (.ok post) ∧
+      xs <<+ armPre.stack := by
+  obtain ⟨armPre, pop, armRun⟩ :=
+    Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok rightNotOk run
+  have pzero : (0 : B256) :: ([] : Stack) <<+ pre.stack :=
+    ⟨armPre.stack, pop.stack⟩
+  have flagZero : flag = 0 := pref_head_unique hp pzero
+  subst flag
+  exact ⟨armPre, rfl, pop, armRun,
+    (popBurn_pref (Devm.PopBurn.of_popBurnBy pop) hp).2⟩
+
+/-- Prefix-retaining form of `zero_branch_of_ok_call_rev`.  It additionally
+identifies the caller's known head with zero and transports its tail across
+the branch pop. -/
+theorem Func.RunCompiledTo.zero_branch_of_ok_call_rev_of_prefix
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {rest : Func} {slot : Nat} {flag : B256} {xs : Stack}
+    (hget : fs[slot]? = some Func.rev)
+    (hp : flag :: xs <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (Func.branch rest (.call slot)) (.ok post)) :
+    ∃ armPre,
+      flag = 0 ∧
+      Devm.PopBurnBy [0] (gVerylow + gHigh) pre armPre ∧
+      Func.RunCompiledTo fs sevm armPre rest (.ok post) ∧
+      xs <<+ armPre.stack := by
+  exact Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix
+    (fun rightRun => Func.RunCompiledTo.not_ok_call_rev hget rightRun)
+    hp run
+
 /-- A known call to a four-byte selector reverter cannot produce `.ok`. -/
 theorem Func.RunCompiledTo.not_ok_call_revSelector
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {slot : Nat}

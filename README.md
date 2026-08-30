@@ -21,6 +21,12 @@ When a Blanc contract reimplements an existing one, what that port does and
 does not claim — and the deviation-registry discipline that backs it — is
 governed by [PORTING.md](PORTING.md).
 
+The TriggerableWithdrawalsGateway port's finite differential boundary and
+known observable differences are recorded in
+[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md)
+and
+[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md).
+
 This repo contains the following files:
 
 - [Basic.lean](Blanc/Basic.lean): Blanc's own prefix/split algebra over lists
@@ -785,9 +791,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 864 named results and
+   current source inventory pins the exact axiom set of 887 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `864/864` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `887/887` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -815,7 +821,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **864** top theorems. `scripts/check.sh`'s
+current source inventory contains **887** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the

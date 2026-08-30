@@ -6,6 +6,7 @@ import Blanc.LidoCircuitBreakerCode
 
 namespace Blanc.LidoCircuitBreaker.DispatcherBenchmark
 
+open CreationArtifact
 open Jaune
 open Jaune.Ninst Ninst
 

@@ -78,6 +78,52 @@ def AcceptedBoolExecution (ex : TargetMessageResult) (word : B256) : Prop :=
 def BoolQueryExecutionFailure (ex : TargetMessageResult) : Prop :=
   ¬ AcceptedBoolExecution ex 0 ∧ ¬ AcceptedBoolExecution ex 1
 
+/-- A clean full-word output is accepted exactly at the word it encodes.
+This is the shared account-boundary adapter from raw output equality to the
+`AcceptedBoolWord` protocol; contract families should not repeat its byte
+slice normalization. -/
+theorem acceptedBoolWord_iff_of_output
+    {post : Devm} {word result : B256}
+    (errorClean : post.error = none)
+    (outputEq : post.output = word.toBytes) :
+    AcceptedBoolWord post result ↔ word = result := by
+  have sliceEq : word.toBytes.sliceD 0 word.toBytes.length 0 =
+      word.toBytes := by
+    simpa [Bytes.writeAt] using
+      (Bytes.sliceD_writeAt ([] : Bytes) word.toBytes 0)
+  have headEq : Bytes.toB256 (post.output.sliceD 0 32 0) = word := by
+    rw [outputEq,
+      show (32 : Nat) = word.toBytes.length from
+        (B256.length_toBytes word).symm,
+      sliceEq, B256.toB256_toBytes]
+  constructor
+  · intro accepted
+    exact headEq.symm.trans accepted.2.2
+  · intro wordEq
+    refine ⟨?_, ?_, ?_⟩
+    · rw [errorClean]
+      rfl
+    · rw [outputEq, B256.length_toBytes]
+    · exact headEq.trans wordEq
+
+/-- At a successful settled result, whole-execution boolean acceptance is
+exactly acceptance of the returned child. -/
+theorem acceptedBoolExecution_ok_iff (post : Devm) (word : B256) :
+    AcceptedBoolExecution (.ok post) word ↔ AcceptedBoolWord post word := by
+  constructor
+  · rintro ⟨child, childEq, accepted⟩
+    cases childEq
+    exact accepted
+  · intro accepted
+    exact ⟨post, rfl, accepted⟩
+
+/-- The execution-level rejected-boolean predicate specializes to the
+underlying successful child's rejected-boolean predicate. -/
+theorem boolQueryExecutionFailure_ok_iff (post : Devm) :
+    BoolQueryExecutionFailure (.ok post) ↔ BoolQueryFailure post := by
+  unfold BoolQueryExecutionFailure BoolQueryFailure
+  rw [acceptedBoolExecution_ok_iff, acceptedBoolExecution_ok_iff]
+
 /-- A settled code result that was not cut short by an exceptional halt.  The
 two cases deliberately leave ordinary clean completion open; a protected-
 surface safety law may then rule that case out without promising enough gas to
@@ -101,9 +147,9 @@ def pauseForProjection (time duration : B256) : B256 :=
   else time + duration
 
 /-- The branch-free encoding of `pauseForProjection`: multiplying the timestamp
-by the negated sentinel test selects the sentinel arm without a jump.  Every
-faithful `PausableUntil` port compiles the pause word this way, so the identity
-is stated once here beside the projection rather than per contract family. -/
+by the negated sentinel test selects the sentinel arm without a jump.  This
+identity supports branch-free implementations and executable test stubs; a
+faithful port may instead branch explicitly between the two projection arms. -/
 theorem compact_pause_word_eq_projection (time duration : B256) :
     time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration =
       pauseForProjection time duration := by

@@ -50,9 +50,11 @@ jobs:
         run: scripts/check-weth10-reference.sh
       - name: Lido CircuitBreaker reference lock (offline)
         run: scripts/check-lido-circuit-breaker-reference.sh
-      # The dispatcher and differential matrices remain mandatory local
-      # candidate gates. The narrowly provisioned EELS checkout below is owned
-      # by the deployment-root singleton replay only.
+      - name: Lido TWG reference lock (offline)
+        run: scripts/check-lido-twg-reference.sh
+      # The Lido dispatcher and both differential matrices remain mandatory
+      # local candidate gates. The narrowly provisioned EELS checkout below is
+      # owned by the deployment-root singleton replay only.
       - uses: leanprover/lean-action@v1
       - name: Lido CircuitBreaker Registry RI7 assurance
         run: scripts/check-lido-circuit-breaker-registry.sh

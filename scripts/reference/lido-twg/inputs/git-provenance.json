@@ -1,0 +1,37 @@
+{
+  "lido": {
+    "commit": "17005714f151e5502c559932319a3f2f74ac2436",
+    "files": {
+      "contracts/0.8.9/TriggerableWithdrawalsGateway.sol": "b4195e99631ba7ff2a21cce98e7880eb2a560c02",
+      "contracts/0.8.9/lib/ExitLimitUtils.sol": "8a2ffd42a6c6633d97e2174d70582ae7944a3d7a",
+      "contracts/0.8.9/lib/UnstructuredStorage.sol": "03bad552ea02d197d3c4898d08809d37d0de5e3d",
+      "contracts/0.8.9/utils/PausableUntil.sol": "91e2c415342ffaa9e81153f6b86d9f485a2747df",
+      "contracts/0.8.9/utils/access/AccessControl.sol": "f1a0dcbc77911b54e257efd8a95f26b9599d2db4",
+      "contracts/0.8.9/utils/access/AccessControlEnumerable.sol": "8982e11ee393e3bf23a263a872ed55e5423c8ffd",
+      "contracts/COMPILERS.md": "4a7cc445ea7854a6f25931d213ab66ad037cb6ae",
+      "deployed-mainnet.json": "1aa9165e97936ef1020ac873115ba35c3b94dd28",
+      "hardhat.config.ts": "8156497feda3a05d0142d53cc99f9212ea3f3ee1",
+      "package.json": "2d9084a710482ff6957241ba4d64eb42b15bc8dc",
+      "yarn.lock": "b5939dc1dfac88bcdb4786c7c99344e4fb556a5e"
+    },
+    "repository": "https://github.com/lidofinance/core",
+    "tag": "v4.0.0"
+  },
+  "openzeppelin": {
+    "commit": "6bd6b76d1156e20e45d1016f355d154141c7e5b9",
+    "files": {
+      "contracts/access/IAccessControl.sol": "f773ecc6345e20735072dae5ee93b611e402f8a4",
+      "contracts/access/IAccessControlEnumerable.sol": "61aaf57aaa010867a03772eeb7fdc2c64523e864",
+      "contracts/utils/Context.sol": "f304065b46068cf2c19856506d063ef8f8585f1e",
+      "contracts/utils/Strings.sol": "d38bbe8267e57a42c5e8e19c7f3368b6519a9e58",
+      "contracts/utils/introspection/ERC165.sol": "3bf5613a6ccf0d76c8296a467dfab6be0c4e57a9",
+      "contracts/utils/introspection/IERC165.sol": "e8cdbdbf6099b22601175ecbc1bdb9467b3b0a26",
+      "contracts/utils/structs/EnumerableSet.sol": "68148e944c54971f775619102f204aa413a19d67"
+    },
+    "packageAlias": "@openzeppelin/contracts-v4.4",
+    "packageResolution": "npm:@openzeppelin/contracts@4.4.1",
+    "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+    "tag": "v4.4.1"
+  },
+  "schema": 1
+}
