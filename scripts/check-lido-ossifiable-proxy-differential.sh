@@ -37,7 +37,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
   --repo-root "$REPO_ROOT" \
   --eels-root "$EELS_ROOT" \
   --blanc-artifacts "$ARTIFACTS" \
-  --result-out "$RESULT"
+  --result-out "$RESULT" >/dev/null
 PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
   "$SCRIPT_DIR/check-lido-ossifiable-proxy-differential.py" \
   --repo-root "$REPO_ROOT" \

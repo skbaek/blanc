@@ -52,6 +52,10 @@ jobs:
         run: scripts/check-lido-circuit-breaker-reference.sh
       - name: Lido TWG reference lock (offline)
         run: scripts/check-lido-twg-reference.sh
+      - name: Lido OssifiableProxy reference lock (offline)
+        run: scripts/check-lido-ossifiable-proxy-reference.sh
+      - name: Lido OssifiableProxy performance contract (static)
+        run: scripts/check-lido-ossifiable-proxy-performance.sh
       # The Lido dispatcher and both differential matrices remain mandatory
       # local candidate gates. The narrowly provisioned EELS checkout below is
       # owned by the deployment-root singleton replay only.

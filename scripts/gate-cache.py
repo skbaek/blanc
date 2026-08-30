@@ -524,6 +524,16 @@ NAMED_ROOTS = {
     "twgref": ("LIDO_TWG_REFERENCE_DIR", "scripts/reference/lido-twg"),
     "twglock": ("LIDO_TWG_REFERENCE_LOCK",
                 "scripts/lido-twg-reference.json"),
+    "ossifiableref": ("LIDO_OSSIFIABLE_PROXY_REFERENCE_DIR",
+                       "scripts/reference/lido-ossifiable-proxy"),
+    "ossifiablelock": ("LIDO_OSSIFIABLE_PROXY_REFERENCE_LOCK",
+                        "scripts/lido-ossifiable-proxy-reference.json"),
+    "ossifiabledoc": ("LIDO_OSSIFIABLE_PROXY_COMPATIBILITY_DOC",
+                       "OSSIFIABLE_PROXY_COMPATIBILITY.md"),
+    "ossifiableperfroot": ("LIDO_OSSIFIABLE_PROXY_PERFORMANCE_ROOT", "."),
+    "ossifiableperfmanifest": (
+        "LIDO_OSSIFIABLE_PROXY_PERFORMANCE_MANIFEST",
+        "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json"),
 }
 
 

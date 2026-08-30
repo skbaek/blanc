@@ -11,7 +11,7 @@ if [ "$#" -ne 0 ]; then
   exit 2
 fi
 
-if ! "$SCRIPT_DIR/check-current-mainnet.sh"; then
+if ! "$SCRIPT_DIR/check-current-mainnet.sh" >/dev/null; then
   echo "REGRESSION — OssifiableProxy BPO2 replay: shared boundary failed" >&2
   exit 1
 fi
@@ -55,4 +55,4 @@ REPLAY_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   echo "REGRESSION — OssifiableProxy BPO2 replay failed" >&2
   exit 1
 }
-printf '%s\n' "$REPLAY_OUT"
+printf '%s\n' "${REPLAY_OUT##*$'\n'}"
