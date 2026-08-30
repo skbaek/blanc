@@ -37,6 +37,30 @@ private def constructorPushWord (word : B256) : Ninst :=
 private def constructorPushWords : List B256 → Line :=
   List.map constructorPushWord
 
+/-- Exact compiled semantics of the constructor's fixed-width `PUSH2` form.
+The bound is the same non-truncation guard used by `constructorPushWord`. -/
+theorem Ninst.runCompiled_constructorPushWord
+    {sevm : Sevm} {devm : Devm} {word : B256} {G : Nat}
+    (fit : word.toNat < 2 ^ 16)
+    (gas : devm.gasLeft = G + gVerylow)
+    (room : devm.stack.length < 1024) :
+    Ninst.RunCompiled sevm devm (constructorPushWord word)
+      (devm.setMach ⟨word :: devm.stack, devm.memory, G⟩) := by
+  let bytes : Bytes :=
+    [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8]
+  have cost : pushCost bytes = gVerylow := by
+    simp [bytes, pushCost]
+  have pushed : Bytes.toB256 bytes = word := by
+    change Bytes.toB256
+      [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8] = word
+    rw [List.toB256_pair word.toNat fit, Jaune.toB256_toNat]
+  have run := Ninst.runCompiled_pushBytes
+    (sevm := sevm) (devm := devm) (xs := bytes)
+    (le := by simp [bytes]) (c := gVerylow) (G := G)
+    cost gas room
+  rw [constructorPushWord, if_pos fit]
+  simpa only [bytes, pushed] using run
+
 private def constructorLoadWord (word : B256) : Line :=
   [constructorPushWord (word * 32), mload]
 
@@ -227,22 +251,37 @@ def constructorCodecopySourceSites : List Prog.SourceSite :=
 def constructorExternalExecutionSourceSites : List Prog.SourceSite :=
   constructorSourceSitesMatching constructorIsExternalExecution
 
+/-- Membership in the constructor SSTORE inventory is exactly membership in
+the constructor source map at its recursive source-level SSTORE. -/
+theorem mem_constructorSstoreSourceSites_iff
+    {site : Prog.SourceSite} :
+    site ∈ constructorSstoreSourceSites ↔
+      site ∈ constructorProgram.sourceSites ∧
+        site.instruction = .reg .sstore := by
+  rcases site with ⟨path, pc, instruction⟩
+  cases instruction <;>
+    simp [constructorSstoreSourceSites, constructorSourceSitesMatching,
+      constructorIsSstore]
+  rename_i regular
+  cases regular <;>
+    simp
+
 def runtimeAndConstructorStaticcallSourceSites : List Prog.SourceSite :=
   runtimeStaticcallSourceSites ++ constructorStaticcallSourceSites
 
 private theorem constructorSourceSiteFacts :
     constructorSstoreSourceSites.length = 1 ∧
-    sourceSitePcs constructorSstoreSourceSites = [137] ∧
+    Prog.SourceSite.pcs constructorSstoreSourceSites = [137] ∧
     constructorStaticcallSourceSites.length = 1 ∧
-    sourceSitePcs constructorStaticcallSourceSites = [98] ∧
+    Prog.SourceSite.pcs constructorStaticcallSourceSites = [98] ∧
     constructorCodecopySourceSites.length = 1 ∧
-    sourceSitePcs constructorCodecopySourceSites = [57] ∧
+    Prog.SourceSite.pcs constructorCodecopySourceSites = [57] ∧
     (constructorExternalExecutionSourceSites.all fun site =>
       match site.instruction with
       | .exec .statcall => true
       | _ => false) = true ∧
     constructorExternalExecutionSourceSites.length = 1 ∧
-    sourceSitePcs constructorExternalExecutionSourceSites = [98] := by
+    Prog.SourceSite.pcs constructorExternalExecutionSourceSites = [98] := by
   decide +kernel
 
 theorem constructorSstoreSourceSites_length :
@@ -250,15 +289,41 @@ theorem constructorSstoreSourceSites_length :
   constructorSourceSiteFacts.1
 
 theorem constructorSstoreSourceSites_pcs :
-    sourceSitePcs constructorSstoreSourceSites = [137] :=
+    Prog.SourceSite.pcs constructorSstoreSourceSites = [137] :=
   constructorSourceSiteFacts.2.1
+
+theorem constructorSstoreSourceSites_coordinates :
+    Prog.SourceSite.coordinates constructorSstoreSourceSites = [(4, 137)] := by
+  decide +kernel
+
+/-- Every constructor source-level SSTORE is the unique recursive zero-hash
+write site at compiled prefix PC 137. -/
+theorem constructorSstoreSourceSite_pc
+    {site : Prog.SourceSite}
+    (member : site ∈ constructorSstoreSourceSites) :
+    site.pc = 137 := by
+  have pcMember : site.pc ∈ Prog.SourceSite.pcs constructorSstoreSourceSites :=
+    List.mem_map_of_mem member
+  rw [constructorSstoreSourceSites_pcs] at pcMember
+  simpa using pcMember
+
+theorem constructorSstoreSourceSite_coordinate
+    {site : Prog.SourceSite}
+    (member : site ∈ constructorSstoreSourceSites) :
+    site.path.functionIndex = 4 ∧ site.pc = 137 := by
+  have coordinateMember :
+      (site.path.functionIndex, site.pc) ∈
+        Prog.SourceSite.coordinates constructorSstoreSourceSites :=
+    List.mem_map_of_mem member
+  rw [constructorSstoreSourceSites_coordinates] at coordinateMember
+  simpa using coordinateMember
 
 theorem constructorStaticcallSourceSites_length :
     constructorStaticcallSourceSites.length = 1 :=
   constructorSourceSiteFacts.2.2.1
 
 theorem constructorStaticcallSourceSites_pcs :
-    sourceSitePcs constructorStaticcallSourceSites = [98] :=
+    Prog.SourceSite.pcs constructorStaticcallSourceSites = [98] :=
   constructorSourceSiteFacts.2.2.2.1
 
 theorem constructorCodecopySourceSites_length :
@@ -266,7 +331,7 @@ theorem constructorCodecopySourceSites_length :
   constructorSourceSiteFacts.2.2.2.2.1
 
 theorem constructorCodecopySourceSites_pcs :
-    sourceSitePcs constructorCodecopySourceSites = [57] :=
+    Prog.SourceSite.pcs constructorCodecopySourceSites = [57] :=
   constructorSourceSiteFacts.2.2.2.2.2.1
 
 theorem constructorExternalExecutionSourceSites_all_staticcall :
@@ -281,7 +346,7 @@ theorem constructorExternalExecutionSourceSites_length :
   constructorSourceSiteFacts.2.2.2.2.2.2.2.1
 
 theorem constructorExternalExecutionSourceSites_pcs :
-    sourceSitePcs constructorExternalExecutionSourceSites = [98] :=
+    Prog.SourceSite.pcs constructorExternalExecutionSourceSites = [98] :=
   constructorSourceSiteFacts.2.2.2.2.2.2.2.2
 
 theorem runtimeAndConstructorStaticcallSourceSites_length :

@@ -162,7 +162,8 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
   `runCompiled_*` projection intentionally forgets the empty child slot.
 - `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
   `Exec.NoRawSstore`; its consequences exclude every successful raw SSTORE and
-  force `retainedStorageWrites = []` for that same witness.
+  force `retainedStorageWrites = []` for that same witness;
+  `retainedStorageEffectTriples_eq_nil` gives the proof-erased chronology.
 - `Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree` is the
   occurrence-direction counterpart for an existing exact `Exec`: reachable
   exec freedom collapses child frames, then the same-frame entry certificate
@@ -205,6 +206,12 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
+- `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
+  `Prog.SourceSite.coordinates` keeps each counter coupled to its owning
+  function-table index for role-preserving finite inventory checks.
+- `Exec.StorageWrite.effectTriple` erases only the derivation node from a
+  successful write, and `Exec.retainedStorageEffectTriples` is the canonical
+  settlement-retained `(owner, key, value)` chronology.
 - For an actual target-directed source route, use
   `Exec.Deriv.SourceCursor.Toward.chronology`,
   `next_of_instruction_ne`, `rebase`, `dropLineRun`,

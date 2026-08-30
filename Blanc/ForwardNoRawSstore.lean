@@ -688,4 +688,14 @@ theorem Exec.NoRawSstore.retainedStorageWrites_eq_nil
       (event := event) member with ⟨write, -, -⟩
   exact safe.no_successfulSstoreOccurrence ⟨write⟩
 
+/-- The proof-erased owner/key/value chronology is empty as well. -/
+theorem Exec.NoRawSstore.retainedStorageEffectTriples_eq_nil
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {run : Exec pc sevm pre out}
+    (safe : Exec.NoRawSstore run) :
+    Exec.retainedStorageEffectTriples run = [] := by
+  rw [Exec.retainedStorageEffectTriples,
+    safe.retainedStorageWrites_eq_nil]
+  rfl
+
 end Blanc

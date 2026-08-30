@@ -334,6 +334,7 @@ symbols = [
   "declaration:Blanc.Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree",
   "declaration:Blanc.Exec.NoRawSstore.no_successfulSstoreOccurrence",
   "declaration:Blanc.Exec.NoRawSstore.retainedStorageWrites_eq_nil",
+  "declaration:Blanc.Exec.NoRawSstore.retainedStorageEffectTriples_eq_nil",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"

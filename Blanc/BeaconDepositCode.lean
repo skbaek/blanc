@@ -97,23 +97,64 @@ def runtimeExternalExecutionSourceSites : List Prog.SourceSite :=
 def runtimeMstore8SourceSites : List Prog.SourceSite :=
   sourceSitesMatching isMstore8
 
-def sourceSitePcs (sites : List Prog.SourceSite) : List Nat :=
-  sites.map fun site => site.pc
+/-- Membership in the runtime SSTORE inventory is exactly membership in the
+compiler source map at a source-level SSTORE instruction. -/
+theorem mem_runtimeSstoreSourceSites_iff
+    {site : Prog.SourceSite} :
+    site ∈ runtimeSstoreSourceSites ↔
+      site ∈ runtime.sourceSites ∧ site.instruction = .reg .sstore := by
+  rcases site with ⟨path, pc, instruction⟩
+  cases instruction <;>
+    simp [runtimeSstoreSourceSites, sourceSitesMatching, isSstore]
+  rename_i regular
+  cases regular <;>
+    simp
 
 theorem runtimeSstoreSourceSites_length :
     runtimeSstoreSourceSites.length = 2 := by
   decide +kernel
 
 theorem runtimeSstoreSourceSites_pcs :
-    sourceSitePcs runtimeSstoreSourceSites = [1070, 2869] := by
+    Prog.SourceSite.pcs runtimeSstoreSourceSites = [1070, 2869] := by
   decide +kernel
+
+/-- Coupled function-table/PC identities for the two runtime write sites.
+Keeping the coordinates paired prevents a consumer from mixing the main-body
+count site with the insertion-loop branch site. -/
+theorem runtimeSstoreSourceSites_coordinates :
+    Prog.SourceSite.coordinates runtimeSstoreSourceSites =
+      [(0, 1070), (13, 2869)] := by
+  decide +kernel
+
+/-- The complete runtime source-level SSTORE population is the count write in
+the main deposit body or the branch write in the insertion-loop auxiliary. -/
+theorem runtimeSstoreSourceSite_pc
+    {site : Prog.SourceSite}
+    (member : site ∈ runtimeSstoreSourceSites) :
+    site.pc = 1070 ∨ site.pc = 2869 := by
+  have pcMember : site.pc ∈ Prog.SourceSite.pcs runtimeSstoreSourceSites :=
+    List.mem_map_of_mem member
+  rw [runtimeSstoreSourceSites_pcs] at pcMember
+  simpa using pcMember
+
+theorem runtimeSstoreSourceSite_coordinate
+    {site : Prog.SourceSite}
+    (member : site ∈ runtimeSstoreSourceSites) :
+    (site.path.functionIndex = 0 ∧ site.pc = 1070) ∨
+      (site.path.functionIndex = 13 ∧ site.pc = 2869) := by
+  have coordinateMember :
+      (site.path.functionIndex, site.pc) ∈
+        Prog.SourceSite.coordinates runtimeSstoreSourceSites :=
+    List.mem_map_of_mem member
+  rw [runtimeSstoreSourceSites_coordinates] at coordinateMember
+  simpa using coordinateMember
 
 theorem runtimeStaticcallSourceSites_length :
     runtimeStaticcallSourceSites.length = 11 := by
   decide +kernel
 
 theorem runtimeStaticcallSourceSites_pcs :
-    sourceSitePcs runtimeStaticcallSourceSites =
+    Prog.SourceSite.pcs runtimeStaticcallSourceSites =
       [799, 826, 861, 899, 937, 975, 1013, 2618, 2690, 2745, 2830] := by
   decide +kernel
 
@@ -122,7 +163,7 @@ theorem runtimeLog1SourceSites_length :
   decide +kernel
 
 theorem runtimeLog1SourceSites_pcs :
-    sourceSitePcs runtimeLog1SourceSites = [786] := by
+    Prog.SourceSite.pcs runtimeLog1SourceSites = [786] := by
   decide +kernel
 
 theorem runtimeExternalExecutionSourceSites_all_staticcall :
@@ -137,7 +178,7 @@ theorem runtimeExternalExecutionSourceSites_length :
   decide +kernel
 
 theorem runtimeExternalExecutionSourceSites_pcs :
-    sourceSitePcs runtimeExternalExecutionSourceSites =
+    Prog.SourceSite.pcs runtimeExternalExecutionSourceSites =
       [799, 826, 861, 899, 937, 975, 1013, 2618, 2690, 2745, 2830] := by
   decide +kernel
 
@@ -146,7 +187,7 @@ theorem runtimeMstore8SourceSites_length :
   decide +kernel
 
 theorem runtimeMstore8SourceSites_pcs :
-    sourceSitePcs runtimeMstore8SourceSites =
+    Prog.SourceSite.pcs runtimeMstore8SourceSites =
       [134, 141, 148, 155, 162, 169, 176, 182,
        607, 615, 623, 631, 639, 647, 655, 662,
        693, 701, 709, 717, 725, 733, 741, 748,

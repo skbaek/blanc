@@ -556,6 +556,12 @@ structure Exec.StorageWrite where
   key : B256
   value : B256
 
+/-- Proof-erased persistent-write identity used for exact effect chronology.
+The order is storage owner, raw key, then raw value. -/
+def Exec.StorageWrite.effectTriple
+    (write : Exec.StorageWrite) : Adr × B256 × B256 :=
+  (write.owner, write.key, write.value)
+
 @[ext] theorem Exec.StorageWrite.ext
     {left right : Exec.StorageWrite}
     (node : left.node = right.node)
@@ -582,6 +588,13 @@ def Exec.retainedStorageWrites
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) : List Exec.StorageWrite :=
   (Exec.retainedNodes run).filterMap Exec.Deriv.successfulSstore?
+
+/-- Settlement-retained persistent writes in canonical chronology, with proof
+nodes erased but owner, key, and value preserved exactly. -/
+def Exec.retainedStorageEffectTriples
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List (Adr × B256 × B256) :=
+  (Exec.retainedStorageWrites run).map Exec.StorageWrite.effectTriple
 
 /-- Project the data fields of an exact successful SSTORE occurrence. -/
 def Exec.SuccessfulSstoreOccurrence.storageWrite
@@ -2223,6 +2236,16 @@ structure Prog.SourceSite where
   path : Prog.SourcePath
   pc : Nat
   instruction : Ninst
+
+/-- Project a source-site inventory to its compiled program counters. -/
+def Prog.SourceSite.pcs (sites : List Prog.SourceSite) : List Nat :=
+  sites.map fun site => site.pc
+
+/-- Project a source-site inventory to coupled function-table/PC coordinates.
+The paired form preserves which function owns each compiled counter. -/
+def Prog.SourceSite.coordinates
+    (sites : List Prog.SourceSite) : List (Nat × Nat) :=
+  sites.map fun site => (site.path.functionIndex, site.pc)
 
 /-- Enumerate exactly the `.next` nodes of a source function at their compiled
 program counters.  `branch` and `call` contribute only compiler glue, so they

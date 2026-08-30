@@ -139,6 +139,8 @@ import Blanc.BeaconDepositGuardErrors
 import Blanc.BeaconDepositErrors
 import Blanc.BeaconDepositCode
 import Blanc.BeaconDepositDeploy
+import Blanc.BeaconDepositWriteSites
+import Blanc.BeaconDepositBridge
 import Blanc.BeaconDepositMemory
 import Blanc.BeaconDepositSha
 import Blanc.BeaconDepositAbiMemory
