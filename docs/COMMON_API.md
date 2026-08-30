@@ -144,6 +144,9 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
   constant-error specialization.
 - `NoRawSstorePath.of_emptyRevertGuard` certifies a selected nonzero guard
   whose internal auxiliary is the common empty `Func.rev` body.
+- `NoRawSstorePath.of_prepend_nonexec` prepends an instruction-only line when
+  every instruction is non-external and distinct from raw `SSTORE`; its tail
+  certificate may depend on the intermediate compiled state.
 - For a warm fixed-width SHA-256 precompile crossing, use
   `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
   [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary

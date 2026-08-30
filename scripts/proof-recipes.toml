@@ -308,7 +308,7 @@ review_date = "2026-08-29"
 id = "raw-sstore-free-compiled-path"
 status = "active"
 triggers = ["goal-shape:raw-sstore-free-compiled-path"]
-preferred_path = "Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body, `NoRawSstorePath.of_revWith` for a symbolic constant-error body, and `NoRawSstorePath.of_emptyRevertGuard` for a selected nonzero guard calling an empty-revert auxiliary. For a warm fixed-width SHA-256 precompile step, preserve the empty child slot with `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext`; finish with `Prog.exists_exec_noRawSstore`."
+preferred_path = "Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body, `NoRawSstorePath.of_prepend_nonexec` for an instruction-only prefix, `NoRawSstorePath.of_revWith` for a symbolic constant-error body, and `NoRawSstorePath.of_emptyRevertGuard` for a selected nonzero guard calling an empty-revert auxiliary. For a warm fixed-width SHA-256 precompile step, preserve the empty child slot with `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext`; finish with `Prog.exists_exec_noRawSstore`."
 boundary = "This is raw construction-direction chronology, not rollback reasoning. An empty retained-write list or reverted terminal state does not prove the certificate because an earlier raw SSTORE may have executed and then rolled back. Entered child frames require their own evidence; synchronously resolved childless precompiles may use the explicit done-frame constructor."
 owner_module = "Blanc/ForwardNoRawSstore.lean"
 canonical_example = "Blanc/ForwardNoRawSstore.lean:Func.RunCompiledTo.NoRawSstorePath.of_execFree"
@@ -326,6 +326,7 @@ symbols = [
   "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_execFree",
   "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_revWith",
   "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_prepend_nonexec",
   "declaration:Blanc.Prog.exists_exec_noRawSstore",
   "declaration:Blanc.Exec.NoRawSstore.no_successfulSstoreOccurrence",
   "declaration:Blanc.Exec.NoRawSstore.retainedStorageWrites_eq_nil",

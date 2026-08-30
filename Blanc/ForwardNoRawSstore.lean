@@ -247,6 +247,39 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard
                 (by simp [Func.rev, Ninst.pushB256,
                   Func.LocalSstoreFree])))
 
+/-- Prepending an instruction-only line that is externally execution-free and
+locally SSTORE-free preserves a selected tail certificate.  The tail premise
+is quantified over its intermediate state because a compiled line determines
+that state as it runs. -/
+theorem Func.RunCompiledTo.NoRawSstorePath.of_prepend_nonexec
+    {fs : List Func} {sevm : Sevm} {pre : Devm}
+    {line : Line} {body : Func} {out : Execution}
+    (run : Func.RunCompiledTo fs sevm pre (line +++ body) out)
+    (notSstore : ∀ instruction ∈ line, instruction ≠ .reg .sstore)
+    (notExec : ∀ instruction ∈ line,
+      ∀ operation : Xinst, instruction ≠ .exec operation)
+    (tailSafe : ∀ {mid : Devm}
+      (tailRun : Func.RunCompiledTo fs sevm mid body out),
+      Func.RunCompiledTo.NoRawSstorePath tailRun) :
+    Func.RunCompiledTo.NoRawSstorePath run := by
+  induction line generalizing pre with
+  | nil =>
+      exact tailSafe (by simpa [prepend] using run)
+  | cons instruction line ih =>
+      cases run with
+      | next instructionRun tail =>
+          exact .next (instructionRun := instructionRun)
+            (notSstore instruction (by simp))
+            (instructionRun.childless_of_not_exec
+              (notExec instruction (by simp)))
+            (ih tail
+              (by
+                intro next reached
+                exact notSstore next (by simp [reached]))
+              (by
+                intro next reached operation
+                exact notExec next (by simp [reached]) operation))
+
 /-- Prepend one decoded childless instruction to a raw-SSTORE-free execution.
 The `.exec` case admits synchronous `.done` and synchronously resolved
 `.spawn` steps, but rejects an entered child frame by the empty-slot witness. -/
