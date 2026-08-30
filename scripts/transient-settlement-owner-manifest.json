@@ -98,8 +98,8 @@
   ],
   "frozenAssuranceFiles": {
     "Blanc/ExecutionSettlement.lean": "0e01d0a0ce1a571af2af61bc2af4bf5405bbade4b792879fb199ce468e7a5582",
-    "Blanc/ExecutionOccurrence.lean": "cfb5c43c75ba0197f6f0ed7f3f44e79475e454ef9b211ca6fdd95a80c144a9bf",
-    "Blanc/CycleWriteFree.lean": "54408b348b2687dbf8096a486f13460217f79ac3da8ac985ae17558c78a19231",
+    "Blanc/ExecutionOccurrence.lean": "929ea452292d3250d093a2b2ea82dfde79d65b4e7170306bd8ca4787c5753a4d",
+    "Blanc/CycleWriteFree.lean": "6df69e846e5c165acb8ad12bedd7cb97503e9ee3eda8bee9553e3a8c8c706dac",
     "scripts/ExecutionSettlementRegression.lean": "d1e4fc1aeb4e31a9188af49a9df1ce2bf23b87571544f7f31e0af1abcea74c2f",
     "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",
     "scripts/execution-settlement-lift-manifest.json": "6d388528be7cfb64a324a8a3d1b9aaf9bf19d4f4525b02cd7f899f1a1bbcc9d7",
@@ -110,7 +110,7 @@
     "scripts/check-execution-raw-attribution-ownership.py": "581d80755ede30b6fe0a0c2115c347e6679a035d0a27275565bb82fe0e123a26",
     "scripts/execution-raw-attribution-owner-manifest.json": "13819a6d80e58af5d5333e41c07f61eb5c0e09765f628b28cb085e305a22e2b6",
     "scripts/CycleWriteFreeRegression.lean": "972fb8c3d780e281490b80bb38c32e4aae4702b49a7f016a3c9313cd8fc5db7e",
-    "scripts/check-cycle-write-free.py": "5cc462ff491d1812fc401760ac13f32709b1bb29c5a78fd22df8290b426e0173",
-    "scripts/cycle-write-free-owner-manifest.json": "563714dc1786700a93ffad5d4201d58f80a39b09b9ae162cc68f641da9c2cca3"
+    "scripts/check-cycle-write-free.py": "f41057a4feccf4c6ed5fa88df53f1fe9dd03f6e02548fa40e982c93c15861a20",
+    "scripts/cycle-write-free-owner-manifest.json": "1436cc0ae9adf2d41cbf8b7966715174d518378ed8a2713e07420040d7c77e8b"
   }
 }

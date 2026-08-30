@@ -15,6 +15,7 @@
     {"declaration": "Blanc.Func.LocalSstoreFree", "kind": "def"},
     {"declaration": "Blanc.Func.localSstoreFree", "kind": "def"},
     {"declaration": "Blanc.Func.localSstoreFree_iff", "kind": "theorem"},
+    {"declaration": "Blanc.Func.callsIn_mem_iff", "kind": "theorem"},
     {"declaration": "Blanc.Prog.function?", "kind": "def"},
     {"declaration": "Blanc.Prog.ClosedSstoreFree", "kind": "def"},
     {"declaration": "Blanc.Prog.componentSstoreFree", "kind": "def"},
