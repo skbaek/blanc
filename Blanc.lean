@@ -156,6 +156,7 @@ import Blanc.BeaconDepositInsertFirstLiveCost
 import Blanc.BeaconDepositInsertFirstLiveRun
 import Blanc.BeaconDepositInsertBridge
 import Blanc.BeaconDepositSuccessGuards
+import Blanc.BeaconDepositSuccess
 import Blanc.BeaconDepositRootMemory
 import Blanc.BeaconDepositRoot
 import Blanc.BeaconDepositRootFold

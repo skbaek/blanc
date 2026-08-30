@@ -85,7 +85,7 @@ CONTRACTS = {
                        "BeaconDepositInsertFirstLiveCost",
                        "BeaconDepositInsertFirstLiveRun",
                        "BeaconDepositInsertCommit", "BeaconDepositInsertBridge",
-                       "BeaconDepositSuccessGuards",
+                       "BeaconDepositSuccessGuards", "BeaconDepositSuccess",
                        "BeaconDepositRootMemory", "BeaconDepositRoot",
                        "BeaconDepositRootFold", "BeaconDepositRootEffects",
                        "BeaconDepositRootPublic",
