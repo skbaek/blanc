@@ -56,7 +56,7 @@ private theorem runtime_pcFree (dp : DeployParams) :
 
 /-- The finite internal-call component used by the pause entry. -/
 def pauseExecMembers : List Nat :=
-  [missingRoleSlot, pausedExpectedSlot, zeroPauseDurationSlot,
+  [missingRoleSlot, resumedExpectedSlot, zeroPauseDurationSlot,
     arithmeticPanicSlot, collisionRefusalSlot]
 
 private theorem pauseEntry_localExecFree :
@@ -76,8 +76,8 @@ private theorem pauseComponent_missingRole (dp : DeployParams) :
             body.callsIn (fun callee => callee ∈ pauseExecMembers)) = true := by
   rfl
 
-private theorem pauseComponent_pausedExpected (dp : DeployParams) :
-    (match (runtime dp).function? pausedExpectedSlot with
+private theorem pauseComponent_resumedExpected (dp : DeployParams) :
+    (match (runtime dp).function? resumedExpectedSlot with
       | none => false
       | some body =>
           body.localExecFree &&
@@ -123,7 +123,7 @@ private theorem pauseComponents_execFree (dp : DeployParams) :
     or_false] at member
   rcases member with rfl | rfl | rfl | rfl | rfl
   · exact pauseComponent_missingRole dp
-  · exact pauseComponent_pausedExpected dp
+  · exact pauseComponent_resumedExpected dp
   · exact pauseComponent_zeroDuration dp
   · exact pauseComponent_arithmeticPanic dp
   · exact pauseComponent_collisionRefusal dp
