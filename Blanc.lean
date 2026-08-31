@@ -267,6 +267,7 @@ import Blanc.ProrataAttackTrace
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
+import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
 
 namespace Blanc
 

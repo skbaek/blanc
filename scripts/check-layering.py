@@ -273,6 +273,7 @@ CONTRACTS = {
 # check 4 starts binding it. Nothing may import back into this list.
 COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
 ]
 
 ROOTS = ["Blanc", "Main"]
