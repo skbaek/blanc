@@ -74,9 +74,10 @@ corresponds to a real oracle case. Those are review obligations, not
 mechanically checkable ones, and pretending otherwise would be the vacuity this
 gate exists to prevent.
 
-It owns only this repository's tree, per AGENTS.md's rule that a gate lives in
-the repository whose tree it checks. The plain-language companion lives in the
-plans repository and no gate here can see it.
+It owns only this repository's tree, following `scripts/GATES.md`'s rule that a
+gate lives in the repository whose tree it checks. Its checked claim map is
+`LIDO_CIRCUIT_BREAKER_ASSURANCE.md`; whether each row's prose fairly summarizes
+its declaration remains the repository-local review obligation stated above.
 
 GATE-OWNED ROWS
 ---------------

@@ -23,9 +23,11 @@ Falsifier modes:
                   apply.
 
   --falsify       Full campaign. THE CALLER MUST HOLD THE HOST SEMAPHORE'S
-                  EXCLUSIVE HARD HOLD (~/.codex/bin/codex-host-semaphore):
-                  each mutant gets a temporary git worktree of HEAD with an
-                  APFS-cloned .lake, a `lake build`, and an evaluator run.
+                  EXCLUSIVE HARD HOLD through `python3 -m creme semaphore`
+                  (see `~/creme/docs/guides/execution.md`):
+                  each mutant gets a temporary git worktree of HEAD with a
+                  cloned .lake on APFS and a portable full-copy fallback, a
+                  `lake build`, and an evaluator run.
                   Each mutant must build GREEN (they are self-consistent by
                   design; a build failure is itself a campaign failure) and
                   must then be CAUGHT by the vector comparison against the
@@ -601,6 +603,29 @@ def git(args, **kw):
                           text=True, **kw)
 
 
+def copy_build_state(source, destination):
+    """Clone a build tree on APFS, with a portable recursive-copy fallback."""
+    clone_error = None
+    if sys.platform == "darwin":
+        result = subprocess.run(
+            ["cp", "-c", "-R", source, destination],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            return
+        clone_error = result.stderr.strip() or result.stdout.strip()
+        if os.path.lexists(destination):
+            if os.path.isdir(destination) and not os.path.islink(destination):
+                shutil.rmtree(destination)
+            else:
+                os.unlink(destination)
+    try:
+        shutil.copytree(source, destination, symlinks=True)
+    except OSError as exc:
+        detail = f"; APFS clone failed first: {clone_error}" if clone_error else ""
+        fail(f"could not copy .lake into mutant worktree: {exc}{detail}")
+
+
 def falsify():
     vec = load_vectors()  # the COMMITTED vectors of the main tree
     results = []
@@ -617,13 +642,9 @@ def falsify():
             r = git(["worktree", "add", "--detach", wt, "HEAD"])
             if r.returncode != 0:
                 fail(f"git worktree add failed: {r.stderr.strip()}")
-            # APFS-clone the build state so the mutant build is incremental.
-            r = subprocess.run(["cp", "-c", "-R",
-                                os.path.join(ROOT, ".lake"),
-                                os.path.join(wt, ".lake")],
-                               capture_output=True, text=True)
-            if r.returncode != 0:
-                fail(f"cp -c -R .lake failed: {r.stderr.strip()}")
+            # Clone when APFS supports it; otherwise copy the build state.
+            copy_build_state(os.path.join(ROOT, ".lake"),
+                             os.path.join(wt, ".lake"))
             # The evaluator is an input, not a golden: if HEAD does not carry
             # it yet (untracked in the main tree), copy it in.
             if not os.path.isfile(os.path.join(wt, EVAL_REL)):

@@ -19,11 +19,11 @@ Two properties matter as much as the equality check:
     than passing with nothing checked -- a green run here never means "no
     surface was inspected". Reword freely, then re-register the pattern.
 
-  * It owns only this repository's tree, per AGENTS.md's rule that a gate lives
-    in the repository whose tree it checks. Jaune's site quotes this number too
-    and no gate in either repository can see across the boundary, so a
-    successful run prints the cross-repository reminder rather than pretending
-    the surface does not exist.
+  * It owns only this repository's tree, following `scripts/GATES.md`'s rule
+    that a gate lives in the repository whose tree it checks. Jaune's site
+    quotes this number too and no gate in either repository can see across the
+    boundary, so a successful run prints the cross-repository reminder rather
+    than pretending the surface does not exist.
 
 This gate needs no Lean toolchain, no build and no network -- it reads
 committed files only -- so it is instant, takes no report or heavy lock, and

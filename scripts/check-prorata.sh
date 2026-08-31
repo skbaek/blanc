@@ -90,7 +90,7 @@ PYEOF
 
 if [ "$SELF_TEST" -eq 1 ]; then
   set -e
-  SELF_TEST_DIR="$(mktemp -d /private/tmp/prorata-self-test.XXXXXX)"
+  SELF_TEST_DIR="$(mktemp -d)"
   trap 'rm -rf "$SELF_TEST_DIR"' EXIT
 
   cp -R "$FIXTURES_DIR" "$SELF_TEST_DIR/fixtures"
