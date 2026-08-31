@@ -50,7 +50,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
-          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
+          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
@@ -65,9 +65,10 @@ SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesG
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "DelegatecallEnvelope",
-           "ExecutionFrames", "ExecutionAdmission", "ContractAdmission",
+           "ExecutionFrames", "ExecutionFrameEntry", "ExecutionAdmission", "ContractAdmission",
            "ExecutionMessageAdmission", "ExecutionTransactionAdmission",
            "ExecutionBodyAdmission", "ExecutionHistoryAdmission",
+           "ExecutionTraceFresh",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects"]
 

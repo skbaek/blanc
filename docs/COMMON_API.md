@@ -695,6 +695,16 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
   `processMessage_entry_stack` separately recovers its empty operand stack
   and `processMessage_entry_memory` its empty memory, without changing the
   established conjunction returned by the former.
+- For an already-retained zero-value static-precompile child, use
+  [`Blanc/StaticPrecompileMessage.lean`](../Blanc/StaticPrecompileMessage.lean):
+  `stor_of_processMessage_staticPrecomp` exposes the all-account storage frame
+  under the positive enabled-precompile premise.  At address `0x2`,
+  `gasSha25664_le_of_processMessage_clean` rules out an underfunded clean
+  child, `output_of_processMessage_sha256_64_clean` identifies the exact
+  64-byte SHA-256 result, and `frame_of_processMessage_sha256_64_clean`
+  packages both conclusions.  None of these facts bypasses delegation
+  resolution: the caller must first establish that the actual call selected
+  the ordinary address-2 precompile route.
 - `Msg.initDevm_*` and `Msg.initSevm_*` expose canonical message-entry fields.
 
 ### T2. I need to know which child effects survive settlement
@@ -756,10 +766,13 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
 Before lifting through a wrapper, an invariant may need a positive condition
 only at the roots of target frames actually entered by one concrete execution.
 Use [`Blanc/ExecutionFrames.lean`](../Blanc/ExecutionFrames.lean),
+[`Blanc/ExecutionFrameEntry.lean`](../Blanc/ExecutionFrameEntry.lean),
 [`Blanc/ExecutionAdmission.lean`](../Blanc/ExecutionAdmission.lean), and
 [`Blanc/ContractAdmission.lean`](../Blanc/ContractAdmission.lean) for the raw
 execution layer, then the matching `Execution*Admission` module for retained
-message, transaction, body, block, and history carriers:
+message, transaction, body, block, and history carriers.  Import
+[`Blanc/ExecutionTraceFresh.lean`](../Blanc/ExecutionTraceFresh.lean) when the
+consumer needs canonical interpreter ingress as one conjunct:
 
 - `Exec.rawFrameDescendants` and `Exec.rawFrameRoots` are the unfiltered
   entered-frame traversal below both the invariant ladder and the richer
@@ -769,6 +782,10 @@ message, transaction, body, block, and history carriers:
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
   theorems are the supported restriction interface; do not reconstruct list
   membership inside a contract proof.
+- `Exec.FreshEntry sevm pre` records only `pre.stack = []` and
+  `pre.memory = Mem.empty`. `Exec.FrameAdmitted.fresh_of_enter` derives it
+  from one actual frame entry, and `Exec.FrameAdmitted.and` combines it with
+  an independently established contract-specific condition.
 - `ForallSubExecAdmitted`, `lift_admitted`, and `lift_inv_admitted` are the
   arbitrary-`Exec` eliminators. Unlike `RootedExecution`'s forward compiled
   construction, they keep the selected execution proof in the induction
@@ -783,10 +800,15 @@ message, transaction, body, block, and history carriers:
   theorem through their exact retained wrappers.  Each carrier has a matching
   `FrameAdmitted` predicate, so admission is required only for interpreter
   frames that the concrete trace actually entered.
+- Every retained carrier from `ProcessMessageTrace` through
+  `ConfiguredHistoryTrace` has `freshFrameAdmitted`; its matching
+  `FrameAdmitted.and` combines that trace-derived fact with another admission
+  over the same retained roots.
 
-This layer does not manufacture an admission fact, constrain an execution's
-result, or filter by settlement. A consumer must derive admission from its
-actual trace and use the retained/committed APIs when rollback matters.
+This layer does not manufacture environment, storage, routing, delegation, or
+precompile facts, constrain an execution's result, or filter by settlement.
+A consumer must derive every independent admission from its actual trace and
+use the retained/committed APIs when rollback matters.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 

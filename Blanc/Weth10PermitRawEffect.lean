@@ -9,6 +9,7 @@
 -- removed, so the resulting storage image holds of short and dirty calldata
 -- as well.
 
+import Blanc.StaticPrecompileMessage
 import Blanc.Weth10Permit
 import Blanc.Weth10StateSound
 
@@ -639,64 +640,7 @@ theorem of_permitToRecover_raw (dp : DeployParams)
       ← congrFun hstor2 sevm.currentTarget, hstor1]
   · exact hcode3.trans (hcode2.trans (hcode1.trans hcodeMid))
 
-/-! ## The raw ECRECOVER crossing
-
-The canonical crossing identifies the child's input with
-`permitEcrecoverImage` in order to compute the returned word.  A storage
-frame needs none of that: `applyPrecompResult` writes only gas and output, so
-a synchronous precompile child preserves every account's storage whatever it
-was handed.  The two routing hypotheses are kept exactly as the canonical
-chain states them, because without them the model admits an EIP-7702
-delegation designator at address 1 whose interpreted child could store. -/
-
-/-- A synchronous precompile child of a zero-value static call leaves every
-account's storage where the parent had it.  Input-free form of the storage
-clause of `frame_of_processMessage_permitEcrecover_clean`. -/
-theorem stor_of_processMessage_staticPrecomp
-    {sevm : Sevm} {parent child : Devm} {gas : Nat} {calldata : Bytes}
-    {code : ByteArray} {xl : Xlot} {target : Adr}
-    (hpre : decide (sevm.benvStat.rules.isPrecomp target) = true)
-    (hpm : ProcessMessage
-      (callMsg sevm parent gas 0 sevm.currentTarget target target true true
-        calldata code false) xl (.ok child)) :
-    ∀ a, Devm.getStor child a = Devm.getStor parent a := by
-  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
-  unfold FrameBody at hbody
-  rcases hbt :
-      (callMsg sevm parent gas 0 sevm.currentTarget target target true true
-        calldata code false).benvAfterTransfer with e | benv <;>
-    rw [hbt] at hbody
-  · rw [hbody.2] at hset
-    unfold processMessage.settle at hset
-    cases hset
-  · obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
-    subst benv
-    have hca :
-        ((callMsg sevm parent gas 0 sevm.currentTarget target target true true
-            calldata code false).withBenv
-          (((callMsg sevm parent gas 0 sevm.currentTarget target target true
-              true calldata code false).benv.withState st_mid).addBal
-            target 0)).codeAddress = some target := rfl
-    rcases of_executeCode_someCode hca hbody with hpc | hinterp
-    · rcases r0 with x | evm'
-      · rw [processMessage.settle_error] at hset
-        cases hset
-      · unfold processMessage.settle at hset
-        dsimp only [bind, Except.bind] at hset
-        by_cases herr : evm'.error.isSome = true
-        · rw [if_pos herr] at hset
-          intro a
-          rw [Except.ok.inj hset]
-          rfl
-        · rw [if_neg herr] at hset
-          have heq : child = evm' := Except.ok.inj hset
-          subst heq
-          have hstate := state_of_executePrecomp_ok hpc.2.2 herr
-          intro a
-          change (child.state.get a).stor = (parent.state.get a).stor
-          rw [hstate]
-          exact (of_state_transfer_fields hsub).1 a
-    · exact False.elim (hinterp.1 (by exact hpre))
+/-! ## The raw ECRECOVER crossing -/
 
 /-- Raw storage frame for permit's whole recovery line.  The recovered word
 is left existential: the only thing the raw storage image needs from the

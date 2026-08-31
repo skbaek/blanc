@@ -1,6 +1,7 @@
 import Blanc.Solvent
 import Blanc.WethCode
 import Blanc.Ladder
+import Blanc.StaticPrecompileMessage
 import Blanc.BalanceAlgebra
 import Blanc.WordArithmetic
 import Blanc.BytesWrite
@@ -17,10 +18,12 @@ import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryEffects
+import Blanc.ExecutionFrameEntry
 import Blanc.ExecutionMessageAdmission
 import Blanc.ExecutionTransactionAdmission
 import Blanc.ExecutionBodyAdmission
 import Blanc.ExecutionHistoryAdmission
+import Blanc.ExecutionTraceFresh
 import Blanc.ExecutionOccurrence
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
