@@ -196,6 +196,7 @@ import Blanc.BeaconDepositSuccessSettlement
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositRootEffects
 import Blanc.BeaconDepositRootPublic
+import Blanc.BeaconDepositDeploymentRoot
 import Blanc.ProxyPairSlots
 import Blanc.ProxyPairProgram
 import Blanc.ProxyPairOssifiableSurface
