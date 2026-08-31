@@ -1171,6 +1171,88 @@ Blanc.Exec.noExecOccurrence_of_exactMain_reachableExecFree|$STANDARD
 Blanc.Exec.noRetainedWriteTo_of_exactMain_reachableExecFree|$STANDARD
 Blanc.ReachableExecFreeControl.routeControlProgram_not_reachableExecFree|propext, Quot.sound
 Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_circuitBreaker_noninterference|$STANDARD
+Blanc.BeaconDeposit.div_mul_eq_sub_mod|propext, Quot.sound
+Blanc.BeaconDeposit.pred_div_eq|propext, Quot.sound
+Blanc.BeaconDeposit.pred_mod_of_pos|propext, Quot.sound
+Blanc.BeaconDeposit.pred_mod_eq|propext, Quot.sound
+Blanc.BeaconDeposit.pred_div_pow_eq|propext, Quot.sound
+Blanc.BeaconDeposit.mod_two_pow_eq_zero_iff|$STANDARD
+Blanc.BeaconDeposit.rootAt_nil|propext
+Blanc.BeaconDeposit.rootAt_short|propext
+Blanc.BeaconDeposit.rootAtE_eq|propext
+Blanc.BeaconDeposit.rootAt_append|propext, Quot.sound
+Blanc.BeaconDeposit.empty_inv|$STANDARD
+Blanc.BeaconDeposit.pending_step_even|$STANDARD
+Blanc.BeaconDeposit.pending_step_odd|$STANDARD
+Blanc.BeaconDeposit.rootAt_pending_even|$STANDARD
+Blanc.BeaconDeposit.rootAt_pending_odd|$STANDARD
+Blanc.BeaconDeposit.climb_spec|$STANDARD
+Blanc.BeaconDeposit.root_correct|$STANDARD
+Blanc.BeaconDeposit.empty_root|$STANDARD
+Blanc.BeaconDeposit.div_two_div_pow|propext
+Blanc.BeaconDeposit.div_pow_div_two|propext
+Blanc.BeaconDeposit.walk_eq_none_iff|propext, Quot.sound
+Blanc.BeaconDeposit.walk_isSome_iff|$STANDARD
+Blanc.BeaconDeposit.walk_none_at_cap|$STANDARD
+Blanc.BeaconDeposit.insert_isSome_iff|$STANDARD
+Blanc.BeaconDeposit.take_drop_append|propext, Quot.sound
+Blanc.BeaconDeposit.mod_pow_ge_of_bit|$STANDARD
+Blanc.BeaconDeposit.mod_pow_ge_of_two_bits|$STANDARD
+Blanc.BeaconDeposit.bit_zero_of_mod_zero|$STANDARD
+Blanc.BeaconDeposit.completedBlock_pred|$STANDARD
+Blanc.BeaconDeposit.walk_insert_spec|$STANDARD
+Blanc.BeaconDeposit.insert_spec|$STANDARD
+Blanc.BeaconDeposit.deposit_ne_assert_false|$STANDARD
+Blanc.BeaconDeposit.deposit_ok_spec|$STANDARD
+Blanc.BeaconDeposit.deposit_inv|$STANDARD
+Blanc.BeaconDeposit.le64_length|
+Blanc.BeaconDeposit.zeros_length|propext
+Blanc.BeaconDeposit.le64_zero|
+Blanc.BeaconDeposit.hashPair_input_length|propext
+Blanc.BeaconDeposit.mixIn_input_length|propext
+Blanc.BeaconDeposit.pubkeyRoot_input_length|propext
+Blanc.BeaconDeposit.signatureRoot_input_lengths|propext, Quot.sound
+Blanc.BeaconDeposit.depositDataNode_input_lengths|propext
+Blanc.BeaconDeposit.code_compile|$STANDARD
+Blanc.BeaconDeposit.code_eip170|$STANDARD
+Blanc.BeaconDeposit.constructorInitPrefix_compile|$STANDARD
+Blanc.BeaconDeposit.creationCode_eip3860|$STANDARD
+Blanc.BeaconDeposit.deposit_success_settled_effects|$STANDARD
+Blanc.BeaconDeposit.deposit_success_retainedStorageEffectTriples|$STANDARD
+Blanc.BeaconDeposit.deposit_pubkeyLength_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_withdrawalCredentialsLength_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_signatureLength_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_valueTooLow_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_valueNotGweiMultiple_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_valueTooHigh_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_depositDataRootMismatch_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_merkleTreeFull_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_error_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.deposit_malformed_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.noMatchSelector_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.unmatched_selector_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.supportsInterface_runCompiled|$STANDARD
+Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.supportsInterface_runCompiled_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.supportsInterface_short_calldata_runCompiledTo_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled|$STANDARD
+Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.getDepositCount_warm_runCompiled|$STANDARD
+Blanc.BeaconDeposit.getDepositCount_cold_runCompiled|$STANDARD
+Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo|$STANDARD
+Blanc.BeaconDeposit.getDepositCount_warm_runCompiled_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.getDepositCount_cold_runCompiled_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo_noRawSstore|$STANDARD
+Blanc.BeaconDeposit.Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot|$STANDARD
+Blanc.BeaconDeposit.Exec.Deriv.beaconConstructor_sstore_coordinate|$STANDARD
+Blanc.BeaconDeposit.constructor_success_retainedStorageEffectTriples|$STANDARD
+Blanc.BeaconDeposit.ArtifactInv.root_eq_mixedRootOf|$STANDARD
+Blanc.BeaconDeposit.ArtifactInv.count_eq_history_length|$STANDARD
+Blanc.BeaconDeposit.constructorFinalStorage_artifactInv|$STANDARD
+Blanc.BeaconDeposit.deposit_success_artifactInv|$STANDARD
 Blanc.compact_pause_word_eq_projection|$STANDARD
 Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution|$STANDARD
 Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok|$STANDARD

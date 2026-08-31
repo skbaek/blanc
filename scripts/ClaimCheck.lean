@@ -16,6 +16,15 @@ import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerDeploymentRoot
 import Blanc.ProrataAttackTrace
+import Blanc.BeaconDepositConstructorEffects
+import Blanc.BeaconDepositBridgeCompiled
+import Blanc.BeaconDepositSuccessSettlement
+import Blanc.BeaconDepositSuccessChronology
+import Blanc.BeaconDepositErrors
+import Blanc.BeaconDepositRootPublic
+import Blanc.BeaconDepositSelectorMiss
+import Blanc.BeaconDepositCountEffects
+import Blanc.BeaconDepositEffects
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -3742,5 +3751,564 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
   victim_loss_bound trace hmoves hdeposit hexit
 
 end Prorata
+
+namespace BeaconDeposit
+
+/-! ## Beacon deposit — compiled P1–P6 flagships.
+
+These declaration pins keep the artifact, total behavior partition, public
+views, complete retained chronology, and compiled/model bridge in the claims
+inventory.  Their exact axiom sets are independently pinned by `check.sh`. -/
+
+example : Prog.compile runtime = some code := code_compile
+
+example : Prog.compile constructorProgram = some constructorInitPrefix :=
+  constructorInitPrefix_compile
+example {msg : Msg} {benv : Benv} {codeAddress : Adr}
+    (sevm : Sevm) (base : Devm)
+    (pubkey withdrawalCredentials signature : Bytes)
+    (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
+    (stor : Stor) (keys : KeySet) (countCost n G : Nat)
+    (htransfer : msg.benvAfterTransfer = .ok benv)
+    (hcodeAddress : msg.codeAddress = some codeAddress)
+    (hnotPrecompile :
+      decide (benv.stat.rules.isPrecomp codeAddress) = false)
+    (hsevm : sevm = initSevm (msg.withBenv benv))
+    (hbase : base = initDevm (msg.withBenv benv))
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hOk : deposit Bytes.sha256
+      (accOfStor (Devm.getStor base sevm.currentTarget))
+      pubkey withdrawalCredentials signature depositDataRoot
+      sevm.value.toNat = .ok (s', ev))
+    (hstor : Devm.getStor
+      (afterSstore sevm (afterSload sevm base depositCountSlot)
+        depositCountSlot
+        (Nat.toB256
+          (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1))
+      sevm.currentTarget = stor)
+    (hkeys :
+      (afterSstore sevm (afterSload sevm base depositCountSlot)
+        depositCountSlot
+        (Nat.toB256
+          (accOfStor
+            (Devm.getStor base sevm.currentTarget)).count + 1)).accessedStorageKeys =
+        keys)
+    (hcount : sstoreCost sevm
+      (afterSload sevm base depositCountSlot) depositCountSlot
+      (Nat.toB256
+        (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) =
+      countCost)
+    (hheight : n < 32)
+    (hfirst : FirstLive
+      ((accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) n)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
+    (hbranchSentry : gCallStipend < G + 2 +
+      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+    (hbound :
+      (G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys) < 2 ^ 256)
+    (hcountSentry : gCallStipend <
+      ((G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys)) + 14 + countCost)
+    (hreconstructBound :
+      ((((G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys)) + 38 + countCost) + 59) +
+        1762 < 2 ^ 256)
+    (hcode : sevm.code.toList = code)
+    (hgasEntry : base.gasLeft =
+      depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+        ((accOfStor (Devm.getStor base sevm.currentTarget)).count + 1)
+        countCost G) :
+    ∃ settled,
+      processMessage msg = .ok settled ∧
+        settled.stack = [] ∧
+        settled.gasLeft = G ∧
+        settled.logs = base.logs ++
+          [depositEventLog sevm.currentTarget ev] ∧
+        CanonicalDepositEventData ev
+          (depositEventLog sevm.currentTarget ev).data ∧
+        stor =
+          (Devm.getStor base sevm.currentTarget).set depositCountSlot
+            (Nat.toB256
+              (accOfStor
+                (Devm.getStor base sevm.currentTarget)).count + 1) ∧
+        (∀ a, Devm.getStor settled a =
+          if a = sevm.currentTarget then
+            stor.set (branchSlot n)
+              (accumulatedNode Bytes.sha256 (accOfStor stor).branch
+                0 n depositDataRoot)
+          else Devm.getStor base a) ∧
+        (∀ a, settled.getCode a = base.getCode a) ∧
+        settled.accessedAddresses = base.accessedAddresses ∧
+        settled.output = base.output ∧
+        settled.error = base.error ∧
+        some sevm.code.toList = Prog.compile runtime :=
+  deposit_success_settled_effects sevm base pubkey withdrawalCredentials
+    signature depositDataRoot s' ev stor keys countCost n G htransfer
+    hcodeAddress hnotPrecompile hsevm hbase hdataBound hdec hOk hstor hkeys
+    hcount hheight hfirst hselector hnodeleg hwarm hpre hdepth hstatic
+    hbranchSentry hbound hcountSentry hreconstructBound hcode hgasEntry
+
+example {sevm : Sevm} {base : Devm} {state : Acc}
+    {pubkey withdrawalCredentials signature : Bytes}
+    {depositDataRoot : B256} {G : Nat} {reason : Reason}
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hcountBound : state.count < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hcountValue : base.getStorVal sevm.currentTarget depositCountSlot =
+      Nat.toB256 state.count)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
+    (hrootBound :
+      (G + depositPostHashErrorGuardCost .depositDataRootMismatch + 18) +
+        1762 < 2 ^ 256)
+    (hcapBound :
+      (G + depositPostHashErrorGuardCost .merkleTreeFull + 46) +
+        1762 < 2 ^ 256)
+    (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
+      signature depositDataRoot sevm.value.toNat = .error reason)
+    (hcode : sevm.code.toList = code) :
+    ∃ runtimeCost post,
+      ∃ execution : Exec 0 sevm
+          (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+          (.error (.revert, post)),
+        Prog.RunCompiledTo sevm
+            (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+            runtime (.error (.revert, post)) ∧
+          post.output = errorData (reasonString reason) ∧
+          Exec.NoRawSstore execution ∧
+          Exec.retainedStorageWrites execution = [] ∧
+          Exec.retainedStorageEffectTriples execution = [] ∧
+          some sevm.code.toList = Prog.compile runtime := by
+  simpa only [DepositPublicErrorWitness] using
+    deposit_error_runCompiledTo hnonempty hdataBound hcountBound hselector hdec
+      hcountValue hnodeleg hwarm hpre hdepth hstatic hrootBound hcapBound herror
+      hcode
+
+example (sevm : Sevm) (base : Devm) (G : Nat)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hbad : ¬ DepositAbiStructureDecodable sevm.data)
+    (hcode : sevm.code.toList = code) :
+    ∃ failure : DepositAbiFailure,
+      DepositAbiFailure.Holds sevm.data failure ∧
+      ∃ execution : Exec 0 sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+          (.error (.revert,
+            (base.setMach
+              ⟨failure.finalStack sevm.data,
+                failure.finalMemory sevm.data, G⟩).withOutput [])),
+        Prog.RunCompiledTo sevm
+            (base.setMach
+              ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+            runtime
+            (.error (.revert,
+              (base.setMach
+                ⟨failure.finalStack sevm.data,
+                  failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
+          Exec.NoRawSstore execution ∧
+          Exec.retainedStorageWrites execution = [] ∧
+          Exec.retainedStorageEffectTriples execution = [] ∧
+          some sevm.code.toList = Prog.compile runtime :=
+  deposit_malformed_noRawSstore sevm base G hnonempty hdataBound hselector
+    hbad hcode
+example (sevm : Sevm) (base : Devm) (G : Nat) (selector : B256)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector sevm = selector)
+    (hmiss : selector ∉ beaconSelectors)
+    (hcode : sevm.code.toList = code) :
+    ∃ execution : Exec 0 sevm
+        (base.setMach
+          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector⟩)
+        (.error (.revert,
+          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+      Prog.RunCompiledTo sevm
+        (base.setMach
+          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector⟩)
+        runtime
+        (.error (.revert,
+          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+      Exec.NoRawSstore execution ∧
+      Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
+      some sevm.code.toList = Prog.compile runtime :=
+  unmatched_selector_noRawSstore sevm base G selector hnonempty hselector
+    hmiss hcode
+
+example (sevm : Sevm) (base : Devm) (G : Nat)
+    (hdataLength : 36 ≤ sevm.data.length)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
+    (hcode : sevm.code.toList = code) :
+    ∃ post,
+      ∃ execution : Exec 0 sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas⟩)
+          (.ok post),
+        Prog.RunCompiledTo sevm
+            (base.setMach
+              ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas⟩)
+            runtime (.ok post) ∧
+        post.gasLeft = G ∧
+        Devm.output post = abiBoolReturn (supportsInterfaceArg sevm) ∧
+        Devm.WorldEq base post ∧
+        post.logs = base.logs ∧
+        Exec.NoRawSstore execution ∧
+        Exec.retainedStorageWrites execution = [] ∧
+        Exec.retainedStorageEffectTriples execution = [] ∧
+        some sevm.code.toList = Prog.compile runtime :=
+  supportsInterface_runCompiled_noRawSstore sevm base G hdataLength
+    hdataBound hvalue hselector hcode
+example (sevm : Sevm) (base : Devm) (stor : Stor) (count G : Nat)
+    (hdataLength : 4 ≤ sevm.data.length)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = getDepositRootSelector)
+    (hstor : Devm.getStor base sevm.currentTarget = stor)
+    (hcountValue :
+      base.getStorVal sevm.currentTarget depositCountSlot =
+        Nat.toB256 count)
+    (hcount : count < 2 ^ 32)
+    (hzero : ZeroHashesCorrect stor)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hbound :
+      G + 416 +
+          rootLoopGas sevm.currentTarget stor 32
+            (rootInitialLoopState
+              (afterSload sevm base depositCountSlot)
+              (Nat.toB256 count)) <
+        2 ^ 256)
+    (hcode : sevm.code.toList = code) :
+    ∃ post,
+      ∃ execution : Exec 0 sevm
+          (base.setMach
+            ⟨[], Mem.empty,
+              G + getDepositRootRuntimeGas sevm base stor count⟩)
+          (.ok post),
+        Prog.RunCompiledTo sevm
+            (base.setMach
+              ⟨[], Mem.empty,
+                G + getDepositRootRuntimeGas sevm base stor count⟩)
+            runtime (.ok post) ∧
+        post.stack = [] ∧
+        post.gasLeft = G ∧
+        post.output =
+          (Acc.root Bytes.sha256 (accOfStor stor)).toBytes ∧
+        Bytes.toB256 post.output =
+          Acc.root Bytes.sha256 (accOfStor stor) ∧
+        post.returnData =
+          (Acc.root Bytes.sha256 (accOfStor stor)).toBytes ∧
+        (∀ a, Devm.getStor post a = Devm.getStor base a) ∧
+        (∀ a, post.getCode a = base.getCode a) ∧
+        post.accessedAddresses = base.accessedAddresses ∧
+        post.accessedStorageKeys =
+          (rootLoopIter sevm.currentTarget stor 32
+            (rootInitialLoopState
+              (afterSload sevm base depositCountSlot)
+              (Nat.toB256 count))).keys ∧
+        post.logs = base.logs ∧
+        post.error = base.error ∧
+        Exec.NoRawSstore execution ∧
+        Exec.retainedStorageWrites execution = [] ∧
+        Exec.retainedStorageEffectTriples execution = [] ∧
+        some sevm.code.toList = Prog.compile runtime :=
+  getDepositRoot_zero_runCompiled_noRawSstore sevm base stor count G
+    hdataLength hdataBound hvalue hselector hstor hcountValue hcount hzero
+    hnodeleg hwarm hpre hdepth hbound hcode
+example (sevm : Sevm) (base : Devm) (G : Nat)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hvalue : sevm.value ≠ 0)
+    (hselector : Sevm.selector sevm = getDepositRootSelector)
+    (hcode : sevm.code.toList = code) :
+    ∃ execution : Exec 0 sevm
+        (base.setMach
+          ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas⟩)
+        (.error (.revert,
+          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+      Prog.RunCompiledTo sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas⟩)
+          runtime
+          (.error (.revert,
+            (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+      Exec.NoRawSstore execution ∧
+      Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
+      some sevm.code.toList = Prog.compile runtime :=
+  getDepositRoot_nonzero_value_runCompiledTo_noRawSstore
+    sevm base G hnonempty hvalue hselector hcode
+example (sevm : Sevm) (base : Devm) (word : B256) (G : Nat)
+    (hdataLength : 4 ≤ sevm.data.length)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = getDepositCountSelector)
+    (hwarm :
+      ⟨sevm.currentTarget, depositCountSlot⟩ ∈ base.accessedStorageKeys)
+    (hstorage :
+      base.getStorVal sevm.currentTarget depositCountSlot = word)
+    (hcode : sevm.code.toList = code) :
+    ∃ execution : Exec 0 sevm
+        (base.setMach
+          ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas⟩)
+        (.ok ((base.setMach
+          ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+            (abiDynamicBytesReturn (le64 word.toNat)))),
+      Prog.RunCompiledTo sevm
+          (base.setMach
+            ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas⟩)
+          runtime
+          (.ok ((base.setMach
+            ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+              (abiDynamicBytesReturn (le64 word.toNat)))) ∧
+      Exec.NoRawSstore execution ∧
+      Exec.retainedStorageWrites execution = [] ∧
+      Exec.retainedStorageEffectTriples execution = [] ∧
+      some sevm.code.toList = Prog.compile runtime :=
+  getDepositCount_warm_runCompiled_noRawSstore sevm base word G hdataLength
+    hdataBound hvalue hselector hwarm hstorage hcode
+example (sevm : Sevm) (base : Devm)
+    (pubkey withdrawalCredentials signature : Bytes)
+    (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
+    (stor : Stor) (keys : KeySet) (countCost n G : Nat)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hOk : deposit Bytes.sha256
+      (accOfStor (Devm.getStor base sevm.currentTarget))
+      pubkey withdrawalCredentials signature depositDataRoot
+      sevm.value.toNat = .ok (s', ev))
+    (hstor : Devm.getStor
+      (afterSstore sevm (afterSload sevm base depositCountSlot)
+        depositCountSlot
+        (Nat.toB256
+          (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1))
+      sevm.currentTarget = stor)
+    (hkeys :
+      (afterSstore sevm (afterSload sevm base depositCountSlot)
+        depositCountSlot
+        (Nat.toB256
+          (accOfStor
+            (Devm.getStor base sevm.currentTarget)).count + 1)).accessedStorageKeys =
+        keys)
+    (hcount : sstoreCost sevm
+      (afterSload sevm base depositCountSlot) depositCountSlot
+      (Nat.toB256
+        (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) =
+      countCost)
+    (hheight : n < 32)
+    (hfirst : FirstLive
+      ((accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) n)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
+    (hbaseError : base.error = none)
+    (hbranchSentry : gCallStipend < G + 2 +
+      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+    (hbound :
+      (G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys) < 2 ^ 256)
+    (hcountSentry : gCallStipend <
+      ((G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys)) + 14 + countCost)
+    (hreconstructBound :
+      ((((G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys)) + 38 + countCost) + 59) +
+        1762 < 2 ^ 256)
+    (hcode : sevm.code.toList = code) :
+    ∃ post,
+      ∃ execution : Exec 0 sevm
+          (base.setMach
+            ⟨[], Mem.empty,
+              depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+                ((accOfStor
+                  (Devm.getStor base sevm.currentTarget)).count + 1)
+                countCost G⟩)
+          (.ok post),
+        Prog.RunCompiledTo sevm
+            (base.setMach
+              ⟨[], Mem.empty,
+                depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+                  ((accOfStor
+                    (Devm.getStor base sevm.currentTarget)).count + 1)
+                  countCost G⟩)
+            runtime (.ok post) ∧
+          Exec.retainedStorageEffectTriples execution =
+            [(sevm.currentTarget, depositCountSlot,
+                Nat.toB256
+                  (accOfStor
+                    (Devm.getStor base sevm.currentTarget)).count + 1),
+              (sevm.currentTarget, branchSlot n,
+                accumulatedNode Bytes.sha256 (accOfStor stor).branch
+                  0 n depositDataRoot)] ∧
+          some sevm.code.toList = Prog.compile runtime :=
+  deposit_success_retainedStorageEffectTriples sevm base pubkey
+    withdrawalCredentials signature depositDataRoot s' ev stor keys countCost
+    n G hdataBound hdec hOk hstor hkeys hcount hheight hfirst hselector
+    hnodeleg hwarm hpre hdepth hstatic hbaseError hbranchSentry hbound
+    hcountSentry hreconstructBound hcode
+example {sevm : Sevm} {base : Devm}
+    (hvalue : sevm.value = 0)
+    (hstorage : Devm.getStor base sevm.currentTarget = Stor.empty)
+    (hshaCode : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hshaWarm : (2 : Adr) ∈ base.accessedAddresses)
+    (herror : base.error = none)
+    (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hcode : sevm.code.toList = creationCode) :
+    ∃ post,
+    ∃ execution : Exec 0 sevm
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas⟩) (.ok post),
+      post.output = code ∧
+      post.error = none ∧
+      Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
+      ArtifactInv (Devm.getStor post sevm.currentTarget) [] ∧
+      Prog.RunCompiledTo sevm
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas⟩)
+        constructorProgram (.ok post) ∧
+      Exec.retainedStorageEffectTriples execution =
+        constructorStorageEffectTriples sevm.currentTarget :=
+  constructor_success_retainedStorageEffectTriples hvalue hstorage hshaCode
+    hshaWarm herror hstatic hdepth hpre hcode
+example (sevm : Sevm) (base : Devm)
+    (pubkey withdrawalCredentials signature : Bytes)
+    (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
+    (stor : Stor) (keys : KeySet) (countCost n G : Nat)
+    (history : List B256)
+    (hinvariant : ArtifactInv
+      (Devm.getStor base sevm.currentTarget) history)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
+      signature depositDataRoot)
+    (hOk : deposit Bytes.sha256
+      (accOfStor (Devm.getStor base sevm.currentTarget))
+      pubkey withdrawalCredentials signature depositDataRoot
+      sevm.value.toNat = .ok (s', ev))
+    (hstor : Devm.getStor
+      (afterSstore sevm (afterSload sevm base depositCountSlot)
+        depositCountSlot
+        (Nat.toB256
+          (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1))
+      sevm.currentTarget = stor)
+    (hkeys :
+      (afterSstore sevm (afterSload sevm base depositCountSlot)
+        depositCountSlot
+        (Nat.toB256
+          (accOfStor
+            (Devm.getStor base sevm.currentTarget)).count + 1)).accessedStorageKeys =
+        keys)
+    (hcount : sstoreCost sevm
+      (afterSload sevm base depositCountSlot) depositCountSlot
+      (Nat.toB256
+        (accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) =
+      countCost)
+    (hheight : n < 32)
+    (hfirst : FirstLive
+      ((accOfStor (Devm.getStor base sevm.currentTarget)).count + 1) n)
+    (hselector : Sevm.selector sevm = depositSelector)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
+    (hbranchSentry : gCallStipend < G + 2 +
+      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+    (hbound :
+      (G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys) < 2 ^ 256)
+    (hcountSentry : gCallStipend <
+      ((G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys)) + 14 + countCost)
+    (hreconstructBound :
+      ((((G + 46 +
+          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0
+            ((accOfStor
+              (Devm.getStor base sevm.currentTarget)).count + 1)
+            depositDataRoot keys)) + 38 + countCost) + 59) +
+        1762 < 2 ^ 256)
+    (hcode : sevm.code.toList = code) :
+    ∃ post,
+      Prog.RunCompiled sevm
+          (base.setMach
+            ⟨[], Mem.empty,
+              depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+                ((accOfStor
+                  (Devm.getStor base sevm.currentTarget)).count + 1)
+                countCost G⟩)
+          runtime post ∧
+        ArtifactInv (Devm.getStor post sevm.currentTarget)
+          (history ++ [depositDataNode Bytes.sha256 pubkey
+            withdrawalCredentials signature
+            (le64 (sevm.value.toNat / oneGwei))]) :=
+  deposit_success_artifactInv sevm base pubkey withdrawalCredentials signature
+    depositDataRoot s' ev stor keys countCost n G history hinvariant hdataBound
+    hdec hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
+    hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
+
+end BeaconDeposit
 
 end Blanc

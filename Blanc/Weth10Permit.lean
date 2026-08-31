@@ -3884,7 +3884,7 @@ theorem permitExpired_selected_runCompiledTo
   · change sevm.benvStat.time >? Sevm.argWord sevm 3 = 1
     rw [argWord_three_of_decodesPermit hdec]
     exact permitDeadlineFlag_expired hexpired
-  · exact errorGuard_runCompiledTo (expiredPermitError_lookup dp)
+  · exact Func.runCompiledTo_errorGuard (expiredPermitError_lookup dp)
       (by decide) rfl hwf hr halign h_blob h_words (by
         simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
           errorBodyCost, Devm.extCost, Devm.memory_setMach]
@@ -3918,7 +3918,7 @@ theorem permitSignerZero_runCompiledTo
   all_goals try {
     simp only [Devm.stack_setMach, List.length_cons] at *
     omega }
-  · exact errorGuard_runCompiledTo (invalidPermitError_lookup dp)
+  · exact Func.runCompiledTo_errorGuard (invalidPermitError_lookup dp)
       (by decide) rfl hwf hr halign h_blob h_words (by
         simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
           errorBodyCost, Devm.extCost, Devm.memory_setMach]

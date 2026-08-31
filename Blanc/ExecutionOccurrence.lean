@@ -556,6 +556,12 @@ structure Exec.StorageWrite where
   key : B256
   value : B256
 
+/-- Proof-erased persistent-write identity used for exact effect chronology.
+The order is storage owner, raw key, then raw value. -/
+def Exec.StorageWrite.effectTriple
+    (write : Exec.StorageWrite) : Adr × B256 × B256 :=
+  (write.owner, write.key, write.value)
+
 @[ext] theorem Exec.StorageWrite.ext
     {left right : Exec.StorageWrite}
     (node : left.node = right.node)
@@ -582,6 +588,62 @@ def Exec.retainedStorageWrites
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) : List Exec.StorageWrite :=
   (Exec.retainedNodes run).filterMap Exec.Deriv.successfulSstore?
+
+/-- Settlement-retained persistent writes in canonical chronology, with proof
+nodes erased but owner, key, and value preserved exactly. -/
+def Exec.retainedStorageEffectTriples
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List (Adr × B256 × B256) :=
+  (Exec.retainedStorageWrites run).map Exec.StorageWrite.effectTriple
+
+/-- A committed continuing step contributes its recognized storage effect,
+followed by the retained effects of its tail. -/
+@[simp] theorem Exec.retainedStorageEffectTriples_cont
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post}
+    {out : Execution} (tail : Exec pc' sevm post out)
+    (committed : Execution.commits out = true) :
+    Exec.retainedStorageEffectTriples (.cont step tail) =
+      (Exec.Deriv.successfulSstore?
+        (⟨pc, sevm, pre, out, Exec.cont step tail⟩ : Exec.Deriv)).toList.map
+          Exec.StorageWrite.effectTriple ++
+        Exec.retainedStorageEffectTriples tail := by
+  rw [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
+    Exec.retainedNodes_eq_of_commits _ committed,
+    Exec.retainedNodesOfCommits]
+  rw [List.filterMap_cons]
+  rw [← Exec.retainedNodes_eq_of_commits tail committed]
+  cases h : Exec.Deriv.successfulSstore?
+      (⟨pc, sevm, pre, out, Exec.cont step tail⟩ : Exec.Deriv) <;>
+    simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites]
+
+/-- A synchronously resolved childless frame contributes no child-frame
+storage effects; retained effects resume at the same-frame tail. -/
+@[simp] theorem Exec.retainedStorageEffectTriples_doneOk
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Jaune.Frame} {resume : Resume}
+    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
+    {step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc'}
+    {entered : frame.enter = FrameEntry.done settled}
+    {resumed : resume.run settled = .ok post}
+    {out : Execution} (tail : Exec pc' sevm post out)
+    (committed : Execution.commits out = true) :
+    Exec.retainedStorageEffectTriples
+        (.doneOk step entered resumed tail) =
+      Exec.retainedStorageEffectTriples tail := by
+  simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
+    Exec.retainedNodes, committed, Exec.retainedNodesOfCommits,
+    Exec.Deriv.successfulSstore?]
+
+/-- A committed halt has no retained SSTORE driver node. -/
+@[simp] theorem Exec.retainedStorageEffectTriples_halt
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {step : Evm.step ⟨pc, sevm, pre⟩ = .halt out}
+    (committed : Execution.commits out = true) :
+    Exec.retainedStorageEffectTriples (.halt step) = [] := by
+  simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
+    Exec.retainedNodes, committed, Exec.retainedNodesOfCommits,
+    Exec.Deriv.successfulSstore?]
 
 /-- Project the data fields of an exact successful SSTORE occurrence. -/
 def Exec.SuccessfulSstoreOccurrence.storageWrite
@@ -2224,6 +2286,16 @@ structure Prog.SourceSite where
   pc : Nat
   instruction : Ninst
 
+/-- Project a source-site inventory to its compiled program counters. -/
+def Prog.SourceSite.pcs (sites : List Prog.SourceSite) : List Nat :=
+  sites.map fun site => site.pc
+
+/-- Project a source-site inventory to coupled function-table/PC coordinates.
+The paired form preserves which function owns each compiled counter. -/
+def Prog.SourceSite.coordinates
+    (sites : List Prog.SourceSite) : List (Nat × Nat) :=
+  sites.map fun site => (site.path.functionIndex, site.pc)
+
 /-- Enumerate exactly the `.next` nodes of a source function at their compiled
 program counters.  `branch` and `call` contribute only compiler glue, so they
 do not themselves produce source sites. -/
@@ -2932,6 +3004,22 @@ private theorem Exec.Deriv.SourceCursor.Toward.sourceSite
   | branchLeft cursor chronology arm compilerPrefix rest ih => exact ih
   | branchRight cursor chronology arm compilerPrefix rest ih => exact ih
   | call cursor chronology lookup bodyCursor compilerPrefix rest ih => exact ih
+
+/-- Expose the source-site result of a completed target-directed route without
+exposing the traversal's private induction kernel. -/
+theorem Exec.Deriv.SourceCursor.Toward.sourceSiteResult
+    {root target : Exec.Deriv} {program : Prog}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {targetInstruction : Ninst}
+    {initial : Exec.Deriv.SourceCursor root program initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (route : Exec.Deriv.SourceCursor.Toward
+      initial target targetInstruction cursor) :
+    ∃ site : Prog.SourceSite,
+      site ∈ program.sourceSites ∧
+      site.pc = target.pc ∧
+      site.instruction = targetInstruction := by
+  exact route.sourceSite
 
 /-- The sole target-directed source traversal follows the finite execution
 proof, not the source call graph, and retains every intermediate cursor. -/

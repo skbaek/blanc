@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Vector-comparison gate for the BeaconDeposit pure model.
 
-Default mode compares the Lean model's keccak-256 outputs (emitted by
-scripts/eval-beacon-deposit-model.lean via `lake env lean`) against the
-committed golden vectors produced by the independent Python oracle
-(scripts/reference/beacon-deposit/vectors.json, keccak256 regime). The
-comparison is fail-closed: an unknown line shape, a missing section, a
-FAILURE line, a missing terminal `eval_done`, or any value mismatch is a
-REGRESSION. The gate does NOT run `lake build`; a stale or missing build is
-the caller's error and surfaces as a REGRESSION.
+Default mode compares the Lean model's keccak-256 and SHA-256 outputs (emitted
+by scripts/eval-beacon-deposit-model.lean via `lake env lean`) against the
+corresponding committed golden-vector regimes produced by the independent
+Python oracle (scripts/reference/beacon-deposit/vectors.json). The comparison
+is fail-closed: an unexpected regime block/order/marker, unknown line shape,
+missing section or key population, FAILURE line, missing terminal `eval_done`,
+or value mismatch is a REGRESSION. The gate does NOT run `lake build`; a stale
+or missing build is the caller's error and surfaces as a REGRESSION.
 
 Before comparing, the gate re-pins the fidelity target (SHA-256 of the
 committed deposit_contract.sol) and re-derives the committed vectors via
@@ -17,10 +17,10 @@ committed deposit_contract.sol) and re-derives the committed vectors via
 
 Falsifier modes:
 
-  --falsify-dry   For each of the three mutants, verify the patch applies
-                  cleanly (exact occurrence counts) to a TEMPORARY COPY of
-                  the two Blanc files. No build, no eval. Exit 0 iff all
-                  three apply.
+  --falsify-dry   For each of the four mutants, verify the patch applies
+                  cleanly (exact occurrence counts) to temporary copies of
+                  its target files. No build, no eval. Exit 0 iff all four
+                  apply.
 
   --falsify       Full campaign. THE CALLER MUST HOLD THE HOST SEMAPHORE'S
                   EXCLUSIVE HARD HOLD through `python3 -m creme semaphore`
@@ -31,7 +31,9 @@ Falsifier modes:
                   Each mutant must build GREEN (they are self-consistent by
                   design; a build failure is itself a campaign failure) and
                   must then be CAUGHT by the vector comparison against the
-                  main tree's committed vectors. Note: the campaign patches
+                  main tree's committed vectors. The SHA-isolated evaluator
+                  mutant must be caught specifically in the SHA-256 block.
+                  Note: the campaign patches
                   HEAD, so the model, correctness module, and the evaluator
                   script must be committed before the campaign is meaningful
                   (an untracked evaluator is copied in from the main tree as
@@ -61,7 +63,15 @@ EVAL_REL = "scripts/eval-beacon-deposit-model.lean"
 MODEL_REL = "Blanc/BeaconDepositModel.lean"
 CORR_REL = "Blanc/BeaconDepositCorrectness.lean"
 
-HEADER_LINE = "eval_beacon_deposit_model keccak256"
+REGIMES = ("keccak256", "sha256")
+
+
+def header_line(regime):
+    return f"eval_beacon_deposit_model {regime}"
+
+
+def regime_done_line(regime):
+    return f"eval_regime_done {regime}"
 
 # Source-string mapping: Lean Reason tag -> the deployed source's revert
 # reason. A tag of "ok" or "assert_false" anywhere in a guard_case line is a
@@ -81,18 +91,19 @@ TAG_TO_REASON = {
     "merkle_tree_full": "DepositContract: merkle tree full",
 }
 
-# Mutants: (name, [(relpath, old, new, expected_occurrences)]).
+# Mutants: (name, [(relpath, old, new, expected_occurrences)],
+#           required_caught_regime-or-None).
 # Occurrence counts pinned at authoring time (2026-08-28); a drifted count
 # hard-fails so a mutant can never silently under-apply.
 MUTANTS = [
     ("swap-hash-args", [
         (MODEL_REL, "H (a.toBytes ++ b.toBytes)",
          "H (b.toBytes ++ a.toBytes)", 1),
-    ]),
+    ], None),
     ("drop-mixin", [
         (MODEL_REL, "H (root.toBytes ++ le64 count ++ zeros 24)",
          "root", 1),
-    ]),
+    ], None),
     ("cap-off-by-one", [
         # `walk_none_at_cap` legitimately names the cap VALUE itself — its
         # `(2 ^ 32 - 1) + 1` is the fall-through count `2 ^ 32`, not the
@@ -103,9 +114,14 @@ MUTANTS = [
         # elaborates and only the vector comparison catches the change.
         (CORR_REL, "(2 ^ 32 - 1) + 1", "@CAP_BOUNDARY_KEEP@", 2),
         (MODEL_REL, "2 ^ 32 - 1", "2 ^ 32 - 2", 2),
-        (CORR_REL, "2 ^ 32 - 1", "2 ^ 32 - 2", 10),
+        (CORR_REL, "2 ^ 32 - 1", "2 ^ 32 - 2", 11),
         (CORR_REL, "@CAP_BOUNDARY_KEEP@", "(2 ^ 32 - 1) + 1", 2),
-    ]),
+    ], None),
+    ("sha256-regime-uses-keccak", [
+        # This changes only the SHA block invocation; the keccak block is
+        # unchanged, so a caught comparison must be attributed to SHA-256.
+        (EVAL_REL, 'emitRegime "sha256" Hs', 'emitRegime "sha256" Hk', 1),
+    ], "sha256"),
 ]
 
 
@@ -149,22 +165,12 @@ SECTIONS = [
 ]
 
 
-def parse_eval(text):
-    """Fail-closed parse of the evaluator's stdout.
+def parse_regime(body):
+    """Fail-closed parse of one evaluator regime body.
 
-    Returns ({section: {key: (value, raw_line)}}, compared_line_count).
+    Returns {section: {key: (value, raw_line)}}. Exact key populations are
+    checked by `compare` against that regime's committed vector block.
     """
-    lines = text.split("\n")
-    while lines and lines[-1].strip() == "":
-        lines.pop()
-    if not lines:
-        fail("evaluator produced no output")
-    if lines[0] != HEADER_LINE:
-        fail(f"missing or unexpected header line: {lines[0]!r} "
-             f"(expected {HEADER_LINE!r})")
-    if lines[-1] != "eval_done":
-        fail(f"missing terminal eval_done line (last line: {lines[-1]!r})")
-    body = lines[1:-1]
     P = {k: {} for k in SECTIONS}
 
     def put(kind, key, val, line):
@@ -216,7 +222,49 @@ def parse_eval(text):
             put(kind, t[1], req_bool(t[2], line), line)
         else:
             fail(f"unknown line shape: {line!r}")
-    return P, len(body)
+    return P
+
+
+def parse_eval(text):
+    """Fail-closed parse of exactly two ordered evaluator regime blocks.
+
+    The wire format is one `header_line(regime)` + body +
+    `regime_done_line(regime)` block per member of `REGIMES`, followed by the
+    single terminal `eval_done`. No alternate regime, reordered block,
+    duplicate marker, or trailing nonblank line is accepted.
+    """
+    lines = text.split("\n")
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+    if not lines:
+        fail("evaluator produced no output")
+    if lines[-1] != "eval_done":
+        fail(f"missing terminal eval_done line (last line: {lines[-1]!r})")
+
+    pos = 0
+    parsed = {}
+    nlines = 0
+    for regime in REGIMES:
+        expected_header = header_line(regime)
+        if pos >= len(lines) - 1 or lines[pos] != expected_header:
+            got = lines[pos] if pos < len(lines) - 1 else None
+            fail(f"missing or unexpected {regime} header at block position "
+                 f"{pos}: {got!r} (expected {expected_header!r})")
+        pos += 1
+        start = pos
+        expected_done = regime_done_line(regime)
+        while pos < len(lines) - 1 and lines[pos] != expected_done:
+            pos += 1
+        if pos == len(lines) - 1:
+            fail(f"missing {regime} regime marker {expected_done!r}")
+        body = lines[start:pos]
+        parsed[regime] = parse_regime(body)
+        nlines += len(body)
+        pos += 1
+    if pos != len(lines) - 1:
+        fail(f"unexpected output after {REGIMES[-1]} regime marker: "
+             f"{lines[pos:-1]!r}")
+    return parsed, nlines
 
 
 def eq(section, key, got, want, line, field=""):
@@ -226,10 +274,12 @@ def eq(section, key, got, want, line, field=""):
              f"(line: {line!r})")
 
 
-def compare(P, vec):
+def compare(P, vec, regime):
     """Compare parsed evaluator output against the vectors. Raises
     Regression on the first mismatch; returns (stats, uncovered_notes)."""
-    k = vec["keccak256"]
+    if regime not in vec:
+        fail(f"vectors missing {regime!r} regime")
+    k = vec[regime]
     stats = []
     notes = []
 
@@ -435,6 +485,27 @@ def compare(P, vec):
     return stats, notes
 
 
+def compare_all(parsed, vec):
+    """Compare both mandatory regimes and return their labelled summaries."""
+    meta_regimes = vec.get("meta", {}).get("regimes")
+    if not isinstance(meta_regimes, list) or set(meta_regimes) != set(REGIMES) \
+            or len(meta_regimes) != len(REGIMES):
+        fail(f"vectors meta.regimes {meta_regimes!r} does not contain exactly "
+             f"{list(REGIMES)!r}")
+    if set(parsed) != set(REGIMES):
+        fail(f"parsed regime set {sorted(parsed)} != {list(REGIMES)!r}")
+    summaries = []
+    notes = []
+    for regime in REGIMES:
+        try:
+            stats, regime_notes = compare(parsed[regime], vec, regime)
+        except Regression as e:
+            fail(f"{regime} regime comparison: {e}")
+        summaries.append(f"{regime}: {', '.join(stats)}")
+        notes.extend(f"{regime}: {note}" for note in regime_notes)
+    return summaries, notes
+
+
 def load_vectors():
     with open(os.path.join(ROOT, VECTORS_REL)) as f:
         return json.load(f)
@@ -474,8 +545,8 @@ def default_mode():
 
     # 3-4. Evaluate the Lean model and compare fail-closed.
     out = run_evaluator(ROOT)
-    P, nlines = parse_eval(out)
-    stats, notes = compare(P, load_vectors())
+    parsed, nlines = parse_eval(out)
+    stats, notes = compare_all(parsed, load_vectors())
     note = f"; uncovered fields: {', '.join(notes)}" if notes else ""
     print(f"OK — beacon-deposit model vs oracle: {nlines} compared lines, "
           f"{', '.join(stats)}{note}")
@@ -501,12 +572,11 @@ def falsify_dry():
     ok = True
     tmp = tempfile.mkdtemp(prefix="beacon-deposit-falsify-dry-")
     try:
-        for name, specs in MUTANTS:
-            case = os.path.join(tmp, name, "Blanc")
-            os.makedirs(case)
-            for rel in (MODEL_REL, CORR_REL):
-                shutil.copy(os.path.join(ROOT, rel),
-                            os.path.join(tmp, name, rel))
+        for name, specs, _required_regime in MUTANTS:
+            for rel in sorted({sp[0] for sp in specs}):
+                target = os.path.join(tmp, name, rel)
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                shutil.copy(os.path.join(ROOT, rel), target)
             try:
                 apply_mutant(name, specs, os.path.join(tmp, name))
                 n = sum(sp[3] for sp in specs)
@@ -519,9 +589,9 @@ def falsify_dry():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     if ok:
-        print("OK — beacon-deposit falsify-dry: all three mutants "
-              "(swap-hash-args, drop-mixin, cap-off-by-one) apply cleanly "
-              "to temporary copies")
+        print("OK — beacon-deposit falsify-dry: all four mutants "
+              "(swap-hash-args, drop-mixin, cap-off-by-one, "
+              "sha256-regime-uses-keccak) apply cleanly to temporary copies")
         return 0
     print("REGRESSION — beacon-deposit model: falsify-dry — at least one "
           "mutant patch no longer applies (see lines above)")
@@ -560,10 +630,12 @@ def falsify():
     vec = load_vectors()  # the COMMITTED vectors of the main tree
     results = []
     all_ok = True
-    for name, specs in MUTANTS:
+    for name, specs, required_regime in MUTANTS:
         verdict = {"mutant": name, "applied": False, "built": False,
                    "eval_ran": False, "comparison_failed": False,
-                   "first_mismatch": None}
+                   "first_mismatch": None,
+                   "required_regime": required_regime,
+                   "caught_regime": None}
         parent = tempfile.mkdtemp(prefix=f"beacon-mutant-{name}-")
         wt = os.path.join(parent, "wt")
         try:
@@ -592,11 +664,17 @@ def falsify():
             out = run_evaluator(wt)
             verdict["eval_ran"] = True
             try:
-                P, _ = parse_eval(out)
-                compare(P, vec)
+                parsed, _ = parse_eval(out)
+                compare_all(parsed, vec)
             except Regression as e:
                 verdict["comparison_failed"] = True
                 verdict["first_mismatch"] = str(e)
+                if required_regime is not None:
+                    expected_prefix = f"{required_regime} regime comparison:"
+                    if not str(e).startswith(expected_prefix):
+                        fail(f"mutant {name}: expected first comparison "
+                             f"rejection from {required_regime!r}, got {e}")
+                    verdict["caught_regime"] = required_regime
             if not verdict["comparison_failed"]:
                 fail(f"mutant {name}: built green and PASSED the vector "
                      f"comparison — the gate does not catch this mutant")
@@ -613,17 +691,25 @@ def falsify():
         line = (f"falsify {v['mutant']}: applied={v['applied']} "
                 f"built={v['built']} eval_ran={v['eval_ran']} "
                 f"comparison_failed={v['comparison_failed']}")
+        if v["required_regime"] is not None:
+            line += (f" required_regime={v['required_regime']} "
+                     f"caught_regime={v['caught_regime']}")
         print(line)
         if v.get("first_mismatch"):
             print(f"  first mismatch: {v['first_mismatch']}")
         if v.get("error"):
             print(f"  campaign failure: {v['error']}")
     caught = all(v["applied"] and v["built"] and v["eval_ran"]
-                 and v["comparison_failed"] for v in results)
+                 and v["comparison_failed"]
+                 and (v["required_regime"] is None
+                      or v["caught_regime"] == v["required_regime"])
+                 for v in results)
     if caught and all_ok:
-        print("OK — beacon-deposit falsify campaign: all three mutants "
-              "(swap-hash-args, drop-mixin, cap-off-by-one) built green and "
-              "were caught by the vector comparison")
+        print("OK — beacon-deposit falsify campaign: all four mutants "
+              "(swap-hash-args, drop-mixin, cap-off-by-one, "
+              "sha256-regime-uses-keccak) built green and were caught by the "
+              "vector comparison; sha256-regime-uses-keccak was rejected in "
+              "the SHA-256 block")
         return 0
     print("REGRESSION — beacon-deposit model: falsify campaign failed "
           "(see per-mutant lines above)")

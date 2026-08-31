@@ -310,6 +310,98 @@ theorem div_two_div_pow (size j : Nat) : size / 2 / 2 ^ j = size / 2 ^ (j + 1) :
 theorem div_pow_div_two (m h : Nat) : m / 2 ^ h / 2 = m / 2 ^ (h + 1) := by
   rw [Nat.div_div_eq_div_mul, ← Nat.pow_succ]
 
+/-- Height `h` is the unique least set bit of `m`: the bit at `h` is live and
+every strictly lower bit is dead. -/
+def FirstLive (m h : Nat) : Prop :=
+  m / 2 ^ h % 2 = 1 ∧ ∀ j, j < h → m / 2 ^ j % 2 = 0
+
+/-- Two indices satisfying `FirstLive` for the same value coincide. -/
+theorem FirstLive.eq {m h h' : Nat} (hh : FirstLive m h)
+    (hh' : FirstLive m h') : h = h' := by
+  rcases hh with ⟨hbit, hbelow⟩
+  rcases hh' with ⟨hbit', hbelow'⟩
+  rcases lt_trichotomy h h' with hlt | heq | hgt
+  · have hz := hbelow' h hlt
+    omega
+  · exact heq
+  · have hz := hbelow h' hgt
+    omega
+
+/-- Every positive value below the tree capacity has exactly one first live
+height below 32. -/
+theorem firstLive_existsUnique (m : Nat) (hm0 : 0 < m) (hm32 : m < 2 ^ 32) :
+    ∃! h, h < 32 ∧ FirstLive m h := by
+  have hmod : m % 2 ^ 32 ≠ 0 := by
+    rw [Nat.mod_eq_of_lt hm32]
+    omega
+  have hex : ∃ h, h < 32 ∧ m / 2 ^ h % 2 = 1 := by
+    by_contra hnone
+    have hall : ∀ j, j < 32 → m / 2 ^ j % 2 = 0 := by
+      intro j hj
+      rcases Nat.mod_two_eq_zero_or_one (m / 2 ^ j) with hz | ho
+      · exact hz
+      · exact (hnone ⟨j, hj, ho⟩).elim
+    exact hmod ((mod_two_pow_eq_zero_iff m 32).mpr hall)
+  let h := Nat.find hex
+  have hspec : h < 32 ∧ m / 2 ^ h % 2 = 1 := by
+    simpa [h] using Nat.find_spec hex
+  have hfirst : FirstLive m h := by
+    refine ⟨hspec.2, ?_⟩
+    intro j hj
+    rcases Nat.mod_two_eq_zero_or_one (m / 2 ^ j) with hz | ho
+    · exact hz
+    · have hle : h ≤ j := by
+        dsimp [h]
+        exact Nat.find_min' hex ⟨by omega, ho⟩
+      omega
+  refine ⟨h, ⟨hspec.1, hfirst⟩, ?_⟩
+  intro y hy
+  exact FirstLive.eq hy.2 hfirst
+
+/-- The node obtained after `steps` consecutive dead insertion steps starting
+at `start`. -/
+def accumulatedNode (H : Bytes → B256) (branch : Nat → B256) :
+    Nat → Nat → B256 → B256
+  | _, 0, node => node
+  | start, steps + 1, node =>
+      accumulatedNode H branch (start + 1) steps (hashPair H (branch start) node)
+
+/-- If `live` is the first live bit, the walk performs exactly the preceding
+dead hashes and writes their accumulated node at `start + live`. -/
+theorem walk_eq_some_firstLive (H : Bytes → B256) (branch : Nat → B256)
+    (node : B256) {fuel start size live : Nat} (hlive : live < fuel)
+    (hfirst : FirstLive size live) :
+    walk H branch fuel start size node =
+      some (setSlot branch (start + live)
+        (accumulatedNode H branch start live node)) := by
+  induction live generalizing fuel start size node with
+  | zero =>
+      rcases fuel with _ | fuel
+      · omega
+      · have hbit : size % 2 = 1 := by simpa [FirstLive] using hfirst.1
+        simp [walk, hbit, accumulatedNode]
+  | succ live ih =>
+      rcases fuel with _ | fuel
+      · omega
+      · have hzero : size % 2 = 0 := by
+          simpa [FirstLive] using hfirst.2 0 (by omega)
+        have hfirst' : FirstLive (size / 2) live := by
+          constructor
+          · rw [div_two_div_pow]
+            exact hfirst.1
+          · intro j hj
+            rw [div_two_div_pow]
+            exact hfirst.2 (j + 1) (by omega)
+        simp only [walk]
+        rw [if_neg (by omega)]
+        have hrec := ih (fuel := fuel) (start := start + 1)
+          (size := size / 2) (node := hashPair H (branch start) node)
+          (by omega) hfirst'
+        rw [accumulatedNode]
+        have hidx : start + (live + 1) = start + 1 + live := by omega
+        rw [hidx]
+        exact hrec
+
 /-- The walk falls through exactly when every bit within its remaining
 range is clear. -/
 theorem walk_eq_none_iff (H : Bytes → B256) :
@@ -379,6 +471,18 @@ theorem insert_isSome_iff (H : Bytes → B256) (s : Acc) (node : B256) :
   · rw [if_neg hc]
     simp
     omega
+
+/-- Under the cap, a known first live height determines the complete insertion
+result, including its sole branch override and accumulated node. -/
+theorem insert_eq_some_firstLive (H : Bytes → B256) (s : Acc) (node : B256)
+    {h : Nat} (hcap : s.count < 2 ^ 32 - 1) (hh : h < 32)
+    (hfirst : FirstLive (s.count + 1) h) :
+    Acc.insert H s node =
+      some ⟨setSlot s.branch h
+        (accumulatedNode H s.branch 0 h node), s.count + 1⟩ := by
+  unfold Acc.insert
+  rw [if_pos hcap, walk_eq_some_firstLive H s.branch node hh hfirst]
+  simp
 
 /-! ## Insertion preserves the invariant -/
 
@@ -678,6 +782,38 @@ theorem deposit_ok_spec (H : Bytes → B256) (s : Acc)
   · unfold Acc.insert
     rw [if_pos hcap', hwalk]
     exact congrArg some h1
+
+/-- A successful deposit with a known first live height has the exact branch
+write, accumulated node, incremented count, and pre-increment event payload. -/
+theorem deposit_ok_result_eq_firstLive (H : Bytes → B256) (s : Acc)
+    (pubkey withdrawal_credentials signature : Bytes)
+    (deposit_data_root : B256) (value : Nat) (s' : Acc) (ev : DepositEvent)
+    {h : Nat}
+    (hOk : deposit H s pubkey withdrawal_credentials signature
+      deposit_data_root value = .ok (s', ev))
+    (hh : h < 32) (hfirst : FirstLive (s.count + 1) h) :
+    (s', ev) =
+      (⟨setSlot s.branch h
+          (accumulatedNode H s.branch 0 h
+            (depositDataNode H pubkey withdrawal_credentials signature
+              (le64 (value / oneGwei)))),
+          s.count + 1⟩,
+        ⟨pubkey, withdrawal_credentials, le64 (value / oneGwei), signature,
+          le64 s.count⟩) := by
+  obtain ⟨-, -, -, -, -, -, -, hcap, -, hev, hins⟩ :=
+    deposit_ok_spec H s pubkey withdrawal_credentials signature
+      deposit_data_root value s' ev hOk
+  have hinsert := insert_eq_some_firstLive H s
+    (depositDataNode H pubkey withdrawal_credentials signature
+      (le64 (value / oneGwei))) hcap hh hfirst
+  have hs' : s' =
+      ⟨setSlot s.branch h
+        (accumulatedNode H s.branch 0 h
+          (depositDataNode H pubkey withdrawal_credentials signature
+            (le64 (value / oneGwei)))),
+        s.count + 1⟩ :=
+    Option.some.inj (hins.symm.trans hinsert)
+  rw [hs', hev]
 
 /-- `deposit` success preserves the invariant: the appended leaf is exactly
 the reconstructed deposit-data node. -/

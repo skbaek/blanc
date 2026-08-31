@@ -588,6 +588,34 @@ def storesFixedCost : List (B256 × Nat) → Nat
       pushCost iw.1.toBytes.sig +
       pushCost (Nat.toB256 (32 * iw.2)).toBytes.sig + gVerylow
 
+/-! ## Constant-error guard costs -/
+
+/-- Exact cost of a constant `Error(string)` body at its entry state. -/
+def errorBodyCost (devm : Devm) (reason : String) : Nat :=
+  storesFixedCost (bytesWords (errorData reason)).zipIdx +
+    pushCost (Nat.toB256 (errorData reason).length).toBytes.sig + gBase +
+    devm.extCost [⟨0, 32 * (bytesWords (errorData reason)).length⟩]
+
+/-- Exact cost of tail-calling a constant-error auxiliary, including its
+entry `JUMPDEST`. -/
+def errorCallCost (devm : Devm) (reason : String) : Nat :=
+  gVerylow + gMid + gJumpdest + errorBodyCost devm reason
+
+/-- Exact cost from a nonzero branch flag through a constant-error
+auxiliary. -/
+def errorGuardCost (devm : Devm) (reason : String) : Nat :=
+  gVerylow + gHigh + gJumpdest + errorCallCost devm reason
+
+/-- Constant-error guard cost depends on the entry memory only through its
+size.  This lets an existential post-state reuse a cost fixed against any
+same-sized representative without weakening the exact expansion charge. -/
+theorem errorGuardCost_congr_memory_size
+    {left right : Devm} {reason : String}
+    (hsize : left.memory.size = right.memory.size) :
+    errorGuardCost left reason = errorGuardCost right reason := by
+  simp only [errorGuardCost, errorCallCost, errorBodyCost, Devm.extCost,
+    hsize]
+
 /-- All per-store expansion charges telescope to the single complete aligned
 window charge. -/
 lemma storesRevCost_zipIdx (M : Mem) (ws : List B256) (k : Nat)
@@ -761,6 +789,50 @@ lemma Func.runCompiledTo_revWith {fs : List Func} {sevm : Sevm}
           G⟩).withOutput (errorData s))) := by
   simpa only [Func.revWith] using
     Func.runCompiledTo_revData hwf hr halign h_blob h_words h_gas h_room
+
+/-- A nonzero guard followed by an internal call to a constant-error
+auxiliary reverts with that auxiliary's complete ABI `Error(string)` payload.
+
+The memory hypotheses deliberately permit an arbitrary aligned prior image;
+the cost therefore includes the entry state's exact memory-expansion charge.
+The final stack is the guard tail, and the remaining gas is exactly `G`. -/
+theorem Func.runCompiledTo_errorGuard {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {reason : String} {slot G : Nat} {w : B256}
+    {stack : List B256} {img : Bytes} {otherwise : Func}
+    (h_get : fs[slot]? = some (Func.revWith reason))
+    (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack)
+    (hwf : Mem.Wf devm.memory) (hr : Mem.Reads devm.memory img)
+    (halign : devm.memory.size % 32 = 0)
+    (h_blob : (errorData reason).length < 2 ^ 256)
+    (h_words : 32 * (bytesWords (errorData reason)).length < 2 ^ 256)
+    (h_gas : devm.gasLeft = G + errorGuardCost devm reason)
+    (h_room : devm.stack.length < 1024) :
+    Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
+      (.error (.revert,
+        (devm.setMach ⟨stack,
+          Mem.writeStoresRev devm.memory
+            (bytesWords (errorData reason)).zipIdx, G⟩).withOutput
+              (errorData reason))) := by
+  have h_room_tail : stack.length < 1023 := by
+    rw [h_stack] at h_room
+    simp only [List.length_cons] at h_room
+    omega
+  refine Func.runCompiledTo_branch_succ
+    (G := G + errorCallCost devm reason) h_ne h_stack h_room ?_ ?_
+  · simp only [errorGuardCost] at h_gas
+    omega
+  · refine Func.runCompiledTo_call'
+      (G := G + errorBodyCost devm reason) h_get ?_ ?_ ?_
+    · simp only [Devm.stack_setMach]
+      omega
+    · simp only [Devm.gasLeft_setMach, errorCallCost]
+      omega
+    · simp only [Devm.setMach_setMach]
+      refine Func.runCompiledTo_revWith (G := G) hwf hr halign
+        h_blob h_words ?_ ?_
+      · simp only [Devm.gasLeft_setMach, errorBodyCost, Devm.extCost,
+          Devm.memory_setMach]
+      · simpa only [Devm.stack_setMach] using h_room_tail
 
 /-- `revReturnData` copies and reverts with the preceding call's complete
 returndata, with exact gas and final memory.

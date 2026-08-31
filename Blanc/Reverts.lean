@@ -545,4 +545,44 @@ lemma Func.runCompiledTo_rev_func {fs : List Func} {sevm : Sevm} {devm : Devm}
   exact Func.runCompiledTo_rev_of (i := 0) (sz := 0) (s := devm.stack)
     rfl Devm.extCost_empty_window rfl Devm.memRead_zero
 
+/-- Exact cost of a taken nonzero guard, an internal auxiliary call, and that
+auxiliary's `PUSH0; PUSH0; REVERT` body. -/
+def emptyRevertGuardCost : Nat :=
+  (gVerylow + gHigh + gJumpdest) +
+    (gVerylow + gMid + gJumpdest) +
+    (gBase + gBase)
+
+/-- A nonzero guard followed by an internal call to `Func.rev` reverts with
+empty output, unchanged memory, the guard-tail stack, and exactly `G` gas.
+This is the contract-neutral empty-revert counterpart of the constant
+`Error(string)` guard constructor in `RevertPayload`. -/
+theorem Func.runCompiledTo_emptyRevertGuard
+    {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {slot G : Nat} {w : B256} {stack : List B256} {otherwise : Func}
+    (h_get : fs[slot]? = some Func.rev)
+    (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack)
+    (h_gas : devm.gasLeft = G + emptyRevertGuardCost)
+    (h_room : devm.stack.length < 1024) :
+    Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
+      (.error (.revert,
+        (devm.setMach ⟨stack, devm.memory, G⟩).withOutput [])) := by
+  have h_room_tail : stack.length < 1023 := by
+    rw [h_stack] at h_room
+    simp only [List.length_cons] at h_room
+    omega
+  refine Func.runCompiledTo_branch_succ
+    (G := G + (gVerylow + gMid + gJumpdest) + (gBase + gBase))
+    h_ne h_stack h_room ?_ ?_
+  · simp only [emptyRevertGuardCost] at h_gas
+    omega
+  · refine Func.runCompiledTo_call'
+      (G := G + (gBase + gBase)) h_get ?_ ?_ ?_
+    · simp only [Devm.stack_setMach]
+      omega
+    · simp only [Devm.gasLeft_setMach]
+      omega
+    · simp only [Devm.setMach_setMach]
+      exact Func.runCompiledTo_rev_func rfl
+        (by simpa only [Devm.stack_setMach] using h_room_tail)
+
 end Blanc

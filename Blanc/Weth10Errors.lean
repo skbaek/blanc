@@ -15,67 +15,6 @@ namespace Weth10
 
 /-! ## Constant `Error(string)` auxiliaries -/
 
-/-- Exact cost of a constant `Error(string)` body at its entry state. -/
-def errorBodyCost (devm : Devm) (reason : String) : Nat :=
-  storesFixedCost (bytesWords (errorData reason)).zipIdx +
-    pushCost (Nat.toB256 (errorData reason).length).toBytes.sig + gBase +
-    devm.extCost [⟨0, 32 * (bytesWords (errorData reason)).length⟩]
-
-/-- Exact cost of tail-calling a WETH10 error auxiliary, including its entry
-`JUMPDEST`. -/
-def errorCallCost (devm : Devm) (reason : String) : Nat :=
-  gVerylow + gMid + gJumpdest + errorBodyCost devm reason
-
-/-- Exact cost from a nonzero branch flag through a WETH10 error auxiliary. -/
-def errorGuardCost (devm : Devm) (reason : String) : Nat :=
-  gVerylow + gHigh + gJumpdest + errorCallCost devm reason
-
-/-- A nonzero guard followed by an internal call to a constant WETH10 error
-auxiliary reverts with that auxiliary's complete ABI `Error(string)` payload.
-
-The memory hypotheses deliberately permit an arbitrary aligned prior image;
-the cost therefore includes the entry state's exact memory-expansion charge.
-The final stack is the guard tail, and the remaining gas is exactly `G`. -/
-theorem errorGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {devm : Devm} {reason : String} {slot G : Nat} {w : B256}
-    {stack : List B256} {img : Bytes} {otherwise : Func}
-    (h_get : ((weth10 dp).main :: weth10Aux)[slot]? =
-      some (Func.revWith reason))
-    (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack)
-    (hwf : Mem.Wf devm.memory) (hr : Mem.Reads devm.memory img)
-    (halign : devm.memory.size % 32 = 0)
-    (h_blob : (errorData reason).length < 2 ^ 256)
-    (h_words : 32 * (bytesWords (errorData reason)).length < 2 ^ 256)
-    (h_gas : devm.gasLeft = G + errorGuardCost devm reason)
-    (h_room : devm.stack.length < 1024) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm devm
-      ((.call slot) <?> otherwise)
-      (.error (.revert,
-        (devm.setMach ⟨stack,
-          Mem.writeStoresRev devm.memory
-            (bytesWords (errorData reason)).zipIdx, G⟩).withOutput
-              (errorData reason))) := by
-  have h_room_tail : stack.length < 1023 := by
-    rw [h_stack] at h_room
-    simp only [List.length_cons] at h_room
-    omega
-  refine Func.runCompiledTo_branch_succ
-    (G := G + errorCallCost devm reason) h_ne h_stack h_room ?_ ?_
-  · simp only [errorGuardCost] at h_gas
-    omega
-  · refine Func.runCompiledTo_call'
-      (G := G + errorBodyCost devm reason) h_get ?_ ?_ ?_
-    · simp only [Devm.stack_setMach]
-      omega
-    · simp only [Devm.gasLeft_setMach, errorCallCost]
-      omega
-    · simp only [Devm.setMach_setMach]
-      refine Func.runCompiledTo_revWith (G := G) hwf hr halign
-        h_blob h_words ?_ ?_
-      · simp only [Devm.gasLeft_setMach, errorBodyCost, Devm.extCost,
-          Devm.memory_setMach]
-      · simpa only [Devm.stack_setMach] using h_room_tail
-
 /-! The following equations lock every deliberate WETH10 reason to its stable
 auxiliary-table coordinate.  They are kept separate from path theorems so a
 new call site can reuse the exact payload without multiplying identical
@@ -193,7 +132,7 @@ theorem lockedErrorGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory (bytesWords (errorData e.reason)).zipIdx,
           G⟩).withOutput (errorData e.reason))) := by
-  exact errorGuard_runCompiledTo (lockedError_lookup dp e) h_ne rfl
+  exact Func.runCompiledTo_errorGuard (lockedError_lookup dp e) h_ne rfl
     hwf hr halign h_blob h_words (by
       simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
         errorBodyCost, Devm.extCost, Devm.memory_setMach]) (by
@@ -607,7 +546,7 @@ theorem flashCallback_wrongMagicTail_runCompiledTo {dp : DeployParams}
             (bytesWords (errorData "WETH: flash loan failed")).zipIdx,
           G⟩).withOutput (errorData "WETH: flash loan failed"))) := by
   apply callbackMagicMismatchPrefix_runCompiledTo h_ge h_neq h32 h_msz
-  · exact errorGuard_runCompiledTo (flashFailedError_lookup dp)
+  · exact Func.runCompiledTo_errorGuard (flashFailedError_lookup dp)
       (by decide) rfl
       (by simpa only [flashCallbackHeadBase, Devm.memory_setMach] using hwf)
       (by simpa only [flashCallbackHeadBase, Devm.memory_setMach] using hr)
@@ -717,7 +656,7 @@ theorem flashFee_wrongToken_runCompiledTo {dp : DeployParams} {sevm : Sevm}
   · change sevm.currentTarget.toB256 =? Sevm.argWord sevm 0 = 0
     rw [h_arg]
     simp [B256.eqCheck, Ne.symm h_ne]
-  · exact errorGuard_runCompiledTo (flashTokenError_lookup dp)
+  · exact Func.runCompiledTo_errorGuard (flashTokenError_lookup dp)
       (by decide) rfl hwf hr halign h_blob h_words (by
         simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
           errorBodyCost, Devm.extCost, Devm.memory_setMach]
