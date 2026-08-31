@@ -113,7 +113,12 @@ CONTRACTS = {
                        "BeaconDepositSuccessChronology",
                        "BeaconDepositBridgeCompiled",
                        "BeaconDepositSuccessSettlement",
-                       "BeaconDepositCountEffects"],
+                       "BeaconDepositCountEffects",
+                       "BeaconDepositDeploymentMessage",
+                       "BeaconDepositDeploymentInput",
+                       "BeaconDepositDeploymentTransaction",
+                       "BeaconDepositDeploymentBlock",
+                       "BeaconDepositDeploymentRoot"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
