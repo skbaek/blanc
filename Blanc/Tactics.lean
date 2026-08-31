@@ -271,6 +271,9 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredHistoryTrace target
   | "goal-head:StateReplay" => return head == some `Blanc.StateReplay
   | "goal-head:ReturnsWord" => return head == some `Blanc.ReturnsWord
+  | "goal-head:MigrationSound" => return head == some `Blanc.MigrationSound
+  | "goal-head:BehavioralRefinement" =>
+      return head == some `Blanc.BehavioralRefinement
   | "goal-shape:accepted-bool-word" =>
       return head == some `Iff &&
         proofRecipeContainsName `Blanc.AcceptedBoolWord target

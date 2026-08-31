@@ -654,3 +654,20 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
+
+[[recipe]]
+id = "upgrade-migration-refinement"
+status = "active"
+triggers = ["goal-head:MigrationSound", "goal-head:BehavioralRefinement"]
+preferred_path = "Start from `UpgradeArchitecture`, keeping `proxyProg`, v1, v2, the migration, and the relation explicit. Prove `MigrationSound` from the named state transformer independently of `BehavioralRefinement`; then prove the latter from version-specific shared steps. A product theorem must separately connect an exact proxy execution to the migration."
+boundary = "These predicates describe a migration and shared logical behavior. They do not execute a proxy, establish authorization or installation, transport a child through delegatecall, prove rollback, or turn one predicate into evidence for the other."
+owner_module = "Blanc/Upgrade.lean"
+canonical_example = "Blanc/Upgrade.lean:MigrationSound"
+symbols = [
+  "module:Blanc/Upgrade.lean",
+  "declaration:Blanc.UpgradeArchitecture",
+  "declaration:Blanc.MigrationSound",
+  "declaration:Blanc.BehavioralRefinement",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-09-01"

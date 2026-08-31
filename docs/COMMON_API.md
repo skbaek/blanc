@@ -514,9 +514,26 @@ Use `Devm.StateWriteFrame` and its reflexive/transitive/composition lemmas in
 [`Blanc/Ladder.lean`](../Blanc/Ladder.lean).
 
 If the fact is about which holder's balance moved rather than how states
-compose, continue to S4.
+compose, continue to S5.
 
-### S4. I need the address-shaped storage rows a token ledger sums over
+### S4. I need to separate upgrade migration from behavioral refinement
+
+Use [`Blanc/Upgrade.lean`](../Blanc/Upgrade.lean). `UpgradeArchitecture`
+records all five identifying objects explicitly: the proxy program, v1, v2,
+the state migration, and the pre/post relation. `MigrationSound` says that the
+named migration reaches the v2 domain and establishes the relation;
+`BehavioralRefinement` separately says that admitted shared inputs have equal
+observations and preserve the relation. Neither predicate says that a proxy
+transaction realizes the migration, and neither may be used as evidence for
+the other.
+
+Keep `proxyProg` an explicit value through product corollaries. Instantiate
+the vocabulary in the contract family that owns the concrete programs,
+storage projection, execution route, and relation. For the worked exact
+OssifiableProxy instance, see
+[`docs/PROXY_PAIR_UPGRADE.md`](PROXY_PAIR_UPGRADE.md).
+
+### S5. I need the address-shaped storage rows a token ledger sums over
 
 `Stor.rest` in [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean) is the
 holder-keyed view of persistent storage — exactly the domain `balSum` sums
@@ -542,7 +559,7 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
   that separately (`Stor.rest_set_supplySlot`, `Stor.rest_set_prorataSupplySlot`)
   because the slot is the contract's own.
 
-### S5. I need a basic EVM-word identity
+### S6. I need a basic EVM-word identity
 
 Use the word/arithmetic declarations in
 [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before destructing a

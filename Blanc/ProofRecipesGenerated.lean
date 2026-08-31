@@ -258,6 +258,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Ladder.lean", "declaration:ReturnsWord", "declaration:of_storeReturnWord", "declaration:returnsWord_of_storeReturn"]
     boundary := "This is the source-level one-word ABI observation. For a compiled terminal walk use `Func.runCompiledTo_ret_word_at_zero`; for other offsets, sizes, or payloads use the general return APIs."
   },
+  {
+    id := "upgrade-migration-refinement"
+    status := "active"
+    triggers := ["goal-head:MigrationSound", "goal-head:BehavioralRefinement"]
+    preferredPath := "Start from `UpgradeArchitecture`, keeping `proxyProg`, v1, v2, the migration, and the relation explicit. Prove `MigrationSound` from the named state transformer independently of `BehavioralRefinement`; then prove the latter from version-specific shared steps. A product theorem must separately connect an exact proxy execution to the migration."
+    symbols := ["module:Blanc/Upgrade.lean", "declaration:Blanc.UpgradeArchitecture", "declaration:Blanc.MigrationSound", "declaration:Blanc.BehavioralRefinement"]
+    boundary := "These predicates describe a migration and shared logical behavior. They do not execute a proxy, establish authorization or installation, transport a child through delegatecall, prove rollback, or turn one predicate into evidence for the other."
+  },
 ]
 
 end Blanc.ProofRecipes

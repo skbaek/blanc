@@ -52,6 +52,10 @@ This repo contains the following files:
   including the `ContractSpec` record each contract instantiates and the
   dispatcher decomposition (`FuncSound`, `sound_of_dispatch`) that reduces a
   whole-contract obligation to one obligation per dispatch target.
+- [Upgrade.lean](Blanc/Upgrade.lean): contract-neutral vocabulary for an
+  explicit five-part upgrade architecture. It keeps migration soundness and
+  shared behavioral refinement as separate predicates; product families must
+  still prove that an exact proxy execution realizes the named migration.
 - [Compiled.lean](Blanc/Compiled.lean): a gas-exact sibling of `Func.Run`/
   `Prog.Run` — `Func.RunCompiled`, `Prog.RunCompiled` — and
   `Prog.runCompiled_iff_exec`, the biconditional relating a gas-exact run of a
@@ -409,6 +413,13 @@ lines and fails on a cross-contract import, on a shared module importing a
 contract (the same break, other direction), and on any module missing from its
 classification — so a new contract cannot escape the rule by never being
 listed. It needs no Lean toolchain and runs ahead of the build in CI.
+
+The goal-local representation-changing v1/v2 witness and its exact compiled
+OssifiableProxy route are documented in
+[`docs/PROXY_PAIR_UPGRADE.md`](docs/PROXY_PAIR_UPGRADE.md). That boundary
+states the R2 projection, primary and identity routes, forwarding premises,
+executable rollback controls, and deliberate non-claims; it is not a deployed
+Solidity or mainnet verification claim.
 
 ## Proof recipe lookup
 
