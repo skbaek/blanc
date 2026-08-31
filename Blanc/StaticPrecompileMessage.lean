@@ -64,6 +64,56 @@ theorem stor_of_processMessage_staticPrecomp
           exact (of_state_transfer_fields hsub).1 a
     · exact False.elim (hinterp.1 (by exact hpre))
 
+/-- A synchronous enabled static precompile also preserves every account's
+code.  This is the code-field companion of
+`stor_of_processMessage_staticPrecomp`; callers need it to transport a
+non-delegation fact across a sequence of precompile calls. -/
+theorem code_of_processMessage_staticPrecomp
+    {sevm : Sevm} {parent child : Devm} {gas : Nat} {calldata : Bytes}
+    {code : ByteArray} {xl : Xlot} {target : Adr}
+    (hpre : decide (sevm.benvStat.rules.isPrecomp target) = true)
+    (hpm : ProcessMessage
+      (callMsg sevm parent gas 0 sevm.currentTarget target target true true
+        calldata code false) xl (.ok child)) :
+    ∀ a, child.getCode a = parent.getCode a := by
+  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
+  unfold FrameBody at hbody
+  rcases hbt :
+      (callMsg sevm parent gas 0 sevm.currentTarget target target true true
+        calldata code false).benvAfterTransfer with e | benv <;>
+    rw [hbt] at hbody
+  · rw [hbody.2] at hset
+    unfold processMessage.settle at hset
+    cases hset
+  · obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+    subst benv
+    have hca :
+        ((callMsg sevm parent gas 0 sevm.currentTarget target target true true
+            calldata code false).withBenv
+          (((callMsg sevm parent gas 0 sevm.currentTarget target target true
+              true calldata code false).benv.withState st_mid).addBal
+            target 0)).codeAddress = some target := rfl
+    rcases of_executeCode_someCode hca hbody with hpc | hinterp
+    · rcases r0 with x | evm'
+      · rw [processMessage.settle_error] at hset
+        cases hset
+      · unfold processMessage.settle at hset
+        dsimp only [bind, Except.bind] at hset
+        by_cases herr : evm'.error.isSome = true
+        · rw [if_pos herr] at hset
+          intro a
+          rw [Except.ok.inj hset]
+          rfl
+        · rw [if_neg herr] at hset
+          have heq : child = evm' := Except.ok.inj hset
+          subst heq
+          have hstate := state_of_executePrecomp_ok hpc.2.2 herr
+          intro a
+          change (child.state.get a).code = (parent.state.get a).code
+          rw [hstate]
+          exact (of_state_transfer_fields hsub).2.1 a
+    · exact False.elim (hinterp.1 (by exact hpre))
+
 /-- A clean 64-byte SHA-256 child necessarily paid the fixed precompile
 charge.  An underfunded precompile exceptional-halts, so it cannot satisfy the
 clean-child premise. -/
