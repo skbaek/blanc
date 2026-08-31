@@ -244,6 +244,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ninstAllChildRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameDescendants target
+  | "goal-head:ContractSpec.PreservesAdmitted" =>
+      return head == some `Blanc.ContractSpec.PreservesAdmitted
   | "goal-shape:raw-sstore-free-compiled-path" =>
       return proofRecipeContainsName
           `Blanc.Func.RunCompiledTo.NoRawSstorePath target ||

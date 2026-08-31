@@ -155,6 +155,14 @@ def recipes : List Recipe := [
     boundary := "This API preserves predicates over raw entered-frame roots. It does not apply settlement/commit filtering; use `ExecutionSettlement` and `ExecutionOccurrence` for retained or committed histories."
   },
   {
+    id := "trace-admitted-frame-invariant"
+    status := "active"
+    triggers := ["goal-head:ContractSpec.PreservesAdmitted"]
+    preferredPath := "State the target program obligation as `ContractSpec.SoundAdmitted ca entry`, keeping the concrete `Exec.FrameAdmitted` premise result-free, then apply `ContractSpec.preserves_inv_admitted`. Use `Exec.FrameAdmitted.root` at the selected target entry and the named child/continuation restriction lemmas rather than rebuilding raw-frame list membership. Drop to `preserves_lift_admitted` or `lift_inv_admitted` only when the standard `ContractSpec.PreWf` carrier is insufficient."
+    symbols := ["module:Blanc/ExecutionFrames.lean", "module:Blanc/ExecutionAdmission.lean", "module:Blanc/ContractAdmission.lean", "declaration:Blanc.Exec.FrameAdmitted", "declaration:Blanc.Exec.FrameAdmitted.root", "declaration:Blanc.ForallSubExecAdmitted", "declaration:Blanc.lift_admitted", "declaration:Blanc.lift_inv_admitted", "declaration:Blanc.ContractSpec.SoundAdmitted", "declaration:Blanc.ContractSpec.PreservesAdmitted", "declaration:Blanc.ContractSpec.preserves_lift_admitted", "declaration:Blanc.ContractSpec.preserves_inv_admitted"]
+    boundary := "Admission ranges over raw actually entered frame roots and is not a settlement filter or a postcondition. The caller must establish it for the concrete execution or retained trace; this recipe does not manufacture a world-state fact, weaken `PreservesAdmitted` to an endpoint premise, or replace the forward `RootedExecution` construction API."
+  },
+  {
     id := "message-execution-settlement"
     status := "active"
     triggers := ["goal-shape:message-execution-settlement"]

@@ -751,6 +751,35 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
 - For exact retained wrapper carriers continue to E6; for their ordered state
   chronology continue to E8.
 
+### T2a. I need a frame invariant under trace-local entry premises
+
+Before lifting through a wrapper, an invariant may need a positive condition
+only at the roots of target frames actually entered by one concrete execution.
+Use [`Blanc/ExecutionFrames.lean`](../Blanc/ExecutionFrames.lean),
+[`Blanc/ExecutionAdmission.lean`](../Blanc/ExecutionAdmission.lean), and
+[`Blanc/ContractAdmission.lean`](../Blanc/ContractAdmission.lean):
+
+- `Exec.rawFrameDescendants` and `Exec.rawFrameRoots` are the unfiltered
+  entered-frame traversal below both the invariant ladder and the richer
+  occurrence APIs.
+- `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
+  whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
+  `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
+  theorems are the supported restriction interface; do not reconstruct list
+  membership inside a contract proof.
+- `ForallSubExecAdmitted`, `lift_admitted`, and `lift_inv_admitted` are the
+  arbitrary-`Exec` eliminators. Unlike `RootedExecution`'s forward compiled
+  construction, they keep the selected execution proof in the induction
+  motive and therefore can consume trace-local evidence.
+- State a contract obligation as `ContractSpec.SoundAdmitted ca entry` and
+  close the frame theorem with `ContractSpec.preserves_inv_admitted`, yielding
+  `ContractSpec.PreservesAdmitted ca entry`. `preserves_lift_admitted` is the
+  lower transport seam for a custom frame invariant.
+
+This layer does not manufacture an admission fact, constrain an execution's
+result, or filter by settlement. A consumer must derive admission from its
+actual trace and use the retained/committed APIs when rollback matters.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use

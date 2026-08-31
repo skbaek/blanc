@@ -1,4 +1,5 @@
 import Blanc.BeaconDepositBridgeCompiled
+import Blanc.ContractAdmission
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionOccurrence
 
@@ -94,28 +95,20 @@ fact, and no result or poststorage premise appears. -/
 def Exec.NativeShaAdmitted
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (ca : Adr) (run : Exec pc sevm pre out) : Prop :=
-  ∀ root ∈ Exec.rawFrameRoots run,
-    root.sevm.currentTarget = ca → NativeShaEntry root.sevm root.devm
+  Exec.FrameAdmitted ca NativeShaEntry run
 
 theorem Exec.NativeShaAdmitted.root
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     {ca : Adr} {run : Exec pc sevm pre out}
     (admitted : Exec.NativeShaAdmitted ca run)
     (target : sevm.currentTarget = ca) : NativeShaEntry sevm pre := by
-  exact admitted ⟨pc, sevm, pre, out, run⟩
-    (Exec.mem_rawFrameRoots_self run) target
+  exact Exec.FrameAdmitted.root admitted target
 
 /-- The open-frame preservation boundary used by Beacon history.  It is the
 ordinary `ContractSpec.Preserves` statement with one additional piece of
 positive evidence: native SHA admission for the concrete execution's actual
 frame roots. -/
 def HistoryPreserves (baseline : List B256) (ca : Adr) : Prop :=
-  ∀ sevm pre post (run : Exec 0 sevm pre (.ok post)),
-    Exec.NativeShaAdmitted ca run →
-    (sevm.currentTarget = ca →
-      some sevm.code.toList = Prog.compile (historySpec baseline).prog) →
-    (sevm.currentTarget = ca → Mem.Wf pre.memory) →
-    (historySpec baseline).Pre ca sevm pre →
-    (historySpec baseline).Post ca sevm post
+  (historySpec baseline).PreservesAdmitted ca NativeShaEntry
 
 end Blanc.BeaconDeposit

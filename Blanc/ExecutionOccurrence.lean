@@ -1,4 +1,5 @@
 import Blanc.ExecutionSettlement
+import Blanc.ExecutionFrames
 import Blanc.Compiled
 import Blanc.CommonProofs
 import Blanc.ExecDeterminism
@@ -18,10 +19,6 @@ namespace Blanc
 
 open Jaune
 
-/-- The root derivation bundled by a retained frame. -/
-def Exec.Frame.rootDeriv (frame : Exec.Frame) : Exec.Deriv :=
-  ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
-
 /-- Every reached driver node, in execution order.  This is deliberately not
 `Exec.Deriv.le`: the child and resumed continuation of `runOk` are sibling
 recursive premises, while the chronology orders the child first. -/
@@ -37,70 +34,6 @@ def Exec.rawNodes {pc : Nat} {sevm : Sevm} {pre : Devm}
   | .runOk _ _ child _ next =>
       root :: (Exec.rawNodes child ++ Exec.rawNodes next)
 termination_by sizeOf run
-
-/-- Roots of actually entered child code frames, in execution order.  Same-frame
-continuations contribute only the child frames that they later enter. -/
-def Exec.rawFrameDescendants {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution} (run : Exec pc sevm pre out) : List Exec.Deriv :=
-  match run with
-  | .halt _ => []
-  | .cont _ next => Exec.rawFrameDescendants next
-  | .doneErr _ _ _ => []
-  | .doneOk _ _ _ next => Exec.rawFrameDescendants next
-  | .runErr _ _ child _ =>
-      ⟨_, _, _, _, child⟩ :: Exec.rawFrameDescendants child
-  | .runOk _ _ child _ next =>
-      ⟨_, _, _, _, child⟩ ::
-        (Exec.rawFrameDescendants child ++ Exec.rawFrameDescendants next)
-termination_by sizeOf run
-
-/-- The all-outcome code-frame traversal: the selected outer root followed by
-every actually entered child root, with child descendants before roots reached
-after the parent resumes.  No commitment or settlement filter is applied. -/
-def Exec.rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution} (run : Exec pc sevm pre out) : List Exec.Deriv :=
-  ⟨pc, sevm, pre, out, run⟩ :: Exec.rawFrameDescendants run
-
-/-- The selected outer execution always heads its raw-frame traversal. -/
-theorem Exec.mem_rawFrameRoots_self
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) :
-    (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) ∈
-      Exec.rawFrameRoots run := by
-  simp [Exec.rawFrameRoots]
-
-/-- A failed parent resume still retains the entered child and all of its raw
-descendant frame roots. -/
-@[simp] theorem Exec.rawFrameRoots_runErr
-    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
-    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
-    {raw : Execution} {error : EvmError × Devm}
-    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (henter : frame.enter = .run childEvm)
-    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
-    (hresume : resume.run (frame.settle raw) = .error error) :
-    Exec.rawFrameRoots (.runErr hstep henter child hresume) =
-      ⟨pc, sevm, pre, .error error,
-        Exec.runErr hstep henter child hresume⟩ ::
-        Exec.rawFrameRoots child := by
-  simp [Exec.rawFrameRoots, Exec.rawFrameDescendants]
-
-/-- On a successful parent resume, the child's complete raw-frame segment
-precedes every child frame entered later by the resumed parent. -/
-@[simp] theorem Exec.rawFrameRoots_runOk
-    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
-    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
-    {raw out : Execution}
-    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (henter : frame.enter = .run childEvm)
-    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
-    (hresume : resume.run (frame.settle raw) = .ok post)
-    (next : Exec pc' sevm post out) :
-    Exec.rawFrameRoots (.runOk hstep henter child hresume next) =
-      ⟨pc, sevm, pre, out,
-        Exec.runOk hstep henter child hresume next⟩ ::
-        (Exec.rawFrameRoots child ++ Exec.rawFrameDescendants next) := by
-  simp [Exec.rawFrameRoots, Exec.rawFrameDescendants]
 
 /-- The execution proof itself heads its raw chronology. -/
 theorem Exec.mem_rawNodes_self

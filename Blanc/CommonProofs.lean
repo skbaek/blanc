@@ -4075,7 +4075,7 @@ private lemma lift_core.atTarget
 
 /-- Code preservation across one driver step, in the form the `Prog.At`
 bookkeeping needs. -/
-private lemma lift_core.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
+lemma lift_core.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     {xl : Xlot} (hxl : Xlot.Rel Devm.CodePreserve xl)
     (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl (.ok devm'))
     (a : Adr) (ha : (devm.getCode a).toList ≠ []) :

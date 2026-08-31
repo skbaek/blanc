@@ -65,6 +65,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesG
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "DelegatecallEnvelope",
+           "ExecutionFrames", "ExecutionAdmission", "ContractAdmission",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects"]
 

@@ -196,6 +196,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/RootedExecution.lean`, `declaration:rootedRunCompiledTo`, `declaration:ninstAllChildRoots`, `declaration:ninstAllChildRoots_of_not_exec`, `declaration:ninstAllChildRoots_of_exec_spawn`, `declaration:funcExecFree`, `declaration:rootedRunCompiledTo_of_execFree`, `declaration:Prog.exec_of_rootedRunCompiledTo`, `declaration:NonExecInstruction`
 - Review: `proof-infrastructure` on `2026-08-29`
 
+## `trace-admitted-frame-invariant`
+
+- Status: `active`
+- Triggers: `goal-head:ContractSpec.PreservesAdmitted`
+- Preferred path: State the target program obligation as `ContractSpec.SoundAdmitted ca entry`, keeping the concrete `Exec.FrameAdmitted` premise result-free, then apply `ContractSpec.preserves_inv_admitted`. Use `Exec.FrameAdmitted.root` at the selected target entry and the named child/continuation restriction lemmas rather than rebuilding raw-frame list membership. Drop to `preserves_lift_admitted` or `lift_inv_admitted` only when the standard `ContractSpec.PreWf` carrier is insufficient.
+- Boundary: Admission ranges over raw actually entered frame roots and is not a settlement filter or a postcondition. The caller must establish it for the concrete execution or retained trace; this recipe does not manufacture a world-state fact, weaken `PreservesAdmitted` to an endpoint premise, or replace the forward `RootedExecution` construction API.
+- Owner module: [Blanc/ContractAdmission.lean](../Blanc/ContractAdmission.lean)
+- Canonical example: [Blanc/ContractAdmission.lean](../Blanc/ContractAdmission.lean) — `ContractSpec.preserves_inv_admitted`
+- Registered symbols: `module:Blanc/ExecutionFrames.lean`, `module:Blanc/ExecutionAdmission.lean`, `module:Blanc/ContractAdmission.lean`, `declaration:Blanc.Exec.FrameAdmitted`, `declaration:Blanc.Exec.FrameAdmitted.root`, `declaration:Blanc.ForallSubExecAdmitted`, `declaration:Blanc.lift_admitted`, `declaration:Blanc.lift_inv_admitted`, `declaration:Blanc.ContractSpec.SoundAdmitted`, `declaration:Blanc.ContractSpec.PreservesAdmitted`, `declaration:Blanc.ContractSpec.preserves_lift_admitted`, `declaration:Blanc.ContractSpec.preserves_inv_admitted`
+- Review: `proof-infrastructure` on `2026-09-01`
+
 ## `message-execution-settlement`
 
 - Status: `active`
