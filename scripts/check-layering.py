@@ -66,6 +66,8 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "DelegatecallEnvelope",
            "ExecutionFrames", "ExecutionAdmission", "ContractAdmission",
+           "ExecutionMessageAdmission", "ExecutionTransactionAdmission",
+           "ExecutionBodyAdmission", "ExecutionHistoryAdmission",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects"]
 

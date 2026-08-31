@@ -243,6 +243,14 @@ def recipes : List Recipe := [
     boundary := "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay."
   },
   {
+    id := "trace-local-frame-admission"
+    status := "active"
+    triggers := ["goal-shape:trace-local-frame-admission"]
+    preferredPath := "State the contract's entry condition as `Exec.FrameAdmitted ca entry` on the exact retained execution. Prove the frame obligation as `ContractSpec.SoundAdmitted ca entry`, close it with `ContractSpec.preserves_inv_admitted`, and use the matching `FrameAdmitted` plus `stateInv_admitted`/`benvInv_admitted` theorem on `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or `ConfiguredHistoryTrace` to transport it through only the interpreter frames actually entered."
+    symbols := ["module:Blanc/ExecutionFrames.lean", "module:Blanc/ExecutionAdmission.lean", "module:Blanc/ContractAdmission.lean", "module:Blanc/ExecutionMessageAdmission.lean", "module:Blanc/ExecutionTransactionAdmission.lean", "module:Blanc/ExecutionBodyAdmission.lean", "module:Blanc/ExecutionHistoryAdmission.lean", "declaration:Exec.FrameAdmitted", "declaration:lift_inv_admitted", "declaration:ContractSpec.SoundAdmitted", "declaration:ContractSpec.PreservesAdmitted", "declaration:ContractSpec.preserves_inv_admitted", "declaration:ExecutionTrace.MessageCallTrace.stateInv_admitted", "declaration:ExecutionTrace.TransactionTrace.benvInv_admitted", "declaration:ExecutionTrace.AppliedBodyTrace.stateInv_admitted", "declaration:ExecutionTrace.ConfiguredHistoryTrace.stateInv_admitted"]
+    boundary := "Admission is evidence about concrete target-frame roots, not an execution constructor, settlement filter, or global environment restriction. The consumer must derive it from the retained trace; rollback and direct envelope effects remain governed by the ordinary wrapper transports."
+  },
+  {
     id := "retained-state-replay"
     status := "active"
     triggers := ["goal-head:StateReplay"]

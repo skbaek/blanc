@@ -757,7 +757,9 @@ Before lifting through a wrapper, an invariant may need a positive condition
 only at the roots of target frames actually entered by one concrete execution.
 Use [`Blanc/ExecutionFrames.lean`](../Blanc/ExecutionFrames.lean),
 [`Blanc/ExecutionAdmission.lean`](../Blanc/ExecutionAdmission.lean), and
-[`Blanc/ContractAdmission.lean`](../Blanc/ContractAdmission.lean):
+[`Blanc/ContractAdmission.lean`](../Blanc/ContractAdmission.lean) for the raw
+execution layer, then the matching `Execution*Admission` module for retained
+message, transaction, body, block, and history carriers:
 
 - `Exec.rawFrameDescendants` and `Exec.rawFrameRoots` are the unfiltered
   entered-frame traversal below both the invariant ladder and the richer
@@ -775,6 +777,12 @@ Use [`Blanc/ExecutionFrames.lean`](../Blanc/ExecutionFrames.lean),
   close the frame theorem with `ContractSpec.preserves_inv_admitted`, yielding
   `ContractSpec.PreservesAdmitted ca entry`. `preserves_lift_admitted` is the
   lower transport seam for a custom frame invariant.
+- `ExecutionTrace.MessageCallTrace.stateInv_admitted`,
+  `TransactionTrace.benvInv_admitted`, `AppliedBodyTrace.stateInv_admitted`,
+  and `ConfiguredHistoryTrace.stateInv_admitted` thread that same preservation
+  theorem through their exact retained wrappers.  Each carrier has a matching
+  `FrameAdmitted` predicate, so admission is required only for interpreter
+  frames that the concrete trace actually entered.
 
 This layer does not manufacture an admission fact, constrain an execution's
 result, or filter by settlement. A consumer must derive admission from its

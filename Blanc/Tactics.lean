@@ -246,6 +246,32 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.Exec.rawFrameDescendants target
   | "goal-head:ContractSpec.PreservesAdmitted" =>
       return head == some `Blanc.ContractSpec.PreservesAdmitted
+  | "goal-shape:trace-local-frame-admission" =>
+      return head == some `Blanc.Exec.FrameAdmitted ||
+        head == some `Blanc.ContractSpec.SoundAdmitted ||
+        head == some `Blanc.ContractSpec.PreservesAdmitted ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ProcessMessageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ProcessCreateMessageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.MessageCallTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.TransactionTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ApplyTransactionsTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.SystemMessageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.RequestsTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.AppliedBodyTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ConfiguredBlockTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted target
   | "goal-shape:raw-sstore-free-compiled-path" =>
       return proofRecipeContainsName
           `Blanc.Func.RunCompiledTo.NoRawSstorePath target ||

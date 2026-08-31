@@ -17,6 +17,10 @@ import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryEffects
+import Blanc.ExecutionMessageAdmission
+import Blanc.ExecutionTransactionAdmission
+import Blanc.ExecutionBodyAdmission
+import Blanc.ExecutionHistoryAdmission
 import Blanc.ExecutionOccurrence
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
