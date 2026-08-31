@@ -9617,6 +9617,19 @@ lemma Devm.setCode_logs (devm : Devm) (address : Adr)
     (devm.setCode address code).logs = devm.logs := by
   rfl
 
+/-- Installing account code preserves every account's persistent storage. -/
+lemma Devm.setCode_getStor (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    Devm.getStor (devm.setCode address code) = Devm.getStor devm := by
+  funext target
+  change ((devm.state.setCode address code).get target).stor =
+    (devm.state.get target).stor
+  unfold State.setCode
+  by_cases h : address = target
+  · subst h
+    rw [State.get_set_self]
+  · rw [State.get_set_ne _ h]
+
 /-- Installing account code preserves the frame output bytes. -/
 lemma Devm.setCode_output (devm : Devm) (address : Adr)
     (code : ByteArray) :
@@ -9627,6 +9640,18 @@ lemma Devm.setCode_output (devm : Devm) (address : Adr)
 lemma Devm.setCode_error (devm : Devm) (address : Adr)
     (code : ByteArray) :
     (devm.setCode address code).error = devm.error := by
+  rfl
+
+/-- Installing account code preserves the frame refund counter. -/
+lemma Devm.setCode_refundCounter (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    (devm.setCode address code).refundCounter = devm.refundCounter := by
+  rfl
+
+/-- Installing account code preserves the deletion-set accumulator. -/
+lemma Devm.setCode_accountsToDelete (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    (devm.setCode address code).accountsToDelete = devm.accountsToDelete := by
   rfl
 
 /-! ### Reusable projection cuts for compiled RETURN and SSTORE posts -/

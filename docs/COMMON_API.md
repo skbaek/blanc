@@ -56,8 +56,9 @@ registry has identified the likely vocabulary.
   `sstoreCost` / `afterSstore` carriers in
   [`Blanc/ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean).
   Its projection API includes unchanged storage on a non-target account,
-  code, addresses, logs, output, and error; the target-storage and key-set
-  equations expose the selected write and warm/cold access update.  The lower
+  code, addresses, logs, account-deletion set, output, and error; the
+  target-storage, refund-counter, and key-set equations expose the selected
+  write, refund update, and warm/cold access update.  The lower
   one-write primitive is `setStorVal_getStor_ne` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
@@ -246,7 +247,10 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
 - For a warm fixed-width SHA-256 precompile crossing, use
   `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
   [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary
-  `runCompiled_*` projection intentionally forgets the empty child slot.
+  `runCompiled_*` projection intentionally forgets the empty child slot. Use
+  `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full` when later
+  transaction settlement also needs the crossing's exact refund preservation
+  and account-deletion-set emptiness preservation.
 - `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
   `Exec.NoRawSstore`; its consequences exclude every successful raw SSTORE and
   force `retainedStorageWrites = []` for that same witness;
@@ -487,9 +491,11 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   component across an access-key update followed by the final `setMach`.
 - `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
 - `Devm.setStorVal_getCode` carries account code across a persistent storage
-  write. `Devm.setCode_logs`, `Devm.setCode_output`, and
-  `Devm.setCode_error` carry the frame observations that code installation
-  does not modify.
+  write. `Devm.setCode_getStor`, `Devm.setCode_logs`,
+  `Devm.setCode_output`, `Devm.setCode_error`,
+  `Devm.setCode_refundCounter`, and `Devm.setCode_accountsToDelete` carry the
+  persistent storage and frame observations that code installation does not
+  modify.
 - `Devm.retPost_world`, `Devm.retPost_getStorVal`,
   `Devm.retPost_transientStorage`, and
   `Devm.retPost_accessedStorageKeys` project through the common

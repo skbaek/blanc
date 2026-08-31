@@ -627,6 +627,8 @@ theorem constructorSha64_success_storageEffectRun_ext
       callPost.accessedAddresses = base.accessedAddresses ∧
       callPost.accessedStorageKeys = base.accessedStorageKeys ∧
       callPost.logs = base.logs ∧
+      callPost.refundCounter = base.refundCounter ∧
+      callPost.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
       (∃ stmid,
@@ -648,8 +650,8 @@ theorem constructorSha64_success_storageEffectRun_ext
       base.memory, K + 221 + ext⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
-    Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
+      hlogs, hrefund, hdelete, houtput, herror, stmid, hsub, hstate⟩ :=
+    Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)
@@ -700,6 +702,16 @@ theorem constructorSha64_success_storageEffectRun_ext
     calc
       callPost.logs = callPre.logs := hlogs
       _ = base.logs := by rfl
+  have hrefund' : callPost.refundCounter = base.refundCounter := by
+    calc
+      callPost.refundCounter = callPre.refundCounter := hrefund
+      _ = base.refundCounter := by rfl
+  have hdelete' :
+      callPost.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty := by
+    calc
+      callPost.accountsToDelete.isEmpty =
+          callPre.accountsToDelete.isEmpty := hdelete
+      _ = base.accountsToDelete.isEmpty := by rfl
   have houtput' : callPost.output = base.output := by
     calc
       callPost.output = callPre.output := houtput
@@ -712,7 +724,7 @@ theorem constructorSha64_success_storageEffectRun_ext
     change base.state.subBal sevm.currentTarget 0 = some stmid at hsub
     exact hsub
   refine ⟨callPost, hstack, hmemory', hgas', hreturn', hstorage', hcode',
-    haddresses', hkeys', hlogs', houtput', herror',
+    haddresses', hkeys', hlogs', hrefund', hdelete', houtput', herror',
     ⟨stmid, hsub', hstate⟩, ?_⟩
   intro ex effects tail
   have hge :
@@ -828,6 +840,10 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
       K + 18 + sstoreCost sevm base (zeroHashSlot (height + 1))
         (zeroHash Bytes.sha256 (height + 1))) :
     ∃ shaPost,
+      shaPost.logs = base.logs ∧
+      shaPost.refundCounter = base.refundCounter ∧
+      shaPost.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
+      (∀ address, Devm.getStor shaPost address = Devm.getStor base address) ∧
       Nonempty (ConstructorLoopMemory shaPost.memory (height + 1)) ∧
       ConstructorLoopWorld sevm
         (afterSstore sevm shaPost (zeroHashSlot (height + 1))
@@ -871,8 +887,8 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
         ⟨(constructorNodeWord * 32).toNat, 32⟩] = 0 := by
     exact Devm.extCost_covered covered
   obtain ⟨shaPost, hstack, hmemory, hgas, hreturn,
-      hstorage, hcode, haddresses, hkeys, hlogs, houtput, herror,
-      hstate, shaLift⟩ :=
+      hstorage, hcode, haddresses, hkeys, hlogs, hrefund, hdelete,
+      houtput, herror, hstate, shaLift⟩ :=
     constructorSha64_success_storageEffectRun_ext
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := constructorNodeWord)
@@ -908,6 +924,20 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
     calc
       shaPost.accessedStorageKeys = shaBase.accessedStorageKeys := hkeys
       _ = base.accessedStorageKeys := rfl
+  have hlogsBase : shaPost.logs = base.logs := by
+    calc
+      shaPost.logs = shaBase.logs := hlogs
+      _ = base.logs := by rfl
+  have hrefundBase : shaPost.refundCounter = base.refundCounter := by
+    calc
+      shaPost.refundCounter = shaBase.refundCounter := hrefund
+      _ = base.refundCounter := by rfl
+  have hdeleteBase :
+      shaPost.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty := by
+    calc
+      shaPost.accountsToDelete.isEmpty =
+          shaBase.accountsToDelete.isEmpty := hdelete
+      _ = base.accountsToDelete.isEmpty := by rfl
   have herrorBase : shaPost.error = base.error := by
     calc
       shaPost.error = shaBase.error := herror
@@ -936,7 +966,8 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
   have nextWorld : ConstructorLoopWorld sevm
       (afterSstore sevm shaPost key node) (height + 1) := by
     exact world.afterShaWrite hstorageBase hcodeBase haddressesBase herrorBase
-  refine ⟨shaPost, ⟨nextMemory⟩, ?_, ?_⟩
+  refine ⟨shaPost, hlogsBase, hrefundBase, hdeleteBase,
+    hstorageBase, ⟨nextMemory⟩, ?_, ?_⟩
   · simpa only [key, node] using nextWorld
   · intro ex effects tail
     have continuation : Func.StorageEffectRun fs sevm
@@ -1076,6 +1107,10 @@ theorem constructorFinish_storageEffectRun
     ∃ post,
       post.output = code ∧
       post.error = base.error ∧
+      post.gasLeft = K ∧
+      post.logs = base.logs ∧
+      post.refundCounter = base.refundCounter ∧
+      post.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
       Devm.getStor post sevm.currentTarget =
         Devm.getStor base sevm.currentTarget ∧
       Func.StorageEffectRun fs sevm
@@ -1135,11 +1170,25 @@ theorem constructorFinish_storageEffectRun
   have postError : post.error = base.error := by
     rw [postDef, Devm.withOutput_error, Devm.memRead_error,
       returnBaseDef, Devm.setMach_error]
+  have postGas : post.gasLeft = K := by
+    rw [postDef, Devm.withOutput_gasLeft, Devm.memRead_gasLeft,
+      returnBaseDef, Devm.gasLeft_setMach]
+  have postLogs : post.logs = base.logs := by
+    rw [postDef, Devm.withOutput_logs, Devm.memRead_logs,
+      returnBaseDef, Devm.setMach_logs]
+  have postRefund : post.refundCounter = base.refundCounter := by
+    rw [postDef, Devm.withOutput_refundCounter, returnBaseDef]
+    rfl
+  have postDelete :
+      post.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty := by
+    rw [postDef, Devm.withOutput_accountsToDelete, returnBaseDef]
+    rfl
   have postStorage : Devm.getStor post sevm.currentTarget =
       Devm.getStor base sevm.currentTarget := by
     rw [postDef]
     rfl
-  refine ⟨post, postOutput, postError, postStorage, ?_⟩
+  refine ⟨post, postOutput, postError, postGas, postLogs, postRefund,
+    postDelete, postStorage, ?_⟩
   simp only [constructorFinish, constructorPushWords]
   refine Func.StorageEffectRun.next_constructorPushWord
     (G := K + 12 + copyCost) ?_ ?_ ?_
@@ -1306,6 +1355,11 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
     ∃ post,
       post.output = code ∧
       post.error = none ∧
+      slack ≤ post.gasLeft ∧
+      post.logs = base.logs ∧
+      post.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
+      ((sevm.benvStat.origState.get sevm.currentTarget).stor = Stor.empty →
+        post.refundCounter = base.refundCounter) ∧
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       Func.StorageEffectRun fs sevm
         (base.setMach
@@ -1319,7 +1373,8 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
   | zero =>
       have heightEq : height = 31 := by omega
       subst height
-      obtain ⟨post, postOutput, postError, postStorage, finishRun⟩ :=
+      obtain ⟨post, postOutput, postError, postGas, postLogs,
+          postRefund, postDelete, postStorage, finishRun⟩ :=
         constructorFinish_storageEffectRun
           (fs := fs) (sevm := sevm) (base := base) (memory := memory)
           (K := slack + constructorSentryReserve) memoryCarrier hcode
@@ -1339,7 +1394,9 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
           constructorFinalStorage := by
         rw [postStorage, world.storage]
         rfl
-      exact ⟨post, postOutput, postError.trans world.error, finalStorage,
+      exact ⟨post, postOutput, postError.trans world.error,
+        by rw [postGas]; omega, postLogs, postDelete,
+        (fun _ => postRefund), finalStorage,
         by
           simpa only [constructorStorageEffectTriplesFrom_zero] using
             loopRun⟩
@@ -1387,7 +1444,8 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
         simp only [K, nextSlack, constructorLoopGas,
           constructorSentryReserve]
         omega
-      obtain ⟨shaPost, ⟨nextMemoryCarrier⟩, nextWorld, lift⟩ :=
+      obtain ⟨shaPost, shaLogs, shaRefund, shaDelete, shaStorage,
+          ⟨nextMemoryCarrier⟩, nextWorld, lift⟩ :=
         constructorZeroHashLoop_succ_storageEffectRun
           (fs := fs) (sevm := sevm) (base := base) (memory := memory)
           (height := height) (K := K) heightBound memoryCarrier world
@@ -1401,20 +1459,113 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
           rw [gasEq]
           exact hgasBound
         omega
-      obtain ⟨post, postOutput, postError, postStorage, tailRun⟩ := ih
+      obtain ⟨post, postOutput, postError, postSlack, postLogs, postDelete,
+          postRefund, postStorage, tailRun⟩ := ih
         (height := height + 1) (slack := nextSlack)
         (base := afterSstore sevm shaPost key node)
         (memory := shaPost.memory)
         (by omega) nextMemoryCarrier
         (by simpa only [key, node] using nextWorld)
         nextGasBound
+      have currentZero :
+          shaPost.getStorVal sevm.currentTarget key = 0 := by
+        change (Devm.getStor shaPost sevm.currentTarget).get key = 0
+        rw [shaStorage, world.storage]
+        apply constructorZeroHashStorage_get_of_lt
+        · omega
+        · omega
+      have nextRefund
+          (originalEmpty :
+            (sevm.benvStat.origState.get sevm.currentTarget).stor =
+              Stor.empty) :
+          (afterSstore sevm shaPost key node).refundCounter =
+            base.refundCounter := by
+        calc
+          (afterSstore sevm shaPost key node).refundCounter =
+              shaPost.refundCounter := by
+            rw [afterSstore_refundCounter]
+            have originalZero :
+                getOrigStorVal sevm sevm.currentTarget key = 0 := by
+              unfold getOrigStorVal getOrigAcct
+              rw [originalEmpty]
+              rfl
+            rw [originalZero, currentZero]
+            unfold sstoreNewRefundCounter
+            by_cases different : (0 : B256) ≠ node <;> simp [different]
+          _ = base.refundCounter := shaRefund
+      have finalLogs : post.logs = base.logs := by
+        calc
+          post.logs = (afterSstore sevm shaPost key node).logs := postLogs
+          _ = shaPost.logs := by rw [afterSstore_logs]
+          _ = base.logs := shaLogs
+      have finalDelete :
+          post.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty := by
+        calc
+          post.accountsToDelete.isEmpty =
+              (afterSstore sevm shaPost key node).accountsToDelete.isEmpty :=
+            postDelete
+          _ = shaPost.accountsToDelete.isEmpty := by
+            rw [afterSstore_accountsToDelete]
+          _ = base.accountsToDelete.isEmpty := shaDelete
+      have finalRefund :
+          (sevm.benvStat.origState.get sevm.currentTarget).stor = Stor.empty →
+            post.refundCounter = base.refundCounter := by
+        intro originalEmpty
+        exact (postRefund originalEmpty).trans (nextRefund originalEmpty)
       have currentRun := lift tailRun
       rw [gasEq] at currentRun
-      refine ⟨post, postOutput, postError, postStorage, ?_⟩
+      refine ⟨post, postOutput, postError, ?_, finalLogs, finalDelete,
+        finalRefund, postStorage, ?_⟩
+      · exact le_trans (by simp only [nextSlack]; omega) postSlack
       simpa only [constructorStorageEffectTriplesFrom_succ, key, node] using
         currentRun
 
-/-- Public height-zero specialization of the exact constructor fold. -/
+/-! Public height-zero specializations of the exact constructor fold. -/
+
+/-- The constructor loop accepts arbitrary terminal slack and returns at
+least that much gas after the exact thirty-one-write execution. -/
+theorem constructorZeroHashLoop_storageEffectRun_withSlack
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    (slack : Nat)
+    (hgasBound : constructorLoopGas slack 31 < 2 ^ 256)
+    (world : ConstructorLoopWorld sevm base 0)
+    (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hcontinuation : fs[constructorZeroHashContinuationSlot]? =
+      some constructorZeroHashContinuation)
+    (hloop : fs[constructorZeroHashLoopSlot]? = some
+      (constructorZeroHashLoop constructorRuntimeOffset codeSize))
+    (hcode : sevm.code.toList = creationCode) :
+    ∃ post,
+      post.output = code ∧
+      post.error = none ∧
+      slack ≤ post.gasLeft ∧
+      post.logs = base.logs ∧
+      post.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
+      ((sevm.benvStat.origState.get sevm.currentTarget).stor = Stor.empty →
+        post.refundCounter = base.refundCounter) ∧
+      Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
+      Func.StorageEffectRun fs sevm
+        (base.setMach
+          ⟨[0], constructorInitialMemory, constructorLoopGas slack 31⟩)
+        (constructorZeroHashLoop constructorRuntimeOffset codeSize)
+        (.ok post) (constructorStorageEffectTriples sevm.currentTarget) := by
+  obtain ⟨post, postOutput, postError, postSlack, postLogs, postDelete,
+      postRefund, postStorage, run⟩ :=
+    constructorZeroHashLoop_remaining_storageEffectRun
+      (fs := fs) (sevm := sevm) (base := base)
+      (memory := constructorInitialMemory) (height := 0)
+      (remaining := 31) (slack := slack) rfl
+      constructorInitialMemory_carrier world hstatic hdepth hpre
+      hcontinuation hloop hcode
+      hgasBound
+  exact ⟨post, postOutput, postError, postSlack, postLogs, postDelete,
+    postRefund, postStorage, by
+    simpa only [constructorStorageEffectTriplesFrom_initial,
+      show Nat.toB256 0 = 0 by decide +kernel] using run⟩
+
+/-- Backward-compatible zero-slack specialization. -/
 theorem constructorZeroHashLoop_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     (world : ConstructorLoopWorld sevm base 0)
@@ -1435,20 +1586,12 @@ theorem constructorZeroHashLoop_storageEffectRun
           ⟨[0], constructorInitialMemory, constructorLoopGas 0 31⟩)
         (constructorZeroHashLoop constructorRuntimeOffset codeSize)
         (.ok post) (constructorStorageEffectTriples sevm.currentTarget) := by
-  obtain ⟨post, postOutput, postError, postStorage, run⟩ :=
-    constructorZeroHashLoop_remaining_storageEffectRun
-      (fs := fs) (sevm := sevm) (base := base)
-      (memory := constructorInitialMemory) (height := 0)
-      (remaining := 31) (slack := 0) rfl
-      constructorInitialMemory_carrier world hstatic hdepth hpre
-      hcontinuation hloop hcode
-      (by
-        unfold constructorLoopGas constructorSentryReserve
-          constructorIterationGasBound
-        decide +kernel)
-  exact ⟨post, postOutput, postError, postStorage, by
-    simpa only [constructorStorageEffectTriplesFrom_initial,
-      show Nat.toB256 0 = 0 by decide +kernel] using run⟩
+  obtain ⟨post, postOutput, postError, _, _postLogs, _postDelete,
+      _postRefund, postStorage, run⟩ :=
+    constructorZeroHashLoop_storageEffectRun_withSlack 0 (by decide +kernel)
+      world hstatic
+      hdepth hpre hcontinuation hloop hcode
+  exact ⟨post, postOutput, postError, postStorage, run⟩
 
 /-- Initialize the constructor's scratch word and enter the exact zero-hash
 loop.  The prefix costs 33 gas including the internal-call boundary. -/

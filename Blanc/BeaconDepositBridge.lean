@@ -144,6 +144,17 @@ private theorem constructorZeroHashStorage_get_of_region_ne
       intro height positive le
       exact separate height positive (by omega)
 
+/-- A constructor slot strictly beyond the materialized prefix is still at
+the EVM storage default. -/
+theorem constructorZeroHashStorage_get_of_lt
+    {limit next : Nat} (hnext : limit < next) (nextBound : next < 32) :
+    (constructorZeroHashStorage limit).get (zeroHashSlot next) = 0 := by
+  apply constructorZeroHashStorage_get_of_region_ne (limit := limit)
+    (by omega)
+  intro height positive le equal
+  have same := zeroHashSlot_injective nextBound (by omega) equal
+  omega
+
 theorem accOfStor_constructorFinalStorage :
     accOfStor constructorFinalStorage = Acc.empty := by
   unfold accOfStor Acc.empty constructorFinalStorage
