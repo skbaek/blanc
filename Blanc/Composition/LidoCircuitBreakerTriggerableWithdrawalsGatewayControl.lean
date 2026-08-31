@@ -137,18 +137,16 @@ theorem gatewayPauseWorld_targetCodeAt :
       (gatewayCode controlDeployParams) :=
   gatewayPauseWorld_targetCode
 
-/-! ## The two low-level code facts, discharged rather than assumed
+/-! ## The one low-level code fact, discharged rather than assumed
 
-Both are kernel-reduced over the compiler's own output for
-`controlDeployParams`.  They are the reason entry 3's non-delegation and
-nonempty-code premises are not vacuous. -/
+It is kernel-reduced over the compiler's own output for `controlDeployParams`,
+so entry 3's single remaining code premise is not vacuous.  Non-delegation is
+deliberately absent: `not_delegation_of_compile` already proves that compiler
+output is never an EIP-7702 designator, so asking for it here would be asking
+the world to re-supply a fact the compiler proves. -/
 
 theorem controlGatewayCode_size_ne_zero :
     (gatewayCode controlDeployParams).size.toB256 ≠ 0 := by
-  decide +kernel
-
-theorem controlGatewayCode_not_delegation :
-    ¬ isValidDelegation (gatewayCode controlDeployParams) := by
   decide +kernel
 
 theorem gatewayPauseWorld_target_ne_owner :
@@ -262,41 +260,22 @@ theorem gatewayPauseWorld_closedPremises
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
   publicPause_gatewayPinnedTarget gatewayPauseWorld_publicPausePremises
     gatewayPauseWorld_target_ne_owner gatewayPauseWorld_target_not_precompile
-    controlGatewayCode_not_delegation controlGatewayCode_size_ne_zero
-    publicRun success
+    controlGatewayCode_size_ne_zero publicRun success
 
 /-! ## Falsifiers
 
-Each mutant below **refutes** one of entry 3's premises rather than merely
-failing to prove it, so the premise is shown to be load-bearing: the theorem
-could not have been applied to that world at all.  These are the code-identity
-falsifiers; they are what distinguishes "the gateway runtime is installed at the
-target" from "some code is installed at the target". -/
+The mutant below **refutes** entry 3's one remaining code premise rather than
+merely failing to prove it, so the premise is shown to be load-bearing: the
+theorem could not have been applied to that world at all.
 
-/-- **Delegation mutant.**  An EIP-7702 designator delegating the target account
-to the gateway.  It is 23 bytes with the `0xEF0100` marker, so it satisfies
-`isValidDelegation` exactly. -/
-def delegationMutantCode : ByteArray :=
-  ByteArray.mk
-    (([0xEF, 0x01, 0x00] ++ List.replicate 20 (0x11 : UInt8)).toArray)
-
-/-- The mutant is a real delegation designator, so entry 3's non-delegation
-premise is **false** of this world.  A delegated account does not execute the
-gateway's code; it executes whatever the designated account holds, which is
-precisely the confusion the premise exists to exclude. -/
-theorem delegationMutant_refutes_nonDelegation :
-    isValidDelegation delegationMutantCode := by
-  decide +kernel
-
-/-- Consequently no instance of the direct-target adapter exists for the mutant:
-its non-delegation hypothesis cannot be supplied. -/
-theorem delegationMutant_blocks_adapter :
-    ¬ ¬ isValidDelegation delegationMutantCode :=
-  fun contra => contra delegationMutant_refutes_nonDelegation
+There is deliberately no delegation-designator mutant. Non-delegation is not a
+premise of entry 3, because `not_delegation_of_compile` derives it from the
+compiler witness; a designator is simply not compiler output, so a mutant
+carrying one would refute a hypothesis nobody makes. -/
 
 /-- **Empty-code mutant.**  An account with no code at all.  The CircuitBreaker's
 own `pauseCodeGuard` is what rules this out on the live route; entry 3 records
-the same fact as a premise, and this refutes it. -/
+the same fact as its single code premise, and this refutes it. -/
 theorem emptyMutant_refutes_nonzeroCode :
     ¬ ((ByteArray.empty).size.toB256 ≠ 0) :=
   fun contra => contra rfl

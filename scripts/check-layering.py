@@ -278,7 +278,12 @@ COMPOSITION = [
 
 ROOTS = ["Blanc", "Main"]
 
-IMPORT_RE = re.compile(r"^import\s+Blanc(?:\.([A-Za-z0-9_.]+))?\s*$")
+# One import command: `import <Module>`, and nothing else on the line. The
+# module name is matched generically rather than anchored to `Blanc`, because
+# `Main` is a root too and an import of it must be *seen* before it can be
+# judged -- a pattern that can only match `Blanc...` silently exempts every
+# rule involving the other root.
+IMPORT_RE = re.compile(r"^import\s+([A-Za-z_][A-Za-z0-9_.']*)\s*$")
 
 
 def classify():
@@ -326,14 +331,64 @@ def modules_on_disk(root):
     return found
 
 
+def uncommented_lines(text):
+    """-> the file's lines with Lean comments blanked out.
+
+    Comments are removed before imports are matched, in both forms Lean has:
+    `--` to end of line, and nested `/- ... -/` blocks that may span lines or
+    sit inline before an import. Matching raw lines instead would let any
+    prohibited import hide behind a trailing comment -- a legal edit that
+    changes what the module imports while leaving this gate green, which is
+    exactly the silent escape the classification is supposed to prevent.
+
+    An import line carries a bare module name and can contain no string
+    literal, so no string-awareness is needed here.
+    """
+    out = []
+    depth = 0
+    for raw in text.splitlines():
+        buf = []
+        i = 0
+        while i < len(raw):
+            if depth:
+                if raw.startswith("/-", i):
+                    depth += 1
+                    i += 2
+                elif raw.startswith("-/", i):
+                    depth -= 1
+                    i += 2
+                else:
+                    i += 1
+            elif raw.startswith("/-", i):
+                depth += 1
+                i += 2
+            elif raw.startswith("--", i):
+                break
+            else:
+                buf.append(raw[i])
+                i += 1
+        out.append("".join(buf))
+    return out
+
+
 def imports_of(path):
-    """-> imported Blanc module names (Blanc.X -> X; a bare `import Blanc` -> Blanc)."""
+    """-> imported local module names (Blanc.X -> X; `Blanc` and `Main` as-is).
+
+    An import of anything outside this repository -- Jaune, Mathlib -- is not a
+    classified module and is skipped, exactly as before.
+    """
     out = []
     with open(path) as handle:
-        for raw in handle:
-            match = IMPORT_RE.match(raw.strip())
-            if match:
-                out.append(match.group(1) or "Blanc")
+        text = handle.read()
+    for line in uncommented_lines(text):
+        match = IMPORT_RE.match(line.strip())
+        if not match:
+            continue
+        name = match.group(1)
+        if name in ("Blanc", "Main"):
+            out.append(name)
+        elif name.startswith("Blanc."):
+            out.append(name[len("Blanc."):])
     return out
 
 

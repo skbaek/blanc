@@ -1076,6 +1076,5 @@ import Blanc.BeaconDepositWriteSites
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_publicPausePremises
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.controlGatewayCode_not_delegation
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.controlGatewayCode_size_ne_zero
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises

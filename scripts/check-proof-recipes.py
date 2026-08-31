@@ -838,7 +838,13 @@ DUPLICATION_BASELINE_COMMENT = (
     "module. A family id is the first 16 hex digits of its own normalized_sha256; "
     "run the gate with --list to see where a family's sites currently are."
 )
-DUPLICATION_MODULE_RE = re.compile(r"Blanc/[A-Za-z_][A-Za-z0-9_]*\.lean\Z")
+# Nested modules are accepted so a `Blanc/Composition/X.lean` path can be a
+# baseline member, a ceiling, an exception, an owner or a canonical example --
+# the corpus walk is recursive, so a validator that only accepted one flat
+# component would let the writer emit paths its own reader rejects. Every
+# component must start with a letter or underscore, so `.` and `..` cannot
+# appear and the pattern is traversal-safe by construction.
+DUPLICATION_MODULE_RE = re.compile(r"Blanc/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.lean\Z")
 FAMILY_ID_RE = re.compile(r"[0-9a-f]{16}\Z")
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
 SLUG_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")

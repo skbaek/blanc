@@ -590,10 +590,14 @@ callback-shaped is assumed — in particular neither `MessageExecutesProgram`
 witness, no accepted query answer, and no final pausedness is a premise.  Both
 occurrences are *derived* from the walk's own spawns.
 
-The code facts are the direct-installation premise, and they are exactly the
-three spawn sources `Xinst.step_spawn_source` admits plus the guard's nonzero
-`EXTCODESIZE`: empty code, self-call, and a delegation designator are each ruled
-out, so the message the CircuitBreaker spawned really carries `program`. -/
+Only **one** code fact is asked of the caller, and it is exactly what the
+CircuitBreaker's own `EXTCODESIZE` guard tests: the installed code is not empty
+at the width the guard measures. The other two spawn sources
+`Xinst.step_spawn_source` admits are ruled out from the compiler witness itself
+-- `not_delegation_of_compile` shows compiler output is never an EIP-7702
+designator, and `Prog.compile_ne_nil` shows it is never the empty byte list -- so
+asking a caller for either would be asking it to re-supply a fact the compiler
+already proves. -/
 theorem directBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
@@ -601,9 +605,6 @@ theorem directBoundaryExecutions_of_afterSet_ok
     (h_empty : fs[emptyRevertSlot]? = some Func.rev)
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
     (compiled : Prog.compile program = some code.toList)
-    (nonempty : code ≠ .empty)
-    (notDelegation : ¬ isValidDelegation code)
-    (toListNonempty : code.toList ≠ [])
     (codeNonzero : code.size.toB256 ≠ 0)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
@@ -617,7 +618,13 @@ theorem directBoundaryExecutions_of_afterSet_ok
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
     LidoPinnedBoundaryExecutions fs sevm entry target
       program duration (.ok final) := by
-  have codeNonzero : (entry.getCode target).size.toB256 ≠ 0 := by
+  have notDelegation : ¬ isValidDelegation code :=
+    not_delegation_of_compile compiled.symm
+  have toListNonempty : code.toList ≠ [] := fun isNil =>
+    Prog.compile_ne_nil (isNil ▸ compiled)
+  have nonempty : code ≠ .empty := fun isEmpty =>
+    codeNonzero (by rw [isEmpty]; rfl)
+  have installedNonzero : (entry.getCode target).size.toB256 ≠ 0 := by
     rw [installed]
     exact codeNonzero
   rw [pauseAfterSet_eq_afterCall] at run
@@ -763,7 +770,7 @@ theorem directBoundaryExecutions_of_afterSet_ok
         ⟨statMsg, statXl, statChild, statPc, statNextPc, statResume,
           statExact, statExecutes, statTime, statSpawn, statFilled,
           statProcess, statStepRun, statState, statOutput⟩
-      exact ⟨codeNonzero, guardTestPost, guardPost, callPre, callPost,
+      exact ⟨installedNonzero, guardTestPost, guardPost, callPre, callPost,
         branchTestPost, armPre, statPre, statPost, guardRun, guardPop,
         callStaging, callRun, callBoundary, pinnedPause,
         afterCallContinuation, callIszero, branchPop, statStaging, statRun,
@@ -791,8 +798,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
     LidoPinnedBoundaryExecutions fs sevm entry target
       PinnedTargetControl.stubProgram duration (.ok final) :=
   directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
-    stubProgram_compile_toList stubCode_nonempty stubCode_not_delegation
-    stubCode_toList_nonempty (by decide +kernel) targetNe nonprecompile
+    stubProgram_compile_toList (by decide +kernel) targetNe nonprecompile
     installed targetWindow durationWindow depth dynamic run
 
 private theorem spawnedChild_clean_of_zeroBranch

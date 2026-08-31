@@ -126,37 +126,22 @@ theorem gatewayCode_compile
   rw [LidoTriggerableWithdrawalsGateway.lidoTwgCode_compile]
   simp [gatewayCode, ByteArray.toList_eq_toList_data]
 
-private theorem ne_empty_of_size_toB256_ne_zero {code : ByteArray}
-    (h : code.size.toB256 ≠ 0) : code ≠ .empty := by
-  intro isEmpty
-  exact h (by rw [isEmpty]; rfl)
-
-private theorem toList_ne_nil_of_size_toB256_ne_zero {code : ByteArray}
-    (h : code.size.toB256 ≠ 0) : code.toList ≠ [] := by
-  intro isNil
-  apply h
-  have sizeZero : code.size = 0 := by
-    have := congrArg List.length isNil
-    simpa [ByteArray.toList_eq_toList_data] using this
-  rw [sizeZero]
-  rfl
-
 /-- **The direct-target adapter.**  A successful `pauseAfterSet` suffix against
 an account carrying the exact compiled gateway runtime supplies both actual
 program occurrences.
 
-Only two low-level code facts are asked of the caller, and neither is
-result-equivalent: that the installed bytes are not an EIP-7702 delegation
-designator, and that they are not empty.  Everything else — both
-`MessageExecutesProgram` witnesses and the concrete CALL/STATICCALL linkage —
-is derived. -/
+Exactly **one** low-level code fact is asked of the caller, and it is not
+result-equivalent: that the installed bytes are not empty at the width the
+CircuitBreaker's own `EXTCODESIZE` guard measures.  Non-delegation and
+nonemptiness of the byte list are consequences of the compiler witness, not
+caller obligations.  Everything else — both `MessageExecutesProgram` witnesses
+and the concrete CALL/STATICCALL linkage — is derived. -/
 theorem gatewayBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
     {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
     (h_empty : fs[emptyRevertSlot]? = some Func.rev)
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (notDelegation : ¬ isValidDelegation (gatewayCode dp))
     (codeNonzero : (gatewayCode dp).size.toB256 ≠ 0)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
@@ -171,17 +156,14 @@ theorem gatewayBoundaryExecutions_of_afterSet_ok
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
   directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
-    (gatewayCode_compile dp)
-    (ne_empty_of_size_toB256_ne_zero codeNonzero) notDelegation
-    (toList_ne_nil_of_size_toB256_ne_zero codeNonzero) codeNonzero
-    targetNe nonprecompile installed targetWindow durationWindow depth dynamic
-    run
+    (gatewayCode_compile dp) codeNonzero targetNe nonprecompile installed
+    targetWindow durationWindow depth dynamic run
 
 /-! ## Entry 3: the pinned-target closure
 
 The headline theorem takes the ordinary public-entry premises, the production
-run, direct gateway code identity, distinctness and non-precompile facts, and a
-successful terminal polarity — and nothing else.  In particular it has **no**
+run, exact gateway code identity, distinctness, non-precompile, a nonempty
+installed-code fact, and a successful terminal polarity — and nothing else.  In particular it has **no**
 bundle premise (C2 supplies it), **no** program-occurrence premise (the adapter
 derives both), no accepted-query premise, no callback-noninterference premise,
 and no paused-result premise.  Its conclusion is the frozen entry-3 conclusion,
@@ -204,7 +186,6 @@ theorem publicPause_gatewayPinnedTarget
       idx0 len0 last0 img (gatewayCode dp))
     (targetNe : target.toAdr ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target.toAdr = false)
-    (notDelegation : ¬ isValidDelegation (gatewayCode dp))
     (codeNonzero : (gatewayCode dp).size.toB256 ≠ 0)
     (publicRun : Prog.RunCompiledTo sevm pre (runtime officialParams) ex)
     (success : ex = .ok final) :
@@ -225,7 +206,7 @@ theorem publicPause_gatewayPinnedTarget
   subst success
   have hook := gatewayBoundaryExecutions_of_afterSet_ok
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
-    (by rfl) (by rfl) notDelegation codeNonzero targetNe nonprecompile
+    (by rfl) (by rfl) codeNonzero targetNe nonprecompile
     targetCodeAt (by rw [canonicalTarget]; exact targetWindow) durationWindow
     premises.entered premises.dynamic afterSetRun
   exact publicPause_pinnedTarget premises targetNe publicRun

@@ -28,7 +28,13 @@ THRESHOLD_SOURCE = "README.md:417-425"
 SCHEMA_VERSION = 1
 BASELINE_REL = Path("scripts/proof-module-size-baseline.json")
 EXCEPTIONS_REL = Path("scripts/proof-module-size-exceptions.json")
-MODULE_RE = re.compile(r"Blanc/[A-Za-z_][A-Za-z0-9_]*\.lean\Z")
+# Nested modules are accepted so a `Blanc/Composition/X.lean` path can be a
+# baseline member, a ceiling, an exception, an owner or a canonical example --
+# the corpus walk is recursive, so a validator that only accepted one flat
+# component would let the writer emit paths its own reader rejects. Every
+# component must start with a letter or underscore, so `.` and `..` cannot
+# appear and the pattern is traversal-safe by construction.
+MODULE_RE = re.compile(r"Blanc/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.lean\Z")
 ID_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 OWNER_RE = ID_RE
 FINDING_KINDS = {
