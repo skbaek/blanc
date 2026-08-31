@@ -590,14 +590,13 @@ callback-shaped is assumed — in particular neither `MessageExecutesProgram`
 witness, no accepted query answer, and no final pausedness is a premise.  Both
 occurrences are *derived* from the walk's own spawns.
 
-Only **one** code fact is asked of the caller, and it is exactly what the
-CircuitBreaker's own `EXTCODESIZE` guard tests: the installed code is not empty
-at the width the guard measures. The other two spawn sources
-`Xinst.step_spawn_source` admits are ruled out from the compiler witness itself
--- `not_delegation_of_compile` shows compiler output is never an EIP-7702
-designator, and `Prog.compile_ne_nil` shows it is never the empty byte list -- so
-asking a caller for either would be asking it to re-supply a fact the compiler
-already proves. -/
+**No** code-shape fact is asked of the caller. All three spawn sources
+`Xinst.step_spawn_source` admits are ruled out from hypotheses the caller is
+already supplying: `not_delegation_of_compile` and `Prog.compile_ne_nil` rule
+out the delegated and empty sources from the compiler witness, and the
+successful terminal polarity decides the `EXTCODESIZE` guard, whose zero arm
+reverts. A hypothesis implied by the ones beside it does not belong in a
+signature -- it advertises a demand the theorem does not make. -/
 theorem directBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
@@ -605,7 +604,6 @@ theorem directBoundaryExecutions_of_afterSet_ok
     (h_empty : fs[emptyRevertSlot]? = some Func.rev)
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
     (compiled : Prog.compile program = some code.toList)
-    (codeNonzero : code.size.toB256 ≠ 0)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target = code)
@@ -622,11 +620,17 @@ theorem directBoundaryExecutions_of_afterSet_ok
     not_delegation_of_compile compiled.symm
   have toListNonempty : code.toList ≠ [] := fun isNil =>
     Prog.compile_ne_nil (isNil ▸ compiled)
-  have nonempty : code ≠ .empty := fun isEmpty =>
-    codeNonzero (by rw [isEmpty]; rfl)
+  -- The successful terminal polarity already decides the CircuitBreaker's own
+  -- `EXTCODESIZE` guard: its zero arm reverts, so a run that ends `.ok` is on
+  -- the nonzero arm. Asking a caller for this would be asking it to re-supply
+  -- what the run it is already handing us has settled.
   have installedNonzero : (entry.getCode target).size.toB256 ≠ 0 := by
-    rw [installed]
-    exact codeNonzero
+    rcases pauseAfterSet_codeGuard_arms_windows h_empty targetWindow
+        durationWindow run with ⟨_, _, reverted, _⟩ | ⟨nonzero, _⟩
+    · exact absurd reverted (by simp)
+    · exact nonzero
+  have nonempty : code ≠ .empty := fun isEmpty =>
+    installedNonzero (by rw [installed, isEmpty]; rfl)
   rw [pauseAfterSet_eq_afterCall] at run
   obtain ⟨guardTestPost, guardRun, guardBranch⟩ :=
     runCompiledTo_prepend_inv run
@@ -798,7 +802,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
     LidoPinnedBoundaryExecutions fs sevm entry target
       PinnedTargetControl.stubProgram duration (.ok final) :=
   directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
-    stubProgram_compile_toList (by decide +kernel) targetNe nonprecompile
+    stubProgram_compile_toList targetNe nonprecompile
     installed targetWindow durationWindow depth dynamic run
 
 private theorem spawnedChild_clean_of_zeroBranch

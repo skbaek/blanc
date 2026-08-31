@@ -137,17 +137,12 @@ theorem gatewayPauseWorld_targetCodeAt :
       (gatewayCode controlDeployParams) :=
   gatewayPauseWorld_targetCode
 
-/-! ## The one low-level code fact, discharged rather than assumed
+/-! ## No code facts are discharged here, because none are asked for
 
-It is kernel-reduced over the compiler's own output for `controlDeployParams`,
-so entry 3's single remaining code premise is not vacuous.  Non-delegation is
-deliberately absent: `not_delegation_of_compile` already proves that compiler
-output is never an EIP-7702 designator, so asking for it here would be asking
-the world to re-supply a fact the compiler proves. -/
-
-theorem controlGatewayCode_size_ne_zero :
-    (gatewayCode controlDeployParams).size.toB256 ≠ 0 := by
-  decide +kernel
+Entry 3 carries no code-shape premise.  Non-delegation and a nonempty byte list
+follow from the compiler witness; nonzero installed width follows from the
+successful run, because the CircuitBreaker's `EXTCODESIZE` guard reverts on the
+zero arm.  A world-local restatement of any of them would be dead weight. -/
 
 theorem gatewayPauseWorld_target_ne_owner :
     pauseWorldCallee.toB256.toAdr ≠ gatewayPauseWorldSevm.currentTarget := by
@@ -260,25 +255,15 @@ theorem gatewayPauseWorld_closedPremises
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
   publicPause_gatewayPinnedTarget gatewayPauseWorld_publicPausePremises
     gatewayPauseWorld_target_ne_owner gatewayPauseWorld_target_not_precompile
-    controlGatewayCode_size_ne_zero publicRun success
+    publicRun success
 
 /-! ## Falsifiers
 
-The mutant below **refutes** entry 3's one remaining code premise rather than
-merely failing to prove it, so the premise is shown to be load-bearing: the
-theorem could not have been applied to that world at all.
-
-There is deliberately no delegation-designator mutant. Non-delegation is not a
-premise of entry 3, because `not_delegation_of_compile` derives it from the
-compiler witness; a designator is simply not compiler output, so a mutant
-carrying one would refute a hypothesis nobody makes. -/
-
-/-- **Empty-code mutant.**  An account with no code at all.  The CircuitBreaker's
-own `pauseCodeGuard` is what rules this out on the live route; entry 3 records
-the same fact as its single code premise, and this refutes it. -/
-theorem emptyMutant_refutes_nonzeroCode :
-    ¬ ((ByteArray.empty).size.toB256 ≠ 0) :=
-  fun contra => contra rfl
+Entry 3 has no code-shape premise left to refute, so there is deliberately no
+delegation or empty-code mutant here: a mutant needs a hypothesis to falsify,
+and both hypotheses are now consequences of the compiler witness and the
+successful run. What remains falsifiable is the ABI agreement, which is a real
+check between two independently defined encoders rather than a derived fact. -/
 
 /-- **ABI independence.**  The two families define their selectors on separate
 evidence — the CircuitBreaker computes `selector "pauseFor" [.uint256]`, the

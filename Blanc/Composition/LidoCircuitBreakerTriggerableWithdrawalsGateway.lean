@@ -130,19 +130,17 @@ theorem gatewayCode_compile
 an account carrying the exact compiled gateway runtime supplies both actual
 program occurrences.
 
-Exactly **one** low-level code fact is asked of the caller, and it is not
-result-equivalent: that the installed bytes are not empty at the width the
-CircuitBreaker's own `EXTCODESIZE` guard measures.  Non-delegation and
-nonemptiness of the byte list are consequences of the compiler witness, not
-caller obligations.  Everything else — both `MessageExecutesProgram` witnesses
-and the concrete CALL/STATICCALL linkage — is derived. -/
+**No** low-level code fact is asked of the caller.  Non-delegation and a
+nonempty byte list follow from the compiler witness; nonzero installed width
+follows from the successful terminal polarity, because the CircuitBreaker's own
+`EXTCODESIZE` guard reverts on the zero arm.  Both `MessageExecutesProgram`
+witnesses and the concrete CALL/STATICCALL linkage are derived. -/
 theorem gatewayBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
     {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
     (h_empty : fs[emptyRevertSlot]? = some Func.rev)
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (codeNonzero : (gatewayCode dp).size.toB256 ≠ 0)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target = gatewayCode dp)
@@ -156,14 +154,15 @@ theorem gatewayBoundaryExecutions_of_afterSet_ok
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
   directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
-    (gatewayCode_compile dp) codeNonzero targetNe nonprecompile installed
+    (gatewayCode_compile dp) targetNe nonprecompile installed
     targetWindow durationWindow depth dynamic run
 
 /-! ## Entry 3: the pinned-target closure
 
 The headline theorem takes the ordinary public-entry premises, the production
-run, exact gateway code identity, distinctness, non-precompile, a nonempty
-installed-code fact, and a successful terminal polarity — and nothing else.  In particular it has **no**
+run, exact gateway code identity, distinctness, non-precompile, and a
+successful terminal polarity — and nothing else.  It carries no code-shape
+premise at all.  In particular it has **no**
 bundle premise (C2 supplies it), **no** program-occurrence premise (the adapter
 derives both), no accepted-query premise, no callback-noninterference premise,
 and no paused-result premise.  Its conclusion is the frozen entry-3 conclusion,
@@ -186,7 +185,6 @@ theorem publicPause_gatewayPinnedTarget
       idx0 len0 last0 img (gatewayCode dp))
     (targetNe : target.toAdr ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target.toAdr = false)
-    (codeNonzero : (gatewayCode dp).size.toB256 ≠ 0)
     (publicRun : Prog.RunCompiledTo sevm pre (runtime officialParams) ex)
     (success : ex = .ok final) :
     PublicPausePinnedTargetConclusion sevm pre target duration (gatewayCode dp)
@@ -206,7 +204,7 @@ theorem publicPause_gatewayPinnedTarget
   subst success
   have hook := gatewayBoundaryExecutions_of_afterSet_ok
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
-    (by rfl) (by rfl) codeNonzero targetNe nonprecompile
+    (by rfl) (by rfl) targetNe nonprecompile
     targetCodeAt (by rw [canonicalTarget]; exact targetWindow) durationWindow
     premises.entered premises.dynamic afterSetRun
   exact publicPause_pinnedTarget premises targetNe publicRun

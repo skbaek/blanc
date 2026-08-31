@@ -4573,8 +4573,6 @@ example
     {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
     (h_empty : fs[emptyRevertSlot]? = some Func.rev)
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (codeNonzero :
-      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp).size.toB256 ≠ 0)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target =
@@ -4587,7 +4585,7 @@ example
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
   Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok
-    h_empty h_bubble codeNonzero targetNe nonprecompile installed
+    h_empty h_bubble targetNe nonprecompile installed
     targetWindow durationWindow depth dynamic run
 
 example
@@ -4600,8 +4598,6 @@ example
       (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp))
     (targetNe : target.toAdr ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target.toAdr = false)
-    (codeNonzero :
-      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp).size.toB256 ≠ 0)
     (publicRun : Prog.RunCompiledTo sevm pre (runtime officialParams) ex)
     (success : ex = .ok final) :
     PublicPausePinnedTargetConclusion sevm pre target duration
@@ -4609,7 +4605,7 @@ example
       (LidoTriggerableWithdrawalsGateway.runtime dp)
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
   Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget
-    premises targetNe nonprecompile codeNonzero publicRun success
+    premises targetNe nonprecompile publicRun success
 
 end Composition.LidoCircuitBreakerTwg
 

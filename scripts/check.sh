@@ -1299,7 +1299,6 @@ Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode_compile|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_publicPausePremises|$STANDARD
-Blanc.Composition.LidoCircuitBreakerTwg.controlGatewayCode_size_ne_zero|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
