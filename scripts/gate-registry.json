@@ -2037,7 +2037,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — common/WETH10/Lido claim statements: "
+          "^OK — claim statements: "
         ]
       }
     },
