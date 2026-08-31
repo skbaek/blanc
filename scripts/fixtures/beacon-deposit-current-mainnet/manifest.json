@@ -50,18 +50,18 @@
       "pythonExecutable": {
         "isSymlink": true,
         "relativePath": ".venv/bin/python",
-        "sha256": "ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884",
-        "symlinkTarget": "/Users/agent/.local/share/uv/python/cpython-3.11-macos-aarch64-none/bin/python3.11"
+        "sha256": "d1483a82342508f2ec2b172b788d5b676a59eaf70ed01ae846a0f84f63a3a82a",
+        "symlinkTarget": "/home/agent/.local/share/uv/python/cpython-3.11-linux-x86_64-gnu/bin/python3.11"
       },
       "pyvenvConfig": {
         "isSymlink": false,
         "relativePath": ".venv/pyvenv.cfg",
-        "sha256": "09dc49b2a0fd58230a8fcae4870d8bbb4973e9ed03497c1b6e6a004020b13728"
+        "sha256": "cb19b1d309fbd35396ba0f36b051c8bc0584f6efba17dfee4f116262b11c7653"
       },
       "t8nEntrypoint": {
         "isSymlink": false,
         "relativePath": ".venv/bin/ethereum-spec-evm",
-        "sha256": "39df28ccc14f406f096a64642eaec679dce2063f92814c171c5189fe12770f46"
+        "sha256": "d0fa0ccc738ad073fa8028541cbd3ba332d421ba8c4efaf1a6e22dbea1a5e11e"
       }
     },
     "targetSitePackages": {
@@ -70,9 +70,9 @@
         "**/*.pyc",
         "**/*.pyo"
       ],
-      "fileRecords": 3269,
+      "fileRecords": 4371,
       "relativeRoot": ".venv/lib/python3.11/site-packages",
-      "sha256": "46cb9ec85254aefe093d4f50ef1501310781fb50f97f0f121f4de20b99aa59fb"
+      "sha256": "5f1dea4e0153ee73c799f9e454f10044af00491937fba3e86f33209feaa0583c"
     }
   },
   "channel": "finite-bpo2-execution-witness-not-a-lean-premise",
