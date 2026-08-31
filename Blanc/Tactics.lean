@@ -244,8 +244,19 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ninstAllChildRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameDescendants target
+  | "goal-shape:raw-sstore-free-compiled-path" =>
+      return proofRecipeContainsName
+          `Blanc.Func.RunCompiledTo.NoRawSstorePath target ||
+        proofRecipeContainsName `Blanc.Exec.NoRawSstore target ||
+        proofRecipeContainsName `Blanc.Ninst.ChildlessRunCompiled target
   | "goal-shape:retained-write-noninterference" =>
       return head == some `Blanc.Exec.NoRetainedWriteTo
+  | "goal-shape:exact-retained-storage-effects" =>
+      return proofRecipeContainsName
+          `Blanc.Exec.retainedStorageEffectTriples target ||
+        proofRecipeContainsName
+          `Blanc.Func.RunCompiledTo.StorageEffectPath target ||
+        proofRecipeContainsName `Blanc.Func.StorageEffectRun target
   | "goal-shape:retained-wrapper-trace" =>
       return proofRecipeContainsName `Blanc.ExecutionTrace.RetainedXlot target ||
         proofRecipeContainsName `Blanc.ExecutionTrace.ProcessMessageTrace target ||
@@ -275,6 +286,11 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return head == some `Blanc.Func.RunCompiledTo &&
         (proofRecipeContainsName `Jaune.Linst.ret target ||
           proofRecipeContainsName `Jaune.Linst.rev target)
+  | "goal-shape:constant-error-guard" =>
+      return head == some `Blanc.Func.RunCompiledTo &&
+        proofRecipeContainsName `Blanc.Func.branch target &&
+        proofRecipeContainsName `Blanc.Func.call target &&
+        proofRecipeContainsName `Blanc.errorData target
   | "goal-shape:full-length-slice" =>
       return proofRecipeContainsName `Jaune.List.sliceD target
   | "goal-shape:runcompiled-family-compression" =>

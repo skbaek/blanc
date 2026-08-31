@@ -91,6 +91,57 @@ lemma Ninst.runCompiled_exec_run {sevm : Sevm} {devm : Devm} {x : Xinst}
   rw [h_step]
   exact ⟨_, RunFrame.of_run h_enter, h_res.symm⟩
 
+/-- A successful compiled instruction step whose recursive execution slot is
+definitionally empty.  This is stronger than `RunCompiled` and is the common
+boundary needed by callers that reason about raw child-frame chronology. -/
+def Ninst.ChildlessRunCompiled
+    (sevm : Sevm) (pre : Devm) (instruction : Ninst) (post : Devm) : Prop :=
+  ∀ pc, Ninst.StepRun pc sevm pre instruction .none (.ok post)
+
+/-- Forgetting childlessness yields the ordinary compiled-step witness. -/
+theorem Ninst.ChildlessRunCompiled.toRunCompiled
+    {sevm : Sevm} {pre post : Devm} {instruction : Ninst}
+    (run : Ninst.ChildlessRunCompiled sevm pre instruction post) :
+    Ninst.RunCompiled sevm pre instruction post :=
+  ⟨.none, trivial, run⟩
+
+/-- A syntactically non-external compiled instruction necessarily uses the
+empty recursive slot. -/
+theorem Ninst.RunCompiled.childless_of_not_exec
+    {sevm : Sevm} {pre post : Devm} {instruction : Ninst}
+    (run : Ninst.RunCompiled sevm pre instruction post)
+    (notExec : ∀ operation : Xinst, instruction ≠ .exec operation) :
+    Ninst.ChildlessRunCompiled sevm pre instruction post := by
+  rcases run with ⟨slot, filled, steps⟩
+  cases instruction with
+  | reg operation =>
+      have stepRun := steps 0
+      rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at stepRun
+      rw [stepRun.1] at steps
+      exact steps
+  | push bytes length =>
+      have stepRun := steps 0
+      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at stepRun
+      rw [stepRun.1] at steps
+      exact steps
+  | exec operation => exact (notExec operation rfl).elim
+
+/-- A spawning instruction whose frame resolves synchronously has a childless
+compiled-step witness.  Enabled precompiles are the principal consumer. -/
+theorem Ninst.childlessRunCompiled_exec_doneFrame
+    {sevm : Sevm} {pre post : Devm} {operation : Xinst}
+    {frame : Frame} {resume : Resume}
+    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
+    (step : Xinst.step sevm pre operation = .spawn frame resume)
+    (enter : frame.enter = .done settled)
+    (resumeOk : resume.run settled = .ok post) :
+    Ninst.ChildlessRunCompiled sevm pre (.exec operation) post := by
+  intro pc
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+  show XStep.Run (Xinst.step sevm pre operation) _ _
+  rw [step]
+  exact ⟨settled, RunFrame.of_done enter, resumeOk.symm⟩
+
 /-- A spawning instruction whose frame **does not enter** — the value transfer
 failed, or the callee is a precompile.  No child machine exists, the slot is
 `.none`, and `Filled` is `True`. -/
@@ -243,6 +294,164 @@ lemma le_sload_cost_of {sevm : Sevm} {devm : Devm} {k : B256} {c : Nat}
       then gasWarmAccess else gasColdSload) = c) :
     gasWarmAccess ≤ c ∧ c ≤ gasColdSload := by
   subst h_cost; split <;> exact ⟨by decide, by decide⟩
+
+/-- State-dependent charge selected by one `SLOAD`. -/
+def sloadCost (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
+  if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      base.accessedStorageKeys then
+    gasWarmAccess
+  else
+    gasColdSload
+
+/-- Meta-state after one `SLOAD`, including a newly warmed key when needed. -/
+def afterSload (sevm : Sevm) (base : Devm) (key : B256) : Devm :=
+  if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      base.accessedStorageKeys then
+    base
+  else
+    addAccessedStorageKey base sevm.currentTarget key
+
+private lemma addAccessedStorageKey_setMach_setMach_selected
+    {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
+    (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
+      (addAccessedStorageKey base target key).setMach mach' := rfl
+
+/-- One exact `SLOAD` whose warm/cold choice stays inside neutral carrier
+definitions.  Unlike the CPS rule below, this needs only the actually selected
+charge and is therefore suitable for minimal-gas theorems. -/
+theorem Ninst.runCompiled_sload_selected
+    {sevm : Sevm} {base : Devm} {key value : B256}
+    {stack : List B256} {memory : Mem} {G : Nat}
+    (hvalue : base.getStorVal sevm.currentTarget key = value)
+    (hroom : stack.length < 1024) :
+    Ninst.RunCompiled sevm
+      (base.setMach
+        ⟨key :: stack, memory, G + sloadCost sevm base key⟩)
+      sload
+      ((afterSload sevm base key).setMach
+        ⟨value :: stack, memory, G⟩) := by
+  by_cases hwarm :
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+        base.accessedStorageKeys
+  · rw [sloadCost, if_pos hwarm, afterSload, if_pos hwarm]
+    exact Ninst.runCompiled_sload_warm
+      (k := key) (v := value) (s := stack) (G := G)
+      rfl hwarm hvalue
+      (by simp only [Devm.gasLeft_setMach, gasWarmAccess])
+      hroom
+  · rw [sloadCost, if_neg hwarm, afterSload, if_neg hwarm]
+    simpa only [addAccessedStorageKey_setMach_setMach_selected,
+      Devm.memory_setMach] using
+      (Ninst.runCompiled_sload_cold
+        (sevm := sevm)
+        (devm := base.setMach
+          ⟨key :: stack, memory, G + gasColdSload⟩)
+        (k := key) (v := value) (s := stack) (G := G)
+        rfl hwarm
+        (by simpa only [Devm.getStorVal_setMach] using hvalue)
+        (by simp only [Devm.gasLeft_setMach, gasColdSload])
+        hroom)
+
+/-- Exact selected warm/cold charge of one `SSTORE`. -/
+def sstoreCost (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
+  (if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      devm.accessedStorageKeys then 0 else gasColdSload) +
+    sstoreValueCost (getOrigStorVal sevm sevm.currentTarget key)
+      (devm.getStorVal sevm.currentTarget key) value
+
+/-- Meta/world state after one selected warm/cold `SSTORE`. -/
+def afterSstore (sevm : Sevm) (devm : Devm)
+    (key value : B256) : Devm :=
+  let accessed :=
+    if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+        devm.accessedStorageKeys then devm
+    else addAccessedStorageKey devm sevm.currentTarget key
+  (accessed.withRefundCounter
+      (sstoreNewRefundCounter value
+        (getOrigStorVal sevm sevm.currentTarget key)
+        (devm.getStorVal sevm.currentTarget key) devm.refundCounter)).setStorVal
+    sevm.currentTarget key value
+
+/-- One exact `SSTORE` whose warm/cold choice stays inside neutral carrier
+definitions. The caller supplies the real EIP-2200 sentry and static-context
+premises; the successor exposes the selected access-set and refund update. -/
+theorem Ninst.runCompiled_sstore_selected
+    {sevm : Sevm} {devm : Devm} {key value : B256}
+    {stack : List B256} {G : Nat}
+    (hstack : devm.stack = key :: value :: stack)
+    (hsentry : gCallStipend < devm.gasLeft)
+    (hstatic : sevm.isStatic = false)
+    (hgas : devm.gasLeft = G + sstoreCost sevm devm key value) :
+    Ninst.RunCompiled sevm devm sstore
+      ((afterSstore sevm devm key value).setMach
+        ⟨stack, devm.memory, G⟩) := by
+  by_cases hwarm :
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+        devm.accessedStorageKeys
+  · simp only [sstoreCost, if_pos hwarm, Nat.zero_add,
+      afterSstore] at hgas ⊢
+    exact Ninst.runCompiled_sstore_warm hstack hwarm hsentry hstatic
+      rfl rfl hgas
+  · simp only [sstoreCost, if_neg hwarm, afterSstore] at hgas ⊢
+    exact Ninst.runCompiled_sstore_cold hstack hwarm hsentry hstatic
+      rfl rfl hgas
+
+@[simp] theorem sstoreCost_setMach
+    {sevm : Sevm} {base : Devm} {mach : Mach} {key value : B256} :
+    sstoreCost sevm (base.setMach mach) key value =
+      sstoreCost sevm base key value := rfl
+
+private lemma accessedStorageKeys_setMach_selected
+    {base : Devm} {mach : Mach} :
+    (base.setMach mach).accessedStorageKeys =
+      base.accessedStorageKeys := rfl
+
+private lemma afterSstore_setMach_setMach_selected
+    {sevm : Sevm} {base : Devm} {mach mach' : Mach}
+    {key value : B256} :
+    (afterSstore sevm (base.setMach mach) key value).setMach mach' =
+      (afterSstore sevm base key value).setMach mach' := by
+  unfold afterSstore
+  by_cases hwarm :
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+        base.accessedStorageKeys
+  · simp only [accessedStorageKeys_setMach_selected,
+      Devm.getStorVal_setMach, Devm.setMach_refundCounter,
+      hwarm, if_pos]
+    rfl
+  · simp only [accessedStorageKeys_setMach_selected,
+      Devm.getStorVal_setMach, Devm.setMach_refundCounter,
+      hwarm]
+    rfl
+
+/-- The selected warm/cold `SSTORE` rule specialized to a caller-owned
+machine image.  The selected cost and successor remain phrased over the
+stable base state, so later instructions do not inherit a machine-register
+term in either one. -/
+theorem Ninst.runCompiled_sstore_selected_setMach
+    {sevm : Sevm} {base : Devm} {key value : B256}
+    {stack : List B256} {memory : Mem} {G : Nat}
+    (hsentry : gCallStipend < G + sstoreCost sevm base key value)
+    (hstatic : sevm.isStatic = false) :
+    Ninst.RunCompiled sevm
+      (base.setMach
+        ⟨key :: value :: stack, memory,
+          G + sstoreCost sevm base key value⟩)
+      sstore
+      ((afterSstore sevm base key value).setMach
+        ⟨stack, memory, G⟩) := by
+  simpa only [sstoreCost_setMach,
+    afterSstore_setMach_setMach_selected, Devm.memory_setMach] using
+    (Ninst.runCompiled_sstore_selected
+      (sevm := sevm)
+      (devm := base.setMach
+        ⟨key :: value :: stack, memory,
+          G + sstoreCost sevm base key value⟩)
+      (key := key) (value := value) (stack := stack) (G := G)
+      rfl
+      (by simpa only [Devm.gasLeft_setMach] using hsentry)
+      hstatic
+      (by simp only [Devm.gasLeft_setMach, sstoreCost_setMach]))
 
 /-! ### The two storage steps, in continuation-passing form
 
@@ -652,6 +861,48 @@ lemma Func.runCompiledTo_mstore_step {fs : List Func} {sevm : Sevm} {devm : Devm
     (Ninst.runCompiled_mstore_of (G := devm.gasLeft - c) (e := devm.extCost
       [⟨i.toNat, 32⟩]) h_stk rfl (by omega) rfl) ?_
   exact h_next _ _ rfl (by omega)
+
+/-- `mstoreAt` over an abstract memory.  The written image remains behind the
+continuation boundary instead of becoming a concrete write tower in every
+later compiled state. -/
+lemma Func.runCompiledTo_mstoreAt
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    {memory : Mem} {stack : List B256} {value word : B256}
+    {G pushGas extGas : Nat} {body : Func} {ex : Execution}
+    (hpushCost : pushCost (word * 32).toBytes.sig = pushGas)
+    (hroom : stack.length < 1023)
+    (hext : ∀ (S : List B256) (G' : Nat),
+      (base.setMach ⟨S, memory, G'⟩).extCost
+        [⟨(word * 32).toNat, 32⟩] = extGas)
+    (hbody : Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨stack, memory.write (word * 32).toNat value.toBytes, G⟩)
+      body ex) :
+    Func.RunCompiledTo fs sevm
+      (base.setMach
+        ⟨value :: stack, memory, G + pushGas + gVerylow + extGas⟩)
+      (mstoreAt word +++ body) ex := by
+  unfold mstoreAt
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256
+      (G := G + gVerylow + extGas) hpushCost
+      (by simp only [Devm.gasLeft_setMach]; omega)
+      (by
+        simp only [Devm.stack_setMach, List.length_cons]
+        omega)) ?_
+  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+    Devm.memory_setMach]
+  refine Func.runCompiledTo_mstore_step
+    (M := memory) (c := gVerylow + extGas) rfl rfl ?_ ?_ ?_
+  · rw [hext]
+  · simp only [Devm.gasLeft_setMach]
+    omega
+  · intro memory' G' hmemory hgas
+    simp only [Devm.gasLeft_setMach] at hgas
+    subst memory'
+    have hG' : G' = G := by omega
+    subst G'
+    simpa only [Devm.setMach_setMach, prepend] using hbody
 
 /-- `LOG n` as a walk step.  The emitted entry, the untouched storage and
 accessed set, and the gas account arrive in the continuation. -/
@@ -1735,6 +1986,38 @@ lemma Frame.enter_run_of_nonprecompile {f : Frame} {benv : Benv} {adr : Adr}
     simp
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   exact (hn h.2).elim
+
+/-- A `STATICCALL` whose frame resolves without entering, preserving the
+definitionally empty child slot.  Enabled precompiles are the principal
+consumer. -/
+lemma Ninst.childlessRunCompiled_statcall_doneFrame
+    {sevm : Sevm} {devm : Devm}
+    {gw tw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat} {devm' : Devm}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost tw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
+    (h_enter : (Frame.ofCall (statcallSpawnMsg sevm
+      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs tw.toAdr dadr iiw.toNat isw.toNat code dp)).enter = .done r)
+    (h_res : Resume.run
+      (.call (callSpawnParent d1 (mcc + ext)
+        iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat)
+      r = .ok devm') :
+    Ninst.ChildlessRunCompiled sevm devm (.exec .statcall) devm' :=
+  Ninst.childlessRunCompiled_exec_doneFrame
+    (Xinst.step_statcall_spawn h_stk h_ext h_del h_acc h_split h_gas h_depth)
+    h_enter h_res
 
 /-- A `STATICCALL` whose frame resolves without entering, packaged as one
 `Ninst.RunCompiled` premise.  Enabled precompiles are the principal consumer:

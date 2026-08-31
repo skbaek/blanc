@@ -11,15 +11,56 @@ Plan mode executes no gate body, so this is cheap and safe.  Lean-source
 controls run `lake build` first, because that is what the real runner does
 before planning and because a depHash is not evidence until Lake has refreshed
 it.
+
+The repository root defaults to the checkout containing this script.  The
+pinned EELS checkout resolves from `--eels-root`, then `EELS_ROOT`, then
+`~/execution-specs`.  `--output` is required and must name a path outside the
+repository, so the report destination is deliberate and cannot dirty the tree
+whose restoration this matrix checks.
 """
 
+import argparse
 import json
+import os
 import subprocess
 import sys
 from contextlib import contextmanager
 from pathlib import Path
 
-ROOT = Path("/Users/agent/blanc")
+
+def parse_arguments() -> tuple[Path, Path, Path]:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root", type=Path, default=Path(__file__).resolve().parents[1],
+        help="Blanc checkout (default: checkout containing this script)",
+    )
+    parser.add_argument(
+        "--eels-root", type=Path,
+        default=Path(os.environ.get("EELS_ROOT", "~/execution-specs")),
+        help="pinned EELS checkout (default: EELS_ROOT or ~/execution-specs)",
+    )
+    parser.add_argument(
+        "--output", type=Path, required=True,
+        help="JSON result path outside the Blanc checkout",
+    )
+    arguments = parser.parse_args()
+    root = arguments.root.expanduser().resolve()
+    eels_root = arguments.eels_root.expanduser().resolve()
+    output = arguments.output.expanduser().resolve()
+    if not (root / "scripts/gate-cache.py").is_file():
+        parser.error(f"--root is not a Blanc checkout: {root}")
+    if not (eels_root / ".git").exists():
+        parser.error(f"--eels-root is not a git checkout: {eels_root}")
+    try:
+        output.relative_to(root)
+    except ValueError:
+        pass
+    else:
+        parser.error(f"--output must be outside the Blanc checkout: {output}")
+    return root, eels_root, output
+
+
+ROOT, EELS_ROOT, OUTPUT = parse_arguments()
 
 
 def run(*arguments: str, cwd: Path = ROOT) -> subprocess.CompletedProcess:
@@ -185,8 +226,8 @@ try:
 finally:
     extra.unlink(missing_ok=True)
 
-# M7 -- the pinned external checkout stops being clean.
-with external_dirt(Path("/Users/agent/execution-specs"), ".gate-cache-precision-control"):
+# M8 -- the pinned external checkout stops being clean.
+with external_dirt(EELS_ROOT, ".gate-cache-precision-control"):
     control("M8 dirty pinned EELS checkout", EELS, fresh_set(), ALL - EELS)
 
 # M9 -- the elaboration gate's own ignored host-local baseline. `edited`
@@ -234,8 +275,9 @@ if leftover:
 else:
     print("tree restored clean")
 
-Path("/private/tmp/claude-502/-Users-agent-elanc/8491d8f5-ad70-4396-bdde-9754abf99e2d/"
-     "scratchpad/precision-matrix.json").write_text(json.dumps(RESULTS, indent=2) + "\n")
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+OUTPUT.write_text(json.dumps(RESULTS, indent=2) + "\n", encoding="utf-8")
+print(f"report: {OUTPUT}")
 failed = [r for r in RESULTS if r["verdict"] != "OK"]
 print(f"\n{'REGRESSION' if failed else 'OK'} — precision matrix: "
       f"{len(RESULTS) - len(failed)}/{len(RESULTS)} controls passed")

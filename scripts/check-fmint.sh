@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# fmint fixture suite (fmint-code Step 2, ~/plans/fmint-code.md; program
-# source of truth ~/plans/flashmint-proposal.md): runs the fixtures in
-# scripts/fixtures/fmint/ through Jaune's fixture runner at network Prague,
-# the sibling of check-weth.sh. Every fixture's fmint account carries
+# fmint fixture suite (`scripts/fixtures/fmint/README.md`; program and
+# compiled-byte authorities `Blanc/Fmint.lean` and `Blanc/FmintCode.lean`):
+# runs the fixtures through Jaune's fixture runner at network Prague, the
+# sibling of check-weth.sh. Every fixture's fmint account carries
 # Blanc.fmintCode -- exactly the bytes Blanc.fmintCode_compile witnesses as
 # Prog.compile Fmint.fmint's output -- and every expectation was filled by
 # the pinned frozen EELS oracle's t8n (scripts/gen-fmint-fixtures.py), never
@@ -18,14 +18,14 @@
 # file with no matching manifest row, is a REGRESSION -- distinct from a
 # fixture that merely fails to PASS.
 #
-# Also beyond check-weth.sh's PASS/FAIL loop (fmint-hygiene Step 3,
-# ~/plans/fmint-hygiene.md): before running any fixture, every fixture's
-# fmint account's code is compared byte-for-byte against the committed
-# Blanc.fmintCode literal (scripts/check-runtime-bytes.py, shared with
-# check-weth.sh) -- not merely the length-based identification the
-# generator and coverage scripts use. A parse failure on the Lean literal or
-# a byte mismatch is a REGRESSION, distinct from both the manifest
-# cross-check and a fixture FAIL.
+# Also beyond check-weth.sh's PASS/FAIL loop, as documented under "Provenance
+# and shape" in `scripts/fixtures/fmint/README.md`: before running any fixture,
+# every fixture's fmint account's code is compared byte-for-byte against the
+# committed Blanc.fmintCode literal (scripts/check-runtime-bytes.py, shared
+# with check-weth.sh) -- not merely the length-based identification the
+# generator and coverage scripts use. A parse failure on the Lean literal or a
+# byte mismatch is a REGRESSION, distinct from both the manifest cross-check
+# and a fixture FAIL.
 #
 # The Solidity-compiled borrower has a separate provenance leg: before any
 # fixture runs, scripts/check-fmint-borrower-source.py independently recomputes

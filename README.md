@@ -21,6 +21,15 @@ When a Blanc contract reimplements an existing one, what that port does and
 does not claim — and the deviation-registry discipline that backs it — is
 governed by [PORTING.md](PORTING.md).
 
+## Optional enhanced agent workflow
+
+Blanc is standalone: its pinned Jaune dependency is fetched by Lake, and Creme
+is not a build dependency. For the optional shared Jaune/Blanc agent workflow,
+clone the public Creme repository alongside Blanc (and Jaune when needed),
+launch the agent client with Creme as its project directory, and follow
+`../creme/docs/guides/execution.md` for host setup and coordination. Blanc's
+repository-specific commands and pass criteria remain in `scripts/GATES.md`.
+
 The TriggerableWithdrawalsGateway port's finite differential boundary and
 known observable differences are recorded in
 [`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md)
@@ -769,10 +778,10 @@ misplace declarations whose names have drifted from their content.
 `absentZeroRemovePost` or `freshRegisterMemory`, for a storage-write state
 builder and a memory image that no chronology owns, are not merely untidy: they
 cause exactly the misplacement above, and once a gate pins a name, renaming
-stops being free. Rename on the way into the substrate. This is the
-sibling-module discipline of `AGENTS.md` applied within a contract — a name
-claiming one case while serving all of them is evidence that the declaration
-belongs upstream.
+stops being free. Rename on the way into the substrate. This applies the
+repository's [sibling-module discipline](#module-hierarchy-contracts-are-siblings)
+within a contract — a name claiming one case while serving all of them is
+evidence that the declaration belongs upstream.
 
 **Re-check reachability after every deduplication.** Replacing several parallel
 walks with one generic walk leaves the superseded intermediates behind, and an
@@ -791,9 +800,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 899 named results and
+   current source inventory pins the exact axiom set of 981 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `899/899` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `981/981` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -821,7 +830,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **899** top theorems. `scripts/check.sh`'s
+current source inventory contains **981** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the

@@ -73,6 +73,17 @@ import Blanc.LidoTriggerableWithdrawalsGatewayAuthorization
 import Blanc.LidoTriggerableWithdrawalsGatewayPinnedTarget
 import Blanc.LidoTriggerableWithdrawalsGatewayDeploy
 import Blanc.ProrataAttackTrace
+import Blanc.BeaconDepositCorrectness
+import Blanc.BeaconDepositConstructorEffects
+import Blanc.BeaconDepositBridgeCompiled
+import Blanc.BeaconDepositSuccessSettlement
+import Blanc.BeaconDepositSuccessChronology
+import Blanc.BeaconDepositErrors
+import Blanc.BeaconDepositRootPublic
+import Blanc.BeaconDepositCountEffects
+import Blanc.BeaconDepositEffects
+import Blanc.BeaconDepositSelectorMiss
+import Blanc.BeaconDepositWriteSites
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -954,6 +965,88 @@ import Blanc.ProrataAttackTrace
 #print axioms Blanc.Exec.noRetainedWriteTo_of_exactMain_reachableExecFree
 #print axioms Blanc.ReachableExecFreeControl.routeControlProgram_not_reachableExecFree
 #print axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_circuitBreaker_noninterference
+#print axioms Blanc.BeaconDeposit.div_mul_eq_sub_mod
+#print axioms Blanc.BeaconDeposit.pred_div_eq
+#print axioms Blanc.BeaconDeposit.pred_mod_of_pos
+#print axioms Blanc.BeaconDeposit.pred_mod_eq
+#print axioms Blanc.BeaconDeposit.pred_div_pow_eq
+#print axioms Blanc.BeaconDeposit.mod_two_pow_eq_zero_iff
+#print axioms Blanc.BeaconDeposit.rootAt_nil
+#print axioms Blanc.BeaconDeposit.rootAt_short
+#print axioms Blanc.BeaconDeposit.rootAtE_eq
+#print axioms Blanc.BeaconDeposit.rootAt_append
+#print axioms Blanc.BeaconDeposit.empty_inv
+#print axioms Blanc.BeaconDeposit.pending_step_even
+#print axioms Blanc.BeaconDeposit.pending_step_odd
+#print axioms Blanc.BeaconDeposit.rootAt_pending_even
+#print axioms Blanc.BeaconDeposit.rootAt_pending_odd
+#print axioms Blanc.BeaconDeposit.climb_spec
+#print axioms Blanc.BeaconDeposit.root_correct
+#print axioms Blanc.BeaconDeposit.empty_root
+#print axioms Blanc.BeaconDeposit.div_two_div_pow
+#print axioms Blanc.BeaconDeposit.div_pow_div_two
+#print axioms Blanc.BeaconDeposit.walk_eq_none_iff
+#print axioms Blanc.BeaconDeposit.walk_isSome_iff
+#print axioms Blanc.BeaconDeposit.walk_none_at_cap
+#print axioms Blanc.BeaconDeposit.insert_isSome_iff
+#print axioms Blanc.BeaconDeposit.take_drop_append
+#print axioms Blanc.BeaconDeposit.mod_pow_ge_of_bit
+#print axioms Blanc.BeaconDeposit.mod_pow_ge_of_two_bits
+#print axioms Blanc.BeaconDeposit.bit_zero_of_mod_zero
+#print axioms Blanc.BeaconDeposit.completedBlock_pred
+#print axioms Blanc.BeaconDeposit.walk_insert_spec
+#print axioms Blanc.BeaconDeposit.insert_spec
+#print axioms Blanc.BeaconDeposit.deposit_ne_assert_false
+#print axioms Blanc.BeaconDeposit.deposit_ok_spec
+#print axioms Blanc.BeaconDeposit.deposit_inv
+#print axioms Blanc.BeaconDeposit.le64_length
+#print axioms Blanc.BeaconDeposit.zeros_length
+#print axioms Blanc.BeaconDeposit.le64_zero
+#print axioms Blanc.BeaconDeposit.hashPair_input_length
+#print axioms Blanc.BeaconDeposit.mixIn_input_length
+#print axioms Blanc.BeaconDeposit.pubkeyRoot_input_length
+#print axioms Blanc.BeaconDeposit.signatureRoot_input_lengths
+#print axioms Blanc.BeaconDeposit.depositDataNode_input_lengths
+#print axioms Blanc.BeaconDeposit.code_compile
+#print axioms Blanc.BeaconDeposit.code_eip170
+#print axioms Blanc.BeaconDeposit.constructorInitPrefix_compile
+#print axioms Blanc.BeaconDeposit.creationCode_eip3860
+#print axioms Blanc.BeaconDeposit.deposit_success_settled_effects
+#print axioms Blanc.BeaconDeposit.deposit_success_retainedStorageEffectTriples
+#print axioms Blanc.BeaconDeposit.deposit_pubkeyLength_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_withdrawalCredentialsLength_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_signatureLength_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_valueTooLow_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_valueNotGweiMultiple_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_valueTooHigh_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_depositDataRootMismatch_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_merkleTreeFull_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_error_runCompiledTo
+#print axioms Blanc.BeaconDeposit.deposit_malformed_noRawSstore
+#print axioms Blanc.BeaconDeposit.noMatchSelector_runCompiledTo
+#print axioms Blanc.BeaconDeposit.unmatched_selector_noRawSstore
+#print axioms Blanc.BeaconDeposit.supportsInterface_runCompiled
+#print axioms Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo
+#print axioms Blanc.BeaconDeposit.supportsInterface_runCompiled_noRawSstore
+#print axioms Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo_noRawSstore
+#print axioms Blanc.BeaconDeposit.supportsInterface_short_calldata_runCompiledTo_noRawSstore
+#print axioms Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled
+#print axioms Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo
+#print axioms Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled_noRawSstore
+#print axioms Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo_noRawSstore
+#print axioms Blanc.BeaconDeposit.getDepositCount_warm_runCompiled
+#print axioms Blanc.BeaconDeposit.getDepositCount_cold_runCompiled
+#print axioms Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo
+#print axioms Blanc.BeaconDeposit.getDepositCount_warm_runCompiled_noRawSstore
+#print axioms Blanc.BeaconDeposit.getDepositCount_cold_runCompiled_noRawSstore
+#print axioms Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo_noRawSstore
+#print axioms Blanc.BeaconDeposit.Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot
+#print axioms Blanc.BeaconDeposit.Exec.Deriv.beaconConstructor_sstore_coordinate
+#print axioms Blanc.BeaconDeposit.constructor_success_retainedStorageEffectTriples
+#print axioms Blanc.BeaconDeposit.ArtifactInv.root_eq_mixedRootOf
+#print axioms Blanc.BeaconDeposit.ArtifactInv.count_eq_history_length
+#print axioms Blanc.BeaconDeposit.constructorFinalStorage_artifactInv
+#print axioms Blanc.BeaconDeposit.deposit_success_artifactInv
 #print axioms Blanc.compact_pause_word_eq_projection
 #print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution
 #print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok

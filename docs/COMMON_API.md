@@ -47,6 +47,19 @@ registry has identified the likely vocabulary.
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
+- A selected `LOG` step that exposes unchanged storage, balances, code,
+  access sets, output, and error while threading an arbitrary continuation:
+  `Func.runCompiledTo_log_step_ext` and its exhibited-state form
+  `Func.runCompiledTo_log_step_exists` in
+  [`Blanc/ForwardLog.lean`](../Blanc/ForwardLog.lean).
+- Selected storage access uses the neutral `sloadCost` / `afterSload` and
+  `sstoreCost` / `afterSstore` carriers in
+  [`Blanc/ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean).
+  Its projection API includes unchanged storage on a non-target account,
+  code, addresses, logs, output, and error; the target-storage and key-set
+  equations expose the selected write and warm/cold access update.  The lower
+  one-write primitive is `setStorVal_getStor_ne` in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` and is the identity
   on constant-data reverters by `Trigger.rebaseLocalCalls_revData` in
@@ -143,6 +156,11 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   four-instruction selector prefix before the residual function.
 - `Func.ExecSat` / `Prog.ExecSat` package predicates over outcomes.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
+- `Ninst.ChildlessRunCompiled` strengthens one compiled instruction with a
+  definitionally empty recursive slot; `.toRunCompiled` forgets that fact,
+  while `childlessRunCompiled_exec_doneFrame` and
+  `childlessRunCompiled_statcall_doneFrame` construct it for synchronously
+  resolved frames.
 - `Func.exec_of_runCompiledTo` and its program bridge recover an `Exec`
   derivation from a completed arbitrary-outcome compiled walk.
 
@@ -201,6 +219,47 @@ Use [`Blanc/RootedExecution.lean`](../Blanc/RootedExecution.lean):
 For retained or settlement-filtered children, do not encode the filter into
 this raw-root bridge; continue to T2.
 
+For raw `SSTORE` exclusion on one exact selected compiled path, use
+[`Blanc/ForwardNoRawSstore.lean`](../Blanc/ForwardNoRawSstore.lean):
+
+- `Func.RunCompiledTo.NoRawSstorePath` mirrors the chosen branches and
+  internal calls and requires explicit childlessness at external instructions.
+- `NoRawSstorePath.of_execFree` discharges an execution-free, locally
+  SSTORE-free body; `NoRawSstorePath.of_revWith` is the symbolic
+  constant-error specialization.
+- `NoRawSstorePath.of_emptyRevertGuard` certifies a selected nonzero guard
+  whose internal auxiliary is the common empty `Func.rev` body.
+- `NoRawSstorePath.of_prepend_nonexec` prepends an instruction-only line when
+  every instruction is non-external and distinct from raw `SSTORE`; its tail
+  certificate may depend on the intermediate compiled state.
+- `NoRawSstorePath.of_entrySstoreFree_reachableExecFree` converts an exact
+  compiled walk directly when the shared executable entry/component checkers
+  certify both same-frame SSTORE freedom and absence of child-entering
+  instructions; recursive internal-call components are supported.
+- `Func.replaceStopWith` replaces successful `STOP` leaves and
+  `Func.replaceStopWith_prepend` pushes that replacement through an
+  instruction-only prefix, while
+  `NoRawSstorePath.replaceStopWith_of_error` transports an exact error-ending
+  path and its certificate across that replacement.  Use this when a checker
+  can certify a prefix only with a harmless success continuation: the error
+  proof establishes that the replaced continuation was not entered.
+- For a warm fixed-width SHA-256 precompile crossing, use
+  `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
+  [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary
+  `runCompiled_*` projection intentionally forgets the empty child slot.
+- `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
+  `Exec.NoRawSstore`; its consequences exclude every successful raw SSTORE and
+  force `retainedStorageWrites = []` for that same witness;
+  `retainedStorageEffectTriples_eq_nil` gives the proof-erased chronology.
+- `Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree` is the
+  occurrence-direction counterpart for an existing exact `Exec`: reachable
+  exec freedom collapses child frames, then the same-frame entry certificate
+  excludes every raw SSTORE node.
+
+This is construction-direction evidence. A late revert may already have
+executed an SSTORE, so neither rollback nor an empty retained-write list can
+replace the selected-path certificate.
+
 ### E4. I need a common terminal walk
 
 Use [`Blanc/ExecutionTerminal.lean`](../Blanc/ExecutionTerminal.lean):
@@ -212,6 +271,19 @@ For different offsets, sizes, stack tails, or payloads, use the general
 `Func.runCompiledTo_ret_word` in `ForwardCall` or
 `Func.runCompiledTo_rev` / `Func.runCompiledTo_rev_of` in `Reverts`.
 
+For a nonzero branch flag that tail-calls an empty-revert auxiliary, use
+`emptyRevertGuardCost` and `Func.runCompiledTo_emptyRevertGuard` in
+[`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
+
+For a nonzero branch flag that tail-calls a constant `Error(string)`
+auxiliary, use `errorBodyCost`, `errorCallCost`, `errorGuardCost`, and
+`Func.runCompiledTo_errorGuard` in
+[`Blanc/RevertPayload.lean`](../Blanc/RevertPayload.lean). The cost remains a
+function of the entry state, so arbitrary aligned prior memory and its exact
+expansion charge are retained.  When an existential carrier exposes a
+different entry state with the same memory size, transport the exact cost with
+`errorGuardCost_congr_memory_size`.
+
 For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 `ReturnsWord`, `of_storeReturnWord`, or the memory-side-condition-free
 `returnsWord_of_storeReturn` in
@@ -221,6 +293,12 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
+- `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
+  `Prog.SourceSite.coordinates` keeps each counter coupled to its owning
+  function-table index for role-preserving finite inventory checks.
+- `Exec.StorageWrite.effectTriple` erases only the derivation node from a
+  successful write, and `Exec.retainedStorageEffectTriples` is the canonical
+  settlement-retained `(owner, key, value)` chronology.
 - For an actual target-directed source route, use
   `Exec.Deriv.SourceCursor.Toward.chronology`,
   `next_of_instruction_ne`, `rebase`, `dropLineRun`,
@@ -514,6 +592,13 @@ repeat their byte-slice normalization in a contract family.
   at offsets 0 and 32 read back as the exact 64-byte concatenation;
   `Bytes.read_two_word_writes_at` and `Mem.read_two_word_writes_at` provide the
   same fact at an arbitrary starting offset.
+- Compose exact fixed-layout byte images with the shared laws in
+  [`Blanc/BytesWrite.lean`](../Blanc/BytesWrite.lean): `Bytes.length_writeAt`,
+  `List.sliceD_add`, `Bytes.sliceD_stagedPair`,
+  `Bytes.sliceD_append_middle`, `Bytes.getD_sliceD_of_lt`,
+  `Bytes.sliceD_sliceD_of_le`, `Bytes.sliceD_of_sliceD_eq`,
+  `Bytes.sliceD_of_sliceD_zero_eq`, and
+  `Bytes.writeAt_append_middle_at`.
 - Decode an exact word without losing bytes with
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private
@@ -577,9 +662,17 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
   successful transfer, exact code address, and fork-relative non-precompile
   fact without requiring `disablePrecompiles = true`; its settlement-level
   companion is
-  `processMessage_eq_settle_exec_afterTransfer_of_notPrecompile`. The derived
-  `processMessage_eq_settle_exec_afterTransfer` names the actual environment
-  produced by value transfer when precompiles are disabled, and
+  `processMessage_eq_settle_exec_afterTransfer_of_notPrecompile`.
+- For payable calls that already retain the exact interpreter entry, use
+  `processMessage_eq_settle_exec_afterTransfer_of_codeEntry` and
+  `processMessage_clean_of_exec_afterTransfer_of_codeEntry`. Derive ordinary
+  non-precompile entry with
+  `executeCode_enter_of_codeAddress_not_precompile`; this covers normal
+  `disablePrecompiles = false` messages. Use
+  `processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress` for creation
+  code with no separate address.
+- `processMessage_eq_settle_exec_afterTransfer` names the actual environment
+  produced by value transfer when precompiles are explicitly disabled, and
   `processMessage_eq_settle_exec` is its identity-entry specialization.
 - `processMessage_clean_of_exec_afterTransfer`,
   `processMessage_revert_of_exec_afterTransfer`, and
@@ -607,6 +700,36 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   from complete frame settlement.
 - `Exec.descendantFrames`, `Exec.committedFrames`, and retained-node APIs
   traverse only effects that survive the relevant settlement boundary.
+- `Exec.retainedStorageEffectTriples_cont`,
+  `Exec.retainedStorageEffectTriples_doneOk`, and
+  `Exec.retainedStorageEffectTriples_halt` compose the proof-erased retained
+  `(owner, key, value)` chronology across ordinary, synchronously childless,
+  and terminal execution nodes.
+- For construction from a successful selected compiled walk, use
+  [`Blanc/ForwardStorageEffects.lean`](../Blanc/ForwardStorageEffects.lean):
+  annotate it with `Func.RunCompiledTo.StorageEffectPath`.  When construction
+  must thread the run and annotation together through a long CPS-style walk,
+  use `Func.StorageEffectRun` with `of_noRawSstorePath` for an already
+  certified empty path and its `last`, `next`, `next_effectNeutral`, `zero`,
+  `succ`, and `call` constructors; ordinary non-external steps can otherwise
+  use `StorageEffectPath.next_of_not_exec`.  The `storage_effect_run` tactic
+  walks a childless non-SSTORE prefix with `func_run`'s state, gas, hint, and
+  side-condition engine, deliberately returning an external instruction,
+  SSTORE, internal call, or terminal to the caller.  To replace a designated
+  successful `STOP` by an exact-effect continuation, certify the selected
+  neutral walk with `RunCompiledTo.SuccessfulStopPrefix.of_execFree` and use
+  `SuccessfulStopPrefix.splice`; `Func.SuccessStopOnly` rules out other
+  successful terminal shapes and internal-call leaves.  Finish with
+  `Prog.exists_exec_retainedStorageEffectTriples`, or its `_appended` variant
+  when the compiled program is the exact prefix of creation code. The
+  resulting list is exact execution order and intentionally retains successful
+  no-op SSTOREs. An existing `NoRawSstorePath` converts directly with
+  `StorageEffectPath.of_noRawSstorePath`; in the reverse direction, an exact
+  empty annotation converts with `StorageEffectPath.noRawSstorePath_of_nil`,
+  or directly from its packaged carrier with
+  `Func.StorageEffectRun.noRawSstorePath`.  The reverse direction is indexed by
+  the identical selected run, so it proves raw absence rather than inferring it
+  from final storage equality.
 - `ProcessMessage.clean_input_state_of_settle` exposes the clean raw input and
   exact state retained by a successful settlement.
 - `processCreateMessage.chargeCodeGas_bal_eq` and
@@ -757,6 +880,13 @@ For schedule-parametric block/history state boundaries and replay, use
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
 - Call crossings:
   [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean).
+- Exact failed binary-dispatch walks:
+  [`Blanc/ForwardDispatchMiss.lean`](../Blanc/ForwardDispatchMiss.lean).
+  `DispatchTree.HasSelector` names membership in the selector census,
+  `DispatchTree.dispatchMissGas` records the selector-dependent cost, and
+  `DispatchTree.dispatchMiss_runCompiledTo_with_path` constructs the exact
+  empty-revert walk together with raw-SSTORE freedom for the identical selected
+  proof.  It deliberately requires no safety property of an unselected sibling.
 
 ### C2. I need deployment/message correspondence
 

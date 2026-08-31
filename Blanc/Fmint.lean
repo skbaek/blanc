@@ -1,9 +1,9 @@
 -- Fmint.lean : "fmint", contract #2 — an ERC-3156 flash-mintable ERC-20.
 --
--- Program source of truth: `~/plans/flashmint-proposal.md` (D1 resolved pure,
--- D2 fee ≡ 0, D3 storage layout, D4 callback shape, D5 ordering discipline,
--- D6 events).  Behavioral adjudication against the pinned OpenZeppelin
--- reference: `FMINT_DEVIATIONS.md`.
+-- Program and design authority: this module (D1 resolved pure, D2 fee ≡ 0,
+-- D3 storage layout, D4 callback shape, D5 ordering discipline, D6 events).
+-- Behavioral adjudication against the pinned OpenZeppelin reference:
+-- `FMINT_DEVIATIONS.md`.
 --
 -- Reading order: the storage layout and its guard, the event topics, the
 -- ERC-3156 constants, the aux table, then `flashLoan` and its fragments — the
@@ -138,7 +138,7 @@ it.
 
 Both are `example`s, and both are checked by `decide` rather than
 `decide +kernel`: `B256`'s comparison instances are built by tactics and stall
-in the kernel evaluator (`~/plans/kernel-decidable.md`). -/
+in the kernel evaluator. -/
 
 /-- The new clause fires on the concrete colliding word. -/
 example : B256.eqCheck (~~~ supplySlot) 0 = 1 := by decide
@@ -220,10 +220,9 @@ contract exists.  It is genuinely new code rather than a reuse of WETH's
 allowance, or decrement a finite one — have to reach the same burn.  A `Func` is
 a tree with no join points, so a shared continuation is either an `aux` entry
 reached by `Func.call`, or a duplicated tail, or no branch at all.  Chosen: the
-**`aux` entry**, which is the free tail-share case (`~/plans/cps-proposal.md`
-structural fact 6: a join that is a function *suffix* costs a `PUSH2`/`JUMP` and
-nothing else), and which the proposal names directly.  The two rejected shapes,
-recorded so the choice is not re-litigated:
+**`aux` entry**, which is the free tail-share case: `Func.compile` in
+`Blanc/CommonCore.lean` compiles a call to only `PUSH2`/`JUMP`.  The two
+rejected shapes, recorded so the choice is not re-litigated:
 
 * *duplicated tail* — also correct, but it emits the whole epilogue twice (~70
   bytes here) to save one `PUSH2`/`JUMP`, and leaves Arc B two leaves to walk
@@ -233,9 +232,9 @@ recorded so the choice is not re-litigated:
   Arc B to save one jump, and forcing an `SSTORE` of the unchanged value in the
   infinite case.  Rejected on proof cost.
 
-The selector-CPS scheme of `~/plans/cps-proposal.md` is **not** in scope and
-must not be introduced here.  Its trigger is a shared *middle* with
-caller-specific resumptions; this is a shared *tail*, which needs none of it. -/
+A selector-CPS scheme is **not** in scope and must not be introduced here.  Its
+trigger would be a shared *middle* with caller-specific resumptions; this is a
+shared *tail*, which needs none of it. -/
 
 /-- The shared burn epilogue, aux slot `burnSlot`.
 

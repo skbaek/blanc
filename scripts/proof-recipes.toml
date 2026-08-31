@@ -308,17 +308,23 @@ review_date = "2026-08-29"
 id = "message-execution-settlement"
 status = "active"
 triggers = ["goal-shape:message-execution-settlement"]
-preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec_of_enter` when an exact successful `Frame.enter` equation is already retained, including for delegated children. Use `processMessage_eq_settle_exec_afterTransfer` when value transfer prepared a distinct entry environment and precompiles are disabled, then its clean/revert/halt `_afterTransfer` adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. Use the unsuffixed `processMessage_eq_settle_exec` and outcome adapters for the identity-entry specialization. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections."
-boundary = "The generic enter bridge requires only the exact successful entry equation. The post-transfer bridge additionally names the successful post-transfer environment and requires disabled precompiles; the unsuffixed specialization also requires entry-state identity. The retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
+preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec_of_enter` when an exact successful `Frame.enter` equation is already retained, including for delegated children. For payable ordinary calls, derive a normal non-precompile entry with `executeCode_enter_of_codeAddress_not_precompile` and use the `*_afterTransfer_of_codeEntry` adapters; the `*_afterTransfer_of_notPrecompile` bridge packages the same route from address evidence. Use `processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress` for creation-code entry, or `processMessage_eq_settle_exec_afterTransfer` when precompiles are explicitly disabled. Then use the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. Use the unsuffixed adapters for the identity-entry specialization. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections."
+boundary = "The generic enter bridge requires only the exact successful entry equation. Post-transfer bridges name the successful transferred environment: exact-code-entry and non-precompile variants work with ordinary `disablePrecompiles = false` messages, the no-code-address variant covers creation code, and the convenience bridge requires disabled precompiles. The unsuffixed specialization additionally requires entry-state identity. Retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
 owner_module = "Blanc/MessageExecution.lean"
 canonical_example = "Blanc/MessageExecution.lean:MessageExecution.processMessage_eq_settle_exec"
 symbols = [
   "module:Blanc/MessageExecution.lean",
   "module:Blanc/MessageExecutionInversion.lean",
   "declaration:MessageExecution.processMessage_eq_settle_exec_of_enter",
+  "declaration:MessageExecution.frameEnter_eq_run_afterTransfer_of_notPrecompile",
+  "declaration:MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_notPrecompile",
+  "declaration:MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress",
   "declaration:MessageExecution.processMessage_eq_settle_exec_afterTransfer",
   "declaration:MessageExecution.processMessage_eq_settle_exec",
   "declaration:MessageExecution.processMessage_clean_of_exec_afterTransfer",
+  "declaration:MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_codeEntry",
+  "declaration:MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry",
+  "declaration:MessageExecution.executeCode_enter_of_codeAddress_not_precompile",
   "declaration:MessageExecution.processMessage_clean_of_exec",
   "declaration:MessageExecution.processMessage_revert_of_exec_afterTransfer",
   "declaration:MessageExecution.processMessage_revert_of_exec",
@@ -332,6 +338,42 @@ symbols = [
   "declaration:MessageExecution.settledHalt",
   "declaration:Msg.initDevm_stack",
   "declaration:Msg.initSevm_data",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-30"
+
+[[recipe]]
+id = "raw-sstore-free-compiled-path"
+status = "active"
+triggers = ["goal-shape:raw-sstore-free-compiled-path"]
+preferred_path = "Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_entrySstoreFree_reachableExecFree` when the executable finite-component checkers prove both local SSTORE freedom and reachable exec freedom; otherwise use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body, `NoRawSstorePath.of_prepend_nonexec` for an instruction-only prefix, `NoRawSstorePath.of_revWith` for a symbolic constant-error body, or `NoRawSstorePath.of_emptyRevertGuard` for a selected nonzero guard calling an empty-revert auxiliary. When a failing prefix is checker-safe only with a harmless success continuation, certify that source and use `NoRawSstorePath.replaceStopWith_of_error` to reinstate the production continuation that the exact error path never enters; `Func.replaceStopWith_prepend` normalizes an instruction-only prefix around that replacement. For a warm fixed-width SHA-256 precompile step, preserve the empty child slot with `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext`; finish with `Prog.exists_exec_noRawSstore`. When an exact `Exec` already exists, use `Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree` to combine the two executable entry certificates occurrence-first."
+boundary = "This is raw construction-direction chronology, not rollback reasoning. An empty retained-write list or reverted terminal state does not prove the certificate because an earlier raw SSTORE may have executed and then rolled back. Entered child frames require their own evidence; synchronously resolved childless precompiles may use the explicit done-frame constructor."
+owner_module = "Blanc/ForwardNoRawSstore.lean"
+canonical_example = "Blanc/ForwardNoRawSstore.lean:Func.RunCompiledTo.NoRawSstorePath.of_execFree"
+symbols = [
+  "module:Blanc/ForwardNoRawSstore.lean",
+  "declaration:Blanc.Ninst.ChildlessRunCompiled",
+  "declaration:Blanc.Ninst.ChildlessRunCompiled.toRunCompiled",
+  "declaration:Blanc.Ninst.childlessRunCompiled_exec_doneFrame",
+  "declaration:Blanc.Ninst.childlessRunCompiled_statcall_doneFrame",
+  "declaration:Blanc.Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext",
+  "declaration:Blanc.emptyRevertGuardCost",
+  "declaration:Blanc.Func.runCompiledTo_emptyRevertGuard",
+  "declaration:Blanc.Exec.NoRawSstore",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_execFree",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_revWith",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_prepend_nonexec",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree",
+  "declaration:Blanc.Func.replaceStopWith",
+  "declaration:Blanc.Func.replaceStopWith_prepend",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.replaceStopWith_of_error",
+  "declaration:Blanc.Prog.exists_exec_noRawSstore",
+  "declaration:Blanc.Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree",
+  "declaration:Blanc.Exec.NoRawSstore.no_successfulSstoreOccurrence",
+  "declaration:Blanc.Exec.NoRawSstore.retainedStorageWrites_eq_nil",
+  "declaration:Blanc.Exec.NoRawSstore.retainedStorageEffectTriples_eq_nil",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
@@ -361,6 +403,62 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
+
+[[recipe]]
+id = "exact-retained-storage-effects"
+status = "active"
+triggers = ["goal-shape:exact-retained-storage-effects"]
+preferred_path = "For a committing selected compiled walk, build `Func.RunCompiledTo.StorageEffectPath` in source order. For a long construction that must thread the indexed run and annotation together, use `Func.StorageEffectRun` and its source-shaped constructors; `next_effectNeutral` preserves the tail list across an ordinary non-SSTORE step, while `of_noRawSstorePath` packages an existing empty selected-path certificate. Use `storage_effect_run` to walk a childless neutral prefix with the `func_run` state/gas/hint engine; it hands external instructions, SSTOREs, internal calls, and terminals back to the caller. To replace a designated successful STOP with an exact-effect continuation, certify the selected neutral walk with `RunCompiledTo.SuccessfulStopPrefix.of_execFree` and apply `SuccessfulStopPrefix.splice`. Convert an existing raw-SSTORE-free certificate with `StorageEffectPath.of_noRawSstorePath`; convert an exact empty annotation back to raw freedom with `StorageEffectPath.noRawSstorePath_of_nil` or `StorageEffectRun.noRawSstorePath`. Otherwise supply `Ninst.ChildlessRunCompiled` at each synchronously resolved external step. Finish with `Prog.exists_exec_retainedStorageEffectTriples`, or `_appended` when the compiled program is only the exact prefix of a larger creation-code image. When composing an `Exec` directly, use `Exec.retainedStorageEffectTriples_cont`, `Exec.retainedStorageEffectTriples_doneOk`, and `Exec.retainedStorageEffectTriples_halt`."
+boundary = "The certificate is exact retained chronology, including successful no-op SSTOREs. It requires a committing successful result and explicit childlessness at external steps; it does not infer child-frame absence from same-frame source classification or final storage equality."
+owner_module = "Blanc/ForwardStorageEffects.lean"
+canonical_example = "Blanc/ForwardStorageEffects.lean:Prog.exists_exec_retainedStorageEffectTriples"
+symbols = [
+  "module:Blanc/ForwardStorageEffects.lean",
+  "declaration:Blanc.Ninst.storageEffectTriple?",
+  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath",
+  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.next_of_not_exec",
+  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath",
+  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil",
+  "declaration:Blanc.Func.StorageEffectRun",
+  "declaration:Blanc.Func.StorageEffectRun.of_noRawSstorePath",
+  "declaration:Blanc.Func.StorageEffectRun.noRawSstorePath",
+  "declaration:Blanc.Func.StorageEffectRun.last",
+  "declaration:Blanc.Func.StorageEffectRun.next",
+  "declaration:Blanc.Func.StorageEffectRun.next_effectNeutral",
+  "declaration:Blanc.Func.StorageEffectRun.zero",
+  "declaration:Blanc.Func.StorageEffectRun.succ",
+  "declaration:Blanc.Func.StorageEffectRun.call",
+  "declaration:Blanc.Func.storageEffectRun_branch_zero",
+  "declaration:Blanc.Func.storageEffectRun_branch_succ",
+  "declaration:Blanc.Func.SuccessStopOnly",
+  "declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix",
+  "declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree",
+  "declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix.splice",
+  "declaration:Blanc.Prog.exists_exec_retainedStorageEffectTriples",
+  "declaration:Blanc.Prog.exists_exec_retainedStorageEffectTriples_appended",
+  "declaration:Blanc.Exec.retainedStorageEffectTriples_cont",
+  "declaration:Blanc.Exec.retainedStorageEffectTriples_doneOk",
+  "declaration:Blanc.Exec.retainedStorageEffectTriples_halt",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-30"
+
+[[recipe]]
+id = "binary-dispatch-miss"
+status = "active"
+triggers = ["goal-shape:raw-sstore-free-compiled-path"]
+preferred_path = "For an unmatched selector in a `DispatchTree`, prove `¬ tree.HasSelector selector` and apply `DispatchTree.dispatchMiss_runCompiledTo_with_path`. The result is the exact selector-dependent empty-revert `RunCompiledTo` paired with `NoRawSstorePath` for that identical proof; `DispatchTree.dispatchMissGas` names its exact cost."
+boundary = "This follows only the selected miss path. It does not inspect or certify unselected sibling bodies, prove a contract-specific selector census, or add the selector-extraction and program-main prefix around `dispatch tree`."
+owner_module = "Blanc/ForwardDispatchMiss.lean"
+canonical_example = "Blanc/ForwardDispatchMiss.lean:DispatchTree.dispatchMiss_runCompiledTo_with_path"
+symbols = [
+  "module:Blanc/ForwardDispatchMiss.lean",
+  "declaration:Blanc.DispatchTree.HasSelector",
+  "declaration:Blanc.DispatchTree.dispatchMissGas",
+  "declaration:Blanc.DispatchTree.dispatchMiss_runCompiledTo_with_path",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-31"
 
 [[recipe]]
 id = "accepted-boolean-settlement"
@@ -516,6 +614,26 @@ symbols = [
   "declaration:ExecutionTrace.TransactionStateChronology.stateReplay",
   "declaration:ExecutionTrace.AppliedBodyStateChronology.stateReplay",
   "declaration:ExecutionTrace.ConfiguredHistoryStateChronology.stateReplay",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-08-30"
+
+[[recipe]]
+id = "constant-error-guard"
+status = "active"
+triggers = ["goal-shape:constant-error-guard"]
+preferred_path = "Use `Func.runCompiledTo_errorGuard` when a nonzero branch flag tail-calls an auxiliary equal to `Func.revWith reason`. Supply the auxiliary lookup, exact entry-state memory image and alignment, payload bounds, gas expressed through `errorGuardCost`, and stack room; the theorem returns the complete ABI `Error(string)` payload with exact final memory, stack, and gas. When an existential carrier exposes a different state with the same memory size, transport that exact cost with `errorGuardCost_congr_memory_size`."
+boundary = "This proves the branch-and-internal-call walk only. It does not select a contract route, establish which flag is nonzero, authenticate a contract-specific reason/slot table, or turn the local revert into a public endpoint theorem. Keep `errorGuardCost` indexed by the actual entry state, or transport it only across a proved memory-size equality, so memory expansion is not silently weakened."
+owner_module = "Blanc/RevertPayload.lean"
+canonical_example = "Blanc/RevertPayload.lean:Func.runCompiledTo_errorGuard"
+symbols = [
+  "module:Blanc/RevertPayload.lean",
+  "declaration:Blanc.errorBodyCost",
+  "declaration:Blanc.errorCallCost",
+  "declaration:Blanc.errorGuardCost",
+  "declaration:Blanc.errorGuardCost_congr_memory_size",
+  "declaration:Blanc.Func.runCompiledTo_revWith",
+  "declaration:Blanc.Func.runCompiledTo_errorGuard",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"

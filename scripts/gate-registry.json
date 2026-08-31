@@ -24,7 +24,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 doc-counts: "
+          "^OK — doc-counts: "
         ]
       }
     },
@@ -56,7 +56,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 lido-circuit-breaker-assurance: "
+          "^OK — lido-circuit-breaker-assurance: "
         ]
       }
     },
@@ -87,7 +87,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 layering: "
+          "^OK — layering: "
         ]
       }
     },
@@ -136,8 +136,8 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 proof recipes: ",
-          "^OK \u2014 proof-recipe gate \\(report-only\\): "
+          "^OK — proof recipes: ",
+          "^OK — proof-recipe gate \\(report-only\\): "
         ]
       }
     },
@@ -170,7 +170,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 proof-debt: "
+          "^OK — proof-debt: "
         ]
       }
     },
@@ -203,7 +203,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 proof module size \\(report-only\\): "
+          "^OK — proof module size \\(report-only\\): "
         ]
       }
     },
@@ -236,7 +236,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 proof duplication ratchet: "
+          "^OK — proof duplication ratchet: "
         ]
       }
     },
@@ -268,7 +268,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 proof residue: "
+          "^OK — proof residue: "
         ]
       }
     },
@@ -312,12 +312,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The wrapper always passes --negative-controls, which makes one seed copy of the whole tree and eight case copies through nine unguarded shutil.copytree calls: a dangling symlink or an unreadable file anywhere outside .git/.lake/build makes one raise and the gate fail. Two earlier declarations of that were both wrong. Content hashing the tree reran the gate on every unrelated edit; membership reran it on every unrelated addition and still missed the case, because a dangling symlink is not is_file() and never entered the digest. The traversable mode declares the hazard instead of a corpus \u2014 it refuses to fingerprint a tree it cannot read and contributes nothing otherwise. Residue: chmod-ing an already-present file unreadable is caught, but a file made unreadable and readable again between two runs is not observed.",
+      "note": "The wrapper always passes --negative-controls, which makes one seed copy of the whole tree and eight case copies through nine unguarded shutil.copytree calls: a dangling symlink or an unreadable file anywhere outside .git/.lake/build makes one raise and the gate fail. Two earlier declarations of that were both wrong. Content hashing the tree reran the gate on every unrelated edit; membership reran it on every unrelated addition and still missed the case, because a dangling symlink is not is_file() and never entered the digest. The traversable mode declares the hazard instead of a corpus — it refuses to fingerprint a tree it cannot read and contributes nothing otherwise. Residue: chmod-ing an already-present file unreadable is caught, but a file made unreadable and readable again between two runs is not observed.",
       "order": 9,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 extraction ownership: "
+          "^OK — extraction ownership: "
         ]
       }
     },
@@ -348,7 +348,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 trust surface: "
+          "^OK — trust surface: "
         ]
       }
     },
@@ -396,12 +396,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The falsifier harness copies the whole scripts/reference/weth10 tree per coordinated case, but only the input files named here are ever loaded back out of the copy. The four WETH10_REFERENCE_*/WETH10_COMPATIBILITY_DOC overrides repoint the lock, the vendored input tree and the compatibility document, so they are inputs even though they are normally unset. Its reference tree and lock are declared through the same environment overrides the gate itself resolves, so a run held at a redirected location fingerprints the tree it actually read rather than the default one it did not. Its falsifier harness copytrees the whole reference directory, so every file there \u2014 README.md included \u2014 must be readable for the gate to run at all, while only the twelve declared inputs can change its verdict. The traversable population states exactly that. Found by scripts/gate-read-audit.py, not by reading.",
+      "note": "The falsifier harness copies the whole scripts/reference/weth10 tree per coordinated case, but only the input files named here are ever loaded back out of the copy. The four WETH10_REFERENCE_*/WETH10_COMPATIBILITY_DOC overrides repoint the lock, the vendored input tree and the compatibility document, so they are inputs even though they are normally unset. Its reference tree and lock are declared through the same environment overrides the gate itself resolves, so a run held at a redirected location fingerprints the tree it actually read rather than the default one it did not. Its falsifier harness copytrees the whole reference directory, so every file there — README.md included — must be readable for the gate to run at all, while only the twelve declared inputs can change its verdict. The traversable population states exactly that. Found by scripts/gate-read-audit.py, not by reading.",
       "order": 11,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 WETH10 reference: "
+          "^OK — WETH10 reference: "
         ]
       }
     },
@@ -442,7 +442,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido CircuitBreaker reference: "
+          "^OK — Lido CircuitBreaker reference: "
         ]
       }
     },
@@ -467,7 +467,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido TWG census: "
+          "^OK — Lido TWG census: "
         ]
       }
     },
@@ -506,7 +506,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido TWG reference: "
+          "^OK — Lido TWG reference: "
         ]
       }
     },
@@ -548,7 +548,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido OssifiableProxy reference: "
+          "^OK — Lido OssifiableProxy reference: "
         ]
       }
     },
@@ -589,7 +589,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 OssifiableProxy performance static gate; no measurements run$"
+          "^OK — OssifiableProxy performance static gate; no measurements run$"
         ]
       }
     },
@@ -669,7 +669,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido artifact profiles: "
+          "^OK — Lido artifact profiles: "
         ]
       }
     },
@@ -698,7 +698,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido constructor byte gate: "
+          "^OK — Lido constructor byte gate: "
         ]
       }
     },
@@ -727,7 +727,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido runtime error byte gate: "
+          "^OK — Lido runtime error byte gate: "
         ]
       }
     },
@@ -766,7 +766,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido CircuitBreaker Registry RI7: "
+          "^OK — Lido CircuitBreaker Registry RI7: "
         ]
       }
     },
@@ -795,7 +795,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 S3 enumeration assurance: "
+          "^OK — S3 enumeration assurance: "
         ]
       }
     },
@@ -887,7 +887,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 S5 access assurance: "
+          "^OK — S5 access assurance: "
         ]
       }
     },
@@ -918,12 +918,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "With the Chain owner ACTIVE the gate reads the working Chain source and never shells out to git; git is reachable only on --chain-dry-run, which this command does not pass. Blanc/LidoCircuitBreaker.lean is read but never pinned \u2014 the dispatcher inventory is derived from it, so its bytes still decide the verdict.",
+      "note": "With the Chain owner ACTIVE the gate reads the working Chain source and never shells out to git; git is reachable only on --chain-dry-run, which this command does not pass. Blanc/LidoCircuitBreaker.lean is read but never pinned — the dispatcher inventory is derived from it, so its bytes still decide the verdict.",
       "order": 25,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 S7 Registry-history assurance: "
+          "^OK — S7 Registry-history assurance: "
         ]
       }
     },
@@ -987,12 +987,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The fixture generator importlib-loads gen-weth-fixtures.py for its EEST helpers; it never calls build_fixture, so the EEST template that file names is not read and is not declared. AxiomCheck.lean is elaborated by check.sh and separately read as text by both check.sh and the deployment checker, and the Lean entry already covers its bytes. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly \u2014 package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
+      "note": "The fixture generator importlib-loads gen-weth-fixtures.py for its EEST helpers; it never calls build_fixture, so the EEST template that file names is not read and is not declared. AxiomCheck.lean is elaborated by check.sh and separately read as text by both check.sh and the deployment checker, and the Lean entry already covers its bytes. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
       "order": 26,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido CircuitBreaker direct deployment root \\("
+          "^OK — Lido CircuitBreaker direct deployment root \\("
         ]
       }
     },
@@ -1021,7 +1021,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 execution settlement: "
+          "^OK — execution settlement: "
         ]
       }
     },
@@ -1063,7 +1063,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 execution occurrence: "
+          "^OK — execution occurrence: "
         ]
       }
     },
@@ -1095,12 +1095,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "check-layering.py is importlib-loaded for its CONTRACTS literal, which decides which contract modules this gate audits \u2014 gate 24 regex-scrapes the same file as text, so the two couple to it by different mechanisms and a formatting change breaks only one of them. The mutant and deletion fixtures are generated from CycleWriteFreeRegression.lean at run time and need no declaration of their own.",
+      "note": "check-layering.py is importlib-loaded for its CONTRACTS literal, which decides which contract modules this gate audits — gate 24 regex-scrapes the same file as text, so the two couple to it by different mechanisms and a formatting change breaks only one of them. The mutant and deletion fixtures are generated from CycleWriteFreeRegression.lean at run time and need no declaration of their own.",
       "order": 29,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 cycle write free: "
+          "^OK — cycle write free: "
         ]
       }
     },
@@ -1152,12 +1152,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate \u2014 the recursive Blanc population is what preserves that membership sensitivity.",
+      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate — the recursive Blanc population is what preserves that membership sensitivity.",
       "order": 30,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 transient-settlement: "
+          "^OK — transient-settlement: "
         ]
       }
     },
@@ -1207,12 +1207,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The oracle is the pinned EELS checkout's own Prague interpreter, run under that checkout's venv python rather than the system python3; the external pin covers the checkout and refuses a dirty one. Blanc/Weth10Code.lean is read as text for the committed-literal comparison, a claim no .olean can witness, so it is fingerprinted separately from the evaluator's import closure. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly \u2014 package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
+      "note": "The oracle is the pinned EELS checkout's own Prague interpreter, run under that checkout's venv python rather than the system python3; the external pin covers the checkout and refuses a dirty one. Blanc/Weth10Code.lean is read as text for the committed-literal comparison, a claim no .olean can witness, so it is fingerprinted separately from the evaluator's import closure. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
       "order": 31,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 WETH10 differential: "
+          "^OK — WETH10 differential: "
         ]
       }
     },
@@ -1264,12 +1264,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The checker importlib-loads gen-lido-circuit-breaker-differential.py, so that generator and the AC5 shape schema it imports are this gate's implementation even though the wrapper never names them. LIDO_DISPATCHER_SELECTION_STAGE decides the mode and is cross-checked against the checker's own constant, so it is a verdict input. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly \u2014 package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
+      "note": "The checker importlib-loads gen-lido-circuit-breaker-differential.py, so that generator and the AC5 shape schema it imports are this gate's implementation even though the wrapper never names them. LIDO_DISPATCHER_SELECTION_STAGE decides the mode and is cross-checked against the checker's own constant, so it is a verdict input. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
       "order": 32,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido CircuitBreaker dispatcher: "
+          "^OK — Lido CircuitBreaker dispatcher: "
         ]
       }
     },
@@ -1322,12 +1322,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The generator importlib-loads check-lido-circuit-breaker-dispatchers.py for its completion-threshold cross-check, so the dispatcher gate's source is an input here as well \u2014 the two gates load each other. The wrapper's inline required-tag digest, the resource schema's canonical-JSON demand and the falsifier baseline all read the same manifest, so one byte moving there reddens four independent checks. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly \u2014 package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
+      "note": "The generator importlib-loads check-lido-circuit-breaker-dispatchers.py for its completion-threshold cross-check, so the dispatcher gate's source is an input here as well — the two gates load each other. The wrapper's inline required-tag digest, the resource schema's canonical-JSON demand and the falsifier baseline all read the same manifest, so one byte moving there reddens four independent checks. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
       "order": 33,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido CircuitBreaker differential: "
+          "^OK — Lido CircuitBreaker differential: "
         ]
       }
     },
@@ -1403,7 +1403,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 Lido TWG differential: 60 agreement rows \\+ 11 exact registered-deviation rows; 24/24 selectors \\+ constructor; 52 causal history messages; 186 resource boundaries; 46 reference CALL/STATICCALL traces; 10 positive artifact checks; 9 live channel/identity/semantic falsifiers$"
+          "^OK — Lido TWG differential: 60 agreement rows \\+ 11 exact registered-deviation rows; 24/24 selectors \\+ constructor; 52 causal history messages; 186 resource boundaries; 46 reference CALL/STATICCALL traces; 10 positive artifact checks; 9 live channel/identity/semantic falsifiers$"
         ]
       }
     },
@@ -1461,7 +1461,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 OssifiableProxy differential result: 85/85 rows match; zero skipped; manifest "
+          "^OK — OssifiableProxy differential result: 85/85 rows match; zero skipped; manifest "
         ]
       }
     },
@@ -1516,12 +1516,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is what produces PASS/FAIL and is fingerprinted directly, and no Blanc module is elaborated at all. The EEST blockchain-test template under ~ supplies the Prague predeploy code and the genesis header, yet is hardcoded, unpinned and unguarded, so it is declared as an exact file outside the repository. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly \u2014 package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
+      "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is what produces PASS/FAIL and is fingerprinted directly, and no Blanc module is elaborated at all. The EEST blockchain-test template under ~ supplies the Prague predeploy code and the genesis header, yet is hardcoded, unpinned and unguarded, so it is declared as an exact file outside the repository. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
       "order": 36,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 WETH10 redemption fixtures: "
+          "^OK — WETH10 redemption fixtures: "
         ]
       }
     },
@@ -1572,12 +1572,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "check-weth10-deployment.py importlib-loads gen-weth10-redemption-fixtures.py, which loads gen-weth-fixtures.py and check-runtime-bytes.py at its own import time; the whole three-deep chain is declared, and through build_fixture it reaches the same unpinned ~/eest-\u2026 template as gate 28. Blanc/Weth10Code.lean is deliberately absent: the literal parse in the loaded module lives in a main() that never runs on this path. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly \u2014 package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
+      "note": "check-weth10-deployment.py importlib-loads gen-weth10-redemption-fixtures.py, which loads gen-weth-fixtures.py and check-runtime-bytes.py at its own import time; the whole three-deep chain is declared, and through build_fixture it reaches the same unpinned ~/eest-… template as gate 28. Blanc/Weth10Code.lean is deliberately absent: the literal parse in the loaded module lives in a main() that never runs on this path. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
       "order": 37,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 WETH10 deployment: "
+          "^OK — WETH10 deployment: "
         ]
       }
     },
@@ -1608,7 +1608,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 error data: "
+          "^OK — error data: "
         ]
       }
     },
@@ -1640,7 +1640,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 beacon-deposit model vs oracle: "
+          "^OK — beacon-deposit model vs oracle: "
         ]
       }
     },
@@ -1703,7 +1703,136 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 current-mainnet lane: "
+          "^OK — current-mainnet lane: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-beacon-deposit-current-mainnet.sh"
+      ],
+      "id": "beacon-deposit-current-mainnet",
+      "inputs": {
+        "env": [
+          "JAUNE_T8N_TARGET",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "t8n_target",
+            "path": "~/execution-specs-t8n-amsterdam",
+            "path_env": "JAUNE_T8N_TARGET",
+            "pin": "827a1cad9c9c8528512f90a06888c8bd9171d9ae"
+          }
+        ],
+        "files": [
+          "scripts/check-beacon-deposit-current-mainnet.sh",
+          "scripts/gen-beacon-deposit-current-mainnet.py",
+          "scripts/current-mainnet-target.json",
+          "scripts/current_mainnet.py",
+          "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
+          "scripts/reference/beacon-deposit/inputs/deposit_contract.json",
+          "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex",
+          "scripts/fixtures/beacon-deposit-current-mainnet/manifest.json",
+          "BEACON_DEPOSIT_DEVIATIONS.md",
+          "@t8n_target/.git/config",
+          "@t8n_target/.venv/pyvenv.cfg",
+          "@t8n_target/.venv/bin/python",
+          "@t8n_target/.venv/bin/ethereum-spec-evm",
+          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
+          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "/bin/bash",
+          "/usr/bin/env",
+          "/usr/bin/git"
+        ],
+        "lean_entries": [
+          "scripts/eval-beacon-deposit-differential-code.lean"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@t8n_target/.venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+          }
+        ],
+        "tools": [
+          "lean",
+          "git",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The manifest fingerprints its direct consumer inputs; this registry additionally owns the exact checkout, helper/profile, venv/site-packages, and CPython runtime closure.",
+      "order": 41,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — beacon-deposit current-mainnet: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-beacon-deposit-differential.sh"
+      ],
+      "id": "beacon-deposit-differential",
+      "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-beacon-deposit-differential.sh",
+          "scripts/gen-beacon-deposit-differential.py",
+          "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
+          "scripts/reference/beacon-deposit/inputs/deposit_contract.json",
+          "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex",
+          "scripts/fixtures/beacon-deposit/manifest.json",
+          "BEACON_DEPOSIT_DEVIATIONS.md",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python"
+        ],
+        "lean_entries": [
+          "scripts/eval-beacon-deposit-differential-code.lean"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@eels/venv/lib"
+          }
+        ],
+        "tools": [
+          "lean",
+          "git"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The evaluator's direct Lean root supplies the compiler-owned runtime and creation artifacts through Lake depHash closure; the Python runner directly reads the three pinned reference inputs, exact manifest, and positive-gas deviation registry, and owns both the runtime matrix and separate constructor gas/poststate measurement. The clean external pin owns EELS source, while the ignored virtualenv interpreter and complete site-packages population are hashed separately through the same EELS_ROOT.",
+      "order": 42,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — beacon-deposit differential: "
         ]
       }
     },
@@ -1777,11 +1906,11 @@
       },
       "kind": "cacheable",
       "note": "PRORATA's read-only BPO2 consumer of the contract-neutral current-mainnet API. It reconstructs canonical system preallocation and block envelopes from the pinned target, executes all fourteen fixture scenarios with explicit block semantics, checks receipt/no-log and exact integer-model postconditions, and byte-compares the complete generated fixture population. It also validates the locked exact-surface Solidity/Yul referents, runs ten independent signed-transaction scenarios against all three runtimes with zero projected semantic mismatches, and byte-compares canonical receipt gas. The ordinary fixture gate independently replays committed PRORATA blocks through Jaune and remains CI-safe without the external checkout.",
-      "order": 41,
+      "order": 43,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 prorata current-mainnet: "
+          "^OK — prorata current-mainnet: "
         ]
       }
     },
@@ -1850,11 +1979,11 @@
       },
       "kind": "cacheable",
       "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages and the profile-pinned CPython standard library.",
-      "order": 42,
+      "order": 44,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 checked OssifiableProxy BPO2 replay: 21 represented primary transaction scenarios, A1/A2 outside transaction scope, F2/F4 explicitly warm-state excluded, zero semantic mismatches$"
+          "^OK — checked OssifiableProxy BPO2 replay: 21 represented primary transaction scenarios, A1/A2 outside transaction scope, F2/F4 explicitly warm-state excluded, zero semantic mismatches$"
         ]
       }
     },
@@ -1877,12 +2006,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The 880-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
-      "order": 43,
+      "note": "The 981-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
+      "order": 45,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 axiom audit: "
+          "^OK — axiom audit: "
         ]
       }
     },
@@ -1904,11 +2033,11 @@
       },
       "kind": "cacheable",
       "note": "The pinned inventory count lives in the wrapper, so its bytes are an input.",
-      "order": 44,
+      "order": 46,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 common/WETH10/Lido claim statements: "
+          "^OK — common/WETH10/Lido claim statements: "
         ]
       }
     },
@@ -1951,12 +2080,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes \u2014 the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its ignored host-local baseline (including absence before genesis), and its own implementation. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see \u2014 a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
-      "order": 45,
+      "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes — the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its ignored host-local baseline (including absence before genesis), and its own implementation. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see — a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
+      "order": 47,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 elab: "
+          "^OK — elab: "
         ]
       }
     },
@@ -1991,11 +2120,11 @@
       },
       "kind": "cacheable",
       "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is the thing that produces PASS/FAIL and is fingerprinted directly. weth10-reference.py and weth10_reference_schema.py are in the closure only because the borrower checker importlib-loads the former for its keccak256.",
-      "order": 46,
+      "order": 48,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 fmint fixtures: "
+          "^OK — fmint fixtures: "
         ]
       }
     },
@@ -2024,11 +2153,11 @@
       },
       "kind": "cacheable",
       "note": "This suite has no manifest, so its fixture-directory membership is its only population guard; declaring the population here restores that guard for reuse decisions.",
-      "order": 47,
+      "order": 49,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 weth fixtures: "
+          "^OK — weth fixtures: "
         ]
       }
     },
@@ -2061,11 +2190,11 @@
       },
       "kind": "cacheable",
       "note": "CI-safe replay of the committed BPO2 population through Jaune. The manifest is a bidirectional population guard, the independent integer oracle vectors are regenerated through a timing-free byte comparison, and every embedded PRORATA runtime is compared with the frozen literal. Exact-target regeneration belongs to the separate prorata-current-mainnet gate.",
-      "order": 48,
+      "order": 50,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 prorata fixtures: "
+          "^OK — prorata fixtures: "
         ]
       }
     },
@@ -2094,11 +2223,11 @@
         ]
       },
       "kind": "cacheable",
-      "order": 49,
+      "order": 51,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 fmint coverage: "
+          "^OK — fmint coverage: "
         ]
       }
     },
@@ -2127,11 +2256,11 @@
         ]
       },
       "kind": "cacheable",
-      "order": 50,
+      "order": 52,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK \u2014 weth coverage: "
+          "^OK — weth coverage: "
         ]
       }
     }

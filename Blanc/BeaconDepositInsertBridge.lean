@@ -1,0 +1,17 @@
+import Blanc.BeaconDepositInsertDead
+import Blanc.BeaconDepositInsertCommit
+import Blanc.BeaconDepositInsertFirstLiveCost
+import Blanc.BeaconDepositInsertFirstLiveRun
+import Blanc.BeaconDepositInsertIterHeight
+import Blanc.BeaconDepositInsertIterKey
+import Blanc.BeaconDepositInsertIterKeys
+import Blanc.BeaconDepositInsertIterNode
+import Blanc.BeaconDepositInsertIterSize
+
+/-!
+# Beacon deposit insertion bridge
+
+Compatibility import for the projection-level bridges between the compiled
+insertion fold and the pure first-live model.  Each projection has a separate
+owner so elaboration never constructs one monolithic state equality.
+-/
