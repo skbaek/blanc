@@ -989,3 +989,54 @@ axioms and admits no exception table.
 - **Differential channel:** the full manifest, whose green verdict is what makes an empty deviation registry meaningful rather than merely empty
 - **Non-claims:** an empty deviation registry records that no deviation was **accepted**, not that none could exist outside the finite matrix. Storage representation may still differ from the original by design; `PORTING.md` owns that boundary.
 - **Source:** `LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md`, `LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`
+
+---
+
+## Pillar — Pinned-target composition (entry 3)
+
+This pillar is about two contracts at once, and it is the only pillar that is.
+Everything above describes the CircuitBreaker alone; the rows below describe
+what happens when the exact compiled Blanc **Triggerable Withdrawals Gateway**
+runtime is the account the CircuitBreaker pauses.
+
+Read the boundary carefully. The CircuitBreaker's own public pause family
+(HOSTILE-5) is explicit that accepting a canonical `1` is evidence the target
+*reported* success and never that the target is really paused — for an
+arbitrary target that limit stands unchanged. These rows do not weaken it. They
+replace the arbitrary target with one whose behaviour is separately proved, and
+the pausedness in TWG-2's conclusion comes from the gateway family's own
+account-level bundle, not from the CircuitBreaker's observation of returndata.
+
+The two CircuitBreaker cells are likewise preserved by the gateway's proved
+semantic descendant-write noninterference, not by an assumed callback equality:
+`PauseSuccessNoninterference` is **discharged** here rather than assumed.
+
+#### TWG-1 — The two families are connected by exact ABI agreement and one bundle specialization, with neither family importing the other
+
+- **Declarations:** `Blanc.Composition.LidoCircuitBreakerTwg.pauseForCalldata_eq`, `Blanc.Composition.LidoCircuitBreakerTwg.isPausedCalldata_eq`, `Blanc.Composition.LidoCircuitBreakerTwg.gateway_lidoPinnedPauseTarget`
+- **Premises:** for the ABI rows, none — both encoders are closed terms and the equalities are kernel-decided. For the specialization, the gateway's own quantified bundle theorem and the two accounts being distinct. The gateway bundle's four clauses are consumed whole; none is re-proved, restated or unfolded in the composition stratum.
+- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
+- **Gate:** `scripts/check-layering.sh`, `scripts/check.sh`
+- **Differential channel:** not applicable — this row is an interface identity, not an execution claim
+- **Non-claims:** the ABI agreement is between *Blanc's* CircuitBreaker encoders and *Blanc's* gateway selector census. It is not a claim about any deployed Solidity contract's ABI, and `PORTING.md` owns that boundary. The specialization fixes the cell list `[countSlot pauser, heartbeatIntervalSlot]` and says nothing about any other storage cell.
+- **Source:** `Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean`
+
+#### TWG-2 — A successful public pause of the directly installed gateway leaves it paused at the exact shared projection, sentinel included, with both CircuitBreaker cells preserved
+
+- **Declarations:** `Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget`, `Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok`, `Blanc.LidoCircuitBreaker.directBoundaryExecutions_of_afterSet_ok`
+- **Premises:** the ordinary `PublicPauseEntryPremises` entry bundle naming the exact compiled gateway runtime as the installed target code; target/CircuitBreaker distinctness; the target account is not a precompile; the installed bytes are not an EIP-7702 delegation designator and are not empty; the production `Prog.RunCompiledTo`; and a successful terminal polarity. There is **no** bundle premise, **no** program-occurrence premise, **no** accepted-query premise, **no** callback-noninterference premise, and **no** paused-result premise: both `MessageExecutesProgram` occurrences and the CALL/STATICCALL linkage are derived from the walk's own spawns.
+- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
+- **Gate:** `scripts/check-claims.sh`, `scripts/check.sh`
+- **Differential channel:** the gateway family's own differential manifest, which is what makes "the exact compiled runtime" a statement about the ported artifact rather than about an arbitrary program
+- **Non-claims:** direct installation is the account shape proved here. A target behind a proxy is a **different instantiation** and is not licensed by this row; the later three-party convergence remains a separate unscheduled successor. This row says nothing about Lido's deployed Solidity, current mainnet code or role membership, liveness, gas sufficiency, or a second transaction. In particular it is **not** a sequential theorem that `triggerFullWithdrawals` reverts after this pause: the gateway family's protected-surface law is the exact boundary and is a statement about a paused entry projection, not about a history following this run.
+- **Source:** `Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean`; `Blanc/LidoCircuitBreakerPinnedTargetComposition.lean`
+
+#### TWG-3 — The entry-3 premise bundle is satisfied by a concrete world holding the compiler's own gateway output, and its code premises are refuted by named mutants
+
+- **Declarations:** `Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_publicPausePremises`, `Blanc.Composition.LidoCircuitBreakerTwg.controlGatewayCode_not_delegation`, `Blanc.Composition.LidoCircuitBreakerTwg.controlGatewayCode_size_ne_zero`, `Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises`
+- **Premises:** one concrete world installing the production CircuitBreaker runtime at its account and the exact compiled gateway runtime at the pause target, with only the explicit role, Registry, time and storage configuration. The two code facts are kernel-reduced over the compiler's own output for that world's deploy parameters; no literal byte string and no evaluator output is reflected into a theorem.
+- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
+- **Gate:** `scripts/check.sh`
+- **Differential channel:** not applicable — this row is a satisfiability exhibit for TWG-2's premises
+- **Non-claims:** **this row does not establish that the world's public pause run terminates successfully.** `gatewayPauseWorld_closedPremises` discharges every entry-3 premise *except* reachability, so it yields TWG-2's conclusion only when handed a successful production run of that world. A gateway-side compiled walk and its gas schedule are required to close that last premise, and are not part of this row; the finite-versus-sentinel duration arms are covered only by whichever run is eventually supplied. The falsifiers refute premises rather than exhibiting a failed execution.
+- **Source:** `Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGatewayControl.lean`

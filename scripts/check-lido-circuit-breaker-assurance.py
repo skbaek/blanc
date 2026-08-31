@@ -196,13 +196,14 @@ EXPECTED_ROWS_PER_PILLAR = {
     "Hostile-world results (Stage 6)": 5,
     "Deployment and history": 13,
     "Artifact conformance and cost": 4,
+    "Pinned-target composition (entry 3)": 3,
 }
 
 # The total is pinned SEPARATELY from the per-pillar map rather than derived
 # from it. Deriving it would let a single edit move a row between pillars and a
 # matching edit here keep the gate green with no total to disagree with; two
 # independent pins have to be falsified together.
-EXPECTED_TOTAL_ROWS = 71
+EXPECTED_TOTAL_ROWS = 74
 
 # Rows whose Declarations field is the gate-owned literal. Pinned so the
 # escape hatch cannot widen quietly: convert one normal row and this fails.
@@ -224,7 +225,7 @@ EXPECTED_GATE_OWNED_ROWS = 8
 # in the same commit as the row, having decided that the row's second gate is
 # an authority it really depends on rather than padding. That is a decision.
 # Bumping it to clear a red gate is Rule 1 in `scripts/GATES.md`.
-EXPECTED_MULTI_GATE_ROWS = 4
+EXPECTED_MULTI_GATE_ROWS = 6
 
 # Load-bearing non-claims. Each must still appear somewhere in the register.
 # Matched case-insensitively against the register with all whitespace runs

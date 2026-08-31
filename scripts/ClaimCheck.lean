@@ -29,6 +29,7 @@ import Blanc.BeaconDepositRootPublic
 import Blanc.BeaconDepositSelectorMiss
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositEffects
+import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -4534,5 +4535,86 @@ example (sevm : Sevm) (base : Devm)
     hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
 
 end BeaconDeposit
+
+namespace Composition.LidoCircuitBreakerTwg
+
+open Blanc.LidoCircuitBreaker
+
+/-! Entry 3: the pinned-target closure for the CircuitBreaker × gateway
+composition.  These pins fix the exact public statements — the two ABI
+agreements, the specialized bundle, the direct-installation adapter, and the
+headline theorem — so a statement change breaks this file while a proof-only
+refactor does not. -/
+
+example (duration : B256) :
+    LidoTriggerableWithdrawalsGateway.pauseForCalldata duration =
+      LidoCircuitBreaker.pauseForCalldata duration :=
+  Blanc.Composition.LidoCircuitBreakerTwg.pauseForCalldata_eq duration
+
+example :
+    LidoTriggerableWithdrawalsGateway.isPausedCalldata =
+      LidoCircuitBreaker.isPausedCalldata :=
+  Blanc.Composition.LidoCircuitBreakerTwg.isPausedCalldata_eq
+
+example
+    (dp : LidoTriggerableWithdrawalsGateway.DeployParams)
+    (circuitBreaker pauser gateway : Adr)
+    (different : gateway ≠ circuitBreaker) :
+    LidoPinnedPauseTarget circuitBreaker pauser gateway
+      (LidoTriggerableWithdrawalsGateway.runtime dp)
+      LidoTriggerableWithdrawalsGateway.pausedUntil
+      LidoTriggerableWithdrawalsGateway.protectedSurface :=
+  Blanc.Composition.LidoCircuitBreakerTwg.gateway_lidoPinnedPauseTarget dp
+    circuitBreaker pauser gateway different
+
+example
+    {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    {target : Adr} {duration : B256}
+    {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (notDelegation : ¬ isValidDelegation
+      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp))
+    (codeNonzero :
+      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp).size.toB256 ≠ 0)
+    (targetNe : target ≠ sevm.currentTarget)
+    (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
+    (installed : entry.getCode target =
+      Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp)
+    (targetWindow : MemWordAt entry (targetWord * 32).toNat target.toB256)
+    (durationWindow : MemWordAt entry (durationWord * 32).toNat duration)
+    (depth : sevm.depth ≠ 0)
+    (dynamic : sevm.isStatic = false)
+    (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
+    LidoPinnedBoundaryExecutions fs sevm entry target
+      (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
+  Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok
+    h_empty h_bubble notDelegation codeNonzero targetNe nonprecompile installed
+    targetWindow durationWindow depth dynamic run
+
+example
+    {sevm : Sevm} {pre final : Devm} {owner : Adr}
+    {target duration idx0 len0 last0 : B256} {img : Bytes}
+    {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
+    {ex : Execution}
+    (premises : PublicPauseEntryPremises sevm pre owner target duration
+      idx0 len0 last0 img
+      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp))
+    (targetNe : target.toAdr ≠ sevm.currentTarget)
+    (nonprecompile : sevm.benvStat.rules.isPrecomp target.toAdr = false)
+    (notDelegation : ¬ isValidDelegation
+      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp))
+    (codeNonzero :
+      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp).size.toB256 ≠ 0)
+    (publicRun : Prog.RunCompiledTo sevm pre (runtime officialParams) ex)
+    (success : ex = .ok final) :
+    PublicPausePinnedTargetConclusion sevm pre target duration
+      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp)
+      (LidoTriggerableWithdrawalsGateway.runtime dp)
+      LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
+  Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget
+    premises targetNe nonprecompile notDelegation codeNonzero publicRun success
+
+end Composition.LidoCircuitBreakerTwg
 
 end Blanc
