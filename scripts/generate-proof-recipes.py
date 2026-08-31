@@ -318,7 +318,7 @@ def declarations_in(path: Path) -> Set[str]:
 
 
 def lean_sources(root: Path) -> List[Path]:
-    paths = sorted((root / "Blanc").glob("*.lean"))
+    paths = sorted((root / "Blanc").rglob("*.lean"))
     if (root / "Blanc.lean").is_file():
         paths.append(root / "Blanc.lean")
     if not paths:

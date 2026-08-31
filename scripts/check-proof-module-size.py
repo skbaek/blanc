@@ -125,14 +125,16 @@ def production_modules(root: Path) -> Dict[str, int]:
     if not source.is_dir():
         raise ModuleSizeError(f"production source directory not found: {source}")
     result: Dict[str, int] = {}
-    for path in sorted(source.glob("*.lean")):
+    for path in sorted(source.rglob("*.lean")):
         try:
             lines = len(path.read_text(encoding="utf-8").splitlines())
         except OSError as exc:
             raise ModuleSizeError(f"cannot read {path}: {exc}") from exc
         result[path.relative_to(root).as_posix()] = lines
     if not result:
-        raise ModuleSizeError(f"no production Blanc/*.lean modules found under {root}")
+        raise ModuleSizeError(
+            f"no production Blanc/**/*.lean modules found under {root}"
+        )
     return result
 
 

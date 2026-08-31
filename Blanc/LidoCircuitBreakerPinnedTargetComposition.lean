@@ -471,29 +471,52 @@ private theorem stubCode_not_delegation :
     ¬ isValidDelegation PinnedTargetControl.stubCode := by
   decide +kernel
 
+private theorem stubProgram_compile_toList :
+    Prog.compile PinnedTargetControl.stubProgram =
+      some PinnedTargetControl.stubCode.toList := by
+  rw [PinnedTargetControl.stubProgram_compile]
+  simp [PinnedTargetControl.stubCode, PinnedTargetControl.stubBytes,
+    ByteArray.toList_eq_toList_data]
+
 private theorem stubCode_toList_nonempty :
     PinnedTargetControl.stubCode.toList ≠ [] := by
   decide +kernel
 
-/-- The stub is not a delegation designator, so at a state with the stub
-installed at `target` the resolved code address a spawned call carries is
-`target` itself. -/
-private theorem resolvedCodeAddress_of_stub
-    {pre : Devm} {target : Adr}
-    (installed : pre.getCode target = PinnedTargetControl.stubCode) :
+/-- Directly installed code is not a delegation designator, so at a state with
+that code at `target` the resolved code address a spawned call carries is
+`target` itself.
+
+This is the *direct-installation* arm of the seam.  A later proxy revisit
+replaces exactly this step — and nothing else in the crossing below — with a
+proxy/implementation correspondence. -/
+private theorem resolvedCodeAddress_of_direct
+    {pre : Devm} {target : Adr} {code : ByteArray}
+    (installed : pre.getCode target = code)
+    (notDelegation : ¬ isValidDelegation code) :
     (getDelegatedCodeAddress (pre.getCode target)).getD target = target := by
   rw [installed]
   dsimp only [getDelegatedCodeAddress]
-  rw [if_neg stubCode_not_delegation]
+  rw [if_neg notDelegation]
   rfl
 
-/-- An actual non-precompile spawn from a state with the stub installed
-carries a retained compiled-stub execution in its own slot. -/
-private theorem spawnedMessage_executes_stub
+/-- An actual non-precompile spawn from a state with `program`'s compiled bytes
+directly installed carries a retained execution of that program in its own
+slot.
+
+Nothing here is specific to a target: the message's code is derived from the
+spawn source, and the three code facts are exactly what rules out the empty,
+self and delegated sources.  The conclusion is the shared
+`MessageExecutesProgram` predicate, so a caller obtains a real program
+occurrence rather than a code-shaped assumption. -/
+private theorem spawnedMessage_executesProgram
     {sevm : Sevm} {pre : Devm} {target : Adr}
+    {code : ByteArray} {program : Prog}
     {msg : Msg} {xl : Xlot} {child : Devm} {resume : Resume} {x : Xinst}
+    (compiled : Prog.compile program = some code.toList)
+    (nonempty : code ≠ .empty)
+    (notDelegation : ¬ isValidDelegation code)
     (targetNe : target ≠ sevm.currentTarget)
-    (installed : pre.getCode target = PinnedTargetControl.stubCode)
+    (installed : pre.getCode target = code)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (currentTarget : msg.currentTarget = target)
     (codeAddress : msg.codeAddress = some target)
@@ -504,25 +527,24 @@ private theorem spawnedMessage_executes_stub
       .spawn (Jaune.Frame.ofCall msg) resume)
     (filled : Xlot.Filled xl)
     (process : ProcessMessage msg xl (.ok child)) :
-    MessageExecutesProgram msg xl PinnedTargetControl.stubProgram := by
-  have codeEq : msg.code = PinnedTargetControl.stubCode := by
+    MessageExecutesProgram msg xl program := by
+  have codeEq : msg.code = code := by
     rcases Xinst.step_spawn_source spawn with empty | same | source
-    · have impossible : PinnedTargetControl.stubCode = .empty := by
+    · have impossible : code = .empty := by
         simpa only [Jaune.Frame.ofCall, currentTarget, installed] using empty
-      exact (stubCode_nonempty impossible).elim
+      exact (nonempty impossible).elim
     · have impossible : target = sevm.currentTarget := by
         simpa only [Jaune.Frame.ofCall, currentTarget] using same
       exact (targetNe impossible).elim
     · have direct := source (by
         change ¬ isValidDelegation (pre.getCode msg.currentTarget)
         rw [currentTarget, installed]
-        exact stubCode_not_delegation)
+        exact notDelegation)
       simpa only [Jaune.Frame.ofCall, currentTarget, installed] using direct
-  have uses : MessageUsesProgram msg PinnedTargetControl.stubProgram := by
+  have uses : MessageUsesProgram msg program := by
     unfold MessageUsesProgram
-    rw [codeEq, PinnedTargetControl.stubProgram_compile]
-    simp [PinnedTargetControl.stubCode, PinnedTargetControl.stubBytes,
-      ByteArray.toList_eq_toList_data]
+    rw [codeEq]
+    exact compiled.symm
   have affordable : ¬ msg.benv.state.bal msg.caller < msg.value := by
     rw [valueZero]
     rw [B256.lt_iff_toNat_lt_toNat]
@@ -556,16 +578,36 @@ private theorem runCompiled_getCode_eq_of_nonempty
       cases raw <;> exact Exec.preserves_getCode childRun
   exact Ninst.codePreserve_effectRec n slotCode (steps 0) owner nonempty
 
-/-- The successful `pauseAfterSet` suffix itself supplies both exact stub
-program occurrences.  No callback-shaped state or execution is assumed. -/
-theorem stubBoundaryExecutions_of_afterSet_ok
+/-- **The direct-installation crossing.**  A successful `pauseAfterSet` suffix,
+run against an account carrying `program`'s exact compiled bytes directly,
+itself supplies both actual program occurrences at the CALL and STATICCALL
+boundaries.
+
+The statement is target-neutral: it names the CircuitBreaker's own
+`pauseAfterSet` route and its two boundary relations, but says nothing about
+which program is installed beyond the four code facts below.  Nothing
+callback-shaped is assumed — in particular neither `MessageExecutesProgram`
+witness, no accepted query answer, and no final pausedness is a premise.  Both
+occurrences are *derived* from the walk's own spawns.
+
+The code facts are the direct-installation premise, and they are exactly the
+three spawn sources `Xinst.step_spawn_source` admits plus the guard's nonzero
+`EXTCODESIZE`: empty code, self-call, and a delegation designator are each ruled
+out, so the message the CircuitBreaker spawned really carries `program`. -/
+theorem directBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
+    {code : ByteArray} {program : Prog}
     (h_empty : fs[emptyRevertSlot]? = some Func.rev)
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (compiled : Prog.compile program = some code.toList)
+    (nonempty : code ≠ .empty)
+    (notDelegation : ¬ isValidDelegation code)
+    (toListNonempty : code.toList ≠ [])
+    (codeNonzero : code.size.toB256 ≠ 0)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
-    (installed : entry.getCode target = PinnedTargetControl.stubCode)
+    (installed : entry.getCode target = code)
     (targetWindow : MemWordAt entry
       (targetWord * 32).toNat target.toB256)
     (durationWindow : MemWordAt entry
@@ -574,10 +616,10 @@ theorem stubBoundaryExecutions_of_afterSet_ok
     (dynamic : sevm.isStatic = false)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
     LidoPinnedBoundaryExecutions fs sevm entry target
-      PinnedTargetControl.stubProgram duration (.ok final) := by
+      program duration (.ok final) := by
   have codeNonzero : (entry.getCode target).size.toB256 ≠ 0 := by
     rw [installed]
-    decide +kernel
+    exact codeNonzero
   rw [pauseAfterSet_eq_afterCall] at run
   obtain ⟨guardTestPost, guardRun, guardBranch⟩ :=
     runCompiledTo_prepend_inv run
@@ -616,8 +658,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
     obtain ⟨callBoundary, callExecution⟩ :=
       pauseCall_boundary_with_execution callStack callData depth dynamic
         callRun
-    have callPreInstalled :
-        callPre.getCode target = PinnedTargetControl.stubCode := by
+    have callPreInstalled : callPre.getCode target = code := by
       calc
         callPre.getCode target = guardPost.getCode target :=
           congrFun (pauseCallStaging_codeInv callStaging).symm target
@@ -628,29 +669,30 @@ theorem stubBoundaryExecutions_of_afterSet_ok
           congrFun (Line.of_inv Devm.getCode
             (by unfold pauseCodeGuard loadWord; line_inv) guardRun).symm
             target
-        _ = PinnedTargetControl.stubCode := installed
+        _ = code := installed
     rcases callExecution with
       ⟨pauseMsg, pauseXl, pauseChild, pausePc, pauseNextPc, pauseResume,
         pauseCurrent, pauseTarget, pauseCodeAddress, pauseCaller, pauseValue,
         pauseTransfer, pauseStatic, pauseData, pauseTime, pauseRules,
         pauseSpawn, pauseFilled, pauseProcess, pauseStepRun, pauseState,
         pauseOutput⟩
-    rw [resolvedCodeAddress_of_stub callPreInstalled] at pauseCodeAddress
+    have callResolved := resolvedCodeAddress_of_direct callPreInstalled
+      notDelegation
+    rw [callResolved] at pauseCodeAddress
     have pauseXSpawn : Xinst.step sevm callPre .call =
         .spawn (Jaune.Frame.ofCall pauseMsg) pauseResume :=
       XStep.toStep_spawn (by
         simpa only [Ninst.call, Ninst.step_exec] using pauseSpawn)
-    have pauseExecutes : MessageExecutesProgram pauseMsg pauseXl
-        PinnedTargetControl.stubProgram :=
-      spawnedMessage_executes_stub targetNe callPreInstalled nonprecompile
-        pauseCurrent pauseCodeAddress pauseValue pauseTransfer pauseRules
-        pauseXSpawn pauseFilled pauseProcess
+    have pauseExecutes : MessageExecutesProgram pauseMsg pauseXl program :=
+      spawnedMessage_executesProgram compiled nonempty notDelegation targetNe
+        callPreInstalled nonprecompile pauseCurrent pauseCodeAddress pauseValue
+        pauseTransfer pauseRules pauseXSpawn pauseFilled pauseProcess
     have pauseExact : ExactTargetCall sevm.currentTarget target
         (pauseForCalldata duration) false pauseMsg :=
       ⟨pauseCurrent, pauseTarget, pauseCodeAddress, pauseCaller, pauseValue,
         pauseTransfer, pauseStatic, pauseData⟩
     have pinnedPause : PinnedPauseBoundaryExecutesProgram sevm target
-        PinnedTargetControl.stubProgram duration callPre callPost :=
+        program duration callPre callPost :=
       ⟨pauseMsg, pauseXl, pauseChild, pausePc, pauseNextPc, pauseResume,
         pauseExact, pauseExecutes, pauseTime, pauseSpawn, pauseFilled,
         pauseProcess, pauseStepRun, pauseState, pauseOutput⟩
@@ -680,11 +722,10 @@ theorem stubBoundaryExecutions_of_afterSet_ok
         pauseStat_boundary_with_execution statStack statData depth statRun
       have callPreNonempty : (callPre.getCode target).toList ≠ [] := by
         rw [callPreInstalled]
-        exact stubCode_toList_nonempty
+        exact toListNonempty
       have callCode :=
         runCompiled_getCode_eq_of_nonempty callRun callPreNonempty
-      have statPreInstalled :
-          statPre.getCode target = PinnedTargetControl.stubCode := by
+      have statPreInstalled : statPre.getCode target = code := by
         calc
           statPre.getCode target = armPre.getCode target :=
             congrFun (pauseStatStaging_codeInv statStaging).symm target
@@ -695,29 +736,30 @@ theorem stubBoundaryExecutions_of_afterSet_ok
             congrFun (Ninst.Hinv.inv (f := Devm.getCode)
               (Ninst.Run.of_runCompiled callIszero)).symm target
           _ = callPre.getCode target := callCode
-          _ = PinnedTargetControl.stubCode := callPreInstalled
+          _ = code := callPreInstalled
       rcases statExecution with
         ⟨statMsg, statXl, statChild, statPc, statNextPc, statResume,
           statCurrent, statTarget, statCodeAddress, statCaller, statValue,
           statTransfer, statStatic, statDataEq, statTime, statRules,
           statSpawn, statFilled, statProcess, statStepRun, statState,
           statOutput⟩
-      rw [resolvedCodeAddress_of_stub statPreInstalled] at statCodeAddress
+      have statResolved := resolvedCodeAddress_of_direct statPreInstalled
+        notDelegation
+      rw [statResolved] at statCodeAddress
       have statXSpawn : Xinst.step sevm statPre .statcall =
           .spawn (Jaune.Frame.ofCall statMsg) statResume :=
         XStep.toStep_spawn (by
           simpa only [Ninst.statcall, Ninst.step_exec] using statSpawn)
-      have statExecutes : MessageExecutesProgram statMsg statXl
-          PinnedTargetControl.stubProgram :=
-        spawnedMessage_executes_stub targetNe statPreInstalled nonprecompile
-          statCurrent statCodeAddress statValue statTransfer statRules
-          statXSpawn statFilled statProcess
+      have statExecutes : MessageExecutesProgram statMsg statXl program :=
+        spawnedMessage_executesProgram compiled nonempty notDelegation targetNe
+          statPreInstalled nonprecompile statCurrent statCodeAddress statValue
+          statTransfer statRules statXSpawn statFilled statProcess
       have statExact : ExactTargetCall sevm.currentTarget target
           isPausedCalldata true statMsg :=
         ⟨statCurrent, statTarget, statCodeAddress, statCaller, statValue,
           statTransfer, statStatic, statDataEq⟩
       have pinnedStat : PinnedStatBoundaryExecutesProgram sevm target
-          PinnedTargetControl.stubProgram statPre statPost :=
+          program statPre statPost :=
         ⟨statMsg, statXl, statChild, statPc, statNextPc, statResume,
           statExact, statExecutes, statTime, statSpawn, statFilled,
           statProcess, statStepRun, statState, statOutput⟩
@@ -728,6 +770,30 @@ theorem stubBoundaryExecutions_of_afterSet_ok
         statBoundary, pinnedStat, observationRun⟩
     · exact (bubbleCall_not_ok h_bubble bubbleRun).elim
   · exact (revCall_not_ok h_empty revertRun).elim
+
+/-- The compiled test stub is one instance of the direct-installation crossing.
+Its statement is unchanged: the existing stub control consumes exactly this. -/
+theorem stubBoundaryExecutions_of_afterSet_ok
+    {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    {target : Adr} {duration : B256}
+    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (targetNe : target ≠ sevm.currentTarget)
+    (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
+    (installed : entry.getCode target = PinnedTargetControl.stubCode)
+    (targetWindow : MemWordAt entry
+      (targetWord * 32).toNat target.toB256)
+    (durationWindow : MemWordAt entry
+      (durationWord * 32).toNat duration)
+    (depth : sevm.depth ≠ 0)
+    (dynamic : sevm.isStatic = false)
+    (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
+    LidoPinnedBoundaryExecutions fs sevm entry target
+      PinnedTargetControl.stubProgram duration (.ok final) :=
+  directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
+    stubProgram_compile_toList stubCode_nonempty stubCode_not_delegation
+    stubCode_toList_nonempty (by decide +kernel) targetNe nonprecompile
+    installed targetWindow durationWindow depth dynamic run
 
 private theorem spawnedChild_clean_of_zeroBranch
     {sevm : Sevm} {pre post testPost armPre : Devm}

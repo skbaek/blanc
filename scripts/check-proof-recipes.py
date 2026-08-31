@@ -954,17 +954,25 @@ def production_modules(root: pathlib.Path) -> List[str]:
     """The ratchet's corpus.
 
     This mirrors ``production_modules`` in scripts/check-proof-module-size.py
-    exactly -- the non-recursive ``Blanc/*.lean`` glob, sorted, and an empty
+    exactly -- the recursive ``Blanc/**/*.lean`` walk, sorted, and an empty
     result is an error, never an empty pass. Both gates state the same corpus
     contract, so a disagreement between their module counts is itself visible.
+
+    The walk is recursive so that a module cannot leave the ratchet's census by
+    moving into a subdirectory such as ``Blanc/Composition/``. A census that
+    silently stopped reading a module would report a *falling* duplication
+    count and pass, which is the one direction this shrink-only gate cannot
+    detect on its own.
     """
     source = root / DUPLICATION_SCAN_ROOT
     if not source.is_dir():
         raise GateError(f"production source directory not found: {source}")
-    modules = [path.relative_to(root).as_posix() for path in sorted(source.glob("*.lean"))]
+    modules = [
+        path.relative_to(root).as_posix() for path in sorted(source.rglob("*.lean"))
+    ]
     if not modules:
         raise GateError(
-            f"no production {DUPLICATION_SCAN_ROOT}/*.lean modules found under {root}"
+            f"no production {DUPLICATION_SCAN_ROOT}/**/*.lean modules found under {root}"
         )
     return modules
 
