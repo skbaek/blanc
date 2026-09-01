@@ -51,7 +51,8 @@ channels, its allowlist, its trust scan and its axiom probe are all live.
 
 A fourth net was added once the family was complete.  `VOCABULARY_PINS` pins
 the declarations this family is WRITTEN IN but does not own -- `RegistryWitness`
-and the `ContractSpec` premise vocabulary in `Blanc/Ladder.lean`.  Without it a
+and the `ContractSpec` premise vocabulary in `Blanc/Ladder.lean`, plus the
+shared storage-silence fixed point in `Blanc/CommonProofs.lean`.  Without it a
 pinned statement can keep its digest while the words it is made of change
 meaning underneath it, which is not hypothetical: threading `Mem.Wf` through
 the ladder moved `DispatchInv` and three Chain statements from `Pre` to `PreWf`
@@ -557,14 +558,13 @@ HEADER_PINS = {
         "configSlot_ne_assignmentSlot": "b659728b90127eea0421050f146b90f1cd579b4a2555ac7cd70f93ae356129d9",
         "configSlot_ne_countSlot": "321e480a4e3d76dd490db50dfeef69beb3323df80fcf09dcd90689a06700f02c",
         "configSlot_ne_indexSlot": "148680149f9074c7e389a09a5e3ea5860bcfcb9261f34d188ef7c244c1e80bf3",
-        "enumLoopSlot_closed": "fa07e8d8f7cdb4b725036957a970a7a18543ac68f7f0a4b4a38b804a4f214856",
+        "enumLoopSlot_closed": "bb5c7b40f5cee8a00162f32beac7c59d3bdcf4f2b4ee36c36227d57808a274b2",
         "funcInv_prependStoresRev": "6e6c8e8f4f8ee7b5a343d1f477e7c55dc4a258d048afcc90862064620c36662a",
         "funcSound_of_mem_funcs": "df3b9853eae0974020fc74a3698590fb9c0e57adb3b04bbd3f8e48c000b8f839",
         "funcSound_of_mem_nonRegistry": "97c18b9904352c901bfc12ed3c6c08183b9f7748e0113570a0e6f740ae52aaa5",
         "getPausableCount_funcSound": "5d0f7a6b610016015bcf2c19d58510dd57239306e914c7acfac6e13cb727ae27",
         "getPausables_funcSound": "89ef152cf1132d8ead5450a8b2b17697d4670fcac6ee5058711f7676840638a8",
         "getPauser_funcSound": "cb59fd88d6ab7c014ea61af8dd45463f65c883c1018c6a36ee781e59d4286e43",
-        "getStor_eq_of_run_silentIn": "59d24991a54c34c73817e2d7543ce3ef23eb2fa7943e4a84822e33c8ca210051",
         "get_arithmeticPanicSlot": "427009816732fcbc1282ff4434fdb2796848eb4da682e73c4fb555d18fbcc20b",
         "get_emptyRevertSlot": "0bc0343bd82804d3eb73760960d28244348e3edcb7aff4651e694f72905c0e80",
         "get_enumLoopSlot": "4fb2ee90afaf9faff053c04ce00885fb838c0958ca32be036d013a3a01a7dd4f",
@@ -580,8 +580,8 @@ HEADER_PINS = {
         "pauseDuration_funcSound": "13804a724353d418fc64b6896d81b1e662a7f706636eca8b1e33128d58e2bc1a",
         "setHeartbeatInterval_funcSound": "a825e736961582eb19008f1a0301ccfdb176121cbc05fc9a169152c4a99e6870",
         "setPauseDuration_funcSound": "b822c4544022615800989a9c4ae196d01bbc0d5badb7077618ac73184cc60b0b",
-        "silentIn_enumLoop": "ae1d775e66e7da89308384e60b797774a1d517c6ad03508be2d34e5c7bad2d70",
-        "silentIn_getPausables": "d0473a5fb1f188954db8bdabbe6ccae534be8e393b017c534585c851e41931dd",
+        "silentIn_enumLoop": "068cc41b846e971794bddf9ef74c59c2ccc93c40e909b60b163e858989a6a981",
+        "silentIn_getPausables": "0abe00c74aa812c0d0256a1654e398ef6a9809758948182fb03d65d6576939a1",
         "storFixed_enumLoop": "4d9310b1a72cb13ad313908af32ccf9edb190c6bac0418933db3f98365a7c384",
         "storFixed_getPausableCount": "2241ed2e5f40265e37a4082069c0f4ec90274b56adae3936dd7df70e30b2d23d",
         "storFixed_getPausables": "658b16f9dbfe4f758cbc8ddb79789dd04d7dd22bbd222f2c5943e0c28e1b83f1",
@@ -592,7 +592,7 @@ HEADER_PINS = {
         "storFixed_heartbeatExpiry": "d027ffde27bf5b80021d9d5c8cc97fc914e2cef7ba41c3c1d1be2cb0dc659a7c",
         "storFixed_heartbeatInterval": "c3063d8c4aa3580e1b336aef47ef185f7c325835bc655ba2775d44f0e1091ea6",
         "storFixed_isPauserLive": "3d1b7c8e712ecaa01d62b7356dd10c4cddacb1975b3d959a61157ada9bfaf318",
-        "storFixed_of_silentIn": "0e2d47df687caa133ce8f9fb782b9809eb990598e1e77135c163cebe736f80b5",
+        "storFixed_of_silentIn": "dd684c4c38f12a091aac1585205df8cb424ef4f1badd5f840afaa8cbd1a2da7a",
         "storFixed_pauseAboveMaxError": "82c38ff461bc2839ab391cd6ba9e906e761109aa19c54c6895e281b61cda6fb7",
         "storFixed_pauseBelowMinError": "66155dbe3f912664a81432e47250764026716100399ad7fd850a9f300cb79137",
         "storFixed_pauseDuration": "d22ee91643fb655f56a4b67fbcbc36eee9f4ca37cdd84e5099835e076e4cba31",
@@ -634,8 +634,7 @@ DEFINITION_PINS = {
         "registryView": "0a512b4685656d8302e6a33b6f9c9e09ddd782a9e746ed50e1ecdb83041f2177"
     },
     "endpoints": {
-        "Coherent": "71e0b8a9297e1779023ccf8d81524e81b2b484acc2c674e6f746e5b3fcdc019a",
-        "SilentIn": "439123a9eb01411614919e885f7f655bef1bf6656461efa4cfa728b96a44d531"
+        "Coherent": "71e0b8a9297e1779023ccf8d81524e81b2b484acc2c674e6f746e5b3fcdc019a"
     },
     "history": {
         "DispatchInv": "574528abf00a3e3d21cf448fbc6410b106d0987add183df57a88b977ff6b1e2d",
@@ -678,8 +677,6 @@ SEMANTIC_CHANNELS = {
     "StorFixed": ("Func.Run", "(runtime dp).main :: aux",
                   "Devm.getStor r = Devm.getStor s"),
     "Coherent": ("Func.Core", "(runtime dp).main :: aux", "RegistryCoherent"),
-    "SilentIn": ("Linst.Inv Devm.getStor Devm.getStor",
-                 "Ninst.Inv Devm.getStor"),
     # `PreWf` and `Mem.Wf` are listed because the deeper-frame hypothesis is
     # phrased at the STRONGER antecedent, which is what makes the dispatcher
     # lemmas the stronger claim; a re-pin that quietly put `c.Pre ca` back
@@ -731,6 +728,10 @@ SEMANTIC_CHANNELS = {
 # missing pin, and so that the digest emitter cannot bootstrap itself from an
 # empty table.
 VOCABULARY_NAMES = {
+    "Blanc/CommonProofs.lean": (
+        "Blanc.Func.StorSilentIn",
+        "Blanc.Func.getStor_eq_of_run_storSilentIn",
+    ),
     "Blanc/LidoCircuitBreakerRegistryModel.lean": (
         "Blanc.LidoCircuitBreaker.RegistryWitness",
     ),
@@ -754,6 +755,10 @@ VOCABULARY_SOURCES = tuple(VOCABULARY_NAMES)
 
 # >>> VOCABULARY PINS >>>
 VOCABULARY_PINS = {
+    "Blanc/CommonProofs.lean": {
+        "Blanc.Func.StorSilentIn": "8dab02e4b783fd0bb8af9bf8c4d175aa1ee8e037b8cf72ef04aceddd71d5e887",
+        "Blanc.Func.getStor_eq_of_run_storSilentIn": "15e4b349ffc9ce4a35e8e6b0573213efe975a1a991db75705b73c8b3065ea159"
+    },
     "Blanc/Ladder.lean": {
         "Blanc.BlockChain.Reach": "f65d2cfb2dd0fa916d35deac841a6eeebd45676aec48c7b5e76c2898807f6244",
         "Blanc.BlockChain.ReachUsing": "cf3e4d62373f92180b65f6a0458426517e58e8ba501c0cf31ec744dd33ce386c",
@@ -780,6 +785,14 @@ VOCABULARY_PINS = {
 # its field NAMES plus the terms that make each field say something -- a field
 # whose body has been replaced by `True` keeps its name but loses its term.
 VOCABULARY_CHANNELS = {
+    "Blanc.Func.StorSilentIn": (
+        "Func.StorSilentIn P f", "Func.StorSilentIn P g",
+        "Linst.Inv Devm.getStor Devm.getStor l",
+        "Ninst.Inv Devm.getStor i", ".call k => P k"),
+    "Blanc.Func.getStor_eq_of_run_storSilentIn": (
+        "Func.Run fs sevm s f r", "Func.StorSilentIn P f",
+        "Devm.getStor r = Devm.getStor s", "induction run",
+        "hclosed _ _ silent hget"),
     "Blanc.LidoCircuitBreaker.RegistryWitness": (
         "targetsNodup", "targetsValid", "pausersValid", "lengthWord",
         "arrayWords", "assignments", "indices", "counts", "zeroCount",
@@ -921,10 +934,10 @@ ADMISSIBLE_HYPOTHESES = (
     # ---- the two assembly disciplines, and their syntactic guard ----
     ("storage-silence of a body", rf"StorFixed dp {_ID}", True),
     ("coherence transport of a body", rf"Coherent dp {_ID}", True),
-    ("syntactic storage-silence", rf"SilentIn P {_ID}", False),
+    ("syntactic storage-silence", rf"Func\.StorSilentIn P {_ID}", False),
     ("closure of the permitted jump indices",
      r"∀ k g, P k → \(\(runtime dp\)\.main :: aux\)\[k\]\? = some g → "
-     r"SilentIn P g", False),
+     r"Func\.StorSilentIn P g", False),
     # ---- storage-invariance of a fragment ----
     ("fragment storage-invariance",
      rf"(Func|Linst)\.Inv Devm\.getStor Devm\.getStor {_ID}", True),
@@ -2644,7 +2657,7 @@ SELF_TESTS = (
      "world", "endpoints",
      "theorem storFixed_enumLoop (dp : DeployParams) : StorFixed dp enumLoop :=",
      "theorem storFixed_enumLoop (dp : DeployParams)\n"
-     "    (hsilent : SilentIn P enumLoop) : StorFixed dp enumLoop :=",
+     "    (hsilent : Func.StorSilentIn P enumLoop) : StorFixed dp enumLoop :=",
      "admissible only inside the module"),
     ("definition: RegistryCoherent gutted", "pin", "history",
      "def RegistryCoherent (s : Stor) : Prop :=\n"
@@ -2733,6 +2746,21 @@ SELF_TESTS = (
      "Blanc/LidoCircuitBreakerRegistryModel.lean",
      "  targetsValid : ∀ entry ∈ entries, nonzeroCanonicalAddress entry.1",
      "  targetsValid : ∀ entry ∈ entries, True",
+     "no longer mentions"),
+    ("vocabulary: shared storage-silence definition gutted",
+     "vocabulary", "Blanc/CommonProofs.lean",
+     "  | .last l => Linst.Inv Devm.getStor Devm.getStor l",
+     "  | .last _ => True",
+     "changed in"),
+    ("vocabulary: shared storage-silence definition gutted, digest re-taken",
+     "vocabulary-channels", "Blanc/CommonProofs.lean",
+     "  | .last l => Linst.Inv Devm.getStor Devm.getStor l",
+     "  | .last _ => True",
+     "no longer mentions"),
+    ("vocabulary: shared storage-silence theorem weakened, digest re-taken",
+     "vocabulary-channels", "Blanc/CommonProofs.lean",
+     "    Devm.getStor r = Devm.getStor s := by",
+     "    True := by",
      "no longer mentions"),
     ("vocabulary: valid-chain reachability restricted to empty blocks",
      "vocabulary", "Blanc/Ladder.lean",

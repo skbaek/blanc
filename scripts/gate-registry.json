@@ -905,6 +905,7 @@
           "Blanc/LidoCircuitBreakerHistoryChain.lean",
           "Blanc/LidoCircuitBreaker.lean",
           "Blanc/LidoCircuitBreakerRegistryModel.lean",
+          "Blanc/CommonProofs.lean",
           "Blanc/Ladder.lean"
         ],
         "lean_modules": [
@@ -918,7 +919,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "With the Chain owner ACTIVE the gate reads the working Chain source and never shells out to git; git is reachable only on --chain-dry-run, which this command does not pass. Blanc/LidoCircuitBreaker.lean is read but never pinned — the dispatcher inventory is derived from it, so its bytes still decide the verdict.",
+      "note": "With the Chain owner ACTIVE the gate reads the working Chain source and never shells out to git; git is reachable only on --chain-dry-run, which this command does not pass. Blanc/LidoCircuitBreaker.lean is read but never pinned — the dispatcher inventory is derived from it, so its bytes still decide the verdict. Blanc/CommonProofs.lean supplies the shared storage-silence vocabulary pinned by this family.",
       "order": 25,
       "verdict": {
         "expect_exit": 0,
@@ -1128,6 +1129,7 @@
           "scripts/cycle-write-free-owner-manifest.json",
           "scripts/CycleWriteFreeRegression.lean",
           "Blanc/ExecutionSettlement.lean",
+          "Blanc/ExecutionFrames.lean",
           "Blanc/ExecutionOccurrence.lean",
           "Blanc/CycleWriteFree.lean",
           "Blanc/TransientSettlement.lean",
@@ -1152,7 +1154,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate — the recursive Blanc population is what preserves that membership sensitivity.",
+      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. ExecutionFrames.lean and ExecutionOccurrence.lean are both pinned because raw-attribution ownership is split across them. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate — the recursive Blanc population is what preserves that membership sensitivity.",
       "order": 30,
       "verdict": {
         "expect_exit": 0,
