@@ -412,6 +412,18 @@ listed. Its discovery walk is recursive, so a module cannot leave the
 classification by moving into a subdirectory either. It needs no Lean toolchain
 and runs ahead of the build in CI.
 
+**What its import recognition currently covers.** The gate reads imports from
+source text after stripping `--` line comments and nested `/- … -/` blocks, and
+it recognizes any module name including both roots. It does **not** yet parse
+the full Lean module-header grammar: an import split across lines, a quoted
+identifier such as `«Main»`, and the `public` / `meta` / `all` prefixes are not
+recognized, and a multiline string whose interior line reads like an import is
+misread as one. Those gaps predate the composition stratum — the earlier
+pattern was blind to comments as well — and closing them is contracted
+separately as `blanc-layering-import-parser-v1`. Until it lands, treat the rule
+as enforced against the import forms this repository actually uses, not against
+every form Lean accepts.
+
 ### The composition stratum
 
 Some theorems are genuinely about two contracts at once — a CircuitBreaker
