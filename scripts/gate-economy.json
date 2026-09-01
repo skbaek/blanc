@@ -1,6 +1,16 @@
 {
   "schema": 1,
   "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
+  "launch_population": 53,
+  "launch_ci_population": 34,
+  "final_ci_population": 39,
+  "split_families": [
+    "lido-circuit-breaker-registry",
+    "execution-occurrence",
+    "cycle-write-free",
+    "transient-settlement",
+    "proxy-pair-upgrade"
+  ],
   "rows": [
     {"id":"doc-counts","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale published theorem counts"]},
     {"id":"lido-circuit-breaker-assurance","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale claim metadata"]},
