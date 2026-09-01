@@ -1244,6 +1244,26 @@ def control_worktree_seed_never_publishes_partial_or_racing_state() -> None:
                 raise ControlFailure("source movement during copy must refuse")
         require(not (target / ".lake").exists(), "racing state must never be published")
 
+    with seed_pair() as (_s, source, target):
+        def build_racing(_creme: Path, origin: Path, destination: Path, _execute: bool):
+            shutil.copytree(origin, destination, symlinks=True)
+            gc.atomic_json(
+                source / ".lake/build/lib/lean/Blanc/A.trace",
+                {"depHash": "moved-build-state"},
+            )
+            return {"status": "OK", "detail": "build race", "data": {"method": "copytree"}}
+
+        with patched(ws, "load_gate_cache", lambda _directory: gc):
+            try:
+                ws.seed(source, target, Path("/unused"), True, copier=build_racing)
+            except ws.SeedRefusal as error:
+                require("build state moved during copy" in str(error),
+                        "a trace race should be diagnosed")
+            else:
+                raise ControlFailure("source build-state movement during copy must refuse")
+        require(not (target / ".lake").exists(),
+                "racing build state must never be published")
+
 
 def control_dependency_evidence_is_consumed_without_rerunning_its_body() -> None:
     with scratch() as s:

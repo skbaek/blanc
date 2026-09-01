@@ -156,6 +156,14 @@ def seed(
         raise SeedRefusal(
             f"source moved during copy; staged state was retained for inspection: {stage}"
         )
+    source_current_after, source_reason_after, source_certificate_after = (
+        gate_cache.build_certificate_status(source)
+    )
+    if not source_current_after or source_certificate_after != source_certificate:
+        raise SeedRefusal(
+            "source build state moved during copy "
+            f"({source_reason_after}); staged state was retained for inspection: {stage}"
+        )
     staged_current, staged_reason, staged_certificate = gate_cache.build_certificate_status(
         target, stage
     )

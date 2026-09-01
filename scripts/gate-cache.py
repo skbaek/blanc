@@ -2153,16 +2153,23 @@ def show_plan(root: Path, arguments: argparse.Namespace) -> int:
         print(f"cache: {cache_reason}")
     rows = plan(root, registry, cache, fresh=arguments.fresh)
     executed = sum(1 for row in rows if row["disposition"] == "fresh")
-    reused = len(rows) - executed
+    reused = sum(1 for row in rows if row["disposition"] == "reused")
+    certified = sum(1 for row in rows if row["disposition"] == "certified")
     for row in rows:
-        marker = "reuse " if row["disposition"] == "reused" else "RUN   "
+        marker = {
+            "reused": "reuse ",
+            "certified": "cert  ",
+        }.get(row["disposition"], "RUN   ")
         print(f"{row['order']:>3} {marker} {command_text(row['gate'])}")
         if row["disposition"] == "fresh":
             print(f"    reason: {row['reason']}")
             if arguments.explain:
                 for line in explain_row(cache, row):
                     print(line)
-    print(f"PLAN: {len(rows)} rows, {executed} would execute, {reused} would reuse")
+    print(
+        f"PLAN: {len(rows)} rows, {executed} would execute, {reused} would reuse, "
+        f"{certified} build-certified"
+    )
     return 0
 
 
