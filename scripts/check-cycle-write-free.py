@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import importlib.util
 import pathlib
@@ -600,23 +601,31 @@ def missing_positives(source: str) -> list[str]:
     )
 
 
-def main() -> int:
-    try:
-        manifest = read_manifest()
-        common_path = ROOT / manifest["commonModule"]
-        root_path = ROOT / manifest["rootModule"]
-        common = common_path.read_text(encoding="utf-8")
-        root = root_path.read_text(encoding="utf-8")
-        contracts = {
-            path: path.read_text(encoding="utf-8")
-            for path in contract_paths(manifest)
-        }
-        errors = audit_sources(manifest, common, root, contracts)
-        if errors:
-            return fail("ownership/signature audit failed: " + "; ".join(errors))
-        owner_controls = ownership_controls(manifest, common, root, contracts)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        return fail(f"ownership/signature setup failed: {exc}")
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser()
+    phase = parser.add_mutually_exclusive_group()
+    phase.add_argument("--static-only", action="store_true")
+    phase.add_argument("--semantic-only", action="store_true")
+    arguments = parser.parse_args(argv)
+    manifest: dict = {}
+    owner_controls = 0
+    if not arguments.semantic_only:
+        try:
+            manifest = read_manifest()
+            common_path = ROOT / manifest["commonModule"]
+            root_path = ROOT / manifest["rootModule"]
+            common = common_path.read_text(encoding="utf-8")
+            root = root_path.read_text(encoding="utf-8")
+            contracts = {
+                path: path.read_text(encoding="utf-8")
+                for path in contract_paths(manifest)
+            }
+            errors = audit_sources(manifest, common, root, contracts)
+            if errors:
+                return fail("ownership/signature audit failed: " + "; ".join(errors))
+            owner_controls = ownership_controls(manifest, common, root, contracts)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return fail(f"ownership/signature setup failed: {exc}")
 
     source = FIXTURE.read_text(encoding="utf-8")
     if EXPECTED.startswith("__PENDING") or not REQUIRED_POSITIVE_THEOREMS or not MUTANTS:
@@ -624,58 +633,77 @@ def main() -> int:
     for marker in MUTANTS:
         if source.count(marker) != 1:
             return fail(f"fixture must contain exactly one `{marker}` marker")
-    absent = missing_positives(source)
-    if absent:
-        return fail("required positive proofs missing/wrong-kind: " + ", ".join(absent))
+    if not arguments.semantic_only:
+        absent = missing_positives(source)
+        if absent:
+            return fail("required positive proofs missing/wrong-kind: " + ", ".join(absent))
 
-    positive = run(["lake", "env", "lean", str(FIXTURE)])
-    if positive.returncode != 0:
-        return fail("positive fixture did not compile", positive)
-    if positive.stdout.strip() != EXPECTED or positive.stderr:
-        return fail("positive fixture evaluator vector drifted", positive)
+    if not arguments.static_only:
+        positive = run(["lake", "env", "lean", str(FIXTURE)])
+        if positive.returncode != 0:
+            return fail("positive fixture did not compile", positive)
+        if positive.stdout.strip() != EXPECTED or positive.stderr:
+            return fail("positive fixture evaluator vector drifted", positive)
 
-    with tempfile.TemporaryDirectory(prefix="cycle-write-free-") as temp:
-        temp_root = pathlib.Path(temp)
-        for index, (marker, (mutant_source, diagnostics)) in enumerate(MUTANTS.items()):
-            path = temp_root / f"CycleWriteFreeMutant{index}.lean"
-            path.write_text(source.replace(marker, mutant_source), encoding="utf-8")
-            result = run(["lake", "env", "lean", str(path)])
-            evidence = result.stdout + result.stderr
-            if result.returncode == 0:
-                return fail(f"mutant `{marker}` unexpectedly compiled", result)
-            if not any(diagnostic in evidence for diagnostic in diagnostics):
-                return fail(f"mutant `{marker}` failed unexpectedly", result)
+    if not arguments.static_only:
+        with tempfile.TemporaryDirectory(prefix="cycle-write-free-") as temp:
+            temp_root = pathlib.Path(temp)
+            for index, (marker, (mutant_source, diagnostics)) in enumerate(MUTANTS.items()):
+                path = temp_root / f"CycleWriteFreeMutant{index}.lean"
+                path.write_text(source.replace(marker, mutant_source), encoding="utf-8")
+                result = run(["lake", "env", "lean", str(path)])
+                evidence = result.stdout + result.stderr
+                if result.returncode == 0:
+                    return fail(f"mutant `{marker}` unexpectedly compiled", result)
+                if not any(diagnostic in evidence for diagnostic in diagnostics):
+                    return fail(f"mutant `{marker}` failed unexpectedly", result)
 
-        for index, theorem in enumerate(sorted(REQUIRED_POSITIVE_THEOREMS)):
-            short = theorem.rsplit(".", 1)[-1]
-            token = f"theorem {short}"
-            parsed = declarations(source)
-            declaration = parsed.get(theorem)
-            if declaration is None:
-                return fail(f"positive deletion cannot find `{theorem}`")
-            lines = source.splitlines(keepends=True)
-            line_index = declaration.line - 1
-            if lines[line_index].count(token) != 1:
-                return fail(f"positive deletion cannot locate header `{theorem}`")
-            lines[line_index] = lines[line_index].replace(
-                token, f"theorem {short}_removed", 1
-            )
-            path = temp_root / f"CycleWriteFreePositiveDeleted{index}.lean"
-            path.write_text("".join(lines), encoding="utf-8")
-            if theorem not in missing_positives(path.read_text(encoding="utf-8")):
-                return fail(f"positive deletion control failed for `{theorem}`")
+    if not arguments.semantic_only:
+        with tempfile.TemporaryDirectory(prefix="cycle-write-free-static-") as temp:
+            temp_root = pathlib.Path(temp)
+            for index, theorem in enumerate(sorted(REQUIRED_POSITIVE_THEOREMS)):
+                short = theorem.rsplit(".", 1)[-1]
+                token = f"theorem {short}"
+                parsed = declarations(source)
+                declaration = parsed.get(theorem)
+                if declaration is None:
+                    return fail(f"positive deletion cannot find `{theorem}`")
+                lines = source.splitlines(keepends=True)
+                line_index = declaration.line - 1
+                if lines[line_index].count(token) != 1:
+                    return fail(f"positive deletion cannot locate header `{theorem}`")
+                lines[line_index] = lines[line_index].replace(
+                    token, f"theorem {short}_removed", 1
+                )
+                path = temp_root / f"CycleWriteFreePositiveDeleted{index}.lean"
+                path.write_text("".join(lines), encoding="utf-8")
+                if theorem not in missing_positives(path.read_text(encoding="utf-8")):
+                    return fail(f"positive deletion control failed for `{theorem}`")
 
-    print(
-        "OK — cycle write free: exact concrete evaluator; "
-        f"{len(MUTANTS)} diagnostic-pinned Lean mutants; "
-        f"{len(REQUIRED_POSITIVE_THEOREMS)} required positive proofs + "
-        f"{len(REQUIRED_POSITIVE_THEOREMS)} deletion controls; "
-        f"{len(manifest['owners'])} public owners + 7 exact signatures + "
-        f"{owner_controls} parser controls; "
-        "1 exact legacy exemption"
-    )
+    if arguments.static_only:
+        print(
+            "OK — cycle write free static: "
+            f"{len(REQUIRED_POSITIVE_THEOREMS)} required positive proofs + deletion controls; "
+            f"{len(manifest['owners'])} public owners + 7 exact signatures + "
+            f"{owner_controls} parser controls; 1 exact legacy exemption"
+        )
+    elif arguments.semantic_only:
+        print(
+            "OK — cycle write free semantic: exact concrete evaluator; "
+            f"{len(MUTANTS)} diagnostic-pinned Lean mutants"
+        )
+    else:
+        print(
+            "OK — cycle write free: exact concrete evaluator; "
+            f"{len(MUTANTS)} diagnostic-pinned Lean mutants; "
+            f"{len(REQUIRED_POSITIVE_THEOREMS)} required positive proofs + "
+            f"{len(REQUIRED_POSITIVE_THEOREMS)} deletion controls; "
+            f"{len(manifest['owners'])} public owners + 7 exact signatures + "
+            f"{owner_controls} parser controls; "
+            "1 exact legacy exemption"
+        )
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

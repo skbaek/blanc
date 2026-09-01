@@ -2,4 +2,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec python3 scripts/check-cycle-write-free.py
+exec python3 scripts/check-cycle-write-free.py "$@"

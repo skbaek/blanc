@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "population_source": "scripts/gate-economy.json",
+  "default": {
+    "candidate_positive": "complete",
+    "mandatory_boundary": "complete",
+    "harness_cases": "mandatory-boundary",
+    "optional_cases": []
+  },
+  "enabled_families": [],
+  "decision": "No launch family has both a materially smaller eligible draw and 20 representative shadow identities. All candidate and harness cases therefore remain complete."
+}

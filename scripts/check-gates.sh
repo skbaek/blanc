@@ -23,10 +23,11 @@
 # environment where no cache exists.  There is deliberately no `--force`:
 # `--fresh` adds execution and nothing removes it.
 #
-# The cache lives under `.lake/`, is ignored by Git, is never hand-seeded, and
-# may be deleted at any time.  Deleting it costs time; it cannot cost
-# correctness, because a missing, corrupt, incomplete or drifting record causes
-# execution rather than a skip.
+# Successful verdict evidence lives below Git's common directory, so exact
+# content-valid evidence follows a branch across this physical clone's
+# worktrees. Dirty worktrees may consume evidence but may not admit new shared
+# records. The store is ignored by Git, runner-written only, and disposable: a
+# missing, corrupt, incomplete, or drifting record causes execution.
 #
 # USE
 #
@@ -37,6 +38,7 @@
 #   scripts/check-gates.sh --audit        # registry vs catalogue vs CI
 #   scripts/check-gates.sh --self-test    # the fail-closed control suite
 #   scripts/check-gates.sh --inventory    # regenerate docs/GATE_INPUTS.md
+#   scripts/check-gates.sh --certify-build # after a successful host-safe lake build
 #
 # Evidence is written to `.lake/gate-report.md` and `.lake/gate-manifest.json`.
 
@@ -61,6 +63,7 @@ while [ "$#" -gt 0 ]; do
     --audit) MODE=(audit) ;;
     --self-test) MODE=(self-test) ;;
     --inventory) MODE=(inventory --output docs/GATE_INPUTS.md) ;;
+    --certify-build) MODE=(certify-build) ;;
     --force)
       echo "check-gates: there is no --force. Use --fresh, which adds execution." >&2
       exit 2
