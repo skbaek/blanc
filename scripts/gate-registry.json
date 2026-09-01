@@ -2095,8 +2095,7 @@
           "Main.lean"
         ],
         "lean_modules": [
-          "Blanc",
-          "Main"
+          "Blanc"
         ],
         "populations": [
           {
@@ -2115,7 +2114,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes — the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its ignored host-local baseline (including absence before genesis), and its own implementation. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see — a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
+      "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes — the whole Lean corpus including Main.lean, the shared Lean/Lake configuration, the Lake-recorded artifact identity of the default Blanc library root, its ignored host-local baseline (including absence before genesis), and its own implementation. Main is a non-default executable target and has no trace after the authoritative catalogue `lake build`; its source and complete local import population are already direct inputs here, while the Blanc trace binds the toolchain and imported artifacts. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see — a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
       "order": 47,
       "verdict": {
         "expect_exit": 0,
