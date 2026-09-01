@@ -70,7 +70,10 @@ def elab_baseline_identity(root: Path, path: Path, gate_cache) -> tuple[str, int
         text = payload.decode("utf-8")
     except (OSError, UnicodeError) as error:
         raise SeedRefusal(f"elaboration baseline is absent or unreadable: {path}: {error}") from error
-    expected = ["Blanc.lean"] if (root / "Blanc.lean").is_file() else []
+    expected = [
+        relative for relative in ("Blanc.lean", "Main.lean")
+        if (root / relative).is_file()
+    ]
     expected.extend(
         candidate.relative_to(root).as_posix()
         for candidate in sorted((root / "Blanc").rglob("*.lean"))
