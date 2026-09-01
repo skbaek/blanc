@@ -320,7 +320,7 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | affected-module elaboration time vs the ignored host-local `scripts/baseline-elab.txt`; the first green run initializes a full baseline without comparison, and later runs represent every file while reusing unchanged recursive local-source/Lake fingerprints | 0–326 measured files; 326 represented; host-dependent local total | from a few seconds when nothing is affected to ~21 min cache-cold or first-run/`--full` historically |
+| `scripts/check-elab.sh` | affected-module elaboration time vs the ignored host-local `scripts/baseline-elab.txt`; the first green run initializes a full baseline without comparison, and later runs represent every file while reusing unchanged recursive local-source/Lake fingerprints | 0–347 measured files; 347 represented; host-dependent local total | from a few seconds when nothing is affected to ~21 min cache-cold or first-run/`--full` historically |
 | `scripts/check-elab.sh --calibrate` | initializes every module with no local row while checking a commit-seeded stratified sample of provably-unaffected modules against this host's existing rows, refusing at `2.0x` and annotating at `1.5x`. It writes green new rows to the ignored baseline but nothing to the selection cache | sample bands recomputed from this host's current rows | ordinary isolated additions remain a small fraction of a whole-tree pass; with no local baseline it falls back to full genesis |
 
 No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
