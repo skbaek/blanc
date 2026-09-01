@@ -248,6 +248,29 @@ def upgradeToAndCallDecodedImage (image : Bytes)
       128 setupCalldata)
     64 (if forceCall then (1 : B256) else 0).toBytes
 
+private theorem mload_logs_for_upgradeRoute
+    {sevm : Sevm} {pre post : Devm}
+    (run : Ninst.Run sevm pre mload post) : pre.logs = post.logs := by
+  rcases of_run_reg run with ⟨_, core⟩
+  simp only [Rinst.run, Rinst.runCore] at core
+  rcases Except.bind_eq_ok core with ⟨⟨offset, popped⟩, popRun, core⟩
+  rcases Except.bind_eq_ok core with ⟨burned, burnRun, pushRun⟩
+  rcases Devm.pop_of_popToNat popRun with ⟨_, pop⟩
+  have burn := Devm.burn_of_chargeGas burnRun
+  have push := Devm.push_of_push pushRun
+  exact ((pop.logs.trans burn.logs).trans rfl).trans push.logs
+
+theorem loadUpgradeToAndCallWord_logs
+    {sevm : Sevm} {pre post : Devm} {word : B256}
+    (run : Line.Run sevm pre (loadUpgradeToAndCallWord word) post) :
+    pre.logs = post.logs := by
+  unfold loadUpgradeToAndCallWord at run
+  rcases Line.of_run_cons run with ⟨pushed, pushRun, run⟩
+  rcases Line.of_run_cons run with ⟨_, loadRun, done⟩
+  cases done
+  exact (of_run_pushB256 pushRun).logs.trans
+    (mload_logs_for_upgradeRoute loadRun)
+
 /-- Execution-derived boundary at the protected body of the canonical
 `(address,bytes,bool)` decoder. -/
 inductive UpgradeToAndCallDecodeBoundary
@@ -262,6 +285,7 @@ inductive UpgradeToAndCallDecodeBoundary
         (upgradeToAndCallDecodedImage image newImplementation setupCalldata
           forceCall))
       (state : entry.state = bodyPre.state)
+      (logs : entry.logs = bodyPre.logs)
 
 private theorem upgradeToAndCallDecoder_step_size
     {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
@@ -275,7 +299,8 @@ private theorem upgradeToAndCallDecoder_step_size
         (upgradeToAndCallDecoderAfterSize body) out ∧
       tail <<+ next.stack ∧
       pre.state = next.state ∧
-      pre.memory = next.memory := by
+      pre.memory = next.memory ∧
+      pre.logs = next.logs := by
   rw [upgradeToAndCallDecoder_split_shape] at run
   obtain ⟨s1, q1, run⟩ := runCompiledTo_next_inv run
   obtain ⟨s2, q2, run⟩ := runCompiledTo_next_inv run
@@ -296,7 +321,10 @@ private theorem upgradeToAndCallDecoder_step_size
         ((Ninst.Hinv.inv (f := Devm.state) r3).trans hpop.state)),
     (Ninst.Hinv.inv (f := Devm.memory) r1).trans
       ((Ninst.Hinv.inv (f := Devm.memory) r2).trans
-        ((Ninst.Hinv.inv (f := Devm.memory) r3).trans hpop.memory))⟩
+        ((Ninst.Hinv.inv (f := Devm.memory) r3).trans hpop.memory)),
+    (Ninst.Hinv.inv (f := Devm.logs) r1).trans
+      ((of_run_calldatasize r2).logs.trans
+        ((Ninst.Hinv.inv (f := Devm.logs) r3).trans hpop.logs))⟩
 
 private theorem upgradeToAndCallDecoder_step_address
     {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
@@ -310,7 +338,8 @@ private theorem upgradeToAndCallDecoder_step_address
         (upgradeToAndCallDecoderAfterAddress body) out ∧
       tail <<+ next.stack ∧
       pre.state = next.state ∧
-      pre.memory = next.memory := by
+      pre.memory = next.memory ∧
+      pre.logs = next.logs := by
   unfold upgradeToAndCallDecoderAfterSize at run
   obtain ⟨argPost, argRun, run⟩ :=
     runCompiledTo_prepend_inv run
@@ -328,7 +357,9 @@ private theorem upgradeToAndCallDecoder_step_address
     (Line.of_inv Devm.state (by line_inv) argRun).trans
       ((Line.of_inv Devm.state (by line_inv) checkRun).trans hpop.state),
     (Line.of_inv Devm.memory (by line_inv) argRun).trans
-      ((Line.of_inv Devm.memory (by line_inv) checkRun).trans hpop.memory)⟩
+      ((Line.of_inv Devm.memory (by line_inv) checkRun).trans hpop.memory),
+    (Line.of_inv Devm.logs (by line_inv) argRun).trans
+      ((Line.of_inv Devm.logs (by line_inv) checkRun).trans hpop.logs)⟩
 
 private theorem upgradeToAndCallDecoder_step_implementation
     {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
@@ -348,7 +379,8 @@ private theorem upgradeToAndCallDecoder_step_implementation
       Mem.Wf next.memory ∧
       Mem.Reads next.memory
         (Bytes.writeAt image 0 newImplementation.toB256.toBytes) ∧
-      pre.state = next.state := by
+      pre.state = next.state ∧
+      pre.logs = next.logs := by
   unfold upgradeToAndCallDecoderAfterAddress at run
   obtain ⟨s1, arg0Run, run⟩ := runCompiledTo_prepend_inv run
   have p1 : newImplementation.toB256 :: tail <<+ s1.stack := by
@@ -381,7 +413,7 @@ private theorem upgradeToAndCallDecoder_step_implementation
       from by decide] using p5
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
-  refine ⟨next, nextRun, pNext, ?_, ?_, ?_⟩
+  refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
   · rw [← hpop.memory, ← Ninst.Hinv.inv (f := Devm.memory) r5,
       ← Line.of_inv Devm.memory (by line_inv) arg1Run,
       ← Ninst.Hinv.inv (f := Devm.memory) r3]
@@ -394,6 +426,11 @@ private theorem upgradeToAndCallDecoder_step_implementation
       (state2.trans ((Ninst.Hinv.inv (f := Devm.state) r3).trans
         ((Line.of_inv Devm.state (by line_inv) arg1Run).trans
           ((Ninst.Hinv.inv (f := Devm.state) r5).trans hpop.state))))
+  · exact (Line.of_inv Devm.logs (by line_inv) arg0Run).trans
+      ((Line.of_inv Devm.logs (by line_inv) storeRun).trans
+        ((Ninst.Hinv.inv (f := Devm.logs) r3).trans
+          ((Line.of_inv Devm.logs (by line_inv) arg1Run).trans
+            ((Ninst.Hinv.inv (f := Devm.logs) r5).trans hpop.logs))))
 
 private theorem upgradeToAndCallDecoder_step_offset
     {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
@@ -412,7 +449,8 @@ private theorem upgradeToAndCallDecoder_step_offset
       Mem.Wf next.memory ∧
       Mem.Reads next.memory
         (Bytes.writeAt image 96 (96 : B256).toBytes) ∧
-      pre.state = next.state := by
+      pre.state = next.state ∧
+      pre.logs = next.logs := by
   unfold upgradeToAndCallDecoderAfterOffset at run
   obtain ⟨s1, arg1Run, run⟩ := runCompiledTo_prepend_inv run
   have p1 : (96 : B256) :: tail <<+ s1.stack := by
@@ -455,7 +493,7 @@ private theorem upgradeToAndCallDecoder_step_offset
     simpa [hheader] using p7
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
-  refine ⟨next, nextRun, pNext, ?_, ?_, ?_⟩
+  refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
   · rw [← hpop.memory, ← Ninst.Hinv.inv (f := Devm.memory) r7,
       ← Ninst.Hinv.inv (f := Devm.memory) r6,
       ← Ninst.Hinv.inv (f := Devm.memory) r5,
@@ -472,6 +510,14 @@ private theorem upgradeToAndCallDecoder_step_offset
           ((Ninst.Hinv.inv (f := Devm.state) r5).trans
             ((Ninst.Hinv.inv (f := Devm.state) r6).trans
               ((Ninst.Hinv.inv (f := Devm.state) r7).trans hpop.state))))))
+  · exact (Line.of_inv Devm.logs (by line_inv) arg1Run).trans
+      ((Line.of_inv Devm.logs (by line_inv) storeRun).trans
+        ((loadUpgradeToAndCallWord_logs loadRun).trans
+          ((Ninst.Hinv.inv (f := Devm.logs) r4).trans
+            ((Ninst.Hinv.inv (f := Devm.logs) r5).trans
+              ((of_run_calldatasize r6).logs.trans
+                ((Ninst.Hinv.inv (f := Devm.logs) r7).trans
+                  hpop.logs))))))
 
 private theorem upgradeToAndCallDecoder_step_header
     {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
@@ -496,7 +542,8 @@ private theorem upgradeToAndCallDecoder_step_header
       Mem.Reads next.memory
         (Bytes.writeAt image 32
           (Nat.toB256 setupCalldata.length).toBytes) ∧
-      pre.state = next.state := by
+      pre.state = next.state ∧
+      pre.logs = next.logs := by
   unfold upgradeToAndCallDecoderAfterHeader at run
   obtain ⟨s1, loadOffsetRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨p1, wf1, reads1, state1⟩ :=
@@ -556,7 +603,7 @@ private theorem upgradeToAndCallDecoder_step_header
     simpa [hlengthGuard] using p8
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
-  refine ⟨next, nextRun, pNext, ?_, ?_, ?_⟩
+  refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
   · rw [← hpop.memory, ← Ninst.Hinv.inv (f := Devm.memory) r8]
     exact wf7
   · rw [← hpop.memory, ← Ninst.Hinv.inv (f := Devm.memory) r8]
@@ -569,6 +616,15 @@ private theorem upgradeToAndCallDecoder_step_header
               (state7.trans
                 ((Ninst.Hinv.inv (f := Devm.state) r8).trans
                   hpop.state)))))))
+  · exact (loadUpgradeToAndCallWord_logs loadOffsetRun).trans
+      ((Ninst.Hinv.inv (f := Devm.logs) r2).trans
+        ((Ninst.Hinv.inv (f := Devm.logs) r3).trans
+          ((Ninst.Hinv.inv (f := Devm.logs) r4).trans
+            ((Line.of_inv Devm.logs (by line_inv) storeLengthRun).trans
+              ((Ninst.Hinv.inv (f := Devm.logs) r6).trans
+                ((loadUpgradeToAndCallWord_logs loadLengthRun).trans
+                  ((Ninst.Hinv.inv (f := Devm.logs) r8).trans
+                    hpop.logs)))))))
 
 private theorem upgradeToAndCallDecoder_step_payload_bound
     {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
@@ -591,7 +647,8 @@ private theorem upgradeToAndCallDecoder_step_payload_bound
       tail <<+ next.stack ∧
       Mem.Wf next.memory ∧
       Mem.Reads next.memory image ∧
-      pre.state = next.state := by
+      pre.state = next.state ∧
+      pre.logs = next.logs := by
   unfold upgradeToAndCallDecoderAfterLengthBound at run
   obtain ⟨s1, loadOffsetRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨p1, wf1, reads1, state1⟩ :=
@@ -639,7 +696,7 @@ private theorem upgradeToAndCallDecoder_step_payload_bound
     simpa [hpayloadGuard] using p7
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
-  refine ⟨next, nextRun, pNext, ?_, ?_, ?_⟩
+  refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
   · rw [← hpop.memory, ← Ninst.Hinv.inv (f := Devm.memory) r7,
       ← Ninst.Hinv.inv (f := Devm.memory) r6,
       ← Ninst.Hinv.inv (f := Devm.memory) r5]
@@ -655,6 +712,14 @@ private theorem upgradeToAndCallDecoder_step_payload_bound
             ((Ninst.Hinv.inv (f := Devm.state) r6).trans
               ((Ninst.Hinv.inv (f := Devm.state) r7).trans
                 hpop.state))))))
+  · exact (loadUpgradeToAndCallWord_logs loadOffsetRun).trans
+      ((Ninst.Hinv.inv (f := Devm.logs) r2).trans
+        ((Ninst.Hinv.inv (f := Devm.logs) r3).trans
+          ((loadUpgradeToAndCallWord_logs loadLengthRun).trans
+            ((Ninst.Hinv.inv (f := Devm.logs) r5).trans
+              ((of_run_calldatasize r6).logs.trans
+                ((Ninst.Hinv.inv (f := Devm.logs) r7).trans
+                  hpop.logs))))))
 
 private theorem upgradeToAndCallDecoder_step_copy
     {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
@@ -680,7 +745,8 @@ private theorem upgradeToAndCallDecoder_step_copy
       Mem.Reads next.memory
         (Bytes.writeAt (Bytes.writeAt image 128 setupCalldata) 64
           (if forceCall then (1 : B256) else 0).toBytes) ∧
-      pre.state = next.state := by
+      pre.state = next.state ∧
+      pre.logs = next.logs := by
   unfold upgradeToAndCallDecoderAfterPayloadBound at run
   obtain ⟨s1, loadLengthRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨p1, wf1, reads1, state1⟩ :=
@@ -789,8 +855,8 @@ private theorem upgradeToAndCallDecoder_step_copy
     of_run_mstoreAt_image p12 wf12 reads12 storeForceRun
   rw [show ((upgradeToAndCallForceWord * 32 : B256)).toNat = 64
     from by decide] at readsNext
-  refine ⟨next, bodyRun, pNext, wfNext, readsNext, ?_⟩
-  exact state1.trans (state2.trans
+  refine ⟨next, bodyRun, pNext, wfNext, readsNext, ?_, ?_⟩
+  · exact state1.trans (state2.trans
     ((Ninst.Hinv.inv (f := Devm.state) r3).trans
       ((Ninst.Hinv.inv (f := Devm.state) r4).trans
         ((Ninst.Hinv.inv (f := Devm.state) r5).trans
@@ -803,6 +869,22 @@ private theorem upgradeToAndCallDecoder_step_copy
                       (hpop.state.trans
                         ((Line.of_inv Devm.state (by line_inv) arg2Run').trans
                           stateNext))))))))))))
+  · exact (loadUpgradeToAndCallWord_logs loadLengthRun).trans
+      ((loadUpgradeToAndCallWord_logs loadOffsetRun).trans
+        ((Ninst.Hinv.inv (f := Devm.logs) r3).trans
+          ((Ninst.Hinv.inv (f := Devm.logs) r4).trans
+            ((Ninst.Hinv.inv (f := Devm.logs) r5).trans
+              ((Ninst.Hinv.inv (f := Devm.logs) r6).trans
+                ((Line.of_inv Devm.logs (by line_inv) arg2Run).trans
+                  ((Ninst.Hinv.inv (f := Devm.logs) r8).trans
+                    ((Ninst.Hinv.inv (f := Devm.logs) r9).trans
+                      ((Ninst.Hinv.inv (f := Devm.logs) r10).trans
+                        ((Ninst.Hinv.inv (f := Devm.logs) r11).trans
+                          (hpop.logs.trans
+                            ((Line.of_inv Devm.logs (by line_inv)
+                              arg2Run').trans
+                              (Line.of_inv Devm.logs (by line_inv)
+                                storeForceRun)))))))))))))
 
 /-- Canonical ABI words plus the decoder's explicit arithmetic guards produce
 the protected-body boundary.  The following public corollary discharges these
@@ -836,7 +918,7 @@ theorem decodeUpgradeToAndCallControl_boundary_of_guards
   have harg2 := proxyUpgradeToAndCallCalldata_arg2 hdata
   have hsetupLength := proxyUpgradeToAndCallCalldata_setupLength hdata
   have hsetupSlice := proxyUpgradeToAndCallCalldata_setupSlice hdata
-  obtain ⟨n1, run1, p1, state1, memory1⟩ :=
+  obtain ⟨n1, run1, p1, state1, memory1, logs1⟩ :=
     upgradeToAndCallDecoder_step_size hp hsizeGuard run
   have wf1 : Mem.Wf n1.memory := by rw [← memory1]; exact hwf
   have reads1 : Mem.Reads n1.memory image := by
@@ -845,16 +927,16 @@ theorem decodeUpgradeToAndCallControl_boundary_of_guards
   have hvalid : ValidAdr (Sevm.argWord sevm 0) := by
     rw [harg0]
     exact ⟨newImplementation, rfl⟩
-  obtain ⟨n2, run2, p2, state2, memory2⟩ :=
+  obtain ⟨n2, run2, p2, state2, memory2, logs2⟩ :=
     upgradeToAndCallDecoder_step_address p1 hvalid run1
   have wf2 : Mem.Wf n2.memory := by rw [← memory2]; exact wf1
   have reads2 : Mem.Reads n2.memory image := by
     rw [← memory2]
     exact reads1
-  obtain ⟨n3, run3, p3, wf3, reads3, state3⟩ :=
+  obtain ⟨n3, run3, p3, wf3, reads3, state3, logs3⟩ :=
     upgradeToAndCallDecoder_step_implementation p2 wf2 reads2 harg0 harg1
       run2
-  obtain ⟨n4, run4, p4, wf4, reads4, state4⟩ :=
+  obtain ⟨n4, run4, p4, wf4, reads4, state4, logs4⟩ :=
     upgradeToAndCallDecoder_step_offset p3 wf3 reads3 harg1 hheaderGuard
       run3
   have hoffset4 : Bytes.toB256
@@ -862,7 +944,7 @@ theorem decodeUpgradeToAndCallControl_boundary_of_guards
         (Bytes.writeAt image 0 newImplementation.toB256.toBytes)
         96 (96 : B256).toBytes).sliceD 96 32 0) = 96 :=
     Bytes.readWord_writeAt_self _ 96 96
-  obtain ⟨n5, run5, p5, wf5, reads5, state5⟩ :=
+  obtain ⟨n5, run5, p5, wf5, reads5, state5, logs5⟩ :=
     upgradeToAndCallDecoder_step_header p4 wf4 reads4 hoffset4 hsetupLength
       hlengthGuard run4
   have hoffset5 : Bytes.toB256
@@ -883,16 +965,18 @@ theorem decodeUpgradeToAndCallControl_boundary_of_guards
         32 (Nat.toB256 setupCalldata.length).toBytes).sliceD 32 32 0) =
       Nat.toB256 setupCalldata.length :=
     Bytes.readWord_writeAt_self _ 32 (Nat.toB256 setupCalldata.length)
-  obtain ⟨n6, run6, p6, wf6, reads6, state6⟩ :=
+  obtain ⟨n6, run6, p6, wf6, reads6, state6, logs6⟩ :=
     upgradeToAndCallDecoder_step_payload_bound p5 wf5 reads5
       hoffset5 hlength5 hpayloadGuard run5
-  obtain ⟨n7, run7, p7, wf7, reads7, state7⟩ :=
+  obtain ⟨n7, run7, p7, wf7, reads7, state7, logs7⟩ :=
     upgradeToAndCallDecoder_step_copy p6 wf6 reads6 hoffset5 hlength5
       hlengthBound hsetupSlice harg2 run6
-  refine ⟨n7, run7, p7, wf7, ?_, ?_⟩
+  refine ⟨n7, run7, p7, wf7, ?_, ?_, ?_⟩
   · simpa [upgradeToAndCallDecodedImage] using reads7
   · exact state1.trans (state2.trans (state3.trans (state4.trans
       (state5.trans (state6.trans state7)))))
+  · exact logs1.trans (logs2.trans (logs3.trans (logs4.trans
+      (logs5.trans (logs6.trans logs7)))))
 
 /-- The canonical encoder clears every decoder guard under the Solidity
 decoder's `uint64` length bound and the ordinary 256-bit calldata-size bound. -/
@@ -974,6 +1058,7 @@ inductive UpgradeToAndCallSetupRoute
       (memoryWf : Mem.Wf delegatePre.memory)
       (memoryReads : Mem.Reads delegatePre.memory decodedImage)
       (state : pre.state = delegatePre.state)
+      (logs : pre.logs = delegatePre.logs)
   | forced (setupEmpty : setupCalldata = [])
       (forceTrue : forceCall = true)
       (delegatePre : Devm)
@@ -983,6 +1068,7 @@ inductive UpgradeToAndCallSetupRoute
       (memoryWf : Mem.Wf delegatePre.memory)
       (memoryReads : Mem.Reads delegatePre.memory decodedImage)
       (state : pre.state = delegatePre.state)
+      (logs : pre.logs = delegatePre.logs)
   | skipped (setupEmpty : setupCalldata = [])
       (forceFalse : forceCall = false)
       (stopPre : Devm)
@@ -991,6 +1077,7 @@ inductive UpgradeToAndCallSetupRoute
       (memoryWf : Mem.Wf stopPre.memory)
       (memoryReads : Mem.Reads stopPre.memory decodedImage)
       (state : pre.state = stopPre.state)
+      (logs : pre.logs = stopPre.logs)
 
 theorem upgradeToAndCallAfter_route
     {fs : List Func} {sevm : Sevm} {pre : Devm} {tail : Stack}
@@ -1034,6 +1121,8 @@ theorem upgradeToAndCallAfter_route
           from by decide]
         exact hlengthImage)
       loadLengthRun
+  have logsLength : pre.logs = lengthPost.logs :=
+    loadUpgradeToAndCallWord_logs loadLengthRun
   by_cases hzero : setupCalldata.length = 0
   · have hwordZero : Nat.toB256 setupCalldata.length = (0 : B256) := by
       rw [hzero]
@@ -1055,6 +1144,8 @@ theorem upgradeToAndCallAfter_route
             from by decide]
           exact hforceImage)
         loadForceRun
+    have logsForce : forcePre.logs = forcePost.logs :=
+      loadUpgradeToAndCallWord_logs loadForceRun
     have setupEmpty : setupCalldata = [] := List.length_eq_zero_iff.mp hzero
     cases forceCall with
     | false =>
@@ -1067,6 +1158,8 @@ theorem upgradeToAndCallAfter_route
         (by rw [← hforcePop.memory]; exact readsForce)
         (stateLength.trans (hlengthPop.state.trans
           (stateForce.trans hforcePop.state)))
+        (logsLength.trans (hlengthPop.logs.trans
+          (logsForce.trans hforcePop.logs)))
     | true =>
       have pForceOne : (1 : B256) :: tail <<+ forcePost.stack := by
         simpa using pForce
@@ -1078,6 +1171,8 @@ theorem upgradeToAndCallAfter_route
         (by rw [← hforcePop.memory]; exact readsForce)
         (stateLength.trans (hlengthPop.state.trans
           (stateForce.trans hforcePop.state)))
+        (logsLength.trans (hlengthPop.logs.trans
+          (logsForce.trans hforcePop.logs)))
   · have hwordNonzero : Nat.toB256 setupCalldata.length ≠ 0 := by
       intro hword
       have hnat := congrArg B256.toNat hword
@@ -1091,6 +1186,7 @@ theorem upgradeToAndCallAfter_route
       (by rw [← hlengthPop.memory]; exact wfLength)
       (by rw [← hlengthPop.memory]; exact readsLength)
       (stateLength.trans hlengthPop.state)
+      (logsLength.trans hlengthPop.logs)
 
 /-! ## Upgrade code check and commit -/
 

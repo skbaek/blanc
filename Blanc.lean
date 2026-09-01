@@ -1,6 +1,8 @@
 import Blanc.Solvent
 import Blanc.WethCode
 import Blanc.Ladder
+import Blanc.Upgrade
+import Blanc.StaticPrecompileMessage
 import Blanc.BalanceAlgebra
 import Blanc.WordArithmetic
 import Blanc.BytesWrite
@@ -17,6 +19,12 @@ import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryEffects
+import Blanc.ExecutionFrameEntry
+import Blanc.ExecutionMessageAdmission
+import Blanc.ExecutionTransactionAdmission
+import Blanc.ExecutionBodyAdmission
+import Blanc.ExecutionHistoryAdmission
+import Blanc.ExecutionTraceFresh
 import Blanc.ExecutionOccurrence
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
@@ -196,6 +204,10 @@ import Blanc.BeaconDepositSuccessSettlement
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositRootEffects
 import Blanc.BeaconDepositRootPublic
+import Blanc.BeaconDepositDeploymentRoot
+import Blanc.BeaconDepositHistory
+import Blanc.BeaconDepositHistorySound
+import Blanc.BeaconDepositHistoryChain
 import Blanc.ProxyPairSlots
 import Blanc.ProxyPairProgram
 import Blanc.ProxyPairOssifiableSurface
@@ -224,6 +236,10 @@ import Blanc.ProxyPairImplementation
 import Blanc.ProxyPairExecution
 import Blanc.ProxyPairCorrespondence
 import Blanc.ProxyPairAuthority
+import Blanc.ProxyPairUpgradePrograms
+import Blanc.ProxyPairUpgradeRelation
+import Blanc.ProxyPairUpgradeExecution
+import Blanc.ProxyPairUpgradeRefinement
 import Blanc.LidoTriggerableWithdrawalsGatewayCore
 import Blanc.LidoTriggerableWithdrawalsGatewayTrigger
 import Blanc.LidoTriggerableWithdrawalsGateway

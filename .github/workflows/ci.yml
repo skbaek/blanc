@@ -24,6 +24,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history: the OssifiableProxy performance contract verifies its
+          # campaign base commit with git cat-file, which a shallow clone fails.
+          fetch-depth: 0
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
       # Static and fail-closed: it reads committed files only, so it needs no
@@ -31,6 +35,8 @@ jobs:
       # second when the assurance register stops describing the tree.
       - name: Lido CircuitBreaker assurance register
         run: scripts/check-lido-circuit-breaker-assurance.sh
+      - name: BeaconDeposit assurance register
+        run: scripts/check-beacon-deposit-assurance.sh
       - name: Proof-resource ceiling debt
         run: scripts/check-proof-debt.sh
       - name: Proof-duplication ratchet
@@ -110,6 +116,8 @@ jobs:
         run: scripts/check.sh --no-build
       - name: Pin WETH10/Lido artifact statements
         run: scripts/check-claims.sh
+      - name: Proxy-pair upgrade migration and R2 assurance
+        run: scripts/check-proxy-pair-upgrade.sh
       - name: WETH fixture suite (Jaune vs frozen EELS on the witnessed bytes)
         run: scripts/check-weth.sh --no-build
       - name: PRORATA fixture suite (Jaune vs frozen EELS on the witnessed bytes)

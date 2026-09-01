@@ -368,6 +368,51 @@ def control_registry_declaration_invalidates() -> None:
         require(s.disposition("g") == "fresh", "a widened declaration must force execution")
 
 
+def control_lock_implementation_is_not_gate_evidence_identity() -> None:
+    gate = simple_gate("g", ["scripts/g.sh"], {}, "^OK — g: ")
+    sources = gc.runner_identity_sources(gate)
+    require("gate-cache.py" in sources, "the evidence engine must remain identified")
+    require(
+        "gate_cache_lock.py" not in sources,
+        "serialization-only lock code must not invalidate gate evidence",
+    )
+
+
+def control_t8n_resolver_invalidates_only_its_consumers() -> None:
+    ordinary = simple_gate(
+        "ordinary",
+        ["scripts/ordinary.sh"],
+        {"files": ["scripts/x.txt"]},
+        "^OK — ordinary: ",
+    )
+    current = simple_gate(
+        "current",
+        ["scripts/current.sh"],
+        {"files": ["@t8n_python_base/bin/python3.11"]},
+        "^OK — current: ",
+    )
+    before_ordinary, _ = gc.runner_identity(ordinary)
+    before_current, _ = gc.runner_identity(current)
+    original = gc.file_digest
+
+    def changed_t8n_only(path: Path) -> str:
+        if path.name == gc.RUNNER_T8N_SOURCE:
+            return "f" * 64
+        return original(path)
+
+    with patched(gc, "file_digest", changed_t8n_only):
+        after_ordinary, _ = gc.runner_identity(ordinary)
+        after_current, _ = gc.runner_identity(current)
+    require(
+        after_ordinary == before_ordinary,
+        "a t8n resolver change must preserve unrelated gate fingerprints",
+    )
+    require(
+        after_current != before_current,
+        "a t8n resolver change must invalidate current-mainnet consumers",
+    )
+
+
 def control_unparsable_import_cannot_hide_a_dependency() -> None:
     """An import the parser does not understand must raise, not be dropped.
 
@@ -599,6 +644,7 @@ def control_oracle_lanes_are_disjoint_and_exact() -> None:
         }
         shared_files = [
             "scripts/current-mainnet-target.json",
+            "scripts/current-mainnet-runtime-lock.json",
             "scripts/current_mainnet.py",
         ]
         for path in shared_files:
@@ -636,6 +682,9 @@ def control_oracle_lanes_are_disjoint_and_exact() -> None:
         changed = copy.deepcopy(valid_current)
         changed["files"].remove("scripts/current_mainnet.py")
         mutants.append(("helper omitted", changed))
+        changed = copy.deepcopy(valid_current)
+        changed["files"].remove("scripts/current-mainnet-runtime-lock.json")
+        mutants.append(("runtime lock omitted", changed))
 
         for label, inputs in mutants:
             s.registry([gate(inputs)])
@@ -665,6 +714,50 @@ def control_symlink_file_target_invalidates() -> None:
             s.disposition("g") == "fresh",
             "retargeting a file symlink must invalidate even with equal target bytes",
         )
+
+
+def control_current_mainnet_python_base_is_native() -> None:
+    """The CPython root follows the venv selector instead of one OS literal."""
+
+    with scratch() as s:
+        target = s.root / "target"
+        selector = target / ".venv/bin/python"
+        selector.parent.mkdir(parents=True)
+        bases = [s.root / "uv/a", s.root / "uv/b"]
+        for base in bases:
+            executable = base / "bin/python3.11"
+            executable.parent.mkdir(parents=True)
+            executable.write_text("same runtime\n", encoding="utf-8")
+            (base / "lib/python3.11").mkdir(parents=True)
+        selector.symlink_to(bases[0] / "bin/python3.11")
+        old = os.environ.get("JAUNE_T8N_TARGET")
+        os.environ["JAUNE_T8N_TARGET"] = str(target)
+        try:
+            resolved = gc.resolve_path(s.root, "@t8n_python_base/lib/python3.11")
+            require(
+                resolved == (bases[0] / "lib/python3.11").resolve(strict=True),
+                "derived CPython root did not follow the first native selector",
+            )
+            selector.unlink()
+            selector.symlink_to(bases[1] / "bin/python3.11")
+            resolved = gc.resolve_path(s.root, "@t8n_python_base/lib/python3.11")
+            require(
+                resolved == (bases[1] / "lib/python3.11").resolve(strict=True),
+                "derived CPython root did not follow a retargeted native selector",
+            )
+            selector.unlink()
+            selector.write_text("not a selector\n", encoding="utf-8")
+            try:
+                gc.resolve_path(s.root, "@t8n_python_base/lib/python3.11")
+            except gc.Unresolvable:
+                pass
+            else:
+                raise ControlFailure("a non-symlink CPython selector was accepted")
+        finally:
+            if old is None:
+                os.environ.pop("JAUNE_T8N_TARGET", None)
+            else:
+                os.environ["JAUNE_T8N_TARGET"] = old
 
 
 def control_symlink_directory_selector_invalidates() -> None:
@@ -1033,37 +1126,49 @@ def control_lock_refuses_a_second_run() -> None:
         gc.release_lock(path)
 
 
-def control_stale_lock_is_reclaimed_and_announced() -> None:
-    """Reclaimed *and* announced. A guard that cleans up quietly stops being
-    evidence, which is the reason gate-lock.sh's own header gives."""
+def control_kernel_lock_refuses_another_process() -> None:
+    """The mutex, not same-process bookkeeping or PID metadata, must bite."""
+
+    with scratch() as s:
+        path = gc.lock_path(s.root)
+        require(gc.acquire_lock(path), "the parent should take the lock")
+        probe = (
+            "import fcntl, sys\n"
+            "with open(sys.argv[1], 'a+') as handle:\n"
+            "    try:\n"
+            "        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+            "    except BlockingIOError:\n"
+            "        raise SystemExit(73)\n"
+        )
+        blocked = subprocess.run(
+            [sys.executable, "-c", probe, str(path / "mutex")], check=False
+        )
+        require(blocked.returncode == 73,
+                f"another process must be refused by the kernel, got {blocked.returncode}")
+        gc.release_lock(path)
+        free = subprocess.run(
+            [sys.executable, "-c", probe, str(path / "mutex")], check=False
+        )
+        require(free.returncode == 0,
+                f"the kernel lock must release with its process, got {free.returncode}")
+
+
+def control_stale_owner_metadata_does_not_block_an_unlocked_mutex() -> None:
+    """PID metadata is diagnostic only, because PIDs are namespace-relative."""
 
     with scratch() as s:
         path = gc.lock_path(s.root)
         path.mkdir(parents=True)
         (path / "pid").write_text("999999999\n", encoding="utf-8")
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            taken = gc.acquire_lock(path)
-        require(taken, "a lock held by a dead process must be reclaimed")
-        require("reclaim" in err.getvalue() and "999999999" in err.getvalue(),
-                f"the reclaim must name the dead owner, got {err.getvalue()!r}")
+        require(gc.acquire_lock(path),
+                "stale PID metadata must not override an unlocked kernel mutex")
+        require(gc.read_lock_pid(path / "pid") == os.getpid(),
+                "the new holder must replace stale diagnostic metadata")
         gc.release_lock(path)
-
-
-def control_lock_without_an_owner_says_how_to_clear_it() -> None:
-    """mkdir and the pid stamp are two steps. A run killed between them leaves
-    a directory nothing can attribute, and refusing every future run in silence
-    is worse than the contention it was guarding against."""
-
-    with scratch() as s:
-        path = gc.lock_path(s.root)
-        path.mkdir(parents=True)
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            taken = gc.acquire_lock(path)
-        require(not taken, "an unattributable lock must still refuse")
-        require("by hand" in err.getvalue(),
-                f"and must say how to clear it, got {err.getvalue()!r}")
+        require(path.is_dir() and (path / "mutex").is_file(),
+                "the stable mutex inode must persist after release")
+        require(not (path / "pid").exists(),
+                "released diagnostic owner metadata must not persist")
 
 
 def control_atomic_write_leaves_no_debris() -> None:
@@ -1614,6 +1719,8 @@ CONTROLS = (
     control_implementation_change_invalidates,
     control_command_arguments_invalidate,
     control_registry_declaration_invalidates,
+    control_lock_implementation_is_not_gate_evidence_identity,
+    control_t8n_resolver_invalidates_only_its_consumers,
     control_lean_module_dep_hash_invalidates,
     control_missing_trace_forces_execution,
     control_malformed_trace_forces_execution,
@@ -1625,6 +1732,7 @@ CONTROLS = (
     control_external_checkout_identity,
     control_oracle_lanes_are_disjoint_and_exact,
     control_symlink_file_target_invalidates,
+    control_current_mainnet_python_base_is_native,
     control_symlink_directory_selector_invalidates,
     control_environment_variable_invalidates,
     control_clock_rollover_invalidates,
@@ -1644,8 +1752,8 @@ CONTROLS = (
     control_registry_faults_are_refused,
     control_registry_schema_version_is_enforced,
     control_lock_refuses_a_second_run,
-    control_stale_lock_is_reclaimed_and_announced,
-    control_lock_without_an_owner_says_how_to_clear_it,
+    control_kernel_lock_refuses_another_process,
+    control_stale_owner_metadata_does_not_block_an_unlocked_mutex,
     control_atomic_write_leaves_no_debris,
     control_there_is_no_force,
     control_fresh_mode_adds_work_and_refreshes,

@@ -1,0 +1,15 @@
+import Blanc.ProxyPairUpgradeRefinement
+
+#print axioms Blanc.ProxyPair.Upgrade.migration_establishes_initializedDomain
+#print axioms Blanc.ProxyPair.Upgrade.migration_sound
+#print axioms Blanc.ProxyPair.Upgrade.shared_getter_refinement
+#print axioms Blanc.ProxyPair.Upgrade.shared_setter_refinement
+#print axioms Blanc.ProxyPair.Upgrade.upgradeToAndCall_primary_realizes_migration
+#print axioms Blanc.ProxyPair.Upgrade.upgradeTo_realizes_identity
+#print axioms Blanc.ProxyPair.Upgrade.upgradeToAndCall_skipped_empty_realizes_identity
+#print axioms Blanc.ProxyPair.Upgrade.upgradeTo_identity_sound_of_admissible
+#print axioms Blanc.ProxyPair.Upgrade.throughProxy_primary_refinement
+#print axioms Blanc.ProxyPair.Upgrade.throughProxy_identity_refinement_of_admissible
+#print axioms Blanc.ProxyPair.Upgrade.fixture_exactProxyPairSharedExecution_value
+#print axioms Blanc.ProxyPair.Upgrade.fixture_throughProxy_value_refinement
+#print axioms Blanc.ProxyPair.Upgrade.upgradeToAndCall_primary_throughProxy_refinement

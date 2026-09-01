@@ -1,5 +1,6 @@
 import Blanc.BeaconDeposit
 import Blanc.ForwardSha256
+import Blanc.StaticPrecompileMessage
 
 /-!
 # Beacon deposit SHA-256 wrapper carrier
@@ -320,6 +321,223 @@ theorem sha64_success_prefix_runCompiledTo
   simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
     (sha64_success_prefix_runCompiledTo_ext
       (ext := 0) hext hnodeleg hwarm hpre hdepth (by simpa using hbound) hroom)
+
+/-! ## Source-level successful-run inversion -/
+
+/-- Invert a successful source-level `sha64` walk.  The actual `STATICCALL`
+must have entered the native address-2 precompile: its failure arm bubbles and
+its short-output arm reverts, so neither can occur in a successful walk.  The
+returned continuation state carries the exact digest write while preserving
+storage and code. -/
+theorem sha64_success_of_run
+    {fs : List Func} {sevm : Sevm} {s r : Devm}
+    {inputWord outputWord : B256} {xs : Stack} {success : Func}
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hnodeleg : getDelegatedCodeAddress (s.getCode 2) = none)
+    (hp : xs <<+ s.stack)
+    (run : Func.Run fs sevm s (sha64 inputWord outputWord success) r) :
+    ∃ q,
+      xs <<+ q.stack ∧
+      Func.Run fs sevm q success r ∧
+      q.memory =
+        (s.memory.extends
+          [⟨(inputWord * 32).toNat, 64⟩,
+            ⟨(outputWord * 32).toNat, 32⟩]).write
+          (outputWord * 32).toNat
+          (Bytes.sha256 (s.memory.read (inputWord * 32).toNat 64).1).toBytes ∧
+      q.returnData =
+        (Bytes.sha256 (s.memory.read (inputWord * 32).toNat 64).1).toBytes ∧
+      Devm.getStor q = Devm.getStor s ∧
+      Devm.getCode q = Devm.getCode s := by
+  unfold sha64 at run
+  rcases of_run_prepend
+      (pushList [32, outputWord * 32, 64, inputWord * 32, 2]) _ run with
+    ⟨p, hpushLine, run⟩
+  have hpushFrameStor : Devm.getStor s = Devm.getStor p :=
+    Line.of_inv Devm.getStor (by unfold pushList; line_inv) hpushLine
+  have hpushFrameCode : Devm.getCode s = Devm.getCode p :=
+    Line.of_inv Devm.getCode (by unfold pushList; line_inv) hpushLine
+  have hpushFrameMem : s.memory = p.memory :=
+    Line.of_inv Devm.memory (by unfold pushList; line_inv) hpushLine
+  have hpl := hpushLine
+  simp only [pushList, List.map] at hpl
+  rcases Line.of_run_cons hpl with ⟨p1, q1, hpl⟩
+  have hp1 := prefix_of_push (of_run_pushB256 q1) hp
+  rcases Line.of_run_cons hpl with ⟨p2, q2, hpl⟩
+  have hp2 := prefix_of_push (of_run_pushB256 q2) hp1
+  rcases Line.of_run_cons hpl with ⟨p3, q3, hpl⟩
+  have hp3 := prefix_of_push (of_run_pushB256 q3) hp2
+  rcases Line.of_run_cons hpl with ⟨p4, q4, hpl⟩
+  have hp4 := prefix_of_push (of_run_pushB256 q4) hp3
+  rcases Line.of_run_cons hpl with ⟨p5, q5, hnil⟩
+  cases hnil
+  have hp5 := prefix_of_push (of_run_pushB256 q5) hp4
+  rcases of_run_next run with ⟨callPre, qgas, run⟩
+  rcases of_run_gas qgas with ⟨g, hgas⟩
+  have hpCall :
+      g :: (2 : B256) :: inputWord * 32 :: (64 : B256) ::
+        outputWord * 32 :: (32 : B256) :: xs <<+ callPre.stack :=
+    prefix_of_push hgas hp5
+  have hstorCall : Devm.getStor callPre = Devm.getStor s := by
+    exact ((hpushFrameStor.trans
+      (Ninst.Hinv.inv (f := Devm.getStor) qgas))).symm
+  have hcodeCall : Devm.getCode callPre = Devm.getCode s := by
+    exact ((hpushFrameCode.trans
+      (Ninst.Hinv.inv (f := Devm.getCode) qgas))).symm
+  have hmemCall : callPre.memory = s.memory := by
+    exact ((hpushFrameMem.trans
+      (Ninst.Hinv.inv (f := Devm.memory) qgas))).symm
+  have hnodelegCall :
+      getDelegatedCodeAddress (callPre.getCode 2) = none := by
+    rw [congrFun hcodeCall 2]
+    exact hnodeleg
+  rcases of_run_next run with ⟨callPost, qstat, run⟩
+  rcases of_run_statcall_val_with_depth_cause hpCall qstat with
+      hfail | hsuccess
+  · rcases hfail with ⟨hpPost, hworld, out, hret, hmem, hcause⟩
+    rcases of_run_next run with ⟨afterIszero, qiszero, run⟩
+    have hpFlag := prefix_of_iszero qiszero hpPost
+    rcases of_run_branch_call_revReturnData hbubble run with
+      ⟨afterBranch, hpop, hcontinue⟩
+    have hpopStack := hpop.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
+    rw [hpopStack] at hpFlag
+    have hbad : (((0 : B256) =? 0) : B256) = 0 :=
+      pref_head_unique hpFlag (pref_append [(0 : B256)] afterBranch.stack)
+    rw [show (((0 : B256) =? 0) : B256) = 1 by simp [B256.eqCheck]] at hbad
+    exact False.elim (B256.zero_ne_one hbad.symm)
+  · rcases hsuccess with
+      ⟨parent, child, xl, dp, na, code, avail,
+        hdepth, hstack, hstate, hmemory, hparentLogs, hparentOutput,
+        hdel, hfill, hpm, hclean, hresume, hpostState, hpostRet,
+        hpostMemory, hpostStack⟩
+    rcases hdel with
+      ⟨hnd, hna, hcode, hdp⟩ | ⟨d, hsome, hna, hcode, hdp⟩
+    · subst na
+      subst dp
+      have hlen :
+          (callPre.memory.read (inputWord * 32).toNat 64).1.length = 64 := by
+        change
+          (callPre.memory.data.sliceD (inputWord * 32).toNat 64 0).length = 64
+        rw [Array.sliceD_eq_map, List.length_map, List.length_range]
+      have hframe := frame_of_processMessage_sha256_64_clean
+        hpre hlen hpm hclean
+      have hchildStor := hframe.1
+      have hchildOut := hframe.2
+      have hchildCode := code_of_processMessage_staticPrecomp hpre hpm
+      have hpParent : xs <<+ parent.stack := by
+        rw [hstack] at hpCall
+        exact cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
+          (cons_pref_cons_inv (cons_pref_cons_inv
+            (cons_pref_cons_inv hpCall)))))
+      have hpPost : (1 : B256) :: xs <<+ callPost.stack := by
+        rw [hpostStack]
+        exact pref_cons hpParent
+      have hstorPost : Devm.getStor callPost = Devm.getStor s := by
+        funext a
+        calc
+          Devm.getStor callPost a = Devm.getStor child a :=
+            getStor_eq_of_state_eq hpostState a
+          _ = Devm.getStor parent a := hchildStor a
+          _ = Devm.getStor callPre a := getStor_eq_of_state_eq hstate a
+          _ = Devm.getStor s a := congrFun hstorCall a
+      have hcodePost : Devm.getCode callPost = Devm.getCode s := by
+        funext a
+        calc
+          Devm.getCode callPost a = Devm.getCode child a :=
+            getCode_eq_of_state_eq hpostState a
+          _ = Devm.getCode parent a := hchildCode a
+          _ = Devm.getCode callPre a := getCode_eq_of_state_eq hstate a
+          _ = Devm.getCode s a := congrFun hcodeCall a
+      have hretPost : callPost.returnData =
+          (Bytes.sha256
+            (s.memory.read (inputWord * 32).toNat 64).1).toBytes := by
+        rw [hpostRet, hchildOut, hmemCall]
+      have hmemPost : callPost.memory =
+          (s.memory.extends
+            [⟨(inputWord * 32).toNat, 64⟩,
+              ⟨(outputWord * 32).toNat, 32⟩]).write
+            (outputWord * 32).toNat
+            (Bytes.sha256
+              (s.memory.read (inputWord * 32).toNat 64).1).toBytes := by
+        rw [hpostMemory, hmemory, hchildOut, hmemCall]
+        simp only [show ((64 : B256).toNat) = 64 by decide +kernel,
+          show ((32 : B256).toNat) = 32 by decide +kernel]
+        rw [List.take_of_length_le]
+        rw [B256.length_toBytes]
+      rcases of_run_next run with ⟨afterIszero, qiszero, run⟩
+      have hpFlag := prefix_of_iszero qiszero hpPost
+      obtain ⟨iszeroWord, hdbIszero⟩ :
+          ∃ w, Devm.DiffBurn [w] [w =? 0] callPost afterIszero := by
+        rcases of_run_reg qiszero with ⟨pc, hreg⟩
+        simp only [Rinst.run, Rinst.runCore] at hreg
+        exact Devm.diffBurn_of_applyUnary hreg
+      rcases of_run_branch_call_revReturnData hbubble run with
+        ⟨afterBranch, hpop, run⟩
+      have hpopStack := hpop.stack
+      simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
+      rw [hpopStack] at hpFlag
+      have hflag : (((1 : B256) =? 0) : B256) = 0 :=
+        pref_head_unique hpFlag (pref_append [(0 : B256)] afterBranch.stack)
+      rw [hflag] at hpFlag
+      have hpBranch : xs <<+ afterBranch.stack := cons_pref_cons_inv hpFlag
+      have hstorBranch : Devm.getStor afterBranch = Devm.getStor s := by
+        rw [← hstorPost]
+        funext a
+        exact (getStor_eq_of_state_eq
+          (hdbIszero.state.trans hpop.state) a).symm
+      have hcodeBranch : Devm.getCode afterBranch = Devm.getCode s := by
+        rw [← hcodePost]
+        funext a
+        exact (getCode_eq_of_state_eq
+          (hdbIszero.state.trans hpop.state) a).symm
+      have hmemBranch : afterBranch.memory = callPost.memory :=
+        ((Ninst.Hinv.inv (f := Devm.memory) qiszero).trans hpop.memory).symm
+      have hretBranch : afterBranch.returnData = callPost.returnData :=
+        (hdbIszero.returnData.trans hpop.returnData).symm
+      rcases of_run_prepend (retdataShorterThan 32) _ run with
+        ⟨afterShort, hshort, run⟩
+      rcases of_retdataShorterThan_val hpBranch hshort with
+        ⟨hpShort, hmemShort, hretShort⟩
+      rcases of_run_branch_call_rev hrev run with
+        ⟨q, hpopShort, hsuccess⟩
+      have hpopShortStack := hpopShort.stack
+      simp only [Stack.Pop, Split, List.nil_append,
+        List.cons_append] at hpopShortStack
+      rw [hpopShortStack] at hpShort
+      have hshortFlag :
+          (afterBranch.returnData.length.toB256 <? (32 : B256)) = 0 :=
+        pref_head_unique hpShort (pref_append [(0 : B256)] q.stack)
+      have hshortZero :
+          (afterBranch.returnData.length.toB256 <? (32 : B256)) = 0 := by
+        rw [hretBranch, hretPost, B256.length_toBytes]
+        decide +kernel
+      rw [hshortZero] at hpShort
+      have hpQ : xs <<+ q.stack := cons_pref_cons_inv hpShort
+      refine ⟨q, hpQ, hsuccess, ?_, ?_, ?_, ?_⟩
+      · rw [← hmemPost]
+        exact hpopShort.memory.symm.trans
+          (hmemShort.trans hmemBranch)
+      · rw [← hretPost]
+        exact hpopShort.returnData.symm.trans
+          (hretShort.trans hretBranch)
+      · rw [← hstorBranch]
+        funext a
+        exact (getStor_eq_of_state_eq hpopShort.state a).symm.trans
+          (congrFun (Line.of_inv Devm.getStor (by
+            unfold retdataShorterThan
+            line_inv) hshort) a).symm
+      · rw [← hcodeBranch]
+        funext a
+        exact (getCode_eq_of_state_eq hpopShort.state a).symm.trans
+          (congrFun (Line.of_inv Devm.getCode (by
+            unfold retdataShorterThan
+            line_inv) hshort) a).symm
+    · change getDelegatedCodeAddress (callPre.getCode 2) = some d at hsome
+      rw [hnodelegCall] at hsome
+      cases hsome
 
 /-! ## Contract-site cost specializations -/
 

@@ -244,6 +244,34 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ninstAllChildRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameRoots target ||
         proofRecipeContainsName `Blanc.Exec.rawFrameDescendants target
+  | "goal-head:ContractSpec.PreservesAdmitted" =>
+      return head == some `Blanc.ContractSpec.PreservesAdmitted
+  | "goal-shape:trace-local-frame-admission" =>
+      return head == some `Blanc.Exec.FrameAdmitted ||
+        head == some `Blanc.ContractSpec.SoundAdmitted ||
+        head == some `Blanc.ContractSpec.PreservesAdmitted ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ProcessMessageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ProcessCreateMessageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.MessageCallTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.TransactionTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ApplyTransactionsTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.SystemMessageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.RequestsTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.AppliedBodyTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ConfiguredBlockTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted target
   | "goal-shape:raw-sstore-free-compiled-path" =>
       return proofRecipeContainsName
           `Blanc.Func.RunCompiledTo.NoRawSstorePath target ||
@@ -271,6 +299,9 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredHistoryTrace target
   | "goal-head:StateReplay" => return head == some `Blanc.StateReplay
   | "goal-head:ReturnsWord" => return head == some `Blanc.ReturnsWord
+  | "goal-head:MigrationSound" => return head == some `Blanc.MigrationSound
+  | "goal-head:BehavioralRefinement" =>
+      return head == some `Blanc.BehavioralRefinement
   | "goal-shape:accepted-bool-word" =>
       return head == some `Iff &&
         proofRecipeContainsName `Blanc.AcceptedBoolWord target

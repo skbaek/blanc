@@ -104,6 +104,17 @@ theorem processCreateMessage_ok_of_processMessage_error
     cases herror
   rw [if_neg hnotNone]
 
+/-- The outer message result induced by a successful direct CREATE after code
+charging.  Constructor families may retain their historical wrapper names,
+but the projection itself is contract-neutral. -/
+def directCreateMessageOutputOf (post : Devm) : MsgCallOutput :=
+  { gasLeft := post.gasLeft
+    refundCounter := 0
+    logs := post.logs
+    accountsToDelete := post.accountsToDelete
+    error := post.error
+    returnData := post.output }
+
 /-! ## Contract-neutral protocol-deployment plumbing -/
 
 private theorem deploymentListCompare_eq_compareLex {α : Type u} [Ord α]

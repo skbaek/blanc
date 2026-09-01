@@ -86,6 +86,9 @@ import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositEffects
 import Blanc.BeaconDepositSelectorMiss
 import Blanc.BeaconDepositWriteSites
+import Blanc.BeaconDepositDeploymentRoot
+import Blanc.BeaconDepositHistorySound
+import Blanc.BeaconDepositHistoryChain
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -1049,6 +1052,13 @@ import Blanc.BeaconDepositWriteSites
 #print axioms Blanc.BeaconDeposit.ArtifactInv.count_eq_history_length
 #print axioms Blanc.BeaconDeposit.constructorFinalStorage_artifactInv
 #print axioms Blanc.BeaconDeposit.deposit_success_artifactInv
+#print axioms Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence
+#print axioms Blanc.BeaconDeposit.historySpec_sound
+#print axioms Blanc.BeaconDeposit.historySpec_preserves
+#print axioms Blanc.BeaconDeposit.pragueOnly_history_extends
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root
 #print axioms Blanc.compact_pause_word_eq_projection
 #print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution
 #print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok

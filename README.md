@@ -52,6 +52,10 @@ This repo contains the following files:
   including the `ContractSpec` record each contract instantiates and the
   dispatcher decomposition (`FuncSound`, `sound_of_dispatch`) that reduces a
   whole-contract obligation to one obligation per dispatch target.
+- [Upgrade.lean](Blanc/Upgrade.lean): contract-neutral vocabulary for an
+  explicit five-part upgrade architecture. It keeps migration soundness and
+  shared behavioral refinement as separate predicates; product families must
+  still prove that an exact proxy execution realizes the named migration.
 - [Compiled.lean](Blanc/Compiled.lean): a gas-exact sibling of `Func.Run`/
   `Prog.Run` — `Func.RunCompiled`, `Prog.RunCompiled` — and
   `Prog.runCompiled_iff_exec`, the biconditional relating a gas-exact run of a
@@ -404,25 +408,33 @@ conservation, and neither use is prior to the other. So it moved to
 `Solvent.lean` has found the same kind of factoring defect, not a shortcut.
 
 The rule is enforced, not merely documented:
-[`scripts/check-layering.sh`](scripts/check-layering.sh) parses the import
-lines and fails on a cross-contract import, on a shared module importing a
-contract (the same break, other direction), and on any module missing from its
-classification — so a new contract cannot escape the rule by never being
-listed. Its discovery walk is recursive, so a module cannot leave the
-classification by moving into a subdirectory either. It needs no Lean toolchain
-and runs ahead of the build in CI.
+[`scripts/check-layering.sh`](scripts/check-layering.sh) reads the actual Lean
+module header, not physical lines. For Lean 4.32.1 it recognizes local imports
+in the complete command shape `public? meta? import all? ident`, after the
+optional bare `module` and `prelude` directives. The elaborating modifier cases
+are plain `import`; with `module`, `public import`, `meta import`, `import all`,
+`public meta import`, and `meta import all`. Identifiers may use quoted
+components such as `«Main»` and Lean's unquoted letter-like Unicode characters;
+whitespace and nested comments may occur between the pieces, an import may span
+lines, and a trailing line comment is trivia.
+`public`, `meta`, and `all` require a `module` header. `public import all` and
+the reversed `meta public import` modifier order are rejected because Lean
+rejects those combinations. A partial trailing dot
+(`import Blanc.`) is an editor-completion parse shape, not an elaborating
+import, so the gate rejects it closed as it does an unterminated header comment
+or string.
 
-**What its import recognition currently covers.** The gate reads imports from
-source text after stripping `--` line comments and nested `/- … -/` blocks, and
-it recognizes any module name including both roots. It does **not** yet parse
-the full Lean module-header grammar: an import split across lines, a quoted
-identifier such as `«Main»`, and the `public` / `meta` / `all` prefixes are not
-recognized, and a multiline string whose interior line reads like an import is
-misread as one. Those gaps predate the composition stratum — the earlier
-pattern was blind to comments as well — and closing them is contracted
-separately as `blanc-layering-import-parser-v1`. Until it lands, treat the rule
-as enforced against the import forms this repository actually uses, not against
-every form Lean accepts.
+The reader stops at the first non-header command. Thus an `import`-shaped line
+in a declaration, string literal, or later comment is never mistaken for a
+module dependency. It fails on a cross-contract import, on a shared module
+importing a contract (the same break, other direction), and on any module
+missing from its classification — so a new contract cannot escape the rule by
+never being listed. Import recognition is category-agnostic: `imports_of`
+returns a local-looking module name before, and without, consulting the
+classification table, so a category added later receives the same complete
+header reading. It needs no Lean toolchain and runs ahead of the build in CI;
+[`scripts/check-layering-controls.py`](scripts/check-layering-controls.py)
+separately pairs the accepted forms with real Lean elaboration.
 
 ### The composition stratum
 
@@ -460,6 +472,13 @@ gets its own classified, checked category instead.
 
 The first inhabitant is
 [`Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean`](Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean).
+
+The goal-local representation-changing v1/v2 witness and its exact compiled
+OssifiableProxy route are documented in
+[`docs/PROXY_PAIR_UPGRADE.md`](docs/PROXY_PAIR_UPGRADE.md). That boundary
+states the R2 projection, primary and identity routes, forwarding premises,
+executable rollback controls, and deliberate non-claims; it is not a deployed
+Solidity or mainnet verification claim.
 
 ## Proof recipe lookup
 
@@ -851,9 +870,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 990 named results and
+   current source inventory pins the exact axiom set of 988 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `990/990` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `988/988` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -881,7 +900,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **990** top theorems. `scripts/check.sh`'s
+current source inventory contains **988** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the

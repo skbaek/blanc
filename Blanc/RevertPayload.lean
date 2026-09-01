@@ -265,6 +265,16 @@ theorem Func.not_run_revWith {fs : List Func} {sevm : Sevm} {d r : Devm}
   rcases of_run_next run1 with ⟨s2, h2, run2⟩
   exact no_last run2
 
+/-- Successful fall-through past a constant `Error(string)` auxiliary. -/
+theorem of_run_branch_call_revWith
+    {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat}
+    {reason : String} {next : Func}
+    (hget : fs[k]? = some (Func.revWith reason))
+    (run : Func.Run fs sevm s ((.call k) <?> next) r) :
+    ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs sevm s' next r := by
+  exact of_run_branch_call_of_not_run hget
+    (fun hbody => Func.not_run_revWith hbody) run
+
 /-- Revert with the complete returndata from the immediately preceding call.
 
 The second `RETURNDATASIZE` avoids retaining a fourth live stack word across
@@ -278,6 +288,35 @@ def Func.revReturnData : Func :=
   Ninst.retdatasize :::
   Ninst.pushB256 0 :::
   .last .rev
+
+/-- `revReturnData` cannot be the body of a successful source walk. -/
+theorem Func.not_run_revReturnData
+    {fs : List Func} {sevm : Sevm} {s r : Devm} :
+    ¬ Func.Run fs sevm s Func.revReturnData r := by
+  intro run
+  simp only [Func.revReturnData] at run
+  rcases of_run_next run with ⟨s1, h1, run⟩
+  rcases of_run_next run with ⟨s2, h2, run⟩
+  rcases of_run_next run with ⟨s3, h3, run⟩
+  rcases of_run_next run with ⟨s4, h4, run⟩
+  rcases of_run_next run with ⟨s5, h5, run⟩
+  rcases of_run_next run with ⟨s6, h6, run⟩
+  cases run with
+  | last hrun =>
+      simp only [Linst.Run, Linst.run] at hrun
+      rcases Except.bind_eq_ok hrun with ⟨v1, h1, h2⟩
+      rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
+      rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
+      contradiction
+
+/-- Successful fall-through past an exact returndata-bubbling auxiliary. -/
+theorem of_run_branch_call_revReturnData
+    {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat} {next : Func}
+    (hget : fs[k]? = some Func.revReturnData)
+    (run : Func.Run fs sevm s ((.call k) <?> next) r) :
+    ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs sevm s' next r := by
+  exact of_run_branch_call_of_not_run hget
+    (fun hbody => Func.not_run_revReturnData hbody) run
 
 /-- Exact frame-local cost of `Func.revSelector`. -/
 def revSelectorCost (devm : Devm) : Nat :=

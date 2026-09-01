@@ -1272,6 +1272,13 @@ Blanc.BeaconDeposit.ArtifactInv.root_eq_mixedRootOf|$STANDARD
 Blanc.BeaconDeposit.ArtifactInv.count_eq_history_length|$STANDARD
 Blanc.BeaconDeposit.constructorFinalStorage_artifactInv|$STANDARD
 Blanc.BeaconDeposit.deposit_success_artifactInv|$STANDARD
+Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence|$STANDARD
+Blanc.BeaconDeposit.historySpec_sound|$STANDARD
+Blanc.BeaconDeposit.historySpec_preserves|$STANDARD
+Blanc.BeaconDeposit.pragueOnly_history_extends|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.future_history_extends|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.future_count_root|$STANDARD
 Blanc.compact_pause_word_eq_projection|$STANDARD
 Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution|$STANDARD
 Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok|$STANDARD

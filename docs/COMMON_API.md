@@ -35,6 +35,13 @@ registry has identified the likely vocabulary.
 - Ordinary source `Func.Run` walk:
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
+- For a successful source branch whose selected arm calls a known
+  nonreturning auxiliary, use `of_run_branch_call_of_not_run` in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).  Its shared
+  specializations `of_run_branch_call_rev`,
+  `of_run_branch_call_revWith`, and
+  `of_run_branch_call_revReturnData` cover the standard empty,
+  constant-payload, and returndata-bubbling reverters.
 - Known stack steps without a tactic arm: `prefix_of_mul`, `prefix_of_div`,
   `prefix_of_timestamp`, `prefix_of_xor`, `prefix_of_extcodesize_val`, and
   `prefix_of_argCheckNonAddress` in
@@ -56,8 +63,9 @@ registry has identified the likely vocabulary.
   `sstoreCost` / `afterSstore` carriers in
   [`Blanc/ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean).
   Its projection API includes unchanged storage on a non-target account,
-  code, addresses, logs, output, and error; the target-storage and key-set
-  equations expose the selected write and warm/cold access update.  The lower
+  code, addresses, logs, account-deletion set, output, and error; the
+  target-storage, refund-counter, and key-set equations expose the selected
+  write, refund update, and warm/cold access update.  The lower
   one-write primitive is `setStorVal_getStor_ne` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
@@ -246,7 +254,10 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
 - For a warm fixed-width SHA-256 precompile crossing, use
   `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
   [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary
-  `runCompiled_*` projection intentionally forgets the empty child slot.
+  `runCompiled_*` projection intentionally forgets the empty child slot. Use
+  `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full` when later
+  transaction settlement also needs the crossing's exact refund preservation
+  and account-deletion-set emptiness preservation.
 - `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
   `Exec.NoRawSstore`; its consequences exclude every successful raw SSTORE and
   force `retainedStorageWrites = []` for that same witness;
@@ -487,9 +498,11 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   component across an access-key update followed by the final `setMach`.
 - `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
 - `Devm.setStorVal_getCode` carries account code across a persistent storage
-  write. `Devm.setCode_logs`, `Devm.setCode_output`, and
-  `Devm.setCode_error` carry the frame observations that code installation
-  does not modify.
+  write. `Devm.setCode_getStor`, `Devm.setCode_logs`,
+  `Devm.setCode_output`, `Devm.setCode_error`,
+  `Devm.setCode_refundCounter`, and `Devm.setCode_accountsToDelete` carry the
+  persistent storage and frame observations that code installation does not
+  modify.
 - `Devm.retPost_world`, `Devm.retPost_getStorVal`,
   `Devm.retPost_transientStorage`, and
   `Devm.retPost_accessedStorageKeys` project through the common
@@ -514,9 +527,26 @@ Use `Devm.StateWriteFrame` and its reflexive/transitive/composition lemmas in
 [`Blanc/Ladder.lean`](../Blanc/Ladder.lean).
 
 If the fact is about which holder's balance moved rather than how states
-compose, continue to S4.
+compose, continue to S5.
 
-### S4. I need the address-shaped storage rows a token ledger sums over
+### S4. I need to separate upgrade migration from behavioral refinement
+
+Use [`Blanc/Upgrade.lean`](../Blanc/Upgrade.lean). `UpgradeArchitecture`
+records all five identifying objects explicitly: the proxy program, v1, v2,
+the state migration, and the pre/post relation. `MigrationSound` says that the
+named migration reaches the v2 domain and establishes the relation;
+`BehavioralRefinement` separately says that admitted shared inputs have equal
+observations and preserve the relation. Neither predicate says that a proxy
+transaction realizes the migration, and neither may be used as evidence for
+the other.
+
+Keep `proxyProg` an explicit value through product corollaries. Instantiate
+the vocabulary in the contract family that owns the concrete programs,
+storage projection, execution route, and relation. For the worked exact
+OssifiableProxy instance, see
+[`docs/PROXY_PAIR_UPGRADE.md`](PROXY_PAIR_UPGRADE.md).
+
+### S5. I need the address-shaped storage rows a token ledger sums over
 
 `Stor.rest` in [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean) is the
 holder-keyed view of persistent storage — exactly the domain `balSum` sums
@@ -542,7 +572,7 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
   that separately (`Stor.rest_set_supplySlot`, `Stor.rest_set_prorataSupplySlot`)
   because the slot is the contract's own.
 
-### S5. I need a basic EVM-word identity
+### S6. I need a basic EVM-word identity
 
 Use the word/arithmetic declarations in
 [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before destructing a
@@ -610,6 +640,12 @@ repeat their byte-slice normalization in a contract family.
 
 - `Devm.memWrite_memory`, `Devm.memWrite_stack`, and Jaune's
   `Devm.memWrite_gasLeft` describe the primitive update.
+- For source inversion of primitive word and byte stores, use
+  `of_run_mstore_val` / `prefix_of_mstore_val` and
+  `of_run_mstore8_val` / `prefix_of_mstore8_val`.  The byte-store result is
+  the exact low-byte singleton write; `of_run_mstore8_state` supplies its
+  persistent-state equation without widening the instruction invariance
+  class.
 - `Mem.size_write_of_le`, `Mem.size_read_snd_of_le`, and related extension
   lemmas live in [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean).
 - `Func.runCompiledTo_mstore_step` and other compiled memory steps live in the
@@ -629,6 +665,9 @@ repeat their byte-slice normalization in a contract family.
   proof-carrying decoder step.  `of_run_codecopy_logs` is the corresponding
   standalone successful-run log-silence fact, without widening the global
   instruction invariance class.
+- For calldata copies with all three operands already known on the stack,
+  `prefix_of_calldatacopy_val` consumes that prefix and exposes the exact
+  `Sevm.data.sliceD` memory write.
 
 A scratch-word walk that writes several fixed slots and reads them back needs
 three window cases.  `Bytes.sliceD_writeAt_inside` projects a subwindow wholly
@@ -689,6 +728,16 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
   `processMessage_entry_stack` separately recovers its empty operand stack
   and `processMessage_entry_memory` its empty memory, without changing the
   established conjunction returned by the former.
+- For an already-retained zero-value static-precompile child, use
+  [`Blanc/StaticPrecompileMessage.lean`](../Blanc/StaticPrecompileMessage.lean):
+  `stor_of_processMessage_staticPrecomp` exposes the all-account storage frame
+  under the positive enabled-precompile premise.  At address `0x2`,
+  `gasSha25664_le_of_processMessage_clean` rules out an underfunded clean
+  child, `output_of_processMessage_sha256_64_clean` identifies the exact
+  64-byte SHA-256 result, and `frame_of_processMessage_sha256_64_clean`
+  packages both conclusions.  None of these facts bypasses delegation
+  resolution: the caller must first establish that the actual call selected
+  the ordinary address-2 precompile route.
 - `Msg.initDevm_*` and `Msg.initSevm_*` expose canonical message-entry fields.
 
 ### T2. I need to know which child effects survive settlement
@@ -744,6 +793,55 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   Gas and warm-access bookkeeping are intentionally outside that relation.
 - For exact retained wrapper carriers continue to E6; for their ordered state
   chronology continue to E8.
+
+### T2a. I need a frame invariant under trace-local entry premises
+
+Before lifting through a wrapper, an invariant may need a positive condition
+only at the roots of target frames actually entered by one concrete execution.
+Use [`Blanc/ExecutionFrames.lean`](../Blanc/ExecutionFrames.lean),
+[`Blanc/ExecutionFrameEntry.lean`](../Blanc/ExecutionFrameEntry.lean),
+[`Blanc/ExecutionAdmission.lean`](../Blanc/ExecutionAdmission.lean), and
+[`Blanc/ContractAdmission.lean`](../Blanc/ContractAdmission.lean) for the raw
+execution layer, then the matching `Execution*Admission` module for retained
+message, transaction, body, block, and history carriers.  Import
+[`Blanc/ExecutionTraceFresh.lean`](../Blanc/ExecutionTraceFresh.lean) when the
+consumer needs canonical interpreter ingress as one conjunct:
+
+- `Exec.rawFrameDescendants` and `Exec.rawFrameRoots` are the unfiltered
+  entered-frame traversal below both the invariant ladder and the richer
+  occurrence APIs.
+- `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
+  whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
+  `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
+  theorems are the supported restriction interface; do not reconstruct list
+  membership inside a contract proof.
+- `Exec.FreshEntry sevm pre` records only `pre.stack = []` and
+  `pre.memory = Mem.empty`. `Exec.FrameAdmitted.fresh_of_enter` derives it
+  from one actual frame entry, and `Exec.FrameAdmitted.and` combines it with
+  an independently established contract-specific condition.
+- `ForallSubExecAdmitted`, `lift_admitted`, and `lift_inv_admitted` are the
+  arbitrary-`Exec` eliminators. Unlike `RootedExecution`'s forward compiled
+  construction, they keep the selected execution proof in the induction
+  motive and therefore can consume trace-local evidence.
+- State a contract obligation as `ContractSpec.SoundAdmitted ca entry` and
+  close the frame theorem with `ContractSpec.preserves_inv_admitted`, yielding
+  `ContractSpec.PreservesAdmitted ca entry`. `preserves_lift_admitted` is the
+  lower transport seam for a custom frame invariant.
+- `ExecutionTrace.MessageCallTrace.stateInv_admitted`,
+  `TransactionTrace.benvInv_admitted`, `AppliedBodyTrace.stateInv_admitted`,
+  and `ConfiguredHistoryTrace.stateInv_admitted` thread that same preservation
+  theorem through their exact retained wrappers.  Each carrier has a matching
+  `FrameAdmitted` predicate, so admission is required only for interpreter
+  frames that the concrete trace actually entered.
+- Every retained carrier from `ProcessMessageTrace` through
+  `ConfiguredHistoryTrace` has `freshFrameAdmitted`; its matching
+  `FrameAdmitted.and` combines that trace-derived fact with another admission
+  over the same retained roots.
+
+This layer does not manufacture environment, storage, routing, delegation, or
+precompile facts, constrain an execution's result, or filter by settlement.
+A consumer must derive every independent admission from its actual trace and
+use the retained/committed APIs when rollback matters.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
@@ -902,6 +1000,9 @@ For schedule-parametric block/history state boundaries and replay, use
   REVERT with no separate code address crosses through
   `MessageExecution.processMessage_revert_of_exec_afterTransfer_of_noCodeAddress`
   without changing the message's precompile switch.
+  `directCreateMessageOutputOf` is the shared projection from a charged direct
+  CREATE post-frame to its outer `MsgCallOutput`; contract owners may retain a
+  thin historical wrapper name, but must not restate its six fields.
 - Source attainment and source-step provenance:
   [`Blanc/SourceAttainment.lean`](../Blanc/SourceAttainment.lean).
 

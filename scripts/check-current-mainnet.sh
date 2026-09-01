@@ -37,6 +37,13 @@ if [[ -n "${TMPDIR:-}" ]]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
+/usr/bin/env -i "${CHILD_ENV[@]}" \
+  "$TARGET_PYTHON" -B -s "$SCRIPT_DIR/gen-current-mainnet-runtime-lock.py" \
+    --self-check
+/usr/bin/env -i "${CHILD_ENV[@]}" \
+  "$TARGET_PYTHON" -B -s "$SCRIPT_DIR/gen-current-mainnet-runtime-lock.py" \
+    --check --root "$TARGET_ROOT"
+
 exec /usr/bin/env -i "${CHILD_ENV[@]}" \
   "$TARGET_PYTHON" -I -s "$SCRIPT_DIR/current_mainnet.py" \
     --check \
@@ -66,7 +73,9 @@ exec /usr/bin/env -i "${CHILD_ENV[@]}" \
     --_expected-t8n bin/ethereum-spec-evm \
     --_expected-python-implementation CPython \
     --_expected-python-version 3.11.9 \
-    --_expected-python-base-prefix '~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none' \
+    --_expected-runtime-lock current-mainnet-runtime-lock.json \
+    --_expected-python-platform 'macos-arm64|Darwin|arm64|~/.local/share/uv/python/cpython-3.11-macos-aarch64-none|~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none' \
+    --_expected-python-platform 'linux-x86_64|Linux|x86_64|~/.local/share/uv/python/cpython-3.11-linux-x86_64-gnu|~/.local/share/uv/python/cpython-3.11.9-linux-x86_64-gnu' \
     --_expected-blob-target 14 \
     --_expected-blob-max 21 \
     --_expected-blob-fraction 11684671 \

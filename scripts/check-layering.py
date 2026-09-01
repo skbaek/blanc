@@ -37,6 +37,15 @@ this gate by construction.
 Needs no Lean toolchain, no build and no network: it reads committed .lean
 files only, so it runs identically here and in CI.
 
+Import recognition is intentionally limited to Lean's module header.  It follows
+the Lean 4.32.1 header grammar: optional `module` and `prelude` directives,
+then `public? meta? import all? identWithPartialTrailingDot` commands.  The
+reader handles nested comments, quoted identifier components, and whitespace
+across physical lines; it stops at the first non-header command.  An
+unterminated header block comment or string, an incomplete trailing-dot name,
+or a semantically disallowed modifier combination fails the gate closed rather
+than producing a partial import list.
+
 Usage: scripts/check-layering.sh [--root DIR]
 
 --root overrides the repository root (default: the parent of scripts/). It
@@ -48,7 +57,6 @@ unambiguous verdict line.
 """
 
 import os
-import re
 import sys
 
 # ---------------------------------------------------------------------------
@@ -62,8 +70,8 @@ import sys
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
-          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
+SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder", "Upgrade",
+          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
@@ -78,6 +86,10 @@ SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesG
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "DelegatecallEnvelope",
+           "ExecutionFrames", "ExecutionFrameEntry", "ExecutionAdmission", "ContractAdmission",
+           "ExecutionMessageAdmission", "ExecutionTransactionAdmission",
+           "ExecutionBodyAdmission", "ExecutionHistoryAdmission",
+           "ExecutionTraceFresh",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects"]
 
@@ -96,6 +108,7 @@ CONTRACTS = {
                        "BeaconDepositBridge",
                        "BeaconDepositMemory", "BeaconDepositSha",
                        "BeaconDepositAbiMemory", "BeaconDepositAbi",
+                       "BeaconDepositAbiSource",
                        "BeaconDepositAbiStorageEffects",
                        "BeaconDepositEventMemory", "BeaconDepositEvent",
                        "BeaconDepositEventStorageEffects",
@@ -126,7 +139,15 @@ CONTRACTS = {
                        "BeaconDepositSuccessChronology",
                        "BeaconDepositBridgeCompiled",
                        "BeaconDepositSuccessSettlement",
-                       "BeaconDepositCountEffects"],
+                       "BeaconDepositSuccessSource",
+                       "BeaconDepositCountEffects",
+                       "BeaconDepositDeploymentMessage",
+                       "BeaconDepositDeploymentInput",
+                       "BeaconDepositDeploymentTransaction",
+                       "BeaconDepositDeploymentBlock",
+                       "BeaconDepositDeploymentRoot",
+                       "BeaconDepositHistory", "BeaconDepositHistorySound",
+                       "BeaconDepositHistoryChain"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
@@ -171,7 +192,9 @@ CONTRACTS = {
                    "ProxyPairOssifiableDeploymentMessage",
                    "ProxyPairOssifiableDeploymentFixture",
                    "ProxyPairImplementation", "ProxyPairExecution",
-                   "ProxyPairCorrespondence", "ProxyPairAuthority"],
+                   "ProxyPairCorrespondence", "ProxyPairAuthority",
+                   "ProxyPairUpgradePrograms", "ProxyPairUpgradeRelation",
+                   "ProxyPairUpgradeExecution", "ProxyPairUpgradeRefinement"],
     "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",
                 "ProrataAccountingExec", "ProrataAccountingTransaction",
                 "ProrataAccountingBody", "ProrataAccountingHistory",
@@ -278,14 +301,6 @@ COMPOSITION = [
 
 ROOTS = ["Blanc", "Main"]
 
-# One import command: `import <Module>`, and nothing else on the line. The
-# module name is matched generically rather than anchored to `Blanc`, because
-# `Main` is a root too and an import of it must be *seen* before it can be
-# judged -- a pattern that can only match `Blanc...` silently exempts every
-# rule involving the other root.
-IMPORT_RE = re.compile(r"^import\s+([A-Za-z_][A-Za-z0-9_.']*)\s*$")
-
-
 def classify():
     """-> module -> category, where category is 'shared', 'root', or a contract."""
     owner = {}
@@ -331,65 +346,273 @@ def modules_on_disk(root):
     return found
 
 
-def uncommented_lines(text):
-    """-> the file's lines with Lean comments blanked out.
+class HeaderParseError(Exception):
+    """The lexical state of a module header cannot be established safely."""
 
-    Comments are removed before imports are matched, in both forms Lean has:
-    `--` to end of line, and nested `/- ... -/` blocks that may span lines or
-    sit inline before an import. Matching raw lines instead would let any
-    prohibited import hide behind a trailing comment -- a legal edit that
-    changes what the module imports while leaving this gate green, which is
-    exactly the silent escape the classification is supposed to prevent.
 
-    An import line carries a bare module name and can contain no string
-    literal, so no string-awareness is needed here.
+class HeaderScanner:
+    """The small, fail-closed subset of Lean's module-header parser this gate needs.
+
+    Lean 4.32.1 defines a header as an optional `module`, optional `prelude`,
+    and zero or more imports in `Lean/Parser/Module/Syntax.lean`.  This scanner
+    deliberately does not parse the body: its first non-header command ends
+    the scan.  It does, however, lex header trivia itself, because an import is
+    allowed to cross physical lines and comments, while import-shaped text in a
+    comment or body string is not an import.
     """
-    out = []
-    depth = 0
-    for raw in text.splitlines():
-        buf = []
-        i = 0
-        while i < len(raw):
-            if depth:
-                if raw.startswith("/-", i):
-                    depth += 1
-                    i += 2
-                elif raw.startswith("-/", i):
-                    depth -= 1
-                    i += 2
-                else:
-                    i += 1
-            elif raw.startswith("/-", i):
-                depth += 1
-                i += 2
-            elif raw.startswith("--", i):
-                break
+
+    def __init__(self, text):
+        self.text = text
+        self.i = 0
+
+    def error(self, message):
+        line = self.text.count("\n", 0, self.i) + 1
+        raise HeaderParseError(f"{message} at header line {line}")
+
+    def skip_trivia(self):
+        """Consume whitespace and Lean line/nested-block comments."""
+        consumed = False
+        while self.i < len(self.text):
+            if self.text[self.i].isspace():
+                if self.text[self.i] == "\t":
+                    self.error("tabs are not allowed")
+                self.i += 1
+                consumed = True
+            elif self.text.startswith("--", self.i):
+                newline = self.text.find("\n", self.i + 2)
+                self.i = len(self.text) if newline < 0 else newline + 1
+                consumed = True
+            elif self.text.startswith("/-", self.i):
+                # Lean's `/--` and `/-!` doc comments are tokens, not
+                # whitespace.  They end the module header just like a first
+                # declaration does.
+                if self.text.startswith("/--", self.i) or self.text.startswith("/-!", self.i):
+                    return consumed, True
+                depth = 1
+                self.i += 2
+                consumed = True
+                while depth:
+                    if self.i >= len(self.text):
+                        self.error("unterminated block comment")
+                    if self.text.startswith("/-", self.i):
+                        depth += 1
+                        self.i += 2
+                    elif self.text.startswith("-/", self.i):
+                        depth -= 1
+                        self.i += 2
+                    else:
+                        self.i += 1
             else:
-                buf.append(raw[i])
-                i += 1
-        out.append("".join(buf))
-    return out
+                break
+        return consumed, False
+
+    def starts_word(self, word):
+        if not self.text.startswith(word, self.i):
+            return False
+        end = self.i + len(word)
+        return end == len(self.text) or not self.is_ident_char(self.text[end])
+
+    @staticmethod
+    def is_letter_like(char):
+        """Lean 4.32.1's `Init.isLetterLike`, copied as ranges rather than guessed."""
+        value = ord(char)
+        return (
+            0x3B1 <= value <= 0x3C9 and value != 0x3BB
+        ) or (
+            0x391 <= value <= 0x3A9 and value not in (0x3A0, 0x3A3)
+        ) or (
+            0x3CA <= value <= 0x3FB
+        ) or (
+            0x1F00 <= value <= 0x1FFE
+        ) or (
+            0x2100 <= value <= 0x214F
+        ) or (
+            0x1D49C <= value <= 0x1D59F
+        ) or (
+            0x00C0 <= value <= 0x00FF and value not in (0x00D7, 0x00F7)
+        ) or 0x0100 <= value <= 0x017F
+
+    @staticmethod
+    def is_subscript_alnum(char):
+        value = ord(char)
+        return (
+            0x2080 <= value <= 0x2089
+            or 0x2090 <= value <= 0x209C
+            or 0x1D62 <= value <= 0x1D6A
+            or value == 0x2C7C
+        )
+
+    @classmethod
+    def is_ident_first(cls, char):
+        return char == "_" or char.isalpha() or cls.is_letter_like(char)
+
+    @classmethod
+    def is_ident_char(cls, char):
+        """Lean 4.32.1's `isIdRest`."""
+        return (
+            char in "_'!?"
+            or char.isalnum()
+            or cls.is_letter_like(char)
+            or cls.is_subscript_alnum(char)
+        )
+
+    def take_word(self, word):
+        if not self.starts_word(word):
+            return False
+        self.i += len(word)
+        return True
+
+    def scan_string(self):
+        """Only used when a string occurs where a header command must begin."""
+        self.i += 1
+        while self.i < len(self.text):
+            if self.text[self.i] == '\"':
+                self.i += 1
+                return
+            if self.text[self.i] == "\\\\":
+                self.i += 2
+            else:
+                self.i += 1
+        self.error("unterminated string literal")
+
+    def scan_raw_string(self):
+        """Recognize Lean's `r###"..."###` form at header scope."""
+        start = self.i
+        self.i += 1  # r
+        hashes = 0
+        while self.i < len(self.text) and self.text[self.i] == "#":
+            hashes += 1
+            self.i += 1
+        if self.i >= len(self.text) or self.text[self.i] != '\"':
+            self.i = start
+            return False
+        self.i += 1
+        closer = '\"' + ("#" * hashes)
+        end = self.text.find(closer, self.i)
+        if end < 0:
+            self.error("unterminated raw string literal")
+        self.i = end + len(closer)
+        return True
+
+    def read_component(self):
+        if self.i >= len(self.text):
+            return None
+        if self.text[self.i] == "«":
+            end = self.text.find("»", self.i + 1)
+            if end < 0:
+                self.error("unterminated quoted identifier")
+            component = self.text[self.i + 1:end]
+            if not component:
+                self.error("empty quoted identifier")
+            self.i = end + 1
+            return component
+        if not self.is_ident_first(self.text[self.i]):
+            return None
+        start = self.i
+        self.i += 1
+        while self.i < len(self.text) and self.is_ident_char(self.text[self.i]):
+            self.i += 1
+        return self.text[start:self.i]
+
+    def read_module_name(self):
+        components = []
+        component = self.read_component()
+        if component is None:
+            self.error("expected module identifier after import")
+        components.append(component)
+        while self.i < len(self.text) and self.text[self.i] == ".":
+            self.i += 1
+            if self.i >= len(self.text) or self.text[self.i].isspace():
+                self.error("incomplete module identifier")
+            component = self.read_component()
+            if component is None:
+                self.error("invalid module identifier")
+            components.append(component)
+        return tuple(components)
+
+    @staticmethod
+    def local_module(components):
+        """Map Lean identifier components to this repository's module spelling."""
+        if components == ("Blanc",) or components == ("Main",):
+            return components[0]
+        if len(components) >= 2 and components[0] == "Blanc":
+            return ".".join(components[1:])
+        return None
+
+    def read_import(self):
+        # The toolchain grammar is optional `public`, optional `meta`, `import`,
+        # optional `all`, then `identWithPartialTrailingDot`, in exactly this order.
+        saw_public = self.take_word("public")
+        if saw_public:
+            _, ends_header = self.skip_trivia()
+            if ends_header:
+                return False, None, False, False, False
+        saw_meta = self.take_word("meta")
+        if saw_meta:
+            _, ends_header = self.skip_trivia()
+            if ends_header:
+                return False, None, False, False, False
+        if not self.take_word("import"):
+            # Once an import-only modifier has begun a header command, another
+            # modifier cannot silently turn it into a body boundary.  In
+            # particular Lean rejects `meta public import`; treating it as a
+            # declaration would hide the later import from this gate.
+            if (saw_public or saw_meta) and (
+                self.take_word("public")
+                or self.take_word("meta")
+                or self.take_word("all")
+            ):
+                self.error("invalid import modifier order")
+            return False, None, False, False, False
+        had_trivia, ends_header = self.skip_trivia()
+        if ends_header or not had_trivia:
+            self.error("expected whitespace and a module identifier after import")
+        saw_all = self.take_word("all")
+        if saw_all:
+            had_trivia, ends_header = self.skip_trivia()
+            if ends_header or not had_trivia:
+                self.error("expected whitespace and a module identifier after import all")
+        return True, self.local_module(self.read_module_name()), saw_public, saw_meta, saw_all
+
+    def imports(self):
+        out = []
+        saw_module = False
+        while True:
+            _, ends_header = self.skip_trivia()
+            if ends_header:
+                return out
+            if self.i >= len(self.text):
+                return out
+            if self.text[self.i] == '"':
+                # A literal at header scope cannot be an import.  Scan it only
+                # to distinguish a valid body-shaped token from malformed state.
+                self.scan_string()
+                return out
+            if self.text[self.i] == "r" and self.scan_raw_string():
+                return out
+            if not saw_module and self.take_word("module"):
+                saw_module = True
+                continue
+            if self.take_word("prelude"):
+                continue
+            recognized, imported, saw_public, saw_meta, saw_all = self.read_import()
+            if not recognized:
+                # First declaration (or any other non-header command): Lean's
+                # header parser has finished, so later text is deliberately out
+                # of scope even if it resembles an import command.
+                return out
+            if (saw_public or saw_meta or saw_all) and not saw_module:
+                self.error("public, meta, and all imports require a module header")
+            if saw_public and saw_all:
+                self.error("public import cannot be combined with all")
+            if imported is not None:
+                out.append(imported)
 
 
 def imports_of(path):
-    """-> imported local module names (Blanc.X -> X; `Blanc` and `Main` as-is).
-
-    An import of anything outside this repository -- Jaune, Mathlib -- is not a
-    classified module and is skipped, exactly as before.
-    """
-    out = []
-    with open(path) as handle:
-        text = handle.read()
-    for line in uncommented_lines(text):
-        match = IMPORT_RE.match(line.strip())
-        if not match:
-            continue
-        name = match.group(1)
-        if name in ("Blanc", "Main"):
-            out.append(name)
-        elif name.startswith("Blanc."):
-            out.append(name[len("Blanc."):])
-    return out
+    """Return local imports in the Lean module header, failing closed on bad trivia."""
+    with open(path, encoding="utf-8") as handle:
+        return [module for module in HeaderScanner(handle.read()).imports() if module]
 
 
 def main(argv):
@@ -429,7 +652,13 @@ def main(argv):
         category = owner.get(mod)
         if category is None or category == "root":
             continue
-        for imported in imports_of(found[mod]):
+        try:
+            imports = imports_of(found[mod])
+        except HeaderParseError as exc:
+            relative = os.path.relpath(found[mod], root)
+            failures.append(f"{relative}: cannot determine module header imports: {exc}")
+            continue
+        for imported in imports:
             target = owner.get(imported)
             if target is None:
                 continue

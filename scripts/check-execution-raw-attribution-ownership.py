@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "scripts" / "execution-raw-attribution-owner-manifest.json"
 EXPECTED_OWNERS = 28
+EXPECTED_COMMON_MODULES = 2
 SHADOW_POLICIES = {"owner-only", "forbid-contract-basename"}
 SOURCE_SITE_DECLARATION = "Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot"
 SOURCE_SITE_SIGNATURE = """theorem Exec.NinstOccurrence.sourceSite_of_rawFrameRoot
@@ -60,6 +61,7 @@ class Owner:
     declaration: str
     kind: str
     shadow: str
+    module: str
 
 
 def load_lean_parser():
@@ -73,24 +75,31 @@ def load_lean_parser():
     return module
 
 
-def read_manifest() -> tuple[Path, tuple[str, ...], tuple[Owner, ...]]:
+def read_manifest() -> tuple[tuple[str, ...], tuple[str, ...], tuple[Owner, ...]]:
     try:
         value = json.loads(MANIFEST.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"manifest is unreadable: {exc}") from exc
     if not isinstance(value, dict) or set(value) != {
-        "schema", "commonModule", "contractModuleGlobs", "owners"
+        "schema", "commonModules", "contractModuleGlobs", "owners"
     }:
         raise ValueError(
-            "manifest must contain exactly schema/commonModule/contractModuleGlobs/owners"
+            "manifest must contain exactly "
+            "schema/commonModules/contractModuleGlobs/owners"
         )
-    if value["schema"] != 1:
+    if value["schema"] != 2:
         raise ValueError("unsupported manifest schema")
-    common = value["commonModule"]
+    modules = value["commonModules"]
     globs = value["contractModuleGlobs"]
     rows = value["owners"]
-    if not isinstance(common, str) or not common:
-        raise ValueError("commonModule must be a nonempty string")
+    if (not isinstance(modules, list) or
+            len(modules) != EXPECTED_COMMON_MODULES or
+            not all(isinstance(module, str) and module for module in modules) or
+            len(set(modules)) != len(modules)):
+        raise ValueError(
+            f"commonModules must contain exactly {EXPECTED_COMMON_MODULES} "
+            "unique nonempty strings"
+        )
     if (not isinstance(globs, list) or not globs or
             not all(isinstance(pattern, str) and pattern for pattern in globs)):
         raise ValueError("contractModuleGlobs must be a nonempty string list")
@@ -98,20 +107,28 @@ def read_manifest() -> tuple[Path, tuple[str, ...], tuple[Owner, ...]]:
         raise ValueError(f"manifest must contain exactly {EXPECTED_OWNERS} owners")
     owners: list[Owner] = []
     for index, row in enumerate(rows, 1):
-        if not isinstance(row, dict) or set(row) != {"declaration", "kind", "shadow"}:
+        if not isinstance(row, dict) or set(row) != {
+            "declaration", "kind", "shadow", "module"
+        }:
             raise ValueError(
-                f"owner {index} must contain exactly declaration/kind/shadow"
+                f"owner {index} must contain exactly "
+                "declaration/kind/shadow/module"
             )
-        declaration, kind, shadow = row["declaration"], row["kind"], row["shadow"]
+        declaration = row["declaration"]
+        kind = row["kind"]
+        shadow = row["shadow"]
+        module = row["module"]
         if (not isinstance(declaration, str) or
                 not declaration.startswith("Blanc.") or
                 not isinstance(kind, str) or not kind or
-                shadow not in SHADOW_POLICIES):
-            raise ValueError(f"owner {index} has invalid declaration/kind/shadow")
-        owners.append(Owner(declaration, kind, shadow))
+                shadow not in SHADOW_POLICIES or module not in modules):
+            raise ValueError(
+                f"owner {index} has invalid declaration/kind/shadow/module"
+            )
+        owners.append(Owner(declaration, kind, shadow, module))
     if len({owner.declaration for owner in owners}) != len(owners):
         raise ValueError("owner declarations must be unique")
-    return ROOT / common, tuple(globs), tuple(owners)
+    return tuple(modules), tuple(globs), tuple(owners)
 
 
 def contract_files(globs: tuple[str, ...]) -> list[Path]:
@@ -119,19 +136,50 @@ def contract_files(globs: tuple[str, ...]) -> list[Path]:
 
 
 def owner_errors(
-    declarations: dict[str, tuple[str, int]], owners: tuple[Owner, ...]
+    declarations: dict[str, dict[str, tuple[str, int]]],
+    owners: tuple[Owner, ...],
 ) -> list[str]:
     errors: list[str] = []
     for owner in owners:
-        actual = declarations.get(owner.declaration)
+        expected_module = declarations[owner.module]
+        actual = expected_module.get(owner.declaration)
         if actual is None:
-            errors.append(f"COMMON-MISSING — {owner.declaration}")
+            elsewhere = [
+                module for module, found in declarations.items()
+                if module != owner.module and owner.declaration in found
+            ]
+            if elsewhere:
+                errors.append(
+                    f"COMMON-WRONG-MODULE — {owner.declaration}: found in "
+                    f"{', '.join(elsewhere)}, expected {owner.module}"
+                )
+            else:
+                errors.append(f"COMMON-MISSING — {owner.declaration}")
         elif actual[0] != owner.kind:
             errors.append(
                 f"COMMON-KIND-MISMATCH — {owner.declaration}: "
                 f"found {actual[0]}, expected {owner.kind}"
             )
+        duplicates = [
+            module for module, found in declarations.items()
+            if module != owner.module and owner.declaration in found
+        ]
+        if actual is not None and duplicates:
+            errors.append(
+                f"COMMON-DUPLICATE — {owner.declaration}: also declared in "
+                f"{', '.join(duplicates)}"
+            )
     return errors
+
+
+def owner_module(declaration: str, owners: tuple[Owner, ...]) -> str:
+    matches = [owner.module for owner in owners
+               if owner.declaration == declaration]
+    if len(matches) != 1:
+        raise ValueError(
+            f"expected one manifest owner for {declaration}, found {len(matches)}"
+        )
+    return matches[0]
 
 
 def shadow_errors(
@@ -228,26 +276,33 @@ def shared_kernel_errors(source: str, strip_comments) -> list[str]:
 def audit() -> list[str]:
     try:
         parser = load_lean_parser()
-        common_path, globs, owners = read_manifest()
-        if not common_path.is_file():
-            return [f"COMMON-MISSING — common module is absent: {common_path}"]
-        common_source = common_path.read_text(encoding="utf-8")
-        common = parser.declarations(common_path)
-        errors = owner_errors(common, owners)
+        modules, globs, owners = read_manifest()
+        sources: dict[str, str] = {}
+        declarations: dict[str, dict[str, tuple[str, int]]] = {}
+        for relative in modules:
+            path = ROOT / relative
+            if not path.is_file():
+                return [f"COMMON-MISSING — common module is absent: {path}"]
+            sources[relative] = path.read_text(encoding="utf-8")
+            declarations[relative] = parser.declarations(path)
+        errors = owner_errors(declarations, owners)
+        source_site_source = sources[owner_module(SOURCE_SITE_DECLARATION, owners)]
         errors.extend(
-            source_site_signature_errors(common_source, parser.strip_comments)
+            source_site_signature_errors(source_site_source, parser.strip_comments)
         )
+        strict_source = sources[owner_module(STRICT_BEFORE_DECLARATION, owners)]
         errors.extend(normalized_header_errors(
-            common_source, parser.strip_comments,
+            strict_source, parser.strip_comments,
             "theorem Exec.Deriv.SourceCursor.Chronology.strictBefore\n",
             STRICT_BEFORE_HEADER, STRICT_BEFORE_DECLARATION,
         ))
+        toward_source = sources[owner_module(TOWARD_DECLARATION, owners)]
         errors.extend(normalized_header_errors(
-            common_source, parser.strip_comments,
+            toward_source, parser.strip_comments,
             TOWARD_MARKER,
             TOWARD_HEADER, TOWARD_DECLARATION,
         ))
-        errors.extend(shared_kernel_errors(common_source, parser.strip_comments))
+        errors.extend(shared_kernel_errors(toward_source, parser.strip_comments))
         files = contract_files(globs)
         if not files:
             errors.append("SETUP — no contract module matched the manifest globs")
@@ -262,15 +317,30 @@ def audit() -> list[str]:
 
 def negative_controls() -> list[str]:
     parser = load_lean_parser()
-    common_path, _globs, owners = read_manifest()
-    common_source = common_path.read_text(encoding="utf-8")
-    common = parser.declarations(common_path)
+    modules, _globs, owners = read_manifest()
+    sources = {
+        relative: (ROOT / relative).read_text(encoding="utf-8")
+        for relative in modules
+    }
+    common = {
+        relative: parser.declarations(ROOT / relative)
+        for relative in modules
+    }
     first = owners[0]
-    missing = dict(common)
-    missing.pop(first.declaration, None)
+    missing = {relative: dict(found) for relative, found in common.items()}
+    missing[first.module].pop(first.declaration, None)
     missing_live = any(
         error == f"COMMON-MISSING — {first.declaration}"
         for error in owner_errors(missing, owners)
+    )
+
+    relocated = {relative: dict(found) for relative, found in common.items()}
+    moved = relocated[first.module].pop(first.declaration)
+    wrong_module = next(module for module in modules if module != first.module)
+    relocated[wrong_module][first.declaration] = moved
+    wrong_module_live = any(
+        error.startswith(f"COMMON-WRONG-MODULE — {first.declaration}:")
+        for error in owner_errors(relocated, owners)
     )
 
     shadow_owner = next(
@@ -283,7 +353,8 @@ def negative_controls() -> list[str]:
             {synthetic: ("theorem", 1)}, owners, "synthetic.lean"
         )
     )
-    selected_mutant = common_source.replace(
+    source_site_source = sources[owner_module(SOURCE_SITE_DECLARATION, owners)]
+    selected_mutant = source_site_source.replace(
         "(_selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)",
         "(_selected : True)",
         1,
@@ -294,7 +365,7 @@ def negative_controls() -> list[str]:
             selected_mutant, parser.strip_comments
         )
     )
-    prefix_mutant = common_source.replace(
+    prefix_mutant = source_site_source.replace(
         "(sameFrame : Exec.Deriv.ParentPrefix frameRoot occurrence.node)",
         "(sameFrame : True)",
         1,
@@ -308,7 +379,8 @@ def negative_controls() -> list[str]:
         "(reached : True)",
         1,
     )
-    toward_mutant = common_source.replace(
+    toward_source = sources[owner_module(TOWARD_DECLARATION, owners)]
+    toward_mutant = toward_source.replace(
         TOWARD_HEADER, weakened_toward_header, 1
     )
     toward_live = any(
@@ -319,7 +391,8 @@ def negative_controls() -> list[str]:
             TOWARD_HEADER, TOWARD_DECLARATION,
         )
     )
-    strict_mutant = common_source.replace(
+    strict_source = sources[owner_module(STRICT_BEFORE_DECLARATION, owners)]
+    strict_mutant = strict_source.replace(
         "(distinct : cursor.node ≠ target)",
         "(distinct : True)",
         1,
@@ -332,7 +405,7 @@ def negative_controls() -> list[str]:
             STRICT_BEFORE_HEADER, STRICT_BEFORE_DECLARATION,
         )
     )
-    kernel_mutant = common_source.replace(
+    kernel_mutant = toward_source.replace(
         "private theorem Exec.Deriv.SourceCursor.toward_core :",
         "private theorem Exec.Deriv.SourceCursor.toward_core_removed",
         1,
@@ -341,7 +414,7 @@ def negative_controls() -> list[str]:
         error.startswith("SHARED-KERNEL —")
         for error in shared_kernel_errors(kernel_mutant, parser.strip_comments)
     )
-    delegation_mutant = common_source.replace(
+    delegation_mutant = toward_source.replace(
         TOWARD_DELEGATION,
         TOWARD_DELEGATION.replace("toward_core", "toward_core_bypassed", 1),
         1,
@@ -355,6 +428,8 @@ def negative_controls() -> list[str]:
     errors: list[str] = []
     if not missing_live:
         errors.append("CONTROL — common-owner removal was not detected")
+    if not wrong_module_live:
+        errors.append("CONTROL — wrong common-owner module was not detected")
     if not shadow_live:
         errors.append("CONTROL — contract-basename shadow was not detected")
     if not selected_live:
@@ -386,11 +461,12 @@ def main() -> int:
         print(error, file=sys.stderr)
     if errors:
         return 1
-    controls = "; 8/8 controls live" if args.negative_controls else ""
+    controls = "; 9/9 controls live" if args.negative_controls else ""
     print(
         f"OK — raw attribution ownership: {EXPECTED_OWNERS}/{EXPECTED_OWNERS} "
-        f"common owners; no contract basename shadows; exact selected-root "
-        f"source/chronology signatures{controls}"
+        f"common owners across {EXPECTED_COMMON_MODULES} modules; no contract "
+        f"basename shadows; exact selected-root source/chronology "
+        f"signatures{controls}"
     )
     return 0
 

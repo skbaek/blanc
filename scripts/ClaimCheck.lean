@@ -30,6 +30,7 @@ import Blanc.BeaconDepositSelectorMiss
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositEffects
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
+import Blanc.BeaconDepositHistoryChain
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -4533,6 +4534,83 @@ example (sevm : Sevm) (base : Devm)
     depositDataRoot s' ev stor keys countCost n G history hinvariant hdataBound
     hdec hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
     hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
+
+/-! ## Beacon deposit — P7/P8 deployment and open-history closure. -/
+
+example
+    (chainId : UInt64) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (henv : CanonicalBeaconDepositDeploymentBlock chainId base cb
+      txBytes tx sender ca)
+    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
+      base cb.block = .ok deployed) :
+    DeploymentRoot chainId base deployed ca :=
+  canonicalDeploymentStep_establishes_root chainId base deployed cb txBytes
+    tx sender ca hbase henv hstep
+
+example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot chainId base deployed ca) :
+    ∃ (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx) (sender : Adr)
+      (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+      (post : State) (bout : BlockOutput) (messagePost : State)
+      (out : MsgCallOutput) (createPost : Devm),
+      CanonicalBeaconDepositDeploymentBlock chainId base cb
+        txBytes tx sender ca ∧
+      stateTransitionUsing (ChainConfig.pragueOnly chainId)
+        base cb.block = .ok deployed ∧
+      DeploymentTransactionResult chainId ca ctx post bout ∧
+      DirectConstructorMessageResult ca ctx.msg messagePost out ∧
+      DirectCreateMessageResult ca ctx.msg createPost ∧
+      DirectCreateMessageExecution ca ctx.msg createPost :=
+  hroot.constructorOccurrence
+
+example (baseline : List B256) (ca : Adr) :
+    (historySpec baseline).SoundAdmitted ca HistoryEntry :=
+  historySpec_sound baseline ca
+
+example (baseline : List B256) (ca : Adr) :
+    HistoryPreserves baseline ca :=
+  historySpec_preserves baseline ca
+
+example
+    (chainId : UInt64) {baseline : List B256}
+    {checkpoint future : BlockChain} {ca : Adr}
+    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      checkpoint future)
+    (native : ReachNativeShaAdmitted reach ca)
+    (installed :
+      some (checkpoint.state.getCode ca).toList = Prog.compile runtime)
+    (artifact : ArtifactInv (checkpoint.state.getStor ca) baseline) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
+  pragueOnly_history_extends chainId reach native installed artifact
+
+example
+    {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot chainId base deployed ca)
+    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future)
+    (native : ReachNativeShaAdmitted reach ca) :
+    ∃ suffix, ArtifactInv (future.state.getStor ca) suffix :=
+  root.future_history_extends reach native
+
+example
+    {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot chainId base deployed ca)
+    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future)
+    (native : ReachNativeShaAdmitted reach ca) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) suffix ∧
+      ((future.state.getStor ca).get depositCountSlot).toNat =
+        suffix.length ∧
+      (0 < ((future.state.getStor ca).get depositCountSlot).toNat ↔
+        suffix ≠ []) ∧
+      Acc.root Bytes.sha256 (accOfStor (future.state.getStor ca)) =
+        mixedRootOf Bytes.sha256 suffix :=
+  root.future_count_root reach native
 
 end BeaconDeposit
 

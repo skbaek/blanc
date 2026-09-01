@@ -105,6 +105,7 @@ inductive UpgradeToAndCallDecodedRoute
         (upgradeToAndCallDecodedImage image newImplementation setupCalldata
           forceCall))
       (state : decodePre.state = authPre.state)
+      (logs : decodePre.logs = authPre.logs)
 
 /-- Open the exact public `upgradeToAndCall` program through ABI decoding and
 authorization classification.  Memory-side premises are requested only after
@@ -133,9 +134,9 @@ theorem upgradeToAndCall_decoded_route_of_program
   intro image hwf hreads
   rcases decodeUpgradeToAndCallControl_boundary pDecode hwf hreads hdata
       hlength64 hdataLength decodeRun with
-    ⟨authPre, authRun, pAuth, authWf, authReads, decodeState⟩
+    ⟨authPre, authRun, pAuth, authWf, authReads, decodeState, decodeLogs⟩
   exact .intro authPre (activeAdminControl_route pAuth authRun)
-    authWf authReads decodeState
+    authWf authReads decodeState decodeLogs
 
 /-- The decoded public route preserves enough memory evidence to classify the
 ossified-precedence arm all the way through its exact custom-error payload. -/
@@ -153,7 +154,7 @@ theorem UpgradeToAndCallDecodedRoute.ossified_exact
           sevm callPre (.call proxyIsOssifiedErrorSlot) out ∧
         ControlErrorOutcome callPre proxyIsOssifiedErrorData out := by
   rcases route with
-    ⟨authPre, authRoute, authWf, authReads, decodeState⟩
+    ⟨authPre, authRoute, authWf, authReads, decodeState, _decodeLogs⟩
   have decodeAuthStor : Devm.getStor decodePre = Devm.getStor authPre :=
     funext (getStor_eq_of_state_eq decodeState)
   have hadmin := storedAdminWord_eq_of_getStor_eq decodeAuthStor
@@ -195,7 +196,7 @@ theorem UpgradeToAndCallDecodedRoute.unauthorized_exact
           sevm callPre (.call notAdminErrorSlot) out ∧
         ControlErrorOutcome callPre notAdminErrorData out := by
   rcases route with
-    ⟨authPre, authRoute, authWf, authReads, decodeState⟩
+    ⟨authPre, authRoute, authWf, authReads, decodeState, _decodeLogs⟩
   have decodeAuthStor : Devm.getStor decodePre = Devm.getStor authPre :=
     funext (getStor_eq_of_state_eq decodeState)
   have hadmin := storedAdminWord_eq_of_getStor_eq decodeAuthStor
@@ -585,6 +586,7 @@ inductive UpgradeToAndCallDelegateBoundary
       (memoryWf : Mem.Wf callPre.memory)
       (memoryReads : Mem.Reads callPre.memory decodedImage)
       (state : pre.state = callPre.state)
+      (logs : pre.logs = callPre.logs)
 
 /-- Once a proof-carrying spawn descriptor is supplied for the exact call
 state, the shared inversion theorem retains the arbitrary child execution and
@@ -601,7 +603,7 @@ theorem UpgradeToAndCallDelegateBoundary.child_certificate
           Nonempty (DelegatedChildCertificate spawn.child childOut) ∧
             spawn.resume.run childOut = .ok callPost := by
   rcases boundary with
-    ⟨_, callPre, callPost, callRun, _, _, _, _, _⟩
+    ⟨_, callPre, callPost, callRun, _, _, _, _, _, _⟩
   exact ⟨callPre, callPost, fun spawn =>
     spawn.certificate_of_runCompiled callRun⟩
 
@@ -709,7 +711,7 @@ theorem upgradeToAndCallDelegateSetup_boundary
           callPre.stack :=
     prefix_of_push gasPush pImplementation
   obtain ⟨callPost, callRun, tailRun⟩ := runCompiledTo_next_inv run
-  refine .intro gasWord callPre callPost callRun tailRun pGas ?_ ?_ ?_
+  refine .intro gasWord callPre callPost callRun tailRun pGas ?_ ?_ ?_ ?_
   · rw [← Ninst.Hinv.inv (f := Devm.memory) rGas]
     exact wfImplementation
   · rw [← Ninst.Hinv.inv (f := Devm.memory) rGas]
@@ -720,6 +722,12 @@ theorem upgradeToAndCallDelegateSetup_boundary
           ((Ninst.Hinv.inv (f := Devm.state) rInputOffset).trans
             (stateImplementation.trans
               gasPush.state))))
+  · exact (Ninst.Hinv.inv (f := Devm.logs) rOutputOffset).trans
+      ((Ninst.Hinv.inv (f := Devm.logs) rOutputSize).trans
+        ((loadUpgradeToAndCallWord_logs loadLengthRun).trans
+          ((Ninst.Hinv.inv (f := Devm.logs) rInputOffset).trans
+            ((loadUpgradeToAndCallWord_logs loadImplementationRun).trans
+              gasPush.logs))))
 
 /-! ## Setup child settlement -/
 
@@ -786,7 +794,7 @@ theorem UpgradeToAndCallDelegateBoundary.settled_child
         spawn.parent.stack.length < 1024 →
           ∃ child, DelegatecallSettledBoundary spawn child callPost := by
   rcases boundary with
-    ⟨_, callPre, callPost, callRun, tailRun, _, _, _, _⟩
+    ⟨_, callPre, callPost, callRun, tailRun, _, _, _, _, _⟩
   exact ⟨callPre, callPost, callRun, tailRun,
     fun spawn room => spawn.settled_of_runCompiled callRun room⟩
 

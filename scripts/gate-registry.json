@@ -1,4 +1,5 @@
 {
+  "schema": 1,
   "gates": [
     {
       "command": [
@@ -905,6 +906,7 @@
           "Blanc/LidoCircuitBreakerHistoryChain.lean",
           "Blanc/LidoCircuitBreaker.lean",
           "Blanc/LidoCircuitBreakerRegistryModel.lean",
+          "Blanc/CommonProofs.lean",
           "Blanc/Ladder.lean"
         ],
         "lean_modules": [
@@ -918,7 +920,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "With the Chain owner ACTIVE the gate reads the working Chain source and never shells out to git; git is reachable only on --chain-dry-run, which this command does not pass. Blanc/LidoCircuitBreaker.lean is read but never pinned — the dispatcher inventory is derived from it, so its bytes still decide the verdict.",
+      "note": "With the Chain owner ACTIVE the gate reads the working Chain source and never shells out to git; git is reachable only on --chain-dry-run, which this command does not pass. Blanc/LidoCircuitBreaker.lean is read but never pinned — the dispatcher inventory is derived from it, so its bytes still decide the verdict. Blanc/CommonProofs.lean supplies the shared storage-silence vocabulary pinned by this family.",
       "order": 25,
       "verdict": {
         "expect_exit": 0,
@@ -1128,6 +1130,7 @@
           "scripts/cycle-write-free-owner-manifest.json",
           "scripts/CycleWriteFreeRegression.lean",
           "Blanc/ExecutionSettlement.lean",
+          "Blanc/ExecutionFrames.lean",
           "Blanc/ExecutionOccurrence.lean",
           "Blanc/CycleWriteFree.lean",
           "Blanc/TransientSettlement.lean",
@@ -1152,7 +1155,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate — the recursive Blanc population is what preserves that membership sensitivity.",
+      "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. ExecutionFrames.lean and ExecutionOccurrence.lean are both pinned because raw-attribution ownership is split across them. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate — the recursive Blanc population is what preserves that membership sensitivity.",
       "order": 30,
       "verdict": {
         "expect_exit": 0,
@@ -1665,13 +1668,14 @@
         "files": [
           "scripts/check-current-mainnet.sh",
           "scripts/current-mainnet-target.json",
+          "scripts/current-mainnet-runtime-lock.json",
+          "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
           "@t8n_target/.git/config",
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
           "@t8n_target/.venv/bin/ethereum-spec-evm",
-          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
-          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git"
@@ -1689,7 +1693,7 @@
               "*/__pycache__/*"
             ],
             "pattern": "**/*",
-            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+            "root": "@t8n_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1698,7 +1702,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. Cache identity includes the checkout configuration, venv selector/interpreter/entrypoint, complete site-packages, and selected CPython 3.11.9 standard library.",
+      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. A generated two-platform runtime lock owns exact native macOS arm64 and Linux x86_64 closures; cache identity derives the selected CPython 3.11.9 standard library from the venv instead of naming one OS path.",
       "order": 40,
       "verdict": {
         "expect_exit": 0,
@@ -1729,6 +1733,8 @@
           "scripts/check-beacon-deposit-current-mainnet.sh",
           "scripts/gen-beacon-deposit-current-mainnet.py",
           "scripts/current-mainnet-target.json",
+          "scripts/current-mainnet-runtime-lock.json",
+          "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.json",
@@ -1739,8 +1745,7 @@
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
           "@t8n_target/.venv/bin/ethereum-spec-evm",
-          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
-          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git"
@@ -1761,7 +1766,7 @@
               "*/__pycache__/*"
             ],
             "pattern": "**/*",
-            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+            "root": "@t8n_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1771,7 +1776,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The manifest fingerprints its direct consumer inputs; this registry additionally owns the exact checkout, helper/profile, venv/site-packages, and CPython runtime closure.",
+      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The portable manifest binds the generated two-platform runtime lock; this registry additionally owns the exact selected native checkout, venv/site-packages, and CPython closure.",
       "order": 41,
       "verdict": {
         "expect_exit": 0,
@@ -1838,6 +1843,61 @@
     },
     {
       "command": [
+        "scripts/check-beacon-deposit-deployment.sh"
+      ],
+      "id": "beacon-deposit-deployment",
+      "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-beacon-deposit-deployment.sh",
+          "scripts/gen-beacon-deposit-deployment-fixture.py",
+          "scripts/gen-weth-fixtures.py",
+          ".lake/packages/jaune/.lake/build/bin/jaune",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python"
+        ],
+        "lean_entries": [
+          "scripts/eval-beacon-deposit-deployment.lean"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@eels/venv/lib"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3",
+          "git",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The evaluator is a direct Lean entry whose Lake depHash closes over the exact D1 deployment root; it emits no theorem or golden. The Python generator independently pins both artifact SHA-256 identities and reconstructs all 31 constructor storage words with Python SHA-256 before authoring a temporary strict singleton Prague block. Pinned EELS executes the block, three isolated target/runtime/storage mutants must fail at their named boundaries, the unchanged control must return green, and the generated block is replayed through the exact Jaune binary. The generator importlib-loads gen-weth-fixtures.py only for EEST helpers. The EELS checkout gitignores its virtualenv, so its interpreter and complete site-packages population are fingerprinted separately through the same EELS_ROOT.",
+      "order": 43,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — BeaconDeposit direct deployment control \\("
+        ]
+      }
+    },
+    {
+      "command": [
         "scripts/check-prorata-current-mainnet.sh"
       ],
       "id": "prorata-current-mainnet",
@@ -1860,6 +1920,8 @@
           "scripts/gen-prorata-benchmark.py",
           "scripts/check-current-mainnet.sh",
           "scripts/current-mainnet-target.json",
+          "scripts/current-mainnet-runtime-lock.json",
+          "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
           "scripts/check-runtime-bytes.py",
           "scripts/prorata_oracle.py",
@@ -1873,8 +1935,7 @@
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
           "@t8n_target/.venv/bin/ethereum-spec-evm",
-          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
-          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git"
@@ -1896,7 +1957,7 @@
               "*/__pycache__/*"
             ],
             "pattern": "**/*",
-            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+            "root": "@t8n_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1906,7 +1967,7 @@
       },
       "kind": "cacheable",
       "note": "PRORATA's read-only BPO2 consumer of the contract-neutral current-mainnet API. It reconstructs canonical system preallocation and block envelopes from the pinned target, executes all fourteen fixture scenarios with explicit block semantics, checks receipt/no-log and exact integer-model postconditions, and byte-compares the complete generated fixture population. It also validates the locked exact-surface Solidity/Yul referents, runs ten independent signed-transaction scenarios against all three runtimes with zero projected semantic mismatches, and byte-compares canonical receipt gas. The ordinary fixture gate independently replays committed PRORATA blocks through Jaune and remains CI-safe without the external checkout.",
-      "order": 43,
+      "order": 44,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1937,6 +1998,8 @@
           "scripts/gen-lido-ossifiable-proxy-current-mainnet.py",
           "scripts/check-current-mainnet.sh",
           "scripts/current-mainnet-target.json",
+          "scripts/current-mainnet-runtime-lock.json",
+          "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
           "scripts/lido_ossifiable_proxy_performance_schema.py",
           "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
@@ -1950,8 +2013,7 @@
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
           "@t8n_target/.venv/bin/ethereum-spec-evm",
-          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
-          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git"
@@ -1969,7 +2031,7 @@
               "*/__pycache__/*"
             ],
             "pattern": "**/*",
-            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+            "root": "@t8n_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1978,8 +2040,8 @@
         ]
       },
       "kind": "cacheable",
-      "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages and the profile-pinned CPython standard library.",
-      "order": 44,
+      "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper and two-platform runtime lock, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages and the selected native CPython standard library.",
+      "order": 45,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2006,8 +2068,8 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The 981-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
-      "order": 45,
+      "note": "The 988-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
+      "order": 46,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2033,7 +2095,7 @@
       },
       "kind": "cacheable",
       "note": "The pinned inventory count lives in the wrapper, so its bytes are an input.",
-      "order": 46,
+      "order": 47,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2081,7 +2143,7 @@
       },
       "kind": "cacheable",
       "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes — the whole Lean corpus, the shared Lean/Lake configuration, the Lake-recorded artifact identity of both roots, its ignored host-local baseline (including absence before genesis), and its own implementation. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see — a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
-      "order": 47,
+      "order": 48,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2120,7 +2182,7 @@
       },
       "kind": "cacheable",
       "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is the thing that produces PASS/FAIL and is fingerprinted directly. weth10-reference.py and weth10_reference_schema.py are in the closure only because the borrower checker importlib-loads the former for its keccak256.",
-      "order": 48,
+      "order": 49,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2153,7 +2215,7 @@
       },
       "kind": "cacheable",
       "note": "This suite has no manifest, so its fixture-directory membership is its only population guard; declaring the population here restores that guard for reuse decisions.",
-      "order": 49,
+      "order": 50,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2190,7 +2252,7 @@
       },
       "kind": "cacheable",
       "note": "CI-safe replay of the committed BPO2 population through Jaune. The manifest is a bidirectional population guard, the independent integer oracle vectors are regenerated through a timing-free byte comparison, and every embedded PRORATA runtime is compared with the frozen literal. Exact-target regeneration belongs to the separate prorata-current-mainnet gate.",
-      "order": 50,
+      "order": 51,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2223,7 +2285,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 51,
+      "order": 52,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2256,14 +2318,93 @@
         ]
       },
       "kind": "cacheable",
-      "order": 52,
+      "order": 53,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
           "^OK — weth coverage: "
         ]
       }
+    },
+    {
+      "command": [
+        "scripts/check-proxy-pair-upgrade.sh"
+      ],
+      "id": "proxy-pair-upgrade",
+      "inputs": {
+        "files": [
+          "scripts/check-proxy-pair-upgrade.sh",
+          "scripts/check-proxy-pair-upgrade.py",
+          "scripts/check-layering.sh",
+          "scripts/check-layering.py",
+          "scripts/ProxyPairUpgradeWitness.lean",
+          "scripts/ProxyPairUpgradeAxiomCheck.lean",
+          "Blanc.lean",
+          "Main.lean",
+          "Blanc/Upgrade.lean",
+          "Blanc/ProxyPairUpgradePrograms.lean",
+          "Blanc/ProxyPairUpgradeRelation.lean",
+          "Blanc/ProxyPairUpgradeExecution.lean",
+          "Blanc/ProxyPairUpgradeRefinement.lean",
+          "docs/PROXY_PAIR_UPGRADE.md"
+        ],
+        "lean_entries": [
+          "scripts/ProxyPairUpgradeAxiomCheck.lean",
+          "scripts/ProxyPairUpgradeWitness.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The whole Blanc Lean population is an input because this gate composes the total layering check; the two evaluator entries additionally bind their complete transitive compiled dependency hashes.",
+      "order": 54,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — proxy-pair-upgrade: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-beacon-deposit-assurance.sh"
+      ],
+      "id": "beacon-deposit-assurance",
+      "inputs": {
+        "files": [
+          "scripts/check-beacon-deposit-assurance.sh",
+          "scripts/check-beacon-deposit-assurance.py",
+          "BEACON_DEPOSIT_ASSURANCE.md",
+          "scripts/AxiomCheck.lean",
+          "scripts/check.sh",
+          "scripts/check-claims.sh",
+          "scripts/check-beacon-deposit-model.sh",
+          "scripts/check-beacon-deposit-differential.sh",
+          "scripts/check-beacon-deposit-current-mainnet.sh",
+          "scripts/check-beacon-deposit-deployment.sh",
+          "scripts/GATES.md"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Static fail-closed P1-P8 assurance map. The checker resolves every cited declaration and exact axiom set through the existing repository audit, pins row/declaration/gate/nonclaim populations, and always executes the required misspelled-name and wrong-axiom controls in memory.",
+      "order": 55,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — beacon-deposit-assurance: "
+        ]
+      }
     }
-  ],
-  "schema": 1
+  ]
 }

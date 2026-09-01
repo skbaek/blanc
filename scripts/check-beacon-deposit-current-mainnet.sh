@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 : "${HOME:?HOME is required}"
 
-WRAPPER_SCHEMA=1
+WRAPPER_SCHEMA=2
 WRAPPER_ROWS="deposit-success,get-deposit-root,get-deposit-count,supports-erc165,supports-deposit,supports-invalid,no-match"
 WRAPPER_CHANNELS="status,gas,deposit-log,deposit-storage,deposit-eth"
 WRAPPER_ROW_CHANNEL_MAP="deposit-success=status+gas+deposit-log+deposit-storage+deposit-eth,get-deposit-root=status+gas,get-deposit-count=status+gas,supports-erc165=status+gas,supports-deposit=status+gas,supports-invalid=status+gas,no-match=status+gas"
@@ -23,16 +23,15 @@ WRAPPER_RAW_CHANNEL_FALSIFIERS=5
 WRAPPER_MANIFEST_CHANNEL_FALSIFIERS=5
 WRAPPER_REGISTRY_FALSIFIERS=1
 WRAPPER_MANIFEST_FALSIFIERS=12
-WRAPPER_MANIFEST_CLASSES="row-inventory,credited-channel,profile,constructor-dominance,decomposition-basis,historical-boundary,artifact-size,cache-repository,cache-target-file,cache-site-tree,cache-ownership,gas-policy"
+WRAPPER_MANIFEST_CLASSES="row-inventory,credited-channel,profile,constructor-dominance,decomposition-basis,historical-boundary,artifact-size,cache-repository,runtime-lock-path,runtime-lock-digest,cache-ownership,gas-policy"
 WRAPPER_DEVIATION_MARKER="beacon-deposit-current-mainnet-gas-v1"
 WRAPPER_CREATE_TARGET="0x6295ee1b4f6dd65047762f924ecd367c17eabf8f"
 WRAPPER_TX_GAS_LIMIT=16777216
 WRAPPER_GAS_CONSTANTS="txBase=21000,txCreate=32000,standardToken=4,floorToken=10,initcodeWord=2,codeDepositPerByte=200,eip170Limit=24576,eip3860Limit=49152"
-WRAPPER_CACHE_REPOSITORY_FILES="scripts/current-mainnet-target.json,scripts/current_mainnet.py,scripts/gen-beacon-deposit-current-mainnet.py,scripts/check-beacon-deposit-current-mainnet.sh,scripts/eval-beacon-deposit-differential-code.lean,scripts/reference/beacon-deposit/inputs/deposit_contract.sol,scripts/reference/beacon-deposit/inputs/deposit_contract.json,scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex,BEACON_DEPOSIT_DEVIATIONS.md"
-WRAPPER_CACHE_TARGET_FILES="pyvenvConfig=.venv/pyvenv.cfg,pythonExecutable=.venv/bin/python,t8nEntrypoint=.venv/bin/ethereum-spec-evm"
-WRAPPER_CACHE_SITE_ROOT=".venv/lib/python3.11/site-packages"
-WRAPPER_CACHE_EXCLUDES="**/__pycache__/**,**/*.pyc,**/*.pyo"
-WRAPPER_CACHE_OWNERSHIP="gate registry additionally fingerprints the exact checkout, complete selected site-packages population, and profile-pinned CPython 3.11.9 standard library; this manifest records the same consumer-facing roots"
+WRAPPER_CACHE_REPOSITORY_FILES="scripts/current-mainnet-target.json,scripts/current-mainnet-runtime-lock.json,scripts/current_mainnet.py,scripts/gen-current-mainnet-runtime-lock.py,scripts/gen-beacon-deposit-current-mainnet.py,scripts/check-beacon-deposit-current-mainnet.sh,scripts/eval-beacon-deposit-differential-code.lean,scripts/reference/beacon-deposit/inputs/deposit_contract.sol,scripts/reference/beacon-deposit/inputs/deposit_contract.json,scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex,BEACON_DEPOSIT_DEVIATIONS.md"
+WRAPPER_CACHE_RUNTIME_LOCK="scripts/current-mainnet-runtime-lock.json"
+WRAPPER_CACHE_RUNTIME_PLATFORMS="macos-arm64,linux-x86_64"
+WRAPPER_CACHE_OWNERSHIP="the shared runtime lock owns exact macOS arm64 and Linux x86_64 native closures; the gate registry additionally fingerprints the selected exact checkout, site-packages population, and CPython 3.11.9 standard library"
 WRAPPER_BLANC_ARTIFACTS="runtimeBytes=2891,runtimeSha256=8f2474c60f85dce94e97403369d64d94d7cce4bbb44e620175bd43a5990f0c48,creationBytes=3037,creationSha256=3f3af51d0674c1afb7679dbcc60720bbd3f3d61adc9bd319da025064c0521c59,constructorPrefixBytes=146,constructorSstoreSites=137,constructorStaticcallSites=98,constructorCodecopySites=57"
 WRAPPER_ARGS=(
   --wrapper-schema "$WRAPPER_SCHEMA"
@@ -55,9 +54,8 @@ WRAPPER_ARGS=(
   --wrapper-tx-gas-limit "$WRAPPER_TX_GAS_LIMIT"
   --wrapper-gas-constants "$WRAPPER_GAS_CONSTANTS"
   --wrapper-cache-repository-files "$WRAPPER_CACHE_REPOSITORY_FILES"
-  --wrapper-cache-target-files "$WRAPPER_CACHE_TARGET_FILES"
-  --wrapper-cache-site-root "$WRAPPER_CACHE_SITE_ROOT"
-  --wrapper-cache-excludes "$WRAPPER_CACHE_EXCLUDES"
+  --wrapper-cache-runtime-lock "$WRAPPER_CACHE_RUNTIME_LOCK"
+  --wrapper-cache-runtime-platforms "$WRAPPER_CACHE_RUNTIME_PLATFORMS"
   --wrapper-cache-ownership "$WRAPPER_CACHE_OWNERSHIP"
   --wrapper-blanc-artifacts "$WRAPPER_BLANC_ARTIFACTS"
 )
