@@ -93,7 +93,7 @@ CONSUMERS = [
 # Surfaces outside this repository that quote the same number. No gate can
 # check these from here; a passing run names them so the human can.
 FOREIGN_SURFACES = [
-    "jaune: docs/index.html (3 quotations, as of 2026-08-27)",
+    "jaune: docs/index.html (3 quotations, as of 2026-09-01)",
 ]
 
 # Published numbers this gate deliberately does NOT check yet, recorded so the

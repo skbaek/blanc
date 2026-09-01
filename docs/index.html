@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blanc — keep every freedom, except one</title>
-<meta name="description" content="Keep every freedom, except one: theorems about the exact deployed bytes with no compiler in the trust base; proofs a small kernel re-checks under three classical axioms and nothing else; an executable EVM semantics passing the ecosystem’s own fixture corpus; custom hand-optimized bytecode, jumps alone compiler-placed; and a property ceiling rarely available at any price. The bill is one line: a new, deliberately bare language. Four contracts in: a WETH, a flash-mint token, a full 27-selector WETH10, and Lido’s CircuitBreaker.">
+<meta name="description" content="Keep every freedom, except one: theorems about the exact bytes that deploy, with no compiler in the trust base; proofs a small kernel re-checks under three classical axioms and nothing else; an executable EVM semantics passing the ecosystem’s own fixture corpus; custom hand-optimized bytecode, jumps alone compiler-placed; and a property ceiling rarely available at any price. The bill is one line: a new, deliberately bare language. Four contracts in: a WETH, a flash-mint token, a full 27-selector WETH10, and Lido’s CircuitBreaker.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="site.css">
 <script>document.documentElement.classList.add('js');</script>
@@ -44,11 +44,11 @@
         <p class="eyebrow">A minimal EVM contract language · Lean 4</p>
         <h1 style="max-width:none;font-size:clamp(2.35rem,4.9vw,3.4rem)">Keep every freedom.<br>Except one.</h1>
         <p class="lede">
-          Freedom from trusted compilers, proving theorems about the exact deployed bytes;
+          Freedom from trusted compilers, proving theorems about the exact bytes that deploy;
           freedom to check every proof yourself, with a small kernel, three classical axioms,
           and <em>nothing</em> else; freedom from semantic gaps with mainnet, built on an
           executable EVM semantics passing the ecosystem’s own fixture corpus in full,
-          5,100/5,100 files; freedom to write custom, hand-optimized bytecode down to the last
+          5,100/5,100 supported files; freedom to write custom, hand-optimized bytecode down to the last
           instruction, jumps alone placed by the proved compiler; and the freedom of expressing
           and proving any property, up to liveness constructed over every reachable future —
           a ceiling rarely available at any price.<sup class="fn"><a href="#fn1">1</a></sup>
@@ -70,7 +70,7 @@
 <span class="ok">OK — axiom audit: 988/988 audited theorems depend on exactly their pinned axiom sets</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
-        <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (latest run 2026-08-27): the
+        <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (latest run 2026-09-01): the
           axiom audit that pins every audited theorem to its exact axiom set, and the differential
           gate executing Blanc’s WETH10 beside the deployed original’s runtime, byte for byte, in a
           pinned oracle.<sup class="fn"><a href="#fn3">3</a></sup></p>
@@ -89,21 +89,22 @@
       over the raw instruction set, a compiler into deployable bytecode, a machine-checked proof
       that the compiler is correct — and asks its user to give up as little as its authors could
       manage: theorems land on the exact bytes that deploy; every audited theorem’s axiom closure
-      is pinned to Lean’s three canonical axioms; the semantics underneath is executable and
+      is pinned to its exact expected set, within Lean’s three canonical axioms; the semantics underneath is executable and
       exercised by the ecosystem’s own fixture corpus; and the implementation surface, from
       storage scheme to error genre, stays the author’s. Programs, semantics, compiler, and proofs
-      are one Lean&nbsp;4 artifact — roughly 251,000 lines — built on Jaune’s executable EVM
+      are one Lean&nbsp;4 artifact — roughly 361,000 lines — built on Jaune’s executable EVM
       semantics at a pinned commit. Four contracts are in: a WETH at less than a third of the
-      deployed WETH9’s code size, its solvency proved over every reachable state of a configured
+      deployed WETH9’s code size, its solvency preserved across every reachable state of a configured
       chain, with no hash-collision clause anywhere in the statement; an ERC-3156 flash-mint token
       whose supply conservation survives arbitrary reentrant borrower code; a full 27-selector
       WETH10, taken from zero contract code to a verified drop-in — every verification goal in its
       charter met; and Lido’s
       CircuitBreaker, ported with zero accepted deviations, its Registry invariant closing — as
       corollaries — the three obligations a named industrial campaign left open, rooted in a
-      proved official-parameters deployment through a real Prague block. WETH10’s redeemability theorem is of a kind rarely purchasable at any
-      price: from a proved deployment onward, every holder’s booked balance stays exactly conserved
-      at every reachable future, and every wei of it is redemption-enabled through canonical
+      proved official-parameters deployment through the full Prague block pipeline. WETH10’s redeemability theorem is of a kind rarely purchasable at any
+      price: from a proved deployment onward, every holder’s booked balance closes an exact ℕ flow
+      equation at every reachable future, and every wei of the residual it grants is
+      redemption-enabled through canonical
       <span class="mono">withdraw</span> and <span class="mono">withdrawTo</span> at both message and
       Prague type-2 transaction altitude. For a funded code-free external holder with the canonical
       transaction fields, only recovery of its own signature remains to admit the transaction; no
@@ -225,10 +226,11 @@
       <div class="panel">
         <span class="tick">the trust base, exhaustively</span>
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          <strong>Three axioms, no oracle.</strong> The axiom closure of every audited theorem is
-          pinned in CI to exactly <span class="mono">propext</span>,
+          <strong>Three axioms at most, no oracle.</strong> Every audited theorem’s axiom closure is
+          pinned in CI to its own exact expected set, drawn from <span class="mono">propext</span>,
           <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span> —
-          Lean’s three canonical axioms, the same ground ordinary classical mathematics stands on.
+          Lean’s three canonical axioms, the same ground ordinary classical mathematics stands
+          on; most rows use all three, and the rest pin smaller sets, down to none.
           The audit fails on an extra axiom <em>or a missing
           one</em>, on <span class="mono">sorryAx</span>, and on any
           <span class="mono">native_decide</span>-style escape into compiled evaluation. Nothing
@@ -240,8 +242,9 @@
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           <strong>A weakened conclusion fails as loudly as a broken proof.</strong> Proving
           <em>something</em> is cheap; the discipline is keeping the something fixed. A
-          statement-pin gate Lean-checks the exact wording of the protected WETH10 claims — 188
-          definitions, statements, and record constructors — so the theorem quoted on this page is
+          statement-pin gate Lean-checks the exact wording of the protected claims — 304
+          definitions, statements, and record constructors across the shared layer and the
+          protected contract families — so the theorem quoted on this page is
           character-for-character the theorem CI checks, and a quiet regression in what is
           <em>claimed</em> trips the same wire as a regression in whether it holds.
         </p>
@@ -275,7 +278,7 @@
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           <strong>Believing it is not an act of reading.</strong> Because the semantics executes,
           it can be tested like an implementation: at the pinned commit it passes the ecosystem’s
-          full fixture corpus — 5,100/5,100 files — and Blanc’s differential gates run each
+          fixture corpus in full — 5,100/5,100 supported files — and Blanc’s differential gates run each
           contract beside EELS, Ethereum’s canonical executable specification, in a pinned oracle:
           147/147 WETH10 rows, 175/175 CircuitBreaker rows, 11/11 and 11/11 contract fixture
           suites. The definitions the corpus
@@ -520,7 +523,7 @@
           state stays coherent — with no premise about the bytecode at any other address, no
           non-reentrancy condition, and no honesty asked of the contracts it pauses. The
           checkpoint hypothesis is discharged by a proved official-parameters deployment, so
-          the family stands on a real Prague block rather than a supposition.
+          the family stands on a derived deployment root rather than an assumed checkpoint.
         </p>
       </div>
       <div class="panel">
@@ -600,7 +603,7 @@
         </span>
         <p class="carddesc">Registry integrity as one combined invariant — its
           corollaries close the three obligations an industrial campaign left open — rooted in a
-          proved official-parameters deployment through a real Prague block, and preserved at
+          proved official-parameters deployment through the full Prague block pipeline, and preserved at
           every reachable future over arbitrary hostile callees.</p>
         <span class="cardfacts">
           <span class="chip"><b>4,282 B</b> vs 4,584 deployed</span>
@@ -656,14 +659,14 @@
         </div>
       <div>
         <div class="term"><span class="p">$</span> scripts/check-layering.sh
-<span class="ok">OK — layering: 4 contract(s) are siblings; 150 module(s) classified, 148 non-root checked, no cross-contract or inverted import</span>
+<span class="ok">OK — layering: 8 contract(s) are siblings; 352 module(s) classified, 350 non-root checked, no cross-contract or inverted import</span>
 <span class="p">$</span> scripts/check-claims.sh
-<span class="ok">OK — claim statements: 289 definitions/statements and exact
+<span class="ok">OK — claim statements: 304 definitions/statements and exact
      record constructors pinned by Lean</span>
 <span class="p">$</span> scripts/check-weth.sh --no-build &amp;&amp; scripts/check-fmint.sh --no-build
 <span class="ok">OK — weth fixtures: 11/11 PASS</span>
 <span class="ok">OK — fmint fixtures: 11/11 PASS, manifest cross-check clean</span></div>
-        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery, verbatim (2026-08-27). The
+        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery, verbatim (2026-09-01). The
           full ordered set — layering, trust surface, reference lock, differential, redemption,
           deployment, axiom audit, statement pins, elaboration budget, fixtures, coverage — is
           catalogued with scales and pass criteria in
@@ -819,7 +822,7 @@
         </li>
         <li>
           <div>Proof effort that rounds to zero
-            <span class="why">the theorems above took ~251,000 lines of Lean for four contracts; interactive proof is real engineering, even with the shared ladder doing the heavy lifting</span></div>
+            <span class="why">the theorems above sit in a library of ~361,000 lines of Lean; interactive proof is real engineering, even with the shared ladder doing the heavy lifting</span></div>
           <span class="verdict">real cost</span>
         </li>
         <li>
@@ -1066,7 +1069,7 @@
             <td class="dim">Yul programs, against a formal Yul semantics</td>
             <td class="dim">—</td>
             <td class="dim">—</td>
-            <td class="dim">claims live at the Yul level, not the deployed bytes; documents its Yul-model limitations; upstream quiet since late 2025</td>
+            <td class="dim">claims live at the Yul level, not the deployed bytes; documents its Yul-model limitations</td>
           </tr>
           <tr>
             <td><b>DeepSEA</b></td>
@@ -1074,7 +1077,7 @@
             <td class="dim">programs in its own layered language, compiled toward EVM in the verified-compiler tradition</td>
             <td class="dim">—</td>
             <td class="dim">—</td>
-            <td class="dim">a research system, quiet in recent years</td>
+            <td class="dim">a research system</td>
           </tr>
           <tr class="group"><td colspan="6">verifies bytecode that already exists</td></tr>
           <tr>
@@ -1225,7 +1228,7 @@
         <h3>Proof engineers &amp; PL researchers</h3>
         <p>A live laboratory for proof-cost economics: which abstractions let the fourth contract
           cost less than the third, where callback-crossing machinery generalises, what a
-          dispatcher-combinator layer owes its clients. ~251,000 lines of worked answers, with the
+          dispatcher-combinator layer owes its clients. ~361,000 lines of worked answers, with the
           open questions in the goal ledgers.</p>
         <div class="hook">start: Blanc/Semantics.lean — the four constructors<br>then: Blanc/Ladder.lean · Blanc/Forward.lean — the reusable spine</div>
       </div>
@@ -1268,9 +1271,10 @@
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
-          the protected WETH10 redeemability set and Lido Registry mutation,
+          the protected WETH10 redeemability set, the Lido Registry mutation,
           enumeration, local-observability, exact constructor/message/transaction/block,
-          direct-root, and rooted-future boundaries, so a weakened conclusion
+          direct-root, and rooted-future boundaries, the proxy-pair upgrade boundary,
+          and the PRORATA and BeaconDeposit headline sets, so a weakened conclusion
           fails as loudly as a broken proof.
           Both projects open with <span class="mono">lake exe cache get</span>; skipping it means
           compiling mathlib from source — hours instead of minutes.
@@ -1307,9 +1311,9 @@
           page</a> for its conformance evidence.</li>
         <li id="fn3">Every figure about this repository on this page is drawn from a committed
           report, registry, gate summary, or theorem in the repository; the snapshot is current
-          as of 2026-08-27. §&nbsp;11’s landscape table is the one deliberate exception — it
+          as of 2026-09-01. §&nbsp;11’s landscape table is the one deliberate exception — it
           describes other people’s projects, on the terms its own disclaimer states. Gate
-          lines shown are verbatim output — Fig.&nbsp;1 and Fig.&nbsp;2 from 2026-08-27
+          lines shown are verbatim output — Fig.&nbsp;1 and Fig.&nbsp;2 from 2026-09-01
           runs — except that one long line is wrapped and ellipses mark elision; the
           differential line continues “… 7 state-mutating reentrancy rows, 26
           STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</li>
