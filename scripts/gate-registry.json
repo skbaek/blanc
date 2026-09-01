@@ -2379,6 +2379,7 @@
         "files": [
           "scripts/check-fmint-coverage.sh",
           "scripts/check-fmint-coverage.py",
+          "scripts/selector_coverage.py",
           "scripts/check-runtime-bytes.py",
           "scripts/fmint-selectors.json",
           "scripts/fmint-coverage-budget.txt",
@@ -2412,6 +2413,7 @@
         "files": [
           "scripts/check-weth-coverage.sh",
           "scripts/check-weth-coverage.py",
+          "scripts/selector_coverage.py",
           "scripts/check-runtime-bytes.py",
           "scripts/weth-selectors.json",
           "scripts/weth-coverage-budget.txt",
