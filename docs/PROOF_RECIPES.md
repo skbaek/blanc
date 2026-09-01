@@ -338,3 +338,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Ladder.lean](../Blanc/Ladder.lean) — `returnsWord_of_storeReturn`
 - Registered symbols: `module:Blanc/Ladder.lean`, `declaration:ReturnsWord`, `declaration:of_storeReturnWord`, `declaration:returnsWord_of_storeReturn`
 - Review: `proof-infrastructure` on `2026-08-30`
+
+## `upgrade-migration-refinement`
+
+- Status: `active`
+- Triggers: `goal-head:MigrationSound`, `goal-head:BehavioralRefinement`
+- Preferred path: Start from `UpgradeArchitecture`, keeping `proxyProg`, v1, v2, the migration, and the relation explicit. Prove `MigrationSound` from the named state transformer independently of `BehavioralRefinement`; then prove the latter from version-specific shared steps. A product theorem must separately connect an exact proxy execution to the migration.
+- Boundary: These predicates describe a migration and shared logical behavior. They do not execute a proxy, establish authorization or installation, transport a child through delegatecall, prove rollback, or turn one predicate into evidence for the other.
+- Owner module: [Blanc/Upgrade.lean](../Blanc/Upgrade.lean)
+- Canonical example: [Blanc/Upgrade.lean](../Blanc/Upgrade.lean) — `MigrationSound`
+- Registered symbols: `module:Blanc/Upgrade.lean`, `declaration:Blanc.UpgradeArchitecture`, `declaration:Blanc.MigrationSound`, `declaration:Blanc.BehavioralRefinement`
+- Review: `proof-infrastructure` on `2026-09-01`

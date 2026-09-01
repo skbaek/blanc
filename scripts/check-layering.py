@@ -49,7 +49,7 @@ import sys
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
+SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder", "Upgrade",
           "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
@@ -158,7 +158,9 @@ CONTRACTS = {
                    "ProxyPairOssifiableDeploymentMessage",
                    "ProxyPairOssifiableDeploymentFixture",
                    "ProxyPairImplementation", "ProxyPairExecution",
-                   "ProxyPairCorrespondence", "ProxyPairAuthority"],
+                   "ProxyPairCorrespondence", "ProxyPairAuthority",
+                   "ProxyPairUpgradePrograms", "ProxyPairUpgradeRelation",
+                   "ProxyPairUpgradeExecution", "ProxyPairUpgradeRefinement"],
     "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",
                 "ProrataAccountingExec", "ProrataAccountingTransaction",
                 "ProrataAccountingBody", "ProrataAccountingHistory",

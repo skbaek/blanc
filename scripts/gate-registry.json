@@ -2267,6 +2267,53 @@
           "^OK — weth coverage: "
         ]
       }
+    },
+    {
+      "command": [
+        "scripts/check-proxy-pair-upgrade.sh"
+      ],
+      "id": "proxy-pair-upgrade",
+      "inputs": {
+        "files": [
+          "scripts/check-proxy-pair-upgrade.sh",
+          "scripts/check-proxy-pair-upgrade.py",
+          "scripts/check-layering.sh",
+          "scripts/check-layering.py",
+          "scripts/ProxyPairUpgradeWitness.lean",
+          "scripts/ProxyPairUpgradeAxiomCheck.lean",
+          "Blanc.lean",
+          "Main.lean",
+          "Blanc/Upgrade.lean",
+          "Blanc/ProxyPairUpgradePrograms.lean",
+          "Blanc/ProxyPairUpgradeRelation.lean",
+          "Blanc/ProxyPairUpgradeExecution.lean",
+          "Blanc/ProxyPairUpgradeRefinement.lean",
+          "docs/PROXY_PAIR_UPGRADE.md"
+        ],
+        "lean_entries": [
+          "scripts/ProxyPairUpgradeAxiomCheck.lean",
+          "scripts/ProxyPairUpgradeWitness.lean"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The whole Blanc Lean population is an input because this gate composes the total layering check; the two evaluator entries additionally bind their complete transitive compiled dependency hashes.",
+      "order": 53,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — proxy-pair-upgrade: "
+        ]
+      }
     }
   ],
   "schema": 1

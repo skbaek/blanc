@@ -1,6 +1,7 @@
 import Blanc.Solvent
 import Blanc.WethCode
 import Blanc.Ladder
+import Blanc.Upgrade
 import Blanc.BalanceAlgebra
 import Blanc.WordArithmetic
 import Blanc.BytesWrite
@@ -224,6 +225,10 @@ import Blanc.ProxyPairImplementation
 import Blanc.ProxyPairExecution
 import Blanc.ProxyPairCorrespondence
 import Blanc.ProxyPairAuthority
+import Blanc.ProxyPairUpgradePrograms
+import Blanc.ProxyPairUpgradeRelation
+import Blanc.ProxyPairUpgradeExecution
+import Blanc.ProxyPairUpgradeRefinement
 import Blanc.LidoTriggerableWithdrawalsGatewayCore
 import Blanc.LidoTriggerableWithdrawalsGatewayTrigger
 import Blanc.LidoTriggerableWithdrawalsGateway
