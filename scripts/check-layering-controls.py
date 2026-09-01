@@ -212,7 +212,7 @@ def composition_edge_controls() -> None:
     def with_probe(raw: str, header: str) -> Path:
         root = Path(raw)
         target = root / "Blanc" / "Composition"
-        target.mkdir()
+        target.mkdir(exist_ok=True)
         (target / "Probe.lean").write_text(header, encoding="utf-8")
         return root
 
@@ -226,7 +226,7 @@ def composition_edge_controls() -> None:
     with fixture() as raw:
         root = Path(raw)
         target = root / "Blanc" / "Composition"
-        target.mkdir()
+        target.mkdir(exist_ok=True)
         (target / "Unregistered.lean").write_text("import Blanc.Basic\n", encoding="utf-8")
         must_fail(root, "unclassified-composition mutation",
                   "Composition.Unregistered is not classified")
