@@ -676,6 +676,20 @@ def main(argv: list[str]) -> int:
             if not any(expected in evidence for expected in expected_failures):
                 return fail(f"mutant `{marker}` failed unexpectedly", mutant)
 
+    if arguments.semantic_only:
+        if not arguments.composed_prerequisites:
+            settlement = run([sys.executable, "scripts/check-execution-settlement.py"])
+            if settlement.returncode != 0:
+                return fail("CREATE settlement/raw-commit control failed", settlement)
+            if not settlement.stdout.startswith("OK — execution settlement:"):
+                return fail("CREATE settlement control verdict drifted", settlement)
+        print(
+            "OK — execution occurrence semantic: 17 concrete occurrence + 6 direct-code "
+            "controls; 21 occurrence + 2 direct-code Lean mutants; 27 required positive "
+            "proofs + 7 live direct-code deletions"
+        )
+        return 0
+
     weth_source = WETH.read_text(encoding="utf-8")
     bridge_tokens = (
         "theorem Exec.Frame.NinstOccurrence.toCommon\n",
@@ -1248,12 +1262,6 @@ def main(argv: list[str]) -> int:
         print(
             "OK — execution occurrence static: 10 moved owners, exact headers and "
             "consumer counts; contract-wide shadow/export/copy controls"
-        )
-    elif arguments.semantic_only:
-        print(
-            "OK — execution occurrence semantic: 17 concrete occurrence + 6 direct-code "
-            "controls; 21 occurrence + 2 direct-code Lean mutants; 27 required positive "
-            "proofs + 7 live direct-code deletions"
         )
     else:
         print(
