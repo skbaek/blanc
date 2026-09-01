@@ -2061,7 +2061,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The 981-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
+      "note": "The 988-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
       "order": 46,
       "verdict": {
         "expect_exit": 0,
@@ -2316,6 +2316,39 @@
         "expect_exit": 0,
         "summary_patterns": [
           "^OK — weth coverage: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-beacon-deposit-assurance.sh"
+      ],
+      "id": "beacon-deposit-assurance",
+      "inputs": {
+        "files": [
+          "scripts/check-beacon-deposit-assurance.sh",
+          "scripts/check-beacon-deposit-assurance.py",
+          "BEACON_DEPOSIT_ASSURANCE.md",
+          "scripts/AxiomCheck.lean",
+          "scripts/check.sh",
+          "scripts/check-claims.sh",
+          "scripts/check-beacon-deposit-model.sh",
+          "scripts/check-beacon-deposit-differential.sh",
+          "scripts/check-beacon-deposit-current-mainnet.sh",
+          "scripts/check-beacon-deposit-deployment.sh",
+          "scripts/GATES.md"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Static fail-closed P1-P8 assurance map. The checker resolves every cited declaration and exact axiom set through the existing repository audit, pins row/declaration/gate/nonclaim populations, and always executes the required misspelled-name and wrong-axiom controls in memory.",
+      "order": 54,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — beacon-deposit-assurance: "
         ]
       }
     }

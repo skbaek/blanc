@@ -31,6 +31,8 @@ jobs:
       # second when the assurance register stops describing the tree.
       - name: Lido CircuitBreaker assurance register
         run: scripts/check-lido-circuit-breaker-assurance.sh
+      - name: BeaconDeposit assurance register
+        run: scripts/check-beacon-deposit-assurance.sh
       - name: Proof-resource ceiling debt
         run: scripts/check-proof-debt.sh
       - name: Proof-duplication ratchet
