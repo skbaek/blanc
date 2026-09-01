@@ -562,3 +562,5 @@ def weth10MainnetCode : Bytes :=
    0x56]
 
 end Blanc.Weth10
+
+-- Gate-economy benchmark: proof-source comment only; runtime bytes are unchanged.
