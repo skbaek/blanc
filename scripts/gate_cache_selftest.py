@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import datetime as dt
 import io
 import json
 import os
@@ -49,6 +50,7 @@ from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import importlib.util
+import worktree_seed as ws
 
 _SPEC = importlib.util.spec_from_file_location(
     "gate_cache", Path(__file__).resolve().parent / "gate-cache.py"
@@ -80,6 +82,9 @@ class Scratch:
         (root / "scripts").mkdir(parents=True, exist_ok=True)
         (root / "Blanc").mkdir(parents=True, exist_ok=True)
         (root / ".lake/build/lib/lean/Blanc").mkdir(parents=True, exist_ok=True)
+        self.git("init", "-q")
+        self.git("config", "user.email", "control@example.invalid")
+        self.git("config", "user.name", "control")
 
     def write(self, relative: str, text: str) -> Path:
         path = self.root / relative
@@ -190,9 +195,6 @@ class Scratch:
         return result.stdout.strip()
 
     def git_init(self) -> None:
-        self.git("init", "-q")
-        self.git("config", "user.email", "control@example.invalid")
-        self.git("config", "user.name", "control")
         self.git("add", "-A")
         self.git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "one")
 
@@ -202,6 +204,28 @@ def scratch():
     directory = Path(tempfile.mkdtemp(prefix="gate-cache-control-"))
     try:
         yield Scratch(directory)
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+@contextmanager
+def seed_pair():
+    directory = Path(tempfile.mkdtemp(prefix="worktree-seed-control-"))
+    source = directory / "source"
+    target = directory / "target"
+    source.mkdir()
+    s = Scratch(source)
+    s.write(".gitignore", ".lake/\n")
+    prepare_build_state(s)
+    s.git("worktree", "add", "-q", "-b", "target-control", str(target), "HEAD")
+    try:
+        with patched(
+            gc,
+            "component_tools",
+            lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"}),
+        ):
+            gc.write_build_certificate(source)
+            yield s, source, target
     finally:
         shutil.rmtree(directory, ignore_errors=True)
 
@@ -221,6 +245,39 @@ def simple_gate(
         "inputs": inputs,
         "verdict": {"expect_exit": 0, "summary_patterns": [pattern]},
     }
+
+
+def prepare_build_state(s: Scratch) -> Path:
+    """Give a scratch checkout the minimum exact state a build may certify."""
+
+    s.write("lean-toolchain", "leanprover/lean4:v4.32.0\n")
+    s.write("lakefile.lean", "import Lake\nopen Lake DSL\npackage blanc\n")
+    s.write("Blanc.lean", "import Blanc.A\n")
+    s.write("Blanc/A.lean", "theorem a : True := trivial\n")
+    s.trace("Blanc", "root-dep-hash")
+    s.trace("Blanc.A", "a-dep-hash")
+
+    package = s.root / ".lake/packages/jaune"
+    package.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=package, check=True)
+    subprocess.run(["git", "config", "user.email", "control@example.invalid"], cwd=package, check=True)
+    subprocess.run(["git", "config", "user.name", "control"], cwd=package, check=True)
+    (package / "Jaune.lean").write_text("def jaune := 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "Jaune.lean"], cwd=package, check=True)
+    subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pin"],
+        cwd=package,
+        check=True,
+    )
+    pin = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=package, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    gc.atomic_json(
+        s.root / "lake-manifest.json",
+        {"version": "1.1.0", "packages": [{"name": "jaune", "rev": pin}]},
+    )
+    s.git_init()
+    return package
 
 
 # --- controls: the reuse decision itself ------------------------------------
@@ -371,11 +428,60 @@ def control_registry_declaration_invalidates() -> None:
 def control_lock_implementation_is_not_gate_evidence_identity() -> None:
     gate = simple_gate("g", ["scripts/g.sh"], {}, "^OK — g: ")
     sources = gc.runner_identity_sources(gate)
-    require("gate-cache.py" in sources, "the evidence engine must remain identified")
+    require("gate-cache.py#soundness" in sources,
+            "the soundness authority must remain identified")
     require(
         "gate_cache_lock.py" not in sources,
         "serialization-only lock code must not invalidate gate evidence",
     )
+
+
+def control_presentation_edits_preserve_soundness_identity() -> None:
+    source = Path(gc.__file__).read_text(encoding="utf-8")
+    baseline = gc.semantic_authority_digest(Path(gc.__file__))
+    mutations = (
+        source.replace("# Blanc selective gate checkpoint", "# Reformatted checkpoint", 1),
+        source.replace("report what would run, without running it",
+                       "preview candidate dispositions", 1),
+        source + "\n# presentation-only trailing comment\n",
+    )
+    with tempfile.TemporaryDirectory(prefix="gate-runner-presentation-") as temp:
+        for index, text in enumerate(mutations):
+            path = Path(temp) / f"runner-{index}.py"
+            path.write_text(text, encoding="utf-8")
+            require(gc.semantic_authority_digest(path) == baseline,
+                    "comments, CLI help, and report formatting must preserve verdict identity")
+
+
+def control_soundness_edit_invalidates_every_cacheable_row() -> None:
+    source = Path(gc.__file__).read_text(encoding="utf-8")
+    changed = source.replace(
+        "if result.returncode != expected:",
+        "if result.returncode == expected:",
+        1,
+    )
+    require(changed != source, "soundness mutation did not apply")
+    with tempfile.TemporaryDirectory(prefix="gate-runner-soundness-") as temp:
+        path = Path(temp) / "runner.py"
+        path.write_text(changed, encoding="utf-8")
+        require(gc.semantic_authority_digest(path) !=
+                gc.semantic_authority_digest(Path(gc.__file__)),
+                "verdict validation movement must change global soundness identity")
+
+
+def control_scheduling_metadata_is_not_substantive_verdict_identity() -> None:
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        gate = simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                           "^OK — g: ")
+        before, _ = gc.fingerprint(s.root, gate)
+        moved = copy.deepcopy(gate)
+        moved["order"] = 99
+        moved["ci_only"] = True
+        moved["prerequisite"] = False
+        after, _ = gc.fingerprint(s.root, moved)
+        require(after == before,
+                "order and CI placement must not retroactively change a substantive verdict")
 
 
 def control_t8n_resolver_invalidates_only_its_consumers() -> None:
@@ -795,21 +901,48 @@ def control_environment_variable_invalidates() -> None:
             os.environ.pop("GATE_CACHE_CONTROL", None)
 
 
-def control_clock_rollover_invalidates() -> None:
-    """A gate holding an expiring exception reads the clock whether it says so
-    or not, so yesterday's pass must stop counting tomorrow."""
-
+def control_expiry_clock_moves_only_at_semantic_transition() -> None:
     with scratch() as s:
+        registry = s.write("scripts/exceptions.json", json.dumps({"exceptions": []}))
+        spec = {"kind": "expiry-transitions", "files": ["scripts/exceptions.json"]}
+        plus_nine = dt.timezone(dt.timedelta(hours=9))
+        minus_eight = dt.timezone(dt.timedelta(hours=-8))
+        early = dt.datetime(2026, 9, 1, 0, 1, tzinfo=plus_nine)
+        late = dt.datetime(2026, 9, 30, 23, 59, tzinfo=minus_eight)
+        require(gc.component_clock(s.root, spec, early)[0] ==
+                gc.component_clock(s.root, spec, late)[0],
+                "an empty exception registry must survive every civil-date rollover")
+
+        registry.write_text(json.dumps({"exceptions": [{"expires": "2026-09-01"}]}),
+                            encoding="utf-8")
+        before_utc = dt.datetime(2026, 9, 1, 14, 30, tzinfo=dt.timezone.utc)
+        after_utc = dt.datetime(2026, 9, 1, 15, 30, tzinfo=dt.timezone.utc)
+        before_plus = before_utc.astimezone(plus_nine)
+        after_plus = after_utc.astimezone(plus_nine)
+        before_minus = before_utc.astimezone(minus_eight)
+        require(gc.component_clock(s.root, spec, before_plus)[0] ==
+                gc.component_clock(s.root, spec, before_minus)[0],
+                "positive and negative offsets before their local boundary must agree")
+        require(gc.component_clock(s.root, spec, before_plus)[0] !=
+                gc.component_clock(s.root, spec, after_plus)[0],
+                "UTC+9 must invalidate at its first local date after expiry")
+        require(gc.component_clock(s.root, spec, before_minus)[0] ==
+                gc.component_clock(s.root, spec, after_utc.astimezone(minus_eight))[0],
+                "a negative offset must not invalidate before its own local boundary")
+
         s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
-        s.registry([simple_gate("g", ["scripts/g.sh"], {"clock": "utc-date"}, "^OK — g.sh: ")])
-        s.run()
-        require(s.disposition("g") == "reused", "the same day should reuse")
-        original = time.gmtime
-        time.gmtime = lambda *arguments: original(0)  # 1970-01-01
-        try:
-            require(s.disposition("g") == "fresh", "a different date must force execution")
-        finally:
-            time.gmtime = original
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"clock": spec},
+                                "^OK — g.sh: ")])
+        real = gc.component_clock
+        with patched(gc, "component_clock",
+                     lambda root, contract: real(root, contract, before_plus)):
+            s.run()
+            require(s.disposition("g") == "reused",
+                    "evidence must reuse before the semantic boundary")
+        with patched(gc, "component_clock",
+                     lambda root, contract: real(root, contract, after_plus)):
+            require(s.disposition("g") == "fresh",
+                    "evidence must invalidate exactly at the semantic boundary")
 
 
 def control_tool_identity_invalidates() -> None:
@@ -836,6 +969,329 @@ def control_unknown_tool_is_a_registry_fault() -> None:
         except gc.GateCacheError:
             return
         raise ControlFailure("an unidentifiable tool must be a fault, not a silent pass")
+
+
+def control_exact_build_certificate_skips_only_the_authoritative_build() -> None:
+    with scratch() as s:
+        prepare_build_state(s)
+        command = s.passing_gate("build.sh", "build-ran.txt")
+        gate = {
+            "id": "lake-build",
+            "order": 1,
+            "command": [command],
+            "kind": "composition",
+            "prerequisite": True,
+            "reason": "authoritative build prerequisite",
+            "inputs": {},
+            "verdict": {"expect_exit": 0, "summary_patterns": ["^OK — build.sh: "]},
+        }
+        s.registry([gate])
+        with patched(
+            gc,
+            "component_tools",
+            lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"}),
+        ):
+            require(s.run() == 0, "the first run should execute and certify the build")
+            require(s.ran("build-ran.txt") == 1, "the first run must execute the build")
+            require(s.run() == 0, "an exact certificate should satisfy the next run")
+            require(s.ran("build-ran.txt") == 1, "an exact certificate must skip the body")
+            require(
+                s.disposition("lake-build") == "certified",
+                "the plan must distinguish a certified build from reused gate evidence",
+            )
+            require(
+                s.disposition("lake-build", fresh=True) == "fresh",
+                "--fresh must still require the authoritative build",
+            )
+
+
+def control_build_certificate_refuses_every_identity_and_trace_uncertainty() -> None:
+    with scratch() as s:
+        package = prepare_build_state(s)
+        s.write("docs.md", "one\n")
+        tools = {"identity": "one"}
+
+        def fake_tools(root: Path, names: list[str]):
+            detail = {name: tools["identity"] for name in names}
+            return gc.digest_of(detail), detail
+
+        with patched(gc, "component_tools", fake_tools):
+            gc.write_build_certificate(s.root)
+            require(gc.build_certificate_status(s.root)[0], "fresh certificate should match")
+
+            s.write("docs.md", "two\n")
+            require(
+                gc.build_certificate_status(s.root)[0],
+                "documentation movement must not invalidate the build",
+            )
+
+            s.write("Blanc/A.lean", "theorem a : True := by trivial\n")
+            require(
+                not gc.build_certificate_status(s.root)[0],
+                "direct Lean source movement must invalidate the certificate",
+            )
+            s.write("Blanc/A.lean", "theorem a : True := trivial\n")
+            require(gc.build_certificate_status(s.root)[0], "restoring source should restore identity")
+
+            tools["identity"] = "two"
+            require(
+                not gc.build_certificate_status(s.root)[0],
+                "toolchain movement must invalidate the certificate",
+            )
+            tools["identity"] = "one"
+
+            s.write("lakefile.lean", "import Lake\nopen Lake DSL\npackage blanc where\n")
+            require(
+                not gc.build_certificate_status(s.root)[0],
+                "Lake configuration movement must invalidate the certificate",
+            )
+            s.write("lakefile.lean", "import Lake\nopen Lake DSL\npackage blanc\n")
+
+            (package / "Jaune.lean").write_text("def jaune := 2\n", encoding="utf-8")
+            subprocess.run(["git", "add", "Jaune.lean"], cwd=package, check=True)
+            subprocess.run(
+                ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "move"],
+                cwd=package,
+                check=True,
+            )
+            require(
+                not gc.build_certificate_status(s.root)[0],
+                "an installed dependency moving off its exact pin must invalidate",
+            )
+            subprocess.run(["git", "reset", "--hard", "HEAD^", "-q"], cwd=package, check=True)
+            require(gc.build_certificate_status(s.root)[0], "restoring the dependency pin should match")
+
+            s.trace("Blanc.A", "moved-dep-hash")
+            require(
+                not gc.build_certificate_status(s.root)[0],
+                "transitive trace movement must invalidate the certificate",
+            )
+            s.trace("Blanc.A", "a-dep-hash")
+            (s.root / ".lake/build/lib/lean/Blanc/A.trace").unlink()
+            require(
+                not gc.build_certificate_status(s.root)[0],
+                "a missing trace must invalidate the certificate",
+            )
+
+
+def control_corrupt_build_certificate_forces_authoritative_build() -> None:
+    with scratch() as s:
+        prepare_build_state(s)
+        with patched(
+            gc,
+            "component_tools",
+            lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"}),
+        ):
+            gc.write_build_certificate(s.root)
+            gc.build_certificate_path(s.root).write_text("{broken", encoding="utf-8")
+            current, reason, _ = gc.build_certificate_status(s.root)
+            require(not current, "a corrupt certificate must never be credited")
+            require("corrupt" in reason, "the refusal should identify certificate corruption")
+
+
+def control_material_output_reuses_proof_only_and_refuses_every_material_uncertainty() -> None:
+    with scratch() as s:
+        s.write("material.bin", "A")
+        s.write("scenario.json", "one\n")
+        s.write("generated.json", "A\n")
+        s.write("Proof.lean", "theorem p : True := trivial\n")
+        material = s.write(
+            "scripts/material.py",
+            "from pathlib import Path\n"
+            "print(Path('material.bin').read_text(), end='')\n",
+        )
+        command = s.passing_gate("expensive.sh", "expensive-ran.txt")
+        inputs = {
+            "files": ["scenario.json", "generated.json"],
+            "material_output": [{
+                "id": "compiled-bytes",
+                "command": [sys.executable, "scripts/material.py"],
+                "authority": ["scripts/material.py"],
+            }],
+        }
+        s.registry([simple_gate("expensive", [command], inputs, "^OK — expensive.sh: ")])
+        require(s.run() == 0, "the first material certificate should execute the gate")
+
+        s.write("Proof.lean", "theorem p : True := by trivial\n")
+        require(
+            s.disposition("expensive") == "reused",
+            "proof-only movement with identical material output should reuse",
+        )
+
+        s.write("material.bin", "B")
+        require(s.disposition("expensive") == "fresh", "one output byte must invalidate")
+        s.write("material.bin", "A")
+        require(s.disposition("expensive") == "reused", "restoring output should restore identity")
+
+        s.write("scenario.json", "two\n")
+        require(s.disposition("expensive") == "fresh", "scenario/oracle movement must invalidate")
+        s.write("scenario.json", "one\n")
+        s.write("generated.json", "stale\n")
+        require(s.disposition("expensive") == "fresh", "stale generated evidence must invalidate")
+        s.write("generated.json", "A\n")
+
+        material.write_text(
+            "# lying output producer\nprint('A', end='')\n", encoding="utf-8"
+        )
+        require(
+            s.disposition("expensive") == "fresh",
+            "a changed producer that lies with the same output must invalidate through authority",
+        )
+
+        material.write_text("raise SystemExit(3)\n", encoding="utf-8")
+        require(
+            s.disposition("expensive") == "fresh",
+            "a failed certificate derivation must conservatively execute",
+        )
+
+
+def control_worktree_seed_previews_then_publishes_isolated_exact_state() -> None:
+    with seed_pair() as (_s, source, target):
+        (source / ".lake/gate-report.md").write_text("source admission\n", encoding="utf-8")
+
+        def copy(_creme: Path, origin: Path, destination: Path, execute: bool):
+            if execute:
+                shutil.copytree(origin, destination, symlinks=True)
+            return {
+                "status": "OK" if execute else "PREVIEW",
+                "detail": "control copy",
+                "data": {"method": "copytree"},
+            }
+
+        with patched(ws, "load_gate_cache", lambda _directory: gc):
+            preview = ws.seed(source, target, Path("/unused"), False, copier=copy)
+            require(preview["status"] == "PREVIEW", "the first operation must be a preview")
+            require(not (target / ".lake").exists(), "preview must not create target state")
+            result = ws.seed(source, target, Path("/unused"), True, copier=copy)
+        require(result["status"] == "OK", "exact staged state should publish")
+        require((target / ".lake/blanc-build-certificate.json").is_file(),
+                "the exact build certificate must be copied")
+        require((target / ".lake/blanc-seed-receipt.json").is_file(),
+                "the target must record copy provenance")
+        require(not (target / ".lake/gate-report.md").exists(),
+                "source candidate admissions must not be copied")
+        require(not (target / ".lake").is_symlink(),
+                "worktrees must never share a live writable .lake")
+
+
+def control_worktree_seed_refuses_missing_stale_or_different_state() -> None:
+    with seed_pair() as (_s, source, target):
+        gc.build_certificate_path(source).unlink()
+        with patched(ws, "load_gate_cache", lambda _directory: gc):
+            try:
+                ws.seed(source, target, Path("/unused"), False)
+            except ws.SeedRefusal:
+                pass
+            else:
+                raise ControlFailure("missing source state must refuse")
+
+    with seed_pair() as (s, source, target):
+        s.write("Blanc/New.lean", "theorem n : True := trivial\n")
+        s.git("add", "Blanc/New.lean")
+        s.git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "move-source")
+        with patched(ws, "load_gate_cache", lambda _directory: gc):
+            try:
+                ws.seed(source, target, Path("/unused"), False)
+            except ws.SeedRefusal as error:
+                require("same source base" in str(error), "different bases need an exact refusal")
+            else:
+                raise ControlFailure("different source bases must refuse")
+
+    with seed_pair() as (s, source, target):
+        s.write("lakefile.lean", "import Lake\nopen Lake DSL\npackage changed\n")
+        s.git("add", "lakefile.lean")
+        s.git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "move-config")
+        head = s.git("rev-parse", "HEAD")
+        subprocess.run(["git", "reset", "--hard", head], cwd=target, check=True,
+                       capture_output=True)
+        with patched(ws, "load_gate_cache", lambda _directory: gc):
+            try:
+                ws.seed(source, target, Path("/unused"), False)
+            except ws.SeedRefusal as error:
+                require("not certifiable" in str(error), "stale config must fail the certificate")
+            else:
+                raise ControlFailure("stale configuration must refuse")
+
+
+def control_worktree_seed_never_publishes_partial_or_racing_state() -> None:
+    with seed_pair() as (_s, source, target):
+        def partial(_creme: Path, _origin: Path, destination: Path, _execute: bool):
+            destination.mkdir()
+            (destination / "partial").write_text("partial", encoding="utf-8")
+            return {"status": "ERROR", "detail": "unsupported", "data": {}}
+
+        with patched(ws, "load_gate_cache", lambda _directory: gc):
+            try:
+                ws.seed(source, target, Path("/unused"), True, copier=partial)
+            except ws.SeedRefusal:
+                pass
+            else:
+                raise ControlFailure("an unsupported/partial copy must refuse")
+        require(not (target / ".lake").exists(), "partial state must never be published")
+
+    with seed_pair() as (_s, source, target):
+        def racing(_creme: Path, origin: Path, destination: Path, _execute: bool):
+            shutil.copytree(origin, destination, symlinks=True)
+            (source / "lean-toolchain").write_text("moved-during-copy\n", encoding="utf-8")
+            return {"status": "OK", "detail": "racing copy", "data": {"method": "copytree"}}
+
+        with patched(ws, "load_gate_cache", lambda _directory: gc):
+            try:
+                ws.seed(source, target, Path("/unused"), True, copier=racing)
+            except ws.SeedRefusal as error:
+                require("moved during copy" in str(error), "the race should be diagnosed")
+            else:
+                raise ControlFailure("source movement during copy must refuse")
+        require(not (target / ".lake").exists(), "racing state must never be published")
+
+
+def control_dependency_evidence_is_consumed_without_rerunning_its_body() -> None:
+    with scratch() as s:
+        s.write("dep.txt", "one\n")
+        s.write("consumer.txt", "one\n")
+        dep = s.passing_gate("dep.sh", "dep-ran.txt")
+        consumer = s.passing_gate("consumer.sh", "consumer-ran.txt")
+        dependent = simple_gate(
+            "consumer", [consumer], {"files": ["consumer.txt"]},
+            "^OK — consumer.sh: ", order=2,
+        )
+        dependent["depends_on"] = ["dep"]
+        s.registry([
+            simple_gate("dep", [dep], {"files": ["dep.txt"]}, "^OK — dep.sh: "),
+            dependent,
+        ])
+        require(s.run() == 0, "the complete conjunction should start green")
+        s.write("consumer.txt", "two\n")
+        require(s.run() == 0, "a fresh consumer may consume exact reused prerequisite evidence")
+        require(s.ran("dep-ran.txt") == 1, "the prerequisite body must start only once")
+        require(s.ran("consumer-ran.txt") == 2, "the changed consumer must execute")
+
+
+def control_missing_or_failing_dependency_never_yields_a_green_consumer() -> None:
+    with scratch() as s:
+        dep = s.gate("dep.sh", "#!/bin/sh\nexit 1\n")
+        consumer = s.passing_gate("consumer.sh", "consumer-ran.txt")
+        dependent = simple_gate(
+            "consumer", [consumer], {"files": ["scripts/consumer.sh"]},
+            "^OK — consumer.sh: ", order=2,
+        )
+        dependent["depends_on"] = ["dep"]
+        s.registry([
+            simple_gate("dep", [dep], {"files": ["scripts/dep.sh"]}, "^OK — dep.sh: "),
+            dependent,
+        ])
+        require(s.run() != 0, "a failed prerequisite must redden the conjunction")
+        require(s.ran("consumer-ran.txt") == 0, "a blocked consumer body must not start")
+
+        broken = copy.deepcopy(dependent)
+        broken["depends_on"] = ["absent"]
+        s.registry([broken])
+        try:
+            s.load()
+        except gc.GateCacheError:
+            pass
+        else:
+            raise ControlFailure("a dependency removed from the registry must be refused")
 
 
 # --- controls: what may enter the cache -------------------------------------
@@ -1171,6 +1627,99 @@ def control_stale_owner_metadata_does_not_block_an_unlocked_mutex() -> None:
                 "released diagnostic owner metadata must not persist")
 
 
+def control_same_repository_worktrees_share_records_and_lock() -> None:
+    """The Git common directory, not a worktree-local `.lake`, is the trust root."""
+
+    with scratch() as s:
+        s.write(".gitignore", "/.worktrees/\n")
+        s.write("Blanc/A.lean", "one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate(
+            "g", [command], {"populations": [{"root": "Blanc", "pattern": "*.lean"}]},
+            "^OK — g.sh: ")])
+        s.git_init()
+        require(s.run() == 0 and s.ran("ran.txt") == 1,
+                "the first worktree must earn one record")
+
+        second = s.root / ".worktrees/second"
+        s.git("worktree", "add", "-q", "-b", "control-second", str(second), "HEAD")
+        require(gc.cache_path(s.root) == gc.cache_path(second),
+                "two worktrees of one repository must resolve one shared store")
+        require(gc.lock_path(s.root) == gc.lock_path(second),
+                "two worktrees of one repository must resolve one shared lock")
+        cache, reason = gc.read_cache(gc.cache_path(second))
+        require(reason is None, f"the second worktree must read the first record: {reason}")
+        rows = gc.plan(second, gc.load_registry(gc.registry_path(second)), cache, fresh=False)
+        require(rows[0]["disposition"] == "reused",
+                "exact content in a second worktree must reuse")
+
+        require(gc.acquire_lock(gc.lock_path(s.root)), "the first worktree takes the lock")
+        require(not gc.acquire_lock(gc.lock_path(second)),
+                "the second worktree must contend on the same lock")
+        gc.release_lock(gc.lock_path(s.root))
+
+
+def control_other_physical_clone_never_inherits_shared_records() -> None:
+    """Identical content in another clone is outside the local trust domain."""
+
+    with scratch() as s:
+        s.write("Blanc/A.lean", "one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate(
+            "g", [command], {"populations": [{"root": "Blanc", "pattern": "*.lean"}]},
+            "^OK — g.sh: ")])
+        s.git_init()
+        require(s.run() == 0 and s.ran("ran.txt") == 1,
+                "the source clone must earn one record")
+
+        container = Path(tempfile.mkdtemp(prefix="gate-cache-other-clone-"))
+        clone = container / "clone"
+        try:
+            subprocess.run(
+                ["git", "clone", "-q", str(s.root), str(clone)], check=True
+            )
+            require(gc.cache_path(s.root) != gc.cache_path(clone),
+                    "another physical clone must resolve a different evidence store")
+            cache, reason = gc.read_cache(gc.cache_path(clone))
+            require(reason == "no prior cache" and not cache["gates"],
+                    "another clone must start without the source clone's evidence")
+            rows = gc.plan(
+                clone, gc.load_registry(gc.registry_path(clone)), cache, fresh=False
+            )
+            require(rows[0]["disposition"] == "fresh",
+                    "identical content in another clone must execute fresh")
+        finally:
+            shutil.rmtree(container, ignore_errors=True)
+
+
+def control_foreign_host_store_never_yields_reuse() -> None:
+    with scratch() as s:
+        cache = gc.empty_cache()
+        cache["host"] = "foreign-host"
+        gc.atomic_json(gc.cache_path(s.root), cache)
+        loaded, reason = s.cache()
+        require(reason == "cache belongs to a different host identity",
+                "a foreign host store must be refused explicitly")
+        require(not loaded["gates"], "a foreign host store must become empty work")
+
+
+def control_dirty_worktree_does_not_seed_shared_evidence() -> None:
+    with scratch() as s:
+        s.write("Blanc/A.lean", "one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate(
+            "g", [command], {"populations": [{"root": "Blanc", "pattern": "*.lean"}]},
+            "^OK — g.sh: ")])
+        s.git_init()
+        s.write("Blanc/A.lean", "dirty\n")
+        require(s.run() == 0, "a dirty candidate may execute safely")
+        cache, reason = s.cache()
+        require(reason is None, "a structurally valid empty shared store is still readable")
+        require(not cache["gates"], "a dirty candidate must not seed shared evidence")
+        require("dirty worktree" in s.output,
+                "the manifest path must explain why admission was refused")
+
+
 def control_atomic_write_leaves_no_debris() -> None:
     with scratch() as s:
         target = s.root / ".lake/atomic.json"
@@ -1414,26 +1963,6 @@ def control_run_refuses_a_registry_that_lost_a_gate() -> None:
         require(s.run() != 0, f"a shrunken registry must refuse to run:\n{s.output}")
         require("--audit" in s.output, "and must say how to diagnose it")
         require(s.ran("b.txt") == 1, "the dropped gate's body must not have run either")
-
-
-def control_local_date_is_the_clock_the_gates_read() -> None:
-    with scratch() as s:
-        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
-        s.registry([simple_gate("g", ["scripts/g.sh"], {"clock": "local-date"},
-                                "^OK — g.sh: ")])
-        s.run()
-        require(s.disposition("g") == "reused", "the same local day should reuse")
-        original = time.strftime
-
-        def shifted(fmt, *rest):
-            return "1970-01-01" if fmt == "%Y-%m-%d" and not rest else original(fmt, *rest)
-
-        time.strftime = shifted
-        try:
-            require(s.disposition("g") == "fresh",
-                    "a different local date must force execution")
-        finally:
-            time.strftime = original
 
 
 def control_named_root_follows_its_override() -> None:
@@ -1720,6 +2249,9 @@ CONTROLS = (
     control_command_arguments_invalidate,
     control_registry_declaration_invalidates,
     control_lock_implementation_is_not_gate_evidence_identity,
+    control_presentation_edits_preserve_soundness_identity,
+    control_soundness_edit_invalidates_every_cacheable_row,
+    control_scheduling_metadata_is_not_substantive_verdict_identity,
     control_t8n_resolver_invalidates_only_its_consumers,
     control_lean_module_dep_hash_invalidates,
     control_missing_trace_forces_execution,
@@ -1735,9 +2267,18 @@ CONTROLS = (
     control_current_mainnet_python_base_is_native,
     control_symlink_directory_selector_invalidates,
     control_environment_variable_invalidates,
-    control_clock_rollover_invalidates,
+    control_expiry_clock_moves_only_at_semantic_transition,
     control_tool_identity_invalidates,
     control_unknown_tool_is_a_registry_fault,
+    control_exact_build_certificate_skips_only_the_authoritative_build,
+    control_build_certificate_refuses_every_identity_and_trace_uncertainty,
+    control_corrupt_build_certificate_forces_authoritative_build,
+    control_material_output_reuses_proof_only_and_refuses_every_material_uncertainty,
+    control_worktree_seed_previews_then_publishes_isolated_exact_state,
+    control_worktree_seed_refuses_missing_stale_or_different_state,
+    control_worktree_seed_never_publishes_partial_or_racing_state,
+    control_dependency_evidence_is_consumed_without_rerunning_its_body,
+    control_missing_or_failing_dependency_never_yields_a_green_consumer,
     control_failed_run_is_never_cached,
     control_missing_summary_is_never_cached,
     control_duplicated_summary_is_never_cached,
@@ -1754,6 +2295,10 @@ CONTROLS = (
     control_lock_refuses_a_second_run,
     control_kernel_lock_refuses_another_process,
     control_stale_owner_metadata_does_not_block_an_unlocked_mutex,
+    control_same_repository_worktrees_share_records_and_lock,
+    control_other_physical_clone_never_inherits_shared_records,
+    control_foreign_host_store_never_yields_reuse,
+    control_dirty_worktree_does_not_seed_shared_evidence,
     control_atomic_write_leaves_no_debris,
     control_there_is_no_force,
     control_fresh_mode_adds_work_and_refreshes,
@@ -1765,7 +2310,6 @@ CONTROLS = (
     control_audit_needs_a_catalogue_block,
     control_every_import_spelling_is_parsed_or_refused,
     control_run_refuses_a_registry_that_lost_a_gate,
-    control_local_date_is_the_clock_the_gates_read,
     control_named_root_follows_its_override,
     control_environment_value_cannot_imitate_absence,
     control_symlinked_directory_refuses_rather_than_hides_files,

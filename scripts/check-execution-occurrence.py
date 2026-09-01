@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import pathlib
@@ -470,7 +471,7 @@ def contract_ownership_errors(
     return errors
 
 
-def check_direct_code_fixture(ownership) -> int | None:
+def check_direct_code_fixture(ownership, *, semantic: bool) -> int | None:
     if not DIRECT_CODE_FIXTURE.is_file():
         return fail(
             "direct-code fixture is missing: "
@@ -515,52 +516,54 @@ def check_direct_code_fixture(ownership) -> int | None:
                 f"direct-code fixture must contain exactly one `{marker}` marker"
             )
 
-    positive = run(["lake", "env", "lean", str(DIRECT_CODE_FIXTURE)])
-    if positive.returncode != 0:
-        return fail("direct-code positive fixture did not compile", positive)
-    if positive.stdout.strip() != DIRECT_CODE_EXPECTED or positive.stderr:
-        return fail("direct-code positive fixture output drifted", positive)
+    if semantic:
+        positive = run(["lake", "env", "lean", str(DIRECT_CODE_FIXTURE)])
+        if positive.returncode != 0:
+            return fail("direct-code positive fixture did not compile", positive)
+        if positive.stdout.strip() != DIRECT_CODE_EXPECTED or positive.stderr:
+            return fail("direct-code positive fixture output drifted", positive)
 
     with tempfile.TemporaryDirectory(prefix="execution-direct-code-") as temp:
         temp_root = pathlib.Path(temp)
-        for index, (marker, (mutant_source, diagnostics)) in enumerate(
-            DIRECT_CODE_MUTANTS.items()
-        ):
-            path = temp_root / f"ExecutionDirectCodeMutant{index}.lean"
-            path.write_text(
-                source.replace(marker, mutant_source), encoding="utf-8"
-            )
-            result = run(["lake", "env", "lean", str(path)])
-            evidence = result.stdout + result.stderr
-            if result.returncode == 0:
-                return fail(
-                    f"direct-code mutant `{marker}` unexpectedly compiled", result
+        if semantic:
+            for index, (marker, (mutant_source, diagnostics)) in enumerate(
+                DIRECT_CODE_MUTANTS.items()
+            ):
+                path = temp_root / f"ExecutionDirectCodeMutant{index}.lean"
+                path.write_text(
+                    source.replace(marker, mutant_source), encoding="utf-8"
                 )
-            if not all(diagnostic in evidence for diagnostic in diagnostics):
-                return fail(
-                    f"direct-code mutant `{marker}` failed unexpectedly", result
-                )
+                result = run(["lake", "env", "lean", str(path)])
+                evidence = result.stdout + result.stderr
+                if result.returncode == 0:
+                    return fail(
+                        f"direct-code mutant `{marker}` unexpectedly compiled", result
+                    )
+                if not all(diagnostic in evidence for diagnostic in diagnostics):
+                    return fail(
+                        f"direct-code mutant `{marker}` failed unexpectedly", result
+                    )
 
-        for index, theorem in enumerate(
-            sorted(DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS)
-        ):
-            short = theorem.rsplit(".", 1)[-1]
-            token = f"theorem {short}"
-            if source.count(token) != 1:
-                return fail(
-                    f"direct-code deletion cannot uniquely locate `{theorem}`"
-                )
-            changed = source.replace(token, f"theorem {short}_removed", 1)
-            changed += f"\n#check {theorem}\n"
-            path = temp_root / f"ExecutionDirectCodeDeleted{index}.lean"
-            path.write_text(changed, encoding="utf-8")
-            result = run(["lake", "env", "lean", str(path)])
-            evidence = result.stdout + result.stderr
-            if result.returncode == 0 or short not in evidence:
-                return fail(
-                    f"direct-code live deletion did not fail through `{theorem}`",
-                    result,
-                )
+            for index, theorem in enumerate(
+                sorted(DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS)
+            ):
+                short = theorem.rsplit(".", 1)[-1]
+                token = f"theorem {short}"
+                if source.count(token) != 1:
+                    return fail(
+                        f"direct-code deletion cannot uniquely locate `{theorem}`"
+                    )
+                changed = source.replace(token, f"theorem {short}_removed", 1)
+                changed += f"\n#check {theorem}\n"
+                path = temp_root / f"ExecutionDirectCodeDeleted{index}.lean"
+                path.write_text(changed, encoding="utf-8")
+                result = run(["lake", "env", "lean", str(path)])
+                evidence = result.stdout + result.stderr
+                if result.returncode == 0 or short not in evidence:
+                    return fail(
+                        f"direct-code live deletion did not fail through `{theorem}`",
+                        result,
+                    )
 
         first_pin = pins[0]
         short = first_pin["declaration"].rsplit(".", 1)[-1]
@@ -582,7 +585,14 @@ def check_direct_code_fixture(ownership) -> int | None:
     return None
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser()
+    phase = parser.add_mutually_exclusive_group()
+    phase.add_argument("--static-only", action="store_true")
+    phase.add_argument("--semantic-only", action="store_true")
+    parser.add_argument("--composed-prerequisites", action="store_true")
+    arguments = parser.parse_args(argv)
+    semantic = not arguments.static_only
     source = FIXTURE.read_text(encoding="utf-8")
     for marker in [*MUTANTS, "-- WETH-BRIDGE-MUTANT-CONTROL"]:
         if source.count(marker) != 1:
@@ -599,19 +609,20 @@ def main() -> int:
             + ", ".join(missing_positives)
         )
 
-    direct_code_error = check_direct_code_fixture(ownership)
+    direct_code_error = check_direct_code_fixture(ownership, semantic=semantic)
     if direct_code_error is not None:
         return direct_code_error
 
-    positive = run(["lake", "env", "lean", str(FIXTURE)])
-    if positive.returncode != 0:
-        return fail("positive fixture did not compile", positive)
-    if positive.stdout.strip() != EXPECTED or positive.stderr:
-        return fail("positive fixture evaluator vector drifted", positive)
+    if semantic:
+        positive = run(["lake", "env", "lean", str(FIXTURE)])
+        if positive.returncode != 0:
+            return fail("positive fixture did not compile", positive)
+        if positive.stdout.strip() != EXPECTED or positive.stderr:
+            return fail("positive fixture evaluator vector drifted", positive)
 
     with tempfile.TemporaryDirectory(prefix="execution-occurrence-mutants-") as temp:
         temp_root = pathlib.Path(temp)
-        for index, (marker, mutant_source) in enumerate(MUTANTS.items()):
+        for index, (marker, mutant_source) in enumerate(MUTANTS.items() if semantic else ()):
             mutant_path = temp_root / f"ExecutionOccurrenceMutant{index}.lean"
             mutant_path.write_text(
                 source.replace(marker, mutant_source), encoding="utf-8"
@@ -992,12 +1003,13 @@ def main() -> int:
         )
         if not any("contract alias" in error for error in lido_alias_errors):
             return fail("Lido alias negative control failed")
-        compiled_lido_alias = run(["lake", "env", "lean", str(lido_alias_path)])
-        if compiled_lido_alias.returncode != 0:
-            return fail(
-                "Lido alias negative control is not valid Lean",
-                compiled_lido_alias,
-            )
+        if semantic:
+            compiled_lido_alias = run(["lake", "env", "lean", str(lido_alias_path)])
+            if compiled_lido_alias.returncode != 0:
+                return fail(
+                    "Lido alias negative control is not valid Lean",
+                    compiled_lido_alias,
+                )
 
         canonical_shadow_path = temp_root / "CanonicalDirectCodeShadow.lean"
         canonical_shadow_path.write_text(
@@ -1146,13 +1158,14 @@ def main() -> int:
             return fail("unexpected canonical consumer control failed")
         command_controls.append((extra_consumer_path, "unexpected consumer"))
 
-        for control_path, label in command_controls:
-            compiled_control = run(["lake", "env", "lean", str(control_path)])
-            if compiled_control.returncode != 0:
-                return fail(
-                    f"ownership parser {label} control is not valid Lean",
-                    compiled_control,
-                )
+        if semantic:
+            for control_path, label in command_controls:
+                compiled_control = run(["lake", "env", "lean", str(control_path)])
+                if compiled_control.returncode != 0:
+                    return fail(
+                        f"ownership parser {label} control is not valid Lean",
+                        compiled_control,
+                    )
 
         common_path = ROOT / first["commonModule"]
         common_source = common_path.read_text(encoding="utf-8")
@@ -1224,22 +1237,35 @@ def main() -> int:
     if not raw_ownership.stdout.startswith("OK — raw attribution ownership:"):
         return fail("raw-attribution owner/shadow verdict drifted", raw_ownership)
 
-    settlement = run([sys.executable, "scripts/check-execution-settlement.py"])
-    if settlement.returncode != 0:
-        return fail("CREATE settlement/raw-commit control failed", settlement)
-    if not settlement.stdout.startswith("OK — execution settlement:"):
-        return fail("CREATE settlement control verdict drifted", settlement)
+    if semantic and not arguments.composed_prerequisites:
+        settlement = run([sys.executable, "scripts/check-execution-settlement.py"])
+        if settlement.returncode != 0:
+            return fail("CREATE settlement/raw-commit control failed", settlement)
+        if not settlement.stdout.startswith("OK — execution settlement:"):
+            return fail("CREATE settlement control verdict drifted", settlement)
 
-    print(
-        "OK — execution occurrence: 17 concrete occurrence + 6 direct-code controls; "
-        "21 occurrence + 2 direct-code Lean mutants; WETH bridge-removal mutant; "
-        "10 moved-owner + 8 exact direct-code headers + 23 ownership-parser controls; "
-        "28 raw-attribution owners + exact source/chronology signatures + shared "
-        "kernel + 8 controls; 27 required positive proofs + legacy deletion + 7 live direct-code "
-        "deletions; 2 CREATE mutants"
-    )
+    if arguments.static_only:
+        print(
+            "OK — execution occurrence static: 10 moved owners, exact headers and "
+            "consumer counts; contract-wide shadow/export/copy controls"
+        )
+    elif arguments.semantic_only:
+        print(
+            "OK — execution occurrence semantic: 17 concrete occurrence + 6 direct-code "
+            "controls; 21 occurrence + 2 direct-code Lean mutants; 27 required positive "
+            "proofs + 7 live direct-code deletions"
+        )
+    else:
+        print(
+            "OK — execution occurrence: 17 concrete occurrence + 6 direct-code controls; "
+            "21 occurrence + 2 direct-code Lean mutants; WETH bridge-removal mutant; "
+            "10 moved-owner + 8 exact direct-code headers + 23 ownership-parser controls; "
+            "28 raw-attribution owners + exact source/chronology signatures + shared "
+            "kernel + 8 controls; 27 required positive proofs + legacy deletion + 7 live direct-code "
+            "deletions; 2 CREATE mutants"
+        )
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

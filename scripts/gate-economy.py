@@ -62,7 +62,9 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
         identifier = raw["id"]
         if identifier in rows:
             raise EconomyError(f"duplicate economic row {identifier}")
-        if set(raw) != {"id", "work", "resource_class", "prerequisites", "historical_catches"}:
+        if set(raw) - {"id", "work", "resource_class", "prerequisites", "historical_catches", "material_identity"} or not {
+            "id", "work", "resource_class", "prerequisites", "historical_catches"
+        }.issubset(raw):
             raise EconomyError(f"economic row {identifier} has an unknown or missing field")
         work = raw["work"]
         if not isinstance(work, list) or not work or set(work) - WORK_CLASSES:
@@ -75,6 +77,14 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             raise EconomyError(f"economic row {identifier} has malformed prerequisites")
         if not all(isinstance(item, str) and item for item in raw["historical_catches"]):
             raise EconomyError(f"economic row {identifier} has malformed historical catches")
+        material = raw.get("material_identity")
+        if raw["resource_class"] == "exclusive" and (
+            not isinstance(material, str)
+            or not material.startswith(("output-aware:", "already precise:", "conservative:"))
+        ):
+            raise EconomyError(
+                f"exclusive row {identifier} has no output-aware/already-precise/conservative disposition"
+            )
         rows[identifier] = raw
     gate_ids = {gate["id"] for gate in gates}
     if set(rows) != gate_ids:
@@ -110,8 +120,8 @@ def render() -> str:
         "`scripts/check-gates.sh --audit`. Timing cells below are the catalogue's latest",
         "host-local observations; `unmeasured` is preserved honestly and no parallel sums are made.",
         "",
-        "| # | gate | positive | static/corpus | harness/self-test | prerequisites | mutable input classes | ordinary wall time | resource | historical actionable catches |",
-        "|---:|---|:---:|:---:|:---:|---|---|---|---|---|",
+        "| # | gate | positive | static/corpus | harness/self-test | prerequisites | mutable input classes | material-output disposition | ordinary wall time | resource | historical actionable catches |",
+        "|---:|---|:---:|:---:|:---:|---|---|---|---|---|---|",
     ]
     for gate in gates:
         row = rows[gate["id"]]
@@ -122,15 +132,15 @@ def render() -> str:
         lines.append(
             f"| {gate['order']} | `{command}` | {mark(row['work'], 'candidate-positive')} | "
             f"{mark(row['work'], 'static-corpus')} | {mark(row['work'], 'harness-self-test')} | "
-            f"{prerequisites} | {inputs} | {times[command_text(gate)]} | "
+            f"{prerequisites} | {inputs} | {row.get('material_identity', 'not expensive')} | {times[command_text(gate)]} | "
             f"{row['resource_class']} | {catches} |"
         )
     lines += [
         "",
         "## Launch interpretation",
         "",
-        "- The prerequisite column records logical or nested composition observed at launch;",
-        "  it is not yet runner-enforced dependency metadata.",
+        "- The prerequisite column records the launch and final logical composition;",
+        "  final catalogue dependencies are runner-enforced and consume exact green evidence.",
         "- A catalogue timing cell is retained as published evidence, not relabelled as a new",
         "  measurement. Exact serialized per-row measurements will be imported only from a",
         "  green fresh candidate manifest.",

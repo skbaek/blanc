@@ -24,6 +24,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
       # Static and fail-closed: it reads committed files only, so it needs no
@@ -62,8 +64,10 @@ jobs:
       # local candidate gates. The narrowly provisioned EELS checkout below is
       # owned by the deployment-root singleton replay only.
       - uses: leanprover/lean-action@v1
-      - name: Lido CircuitBreaker Registry RI7 assurance
-        run: scripts/check-lido-circuit-breaker-registry.sh
+      - name: Lido CircuitBreaker Registry RI7 static assurance
+        run: scripts/check-lido-circuit-breaker-registry.sh --static-only
+      - name: Lido CircuitBreaker Registry RI7 semantic assurance
+        run: scripts/check-lido-circuit-breaker-registry.sh --semantic-only
       - name: Lido CircuitBreaker enumeration and observability S3 assurance
         run: scripts/check-lido-circuit-breaker-enumeration.sh
       - name: Lido CircuitBreaker access and temporal-authority S5 assurance
@@ -98,20 +102,28 @@ jobs:
         run: scripts/check-lido-circuit-breaker-runtime-errors.sh
       - name: Execution-settlement CREATE rollback regression
         run: scripts/check-execution-settlement.sh
-      - name: Execution-occurrence semantic regression
-        run: scripts/check-execution-occurrence.sh
-      - name: Cycle-safe same-frame SSTORE-occurrence regression
-        run: scripts/check-cycle-write-free.sh
-      - name: Transaction-scoped transient settlement regression
-        run: scripts/check-transient-settlement.sh
+      - name: Execution-occurrence static corpus assurance
+        run: scripts/check-execution-occurrence.sh --static-only
+      - name: Execution-occurrence compiled semantic regression
+        run: scripts/check-execution-occurrence.sh --semantic-only --composed-prerequisites
+      - name: Cycle-safe same-frame static corpus assurance
+        run: scripts/check-cycle-write-free.sh --static-only
+      - name: Cycle-safe same-frame compiled semantic regression
+        run: scripts/check-cycle-write-free.sh --semantic-only
+      - name: Transaction-scoped transient settlement static assurance
+        run: scripts/check-transient-settlement.sh --static-only
+      - name: Transaction-scoped transient settlement semantic regression
+        run: scripts/check-transient-settlement.sh --semantic-only
       - name: Error(string) payload cross-derivation (offline)
         run: scripts/check-error-data.sh
       - name: Audit headline theorem axioms
         run: scripts/check.sh --no-build
       - name: Pin WETH10/Lido artifact statements
         run: scripts/check-claims.sh
-      - name: Proxy-pair upgrade migration and R2 assurance
-        run: scripts/check-proxy-pair-upgrade.sh
+      - name: Proxy-pair upgrade static migration and R2 assurance
+        run: scripts/check-proxy-pair-upgrade.sh --static-only
+      - name: Proxy-pair upgrade compiled witnesses and axioms
+        run: scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites
       - name: WETH fixture suite (Jaune vs frozen EELS on the witnessed bytes)
         run: scripts/check-weth.sh --no-build
       - name: PRORATA fixture suite (Jaune vs frozen EELS on the witnessed bytes)

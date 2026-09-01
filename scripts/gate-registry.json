@@ -100,7 +100,7 @@
       ],
       "id": "proof-recipes",
       "inputs": {
-        "clock": "local-date",
+        "clock": {"files": ["scripts/proof-recipe-exceptions.json"], "kind": "expiry-transitions"},
         "files": [
           "scripts/check-proof-recipes.sh",
           "scripts/check-proof-recipes.py",
@@ -148,7 +148,7 @@
       ],
       "id": "proof-debt",
       "inputs": {
-        "clock": "local-date",
+        "clock": {"files": ["scripts/proof-debt-exceptions.json"], "kind": "expiry-transitions"},
         "files": [
           "scripts/check-proof-debt.sh",
           "scripts/check-proof-debt.py",
@@ -181,7 +181,7 @@
       ],
       "id": "proof-module-size",
       "inputs": {
-        "clock": "local-date",
+        "clock": {"files": ["scripts/proof-module-size-exceptions.json"], "kind": "expiry-transitions"},
         "files": [
           "scripts/check-proof-module-size.sh",
           "scripts/check-proof-module-size.py",
@@ -214,7 +214,7 @@
       ],
       "id": "proof-duplication",
       "inputs": {
-        "clock": "local-date",
+        "clock": {"files": ["scripts/proof-duplication-exceptions.json"], "kind": "expiry-transitions"},
         "files": [
           "scripts/check-proof-duplication.sh",
           "scripts/check-proof-recipes.py",
@@ -604,7 +604,7 @@
       "kind": "composition",
       "order": 17,
       "prerequisite": true,
-      "reason": "Lake's own incremental build already selects exactly the modules whose inputs moved, and it is what makes every depHash this registry reads current. It is executed before planning, at every run, and is never credited from a record.",
+      "reason": "Lake's own incremental build is the authoritative refresh that makes every depHash current. It executes before dependent planning when the exact local build certificate is missing or stale, and always under --fresh; otherwise that certificate satisfies this composition row without verdict-record reuse.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": []
@@ -734,17 +734,14 @@
     },
     {
       "command": [
-        "scripts/check-lido-circuit-breaker-registry.sh"
+        "scripts/check-lido-circuit-breaker-registry.sh",
+        "--static-only"
       ],
-      "id": "lido-registry",
+      "id": "lido-registry-static",
       "inputs": {
         "files": [
           "scripts/check-lido-circuit-breaker-registry.sh",
           "scripts/check-lido-circuit-breaker-registry.py"
-        ],
-        "lean_entries": [
-          "scripts/LidoCircuitBreakerRegistrySuccess.lean",
-          "scripts/LidoCircuitBreakerRegistryRegression.lean"
         ],
         "populations": [
           {
@@ -757,7 +754,6 @@
           }
         ],
         "tools": [
-          "lean",
           "python3"
         ]
       },
@@ -767,7 +763,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — Lido CircuitBreaker Registry RI7: "
+          "^OK — Lido CircuitBreaker Registry RI7 static: "
         ]
       }
     },
@@ -1028,9 +1024,10 @@
     },
     {
       "command": [
-        "scripts/check-execution-occurrence.sh"
+        "scripts/check-execution-occurrence.sh",
+        "--static-only"
       ],
-      "id": "execution-occurrence",
+      "id": "execution-occurrence-static",
       "inputs": {
         "files": [
           "scripts/check-execution-occurrence.sh",
@@ -1042,11 +1039,6 @@
           "scripts/execution-raw-attribution-owner-manifest.json",
           "Blanc.lean"
         ],
-        "lean_entries": [
-          "scripts/ExecutionOccurrenceRegression.lean",
-          "scripts/ExecutionOccurrenceControls.lean",
-          "scripts/ExecutionSettlementRegression.lean"
-        ],
         "populations": [
           {
             "pattern": "**/*.lean",
@@ -1054,7 +1046,6 @@
           }
         ],
         "tools": [
-          "lean",
           "python3"
         ]
       },
@@ -1064,15 +1055,16 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — execution occurrence: "
+          "^OK — execution occurrence static: "
         ]
       }
     },
     {
       "command": [
-        "scripts/check-cycle-write-free.sh"
+        "scripts/check-cycle-write-free.sh",
+        "--static-only"
       ],
-      "id": "cycle-write-free",
+      "id": "cycle-write-free-static",
       "inputs": {
         "files": [
           "scripts/check-cycle-write-free.sh",
@@ -1081,9 +1073,6 @@
           "scripts/cycle-write-free-owner-manifest.json",
           "Blanc.lean"
         ],
-        "lean_entries": [
-          "scripts/CycleWriteFreeRegression.lean"
-        ],
         "populations": [
           {
             "pattern": "**/*.lean",
@@ -1091,7 +1080,6 @@
           }
         ],
         "tools": [
-          "lean",
           "python3"
         ]
       },
@@ -1101,15 +1089,16 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — cycle write free: "
+          "^OK — cycle write free static: "
         ]
       }
     },
     {
       "command": [
-        "scripts/check-transient-settlement.sh"
+        "scripts/check-transient-settlement.sh",
+        "--static-only"
       ],
-      "id": "transient-settlement",
+      "id": "transient-settlement-static",
       "inputs": {
         "files": [
           "scripts/check-transient-settlement.sh",
@@ -1138,9 +1127,6 @@
           "lakefile.lean",
           "lake-manifest.json"
         ],
-        "lean_entries": [
-          "scripts/TransientSettlementRegression.lean"
-        ],
         "populations": [
           {
             "pattern": "**/*.lean",
@@ -1148,7 +1134,6 @@
           }
         ],
         "tools": [
-          "lean",
           "python3"
         ]
       },
@@ -1158,7 +1143,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — transient-settlement: "
+          "^OK — transient-settlement static: "
         ]
       }
     },
@@ -1190,8 +1175,19 @@
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
-        "lean_entries": [
-          "scripts/eval-weth10-differential-code.lean"
+        "material_output": [
+          {
+            "authority": [
+              "scripts/eval-weth10-differential-code.lean"
+            ],
+            "command": [
+              "lake",
+              "env",
+              "lean",
+              "scripts/eval-weth10-differential-code.lean"
+            ],
+            "id": "weth10-compiled-runtime"
+          }
         ],
         "populations": [
           {
@@ -1334,7 +1330,12 @@
     },
     {
       "command": [
-        "scripts/check-lido-twg-differential.sh"
+        "scripts/check-lido-twg-differential.sh",
+        "--composed-prerequisites"
+      ],
+      "depends_on": [
+        "lido-twg-census",
+        "lido-twg-reference"
       ],
       "id": "lido-twg-differential",
       "inputs": {
@@ -1438,8 +1439,19 @@
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
-        "lean_entries": [
-          "scripts/eval-lido-ossifiable-proxy-artifacts.lean"
+        "material_output": [
+          {
+            "authority": [
+              "scripts/eval-lido-ossifiable-proxy-artifacts.lean"
+            ],
+            "command": [
+              "lake",
+              "env",
+              "lean",
+              "scripts/eval-lido-ossifiable-proxy-artifacts.lean"
+            ],
+            "id": "ossifiable-proxy-generated-artifacts"
+          }
         ],
         "populations": [
           {
@@ -1748,8 +1760,19 @@
           "/usr/bin/env",
           "/usr/bin/git"
         ],
-        "lean_entries": [
-          "scripts/eval-beacon-deposit-differential-code.lean"
+        "material_output": [
+          {
+            "authority": [
+              "scripts/eval-beacon-deposit-differential-code.lean"
+            ],
+            "command": [
+              "lake",
+              "env",
+              "lean",
+              "scripts/eval-beacon-deposit-differential-code.lean"
+            ],
+            "id": "beacon-deposit-current-mainnet-artifacts"
+          }
         ],
         "populations": [
           {
@@ -1841,7 +1864,11 @@
     },
     {
       "command": [
-        "scripts/check-prorata-current-mainnet.sh"
+        "scripts/check-prorata-current-mainnet.sh",
+        "--composed-prerequisites"
+      ],
+      "depends_on": [
+        "current-mainnet"
       ],
       "id": "prorata-current-mainnet",
       "inputs": {
@@ -1920,7 +1947,11 @@
     },
     {
       "command": [
-        "scripts/check-lido-ossifiable-proxy-current-mainnet.sh"
+        "scripts/check-lido-ossifiable-proxy-current-mainnet.sh",
+        "--composed-prerequisites"
+      ],
+      "depends_on": [
+        "current-mainnet"
       ],
       "id": "lido-ossifiable-proxy-current-mainnet",
       "inputs": {
@@ -2271,17 +2302,15 @@
     },
     {
       "command": [
-        "scripts/check-proxy-pair-upgrade.sh"
+        "scripts/check-proxy-pair-upgrade.sh",
+        "--static-only"
       ],
-      "id": "proxy-pair-upgrade",
+      "id": "proxy-pair-upgrade-static",
       "inputs": {
         "files": [
           "scripts/check-proxy-pair-upgrade.sh",
           "scripts/check-proxy-pair-upgrade.py",
-          "scripts/check-layering.sh",
           "scripts/check-layering.py",
-          "scripts/ProxyPairUpgradeWitness.lean",
-          "scripts/ProxyPairUpgradeAxiomCheck.lean",
           "Blanc.lean",
           "Main.lean",
           "Blanc/Upgrade.lean",
@@ -2291,10 +2320,6 @@
           "Blanc/ProxyPairUpgradeRefinement.lean",
           "docs/PROXY_PAIR_UPGRADE.md"
         ],
-        "lean_entries": [
-          "scripts/ProxyPairUpgradeAxiomCheck.lean",
-          "scripts/ProxyPairUpgradeWitness.lean"
-        ],
         "populations": [
           {
             "pattern": "**/*.lean",
@@ -2302,7 +2327,6 @@
           }
         ],
         "tools": [
-          "lean",
           "python3"
         ]
       },
@@ -2312,7 +2336,168 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — proxy-pair-upgrade: "
+          "^OK — proxy-pair-upgrade static: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-lido-circuit-breaker-registry.sh",
+        "--semantic-only"
+      ],
+      "id": "lido-registry-semantic",
+      "inputs": {
+        "files": [
+          "scripts/check-lido-circuit-breaker-registry.sh",
+          "scripts/check-lido-circuit-breaker-registry.py"
+        ],
+        "lean_entries": [
+          "scripts/LidoCircuitBreakerRegistrySuccess.lean",
+          "scripts/LidoCircuitBreakerRegistryRegression.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Compiled positive, mutant and axiom evidence is independent of the repository-wide ownership/shadow census in the static row.",
+      "order": 54,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — Lido CircuitBreaker Registry RI7 semantic: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-execution-occurrence.sh",
+        "--semantic-only",
+        "--composed-prerequisites"
+      ],
+      "depends_on": [
+        "execution-settlement"
+      ],
+      "id": "execution-occurrence-semantic",
+      "inputs": {
+        "files": [
+          "scripts/check-execution-occurrence.sh",
+          "scripts/check-execution-occurrence.py",
+          "scripts/check-extraction-ownership.py",
+          "scripts/execution-occurrence-lift-manifest.json"
+        ],
+        "lean_entries": [
+          "scripts/ExecutionOccurrenceRegression.lean",
+          "scripts/ExecutionOccurrenceControls.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Compiled occurrence fixtures and mutants consume the independently registered settlement verdict instead of starting that body again.",
+      "order": 55,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — execution occurrence semantic: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-cycle-write-free.sh",
+        "--semantic-only"
+      ],
+      "id": "cycle-write-free-semantic",
+      "inputs": {
+        "files": [
+          "scripts/check-cycle-write-free.sh",
+          "scripts/check-cycle-write-free.py",
+          "scripts/check-layering.py",
+          "scripts/cycle-write-free-owner-manifest.json"
+        ],
+        "lean_entries": [
+          "scripts/CycleWriteFreeRegression.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The concrete evaluator and diagnostic-pinned Lean mutants have their own transitive compiled identity.",
+      "order": 56,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — cycle write free semantic: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-transient-settlement.sh",
+        "--semantic-only"
+      ],
+      "id": "transient-settlement-semantic",
+      "inputs": {
+        "files": [
+          "scripts/check-transient-settlement.sh",
+          "scripts/check-transient-settlement.py",
+          "scripts/transient-settlement-owner-manifest.json"
+        ],
+        "lean_entries": [
+          "scripts/TransientSettlementRegression.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Evaluator vectors, compiled mutants and live positive-deletion controls are separated from the repository-wide owner and architecture census.",
+      "order": 57,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — transient-settlement semantic: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-proxy-pair-upgrade.sh",
+        "--semantic-only",
+        "--composed-prerequisites"
+      ],
+      "depends_on": [
+        "layering"
+      ],
+      "id": "proxy-pair-upgrade-semantic",
+      "inputs": {
+        "files": [
+          "scripts/check-proxy-pair-upgrade.sh",
+          "scripts/check-proxy-pair-upgrade.py"
+        ],
+        "lean_entries": [
+          "scripts/ProxyPairUpgradeAxiomCheck.lean",
+          "scripts/ProxyPairUpgradeWitness.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The semantic row consumes the independently registered total-layering verdict and runs only axiom and executable-witness evidence.",
+      "order": 58,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — proxy-pair-upgrade semantic: "
         ]
       }
     }

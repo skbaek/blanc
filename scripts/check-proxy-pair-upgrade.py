@@ -400,14 +400,18 @@ def self_test(root: Path) -> list[str]:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    parser.add_argument("--static-only", action="store_true")
+    phase = parser.add_mutually_exclusive_group()
+    phase.add_argument("--static-only", action="store_true")
+    phase.add_argument("--semantic-only", action="store_true")
+    parser.add_argument("--composed-prerequisites", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
-    errors = static_errors(root)
+    errors = [] if args.semantic_only else static_errors(root)
     if not args.static_only:
-        errors.extend(run_layering(root))
+        if not args.composed_prerequisites:
+            errors.extend(run_layering(root))
         errors.extend(dynamic_errors(root))
     if args.self_test and not errors:
         errors.extend(f"CONTROL — {item}" for item in self_test(root))
@@ -418,7 +422,12 @@ def main(argv: list[str]) -> int:
         print(f"REGRESSION — {SUBJECT}: {len(errors)} failure(s)")
         return 1
     suffix = "; 23 disposable controls bite" if args.self_test else ""
-    print(f"OK — {SUBJECT}: 10 headlines, 3 assurance theorems, 3 generic definitions, 13 axiom pins, 12 exact witness rows{suffix}")
+    if args.static_only:
+        print(f"OK — {SUBJECT} static: 10 headlines, 3 assurance theorems, 3 generic definitions{suffix}")
+    elif args.semantic_only:
+        print(f"OK — {SUBJECT} semantic: 13 axiom pins, 12 exact witness rows{suffix}")
+    else:
+        print(f"OK — {SUBJECT}: 10 headlines, 3 assurance theorems, 3 generic definitions, 13 axiom pins, 12 exact witness rows{suffix}")
     return 0
 
 

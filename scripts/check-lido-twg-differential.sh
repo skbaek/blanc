@@ -11,13 +11,21 @@ ERRORS="$(mktemp)"
 GENERATOR_OUT="$(mktemp)"
 trap 'rm -f "$ARTIFACTS" "$ERRORS" "$GENERATOR_OUT"' EXIT
 
+COMPOSED_PREREQUISITES=0
+if [ "${1:-}" = "--composed-prerequisites" ]; then
+  COMPOSED_PREREQUISITES=1
+  shift
+fi
+
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — Lido TWG differential: pinned EELS python not found at $EELS_PY"
   exit 1
 fi
 
-PYTHONDONTWRITEBYTECODE=1 "$SCRIPT_DIR/check-lido-twg-reference.sh" >/dev/null
-PYTHONDONTWRITEBYTECODE=1 "$SCRIPT_DIR/check-lido-twg-census.sh" >/dev/null
+if [ "$COMPOSED_PREREQUISITES" -eq 0 ]; then
+  PYTHONDONTWRITEBYTECODE=1 "$SCRIPT_DIR/check-lido-twg-reference.sh" >/dev/null
+  PYTHONDONTWRITEBYTECODE=1 "$SCRIPT_DIR/check-lido-twg-census.sh" >/dev/null
+fi
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-lido-twg-artifacts.lean >"$ARTIFACTS" 2>"$ERRORS"); then
   echo "REGRESSION — Lido TWG differential: Blanc artifact evaluation failed"

@@ -9,6 +9,7 @@ and runs in-memory falsifiers against the same static validator.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import re
 import subprocess
@@ -516,29 +517,51 @@ def axiom_check(relative: str, qualified: str) -> None:
         fail(f"{qualified}: axioms {sorted(actual)}, expected {sorted(EXPECTED_AXIOMS)}")
 
 
-def main() -> None:
-    all_sources = sources()
-    validate(all_sources)
-    falsifier_count = assert_falsifiers(all_sources)
-    compile_fixture(SUCCESS)
-    compile_fixture(REGRESSION)
-    for relative, qualified in AXIOM_CONTROLS:
-        axiom_check(relative, qualified)
+def main(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser()
+    phase = parser.add_mutually_exclusive_group()
+    phase.add_argument("--static-only", action="store_true")
+    phase.add_argument("--semantic-only", action="store_true")
+    arguments = parser.parse_args(argv)
+
+    falsifier_count = 0
+    if not arguments.semantic_only:
+        all_sources = sources()
+        validate(all_sources)
+        falsifier_count = assert_falsifiers(all_sources)
+    if not arguments.static_only:
+        compile_fixture(SUCCESS)
+        compile_fixture(REGRESSION)
+        for relative, qualified in AXIOM_CONTROLS:
+            axiom_check(relative, qualified)
     owner_count = len(REQUIRED[OWNER])
     header_count = len(EXPECTED_HEADERS)
     success_count = len(REQUIRED[SUCCESS])
     storage_mutant_count = len(REQUIRED[REGRESSION]) - 1
-    print(
-        f"OK — Lido CircuitBreaker Registry RI7: {owner_count} Registry declarations, "
-        f"{header_count} header pins, {success_count + 1} exact-code controls, "
-        f"{storage_mutant_count} storage mutants, {falsifier_count} falsifiers, "
-        f"and {len(AXIOM_CONTROLS)} axiom pins"
-    )
+    if arguments.static_only:
+        print(
+            "OK — Lido CircuitBreaker Registry RI7 static: "
+            f"{owner_count} Registry declarations, {header_count} header pins, "
+            f"and {falsifier_count} falsifiers"
+        )
+    elif arguments.semantic_only:
+        print(
+            "OK — Lido CircuitBreaker Registry RI7 semantic: "
+            f"{success_count + 1} exact-code controls, {storage_mutant_count} storage "
+            f"mutants, and {len(AXIOM_CONTROLS)} axiom pins"
+        )
+    else:
+        print(
+            f"OK — Lido CircuitBreaker Registry RI7: {owner_count} Registry declarations, "
+            f"{header_count} header pins, {success_count + 1} exact-code controls, "
+            f"{storage_mutant_count} storage mutants, {falsifier_count} falsifiers, "
+            f"and {len(AXIOM_CONTROLS)} axiom pins"
+        )
 
 
 if __name__ == "__main__":
     try:
-        main()
+        main(sys.argv[1:])
     except Regression as error:
         print(f"REGRESSION — Lido CircuitBreaker Registry RI7: {error}", file=sys.stderr)
         sys.exit(1)

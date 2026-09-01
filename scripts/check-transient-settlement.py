@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import pathlib
@@ -328,63 +329,114 @@ def audit_fixture(data: dict) -> None:
         fail(f"batched mutants did not all fail for their pinned reason\n{output}")
 
 
-def deletion_controls(data: dict) -> None:
-    source = read(ROOT / data["commonModule"])
-    for name, _ in data["owners"]:
-        pattern = re.compile(
-            rf"(?m)^((?:theorem|lemma|structure|def|inductive)\s+){re.escape(name)}\b"
-        )
-        changed, count = pattern.subn(rf"\1deleted_{name.replace('.', '_')}", source, count=1)
-        if count != 1:
-            fail(f"cannot live-delete {name}")
-        try:
-            audit_source(data, changed)
-        except SystemExit as exc:
-            if "public owner set mismatch" not in str(exc):
-                raise
-        else:
-            fail(f"live deletion was not detected: {name}")
-    fixture = read(FIXTURE)
-    for name in data["requiredPositiveTheorems"]:
-        changed, count = re.subn(
-            rf"(?m)^(private\s+theorem\s+){re.escape(name)}\b",
-            rf"\1deleted_{name}", fixture, count=1,
-        )
-        if count != 1 or re.search(
-            rf"(?m)^private\s+theorem\s+{re.escape(name)}\b", changed
-        ):
-            fail(f"positive deletion was not detected: {name}")
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".lean", prefix="TransientSettlementDeletion-",
-            dir=ROOT / "scripts", delete=False,
-        ) as handle:
-            handle.write(changed)
-            tmp = pathlib.Path(handle.name)
-        try:
-            result = run_lean(tmp)
-        finally:
-            tmp.unlink(missing_ok=True)
-        if result.returncode == 0 or name not in result.stdout + result.stderr:
-            fail(f"live positive deletion did not fail through {name}")
+def deletion_controls(data: dict, *, static: bool, semantic: bool) -> None:
+    if static:
+        source = read(ROOT / data["commonModule"])
+        for name, _ in data["owners"]:
+            pattern = re.compile(
+                rf"(?m)^((?:theorem|lemma|structure|def|inductive)\s+){re.escape(name)}\b"
+            )
+            changed, count = pattern.subn(
+                rf"\1deleted_{name.replace('.', '_')}", source, count=1
+            )
+            if count != 1:
+                fail(f"cannot live-delete {name}")
+            try:
+                audit_source(data, changed)
+            except SystemExit as exc:
+                if "public owner set mismatch" not in str(exc):
+                    raise
+            else:
+                fail(f"live deletion was not detected: {name}")
+        for owner_file, name, _ in data["movedDonors"]:
+            owner_text = read(ROOT / owner_file)
+            changed, count = re.subn(
+                rf"(?m)^(\s*(?:theorem|lemma)\s+){re.escape(name)}\b",
+                rf"\1deleted_{name.replace('.', '_')}", owner_text, count=1,
+            )
+            if count != 1 or name in declarations(changed):
+                fail(f"moved-donor deletion was not detected: {name}")
 
-    for owner_file, name, _ in data["movedDonors"]:
-        owner_text = read(ROOT / owner_file)
-        changed, count = re.subn(
-            rf"(?m)^(\s*(?:theorem|lemma)\s+){re.escape(name)}\b",
-            rf"\1deleted_{name.replace('.', '_')}", owner_text, count=1,
-        )
-        if count != 1 or name in declarations(changed):
-            fail(f"moved-donor deletion was not detected: {name}")
+    if semantic:
+        fixture = read(FIXTURE)
+        for name in data["requiredPositiveTheorems"]:
+            changed, count = re.subn(
+                rf"(?m)^(private\s+theorem\s+){re.escape(name)}\b",
+                rf"\1deleted_{name}", fixture, count=1,
+            )
+            if count != 1 or re.search(
+                rf"(?m)^private\s+theorem\s+{re.escape(name)}\b", changed
+            ):
+                fail(f"positive deletion was not detected: {name}")
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".lean", prefix="TransientSettlementDeletion-",
+                dir=ROOT / "scripts", delete=False,
+            ) as handle:
+                handle.write(changed)
+                tmp = pathlib.Path(handle.name)
+            try:
+                result = run_lean(tmp)
+            finally:
+                tmp.unlink(missing_ok=True)
+            if result.returncode == 0 or name not in result.stdout + result.stderr:
+                fail(f"live positive deletion did not fail through {name}")
+
+
+def write_manifest(data: dict) -> None:
+    """Regenerate only byte/header fields derived from the declared sources."""
+
+    data = dict(data)
+    actual = declarations(read(ROOT / data["commonModule"]))
+    data["signatureHashes"] = {
+        name: hashlib.sha256(actual[name][1].encode()).hexdigest()
+        for name, _ in data["owners"]
+    }
+    data["movedSignatureHashes"] = {
+        name: hashlib.sha256(
+            declarations(read(ROOT / owner_file))[name][1].encode()
+        ).hexdigest()
+        for owner_file, name, _ in data["movedDonors"]
+    }
+    data["touchedConsumerHashes"] = {
+        relative: sha256(ROOT / relative) for relative in data["touchedConsumers"]
+    }
+    headers = []
+    for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
+        for name, (kind, header) in sorted(declarations(read(path)).items()):
+            headers.append(f"{path.name}:{kind}:{name}:{header}")
+    data["wethPublicHeaderAggregate"] = hashlib.sha256(
+        "\n".join(headers).encode()
+    ).hexdigest()
+    data["frozenAssuranceFiles"] = {
+        relative: sha256(ROOT / relative)
+        for relative in data["frozenAssuranceFiles"]
+    }
+    rendered = json.dumps(data, indent=2, sort_keys=True) + "\n"
+    temporary = MANIFEST_PATH.with_suffix(".json.tmp")
+    temporary.write_text(rendered, encoding="utf-8")
+    temporary.replace(MANIFEST_PATH)
+    print(f"OK — transient-settlement manifest: wrote {MANIFEST_PATH.relative_to(ROOT)}")
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    phase = parser.add_mutually_exclusive_group()
+    phase.add_argument("--static-only", action="store_true")
+    phase.add_argument("--semantic-only", action="store_true")
+    parser.add_argument("--print-signatures", action="store_true")
+    parser.add_argument("--print-compatibility", action="store_true")
+    parser.add_argument("--write-manifest", action="store_true")
+    arguments = parser.parse_args()
     data = load_manifest()
-    if "--print-signatures" in sys.argv:
+    if arguments.write_manifest:
+        write_manifest(data)
+        return
+    if arguments.print_signatures:
         actual = declarations(read(ROOT / data["commonModule"]))
         print(json.dumps({name: hashlib.sha256(header.encode()).hexdigest()
                           for name, (_, header) in actual.items()}, indent=2))
         return
-    if "--print-compatibility" in sys.argv:
+    if arguments.print_compatibility:
         moved = {}
         for owner_file, name, _ in data["movedDonors"]:
             moved[name] = hashlib.sha256(
@@ -404,18 +456,34 @@ def main() -> None:
             ).hexdigest(),
         }, indent=2))
         return
-    audit_source(data)
-    audit_moves(data)
-    audit_architecture(data)
-    audit_frozen(data)
-    deletion_controls(data)
-    audit_fixture(data)
-    print(
-        "OK — transient-settlement: "
-        f"{len(data['owners'])} owned declarations, "
-        f"{len(data['movedDonors'])} donor moves, "
-        f"25 evaluator controls, {len(MUTANTS)} mutants"
+    if not arguments.semantic_only:
+        audit_source(data)
+        audit_moves(data)
+        audit_architecture(data)
+        audit_frozen(data)
+    deletion_controls(
+        data, static=not arguments.semantic_only, semantic=not arguments.static_only
     )
+    if not arguments.static_only:
+        audit_fixture(data)
+    if arguments.static_only:
+        print(
+            "OK — transient-settlement static: "
+            f"{len(data['owners'])} owned declarations, "
+            f"{len(data['movedDonors'])} donor moves"
+        )
+    elif arguments.semantic_only:
+        print(
+            "OK — transient-settlement semantic: "
+            f"25 evaluator controls, {len(MUTANTS)} mutants"
+        )
+    else:
+        print(
+            "OK — transient-settlement: "
+            f"{len(data['owners'])} owned declarations, "
+            f"{len(data['movedDonors'])} donor moves, "
+            f"25 evaluator controls, {len(MUTANTS)} mutants"
+        )
 
 
 if __name__ == "__main__":
