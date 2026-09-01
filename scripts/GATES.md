@@ -234,12 +234,15 @@ Jaune. There is no second, hand-maintained import graph here. An evaluator under
 
 The local `.lake/blanc-build-certificate.json` may satisfy the build
 prerequisite without rebuilding only when its host, all Lean sources, Lake
-configuration, toolchain and package pins, trace population, and trace
-`depHash` values match exactly. Write it with `--certify-build` only immediately
-after the repository-prescribed host-safe authoritative build reports success.
-Missing, stale, foreign, or corrupt certificates force that build before any
-Lean-dependent planning; `--fresh` always forces it. Source/configuration,
-toolchain, package-pin, and trace movement are independently controlled.
+configuration, toolchain and package pins, trace population, trace `depHash`
+values, and the exact Jaune fixture-runner bytes match. A certifiable local
+setup therefore runs both the repository-prescribed host-safe authoritative
+build and its `jaune/jaune` target before `--certify-build`; CI's setup already
+builds that target explicitly. Missing, stale, foreign, or corrupt certificates
+force the authoritative build before Lean-dependent planning, and certification
+then refuses until the fixture runner exists; `--fresh` always forces the build.
+Source/configuration, toolchain, package-pin, trace, and runner-artifact movement
+are independently controlled.
 
 A clean exact-HEAD goal worktree with no `.lake` can preview and then receive
 an isolated copy of a certified peer worktree's state:

@@ -263,7 +263,10 @@ def prepare_build_state(s: Scratch) -> Path:
     subprocess.run(["git", "config", "user.email", "control@example.invalid"], cwd=package, check=True)
     subprocess.run(["git", "config", "user.name", "control"], cwd=package, check=True)
     (package / "Jaune.lean").write_text("def jaune := 1\n", encoding="utf-8")
-    subprocess.run(["git", "add", "Jaune.lean"], cwd=package, check=True)
+    runner = package / ".lake/build/bin/jaune"
+    runner.parent.mkdir(parents=True, exist_ok=True)
+    runner.write_text("runner-one\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=package, check=True)
     subprocess.run(
         ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pin"],
         cwd=package,
@@ -1039,6 +1042,27 @@ def control_build_certificate_refuses_every_identity_and_trace_uncertainty() -> 
                 "toolchain movement must invalidate the certificate",
             )
             tools["identity"] = "one"
+
+            runner = s.root / ".lake/packages/jaune/.lake/build/bin/jaune"
+            runner.write_text("runner-two\n", encoding="utf-8")
+            gc.forget_digests()
+            require(
+                not gc.build_certificate_status(s.root)[0],
+                "Jaune runner movement must invalidate the certificate",
+            )
+            runner.write_text("runner-one\n", encoding="utf-8")
+            gc.forget_digests()
+            require(gc.build_certificate_status(s.root)[0], "restoring the runner should match")
+            runner.unlink()
+            gc.forget_digests()
+            require(
+                not gc.build_certificate_status(s.root)[0],
+                "a missing Jaune runner must invalidate the certificate",
+            )
+            runner.parent.mkdir(parents=True, exist_ok=True)
+            runner.write_text("runner-one\n", encoding="utf-8")
+            gc.forget_digests()
+            require(gc.build_certificate_status(s.root)[0], "restoring the runner should match")
 
             s.write("lakefile.lean", "import Lake\nopen Lake DSL\npackage blanc where\n")
             require(

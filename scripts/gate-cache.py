@@ -99,7 +99,7 @@ REPORT_RELATIVE = ".lake/gate-report.md"
 MANIFEST_RELATIVE = ".lake/gate-manifest.json"
 BUILD_CERTIFICATE_RELATIVE = ".lake/blanc-build-certificate.json"
 SHARED_STATE_RELATIVE = "blanc-gate-evidence"
-BUILD_CERTIFICATE_SCHEMA = 1
+BUILD_CERTIFICATE_SCHEMA = 2
 
 
 def registry_path(root: Path) -> Path:
@@ -164,6 +164,7 @@ LEAN_TRACE_ROOTS = (
     ".lake/build/lib/lean",
     ".lake/packages/jaune/.lake/build/lib/lean",
 )
+JAUNE_RUNNER_RELATIVE = "packages/jaune/.lake/build/bin/jaune"
 
 # Lean 4.32 spells an import with any run of modifiers before the keyword and
 # an optional `all` after it.  In this toolchain's own packages there are
@@ -1265,10 +1266,14 @@ def build_source_identity(
                 raise Unresolvable(f"Lake package {name} is at {head}, expected {expected}")
         package_detail[name] = head
     package_print = digest_of(package_detail)
+    runner_path = (lake_root or root / ".lake") / JAUNE_RUNNER_RELATIVE
+    runner_detail = {JAUNE_RUNNER_RELATIVE: file_identity(runner_path)}
+    runner_print = digest_of(runner_detail)
     detail = {
         "files": {"digest": file_print, "detail": file_detail},
         "tools": {"digest": tool_print, "detail": tool_detail},
         "packages": {"digest": package_print, "detail": package_detail},
+        "runtime_artifacts": {"digest": runner_print, "detail": runner_detail},
     }
     return digest_of({name: item["digest"] for name, item in detail.items()}), detail
 
