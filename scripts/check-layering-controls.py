@@ -166,10 +166,12 @@ def category_agnostic_imports() -> None:
 def gate_patched(root: Path, extra_composition: list[str]) -> tuple[int, str]:
     """Run the checker in-process with a temporarily extended COMPOSITION table.
 
-    The shipped table is deliberately empty until the stratum's first
-    inhabitant lands, so the classified-composition edges are exercised by
-    patching the imported checker module, exactly as the category-agnostic
-    control patches `classify`.  The patch is restored unconditionally.
+    The classified-composition edges are exercised by appending a probe entry
+    to the imported checker's COMPOSITION table — which now carries the
+    stratum's real inhabitants — exactly as the category-agnostic control
+    patches `classify`.  The patch is restored unconditionally, and the
+    controls are correct whether the shipped table is empty (as it was at the
+    stratum's standalone landing) or inhabited (as it is here).
     """
     import contextlib
     import io
@@ -222,7 +224,8 @@ def composition_edge_controls() -> None:
     with fixture() as raw:
         patched_must_pass(with_probe(raw, legal), "composition positive witness", [probe])
 
-    # 1. Unclassified composition module fails against the SHIPPED empty table.
+    # 1. An unclassified composition module fails against the shipped table
+    #    (whatever it carries), with no probe appended.
     with fixture() as raw:
         root = Path(raw)
         target = root / "Blanc" / "Composition"

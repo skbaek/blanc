@@ -353,4 +353,3 @@ lemma lift_inv_admitted
     exact last h_at h_run targetNe hσ
 
 end Blanc
-
