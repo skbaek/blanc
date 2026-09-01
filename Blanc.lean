@@ -281,6 +281,9 @@ import Blanc.ProrataAccountingHistory
 import Blanc.ProrataAttackModel
 import Blanc.ProrataAttackPath
 import Blanc.ProrataAttackTrace
+import Blanc.ProrataWethVault
+import Blanc.ProrataWethVaultCode
+import Blanc.ProrataWethVaultArtifact
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.

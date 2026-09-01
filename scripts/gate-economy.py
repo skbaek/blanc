@@ -83,6 +83,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "beacon-deposit-assurance",
             "beacon-deposit-deployment",
             "weth10-current-mainnet",
+            "prorata-weth-vault-artifact",
         ],
     }
     for key, expected in expected_meta.items():
@@ -200,12 +201,13 @@ def render() -> str:
         "- Five launch composite rows retain their static halves in catalogue order and",
         "  add semantic halves at positions 56–60: "
         + ", ".join(f"`{item}`" for item in economy["split_families"]) + ".",
-        "- Two gates landed on main after the launch inventory: the cheap BeaconDeposit assurance",
+        "- Three gates landed after the launch inventory: the cheap BeaconDeposit assurance",
         "  row runs early at position 3, while the deployment control at position 44 uses exact",
         "  evaluator stdout and authority as a material-output certificate. Its positive and",
         "  mutation checks are unchanged, but proof-only movement with identical emitted evidence",
-        "  does not rerun the EELS/Jaune body.",
-        "  The final population is therefore 53 + 5 + 2 = 60; no required content was dropped.",
+        "  does not rerun the EELS/Jaune body. The PRORATA WETH vault artifact row at position 61",
+        "  binds its new family-owned runtime, ABI and compile witness.",
+        "  The final population is therefore 53 + 5 + 3 = 61; no required content was dropped.",
         "- CI makes the same five splits and adds the cheap assurance row, so its registered",
         "  command population moves from 34 to 40. The deployment control remains a local",
         "  merge-candidate row. The prerequisite column also records nested launch composition",

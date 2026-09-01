@@ -71,17 +71,19 @@ host-local observations; `unmeasured` is preserved honestly and no parallel sums
 | 59 | `scripts/check-cycle-write-free.sh --semantic-only` | yes | — | yes | `lake-build` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
 | 60 | `scripts/check-transient-settlement.sh --semantic-only` | yes | — | yes | `lake-build` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
 | 61 | `scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites` | yes | — | yes | `lake-build`, `layering` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
+| 62 | `scripts/check-prorata-weth-vault-artifact.sh` | yes | yes | — | `lake-build` | files, lean_entries, tools | not expensive | ~21 s from an incremental source change; sub-second when built | elaboration | none known |
 
 ## Population reconciliation
 
 - Five launch composite rows retain their static halves in catalogue order and
   add semantic halves at positions 56–60: `lido-circuit-breaker-registry`, `execution-occurrence`, `cycle-write-free`, `transient-settlement`, `proxy-pair-upgrade`.
-- Two gates landed on main after the launch inventory: the cheap BeaconDeposit assurance
+- Three gates landed after the launch inventory: the cheap BeaconDeposit assurance
   row runs early at position 3, while the deployment control at position 44 uses exact
   evaluator stdout and authority as a material-output certificate. Its positive and
   mutation checks are unchanged, but proof-only movement with identical emitted evidence
-  does not rerun the EELS/Jaune body.
-  The final population is therefore 53 + 5 + 2 = 60; no required content was dropped.
+  does not rerun the EELS/Jaune body. The PRORATA WETH vault artifact row at position 61
+  binds its new family-owned runtime, ABI and compile witness.
+  The final population is therefore 53 + 5 + 3 = 61; no required content was dropped.
 - CI makes the same five splits and adds the cheap assurance row, so its registered
   command population moves from 34 to 40. The deployment control remains a local
   merge-candidate row. The prerequisite column also records nested launch composition

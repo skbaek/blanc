@@ -2761,6 +2761,35 @@
           "^OK — proxy-pair-upgrade semantic: "
         ]
       }
+    },
+    {
+      "command": [
+        "scripts/check-prorata-weth-vault-artifact.sh"
+      ],
+      "id": "prorata-weth-vault-artifact",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata-weth-vault-artifact.sh",
+          "scripts/check-prorata-weth-vault-artifact.py",
+          "scripts/gen-prorata-weth-vault-code.lean"
+        ],
+        "lean_entries": [
+          "Blanc/ProrataWethVaultArtifact.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The focused Lean root supplies Lake's transitive depHash for the program, generated literal, artifact pins, toolchain, and Jaune dependency; the static checker independently binds the expected ABI, storage/configuration, literal shape, size, and digest.",
+      "order": 61,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — PRORATA WETH vault artifact: 25 selectors; 10 auxiliaries; 17481 runtime bytes; sha256 e57aebd462ffb71c703194f18b1577f3a58b8287a440b89619e9e62a5ded6770; kernel compile witness green$"
+        ]
+      }
     }
   ],
   "schema": 1
