@@ -215,8 +215,12 @@ def seed_pair():
     target = directory / "target"
     source.mkdir()
     s = Scratch(source)
-    s.write(".gitignore", ".lake/\n")
+    s.write(".gitignore", ".lake/\nscripts/baseline-elab.txt\n")
     prepare_build_state(s)
+    s.write(
+        "scripts/baseline-elab.txt",
+        "# host-local control baseline\nOK\t1.0\tBlanc.lean\nOK\t1.0\tBlanc/A.lean\n",
+    )
     s.git("worktree", "add", "-q", "-b", "target-control", str(target), "HEAD")
     try:
         with patched(
@@ -1192,6 +1196,10 @@ def control_worktree_seed_previews_then_publishes_isolated_exact_state() -> None
                 "the exact build certificate must be copied")
         require((target / ".lake/blanc-seed-receipt.json").is_file(),
                 "the target must record copy provenance")
+        require((target / ".lake/baseline-elab.txt").is_file(),
+                "the complete host-local elaboration baseline must be copied")
+        require(result["elab_baseline"]["rows"] == 2,
+                "the receipt must identify the exact baseline population")
         require(not (target / ".lake/gate-report.md").exists(),
                 "source candidate admissions must not be copied")
         require(not (target / ".lake").is_symlink(),
@@ -1199,6 +1207,16 @@ def control_worktree_seed_previews_then_publishes_isolated_exact_state() -> None
 
 
 def control_worktree_seed_refuses_missing_stale_or_different_state() -> None:
+    with seed_pair() as (_s, source, target):
+        (source / "scripts/baseline-elab.txt").unlink()
+        with patched(ws, "load_gate_cache", lambda _directory: gc):
+            try:
+                ws.seed(source, target, Path("/unused"), False)
+            except ws.SeedRefusal as error:
+                require("baseline" in str(error), "missing baseline needs an exact refusal")
+            else:
+                raise ControlFailure("missing elaboration baseline must refuse")
+
     with seed_pair() as (_s, source, target):
         gc.build_certificate_path(source).unlink()
         with patched(ws, "load_gate_cache", lambda _directory: gc):

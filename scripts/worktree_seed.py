@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import os
 import subprocess
 import sys
@@ -59,6 +60,44 @@ def worktree_facts(root: Path) -> dict[str, str]:
         "head": git(resolved, "rev-parse", "HEAD"),
         "status": git(resolved, "status", "--porcelain"),
     }
+
+
+def elab_baseline_identity(root: Path, path: Path, gate_cache) -> tuple[str, int, bytes]:
+    """Validate an exact complete host-local elaboration baseline."""
+
+    try:
+        payload = path.read_bytes()
+        text = payload.decode("utf-8")
+    except (OSError, UnicodeError) as error:
+        raise SeedRefusal(f"elaboration baseline is absent or unreadable: {path}: {error}") from error
+    expected = ["Blanc.lean"] if (root / "Blanc.lean").is_file() else []
+    expected.extend(
+        candidate.relative_to(root).as_posix()
+        for candidate in sorted((root / "Blanc").rglob("*.lean"))
+    )
+    rows: dict[str, float] = {}
+    for number, raw in enumerate(text.splitlines(), 1):
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        fields = raw.split("\t")
+        if len(fields) != 3 or fields[0] != "OK":
+            raise SeedRefusal(f"malformed elaboration baseline row {number}: {path}")
+        try:
+            elapsed = float(fields[1])
+        except ValueError as error:
+            raise SeedRefusal(f"non-numeric elaboration baseline row {number}: {path}") from error
+        relative = fields[2]
+        if not math.isfinite(elapsed) or elapsed <= 0 or relative in rows:
+            raise SeedRefusal(f"invalid elaboration baseline row {number}: {path}")
+        rows[relative] = elapsed
+    if set(rows) != set(expected):
+        missing = sorted(set(expected) - set(rows))
+        extra = sorted(set(rows) - set(expected))
+        raise SeedRefusal(
+            "elaboration baseline does not cover the exact Lean corpus "
+            f"(missing={missing[:3]}, extra={extra[:3]})"
+        )
+    return gate_cache.sha256_bytes(payload), len(rows), payload
 
 
 def default_copy(
@@ -121,6 +160,9 @@ def seed(
         raise SeedRefusal("target worktree already has .lake state")
 
     gate_cache = load_gate_cache(target / "scripts")
+    baseline_digest, baseline_rows, baseline_payload = elab_baseline_identity(
+        source, source / "scripts/baseline-elab.txt", gate_cache
+    )
     current, reason, source_certificate = gate_cache.build_certificate_status(source)
     if not current or source_certificate is None:
         raise SeedRefusal(f"source build state is not certifiable: {reason}")
@@ -135,6 +177,7 @@ def seed(
             "target": str(target),
             "commit": source_facts["head"],
             "host": source_certificate["host"],
+            "elab_baseline": {"digest": baseline_digest, "rows": baseline_rows},
             "copy": preview,
         }
 
@@ -149,12 +192,21 @@ def seed(
         copied_admission = stage / relative
         if copied_admission.exists():
             copied_admission.unlink()
+    staged_baseline = stage / "baseline-elab.txt"
+    staged_baseline.write_bytes(baseline_payload)
 
     after_facts = worktree_facts(source)
     after_identity, _ = gate_cache.build_source_identity(source)
     if after_facts != source_facts or after_identity != before_identity:
         raise SeedRefusal(
             f"source moved during copy; staged state was retained for inspection: {stage}"
+        )
+    after_baseline_digest, after_baseline_rows, _ = elab_baseline_identity(
+        source, source / "scripts/baseline-elab.txt", gate_cache
+    )
+    if (after_baseline_digest, after_baseline_rows) != (baseline_digest, baseline_rows):
+        raise SeedRefusal(
+            f"source elaboration baseline moved during copy; staged state was retained: {stage}"
         )
     source_current_after, source_reason_after, source_certificate_after = (
         gate_cache.build_certificate_status(source)
@@ -172,6 +224,13 @@ def seed(
             f"staged state failed exact certificate validation ({staged_reason}); "
             f"it was retained for inspection: {stage}"
         )
+    staged_baseline_digest, staged_baseline_rows, _ = elab_baseline_identity(
+        target, staged_baseline, gate_cache
+    )
+    if (staged_baseline_digest, staged_baseline_rows) != (baseline_digest, baseline_rows):
+        raise SeedRefusal(
+            f"staged elaboration baseline failed exact validation; it was retained: {stage}"
+        )
     if target_lake.exists():
         raise SeedRefusal(
             f"target .lake appeared during copy; staged state was retained: {stage}"
@@ -184,6 +243,7 @@ def seed(
             "source": str(source),
             "commit": source_facts["head"],
             "host": source_certificate["host"],
+            "elab_baseline": {"digest": baseline_digest, "rows": baseline_rows},
             "method": (result.get("data") or {}).get("method", "unknown"),
             "recorded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         },
@@ -195,6 +255,7 @@ def seed(
         "target": str(target),
         "commit": source_facts["head"],
         "host": source_certificate["host"],
+        "elab_baseline": {"digest": baseline_digest, "rows": baseline_rows},
         "method": (result.get("data") or {}).get("method", "unknown"),
     }
 

@@ -254,9 +254,11 @@ scripts/seed-worktree-state.py --source /path/to/peer --target "$PWD" --execute
 
 The seeder requires both paths to be clean worktrees of the same physical
 repository at the exact same commit, validates the source certificate before
-and after Creme's capability-selected copy, validates the staged copy again,
-removes candidate reports/manifests, and only then atomically publishes
-goal-local `.lake`. It never uses a symlink or common writable build directory.
+and after Creme's capability-selected copy, and requires a complete host-local
+elaboration baseline covering the exact Lean corpus. It validates the staged
+copy and baseline again, removes candidate reports/manifests, and only then
+atomically publishes goal-local `.lake`, including the baseline under that
+isolated directory. It never uses a symlink or common writable build directory.
 Any uncertainty refuses or falls back to ordinary build/genesis work.
 
 One consequence is worth knowing, because it is measured rather than assumed: a
