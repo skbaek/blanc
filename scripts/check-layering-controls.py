@@ -137,6 +137,31 @@ def must_fail(root: Path, label: str, needle: str) -> None:
         fail(f"{label}: expected a named gate failure containing {needle!r}:\n{output}")
 
 
+def category_agnostic_imports() -> None:
+    """Prove the header reader never consults the classification table.
+
+    `FutureComposition` deliberately is not a category or module on Blanc main.
+    The same import is read from a shared-shaped, contract-shaped, and unknown
+    source name while `classify` is replaced by a tripwire.  If a future
+    category is added, the parser therefore already returns its import before
+    the architecture rules decide what relation to enforce.
+    """
+    future = "FutureComposition"
+    if future in layering.classify():
+        fail(f"{future} unexpectedly exists in the current classification table")
+    original = layering.classify
+
+    def classification_forbidden():
+        raise AssertionError("imports_of consulted the classification table")
+
+    layering.classify = classification_forbidden
+    try:
+        for source_name in ("shared-source", "contract-source", "future-category-source"):
+            check_imports(source_name, f"import Blanc.{future}\n", [future])
+    finally:
+        layering.classify = original
+
+
 def main() -> int:
     positives = [
         ("plain", "import Blanc.Weth\n", ["Weth"], "import Init\n"),
@@ -190,10 +215,14 @@ def main() -> int:
         ["Weth"],
     )
 
+    category_agnostic_imports()
+
     with fixture() as raw:
         root = Path(raw)
         must_pass(root, "unmodified architecture fixture")
-        (root / "Blanc" / "LayeringUnclassified.lean").write_text("def x := 1\n")
+        unclassified = "import\n  Blanc.Weth\n\ndef x := 1\n"
+        check_imports("unclassified-line-split", unclassified, ["Weth"])
+        (root / "Blanc" / "LayeringUnclassified.lean").write_text(unclassified)
         must_fail(root, "unclassified-module mutation", "LayeringUnclassified is not classified")
     with fixture() as raw:
         must_pass(Path(raw), "unclassified-module restoration")
@@ -230,7 +259,7 @@ def main() -> int:
     print(
         "OK — layering controls: 11 accepted import forms pair imports_of with Lean; "
         "2 rejected header forms, 3 legal non-imports, header boundary, 3 malformed-header "
-        "and 3 architecture controls bite"
+        "and 3 architecture controls plus 1 category-agnostic control bite"
     )
     return 0
 

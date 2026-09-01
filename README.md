@@ -424,8 +424,11 @@ in a declaration, string literal, or later comment is never mistaken for a
 module dependency. It fails on a cross-contract import, on a shared module
 importing a contract (the same break, other direction), and on any module
 missing from its classification — so a new contract cannot escape the rule by
-never being listed. It needs no Lean toolchain and runs ahead of the build in
-CI; [`scripts/check-layering-controls.py`](scripts/check-layering-controls.py)
+never being listed. Import recognition is category-agnostic: `imports_of`
+returns a local-looking module name before, and without, consulting the
+classification table, so a category added later receives the same complete
+header reading. It needs no Lean toolchain and runs ahead of the build in CI;
+[`scripts/check-layering-controls.py`](scripts/check-layering-controls.py)
 separately pairs the accepted forms with real Lean elaboration.
 
 ## Proof recipe lookup
