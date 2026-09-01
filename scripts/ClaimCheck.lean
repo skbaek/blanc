@@ -4657,14 +4657,13 @@ example
       Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp)
     (targetWindow : MemWordAt entry (targetWord * 32).toNat target.toB256)
     (durationWindow : MemWordAt entry (durationWord * 32).toNat duration)
-    (depth : sevm.depth ≠ 0)
     (dynamic : sevm.isStatic = false)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
   Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok
     h_empty h_bubble targetNe nonprecompile installed
-    targetWindow durationWindow depth dynamic run
+    targetWindow durationWindow dynamic run
 
 example
     {sevm : Sevm} {pre final : Devm} {owner : Adr}

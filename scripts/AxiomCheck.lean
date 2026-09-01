@@ -741,6 +741,7 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.LidoCircuitBreaker.MemWordAt.acrossPauseStatStagingBoundary
 #print axioms Blanc.LidoCircuitBreaker.pauseAfterSet_codeGuard_arms_windows
 #print axioms Blanc.LidoCircuitBreaker.pauseAfterCall_arms_windows
+#print axioms Blanc.LidoCircuitBreaker.pauseAfterCall_ok_depth_ne_zero
 #print axioms Blanc.LidoCircuitBreaker.PublicPauseEntryPremises.removePreservesCount
 #print axioms Blanc.LidoCircuitBreaker.publicPause_reaches_pauseAfterSet
 #print axioms Blanc.LidoCircuitBreaker.pauseAfterSet_boundary_committed_outcomes

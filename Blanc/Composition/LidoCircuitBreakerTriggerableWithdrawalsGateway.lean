@@ -133,7 +133,9 @@ program occurrences.
 **No** low-level code fact is asked of the caller.  Non-delegation and a
 nonempty byte list follow from the compiler witness; nonzero installed width
 follows from the successful terminal polarity, because the CircuitBreaker's own
-`EXTCODESIZE` guard reverts on the zero arm.  Both `MessageExecutesProgram`
+`EXTCODESIZE` guard reverts on the zero arm; nonzero depth follows from the
+successful suffix past the `CALL`, because the depth-limit arm's flag selects
+the bubble and the bubble cannot end `.ok`.  Both `MessageExecutesProgram`
 witnesses and the concrete CALL/STATICCALL linkage are derived. -/
 theorem gatewayBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
@@ -148,14 +150,13 @@ theorem gatewayBoundaryExecutions_of_afterSet_ok
       (targetWord * 32).toNat target.toB256)
     (durationWindow : MemWordAt entry
       (durationWord * 32).toNat duration)
-    (depth : sevm.depth ≠ 0)
     (dynamic : sevm.isStatic = false)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
   directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
     (gatewayCode_compile dp) targetNe nonprecompile installed
-    targetWindow durationWindow depth dynamic run
+    targetWindow durationWindow dynamic run
 
 /-! ## Entry 3: the pinned-target closure
 
@@ -206,7 +207,7 @@ theorem publicPause_gatewayPinnedTarget
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
     (by rfl) (by rfl) targetNe nonprecompile
     targetCodeAt (by rw [canonicalTarget]; exact targetWindow) durationWindow
-    premises.entered premises.dynamic afterSetRun
+    premises.dynamic afterSetRun
   exact publicPause_pinnedTarget premises targetNe publicRun
     (gateway_lidoPinnedPauseTarget dp sevm.currentTarget sevm.caller
       target.toAdr targetNe)

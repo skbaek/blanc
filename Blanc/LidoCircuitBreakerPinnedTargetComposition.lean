@@ -595,7 +595,11 @@ occurrences are *derived* from the walk's own spawns.
 already supplying: `not_delegation_of_compile` and `Prog.compile_ne_nil` rule
 out the delegated and empty sources from the compiler witness, and the
 successful terminal polarity decides the `EXTCODESIZE` guard, whose zero arm
-reverts. A hypothesis implied by the ones beside it does not belong in a
+reverts. The depth fact is decided the same way: at the depth limit the `CALL`
+answers `0` in-frame, the `ISZERO`-inverted branch selects the bubble, and the
+bubble cannot end `.ok` — `pauseAfterCall_ok_depth_ne_zero` packages that
+inversion, so `sevm.depth ≠ 0` is derived from the suffix rather than asked
+for. A hypothesis implied by the ones beside it does not belong in a
 signature -- it advertises a demand the theorem does not make. -/
 theorem directBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
@@ -611,7 +615,6 @@ theorem directBoundaryExecutions_of_afterSet_ok
       (targetWord * 32).toNat target.toB256)
     (durationWindow : MemWordAt entry
       (durationWord * 32).toNat duration)
-    (depth : sevm.depth ≠ 0)
     (dynamic : sevm.isStatic = false)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
     LidoPinnedBoundaryExecutions fs sevm entry target
@@ -666,6 +669,12 @@ theorem directBoundaryExecutions_of_afterSet_ok
     obtain ⟨gasWord, rest, callStack, targetCallPre⟩ :=
       pauseCallStaging_boundary_operands targetGuard callStaging
     have callData := pauseCallStaging_calldata durationGuard callStaging
+    -- The last implied hypothesis, derived where it is decided: a successful
+    -- suffix past the CALL is impossible at the depth limit, because the
+    -- non-spawning arm's flag selects the bubble and the bubble cannot end
+    -- `.ok`.  See `pauseAfterCall_ok_depth_ne_zero`.
+    have depth : sevm.depth ≠ 0 :=
+      pauseAfterCall_ok_depth_ne_zero h_bubble callStack callRun afterCall
     obtain ⟨callBoundary, callExecution⟩ :=
       pauseCall_boundary_with_execution callStack callData depth dynamic
         callRun
@@ -782,8 +791,13 @@ theorem directBoundaryExecutions_of_afterSet_ok
     · exact (bubbleCall_not_ok h_bubble bubbleRun).elim
   · exact (revCall_not_ok h_empty revertRun).elim
 
+set_option linter.unusedVariables false in
 /-- The compiled test stub is one instance of the direct-installation crossing.
-Its statement is unchanged: the existing stub control consumes exactly this. -/
+Its statement is unchanged: the existing stub control consumes exactly this.
+`depth` is retained for that byte-stable compatibility telescope even though
+the crossing now derives the fact itself — see
+`pauseAfterCall_ok_depth_ne_zero`; the linter is silenced for exactly that
+retained binder. -/
 theorem stubBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
@@ -803,7 +817,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
       PinnedTargetControl.stubProgram duration (.ok final) :=
   directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
     stubProgram_compile_toList targetNe nonprecompile
-    installed targetWindow durationWindow depth dynamic run
+    installed targetWindow durationWindow dynamic run
 
 private theorem spawnedChild_clean_of_zeroBranch
     {sevm : Sevm} {pre post testPost armPre : Devm}

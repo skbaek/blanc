@@ -1119,6 +1119,107 @@ theorem pauseCall_failureArm_bubbles {fs : List Func} {sevm : Sevm}
     rw [hstk, herr] at h_fail
     exact absurd (Option.some.inj h_fail) (by decide)
 
+/-! ## The depth premise, discharged
+
+At `sevm.depth = 0` a zero-value `CALL` cannot spawn: `genericCall.step`'s
+depth-limit arm answers `0` on the stack in-frame.  `pauseAfterSet`'s own
+`ISZERO` then inverts that flag to `1`, the branch's nonzero arm is the bubble,
+and `Func.revReturnData` cannot end `.ok`.  So a successful suffix *decides*
+the depth fact by itself, and the crossing derives it rather than asking for
+it — the signature-hygiene rule applied to the last implied hypothesis. -/
+
+/-- The `.call` edge at `value = 0` and `sevm.depth = 0`, inverted: whichever
+way the gas and stack-room cases fall, a derivation that crosses the
+instruction left `0` at the head of the stack.  The out-of-gas and
+stack-overflow arms are refuted by the derivation's own `.ok` polarity. -/
+private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
+    {gw cw iiw isw oiw osw : B256} {s : List B256}
+    (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
+    (h_depth : sevm.depth = 0)
+    (run : Ninst.RunCompiled sevm devm (.exec .call) callPost) :
+    ∃ tail, callPost.stack = 0 :: tail := by
+  obtain ⟨xl, hfill, hrun⟩ := run
+  have hx := hrun 0
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
+  rcases hdel : accessDelegation
+      (addAccessedAddress
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) cw.toAdr)
+      cw.toAdr with ⟨dp, dadr, code, dgc, d1⟩
+  obtain ⟨ext, hext⟩ :
+      ∃ n : Nat,
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+          [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = n := ⟨_, rfl⟩
+  obtain ⟨acc, hacc⟩ :
+      ∃ n : Nat,
+        accessCost cw.toAdr
+          (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+            + dgc = n := ⟨_, rfl⟩
+  rcases hsplit : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc
+    with ⟨mcc, mcs⟩
+  by_cases hga : mcc + ext ≤ d1.gasLeft
+  case neg =>
+    rw [callEdge_step_call_zero_value_outOfGas h_stk hext hdel hacc hsplit
+      (by omega)] at hx
+    obtain ⟨-, hcontra⟩ := hx
+    cases hcontra
+  case pos =>
+    by_cases hroom : d1.stack.length < 1024
+    · -- Room to push: the forward zero-depth packaging constructs the run's
+      -- unique outcome, and determinism transfers its stack head.
+      have hfwd := Ninst.runCompiled_call_zero_value_zero_depth
+        h_stk hext hdel hacc hsplit hga h_depth hroom
+      obtain ⟨xf, ff, rf⟩ := hfwd
+      have hl := hrun 0
+      have hr := rf 0
+      rw [Ninst.StepRun] at hl hr
+      obtain ⟨-, hout⟩ := Step.Run.unique_of_filled hfill ff hl hr
+      refine ⟨d1.stack, ?_⟩
+      rw [Except.ok.inj hout]
+      rfl
+    · -- No room: the push overflows, the step halts, and the derivation's
+      -- `.ok` polarity refutes the case.  The `show … from hroom` coercion
+      -- rides the definitional stack projections through the record updates.
+      rw [Xinst.step_call_zero_value h_stk hext hdel hacc hsplit hga,
+        genericCall.step, if_pos h_depth, Devm.push_def] at hx
+      simp only [Except.assert] at hx
+      rw [if_neg (show ¬ ((((d1.setMach
+              ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+            [(iiw.toNat, isw.toNat), (oiw.toNat, osw.toNat)]).withReturnData
+          []).withGasLeft
+            ((((d1.setMach
+                  ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+                [(iiw.toNat, isw.toNat), (oiw.toNat, osw.toNat)]).withReturnData
+              []).gasLeft + mcs)).stack.length < 1024 from hroom)] at hx
+      obtain ⟨-, hcontra⟩ := hx
+      cases hcontra
+
+/-- **A successful suffix rules out the depth limit.**  With the bubble slot
+bound to `Func.revReturnData`, a crossing of the pause's `CALL` followed by a
+successful `pauseAfterCallBranch` suffix is impossible at `sevm.depth = 0`:
+the flag the depth-limit arm pushes selects the bubble, whose body ends in a
+revert or an out-of-gas halt, never `.ok`.  The crossing consumes this and
+derives its depth fact instead of carrying the premise. -/
+theorem pauseAfterCall_ok_depth_ne_zero {fs : List Func} {sevm : Sevm}
+    {callPre callPost final : Devm} {gw cw iiw isw oiw osw : B256}
+    {s : List B256}
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_stk : callPre.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
+    (callRun : Ninst.RunCompiled sevm callPre (.exec .call) callPost)
+    (afterCall : Func.RunCompiledTo fs sevm callPost pauseAfterCallBranch
+      (.ok final)) :
+    sevm.depth ≠ 0 := by
+  intro h_depth
+  obtain ⟨tail, hflag⟩ := callEdge_zero_depth_flag h_stk h_depth callRun
+  obtain ⟨mid, hn, hrest⟩ := runCompiledTo_next_inv afterCall
+  obtain ⟨hmidstk, -⟩ := iszero_inv hn hflag
+  rcases runCompiledTo_branch_inv hrest with
+    ⟨armPre, hmid0, -, -⟩ | ⟨w, armPre, hne, hmidw, -, harm⟩
+  · rw [hmidstk] at hmid0
+    exact absurd (List.cons.inj hmid0).1 (by decide)
+  · obtain ⟨bubblePre, -, hbody⟩ := runCompiledTo_call_inv h_bubble harm
+    rcases Func.runCompiledTo_revReturnData_inv hbody with
+      ⟨d, hcontra⟩ | ⟨post, hcontra, -⟩ <;> cases hcontra
+
 /-! ## The success arm: the observation
 
 Only here does the pause reach its second message.  The staging line and the

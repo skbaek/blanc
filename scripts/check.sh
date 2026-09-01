@@ -961,6 +961,7 @@ Blanc.LidoCircuitBreaker.MemWordAt.acrossPauseCallStagingBoundary|$STANDARD
 Blanc.LidoCircuitBreaker.MemWordAt.acrossPauseStatStagingBoundary|$STANDARD
 Blanc.LidoCircuitBreaker.pauseAfterSet_codeGuard_arms_windows|$STANDARD
 Blanc.LidoCircuitBreaker.pauseAfterCall_arms_windows|$STANDARD
+Blanc.LidoCircuitBreaker.pauseAfterCall_ok_depth_ne_zero|$STANDARD
 Blanc.LidoCircuitBreaker.PublicPauseEntryPremises.removePreservesCount|$STANDARD
 Blanc.LidoCircuitBreaker.publicPause_reaches_pauseAfterSet|$STANDARD
 Blanc.LidoCircuitBreaker.pauseAfterSet_boundary_committed_outcomes|$STANDARD
