@@ -125,7 +125,8 @@ CONTRACTS = {
                        "BeaconDepositDeploymentTransaction",
                        "BeaconDepositDeploymentBlock",
                        "BeaconDepositDeploymentRoot",
-                       "BeaconDepositHistory", "BeaconDepositHistorySound"],
+                       "BeaconDepositHistory", "BeaconDepositHistorySound",
+                       "BeaconDepositHistoryChain"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",

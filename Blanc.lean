@@ -205,6 +205,8 @@ import Blanc.BeaconDepositRootEffects
 import Blanc.BeaconDepositRootPublic
 import Blanc.BeaconDepositDeploymentRoot
 import Blanc.BeaconDepositHistory
+import Blanc.BeaconDepositHistorySound
+import Blanc.BeaconDepositHistoryChain
 import Blanc.ProxyPairSlots
 import Blanc.ProxyPairProgram
 import Blanc.ProxyPairOssifiableSurface
