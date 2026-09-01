@@ -43,8 +43,12 @@ the one planned before it.
 *No bypass.*  There is deliberately no `--force`.  `--fresh` adds execution;
 nothing removes it.
 
-Cache state lives under `.lake/`, is disposable, is never committed, and may
-be deleted at any time: deleting it costs time and cannot cost correctness.
+Verdict evidence lives below Git's common directory, so it is shared only by
+worktrees of one physical clone.  It is disposable, is never committed, and
+may be deleted at any time: deleting it costs time and cannot cost correctness.
+Dirty worktrees may consume matching evidence but never admit fresh verdicts
+to the shared store. Candidate reports and exact build certificates remain
+worktree-local under `.lake/`.
 
 What the cache validation does and does not do.  `read_cache` rejects any state
 whose *shape* is wrong -- a foreign schema, a malformed table, a record with no
@@ -59,10 +63,13 @@ it -- not that a forgery would be detected.
 from __future__ import annotations
 
 import argparse
+import ast
+import datetime as dt
 import fnmatch
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -80,6 +87,7 @@ from gate_cache_t8n_root import (
 )
 
 SCHEMA_VERSION = 1
+EVIDENCE_SCHEMA_VERSION = 2
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -87,18 +95,50 @@ ROOT = Path(__file__).resolve().parent.parent
 # drive the whole engine against a scratch repository instead of asserting on a
 # reimplementation of it.
 REGISTRY_RELATIVE = "scripts/gate-registry.json"
-CACHE_RELATIVE = ".lake/gate-cache.json"
 REPORT_RELATIVE = ".lake/gate-report.md"
 MANIFEST_RELATIVE = ".lake/gate-manifest.json"
-LOCK_RELATIVE = ".lake/check-gates.lock"
+BUILD_CERTIFICATE_RELATIVE = ".lake/blanc-build-certificate.json"
+SHARED_STATE_RELATIVE = "blanc-gate-evidence"
+BUILD_CERTIFICATE_SCHEMA = 2
 
 
 def registry_path(root: Path) -> Path:
     return root / REGISTRY_RELATIVE
 
 
+def git_common_dir(root: Path) -> Path:
+    """Resolve the physical repository identity shared by all its worktrees."""
+
+    result = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        raise GateCacheError(
+            "cannot resolve Git's common directory; shared evidence requires a worktree "
+            "of one physical repository"
+        )
+    path = Path(result.stdout.strip())
+    if not path.is_absolute():
+        path = root / path
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as error:
+        raise GateCacheError(f"cannot resolve Git common directory {path}: {error}") from error
+    if not resolved.is_dir():
+        raise GateCacheError(f"Git common directory is not a directory: {resolved}")
+    return resolved
+
+
+def shared_state_path(root: Path) -> Path:
+    return git_common_dir(root) / SHARED_STATE_RELATIVE
+
+
 def cache_path(root: Path) -> Path:
-    return root / CACHE_RELATIVE
+    return shared_state_path(root) / "evidence.json"
 
 
 def report_path(root: Path) -> Path:
@@ -109,8 +149,12 @@ def manifest_path(root: Path) -> Path:
     return root / MANIFEST_RELATIVE
 
 
+def build_certificate_path(root: Path, lake_root: Path | None = None) -> Path:
+    return (lake_root or root / ".lake") / "blanc-build-certificate.json"
+
+
 def lock_path(root: Path) -> Path:
-    return root / LOCK_RELATIVE
+    return shared_state_path(root) / "run.lock"
 
 # How many historical successful records to retain per gate.  Eviction is a
 # performance choice only: a pruned record simply causes a fresh run.
@@ -120,6 +164,7 @@ LEAN_TRACE_ROOTS = (
     ".lake/build/lib/lean",
     ".lake/packages/jaune/.lake/build/lib/lean",
 )
+JAUNE_RUNNER_RELATIVE = "packages/jaune/.lake/build/bin/jaune"
 
 # Lean 4.32 spells an import with any run of modifiers before the keyword and
 # an optional `all` after it.  In this toolchain's own packages there are
@@ -146,6 +191,7 @@ INPUT_KINDS = (
     "env",
     "tools",
     "clock",
+    "material_output",
 )
 
 GATE_KINDS = ("cacheable", "composition", "always-fresh")
@@ -335,7 +381,7 @@ def load_registry(path: Path) -> dict[str, Any]:
         unknown_keys = sorted(
             set(gate)
             - {"id", "order", "command", "kind", "reason", "note", "inputs",
-               "verdict", "prerequisite", "ci_only"}
+               "verdict", "prerequisite", "ci_only", "depends_on"}
         )
         if unknown_keys:
             raise GateCacheError(
@@ -352,6 +398,36 @@ def load_registry(path: Path) -> dict[str, Any]:
             )
         if kind == "cacheable" and not inputs:
             raise GateCacheError(f"cacheable gate {identifier} declares no inputs")
+        clock = inputs.get("clock")
+        if clock is not None:
+            if (
+                not isinstance(clock, dict)
+                or set(clock) != {"kind", "files"}
+                or clock.get("kind") != "expiry-transitions"
+                or not isinstance(clock.get("files"), list)
+                or not clock["files"]
+                or not all(isinstance(item, str) and item for item in clock["files"])
+            ):
+                raise GateCacheError(f"gate {identifier} has a malformed clock contract")
+        material = inputs.get("material_output", [])
+        if not isinstance(material, list):
+            raise GateCacheError(f"gate {identifier} has malformed material-output inputs")
+        for spec in material:
+            if (
+                not isinstance(spec, dict)
+                or set(spec) != {"id", "command", "authority"}
+                or not isinstance(spec.get("id"), str)
+                or not spec["id"]
+                or not isinstance(spec.get("command"), list)
+                or not spec["command"]
+                or not all(isinstance(item, str) and item for item in spec["command"])
+                or not isinstance(spec.get("authority"), list)
+                or not spec["authority"]
+                or not all(isinstance(item, str) and item for item in spec["authority"])
+            ):
+                raise GateCacheError(
+                    f"gate {identifier} has a malformed material-output certificate"
+                )
         external = inputs.get("external", [])
         if not isinstance(external, list):
             raise GateCacheError(f"gate {identifier} has malformed external inputs")
@@ -401,6 +477,24 @@ def load_registry(path: Path) -> dict[str, Any]:
 
     _validate_oracle_lanes(gates)
     gates.sort(key=lambda gate: gate["order"])
+    position = {gate["id"]: index for index, gate in enumerate(gates)}
+    for gate in gates:
+        dependencies = gate.get("depends_on", [])
+        if (
+            not isinstance(dependencies, list)
+            or not all(isinstance(item, str) and item for item in dependencies)
+            or len(dependencies) != len(set(dependencies))
+        ):
+            raise GateCacheError(f"gate {gate['id']} has malformed dependencies")
+        for dependency in dependencies:
+            if dependency not in position:
+                raise GateCacheError(
+                    f"gate {gate['id']} depends on absent gate {dependency}"
+                )
+            if position[dependency] >= position[gate["id"]]:
+                raise GateCacheError(
+                    f"gate {gate['id']} dependency {dependency} is not earlier in the catalogue"
+                )
     return registry
 
 
@@ -512,8 +606,35 @@ def command_text(gate: dict[str, Any]) -> str:
     return " ".join(gate["command"])
 
 
-RUNNER_COMMON_SOURCES = ("gate-cache.py", "check-gates.sh")
+RUNNER_SOUNDNESS_SOURCE = "gate-cache.py"
 RUNNER_T8N_SOURCE = "gate_cache_t8n_root.py"
+
+# Top-level authorities whose semantics can change whether an earlier verdict
+# is valid for a candidate.  The AST digest deliberately excludes comments,
+# CLI help, report/inventory rendering, and cache-retention policy.  Those can
+# change how evidence is displayed or retained; they cannot change whether the
+# substantive verdict recorded in that evidence was true.
+SOUNDNESS_AUTHORITY_NAMES = frozenset({
+    "EVIDENCE_SCHEMA_VERSION", "LEAN_TRACE_ROOTS", "IMPORT_MODIFIERS",
+    "IMPORT_LINE", "IMPORT_LIKE", "INPUT_KINDS", "GATE_KINDS",
+    "TOOL_COMMANDS", "LEGACY_EELS_PIN", "CURRENT_T8N_PIN", "NAMED_ROOTS",
+    "SHARED_STATE_RELATIVE", "BUILD_CERTIFICATE_RELATIVE",
+    "BUILD_CERTIFICATE_SCHEMA", "GateCacheError", "Unresolvable",
+    "git_common_dir", "shared_state_path", "cache_path", "build_certificate_path",
+    "sha256_bytes",
+    "file_digest", "file_identity", "forget_digests", "canonical", "digest_of",
+    "load_registry", "_input_strings", "_validate_oracle_lanes",
+    "gate_uses_t8n_resolver", "semantic_authority_digest", "runner_identity",
+    "resolve_path", "component_files", "glob_population", "traversable_population",
+    "component_populations", "trace_path_for", "module_dep_hash",
+    "component_lean_modules", "imports_of", "component_lean_entries", "git_output",
+    "component_git_refs", "component_external", "component_env", "component_tools",
+    "component_clock", "component_material_output", "fingerprint", "empty_cache", "read_cache", "lookup",
+    "store", "prune_details", "tree_identity", "plan", "capture_verdict",
+    "execute", "host_identity", "build_source_identity", "build_trace_state",
+    "read_build_certificate", "write_build_certificate",
+    "build_certificate_status", "run", "main",
+})
 
 
 def gate_uses_t8n_resolver(gate: dict[str, Any]) -> bool:
@@ -535,18 +656,44 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     absent: it serializes writes but cannot make evidence reusable.
     """
 
-    sources = list(RUNNER_COMMON_SOURCES)
+    sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness"]
     if gate_uses_t8n_resolver(gate):
         sources.append(RUNNER_T8N_SOURCE)
     return tuple(sources)
 
 
+def semantic_authority_digest(path: Path) -> str:
+    """Digest only verdict-validity authorities in the runner source."""
+
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, UnicodeError, SyntaxError) as error:
+        raise Unresolvable(f"cannot parse runner soundness authority {path}: {error}") from error
+    found: dict[str, str] = {}
+    for node in tree.body:
+        names: list[str] = []
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names = [node.name]
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            names = [target.id for target in targets if isinstance(target, ast.Name)]
+        for name in names:
+            if name in SOUNDNESS_AUTHORITY_NAMES:
+                found[name] = ast.dump(node, annotate_fields=True, include_attributes=False)
+    missing = sorted(SOUNDNESS_AUTHORITY_NAMES - set(found))
+    if missing:
+        raise Unresolvable(f"runner soundness authority is missing: {', '.join(missing)}")
+    return digest_of(found)
+
+
 def runner_identity(gate: dict[str, Any]) -> tuple[str, dict[str, str]]:
     here = Path(__file__).resolve().parent
     detail = {
-        f"scripts/{name}": file_digest(here / name)
-        for name in runner_identity_sources(gate)
+        f"scripts/{RUNNER_SOUNDNESS_SOURCE}#soundness":
+            semantic_authority_digest(here / RUNNER_SOUNDNESS_SOURCE)
     }
+    if gate_uses_t8n_resolver(gate):
+        detail[f"scripts/{RUNNER_T8N_SOURCE}"] = file_digest(here / RUNNER_T8N_SOURCE)
     return digest_of({"schema": SCHEMA_VERSION, "sources": detail}), detail
 
 
@@ -905,27 +1052,93 @@ def component_tools(root: Path, tools: list[str]) -> tuple[str, dict[str, str]]:
     return digest_of(detail), detail
 
 
-def component_clock(kind: str) -> tuple[str, dict[str, str]]:
-    """The current date, for gates whose exceptions expire.
+def component_clock(
+    root: Path,
+    spec: dict[str, Any],
+    now: dt.datetime | None = None,
+) -> tuple[str, dict[str, str]]:
+    """Identity changes only when an exception can change gate semantics.
 
-    A gate holding an exception that expires on a date reads the clock whether
-    it says so or not, so its verdict can change with no file changing at all.
-    Declaring the clock makes yesterday's pass stop counting tomorrow.
-
-    Which clock matters.  Blanc's four expiry gates compare against
-    `datetime.date.today()`, which is the *local* civil date.  Fingerprinting
-    UTC instead would leave a window every day, as wide as the offset, in which
-    the local date has rolled over and the UTC date has not: on this UTC+9 host
-    a gate that started failing at 00:00 KST would be credited its previous
-    pass until 09:00. `local-date` is therefore not a stylistic choice.
+    All four checkers accept an exception through its `expires` local civil
+    date and reject it on the following local date.  Empty registries therefore
+    have no clock input at all; a future exception contributes a stable
+    before/after boundary rather than invalidating at every midnight.
     """
 
-    if kind == "local-date":
-        detail = {"local-date": time.strftime("%Y-%m-%d")}
-    elif kind == "utc-date":
-        detail = {"utc-date": time.strftime("%Y-%m-%d", time.gmtime())}
-    else:
-        raise GateCacheError(f"unknown clock kind: {kind}")
+    if spec.get("kind") != "expiry-transitions":
+        raise GateCacheError(f"unknown clock contract: {spec!r}")
+    instant = now or dt.datetime.now().astimezone()
+    if instant.tzinfo is None:
+        raise GateCacheError("injected clock must carry an explicit timezone")
+    today = instant.date()
+    detail: dict[str, str] = {}
+    for relative in spec["files"]:
+        path = resolve_path(root, relative)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise Unresolvable(f"cannot read expiry registry {relative}: {error}") from error
+        rows = payload.get("exceptions") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            raise Unresolvable(f"expiry registry {relative} has no exception list")
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict) or not isinstance(row.get("expires"), str):
+                raise Unresolvable(f"expiry registry {relative} row {index} has no expiry")
+            raw = row["expires"]
+            try:
+                expiry = dt.date.fromisoformat(raw)
+            except ValueError as error:
+                raise Unresolvable(
+                    f"expiry registry {relative} row {index} has invalid expiry"
+                ) from error
+            if expiry.isoformat() != raw:
+                raise Unresolvable(
+                    f"expiry registry {relative} row {index} has noncanonical expiry"
+                )
+            state = "active-through" if today <= expiry else "expired-after"
+            detail[f"{relative}#{index}"] = f"{state}:{raw}"
+    if not detail:
+        detail["expiry-transitions"] = "none"
+    return digest_of(detail), detail
+
+
+def component_material_output(
+    root: Path, specs: list[dict[str, Any]]
+) -> tuple[str, dict[str, str]]:
+    """Cheap deterministic projection of bytes an expensive gate consumes.
+
+    The output-producing authority is bound independently of its stdout.  A
+    checker edit that starts printing a constant therefore invalidates rather
+    than laundering changed compiled bytes into an old certificate.
+    """
+
+    detail: dict[str, str] = {}
+    seen: set[str] = set()
+    for spec in specs:
+        identifier = spec["id"]
+        if identifier in seen:
+            raise GateCacheError(f"duplicate material-output id: {identifier}")
+        seen.add(identifier)
+        authority = {
+            relative: file_identity(resolve_path(root, relative))
+            for relative in sorted(set(spec["authority"]))
+        }
+        try:
+            result = subprocess.run(
+                spec["command"], cwd=root, capture_output=True, check=False, timeout=180
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise Unresolvable(f"material output {identifier} could not run: {error}") from error
+        if result.returncode != 0:
+            diagnostic = result.stderr.decode("utf-8", "replace").strip()
+            raise Unresolvable(
+                f"material output {identifier} failed: {diagnostic or result.returncode}"
+            )
+        if not result.stdout:
+            raise Unresolvable(f"material output {identifier} was empty")
+        detail[f"{identifier}::output"] = sha256_bytes(result.stdout)
+        detail[f"{identifier}::authority"] = digest_of(authority)
+        detail[f"{identifier}::command"] = digest_of(spec["command"])
     return digest_of(detail), detail
 
 
@@ -956,9 +1169,6 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                 "kind": gate["kind"],
                 "inputs": inputs,
                 "verdict": gate.get("verdict"),
-                "order": gate["order"],
-                "prerequisite": bool(gate.get("prerequisite")),
-                "ci_only": bool(gate.get("ci_only")),
             }
         ),
         "detail": None,
@@ -994,8 +1204,11 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         digest, detail = component_tools(root, inputs["tools"])
         components["tools"] = {"digest": digest, "detail": detail}
     if "clock" in inputs:
-        digest, detail = component_clock(inputs["clock"])
+        digest, detail = component_clock(root, inputs["clock"])
         components["clock"] = {"digest": digest, "detail": detail}
+    if "material_output" in inputs:
+        digest, detail = component_material_output(root, inputs["material_output"])
+        components["material_output"] = {"digest": digest, "detail": detail}
 
     overall = digest_of(
         {name: entry["digest"] for name, entry in sorted(components.items())}
@@ -1003,11 +1216,157 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     return overall, components
 
 
+# --- authoritative build certificate ---------------------------------------
+
+
+def host_identity() -> str:
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    # The readable platform prefix makes diagnostics useful; the hashed node
+    # component prevents a shared/NFS common directory from laundering local
+    # evidence between two hosts without publishing the hostname itself.
+    node = sha256_bytes(platform.node().encode("utf-8"))[:16]
+    return f"{system}-{machine}-{node}"
+
+
+def build_source_identity(
+    root: Path, lake_root: Path | None = None
+) -> tuple[str, dict[str, Any]]:
+    """Exact source/config/toolchain/dependency identity credited by `lake build`."""
+
+    files = ["lean-toolchain", "lakefile.lean", "lake-manifest.json", "Blanc.lean"]
+    if (root / "Main.lean").is_file():
+        files.append("Main.lean")
+    files.extend(
+        path.relative_to(root).as_posix()
+        for path in sorted((root / "Blanc").rglob("*.lean"))
+    )
+    file_print, file_detail = component_files(root, files)
+    tool_print, tool_detail = component_tools(root, ["lake", "lean"])
+
+    manifest = json.loads((root / "lake-manifest.json").read_text(encoding="utf-8"))
+    packages = manifest.get("packages") if isinstance(manifest, dict) else None
+    if not isinstance(packages, list):
+        raise Unresolvable("lake-manifest.json has no package population")
+    package_detail: dict[str, str] = {}
+    for package in packages:
+        if not isinstance(package, dict) or not isinstance(package.get("name"), str):
+            raise Unresolvable("lake-manifest.json has a malformed package row")
+        name = package["name"]
+        expected = package.get("rev")
+        directory = (lake_root or root / ".lake") / "packages" / name
+        if not directory.is_dir():
+            raise Unresolvable(f"Lake package {name} is absent")
+        head = git_output(directory, ["rev-parse", "HEAD"])
+        dirt = git_output(directory, ["status", "--porcelain"])
+        if dirt:
+            raise Unresolvable(f"Lake package {name} is dirty")
+        if isinstance(expected, str) and re.fullmatch(r"[0-9a-f]{40}", expected):
+            if head != expected:
+                raise Unresolvable(f"Lake package {name} is at {head}, expected {expected}")
+        package_detail[name] = head
+    package_print = digest_of(package_detail)
+    runner_path = (lake_root or root / ".lake") / JAUNE_RUNNER_RELATIVE
+    runner_detail = {JAUNE_RUNNER_RELATIVE: file_identity(runner_path)}
+    runner_print = digest_of(runner_detail)
+    detail = {
+        "files": {"digest": file_print, "detail": file_detail},
+        "tools": {"digest": tool_print, "detail": tool_detail},
+        "packages": {"digest": package_print, "detail": package_detail},
+        "runtime_artifacts": {"digest": runner_print, "detail": runner_detail},
+    }
+    return digest_of({name: item["digest"] for name, item in detail.items()}), detail
+
+
+def build_trace_state(root: Path, lake_root: Path | None = None) -> dict[str, str]:
+    modules = ["Blanc"]
+    modules.extend(
+        path.relative_to(root).with_suffix("").as_posix().replace("/", ".")
+        for path in sorted((root / "Blanc").rglob("*.lean"))
+    )
+    trace_root = (lake_root or root / ".lake") / "build/lib/lean"
+    detail: dict[str, str] = {}
+    for module in sorted(set(modules)):
+        path = trace_root / (module.replace(".", "/") + ".trace")
+        try:
+            trace = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise Unresolvable(f"unreadable Lake trace for {module}: {error}") from error
+        dep_hash = trace.get("depHash") if isinstance(trace, dict) else None
+        if not isinstance(dep_hash, str) or not dep_hash:
+            raise Unresolvable(f"Lake trace for {module} carries no depHash")
+        detail[module] = dep_hash
+    return detail
+
+
+def read_build_certificate(
+    root: Path, lake_root: Path | None = None
+) -> dict[str, Any]:
+    path = build_certificate_path(root, lake_root)
+    try:
+        certificate = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise Unresolvable(f"build certificate is missing or corrupt: {error}") from error
+    required = {"schema", "host", "identity", "components", "traces", "provenance"}
+    if not isinstance(certificate, dict) or set(certificate) != required:
+        raise Unresolvable("build certificate shape is incompatible")
+    if certificate.get("schema") != BUILD_CERTIFICATE_SCHEMA:
+        raise Unresolvable("build certificate schema is incompatible")
+    if certificate.get("host") != host_identity():
+        raise Unresolvable("build certificate belongs to a different host identity")
+    if not isinstance(certificate.get("identity"), str):
+        raise Unresolvable("build certificate has no identity")
+    if not isinstance(certificate.get("components"), dict):
+        raise Unresolvable("build certificate has no component map")
+    traces = certificate.get("traces")
+    if not isinstance(traces, dict) or not all(
+        isinstance(name, str) and isinstance(value, str) for name, value in traces.items()
+    ):
+        raise Unresolvable("build certificate has no trace map")
+    return certificate
+
+
+def write_build_certificate(root: Path) -> dict[str, Any]:
+    identity, components = build_source_identity(root)
+    traces = build_trace_state(root)
+    certificate = {
+        "schema": BUILD_CERTIFICATE_SCHEMA,
+        "host": host_identity(),
+        "identity": identity,
+        "components": {
+            name: item["digest"] for name, item in components.items()
+        },
+        "traces": traces,
+        "provenance": {
+            "commit": git_output(root, ["rev-parse", "HEAD"]),
+            "recorded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
+    }
+    atomic_json(build_certificate_path(root), certificate)
+    return certificate
+
+
+def build_certificate_status(
+    root: Path, lake_root: Path | None = None
+) -> tuple[bool, str, dict[str, Any] | None]:
+    try:
+        certificate = read_build_certificate(root, lake_root)
+        identity, _ = build_source_identity(root, lake_root)
+        if certificate["identity"] != identity:
+            return False, "source/config/toolchain/dependency identity moved", certificate
+        traces = build_trace_state(root, lake_root)
+        if certificate["traces"] != traces:
+            return False, "Lake trace population or depHash moved", certificate
+    except (GateCacheError, Unresolvable, OSError, UnicodeError, json.JSONDecodeError) as error:
+        return False, str(error), None
+    return True, "exact build certificate matches", certificate
+
+
 # --- cache ------------------------------------------------------------------
 #
 # Layout:
 #
-#   {"schema": 1,
+#   {"schema": 2, "trust_domain": "same-git-common-directory", "host": "...",
 #    "gates":  {"<id>": [ {"fingerprint", "components", "verdict",
 #                          "provenance"}, ... newest last ... ]},
 #    "details": {"<component-digest>": {"<path>": "<digest>"}}}
@@ -1018,7 +1377,13 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 
 
 def empty_cache() -> dict[str, Any]:
-    return {"schema": SCHEMA_VERSION, "gates": {}, "details": {}}
+    return {
+        "schema": EVIDENCE_SCHEMA_VERSION,
+        "trust_domain": "same-git-common-directory",
+        "host": host_identity(),
+        "gates": {},
+        "details": {},
+    }
 
 
 def read_cache(path: Path) -> tuple[dict[str, Any], str | None]:
@@ -1035,8 +1400,12 @@ def read_cache(path: Path) -> tuple[dict[str, Any], str | None]:
         cache = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return empty_cache(), "cache is unreadable or corrupt"
-    if not isinstance(cache, dict) or cache.get("schema") != SCHEMA_VERSION:
+    if not isinstance(cache, dict) or cache.get("schema") != EVIDENCE_SCHEMA_VERSION:
         return empty_cache(), "cache schema is missing or incompatible"
+    if cache.get("trust_domain") != "same-git-common-directory":
+        return empty_cache(), "cache trust domain is missing or incompatible"
+    if cache.get("host") != host_identity():
+        return empty_cache(), "cache belongs to a different host identity"
     gates = cache.get("gates")
     details = cache.get("details")
     if not isinstance(gates, dict) or not isinstance(details, dict):
@@ -1143,6 +1512,10 @@ def tree_identity(root: Path) -> dict[str, str]:
 def plan(
     root: Path, registry: dict[str, Any], cache: dict[str, Any], fresh: bool
 ) -> list[dict[str, Any]]:
+    has_build_row = any(gate["id"] == "lake-build" for gate in registry["gates"])
+    build_current, build_reason, _ = (
+        build_certificate_status(root) if has_build_row else (True, "not required", None)
+    )
     rows: list[dict[str, Any]] = []
     for gate in registry["gates"]:
         row: dict[str, Any] = {
@@ -1155,9 +1528,23 @@ def plan(
             "components": None,
             "record": None,
         }
+        if gate["id"] == "lake-build" and not fresh and build_current:
+            row["disposition"] = "certified"
+            row["reason"] = build_reason
+            rows.append(row)
+            continue
         if gate["kind"] != "cacheable":
             row["disposition"] = "fresh"
             row["reason"] = gate["reason"]
+            rows.append(row)
+            continue
+        if (
+            has_build_row
+            and not build_current
+            and any(kind in gate.get("inputs", {}) for kind in ("lean_modules", "lean_entries"))
+        ):
+            row["disposition"] = "fresh"
+            row["reason"] = f"authoritative build refresh required: {build_reason}"
             rows.append(row)
             continue
         try:
@@ -1291,6 +1678,15 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         print(f"check-gates: {cache_reason}; every gate will execute", file=sys.stderr)
 
     identity = tree_identity(root)
+    shared_admission = (
+        identity["commit"] == "<unresolved>" or identity["worktree"] == "clean"
+    )
+    if not shared_admission:
+        print(
+            "check-gates: dirty worktree; successful fresh verdicts will not seed "
+            "shared evidence",
+            file=sys.stderr,
+        )
     started_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     wall_started = time.monotonic()
     failures: list[str] = []
@@ -1304,13 +1700,36 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
     for gate in registry["gates"]:
         if not gate.get("prerequisite"):
             continue
+        if gate["id"] == "lake-build" and not arguments.fresh:
+            current, reason, certificate = build_certificate_status(root)
+            if current:
+                print(f"[cert  ] {command_text(gate)}   ({reason})")
+                prerequisites[gate["id"]] = {
+                    "disposition": "certified",
+                    "verdict": {
+                        "exit": 0,
+                        "summary": ["OK — lake build certificate: exact identity and traces"],
+                        "problems": [],
+                        "output_digest": digest_of(certificate),
+                        "passed": True,
+                    },
+                    "elapsed": 0.0,
+                }
+                continue
         print(f"[fresh ] {command_text(gate)}   (prerequisite refresh)")
         verdict, elapsed = execute(root, gate, echo=arguments.echo)
-        prerequisites[gate["id"]] = {"verdict": verdict, "elapsed": elapsed}
+        prerequisites[gate["id"]] = {
+            "disposition": "fresh", "verdict": verdict, "elapsed": elapsed
+        }
         if not verdict["passed"]:
             problem = "; ".join(verdict["problems"])
             print(f"         FAILED: {problem}", file=sys.stderr)
             failures.append(f"{command_text(gate)}: {problem}")
+        elif gate["id"] == "lake-build":
+            try:
+                write_build_certificate(root)
+            except (GateCacheError, Unresolvable, OSError, UnicodeError) as error:
+                failures.append(f"{command_text(gate)}: could not certify build: {error}")
 
     if failures:
         # Without a current build there is no sound dependency identity for any
@@ -1329,12 +1748,46 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         label = command_text(row["gate"])
         done = prerequisites.get(row["id"])
         if done is not None:
-            row["disposition"] = "fresh"
-            row["reason"] = row["gate"]["reason"]
+            row["disposition"] = done["disposition"]
+            row["reason"] = (
+                "exact build certificate matched"
+                if done["disposition"] == "certified"
+                else row["gate"]["reason"]
+            )
             row["verdict"] = done["verdict"]
             row["elapsed"] = done["elapsed"]
             row["cached"] = False
-            row["cache_reason"] = "prerequisite refresh, never credited from a record"
+            row["cache_reason"] = (
+                "exact local build certificate"
+                if done["disposition"] == "certified"
+                else "prerequisite refresh, never credited from a record"
+            )
+            continue
+        dependencies = row["gate"].get("depends_on", [])
+        unmet = []
+        for dependency in dependencies:
+            prior = next((item for item in rows if item["id"] == dependency), None)
+            prior_green = prior is not None and (
+                prior.get("disposition") in {"reused", "certified"}
+                or prior.get("verdict", {}).get("passed") is True
+            )
+            if not prior_green:
+                unmet.append(dependency)
+        if unmet:
+            row["disposition"] = "blocked"
+            row["reason"] = "required evidence absent or red: " + ", ".join(unmet)
+            row["elapsed"] = 0.0
+            row["verdict"] = {
+                "exit": 1,
+                "summary": [],
+                "problems": [row["reason"]],
+                "output_digest": digest_of(row["reason"]),
+                "passed": False,
+            }
+            row["cached"] = False
+            row["cache_reason"] = row["reason"]
+            failures.append(f"{label}: {row['reason']}")
+            print(f"[block ] {label}   ({row['reason']})", file=sys.stderr)
             continue
         if row["disposition"] == "reused":
             record = row["record"]
@@ -1362,6 +1815,13 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         if row["kind"] != "cacheable" or row["fingerprint"] is None:
             row["cached"] = False
             row["cache_reason"] = row.get("reason", "not cacheable")
+            continue
+        if not shared_admission:
+            row["cached"] = False
+            row["cache_reason"] = (
+                "dirty worktree: verdict is candidate-local and was not admitted "
+                "to shared evidence"
+            )
             continue
 
         # Re-derive the fingerprint now that the gate has finished.  An edit
@@ -1432,8 +1892,10 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
 
     executed = sum(1 for row in rows if row["disposition"] == "fresh")
     reused = sum(1 for row in rows if row["disposition"] == "reused")
+    certified = sum(1 for row in rows if row["disposition"] == "certified")
     print(
-        f"GATES OK: {len(rows)} rows, {executed} executed, {reused} reused "
+        f"GATES OK: {len(rows)} rows, {executed} executed, {reused} reused, "
+        f"{certified} build-certified "
         f"from valid evidence, {wall:.1f}s"
     )
     print(f"check-gates: report {REPORT_RELATIVE}, manifest {MANIFEST_RELATIVE}")
@@ -1470,6 +1932,8 @@ def write_report(
         f"- rows: {len(rows)}",
         f"- executed: {sum(1 for r in rows if r['disposition'] == 'fresh')}",
         f"- reused: {sum(1 for r in rows if r['disposition'] == 'reused')}",
+        f"- build-certified: {sum(1 for r in rows if r['disposition'] == 'certified')}",
+        f"- blocked: {sum(1 for r in rows if r['disposition'] == 'blocked')}",
         "",
         "| # | command | disposition | verdict | evidence from |",
         "|---|---|---|---|---|",
@@ -1482,6 +1946,12 @@ def write_report(
             provenance = row["record"]["provenance"]
             source = f"{provenance.get('commit', '?')[:12]} @ {provenance.get('recorded_utc', '?')}"
             disposition = "reused successful evidence"
+        elif row["disposition"] == "certified":
+            source = BUILD_CERTIFICATE_RELATIVE
+            disposition = "exact build certificate"
+        elif row["disposition"] == "blocked":
+            source = row.get("reason", "required evidence absent or red")
+            disposition = "blocked"
         else:
             source = "executed now"
             disposition = "executed now"
@@ -1498,6 +1968,7 @@ def write_report(
                 "kind": row["kind"],
                 "disposition": row["disposition"],
                 "reason": row.get("reason"),
+                "depends_on": row["gate"].get("depends_on", []),
                 "fingerprint": row["fingerprint"],
                 "components": (
                     {name: entry["digest"] for name, entry in row["components"].items()}
@@ -1509,7 +1980,13 @@ def write_report(
                 "cached": row.get("cached"),
                 "cache_reason": row.get("cache_reason"),
                 "evidence_from": (
-                    row["record"]["provenance"] if row["disposition"] == "reused" else None
+                    row["record"]["provenance"]
+                    if row["disposition"] == "reused"
+                    else (
+                        {"kind": "build-certificate", "path": BUILD_CERTIFICATE_RELATIVE}
+                        if row["disposition"] == "certified"
+                        else None
+                    )
                 ),
             }
         )
@@ -1630,6 +2107,29 @@ def audit(root: Path, quiet: bool = False) -> int:
             f"run scripts/check-gates.sh --inventory"
         )
 
+    if registry.get("economy_inventory"):
+        policy_checks = (
+            ([sys.executable, "scripts/gate-economy.py", "--check"],
+             "economic inventory does not reconcile"),
+            ([sys.executable, "scripts/gate_sampling.py", "--check"],
+             "campaign sampling policy does not reconcile"),
+            ([sys.executable, "scripts/ci_gate_policy.py", "--self-test"],
+             "CI trust-policy controls failed"),
+            ([sys.executable, "scripts/ci_gate_policy.py", "--audit"],
+             "CI gate policy does not reconcile"),
+        )
+        for command, label in policy_checks:
+            result = subprocess.run(
+                command,
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout).strip()
+                problems.append(f"{label}: {detail}")
+
     duplicates = [
         " ".join(command)
         for command in set(catalogue)
@@ -1669,16 +2169,23 @@ def show_plan(root: Path, arguments: argparse.Namespace) -> int:
         print(f"cache: {cache_reason}")
     rows = plan(root, registry, cache, fresh=arguments.fresh)
     executed = sum(1 for row in rows if row["disposition"] == "fresh")
-    reused = len(rows) - executed
+    reused = sum(1 for row in rows if row["disposition"] == "reused")
+    certified = sum(1 for row in rows if row["disposition"] == "certified")
     for row in rows:
-        marker = "reuse " if row["disposition"] == "reused" else "RUN   "
+        marker = {
+            "reused": "reuse ",
+            "certified": "cert  ",
+        }.get(row["disposition"], "RUN   ")
         print(f"{row['order']:>3} {marker} {command_text(row['gate'])}")
         if row["disposition"] == "fresh":
             print(f"    reason: {row['reason']}")
             if arguments.explain:
                 for line in explain_row(cache, row):
                     print(line)
-    print(f"PLAN: {len(rows)} rows, {executed} would execute, {reused} would reuse")
+    print(
+        f"PLAN: {len(rows)} rows, {executed} would execute, {reused} would reuse, "
+        f"{certified} build-certified"
+    )
     return 0
 
 
@@ -1735,7 +2242,10 @@ def render_inventory(root: Path) -> str:
                         + (f" pinned {spec['pin']}" if spec.get("pin") else "")
                     )
             elif kind == "clock":
-                lines.append(f"- clock: {value}")
+                lines.append(
+                    f"- clock: {value['kind']} from "
+                    + ", ".join(f"`{item}`" for item in value["files"])
+                )
             else:
                 lines.append(f"- {kind}: " + ", ".join(f"`{item}`" for item in value))
         lines.append("")
@@ -1780,6 +2290,10 @@ def build_parser() -> argparse.ArgumentParser:
     inventory = commands.add_parser("inventory", help="generate the readable input inventory")
     inventory.add_argument("--output", help="write to this path instead of stdout")
 
+    commands.add_parser(
+        "certify-build",
+        help="record exact state immediately after a successful authoritative lake build",
+    )
     commands.add_parser("self-test", help="run the fail-closed control suite")
     return parser
 
@@ -1801,6 +2315,13 @@ def main(argv: list[str]) -> int:
         if not acquire_lock(lock_path(root)):
             return 2
         try:
+            if arguments.mode == "certify-build":
+                certificate = write_build_certificate(root)
+                print(
+                    "OK — lake build certificate: "
+                    f"{certificate['identity'][:16]} on {certificate['host']}"
+                )
+                return 0
             return run(root, arguments)
         finally:
             release_lock(lock_path(root))

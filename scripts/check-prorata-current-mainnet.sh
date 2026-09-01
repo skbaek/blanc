@@ -9,12 +9,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 : "${HOME:?HOME is required}"
 
+COMPOSED_PREREQUISITES=0
+if [ "${1:-}" = "--composed-prerequisites" ]; then
+  COMPOSED_PREREQUISITES=1
+  shift
+fi
 if [ "$#" -ne 0 ]; then
-  echo "usage: scripts/check-prorata-current-mainnet.sh" >&2
+  echo "usage: scripts/check-prorata-current-mainnet.sh [--composed-prerequisites]" >&2
   exit 2
 fi
 
-if ! "$SCRIPT_DIR/check-current-mainnet.sh"; then
+if [ "$COMPOSED_PREREQUISITES" -eq 0 ] && ! "$SCRIPT_DIR/check-current-mainnet.sh"; then
   echo "REGRESSION — prorata current-mainnet: shared boundary failed" >&2
   exit 1
 fi
