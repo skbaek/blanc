@@ -408,11 +408,33 @@ conservation, and neither use is prior to the other. So it moved to
 `Solvent.lean` has found the same kind of factoring defect, not a shortcut.
 
 The rule is enforced, not merely documented:
-[`scripts/check-layering.sh`](scripts/check-layering.sh) parses the import
-lines and fails on a cross-contract import, on a shared module importing a
-contract (the same break, other direction), and on any module missing from its
-classification — so a new contract cannot escape the rule by never being
-listed. It needs no Lean toolchain and runs ahead of the build in CI.
+[`scripts/check-layering.sh`](scripts/check-layering.sh) reads the actual Lean
+module header, not physical lines. For Lean 4.32.1 it recognizes local imports
+in the complete command shape `public? meta? import all? ident`, after the
+optional bare `module` and `prelude` directives. The elaborating modifier cases
+are plain `import`; with `module`, `public import`, `meta import`, `import all`,
+`public meta import`, and `meta import all`. Identifiers may use quoted
+components such as `«Main»` and Lean's unquoted letter-like Unicode characters;
+whitespace and nested comments may occur between the pieces, an import may span
+lines, and a trailing line comment is trivia.
+`public`, `meta`, and `all` require a `module` header. `public import all` and
+the reversed `meta public import` modifier order are rejected because Lean
+rejects those combinations. A partial trailing dot
+(`import Blanc.`) is an editor-completion parse shape, not an elaborating
+import, so the gate rejects it closed as it does an unterminated header comment
+or string.
+
+The reader stops at the first non-header command. Thus an `import`-shaped line
+in a declaration, string literal, or later comment is never mistaken for a
+module dependency. It fails on a cross-contract import, on a shared module
+importing a contract (the same break, other direction), and on any module
+missing from its classification — so a new contract cannot escape the rule by
+never being listed. Import recognition is category-agnostic: `imports_of`
+returns a local-looking module name before, and without, consulting the
+classification table, so a category added later receives the same complete
+header reading. It needs no Lean toolchain and runs ahead of the build in CI;
+[`scripts/check-layering-controls.py`](scripts/check-layering-controls.py)
+separately pairs the accepted forms with real Lean elaboration.
 
 The goal-local representation-changing v1/v2 witness and its exact compiled
 OssifiableProxy route are documented in
