@@ -265,6 +265,8 @@ CONTRACTS = {
                 "ProrataPreservation", "ProrataSound", "ProrataDeploymentRoot",
                 "ProrataAttackModel", "ProrataAttackPath",
                 "ProrataAttackTrace"],
+    "prorata-weth-vault": ["ProrataWethVault", "ProrataWethVaultCode",
+                            "ProrataWethVaultArtifact"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],

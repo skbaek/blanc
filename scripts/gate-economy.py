@@ -85,6 +85,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "weth10-current-mainnet",
             "keccak-rate-boundary",
             "drip-stack-certificate-data",
+            "prorata-weth-vault-artifact",
         ],
     }
     for key, expected in expected_meta.items():
@@ -202,11 +203,13 @@ def render() -> str:
         "- Five launch composite rows retain their static halves in catalogue order and",
         "  add semantic halves at positions 56–60: "
         + ", ".join(f"`{item}`" for item in economy["split_families"]) + ".",
-        "- Five gates landed after the launch inventory: BeaconDeposit assurance runs early;",
+        "- Six gates landed after the launch inventory: BeaconDeposit assurance runs early;",
         "  BeaconDeposit deployment and WETH10 current-mainnet retain their reviewed output-aware",
-        "  boundaries; Keccak rate-boundary is a static row; and the local-draft DRIP stack",
-        "  certificate data row runs deterministic source comparison and corruption controls.",
-        "  The final population is therefore 53 + 5 + 5 = 63; no required content was dropped.",
+        "  boundaries; Keccak rate-boundary is a static row; the local-draft DRIP stack",
+        "  certificate data row runs deterministic source comparison and corruption controls;",
+        "  and the PRORATA WETH vault artifact row binds its new family-owned runtime, ABI",
+        "  and compile witness.",
+        "  The final population is therefore 53 + 5 + 6 = 64; no required content was dropped.",
         "- CI makes the same five splits and adds the cheap assurance row, so its registered",
         "  command population moves from 34 to 40. Deployment and the DRIP certificate remain",
         "  local merge-candidate rows. The prerequisite column also records nested launch composition",

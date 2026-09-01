@@ -291,6 +291,9 @@ import Blanc.ProrataAccountingHistory
 import Blanc.ProrataAttackModel
 import Blanc.ProrataAttackPath
 import Blanc.ProrataAttackTrace
+import Blanc.ProrataWethVault
+import Blanc.ProrataWethVaultCode
+import Blanc.ProrataWethVaultArtifact
 
 import Blanc.DripStackSafetyCertificate
 
