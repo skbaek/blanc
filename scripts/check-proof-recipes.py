@@ -956,6 +956,41 @@ def load_strict_json(text: str, where: str):
         raise GateError(f"{where}: invalid JSON: {error}") from error
 
 
+def _valid_module_path(value: str) -> bool:
+    """A repository-relative `Blanc/**/*.lean` path, validated structurally.
+
+    Structural rather than a character class: the corpus walk is recursive, so
+    the writers emit whatever names the tree actually holds, and Lean module
+    names are not confined to ASCII. A pattern that enumerated legal identifier
+    characters would reject names its own writer produced -- the round-trip
+    defect this replaces. What must be rejected is traversal, not unusual
+    letters, so that is what is checked. Containment of the *resolved* path is
+    a separate check at read time, because a symlink escapes a string test.
+    """
+    if not isinstance(value, str) or not value or value != value.strip():
+        return False
+    pure = pathlib.PurePosixPath(value)
+    if pure.is_absolute() or len(pure.parts) < 2:
+        return False
+    if pure.parts[0] != "Blanc" or pure.suffix != ".lean":
+        return False
+    return all(part not in ("", ".", "..") for part in pure.parts)
+
+
+def _under_root(path, root) -> bool:
+    """The resolved path stays inside the nominated root.
+
+    `rglob` returns a symlinked *file* under `Blanc/`, and reading it would
+    leave the tree under test entirely. The residue gate already refuses that
+    class; these censuses now refuse it too.
+    """
+    try:
+        path.resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def production_modules(root: pathlib.Path) -> List[str]:
     """The ratchet's corpus.
 
@@ -973,9 +1008,11 @@ def production_modules(root: pathlib.Path) -> List[str]:
     source = root / DUPLICATION_SCAN_ROOT
     if not source.is_dir():
         raise GateError(f"production source directory not found: {source}")
-    modules = [
-        path.relative_to(root).as_posix() for path in sorted(source.rglob("*.lean"))
-    ]
+    discovered = sorted(source.rglob("*.lean"))
+    for path in discovered:
+        if not _under_root(path, root):
+            raise GateError(f"resolved path escapes repository root: {path}")
+    modules = [path.relative_to(root).as_posix() for path in discovered]
     if not modules:
         raise GateError(
             f"no production {DUPLICATION_SCAN_ROOT}/**/*.lean modules found under {root}"
@@ -1110,7 +1147,7 @@ def load_duplication_baseline_text(text: str, where: str) -> DuplicationBaseline
         raise GateError(f"{where}: unparsable_modules must be a list")
     unparsable: List[str] = []
     for item in unparsable_raw:
-        if not isinstance(item, str) or not DUPLICATION_MODULE_RE.fullmatch(item):
+        if not _valid_module_path(item):
             raise GateError(
                 f"{where}: unparsable_modules must name concrete Blanc/*.lean modules"
             )

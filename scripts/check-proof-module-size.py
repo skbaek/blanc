@@ -18,7 +18,7 @@ import re
 import sys
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 
@@ -113,7 +113,7 @@ def positive_int(value: Any, where: str) -> int:
 
 
 def module_path(value: Any, where: str) -> str:
-    if not isinstance(value, str) or not MODULE_RE.fullmatch(value):
+    if not _valid_module_path(value):
         raise ModuleSizeError(
             f"{where}: expected one concrete Blanc/*.lean module; wildcards and file-wide selectors are forbidden"
         )
@@ -126,12 +126,50 @@ def nonempty(value: Any, where: str) -> str:
     return value
 
 
+def _valid_module_path(value: str) -> bool:
+    """A repository-relative `Blanc/**/*.lean` path, validated structurally.
+
+    Structural rather than a character class: the corpus walk is recursive, so
+    the writers emit whatever names the tree actually holds, and Lean module
+    names are not confined to ASCII. A pattern that enumerated legal identifier
+    characters would reject names its own writer produced -- the round-trip
+    defect this replaces. What must be rejected is traversal, not unusual
+    letters, so that is what is checked. Containment of the *resolved* path is
+    a separate check at read time, because a symlink escapes a string test.
+    """
+    if not isinstance(value, str) or not value or value != value.strip():
+        return False
+    pure = PurePosixPath(value)
+    if pure.is_absolute() or len(pure.parts) < 2:
+        return False
+    if pure.parts[0] != "Blanc" or pure.suffix != ".lean":
+        return False
+    return all(part not in ("", ".", "..") for part in pure.parts)
+
+
+def _under_root(path, root) -> bool:
+    """The resolved path stays inside the nominated root.
+
+    `rglob` returns a symlinked *file* under `Blanc/`, and reading it would
+    leave the tree under test entirely. The residue gate already refuses that
+    class; these censuses now refuse it too.
+    """
+    try:
+        path.resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def production_modules(root: Path) -> Dict[str, int]:
     source = root / "Blanc"
     if not source.is_dir():
         raise ModuleSizeError(f"production source directory not found: {source}")
     result: Dict[str, int] = {}
     for path in sorted(source.rglob("*.lean")):
+        if not _under_root(path, root):
+            raise ModuleSizeError(
+                f"resolved path escapes repository root: {path}")
         try:
             lines = len(path.read_text(encoding="utf-8").splitlines())
         except OSError as exc:

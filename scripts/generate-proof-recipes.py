@@ -19,7 +19,7 @@ import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 
@@ -323,8 +323,46 @@ def declarations_in(path: Path) -> Set[str]:
     return found
 
 
+def _valid_module_path(value: str) -> bool:
+    """A repository-relative `Blanc/**/*.lean` path, validated structurally.
+
+    Structural rather than a character class: the corpus walk is recursive, so
+    the writers emit whatever names the tree actually holds, and Lean module
+    names are not confined to ASCII. A pattern that enumerated legal identifier
+    characters would reject names its own writer produced -- the round-trip
+    defect this replaces. What must be rejected is traversal, not unusual
+    letters, so that is what is checked. Containment of the *resolved* path is
+    a separate check at read time, because a symlink escapes a string test.
+    """
+    if not isinstance(value, str) or not value or value != value.strip():
+        return False
+    pure = PurePosixPath(value)
+    if pure.is_absolute() or len(pure.parts) < 2:
+        return False
+    if pure.parts[0] != "Blanc" or pure.suffix != ".lean":
+        return False
+    return all(part not in ("", ".", "..") for part in pure.parts)
+
+
+def _under_root(path, root) -> bool:
+    """The resolved path stays inside the nominated root.
+
+    `rglob` returns a symlinked *file* under `Blanc/`, and reading it would
+    leave the tree under test entirely. The residue gate already refuses that
+    class; these censuses now refuse it too.
+    """
+    try:
+        path.resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def lean_sources(root: Path) -> List[Path]:
     paths = sorted((root / "Blanc").rglob("*.lean"))
+    for path in paths:
+        if not _under_root(path, root):
+            raise RecipeError(f"resolved path escapes repository root: {path}")
     if (root / "Blanc.lean").is_file():
         paths.append(root / "Blanc.lean")
     if not paths:
@@ -515,7 +553,7 @@ def validate_symbol(
         if name not in declarations:
             raise RecipeError(f"{where}: declaration {value!r} ({name}) was not found")
     else:
-        if not MODULE_RE.fullmatch(value):
+        if not _valid_module_path(value):
             raise RecipeError(f"{where}: module {value!r} must be a Blanc/*.lean path")
         if not (root / value).is_file():
             raise RecipeError(f"{where}: module {value!r} does not exist")
@@ -576,11 +614,11 @@ def load_and_validate(root: Path) -> Registry:
         preferred_path = expect_string(raw, "preferred_path", where)
         boundary = expect_string(raw, "boundary", where)
         owner_module = expect_string(raw, "owner_module", where)
-        if not MODULE_RE.fullmatch(owner_module) or not (root / owner_module).is_file():
+        if not _valid_module_path(owner_module) or not (root / owner_module).is_file():
             raise RecipeError(f"{where}.owner_module: missing Blanc module {owner_module!r}")
         canonical_example = expect_string(raw, "canonical_example", where)
         example_file, separator, example_decl = canonical_example.partition(":")
-        if not separator or not MODULE_RE.fullmatch(example_file) or not LEAN_NAME_RE.fullmatch(example_decl):
+        if not separator or not _valid_module_path(example_file) or not LEAN_NAME_RE.fullmatch(example_decl):
             raise RecipeError(
                 f"{where}.canonical_example: expected Blanc/File.lean:Declaration.Name"
             )
