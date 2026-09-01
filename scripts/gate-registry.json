@@ -45,14 +45,24 @@
           "scripts/check-lido-circuit-breaker-enumeration.py",
           "scripts/check-lido-circuit-breaker-registry.py",
           "scripts/check-lido-circuit-breaker-history.py",
+          "Blanc/LidoCircuitBreakerHistory.lean",
+          "Blanc/LidoCircuitBreakerHistoryChain.lean",
+          "Blanc/LidoCircuitBreakerHistoryEndpoints.lean",
           "scripts/GATES.md"
+        ],
+        "populations": [
+          {
+            "mode": "membership",
+            "pattern": "check-*.sh",
+            "root": "scripts"
+          }
         ],
         "tools": [
           "python3"
         ]
       },
       "kind": "cacheable",
-      "note": "Reads every axiom-expectation authority's pin table without writing any of them, so each authority's checker source is a real input: the repository audit (scripts/AxiomCheck.lean + scripts/check.sh's ROWS table, which also backs check-lido-circuit-breaker-deployment.sh) and the access, enumeration and registry gates' tables, plus history's resolution-only pins. The catalogue is an input too, because a Gate field must be registered there. Not an input, and a known gap: the existence of the gate scripts a register row NAMES. Those are checked by path, and only the paths the register happens to cite are consulted, so deleting a cited gate script without touching this row's inputs would leave a credited verdict stale until GATES.md moves with it. The gate runs in hundredths of a second, so widening this to a population over scripts/check-*.sh costs nothing but was left for catalogue review.",
+      "note": "Reads every axiom-expectation authority's pin table without writing any of them, so each authority's checker source is a real input: the repository audit (scripts/AxiomCheck.lean + scripts/check.sh's ROWS table, which also backs check-lido-circuit-breaker-deployment.sh), the access, enumeration and registry gates' tables, and history's checker plus its three resolution owners. The catalogue is an input too, because a Gate field must be registered there. Register rows also name gate scripts by path, so the scripts/check-*.sh membership population ensures deleting or adding a checker invalidates this gate without hashing unrelated script contents.",
       "order": 2,
       "verdict": {
         "expect_exit": 0,
@@ -835,7 +845,10 @@
           "Blanc/LidoCircuitBreakerPreControl.lean",
           "Blanc/LidoCircuitBreakerCallBoundary.lean",
           "Blanc/LidoCircuitBreakerObservation.lean",
-          "Blanc/LidoCircuitBreakerSuccess.lean"
+          "Blanc/LidoCircuitBreakerSuccess.lean",
+          "Blanc/CompiledWalkInversion.lean",
+          "Blanc/LidoCircuitBreakerPublicPause.lean",
+          "Blanc/LidoCircuitBreakerPublicPauseControl.lean"
         ],
         "lean_entries": [
           "scripts/LidoCircuitBreakerAccessControls.lean"
@@ -1037,6 +1050,8 @@
           "scripts/check-extraction-ownership.py",
           "scripts/execution-occurrence-lift-manifest.json",
           "scripts/execution-raw-attribution-owner-manifest.json",
+          "scripts/ExecutionOccurrenceControls.lean",
+          "scripts/ExecutionOccurrenceRegression.lean",
           "Blanc.lean"
         ],
         "populations": [
@@ -1071,6 +1086,7 @@
           "scripts/check-cycle-write-free.py",
           "scripts/check-layering.py",
           "scripts/cycle-write-free-owner-manifest.json",
+          "scripts/CycleWriteFreeRegression.lean",
           "Blanc.lean"
         ],
         "populations": [
@@ -1084,7 +1100,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "check-layering.py is importlib-loaded for its CONTRACTS literal, which decides which contract modules this gate audits — gate 24 regex-scrapes the same file as text, so the two couple to it by different mechanisms and a formatting change breaks only one of them. The mutant and deletion fixtures are generated from CycleWriteFreeRegression.lean at run time and need no declaration of their own.",
+      "note": "check-layering.py is importlib-loaded for its CONTRACTS literal, which decides which contract modules this gate audits — gate 24 regex-scrapes the same file as text, so the two couple to it by different mechanisms and a formatting change breaks only one of them. CycleWriteFreeRegression.lean is read as the source of the run-time mutant and deletion fixtures and is therefore declared directly.",
       "order": 29,
       "verdict": {
         "expect_exit": 0,
@@ -1432,6 +1448,7 @@
           "scripts/check-lido-ossifiable-proxy-differential.py",
           "scripts/lido_ossifiable_proxy_differential_schema.py",
           "scripts/test-lido-ossifiable-proxy-differential-falsifiers.py",
+          "scripts/eval-lido-ossifiable-proxy-artifacts.lean",
           "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json",
           "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
           "scripts/lido-ossifiable-proxy-reference.json",
@@ -2316,6 +2333,8 @@
           "Blanc/ProxyPairUpgradeRelation.lean",
           "Blanc/ProxyPairUpgradeExecution.lean",
           "Blanc/ProxyPairUpgradeRefinement.lean",
+          "scripts/ProxyPairUpgradeAxiomCheck.lean",
+          "scripts/ProxyPairUpgradeWitness.lean",
           "docs/PROXY_PAIR_UPGRADE.md"
         ],
         "populations": [

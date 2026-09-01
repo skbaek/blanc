@@ -11,7 +11,7 @@ host-local observations; `unmeasured` is preserved honestly and no parallel sums
 | # | gate | positive | static/corpus | harness/self-test | prerequisites | mutable input classes | material-output disposition | ordinary wall time | resource | historical actionable catches |
 |---:|---|:---:|:---:|:---:|---|---|---|---|---|---|
 | 1 | `scripts/check-doc-counts.sh` | — | yes | yes | — | files, tools | not expensive | sub-second | light | stale published theorem counts |
-| 2 | `scripts/check-lido-circuit-breaker-assurance.sh` | — | yes | yes | — | files, tools | not expensive | sub-second | light | stale claim metadata |
+| 2 | `scripts/check-lido-circuit-breaker-assurance.sh` | — | yes | yes | — | files, populations, tools | not expensive | sub-second | light | stale claim metadata |
 | 3 | `scripts/check-layering.sh` | — | yes | yes | — | files, populations, tools | not expensive | sub-second | light | forbidden WETH re-export |
 | 4 | `scripts/check-proof-recipes.sh --base main` | — | yes | yes | — | clock, files, git_refs, populations, tools | not expensive | ~30 s self-test; ordinary runs are sub-second on a small diff | light | none known |
 | 5 | `scripts/check-proof-debt.sh` | — | yes | yes | — | clock, files, populations, tools | not expensive | sub-second | light | none known |
