@@ -14,6 +14,8 @@ import copy
 import hashlib
 import json
 import os
+import platform
+import re
 import subprocess
 import sys
 import tempfile
@@ -58,7 +60,29 @@ _EXPECTED: dict[str, Any] = {
     "t8n": "bin/ethereum-spec-evm",
     "pythonImplementation": "CPython",
     "pythonVersion": "3.11.9",
-    "pythonBasePrefix": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none",
+    "runtimeLock": "current-mainnet-runtime-lock.json",
+    "pythonPlatforms": {
+        "macos-arm64": {
+            "system": "Darwin",
+            "machine": "arm64",
+            "uvAliasPrefix": (
+                "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none"
+            ),
+            "uvBasePrefix": (
+                "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none"
+            ),
+        },
+        "linux-x86_64": {
+            "system": "Linux",
+            "machine": "x86_64",
+            "uvAliasPrefix": (
+                "~/.local/share/uv/python/cpython-3.11-linux-x86_64-gnu"
+            ),
+            "uvBasePrefix": (
+                "~/.local/share/uv/python/cpython-3.11.9-linux-x86_64-gnu"
+            ),
+        },
+    },
     "targetBlobsPerBlock": 14,
     "maxBlobsPerBlock": 21,
     "baseFeeUpdateFraction": 11684671,
@@ -191,18 +215,34 @@ def _validate_profile(profile: Any) -> dict[str, Any]:
         _literal(target[key], _EXPECTED[key], f"profile.target.{key}")
     python_identity = _exact_keys(
         target["pythonIdentity"],
-        {"implementation", "version", "basePrefix"},
+        {"implementation", "version", "runtimeLock", "platforms"},
         "profile.target.pythonIdentity",
     )
     for profile_key, expected_key in (
         ("implementation", "pythonImplementation"),
         ("version", "pythonVersion"),
-        ("basePrefix", "pythonBasePrefix"),
+        ("runtimeLock", "runtimeLock"),
     ):
         _literal(
             python_identity[profile_key],
             _EXPECTED[expected_key],
             f"profile.target.pythonIdentity.{profile_key}",
+        )
+    platforms = _exact_keys(
+        python_identity["platforms"],
+        set(_EXPECTED["pythonPlatforms"]),
+        "profile.target.pythonIdentity.platforms",
+    )
+    for key, expected_platform in _EXPECTED["pythonPlatforms"].items():
+        selected_platform = _exact_keys(
+            platforms[key],
+            {"system", "machine", "uvAliasPrefix", "uvBasePrefix"},
+            f"profile.target.pythonIdentity.platforms.{key}",
+        )
+        _literal(
+            selected_platform,
+            expected_platform,
+            f"profile.target.pythonIdentity.platforms.{key}",
         )
     overlay = _exact_keys(
         target["overlay"], {"paths", "diffSha256"}, "profile.target.overlay"
@@ -255,6 +295,64 @@ def load_profile(path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         _fail(f"profile {selected} is not JSON: {exc}")
     return _validate_profile(profile)
+
+
+def _canonical_machine(system: str, machine: str) -> str:
+    value = machine.strip().lower()
+    aliases = {
+        ("Darwin", "arm64"): "arm64",
+        ("Darwin", "aarch64"): "arm64",
+        ("Linux", "x86_64"): "x86_64",
+        ("Linux", "amd64"): "x86_64",
+    }
+    canonical = aliases.get((system, value))
+    if canonical is None:
+        _fail(
+            "unsupported current-mainnet platform: "
+            f"system={system!r} machine={machine!r}"
+        )
+    return canonical
+
+
+def _selected_platform(
+    profile: dict[str, Any],
+    *,
+    system: str | None = None,
+    machine: str | None = None,
+) -> tuple[str, dict[str, str]]:
+    selected_profile = _validate_profile(profile)
+    detected_system = system or platform.system()
+    detected_machine = machine or platform.machine()
+    canonical_machine = _canonical_machine(detected_system, detected_machine)
+    platforms = selected_profile["target"]["pythonIdentity"]["platforms"]
+    matches = [
+        (key, value)
+        for key, value in platforms.items()
+        if value["system"] == detected_system
+        and value["machine"] == canonical_machine
+    ]
+    if len(matches) != 1:
+        _fail(
+            "current-mainnet profile has no unique native platform row for "
+            f"system={detected_system!r} machine={canonical_machine!r}"
+        )
+    return matches[0]
+
+
+def _expanded_home_path(value: str, label: str) -> Path:
+    if not value.startswith("~/"):
+        _fail(f"{label} must be a home-relative path")
+    expanded = Path(os.path.expanduser(value))
+    if not expanded.is_absolute():
+        _fail(f"{label} did not expand to an absolute path")
+    return expanded
+
+
+def _runtime_lock_path(profile: dict[str, Any]) -> Path:
+    name = profile["target"]["pythonIdentity"]["runtimeLock"]
+    if Path(name).name != name:
+        _fail("current-mainnet runtime-lock name must be a sibling filename")
+    return PROFILE_PATH.with_name(name)
 
 
 def resolve_root(
@@ -428,6 +526,257 @@ def verify_target(
     }
 
 
+_RUNTIME_EXCLUDES = ["**/__pycache__/**", "**/*.pyc", "**/*.pyo"]
+_PYVENV_KEYS = {
+    "home",
+    "implementation",
+    "uv",
+    "version_info",
+    "include-system-site-packages",
+    "prompt",
+}
+
+
+def _sha256_file(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        _fail(f"cannot fingerprint runtime file {path}: {exc}")
+
+
+def _canonical_json_sha256(value: Any) -> str:
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _site_packages_fingerprint(paths: TargetPaths) -> dict[str, Any]:
+    series = ".".join(_EXPECTED["pythonVersion"].split(".")[:2])
+    root = paths.venv / "lib" / f"python{series}" / "site-packages"
+    if not root.is_dir():
+        _fail(f"selected target site-packages tree is absent: {root}")
+    records: list[dict[str, Any]] = []
+    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        if "__pycache__" in path.parts or path.suffix in (".pyc", ".pyo"):
+            continue
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            record: dict[str, Any] = {
+                "path": relative,
+                "kind": "symlink",
+                "target": os.readlink(path),
+            }
+            if path.is_file():
+                record["targetSha256"] = _sha256_file(path)
+            records.append(record)
+        elif path.is_file():
+            records.append(
+                {"path": relative, "kind": "file", "sha256": _sha256_file(path)}
+            )
+    return {
+        "relativeRoot": root.relative_to(paths.root).as_posix(),
+        "fileRecords": len(records),
+        "sha256": _canonical_json_sha256(records),
+        "excludes": list(_RUNTIME_EXCLUDES),
+    }
+
+
+def _entrypoint_body_sha256(path: Path) -> str:
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        _fail(f"cannot read target t8n entrypoint {path}: {exc}")
+    first, separator, body = raw.partition(b"\n")
+    if not separator or not first.startswith(b"#!") or not body:
+        _fail("target t8n entrypoint has no shebang-delimited body")
+    return hashlib.sha256(body).hexdigest()
+
+
+def _runtime_entry(paths: TargetPaths) -> dict[str, Any]:
+    return {
+        "pythonExecutableSha256": _sha256_file(paths.python),
+        "targetSitePackages": _site_packages_fingerprint(paths),
+    }
+
+
+def _runtime_target_document(paths: TargetPaths) -> dict[str, Any]:
+    return {
+        "checkoutCommit": _EXPECTED["checkoutCommit"],
+        "pythonImplementation": _EXPECTED["pythonImplementation"],
+        "pythonVersion": _EXPECTED["pythonVersion"],
+        "entrypointBodySha256": _entrypoint_body_sha256(paths.t8n),
+        "sitePackagesExcludes": list(_RUNTIME_EXCLUDES),
+    }
+
+
+def _is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def _validate_runtime_lock_document(
+    profile: dict[str, Any], document: Any
+) -> dict[str, Any]:
+    top = _exact_keys(document, {"schema", "target", "platforms"}, "runtime lock")
+    _literal(top["schema"], 1, "runtime lock.schema")
+    target = _exact_keys(
+        top["target"],
+        {
+            "checkoutCommit",
+            "pythonImplementation",
+            "pythonVersion",
+            "entrypointBodySha256",
+            "sitePackagesExcludes",
+        },
+        "runtime lock.target",
+    )
+    for key, expected in (
+        ("checkoutCommit", _EXPECTED["checkoutCommit"]),
+        ("pythonImplementation", _EXPECTED["pythonImplementation"]),
+        ("pythonVersion", _EXPECTED["pythonVersion"]),
+        ("sitePackagesExcludes", list(_RUNTIME_EXCLUDES)),
+    ):
+        _literal(target[key], expected, f"runtime lock.target.{key}")
+    if not _is_sha256(target["entrypointBodySha256"]):
+        _fail("runtime lock target entrypoint body digest is malformed")
+
+    expected_platforms = set(profile["target"]["pythonIdentity"]["platforms"])
+    platforms = _exact_keys(
+        top["platforms"], expected_platforms, "runtime lock.platforms"
+    )
+    for key in sorted(expected_platforms):
+        entry = _exact_keys(
+            platforms[key],
+            {"pythonExecutableSha256", "targetSitePackages"},
+            f"runtime lock.platforms.{key}",
+        )
+        if not _is_sha256(entry["pythonExecutableSha256"]):
+            _fail(f"runtime lock {key} executable digest is malformed")
+        site = _exact_keys(
+            entry["targetSitePackages"],
+            {"relativeRoot", "fileRecords", "sha256", "excludes"},
+            f"runtime lock.platforms.{key}.targetSitePackages",
+        )
+        expected_root = ".venv/lib/python3.11/site-packages"
+        if site["relativeRoot"] != expected_root \
+                or type(site["fileRecords"]) is not int \
+                or site["fileRecords"] <= 0 \
+                or not _is_sha256(site["sha256"]) \
+                or site["excludes"] != list(_RUNTIME_EXCLUDES):
+            _fail(f"runtime lock {key} site-packages fingerprint is malformed")
+    return top
+
+
+def _load_runtime_lock(profile: dict[str, Any]) -> dict[str, Any]:
+    path = _runtime_lock_path(profile)
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _fail(f"cannot read current-mainnet runtime lock {path}: {exc}")
+    return _validate_runtime_lock_document(profile, document)
+
+
+def _validate_pyvenv(paths: TargetPaths, platform_row: dict[str, str]) -> None:
+    path = paths.venv / "pyvenv.cfg"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        _fail(f"cannot read target pyvenv.cfg: {exc}")
+    values: dict[str, str] = {}
+    for line in lines:
+        if line.count(" = ") != 1:
+            _fail(f"target pyvenv.cfg has a malformed line: {line!r}")
+        key, value = line.split(" = ", 1)
+        if key in values:
+            _fail(f"target pyvenv.cfg duplicates {key!r}")
+        values[key] = value
+    if set(values) != _PYVENV_KEYS:
+        _fail(
+            "target pyvenv.cfg keys differ: "
+            f"missing={sorted(_PYVENV_KEYS - set(values))}, "
+            f"extra={sorted(set(values) - _PYVENV_KEYS)}"
+        )
+    series = ".".join(_EXPECTED["pythonVersion"].split(".")[:2])
+    expected = {
+        "implementation": _EXPECTED["pythonImplementation"],
+        "include-system-site-packages": "false",
+        "prompt": "ethereum-execution",
+    }
+    for key, value in expected.items():
+        _literal(values[key], value, f"target pyvenv.cfg {key}")
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", values["uv"]) is None:
+        _fail("target pyvenv.cfg uv value is not an exact semantic version")
+    if values["version_info"] not in (series, _EXPECTED["pythonVersion"]):
+        _fail(
+            "target pyvenv.cfg version_info must be the pinned Python version "
+            f"or series, got {values['version_info']!r}"
+        )
+    home = Path(values["home"])
+    if not home.is_absolute():
+        _fail("target pyvenv.cfg home is not absolute")
+    expected_base = _expanded_home_path(
+        platform_row["uvBasePrefix"], "platform uvBasePrefix"
+    )
+    if home.resolve() != (expected_base / "bin").resolve():
+        _fail(
+            f"target pyvenv.cfg home resolves to {home.resolve()}, expected "
+            f"{(expected_base / 'bin').resolve()}"
+        )
+
+
+def _verify_runtime_lock(
+    paths: TargetPaths,
+    profile: dict[str, Any],
+    evidence: dict[str, Any],
+) -> str:
+    key, platform_row = _selected_platform(
+        profile,
+        system=evidence.get("platformSystem"),
+        machine=evidence.get("platformMachine"),
+    )
+    if not paths.python.is_symlink():
+        _fail("selected target Python must be the uv-managed venv symlink")
+    raw_target = Path(os.readlink(paths.python))
+    selected_target = (
+        raw_target
+        if raw_target.is_absolute()
+        else (paths.python.parent / raw_target).absolute()
+    )
+    series = ".".join(_EXPECTED["pythonVersion"].split(".")[:2])
+    alias = _expanded_home_path(
+        platform_row["uvAliasPrefix"], "platform uvAliasPrefix"
+    )
+    expected_selected = (alias / "bin" / f"python{series}").absolute()
+    if selected_target != expected_selected:
+        _fail(
+            f"target Python selects {selected_target}, expected native alias "
+            f"{expected_selected} for {key}"
+        )
+    base = _expanded_home_path(
+        platform_row["uvBasePrefix"], "platform uvBasePrefix"
+    )
+    expected_resolved = (base / "bin" / f"python{series}").resolve()
+    if paths.python.resolve() != expected_resolved:
+        _fail(
+            f"target Python resolves to {paths.python.resolve()}, expected native base "
+            f"{expected_resolved} for {key}"
+        )
+    _validate_pyvenv(paths, platform_row)
+    runtime_lock = _load_runtime_lock(profile)
+    target = runtime_lock["target"]
+    _literal(
+        _entrypoint_body_sha256(paths.t8n),
+        target["entrypointBodySha256"],
+        "runtime-lock t8n entrypoint body",
+    )
+    _literal(
+        _runtime_entry(paths),
+        runtime_lock["platforms"][key],
+        f"runtime-lock native closure {key}",
+    )
+    return key
+
+
 _PREFLIGHT = r'''
 import importlib
 import json
@@ -502,6 +851,8 @@ execution = forks.BPO2
 compiler = execution.non_bpo_ancestor()
 evidence = {
     "selectedVenv": str(venv),
+    "platformSystem": platform.system(),
+    "platformMachine": platform.machine(),
     "pythonImplementation": platform.python_implementation(),
     "pythonVersion": platform.python_version(),
     "pythonExecutable": str(actual_python),
@@ -526,7 +877,12 @@ print(json.dumps(evidence, sort_keys=True))
 '''
 
 
-def _python_preflight(paths: TargetPaths, profile: dict[str, Any]) -> dict[str, Any]:
+def _python_preflight(
+    paths: TargetPaths,
+    profile: dict[str, Any],
+    *,
+    verify_runtime: bool = True,
+) -> dict[str, Any]:
     result = _run(
         [
             str(paths.python),
@@ -576,9 +932,18 @@ def _python_preflight(paths: TargetPaths, profile: dict[str, Any]) -> dict[str, 
         "preflight sys.executable target",
     )
     _literal(evidence.get("sysPrefix"), str(paths.venv.resolve()), "preflight sys.prefix")
+    platform_key, platform_row = _selected_platform(
+        profile,
+        system=evidence.get("platformSystem"),
+        machine=evidence.get("platformMachine"),
+    )
     _literal(
         evidence.get("sysBasePrefix"),
-        str(Path(os.path.expanduser(_EXPECTED["pythonBasePrefix"])).resolve()),
+        str(
+            _expanded_home_path(
+                platform_row["uvBasePrefix"], "platform uvBasePrefix"
+            ).resolve()
+        ),
         "preflight sys.base_prefix realpath",
     )
     _literal(evidence.get("t8nEntrypoint"), str(paths.t8n), "preflight t8n entrypoint")
@@ -587,6 +952,13 @@ def _python_preflight(paths: TargetPaths, profile: dict[str, Any]) -> dict[str, 
         f"#!{paths.python}",
         "preflight t8n entrypoint shebang",
     )
+    if verify_runtime:
+        _literal(
+            _verify_runtime_lock(paths, profile, evidence),
+            platform_key,
+            "runtime-lock selected platform",
+        )
+    evidence["platformKey"] = platform_key
     return evidence
 
 
@@ -881,6 +1253,24 @@ def _static_self_check(profile: dict[str, Any]) -> int:
         "profile.target.pythonIdentity.version",
     )
     mutated(
+        "runtime-lock",
+        ("target", "pythonIdentity", "runtimeLock"),
+        "weakened.json",
+        "profile.target.pythonIdentity.runtimeLock",
+    )
+    mutated(
+        "macos-runtime-alias",
+        ("target", "pythonIdentity", "platforms", "macos-arm64", "uvAliasPrefix"),
+        "~/.local/share/uv/python/cpython-3.11-linux-x86_64-gnu",
+        "profile.target.pythonIdentity.platforms.macos-arm64",
+    )
+    mutated(
+        "linux-runtime-base",
+        ("target", "pythonIdentity", "platforms", "linux-x86_64", "uvBasePrefix"),
+        "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none",
+        "profile.target.pythonIdentity.platforms.linux-x86_64",
+    )
+    mutated(
         "schedule",
         ("execution", "blobSchedule", "targetBlobsPerBlock"),
         13,
@@ -922,6 +1312,24 @@ def _static_self_check(profile: dict[str, Any]) -> int:
     for label, mutant, needle in mutants:
         _expect_profile_rejection(mutant, needle, label)
 
+    _literal(
+        _selected_platform(profile, system="Darwin", machine="aarch64")[0],
+        "macos-arm64",
+        "Darwin platform alias",
+    )
+    _literal(
+        _selected_platform(profile, system="Linux", machine="amd64")[0],
+        "linux-x86_64",
+        "Linux platform alias",
+    )
+    try:
+        _selected_platform(profile, system="FreeBSD", machine="amd64")
+    except CurrentMainnetError as exc:
+        if "unsupported current-mainnet platform" not in str(exc):
+            _fail(f"unsupported-platform control failed through wrong channel: {exc}")
+    else:
+        _fail("unsupported-platform control was accepted")
+
     contaminated = TargetPaths(Path("/target"), Path("/target/.venv"), Path("/p"), Path("/t"))
     old = {name: os.environ.get(name) for name in ("EELS_ROOT", "PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "CONDA_PREFIX")}
     try:
@@ -944,6 +1352,24 @@ def _static_self_check(profile: dict[str, Any]) -> int:
 
 def _hidden(parser: argparse.ArgumentParser, flag: str, **kwargs: Any) -> None:
     parser.add_argument(flag, help=argparse.SUPPRESS, **kwargs)
+
+
+def _shell_platforms(rows: list[str]) -> dict[str, dict[str, str]]:
+    result: dict[str, dict[str, str]] = {}
+    for row in rows:
+        fields = row.split("|")
+        if len(fields) != 5:
+            _fail(f"shell-owned Python platform row is malformed: {row!r}")
+        key, system, machine, alias, base = fields
+        if not key or key in result:
+            _fail(f"shell-owned Python platform key is empty or duplicated: {key!r}")
+        result[key] = {
+            "system": system,
+            "machine": machine,
+            "uvAliasPrefix": alias,
+            "uvBasePrefix": base,
+        }
+    return result
 
 
 def _shell_contract(args: argparse.Namespace, profile: dict[str, Any]) -> None:
@@ -969,7 +1395,7 @@ def _shell_contract(args: argparse.Namespace, profile: dict[str, Any]) -> None:
         "t8n": args.expected_t8n,
         "pythonImplementation": args.expected_python_implementation,
         "pythonVersion": args.expected_python_version,
-        "pythonBasePrefix": args.expected_python_base_prefix,
+        "runtimeLock": args.expected_runtime_lock,
         "targetBlobsPerBlock": args.expected_blob_target,
         "maxBlobsPerBlock": args.expected_blob_max,
         "baseFeeUpdateFraction": args.expected_blob_fraction,
@@ -984,6 +1410,11 @@ def _shell_contract(args: argparse.Namespace, profile: dict[str, Any]) -> None:
         _literal(expected, _EXPECTED[key], f"shell-owned {key}")
     _literal(args.expected_external_solc, False, "shell-owned externalSolcInvoked")
     _literal(args.expected_overlay_path, _EXPECTED["overlayPaths"], "shell-owned overlay paths")
+    _literal(
+        _shell_platforms(args.expected_python_platform),
+        _EXPECTED["pythonPlatforms"],
+        "shell-owned Python platforms",
+    )
     _literal(args.falsifier, _EXPECTED["falsifiers"], "shell-owned falsifiers")
     # Revalidation here makes clear that both independent owners constrain the
     # selected profile; neither a shell-only nor JSON-only mutation can pass.
@@ -1023,7 +1454,14 @@ def _parser() -> argparse.ArgumentParser:
     _hidden(parser, "--_expected-t8n", dest="expected_t8n")
     _hidden(parser, "--_expected-python-implementation", dest="expected_python_implementation")
     _hidden(parser, "--_expected-python-version", dest="expected_python_version")
-    _hidden(parser, "--_expected-python-base-prefix", dest="expected_python_base_prefix")
+    _hidden(parser, "--_expected-runtime-lock", dest="expected_runtime_lock")
+    _hidden(
+        parser,
+        "--_expected-python-platform",
+        dest="expected_python_platform",
+        action="append",
+        default=[],
+    )
     _hidden(parser, "--_expected-blob-target", dest="expected_blob_target", type=int)
     _hidden(parser, "--_expected-blob-max", dest="expected_blob_max", type=int)
     _hidden(parser, "--_expected-blob-fraction", dest="expected_blob_fraction", type=int)
@@ -1061,6 +1499,7 @@ def main(argv: list[str] | None = None) -> int:
         f"execution=BPO2 module={evidence['selectedModule']} "
         f"compiler=Osaka backend=cancun external-solc=false "
         f"python={evidence['pythonImplementation']}-{evidence['pythonVersion']} "
+        f"platform={evidence['platformKey']} "
         f"sys-prefix={evidence['sysPrefix']} "
         f"sys-executable={evidence['pythonExecutable']} "
         f"base-prefix={evidence['sysBasePrefix']} "

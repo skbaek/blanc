@@ -1665,13 +1665,14 @@
         "files": [
           "scripts/check-current-mainnet.sh",
           "scripts/current-mainnet-target.json",
+          "scripts/current-mainnet-runtime-lock.json",
+          "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
           "@t8n_target/.git/config",
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
           "@t8n_target/.venv/bin/ethereum-spec-evm",
-          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
-          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git"
@@ -1689,7 +1690,7 @@
               "*/__pycache__/*"
             ],
             "pattern": "**/*",
-            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+            "root": "@t8n_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1698,7 +1699,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. Cache identity includes the checkout configuration, venv selector/interpreter/entrypoint, complete site-packages, and selected CPython 3.11.9 standard library.",
+      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. A generated two-platform runtime lock owns exact native macOS arm64 and Linux x86_64 closures; cache identity derives the selected CPython 3.11.9 standard library from the venv instead of naming one OS path.",
       "order": 40,
       "verdict": {
         "expect_exit": 0,
@@ -1729,6 +1730,8 @@
           "scripts/check-beacon-deposit-current-mainnet.sh",
           "scripts/gen-beacon-deposit-current-mainnet.py",
           "scripts/current-mainnet-target.json",
+          "scripts/current-mainnet-runtime-lock.json",
+          "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.json",
@@ -1739,8 +1742,7 @@
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
           "@t8n_target/.venv/bin/ethereum-spec-evm",
-          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
-          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git"
@@ -1761,7 +1763,7 @@
               "*/__pycache__/*"
             ],
             "pattern": "**/*",
-            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+            "root": "@t8n_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1771,7 +1773,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The manifest fingerprints its direct consumer inputs; this registry additionally owns the exact checkout, helper/profile, venv/site-packages, and CPython runtime closure.",
+      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The portable manifest binds the generated two-platform runtime lock; this registry additionally owns the exact selected native checkout, venv/site-packages, and CPython closure.",
       "order": 41,
       "verdict": {
         "expect_exit": 0,
@@ -1860,6 +1862,8 @@
           "scripts/gen-prorata-benchmark.py",
           "scripts/check-current-mainnet.sh",
           "scripts/current-mainnet-target.json",
+          "scripts/current-mainnet-runtime-lock.json",
+          "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
           "scripts/check-runtime-bytes.py",
           "scripts/prorata_oracle.py",
@@ -1873,8 +1877,7 @@
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
           "@t8n_target/.venv/bin/ethereum-spec-evm",
-          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
-          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git"
@@ -1896,7 +1899,7 @@
               "*/__pycache__/*"
             ],
             "pattern": "**/*",
-            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+            "root": "@t8n_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1937,6 +1940,8 @@
           "scripts/gen-lido-ossifiable-proxy-current-mainnet.py",
           "scripts/check-current-mainnet.sh",
           "scripts/current-mainnet-target.json",
+          "scripts/current-mainnet-runtime-lock.json",
+          "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
           "scripts/lido_ossifiable_proxy_performance_schema.py",
           "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
@@ -1950,8 +1955,7 @@
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
           "@t8n_target/.venv/bin/ethereum-spec-evm",
-          "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
-          "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/bin/python3.11",
+          "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git"
@@ -1969,7 +1973,7 @@
               "*/__pycache__/*"
             ],
             "pattern": "**/*",
-            "root": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none/lib/python3.11"
+            "root": "@t8n_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1978,7 +1982,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages and the profile-pinned CPython standard library.",
+      "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper and two-platform runtime lock, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages and the selected native CPython standard library.",
       "order": 44,
       "verdict": {
         "expect_exit": 0,

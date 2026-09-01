@@ -44,7 +44,7 @@ MANIFEST_PATH = (
     SCRIPT_DIR / "fixtures" / "beacon-deposit-current-mainnet" / "manifest.json"
 )
 
-MANIFEST_SCHEMA = 1
+MANIFEST_SCHEMA = 2
 STATIC_INVENTORY_FALSIFIERS = 4
 API_BOUNDARY_FALSIFIERS = 3
 RAW_CHANNEL_FALSIFIERS = 5
@@ -162,12 +162,14 @@ DEVIATION_MARKER_VERSION = "beacon-deposit-current-mainnet-gas-v1"
 MANIFEST_CLASSES = (
     "row-inventory", "credited-channel", "profile", "constructor-dominance",
     "decomposition-basis", "historical-boundary", "artifact-size",
-    "cache-repository", "cache-target-file", "cache-site-tree",
+    "cache-repository", "runtime-lock-path", "runtime-lock-digest",
     "cache-ownership", "gas-policy",
 )
 CACHE_REPOSITORY_FILES = (
     "scripts/current-mainnet-target.json",
+    "scripts/current-mainnet-runtime-lock.json",
     "scripts/current_mainnet.py",
+    "scripts/gen-current-mainnet-runtime-lock.py",
     "scripts/gen-beacon-deposit-current-mainnet.py",
     "scripts/check-beacon-deposit-current-mainnet.sh",
     "scripts/eval-beacon-deposit-differential-code.lean",
@@ -176,17 +178,12 @@ CACHE_REPOSITORY_FILES = (
     "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex",
     "BEACON_DEPOSIT_DEVIATIONS.md",
 )
-CACHE_TARGET_FILES = (
-    "pyvenvConfig=.venv/pyvenv.cfg",
-    "pythonExecutable=.venv/bin/python",
-    "t8nEntrypoint=.venv/bin/ethereum-spec-evm",
-)
-CACHE_SITE_ROOT = ".venv/lib/python3.11/site-packages"
-CACHE_EXCLUDES = ("**/__pycache__/**", "**/*.pyc", "**/*.pyo")
+CACHE_RUNTIME_LOCK = "scripts/current-mainnet-runtime-lock.json"
+CACHE_RUNTIME_PLATFORMS = ("macos-arm64", "linux-x86_64")
 CACHE_OWNERSHIP = (
-    "gate registry additionally fingerprints the exact checkout, complete "
-    "selected site-packages population, and profile-pinned CPython 3.11.9 "
-    "standard library; this manifest records the same consumer-facing roots"
+    "the shared runtime lock owns exact macOS arm64 and Linux x86_64 native "
+    "closures; the gate registry additionally fingerprints the selected exact "
+    "checkout, site-packages population, and CPython 3.11.9 standard library"
 )
 
 
@@ -1252,63 +1249,19 @@ def validate_positive_gas_registry(
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def fingerprint_path(path: Path, anchor: Path) -> Mapping[str, object]:
-    if not path.exists():
-        die(f"cache-relevant target input is absent: {path}")
-    result: Dict[str, object] = {
-        "relativePath": path.relative_to(anchor).as_posix(),
-        "isSymlink": path.is_symlink(),
-        "sha256": sha256_file(path),
-    }
-    if path.is_symlink():
-        result["symlinkTarget"] = os.readlink(path)
-    return result
-
-
-def tree_fingerprint(root: Path, anchor: Path) -> Mapping[str, object]:
-    if not root.is_dir():
-        die(f"cache-relevant target tree is absent: {root}")
-    records: List[Mapping[str, object]] = []
-    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
-        relative = path.relative_to(root).as_posix()
-        if "__pycache__" in path.parts or path.suffix in (".pyc", ".pyo"):
-            continue
-        if path.is_symlink():
-            record: Dict[str, object] = {
-                "path": relative,
-                "kind": "symlink",
-                "target": os.readlink(path),
-            }
-            if path.is_file():
-                record["targetSha256"] = sha256_file(path)
-            records.append(record)
-        elif path.is_file():
-            records.append({
-                "path": relative, "kind": "file", "sha256": sha256_file(path),
-            })
-    return {
-        "relativeRoot": root.relative_to(anchor).as_posix(),
-        "fileRecords": len(records),
-        "sha256": canonical_json_sha256(records),
-        "excludes": ["**/__pycache__/**", "**/*.pyc", "**/*.pyo"],
-    }
-
-
-def cache_inputs(paths) -> Mapping[str, object]:
+def cache_inputs() -> Mapping[str, object]:
     repo_files = tuple(REPO / relative for relative in CACHE_REPOSITORY_FILES)
-    sites = sorted(paths.venv.glob("lib/python*/site-packages"))
-    if len(sites) != 1:
-        die(f"expected one selected target site-packages tree, got {sites}")
+    runtime_lock = REPO / CACHE_RUNTIME_LOCK
+    runtime_digest = sha256_file(runtime_lock)
     return {
         "repositoryFiles": {
             str(path.relative_to(REPO)): sha256_file(path) for path in repo_files
         },
-        "targetFiles": {
-            "pyvenvConfig": fingerprint_path(paths.venv / "pyvenv.cfg", paths.root),
-            "pythonExecutable": fingerprint_path(paths.python, paths.root),
-            "t8nEntrypoint": fingerprint_path(paths.t8n, paths.root),
+        "runtimeLock": {
+            "relativePath": CACHE_RUNTIME_LOCK,
+            "sha256": runtime_digest,
+            "platforms": list(CACHE_RUNTIME_PLATFORMS),
         },
-        "targetSitePackages": tree_fingerprint(sites[0], paths.root),
         "sharedGateOwnership": CACHE_OWNERSHIP,
     }
 
@@ -1518,7 +1471,7 @@ def profile_document(profile: Mapping[str, object],
 
 
 def build_manifest(profile: Mapping[str, object], verified: Mapping[str, object],
-                   paths, reference_artifacts: Mapping[str, object],
+                   reference_artifacts: Mapping[str, object],
                    blanc_artifacts: Mapping[str, object],
                    reference_creation: Mapping[str, object],
                    blanc_creation: Mapping[str, object],
@@ -1528,7 +1481,7 @@ def build_manifest(profile: Mapping[str, object], verified: Mapping[str, object]
     creation = compose_creation(reference_creation, blanc_creation)
     runtime = compose_runtime(rows, reference_runtime, blanc_runtime)
     return assemble_manifest(
-        profile_document(profile, verified), cache_inputs(paths),
+        profile_document(profile, verified), cache_inputs(),
         artifact_document(reference_artifacts, blanc_artifacts), creation, runtime,
     )
 
@@ -1604,25 +1557,9 @@ def is_sha256(value: object) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
-def validate_cache_path_fingerprint(value: object, relative_path: str,
-                                    label: str) -> None:
-    if not isinstance(value, dict) or value.get("relativePath") != relative_path \
-            or type(value.get("isSymlink")) is not bool \
-            or not is_sha256(value.get("sha256")):
-        die(f"current-mainnet manifest {label} fingerprint differs")
-    expected_keys = {"relativePath", "isSymlink", "sha256"}
-    if value["isSymlink"]:
-        expected_keys.add("symlinkTarget")
-        if not isinstance(value.get("symlinkTarget"), str) \
-                or not value["symlinkTarget"]:
-            die(f"current-mainnet manifest {label} symlink target differs")
-    if set(value) != expected_keys:
-        die(f"current-mainnet manifest {label} fingerprint shape differs")
-
-
 def validate_cache_manifest(cache: object) -> None:
     if not isinstance(cache, dict) or set(cache) != {
-        "repositoryFiles", "targetFiles", "targetSitePackages", "sharedGateOwnership",
+        "repositoryFiles", "runtimeLock", "sharedGateOwnership",
     }:
         die("current-mainnet manifest cache input shape differs")
     repository = cache.get("repositoryFiles")
@@ -1630,21 +1567,15 @@ def validate_cache_manifest(cache: object) -> None:
             or set(repository) != set(CACHE_REPOSITORY_FILES) \
             or any(not is_sha256(value) for value in repository.values()):
         die("current-mainnet manifest repository fingerprints differ")
-    target_files = cache.get("targetFiles")
-    target_paths = dict(item.split("=", 1) for item in CACHE_TARGET_FILES)
-    if not isinstance(target_files, dict) or set(target_files) != set(target_paths):
-        die("current-mainnet manifest target-file inventory differs")
-    for key, relative_path in target_paths.items():
-        validate_cache_path_fingerprint(target_files[key], relative_path, key)
-    site_tree = cache.get("targetSitePackages")
-    if not isinstance(site_tree, dict) or set(site_tree) != {
-        "relativeRoot", "fileRecords", "sha256", "excludes",
-    } or site_tree.get("relativeRoot") != CACHE_SITE_ROOT \
-            or type(site_tree.get("fileRecords")) is not int \
-            or site_tree["fileRecords"] <= 0 \
-            or not is_sha256(site_tree.get("sha256")) \
-            or site_tree.get("excludes") != list(CACHE_EXCLUDES):
-        die("current-mainnet manifest site-packages fingerprint differs")
+    runtime_lock = cache.get("runtimeLock")
+    if not isinstance(runtime_lock, dict) or set(runtime_lock) != {
+        "relativePath", "sha256", "platforms",
+    } or runtime_lock.get("relativePath") != CACHE_RUNTIME_LOCK \
+            or not is_sha256(runtime_lock.get("sha256")) \
+            or runtime_lock.get("platforms") != list(CACHE_RUNTIME_PLATFORMS):
+        die("current-mainnet manifest runtime-lock binding differs")
+    if repository.get(CACHE_RUNTIME_LOCK) != runtime_lock["sha256"]:
+        die("current-mainnet manifest runtime-lock digest ownership differs")
     if cache.get("sharedGateOwnership") != CACHE_OWNERSHIP:
         die("current-mainnet manifest shared-gate ownership differs")
 
@@ -2253,26 +2184,14 @@ def synthetic_manifest() -> Mapping[str, object]:
             relative: str(index % 10) * 64
             for index, relative in enumerate(CACHE_REPOSITORY_FILES)
         },
-        "targetFiles": {
-            "pyvenvConfig": {
-                "relativePath": ".venv/pyvenv.cfg", "isSymlink": False,
-                "sha256": "a" * 64,
-            },
-            "pythonExecutable": {
-                "relativePath": ".venv/bin/python", "isSymlink": True,
-                "sha256": "b" * 64, "symlinkTarget": "/synthetic/python3.11",
-            },
-            "t8nEntrypoint": {
-                "relativePath": ".venv/bin/ethereum-spec-evm", "isSymlink": False,
-                "sha256": "c" * 64,
-            },
-        },
-        "targetSitePackages": {
-            "relativeRoot": CACHE_SITE_ROOT, "fileRecords": 1,
-            "sha256": "d" * 64, "excludes": list(CACHE_EXCLUDES),
+        "runtimeLock": {
+            "relativePath": CACHE_RUNTIME_LOCK,
+            "sha256": "1" * 64,
+            "platforms": list(CACHE_RUNTIME_PLATFORMS),
         },
         "sharedGateOwnership": CACHE_OWNERSHIP,
     }
+    cache["repositoryFiles"][CACHE_RUNTIME_LOCK] = cache["runtimeLock"]["sha256"]
     return assemble_manifest(
         profile, cache, expected_artifact_document(), creation, runtime,
     )
@@ -2328,12 +2247,11 @@ def manifest_falsifiers(expected: Mapping[str, object]) -> int:
     del broken["cacheInputs"]["repositoryFiles"][first_cache]
     mutants.append(("cache-repository", broken))
     broken = copy.deepcopy(expected)
-    broken["cacheInputs"]["targetFiles"]["pythonExecutable"]["sha256"] \
-        = "not-a-digest"
-    mutants.append(("cache-target-file", broken))
+    broken["cacheInputs"]["runtimeLock"]["relativePath"] = "weakened.json"
+    mutants.append(("runtime-lock-path", broken))
     broken = copy.deepcopy(expected)
-    broken["cacheInputs"]["targetSitePackages"]["relativeRoot"] = "weakened"
-    mutants.append(("cache-site-tree", broken))
+    broken["cacheInputs"]["runtimeLock"]["sha256"] = "not-a-digest"
+    mutants.append(("runtime-lock-digest", broken))
     broken = copy.deepcopy(expected)
     broken["cacheInputs"]["sharedGateOwnership"] = "weakened"
     mutants.append(("cache-ownership", broken))
@@ -2481,10 +2399,9 @@ def validate_wrapper_contract(args: argparse.Namespace) -> None:
         die("shell/Python constructor gas/size constants differ")
     if parse_wrapper_list(args.wrapper_cache_repository_files) \
             != CACHE_REPOSITORY_FILES \
-            or parse_wrapper_list(args.wrapper_cache_target_files) \
-            != CACHE_TARGET_FILES \
-            or args.wrapper_cache_site_root != CACHE_SITE_ROOT \
-            or parse_wrapper_list(args.wrapper_cache_excludes) != CACHE_EXCLUDES \
+            or args.wrapper_cache_runtime_lock != CACHE_RUNTIME_LOCK \
+            or parse_wrapper_list(args.wrapper_cache_runtime_platforms) \
+            != CACHE_RUNTIME_PLATFORMS \
             or args.wrapper_cache_ownership != CACHE_OWNERSHIP:
         die("shell/Python cache-provenance ownership differs")
     expected_artifacts = (
@@ -2591,11 +2508,9 @@ def main(argv: Sequence[str]) -> int:
                         help=argparse.SUPPRESS)
     parser.add_argument("--wrapper-cache-repository-files", required=True,
                         help=argparse.SUPPRESS)
-    parser.add_argument("--wrapper-cache-target-files", required=True,
+    parser.add_argument("--wrapper-cache-runtime-lock", required=True,
                         help=argparse.SUPPRESS)
-    parser.add_argument("--wrapper-cache-site-root", required=True,
-                        help=argparse.SUPPRESS)
-    parser.add_argument("--wrapper-cache-excludes", required=True,
+    parser.add_argument("--wrapper-cache-runtime-platforms", required=True,
                         help=argparse.SUPPRESS)
     parser.add_argument("--wrapper-cache-ownership", required=True,
                         help=argparse.SUPPRESS)
@@ -2657,7 +2572,7 @@ def main(argv: Sequence[str]) -> int:
         root=root, profile=profile, run_t8n=run_t8n,
     )
     expected = build_manifest(
-        profile, verified, paths, reference_artifacts, blanc_artifacts,
+        profile, verified, reference_artifacts, blanc_artifacts,
         reference_creation, blanc_creation, reference_runtime, blanc_runtime,
     )
     require_manifest(expected, args.write_manifest)

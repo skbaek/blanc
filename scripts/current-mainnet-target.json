@@ -39,7 +39,21 @@
     "pythonIdentity": {
       "implementation": "CPython",
       "version": "3.11.9",
-      "basePrefix": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none"
+      "runtimeLock": "current-mainnet-runtime-lock.json",
+      "platforms": {
+        "macos-arm64": {
+          "system": "Darwin",
+          "machine": "arm64",
+          "uvAliasPrefix": "~/.local/share/uv/python/cpython-3.11-macos-aarch64-none",
+          "uvBasePrefix": "~/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none"
+        },
+        "linux-x86_64": {
+          "system": "Linux",
+          "machine": "x86_64",
+          "uvAliasPrefix": "~/.local/share/uv/python/cpython-3.11-linux-x86_64-gnu",
+          "uvBasePrefix": "~/.local/share/uv/python/cpython-3.11.9-linux-x86_64-gnu"
+        }
+      }
     }
   },
   "canary": {

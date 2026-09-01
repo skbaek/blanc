@@ -72,6 +72,13 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
+from gate_cache_lock import acquire_lock, read_lock_pid, release_lock
+from gate_cache_t8n_root import (
+    T8N_TARGET_ROOT,
+    T8nPythonBaseError,
+    resolve_t8n_python_base,
+)
+
 SCHEMA_VERSION = 1
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -435,6 +442,7 @@ def _validate_oracle_lanes(gates: list[dict[str, Any]]) -> None:
             "t8n_target" in external_ids
             or "JAUNE_T8N_TARGET" in strings
             or any(value.startswith("@t8n_target/") for value in strings)
+            or any(value.startswith("@t8n_python_base/") for value in strings)
         )
         if legacy and current:
             raise GateCacheError(
@@ -461,7 +469,10 @@ def _validate_oracle_lanes(gates: list[dict[str, Any]]) -> None:
                 raise GateCacheError(
                     f"legacy EELS gate {identifier} has the wrong root environment"
                 )
-            if any(value.startswith("@t8n_target/") for value in strings):
+            if any(
+                value.startswith(("@t8n_target/", "@t8n_python_base/"))
+                for value in strings
+            ):
                 raise GateCacheError(
                     f"legacy EELS gate {identifier} reads the current-mainnet root"
                 )
@@ -489,6 +500,7 @@ def _validate_oracle_lanes(gates: list[dict[str, Any]]) -> None:
                 f"current-mainnet gate {identifier} reads the legacy EELS root"
             )
         required = {"scripts/current-mainnet-target.json", "scripts/current_mainnet.py"}
+        required.add("scripts/current-mainnet-runtime-lock.json")
         if not required.issubset(set(inputs.get("files", []))):
             raise GateCacheError(
                 f"current-mainnet gate {identifier} does not fingerprint its shared "
@@ -498,6 +510,44 @@ def _validate_oracle_lanes(gates: list[dict[str, Any]]) -> None:
 
 def command_text(gate: dict[str, Any]) -> str:
     return " ".join(gate["command"])
+
+
+RUNNER_COMMON_SOURCES = ("gate-cache.py", "check-gates.sh")
+RUNNER_T8N_SOURCE = "gate_cache_t8n_root.py"
+
+
+def gate_uses_t8n_resolver(gate: dict[str, Any]) -> bool:
+    strings = _input_strings(gate.get("inputs", {}))
+    return any(
+        value in {"t8n_target", "JAUNE_T8N_TARGET"}
+        or value.startswith("@t8n_target/")
+        or value.startswith("@t8n_python_base/")
+        for value in strings
+    )
+
+
+def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
+    """Soundness code relevant to this gate, excluding pure serialization.
+
+    The common engine owns fingerprint construction, verdict validation,
+    drift checks, and cache admission. The native t8n resolver is relevant
+    only to current-mainnet consumers. `gate_cache_lock.py` is intentionally
+    absent: it serializes writes but cannot make evidence reusable.
+    """
+
+    sources = list(RUNNER_COMMON_SOURCES)
+    if gate_uses_t8n_resolver(gate):
+        sources.append(RUNNER_T8N_SOURCE)
+    return tuple(sources)
+
+
+def runner_identity(gate: dict[str, Any]) -> tuple[str, dict[str, str]]:
+    here = Path(__file__).resolve().parent
+    detail = {
+        f"scripts/{name}": file_digest(here / name)
+        for name in runner_identity_sources(gate)
+    }
+    return digest_of({"schema": SCHEMA_VERSION, "sources": detail}), detail
 
 
 # --- input components -------------------------------------------------------
@@ -513,7 +563,7 @@ def command_text(gate: dict[str, Any]) -> str:
 # used rather than the default one it did not.
 NAMED_ROOTS = {
     "eels": ("EELS_ROOT", "~/execution-specs"),
-    "t8n_target": ("JAUNE_T8N_TARGET", "~/execution-specs-t8n-amsterdam"),
+    "t8n_target": T8N_TARGET_ROOT,
     "weth10ref": ("WETH10_REFERENCE_DIR", "scripts/reference/weth10"),
     "weth10lock": ("WETH10_REFERENCE_LOCK", "scripts/weth10-reference.json"),
     "weth10doc": ("WETH10_COMPATIBILITY_DOC", "WETH10_COMPATIBILITY.md"),
@@ -540,14 +590,20 @@ NAMED_ROOTS = {
 def resolve_path(root: Path, given: str) -> Path:
     """Repository-relative by default; `@name/`, `~` and absolute kept as given.
 
-    Real inputs live outside the tree: the pinned EELS checkout's virtualenv,
-    which is gitignored inside that checkout and so is invisible to its commit
-    identity, and an EEST fixture template a WETH10 generator reads from `~`.
-    Pretending either is a repository path would silently fingerprint nothing.
+    Real inputs live outside the tree: pinned checkout virtualenvs, the native
+    CPython root selected by the current-mainnet venv, and fixture templates a
+    generator reads from `~`. Pretending any is a repository path would
+    silently fingerprint nothing.
     """
 
     if given.startswith("@"):
         name, _, rest = given[1:].partition("/")
+        if name == "t8n_python_base":
+            try:
+                base = resolve_t8n_python_base(root)
+            except T8nPythonBaseError as error:
+                raise Unresolvable(str(error)) from error
+            return base / rest if rest else base
         entry = NAMED_ROOTS.get(name)
         if entry is None:
             raise GateCacheError(f"unknown named root: @{name}")
@@ -907,16 +963,10 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         ),
         "detail": None,
     }
-    here = Path(__file__).resolve().parent
+    runner_digest, runner_detail = runner_identity(gate)
     components["runner"] = {
-        "digest": digest_of(
-            {
-                "schema": SCHEMA_VERSION,
-                "gate-cache.py": file_digest(here / "gate-cache.py"),
-                "check-gates.sh": file_digest(here / "check-gates.sh"),
-            }
-        ),
-        "detail": None,
+        "digest": runner_digest,
+        "detail": runner_detail,
     }
 
     if "files" in inputs:
@@ -1063,63 +1113,8 @@ def prune_details(cache: dict[str, Any]) -> None:
     }
 
 
-# --- locking ----------------------------------------------------------------
-#
-# `mkdir` because macOS has no flock(1); the same reason `gate-lock.sh` gives.
-# Two concurrent selective runs would interleave their cache writes and their
-# report, so a contending run is refused with the holder named rather than
-# queued.
-
-
-def read_lock_pid(owner: Path) -> int | None:
-    try:
-        return int(owner.read_text(encoding="utf-8").strip())
-    except (OSError, ValueError):
-        return None
-
-
-def acquire_lock(path: Path) -> bool:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        path.mkdir()
-    except FileExistsError:
-        owner = path / "pid"
-        pid = read_lock_pid(owner)
-        if pid is None:
-            # `mkdir` and the pid stamp are two steps, so a run killed between
-            # them leaves a directory nothing can attribute. Wait one second in
-            # case the stamp is merely in flight -- the same grace gate-lock.sh
-            # gives -- and if it never arrives, say how to clear it rather than
-            # refusing every future run in silence.
-            time.sleep(1)
-            pid = read_lock_pid(owner)
-        if pid is not None:
-            try:
-                os.kill(pid, 0)
-            except OSError:
-                print(
-                    f"check-gates: reclaiming lock left by dead process {pid}",
-                    file=sys.stderr,
-                )
-                shutil.rmtree(path, ignore_errors=True)
-                return acquire_lock(path)
-            print(
-                f"REFUSED: another selective gate run holds {path} (pid {pid})",
-                file=sys.stderr,
-            )
-            return False
-        print(
-            f"REFUSED: {path} exists but carries no owner. If no selective gate "
-            f"run is in progress, remove that directory by hand.",
-            file=sys.stderr,
-        )
-        return False
-    (path / "pid").write_text(f"{os.getpid()}\n", encoding="utf-8")
-    return True
-
-
-def release_lock(path: Path) -> None:
-    shutil.rmtree(path, ignore_errors=True)
+# Locking lives in `gate_cache_lock.py`, imported above. It is kept outside the
+# evidence engine so changing serialization cannot invalidate gate verdicts.
 
 
 # --- planning ---------------------------------------------------------------
