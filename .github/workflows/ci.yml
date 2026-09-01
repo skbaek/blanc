@@ -24,6 +24,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history: the OssifiableProxy performance contract verifies its
+          # campaign base commit with git cat-file, which a shallow clone fails.
+          fetch-depth: 0
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
       # Static and fail-closed: it reads committed files only, so it needs no
