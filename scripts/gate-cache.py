@@ -1630,16 +1630,17 @@ def audit(root: Path, quiet: bool = False) -> int:
             f"run scripts/check-gates.sh --inventory"
         )
 
-    economy = subprocess.run(
-        [sys.executable, "scripts/gate-economy.py", "--check"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if economy.returncode != 0:
-        detail = (economy.stderr or economy.stdout).strip()
-        problems.append(f"economic inventory does not reconcile: {detail}")
+    if registry.get("economy_inventory"):
+        economy = subprocess.run(
+            [sys.executable, "scripts/gate-economy.py", "--check"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if economy.returncode != 0:
+            detail = (economy.stderr or economy.stdout).strip()
+            problems.append(f"economic inventory does not reconcile: {detail}")
 
     duplicates = [
         " ".join(command)

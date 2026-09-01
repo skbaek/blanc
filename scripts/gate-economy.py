@@ -50,6 +50,8 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
     economy = load(ECONOMY)
     if registry.get("schema") != 1 or not isinstance(registry.get("gates"), list):
         raise EconomyError("gate registry schema is not 1")
+    if registry.get("economy_inventory") != "scripts/gate-economy.json":
+        raise EconomyError("gate registry does not require its economic inventory")
     if economy.get("schema") != 1 or not isinstance(economy.get("rows"), list):
         raise EconomyError("economic inventory schema is not 1")
     gates = sorted(registry["gates"], key=lambda gate: gate["order"])

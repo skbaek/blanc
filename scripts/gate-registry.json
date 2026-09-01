@@ -1,4 +1,5 @@
 {
+  "economy_inventory": "scripts/gate-economy.json",
   "gates": [
     {
       "command": [
