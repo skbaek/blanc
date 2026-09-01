@@ -162,6 +162,113 @@ def category_agnostic_imports() -> None:
         layering.classify = original
 
 
+
+def gate_patched(root: Path, extra_composition: list[str]) -> tuple[int, str]:
+    """Run the checker in-process with a temporarily extended COMPOSITION table.
+
+    The shipped table is deliberately empty until the stratum's first
+    inhabitant lands, so the classified-composition edges are exercised by
+    patching the imported checker module, exactly as the category-agnostic
+    control patches `classify`.  The patch is restored unconditionally.
+    """
+    import contextlib
+    import io
+
+    original = list(layering.COMPOSITION)
+    layering.COMPOSITION[:] = original + extra_composition
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer):
+            code = layering.main(["check-layering.py", "--root", str(root)])
+    finally:
+        layering.COMPOSITION[:] = original
+    return code, buffer.getvalue()
+
+
+def patched_must_pass(root: Path, label: str, extra: list[str]) -> None:
+    code, output = gate_patched(root, extra)
+    if code:
+        fail(f"{label}: patched gate should pass:\n{output}")
+
+
+def patched_must_fail(root: Path, label: str, needle: str, extra: list[str]) -> None:
+    code, output = gate_patched(root, extra)
+    if code == 0 or needle not in output:
+        fail(f"{label}: expected a named gate failure containing {needle!r}:\n{output}")
+
+
+def composition_edge_controls() -> None:
+    """The five composition edges bite, around a classified positive witness.
+
+    These are the stratum's rules from `lido-twg-pinned-target-closure-v1`
+    C1, landed ahead of their first inhabitant: an unclassified composition
+    module, shared \u2192 composition, contract \u2192 composition, and composition
+    \u2192 either root each fail with a verdict naming the edge, while a probe
+    importing the shared layer and two distinct contract families passes -- the
+    permission that is the stratum's point.
+    """
+    probe = "Composition.Probe"
+
+    def with_probe(raw: str, header: str) -> Path:
+        root = Path(raw)
+        target = root / "Blanc" / "Composition"
+        target.mkdir()
+        (target / "Probe.lean").write_text(header, encoding="utf-8")
+        return root
+
+    legal = "import Blanc.Basic\nimport Blanc.Weth\nimport Blanc.Fmint\n"
+
+    # Positive witness: shared plus two contract families is exactly legal.
+    with fixture() as raw:
+        patched_must_pass(with_probe(raw, legal), "composition positive witness", [probe])
+
+    # 1. Unclassified composition module fails against the SHIPPED empty table.
+    with fixture() as raw:
+        root = Path(raw)
+        target = root / "Blanc" / "Composition"
+        target.mkdir()
+        (target / "Unregistered.lean").write_text("import Blanc.Basic\n", encoding="utf-8")
+        must_fail(root, "unclassified-composition mutation",
+                  "Composition.Unregistered is not classified")
+    with fixture() as raw:
+        must_pass(Path(raw), "unclassified-composition restoration")
+
+    # 2. shared -> composition inverts the stratum.
+    with fixture() as raw:
+        root = with_probe(raw, legal)
+        basic = root / "Blanc" / "Basic.lean"
+        basic.write_text("import Blanc.Composition.Probe\n" + basic.read_text(encoding="utf-8"),
+                         encoding="utf-8")
+        patched_must_fail(root, "shared-to-composition mutation",
+                          "Basic (shared) imports Blanc.Composition.Probe, a composition",
+                          [probe])
+    with fixture() as raw:
+        patched_must_pass(with_probe(raw, legal), "shared-to-composition restoration", [probe])
+
+    # 3. contract -> composition inverts it from the other side.
+    with fixture() as raw:
+        root = with_probe(raw, legal)
+        weth = root / "Blanc" / "Weth.lean"
+        weth.write_text("import Blanc.Composition.Probe\n" + weth.read_text(encoding="utf-8"),
+                        encoding="utf-8")
+        patched_must_fail(root, "contract-to-composition mutation",
+                          "Weth (weth) imports Blanc.Composition.Probe, a composition",
+                          [probe])
+    with fixture() as raw:
+        patched_must_pass(with_probe(raw, legal), "contract-to-composition restoration", [probe])
+
+    # 4/5. composition -> root, for both roots.
+    for root_name in ("Blanc", "Main"):
+        with fixture() as raw:
+            root = with_probe(raw, f"import {root_name}\n")
+            patched_must_fail(root, f"composition-to-{root_name} mutation",
+                              f"Composition.Probe (composition) imports Blanc.{root_name}, a root",
+                              [probe])
+        with fixture() as raw:
+            patched_must_pass(with_probe(raw, legal),
+                              f"composition-to-{root_name} restoration", [probe])
+
+
 def main() -> int:
     positives = [
         ("plain", "import Blanc.Weth\n", ["Weth"], "import Init\n"),
@@ -258,10 +365,13 @@ def main() -> int:
         with fixture() as raw:
             must_pass(Path(raw), f"{name} restoration")
 
+    composition_edge_controls()
+
     print(
         "OK — layering controls: 11 accepted import forms pair imports_of with Lean; "
         "3 rejected header forms, 3 legal non-imports, header boundary, 3 malformed-header "
-        "and 3 architecture controls plus 1 category-agnostic control bite"
+        "and 3 architecture controls plus 1 category-agnostic control bite; "
+        "5 composition-edge controls bite around a classified positive witness"
     )
     return 0
 
