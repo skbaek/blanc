@@ -166,6 +166,9 @@ def seed(
     baseline_digest, baseline_rows, baseline_payload = elab_baseline_identity(
         source, source / "scripts/baseline-elab.txt", gate_cache
     )
+    target_baseline = target / "scripts/baseline-elab.txt"
+    if target_baseline.exists():
+        raise SeedRefusal("target worktree already has a host-local elaboration baseline")
     current, reason, source_certificate = gate_cache.build_certificate_status(source)
     if not current or source_certificate is None:
         raise SeedRefusal(f"source build state is not certifiable: {reason}")
@@ -238,7 +241,26 @@ def seed(
         raise SeedRefusal(
             f"target .lake appeared during copy; staged state was retained: {stage}"
         )
+    if target_baseline.exists():
+        raise SeedRefusal(
+            f"target elaboration baseline appeared during copy; staged state was retained: {stage}"
+        )
+    baseline_stage = target / "scripts" / (
+        f".baseline-elab.blanc-seed-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    )
+    baseline_stage.parent.mkdir(parents=True, exist_ok=True)
+    baseline_stage.write_bytes(baseline_payload)
+    published_baseline_digest, published_baseline_rows, _ = elab_baseline_identity(
+        target, baseline_stage, gate_cache
+    )
+    if (published_baseline_digest, published_baseline_rows) != (
+        baseline_digest, baseline_rows
+    ):
+        raise SeedRefusal(
+            f"candidate elaboration baseline failed exact validation: {baseline_stage}"
+        )
     stage.rename(target_lake)
+    baseline_stage.replace(target_baseline)
     gate_cache.atomic_json(
         target_lake / "blanc-seed-receipt.json",
         {

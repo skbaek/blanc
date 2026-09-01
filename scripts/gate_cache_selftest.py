@@ -1197,7 +1197,9 @@ def control_worktree_seed_previews_then_publishes_isolated_exact_state() -> None
         require((target / ".lake/blanc-seed-receipt.json").is_file(),
                 "the target must record copy provenance")
         require((target / ".lake/baseline-elab.txt").is_file(),
-                "the complete host-local elaboration baseline must be copied")
+                "the staged Lake state must retain the validated baseline")
+        require((target / "scripts/baseline-elab.txt").is_file(),
+                "the gate's established host-local baseline path must be populated")
         require(result["elab_baseline"]["rows"] == 2,
                 "the receipt must identify the exact baseline population")
         require(not (target / ".lake/gate-report.md").exists(),

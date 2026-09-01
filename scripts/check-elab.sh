@@ -9,10 +9,9 @@
 # import closure and the shared Lean/Lake configuration. The default run skips
 # exactly the files whose fingerprints match a prior successful measurement;
 # --full measures every file. Every represented file is compared against this
-# checkout's ignored host-local reference in scripts/baseline-elab.txt, or the
-# isolated `.lake/baseline-elab.txt` installed by the exact-worktree seeder. A
-# fresh clone with neither reference measures the full tree, initializes the
-# scripts file, and performs no timing comparison.
+# checkout's ignored host-local reference in scripts/baseline-elab.txt. A fresh
+# clone's first uncontended green run measures the full tree, initializes that
+# file, and performs no timing comparison.
 #
 # This gate exists because nothing else measures this axis. check-hygiene.sh,
 # check-integrity.sh, and the conformance tiers all say nothing about
@@ -196,9 +195,6 @@ trap cleanup EXIT
 
 SRC_DIR="Blanc"
 BASELINE="$SCRIPT_DIR/baseline-elab.txt"
-if [ ! -f "$BASELINE" ] && [ -f "$ROOT/.lake/baseline-elab.txt" ]; then
-  BASELINE="$ROOT/.lake/baseline-elab.txt"
-fi
 REPORT="$SCRIPT_DIR/report-elab.txt"
 STATE="$ROOT/.lake/check-elab-state.json"
 SELECTOR="$SCRIPT_DIR/check-elab-selection.py"

@@ -257,9 +257,11 @@ repository at the exact same commit, validates the source certificate before
 and after Creme's capability-selected copy, and requires a complete host-local
 elaboration baseline covering the exact Lean corpus. It validates the staged
 copy and baseline again, removes candidate reports/manifests, and only then
-atomically publishes goal-local `.lake`, including the baseline under that
-isolated directory. It never uses a symlink or common writable build directory.
-Any uncertainty refuses or falls back to ordinary build/genesis work.
+publishes goal-local `.lake` plus an atomically installed ignored baseline at
+the elaboration gate's established `scripts/baseline-elab.txt` path. The
+validated baseline is also retained inside isolated `.lake` as provenance. It
+never uses a symlink or common writable build directory. Any uncertainty
+refuses or falls back to ordinary build/genesis work.
 
 One consequence is worth knowing, because it is measured rather than assumed: a
 comment-only edit to a Lean module moves that module's own `depHash`, since its
