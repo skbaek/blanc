@@ -2108,16 +2108,27 @@ def audit(root: Path, quiet: bool = False) -> int:
         )
 
     if registry.get("economy_inventory"):
-        economy = subprocess.run(
-            [sys.executable, "scripts/gate-economy.py", "--check"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
+        policy_checks = (
+            ([sys.executable, "scripts/gate-economy.py", "--check"],
+             "economic inventory does not reconcile"),
+            ([sys.executable, "scripts/gate_sampling.py", "--check"],
+             "campaign sampling policy does not reconcile"),
+            ([sys.executable, "scripts/ci_gate_policy.py", "--self-test"],
+             "CI trust-policy controls failed"),
+            ([sys.executable, "scripts/ci_gate_policy.py", "--audit"],
+             "CI gate policy does not reconcile"),
         )
-        if economy.returncode != 0:
-            detail = (economy.stderr or economy.stdout).strip()
-            problems.append(f"economic inventory does not reconcile: {detail}")
+        for command, label in policy_checks:
+            result = subprocess.run(
+                command,
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout).strip()
+                problems.append(f"{label}: {detail}")
 
     duplicates = [
         " ".join(command)

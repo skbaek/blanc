@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "mode": "conservative-fresh",
+  "population": "registered-ci-commands",
+  "cross_run_evidence": "disabled",
+  "pull_request_admission": false,
+  "fork_admission": false,
+  "unknown_base": "select-all",
+  "moved_base": "select-all",
+  "workflow_or_registry_change": "select-all",
+  "undeclared_input": "fail-audit-and-select-all",
+  "sampling": "disabled"
+}

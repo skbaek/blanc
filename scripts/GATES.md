@@ -292,6 +292,24 @@ consumer. Time-dependent exception rows hash the next semantic expiry
 transition rather than the civil date, so an empty registry survives midnight
 while the first date that can change an active set invalidates it.
 
+**CI trust boundary.** Production CI executes its 39 registered commands fresh
+and accepts no cross-run verdict evidence. Pull requests and forks cannot admit
+evidence; an unavailable, moved, or non-ancestor comparison base selects the
+entire CI population; and workflow, registry, or undeclared-input uncertainty
+can only add work or fail the audit. The workflow runs
+`scripts/ci_gate_policy.py` before the gates, and this catalogue audit repeats
+its trust/dependency controls. CI therefore gains an explicit selection record
+without treating local same-clone evidence as portable or trusted.
+
+**Campaign sampling.** Production sampling is disabled. The reviewed policy
+classifies every candidate-positive and harness case as complete or mandatory,
+and no family is enabled without its own representative shadow evidence. The
+generic deterministic selector is nevertheless controlled now: its seed binds
+candidate, gate, and schema; every failure stratum is represented; a complete
+audit occurs every seventh scheduler day; and any sampled failure expands to
+the full campaign. `docs/GATE_SAMPLING.md` is generated from the policy and the
+economic inventory.
+
 **Fail closed.** A missing or malformed trace, an unresolvable ref, a dirty or
 absent external checkout, an unreadable file, an unknown input kind, an
 undeclared catalogued command, or a corrupt cache all cause execution. So does a

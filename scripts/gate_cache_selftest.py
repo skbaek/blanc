@@ -50,6 +50,7 @@ from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import importlib.util
+import gate_sampling as gs
 import worktree_seed as ws
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -2292,6 +2293,13 @@ def control_negative_trusting_the_registry_at_run_time() -> None:
                   "run-time registry reconciliation removed")
 
 
+def control_campaign_sampling_is_deterministic_and_fail_closed() -> None:
+    gs.self_test()
+    policy, harness = gs.validate_policy()
+    require(policy["enabled_families"] == [], "production sampling was enabled")
+    require(bool(harness), "the economic inventory exposed no harness families")
+
+
 NEGATIVE_CONTROLS = (
     control_negative_laundering_unknown_into_unchanged,
     control_negative_dropping_the_post_execution_drift_check,
@@ -2379,6 +2387,7 @@ CONTROLS = (
     control_symlinked_directory_refuses_rather_than_hides_files,
     control_traversable_population_refuses_what_a_copy_cannot_read,
     control_non_zero_expected_exit_is_refused,
+    control_campaign_sampling_is_deterministic_and_fail_closed,
 ) + NEGATIVE_CONTROLS
 
 

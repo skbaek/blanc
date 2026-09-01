@@ -26,6 +26,22 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: CI gate selection and trust policy
+        env:
+          BLANC_CI_EVENT: ${{ github.event_name }}
+          BLANC_CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BLANC_CI_HEAD: ${{ github.sha }}
+          BLANC_CI_REPOSITORY: ${{ github.repository }}
+          BLANC_CI_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+        run: |
+          python3 scripts/ci_gate_policy.py --self-test
+          python3 scripts/ci_gate_policy.py --audit \
+            --event "$BLANC_CI_EVENT" \
+            --base "$BLANC_CI_BASE" \
+            --head "$BLANC_CI_HEAD" \
+            --repository "$BLANC_CI_REPOSITORY" \
+            --head-repository "$BLANC_CI_HEAD_REPOSITORY" \
+            --output .lake/ci-gate-selection.json
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
       # Static and fail-closed: it reads committed files only, so it needs no
