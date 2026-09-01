@@ -1171,7 +1171,6 @@
           "scripts/check-runtime-bytes.py",
           "scripts/weth10-reference.json",
           "scripts/fixtures/weth10/manifest.json",
-          "Blanc/Weth10Code.lean",
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
