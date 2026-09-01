@@ -150,16 +150,6 @@ theorem DeploymentRoot.constructorOccurrence
   exact ⟨cb, txBytes, tx, sender, ctx, post, bout, messagePost, out,
     createPost, henv, hstep, htx, hmessage, hcreate, hcreate.execution⟩
 
-/-- The configured deployment checkpoint reaches itself under the exact
-Prague-only schedule used by the deployment theorem. -/
-theorem DeploymentRoot.reflReach
-    (hroot : DeploymentRoot chainId base deployed ca) :
-    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed deployed := by
-  exact .refl deployed (ChainConfig.pragueOnly_valid chainId)
-    hroot.deployed_validContext
-    (by simpa [ChainConfig.pragueOnly] using hroot.deployed_chainId)
-
 end BeaconDeposit
 
 end Blanc

@@ -319,12 +319,7 @@ theorem processCreateMessage_establishes_artifact
 /-- The exact output produced by the successful `processMessageCall.create`
 wrapper around the frozen BeaconDeposit constructor poststate. -/
 def messageOutputOf (post : Devm) : MsgCallOutput :=
-  { gasLeft := post.gasLeft
-    refundCounter := 0
-    logs := post.logs
-    accountsToDelete := post.accountsToDelete
-    error := post.error
-    returnData := post.output }
+  directCreateMessageOutputOf post
 
 /-- Settled top-level direct-CREATE result.  The retained direct result keeps
 the constructor execution witness and its exact 31-write occurrence
@@ -389,7 +384,8 @@ theorem processMessageCall_establishes_artifact
     simp only [if_true]
     rw [htarget]
     simp [hnoCodeOrNonce, hnoStorage, Except.bimap, hcreate'.run,
-      hcreate'.error, htoNat, out, messageOutputOf]
+      hcreate'.error, htoNat, out, messageOutputOf,
+      directCreateMessageOutputOf]
     rfl
   refine ⟨createPost.state, out, {
     target_eq := htarget
@@ -410,10 +406,13 @@ theorem processMessageCall_establishes_artifact
       hcreate'.storage
   · simpa [Devm.getStor, Devm.getAcct, State.getStor] using
       hcreate'.artifact
-  · simpa only [out, messageOutputOf] using hcreate'.logs
-  · simpa only [out, messageOutputOf] using hcreate'.output
-  · simpa only [out, messageOutputOf] using hcreate'.error
-  · simpa only [out, messageOutputOf] using
+  · simpa only [out, messageOutputOf, directCreateMessageOutputOf] using
+      hcreate'.logs
+  · simpa only [out, messageOutputOf, directCreateMessageOutputOf] using
+      hcreate'.output
+  · simpa only [out, messageOutputOf, directCreateMessageOutputOf] using
+      hcreate'.error
+  · simpa only [out, messageOutputOf, directCreateMessageOutputOf] using
       hcreate'.accountsToDelete
 
 end BeaconDeposit

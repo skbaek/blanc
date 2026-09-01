@@ -983,6 +983,9 @@ For schedule-parametric block/history state boundaries and replay, use
   REVERT with no separate code address crosses through
   `MessageExecution.processMessage_revert_of_exec_afterTransfer_of_noCodeAddress`
   without changing the message's precompile switch.
+  `directCreateMessageOutputOf` is the shared projection from a charged direct
+  CREATE post-frame to its outer `MsgCallOutput`; contract owners may retain a
+  thin historical wrapper name, but must not restate its six fields.
 - Source attainment and source-step provenance:
   [`Blanc/SourceAttainment.lean`](../Blanc/SourceAttainment.lean).
 
