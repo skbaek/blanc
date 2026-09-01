@@ -735,14 +735,14 @@ def control_current_mainnet_python_base_is_native() -> None:
         try:
             resolved = gc.resolve_path(s.root, "@t8n_python_base/lib/python3.11")
             require(
-                resolved == bases[0] / "lib/python3.11",
+                resolved == (bases[0] / "lib/python3.11").resolve(strict=True),
                 "derived CPython root did not follow the first native selector",
             )
             selector.unlink()
             selector.symlink_to(bases[1] / "bin/python3.11")
             resolved = gc.resolve_path(s.root, "@t8n_python_base/lib/python3.11")
             require(
-                resolved == bases[1] / "lib/python3.11",
+                resolved == (bases[1] / "lib/python3.11").resolve(strict=True),
                 "derived CPython root did not follow a retargeted native selector",
             )
             selector.unlink()
