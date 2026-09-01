@@ -21,6 +21,37 @@ def ArtifactInv (stor : Stor) (history : List B256) : Prop :=
   ZeroHashesCorrect stor ∧
     Inv Bytes.sha256 (accOfStor stor) history
 
+/-- The concrete/model projection depends only on observable storage words,
+not on the tree-map representation of absent zero entries. -/
+theorem accOfStor_eq_of_get_eq {left right : Stor}
+    (equal : ∀ key, left.get key = right.get key) :
+    accOfStor left = accOfStor right := by
+  unfold accOfStor
+  have branchEqual :
+      (fun height =>
+        if height < 32 then left.get (branchSlot height) else 0) =
+      (fun height =>
+        if height < 32 then right.get (branchSlot height) else 0) := by
+    funext height
+    split
+    · exact equal (branchSlot height)
+    · rfl
+  have countEqual : (left.get depositCountSlot).toNat =
+      (right.get depositCountSlot).toNat :=
+    congrArg B256.toNat (equal depositCountSlot)
+  rw [branchEqual, countEqual]
+
+/-- Artifact validity is extensional in EVM storage observations. -/
+theorem ArtifactInv.of_get_eq
+    {before after : Stor} {history : List B256}
+    (equal : ∀ key, after.get key = before.get key)
+    (artifact : ArtifactInv before history) :
+    ArtifactInv after history := by
+  refine ⟨fun height bound => (equal (zeroHashSlot height)).trans
+      (artifact.1 height bound), ?_⟩
+  rw [accOfStor_eq_of_get_eq equal]
+  exact artifact.2
+
 /-! ## Region separation -/
 
 theorem branchSlot_injective

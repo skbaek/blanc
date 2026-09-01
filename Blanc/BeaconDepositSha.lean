@@ -324,64 +324,6 @@ theorem sha64_success_prefix_runCompiledTo
 
 /-! ## Source-level successful-run inversion -/
 
-/-- `revReturnData` cannot be the body of a successful source walk. -/
-private theorem not_run_revReturnData
-    {fs : List Func} {sevm : Sevm} {s r : Devm} :
-    ¬ Func.Run fs sevm s Func.revReturnData r := by
-  intro run
-  simp only [Func.revReturnData] at run
-  rcases of_run_next run with ⟨s1, h1, run⟩
-  rcases of_run_next run with ⟨s2, h2, run⟩
-  rcases of_run_next run with ⟨s3, h3, run⟩
-  rcases of_run_next run with ⟨s4, h4, run⟩
-  rcases of_run_next run with ⟨s5, h5, run⟩
-  rcases of_run_next run with ⟨s6, h6, run⟩
-  cases run with
-  | last hrun =>
-      simp only [Linst.Run, Linst.run] at hrun
-      rcases Except.bind_eq_ok hrun with ⟨v1, h1, h2⟩
-      rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
-      rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
-      contradiction
-
-/-- A successful conditional cannot select an auxiliary that is exactly
-`revReturnData`. -/
-private theorem of_run_branch_call_revReturnData
-    {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat} {next : Func}
-    (hget : fs[k]? = some Func.revReturnData)
-    (run : Func.Run fs sevm s ((.call k) <?> next) r) :
-    ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs sevm s' next r := by
-  rcases of_run_branch run with
-    ⟨s', hpop, hnext⟩ |
-    ⟨w, s', s'', hnz, hpop, hburn, hcall⟩
-  · exact ⟨s', hpop, hnext⟩
-  · rcases of_run_call hcall with
-      ⟨f, s3, hlookup, hcallBurn, hbody⟩
-    have hf : f = Func.revReturnData := by
-      rw [hget] at hlookup
-      exact Option.some.inj hlookup.symm
-    subst f
-    exact absurd hbody not_run_revReturnData
-
-/-- A successful conditional cannot select an auxiliary that is exactly
-`Func.rev`. -/
-private theorem of_run_branch_call_rev
-    {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat} {next : Func}
-    (hget : fs[k]? = some Func.rev)
-    (run : Func.Run fs sevm s ((.call k) <?> next) r) :
-    ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs sevm s' next r := by
-  rcases of_run_branch run with
-    ⟨s', hpop, hnext⟩ |
-    ⟨w, s', s'', hnz, hpop, hburn, hcall⟩
-  · exact ⟨s', hpop, hnext⟩
-  · rcases of_run_call hcall with
-      ⟨f, s3, hlookup, hcallBurn, hbody⟩
-    have hf : f = Func.rev := by
-      rw [hget] at hlookup
-      exact Option.some.inj hlookup.symm
-    subst f
-    exact absurd hbody not_run_rev
-
 /-- Invert a successful source-level `sha64` walk.  The actual `STATICCALL`
 must have entered the native address-2 precompile: its failure arm bubbles and
 its short-output arm reverts, so neither can occur in a successful walk.  The

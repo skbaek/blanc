@@ -17,14 +17,18 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-private def eventPayloadMemory (data : Bytes) (amount : B256) : Mem :=
+/-- Event staging after the three validated dynamic payload copies and before
+the fixed ABI headers are written. -/
+def eventPayloadMemory (data : Bytes) (amount : B256) : Mem :=
   let M0 := depositEventInputMemory data amount
   let M1 := M0.write 224 (0 : B256).toBytes
   let M2 := M1.write 192 (depositEventPubkeySlice data)
   let M3 := M2.write 288 (depositEventWithdrawalSlice data)
   M3.write 416 (depositEventSignatureSlice data)
 
-private def eventBeforeCountMemory (data : Bytes) (amount : B256) : Mem :=
+/-- Event staging after the fixed ABI headers and amount encoding, immediately
+before the old deposit count is loaded. -/
+def eventBeforeCountMemory (data : Bytes) (amount : B256) : Mem :=
   let M4 := eventPayloadMemory data amount
   let M5 := M4.write 0 (160 : B256).toBytes
   let M6 := M5.write 32 (256 : B256).toBytes
@@ -40,7 +44,9 @@ private def eventBeforeCountMemory (data : Bytes) (amount : B256) : Mem :=
   let M16 := M15.write 512 (8 : B256).toBytes
   M16.write 544 (0 : B256).toBytes
 
-private theorem eventMemory_eq
+/-- Normalize the public event image as the pre-count image followed by the
+old-count word and its little-endian encoding. -/
+theorem eventMemory_eq
     (data : Bytes) (amount oldCount : B256) :
     depositEventMemory data amount oldCount =
       storeLe64Memory
@@ -49,7 +55,7 @@ private theorem eventMemory_eq
         544 oldCount := by
   rfl
 
-private structure EventOffsetMemoryCarrier
+structure EventOffsetMemoryCarrier
     (memory : Mem) (data : Bytes) (amount : B256) : Type where
   image : Bytes
   wf : Mem.Wf memory
@@ -64,7 +70,7 @@ private structure EventOffsetMemoryCarrier
     (depositOffsetWord data 2).toBytes
   amount_read : image.sliceD 672 32 0 = amount.toBytes
 
-private def EventOffsetMemoryCarrier.input
+def EventOffsetMemoryCarrier.input
     (data : Bytes) (amount : B256) :
     EventOffsetMemoryCarrier
       (depositEventInputMemory data amount) data amount := by
@@ -72,7 +78,7 @@ private def EventOffsetMemoryCarrier.input
   exact ⟨h.image, h.wf, h.reads, h.size_eq, h.image_length,
     h.offset0_read, h.offset1_read, h.offset2_read, h.amount_read⟩
 
-private def EventOffsetMemoryCarrier.writeAfter
+def EventOffsetMemoryCarrier.writeAfter
     {memory : Mem} {data : Bytes} {amount : B256}
     (h : EventOffsetMemoryCarrier memory data amount)
     (n : Nat) (xs : Bytes) (hstart : 96 ≤ n)
@@ -97,7 +103,7 @@ private def EventOffsetMemoryCarrier.writeAfter
       hbeforeAmount]
     exact h.amount_read
 
-private structure EventAmountMemoryCarrier
+structure EventAmountMemoryCarrier
     (memory : Mem) (amount : B256) : Type where
   image : Bytes
   wf : Mem.Wf memory
@@ -106,13 +112,13 @@ private structure EventAmountMemoryCarrier
   image_length : image.length = 704
   amount_read : image.sliceD 672 32 0 = amount.toBytes
 
-private def EventAmountMemoryCarrier.ofOffsets
+def EventAmountMemoryCarrier.ofOffsets
     {memory : Mem} {data : Bytes} {amount : B256}
     (h : EventOffsetMemoryCarrier memory data amount) :
     EventAmountMemoryCarrier memory amount :=
   ⟨h.image, h.wf, h.reads, h.size_eq, h.image_length, h.amount_read⟩
 
-private def EventAmountMemoryCarrier.writeBefore
+def EventAmountMemoryCarrier.writeBefore
     {memory : Mem} {amount : B256}
     (h : EventAmountMemoryCarrier memory amount)
     (n : Nat) (xs : Bytes) (hbeforeAmount : n + xs.length ≤ 672)
@@ -129,7 +135,7 @@ private def EventAmountMemoryCarrier.writeBefore
   rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hbeforeAmount]
   exact h.amount_read
 
-private def EventAmountMemoryCarrier.writeWordBefore
+def EventAmountMemoryCarrier.writeWordBefore
     {memory : Mem} {amount : B256}
     (h : EventAmountMemoryCarrier memory amount)
     (n : Nat) (word : B256) (hbeforeAmount : n + 32 ≤ 672)
@@ -139,7 +145,7 @@ private def EventAmountMemoryCarrier.writeWordBefore
     (by simpa only [B256.length_toBytes] using hbeforeAmount)
     (by simpa only [B256.length_toBytes] using hfit)
 
-private def EventAmountMemoryCarrier.storeLe64Before
+def EventAmountMemoryCarrier.storeLe64Before
     {memory : Mem} {amount word : B256}
     (h : EventAmountMemoryCarrier memory amount)
     (base : Nat) (hbeforeAmount : base + 8 ≤ 672)
@@ -164,7 +170,7 @@ private def EventAmountMemoryCarrier.storeLe64Before
       exact hbeforeAmount)]
   exact h.amount_read
 
-private def eventPayloadMemory_carrier
+def eventPayloadMemory_carrier
     (data : Bytes) (amount : B256) :
     EventAmountMemoryCarrier (eventPayloadMemory data amount) amount := by
   let M0 := depositEventInputMemory data amount
@@ -204,7 +210,7 @@ private def eventPayloadMemory_carrier
   simpa only [eventPayloadMemory, M4, M3, M2, M1, M0] using
     EventAmountMemoryCarrier.ofOffsets c4
 
-private def eventBeforeCountMemory_carrier
+def eventBeforeCountMemory_carrier
     (data : Bytes) (amount : B256) :
     EventAmountMemoryCarrier (eventBeforeCountMemory data amount) amount := by
   let c4 := eventPayloadMemory_carrier data amount

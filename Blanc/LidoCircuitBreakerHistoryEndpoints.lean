@@ -85,48 +85,14 @@ point is taken instead over the `Func.Run` derivation, guarded by a syntactic
 storage-silence predicate that is closed under the permitted jump — exactly the
 shape `Func.CallsIn` uses to make `Func.Run.mono` structural. -/
 
-/-- Every instruction this body can execute leaves persistent storage alone,
-and every tail jump it can take lands at a permitted index. -/
-private def SilentIn (P : Nat → Prop) : Func → Prop
-  | .branch f g => SilentIn P f ∧ SilentIn P g
-  | .last l => Linst.Inv Devm.getStor Devm.getStor l
-  | .next i body => Ninst.Inv Devm.getStor i ∧ SilentIn P body
-  | .call k => P k
-
-/-- The guarded fixed point.  A syntactically silent body whose permitted
-indices are occupied by syntactically silent bodies is `StorFixed`; the
-recursion is on the derivation, so a self-jump costs nothing. -/
-private theorem getStor_eq_of_run_silentIn {dp : DeployParams} {P : Nat → Prop}
-    (hclosed : ∀ k g, P k → ((runtime dp).main :: aux)[k]? = some g →
-      SilentIn P g)
-    {fs : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
-    (hrun : Func.Run fs sevm s f r) :
-    fs = (runtime dp).main :: aux → SilentIn P f →
-      Devm.getStor r = Devm.getStor s := by
-  induction hrun with
-  | zero hpop _ ih =>
-      exact fun hfs hf =>
-        (ih hfs hf.1).trans (funext (getStor_eq_of_state_eq hpop.state.symm))
-  | succ _ hpop hburn _ ih =>
-      exact fun hfs hf =>
-        (ih hfs hf.2).trans
-          (funext (getStor_eq_of_state_eq (hpop.state.trans hburn.state).symm))
-  | last hl => exact fun _ hf => (hf hl).symm
-  | next hi _ ih => exact fun hfs hf => (ih hfs hf.2).trans (hf.1 hi).symm
-  | call hget hburn _ ih =>
-      refine fun hfs hf => ?_
-      subst hfs
-      exact (ih rfl (hclosed _ _ hf hget)).trans
-        (funext (getStor_eq_of_state_eq hburn.state.symm))
-
 private theorem storFixed_of_silentIn {dp : DeployParams} {P : Nat → Prop}
     (hclosed : ∀ k g, P k → ((runtime dp).main :: aux)[k]? = some g →
-      SilentIn P g)
-    {f : Func} (hf : SilentIn P f) : StorFixed dp f :=
-  fun hrun => getStor_eq_of_run_silentIn hclosed hrun rfl hf
+      Func.StorSilentIn P g)
+    {f : Func} (hf : Func.StorSilentIn P f) : StorFixed dp f :=
+  fun hrun => Func.getStor_eq_of_run_storSilentIn hclosed hrun hf
 
 private theorem silentIn_enumLoop :
-    SilentIn (fun k => k = enumLoopSlot) enumLoop := by
+    Func.StorSilentIn (fun k => k = enumLoopSlot) enumLoop := by
   unfold enumLoop
   repeat' first
     | rfl
@@ -135,7 +101,7 @@ private theorem silentIn_enumLoop :
     | refine ⟨?_, ?_⟩
 
 private theorem silentIn_getPausables :
-    SilentIn (fun k => k = enumLoopSlot) getPausables := by
+    Func.StorSilentIn (fun k => k = enumLoopSlot) getPausables := by
   unfold getPausables
   repeat' first
     | rfl
@@ -150,7 +116,7 @@ theorem get_enumLoopSlot (dp : DeployParams) :
 
 private theorem enumLoopSlot_closed (dp : DeployParams) :
     ∀ k g, k = enumLoopSlot → ((runtime dp).main :: aux)[k]? = some g →
-      SilentIn (fun k => k = enumLoopSlot) g := by
+      Func.StorSilentIn (fun k => k = enumLoopSlot) g := by
   rintro k g rfl hget
   obtain rfl : enumLoop = g :=
     Option.some.inj ((get_enumLoopSlot dp).symm.trans hget)

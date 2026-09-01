@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositBridgeCompiled
 import Blanc.ContractAdmission
+import Blanc.ExecutionFrameEntry
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionOccurrence
 
@@ -38,6 +39,15 @@ theorem HistoryExtends.transAppend
   rcases history with ⟨tail, artifact⟩
   refine ⟨suffix ++ tail, ?_⟩
   simpa only [List.append_assoc] using artifact
+
+/-- Baseline history validity is extensional in observable storage words. -/
+theorem HistoryExtends.of_get_eq
+    {baseline : List B256} {before after : Stor}
+    (equal : ∀ key, after.get key = before.get key)
+    (history : HistoryExtends baseline before) :
+    HistoryExtends baseline after := by
+  rcases history with ⟨suffix, artifact⟩
+  exact ⟨suffix, artifact.of_get_eq equal⟩
 
 /-- The storage-only contract specification used by the history ladder.
 Callvalue and balances are deliberately irrelevant; value movement cannot
@@ -89,6 +99,12 @@ structure NativeShaEntry (sevm : Sevm) (pre : Devm) : Prop where
   nondelegated : getDelegatedCodeAddress (pre.getCode 2) = none
   precompile : decide (sevm.benvStat.rules.isPrecomp 2) = true
 
+/-- Entry facts used by the source-level Beacon frame proof.  Native SHA is
+the contract-specific external-execution boundary; fresh stack and memory are
+facts of the actual entered frame, not assumptions about an arbitrary Devm. -/
+def HistoryEntry (sevm : Sevm) (pre : Devm) : Prop :=
+  NativeShaEntry sevm pre ∧ Exec.FreshEntry sevm pre
+
 /-- Every actually entered frame executing at the Beacon storage owner has a
 native SHA-256 boundary.  This is trace-local: unrelated frames need no such
 fact, and no result or poststorage premise appears. -/
@@ -104,11 +120,25 @@ theorem Exec.NativeShaAdmitted.root
     (target : sevm.currentTarget = ca) : NativeShaEntry sevm pre := by
   exact Exec.FrameAdmitted.root admitted target
 
+/-- Native SHA admission combined with the fresh machine state supplied by
+the concrete frame-entry trace. -/
+def Exec.HistoryAdmitted
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (ca : Adr) (run : Exec pc sevm pre out) : Prop :=
+  Exec.FrameAdmitted ca HistoryEntry run
+
+theorem Exec.HistoryAdmitted.root
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {ca : Adr} {run : Exec pc sevm pre out}
+    (admitted : Exec.HistoryAdmitted ca run)
+    (target : sevm.currentTarget = ca) : HistoryEntry sevm pre := by
+  exact Exec.FrameAdmitted.root admitted target
+
 /-- The open-frame preservation boundary used by Beacon history.  It is the
 ordinary `ContractSpec.Preserves` statement with one additional piece of
 positive evidence: native SHA admission for the concrete execution's actual
 frame roots. -/
 def HistoryPreserves (baseline : List B256) (ca : Adr) : Prop :=
-  (historySpec baseline).PreservesAdmitted ca NativeShaEntry
+  (historySpec baseline).PreservesAdmitted ca HistoryEntry
 
 end Blanc.BeaconDeposit

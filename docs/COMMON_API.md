@@ -35,6 +35,13 @@ registry has identified the likely vocabulary.
 - Ordinary source `Func.Run` walk:
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
+- For a successful source branch whose selected arm calls a known
+  nonreturning auxiliary, use `of_run_branch_call_of_not_run` in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).  Its shared
+  specializations `of_run_branch_call_rev`,
+  `of_run_branch_call_revWith`, and
+  `of_run_branch_call_revReturnData` cover the standard empty,
+  constant-payload, and returndata-bubbling reverters.
 - Known stack steps without a tactic arm: `prefix_of_mul`, `prefix_of_div`,
   `prefix_of_timestamp`, `prefix_of_xor`, `prefix_of_extcodesize_val`, and
   `prefix_of_argCheckNonAddress` in
@@ -616,6 +623,12 @@ repeat their byte-slice normalization in a contract family.
 
 - `Devm.memWrite_memory`, `Devm.memWrite_stack`, and Jaune's
   `Devm.memWrite_gasLeft` describe the primitive update.
+- For source inversion of primitive word and byte stores, use
+  `of_run_mstore_val` / `prefix_of_mstore_val` and
+  `of_run_mstore8_val` / `prefix_of_mstore8_val`.  The byte-store result is
+  the exact low-byte singleton write; `of_run_mstore8_state` supplies its
+  persistent-state equation without widening the instruction invariance
+  class.
 - `Mem.size_write_of_le`, `Mem.size_read_snd_of_le`, and related extension
   lemmas live in [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean).
 - `Func.runCompiledTo_mstore_step` and other compiled memory steps live in the
@@ -635,6 +648,9 @@ repeat their byte-slice normalization in a contract family.
   proof-carrying decoder step.  `of_run_codecopy_logs` is the corresponding
   standalone successful-run log-silence fact, without widening the global
   instruction invariance class.
+- For calldata copies with all three operands already known on the stack,
+  `prefix_of_calldatacopy_val` consumes that prefix and exposes the exact
+  `Sevm.data.sliceD` memory write.
 
 A scratch-word walk that writes several fixed slots and reads them back needs
 three window cases.  `Bytes.sliceD_writeAt_inside` projects a subwindow wholly

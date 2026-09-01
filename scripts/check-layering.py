@@ -50,7 +50,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder",
-          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage",
+          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
@@ -87,6 +87,7 @@ CONTRACTS = {
                        "BeaconDepositBridge",
                        "BeaconDepositMemory", "BeaconDepositSha",
                        "BeaconDepositAbiMemory", "BeaconDepositAbi",
+                       "BeaconDepositAbiSource",
                        "BeaconDepositAbiStorageEffects",
                        "BeaconDepositEventMemory", "BeaconDepositEvent",
                        "BeaconDepositEventStorageEffects",
@@ -117,13 +118,14 @@ CONTRACTS = {
                        "BeaconDepositSuccessChronology",
                        "BeaconDepositBridgeCompiled",
                        "BeaconDepositSuccessSettlement",
+                       "BeaconDepositSuccessSource",
                        "BeaconDepositCountEffects",
                        "BeaconDepositDeploymentMessage",
                        "BeaconDepositDeploymentInput",
                        "BeaconDepositDeploymentTransaction",
                        "BeaconDepositDeploymentBlock",
                        "BeaconDepositDeploymentRoot",
-                       "BeaconDepositHistory"],
+                       "BeaconDepositHistory", "BeaconDepositHistorySound"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",

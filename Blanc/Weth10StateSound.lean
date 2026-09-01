@@ -311,17 +311,7 @@ theorem of_run_branch_call_revWith
     (hget : fs[k]? = some (Func.revWith payload))
     (run : Func.Run fs e s ((.call k) <?> next) r) :
     ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs e s' next r := by
-  rcases of_run_branch run with
-    ⟨s', hpop, hnext⟩ |
-    ⟨w, s', s'', hnz, hpop, hburn, hcall⟩
-  · exact ⟨s', hpop, hnext⟩
-  · rcases of_run_call hcall with
-      ⟨f, s3, hlookup, hcallBurn, hrev⟩
-    have hf : f = Func.revWith payload := by
-      rw [hget] at hlookup
-      exact Option.some.inj hlookup.symm
-    subst f
-    exact absurd hrev Func.not_run_revWith
+  exact Blanc.of_run_branch_call_revWith hget run
 
 /-- Spending a caller allowance is backing-silent before its tail jump.  The
 self-owner and infinite-allowance paths leave storage unchanged; the finite
