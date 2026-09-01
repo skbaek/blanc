@@ -73,7 +73,8 @@ contrapositives of the guards, and none of the eight is a state-restoration
 claim. Read those statements rather than these sentences. What is unchanged:
 no solvency claim is made or implied — during a flash loan the minted supply is unbacked by
 construction, which is the point of the mechanism — and **no liveness claim is
-made anywhere**. Every theorem named above takes a successful run as a
+made anywhere in this family** — fmint's proved liveness is confined to its
+view calls. Every theorem named above takes a successful run as a
 hypothesis; none of them says a `flashLoan` call ever succeeds. The rows below
 are neither kind of result: fixtures are specification-checked differential
 testing on chosen inputs, per [the fixture suite's README](scripts/fixtures/fmint/README.md#what-the-suite-establishes).

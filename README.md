@@ -320,7 +320,7 @@ This repo contains the following files:
   constructed rather than ruled out — the unknown-selector and
   `token ≠ self` executions built instruction by instruction to
   `.error (.revert, _)` with empty returndata: statements that a call
-  *reverts*, with *this* error and *no* data, on the deployed bytes.
+  *reverts*, with *this* error and *no* data, on the exact compiled bytes.
 - [FmintSettles.lean](Blanc/FmintSettles.lean): the walk that runs
   `flashLoan`'s state-changing half — three guards passed, the mint written,
   the frame handed to the callback — and, across the `CALL`, the settlement
@@ -898,7 +898,7 @@ about whether they are the right theorems. Read the statements in
 a theorem's name.
 
 Blanc builds against a **pinned revision** of
-[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 4e6a6555…`
+[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 949cf97e…`
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
