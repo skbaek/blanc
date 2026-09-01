@@ -6,20 +6,33 @@ siblings" -- every contract's program, compiled-bytes and property modules sit
 at the same level of the import hierarchy, and no contract's module imports
 another contract's, in either direction, at any layer.
 
-Three checks, all falsifiable, all exercised by negative controls:
+Four checks, all falsifiable, all exercised by negative controls:
 
   1. Classification is total. Every Lean module in the repository appears in
-     the table below. An unclassified module FAILS the gate rather than being
-     skipped -- otherwise contract #3 could be added and silently escape the
-     rule, which is the vacuity this gate exists to prevent.
+     the table below, wherever it sits in the tree -- discovery is recursive
+     precisely so a module cannot escape by moving into a subdirectory. An
+     unclassified module FAILS the gate rather than being skipped -- otherwise
+     contract #3 could be added and silently escape the rule, which is the
+     vacuity this gate exists to prevent.
   2. No cross-contract import. A contract module importing a module owned by a
      different contract is the defect the rule names: the imported thing was
      never that contract's property, and belongs upstream.
   3. No inverted import. A shared module importing a contract module would put
      an upstream layer below a contract -- the same break, other direction.
+  4. The composition stratum is strictly downstream. A `Blanc/Composition/*`
+     module is the one place a theorem may name two or more contract families
+     at once, so it may import shared modules and any number of contracts. The
+     relation is one-way: no shared module and no contract module may import
+     composition, and composition may not import a root. Roots aggregate
+     composition, never the reverse.
 
-Roots (Blanc.lean, Main.lean) exist to import everything and are exempt from 2
-and 3, never from 1.
+Roots (Blanc.lean, Main.lean) exist to import everything and are exempt from 2,
+3 and 4 as importers, never from 1.
+
+Check 4 is what keeps 2 honest once a cross-family theorem exists: without an
+explicit downstream stratum the only ways to state one are an inverted import,
+a cross-contract import, or hiding it in a root, and the third is invisible to
+this gate by construction.
 
 Needs no Lean toolchain, no build and no network: it reads committed .lean
 files only, so it runs identically here and in CI.
@@ -277,6 +290,17 @@ CONTRACTS = {
                              "LidoCircuitBreakerHistoryChain"],
 }
 
+# The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
+# `import Blanc.Composition.X` writes them. This is the only category permitted
+# to name more than one contract family, and adding a module here is the moment
+# check 4 starts binding it. Nothing may import back into this list.
+COMPOSITION = [
+    # Deliberately empty at landing: the stratum's rules and controls land
+    # ahead of their first inhabitant, so multi-contract goals can build on a
+    # merged category. The first entries arrive with
+    # `lido-twg-pinned-target-closure-v1`.
+]
+
 ROOTS = ["Blanc", "Main"]
 
 def classify():
@@ -285,6 +309,7 @@ def classify():
     for group, category in (
         [(mod, "shared") for mod in SHARED]
         + [(mod, "root") for mod in ROOTS]
+        + [(mod, "composition") for mod in COMPOSITION]
         + [(mod, name) for name, mods in CONTRACTS.items() for mod in mods]
     ):
         if group in owner:
@@ -296,16 +321,30 @@ def classify():
 
 
 def modules_on_disk(root):
-    """-> module name -> path, for every Lean module in the repository."""
+    """-> module name -> path, for every Lean module in the repository.
+
+    The walk under `Blanc/` is recursive and names a nested module the way an
+    `import` statement spells it: `Blanc/Composition/X.lean` is
+    `Composition.X`. A non-recursive listing here would let any module in a
+    subdirectory escape check 1 -- and therefore every other check -- without
+    anyone editing this file, which is exactly the silent escape check 1
+    exists to prevent.
+    """
     found = {}
     for name in ("Blanc.lean", "Main.lean"):
         path = os.path.join(root, name)
         if os.path.exists(path):
             found[name[: -len(".lean")]] = path
     src = os.path.join(root, "Blanc")
-    for name in sorted(os.listdir(src)) if os.path.isdir(src) else []:
-        if name.endswith(".lean"):
-            found[name[: -len(".lean")]] = os.path.join(src, name)
+    for dirpath, dirnames, filenames in os.walk(src):
+        dirnames.sort()
+        for name in sorted(filenames):
+            if not name.endswith(".lean"):
+                continue
+            path = os.path.join(dirpath, name)
+            relative = os.path.relpath(path, src)
+            module = relative[: -len(".lean")].replace(os.sep, ".")
+            found[module] = path
     return found
 
 
@@ -623,13 +662,38 @@ def main(argv):
             continue
         for imported in imports:
             target = owner.get(imported)
-            if target is None or target in ("shared", "root"):
+            if target is None:
+                continue
+            if target == "root":
+                # Roots aggregate; nothing in the graph depends back on them.
+                # Only composition is checked here, because a shared or
+                # contract module importing a root is already an import cycle
+                # the toolchain rejects, while composition is the new category
+                # whose one-way relation to the roots this gate must state.
+                if category == "composition":
+                    failures.append(
+                        f"{mod} (composition) imports Blanc.{imported}, a root "
+                        f"module — roots aggregate composition, not the reverse"
+                    )
+                continue
+            if target == "composition":
+                if category != "composition":
+                    failures.append(
+                        f"{mod} ({category}) imports Blanc.{imported}, a composition "
+                        f"module — the composition stratum is downstream of the "
+                        f"shared and contract layers"
+                    )
+                continue
+            if target == "shared":
                 continue
             if category == "shared":
                 failures.append(
                     f"{mod} (shared) imports Blanc.{imported}, a {target} module — "
                     f"a shared layer must not depend on a contract"
                 )
+            elif category == "composition":
+                # The point of the stratum: one module may name several families.
+                continue
             elif target != category:
                 failures.append(
                     f"{mod} ({category}) imports Blanc.{imported}, owned by {target} "
@@ -645,10 +709,12 @@ def main(argv):
             f"{len(CONTRACTS)} contract(s), {len(found)} module(s)"
         )
         return 1
+    n_composition = sum(1 for m in found if owner.get(m) == "composition")
     print(
         f"OK — layering: {len(CONTRACTS)} contract(s) are siblings; "
         f"{len(found)} module(s) classified, {n_checked} non-root checked, "
-        f"no cross-contract or inverted import"
+        f"{n_composition} composition module(s) downstream, "
+        f"no cross-contract, inverted or composition-inverted import"
     )
     return 0
 

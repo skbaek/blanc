@@ -436,6 +436,47 @@ header reading. It needs no Lean toolchain and runs ahead of the build in CI;
 [`scripts/check-layering-controls.py`](scripts/check-layering-controls.py)
 separately pairs the accepted forms with real Lean elaboration.
 
+### The composition stratum
+
+Some theorems are genuinely about two contracts at once — a CircuitBreaker
+pausing a Triggerable Withdrawals Gateway is the first of them. Such a theorem
+has no honest home in either family: putting it in one makes the other family's
+name that family's property, and the sibling rule above rightly rejects both
+directions.
+
+So there is exactly one downstream place for it. `Blanc/Composition/*` is a
+distinct **COMPOSITION** stratum, and the graph is one-way:
+
+```
+        roots (Blanc.lean, Main.lean)          aggregate everything
+              ▲
+        Blanc/Composition/*                    may name several families
+              ▲                 ▲
+   contract families      shared modules       siblings; neither sees composition
+              ▲                 ▲
+        shared modules                         upstream of every contract
+```
+
+* A composition module may import shared modules and **any number** of contract
+  families. That is the whole point of the stratum.
+* No shared module and no contract module may import composition, and a
+  composition module may not import a root. Roots aggregate composition; the
+  dependency never runs back.
+* The sibling rule is unchanged for contract modules: an ordinary
+  contract-to-other-contract import is still rejected.
+
+Roots are deliberately *not* the place for this. They are aggregation surfaces,
+exempt from the import checks by construction, so a cross-family theorem hidden
+in a root would be invisible to the gate — which is precisely why composition
+gets its own classified, checked category instead.
+
+The stratum lands ahead of its first inhabitant, so multi-contract work can
+build on a merged category: the first entries arrive with the Lido
+CircuitBreaker × TriggerableWithdrawalsGateway composition
+(`lido-twg-pinned-target-closure-v1`), and later cross-contract goals add
+their own.
+
+
 The goal-local representation-changing v1/v2 witness and its exact compiled
 OssifiableProxy route are documented in
 [`docs/PROXY_PAIR_UPGRADE.md`](docs/PROXY_PAIR_UPGRADE.md). That boundary
