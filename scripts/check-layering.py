@@ -501,6 +501,16 @@ class HeaderScanner:
             if ends_header:
                 return False, None, False, False, False
         if not self.take_word("import"):
+            # Once an import-only modifier has begun a header command, another
+            # modifier cannot silently turn it into a body boundary.  In
+            # particular Lean rejects `meta public import`; treating it as a
+            # declaration would hide the later import from this gate.
+            if (saw_public or saw_meta) and (
+                self.take_word("public")
+                or self.take_word("meta")
+                or self.take_word("all")
+            ):
+                self.error("invalid import modifier order")
             return False, None, False, False, False
         had_trivia, ends_header = self.skip_trivia()
         if ends_header or not had_trivia:

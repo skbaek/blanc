@@ -196,6 +196,8 @@ def main() -> int:
     is_rejected_by_lean("trailing-dot", "import Init.\n")
     rejects_header("public-all", "module\n\npublic import all Blanc.Weth\n")
     is_rejected_by_lean("public-all", "module\n\npublic import all Init\n")
+    rejects_header("meta-public", "module\n\nmeta public import Blanc.Weth\n")
+    is_rejected_by_lean("meta-public", "module\n\nmeta public import Init\n")
 
     negatives = [
         ("multiline-string", 'def x := r#"\nimport Blanc.Weth\n"#\n', [],
@@ -258,7 +260,7 @@ def main() -> int:
 
     print(
         "OK — layering controls: 11 accepted import forms pair imports_of with Lean; "
-        "2 rejected header forms, 3 legal non-imports, header boundary, 3 malformed-header "
+        "3 rejected header forms, 3 legal non-imports, header boundary, 3 malformed-header "
         "and 3 architecture controls plus 1 category-agnostic control bite"
     )
     return 0

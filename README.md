@@ -413,8 +413,9 @@ are plain `import`; with `module`, `public import`, `meta import`, `import all`,
 components such as `«Main»` and Lean's unquoted letter-like Unicode characters;
 whitespace and nested comments may occur between the pieces, an import may span
 lines, and a trailing line comment is trivia.
-`public`, `meta`, and `all` require a `module` header, and `public import all`
-is rejected because Lean rejects that combination. A partial trailing dot
+`public`, `meta`, and `all` require a `module` header. `public import all` and
+the reversed `meta public import` modifier order are rejected because Lean
+rejects those combinations. A partial trailing dot
 (`import Blanc.`) is an editor-completion parse shape, not an elaborating
 import, so the gate rejects it closed as it does an unterminated header comment
 or string.
