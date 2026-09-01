@@ -61,7 +61,9 @@ LEAN_NAME_RE = re.compile(rf"{LEAN_PART}(?:\.{LEAN_PART})*\Z")
 # the corpus walk is recursive, so a validator that only accepted one flat
 # component would let the writer emit paths its own reader rejects. Every
 # component must start with a letter or underscore, so `.` and `..` cannot
-# appear and the pattern is traversal-safe by construction.
+# appear and the pattern is traversal-safe by construction. Unifying
+# this key check with the runtime path validator is owned by
+# `blanc-module-path-policy-v1`.
 MODULE_RE = re.compile(r"Blanc/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.lean\Z")
 REVIEW_OWNER_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 DECL_KINDS = {
@@ -324,15 +326,18 @@ def declarations_in(path: Path) -> Set[str]:
 
 
 def _valid_module_path(value: str) -> bool:
-    """A repository-relative `Blanc/**/*.lean` path, validated structurally.
+    """A repository-relative `Blanc/**/*.lean` path, checked after normalization.
 
-    Structural rather than a character class: the corpus walk is recursive, so
-    the writers emit whatever names the tree actually holds, and Lean module
-    names are not confined to ASCII. A pattern that enumerated legal identifier
-    characters would reject names its own writer produced -- the round-trip
-    defect this replaces. What must be rejected is traversal, not unusual
-    letters, so that is what is checked. Containment of the *resolved* path is
-    a separate check at read time, because a symlink escapes a string test.
+    Deliberately not a character class: the corpus walk is recursive, so the
+    writers emit whatever names the tree actually holds, and Lean module names
+    are not confined to ASCII. Honest scope: `PurePosixPath` normalizes before
+    the component check, so `..` and absolute paths are rejected, while
+    normalized-away spellings -- doubled or `.` components and a trailing
+    slash -- are accepted as aliases of their normalized form, and nothing here
+    constrains symlinks, hardlinks, case, or Unicode normalization aliases.
+    Raw-string validation before any path object exists, universal resolved
+    containment, and the filesystem-alias policy are contracted to
+    `blanc-module-path-policy-v1`; this check is not claimed as structural.
     """
     if not isinstance(value, str) or not value or value != value.strip():
         return False
