@@ -1236,3 +1236,5 @@ address.
 If you have a contract with an invariant worth proving and are wondering
 whether this stack could reach it, that conversation is welcome — including
 the answer "not yet, and here is what would have to exist first."
+
+<!-- gate-economy benchmark: documentation-only change -->
