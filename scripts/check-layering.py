@@ -50,7 +50,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "Tactics", "CommonProofs", "Ladder", "Upgrade",
-          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
+          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
@@ -65,6 +65,10 @@ SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesG
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "DelegatecallEnvelope",
+           "ExecutionFrames", "ExecutionFrameEntry", "ExecutionAdmission", "ContractAdmission",
+           "ExecutionMessageAdmission", "ExecutionTransactionAdmission",
+           "ExecutionBodyAdmission", "ExecutionHistoryAdmission",
+           "ExecutionTraceFresh",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects"]
 
@@ -83,6 +87,7 @@ CONTRACTS = {
                        "BeaconDepositBridge",
                        "BeaconDepositMemory", "BeaconDepositSha",
                        "BeaconDepositAbiMemory", "BeaconDepositAbi",
+                       "BeaconDepositAbiSource",
                        "BeaconDepositAbiStorageEffects",
                        "BeaconDepositEventMemory", "BeaconDepositEvent",
                        "BeaconDepositEventStorageEffects",
@@ -113,7 +118,15 @@ CONTRACTS = {
                        "BeaconDepositSuccessChronology",
                        "BeaconDepositBridgeCompiled",
                        "BeaconDepositSuccessSettlement",
-                       "BeaconDepositCountEffects"],
+                       "BeaconDepositSuccessSource",
+                       "BeaconDepositCountEffects",
+                       "BeaconDepositDeploymentMessage",
+                       "BeaconDepositDeploymentInput",
+                       "BeaconDepositDeploymentTransaction",
+                       "BeaconDepositDeploymentBlock",
+                       "BeaconDepositDeploymentRoot",
+                       "BeaconDepositHistory", "BeaconDepositHistorySound",
+                       "BeaconDepositHistoryChain"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",

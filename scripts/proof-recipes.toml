@@ -68,11 +68,20 @@ review_date = "2026-08-20"
 id = "func-run-prefix-split"
 status = "active"
 triggers = ["implication-premise:Func.Run"]
-preferred_path = "Use `func_execute n` or `func_execute_with line` to expose a known prefix."
-boundary = "This targets the older implication-shaped `Func.Run`; it is not `RunCompiled` construction and does not invert an arbitrary named derivation without first reverting it."
+preferred_path = "Use `func_execute n` or `func_execute_with line` to expose a known prefix. For a successful conditional whose selected arm calls a known nonreturning auxiliary, use `of_run_branch_call_of_not_run`; the `rev`, `revWith`, and `revReturnData` specializations discharge the standard reverter bodies."
+boundary = "This targets the older implication-shaped `Func.Run`; it is not `RunCompiled` construction and does not invert an arbitrary named derivation without first reverting it. The nonreturning-call inversion proves only that the successful walk selected the zero/fall-through arm; transport any stack or state observation separately from its returned `Devm.PopBurn`."
 owner_module = "Blanc/Tactics.lean"
 canonical_example = "Blanc/Solvent.lean:withdraw_preserves_solvent"
-symbols = ["tactic:func_execute", "tactic:func_execute_with", "declaration:Func.Run"]
+symbols = [
+  "tactic:func_execute",
+  "tactic:func_execute_with",
+  "declaration:Func.Run",
+  "declaration:Blanc.of_run_branch_call_of_not_run",
+  "declaration:Blanc.of_run_branch_call_rev",
+  "declaration:Blanc.of_run_branch_call_revWith",
+  "declaration:Blanc.of_run_branch_call_revReturnData",
+  "declaration:Blanc.Func.not_run_revReturnData",
+]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-20"
 
@@ -253,7 +262,7 @@ review_date = "2026-08-21"
 id = "fixed-byte-offsets"
 status = "active"
 triggers = ["goal-shape:fixed-byte-offset"]
-preferred_path = "Use `Bytes.sliceD_writeAt` for the whole written window, `Bytes.sliceD_writeAt_inside` for a contained subwindow, and `Bytes.sliceD_writeAt_before` or `Bytes.sliceD_writeAt_after` for disjoint neighboring windows. For a padded slice, use `Bytes.getD_sliceD_of_lt` for an in-range byte or `Bytes.sliceD_sliceD_of_le` for a contained subwindow. Use `Bytes.readWord_writeAt_self` or `Bytes.readWord_writeAt_of_disjoint` for word reads. For adjacent event words use `Bytes.read_two_word_writes_at` or `Mem.read_two_word_writes_at`. For padded or abstract memory, start from `Mem.Wf` and `Mem.Reads`; in scratch decoders, `of_run_mstoreAt_image` and `of_run_loadWordAt_image` advance the stack, image, well-formedness, and state equation together, while `of_run_loadWordAt_logs` preserves event chronology. For creation copies use `of_run_codecopy_image`; its lower-level components are `prefix_of_codecopy_val` plus `of_run_codecopy_logs`. For fixed logs use `of_logWith_image`. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost."
+preferred_path = "Use `Bytes.sliceD_writeAt` for the whole written window, `Bytes.sliceD_writeAt_inside` for a contained subwindow, and `Bytes.sliceD_writeAt_before` or `Bytes.sliceD_writeAt_after` for disjoint neighboring windows. For a padded slice, use `Bytes.getD_sliceD_of_lt` for an in-range byte or `Bytes.sliceD_sliceD_of_le` for a contained subwindow. Use `Bytes.readWord_writeAt_self` or `Bytes.readWord_writeAt_of_disjoint` for word reads. For adjacent event words use `Bytes.read_two_word_writes_at` or `Mem.read_two_word_writes_at`. For padded or abstract memory, start from `Mem.Wf` and `Mem.Reads`; in scratch decoders, `of_run_mstoreAt_image` and `of_run_loadWordAt_image` advance the stack, image, well-formedness, and state equation together, while `of_run_loadWordAt_logs` preserves event chronology. For exact primitive byte-store inversion use `of_run_mstore8_val` or its known-prefix wrapper `prefix_of_mstore8_val`, and use `of_run_mstore8_state` for the persistent-state equation. For calldata copies with known operands use `prefix_of_calldatacopy_val`. For creation copies use `of_run_codecopy_image`; its lower-level components are `prefix_of_codecopy_val` plus `of_run_codecopy_logs`. For fixed logs use `of_logWith_image`. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost."
 boundary = "These laws cover byte-array writes and fixed-width word reads. They do not turn arbitrary compiled-emitter `List.drop` identities into a shared API. `LidoCircuitBreakerEnumeration` was dominated by 34–35 s kernel checks unrelated to byte offsets. On `Weth10Deploy`, a two-next/branch helper changed its 41.5–41.7 s proof by only 0.6–1.1%, and a later top-level private tail theorem moved the owner median only from 48.11 to 46.85 s (-2.62%); both pilots were reverted. Reopen that separate emitter route only for a change whose serialized owner median improves by the licensed win rule."
 owner_module = "Blanc/CommonProofs.lean"
 canonical_example = "Blanc/CommonProofs.lean:Bytes.readWord_writeAt_of_disjoint"
@@ -272,8 +281,12 @@ symbols = [
   "declaration:Mem.Reads",
   "declaration:Mem.read_two_word_writes_at",
   "declaration:of_run_mstoreAt_image",
+  "declaration:of_run_mstore8_val",
+  "declaration:prefix_of_mstore8_val",
+  "declaration:of_run_mstore8_state",
   "declaration:of_run_loadWordAt_image",
   "declaration:of_run_loadWordAt_logs",
+  "declaration:prefix_of_calldatacopy_val",
   "declaration:of_run_codecopy_image",
   "declaration:prefix_of_codecopy_val",
   "declaration:of_run_codecopy_logs",
@@ -305,16 +318,45 @@ review_owner = "proof-infrastructure"
 review_date = "2026-08-29"
 
 [[recipe]]
+id = "trace-admitted-frame-invariant"
+status = "active"
+triggers = ["goal-head:ContractSpec.PreservesAdmitted"]
+preferred_path = "State the target program obligation as `ContractSpec.SoundAdmitted ca entry`, keeping the concrete `Exec.FrameAdmitted` premise result-free, then apply `ContractSpec.preserves_inv_admitted`. Use `Exec.FrameAdmitted.root` at the selected target entry and the named child/continuation restriction lemmas rather than rebuilding raw-frame list membership. When the program proof needs the ordinary message-entry empty stack and memory, conjoin its independent premise with `Exec.FreshEntry` using `Exec.FrameAdmitted.and`; retained wrappers derive the fresh half through their `freshFrameAdmitted` theorem. Drop to `preserves_lift_admitted` or `lift_inv_admitted` only when the standard `ContractSpec.PreWf` carrier is insufficient."
+boundary = "Admission ranges over raw actually entered frame roots and is not a settlement filter or a postcondition. `freshFrameAdmitted` certifies only empty stack and memory from actual entered frames; it does not manufacture an environment, storage, delegation, or precompile fact. The caller must establish every independent entry premise for the concrete execution or retained trace; this recipe does not weaken `PreservesAdmitted` to an endpoint premise or replace the forward `RootedExecution` construction API."
+owner_module = "Blanc/ContractAdmission.lean"
+canonical_example = "Blanc/ContractAdmission.lean:ContractSpec.preserves_inv_admitted"
+symbols = [
+  "module:Blanc/ExecutionFrames.lean",
+  "module:Blanc/ExecutionFrameEntry.lean",
+  "module:Blanc/ExecutionAdmission.lean",
+  "module:Blanc/ContractAdmission.lean",
+  "declaration:Blanc.Exec.FrameAdmitted",
+  "declaration:Blanc.Exec.FrameAdmitted.root",
+  "declaration:Blanc.Exec.FreshEntry",
+  "declaration:Blanc.Exec.FrameAdmitted.and",
+  "declaration:Blanc.ForallSubExecAdmitted",
+  "declaration:Blanc.lift_admitted",
+  "declaration:Blanc.lift_inv_admitted",
+  "declaration:Blanc.ContractSpec.SoundAdmitted",
+  "declaration:Blanc.ContractSpec.PreservesAdmitted",
+  "declaration:Blanc.ContractSpec.preserves_lift_admitted",
+  "declaration:Blanc.ContractSpec.preserves_inv_admitted",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-09-01"
+
+[[recipe]]
 id = "message-execution-settlement"
 status = "active"
 triggers = ["goal-shape:message-execution-settlement"]
-preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec_of_enter` when an exact successful `Frame.enter` equation is already retained, including for delegated children. For payable ordinary calls, derive a normal non-precompile entry with `executeCode_enter_of_codeAddress_not_precompile` and use the `*_afterTransfer_of_codeEntry` adapters; the `*_afterTransfer_of_notPrecompile` bridge packages the same route from address evidence. Use `processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress` for creation-code entry, or `processMessage_eq_settle_exec_afterTransfer` when precompiles are explicitly disabled. Then use the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. Use the unsuffixed adapters for the identity-entry specialization. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections."
-boundary = "The generic enter bridge requires only the exact successful entry equation. Post-transfer bridges name the successful transferred environment: exact-code-entry and non-precompile variants work with ordinary `disablePrecompiles = false` messages, the no-code-address variant covers creation code, and the convenience bridge requires disabled precompiles. The unsuffixed specialization additionally requires entry-state identity. Retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. These facts describe ordinary call-message settlement, not CREATE settlement."
+preferred_path = "Use `MessageExecution.processMessage_eq_settle_exec_of_enter` when an exact successful `Frame.enter` equation is already retained, including for delegated children. For payable ordinary calls, derive a normal non-precompile entry with `executeCode_enter_of_codeAddress_not_precompile` and use the `*_afterTransfer_of_codeEntry` adapters; the `*_afterTransfer_of_notPrecompile` bridge packages the same route from address evidence. Use `processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress` for creation-code entry, or `processMessage_eq_settle_exec_afterTransfer` when precompiles are explicitly disabled. Then use the clean/revert/halt adapters and canonical `settledRevert` or `settledHalt` machines instead of unfolding message settlement at the contract site. Use the unsuffixed adapters for the identity-entry specialization. For an already-retained `ProcessMessage`, use `processMessage_clean_rawPost` to recover the successful raw post, `processMessage_entry_facts` for the actual entry frame projections, and the separate `processMessage_entry_stack` / `processMessage_entry_memory` empty-entry projections. For an actual retained zero-value static-precompile child whose routing already selected the native precompile, use `stor_of_processMessage_staticPrecomp`; at address `0x2` on exactly 64 input bytes, use `gasSha25664_le_of_processMessage_clean`, `output_of_processMessage_sha256_64_clean`, or their combined `frame_of_processMessage_sha256_64_clean` image."
+boundary = "The generic enter bridge requires only the exact successful entry equation. Post-transfer bridges name the successful transferred environment: exact-code-entry and non-precompile variants work with ordinary `disablePrecompiles = false` messages, the no-code-address variant covers creation code, and the convenience bridge requires disabled precompiles. The unsuffixed specialization additionally requires entry-state identity. Retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. Static-precompile inversion does not prove native routing: its enabled-precompile and clean-child premises remain load-bearing, delegation must already be ruled out, and the SHA result is fixed only for address 2 and exactly 64 bytes. These facts describe ordinary call-message settlement, not CREATE settlement."
 owner_module = "Blanc/MessageExecution.lean"
 canonical_example = "Blanc/MessageExecution.lean:MessageExecution.processMessage_eq_settle_exec"
 symbols = [
   "module:Blanc/MessageExecution.lean",
   "module:Blanc/MessageExecutionInversion.lean",
+  "module:Blanc/StaticPrecompileMessage.lean",
   "declaration:MessageExecution.processMessage_eq_settle_exec_of_enter",
   "declaration:MessageExecution.frameEnter_eq_run_afterTransfer_of_notPrecompile",
   "declaration:MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_notPrecompile",
@@ -334,13 +376,17 @@ symbols = [
   "declaration:MessageExecution.processMessage_entry_facts",
   "declaration:MessageExecution.processMessage_entry_stack",
   "declaration:MessageExecution.processMessage_entry_memory",
+  "declaration:Blanc.stor_of_processMessage_staticPrecomp",
+  "declaration:Blanc.gasSha25664_le_of_processMessage_clean",
+  "declaration:Blanc.output_of_processMessage_sha256_64_clean",
+  "declaration:Blanc.frame_of_processMessage_sha256_64_clean",
   "declaration:MessageExecution.settledRevert",
   "declaration:MessageExecution.settledHalt",
   "declaration:Msg.initDevm_stack",
   "declaration:Msg.initSevm_data",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-30"
+review_date = "2026-09-01"
 
 [[recipe]]
 id = "raw-sstore-free-compiled-path"
@@ -589,6 +635,41 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
+
+[[recipe]]
+id = "trace-local-frame-admission"
+status = "active"
+triggers = ["goal-shape:trace-local-frame-admission"]
+preferred_path = "State the contract's entry condition as `Exec.FrameAdmitted ca entry` on the exact retained execution. Prove the frame obligation as `ContractSpec.SoundAdmitted ca entry`, close it with `ContractSpec.preserves_inv_admitted`, and use the matching `FrameAdmitted` plus `stateInv_admitted`/`benvInv_admitted` theorem on `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or `ConfiguredHistoryTrace` to transport it through only the interpreter frames actually entered. If the proof also needs canonical interpreter ingress, obtain `Exec.FreshEntry` from the carrier's `freshFrameAdmitted` theorem and combine it with the independent admission through the carrier's `FrameAdmitted.and`."
+boundary = "Admission is evidence about concrete target-frame roots, not an execution constructor, settlement filter, or global environment restriction. Fresh-entry transport contributes only empty stack and memory and cannot discharge independent routing or world-state premises. The consumer must derive those premises from the retained trace; rollback and direct envelope effects remain governed by the ordinary wrapper transports."
+owner_module = "Blanc/ExecutionAdmission.lean"
+canonical_example = "Blanc/ExecutionHistoryAdmission.lean:ExecutionTrace.ConfiguredHistoryTrace.stateInv_admitted"
+symbols = [
+  "module:Blanc/ExecutionFrames.lean",
+  "module:Blanc/ExecutionFrameEntry.lean",
+  "module:Blanc/ExecutionAdmission.lean",
+  "module:Blanc/ContractAdmission.lean",
+  "module:Blanc/ExecutionMessageAdmission.lean",
+  "module:Blanc/ExecutionTransactionAdmission.lean",
+  "module:Blanc/ExecutionBodyAdmission.lean",
+  "module:Blanc/ExecutionHistoryAdmission.lean",
+  "module:Blanc/ExecutionTraceFresh.lean",
+  "declaration:Exec.FrameAdmitted",
+  "declaration:Exec.FreshEntry",
+  "declaration:Exec.FrameAdmitted.and",
+  "declaration:ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted.and",
+  "declaration:ExecutionTrace.ConfiguredHistoryTrace.freshFrameAdmitted",
+  "declaration:lift_inv_admitted",
+  "declaration:ContractSpec.SoundAdmitted",
+  "declaration:ContractSpec.PreservesAdmitted",
+  "declaration:ContractSpec.preserves_inv_admitted",
+  "declaration:ExecutionTrace.MessageCallTrace.stateInv_admitted",
+  "declaration:ExecutionTrace.TransactionTrace.benvInv_admitted",
+  "declaration:ExecutionTrace.AppliedBodyTrace.stateInv_admitted",
+  "declaration:ExecutionTrace.ConfiguredHistoryTrace.stateInv_admitted",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-09-01"
 
 [[recipe]]
 id = "retained-state-replay"

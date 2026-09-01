@@ -87,6 +87,62 @@ lemma dispatchWith_inv {c k f}
         apply h3 (h0 hs h₁ h_pop) h_burn' h_run_f
     · apply htt' ⟨w, p⟩ rfl (h0 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
 
+/-- Transfer an invariant through the inline-revert dispatcher used by
+contracts whose selector miss is a direct `Func.rev`, rather than an indexed
+fallback call.  This is the exact analogue of `dispatchWith_inv`: comparison
+lines preserve the carried entry predicate, a successful leaf reaches its
+body, and the miss arm is impossible because `Func.rev` has no successful
+run. -/
+lemma dispatch_inv {c}
+    (σ : Sevm → Devm → Prop)
+    (ρ : Sevm → Devm → Prop)
+    (h0 :
+      ∀ {e s x w s' s''},
+        σ e s →
+        Line.Run e s [pushB256 x, eq] s' →
+        Devm.PopBurn [w] s' s'' →
+        σ e s'')
+    (h1 :
+      ∀ {e s x w s' s''},
+        σ e s →
+        Line.Run e s [dup 0, pushB256 x, gt] s' →
+        Devm.PopBurn [w] s' s'' →
+        σ e s'') :
+    ∀ t : DispatchTree,
+      (∀ {e s r}, ∀ wf ∈ t,
+        σ e s → Func.Run c e s wf.2 r → ρ e r) →
+      ∀ (e s r), σ e s → Func.Run c e s (dispatch t) r → ρ e r := by
+  intro t
+  induction t with
+  | fork t t' ih ih' =>
+      intro htt' e s r hs
+      have ht : ∀ {e s r}, ∀ wp ∈ t,
+          σ e s → Func.Run c e s wp.2 r → ρ e r := by
+        intro e s r wp h_in
+        exact htt' wp (Or.inl h_in)
+      have ht' : ∀ {e s r}, ∀ wp ∈ t',
+          σ e s → Func.Run c e s wp.2 r → ρ e r := by
+        intro e s r wp h_in
+        exact htt' wp (Or.inr h_in)
+      func_execute 3
+      intro h₂
+      rcases of_run_branch h₂ with
+        ⟨s₂, h_pop, h_run'⟩ |
+          ⟨w, s₂, s₃, hw, h_pop, h_burn, h_run'⟩
+      · exact ih' ht' e s₂ r (h1 hs h₁ h_pop) h_run'
+      · exact ih ht e s₃ r
+          (h1 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
+  | leaf w p =>
+      intro htt' e s r hs
+      func_execute 2
+      intro h'
+      rcases of_run_branch h' with
+        ⟨s₂, h_pop, h_run'⟩ |
+          ⟨w', s₂, s₃, hw', h_pop, h_burn, h_run'⟩
+      · exact absurd h_run' not_run_rev
+      · exact htt' ⟨w, p⟩ rfl
+          (h0 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
+
 -- Tree membership implies list membership. `dispatchWith_inv` puts `wf ∈ t` in
 -- hypothesis position, so a contract built with `ofSorted` needs to discharge
 -- its per-leaf obligation over its own *list* rather than over the balanced
@@ -681,6 +737,78 @@ lemma Devm.popToNat_getStor_eq {devm devm' n}
     Devm.getStor devm = Devm.getStor devm' := by
   funext a
   exact Devm.WorldEq.getStor (Devm.popToNat_worldEq_of_ok h) a
+
+/-- A fixed-context syntactic certificate for preservation of an arbitrary
+machine observation.  Tail calls are admitted only at indices selected by
+`P`; `observe_eq_of_run_silentIn` checks that those lookups are closed. -/
+def Func.SilentIn {Observation : Type}
+    (observe : Devm → Observation) (P : Nat → Prop) : Func → Prop
+  | .branch f g => Func.SilentIn observe P f ∧ Func.SilentIn observe P g
+  | .last l => Linst.Inv observe observe l
+  | .next i body => Ninst.Inv observe i ∧ Func.SilentIn observe P body
+  | .call k => P k
+
+/-- A `SilentIn` body preserves its observation in a fixed function context
+closed under permitted tail calls.  Recursion is on the successful run, so a
+closed set of mutually recursive slots needs no fuel premise. -/
+theorem Func.observe_eq_of_run_silentIn
+    {Observation : Type} {observe : Devm → Observation}
+    {P : Nat → Prop} {fs : List Func}
+    [PopBurn.Inv observe] [Burn.Inv observe]
+    (hclosed : ∀ k g, P k → fs[k]? = some g → Func.SilentIn observe P g)
+    {sevm : Sevm} {s r : Devm} {f : Func}
+    (run : Func.Run fs sevm s f r)
+    (silent : Func.SilentIn observe P f) :
+    observe r = observe s := by
+  induction run with
+  | zero hpop _ ih =>
+      exact (ih silent.1).trans (PopBurn.Inv.inv hpop).symm
+  | succ _ hpop hburn _ ih =>
+      exact (ih silent.2).trans
+        ((Burn.Inv.inv hburn).symm.trans (PopBurn.Inv.inv hpop).symm)
+  | last hlast =>
+      exact (silent hlast).symm
+  | next hinst _ ih =>
+      exact (ih silent.2).trans (silent.1 hinst).symm
+  | call hget hburn _ ih =>
+      exact (ih (hclosed _ _ silent hget)).trans (Burn.Inv.inv hburn).symm
+
+/-- A fixed-context syntactic certificate that a function cannot change
+persistent storage.  Tail calls are admitted only at indices selected by
+`P`; the companion theorem below checks that every such lookup resolves to a
+body carrying the same certificate. -/
+def Func.StorSilentIn (P : Nat → Prop) : Func → Prop
+  | .branch f g => Func.StorSilentIn P f ∧ Func.StorSilentIn P g
+  | .last l => Linst.Inv Devm.getStor Devm.getStor l
+  | .next i body => Ninst.Inv Devm.getStor i ∧ Func.StorSilentIn P body
+  | .call k => P k
+
+/-- A `StorSilentIn` body preserves the complete persistent-storage map in a
+fixed function context closed under its permitted tail calls.  Recursion is
+on the successful `Func.Run` derivation, so self-recursive loop slots need no
+fuel or termination premise. -/
+theorem Func.getStor_eq_of_run_storSilentIn
+    {P : Nat → Prop} {fs : List Func}
+    (hclosed : ∀ k g, P k → fs[k]? = some g → Func.StorSilentIn P g)
+    {sevm : Sevm} {s r : Devm} {f : Func}
+    (run : Func.Run fs sevm s f r)
+    (silent : Func.StorSilentIn P f) :
+    Devm.getStor r = Devm.getStor s := by
+  induction run with
+  | zero hpop _ ih =>
+      exact (ih silent.1).trans
+        (funext (Devm.PopBurn.getStor hpop))
+  | succ _ hpop hburn _ ih =>
+      exact (ih silent.2).trans
+        ((funext (Devm.Burn.getStor hburn)).trans
+          (funext (Devm.PopBurn.getStor hpop)))
+  | last hlast =>
+      exact (silent hlast).symm
+  | next hinst _ ih =>
+      exact (ih silent.2).trans (silent.1 hinst).symm
+  | call hget hburn _ ih =>
+      exact (ih (hclosed _ _ silent hget)).trans
+        (funext (Devm.Burn.getStor hburn))
 
 /-! ## Fieldwise `Devm.Rel` infrastructure -/
 
@@ -4075,7 +4203,7 @@ private lemma lift_core.atTarget
 
 /-- Code preservation across one driver step, in the form the `Prog.At`
 bookkeeping needs. -/
-private lemma lift_core.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
+lemma lift_core.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     {xl : Xlot} (hxl : Xlot.Rel Devm.CodePreserve xl)
     (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl (.ok devm'))
     (a : Adr) (ha : (devm.getCode a).toList ≠ []) :
@@ -5225,6 +5353,14 @@ lemma prefix_of_div {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s div s' → (x :: y :: xs <<+ s.stack) → ((x / y) :: xs <<+ s'.stack) := by
   intro h0 h1
   refine prefix_of_diffBurn_two (· / ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_mod {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s mod s' → (x :: y :: xs <<+ s.stack) → ((x % y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· % ·) ?_ h1
   rcases of_run_reg h0 with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
@@ -9617,6 +9753,19 @@ lemma Devm.setCode_logs (devm : Devm) (address : Adr)
     (devm.setCode address code).logs = devm.logs := by
   rfl
 
+/-- Installing account code preserves every account's persistent storage. -/
+lemma Devm.setCode_getStor (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    Devm.getStor (devm.setCode address code) = Devm.getStor devm := by
+  funext target
+  change ((devm.state.setCode address code).get target).stor =
+    (devm.state.get target).stor
+  unfold State.setCode
+  by_cases h : address = target
+  · subst h
+    rw [State.get_set_self]
+  · rw [State.get_set_ne _ h]
+
 /-- Installing account code preserves the frame output bytes. -/
 lemma Devm.setCode_output (devm : Devm) (address : Adr)
     (code : ByteArray) :
@@ -9627,6 +9776,18 @@ lemma Devm.setCode_output (devm : Devm) (address : Adr)
 lemma Devm.setCode_error (devm : Devm) (address : Adr)
     (code : ByteArray) :
     (devm.setCode address code).error = devm.error := by
+  rfl
+
+/-- Installing account code preserves the frame refund counter. -/
+lemma Devm.setCode_refundCounter (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    (devm.setCode address code).refundCounter = devm.refundCounter := by
+  rfl
+
+/-- Installing account code preserves the deletion-set accumulator. -/
+lemma Devm.setCode_accountsToDelete (devm : Devm) (address : Adr)
+    (code : ByteArray) :
+    (devm.setCode address code).accountsToDelete = devm.accountsToDelete := by
   rfl
 
 /-! ### Reusable projection cuts for compiled RETURN and SSTORE posts -/
@@ -9813,6 +9974,37 @@ lemma of_run_call {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat}
     ∃ f s', fs[k]? = some f ∧ Devm.Burn s s' ∧ Func.Run fs sevm s' f r := by
   cases h with
   | call h_get h_burn h_run => exact ⟨_, _, h_get, h_burn, h_run⟩
+
+/-- A successful conditional whose selected arm calls a known nonreturning
+function must take the zero/fall-through arm. -/
+theorem of_run_branch_call_of_not_run
+    {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat}
+    {blocked next : Func}
+    (hget : fs[k]? = some blocked)
+    (blocked_not_run : ∀ {pre post : Devm},
+      ¬ Func.Run fs sevm pre blocked post)
+    (run : Func.Run fs sevm s ((.call k) <?> next) r) :
+    ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs sevm s' next r := by
+  rcases of_run_branch run with
+    ⟨s', hpop, hnext⟩ |
+    ⟨w, s', s'', hnz, hpop, hburn, hcall⟩
+  · exact ⟨s', hpop, hnext⟩
+  · rcases of_run_call hcall with
+      ⟨f, callPre, hlookup, hcallBurn, hbody⟩
+    have hf : f = blocked := by
+      rw [hget] at hlookup
+      exact Option.some.inj hlookup.symm
+    subst f
+    exact (blocked_not_run hbody).elim
+
+/-- Successful fall-through past an auxiliary that is exactly `Func.rev`. -/
+theorem of_run_branch_call_rev
+    {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat} {next : Func}
+    (hget : fs[k]? = some Func.rev)
+    (run : Func.Run fs sevm s ((.call k) <?> next) r) :
+    ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs sevm s' next r := by
+  exact of_run_branch_call_of_not_run hget
+    (fun hbody => not_run_rev hbody) run
 
 /-! ### `transfer`'s fragments -/
 
@@ -10590,6 +10782,43 @@ lemma of_run_mstore_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mstore s') :
   · rw [← eq, hmem]
     rfl
 
+/-- `MSTORE8` writes the low byte of the word it popped at the offset it
+popped.  This is the byte-store companion of `of_run_mstore_val`. -/
+lemma of_run_mstore8_val {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s mstore8 s') :
+    ∃ x y, Stack.Pop [x, y] s.stack s'.stack ∧
+      s'.memory = s.memory.write x.toNat [y.2.2.toUInt8] := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨i, s₁⟩, h1, run'⟩
+  rcases Except.bind_eq_ok run' with ⟨⟨v, s₂⟩, h2, run''⟩
+  rcases Except.bind_eq_ok run'' with ⟨s₃, h3, h4⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  have p2 := Devm.pop_of_pop h2
+  have hb := Devm.burn_of_chargeGas h3
+  injection h4 with eq
+  have hmem : s.memory = s₃.memory :=
+    (p1.memory.trans p2.memory).trans hb.memory
+  refine ⟨x, v, ?_, ?_⟩
+  · have hp := (Devm.pop_append p1 p2).stack
+    rw [← eq,
+      show (Devm.memWrite s₃ x.toNat [v.2.2.toUInt8]).stack =
+        s₃.stack from rfl,
+      ← hb.stack]
+    exact hp
+  · rw [← eq, hmem]
+    rfl
+
+/-- A successful `MSTORE8` changes only the machine-local frame, not the
+persistent world state. -/
+lemma of_run_mstore8_state {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s mstore8 s') : s.state = s'.state := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  have frame := Rinst.run_instructionFrame pc e s .mstore8
+    (by intro equal; cases equal) (by intro equal; cases equal)
+  rw [run] at frame
+  exact frame.state
+
 /-- `CALLDATACOPY` writes *the calldata slice named by its operands* at *the
 offset it popped*, and touches nothing else.
 
@@ -10762,6 +10991,19 @@ lemma prefix_of_mstore_val {e} {x y xs} {s s' : Devm}
     (xs <<+ s'.stack) ∧ s'.memory = s.memory.write x.toNat y.toBytes := by
   rcases of_run_mstore_val h0 with ⟨x', y', h2, hm⟩
   rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, -⟩
+  refine ⟨?_, by rw [hx, hy]; exact hm⟩
+  rw [hx, hy] at h1
+  exact of_append_pref h2 h1
+
+/-- `MSTORE8` at a known stack top, retaining the exact low-byte write. -/
+lemma prefix_of_mstore8_val {e} {x y xs} {s s' : Devm}
+    (h0 : Ninst.Run e s mstore8 s')
+    (h1 : x :: y :: xs <<+ s.stack) :
+    xs <<+ s'.stack ∧
+      s'.memory = s.memory.write x.toNat [y.2.2.toUInt8] := by
+  rcases of_run_mstore8_val h0 with ⟨x', y', h2, hm⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
+    with ⟨hx, hy, -⟩
   refine ⟨?_, by rw [hx, hy]; exact hm⟩
   rw [hx, hy] at h1
   exact of_append_pref h2 h1
@@ -11340,6 +11582,45 @@ theorem of_run_loadWordAt_image
     exact pushWf.extend _ _
   · rw [memory]
     exact pushReads.extend _ _
+
+/-- `of_run_loadWordAt_image` with the exact memory extension retained.  This
+is useful when the caller can prove the read window was already covered and
+therefore collapse the extension back to the original memory. -/
+theorem of_run_loadWordAt_image_memory
+    {e : Sevm} {pre post : Devm} {word value : B256}
+    {tail : Stack} {image : Bytes}
+    (hp : tail <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory image)
+    (hvalue : Bytes.toB256
+      (image.sliceD (word * 32).toNat 32 0) = value)
+    (run : Line.Run e pre [pushB256 (word * 32), mload] post) :
+    value :: tail <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory image ∧
+      pre.state = post.state ∧
+      post.memory = pre.memory.extend (word * 32).toNat 32 := by
+  rcases Line.of_run_cons run with ⟨afterPush, pushRun, run⟩
+  rcases Line.of_run_cons run with ⟨_, loadRun, hnil⟩
+  cases hnil
+  have pushed := of_run_pushB256 pushRun
+  have pPush := prefix_of_push pushed hp
+  have pushWf : Mem.Wf afterPush.memory := by
+    rw [← pushed.memory]
+    exact hwf
+  have pushReads : Mem.Reads afterPush.memory image := by
+    rw [← pushed.memory]
+    exact hreads
+  obtain ⟨loaded, memory, _⟩ :=
+    prefix_of_mload_val loadRun pPush pushReads
+  refine ⟨?_, ?_, ?_, Line.of_inv Devm.state (by line_inv)
+    (Line.Run.cons pushRun (Line.Run.cons loadRun Line.Run.nil)), ?_⟩
+  · simpa [hvalue] using loaded
+  · rw [memory]
+    exact pushWf.extend _ _
+  · rw [memory]
+    exact pushReads.extend _ _
+  · rw [memory, ← pushed.memory]
 
 /-- A fixed scratch-word load is log-silent.  `MLOAD` has no global
 `Ninst.Hinv` instance for logs, so expose the exact two-instruction fact at

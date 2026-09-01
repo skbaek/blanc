@@ -139,6 +139,22 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   unfold afterSstore
   split <;> rfl
 
+@[simp] theorem afterSstore_refundCounter
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstore sevm base key value).refundCounter =
+      sstoreNewRefundCounter value
+        (getOrigStorVal sevm sevm.currentTarget key)
+        (base.getStorVal sevm.currentTarget key) base.refundCounter := by
+  unfold afterSstore
+  split <;> rfl
+
+@[simp] theorem afterSstore_accountsToDelete
+    (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstore sevm base key value).accountsToDelete =
+      base.accountsToDelete := by
+  unfold afterSstore
+  split <;> rfl
+
 @[simp] theorem afterSstore_output
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).output = base.output := by

@@ -1027,12 +1027,7 @@ theorem processCreateMessage_establishes_officialRegistryStable
 /-- The exact output produced by the successful `processMessageCall.create`
 wrapper around an official constructor poststate. -/
 def officialMessageOutputOf (post : Devm) : MsgCallOutput :=
-  { gasLeft := post.gasLeft
-    refundCounter := 0
-    logs := post.logs
-    accountsToDelete := post.accountsToDelete
-    error := post.error
-    returnData := post.output }
+  directCreateMessageOutputOf post
 
 /-- Settled top-level creation-message result, retaining the complete direct
 CREATE certificate rather than only its projected world state. -/
@@ -1104,7 +1099,8 @@ theorem processMessageCall_establishes_officialRegistryStable
     simp only [if_true]
     rw [htarget]
     simp [hnoCodeOrNonce, hnoStorage, Except.bimap, hcreate'.run,
-      hcreate'.error, htoNat, out, officialMessageOutputOf]
+      hcreate'.error, htoNat, out, officialMessageOutputOf,
+      directCreateMessageOutputOf]
     rfl
   refine ⟨createPost.state, out, {
     target_eq := htarget
@@ -1125,11 +1121,16 @@ theorem processMessageCall_establishes_officialRegistryStable
       hcreate'.pauseDuration
   · simpa [Devm.getStorVal, Devm.getAcct, State.getStor] using
       hcreate'.heartbeatInterval
-  · simpa only [out, officialMessageOutputOf] using hcreate'.logs
-  · simpa only [out, officialMessageOutputOf] using hcreate'.returnData
-  · simpa only [out, officialMessageOutputOf] using hcreate'.gasLeft
-  · simpa only [out, officialMessageOutputOf] using hcreate'.error
-  · simpa only [out, officialMessageOutputOf] using
+  · simpa only [out, officialMessageOutputOf,
+      directCreateMessageOutputOf] using hcreate'.logs
+  · simpa only [out, officialMessageOutputOf,
+      directCreateMessageOutputOf] using hcreate'.returnData
+  · simpa only [out, officialMessageOutputOf,
+      directCreateMessageOutputOf] using hcreate'.gasLeft
+  · simpa only [out, officialMessageOutputOf,
+      directCreateMessageOutputOf] using hcreate'.error
+  · simpa only [out, officialMessageOutputOf,
+      directCreateMessageOutputOf] using
       hcreate'.accountsToDelete
 
 end LidoCircuitBreaker

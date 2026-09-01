@@ -338,7 +338,7 @@ private lemma successfulCallPost_getCode
 output window succeeds with the exact SHA-256 image.  The net instruction
 cost is 184 gas plus the selected memory-expansion charge: 100 for the warm
 account access and 84 for the two-word precompile input. -/
-theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
+theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
     {sevm : Sevm} {devm : Devm} {iiw oiw : B256}
     {s : List B256} {G ext : Nat}
     (hstk : devm.stack =
@@ -371,6 +371,8 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
       post.accessedAddresses = devm.accessedAddresses ∧
       post.accessedStorageKeys = devm.accessedStorageKeys ∧
       post.logs = devm.logs ∧
+      post.refundCounter = devm.refundCounter ∧
+      post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty ∧
       post.output = devm.output ∧
       post.error = devm.error ∧
       ∃ stmid,
@@ -569,6 +571,19 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
     change p.logs ++ child.logs = devm.logs
     rw [hchildLogs, List.append_nil]
     rfl
+  have hrefundPost : post.refundCounter = devm.refundCounter := by
+    dsimp only [post, child, cev, initEvm, initDevm]
+    change p.refundCounter + 0 = devm.refundCounter
+    rw [show p.refundCounter = devm.refundCounter from rfl]
+    simp
+  have hdeletePost :
+      post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty := by
+    dsimp only [post, child, cev, initEvm, initDevm]
+    change (p.accountsToDelete.union
+      Std.HashSet.emptyWithCapacity).isEmpty =
+        devm.accountsToDelete.isEmpty
+    rw [show p.accountsToDelete = devm.accountsToDelete from rfl]
+    simp
   have houtputPost : post.output = devm.output := by
     change p.output = devm.output
     rfl
@@ -580,8 +595,57 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
     exact hchildState
   exact ⟨post, hrun, hstackPost, hmemoryPost, hgasPost, hreturnData,
     hstorage, hcode, haddresses, hkeys,
-    hlogsPost, houtputPost, herrorPost,
+    hlogsPost, hrefundPost, hdeletePost, houtputPost, herrorPost,
     stmid, hsub', hstatePost⟩
+
+/-- Compatibility projection of the full warm SHA-256 crossing.  Consumers
+that must settle a transaction should use the `_full` theorem so refund and
+account-deletion preservation remain explicit. -/
+theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
+    {sevm : Sevm} {devm : Devm} {iiw oiw : B256}
+    {s : List B256} {G ext : Nat}
+    (hstk : devm.stack =
+      Nat.toB256 G :: (2 : B256) :: iiw :: (64 : B256) ::
+        oiw :: (32 : B256) :: s)
+    (hgas : devm.gasLeft = G)
+    (hext : (devm.setMach
+      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+        [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
+    (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hfloor : 185 + ext ≤ G)
+    (hbound : G < 2 ^ 256)
+    (hroom : s.length < 1024) :
+    ∃ post,
+      Ninst.ChildlessRunCompiled sevm devm (.exec .statcall) post ∧
+      post.stack = 1 :: s ∧
+      post.memory = (devm.memory.extends
+        [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩]).write oiw.toNat
+        (Bytes.sha256
+          (devm.memory.data.sliceD iiw.toNat 64 0)).toBytes ∧
+      post.gasLeft = G - (184 + ext) ∧
+      post.returnData =
+        (Bytes.sha256
+          (devm.memory.data.sliceD iiw.toNat 64 0)).toBytes ∧
+      (∀ a, Devm.getStor post a = Devm.getStor devm a) ∧
+      (∀ a, post.getCode a = devm.getCode a) ∧
+      post.accessedAddresses = devm.accessedAddresses ∧
+      post.accessedStorageKeys = devm.accessedStorageKeys ∧
+      post.logs = devm.logs ∧
+      post.output = devm.output ∧
+      post.error = devm.error ∧
+      ∃ stmid,
+        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
+        post.state = stmid.addBal 2 0 := by
+  obtain ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage,
+      hcode, haddresses, hkeys, hlogs, _hrefund, _hdelete, houtput,
+      herror, stmid, hsub, hstate⟩ :=
+    Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
+      hstk hgas hext hnodeleg hwarm hpre hdepth hfloor hbound hroom
+  exact ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage, hcode,
+    haddresses, hkeys, hlogs, houtput, herror, stmid, hsub, hstate⟩
 
 /-- Ordinary compiled-step projection of the childless warm SHA-256 call.
 All state and gas facts are identical; only the empty child-slot fact is
