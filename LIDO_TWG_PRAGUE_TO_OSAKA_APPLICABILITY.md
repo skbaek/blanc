@@ -1,8 +1,10 @@
 # Lido CircuitBreaker × TWG: Prague→Osaka applicability ledger
 
-**Boundary date:** 2026-09-02  
+**Boundary date:** 2026-09-02
+
 **Network target:** Ethereum mainnet BPO2, the Osaka execution rules plus the
-BPO2 blob schedule  
+BPO2 blob schedule
+
 **Artifacts:** Blanc's compiler-owned Lido CircuitBreaker runtime at
 `officialParams` and TriggerableWithdrawalsGateway runtime at
 `Composition.LidoCircuitBreakerTwg.controlDeployParams`
