@@ -284,6 +284,7 @@ import Blanc.ProrataAttackTrace
 import Blanc.ProrataWethVault
 import Blanc.ProrataWethVaultCode
 import Blanc.ProrataWethVaultArtifact
+import Blanc.ProrataWethVaultArithmetic
 import Blanc.Composition.ProrataWethVaultBoundary
 import Blanc.Composition.ProrataWethVaultEffects
 import Blanc.Composition.ProrataWethVaultStaging
