@@ -1911,6 +1911,24 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     )
     if not registry.active_ids:
         raise GateError("self-test requires at least one active recipe")
+    with tempfile.TemporaryDirectory(prefix="proof-recipe-source-path-") as directory:
+        fixture = pathlib.Path(directory)
+        repo = fixture / "repo"
+        blanc = repo / "Blanc"
+        outside = fixture / "outside"
+        blanc.mkdir(parents=True)
+        outside.mkdir()
+        (blanc / "Inside.lean").write_text("def inside := True\n", encoding="utf-8")
+        (outside / "Back").symlink_to(blanc, target_is_directory=True)
+        (blanc / "Out").symlink_to(outside, target_is_directory=True)
+        try:
+            SourceIndex(repo).parse_worktree("Blanc/Out/Back/Inside.lean")
+        except GateError as error:
+            if "symbolic-link" not in str(error):
+                raise
+        else:
+            raise GateError("self-test source-index out-and-back path passed")
+    print("OK — proof recipe source index: 1/1 out-and-back control live")
     parser_controls = parser_header_self_test()
     detector_self_test(sorted(registry.active_ids)[0])
     controls = duplication_self_test()

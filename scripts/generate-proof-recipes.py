@@ -35,8 +35,8 @@ from module_path_policy import (
 
 
 REGISTRY_PATH = Path("scripts/proof-recipes.toml")
-MARKDOWN_PATH = Path("docs/PROOF_RECIPES.md")
-LEAN_PATH = Path("Blanc/ProofRecipesGenerated.lean")
+MARKDOWN_PATH = "docs/PROOF_RECIPES.md"
+LEAN_PATH = "Blanc/ProofRecipesGenerated.lean"
 TACTICS_PATH = Path("Blanc/Tactics.lean")
 
 TOP_LEVEL_KEYS = {"schema_version", "generated_notice"}
@@ -327,13 +327,14 @@ def declarations_in(path: Path) -> Set[str]:
     return found
 
 
-def lean_sources(root: Path) -> List[Path]:
+def lean_sources(root: Path, aggregate_raw: str = "Blanc.lean") -> List[Path]:
     try:
-        paths = walk_module_files(root, site="proof-recipe-source-walk")
-        if "Blanc.lean" in os.listdir(str(root)):
+        paths: List[Path] = []
+        if aggregate_raw != "Blanc.lean" or "Blanc.lean" in os.listdir(str(root)):
             paths.append(resolve_source_file(
-                root, "Blanc.lean", site="proof-recipe-root-aggregate"
+                root, aggregate_raw, site="proof-recipe-root-aggregate"
             ))
+        paths.extend(walk_module_files(root, site="proof-recipe-source-walk"))
         return paths
     except ModulePathPolicyError as error:
         raise RecipeError(f"module-path policy: {error}") from error
@@ -522,10 +523,28 @@ def validate_symbol(
         if name not in declarations:
             raise RecipeError(f"{where}: declaration {value!r} ({name}) was not found")
     else:
-        try:
-            resolve_module_file(root, value, site="proof-recipe-symbol-module")
-        except ModulePathPolicyError as error:
-            raise RecipeError(f"{where}: invalid module {value!r}: {error}") from error
+        symbol_module_file(root, value, where)
+
+
+def symbol_module_file(root: Path, value: str, where: str) -> Path:
+    try:
+        return resolve_module_file(root, value, site="proof-recipe-symbol-module")
+    except ModulePathPolicyError as error:
+        raise RecipeError(f"{where}: invalid module {value!r}: {error}") from error
+
+
+def owner_module_file(root: Path, value: str, where: str) -> Path:
+    try:
+        return resolve_module_file(root, value, site="proof-recipe-owner-module")
+    except ModulePathPolicyError as error:
+        raise RecipeError(f"{where}: invalid Blanc module {value!r}: {error}") from error
+
+
+def canonical_example_file(root: Path, value: str, where: str) -> Path:
+    try:
+        return resolve_module_file(root, value, site="proof-recipe-canonical-example")
+    except ModulePathPolicyError as error:
+        raise RecipeError(f"{where}: invalid file {value!r}: {error}") from error
 
 
 def load_and_validate(root: Path) -> Registry:
@@ -583,26 +602,16 @@ def load_and_validate(root: Path) -> Registry:
         preferred_path = expect_string(raw, "preferred_path", where)
         boundary = expect_string(raw, "boundary", where)
         owner_module = expect_string(raw, "owner_module", where)
-        try:
-            resolve_module_file(root, owner_module, site="proof-recipe-owner-module")
-        except ModulePathPolicyError as error:
-            raise RecipeError(
-                f"{where}.owner_module: invalid Blanc module {owner_module!r}: {error}"
-            ) from error
+        owner_module_file(root, owner_module, f"{where}.owner_module")
         canonical_example = expect_string(raw, "canonical_example", where)
         example_file, separator, example_decl = canonical_example.partition(":")
         if not separator or not LEAN_NAME_RE.fullmatch(example_decl):
             raise RecipeError(
                 f"{where}.canonical_example: expected Blanc/File.lean:Declaration.Name"
             )
-        try:
-            example_path = resolve_module_file(
-                root, example_file, site="proof-recipe-canonical-example"
-            )
-        except ModulePathPolicyError as error:
-            raise RecipeError(
-                f"{where}.canonical_example: invalid file {example_file!r}: {error}"
-            ) from error
+        example_path = canonical_example_file(
+            root, example_file, f"{where}.canonical_example"
+        )
         example_name = resolve_example_declaration(
             example_decl, per_file.get(example_path, set())
         )
@@ -749,7 +758,7 @@ def render_lean(registry: Registry) -> str:
     return "\n".join(out)
 
 
-def generated_surfaces(registry: Registry) -> Dict[Path, str]:
+def generated_surfaces(registry: Registry) -> Dict[str, str]:
     return {MARKDOWN_PATH: render_markdown(registry), LEAN_PATH: render_lean(registry)}
 
 
@@ -774,12 +783,12 @@ def write_atomic(path: Path, text: str) -> None:
             temporary.unlink()
 
 
-def compare_surfaces(root: Path, expected: Dict[Path, str]) -> List[str]:
+def compare_surfaces(root: Path, expected: Dict[str, str]) -> List[str]:
     failures: List[str] = []
     for relative, wanted in expected.items():
         try:
             path = resolve_bound_file(
-                root, relative.as_posix(), allow_missing=False,
+                root, relative, allow_missing=False,
                 site="proof-recipe-generated-read",
             )
             actual = path.read_text(encoding="utf-8")
@@ -832,7 +841,8 @@ def self_test(root: Path) -> None:
     print(
         "OK — module-path policy self-test: "
         f"{policy_controls}/{policy_controls} raw, census, containment, and alias controls; "
-        f"{explicit_sites} explicit dereference site(s); {closed_skips} host-inexpressible "
+        f"{explicit_sites} explicit dereference site(s) inventoried; "
+        f"{closed_skips} host-inexpressible "
         "case/normalization alias control(s) skipped closed"
     )
     controls = 0
@@ -849,7 +859,7 @@ def self_test(root: Path) -> None:
         markdown = test_root / MARKDOWN_PATH
         markdown.write_text(markdown.read_text(encoding="utf-8") + "perturbed\n", encoding="utf-8")
         drift = compare_surfaces(test_root, surfaces)
-        if not drift or MARKDOWN_PATH.as_posix() not in drift[0]:
+        if not drift or MARKDOWN_PATH not in drift[0]:
             raise RecipeError("self-test: perturbed generated Markdown was not rejected")
         controls += 1
 
@@ -939,7 +949,40 @@ def self_test(root: Path) -> None:
                 "module:Blanc/NoSuchModule.lean",
                 "missing-module",
             ),
-            "does not exist",
+            "not an exact directory entry",
+        )
+        outside = Path(directory) / "outside"
+        outside.mkdir()
+        (outside / "Back").symlink_to(test_root / "Blanc", target_is_directory=True)
+        (test_root / "Blanc" / "Out").symlink_to(
+            outside, target_is_directory=True
+        )
+        out_and_back = "Blanc/Out/Back/Forward.lean"
+        explicit_controls = (
+            ("symbol", lambda: symbol_module_file(
+                test_root, out_and_back, "self-test.symbol"
+            )),
+            ("owner", lambda: owner_module_file(
+                test_root, out_and_back, "self-test.owner"
+            )),
+            ("canonical", lambda: canonical_example_file(
+                test_root, out_and_back, "self-test.canonical"
+            )),
+            ("aggregate", lambda: lean_sources(test_root, out_and_back)),
+        )
+        for label, action in explicit_controls:
+            try:
+                action()
+            except RecipeError as error:
+                if "symbolic-link" not in str(error):
+                    raise
+            else:
+                raise RecipeError(
+                    f"self-test out-and-back {label}: invalid path passed"
+                )
+        print(
+            "OK — proof recipe explicit module paths: 4/4 symbol, owner, "
+            "canonical-example, and root-aggregate out-and-back controls live"
         )
     if controls != 9:
         raise RecipeError(f"self-test accounting: expected 9 controls, ran {controls}")
@@ -974,7 +1017,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.write:
             for relative, text in surfaces.items():
                 path = resolve_bound_file(
-                    root, relative.as_posix(), allow_missing=True,
+                    root, relative, allow_missing=True,
                     site="proof-recipe-generated-write",
                 )
                 write_atomic(path, text)

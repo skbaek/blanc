@@ -8,14 +8,16 @@ identifier components, with the final component ending in the literal
 absolute, trimmed, backslash, non-NFC, and non-identifier spellings are not in
 the language.
 
-Filesystem policy is reject-all-aliases.  Every component must occur with the
+Filesystem policy is reject-all-aliases. Every component must occur with the
 exact spelling returned by its parent directory and must not be a symbolic
-link.  A final module/output must be a regular file with link count one.  Thus
-file and directory symlinks, out-and-back paths, external hardlinks, wrong-case
-aliases, and normalization aliases are rejected even when the host resolves
-them.  The final canonical path must also remain under the canonical repository
-root.  The policy deliberately makes no portability claim for filesystems that
-cannot expose the requested alias; controls report those cases as closed skips.
+link. An existing final module/output must be a regular file with link count
+one; a missing generated-output leaf is admitted only after its exact parent
+and absence of a colliding alias are established. Thus file and directory
+symlinks, out-and-back paths, external hardlinks, wrong-case aliases, and
+normalization aliases are rejected even when the host resolves them. The final
+canonical path must also remain under the canonical repository root. The policy
+deliberately makes no portability claim for filesystems that cannot expose the
+requested alias; controls report those cases as closed skips.
 """
 
 from __future__ import annotations
@@ -248,11 +250,12 @@ def load_census(root: Path) -> Mapping[str, object]:
 
 def _consumer_scripts(root: Path) -> Tuple[str, ...]:
     scripts_root = root / "scripts"
+    helper = Path(__file__).resolve()
     try:
         return tuple(sorted(
             path.relative_to(root).as_posix()
             for path in scripts_root.rglob("*.py")
-            if path.name != Path(__file__).name
+            if path.resolve() != helper
         ))
     except OSError as error:
         raise ModulePathPolicyError(f"cannot enumerate Python consumers: {error}") from error
@@ -371,6 +374,17 @@ def policy_self_test(root: Path) -> Tuple[int, int, int]:
     ]
     with tempfile.TemporaryDirectory(prefix="module-path-policy-") as directory:
         sandbox = Path(directory)
+        empty_repo = sandbox / "empty-repo"
+        (empty_repo / "Blanc").mkdir(parents=True)
+        try:
+            walk_module_files(empty_repo, site="policy-empty-walk")
+        except ModulePathPolicyError as error:
+            if "no production" not in str(error):
+                raise
+            controls += 1
+        else:
+            raise ModulePathPolicyError("empty module-walk control passed unexpectedly")
+
         repo = sandbox / "repo"
         blanc = repo / "Blanc"
         outside = sandbox / "outside"
@@ -425,26 +439,6 @@ def policy_self_test(root: Path) -> Tuple[int, int, int]:
             raise ModulePathPolicyError("external-hardlink control passed unexpectedly")
         hard_inside.unlink()
 
-        out_link = blanc / "Out"
-        back_link = outside / "Back"
-        out_link.symlink_to(outside, target_is_directory=True)
-        back_link.symlink_to(blanc, target_is_directory=True)
-        out_and_back = "Blanc/Out/Back/Inside.lean"
-        for row in explicit_rows:
-            resolver = resolve_source_file if row["call"] == "resolve_source_file" else resolve_module_file
-            try:
-                resolver(repo, out_and_back, site=row["id"])
-            except ModulePathPolicyError as error:
-                if "symbolic-link" not in str(error):
-                    raise
-                controls += 1
-            else:
-                raise ModulePathPolicyError(
-                    f"out-and-back control passed at explicit site {row['id']!r}"
-                )
-        back_link.unlink()
-        out_link.unlink()
-
         case_file = blanc / "CaseFile.lean"
         case_file.write_text("def caseFile := True\n", encoding="utf-8")
         case_alias = "Blanc/casefile.lean"
@@ -475,5 +469,22 @@ def policy_self_test(root: Path) -> Tuple[int, int, int]:
         if not alias_expressible:
             closed_skips += 1
         controls += 1
+
+        output_directory = repo / "docs"
+        output_directory.mkdir()
+        (output_directory / "Generated.md").write_text("canonical\n", encoding="utf-8")
+        try:
+            resolve_bound_file(
+                repo, "docs/generated.md", allow_missing=True,
+                site="policy-generated-write-alias",
+            )
+        except ModulePathPolicyError as error:
+            if "filesystem alias" not in str(error):
+                raise
+            controls += 1
+        else:
+            raise ModulePathPolicyError(
+                "generated-write missing-leaf case-alias control passed unexpectedly"
+            )
 
     return controls, closed_skips, len(explicit_rows)
