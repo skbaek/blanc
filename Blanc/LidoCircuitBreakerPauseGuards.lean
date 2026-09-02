@@ -389,7 +389,8 @@ persistent writes are five split points of one straight line. -/
 /-- Cross `oldCountPrefix` keeping the `newPauserWord` window.  The line
 contains two `MLOAD`s, which only extend memory, so `line_inv` cannot cross it
 in one step. -/
-theorem MemWordAt.acrossOldCountPrefix {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossOldCountPrefix
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a oldCountPrefix b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold oldCountPrefix previousCountKey loadWord tagTop at run
@@ -584,5 +585,9 @@ theorem call_setPauserSlot_routeTo_assignment_revert (dp : DeployParams)
   routeTo_call h (by simp [runtime, aux, setPauserSlot])
     fun _kernelStart _burn tail =>
       setPauserKernel_routeTo_assignment_revert dp tail emptyOutput
+
+/-! Compatibility name retained after hoisting `MemWordAt`. -/
+abbrev MemWordAt.acrossOldCountPrefix :=
+  @Blanc.MemWordAt.acrossOldCountPrefix
 
 end Blanc.LidoCircuitBreaker

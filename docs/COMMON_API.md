@@ -517,6 +517,10 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 
 - `Devm.addAccessedStorageKey_setMach_setMach` cancels an obsolete machine
   component across an access-key update followed by the final `setMach`.
+- `of_run_sload_state` and `of_run_sload_logs` expose the persistent-state
+  and log silence of a successful `SLOAD`, including its cold access-list
+  warming path.  Use these instead of widening the global `Ninst.Hinv`
+  instance set: access metadata changes even though these projections do not.
 - `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
 - `Devm.setStorVal_getCode` carries account code across a persistent storage
   write. `Devm.setCode_getStor`, `Devm.setCode_logs`,
@@ -661,6 +665,8 @@ re-embedded natural ceiling quotient. Under a positive dividend,
 `ceilDiv_lt_wordModulusN_of_floor_lt` upgrades a fitting floor quotient to a
 fitting ceiling quotient from the exact guard that forbids rounding the
 largest word upward.
+`minWord_eq_toB256_min` turns a word-level smaller-candidate branch into exact
+natural-number `min` when the natural candidate fits in one word.
 The generic
 `Nat.fold_divided_words` identity and `foldDividedWords_toNat` justify folding
 a divided high/low pair back into one word. `wideReducedLowWord`,
@@ -772,6 +778,26 @@ repeat their byte-slice normalization in a contract family.
   carries event chronology, `of_run_loadWordAt_logs` supplies the exact
   successful two-instruction log-silence fact; `MLOAD` deliberately has no
   broader `Ninst.Hinv` instance for logs.
+- When only one long-lived word must survive unrelated scratch traffic, import
+  [`Blanc/MemoryImage.lean`](../Blanc/MemoryImage.lean) and carry `MemWordAt`
+  instead of exposing the whole byte image. `MemWordAt.writeMiss`,
+  `.writeMissBytes`, `.extendsWrite`, `.acrossLine`, `.acrossLoadWord`, and
+  `.acrossMstoreAt` are the basic frame transports (including CALL-family
+  resume memory); `Bytes.WordFrameFrom` composes the untouched suffix of exact
+  trace images, `.slice_eq`, `.of_preserved_memImage`, and `.of_wordFrame`
+  bridge those images, and `prefix_of_loadWord_window` reads the selected word
+  back.
+- `Blanc.WordArithmetic.minWord_eq_toB256_min` bridges a compiled comparison
+  between a fitting natural and a word to natural-number `min`;
+  `toNat_toB256_min_maxWord` is the matching exact round-trip for results
+  saturated at `B256.max`.
+- `Blanc.ProrataWethVaultCapacities` owns the family-local supply/amount
+  staging routes and full-width `maxMint`/`maxDeposit`/`maxWithdraw` seams.
+  `Blanc.Composition.ProrataWethVaultCapacities` is the downstream owner that
+  carries those selected words through the exact configured WETH balance
+  query. Its unconditional `maxWithdraw` theorem states the real word
+  saturation; `maxWithdraw_compiled_effect_exact` removes it only from the
+  ledger fact `balance ≤ supply`.
 - For creation-code guards, `of_run_codesize` exposes the complete code-image
   length pushed by `CODESIZE`.
 - For creation-code copies, `of_run_codecopy_mem` and

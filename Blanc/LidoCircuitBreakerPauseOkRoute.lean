@@ -1272,7 +1272,8 @@ survives to `pauseAfterSet`, whose two external calls read it back, and the
 staged `1` at `continuationWord` survives to `finishSetPauser`'s test. -/
 
 /-- Cross a `loadWord k ++ tagTop r` key-construction segment. -/
-theorem MemWordAt.acrossLoadTag {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossLoadTag
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w k : B256} {r : Nat} (run : Line.Run e a (loadWord k ++ tagTop r) b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   rcases of_run_append (loadWord k) run with ⟨_s1, r1, run⟩
@@ -1281,7 +1282,7 @@ theorem MemWordAt.acrossLoadTag {e : Sevm} {a b : Devm} {offset : Nat}
 /-- Cross `removeTarget`'s whole straight line up to its last `SSTORE`.  The
 line's three memory writes land at `removedIndexWord`, `arrayLengthWord` and
 `lastTargetWord`; a window that misses all three survives. -/
-theorem MemWordAt.acrossRemoveTargetPrefix {e : Sevm} {a b : Devm}
+theorem _root_.Blanc.MemWordAt.acrossRemoveTargetPrefix {e : Sevm} {a b : Devm}
     {offset : Nat} {w : B256}
     (missRemoved : offset + 32 ≤ (removedIndexWord * 32).toNat ∨
       (removedIndexWord * 32).toNat + 32 ≤ offset)
@@ -3067,5 +3068,10 @@ theorem runtimeMain_routeTo_pauseRetainedExpiry
   refine routeTo_line heartbeatExpiryStorePrefix arm3
     (fun _s4 _r4 write => ?_)
   exact routeTo_head write pauseRetainedExpiryPath
+
+/-! Compatibility names retained after hoisting `MemWordAt`. -/
+abbrev MemWordAt.acrossLoadTag := @Blanc.MemWordAt.acrossLoadTag
+abbrev MemWordAt.acrossRemoveTargetPrefix :=
+  @Blanc.MemWordAt.acrossRemoveTargetPrefix
 
 end Blanc.LidoCircuitBreaker

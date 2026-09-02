@@ -68,53 +68,9 @@ private theorem joinState_subBal_acct {st st' : State} {adr : Adr}
 
 /-! ## Window survival across the resume's memory shape
 
-Both resume legs leave the parent's memory as
-`(preC.memory.extends spans).write oi bytes` with `bytes.length ≤ os`; a
-window that misses the written span survives, and an `extends` never moves
-data at all. -/
-
-theorem MemWordAt.acrossMemExtends {a b : Devm} {offset : Nat} {w : B256}
-    {pairs : List (Nat × Nat)}
-    (h : b.memory = a.memory.extends pairs)
-    (window : MemWordAt a offset w) : MemWordAt b offset w := by
-  obtain ⟨hwf, img, hreads, hslice⟩ := window
-  refine ⟨?_, img, ?_, hslice⟩
-  · rw [h]
-    exact hwf.extends pairs
-  · rw [h]
-    exact hreads.extends pairs
-
-/-- The resume's whole memory shape at once: an `extends` never moves data,
-and a write that stops short of the window leaves it alone. -/
-theorem MemWordAt.acrossExtendsWrite {a b : Devm} {offset : Nat} {w : B256}
-    {pairs : List (Nat × Nat)} {ys : Bytes} {n : Nat}
-    (h : b.memory = (a.memory.extends pairs).write n ys)
-    (miss : offset + 32 ≤ n ∨ n + ys.length ≤ offset)
-    (window : MemWordAt a offset w) : MemWordAt b offset w := by
-  obtain ⟨hwf, img, hreads, hslice⟩ := window
-  have hwf' : Mem.Wf (a.memory.extends pairs) := hwf.extends pairs
-  have hreads' : Mem.Reads (a.memory.extends pairs) img := hreads.extends pairs
-  refine ⟨by rw [h]; exact hwf'.write n ys, Bytes.writeAt img n ys,
-    by rw [h]; exact Mem.Reads.write hwf' hreads' n ys, ?_⟩
-  rcases miss with late | early
-  · rw [Bytes.sliceD_writeAt_before img ys offset 32 n late]
-    exact hslice
-  · rw [Bytes.sliceD_writeAt_after img ys offset 32 n early]
-    exact hslice
-
-theorem MemWordAt.writeMissBytes {a b : Devm} {offset : Nat} {w : B256}
-    {ys : Bytes} {n : Nat}
-    (h : b.memory = a.memory.write n ys)
-    (miss : offset + 32 ≤ n ∨ n + ys.length ≤ offset)
-    (window : MemWordAt a offset w) : MemWordAt b offset w := by
-  obtain ⟨hwf, img, hreads, hslice⟩ := window
-  refine ⟨by rw [h]; exact hwf.write n ys, Bytes.writeAt img n ys,
-    by rw [h]; exact Mem.Reads.write hwf hreads n ys, ?_⟩
-  rcases miss with late | early
-  · rw [Bytes.sliceD_writeAt_before img ys offset 32 n late]
-    exact hslice
-  · rw [Bytes.sliceD_writeAt_after img ys offset 32 n early]
-    exact hslice
+The contract-independent extension/write transport now lives in
+`Blanc.MemoryImage`. This module applies that shared carrier to the two Lido
+resume edges below. -/
 
 /-! ## Out-of-gas step outcomes
 
@@ -907,7 +863,7 @@ theorem responder_hcall {sevm : Sevm} {target : B256}
   obtain ⟨⟨ys, hlen, hmem⟩, hstor, hcode⟩ :=
     responder_call_effects hstk codeAt h_depth h_np run
   refine ⟨?_, ?_, hstor _ _⟩
-  · refine MemWordAt.acrossExtendsWrite hmem (Or.inr ?_) window
+  · refine MemWordAt.extendsWrite hmem (Or.inr ?_) window
     have h0 : ((0 : B256)).toNat = 0 := rfl
     rw [h0] at hlen ⊢
     omega
@@ -936,7 +892,7 @@ theorem responder_hstat {sevm : Sevm} {target : B256}
   obtain ⟨⟨ys, hlen, hmem⟩, hstor, hcode⟩ :=
     responder_staticcall_effects hstk codeAt h_depth h_np run
   refine ⟨?_, ?_, hstor _ _⟩
-  · refine MemWordAt.acrossExtendsWrite hmem (Or.inr ?_) window
+  · refine MemWordAt.extendsWrite hmem (Or.inr ?_) window
     have h0 : ((0 : B256)).toNat = 0 := rfl
     have h32 : ((32 : B256)).toNat = 32 := rfl
     rw [h32] at hlen

@@ -5996,6 +5996,53 @@ lemma prefix_of_sload {e x xs} {s s' : Devm} :
   subst hx
   exact ⟨_, append_pref h3 (of_append_pref h2 h1), rfl⟩
 
+/-- A successful `SLOAD` does not mutate persistent EVM state.  The access-list
+warming performed on the cold path is execution metadata, not `Devm.state`. -/
+lemma of_run_sload_state {e : Sevm} {s s' : Devm}
+    (run : Ninst.Run e s sload s') : s.state = s'.state := by
+  rcases of_run_reg run with ⟨_pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s1⟩, popRun, tailRun⟩
+  have popState := (Devm.pop_of_pop popRun).state
+  suffices preserve : ∀ (d : Devm) (cost : Nat),
+      s1.state = d.state →
+      (chargeGas cost d >>=
+        fun next => Devm.push
+          (Devm.getStorVal next e.currentTarget key) next) = .ok s' →
+      s1.state = s'.state by
+    refine popState.trans ?_
+    split at tailRun
+    · exact preserve s1 gasWarmAccess rfl tailRun
+    · exact preserve (addAccessedStorageKey s1 e.currentTarget key)
+        gasColdSload rfl tailRun
+  intro d cost stateEq tailRun
+  rcases Except.bind_eq_ok tailRun with ⟨charged, chargeRun, pushRun⟩
+  exact (stateEq.trans (Devm.burn_of_chargeGas chargeRun).state).trans
+    (Devm.push_of_push pushRun).state
+
+/-- A successful `SLOAD` emits no log entries. -/
+lemma of_run_sload_logs {e : Sevm} {s s' : Devm}
+    (run : Ninst.Run e s sload s') : s.logs = s'.logs := by
+  rcases of_run_reg run with ⟨_pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s1⟩, popRun, tailRun⟩
+  have popLogs := (Devm.pop_of_pop popRun).logs
+  suffices preserve : ∀ (d : Devm) (cost : Nat),
+      s1.logs = d.logs →
+      (chargeGas cost d >>=
+        fun next => Devm.push
+          (Devm.getStorVal next e.currentTarget key) next) = .ok s' →
+      s1.logs = s'.logs by
+    refine popLogs.trans ?_
+    split at tailRun
+    · exact preserve s1 gasWarmAccess rfl tailRun
+    · exact preserve (addAccessedStorageKey s1 e.currentTarget key)
+        gasColdSload rfl tailRun
+  intro d cost logsEq tailRun
+  rcases Except.bind_eq_ok tailRun with ⟨charged, chargeRun, pushRun⟩
+  exact (logsEq.trans (Devm.burn_of_chargeGas chargeRun).logs).trans
+    (Devm.push_of_push pushRun).logs
+
 lemma prefix_of_mload {e x xs} {s s' : Devm} :
     Ninst.Run e s mload s' → (x :: xs <<+ s.stack) → ∃ y, y :: xs <<+ s'.stack := by
   intro h0 h1

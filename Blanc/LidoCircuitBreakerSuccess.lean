@@ -1417,7 +1417,7 @@ theorem pauseSuccess_outcome
 
 /-- A staged word at or beyond byte 320 survives the `pauseFor` calldata
 staging line. -/
-private theorem MemWordAt.acrossPauseCallStaging
+private theorem memWordAt_acrossPauseCallStaging
     {sevm : Sevm} {pre post : Devm} {offset : Nat} {word : B256}
     (hpast : 320 ≤ offset)
     (window : MemWordAt pre offset word)
@@ -1442,7 +1442,7 @@ private theorem MemWordAt.acrossPauseCallStaging
 
 /-- A staged word at or beyond byte 288 survives the `isPaused()` calldata
 staging line. -/
-private theorem MemWordAt.acrossPauseStatStaging
+private theorem memWordAt_acrossPauseStatStaging
     {sevm : Sevm} {pre post : Devm} {offset : Nat} {word : B256}
     (hpast : 288 ≤ offset)
     (window : MemWordAt pre offset word)
@@ -1462,23 +1462,23 @@ private theorem MemWordAt.acrossPauseStatStaging
         htarget).acrossLine (by line_inv) hgas
 
 /-- Public successor for carrying a high memory word through CALL staging. -/
-theorem MemWordAt.acrossPauseCallStagingBoundary
+theorem _root_.Blanc.MemWordAt.acrossPauseCallStagingBoundary
     {sevm : Sevm} {pre post : Devm} {offset : Nat} {word : B256}
     (hpast : 320 ≤ offset)
     (window : MemWordAt pre offset word)
     (run : Line.Run sevm pre pauseCallStaging post) :
     MemWordAt post offset word :=
-  MemWordAt.acrossPauseCallStaging hpast window run
+  memWordAt_acrossPauseCallStaging hpast window run
 
 /-- Public successor for carrying a high memory word through STATICCALL
 staging. -/
-theorem MemWordAt.acrossPauseStatStagingBoundary
+theorem _root_.Blanc.MemWordAt.acrossPauseStatStagingBoundary
     {sevm : Sevm} {pre post : Devm} {offset : Nat} {word : B256}
     (hpast : 288 ≤ offset)
     (window : MemWordAt pre offset word)
     (run : Line.Run sevm pre pauseStatStaging post) :
     MemWordAt post offset word :=
-  MemWordAt.acrossPauseStatStaging hpast window run
+  memWordAt_acrossPauseStatStaging hpast window run
 
 /-- Contract-local value-carrying `EXTCODESIZE` inversion used by the
 strengthened code-guard handoff. -/
@@ -2090,9 +2090,9 @@ theorem pauseAfterSet_committed_outcomes
   · obtain ⟨callPre, hcallStaging, hlive⟩ :=
       runCompiledTo_prepend_inv hlive
     obtain ⟨callPost, hcall, hafterCall⟩ := runCompiledTo_next_inv hlive
-    have targetCallPre := targetGuard.acrossPauseCallStaging
+    have targetCallPre := targetGuard.acrossPauseCallStagingBoundary
       (by decide) hcallStaging
-    have durationCallPre := durationGuard.acrossPauseCallStaging
+    have durationCallPre := durationGuard.acrossPauseCallStagingBoundary
       (by decide) hcallStaging
     refine Or.inr ⟨hcode, guardPost, callPre, callPost,
       hcallStaging, hcall, fun callBoundary => ?_⟩
@@ -2119,9 +2119,9 @@ theorem pauseAfterSet_committed_outcomes
         runCompiledTo_prepend_inv hstat
       obtain ⟨statPost, hstatCall, hobservation⟩ :=
         runCompiledTo_next_inv hstat
-      have targetStatPre := targetArm.acrossPauseStatStaging
+      have targetStatPre := targetArm.acrossPauseStatStagingBoundary
         (by decide) hstatStaging
-      have durationStatPre := durationArm.acrossPauseStatStaging
+      have durationStatPre := durationArm.acrossPauseStatStagingBoundary
         (by decide) hstatStaging
       exact Or.inr ⟨armPre, statPre, statPost, hstatStaging, hstatCall,
         fun statBoundary =>
@@ -2149,5 +2149,12 @@ theorem PauseSuccessInputs.of_noninterference
   refine ⟨htarget, hduration, ?_, ?_⟩
   · exact hcountEq
   · exact hintervalEq
+
+/-! Compatibility names retained for the established public Lido boundary
+theorems after hoisting `MemWordAt`. -/
+abbrev MemWordAt.acrossPauseCallStagingBoundary :=
+  @Blanc.MemWordAt.acrossPauseCallStagingBoundary
+abbrev MemWordAt.acrossPauseStatStagingBoundary :=
+  @Blanc.MemWordAt.acrossPauseStatStagingBoundary
 
 end Blanc.LidoCircuitBreaker

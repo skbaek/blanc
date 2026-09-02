@@ -70,7 +70,7 @@ import sys
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
+SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "MemoryImage", "Ladder", "Upgrade",
           "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance",
@@ -211,6 +211,7 @@ CONTRACTS = {
                             "ProrataWethVaultArtifact",
                             "ProrataWethVaultArithmetic",
                             "ProrataWethVaultArithmeticExec",
+                            "ProrataWethVaultCapacities",
                             "ProrataWethVaultConversions",
                             "ProrataWethVaultFunctional",
                             "ProrataWethVaultViews"],
@@ -312,6 +313,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultStaging",
     "Composition.ProrataWethVaultViews",
     "Composition.ProrataWethVaultConversions",
+    "Composition.ProrataWethVaultCapacities",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

@@ -156,7 +156,7 @@ private theorem shortString_body_effect
     rfl
   exact ⟨output, storage, logs⟩
 
-private theorem returnConstant_effect
+theorem returnConstant_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {word : B256}
     (run : Func.RunCompiledTo fs sevm pre (returnConstant word) (.ok post)) :
     WordViewEffect word pre post := by
@@ -221,7 +221,7 @@ private theorem totalSupply_body_effect
   rw [← congrFun entryStorage sevm.currentTarget] at output
   exact ⟨output, storage, logs⟩
 
-private theorem lift_word_view
+theorem lift_word_view
     {pre bodyPre post : Devm} {word : B256}
     (entryState : pre.state = bodyPre.state)
     (entryLogs : pre.logs = bodyPre.logs)
@@ -244,7 +244,7 @@ private theorem lift_bytes_view
 /-- A successful canonical-address guard reaches its body and proves that the
 selected ABI word is address-shaped.  The proof stays on the compiled walk so
 downstream effects retain the exact vault auxiliary table. -/
-private theorem canonicalAddressArg_body_of_ok
+theorem canonicalAddressArg_body_of_ok
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {index : B256} {body : Func} {tail : Stack}
     (hp : tail <<+ pre.stack)

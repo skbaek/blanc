@@ -77,6 +77,7 @@ import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
 import Blanc.LidoTriggerableWithdrawalsGatewayDeploy
 import Blanc.ProrataAttackTrace
+import Blanc.Composition.ProrataWethVaultCapacities
 import Blanc.BeaconDepositCorrectness
 import Blanc.BeaconDepositConstructorEffects
 import Blanc.BeaconDepositBridgeCompiled
@@ -1031,6 +1032,16 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.Prorata.attacker_open_context
 #print axioms Blanc.Prorata.attacker_no_profit
 #print axioms Blanc.Prorata.victim_loss_bound
+#print axioms Blanc.Composition.ProrataWethVault.readTotalAssets_capacity_body_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxMint_body_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_body_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_body_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect_stable
+#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect_stable
+#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect_exact
 #print axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
 #print axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
 #print axioms Blanc.Func.localExecFree_iff

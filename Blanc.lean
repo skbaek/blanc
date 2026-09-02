@@ -5,6 +5,7 @@ import Blanc.Upgrade
 import Blanc.StaticPrecompileMessage
 import Blanc.BalanceAlgebra
 import Blanc.WordArithmetic
+import Blanc.MemoryImage
 import Blanc.BytesWrite
 import Blanc.ExecutionSettlement
 import Blanc.MessageExecution
@@ -289,6 +290,7 @@ import Blanc.ProrataWethVaultArtifact
 import Blanc.ProrataWethVaultArithmetic
 import Blanc.ProrataWethVaultArithmeticExec
 import Blanc.ProrataWethVaultConversions
+import Blanc.ProrataWethVaultCapacities
 import Blanc.ProrataWethVaultFunctional
 import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary
@@ -296,6 +298,7 @@ import Blanc.Composition.ProrataWethVaultEffects
 import Blanc.Composition.ProrataWethVaultStaging
 import Blanc.Composition.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultConversions
+import Blanc.Composition.ProrataWethVaultCapacities
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
