@@ -93,12 +93,15 @@ Three assumptions hold up everything below, and none of them is hidden.
    not about Lido's deployed Solidity.
 2. **A pause target is not assumed honest.** The hostile-world family
    quantifies over arbitrary callee bytecode. What it proves is what the
-   CircuitBreaker *observed and did* — never that the target is really paused.
+   CircuitBreaker *observed and did*; by itself it never proves that an
+   arbitrary target is really paused. The pinned-target pillar separately
+   proves that stronger fact for its two configured TWG worlds.
 3. **The admin is privileged, and one family says so.** Registry coherence
    across histories permits admin interference by returning an existentially
-   updated witness. The exact final state of one successful pause does not, and
-   names `PauseSuccessNoninterference` as an explicit assumption rather than
-   deriving it.
+   updated witness. The standalone exact-final-state family names
+   `PauseSuccessNoninterference` as an explicit assumption; the TWG composition
+   discharges that condition semantically for its two configured worlds rather
+   than generalising it to arbitrary targets.
 
 ## What is deliberately not claimed, in one place
 
@@ -711,7 +714,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the 82 Solidity call and static-call traces in the differential gate; `pause-return-true`
-- **Non-claims:** nothing about what the target does with either message, what it returns, or whether it honours the duration. **The static flag is a fact about the message the CircuitBreaker builds, not a no-write theorem** — a static-context no-write result over arbitrary code exists nowhere in Jaune or Blanc and is not built here. No claim that either edge is reached in any particular run. These relations remain **implications at exact reached states**; composition from the public `pause` entry is deferred and recorded in the successor register.
+- **Non-claims:** nothing about what the target does with either message, what it returns, or whether it honours the duration. **The static flag is a fact about the message the CircuitBreaker builds, not a no-write theorem** — a static-context no-write result over arbitrary code exists nowhere in Jaune or Blanc and is not built here. CALL-1 alone makes no claim that either edge is reached in any particular run: its relations remain **implications at exact reached states**. TWG-3 separately constructs those edges and paused-state conclusions for two configured direct-installation worlds; CALL-1 does not generalise their reachability or target-truth conclusions to arbitrary targets or worlds.
 - **Source:** `reports/lido-circuit-breaker-call-boundary.md`; `Blanc/LidoCircuitBreakerCallBoundary.lean`
 
 #### CALL-2 — The staged target and duration words survive arbitrary callee execution
@@ -741,7 +744,11 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the pause-failure family, plus an independent shape schema validating the exact successful 32-byte output window, the absence of successful-tail copying, complete short and large return coverage, and full failed-child bubbling
-- **Non-claims:** **accepting a canonical `1` is evidence only that the target reported success — never that the target is really paused.** End-to-end pause correctness would need a separately verified target and a composition theorem, recorded in the successor register.
+- **Non-claims:** **CALL-4 alone treats a canonical `1` only as evidence that
+  the target reported success, never as a proof that an arbitrary target is
+  really paused.** TWG-3 separately supplies the verified target executions and
+  composition theorem for its two configured direct-installation worlds; this
+  decoder row does not generalise that result to other targets or worlds.
 - **Source:** `reports/lido-circuit-breaker-observation.md`; `Blanc/LidoCircuitBreakerObservation.lean`
 
 ---
