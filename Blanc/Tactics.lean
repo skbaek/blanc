@@ -1,7 +1,6 @@
 -- Tactics.lean : tactic machinery and the statically quoted lemmas it requires.
 
 import Blanc.CommonCore
-import Blanc.ProofRecipesGenerated
 
 namespace Blanc
 
@@ -330,29 +329,6 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
   | "goal-shape:shared-subject-kernel-decision" =>
       return proofRecipeHasRepeatedClosedLetSubject target
   | _ => return false
-
-def proofRecipeMatches (target : Lean.Expr)
-    (recipe : ProofRecipes.Recipe) : TacticM Bool := do
-  for trigger in recipe.triggers do
-    if ← proofRecipeTriggerMatches target trigger then
-      return true
-  return false
-
-elab "blanc_suggest" : tactic =>
-  withMainContext do
-    let target ← Lean.instantiateMVars (← getMainTarget)
-    let mut found := false
-    for recipe in ProofRecipes.recipes do
-      if ← proofRecipeMatches target recipe then
-        found := true
-        let symbols := String.intercalate ", " recipe.symbols
-        Lean.logInfo m!"[proof-recipe:{recipe.id}] {recipe.preferredPath}\n\
-          Registered symbols: {symbols}\n\
-          Boundary: {recipe.boundary}"
-    unless found do
-      Lean.logInfo "blanc_suggest: no matching proof recipe\n\
-        Declaration discovery: consult docs/COMMON_API.md before adding a \
-        contract-local helper."
 
 def String.toSyntax (s : String) : Lean.Syntax :=
   Lean.Syntax.ident Lean.SourceInfo.none s.toRawSubstring

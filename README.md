@@ -21,6 +21,48 @@ When a Blanc contract reimplements an existing one, what that port does and
 does not claim — and the deviation-registry discipline that backs it — is
 governed by [PORTING.md](PORTING.md).
 
+## Building
+
+The first checkout on a host may fetch the pinned dependency artifacts and
+then build Blanc:
+
+```
+lake exe cache get
+lake build
+scripts/check-lake-artifact-cache.sh
+scripts/check-gates.sh --certify-build
+```
+
+Blanc also enables Lake's local artifact cache. Later fresh worktrees normally
+need only `lake build`: Lake restores immutable artifacts by build identity
+while each worktree keeps its own `.lake`, traces, hashes, certificates,
+reports, and gate state. Do not share or symlink a writable `.lake`, and do not
+repeat `lake exe cache get` merely to reuse artifacts already present in the
+local cache.
+
+Before certifying a restored build, the integrity check above recomputes Lake's
+own artifact hash for the cache and materialized outputs; ordinary restore,
+`--no-build`, and `--rehash` do not authenticate those bytes. The check detects
+accidental corruption and wrong-name restores, with collision resistance of
+Lake's 64-bit non-cryptographic hash explicitly remaining inside the local
+trust boundary. If a restore is suspect, preserve the failure evidence, run
+`lake cache clean`, and rebuild. Setting `LAKE_ARTIFACT_CACHE=false` for that
+rebuild disables local artifact-cache restore without changing the repository
+configuration.
+
+Cache garbage collection is a coordinated maintenance operation. From a Creme
+goal that holds the exclusive host semaphore, preview and then execute it with:
+
+```
+scripts/gc-lake-artifact-cache.py
+scripts/gc-lake-artifact-cache.py --execute --ack-exclusive-semaphore
+```
+
+The collector keeps artifacts referenced by every live cache-participating
+worktree, reports nonparticipants, and fails closed on participant state it
+cannot interpret. `scripts/GATES.md` is the authoritative trust, recovery, and
+verification contract.
+
 ## Optional enhanced agent workflow
 
 Blanc is standalone: its pinned Jaune dependency is fetched by Lake, and Creme
@@ -48,6 +90,10 @@ This repo contains the following files:
   writing and verifying Blanc programs, including the Blanc compiler's
   correctness proof and tactics for automating Blanc program verification.
   They import in that order.
+- [ProofRecipeTactic.lean](Blanc/ProofRecipeTactic.lean): the unimported
+  authoring leaf that joins `Tactics` with the generated recipe registry and
+  provides `blanc_suggest` without putting registry churn on production import
+  paths.
 - [Ladder.lean](Blanc/Ladder.lean): the contract-generic verification ladder,
   including the `ContractSpec` record each contract instantiates and the
   dispatcher decomposition (`FuncSound`, `sound_of_dispatch`) that reduces a
