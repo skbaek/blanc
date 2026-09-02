@@ -70,10 +70,10 @@
     "gatewayManifestSha256": "4dea3481b12f12a751af1bdae602a8e5d6d7055f6359795fdd89950b3e0ae4d4",
     "gatewayReferenceSha256": "8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f",
     "generatorSha256": "de90c522e434bf85ea3b3fa1cef708f9c0cbeb73c9e914838ca5c76724d52ba5",
-    "ledgerSha256": "b92017f766d205b1a49dc210f2f4f322f27fdba427ff433cb90d5457583d4bf0",
+    "ledgerSha256": "da8ce495bb8a351c95466ba11773f6ed54b6fede3ff3cb685b41c1b26efec0eb",
     "profileSha256": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
     "runtimeLockSha256": "9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c",
-    "wrapperSha256": "3d744d010cc8a45bea755fddf761410aa2edbf9a69534cec56e439b208de6598"
+    "wrapperSha256": "accb857ee892ca92ca67182cafe876a795eba35f830a514b7453e3d6f153b676"
   },
   "rows": {
     "composed-public-pause-finite": {

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CircuitBreaker — a Blanc port of Lido’s guardian</title>
-<meta name="description" content="Blanc’s Lido CircuitBreaker: a 4,282-byte port of the deployed CircuitBreaker with a 175-row differential matrix, Registry integrity proved as one combined invariant whose corollaries close the three obligations an industrial campaign left open, an official-parameters deployment root through the full Prague block pipeline, integrity preserved at every reachable future over arbitrary hostile callees, zero accepted deviations, and a 71-row consistency-checked assurance register.">
+<meta name="description" content="Blanc’s Lido CircuitBreaker: a 4,282-byte port of the deployed CircuitBreaker with a 175-row differential matrix, Registry integrity proved as one combined invariant whose corollaries close the three obligations an industrial campaign left open, an official-parameters deployment root through the full Prague block pipeline, integrity preserved at every reachable future over arbitrary hostile callees, zero accepted deviations, and a 75-row consistency-checked assurance register.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 <script>document.documentElement.classList.add('js');</script>
@@ -53,7 +53,7 @@
           <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
           governs what is claimed and what never is. What makes this port distinctive is the
           <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>:
-          71 rows mapping every quotable claim onto the exact declarations that carry it, the
+          75 rows mapping every quotable claim onto the exact declarations that carry it, the
           premises they require, the axioms they depend on, the gate that owns them — and, in
           every row without exception, what the row does <em>not</em> claim.
         </p>
@@ -62,9 +62,9 @@
         <div class="term"><span class="p">$</span> scripts/check-lido-circuit-breaker-differential.sh
 <span class="ok">OK — Lido CircuitBreaker differential: 175/175 rows agree; 17/17 selectors + constructor; 144 causal history transactions; 464 resource boundaries …</span>
 <span class="p">$</span> scripts/check-lido-circuit-breaker-assurance.sh
-<span class="ok">OK — lido-circuit-breaker-assurance: 71 rows across 10 pillars … 145 axiom
-     expectations matched … 13/13 non-claim phrases present</span></div>
-        <p class="cap"><b>Fig. 1</b> — two CircuitBreaker gates, verbatim (2026-08-27 and 2026-08-28), ellipses
+<span class="ok">OK — lido-circuit-breaker-assurance: 75 rows across 11 pillars … 158 axiom
+     expectations matched … 14/14 non-claim phrases present</span></div>
+        <p class="cap"><b>Fig. 1</b> — two CircuitBreaker gates, verbatim (differential 2026-08-27; assurance 2026-09-03), ellipses
           marking elision: the differential matrix beside the locked Solidity reference, and the
           register verifier that fails if any cited declaration, axiom set, or non-claim phrase
           drifts from the tree it describes. The differential line continues “… 82 Solidity
@@ -72,7 +72,7 @@
           channel/projection/identity/manifest falsifiers.”</p>
         <div class="pills">
           <span class="pill"><span class="d"></span>4,282 B runtime — vs 4,584 deployed</span>
-          <span class="pill"><span class="d"></span>71-row assurance register</span>
+          <span class="pill"><span class="d"></span>75-row assurance register</span>
           <span class="pill"><span class="d"></span>0 accepted deviations</span>
         </div>
       </div>
@@ -201,19 +201,22 @@ chainUsing_preserves_registryStable    <span class="c">-- the theorem above</spa
     </div>
     <div class="dev">
       <div class="devhead"><h3>Does any of this say Lido’s protocol is safer?</h3><span class="devtag">pushback</span></div>
-      <p>The claims stop where the evidence stops. No liveness is claimed: nothing here says the
-        contract can be paused, only what happens when it is. A target’s canonical
-        <span class="mono">true</span> is evidence the target <em>reported</em> success, never
-        that it is really paused — end-to-end pause correctness would need a separately verified
-        target and a composition theorem, recorded as successor work rather than implied. And
-        nothing verifies the Solidity deployed at <span class="mono">0x6019…B2F7</span>: its
-        address, transaction, and block are provenance identifiers only.</p>
+      <p>The claims stop where the evidence stops. Two configured direct-installation worlds now
+        construct successful public pauses through the separately verified
+        TriggerableWithdrawalsGateway, for the ordinary and infinite-sentinel durations. In those
+        exact worlds the target’s canonical <span class="mono">true</span> is joined to the real
+        gateway executions and paused storage; outside them it remains evidence only that an
+        arbitrary target <em>reported</em> success. This is no universal liveness or all-world gas
+        claim, and it says neither that an external actor will submit a transaction nor that a
+        current deployed target has this state. Nothing verifies the Solidity deployed at
+        <span class="mono">0x6019…B2F7</span>: its address, transaction, and block are provenance
+        identifiers only.</p>
     </div>
 
     <p class="note" style="margin-top:26px">
-      The 71-row assurance register maps every quotable claim above onto the exact declarations
+      The 75-row assurance register maps every quotable claim above onto the exact declarations
       that carry it, the premises they require, the axioms they depend on — and, in every row
-      without exception, what the row does <em>not</em> claim. Its thirteen load-bearing non-claim
+      without exception, what the row does <em>not</em> claim. Its fourteen load-bearing non-claim
       phrases are pinned by the gate that verifies it, so a sentence that outruns its theorem
       fails CI rather than surviving as prose.
     </p>
@@ -426,10 +429,12 @@ runtimeWriteAuthority_of_rawFrameRoot <span class="c">-- every raw SSTORE in an 
     <p class="note" style="margin-top:26px">
       Boundary, restated: nothing on this page verifies the Solidity artifact deployed at
       <span class="mono">0x6019…B2F7</span> — its address, transaction, and block are
-      provenance identifiers only. No liveness is claimed: nothing here says the contract can
-      be paused, only what happens when it is. And a target’s canonical <span class="mono">true</span>
-      is evidence the target <em>reported</em> success, never that it is really paused. The
-      full boundary — thirteen pinned non-claim phrases — lives in the
+      provenance identifiers only. Two configured direct-installation worlds construct successful
+      public pauses for the ordinary and infinite-sentinel durations, joining the real gateway
+      executions to paused storage. They do not establish universal liveness, an all-world gas
+      bound, external submission, or current deployed-chain state; outside those worlds a target’s
+      canonical <span class="mono">true</span> still means only that it <em>reported</em> success.
+      The full boundary — fourteen pinned non-claim phrases — lives in the
       <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>,
       in the honest register.
     </p>
