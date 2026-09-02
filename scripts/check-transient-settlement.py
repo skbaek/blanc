@@ -386,6 +386,9 @@ def write_manifest(data: dict) -> None:
     """Regenerate only byte/header fields derived from the declared sources."""
 
     data = dict(data)
+    data["jaunePinFiles"] = {
+        relative: sha256(ROOT / relative) for relative in data["jaunePinFiles"]
+    }
     actual = declarations(read(ROOT / data["commonModule"]))
     data["signatureHashes"] = {
         name: hashlib.sha256(actual[name][1].encode()).hexdigest()
