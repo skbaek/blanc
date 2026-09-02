@@ -361,6 +361,8 @@ COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun",
 ]
 
 ROOTS = ["Blanc", "Main"]

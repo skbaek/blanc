@@ -299,6 +299,7 @@ import Blanc.DripStackSafetyCertificate
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
+import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 
 namespace Blanc
 

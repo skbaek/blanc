@@ -1714,12 +1714,15 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
       (by decide)
       (by decide)
       (by decide)
-      (by decide)
       (by show (1024 : Nat) ≠ 0; decide)
       (by simpa only [toAdr_toB256] using
         gatewayPauseWorld_target_not_precompile)
       (by norm_num)
-      (by norm_num)
+      (by
+        have hfiniteCost : pauseWorldDuration ≠ pauseInfiniteSentinel := by
+          decide +kernel
+        simp only [gatewayPauseChildCost, if_neg hfiniteCost]
+        norm_num)
   rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
@@ -1762,7 +1765,10 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
       (Or.inl gatewayRunAfterSetBase_warmExpiry)), ?_⟩
   intro final hrun
   have h := hclose final hrun
-  rw [show (42362 + 30366 + 2600 : Nat) = 75328 from by norm_num] at h
+  have hfiniteCost : pauseWorldDuration ≠ pauseInfiniteSentinel := by
+    decide +kernel
+  simp only [gatewayPauseChildCost, if_neg hfiniteCost] at h
+  rw [show (42362 + 29772 + 594 + 2600 : Nat) = 75328 from by norm_num] at h
   exact h
 
 private theorem gatewayPauseWorld_originalExpiry :
