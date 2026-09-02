@@ -23,6 +23,28 @@
     "outputs",
     "gas"
   ],
+  "executionMutants": {
+    "query-code-empty-return": {
+      "installedTargetCode": {
+        "byteLength": 1,
+        "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+      },
+      "outerReceiptStatus": "0x0",
+      "productionGatewayCodeIdentity": false,
+      "queryReturnedCanonicalWord": false,
+      "transactionStorageRolledBack": true
+    },
+    "reentrant-heartbeat-noninterference": {
+      "callbackTarget": "0x3e40d73eb977dc6a537af587d48316fee66e9c8c",
+      "outerReceiptStatus": "0x1",
+      "productionEventProjectionAccepted": false,
+      "productionProtectedCellProjectionAccepted": false,
+      "protectedCell": "0x1000000000000000000000000000000000000000000000000000000000000001",
+      "protectedCellAfter": "0x0000000000000000000000000000000000000000000000000000000001e13380",
+      "protectedCellBefore": "0x0000000000000000000000000000000000000000000000000000000000278d00",
+      "retainedParentWriteObserved": true
+    }
+  },
   "format": "blanc.lido-twg-pinned-target.current-mainnet-replay",
   "network": {
     "bpo2HeaderFieldBytesUpperBound": 256,
@@ -47,11 +69,11 @@
     "evaluatorSha256": "7727a46df26adc6621645cbaeba19edc73ca965ce0c81b5eeebd24d9c51c66cd",
     "gatewayManifestSha256": "4dea3481b12f12a751af1bdae602a8e5d6d7055f6359795fdd89950b3e0ae4d4",
     "gatewayReferenceSha256": "8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f",
-    "generatorSha256": "707945e70d4c26c7cb7cde384a7227804a4efc4ab3013b8315b053f48f166bde",
+    "generatorSha256": "de90c522e434bf85ea3b3fa1cef708f9c0cbeb73c9e914838ca5c76724d52ba5",
     "ledgerSha256": "b92017f766d205b1a49dc210f2f4f322f27fdba427ff433cb90d5457583d4bf0",
     "profileSha256": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
     "runtimeLockSha256": "9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c",
-    "wrapperSha256": "68bbb6b1419f3303bc09354c6b4e89696e2c7b43c7144d48667c14eca77044b6"
+    "wrapperSha256": "3d744d010cc8a45bea755fddf761410aa2edbf9a69534cec56e439b208de6598"
   },
   "rows": {
     "composed-public-pause-finite": {
@@ -203,6 +225,6 @@
     "composed-public-pause-finite",
     "composed-public-pause-sentinel"
   ],
-  "schema": 1,
+  "schema": 2,
   "semanticMismatches": []
 }

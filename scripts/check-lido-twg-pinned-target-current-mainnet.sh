@@ -7,9 +7,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 : "${HOME:?HOME is required}"
 
-WRAPPER_SCHEMA=1
+WRAPPER_SCHEMA=2
 WRAPPER_SCENARIOS="family-pause-query-finite,family-pause-query-sentinel,composed-public-pause-finite,composed-public-pause-sentinel"
 WRAPPER_CHANNELS="status,storage,events,outputs,gas"
+WRAPPER_MUTANTS="query-code-empty-return,reentrant-heartbeat-noninterference"
 WRAPPER_PROFILE="executionFork=BPO2,logicalCompilerFork=Osaka,testingBackend=cancun"
 WRAPPER_TX_GAS_LIMIT=1000000
 WRAPPER_RLP_BLOCK_SIZE_CAP=8388608
@@ -21,6 +22,7 @@ WRAPPER_ARGS=(
   --wrapper-schema "$WRAPPER_SCHEMA"
   --wrapper-scenarios "$WRAPPER_SCENARIOS"
   --wrapper-channels "$WRAPPER_CHANNELS"
+  --wrapper-mutants "$WRAPPER_MUTANTS"
   --wrapper-profile "$WRAPPER_PROFILE"
   --wrapper-tx-gas-limit "$WRAPPER_TX_GAS_LIMIT"
   --wrapper-rlp-block-size-cap "$WRAPPER_RLP_BLOCK_SIZE_CAP"

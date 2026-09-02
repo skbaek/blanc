@@ -60,7 +60,7 @@ host-local observations; `unmeasured` is preserved honestly and no parallel sums
 | 48 | `scripts/check-lido-ossifiable-proxy-current-mainnet.sh --composed-prerequisites` | yes | yes | yes | `current-mainnet` | env, external, files, populations, tools | already precise: generated artifact JSON, result, target and runtime closure are direct inputs | unmeasured after composition | exclusive | none known |
 | 49 | `scripts/check.sh --no-build` | yes | yes | — | `lake-build` | files, lean_entries, tools | not expensive | ~7 s | elaboration | none known |
 | 50 | `scripts/check-claims.sh` | yes | yes | — | `lake-build` | files, lean_entries, tools | not expensive | ~2 s | elaboration | stale claim metadata |
-| 51 | `scripts/check-elab.sh` | yes | — | yes | `lake-build` | files, lean_modules, populations, tools | already precise: content-addressed module selection is the measured subject | from a few seconds when nothing is affected to ~21 min cache-cold or first-run/`--full` historically | exclusive | none known |
+| 51 | `scripts/check-elab.sh --no-build` | yes | — | yes | `lake-build` | files, lean_modules, populations, tools | already precise: content-addressed module selection is the measured subject | from a few seconds when nothing is affected to ~21 min cache-cold or first-run/`--full` historically | exclusive | none known |
 | 52 | `scripts/check-fmint.sh --no-build` | yes | — | — | — | files, populations, tools | not expensive | sub-second | light | none known |
 | 53 | `scripts/check-weth.sh --no-build` | yes | — | — | — | files, populations, tools | not expensive | sub-second | light | none known |
 | 54 | `scripts/check-prorata.sh --no-build` | yes | — | yes | — | files, populations, tools | not expensive | sub-second | light | none known |
@@ -73,7 +73,7 @@ host-local observations; `unmeasured` is preserved honestly and no parallel sums
 | 61 | `scripts/check-transient-settlement.sh --semantic-only` | yes | — | yes | `lake-build` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
 | 62 | `scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites` | yes | — | yes | `lake-build`, `layering` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
 | 63 | `scripts/check-drip-stack-certificate.sh` | — | yes | yes | — | files, tools | not expensive | unmeasured on this candidate (LOCAL DRAFT) | light | none known |
-| 64 | `scripts/check-lido-twg-pinned-target-current-mainnet.sh --composed-prerequisites` | yes | yes | yes | `current-mainnet` | env, external, files, lean_entries, populations, tools | already precise: exact compiler-owned artifacts, generated result, applicability ledger, target and runtime closure are direct inputs | ~11 s after the evaluator cache is warm | exclusive | none known |
+| 64 | `scripts/check-lido-twg-pinned-target-current-mainnet.sh --composed-prerequisites` | yes | yes | yes | `current-mainnet` | env, external, files, lean_entries, populations, tools | already precise: exact compiler-owned artifacts, generated result, applicability ledger, target and runtime closure are direct inputs | ~15 s after the evaluator cache is warm | exclusive | none known |
 
 ## Population reconciliation
 

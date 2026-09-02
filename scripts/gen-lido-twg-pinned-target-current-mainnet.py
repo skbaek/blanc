@@ -47,7 +47,7 @@ GATEWAY_REFERENCE_PATH = ROOT / "scripts" / "lido-twg-reference.json"
 RESULT_PATH = ROOT / "scripts" / "fixtures" / "lido-twg-current-mainnet" / "results.json"
 
 FORMAT = "blanc.lido-twg-pinned-target.current-mainnet-replay"
-SCHEMA = 1
+SCHEMA = 2
 CURRENT_MAINNET_PUBLIC_API = {
     "load_profile", "resolve_root", "verify_target", "target_paths", "run_t8n",
 }
@@ -58,6 +58,10 @@ SCENARIOS = (
     "composed-public-pause-sentinel",
 )
 CHANNELS = ("status", "storage", "events", "outputs", "gas")
+EXECUTION_MUTANTS = (
+    "query-code-empty-return",
+    "reentrant-heartbeat-noninterference",
+)
 
 UINT256_MAX = 2**256 - 1
 LOW252_MASK = 2**252 - 1
@@ -81,11 +85,13 @@ SECRET_KEY = "0x" + format(1, "064x")
 CIRCUIT_BREAKER = "0x0000000000000000000000000000000000000064"
 GATEWAY = "0x0000000000000000000000000000000000000077"
 COMPOSED_DRIVER = "0x0000000000000000000000000000000000000099"
+ADMIN = "0x3e40d73eb977dc6a537af587d48316fee66e9c8c"
 COINBASE = "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
 
 PAUSE_SELECTOR = bytes.fromhex("76a67a51")
 PAUSE_FOR_SELECTOR = bytes.fromhex("f3f449c7")
 IS_PAUSED_SELECTOR = bytes.fromhex("b187bd26")
+SET_HEARTBEAT_INTERVAL_SELECTOR = bytes.fromhex("71a99c22")
 PAUSE_ROLE = int(
     "139c2898040ef16910dc9f44dc697df79363da767d8bc92f2e310312b816e46d",
     16,
@@ -95,6 +101,8 @@ PAUSER_SET_TOPIC = "0xd92c3c28ed17463268f864776463c4c2154f89b18156d3edf77c0e37d0
 PAUSED_TOPIC = "0x32fb7c9891bc4f963c7de9f1186d2a7755c7d6e9f4604dabe1d8bb3027c2f49e"
 PAUSE_TRIGGERED_TOPIC = "0x9628d25c6e4299393a2779652c1df703eb599acae5fc406c6ef98e92c9ccd93e"
 HEARTBEAT_UPDATED_TOPIC = "0x4ea9e94baeeb3668b47d8d9b4cc8f5a1784d783dd263d7d76f8c10d6a10aed44"
+HEARTBEAT_INTERVAL_UPDATED_TOPIC = "0xca0a37da24604276f661e36e2b0e71661bb56f8d13994a5d0f207070125b950c"
+MUTANT_HEARTBEAT_INTERVAL = 31_536_000
 
 EXPECTED_BREAKER_RUNTIME_BYTES = 4_282
 EXPECTED_BREAKER_RUNTIME_SHA256 = "ff8eb66d66f8e4668af9bf5b687dda082c3729f8cd5ffd24a4b14697389d1505"
@@ -225,9 +233,11 @@ def gateway_role_storage(account_address: str) -> dict[int, int]:
     }
 
 
-def breaker_storage(pauser: str, duration: int) -> dict[int, int]:
+def breaker_storage(
+    pauser: str, duration: int, *, target: str = GATEWAY,
+) -> dict[int, int]:
     pauser_word = int(pauser, 16)
-    target_word = int(GATEWAY, 16)
+    target_word = int(target, 16)
     return {
         slot(1, 0): duration,
         slot(1, 1): HEARTBEAT_INTERVAL,
@@ -390,6 +400,54 @@ def family_driver_code() -> bytes:
     return asm.finish()
 
 
+def reentrant_noninterference_target_code() -> bytes:
+    """A target that writes a protected parent cell through a real callback.
+
+    The target is installed at the official admin address.  Its pause arm calls
+    the production CircuitBreaker `setHeartbeatInterval(uint256)` endpoint, so
+    the callback runs with the exact immutable admin as `msg.sender`.  Its query
+    arm returns canonical true, allowing the outer production pause to finish
+    despite the retained parent write.
+    """
+    asm = Assembler()
+    asm.op(0x36)  # CALLDATASIZE
+    asm.push(4)
+    asm.op(0x14)  # EQ
+    asm.push_label("query")
+    asm.op(0x57)  # JUMPI
+
+    selector_word = int.from_bytes(SET_HEARTBEAT_INTERVAL_SELECTOR, "big") << 224
+    asm.push(selector_word)
+    asm.push(0)
+    asm.op(0x52)  # MSTORE
+    asm.push(MUTANT_HEARTBEAT_INTERVAL)
+    asm.push(4)
+    asm.op(0x52)  # MSTORE
+    asm.push(0)  # output size
+    asm.push(0)  # output offset
+    asm.push(36)  # input size
+    asm.push(0)  # input offset
+    asm.push(0)  # value
+    asm.push(int(CIRCUIT_BREAKER, 16))
+    asm.op(0x5A)  # GAS
+    asm.op(0xF1)  # CALL
+    emit_bubble_or_stop(asm, "pause_ok", "fail")
+    asm.label("pause_ok")
+    asm.op(0x00)  # STOP
+
+    asm.label("query")
+    asm.push(1)
+    asm.push(0)
+    asm.op(0x52)  # MSTORE
+    asm.push(32)
+    asm.push(0)
+    asm.op(0xF3)  # RETURN
+
+    asm.label("fail")
+    emit_revert_returndata(asm)
+    return asm.finish()
+
+
 @dataclass(frozen=True)
 class Artifacts:
     circuit_breaker: bytes
@@ -501,6 +559,7 @@ def validate_wrapper_contract(args: argparse.Namespace) -> None:
         "wrapper_schema": str(SCHEMA),
         "wrapper_scenarios": ",".join(SCENARIOS),
         "wrapper_channels": ",".join(CHANNELS),
+        "wrapper_mutants": ",".join(EXECUTION_MUTANTS),
         "wrapper_profile": "executionFork=BPO2,logicalCompilerFork=Osaka,testingBackend=cancun",
         "wrapper_tx_gas_limit": str(TX_GAS_LIMIT),
         "wrapper_rlp_block_size_cap": str(BPO2_MAX_RLP_BLOCK_BYTES),
@@ -574,8 +633,8 @@ def pause_for_calldata(duration: int) -> bytes:
     return PAUSE_FOR_SELECTOR + word_bytes(duration)
 
 
-def pause_calldata() -> bytes:
-    return PAUSE_SELECTOR + word_bytes(int(GATEWAY, 16))
+def pause_calldata(target: str = GATEWAY) -> bytes:
+    return PAUSE_SELECTOR + word_bytes(int(target, 16))
 
 
 def family_inputs(artifacts: Artifacts, duration: int) -> tuple[Any, Any, Any]:
@@ -607,6 +666,40 @@ def composed_inputs(artifacts: Artifacts, duration: int) -> tuple[Any, Any, Any]
         GATEWAY: account(code=artifacts.gateway, storage=gateway_storage),
     }
     return alloc, block_environment(), [transaction(0, COMPOSED_DRIVER, pause_calldata())]
+
+
+def query_code_mutant_inputs(
+    artifacts: Artifacts, duration: int,
+) -> tuple[Any, Any, Any]:
+    """Install clean STOP code: pause succeeds, but the query returns no word."""
+    mutant_code = bytes([0x00])
+    alloc = {
+        SENDER: account(balance=SENDER_BALANCE, nonce=0),
+        COMPOSED_DRIVER: account(code=composed_driver_code(), storage={0: 1}),
+        CIRCUIT_BREAKER: account(
+            code=artifacts.circuit_breaker,
+            storage=breaker_storage(COMPOSED_DRIVER, duration),
+        ),
+        GATEWAY: account(code=mutant_code, storage=gateway_role_storage(CIRCUIT_BREAKER)),
+    }
+    return alloc, block_environment(), [transaction(0, COMPOSED_DRIVER, pause_calldata())]
+
+
+def noninterference_mutant_inputs(
+    artifacts: Artifacts, duration: int,
+) -> tuple[Any, Any, Any]:
+    """Install a target whose callback retains a parent heartbeat-cell write."""
+    mutant_code = reentrant_noninterference_target_code()
+    alloc = {
+        SENDER: account(balance=SENDER_BALANCE, nonce=0),
+        COMPOSED_DRIVER: account(code=composed_driver_code(), storage={0: 1}),
+        CIRCUIT_BREAKER: account(
+            code=artifacts.circuit_breaker,
+            storage=breaker_storage(COMPOSED_DRIVER, duration, target=ADMIN),
+        ),
+        ADMIN: account(code=mutant_code),
+    }
+    return alloc, block_environment(), [transaction(0, COMPOSED_DRIVER, pause_calldata(ADMIN))]
 
 
 def execute(
@@ -722,11 +815,29 @@ def validate_result(outputs: Any, expected_receipts: int, owner: str) -> tuple[l
         fail(f"{owner}: expected {expected_receipts} receipts, got {receipts!r}")
     for index, receipt in enumerate(receipts):
         if not isinstance(receipt, dict) or receipt.get("status") != "0x1":
-            fail(f"{owner}: receipt {index} did not succeed")
+            fail(f"{owner}: receipt {index} did not succeed: {receipt!r}")
     gas = receipt_gas(receipts, owner)
     if sum(gas) != integer(outputs.result.get("gasUsed"), f"{owner} block gas"):
         fail(f"{owner}: receipt and block gas differ")
     return receipts, gas
+
+
+def validate_reverting_result(outputs: Any, owner: str) -> tuple[Mapping[str, Any], int]:
+    rejected = outputs.result.get("rejected")
+    if rejected not in (None, []):
+        fail(f"{owner}: transaction was rejected instead of executed: {rejected!r}")
+    if outputs.result.get("blockException") is not None:
+        fail(f"{owner}: block exception: {outputs.result['blockException']!r}")
+    receipts = outputs.result.get("receipts")
+    if not isinstance(receipts, list) or len(receipts) != 1 \
+            or not isinstance(receipts[0], dict):
+        fail(f"{owner}: expected one executed receipt, got {receipts!r}")
+    if receipts[0].get("status") != "0x0":
+        fail(f"{owner}: mutant did not drive the outer receipt to status 0")
+    gas = receipt_gas(receipts, owner)
+    if gas[0] != integer(outputs.result.get("gasUsed"), f"{owner} block gas"):
+        fail(f"{owner}: receipt and block gas differ")
+    return receipts[0], gas[0]
 
 
 def paused_log(duration: int) -> dict[str, Any]:
@@ -778,13 +889,13 @@ def family_row(
     }
 
 
-def composed_logs(duration: int) -> list[dict[str, Any]]:
+def composed_logs(duration: int, *, target: str = GATEWAY) -> list[dict[str, Any]]:
     return [
         {
             "address": CIRCUIT_BREAKER,
             "topics": [
                 PAUSER_SET_TOPIC,
-                address_word(GATEWAY),
+                address_word(target),
                 address_word(COMPOSED_DRIVER),
                 word(0),
             ],
@@ -795,7 +906,7 @@ def composed_logs(duration: int) -> list[dict[str, Any]]:
             "address": CIRCUIT_BREAKER,
             "topics": [
                 PAUSE_TRIGGERED_TOPIC,
-                address_word(GATEWAY),
+                address_word(target),
                 address_word(COMPOSED_DRIVER),
             ],
             "data": word(duration),
@@ -844,6 +955,105 @@ def composed_row(
     }
 
 
+def heartbeat_interval_updated_log(old: int, new: int) -> dict[str, Any]:
+    return {
+        "address": CIRCUIT_BREAKER,
+        "topics": [HEARTBEAT_INTERVAL_UPDATED_TOPIC],
+        "data": "0x" + word(old)[2:] + word(new)[2:],
+    }
+
+
+def query_code_mutant_row(
+    artifacts: Artifacts, *, root: Path, profile: dict[str, Any],
+) -> dict[str, Any]:
+    duration = FINITE_DURATION
+    mutant_code = bytes([0x00])
+    outputs = execute(
+        *query_code_mutant_inputs(artifacts, duration), root=root, profile=profile,
+    )
+    receipt, _gas = validate_reverting_result(outputs, "mutant/query-code")
+    if normalize_logs(receipt.get("logs", []), "mutant/query-code") != []:
+        fail("mutant/query-code: reverted receipt retained logs")
+    assert_account(
+        outputs.alloc, CIRCUIT_BREAKER, code=artifacts.circuit_breaker,
+        storage=breaker_storage(COMPOSED_DRIVER, duration),
+        owner="mutant/query-code CircuitBreaker rollback",
+    )
+    assert_account(
+        outputs.alloc, GATEWAY, code=mutant_code,
+        storage=gateway_role_storage(CIRCUIT_BREAKER),
+        owner="mutant/query-code target rollback",
+    )
+    assert_account(
+        outputs.alloc, COMPOSED_DRIVER, code=composed_driver_code(), storage={0: 1},
+        owner="mutant/query-code driver rollback",
+    )
+    return {
+        "installedTargetCode": bytes_identity(mutant_code),
+        "outerReceiptStatus": "0x0",
+        "productionGatewayCodeIdentity": False,
+        "queryReturnedCanonicalWord": False,
+        "transactionStorageRolledBack": True,
+    }
+
+
+def noninterference_mutant_row(
+    artifacts: Artifacts, *, root: Path, profile: dict[str, Any],
+) -> dict[str, Any]:
+    duration = FINITE_DURATION
+    mutant_code = reentrant_noninterference_target_code()
+    outputs = execute(
+        *noninterference_mutant_inputs(artifacts, duration),
+        root=root,
+        profile=profile,
+    )
+    receipts, _gas = validate_result(outputs, 1, "mutant/noninterference")
+    logs = normalize_logs(
+        receipts[0].get("logs", []), "mutant/noninterference",
+    )
+    production = composed_logs(duration, target=ADMIN)
+    expected_logs = [
+        production[0],
+        heartbeat_interval_updated_log(
+            HEARTBEAT_INTERVAL, MUTANT_HEARTBEAT_INTERVAL,
+        ),
+        production[2],
+        production[3],
+    ]
+    if logs != expected_logs:
+        fail(
+            "mutant/noninterference: retained callback log trace differs: "
+            f"expected={expected_logs!r}, actual={logs!r}"
+        )
+    expected_storage = expected_breaker_storage(duration)
+    if expected_storage[slot(1, 1)] == MUTANT_HEARTBEAT_INTERVAL:
+        fail("mutant/noninterference: mutation does not change the protected cell")
+    expected_storage[slot(1, 1)] = MUTANT_HEARTBEAT_INTERVAL
+    assert_account(
+        outputs.alloc, CIRCUIT_BREAKER, code=artifacts.circuit_breaker,
+        storage=expected_storage,
+        owner="mutant/noninterference CircuitBreaker",
+    )
+    assert_account(
+        outputs.alloc, ADMIN, code=mutant_code, storage={},
+        owner="mutant/noninterference target",
+    )
+    assert_account(
+        outputs.alloc, COMPOSED_DRIVER, code=composed_driver_code(), storage={},
+        owner="mutant/noninterference driver",
+    )
+    return {
+        "callbackTarget": ADMIN,
+        "outerReceiptStatus": "0x1",
+        "productionEventProjectionAccepted": False,
+        "productionProtectedCellProjectionAccepted": False,
+        "protectedCell": word(slot(1, 1)),
+        "protectedCellBefore": word(HEARTBEAT_INTERVAL),
+        "protectedCellAfter": word(MUTANT_HEARTBEAT_INTERVAL),
+        "retainedParentWriteObserved": True,
+    }
+
+
 def bytes_identity(value: bytes) -> dict[str, Any]:
     return {"byteLength": len(value), "sha256": sha256_bytes(value)}
 
@@ -851,6 +1061,16 @@ def bytes_identity(value: bytes) -> dict[str, Any]:
 def render_summary(
     artifacts: Artifacts, *, root: Path, profile: dict[str, Any],
 ) -> dict[str, Any]:
+    execution_mutants = {
+        "query-code-empty-return": query_code_mutant_row(
+            artifacts, root=root, profile=profile,
+        ),
+        "reentrant-heartbeat-noninterference": noninterference_mutant_row(
+            artifacts, root=root, profile=profile,
+        ),
+    }
+    if tuple(execution_mutants) != EXECUTION_MUTANTS:
+        fail("execution-mutant population or order differs")
     rows = {
         "family-pause-query-finite": family_row(
             artifacts, FINITE_DURATION, root=root, profile=profile,
@@ -889,6 +1109,7 @@ def render_summary(
             ),
         },
         "channels": list(CHANNELS),
+        "executionMutants": execution_mutants,
         "format": FORMAT,
         "network": {
             "checkoutCommit": profile["target"]["checkoutCommit"],
@@ -950,6 +1171,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--wrapper-schema", required=True)
     result.add_argument("--wrapper-scenarios", required=True)
     result.add_argument("--wrapper-channels", required=True)
+    result.add_argument("--wrapper-mutants", required=True)
     result.add_argument("--wrapper-profile", required=True)
     result.add_argument("--wrapper-tx-gas-limit", required=True)
     result.add_argument("--wrapper-rlp-block-size-cap", required=True)
@@ -967,7 +1189,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.static_self_check:
         if args.root is not None or args.blanc_artifacts is not None or args.write:
             fail("static self-check accepts no execution or write arguments")
-        if len(composed_driver_code()) == 0 or len(family_driver_code()) == 0:
+        if len(composed_driver_code()) == 0 or len(family_driver_code()) == 0 \
+                or len(reentrant_noninterference_target_code()) == 0:
             fail("transaction driver assembly is empty")
         if singleton_rlp_block_size_upper_bound() \
                 != EXPECTED_SINGLETON_RLP_BLOCK_UPPER_BOUND:
@@ -991,7 +1214,7 @@ def main(argv: list[str] | None = None) -> None:
     print(
         f"OK — {verb} Lido CircuitBreaker × TWG BPO2 replay: "
         "2 composed duration arms + 2 family pause/query arms, "
-        "zero semantic mismatches"
+        "2 execution mutants rejected, zero semantic mismatches"
     )
 
 
