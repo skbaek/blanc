@@ -240,6 +240,8 @@ def ExactWethChildExecution
     Ninst.StepRun pc sevm pre instruction xl (.ok post) ∧
     post.state = child.state ∧
     post.returnData = child.output ∧
+    post.logs = (if child.error.isSome then pre.logs
+      else pre.logs ++ child.logs) ∧
     ∃ tail, post.stack =
       (if child.error.isSome then (0 : B256) else 1) :: tail ∧
     result child
@@ -271,7 +273,7 @@ theorem ExactWethChildOccurrence.success_of_post
   unfold ExactWethChildOccurrence ExactWethChildExecution at occurrence
   rcases occurrence with ⟨msg, xl, child, pc, nextPc, resume,
     target, executes, childWorld, childRules, spawn, filled, process, stepRun,
-    state, childOutput, actualTail, actualStack, -⟩
+    state, childOutput, childLogs, actualTail, actualStack, -⟩
   obtain ⟨expectedTail, expectedStack⟩ := successFlag
   have headEq : (if child.error.isSome then (0 : B256) else 1) = 1 := by
     have listEq := actualStack.symm.trans expectedStack
@@ -288,8 +290,8 @@ theorem ExactWethChildOccurrence.success_of_post
         simp only [herror, Option.isSome_some] at errorSomeFalse
         cases errorSomeFalse
   refine ⟨msg, xl, child, pc, nextPc, resume, target, executes, childWorld,
-    childRules, spawn, filled, process, stepRun, state, childOutput, actualTail,
-    actualStack, errorNone, ?_⟩
+    childRules, spawn, filled, process, stepRun, state, childOutput, childLogs,
+    actualTail, actualStack, errorNone, ?_⟩
   rw [← childOutput]
   exact returnData
 
@@ -307,7 +309,7 @@ theorem ExactWethChildOccurrence.rollback_of_post
   unfold ExactWethChildOccurrence ExactWethChildExecution at occurrence
   rcases occurrence with ⟨msg, xl, child, pc, nextPc, resume,
     target, executes, childWorld, childRules, spawn, filled, process, stepRun,
-    postState, postReturnData, actualTail, actualStack, -⟩
+    postState, postReturnData, postLogs, actualTail, actualStack, -⟩
   obtain ⟨failureTail, failureStack⟩ := failureFlag
   have headEq :
       (if child.error.isSome then (0 : B256) else 1) = 0 := by
@@ -504,10 +506,14 @@ theorem exactWethCallOccurrence_of_runCompiled
     change XStep.toStep 1 (Xinst.step sevm pre .call) = _
     rw [hxspawn]
     rfl
+  have postLogs : post.logs = if child.error.isSome then pre.logs
+      else pre.logs ++ child.logs := by
+    rw [Resume.call_logs hres']
+    rfl
   refine ⟨msg, xl, child, 0, 1,
     .call parent outputOffset.toNat outputSize.toNat, ?_, executes, rfl, rfl,
     hspawn, hfill, hframe, hrun 0, Resume.call_state hres',
-    Resume.call_returnData hres', parent.stack,
+    Resume.call_returnData hres', postLogs, parent.stack,
     Resume.call_stack_flag hres', trivial⟩
   refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, ?_, rfl⟩
   show sevm.isStatic = false
@@ -625,10 +631,14 @@ theorem exactWethStatcallOccurrence_of_runCompiled
     change XStep.toStep 1 (Xinst.step sevm pre .statcall) = _
     rw [hxspawn]
     rfl
+  have postLogs : post.logs = if child.error.isSome then pre.logs
+      else pre.logs ++ child.logs := by
+    rw [Resume.call_logs hres']
+    rfl
   refine ⟨msg, xl, child, 0, 1,
     .call parent outputOffset.toNat outputSize.toNat, ?_, executes, rfl, rfl,
     hspawn, hfill, hframe, hrun 0, Resume.call_state hres',
-    Resume.call_returnData hres', parent.stack,
+    Resume.call_returnData hres', postLogs, parent.stack,
     Resume.call_stack_flag hres', trivial⟩
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 

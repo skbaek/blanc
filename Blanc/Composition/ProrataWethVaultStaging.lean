@@ -863,7 +863,7 @@ theorem ExactWethChildOccurrence.successFlag_of_nonzero
   unfold ExactWethChildOccurrence ExactWethChildExecution at occurrence
   rcases occurrence with ⟨msg, xl, child, pc, nextPc, resume,
     target, executes, childWorld, childRules, spawn, filled, process, stepRun,
-    state, childOutput, actualTail, actualStack, -⟩
+    state, childOutput, childLogs, actualTail, actualStack, -⟩
   have statusEq :
       status = (if child.error.isSome then (0 : B256) else 1) := by
     exact (List.cons.inj (statusStack.symm.trans actualStack)).1
@@ -1197,8 +1197,9 @@ theorem checkedCanonicalTrue_success
 /-! ## Source-level exact effects and rollback -/
 
 /-- A successful source-level asset query executes the exact configured WETH
-program, preserves its storage, returns the configured vault's balance, and
-hands that same word to the source continuation. -/
+program, preserves the whole storage world and log frame, returns the
+configured vault's balance, and hands that same word to the source
+continuation. -/
 theorem readTotalAssets_exactEffect
     {fs : List Func} {sevm : Sevm}
     {entry callPre callPost final : Devm} {image : Bytes} {body : Func}
@@ -1215,8 +1216,8 @@ theorem readTotalAssets_exactEffect
             (Func.rev <?> (pushB256 0 ::: mload ::: body)))))
       (.ok final)) :
     ∃ (word : B256) (bodyPre : Devm),
-      callPost.state.getStor wethAccount =
-          callPre.state.getStor wethAccount ∧
+      Devm.getStor callPost = Devm.getStor callPre ∧
+      callPost.logs = callPre.logs ∧
       word.toBytes =
           ((callPre.state.getStor wethAccount).get
             sevm.currentTarget.toB256).toBytes ∧
@@ -1235,9 +1236,9 @@ theorem readTotalAssets_exactEffect
       ExactWethChildSuccess sevm callPre callPost statcall
         (balanceOfCalldata sevm.currentTarget) callPost.returnData true :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
-  have programRun := ExactWethChildSuccess.programRun rawSuccess
-  obtain ⟨storage, output⟩ :=
-    SuccessfulWethProgramRun.balanceOf_effect programRun
+  have worldRun := ExactWethChildSuccess.worldProgramRun rawSuccess
+  obtain ⟨storage, logs, output⟩ :=
+    SuccessfulWethWorldProgramRun.balanceOf_effect worldRun
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [output, B256.length_toBytes]
   have returndataBound : callPost.returnData.length < 2 ^ 256 := by
@@ -1245,7 +1246,7 @@ theorem readTotalAssets_exactEffect
     decide +kernel
   obtain ⟨word, bodyPre, _, returnedWord, wordPrefix, bodyRun⟩ :=
     checkedBalanceOf_success occurrence stack crossing returndataBound suffix
-  exact ⟨word, bodyPre, storage, returnedWord.symm.trans output,
+  exact ⟨word, bodyPre, storage, logs, returnedWord.symm.trans output,
     wordPrefix, bodyRun⟩
 
 /-- A successful source-level delegated transfer executes exact WETH
