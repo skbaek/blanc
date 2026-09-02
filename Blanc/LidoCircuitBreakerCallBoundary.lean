@@ -1470,7 +1470,7 @@ private lemma drop_of_length_append {ξ : Type} (A B : List ξ) (n : Nat)
 /-- The 36 bytes the CALL's window reads out of an image carrying a selector
 word at `256` and a value word at `288`: the selector's low four bytes followed
 by the whole value word.  Pure `Bytes` arithmetic — no `Devm` and no run. -/
-private lemma sliceD_stagedCalldata (img : Bytes) (sel dur : B256) :
+lemma sliceD_stagedCalldata (img : Bytes) (sel dur : B256) :
     (Bytes.writeAt (Bytes.writeAt img 256 (B256.toBytes sel))
         288 (B256.toBytes dur)).sliceD 284 36 0 =
       abiSelectorBytes sel ++ B256.toBytes dur := by
@@ -1628,7 +1628,7 @@ it assumes the callee left memory alone. -/
 selector sits right-aligned in its word, so `[284, 288)` is its low four
 bytes.  Pure `Bytes` arithmetic — the selector-only half of what
 `sliceD_stagedCalldata` proves for the 36-byte encoding. -/
-private lemma sliceD_stagedSelector (img : Bytes) (sel : B256) :
+lemma sliceD_stagedSelector (img : Bytes) (sel : B256) :
     (Bytes.writeAt img 256 (B256.toBytes sel)).sliceD 284 4 0 =
       abiSelectorBytes sel := by
   have hsel : (B256.toBytes sel).length = 32 := B256.length_toBytes sel
