@@ -13,7 +13,8 @@
   ],
   "post_launch_gates": [
     "beacon-deposit-assurance",
-    "beacon-deposit-deployment"
+    "beacon-deposit-deployment",
+    "weth10-current-mainnet"
   ],
   "rows": [
     {"id":"doc-counts","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale published theorem counts"]},
@@ -61,6 +62,7 @@
     {"id":"error-data","work":["candidate-positive","static-corpus"],"resource_class":"light","prerequisites":["lake-build"],"historical_catches":[]},
     {"id":"beacon-deposit-model","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
     {"id":"current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":[],"historical_catches":[],"material_identity":"already precise: exact target checkout, runtime closure, profile and helper are direct inputs"},
+    {"id":"weth10-current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build","current-mainnet"],"historical_catches":[],"material_identity":"output-aware: two deterministic evaluator outputs bind the exact initcode, mainnet-family runtimes, selector inventory, and neutral system program; fixtures and matrix are direct inputs"},
     {"id":"beacon-deposit-current-mainnet","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build","current-mainnet"],"historical_catches":[],"material_identity":"output-aware: deterministic evaluator stdout binds BeaconDeposit creation and runtime bytes"},
     {"id":"beacon-deposit-differential","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"conservative: the Prague model and differential projections remain coupled"},
     {"id":"beacon-deposit-deployment","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"output-aware: deterministic evaluator stdout binds exact deployment artifacts, storage projection, gas coordinates, and system programs"},

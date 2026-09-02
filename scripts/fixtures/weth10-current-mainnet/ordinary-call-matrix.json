@@ -1,0 +1,2530 @@
+{
+  "chainId": 1,
+  "coverage": {
+    "creditedChannels": [
+      "status",
+      "receipt-gas",
+      "logs",
+      "projected-storage",
+      "ETH"
+    ],
+    "historicalBoundary": "BPO2 credits status, receipt gas, logs, projected storage, and ETH for the canonical 27-selector-plus-receive matrix; the preserved Prague differential exclusively owns exact returndata, live CALL traces, and malformed, precompile, and OOG cases",
+    "receive": 1,
+    "rows": 28,
+    "selectors": 27
+  },
+  "identityWorld": {
+    "caller": "0xa56160a359f2eaa66f5c9df5245542b07339a9a6",
+    "contract": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+    "deploymentChainId": 1
+  },
+  "network": "BPO2",
+  "rows": [
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21262,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "CALLBACK_SUCCESS()",
+      "name": "smoke-CALLBACK_SUCCESS",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21352,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21289,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "DOMAIN_SEPARATOR()",
+      "name": "smoke-DOMAIN_SEPARATOR",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21388,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21239,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "PERMIT_TYPEHASH()",
+      "name": "smoke-PERMIT_TYPEHASH",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21308,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6/0x2222222222222222222222222222222222222222": "0x07"
+          },
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 24149,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "allowance(address,address)",
+      "name": "smoke-allowance",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6/0x2222222222222222222222222222222222222222": "0x07"
+          },
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 24415,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000007",
+            "topics": [
+              "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6/0x2222222222222222222222222222222222222222": "0x07"
+          },
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 45750,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "approve(address,uint256)",
+      "name": "smoke-approve",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000007",
+            "topics": [
+              "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6/0x2222222222222222222222222222222222222222": "0x07"
+          },
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 45994,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {
+          "0x4444444444444444444444444444444444444444": {
+            "0x00": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "0x02": "0xa4",
+            "0x03": "0xba451f000000000000000000000000a56160a359f2eaa66f5c9df5245542b0",
+            "0x04": "0x7339a9a600000000000000000000000000000000000000000000000000000000",
+            "0x05": "0x0700000000000000000000000000000000000000000000000000000000",
+            "0x06": "0x6000000000000000000000000000000000000000000000000000000000",
+            "0x07": "0x0361626300000000000000000000000000000000000000000000000000"
+          }
+        },
+        "feeNeutralEth": {
+          "0x4444444444444444444444444444444444444444": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000007",
+            "topics": [
+              "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000004444444444444444444444444444444444444444"
+            ]
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+            "topics": [
+              "0x3211e1d67f2904429b026d80409b17e243ed5bf9ed6d62b63902df9359d60361"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6/0x4444444444444444444444444444444444444444": "0x07"
+          },
+          "balances": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 215963,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "smoke-approveAndCall",
+      "reference": {
+        "auxiliaryStorage": {
+          "0x4444444444444444444444444444444444444444": {
+            "0x00": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "0x02": "0xa4",
+            "0x03": "0xba451f000000000000000000000000a56160a359f2eaa66f5c9df5245542b0",
+            "0x04": "0x7339a9a600000000000000000000000000000000000000000000000000000000",
+            "0x05": "0x0700000000000000000000000000000000000000000000000000000000",
+            "0x06": "0x6000000000000000000000000000000000000000000000000000000000",
+            "0x07": "0x0361626300000000000000000000000000000000000000000000000000"
+          }
+        },
+        "feeNeutralEth": {
+          "0x4444444444444444444444444444444444444444": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000007",
+            "topics": [
+              "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000004444444444444444444444444444444444444444"
+            ]
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+            "topics": [
+              "0x3211e1d67f2904429b026d80409b17e243ed5bf9ed6d62b63902df9359d60361"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6/0x4444444444444444444444444444444444444444": "0x07"
+          },
+          "balances": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 216534,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x09",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23709,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "balanceOf(address)",
+      "name": "smoke-balanceOf",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x09",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23893,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21263,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "decimals()",
+      "name": "smoke-decimals",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21339,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21249,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "deploymentChainId()",
+      "name": "smoke-deploymentChainId",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21339,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda0fffffb",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x05"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x05",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 45090,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": -5
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "deposit()",
+      "name": "smoke-deposit",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda0fffffb",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x05"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x05",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 45238,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": -5
+      },
+      "transactionType": 2,
+      "value": 5
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda0fffffb",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x05"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x05",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 45521,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": -5
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "depositTo(address)",
+      "name": "smoke-depositTo",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda0fffffb",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x05"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x05",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 45664,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": -5
+      },
+      "transactionType": 2,
+      "value": 5
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {
+          "0x4444444444444444444444444444444444444444": {
+            "0x00": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "0x02": "0xa4",
+            "0x03": "0xa4c0ed36000000000000000000000000a56160a359f2eaa66f5c9df5245542b0",
+            "0x04": "0x7339a9a600000000000000000000000000000000000000000000000000000000",
+            "0x05": "0x0500000000000000000000000000000000000000000000000000000000",
+            "0x06": "0x6000000000000000000000000000000000000000000000000000000000",
+            "0x07": "0x0361626300000000000000000000000000000000000000000000000000"
+          }
+        },
+        "feeNeutralEth": {
+          "0x4444444444444444444444444444444444444444": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda0fffffb",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x05"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x0000000000000000000000004444444444444444444444444444444444444444"
+            ]
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+            "topics": [
+              "0x3211e1d67f2904429b026d80409b17e243ed5bf9ed6d62b63902df9359d60361"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x4444444444444444444444444444444444444444": "0x05",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 215771,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": -5
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "smoke-depositToAndCall",
+      "reference": {
+        "auxiliaryStorage": {
+          "0x4444444444444444444444444444444444444444": {
+            "0x00": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "0x02": "0xa4",
+            "0x03": "0xa4c0ed36000000000000000000000000a56160a359f2eaa66f5c9df5245542b0",
+            "0x04": "0x7339a9a600000000000000000000000000000000000000000000000000000000",
+            "0x05": "0x0500000000000000000000000000000000000000000000000000000000",
+            "0x06": "0x6000000000000000000000000000000000000000000000000000000000",
+            "0x07": "0x0361626300000000000000000000000000000000000000000000000000"
+          }
+        },
+        "feeNeutralEth": {
+          "0x4444444444444444444444444444444444444444": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda0fffffb",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x05"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x0000000000000000000000004444444444444444444444444444444444444444"
+            ]
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+            "topics": [
+              "0x3211e1d67f2904429b026d80409b17e243ed5bf9ed6d62b63902df9359d60361"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x4444444444444444444444444444444444444444": "0x05",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 216309,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": -5
+      },
+      "transactionType": 2,
+      "value": 5
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 22430,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "flashFee(address,uint256)",
+      "name": "smoke-flashFee",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 22430,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {
+          "0x4444444444444444444444444444444444444444": {
+            "0x00": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "0x02": "0xe4",
+            "0x03": "0x23e30c8b000000000000000000000000a56160a359f2eaa66f5c9df5245542b0",
+            "0x04": "0x7339a9a6000000000000000000000000f4bb2e28688e89fcce3c0580d37d36a7",
+            "0x05": "0x672e8a9f00000000000000000000000000000000000000000000000000000000",
+            "0x06": "0x0300000000000000000000000000000000000000000000000000000000",
+            "0x08": "0xa000000000000000000000000000000000000000000000000000000000",
+            "0x09": "0x0361626300000000000000000000000000000000000000000000000000"
+          }
+        },
+        "feeNeutralEth": {
+          "0x4444444444444444444444444444444444444444": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x0000000000000000000000004444444444444444444444444444444444444444"
+            ]
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+            "topics": [
+              "0x3211e1d67f2904429b026d80409b17e243ed5bf9ed6d62b63902df9359d60361"
+            ]
+          },
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000004444444444444444444444444444444444444444",
+              "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {
+            "0x4444444444444444444444444444444444444444/0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          },
+          "balances": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 223232,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "smoke-flashLoan",
+      "reference": {
+        "auxiliaryStorage": {
+          "0x4444444444444444444444444444444444444444": {
+            "0x00": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "0x02": "0xe4",
+            "0x03": "0x23e30c8b000000000000000000000000a56160a359f2eaa66f5c9df5245542b0",
+            "0x04": "0x7339a9a6000000000000000000000000f4bb2e28688e89fcce3c0580d37d36a7",
+            "0x05": "0x672e8a9f00000000000000000000000000000000000000000000000000000000",
+            "0x06": "0x0300000000000000000000000000000000000000000000000000000000",
+            "0x08": "0xa000000000000000000000000000000000000000000000000000000000",
+            "0x09": "0x0361626300000000000000000000000000000000000000000000000000"
+          }
+        },
+        "feeNeutralEth": {
+          "0x4444444444444444444444444444444444444444": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x0000000000000000000000004444444444444444444444444444444444444444"
+            ]
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+            "topics": [
+              "0x3211e1d67f2904429b026d80409b17e243ed5bf9ed6d62b63902df9359d60361"
+            ]
+          },
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000004444444444444444444444444444444444444444",
+              "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {
+            "0x4444444444444444444444444444444444444444/0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          },
+          "balances": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 223948,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x03",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23364,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "flashMinted()",
+      "name": "smoke-flashMinted",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x03",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23407,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x03",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23762,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "maxFlashLoan(address)",
+      "name": "smoke-maxFlashLoan",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x03",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23934,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21294,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "name()",
+      "name": "smoke-name",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21706,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x02",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23728,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "nonces(address)",
+      "name": "smoke-nonces",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x02",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23900,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xd41c057fd1c78805aac12b0a94a405c0461a6fbb": "0x00",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000007",
+            "topics": [
+              "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+              "0x000000000000000000000000d41c057fd1c78805aac12b0a94a405c0461a6fbb",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {
+            "0xd41c057fd1c78805aac12b0a94a405c0461a6fbb/0x2222222222222222222222222222222222222222": "0x07"
+          },
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xd41c057fd1c78805aac12b0a94a405c0461a6fbb": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xd41c057fd1c78805aac12b0a94a405c0461a6fbb": "0x01",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 73068,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "smoke-permit",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xd41c057fd1c78805aac12b0a94a405c0461a6fbb": "0x00",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000007",
+            "topics": [
+              "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+              "0x000000000000000000000000d41c057fd1c78805aac12b0a94a405c0461a6fbb",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {
+            "0xd41c057fd1c78805aac12b0a94a405c0461a6fbb/0x2222222222222222222222222222222222222222": "0x07"
+          },
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xd41c057fd1c78805aac12b0a94a405c0461a6fbb": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xd41c057fd1c78805aac12b0a94a405c0461a6fbb": "0x01",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 73878,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda0fffffb",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x05"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x05",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 44907,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": -5
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "receive",
+      "name": "smoke-receive",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda0fffffb",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x05"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x05",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 45065,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": -5
+      },
+      "transactionType": 2,
+      "value": 5
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21292,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "symbol()",
+      "name": "smoke-symbol",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 21748,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x11"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x03",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23373,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "totalSupply()",
+      "name": "smoke-totalSupply",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x11"
+        },
+        "logs": [],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x03",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 23461,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x0a"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x03",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 50777,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "smoke-transfer",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x0a"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x03",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 51187,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {
+          "0x4444444444444444444444444444444444444444": {
+            "0x00": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "0x02": "0xa4",
+            "0x03": "0xa4c0ed36000000000000000000000000a56160a359f2eaa66f5c9df5245542b0",
+            "0x04": "0x7339a9a600000000000000000000000000000000000000000000000000000000",
+            "0x05": "0x0300000000000000000000000000000000000000000000000000000000",
+            "0x06": "0x6000000000000000000000000000000000000000000000000000000000",
+            "0x07": "0x0361626300000000000000000000000000000000000000000000000000"
+          }
+        },
+        "feeNeutralEth": {
+          "0x4444444444444444444444444444444444444444": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x0a"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000004444444444444444444444444444444444444444"
+            ]
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+            "topics": [
+              "0x3211e1d67f2904429b026d80409b17e243ed5bf9ed6d62b63902df9359d60361"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x4444444444444444444444444444444444444444": "0x03",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 220983,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "smoke-transferAndCall",
+      "reference": {
+        "auxiliaryStorage": {
+          "0x4444444444444444444444444444444444444444": {
+            "0x00": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "0x02": "0xa4",
+            "0x03": "0xa4c0ed36000000000000000000000000a56160a359f2eaa66f5c9df5245542b0",
+            "0x04": "0x7339a9a600000000000000000000000000000000000000000000000000000000",
+            "0x05": "0x0300000000000000000000000000000000000000000000000000000000",
+            "0x06": "0x6000000000000000000000000000000000000000000000000000000000",
+            "0x07": "0x0361626300000000000000000000000000000000000000000000000000"
+          }
+        },
+        "feeNeutralEth": {
+          "0x4444444444444444444444444444444444444444": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x0a"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000004444444444444444444444444444444444444444"
+            ]
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+            "topics": [
+              "0x3211e1d67f2904429b026d80409b17e243ed5bf9ed6d62b63902df9359d60361"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x4444444444444444444444444444444444444444": "0x03",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x4444444444444444444444444444444444444444": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 221651,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x0a"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x03",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 51226,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "transferFrom(address,address,uint256)",
+      "name": "smoke-transferFrom",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x00",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x0a"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000002222222222222222222222222222222222222222"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x03",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 51583,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000003",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x07"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 35052,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 3
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "withdraw(uint256)",
+      "name": "smoke-withdraw",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000003",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x07"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 35412,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 3
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x03",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x07"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 63370,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "withdrawFrom(address,address,uint256)",
+      "name": "smoke-withdrawFrom",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x03",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x07"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 63726,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    },
+    {
+      "blanc": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x03",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x07"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 62924,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "comparison": {
+        "equalFields": [
+          "receiptSucceeded",
+          "logs",
+          "projectedStorage",
+          "auxiliaryStorage",
+          "feeNeutralEth",
+          "senderDeltaExcludingFees"
+        ],
+        "gasRecordedNotClaimedEqual": true
+      },
+      "creditedChannels": [
+        "status",
+        "receipt-gas",
+        "logs",
+        "projected-storage",
+        "ETH"
+      ],
+      "endpoint": "withdrawTo(address,uint256)",
+      "name": "smoke-withdrawTo",
+      "reference": {
+        "auxiliaryStorage": {},
+        "feeNeutralEth": {
+          "0x2222222222222222222222222222222222222222": "0x03",
+          "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0xd3c21bcecceda1000000",
+          "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x07"
+        },
+        "logs": [
+          {
+            "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+            "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "topics": [
+              "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+              "0x000000000000000000000000a56160a359f2eaa66f5c9df5245542b07339a9a6",
+              "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+          }
+        ],
+        "projectedStorage": {
+          "allowances": {},
+          "balances": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x07",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          },
+          "flashMinted": "0x00",
+          "nonces": {
+            "0x2222222222222222222222222222222222222222": "0x00",
+            "0xa56160a359f2eaa66f5c9df5245542b07339a9a6": "0x00",
+            "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f": "0x00"
+          }
+        },
+        "receiptGasUsed": 63266,
+        "receiptSucceeded": true,
+        "senderDeltaExcludingFees": 0
+      },
+      "transactionType": 2,
+      "value": 0
+    }
+  ],
+  "runtimes": {
+    "evaluatedBlancMainnet": {
+      "byteLength": 6313,
+      "sha256": "7e8db17e5ef02cfdc0637547e6a6054a0bfb62aa501a59ccc342f3ac83f5aefc"
+    },
+    "lockedDeployed": {
+      "byteLength": 9975,
+      "sha256": "ca979fc12a175535a08add286497b8fc3a1805f7bcef7ae90d3dc4307ac1c25a"
+    }
+  },
+  "schema": "blanc-weth10-current-mainnet-ordinary-matrix-v1",
+  "timestamp": 1767747683
+}

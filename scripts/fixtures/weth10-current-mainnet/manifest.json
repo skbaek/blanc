@@ -1,0 +1,254 @@
+{
+  "claim": "additive BPO2 non-vacuity for evaluated Blanc WETH10; Prague remains the historical differential owner",
+  "historicalBoundary": "BPO2 credits status, receipt gas, logs, projected storage, and ETH for the canonical 27-selector-plus-receive matrix; the preserved Prague differential exclusively owns exact returndata, live CALL traces, and malformed, precompile, and OOG cases",
+  "leanEvaluators": {
+    "deployment": {
+      "outputSha256": "3888e6fb64bf68d5938d019b9f333218afc08ae1bffc3d5c374eb862a7fb39de",
+      "path": "scripts/eval-weth10-deployment-code.lean"
+    },
+    "differential": {
+      "outputSha256": "c8a4d41db57e095b23c711b63f7805a122a403c39f41290ec3560a1c5fde8d9d",
+      "path": "scripts/eval-weth10-differential-code.lean"
+    },
+    "evaluatedInitcode": {
+      "byteLength": 6490,
+      "sha256": "0150283f7790b3754c4141c5bd11975e902560800ab208020f4829f29b513ba6"
+    },
+    "evaluatedMainnetRuntime": {
+      "byteLength": 6313,
+      "sha256": "7e8db17e5ef02cfdc0637547e6a6054a0bfb62aa501a59ccc342f3ac83f5aefc"
+    },
+    "evaluatedNeutralSystemProgram": {
+      "byteLength": 2,
+      "sha256": "d851a0155b6a2716e0da40a1336c5ff311fcf12ce16e53cf06b5a6cbd9cd32df"
+    },
+    "evaluatedSelectorInventory": {
+      "count": 27,
+      "selectors": [
+        "0x06fdde03",
+        "0x095ea7b3",
+        "0x18160ddd",
+        "0x205c2878",
+        "0x23b872dd",
+        "0x2e1a7d4d",
+        "0x30adf81f",
+        "0x313ce567",
+        "0x3644e515",
+        "0x4000aea0",
+        "0x5cffe9de",
+        "0x5ddb7d7e",
+        "0x613255ab",
+        "0x70a08231",
+        "0x7ecebe00",
+        "0x8237e538",
+        "0x8b28d32f",
+        "0x9555a942",
+        "0x95d89b41",
+        "0xa9059cbb",
+        "0xb760faf9",
+        "0xcae9ca51",
+        "0xcd0d0096",
+        "0xd0e30db0",
+        "0xd505accf",
+        "0xd9d98ce4",
+        "0xdd62ed3e"
+      ]
+    },
+    "evaluatedTransactionRuntime": {
+      "byteLength": 6313,
+      "sha256": "e84545b32d638710a4f86b7d11aaf1299fbf75bd2247aedf8367d15854984aeb"
+    }
+  },
+  "outputs": {
+    "blocks": [
+      {
+        "file": "01-creation-block.json",
+        "metadata": {
+          "assertionClasses": [
+            "fresh-top-level-type2",
+            "BPO2-timestamp",
+            "successful-receipt",
+            "exact-create-target",
+            "exact-evaluated-family-member",
+            "empty-target-storage",
+            "empty-logs",
+            "exact-target-balance-nonce",
+            "exact-sender-fee-nonce",
+            "four-state-neutral-system-programs",
+            "EIP-7825-transaction-gas-cap"
+          ],
+          "createTarget": "0xcf024a39b81692e3c25b9ceb8474dc6203d584d7",
+          "installedRuntime": {
+            "byteLength": 6313,
+            "sha256": "e84545b32d638710a4f86b7d11aaf1299fbf75bd2247aedf8367d15854984aeb"
+          },
+          "logCount": 0,
+          "name": "01-creation",
+          "neutralSystemPrograms": [
+            "0x0000f90827f1c53a10cb7a02335b175320002935",
+            "0x000f3df6d732807ef1319fb7b8bb8522d0beac02",
+            "0x00000961ef480eb55e80d19ad83579a64c007002",
+            "0x0000bbddc7ce488642fb579f8b00f3a590007251"
+          ],
+          "receiptGasUsed": 1405981,
+          "receiptSucceeded": true,
+          "sender": "0x4a7a7c2e09209dbe44a582cd92b0edd7129e74be",
+          "storageEmpty": true,
+          "timestamp": 1767747683,
+          "transactionGasCap": 16777216,
+          "transactionGasLimit": 2000000,
+          "transactionType": 2
+        },
+        "sha256": "46f780e056f16e485a6ec763be1394e8afe9d952292d00da6a16eddd8df20d48"
+      },
+      {
+        "file": "02-type2-redemption-block.json",
+        "metadata": {
+          "amounts": [
+            0,
+            3,
+            8
+          ],
+          "authorizationMutation": "none",
+          "holderFlowTotals": {
+            "conservationChecked": true,
+            "finalBooked": 7,
+            "initialBooked": 10,
+            "successfulOutflow": 3,
+            "successfulTransactions": 2
+          },
+          "name": "02-type2-redemption",
+          "owner": "0x157bfbecd023fd6384dad2bded5dad7e27bf92e4",
+          "receiptGasUsed": [
+            28412,
+            62924,
+            23966
+          ],
+          "receiptLogs": [
+            [
+              {
+                "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+                "data": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "topics": [
+                  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                  "0x000000000000000000000000157bfbecd023fd6384dad2bded5dad7e27bf92e4",
+                  "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ]
+              }
+            ],
+            [
+              {
+                "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+                "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                "topics": [
+                  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                  "0x000000000000000000000000157bfbecd023fd6384dad2bded5dad7e27bf92e4",
+                  "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ]
+              }
+            ],
+            []
+          ],
+          "receiptSucceeded": [
+            true,
+            true,
+            false
+          ],
+          "recipient": "0x2222222222222222222222222222222222222222",
+          "timestamp": 1767747683,
+          "transactionTypes": [
+            2,
+            2,
+            2
+          ]
+        },
+        "sha256": "10e24f1f262a985ff8949ef6f2d0078c3660890d4c4b03903c36dae3a2414df4"
+      },
+      {
+        "file": "03-type4-authorization-block.json",
+        "metadata": {
+          "amounts": [
+            3
+          ],
+          "authorizationMutation": "recipient code+nonce",
+          "delegate": "0x000000000000000000000000000000000000d31e",
+          "holderFlowTotals": {
+            "conservationChecked": true,
+            "finalBooked": 0,
+            "initialBooked": 3,
+            "successfulOutflow": 3,
+            "successfulTransactions": 1
+          },
+          "name": "03-type4-authorization",
+          "owner": "0x37da28c050e3c0a1c0ac3be97913ec038783da4c",
+          "receiptGasUsed": [
+            58224
+          ],
+          "receiptLogs": [
+            {
+              "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+              "data": "0x0000000000000000000000000000000000000000000000000000000000000003",
+              "topics": [
+                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                "0x00000000000000000000000037da28c050e3c0a1c0ac3be97913ec038783da4c",
+                "0x0000000000000000000000000000000000000000000000000000000000000000"
+              ]
+            }
+          ],
+          "receiptSucceeded": [
+            true
+          ],
+          "recipientAuthority": "0x3bc8287f1d872df4217283b7920d363f13cf39d8",
+          "timestamp": 1767747683,
+          "transactionTypes": [
+            4
+          ]
+        },
+        "sha256": "a6a94bc78bf3428b7d401d27be07965643ceb5c57841ca73fc74b4d0e907bb20"
+      }
+    ],
+    "ordinaryMatrix": {
+      "file": "ordinary-call-matrix.json",
+      "receive": 1,
+      "rows": 28,
+      "selectors": 27,
+      "sha256": "7a65d4469316eeba8c5c3e4ed88c2b8ab0fa11e6954d2ef94ec827975d5a09ff"
+    }
+  },
+  "profile": {
+    "chainId": 1,
+    "executionFork": "BPO2",
+    "executionModule": "ethereum.forks.bpo2",
+    "externalSolcInvoked": false,
+    "logicalCompilerFork": "Osaka",
+    "reward": -1,
+    "targetCheckoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae",
+    "testingBackend": "cancun"
+  },
+  "referenceRuntimeLock": {
+    "installedRuntime": {
+      "byteLength": 9975,
+      "sha256": "ca979fc12a175535a08add286497b8fc3a1805f7bcef7ae90d3dc4307ac1c25a"
+    },
+    "path": "scripts/weth10-reference.json",
+    "sha256": "1e030d00eeb23e2b0a30493a1d0109e8f49e762495cf31466c7d56b7bb3d6592"
+  },
+  "schema": "blanc-weth10-current-mainnet-v1",
+  "sharedRuntimeLock": {
+    "path": "scripts/current-mainnet-runtime-lock.json",
+    "platforms": [
+      "linux-x86_64",
+      "macos-arm64"
+    ],
+    "schema": 1,
+    "sha256": "9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c",
+    "targetCheckoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae"
+  },
+  "timestampPin": {
+    "atOrAfterActivation": true,
+    "definition": "weth10CurrentMainnetCreationTimestamp",
+    "leanSource": "Blanc/Weth10Mainnet.lean",
+    "mainnetBpo2Activation": 1767747671,
+    "value": 1767747683
+  }
+}
