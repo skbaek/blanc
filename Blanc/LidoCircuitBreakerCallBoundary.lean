@@ -1124,7 +1124,7 @@ theorem pauseCall_failureArm_bubbles {fs : List Func} {sevm : Sevm}
 At `sevm.depth = 0` a zero-value `CALL` cannot spawn: `genericCall.step`'s
 depth-limit arm answers `0` on the stack in-frame.  `pauseAfterSet`'s own
 `ISZERO` then inverts that flag to `1`, the branch's nonzero arm is the bubble,
-and `Func.revReturnData` cannot end `.ok`.  So a successful suffix *decides*
+and `Func.revertReturnData` cannot end `.ok`.  So a successful suffix *decides*
 the depth fact by itself, and the crossing derives it rather than asking for
 it — the signature-hygiene rule applied to the last implied hypothesis. -/
 
@@ -1194,7 +1194,7 @@ private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
       cases hcontra
 
 /-- **A successful suffix rules out the depth limit.**  With the bubble slot
-bound to `Func.revReturnData`, a crossing of the pause's `CALL` followed by a
+bound to `Func.revertReturnData`, a crossing of the pause's `CALL` followed by a
 successful `pauseAfterCallBranch` suffix is impossible at `sevm.depth = 0`:
 the flag the depth-limit arm pushes selects the bubble, whose body ends in a
 revert or an out-of-gas halt, never `.ok`.  The crossing consumes this and
@@ -1202,7 +1202,7 @@ derives its depth fact instead of carrying the premise. -/
 theorem pauseAfterCall_ok_depth_ne_zero {fs : List Func} {sevm : Sevm}
     {callPre callPost final : Devm} {gw cw iiw isw oiw osw : B256}
     {s : List B256}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_stk : callPre.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
     (callRun : Ninst.RunCompiled sevm callPre (.exec .call) callPost)
     (afterCall : Func.RunCompiledTo fs sevm callPost pauseAfterCallBranch
@@ -1217,7 +1217,7 @@ theorem pauseAfterCall_ok_depth_ne_zero {fs : List Func} {sevm : Sevm}
   · rw [hmidstk] at hmid0
     exact absurd (List.cons.inj hmid0).1 (by decide)
   · obtain ⟨bubblePre, -, hbody⟩ := runCompiledTo_call_inv h_bubble harm
-    rcases Func.runCompiledTo_revReturnData_inv hbody with
+    rcases Func.runCompiledTo_revertReturnData_inv hbody with
       ⟨d, hcontra⟩ | ⟨post, hcontra, -⟩ <;> cases hcontra
 
 /-! ## The success arm: the observation

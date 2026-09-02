@@ -86,10 +86,10 @@ private theorem pinnedStat_cell_eq
   rcases executes with ⟨uses, childEvm, raw, slotEq, rawNonempty⟩
   subst xl
   rcases rawNonempty with ⟨rawRun⟩
-  have statSpawn : Xinst.step sevm statPre .statcall =
+  have statSpawn : Xinst.step sevm statPre .staticcall =
       .spawn (Jaune.Frame.ofCall msg) resume :=
     XStep.toStep_spawn (by
-      simpa only [Ninst.statcall, Ninst.step_exec] using spawn)
+      simpa only [Ninst.staticcall, Ninst.step_exec] using spawn)
   unfold Ninst.StepRun at stepRun
   rw [spawn] at stepRun
   obtain ⟨result, frameRun, resumeRun⟩ := stepRun
@@ -109,23 +109,23 @@ private theorem pinnedStat_cell_eq
   · exact replayCell_eq_of_none noWriteRun
   · rfl
 
-private theorem revCall_not_ok
+private theorem revertCall_not_ok
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {slot : Nat}
-    (lookup : fs[slot]? = some Func.rev)
+    (lookup : fs[slot]? = some Func.revert)
     (run : Func.RunCompiledTo fs sevm pre (Func.call slot) (.ok post)) :
     False := by
   obtain ⟨_, -, body⟩ := runCompiledTo_call_inv lookup run
-  obtain ⟨_, hex, -⟩ := runCompiledTo_rev_inv body
+  obtain ⟨_, hex, -⟩ := runCompiledTo_revert_inv body
   cases hex
 
 private theorem bubbleCall_not_ok
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    (lookup : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (lookup : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (run : Func.RunCompiledTo fs sevm pre
       (Func.call bubbleRevertSlot) (.ok post)) :
     False := by
   obtain ⟨_, -, body⟩ := runCompiledTo_call_inv lookup run
-  rcases Func.runCompiledTo_revReturnData_inv body with
+  rcases Func.runCompiledTo_revertReturnData_inv body with
     ⟨_, hex⟩ | ⟨_, hex, -⟩ <;> cases hex
 
 private theorem failedCall_not_ok
@@ -136,9 +136,9 @@ private theorem failedCall_not_ok
     False := by
   obtain ⟨_, -, body⟩ := runCompiledTo_call_inv lookup run
   rw [show pauseFailedError =
-    Func.revSelector (customErrorData "PauseFailed")
+    Func.revertSelector (customErrorData "PauseFailed")
       (by simp [customErrorData, B256.length_toBytes]) from rfl] at body
-  rcases runCompiledTo_revSelector_inv body with
+  rcases runCompiledTo_revertSelector_inv body with
     ⟨_, hex⟩ | ⟨_, hex, -⟩ <;> cases hex
 
 /-- A successful observation/decode/success suffix frames every persistent
@@ -146,11 +146,11 @@ cell other than the caller's expiry slot. -/
 theorem observation_ok_getStorVal_eq_of_ne
     {fs : List Func} {sevm : Sevm} {statPost final : Devm}
     {owner : Adr} {key : B256}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (different : (owner, key) ≠
       (sevm.currentTarget, expirySlot sevm.caller.toB256))
     (run : Func.RunCompiledTo fs sevm statPost
@@ -173,7 +173,7 @@ theorem observation_ok_getStorVal_eq_of_ne
       runCompiledTo_prepend_inv decodeRun
     have hstorGuard : Devm.getStor decodePre = Devm.getStor guardPost :=
       Line.of_inv Devm.getStor
-        (by unfold retdataShorterThan; line_inv) hguard
+        (by unfold returnDataShorterThan; line_inv) hguard
     rcases runCompiledTo_branch_inv decodeRun with
       ⟨loadPre, -, hguardPop, loadRun⟩ |
         ⟨_, emptyPre, -, -, -, emptyRun⟩
@@ -191,7 +191,7 @@ theorem observation_ok_getStorVal_eq_of_ne
         rcases runCompiledTo_branch_inv canonicalRun with
           ⟨emptyPre, -, -, emptyRun⟩ |
             ⟨_, successPre, -, -, hsuccessPop, successRun⟩
-        · exact (revCall_not_ok h_empty emptyRun).elim
+        · exact (revertCall_not_ok h_empty emptyRun).elim
         · have hprefix : Devm.getStor statPost =
               Devm.getStor successPre := by
             calc
@@ -222,18 +222,18 @@ theorem observation_ok_getStorVal_eq_of_ne
             successRun).trans
               (congrArg (fun stor => (stor owner).get key) hprefix).symm
       · exact (failedCall_not_ok h_failed failedRun).elim
-    · exact (revCall_not_ok h_empty emptyRun).elim
+    · exact (revertCall_not_ok h_empty emptyRun).elim
   · exact (bubbleCall_not_ok h_bubble bubbleRun).elim
 
 /-- A successful observation/decode/success suffix preserves the complete
 persistent-storage map of every account other than the CircuitBreaker. -/
 theorem observation_ok_getStor_eq_of_owner_ne
     {fs : List Func} {sevm : Sevm} {statPost final : Devm} {owner : Adr}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (ownerNe : owner ≠ sevm.currentTarget)
     (run : Func.RunCompiledTo fs sevm statPost
       (Ninst.iszero :::
@@ -255,7 +255,7 @@ theorem observation_ok_getStor_eq_of_owner_ne
       runCompiledTo_prepend_inv decodeRun
     have hstorGuard : Devm.getStor decodePre = Devm.getStor guardPost :=
       Line.of_inv Devm.getStor
-        (by unfold retdataShorterThan; line_inv) hguard
+        (by unfold returnDataShorterThan; line_inv) hguard
     rcases runCompiledTo_branch_inv decodeRun with
       ⟨loadPre, -, hguardPop, loadRun⟩ |
         ⟨_, emptyPre, -, -, -, emptyRun⟩
@@ -273,7 +273,7 @@ theorem observation_ok_getStor_eq_of_owner_ne
         rcases runCompiledTo_branch_inv canonicalRun with
           ⟨emptyPre, -, -, emptyRun⟩ |
             ⟨_, successPre, -, -, hsuccessPop, successRun⟩
-        · exact (revCall_not_ok h_empty emptyRun).elim
+        · exact (revertCall_not_ok h_empty emptyRun).elim
         · have hprefix : Devm.getStor statPost =
               Devm.getStor successPre := by
             calc
@@ -303,7 +303,7 @@ theorem observation_ok_getStor_eq_of_owner_ne
           exact (pauseSuccess_ok_getStor_eq_of_owner_ne h_panic ownerNe
             successRun).trans (congrFun hprefix owner).symm
       · exact (failedCall_not_ok h_failed failedRun).elim
-    · exact (revCall_not_ok h_empty emptyRun).elim
+    · exact (revertCall_not_ok h_empty emptyRun).elim
   · exact (bubbleCall_not_ok h_bubble bubbleRun).elim
 
 private theorem pinnedTrace_final_cell_eq
@@ -311,11 +311,11 @@ private theorem pinnedTrace_final_cell_eq
     {target : Adr} {program : Prog} {duration : B256}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
     {ex : Execution} {key : B256}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (bundle : LidoPinnedPauseTarget sevm.currentTarget sevm.caller target
       program pausedUntil surface)
     (hook : LidoPinnedBoundaryExecutions fs sevm entry target program
@@ -381,11 +381,11 @@ private theorem pinnedTrace_noninterference
     {target : Adr} {program : Prog} {duration : B256}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
     {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (bundle : LidoPinnedPauseTarget sevm.currentTarget sevm.caller target
       program pausedUntil surface)
     (hook : LidoPinnedBoundaryExecutions fs sevm entry target program
@@ -453,7 +453,7 @@ private theorem stepCall_spawn_resume
 
 private theorem stepStatcall_spawn_resume
     {sevm : Sevm} {pre : Devm} {msg : Msg} {resume : Resume}
-    (spawn : Xinst.step sevm pre .statcall =
+    (spawn : Xinst.step sevm pre .staticcall =
       .spawn (Jaune.Frame.ofCall msg) resume) :
     ∃ parent oi os, resume = .call parent oi os := by
   simp only [Xinst.step, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
@@ -605,8 +605,8 @@ theorem directBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
     {code : ByteArray} {program : Prog}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (compiled : Prog.compile program = some code.toList)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
@@ -766,10 +766,10 @@ theorem directBoundaryExecutions_of_afterSet_ok
       have statResolved := resolvedCodeAddress_of_direct statPreInstalled
         notDelegation
       rw [statResolved] at statCodeAddress
-      have statXSpawn : Xinst.step sevm statPre .statcall =
+      have statXSpawn : Xinst.step sevm statPre .staticcall =
           .spawn (Jaune.Frame.ofCall statMsg) statResume :=
         XStep.toStep_spawn (by
-          simpa only [Ninst.statcall, Ninst.step_exec] using statSpawn)
+          simpa only [Ninst.staticcall, Ninst.step_exec] using statSpawn)
       have statExecutes : MessageExecutesProgram statMsg statXl program :=
         spawnedMessage_executesProgram compiled nonempty notDelegation targetNe
           statPreInstalled nonprecompile statCurrent statCodeAddress statValue
@@ -789,7 +789,7 @@ theorem directBoundaryExecutions_of_afterSet_ok
         afterCallContinuation, callIszero, branchPop, statStaging, statRun,
         statBoundary, pinnedStat, observationRun⟩
     · exact (bubbleCall_not_ok h_bubble bubbleRun).elim
-  · exact (revCall_not_ok h_empty revertRun).elim
+  · exact (revertCall_not_ok h_empty revertRun).elim
 
 set_option linter.unusedVariables false in
 /-- The compiled test stub is one instance of the direct-installation crossing.
@@ -801,8 +801,8 @@ retained binder. -/
 theorem stubBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target = PinnedTargetControl.stubCode)
@@ -850,10 +850,10 @@ private theorem spawnedChild_clean_of_zeroBranch
     simp only [errorEq, if_true] at headEq
     exact absurd headEq (by decide)
 
-private theorem statcallMessage_entry_getStor_eq
+private theorem staticcallMessage_entry_getStor_eq
     {sevm : Sevm} {pre : Devm} {msg : Msg} {resume : Resume}
     {xl : Xlot} {program : Prog} {child : Devm} {owner : Adr}
-    (spawn : Xinst.step sevm pre .statcall =
+    (spawn : Xinst.step sevm pre .staticcall =
       .spawn (Jaune.Frame.ofCall msg) resume)
     (executes : MessageExecutesProgram msg xl program)
     (process : ProcessMessage msg xl (.ok child)) :
@@ -862,7 +862,7 @@ private theorem statcallMessage_entry_getStor_eq
   have actualEnter : (Jaune.Frame.ofCall msg).enter = .run childEvm :=
     (RunFrame.some_inv process).1
   have resumeCall := stepStatcall_spawn_resume spawn
-  rcases Xinst.step_shape sevm pre .statcall with
+  rcases Xinst.step_shape sevm pre .staticcall with
     ⟨done, shape, -⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, transferValue,
@@ -902,7 +902,7 @@ private theorem statcallMessage_entry_getStor_eq
 
 private theorem observation_zeroBranch
     {fs : List Func} {sevm : Sevm} {statPost final : Devm}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (run : Func.RunCompiledTo fs sevm statPost
       (Ninst.iszero :::
         ((Func.call bubbleRevertSlot) <?> decodePausedResult))
@@ -919,8 +919,8 @@ private theorem observation_zeroBranch
 private theorem observation_success_answer_one
     {fs : List Func} {sevm : Sevm} {target : Adr}
     {statPre statPost final : Devm}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (boundary : PauseStatBoundary sevm target statPre statPost)
     (run : Func.RunCompiledTo fs sevm statPost
@@ -958,11 +958,11 @@ private theorem pinnedTarget_witness_and_paused
     {target : Adr} {program : Prog} {duration : B256}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
     {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (targetNe : target ≠ sevm.currentTarget)
     (bundle : LidoPinnedPauseTarget sevm.currentTarget sevm.caller target
       program pausedUntil surface)
@@ -997,10 +997,10 @@ private theorem pinnedTarget_witness_and_paused
     ⟨statMsg, statXl, statChild, statPc, statNextPc, statResume,
       statExact, statExecutes, statTime, statSpawn, statFilled,
       statProcess, statStepRun, statState, statOutput⟩
-  have statXSpawn : Xinst.step sevm statPre .statcall =
+  have statXSpawn : Xinst.step sevm statPre .staticcall =
       .spawn (Jaune.Frame.ofCall statMsg) statResume :=
     XStep.toStep_spawn (by
-      simpa only [Ninst.statcall, Ninst.step_exec] using statSpawn)
+      simpa only [Ninst.staticcall, Ninst.step_exec] using statSpawn)
   obtain ⟨statTestPost, statArmPre, statIszero, statZeroPop⟩ :=
     observation_zeroBranch h_bubble observationRun
   have statClean : statChild.error.isSome = false :=
@@ -1026,7 +1026,7 @@ private theorem pinnedTarget_witness_and_paused
       statMsg.benv.stat.time := queryTruth.mp acceptedExecution
   have statEntryStor : statMsg.benv.state.getStor target =
       statPre.state.getStor target :=
-    statcallMessage_entry_getStor_eq statXSpawn statExecutes statProcess
+    staticcallMessage_entry_getStor_eq statXSpawn statExecutes statProcess
   have callBranchStor : callPost.state.getStor target =
       branchTestPost.state.getStor target :=
     congrFun (Ninst.Hinv.inv (f := Devm.getStor)

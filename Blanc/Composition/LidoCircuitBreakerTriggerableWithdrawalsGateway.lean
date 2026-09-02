@@ -141,8 +141,8 @@ theorem gatewayBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
     {target : Adr} {duration : B256}
     {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target = gatewayCode dp)
