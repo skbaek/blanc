@@ -112,16 +112,16 @@ private def decodeConstructorArguments (argsOffset : Nat) (body : Func) : Func :
 /-! ## Exact source-order constructor bodies -/
 
 private def constructorNoCodeImplementationError : Func :=
-  Func.revData noCodeImplementationErrorData
+  Func.revertData noCodeImplementationErrorData
 
 private def constructorEmptyDelegatecallError : Func :=
-  Func.revData emptyDelegatecallErrorData
+  Func.revertData emptyDelegatecallErrorData
 
 private def constructorZeroAdminError : Func :=
-  Func.revData zeroAdminErrorData
+  Func.revertData zeroAdminErrorData
 
 private def constructorAllocationPanic : Func :=
-  Func.revData allocationPanicData
+  Func.revertData allocationPanicData
 
 /-- Continue after optional setup.  The previous admin is read here rather than
 before the delegatecall, so setup may mutate either ERC-1967 slot exactly as it
@@ -142,7 +142,7 @@ private def constructorAfterSetup
      -- Return the exact already-compiled runtime appended after this prefix.
      pushCreationCoordinate runtimeLength :::
        pushCreationCoordinate runtimeOffset ::: pushB256 0 ::: codecopy :::
-     pushCreationCoordinate runtimeLength ::: pushB256 0 ::: Func.ret))
+     pushCreationCoordinate runtimeLength ::: pushB256 0 ::: Func.return_))
 
 /-- Delegate the exact decoded setup bytes.  Successful returndata is discarded;
 failed nonempty returndata bubbles verbatim, while an empty failure receives the
@@ -154,10 +154,10 @@ private def constructorDelegateSetup : Func :=
   pushB256 constructorSetupMemoryBase :::
   constructorLoadWord constructorImplementationWord +++
   gas :::
-  delcall :::
+  delegatecall :::
   ((.call constructorAfterSetupSlot) <?>
-    (retdatasize :::
-      (Func.revReturnData <?>
+    (returndatasize :::
+      (Func.revertReturnData <?>
         (.call constructorEmptyDelegatecallErrorSlot))))
 
 /-- `_upgradeToAndCall(implementation_, data_, false)`: validate code, store,
@@ -180,7 +180,7 @@ private def constructorProgram
           constructorInitializeImplementation <?>
           (.call constructorEmptyRevertSlot))
     aux :=
-      [ Func.rev,
+      [ Func.revert,
         constructorNoCodeImplementationError,
         constructorEmptyDelegatecallError,
         constructorZeroAdminError,
@@ -282,25 +282,25 @@ def ossifiablePushCreationCoordinate (value : Nat) : Ninst :=
 @[simp] theorem ossifiableConstructorFunctions_emptyRevert
     (runtimeOffset runtimeLength : Nat) :
     (ossifiableConstructorFunctions runtimeOffset runtimeLength)[1]? =
-      some Func.rev := by
+      some Func.revert := by
   rfl
 
 @[simp] theorem ossifiableConstructorFunctions_noCode
     (runtimeOffset runtimeLength : Nat) :
     (ossifiableConstructorFunctions runtimeOffset runtimeLength)[2]? =
-      some (Func.revData noCodeImplementationErrorData) := by
+      some (Func.revertData noCodeImplementationErrorData) := by
   rfl
 
 @[simp] theorem ossifiableConstructorFunctions_emptyDelegatecall
     (runtimeOffset runtimeLength : Nat) :
     (ossifiableConstructorFunctions runtimeOffset runtimeLength)[3]? =
-      some (Func.revData emptyDelegatecallErrorData) := by
+      some (Func.revertData emptyDelegatecallErrorData) := by
   rfl
 
 @[simp] theorem ossifiableConstructorFunctions_zeroAdmin
     (runtimeOffset runtimeLength : Nat) :
     (ossifiableConstructorFunctions runtimeOffset runtimeLength)[4]? =
-      some (Func.revData zeroAdminErrorData) := by
+      some (Func.revertData zeroAdminErrorData) := by
   rfl
 
 @[simp] theorem ossifiableConstructorFunctions_afterSetup
@@ -318,7 +318,7 @@ def ossifiablePushCreationCoordinate (value : Nat) : Ninst :=
 @[simp] theorem ossifiableConstructorFunctions_allocationPanic
     (runtimeOffset runtimeLength : Nat) :
     (ossifiableConstructorFunctions runtimeOffset runtimeLength)[7]? =
-      some (Func.revData allocationPanicData) := by
+      some (Func.revertData allocationPanicData) := by
   rfl
 
 theorem ossifiableConstructorInitializeImplementation_shape :
@@ -340,10 +340,10 @@ theorem ossifiableConstructorDelegateSetup_shape :
         pushB256 0x100 :::
         [pushB256 0, mload] +++
         gas :::
-        delcall :::
+        delegatecall :::
         ((.call 5) <?>
-          (retdatasize :::
-            (Func.revReturnData <?> (.call 3)))) := by
+          (returndatasize :::
+            (Func.revertReturnData <?> (.call 3)))) := by
   rfl
 
 theorem ossifiableConstructorAfterSetup_shape
@@ -363,7 +363,7 @@ theorem ossifiableConstructorAfterSetup_shape
                   ossifiablePushCreationCoordinate runtimeOffset :::
                   pushB256 0 ::: codecopy :::
                 ossifiablePushCreationCoordinate runtimeLength :::
-                  pushB256 0 ::: Func.ret)))) := by
+                  pushB256 0 ::: Func.return_)))) := by
   rfl
 
 theorem creationBaseline_eq_constructorProgram :

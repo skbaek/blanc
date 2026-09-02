@@ -12,7 +12,7 @@ namespace Blanc
 open Jaune
 
 /-- Return a known 32-byte word from memory offset zero. -/
-theorem Func.runCompiledTo_ret_word_at_zero
+theorem Func.runCompiledTo_return_word_at_zero
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (memory : Mem) (gas : Nat) (output : Bytes)
     (hext :
@@ -20,10 +20,10 @@ theorem Func.runCompiledTo_ret_word_at_zero
     (hread : (memory.read 0 32).1 = output) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[0, 32], memory, gas⟩)
-      (Func.last .ret)
+      (Func.last .return_)
       (.ok (((base.setMach ⟨[], memory, gas⟩).memRead 0 32).2.withOutput
         output)) := by
-  have hrun := Func.runCompiledTo_ret_word
+  have hrun := Func.runCompiledTo_return_word
     (fs := fs) (sevm := sevm)
     (devm := base.setMach ⟨[0, 32], memory, gas⟩)
     (i := 0) (sz := 32) (s := []) (e := 0) (G := gas) (out := output)
@@ -38,15 +38,15 @@ theorem Func.runCompiledTo_ret_word_at_zero
     show (B256.toNat (32 : B256)) = 32 by decide] using hrun
 
 /-- Revert with the empty memory window at offset zero. -/
-theorem Func.runCompiledTo_rev_empty_at_zero
+theorem Func.runCompiledTo_revert_empty_at_zero
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (memory : Mem) (gas : Nat) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[0, 0], memory, gas⟩)
-      (Func.last .rev)
+      (Func.last .revert)
       (.error (.revert,
         (base.setMach ⟨[], memory, gas⟩).withOutput [])) := by
-  have hrun := Func.runCompiledTo_rev
+  have hrun := Func.runCompiledTo_revert
     (fs := fs) (sevm := sevm)
     (devm := base.setMach ⟨[0, 0], memory, gas⟩)
     (i := 0) (sz := 0) (s := []) (out := []) (G := gas)

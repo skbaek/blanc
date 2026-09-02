@@ -7,9 +7,9 @@ import Blanc.MessageExecution
 # Contract-neutral `DELEGATECALL` envelope vocabulary
 
 The descriptor below is a proof-carrying name for the exact child constructed
-by Jaune's `.delcall` arm.  Its fields mirror
-`delcall_enters_with_parent_as_storage_owner`; in particular, the child message
-is derived with `delcallSpawnMsg` rather than accepted from a caller.
+by Jaune's `.delegatecall` arm.  Its fields mirror
+`delegatecall_enters_with_parent_as_storage_owner`; in particular, the child message
+is derived with `delegatecallSpawnMsg` rather than accepted from a caller.
 
 The child certificate retains the actual recursive `ProcessMessage` trace.  It
 does not mention a wrapper result.  `DirectTargetTransport` is a separate
@@ -117,7 +117,7 @@ theorem DelegatecallSpawnDescriptor.afterAccess_memory
 def DelegatecallSpawnDescriptor.child
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) : Msg :=
-  delcallSpawnMsg sevm d.parent d.childGas d.resolvedCodeAddress
+  delegatecallSpawnMsg sevm d.parent d.childGas d.resolvedCodeAddress
     d.inputOffsetWord.toNat d.inputSizeWord.toNat d.code d.delegated
 
 /-- The exact continuation to which the child result is returned. -/
@@ -182,17 +182,17 @@ def DelegatecallSpawnDescriptor.resume
         d.inputSizeWord.toNat).1 :=
   rfl
 
-/-- The exact `.delcall` step that spawns the descriptor's child frame and
+/-- The exact `.delegatecall` step that spawns the descriptor's child frame and
 resume continuation. -/
 theorem DelegatecallSpawnDescriptor.step
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
-    Xinst.step sevm callPre .delcall =
+    Xinst.step sevm callPre .delegatecall =
       .spawn (Frame.ofCall d.child) d.resume := by
   simpa [DelegatecallSpawnDescriptor.parent,
     DelegatecallSpawnDescriptor.child,
     DelegatecallSpawnDescriptor.resume] using
-    (Xinst.step_delcall_spawn d.stackEq d.extensionEq d.delegationEq
+    (Xinst.step_delegatecall_spawn d.stackEq d.extensionEq d.delegationEq
       d.accessEq d.splitEq d.affordable d.depthHeadroom)
 
 /-- The shared crossing theorem specialized to the named descriptor. -/
@@ -208,11 +208,11 @@ theorem DelegatecallSpawnDescriptor.crossing
         Resume.run d.resume
             ((Frame.ofCall d.child).settle
               (exec (initEvm d.child))) = .ok post →
-          Ninst.RunCompiled sevm callPre (.exec .delcall) post := by
+          Ninst.RunCompiled sevm callPre (.exec .delegatecall) post := by
   simpa [DelegatecallSpawnDescriptor.parent,
     DelegatecallSpawnDescriptor.child,
     DelegatecallSpawnDescriptor.resume] using
-    (delcall_enters_with_parent_as_storage_owner
+    (delegatecall_enters_with_parent_as_storage_owner
       d.stackEq d.extensionEq d.delegationEq d.accessEq d.splitEq
       d.affordable d.depthHeadroom d.resolvedNotPrecompile)
 
@@ -231,7 +231,7 @@ are both represented by `MessageResult`. -/
 theorem DelegatecallSpawnDescriptor.certificate_of_runCompiled
     {sevm : Sevm} {callPre post : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
-    (run : Ninst.RunCompiled sevm callPre (.exec .delcall) post) :
+    (run : Ninst.RunCompiled sevm callPre (.exec .delegatecall) post) :
     ∃ childOut : MessageResult,
       Nonempty (DelegatedChildCertificate d.child childOut) ∧
         d.resume.run childOut = .ok post := by
@@ -269,7 +269,7 @@ The only extra premise is the parent's own status-word stack headroom. -/
 theorem DelegatecallSpawnDescriptor.settled_of_runCompiled
     {sevm : Sevm} {callPre post : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
-    (run : Ninst.RunCompiled sevm callPre (.exec .delcall) post)
+    (run : Ninst.RunCompiled sevm callPre (.exec .delegatecall) post)
     (parentStackRoom : d.parent.stack.length < 1024) :
     ∃ child, DelegatecallSettledBoundary d child post := by
   rcases d.certificate_of_runCompiled run with
@@ -422,7 +422,7 @@ theorem DelegatecallSpawnDescriptor.runCompiled_of_certificate
     {childOut : MessageResult}
     (certificate : DelegatedChildCertificate d.child childOut)
     (resume : d.resume.run childOut = .ok post) :
-    Ninst.RunCompiled sevm callPre (.exec .delcall) post := by
+    Ninst.RunCompiled sevm callPre (.exec .delegatecall) post := by
   rcases d.crossing with
     ⟨henter, _currentTarget, _codeAddress, _caller, _value, crossing⟩
   have hsettle :

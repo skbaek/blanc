@@ -398,29 +398,29 @@ lemma Prog.runCompiledTo_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
 
 /-! ## The terminal instruction that reverts
 
-`Blanc/Forward.lean` evaluates `Linst.run` forward on `.ret` only, and says why:
-`.stop` needs nothing, and `.rev` and `.dest` do not end in `.ok`.  With the
-relation generalised, `.rev` becomes statable, and it is the terminal
+`Blanc/Forward.lean` evaluates `Linst.run` forward on `.return_` only, and says why:
+`.stop` needs nothing, and `.revert` and `.selfdestruct` do not end in `.ok`.  With the
+relation generalised, `.revert` becomes statable, and it is the terminal
 instruction this whole genre ends at.
 
-`Linst.run … .rev` and `Linst.run … .ret` are the *same five steps* — pop the
+`Linst.run … .revert` and `Linst.run … .return_` are the *same five steps* — pop the
 offset, pop the size, charge the window's expansion, read it back, attach it as
 output — differing only in the constructor they wrap the result in.  So the
-lemma below is `Linst.run_ret_eq_ok`'s proof verbatim with `.error ⟨.revert, ·⟩`
+lemma below is `Linst.run_return_eq_ok`'s proof verbatim with `.error ⟨.revert, ·⟩`
 in place of `.ok`.  That symmetry is worth naming, because it is also the
 reason nothing about error *taxonomy* appears here: `EvmError.revert` is a
 nullary constructor with no `ErrorDetail`, so there is nothing to pin beyond
 the constructor itself. -/
 
 /-- `Linst.run` on a `REVERT`, evaluated forward. -/
-lemma Linst.run_rev_eq_error {sevm : Sevm} {devm : Devm} {i sz : B256}
+lemma Linst.run_revert_eq_error {sevm : Sevm} {devm : Devm} {i sz : B256}
     {s : List B256} {out : Bytes} {d' : Devm}
     (h_stk : devm.stack = i :: sz :: s)
     (h_gas : devm.extCost [⟨i.toNat, sz.toNat⟩] ≤ devm.gasLeft)
     (h_read : (devm.setMach ⟨s, devm.memory,
         devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
           i.toNat sz.toNat = ⟨out, d'⟩) :
-    Linst.run sevm devm .rev = .error ⟨.revert, d'.withOutput out⟩ := by
+    Linst.run sevm devm .revert = .error ⟨.revert, d'.withOutput out⟩ := by
   show (do
     let ⟨index, d⟩ ← devm.popToNat
     let ⟨size, d⟩ ← d.popToNat
@@ -443,43 +443,43 @@ lemma Linst.run_rev_eq_error {sevm : Sevm} {devm : Devm} {i sz : B256}
   rw [h_read]
 
 /-- `REVERT`, at the relation's altitude.  The memory read is handed in rather
-than written out, for the reason `Func.runCompiled_ret`'s docstring gives and
+than written out, for the reason `Func.runCompiled_return`'s docstring gives and
 `Devm.memRead_word_fst`'s explains at length: writing a memory image into a
 conclusion makes the unifier reduce `Devm.memory devm` to weak head normal
 form. -/
-lemma Func.runCompiledTo_rev {fs : List Func} {sevm : Sevm} {devm : Devm}
+lemma Func.runCompiledTo_revert {fs : List Func} {sevm : Sevm} {devm : Devm}
     {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G : Nat}
     (h_stk : devm.stack = i :: sz :: s)
     (h_gas : devm.gasLeft = G + devm.extCost [⟨i.toNat, sz.toNat⟩])
     (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
       = ⟨out, d'⟩) :
-    Func.RunCompiledTo fs sevm devm (.last .rev)
+    Func.RunCompiledTo fs sevm devm (.last .revert)
       (.error (.revert, d'.withOutput out)) := by
   have h_eq : devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩] = G := by omega
   refine Func.RunCompiledTo.last ?_
-  show Linst.run sevm devm .rev = _
-  exact Linst.run_rev_eq_error (out := out) (d' := d') h_stk (by omega)
+  show Linst.run sevm devm .revert = _
+  exact Linst.run_revert_eq_error (out := out) (d' := d') h_stk (by omega)
     (by rw [h_eq]; exact h_read)
 
 /-- `REVERT` with the window's expansion charge named, for the same reason
-`Func.runCompiled_ret_of` exists: a generator cannot name the successor's gas
+`Func.runCompiled_return_of` exists: a generator cannot name the successor's gas
 account until the charge is a number. -/
-lemma Func.runCompiledTo_rev_of {fs : List Func} {sevm : Sevm} {devm : Devm}
+lemma Func.runCompiledTo_revert_of {fs : List Func} {sevm : Sevm} {devm : Devm}
     {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G e : Nat}
     (h_stk : devm.stack = i :: sz :: s)
     (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
     (h_gas : devm.gasLeft = G + e)
     (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
       = ⟨out, d'⟩) :
-    Func.RunCompiledTo fs sevm devm (.last .rev)
+    Func.RunCompiledTo fs sevm devm (.last .revert)
       (.error (.revert, d'.withOutput out)) := by
   subst h_ext
-  exact Func.runCompiledTo_rev h_stk h_gas h_read
+  exact Func.runCompiledTo_revert h_stk h_gas h_read
 
-/-! ## The empty window, and `Func.rev`
+/-! ## The empty window, and `Func.revert`
 
-`Blanc/CommonCore.lean`'s `Func.rev` is `PUSH0; PUSH0; REVERT`, and its
-docstring says why the two `PUSH0`s are there: a bare `.last .rev` reverts with
+`Blanc/CommonCore.lean`'s `Func.revert` is `PUSH0; PUSH0; REVERT`, and its
+docstring says why the two `PUSH0`s are there: a bare `.last .revert` reverts with
 whatever two words happen to be on the stack, which is an arbitrary window of
 frame memory as revert data, a stack underflow, or an out-of-gas halt from the
 expansion a garbage size implies.  With `(0, 0)` all three go away.
@@ -506,7 +506,7 @@ lemma Devm.extCost_empty_window {devm : Devm} {i : Nat} :
 lemma Devm.memRead_zero {devm : Devm} {i : Nat} :
     devm.memRead i 0 = ⟨[], devm⟩ := rfl
 
-/-- **The `Func.rev` composite.**  `PUSH0; PUSH0; REVERT` from a state with the
+/-- **The `Func.revert` composite.**  `PUSH0; PUSH0; REVERT` from a state with the
 gas for two `gBase` pushes, ending at `.error (.revert, …)` with the output
 pinned to `[]`.
 
@@ -527,10 +527,10 @@ Two premises, and both are tight:
 The post-state's gas account is `G` — the frame reverts with its remaining gas
 intact at this altitude. This says nothing about a *transaction*'s gas: refunds
 and the 63/64 rule are a further layer. -/
-lemma Func.runCompiledTo_rev_func {fs : List Func} {sevm : Sevm} {devm : Devm}
+lemma Func.runCompiledTo_revert_func {fs : List Func} {sevm : Sevm} {devm : Devm}
     {G : Nat} (h_gas : devm.gasLeft = G + (gBase + gBase))
     (h_room : devm.stack.length < 1023) :
-    Func.RunCompiledTo fs sevm devm Func.rev
+    Func.RunCompiledTo fs sevm devm Func.revert
       (.error (.revert,
         (devm.setMach ⟨devm.stack, devm.memory, G⟩).withOutput [])) := by
   refine Func.RunCompiledTo.next
@@ -542,7 +542,7 @@ lemma Func.runCompiledTo_rev_func {fs : List Func} {sevm : Sevm} {devm : Devm}
       pushCost_zero (G := G) rfl
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
   simp only [Devm.setMach_setMach]
-  exact Func.runCompiledTo_rev_of (i := 0) (sz := 0) (s := devm.stack)
+  exact Func.runCompiledTo_revert_of (i := 0) (sz := 0) (s := devm.stack)
     rfl Devm.extCost_empty_window rfl Devm.memRead_zero
 
 /-- Exact cost of a taken nonzero guard, an internal auxiliary call, and that
@@ -552,14 +552,14 @@ def emptyRevertGuardCost : Nat :=
     (gVerylow + gMid + gJumpdest) +
     (gBase + gBase)
 
-/-- A nonzero guard followed by an internal call to `Func.rev` reverts with
+/-- A nonzero guard followed by an internal call to `Func.revert` reverts with
 empty output, unchanged memory, the guard-tail stack, and exactly `G` gas.
 This is the contract-neutral empty-revert counterpart of the constant
 `Error(string)` guard constructor in `RevertPayload`. -/
 theorem Func.runCompiledTo_emptyRevertGuard
     {fs : List Func} {sevm : Sevm} {devm : Devm}
     {slot G : Nat} {w : B256} {stack : List B256} {otherwise : Func}
-    (h_get : fs[slot]? = some Func.rev)
+    (h_get : fs[slot]? = some Func.revert)
     (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack)
     (h_gas : devm.gasLeft = G + emptyRevertGuardCost)
     (h_room : devm.stack.length < 1024) :
@@ -582,7 +582,7 @@ theorem Func.runCompiledTo_emptyRevertGuard
     · simp only [Devm.gasLeft_setMach]
       omega
     · simp only [Devm.setMach_setMach]
-      exact Func.runCompiledTo_rev_func rfl
+      exact Func.runCompiledTo_revert_func rfl
         (by simpa only [Devm.stack_setMach] using h_room_tail)
 
 end Blanc

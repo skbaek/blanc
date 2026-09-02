@@ -442,8 +442,8 @@ theorem reconstructPairSha_success_of_run
     {oldCount amount node intermediate second : B256}
     {leftWord rightWord outputWord left right : B256}
     {outputOffset : Nat} {tail : Stack} {success : Func}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hnodeleg : getDelegatedCodeAddress (pre.getCode 2) = none)
     (hregisters : ReconstructRegistersMemoryCarrier pre.memory
@@ -574,8 +574,8 @@ theorem reconstructSignatureSecondSha_success_of_run
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate : B256}
     {tail : Stack} {success : Func}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hnodeleg : getDelegatedCodeAddress (pre.getCode 2) = none)
     (hintermediate : ReconstructIntermediateMemoryCarrier pre.memory
@@ -686,8 +686,8 @@ theorem reconstructPubkeySha_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount : B256} {tail : Stack} {success : Func}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hnodeleg : getDelegatedCodeAddress (pre.getCode 2) = none)
     (source : ReconstructSourceMemoryCarrier pre.memory
@@ -738,8 +738,8 @@ theorem reconstructSignatureFirstSha_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node : B256} {tail : Stack} {success : Func}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hnodeleg : getDelegatedCodeAddress (pre.getCode 2) = none)
     (hnode : ReconstructNodeMemoryCarrier pre.memory
@@ -797,8 +797,8 @@ theorem reconstructDepositDataNode_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {pubkey withdrawal signature : Bytes}
     {oldCount amount : B256} {tail : Stack} {success : Func}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hnodeleg : getDelegatedCodeAddress (pre.getCode 2) = none)
     (hwithdrawal : withdrawal.length = 32)
@@ -1458,7 +1458,7 @@ theorem branchRevWith_success_of_prefix
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {flag : B256} {slot : Nat} {reason : String}
     {tail : Stack} {rest : Func}
-    (hget : fs[slot]? = some (Func.revWith reason))
+    (hget : fs[slot]? = some (Func.revertWith reason))
     (hp : flag :: tail <<+ pre.stack)
     (run : Func.Run fs sevm pre ((.call slot) <?> rest) post) :
     flag = 0 ∧
@@ -1467,7 +1467,7 @@ theorem branchRevWith_success_of_prefix
       Func.Run fs sevm next rest post ∧
       next.memory = pre.memory ∧
       pre.state = next.state := by
-  rcases of_run_branch_call_revWith hget run with
+  rcases of_run_branch_call_revertWith hget run with
     ⟨next, pop, restRun⟩
   exact ⟨(popBurn_pref pop hp).1.symm, next,
     (popBurn_pref pop hp).2, restRun, pop.memory.symm, pop.state⟩
@@ -1479,7 +1479,7 @@ theorem depositRootGuard_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {oldCount node : B256} {tail : Stack} {rest : Func}
     (hget : fs[rootMismatchErrorSlot]? =
-      some (Func.revWith rootMismatchReason))
+      some (Func.revertWith rootMismatchReason))
     (hmem : InsertionStartMemoryCarrier pre.memory oldCount node)
     (hp : tail <<+ pre.stack)
     (run : Func.Run fs sevm pre
@@ -1546,7 +1546,7 @@ theorem depositCapGuard_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {oldCount node : B256} {tail : Stack} {rest : Func}
     {reason : String}
-    (hget : fs[treeFullErrorSlot]? = some (Func.revWith reason))
+    (hget : fs[treeFullErrorSlot]? = some (Func.revertWith reason))
     (hmem : InsertionStartMemoryCarrier pre.memory oldCount node)
     (hp : tail <<+ pre.stack)
     (run : Func.Run fs sevm pre
@@ -1628,9 +1628,9 @@ theorem depositSuccessGuards_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {oldCount node : B256} {tail : Stack} {treeReason : String}
     (hrootGet : fs[rootMismatchErrorSlot]? =
-      some (Func.revWith rootMismatchReason))
+      some (Func.revertWith rootMismatchReason))
     (htreeGet : fs[treeFullErrorSlot]? =
-      some (Func.revWith treeReason))
+      some (Func.revertWith treeReason))
     (hmem : InsertionStartMemoryCarrier pre.memory oldCount node)
     (hp : tail <<+ pre.stack)
     (run : Func.Run fs sevm pre depositSuccessGuards post) :
@@ -1721,8 +1721,8 @@ theorem insertionDeadStage_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {oldCount : B256} {s : InsertionLoopState} {tail : Stack}
     {stor : Stor}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (native : NativeShaEntry sevm pre)
     (hmem : InsertionMemoryCarrier pre.memory oldCount s.size s.node)
     (hstor : Devm.getStor pre sevm.currentTarget = stor)
@@ -2112,8 +2112,8 @@ theorem insertionLoop_deadLive_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {oldCount : B256} {s : InsertionLoopState} {tail : Stack}
     {stor : Stor} {n : Nat}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hcontinuation : fs[insertionContinuationSlot]? =
       some insertionContinuation)
     (hloop : fs[insertionLoopSlot]? = some insertionLoop)
@@ -2195,8 +2195,8 @@ the insertion loop through the supplied unique first-live height. -/
 theorem commitDeposit_firstLive_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {oldCount node : B256} {tail : Stack} {size n : Nat}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hcontinuation : fs[insertionContinuationSlot]? =
       some insertionContinuation)
     (hloop : fs[insertionLoopSlot]? = some insertionLoop)
@@ -2378,7 +2378,7 @@ private theorem depositLengthGuard_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {word expected actual : B256} {slot : Nat} {reason : String}
     {tail : Stack} {image : Bytes} {rest : Func}
-    (hget : fs[slot]? = some (Func.revWith reason))
+    (hget : fs[slot]? = some (Func.revertWith reason))
     (hp : tail <<+ pre.stack)
     (hwf : Mem.Wf pre.memory)
     (hreads : Mem.Reads pre.memory image)
@@ -2442,7 +2442,7 @@ private theorem depositLengthGuard_success_of_run
 private theorem depositValueLowerGuard_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {slot : Nat} {reason : String} {tail : Stack} {rest : Func}
-    (hget : fs[slot]? = some (Func.revWith reason))
+    (hget : fs[slot]? = some (Func.revertWith reason))
     (hp : tail <<+ pre.stack)
     (run : Func.Run fs sevm pre
       (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
@@ -2482,7 +2482,7 @@ private theorem depositValueLowerGuard_success_of_run
 private theorem depositGweiMultipleGuard_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {slot : Nat} {reason : String} {tail : Stack} {rest : Func}
-    (hget : fs[slot]? = some (Func.revWith reason))
+    (hget : fs[slot]? = some (Func.revertWith reason))
     (hp : tail <<+ pre.stack)
     (run : Func.Run fs sevm pre
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: mod :::
@@ -2516,7 +2516,7 @@ word written for event staging. -/
 private theorem depositAmountUpperGuard_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {slot : Nat} {reason : String} {tail : Stack} {rest : Func}
-    (hget : fs[slot]? = some (Func.revWith reason))
+    (hget : fs[slot]? = some (Func.revertWith reason))
     (hp : tail <<+ pre.stack)
     (run : Func.Run fs sevm pre
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div ::: dup 0 :::

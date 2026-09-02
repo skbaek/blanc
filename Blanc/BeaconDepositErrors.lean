@@ -25,7 +25,7 @@ open Jaune.Ninst Blanc.Ninst
 /-- Exact public gas for the runtime's empty-calldata fallback. -/
 def emptyCalldataRuntimeGas : Nat := 20
 
-/-- Empty calldata selects the runtime's top-level `Func.rev` before selector
+/-- Empty calldata selects the runtime's top-level `Func.revert` before selector
 extraction.  The exhibited execution is raw-chronology `SSTORE`-free, hence
 also has no retained storage writes. -/
 theorem empty_calldata_runCompiledTo
@@ -54,10 +54,10 @@ theorem empty_calldata_runCompiledTo
     .error (.revert,
       (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])
   have hrev : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      afterBranch Func.rev out := by
+      afterBranch Func.revert out := by
     simpa only [afterBranch, out, Devm.setMach_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
-      (Func.runCompiledTo_rev_func
+      (Func.runCompiledTo_revert_func
         (fs := runtime.main :: runtime.aux) (sevm := sevm)
         (devm := afterBranch) (G := G)
         (by simp only [afterBranch, Devm.gasLeft_setMach, gBase])
@@ -65,13 +65,13 @@ theorem empty_calldata_runCompiledTo
           List.length_nil]; omega))
   have hrevSafe : Func.RunCompiledTo.NoRawSstorePath hrev := by
     exact Func.RunCompiledTo.NoRawSstorePath.of_execFree hrev
-      (by simp [Func.rev, Ninst.pushB256, funcExecFree])
-      (by simp [Func.rev, Ninst.pushB256, Func.LocalSstoreFree])
+      (by simp [Func.revert, Ninst.pushB256, funcExecFree])
+      (by simp [Func.revert, Ninst.pushB256, Func.LocalSstoreFree])
   have hbranch : Func.RunCompiledTo
       (runtime.main :: runtime.aux) sevm afterSize
-      (Func.main tree <?> Func.rev) out := by
+      (Func.main tree <?> Func.revert) out := by
     exact Func.runCompiledTo_branch_zero
-      (devm := afterSize) (f := Func.rev) (g := Func.main tree)
+      (devm := afterSize) (f := Func.revert) (g := Func.main tree)
       (s := []) (G := G + 4)
       (by simp only [afterSize, Devm.stack_setMach])
       (by simp only [afterSize, Devm.stack_setMach,
@@ -158,24 +158,24 @@ private theorem noMatchLeaf_runCompiledTo_with_path
         (.error (.revert,
           (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
-  let revPre := base.setMach ⟨[], Mem.empty, G + 4⟩
+  let revertPre := base.setMach ⟨[], Mem.empty, G + 4⟩
   let out : Execution :=
     .error (.revert,
       (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])
   have hrev : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      revPre Func.rev out := by
-    simpa only [revPre, out, Devm.setMach_setMach, Devm.stack_setMach,
+      revertPre Func.revert out := by
+    simpa only [revertPre, out, Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
-      (Func.runCompiledTo_rev_func
+      (Func.runCompiledTo_revert_func
         (fs := runtime.main :: runtime.aux) (sevm := sevm)
-        (devm := revPre) (G := G)
-        (by simp only [revPre, Devm.gasLeft_setMach, gBase])
-        (by simp only [revPre, Devm.stack_setMach,
+        (devm := revertPre) (G := G)
+        (by simp only [revertPre, Devm.gasLeft_setMach, gBase])
+        (by simp only [revertPre, Devm.stack_setMach,
           List.length_nil]; omega))
   have hrevSafe : Func.RunCompiledTo.NoRawSstorePath hrev :=
     Func.RunCompiledTo.NoRawSstorePath.of_execFree hrev
-      (by simp [Func.rev, Ninst.pushB256, funcExecFree])
-      (by simp [Func.rev, Ninst.pushB256, Func.LocalSstoreFree])
+      (by simp [Func.revert, Ninst.pushB256, funcExecFree])
+      (by simp [Func.revert, Ninst.pushB256, Func.LocalSstoreFree])
   let branchPre :=
     base.setMach ⟨[(0 : B256)], Mem.empty, G + 17⟩
   have hbranchRoom : branchPre.stack.length < 1024 := by
@@ -183,8 +183,8 @@ private theorem noMatchLeaf_runCompiledTo_with_path
       List.length_nil]
     omega
   have hbranchPop : Devm.PopBurnBy [0] (gVerylow + gHigh)
-      branchPre revPre := by
-    simpa only [branchPre, revPre, Devm.setMach_setMach,
+      branchPre revertPre := by
+    simpa only [branchPre, revertPre, Devm.setMach_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
       Devm.popBurnBy_setMach (devm := branchPre) (G := G + 4)
         (by simp only [branchPre, Devm.stack_setMach])
@@ -192,7 +192,7 @@ private theorem noMatchLeaf_runCompiledTo_with_path
           gVerylow, gHigh])
   let hbranch : Func.RunCompiledTo
       (runtime.main :: runtime.aux) sevm branchPre
-      (nonpayableEndpoint getDepositRootEndpoint <?> Func.rev) out :=
+      (nonpayableEndpoint getDepositRootEndpoint <?> Func.revert) out :=
     .zero hbranchRoom hbranchPop hrev
   have hbranchSafe : Func.RunCompiledTo.NoRawSstorePath hbranch := by
     dsimp only [hbranch]
@@ -725,7 +725,7 @@ theorem noMatchSelector_runCompiledTo
           gVerylow, gHigh, gJumpdest])
   let hbranch : Func.RunCompiledTo
       (runtime.main :: runtime.aux) sevm afterSize
-      (Func.main tree <?> Func.rev) out :=
+      (Func.main tree <?> Func.revert) out :=
     .succ hnonempty hbranchRoom hbranchPop (by
       simpa only [afterBranch, out] using hmain)
   have hbranchSafe : Func.RunCompiledTo.NoRawSstorePath hbranch := by

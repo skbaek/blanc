@@ -72,13 +72,13 @@ def withdrawLoadCheck : Line :=
 -- assumes : args := [wad]
 def withdraw : Func :=
   withdrawLoadCheck +++ -- (caller_bal < wad) :: caller_bal :: wad :: wad
-  .rev <?> -- [if caller balance < withdraw amount, revert]
+  .revert <?> -- [if caller balance < withdraw amount, revert]
            -- caller_bal :: wad :: wad
   sub ::: caller ::: -- caller :: (caller_bal - wad) :: wad
   sstore ::: -- wad
              -- 'wad' amount of eth subtracted from caller balance
   sendToCaller +++ -- success?
-  logWithdraw <?> .rev -- you revert if flag from sendToCaller is 0, because 0 after `call` opcode means failure.
+  logWithdraw <?> .revert -- you revert if flag from sendToCaller is 0, because 0 after `call` opcode means failure.
 
 
 
@@ -126,16 +126,16 @@ def prepApprove : Line :=
   caller :: mstoreAt 0 ++ -- || caller
   argCopy 1 0 1 ++ -- || caller :: guy
   arg 1 ++ pushList [64, 0] ++ -- 0 :: 64 :: wad || caller :: guy
-  kec :: dup 0 :: -- caller_guy_hash :: caller_guy_hash :: wad ||
+  keccak256 :: dup 0 :: -- caller_guy_hash :: caller_guy_hash :: wad ||
   checkAddress  -- caller_guy_hash_valid? :: caller_guy_hash :: wad ||
 
 -- arguments = [guy, wad]
 def approve : Func :=
   arg 0 +++ -- guy ||
   checkNonAddress +++ -- guy_invalid? ||
-  .rev <?> -- [if guy is invalid, revert]
+  .revert <?> -- [if guy is invalid, revert]
   prepApprove +++ -- hash_valid? :: hash :: wad ||
-  .rev <?> -- [ if storage location of approval amount
+  .revert <?> -- [ if storage location of approval amount
            --   is a valid address that may potentially
            --   collide with balance storage, revert ]
            -- hash :: wad ||
@@ -160,10 +160,10 @@ def updateAllowance : Func :=
   swap 0 :: mstoreAt 0 +++ -- wad || src
   caller ::: mstoreAt 1 +++ -- wad || src :: caller
   pushList [64, 0] +++ -- 0 :: 64 :: wad || src :: caller
-  kec ::: -- hash :: wad
+  keccak256 ::: -- hash :: wad
   swap 0 ::: -- wad :: hash
   dup 1 :: checkAddress +++ -- va(hash) :: wad :: hash
-  .rev <?> -- if hash is a valid address, revert to prevent collision
+  .revert <?> -- if hash is a valid address, revert to prevent collision
            -- wad :: hash
   dup 1 ::: sload ::: -- amnt :: wad :: hash
   dup 0 ::: isMax +++ -- (amnt =? max) :: amnt :: wad :: hash
@@ -172,7 +172,7 @@ def updateAllowance : Func :=
                  --    no EIP mandates it)
                  -- amnt :: wad :: hash
   dup 1 ::: dup 1 ::: lt ::: -- amnt <? wad :: amnt :: wad :: hash
-  .rev <?> -- if allowed amount < transfer amount, revert
+  .revert <?> -- if allowed amount < transfer amount, revert
            -- amnt :: wad :: hash
   sub ::: swap 0 ::: -- hash :: (amnt - wad)
   sstore ::: returnTrue -- [allowance amount is up to date]
@@ -180,15 +180,15 @@ def updateAllowance : Func :=
 -- assumes : args = [src, dst, wad]
 def transferFrom : Func :=
   arg 0 +++ dup 0 ::: checkNonAddress +++ -- ¬ va(src) :: src
-  .rev <?> -- [if src is not a valid address, revert]
+  .revert <?> -- [if src is not a valid address, revert]
         -- src
   arg 2 +++ dup 0 ::: dup 2 ::: sload ::: -- sbal :: wad :: wad :: src
   dup 1 ::: dup 1 ::: lt ::: -- (sbal <? wad) :: sbal :: wad :: wad :: src
-  .rev <?> -- if source balance < wad, then revert
+  .revert <?> -- if source balance < wad, then revert
         -- sbal :: wad :: wad :: src
   transferFromUpdateSbal +++ -- wad :: src
   arg 1 +++ dup 0 ::: checkNonAddress +++ -- ¬ va(dst) :: dst :: wad :: src
-  .rev <?> -- [if dst is not a valid address, revert]
+  .revert <?> -- [if dst is not a valid address, revert]
         -- dst :: wad :: src
   dup 0 ::: dup 2 ::: -- wad :: dst :: dst :: wad :: src
   incrWbal +++ -- [destination balance is up to date]

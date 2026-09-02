@@ -63,11 +63,11 @@ def PinnedStatBoundaryExecutesProgram
     ExactTargetCall sevm.currentTarget target isPausedCalldata true msg ∧
     MessageExecutesProgram msg xl program ∧
     msg.benv.stat.time = sevm.benvStat.time ∧
-    Ninst.step ⟨pc, sevm, statPre⟩ Ninst.statcall =
+    Ninst.step ⟨pc, sevm, statPre⟩ Ninst.staticcall =
       .spawn (Jaune.Frame.ofCall msg) resume nextPc ∧
     Xlot.Filled xl ∧
     ProcessMessage msg xl (.ok child) ∧
-    Ninst.StepRun pc sevm statPre Ninst.statcall xl (.ok statPost) ∧
+    Ninst.StepRun pc sevm statPre Ninst.staticcall xl (.ok statPost) ∧
     statPost.state = child.state ∧
     statPost.returnData = child.output
 
@@ -95,7 +95,7 @@ def LidoPinnedBoundaryExecutions
       Ninst.RunCompiled sevm callPost Ninst.iszero branchTestPost ∧
       Devm.PopBurnBy [0] (gVerylow + gHigh) branchTestPost armPre ∧
       Line.Run sevm armPre pauseStatStaging statPre ∧
-      Ninst.RunCompiled sevm statPre (.exec .statcall) statPost ∧
+      Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost ∧
       PauseStatBoundary sevm target statPre statPost ∧
       PinnedStatBoundaryExecutesProgram sevm target program
         statPre statPost ∧

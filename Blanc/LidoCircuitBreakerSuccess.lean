@@ -184,7 +184,7 @@ def PauseSuccessPanic (fs : List Func) (sevm : Sevm) (pre : Devm)
   PauseSuccessInputs sevm pre target duration count interval ∧
   Func.RunCompiledTo fs sevm pre pauseSuccess ex ∧
   fs[arithmeticPanicSlot]? =
-    some (Func.revData heartbeatArithmeticPanicData) ∧
+    some (Func.revertData heartbeatArithmeticPanicData) ∧
   PauseSuccessPanicTrace fs sevm pre target duration ex ∧
   count ≠ 0 ∧
   ¬ B256.Nof sevm.benvStat.time interval ∧
@@ -911,7 +911,7 @@ theorem pauseSuccess_ok_getStorVal_eq_of_ne
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {owner : Adr} {key : B256}
     (hpanic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (different : (owner, key) ≠
       (sevm.currentTarget, expirySlot sevm.caller.toB256))
     (run : Func.RunCompiledTo fs sevm pre pauseSuccess (.ok post)) :
@@ -991,7 +991,7 @@ theorem pauseSuccess_ok_getStorVal_eq_of_ne
                 (Devm.PopBurn.of_popBurnBy hcheckedPop)))))
       · exact hfinish
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv hpanic hpanicRun
-      exact (Func.RunCompiledTo.not_ok_revData hbody).elim
+      exact (Func.RunCompiledTo.not_ok_revertData hbody).elim
   · obtain ⟨finishPre, hpush, hfinish⟩ :=
       runCompiledTo_next_inv hzeroArm
     apply finishCell
@@ -1006,7 +1006,7 @@ of every account other than the CircuitBreaker itself. -/
 theorem pauseSuccess_ok_getStor_eq_of_owner_ne
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {owner : Adr}
     (hpanic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (ownerNe : owner ≠ sevm.currentTarget)
     (run : Func.RunCompiledTo fs sevm pre pauseSuccess (.ok post)) :
     Devm.getStor post owner = Devm.getStor pre owner := by
@@ -1075,7 +1075,7 @@ theorem pauseSuccess_ok_getStor_eq_of_owner_ne
                 (Devm.PopBurn.of_popBurnBy hcheckedPop)))))
       · exact hfinish
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv hpanic hpanicRun
-      exact (Func.RunCompiledTo.not_ok_revData hbody).elim
+      exact (Func.RunCompiledTo.not_ok_revertData hbody).elim
   · obtain ⟨finishPre, hpush, hfinish⟩ :=
       runCompiledTo_next_inv hzeroArm
     apply finishStor
@@ -1311,7 +1311,7 @@ theorem pauseSuccess_outcome
     {fs : List Func} {sevm : Sevm} {pre : Devm} {ex : Execution}
     {target duration count interval : B256}
     (hpanic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (inputs : PauseSuccessInputs sevm pre target duration count interval)
     (run : Func.RunCompiledTo fs sevm pre pauseSuccess ex) :
     PauseSuccessOutcome fs sevm pre target duration count interval ex := by
@@ -1392,7 +1392,7 @@ theorem pauseSuccess_outcome
     have hwords :
         32 * (bytesWords heartbeatArithmeticPanicData).length < 2 ^ 256 := by
       decide +kernel
-    rcases runCompiledTo_revData_frame_inv hwf hreads hblob hwords hbody with
+    rcases runCompiledTo_revertData_frame_inv hwf hreads hblob hwords hbody with
       ⟨d, herror, hstor, htransient, hlogs⟩ |
         ⟨panicPost, herror, hpayload, hstor, htransient, hlogs⟩
     · refine Or.inr ⟨⟨htarget, hduration, hcount, hinterval⟩, run, hpanic,
@@ -1536,7 +1536,7 @@ windows. -/
 private theorem pauseAfterSet_codeGuard_arms_words
     {fs : List Func} {sevm : Sevm} {entry : Devm} {target : Adr}
     {duration : B256} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
     (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
     (hDuration : MemWordAt entry (durationWord * 32).toNat duration)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
@@ -1600,7 +1600,7 @@ private theorem pauseAfterSet_codeGuard_arms_words
       by_contra hnonzero
       rw [B256.eqCheck, if_neg hnonzero] at hflagWord
       exact hword hflagWord.symm
-    exact Or.inl ⟨hcodeZero, runCompiledTo_rev_inv hbody⟩
+    exact Or.inl ⟨hcodeZero, runCompiledTo_revert_inv hbody⟩
 
 /-- The post-`CALL` branch, with both staged words carried into whichever arm
 the source selects. -/
@@ -1666,7 +1666,7 @@ composition.  It exposes no new premise and preserves both terminal polarities. 
 theorem pauseAfterSet_codeGuard_arms_windows
     {fs : List Func} {sevm : Sevm} {entry : Devm} {target : Adr}
     {duration : B256} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
     (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
     (hDuration : MemWordAt entry (durationWord * 32).toNat duration)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
@@ -1808,12 +1808,12 @@ private theorem pauseDecode_success_words
       Func.RunCompiledTo fs sevm successPre pauseSuccess ex := by
   rw [decodePausedResult] at run
   obtain ⟨shortPost, hshort, hbranch⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨hflag, -, -⟩ := of_retdataShorterThan_val nil_pref hshort
+  obtain ⟨hflag, -, -⟩ := of_returnDataShorterThan_val nil_pref hshort
   rw [hreturnData] at hflag
   have targetShort := targetWindow.acrossLine
-    (by unfold retdataShorterThan; line_inv) hshort
+    (by unfold returnDataShorterThan; line_inv) hshort
   have durationShort := durationWindow.acrossLine
-    (by unfold retdataShorterThan; line_inv) hshort
+    (by unfold returnDataShorterThan; line_inv) hshort
   rcases runCompiledTo_branch_inv hbranch with
     ⟨loadPre, hzeroStack, hpopShort, hloadArm⟩ |
       ⟨shortWord, shortPre, hshortWord, hshortStack, hpopShort, hshortArm⟩
@@ -1828,7 +1828,7 @@ private theorem pauseDecode_success_words
     have hloadMemory : loadPre.memory = memory.write 0 (out.take 32) :=
       popShort.memory.symm.trans
         ((Line.of_inv Devm.memory
-          (by unfold retdataShorterThan; line_inv) hshort).symm.trans hmemory)
+          (by unfold returnDataShorterThan; line_inv) hshort).symm.trans hmemory)
     obtain ⟨loadedPost, hload, hloadArm⟩ :=
       runCompiledTo_prepend_inv hloadArm
     have targetLoaded := targetLoadPre.acrossLoadWord hload
@@ -1968,11 +1968,11 @@ arms and all their out-of-gas alternatives unchanged. -/
 theorem pauseObservation_committed_outcomes
     {fs : List Func} {sevm : Sevm} {entry statPre statPost : Devm}
     {target : Adr} {duration : B256} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (boundary : PauseStatBoundary sevm target statPre statPost)
     (targetWindow : MemWordAt statPre
       (targetWord * 32).toNat target.toB256)
@@ -1995,7 +1995,7 @@ theorem pauseObservation_committed_outcomes
       runCompiledTo_call_inv h_bubble hbubble
     have hbubbleReturn : bubblePre.returnData = child.output :=
       hburn.returnData.symm.trans harmReturn
-    rcases Func.runCompiledTo_revReturnData_inv hbody with
+    rcases Func.runCompiledTo_revertReturnData_inv hbody with
       hoog | ⟨post, hpost, houtput⟩
     · exact Or.inl ⟨herror, Or.inl hoog⟩
     · exact Or.inl ⟨herror, Or.inr ⟨post, hpost,
@@ -2008,18 +2008,18 @@ theorem pauseObservation_committed_outcomes
         ⟨hnotShort, hlong, hnonzero, hnonone, hempty⟩ |
         ⟨hnotShort, hlong, hone, hsuccessRun⟩
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty hempty
-      exact Or.inr (Or.inl ⟨hsuccess, hshort, runCompiledTo_rev_inv hbody⟩)
+      exact Or.inr (Or.inl ⟨hsuccess, hshort, runCompiledTo_revert_inv hbody⟩)
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_failed hfailed
       rw [show pauseFailedError =
-        Func.revSelector (customErrorData "PauseFailed")
+        Func.revertSelector (customErrorData "PauseFailed")
           (by simp [customErrorData, B256.length_toBytes]) from rfl] at hbody
       exact Or.inr (Or.inr (Or.inl
         ⟨hsuccess, hnotShort, hlong, hzero,
-          runCompiledTo_revSelector_inv hbody⟩))
+          runCompiledTo_revertSelector_inv hbody⟩))
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty hempty
       exact Or.inr (Or.inr (Or.inr (Or.inl
         ⟨hsuccess, hnotShort, hlong, hnonzero, hnonone,
-          runCompiledTo_rev_inv hbody⟩)))
+          runCompiledTo_revert_inv hbody⟩)))
     · obtain ⟨successPre, targetSuccess, durationSuccess, hsuccessWalk⟩ :=
         pauseDecode_success_words harmMemory harmReturn hnotShort hone
           targetArm durationArm hdecode
@@ -2059,7 +2059,7 @@ def PauseAfterSetCommittedOutcomes
                     callChild.output.length.toB256.toNat))) ∨
             (∃ armPre statPre statPost : Devm,
               Line.Run sevm armPre pauseStatStaging statPre ∧
-              Ninst.RunCompiled sevm statPre (.exec .statcall) statPost ∧
+              Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost ∧
               (PauseStatBoundary sevm target statPre statPost →
                 PauseObservationCommittedOutcomes fs sevm entry statPost
                   target duration ex)))))
@@ -2072,11 +2072,11 @@ entry storage are the two fields of `PauseSuccessNoninterference`. -/
 theorem pauseAfterSet_committed_outcomes
     {fs : List Func} {sevm : Sevm} {entry : Devm}
     {target : Adr} {duration : B256} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
     (hDuration : MemWordAt entry (durationWord * 32).toNat duration)
     (noninterference : ∀ successPre,
@@ -2110,7 +2110,7 @@ theorem pauseAfterSet_committed_outcomes
         runCompiledTo_call_inv h_bubble hbubble
       have hbubbleReturn : bubblePre.returnData = callChild.output :=
         hburn.returnData.symm.trans harmReturn
-      rcases Func.runCompiledTo_revReturnData_inv hbody with
+      rcases Func.runCompiledTo_revertReturnData_inv hbody with
         hoog | ⟨post, hpost, houtput⟩
       · exact Or.inl hoog
       · exact Or.inr ⟨post, hpost, by rw [houtput, hbubbleReturn]⟩

@@ -120,11 +120,11 @@ private theorem pauseUntilFinite_effect
     · rcases hsucc with ⟨_, _, _, -, -, panicRun⟩
       have hget :
           ((runtime dp).main :: (runtime dp).aux)[arithmeticPanicSlot]? =
-            some (Func.revData
+            some (Func.revertData
               ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
                 (Nat.toB256 0x11).toBytes)) := by
         simp [runtime, aux, baseAux, arithmeticPanicSlot]
-      exact (Func.RunCompiledTo.not_ok_call_revData hget panicRun).elim
+      exact (Func.RunCompiledTo.not_ok_call_revertData hget panicRun).elim
   obtain ⟨stopPre, writeLine, stopRun⟩ :=
     runCompiledTo_prepend_inv writeRun
   rcases of_run_append [dup 0] writeLine with
@@ -210,7 +210,7 @@ private theorem pauseUntilGuard_effect
           ((runtime dp).main :: (runtime dp).aux)[resumedExpectedSlot]? =
             some (runtimeError "ResumedExpected") := by
         simp [runtime, aux, baseAux, resumedExpectedSlot]
-      exact (Func.RunCompiledTo.not_ok_call_revSelector
+      exact (Func.RunCompiledTo.not_ok_call_revertSelector
         (by simpa [runtimeError] using hget) errorRun).elim
     · rcases hsucc with
         ⟨guardWord, unpausedPre, hnz, hstack, hpop, unpausedRun⟩
@@ -285,7 +285,7 @@ private theorem pauseUntilGuard_effect
           ((runtime dp).main :: (runtime dp).aux)[pauseUntilPastSlot]? =
             some (runtimeError "PauseUntilMustBeInFuture") := by
         simp [runtime, aux, baseAux, pauseUntilPastSlot]
-      exact (Func.RunCompiledTo.not_ok_call_revSelector
+      exact (Func.RunCompiledTo.not_ok_call_revertSelector
         (by simpa [runtimeError] using hget) errorRun).elim
   have sentinelTestStor :
       Devm.getStor root = Devm.getStor sentinelTestPre :=
@@ -539,7 +539,7 @@ private theorem resumeGuard_effect
           ((runtime dp).main :: (runtime dp).aux)[pausedExpectedSlot]? =
             some (runtimeError "PausedExpected") := by
         simp [runtime, aux, baseAux, pausedExpectedSlot]
-      exact (Func.RunCompiledTo.not_ok_call_revSelector
+      exact (Func.RunCompiledTo.not_ok_call_revertSelector
         (by simpa [runtimeError] using hget) errorRun).elim
     · rcases hsucc with ⟨word, successPre, hnz, hstack, hpop, successRun⟩
       have pWord : word :: ([] : Stack) <<+ guardTest.stack :=

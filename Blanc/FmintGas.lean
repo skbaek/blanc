@@ -109,7 +109,7 @@ theorem decimals_runCompiled {sevm : Sevm} {pre : Devm}
         (by
           func_run [dcSel, 1, 0, 1, 0, 1, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 138) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 138) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
@@ -204,7 +204,7 @@ theorem totalSupply_gas_exact {sevm : Sevm} {pre : Devm}
           (by
             func_run [tsSel, 1, 1, 0, 1, supplySlot, 3]
             · exact Devm.extCost_empty_word
-            · exact Func.runCompiled_ret_word (G := g - 2218) (e := 0) rfl
+            · exact Func.runCompiled_return_word (G := g - 2218) (e := 0) rfl
                 (Devm.extCost_word_word Mem.size_write_word)
                 (by simp only [Devm.gasLeft_setMach]; omega)
                 (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))))
@@ -300,7 +300,7 @@ theorem totalSupply_warm_runCompiled {sevm : Sevm} {pre : Devm}
         (by
           func_run [tsSel, 1, 1, 0, 1, supplySlot, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 218) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 218) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),

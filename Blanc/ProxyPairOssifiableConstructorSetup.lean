@@ -22,8 +22,8 @@ a failed child tests the complete returned length, then bubbles nonempty bytes
 or enters the inherited empty-error body at slot 3. -/
 def ossifiableConstructorDelegateTail : Func :=
   (.call 5) <?>
-    (retdatasize :::
-      (Func.revReturnData <?> (.call 3)))
+    (returndatasize :::
+      (Func.revertReturnData <?> (.call 3)))
 
 theorem ossifiableConstructorDelegateSetup_split_shape :
     ossifiableConstructorDelegateSetup =
@@ -32,7 +32,7 @@ theorem ossifiableConstructorDelegateSetup_split_shape :
       [pushB256 128, mload] +++
       pushB256 0x100 :::
       [pushB256 0, mload] +++
-      gas ::: delcall ::: ossifiableConstructorDelegateTail := by
+      gas ::: delegatecall ::: ossifiableConstructorDelegateTail := by
   rfl
 
 /-- Execution-derived constructor setup-call cut.  The six exact operands and
@@ -42,7 +42,7 @@ inductive OssifiableConstructorDelegateBoundary
     (decodedImage : Bytes) (implementation : B256)
     (setupData : Bytes) (out : Execution) : Prop where
   | intro (gasWord : B256) (callPre callPost : Devm)
-      (callRun : Ninst.RunCompiled sevm callPre (.exec .delcall) callPost)
+      (callRun : Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost)
       (tailRun : Func.RunCompiledTo fs sevm callPost
         ossifiableConstructorDelegateTail out)
       (stack :
@@ -160,7 +160,7 @@ theorem OssifiableConstructorDelegateBoundary.settled_child
     (boundary : OssifiableConstructorDelegateBoundary fs sevm pre tail
       decodedImage implementation setupData out) :
     ∃ callPre callPost,
-      Ninst.RunCompiled sevm callPre (.exec .delcall) callPost ∧
+      Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost ∧
       Func.RunCompiledTo fs sevm callPost
         ossifiableConstructorDelegateTail out ∧
       ∀ spawn : DelegatecallSpawnDescriptor sevm callPre,
@@ -185,7 +185,7 @@ theorem OssifiableConstructorDelegateBoundary.settled_child_exact
     (setupImage :
       decodedImage.sliceD 0x100 setupData.length 0 = setupData) :
     ∃ gasWord callPre callPost,
-      Ninst.RunCompiled sevm callPre (.exec .delcall) callPost ∧
+      Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost ∧
       Func.RunCompiledTo fs sevm callPost
         ossifiableConstructorDelegateTail out ∧
       pre.state = callPre.state ∧
@@ -515,10 +515,10 @@ theorem OssifiableConstructorDecodeRoute.prepare_of_ok
       ⟨implementationClean, requestedAdminClean, setupLengthBound,
         implementationImage, requestedAdminImage, setupLengthImage, setupImage,
         spec, entryState, entryLogs, prepared⟩⟩
-  · exact (Func.RunCompiledTo.not_ok_call_rev
+  · exact (Func.RunCompiledTo.not_ok_call_revert
       (ossifiableConstructorFunctions_emptyRevert runtimeOffset runtimeLength)
       emptyRun).elim
-  · exact (Func.RunCompiledTo.not_ok_call_revData
+  · exact (Func.RunCompiledTo.not_ok_call_revertData
       (ossifiableConstructorFunctions_allocationPanic runtimeOffset
         runtimeLength) panicRun).elim
 
@@ -637,7 +637,7 @@ The output-length bound is the exact round-trip premise used by the nonempty
 theorem ossifiableConstructorDelegateTail_outcome
     {fs : List Func} {sevm : Sevm} {callPre callPost child : Devm}
     {image : Bytes} {out : Execution}
-    (hEmpty : fs[3]? = some (Func.revData emptyDelegatecallErrorData))
+    (hEmpty : fs[3]? = some (Func.revertData emptyDelegatecallErrorData))
     (spawn : DelegatecallSpawnDescriptor sevm callPre)
     (settled : DelegatecallSettledBoundary spawn child callPost)
     (outputLength : child.output.length < 2 ^ 256)
@@ -672,7 +672,7 @@ theorem ossifiableConstructorDelegateTail_outcome
         Func.RunCompiledTo.zero_branch_of_prefix pZero run
       obtain ⟨sizePost, sizeRun, payloadBranch⟩ :=
         runCompiledTo_next_inv failedRun
-      have sizePush := of_run_retdatasize_val
+      have sizePush := of_run_returndatasize_val
         (Ninst.Run.of_runCompiled sizeRun)
       have failedReturnData : failedPre.returnData = child.output :=
         failedPop.returnData.symm.trans returnData
@@ -709,7 +709,7 @@ theorem ossifiableConstructorDelegateTail_outcome
           returnData rolledState rolledTransient rolledLogs errorState
           (by
             simpa only [ControlErrorOutcome] using
-              runCompiledTo_call_revData_frame_inv hEmpty errorWf errorReads
+              runCompiledTo_call_revertData_frame_inv hEmpty errorWf errorReads
                 (by decide +kernel) (by decide +kernel) errorRun)
       · have lengthWordNonzero :
             Nat.toB256 child.output.length ≠ 0 := by
@@ -731,7 +731,7 @@ theorem ossifiableConstructorDelegateTail_outcome
         have bubbleState : bubblePre.state = callPost.state :=
           bubblePop.state.symm.trans
             (sizePush.state.symm.trans failedPop.state.symm)
-        rcases Func.runCompiledTo_revReturnData_inv bubbleRun with
+        rcases Func.runCompiledTo_revertReturnData_inv bubbleRun with
           outOfGas | ⟨post, postOutcome, postOutput⟩
         · exact .bubbledFailure bubblePre ⟨childCertificate⟩ status
             outputEmpty returnData rolledState rolledTransient rolledLogs

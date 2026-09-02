@@ -2556,7 +2556,7 @@ example (dp : DeployParams) {ca : Adr} {sevm : Sevm} {pre : Devm}
         (gVerylow + pre.extCost [⟨(targetWord * 32).toNat, 32⟩]) +
         gVerylow + (gVerylow + gHigh + gJumpdest) +
         (gVerylow + gMid + gJumpdest) +
-        revSelectorCost (pre.setMach ⟨pre.stack,
+        revertSelectorCost (pre.setMach ⟨pre.stack,
           (pre.memory.read (targetWord * 32).toNat 32).2, 0⟩)))
     (hroom : pre.stack.length < 1023) :
     let fs := (runtime dp).main :: (runtime dp).aux
@@ -2862,7 +2862,7 @@ example {fs : List Func} {sevm : Sevm} {pre : Devm}
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.RunCompiledTo fs sevm pre registerAfterSet out) :
     Execution.Rel
       (fun _ post => RegistryWitness
@@ -2945,7 +2945,7 @@ example (dp : DeployParams)
     (hstatic : sevm.isStatic = false)
     (hemptyLookup :
       ((runtime dp).main :: (runtime dp).aux)[emptyRevertSlot]? =
-        some Func.rev)
+        some Func.revert)
     (hpauseLookup :
       ((runtime dp).main :: (runtime dp).aux)[pauseAfterSetSlot]? =
         some pauseAfterSet)
@@ -2984,7 +2984,7 @@ example (dp : DeployParams)
           ∀ occurrence : Exec.NinstOccurrence
               (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv),
             occurrence.instruction ≠ .exec .call ∧
-            occurrence.instruction ≠ .exec .statcall) ∧
+            occurrence.instruction ≠ .exec .staticcall) ∧
         ∃ post,
           ProcessMessage msg
               (.some ⟨⟨0, sevm, pre⟩, .error (.revert, raw)⟩)
@@ -3151,7 +3151,7 @@ example (h : OfficialConstructorErrorArmLayout) :
         Ninst.callvalue ::: Ninst.iszero :::
           (officialConstructorValidationBody <?> (.call 1)) ∧
       lidoCircuitBreakerConstructorProgram.aux =
-        [Func.rev,
+        [Func.revert,
           DeploymentProof.constructorErrorForProof "AdminZero",
           DeploymentProof.constructorErrorForProof "MinPauseDurationZero",
           DeploymentProof.constructorErrorForProof

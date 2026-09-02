@@ -214,7 +214,7 @@ private def permitCorePrefix : Line :=
   [Ninst.pushB256 1, Ninst.add, Ninst.swap 0, Ninst.sstore, Ninst.pop,
     Ninst.pushB256 PERMIT_TYPEHASH] ++ mstoreAt 0 ++
   argCopy 1 0 3 ++ arg 3 ++ mstoreAt 5 ++
-  pushList [192, 0] ++ [Ninst.kec, Ninst.dup 1]
+  pushList [192, 0] ++ [Ninst.keccak256, Ninst.dup 1]
 
 private def permitDynamicPath : Func :=
   Ninst.swap 0 ::: calculateDomainSeparator +++ .call permitRecoverSlot
@@ -770,34 +770,34 @@ private theorem dispatch22_24_1ByteAt_to_permit
   change
     Func.byteAtByShape locations (n + 6 + 5 + 4)
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (permit (⟨0, 0⟩ : DeployParams))).compileShape
         (nonpayablePrefix +++
-          Func.branch Func.rev (permit dp)) (i - 15) d = _
+          Func.branch Func.revert (permit dp)) (i - 15) d = _
   have hnonpayablePrefix : prefixByteSize nonpayablePrefix = 2 := by
     decide +kernel
-  have hrev : Func.rev.compileShape.byteSize = 3 := by
+  have hrev : Func.revert.compileShape.byteSize = 3 := by
     decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n + 6 + 5 + 4)
       (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (permit (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev (permit dp))
+      (p := Func.branch Func.revert (permit dp))
       (i := i - 15) (d := d) (by
         rw [hnonpayablePrefix]
         omega)]
   simp only [hnonpayablePrefix]
   change
     Func.byteAtByShape locations (n + 6 + 5 + 4 + 2)
-        (.branch Func.rev.compileShape
+        (.branch Func.revert.compileShape
           (permit (⟨0, 0⟩ : DeployParams)).compileShape)
-        (.branch Func.rev (permit dp)) (i - 15 - 2) d = _
+        (.branch Func.revert (permit dp)) (i - 15 - 2) d = _
   conv_lhs => rw [byteAt_branch_to_right
       (locations := locations) (n := n + 6 + 5 + 4 + 2)
-      (left0 := Func.rev)
+      (left0 := Func.revert)
       (right0 := permit (⟨0, 0⟩ : DeployParams))
-      (left := Func.rev) (right := permit dp)
+      (left := Func.revert) (right := permit dp)
       (i := i - 15 - 2) (d := d) (by rw [hrev]; omega)]
   simp only [hrev]
   congr 1
@@ -1524,27 +1524,27 @@ private theorem nonpayableByteAt_eq_before_body
         (nonpayable body0) i d := by
   change
     Func.byteAtByShape locations n
-        (nonpayablePrefix +++ Func.branch Func.rev body0).compileShape
-        (nonpayablePrefix +++ Func.branch Func.rev body) i d =
+        (nonpayablePrefix +++ Func.branch Func.revert body0).compileShape
+        (nonpayablePrefix +++ Func.branch Func.revert body) i d =
       Func.byteAtByShape locations n
-        (nonpayablePrefix +++ Func.branch Func.rev body0).compileShape
-        (nonpayablePrefix +++ Func.branch Func.rev body0) i d
+        (nonpayablePrefix +++ Func.branch Func.revert body0).compileShape
+        (nonpayablePrefix +++ Func.branch Func.revert body0) i d
   have hprefix : prefixByteSize nonpayablePrefix = 2 := by decide +kernel
   by_cases hpre : i < 2
   · apply byteAt_prepend_eq_prefix
     simpa only [hprefix] using hpre
   · conv_lhs => rw [byteAt_prepend_to_tail
         (locations := locations) (n := n) (l := nonpayablePrefix)
-        (p0 := Func.branch Func.rev body0)
-        (p := Func.branch Func.rev body)
+        (p0 := Func.branch Func.revert body0)
+        (p := Func.branch Func.revert body)
         (i := i) (d := d) (by rw [hprefix]; omega)]
     conv_rhs => rw [byteAt_prepend_to_tail
         (locations := locations) (n := n) (l := nonpayablePrefix)
-        (p0 := Func.branch Func.rev body0)
-        (p := Func.branch Func.rev body0)
+        (p0 := Func.branch Func.revert body0)
+        (p := Func.branch Func.revert body0)
         (i := i) (d := d) (by rw [hprefix]; omega)]
     simp only [hprefix]
-    have hrev : Func.rev.compileShape.byteSize = 3 := by decide +kernel
+    have hrev : Func.revert.compileShape.byteSize = 3 := by decide +kernel
     apply byteAt_branch_eq_before_right
     rw [hrev]
     omega
@@ -1558,22 +1558,22 @@ private theorem nonpayableByteAt_to_body
         (i - 10) d := by
   change
     Func.byteAtByShape locations n
-        (nonpayablePrefix +++ Func.branch Func.rev body0).compileShape
-        (nonpayablePrefix +++ Func.branch Func.rev body) i d = _
+        (nonpayablePrefix +++ Func.branch Func.revert body0).compileShape
+        (nonpayablePrefix +++ Func.branch Func.revert body) i d = _
   have hprefix : prefixByteSize nonpayablePrefix = 2 := by decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev body0)
-      (p := Func.branch Func.rev body)
+      (p0 := Func.branch Func.revert body0)
+      (p := Func.branch Func.revert body)
       (i := i) (d := d) (by rw [hprefix]; omega)]
   simp only [hprefix]
-  have hrev : Func.rev.compileShape.byteSize = 3 := by decide +kernel
+  have hrev : Func.revert.compileShape.byteSize = 3 := by decide +kernel
   change
     Func.byteAtByShape locations (n + 2)
-        (.branch Func.rev.compileShape body0.compileShape)
-        (.branch Func.rev body) (i - 2) d = _
+        (.branch Func.revert.compileShape body0.compileShape)
+        (.branch Func.revert body) (i - 2) d = _
   rw [byteAt_branch_to_right locations (n + 2)
-      Func.rev body0 Func.rev body (i - 2) d (by rw [hrev]; omega)]
+      Func.revert body0 Func.revert body (i - 2) d (by rw [hrev]; omega)]
   simp only [hrev]
   congr 1
 

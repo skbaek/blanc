@@ -45,7 +45,7 @@ private def storeByteOffset (offset : Nat) : Line :=
   [pushFixedNat offset, mstore]
 
 private def constructorError (name : String) : Func :=
-  Func.revSelector (customErrorData name) (by
+  Func.revertSelector (customErrorData name) (by
     simp [customErrorData, B256.length_toBytes])
 
 private def patchArgumentIndex : ImmutableParameter → Nat
@@ -134,13 +134,13 @@ private def constructorBody
                                               pushB256 heartbeatIntervalSlot ::: sstore :::
                                               pushFixedNat runtimeLength :::
                                               pushCompactNat constructorRuntimeBase :::
-                                              Func.ret))))))))))))))))))))))
+                                              Func.return_))))))))))))))))))))))
 
 private def constructorProgram
     (runtimeOffset argsOffset runtimeLength : Nat) : Prog :=
   { main := callvalue ::: iszero :::
       (constructorBody runtimeOffset argsOffset runtimeLength <?> (.call 1))
-    aux := [Func.rev,
+    aux := [Func.revert,
       constructorError "AdminZero",
       constructorError "MinPauseDurationZero",
       constructorError "MinPauseDurationExceedsMax",
@@ -465,7 +465,7 @@ theorem constructor_program_site_counts_exact :
     constructorFuncEffectCounts_prepend, constructorLineEffectCounts,
     constructorPatchRuntimeEffectCounts,
     ConstructorEffectCounts.add,
-    Func.rev, Func.revSelector, Func.ret, checkNonAddress, logWith,
+    Func.revert, Func.revertSelector, Func.return_, checkNonAddress, logWith,
     pushAddressMask]
 
 theorem constructor_inventory_cardinalities :

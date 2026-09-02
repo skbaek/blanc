@@ -898,7 +898,7 @@ axioms and admits no exception table.
 
 #### HIST-3 — Coherence is transported across an arbitrary external call and across the pause route, which completes swap-and-pop unregistration *before* yielding to an arbitrary callee
 
-- **Declarations:** `Blanc.LidoCircuitBreaker.coherent_of_call`, `Blanc.LidoCircuitBreaker.coherent_of_statcall`, `Blanc.LidoCircuitBreaker.coherent_pause`
+- **Declarations:** `Blanc.LidoCircuitBreaker.coherent_of_call`, `Blanc.LidoCircuitBreaker.coherent_of_staticcall`, `Blanc.LidoCircuitBreaker.coherent_pause`
 - **Premises:** a depth-indexed induction hypothesis at the deeper frame. **No callee-code premise.**
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-history.sh`

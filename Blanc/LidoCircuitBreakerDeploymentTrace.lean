@@ -98,7 +98,7 @@ def officialConstructorHeartbeatSuffix : Func :=
   pushB256 heartbeatIntervalSlot ::: sstore :::
   pushFixedNatForProof 4282 :::
   pushCompactNatForProof constructorRuntimeBaseForProof :::
-  Func.ret
+  Func.return_
 
 /-- Pause-duration initialization before the shared heartbeat tail. -/
 def officialConstructorConfigurationPrefix : Line :=
@@ -239,7 +239,7 @@ private theorem officialConstructorEffectBody_validationErrorArmIndices :
   unfold officialConstructorEffectBody officialConstructorConfigurationSuffix
     officialConstructorHeartbeatSuffix
   simp only [constructorValidationErrorArmIndices,
-    constructorValidationErrorArmIndices_prepend, Func.ret]
+    constructorValidationErrorArmIndices_prepend, Func.return_]
 
 private theorem officialConstructorValidationBody_errorArmIndices :
     constructorValidationErrorArmIndices officialConstructorValidationBody =
@@ -253,7 +253,7 @@ private theorem officialConstructorValidationBody_errorArmIndices :
 validation order after the bare revert entry. -/
 theorem lidoCircuitBreakerConstructorProgram_aux_official :
     lidoCircuitBreakerConstructorProgram.aux =
-      [Func.rev,
+      [Func.revert,
         constructorErrorForProof "AdminZero",
         constructorErrorForProof "MinPauseDurationZero",
         constructorErrorForProof "MinPauseDurationExceedsMax",
@@ -268,7 +268,7 @@ theorem lidoCircuitBreakerConstructorProgram_aux_official :
 private theorem constructorTableCallIndices_constructorError (name : String) :
     constructorTableCallIndices (constructorErrorForProof name) = [] := by
   rw [constructorErrorForProof_eq]
-  unfold Func.revSelector
+  unfold Func.revertSelector
   rfl
 
 private theorem officialConstructorAuxTableCallIndices_empty :
@@ -276,7 +276,7 @@ private theorem officialConstructorAuxTableCallIndices_empty :
       constructorTableCallIndices).flatten = [] := by
   rw [lidoCircuitBreakerConstructorProgram_aux_official]
   simp only [List.map_cons, List.map_nil, List.flatten_cons,
-    List.flatten_nil, constructorTableCallIndices, Func.rev,
+    List.flatten_nil, constructorTableCallIndices, Func.revert,
     constructorTableCallIndices_constructorError, List.nil_append]
 
 /-- The three source-position calls to table entry one and the single calls to
@@ -1959,7 +1959,7 @@ theorem officialConstructorReturnLine_runCompiled
 theorem officialConstructorReturn_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat} :
     Func.RunCompiled fs sevm
-      (officialConstructorReturnPre sevm base G) Func.ret
+      (officialConstructorReturnPre sevm base G) Func.return_
       (officialConstructorPost sevm base G) := by
   have hindex : (Nat.toB256 constructorRuntimeBaseForProof).toNat =
       constructorRuntimeBaseForProof := by
@@ -1995,14 +1995,14 @@ theorem officialConstructorReturn_runCompiled
         officialConstructorReturnRead sevm base G := by
     unfold officialConstructorReturnRead
     rw [hindex, show (4282 : B256).toNat = 4282 by decide]
-  have hrun := Func.runCompiled_ret
+  have hrun := Func.runCompiled_return
     (fs := fs) (sevm := sevm)
     (devm := officialConstructorReturnPre sevm base G)
     (i := Nat.toB256 constructorRuntimeBaseForProof) (sz := (4282 : B256))
     (s := []) (out := (officialConstructorReturnRead sevm base G).1)
     (d' := (officialConstructorReturnRead sevm base G).2) (G := G)
     hstack hgas (by simpa only [Prod.eta] using hread)
-  simpa only [officialConstructorPost, Func.ret] using hrun
+  simpa only [officialConstructorPost, Func.return_] using hrun
 
 /-! ## Composed constructor effect suffix -/
 

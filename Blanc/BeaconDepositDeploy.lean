@@ -85,8 +85,8 @@ def constructorStoreWord (word : B256) : Line :=
   [constructorPushWord (word * 32), mstore]
 
 /-- Constructor-local returndata length comparison. -/
-def constructorRetdataShorterThan (size : B256) : Line :=
-  [constructorPushWord size, retdatasize, lt]
+def constructorReturnDataShorterThan (size : B256) : Line :=
+  [constructorPushWord size, returndatasize, lt]
 
 /-! ## Zero-hash materialization -/
 
@@ -94,9 +94,9 @@ def constructorRetdataShorterThan (size : B256) : Line :=
 def constructorSha64
     (inputWord outputWord : B256) (success : Func) : Func :=
   constructorPushWords [32, outputWord * 32, 64, inputWord * 32, 2] +++
-  gas ::: statcall ::: iszero :::
+  gas ::: staticcall ::: iszero :::
   ((.call constructorBubbleRevertSlot) <?>
-    (constructorRetdataShorterThan 32 +++
+    (constructorReturnDataShorterThan 32 +++
       ((.call constructorEmptyRevertSlot) <?> success)))
 
 /-- Copy and return the appended runtime from creation code. -/
@@ -106,7 +106,7 @@ def constructorFinish
       [Nat.toB256 runtimeLength, Nat.toB256 runtimeOffset, 0] +++
     codecopy :::
     constructorPushWords [Nat.toB256 runtimeLength, 0] +++
-    Func.ret
+    Func.return_
 
 /-- Store the newly computed zero hash and advance the loop height. -/
 def constructorZeroHashContinuation : Func :=
@@ -134,7 +134,7 @@ def constructorStart : Func :=
 def constructorProgramAt
     (runtimeOffset runtimeLength : Nat) : Prog :=
   { main := nonpayable constructorStart
-    aux := [Func.rev, Func.revReturnData,
+    aux := [Func.revert, Func.revertReturnData,
       constructorZeroHashLoop runtimeOffset runtimeLength,
       constructorZeroHashContinuation] }
 
@@ -258,7 +258,7 @@ private def constructorIsSstore : Ninst → Bool
   | _ => false
 
 private def constructorIsStaticcall : Ninst → Bool
-  | .exec .statcall => true
+  | .exec .staticcall => true
   | _ => false
 
 private def constructorIsCodecopy : Ninst → Bool
@@ -312,7 +312,7 @@ private theorem constructorSourceSiteFacts :
     Prog.SourceSite.pcs constructorCodecopySourceSites = [57] ∧
     (constructorExternalExecutionSourceSites.all fun site =>
       match site.instruction with
-      | .exec .statcall => true
+      | .exec .staticcall => true
       | _ => false) = true ∧
     constructorExternalExecutionSourceSites.length = 1 ∧
     Prog.SourceSite.pcs constructorExternalExecutionSourceSites = [98] := by
@@ -371,7 +371,7 @@ theorem constructorCodecopySourceSites_pcs :
 theorem constructorExternalExecutionSourceSites_all_staticcall :
     (constructorExternalExecutionSourceSites.all fun site =>
       match site.instruction with
-      | .exec .statcall => true
+      | .exec .staticcall => true
       | _ => false) = true :=
   constructorSourceSiteFacts.2.2.2.2.2.2.1
 

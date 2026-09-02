@@ -16,9 +16,9 @@ open Jaune
 
 private def hexOf (bs : Bytes) : String := "0x" ++ Bytes.toHex bs
 
-/-- The fresh-memory instantiation of `runCompiledTo_revWith`'s additive gas
+/-- The fresh-memory instantiation of `runCompiledTo_revertWith`'s additive gas
 term.  It deliberately excludes a table-entry `JUMPDEST`: this is the emitted
-`Func.revWith` body measured by the payload report. -/
+`Func.revertWith` body measured by the payload report. -/
 private def freshGas (s : String) : Nat :=
   let blob := errorData s
   storesFixedCost (bytesWords blob).zipIdx +
@@ -26,7 +26,7 @@ private def freshGas (s : String) : Nat :=
     Mem.expansionCost Mem.empty 0 (32 * (bytesWords blob).length)
 
 private def inlineCodeBytes? (s : String) : Option Nat :=
-  match Func.compile [] 0 (Func.revWith s) with
+  match Func.compile [] 0 (Func.revertWith s) with
   | some bs => some bs.length
   | none => none
 
@@ -43,6 +43,6 @@ def main (inputs : List String) : IO Unit := do
       | some codeBytes =>
           IO.println s!"{(Blanc.errorData s).length}\t{codeBytes}\t{Blanc.freshGas s}"
       | none =>
-          throw (IO.userError s!"Func.revWith failed to compile for {repr s}")
+          throw (IO.userError s!"Func.revertWith failed to compile for {repr s}")
     else
       IO.println (Blanc.hexOf (Blanc.errorData s))

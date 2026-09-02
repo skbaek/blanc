@@ -54,7 +54,7 @@ def stubDispatchLine : Line :=
 def stubBaseMain : Func := stubDispatchLine +++ (stubPause <?> stubQuery)
 
 def stubMain : Func :=
-  stubProtectedLine +++ (Func.rev <?> stubBaseMain)
+  stubProtectedLine +++ (Func.revert <?> stubBaseMain)
 
 def stubProgram : Prog := ⟨stubMain, []⟩
 
@@ -144,10 +144,10 @@ private theorem stubBase_run_of_main
   cases guardNil
   rcases of_run_branch branchRun with
       ⟨entry, zeroPop, baseRun⟩ |
-      ⟨flag, popPost, bodyEntry, flagNonzero, flagPop, bodyBurn, revRun⟩
+      ⟨flag, popPost, bodyEntry, flagNonzero, flagPop, bodyBurn, revertRun⟩
   · refine ⟨entry, baseRun, guardMemory.trans zeroPop.memory,
       guardStorage.trans (zeroPop.getStor target).symm⟩
-  · exact absurd revRun not_run_rev
+  · exact absurd revertRun not_run_revert
 
 private theorem not_stubMain_run_of_protected
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
@@ -177,13 +177,13 @@ private theorem not_stubMain_run_of_protected
     rw [selectorEq, B256.eqCheck, if_pos rfl]
   rcases of_run_branch branchRun with
       ⟨entry, zeroPop, baseRun⟩ |
-      ⟨flag, popPost, bodyEntry, flagNonzero, flagPop, bodyBurn, revRun⟩
+      ⟨flag, popPost, bodyEntry, flagNonzero, flagPop, bodyBurn, revertRun⟩
   · have flagZero :
         (stubProtectedSelector =? Sevm.selector sevm) = 0 :=
       (popBurn_pref zeroPop flagPrefix).1.symm
     rw [flagOne] at flagZero
     exact (by cases flagZero)
-  · exact absurd revRun not_run_rev
+  · exact absurd revertRun not_run_revert
 
 /-- The compiled control implements the bundle's exact pause effect. -/
 theorem stub_pauseFor_effect
@@ -384,7 +384,7 @@ private lemma error_eq_of_mstore
 
 private lemma error_eq_of_return
     {sevm : Sevm} {pre post : Devm}
-    (run : Linst.Run sevm pre .ret (.ok post)) :
+    (run : Linst.Run sevm pre .return_ (.ok post)) :
     pre.error = post.error := by
   simp only [Linst.Run, Linst.run] at run
   rcases Except.bind_eq_ok run with
@@ -450,7 +450,7 @@ private lemma of_returnWord
   have errorEq : pre.error = post.error :=
     storeError.trans (rangeError.trans returnError)
   refine ⟨?_, errorEq.symm⟩
-  rw [(of_run_ret_val offsetPrefix returnRun).1,
+  rw [(of_run_return_val offsetPrefix returnRun).1,
     show (0 : B256).toNat = 0 from rfl,
     show (32 : B256).toNat = 32 from rfl,
     Mem.Reads.read (rangeMemory ▸ storedReads) 0 32,

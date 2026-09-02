@@ -977,23 +977,23 @@ private theorem temporalReturnWord_runCompiled
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩)
-        Func.ret post ∧
+        Func.return_ post ∧
       Devm.output post = word.toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  let retPre := base.setMach
+  let returnPre := base.setMach
     ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩
-  let d := (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32
+  let d := (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, rfl, ?_, rfl⟩
   have hread :
-      (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32 =
+      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32 =
         ⟨word.toBytes, d.2⟩ := by
     exact Prod.ext
       (Devm.memRead_word_fst
-        (by simp only [retPre, Devm.memory_setMach]))
+        (by simp only [returnPre, Devm.memory_setMach]))
       rfl
-  exact Func.runCompiled_ret_of (devm := retPre) (G := G) (e := 0)
+  exact Func.runCompiled_return_of (devm := returnPre) (G := G) (e := 0)
     (out := word.toBytes) (d' := d.2) rfl
     (Devm.extCost_word_word Mem.size_write_word) rfl hread
   · exact ⟨rfl, rfl⟩
@@ -2890,12 +2890,12 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_not_admin
     func_run (9) [0, 0]
     all_goals try { simp [B256.eqCheck, Ne.symm hnotAdmin] }
     case h_body =>
-      apply Func.runCompiledTo_revSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (G := G)
       · simp [customErrorData, B256.length_toBytes]
       · exact Mem.wf_empty
       · exact Mem.reads_empty
       · rfl
-      · simp only [Devm.gasLeft_setMach, revSelectorCost]
+      · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
         omega
@@ -2928,12 +2928,12 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_below_min
     all_goals try { simp [hadmin, B256.eqCheck] }
     all_goals try { rw [harg]; simp [B256.ltCheck, hbelow] }
     case h_body =>
-      apply Func.runCompiledTo_revSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (G := G)
       · simp [customErrorData, B256.length_toBytes]
       · exact Mem.wf_empty
       · exact Mem.reads_empty
       · rfl
-      · simp only [Devm.gasLeft_setMach, revSelectorCost]
+      · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
         omega
@@ -2970,12 +2970,12 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_above_max
       simp [B256.ltCheck, B256.not_lt.mpr hmin] }
     all_goals try { rw [harg]; simp [B256.gtCheck, habove] }
     case h_body =>
-      apply Func.runCompiledTo_revSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (G := G)
       · simp [customErrorData, B256.length_toBytes]
       · exact Mem.wf_empty
       · exact Mem.reads_empty
       · rfl
-      · simp only [Devm.gasLeft_setMach, revSelectorCost]
+      · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
         omega
@@ -3685,12 +3685,12 @@ theorem heartbeat_body_runCompiledTo_error_of_count_zero
       simp only [Devm.getStorVal_setMach, hcount]
       simp [B256.eqCheck] }
     case h_body =>
-      apply Func.runCompiledTo_revSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (G := G)
       · simp [customErrorData, B256.length_toBytes]
       · exact Mem.wf_empty
       · exact Mem.reads_empty
       · rfl
-      · simp only [Devm.gasLeft_setMach, revSelectorCost]
+      · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
         omega
@@ -3739,12 +3739,12 @@ theorem heartbeat_body_runCompiledTo_error_of_expired
       simp only [Devm.getStorVal_setMach, holdExpiry, htime]
       simp [B256.ltCheck, B256.not_lt.mpr hexpired] }
     case h_body =>
-      apply Func.runCompiledTo_revSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (G := G)
       · simp [customErrorData, B256.length_toBytes]
       · exact Mem.wf_empty
       · exact Mem.reads_empty
       · rfl
-      · simp only [Devm.gasLeft_setMach, revSelectorCost]
+      · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
         omega
@@ -4022,7 +4022,7 @@ theorem heartbeat_body_runCompiledTo_error_of_add_wrap
       rw [htime]
       simp [B256.ltCheck, hwrap] }
     case h_body =>
-      apply Func.runCompiledTo_revData (G := G)
+      apply Func.runCompiledTo_revertData (G := G)
       · exact Mem.wf_empty
       · exact Mem.reads_empty
       · rfl

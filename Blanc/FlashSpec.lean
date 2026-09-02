@@ -230,7 +230,7 @@ Arc B walked this same route while tracking `Devm.getStor`, and let every word
 it met be anonymous (`Conserved.lean`, `flashLoan_preserves_conserved`).  Here
 the words are *named*: Step 1's value-carrying calldata layer makes what the
 guards constrain be `Sevm.argWord sevm k`, a function of the calldata alone, so
-each `of_run_branch_rev` — "the revert arm was not taken" — becomes the fact the
+each `of_run_branch_revert` — "the revert arm was not taken" — becomes the fact the
 guard states, and the mint pair becomes an equation rather than a `Conserved`
 step.
 
@@ -246,12 +246,12 @@ changes.  It exists so that `of_flashLoan_toCall` can hand the next step a run
 that is still tied to the same `r`, rather than an unattached state. -/
 def flashLoanFromCall : Func :=
   Ninst.call ::: Ninst.iszero :::
-  .rev <?>
-  retdataShorterThan 32 +++
-  .rev <?>
-  checkRetdataHead erc3156Magic 0 +++
+  .revert <?>
+  returnDataShorterThan 32 +++
+  .revert <?>
+  checkReturnDataHead erc3156Magic 0 +++
   Ninst.iszero :::
-  .rev <?>
+  .revert <?>
   spendAllowanceThenBurn
 
 /-- **The forward walk from `flashLoan`'s entry to its `CALL`.**
@@ -341,7 +341,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r4 Line.Run.nil))
   have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r4 Line.Run.nil))
   clear r4 hs3
-  rcases of_run_branch_rev h_run with ⟨s5, hp5, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s5, hp5, h_run⟩
   have hp5s := hp5.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp5s
   rw [hp5s] at hs4
@@ -380,7 +380,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h8)
   have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) h8)
   clear h8 hs7
-  rcases of_run_branch_rev h_run with ⟨s9, hp9, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s9, hp9, h_run⟩
   have hp9s := hp9.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp9s
   rw [hp9s] at hs8
@@ -448,7 +448,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r15 Line.Run.nil))
   have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r15 Line.Run.nil))
   clear r15 hs14
-  rcases of_run_branch_rev h_run with ⟨s16, hp16, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s16, hp16, h_run⟩
   have hp16s := hp16.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp16s
   rw [hp16s] at hs15
@@ -1117,7 +1117,7 @@ and it holds **at the resumption point `mid` and nowhere else**:
   statement is silent about that.
 
 **No error kind is named.**  `h_flag` is the pushed word, which is all fmint's
-own compiled guard (`call ::: iszero ::: .rev <?> _`) observes; the three ways
+own compiled guard (`call ::: iszero ::: .revert <?> _`) observes; the three ways
 to reach it — the balance guard, the depth guard, and a child frame that
 settled with *some* error — are deliberately not distinguished, and no claim is
 made about which occurred.
@@ -1156,7 +1156,7 @@ theorem rollback_of_callback_failure {sevm : Sevm} {sc mid : Devm}
 guard.**  From the state `sc` entering `flashLoanFromCall` — the operand
 stack, a memory image whose window is the encoding, and the residual run —
 either branch of the `CALL` that does *not* open a clean child frame pushes
-`0`, and `call ::: iszero ::: .rev <?> _` turns reaching the next fragment
+`0`, and `call ::: iszero ::: .revert <?> _` turns reaching the next fragment
 into the fact that the pushed word was nonzero; what survives is
 `CallbackBoundary`, and the walk continues through the two returndata checks
 to the state entering `spendAllowanceThenBurn`, handed to Step 5 with its
@@ -1188,7 +1188,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
     exfalso
     rcases of_run_next h_run with ⟨s1, r_iz, h_run⟩
     have hp1 := prefix_of_iszero r_iz h_fail.1
-    rcases of_run_branch_rev h_run with ⟨s2, hpb2, -⟩
+    rcases of_run_branch_revert h_run with ⟨s2, hpb2, -⟩
     have hps2 := hpb2.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps2
     rw [hps2] at hp1
@@ -1232,17 +1232,17 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
       rcases of_run_reg r_iz with ⟨pc, run⟩
       simp only [Rinst.run, Rinst.runCore] at run
       exact Devm.diffBurn_of_applyUnary run
-    rcases of_run_branch_rev h_run with ⟨s2, hpb2, h_run⟩
+    rcases of_run_branch_revert h_run with ⟨s2, hpb2, h_run⟩
     have hps2 := hpb2.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps2
     rw [hps2] at hp1
     rw [show ((1 : B256) =? 0) = 0 from by
       rw [B256.eqCheck, if_neg (fun h => B256.zero_ne_one h.symm)]] at hp1
     have hp2 : [amount, a.toB256] <<+ s2.stack := cons_pref_cons_inv hp1
-    -- `retdataShorterThan 32`, and the untaken revert arm
-    rcases of_run_prepend (retdataShorterThan 32) _ h_run with ⟨s3, h_rst, h_run⟩
-    rcases of_retdataShorterThan_val hp2 h_rst with ⟨hp3, hm3, hrd3⟩
-    rcases of_run_branch_rev h_run with ⟨s4, hpb4, h_run⟩
+    -- `returnDataShorterThan 32`, and the untaken revert arm
+    rcases of_run_prepend (returnDataShorterThan 32) _ h_run with ⟨s3, h_rst, h_run⟩
+    rcases of_returnDataShorterThan_val hp2 h_rst with ⟨hp3, hm3, hrd3⟩
+    rcases of_run_branch_revert h_run with ⟨s4, hpb4, h_run⟩
     have hps4 := hpb4.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps4
     rw [hps4] at hp3
@@ -1261,10 +1261,10 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
     have h_rd4 : Mem.Reads s4.memory bs := by
       rw [h_mem_s4]
       exact h_rd_mid
-    -- `checkRetdataHead erc3156Magic 0` : the head word, read back
-    rcases of_run_prepend (checkRetdataHead erc3156Magic 0) _ h_run with
+    -- `checkReturnDataHead erc3156Magic 0` : the head word, read back
+    rcases of_run_prepend (checkReturnDataHead erc3156Magic 0) _ h_run with
       ⟨s5, h_crh, h_run⟩
-    rcases of_checkRetdataHead_val hp4 h_wf4 h_rd4 h_crh with
+    rcases of_checkReturnDataHead_val hp4 h_wf4 h_rd4 h_crh with
       ⟨hp5, hlen4, h_wf5, h_rd5, hrd5⟩
     -- `iszero`, and the untaken revert arm : the head word IS the magic
     rcases of_run_next h_run with ⟨s6, r_iz2, h_run⟩
@@ -1273,7 +1273,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
       rcases of_run_reg r_iz2 with ⟨pc, run⟩
       simp only [Rinst.run, Rinst.runCore] at run
       exact Devm.diffBurn_of_applyUnary run
-    rcases of_run_branch_rev h_run with ⟨s7, hpb7, h_run⟩
+    rcases of_run_branch_revert h_run with ⟨s7, hpb7, h_run⟩
     have hps7 := hpb7.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps7
     rw [hps7] at hp6
@@ -1545,10 +1545,10 @@ lemma of_spendAllowanceThenBurn_val {sevm : Sevm} {s r : Devm} {wad : B256}
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h5)
   have hm5 : s4.memory = s5.memory := Line.of_inv Devm.memory (by line_inv) h5
   clear h5 hs4
-  -- kec : the allowance key, named
+  -- keccak256 : the allowance key, named
   rcases of_run_next h_run with ⟨s6, r6, h_run⟩
-  have hs6 := (prefix_of_kec_val r6 hs5).1
-  have hm6 := (prefix_of_kec_val r6 hs5).2
+  have hs6 := (prefix_of_keccak256_val r6 hs5).1
+  have hm6 := (prefix_of_keccak256_val r6 hs5).2
   have h_key : (s5.memory.read (0 : B256).toNat (64 : B256).toNat).1.keccak
       = repayKey a sevm.currentTarget := by
     rw [show (0 : B256).toNat = 0 from rfl, show (64 : B256).toNat = 64 from rfl,
@@ -1572,8 +1572,8 @@ lemma of_spendAllowanceThenBurn_val {sevm : Sevm} {s r : Devm} {wad : B256}
     rcases hrd6 with ⟨img, himg⟩
     exact ⟨img, (Line.of_inv Devm.memory (by line_inv) h7) ▸ himg⟩
   clear h7 hs6 hwf6 hrd6
-  -- rev-branch : the guard passed
-  rcases of_run_branch_rev h_run with ⟨s8, hp8, h_run⟩
+  -- revert-branch : the guard passed
+  rcases of_run_branch_revert h_run with ⟨s8, hp8, h_run⟩
   have hp8s := hp8.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp8s
   rw [hp8s] at hs7
@@ -1730,7 +1730,7 @@ lemma of_spendAllowanceThenBurn_val {sevm : Sevm} {s r : Devm} {wad : B256}
       rcases hmr with ⟨img, himg⟩
       exact ⟨img, (Ninst.Hinv.inv (f := Devm.memory) r16) ▸ himg⟩
     clear r16 hs15
-    rcases of_run_branch_rev h_run with ⟨s17, hp17, h_run⟩
+    rcases of_run_branch_revert h_run with ⟨s17, hp17, h_run⟩
     have hp17s := hp17.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp17s
     rw [hp17s] at hs16
@@ -1942,9 +1942,9 @@ lemma of_returnTrue {fs : List Func} {sevm : Sevm} {s r : Devm}
     ((Ninst.Hinv.inv (f := Devm.getCode) r1).trans
       (Line.of_inv Devm.getCode (by line_inv) h2)).trans
       (Line.of_inv Devm.getCode (by line_inv) h3)
-  refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
+  refine ⟨?_, hgc.trans (of_run_return_val hu2 h).2⟩
   show Devm.output r = _
-  rw [(of_run_ret_val hu2 h).1,
+  rw [(of_run_return_val hu2 h).1,
     show (0 : B256).toNat = 0 from rfl,
     show (32 : B256).toNat = 32 from rfl,
     Mem.Reads.read (hm3 ▸ hrd2) 0 32,
@@ -2056,7 +2056,7 @@ lemma of_burnAndReturn_val {fs : List Func} {sevm : Sevm} {s r : Devm}
     rcases hmr with ⟨img, himg⟩
     exact ⟨img, (Ninst.Hinv.inv (f := Devm.memory) r5) ▸ himg⟩
   clear r5 hs4
-  rcases of_run_branch_rev h_run with ⟨s6, hp6, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s6, hp6, h_run⟩
   have hp6s := hp6.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp6s
   rw [hp6s] at hs5
@@ -2425,10 +2425,10 @@ lemma of_repayment {sevm : Sevm} {s r : Devm} {wad : B256} {a : Adr} {bs : Bytes
       ReturnsTrue r := by
   obtain ⟨h_nva, h_nsup, sb, allow, h_allow, h_arms, h_code, h_stack, h_wfb,
     ⟨img, h_img⟩, h_burn⟩ := of_spendAllowanceThenBurn_val hs h_wf h_reads h_run
-  obtain ⟨h_le, h_stor, h_code2, h_ret⟩ :=
+  obtain ⟨h_le, h_stor, h_code2, h_return⟩ :=
     of_burnAndReturn_val h_stack h_wfb h_img h_burn
   refine ⟨h_nva, h_nsup, Devm.getStor sb sevm.currentTarget, allow, h_allow, ?_,
-    h_le, h_stor, h_code.trans h_code2, h_ret⟩
+    h_le, h_stor, h_code.trans h_code2, h_return⟩
   rcases h_arms with ⟨hmax, heq⟩ | ⟨hne, hle, heq⟩
   · exact Or.inl ⟨hmax, heq⟩
   · exact Or.inr ⟨hne, hle, heq⟩
@@ -2552,7 +2552,7 @@ theorem fmint_flashLoan_spec {sevm : Sevm} {pre post : Devm}
     h_gs_mid, h_gc_mid, h_stack, h_wf_fin, ⟨img, h_img⟩, h_run5⟩ :=
     flashLoan_performs_callback h_dec h_size (h_mem ▸ h_wf) (h_mem ▸ h_fresh) h_run
   obtain ⟨h_nva, h_nsup, st, allow, h_allow, h_arms, h_bal, h_post, h_code_post,
-    h_ret⟩ := of_repayment h_stack h_wf_fin h_img h_run5
+    h_return⟩ := of_repayment h_stack h_wf_fin h_img h_run5
   -- restate the walk's facts at the states a reader can name: `pre`, the
   -- frame's own entry, and `mid`, the state the callback returns in
   rw [h_gs] at h_nof h_stor_sc
@@ -2563,7 +2563,7 @@ theorem fmint_flashLoan_spec {sevm : Sevm} {pre post : Devm}
     rcases h_arms with ⟨-, heq⟩ | ⟨-, -, heq⟩
     · rw [heq] at h_bal; exact h_bal
     · rw [heq, Stor.get_set_ne _ h_key_ne] at h_bal; exact h_bal
-  exact ⟨h_token, h_nof, h_ret, a, sc, mid, st, allow, h_recv,
+  exact ⟨h_token, h_nof, h_return, a, sc, mid, st, allow, h_recv,
     h_gc.symm.trans h_code_sc, h_stor_sc, h_cb, h_nva, h_nsup, h_allow, h_arms,
     h_bal', h_post, h_gc_mid.trans h_code_post⟩
 

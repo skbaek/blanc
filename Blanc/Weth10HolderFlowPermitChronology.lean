@@ -171,13 +171,13 @@ private def StaticcallSpawnData
   msg.shouldTransferValue = true ∧
   msg.isStatic = true
 
-private theorem Xinst.step_statcall_spawn_data
+private theorem Xinst.step_staticcall_spawn_data
     {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}
     (gasWord : B256) (tail : Stack)
     (operands : gasWord :: (1 : B256) :: (0 : B256) ::
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         devm.stack)
-    (hspawn : Xinst.step sevm devm .statcall = .spawn frame resume) :
+    (hspawn : Xinst.step sevm devm .staticcall = .spawn frame resume) :
     StaticcallSpawnData sevm devm frame resume := by
   simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
   rcases eq1 : Devm.pop devm with err | ⟨actualGasWord, d1⟩ <;>
@@ -294,24 +294,24 @@ private theorem Xinst.step_statcall_spawn_data
   · exact congrArg some hresolvedAddress
   · simpa only [callMsg] using hresolution
 
-private theorem Ninst.step_statcall_spawn_data
+private theorem Ninst.step_staticcall_spawn_data
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {frame : Frame} {resume : Resume}
     (gasWord : B256) (tail : Stack)
     (operands : gasWord :: (1 : B256) :: (0 : B256) ::
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         pre.stack)
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall =
+    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall =
       .spawn frame resume pc') :
     StaticcallSpawnData sevm pre frame resume := by
-  have hx : Xinst.step sevm pre .statcall = .spawn frame resume := by
+  have hx : Xinst.step sevm pre .staticcall = .spawn frame resume := by
     exact XStep.toStep_spawn (by
-      simpa only [Ninst.statcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_statcall_spawn_data gasWord tail operands hx
+      simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
+  exact Xinst.step_staticcall_spawn_data gasWord tail operands hx
 
-private theorem Xinst.step_statcall_done_state
+private theorem Xinst.step_staticcall_done_state
     {sevm : Sevm} {pre post : Devm}
-    (hdone : Xinst.step sevm pre .statcall = .done (.ok post)) :
+    (hdone : Xinst.step sevm pre .staticcall = .done (.ok post)) :
     pre.state = post.state := by
   simp only [Xinst.step, Bind.bind, Except.bind] at hdone
   rcases eq1 : Devm.pop pre with err | ⟨gasWord, d1⟩ <;>
@@ -529,9 +529,9 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
     (operands : gasWord :: (1 : B256) :: (0 : B256) ::
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         pre.stack)
-    (hat : Ninst.At sevm.code pc Ninst.statcall)
+    (hat : Ninst.At sevm.code pc Ninst.staticcall)
     (filled : slot.Filled)
-    (step : Ninst.StepRun pc sevm pre Ninst.statcall slot (.ok post))
+    (step : Ninst.StepRun pc sevm pre Ninst.staticcall slot (.ok post))
     (edge : Exec.Deriv.ParentStepActions dp ca
       ⟨nextPc, sevm, post, out, continuation⟩
       ⟨pc, sevm, pre, out, current⟩ selected) :
@@ -539,37 +539,37 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
   cases edge with
   | cont hstep next =>
       have hs := (Evm.step_next hat).symm.trans hstep
-      have actual : Ninst.StepRun pc sevm pre Ninst.statcall .none
+      have actual : Ninst.StepRun pc sevm pre Ninst.staticcall .none
           (.ok post) := by
         simp only [Ninst.StepRun, hs, Step.Run]
         exact ⟨trivial, trivial⟩
       have hslot := (Ninst.StepRun.unique_exec_of_filled
         filled (show Xlot.Filled .none from trivial) step actual).1
       subst slot
-      cases hxs : Xinst.step sevm pre .statcall with
+      cases hxs : Xinst.step sevm pre .staticcall with
       | done ex =>
           have hcont : Step.ofExecution (pc + 1) ex =
               .cont nextPc post := by
-            simpa only [Ninst.statcall, Ninst.step_exec, hxs,
+            simpa only [Ninst.staticcall, Ninst.step_exec, hxs,
               XStep.toStep] using hs
           have hout : ex = .ok post := (Step.ofExecution_cont hcont).2
           subst ex
           exact .none (PermitOwnObservations.of_state_eq
-            (Xinst.step_statcall_done_state hxs))
+            (Xinst.step_staticcall_done_state hxs))
       | spawn frame resume =>
           rw [Ninst.step_exec, hxs] at hs
           cases hs
   | doneOk hstep henter hresume next =>
       rename_i frame resume r
       have hs := (Evm.step_next hat).symm.trans hstep
-      have actual : Ninst.StepRun pc sevm pre Ninst.statcall .none
+      have actual : Ninst.StepRun pc sevm pre Ninst.staticcall .none
           (.ok post) := by
         simp only [Ninst.StepRun, hs, Step.Run]
         exact ⟨_, RunFrame.of_done henter, hresume.symm⟩
       have hslot := (Ninst.StepRun.unique_exec_of_filled
         filled (show Xlot.Filled .none from trivial) step actual).1
       subst slot
-      rcases Ninst.step_statcall_spawn_data gasWord tail operands hs with
+      rcases Ninst.step_staticcall_spawn_data gasWord tail operands hs with
         ⟨msg, parent, outputIndex, outputSize, hframe, hresumeShape,
           hparentState, hbenvState, _hdepth, _htarget, _hcodeAddress,
           _hresolution, hvalue, _htransfer, _hstatic⟩
@@ -587,7 +587,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
       rename_i frame resume childEvm raw
       rcases childEvm with ⟨childPc, childSevm, childPre⟩
       have hs := (Evm.step_next hat).symm.trans hstep
-      have actual : Ninst.StepRun pc sevm pre Ninst.statcall
+      have actual : Ninst.StepRun pc sevm pre Ninst.staticcall
           (.some ⟨⟨childPc, childSevm, childPre⟩, raw⟩) (.ok post) := by
         simp only [Ninst.StepRun, hs, Step.Run]
         exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
@@ -597,7 +597,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
       have hslot := (Ninst.StepRun.unique_exec_of_filled
         filled actualFilled step actual).1
       subst slot
-      rcases Ninst.step_statcall_spawn_data gasWord tail operands hs with
+      rcases Ninst.step_staticcall_spawn_data gasWord tail operands hs with
         ⟨msg, parent, outputIndex, outputSize, hframe, hresumeShape,
           hparentState, hbenvState, hdepth, htarget, hcodeAddress,
           hresolution, hvalue, htransfer, hstatic⟩
@@ -972,7 +972,7 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
         Ninst.pushB256]) with
     ⟨firstBranchCursor, hfirstLine, hfirstActions⟩
   rcases firstBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (reason := "WETH: invalid permit") (by
+      (not_run_call_revertWith (reason := "WETH: invalid permit") (by
         simp [weth10, weth10Aux, invalidPermitErrorSlot,
           invalidPermitError])) with
     ⟨secondGuardCursor, hfirstPop, hfirstBranchActions⟩
@@ -982,7 +982,7 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
           NinstIsChildless, Ninst.pushB256]) with
     ⟨secondBranchCursor, hsecondLine, hsecondActions⟩
   rcases secondBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (reason := "WETH: invalid permit") (by
+      (not_run_call_revertWith (reason := "WETH: invalid permit") (by
         simp [weth10, weth10Aux, invalidPermitErrorSlot,
           invalidPermitError])) with
     ⟨approveCursor, hsecondPop, hsecondBranchActions⟩
@@ -1183,7 +1183,7 @@ private theorem Exec.Frame.reachCompiledPermitRecover
         Ninst.pushB256]) with
     ⟨deadlineBranchCursor, hdeadline, hdeadlineActions⟩
   rcases deadlineBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (reason := "WETH: Expired permit") (by
+      (not_run_call_revertWith (reason := "WETH: Expired permit") (by
         simp [weth10, weth10Aux, expiredPermitErrorSlot,
           expiredPermitError])) with
     ⟨liveCursor, hdeadlinePop, hliveActions⟩
@@ -1236,7 +1236,7 @@ def Exec.Frame.CompiledPermitChronology
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame) : Prop :=
   ∃ (callPre callPost : Devm) (slot : Xlot)
       (selected : List FlowAction),
-    Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.statcall callPre callPost slot ∧
+    Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.staticcall callPre callPost slot ∧
     PermitStaticcallOperandPrefix callPre ∧
     PermitStaticcallOutcome dp ca frame.sevm callPre callPost slot selected ∧
     PermitOwnObservations frame.sevm frame.pre callPre ∧
@@ -1300,10 +1300,10 @@ theorem Exec.Frame.compiledPermitChronology
     ⟨rawPost, rawSlot, rawFilled, rawPc, rawStep⟩
   rcases callCursor.alignExecStep rawFilled rawStep with
     ⟨tailCursor, selected, htailPre, occurrence, edge, htailActions⟩
-  have hat : Ninst.At frame.sevm.code callCursor.pc Ninst.statcall :=
+  have hat : Ninst.At frame.sevm.code callCursor.pc Ninst.staticcall :=
     callCursor.headNinstAt_permit
   have exactStep : Ninst.StepRun callCursor.pc frame.sevm callCursor.pre
-      Ninst.statcall rawSlot (.ok tailCursor.pre) := by
+      Ninst.staticcall rawSlot (.ok tailCursor.pre) := by
     have transported :=
       Ninst.stepRun_pc_irrel (pc' := callCursor.pc)
         (by simp [Ninst.pcFree]) rawStep
@@ -1316,7 +1316,7 @@ theorem Exec.Frame.compiledPermitChronology
     hrecoverPrefixActions.trans hrecoverActions
   have htailSelected : tailCursor.actions = selected := by
     simpa only [hcallActions, List.nil_append] using htailActions
-  have exactOccurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.statcall
+  have exactOccurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.staticcall
       callCursor.pre tailCursor.pre rawSlot :=
     htailPre.symm ▸ occurrence
   exact ⟨callCursor.pre, tailCursor.pre, rawSlot, selected,

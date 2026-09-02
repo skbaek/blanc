@@ -733,7 +733,7 @@ theorem dispatch_routeTo_registerPauser (dp : DeployParams)
 /-! ## The `registerPauser` guard cascade
 
 Four branches, and not one of them costs a branch word: every arm this walk
-does *not* take is `Func.rev` or a `.call` to one, so the successful outcome
+does *not* take is `Func.revert` or a `.call` to one, so the successful outcome
 alone settles all four. -/
 
 /-- `requireStaticArgs 2`'s guard line, spelled literally. -/
@@ -1905,7 +1905,7 @@ carries: `finishSetPauser`'s continuation test reads the zero at
 `continuationWord`, `registerAfterSet`'s first test reads the zero at
 `previousPauserWord`, and its second reads the new pauser again.  The fourth is
 `checkedHeartbeatExpiry`'s overflow test, whose sibling is
-`Func.revData (Panic(0x11))` and therefore free.
+`Func.revertData (Panic(0x11))` and therefore free.
 
 Role pinning is free again, and for the same reason as `afterOld.newCount`:
 every `register.*` row permits `.adminExpiry` alone.
@@ -1934,16 +1934,16 @@ These two names were **transposed** until they were exchanged: index 14 carried
 reverse.  Nothing ever depended on them — every row is pinned by `sourceSite?`
 — but reports and commits written before the exchange use the old pairing. -/
 
-/-- `arithmeticPanic` is `Func.revData` of a `Panic(0x11)` payload, so
+/-- `arithmeticPanic` is `Func.revertData` of a `Panic(0x11)` payload, so
 `checkedHeartbeatExpiry`'s overflow arm is certified-reverting and its branch
 costs no word.
 
 `by rfl` -- what the other six reverting siblings on this route use -- does
-*not* close this one, and the reason is worth recording: `Func.revData`'s node
+*not* close this one, and the reason is worth recording: `Func.revertData`'s node
 count is computed from its payload, so the certificate cannot reduce until
 `signatureHash "Panic"` does, and the elaborator's `whnf` does not get there.
 The kernel does, so this is the one certificate that needs `decide +kernel`.
-`Func.revSelector`, which the other reverters use, has a fixed shape and never
+`Func.revertSelector`, which the other reverters use, has a fixed shape and never
 looks at its payload. -/
 private theorem arithmeticPanic_revertsWithin :
     Func.alwaysRevertsWithin 16
@@ -2132,7 +2132,7 @@ the path equation with no rewriting step of its own.
 Against it, **not one branch word is priced on the two configuration routes,
 and only the dispatcher's are priced on the heartbeat one**.  Every crossing is
 settled either on the concrete calldata selector or by a sibling arm that is
-`Func.rev` or a `.call` to a `runtimeError`, which `routeTo_branch*_of_*RevertsOk`
+`Func.revert` or a `.call` to a `runtimeError`, which `routeTo_branch*_of_*RevertsOk`
 refutes from the successful outcome alone.  Nothing storage-valued or
 memory-valued survives a crossing on any of the three, so no `Devm.getStor`
 chain and no memory image travel with these routes — including the heartbeat
@@ -3375,7 +3375,7 @@ certified-reverting sibling and a successful outcome already excludes it.
 Stated at `officialParams` where its two siblings are stated at an arbitrary
 `dp`, and the reason is `arithmeticPanic`.  Every other reverting sibling on
 every route in this module is certified `by rfl`, which reduces under a free
-deployment parameter; `arithmeticPanic` is `Func.revData` of a `Panic(0x11)`
+deployment parameter; `arithmeticPanic` is `Func.revertData` of a `Panic(0x11)`
 payload, whose certificate needs `decide +kernel` (see
 `arithmeticPanic_revertsWithin`), and `decide` refuses an expected type
 containing a free variable.  MEASURED, not assumed: the generic form was

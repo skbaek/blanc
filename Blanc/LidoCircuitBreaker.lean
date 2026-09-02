@@ -51,7 +51,7 @@ def customErrorData (name : String) (args : List ArgType := []) : Bytes :=
   (signatureHash name args).toBytes.take 4
 
 private def runtimeError (name : String) : Func :=
-  Func.revSelector (customErrorData name) (by
+  Func.revertSelector (customErrorData name) (by
     simp [customErrorData, B256.length_toBytes])
 
 def pausableZeroError : Func := runtimeError "PausableZero"
@@ -129,7 +129,7 @@ calldata instead of letting CALLDATALOAD zero-padding synthesize arguments.
 Trailing bytes remain accepted. -/
 def requireStaticArgs (words : Nat) (body : Func) : Func :=
   pushB256 (Nat.toB256 (4 + 32 * words)) ::: calldatasize ::: lt :::
-  (Func.rev <?> body)
+  (Func.revert <?> body)
 
 /-- Compute `block.timestamp + heartbeatInterval` with Solidity 0.8 checked
 addition.  On overflow this emits `Panic(0x11)`; otherwise `body` receives the
@@ -191,7 +191,7 @@ def enumLoop : Func :=
     pushB256 1 ::: add :::
     .call enumLoopSlot) <?>
   (pop ::: pushB256 32 ::: mload ::: pushB256 32 ::: mul :::
-    pushB256 64 ::: add ::: pushB256 0 ::: Func.ret)
+    pushB256 64 ::: add ::: pushB256 0 ::: Func.return_)
 
 def getPausables : Func :=
   pushB256 32 ::: mstoreAt 0 +++
@@ -343,7 +343,7 @@ memory zero.  Validate the retained returndata length and canonical Boolean
 without copying the unused successful tail; the caller handles failure first
 and still bubbles its complete returndata. -/
 def decodePausedResult : Func :=
-  retdataShorterThan 32 +++
+  returnDataShorterThan 32 +++
   ((.call emptyRevertSlot) <?>
     (loadWord 0 +++
       dup 0 ::: iszero :::
@@ -361,7 +361,7 @@ def pauseAfterSet : Func :=
       iszero :::
       ((.call bubbleRevertSlot) <?>
         (pushB256 isPausedSelector ::: mstoreAt 8 +++
-          pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++ gas ::: statcall :::
+          pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++ gas ::: staticcall :::
           iszero :::
           ((.call bubbleRevertSlot) <?>
             decodePausedResult)))))
@@ -432,10 +432,10 @@ def hybridDispatchWith (k : Nat)
 
 def runtimeMain (dp : DeployParams) : Func :=
   callvalue ::: pushB256 4 ::: calldatasize ::: lt ::: Ninst.or :::
-    (Func.rev <?> (fsig +++ hybridDispatchWith fallbackSlot (funcs dp)))
+    (Func.revert <?> (fsig +++ hybridDispatchWith fallbackSlot (funcs dp)))
 
 def aux : List Func :=
-  [ Func.rev,
+  [ Func.revert,
     pausableZeroError,
     senderNotAdminError,
     senderNotPauserError,
@@ -446,8 +446,8 @@ def aux : List Func :=
     heartbeatExpiredError,
     pauseFailedError,
     reentrantCallError,
-    Func.rev,
-    Func.revReturnData,
+    Func.revert,
+    Func.revertReturnData,
     setPauserKernel,
     appendTarget,
     afterOldPauser,
@@ -456,7 +456,7 @@ def aux : List Func :=
     registerAfterSet,
     pauseAfterSet,
     enumLoop,
-    Func.revData
+    Func.revertData
       ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
         (Nat.toB256 0x11).toBytes) ]
 

@@ -207,7 +207,7 @@ private lemma not_run_pop_donate {fs : List Func} {e : Sevm} {s r : Devm}
   rcases of_run_branch hbranch with
     ⟨u, hpop, hstop⟩ | ⟨w, u, v, hnz, hpop, hburn, hrev⟩
   · exact h_nonempty (popBurn_pref hpop hp).1.symm
-  · exact not_run_rev hrev
+  · exact not_run_revert hrev
 
 private theorem deposit_body_of_prorataMain
     {fs : List Func} {e : Sevm} {s r : Devm}

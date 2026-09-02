@@ -42,24 +42,24 @@ theorem storFixed_heartbeatInterval (dp : DeployParams) :
 /-! ## The four argument-taking views
 
 Each shares one envelope: the static-argument length guard, whose failure arm
-is `Func.rev`, then the canonical-address check, whose failure arm tail-jumps
+is `Func.revert`, then the canonical-address check, whose failure arm tail-jumps
 to `emptyRevertSlot`.  The jump is what `Func.Inv` cannot cross, and what
 `StorFixed` discharges by naming the slot's actual occupant. -/
 
 /-- `emptyRevertSlot` is index 12, and `aux`'s twelfth entry is the bare
 revert. -/
 theorem get_emptyRevertSlot (dp : DeployParams) :
-    ((runtime dp).main :: aux)[emptyRevertSlot]? = some Func.rev := rfl
+    ((runtime dp).main :: aux)[emptyRevertSlot]? = some Func.revert := rfl
 
 theorem storFixed_staticAddressView {dp : DeployParams} {body : Func}
     (h : Func.Inv Devm.getStor Devm.getStor body) :
     StorFixed dp (requireStaticArgs 1 (canonicalAddressArg 0 body)) := by
   unfold requireStaticArgs canonicalAddressArg
   refine StorFixed.next (StorFixed.next (StorFixed.next ?_))
-  refine StorFixed.branch ?_ StorFixed.rev
+  refine StorFixed.branch ?_ StorFixed.revert
   refine StorFixed.prepend (by line_inv) (StorFixed.prepend (by line_inv) ?_)
   exact StorFixed.branch (StorFixed.of_inv h)
-    (StorFixed.call (get_emptyRevertSlot dp) StorFixed.rev)
+    (StorFixed.call (get_emptyRevertSlot dp) StorFixed.revert)
 
 theorem storFixed_heartbeatExpiry (dp : DeployParams) :
     StorFixed dp heartbeatExpiry :=
@@ -363,8 +363,8 @@ end Coherent
 /-! ## The reverting auxiliary targets
 
 Every guard arm of a writing endpoint tail-jumps to a custom-error reverter.
-`Func.revSelector` is a fixed six-node chain and needs no evaluation; the
-arithmetic panic is a `Func.revData`, whose node count depends on a Keccak
+`Func.revertSelector` is a fixed six-node chain and needs no evaluation; the
+arithmetic panic is a `Func.revertData`, whose node count depends on a Keccak
 image, so it is handled generically over the blob instead of by unfolding. -/
 
 private theorem funcInv_prependStoresRev :
@@ -377,8 +377,8 @@ private theorem funcInv_prependStoresRev :
         (next_inv Ninst.Hinv.inv
           (next_inv Ninst.Hinv.inv (next_inv Ninst.Hinv.inv h)))
 
-private theorem storFixed_revData {dp : DeployParams} (blob : Bytes) :
-    StorFixed dp (Func.revData blob) :=
+private theorem storFixed_revertData {dp : DeployParams} (blob : Bytes) :
+    StorFixed dp (Func.revertData blob) :=
   StorFixed.of_inv
     (funcInv_prependStoresRev _
       (next_inv Ninst.Hinv.inv
@@ -416,7 +416,7 @@ theorem coherent_setPauseDuration (dp : DeployParams) :
     Coherent dp (setPauseDuration dp) := by
   unfold setPauseDuration requireStaticArgs onlyAdmin pushDeployWord
   refine Coherent.next (Coherent.next (Coherent.next
-    (Coherent.branch ?_ (Coherent.of_storFixed StorFixed.rev))))
+    (Coherent.branch ?_ (Coherent.of_storFixed StorFixed.revert))))
   refine Coherent.next (Coherent.next (Coherent.next
     (Coherent.branch (Coherent.call rfl
       (Coherent.of_storFixed (storFixed_senderNotAdminError dp))) ?_)))
@@ -438,7 +438,7 @@ theorem coherent_setHeartbeatInterval (dp : DeployParams) :
     Coherent dp (setHeartbeatInterval dp) := by
   unfold setHeartbeatInterval requireStaticArgs onlyAdmin pushDeployWord
   refine Coherent.next (Coherent.next (Coherent.next
-    (Coherent.branch ?_ (Coherent.of_storFixed StorFixed.rev))))
+    (Coherent.branch ?_ (Coherent.of_storFixed StorFixed.revert))))
   refine Coherent.next (Coherent.next (Coherent.next
     (Coherent.branch (Coherent.call rfl
       (Coherent.of_storFixed (storFixed_senderNotAdminError dp))) ?_)))
@@ -467,7 +467,7 @@ disjointness fact. -/
 `Panic(0x11)` reverter. -/
 theorem get_arithmeticPanicSlot (dp : DeployParams) :
     ((runtime dp).main :: aux)[arithmeticPanicSlot]? =
-      some (Func.revData
+      some (Func.revertData
         ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
           (Nat.toB256 0x11).toBytes)) := rfl
 
@@ -482,7 +482,7 @@ theorem coherent_heartbeat (dp : DeployParams) : Coherent dp heartbeat := by
   refine Coherent.next (Coherent.next (Coherent.next (Coherent.next
     (Coherent.next (Coherent.next (Coherent.next (Coherent.next
       (Coherent.branch ?_ (Coherent.call (get_arithmeticPanicSlot dp)
-        (Coherent.of_storFixed (storFixed_revData _)))))))))))
+        (Coherent.of_storFixed (storFixed_revertData _)))))))))))
   refine Coherent.next (Coherent.next (Coherent.next ?_))
   exact Coherent.callerTagSstore
     (fun a _ _ hcoh => hcoh.expiry_set (canonicalAddress_toB256 a))

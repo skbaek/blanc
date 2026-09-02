@@ -26,7 +26,7 @@ theorem b256_and_zero_or (mask value : B256) :
     rw [UInt64.and_zero, UInt64.zero_or]
 
 private def stageReturnEnd : Func :=
-  ossifiablePushCreationCoordinate 2188 ::: pushB256 0 ::: Func.ret
+  ossifiablePushCreationCoordinate 2188 ::: pushB256 0 ::: Func.return_
 
 private def stageCopy : Func :=
   ossifiablePushCreationCoordinate 2188 :::
@@ -82,7 +82,7 @@ private theorem stageReturnEnd_runCompiled
   unfold stageReturnEnd
   simp only [ossifiablePushCreationCoordinate_shape]
   func_run (2)
-  apply Func.runCompiled_ret_word
+  apply Func.runCompiled_return_word
     (devm := base.setMach
       ⟨[(0 : B256), Nat.toB256 2188], memory, G - 5⟩)
     (i := 0) (sz := Nat.toB256 2188) (s := [])
@@ -645,7 +645,7 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
       runtimeBytes)
     (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
-    (hZeroAdmin : fs[4]? = some (Func.revData zeroAdminErrorData))
+    (hZeroAdmin : fs[4]? = some (Func.revertData zeroAdminErrorData))
     (hgas : 100108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
@@ -712,7 +712,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
       runtimeBytes)
     (hruntimeLength : runtimeBytes.length = 2188)
     (hruntimeNonempty : runtimeBytes ≠ [])
-    (hZeroAdmin : fs[4]? = some (Func.revData zeroAdminErrorData))
+    (hZeroAdmin : fs[4]? = some (Func.revertData zeroAdminErrorData))
     (hgas : 102108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm

@@ -229,7 +229,7 @@ def PauseBoundaryEdges (fs : List Func) (sevm : Sevm) (entry : Devm)
             callPost.returnData = callChild.output) ∨
           (∃ armPre statPre statPost : Devm,
             Line.Run sevm armPre pauseStatStaging statPre ∧
-            Ninst.RunCompiled sevm statPre (.exec .statcall) statPost ∧
+            Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost ∧
             PauseStatBoundary sevm target statPre statPost ∧
             Func.RunCompiledTo fs sevm statPost
               (Ninst.iszero :::
@@ -249,11 +249,11 @@ the two frame facts required by the boundary satisfaction theorems. -/
 theorem pauseAfterSet_boundary_committed_outcomes
     {fs : List Func} {sevm : Sevm} {entry : Devm}
     {target : Adr} {duration : B256} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (hTarget : MemWordAt entry
       (targetWord * 32).toNat target.toB256)
     (hDuration : MemWordAt entry (durationWord * 32).toNat duration)

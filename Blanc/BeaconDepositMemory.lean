@@ -411,13 +411,13 @@ private theorem return96_runCompiled
       (base.setMach ⟨[], memory, G + 5⟩)
       (returnMemoryRange 0 96)
       ((base.setMach ⟨[], memory, G⟩).withOutput image) := by
-  let retPre := base.setMach ⟨[(0 : B256), (96 : B256)], memory, G⟩
-  have hext : retPre.extCost [⟨(0 : Nat), (96 : Nat)⟩] = 0 := by
+  let returnPre := base.setMach ⟨[(0 : B256), (96 : B256)], memory, G⟩
+  have hext : returnPre.extCost [⟨(0 : Nat), (96 : Nat)⟩] = 0 := by
     apply Devm.extCost_zero_of_le
     · exact hmod
     · rw [hsize]
   have hread :
-      (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 96 =
+      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 96 =
         ⟨image, base.setMach ⟨[], memory, G⟩⟩ := by
     apply Prod.ext
     · change (memory.read 0 96).1 = image
@@ -432,11 +432,11 @@ private theorem return96_runCompiled
         (memExtSize_of_le hmod (by rw [hsize]))]
   unfold returnMemoryRange pushList
   func_run (2) []
-  change Func.RunCompiled fs sevm retPre Func.ret
+  change Func.RunCompiled fs sevm returnPre Func.return_
     ((base.setMach ⟨[], memory, G⟩).withOutput image)
-  exact Func.runCompiled_ret_of (devm := retPre) (G := G) (e := 0)
+  exact Func.runCompiled_return_of (devm := returnPre) (G := G) (e := 0)
     rfl hext
-    (by simp only [retPre, Devm.gasLeft_setMach, Nat.add_zero])
+    (by simp only [returnPre, Devm.gasLeft_setMach, Nat.add_zero])
     hread
 
 /-! ## Small compiled carriers for the `MSTORE8` chain -/

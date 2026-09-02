@@ -1176,10 +1176,10 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_selectorBody
       prefix_of_fsig nil_pref fsigRun
     have fallbackLookup :
         (((weth10 dp).main :: weth10Aux)[fallbackSlot]?) =
-          some Func.rev := by
+          some Func.revert := by
       simp [fallbackSlot, weth10, weth10Aux]
     have fallbackFree : Func.sstoreFreeWithin 4
-        ((weth10 dp).main :: weth10Aux) Func.rev = true := by
+        ((weth10 dp).main :: weth10Aux) Func.revert = true := by
       rfl
     rcases dispatchCursor.balanceSstoreOccurrence_dispatchWith
         context.invocation.2.2.2 fallbackLookup fallbackFree
@@ -1210,13 +1210,13 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_nonpayable
         stepPre stepPost slot := by
   rcases cursor.balanceSstoreOccurrence_after_line
       (line := [Ninst.callvalue, Ninst.iszero])
-      (tail := .branch Func.rev body)
+      (tail := .branch Func.revert body)
       (by simp) fromCursor with
     ⟨branchCursor, _guardRun, atBranch⟩
   rcases branchCursor.balanceSstoreOccurrence_branch atBranch with
     ⟨revertCursor, insideRevert⟩ | ⟨bodyCursor, insideBody⟩
   · have revertFree : Func.sstoreFreeWithin 4
-        (f₀ :: aux) Func.rev = true := by
+        (f₀ :: aux) Func.revert = true := by
       rfl
     exact (revertCursor.no_balanceSstoreOccurrence_of_free
       hcode revertFree insideRevert).elim
@@ -2155,9 +2155,9 @@ private theorem prependStoresRev_noCalls
       apply ih
       simp [prependStore, Func.NoCalls, tailNoCalls]
 
-private theorem revWith_noCalls (reason : String) :
-    (Func.revWith reason).NoCalls := by
-  unfold Func.revWith Func.revData
+private theorem revertWith_noCalls (reason : String) :
+    (Func.revertWith reason).NoCalls := by
+  unfold Func.revertWith Func.revertData
   apply prependStoresRev_noCalls
   simp [Func.NoCalls]
 
@@ -2167,7 +2167,7 @@ private theorem burnBalanceError_sstoreFree (fs : List Func) :
       Func.sstoreFreeWithin 256 fs burnBalanceError =
         Func.sstoreFreeWithin 256 [] burnBalanceError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem ethTransferError_sstoreFree (fs : List Func) :
@@ -2176,7 +2176,7 @@ private theorem ethTransferError_sstoreFree (fs : List Func) :
       Func.sstoreFreeWithin 256 fs ethTransferError =
         Func.sstoreFreeWithin 256 [] ethTransferError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem transferBalanceError_sstoreFree (fs : List Func) :
@@ -2185,7 +2185,7 @@ private theorem transferBalanceError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs transferBalanceError =
         Func.sstoreFreeWithin 256 [] transferBalanceError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem allowanceError_sstoreFree (fs : List Func) :
@@ -2194,7 +2194,7 @@ private theorem allowanceError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs allowanceError =
         Func.sstoreFreeWithin 256 [] allowanceError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem etherTransferError_sstoreFree (fs : List Func) :
@@ -2203,7 +2203,7 @@ private theorem etherTransferError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs etherTransferError =
         Func.sstoreFreeWithin 256 [] etherTransferError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem flashTokenError_sstoreFree (fs : List Func) :
@@ -2212,7 +2212,7 @@ private theorem flashTokenError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs flashTokenError =
         Func.sstoreFreeWithin 256 [] flashTokenError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem individualLimitError_sstoreFree (fs : List Func) :
@@ -2221,7 +2221,7 @@ private theorem individualLimitError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs individualLimitError =
         Func.sstoreFreeWithin 256 [] individualLimitError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem totalLimitError_sstoreFree (fs : List Func) :
@@ -2230,7 +2230,7 @@ private theorem totalLimitError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs totalLimitError =
         Func.sstoreFreeWithin 256 [] totalLimitError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem expiredPermitError_sstoreFree (fs : List Func) :
@@ -2239,7 +2239,7 @@ private theorem expiredPermitError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs expiredPermitError =
         Func.sstoreFreeWithin 256 [] expiredPermitError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem invalidPermitError_sstoreFree (fs : List Func) :
@@ -2248,7 +2248,7 @@ private theorem invalidPermitError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs invalidPermitError =
         Func.sstoreFreeWithin 256 [] invalidPermitError :=
       Func.sstoreFreeWithin_eq_of_noCalls
-        (by exact revWith_noCalls _) fs []
+        (by exact revertWith_noCalls _) fs []
     _ = true := by decide +kernel
 
 private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_stopOrError
@@ -4103,16 +4103,16 @@ private def flashLoanAfterCredit : Func :=
   Ninst.dup 1 ::: Ninst.pushB256 0 :::
   Ninst.pushB256 Blanc.transferEvent ::: logWith 2 0 1 +++
   Ninst.dup 1 ::: Ninst.extcodesize ::: Ninst.iszero :::
-  Func.rev <?>
+  Func.revert <?>
   (Ninst.dup 0 ::: storeFlashCallbackHead +++
     pushList [0, 0] +++
     forwardArgTail 3 6 +++ flashCallbackArgsSize +++
     Ninst.pushB256 callbackArgsOffset ::: Ninst.pushB256 0 :::
     Ninst.dup 6 ::: Ninst.gas ::: Ninst.call ::: Ninst.iszero :::
     (.call bubbleRevertSlot) <?>
-    (retdataShorterThan 32 +++
-      Func.rev <?>
-      (checkRetdataHead CALLBACK_SUCCESS 0 +++ Ninst.iszero :::
+    (returnDataShorterThan 32 +++
+      Func.revert <?>
+      (checkReturnDataHead CALLBACK_SUCCESS 0 +++ Ninst.iszero :::
         (.call flashFailedErrorSlot) <?>
         (Ninst.pop ::: Ninst.pop ::: .call flashSettleSlot))))
 
@@ -4122,16 +4122,16 @@ private theorem flashLoanAfterCredit_routedToSettle (dp : DeployParams) :
       flashLoanAfterCredit = true := by
   simp [flashLoanAfterCredit, Func.balanceSstoreRoutedToCallWithin, prepend,
     mstoreAt, logWith, pushList, forwardArgTail, flashCallbackArgsSize,
-    storeFlashCallbackHead, retdataShorterThan, checkRetdataHead,
+    storeFlashCallbackHead, returnDataShorterThan, checkReturnDataHead,
     flashSettleSlot, bubbleRevertSlot, flashFailedErrorSlot, weth10,
-    weth10Aux, ninstSstoreFree, arg, cdl, Ninst.pushB256, Func.rev]
+    weth10Aux, ninstSstoreFree, arg, cdl, Ninst.pushB256, Func.revert]
   constructor
   · calc
       Func.sstoreFreeWithin 434 ((weth10 dp).main :: weth10Aux)
           flashFailedError =
         Func.sstoreFreeWithin 434 [] flashFailedError :=
           Func.sstoreFreeWithin_eq_of_noCalls
-            (by exact revWith_noCalls _) _ _
+            (by exact revertWith_noCalls _) _ _
       _ = true := by decide +kernel
   · calc
       Func.sstoreFreeWithin 448 ((weth10 dp).main :: weth10Aux)
@@ -4139,7 +4139,7 @@ private theorem flashLoanAfterCredit_routedToSettle (dp : DeployParams) :
         Func.sstoreFreeWithin 448 [] bubbleRevert :=
           Func.sstoreFreeWithin_eq_of_noCalls
             (by
-              unfold bubbleRevert Func.revReturnData
+              unfold bubbleRevert Func.revertReturnData
               simp [Func.NoCalls]) _ _
       _ = true := by decide +kernel
 
@@ -4851,7 +4851,7 @@ private def permitAfterNonceStore (dp : DeployParams) : Func :=
   Ninst.pop :::
   Ninst.pushB256 PERMIT_TYPEHASH ::: mstoreAt 0 +++
   argCopy 1 0 3 +++ arg 3 +++ mstoreAt 5 +++
-  pushList [192, 0] +++ Ninst.kec :::
+  pushList [192, 0] +++ Ninst.keccak256 :::
   Ninst.dup 1 ::: pushDeployWord dp.deploymentChainId ::: Ninst.eq :::
   (.branch
     (Ninst.swap 0 ::: calculateDomainSeparator +++

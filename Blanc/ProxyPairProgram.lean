@@ -30,11 +30,11 @@ theorem implementationSlotLit_eq_slot :
 status and revert on zero.  The forwarding program and the full Lido runtime
 share this exact tail. -/
 def proxyReturnTail : Func :=
-  pushB256 0 ::: retdatasize ::: pushB256 0 ::: pushB256 0 :::
-  retdatacopy ::: retdatasize ::: swap 1 :::
+  pushB256 0 ::: returndatasize ::: pushB256 0 ::: pushB256 0 :::
+  returndatacopy ::: returndatasize ::: swap 1 :::
   Func.branch
-    (Func.last .rev)
-    (Func.last .ret)
+    (Func.last .revert)
+    (Func.last .return_)
 
 def proxyFallback : Func :=
   -- Copy the whole calldata to memory[0 .. cds).
@@ -46,7 +46,7 @@ def proxyFallback : Func :=
   pushB256 0 :::
   pushB256 implementationSlotLit ::: sload :::
   gas :::
-  delcall :::
+  delegatecall :::
   -- Retain one zero beneath the status word while copying returndata.  A
   -- second RETURNDATASIZE is cheaper than DUP and leaves the shared
   -- RETURN/REVERT offset outside the two branch arms.

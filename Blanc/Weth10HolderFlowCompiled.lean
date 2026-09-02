@@ -1454,7 +1454,7 @@ private theorem compiledDispatchPcFree_build
   | zero =>
       cases entries with
       | nil =>
-          simp [DispatchTree.build, CompiledDispatchPcFree, Func.rev,
+          simp [DispatchTree.build, CompiledDispatchPcFree, Func.revert,
             Func.pcFreeBody, Ninst.pushB256, Ninst.pcFree]
       | cons head tail =>
           cases tail with
@@ -1463,7 +1463,7 @@ private theorem compiledDispatchPcFree_build
   | succ n ih =>
       cases entries with
       | nil =>
-          simp [DispatchTree.build, CompiledDispatchPcFree, Func.rev,
+          simp [DispatchTree.build, CompiledDispatchPcFree, Func.revert,
             Func.pcFreeBody, Ninst.pushB256, Ninst.pcFree]
       | cons head tail =>
           cases tail with
@@ -1518,9 +1518,9 @@ private theorem prependStoresRev_pcFreeBody
       simp only [prependStoresRev]
       exact ih _ (prependStore_pcFreeBody iw.1 iw.2 rest hrest)
 
-private theorem revWith_pcFreeBody (reason : String) :
-    (Func.revWith reason).pcFreeBody = true := by
-  unfold Func.revWith Func.revData
+private theorem revertWith_pcFreeBody (reason : String) :
+    (Func.revertWith reason).pcFreeBody = true := by
+  unfold Func.revertWith Func.revertData
   apply prependStoresRev_pcFreeBody
   rfl
 
@@ -1576,7 +1576,7 @@ private theorem weth10Funcs_pcFreeBody (dp : DeployParams) :
 
 private theorem weth10Aux_shape :
     weth10Aux =
-      [ Func.rev,
+      [ Func.revert,
         flashTokenError,
         individualLimitError,
         totalLimitError,
@@ -1605,7 +1605,7 @@ private theorem weth10Aux_pcFreeBody :
   rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h |
       h | h | h | h | h | h
   all_goals cases h
-  all_goals first | rfl | exact revWith_pcFreeBody _
+  all_goals first | rfl | exact revertWith_pcFreeBody _
 
 private theorem weth10Main_shape (dp : DeployParams) :
     weth10Main dp =
@@ -2332,7 +2332,7 @@ theorem Exec.Frame.CompiledCursor.enterNonpayableSilent
     value_eq_zero_of_run_nonpayable
       (Func.Run.of_runCompiled cursor.run)
   change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
-    ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.rev)) final at cursor
+    ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final at cursor
   rcases cursor.peelChildlessLine
       (by simp [NinstIsChildless]) with
     ⟨branchCursor, hline, hbranchActions⟩
@@ -2486,8 +2486,8 @@ theorem Exec.Frame.CompiledCursor.reachCallBoolCallback
       _ = successCursor.actions := hpopActions
       _ = branchCursor.actions := hbranchActions
       _ = cursor.actions := hcheckActions
-  · rcases hrev with ⟨revCursor, _⟩
-    exact absurd (Func.Run.of_runCompiled revCursor.run) not_run_rev
+  · rcases hrev with ⟨revertCursor, _⟩
+    exact absurd (Func.Run.of_runCompiled revertCursor.run) not_run_revert
 
 /-- Reach the ERC-677 `CALL` while retaining the exact successful source
 prefix facts at the returned cursor state.  In particular, the
@@ -2524,7 +2524,7 @@ theorem Exec.Frame.CompiledCursor.reachCallBoolCallbackWithPrefix
       (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
     ⟨branchCursor, hcheck, hcheckActions⟩
   rcases branchCursor.selectBranchLeftWithBurn
-      (fun _ => not_run_rev) with
+      (fun _ => not_run_revert) with
     ⟨successCursor, hpopCheck, hbranchActions⟩
   rcases successCursor.selectNextChildless (by
       simp [NinstIsChildless]) with
@@ -2619,8 +2619,8 @@ theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
       hdecode | hbubble
   · rcases hdecode with ⟨decodePrefixCursor, hdecodeActions⟩
     rcases decodePrefixCursor.peelChildlessLine
-        (line := retdataShorterThan 32)
-        (by simp [retdataShorterThan, NinstIsChildless,
+        (line := returnDataShorterThan 32)
+        (by simp [returnDataShorterThan, NinstIsChildless,
           Ninst.pushB256]) with
       ⟨secondBranchCursor, _hshort, hshortActions⟩
     rcases secondBranchCursor.selectBranchWithActions with
@@ -2630,17 +2630,17 @@ theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         ((pushList [32, 0, 0] ++
-          [Ninst.retdatacopy, Ninst.pushB256 0, Ninst.mload,
+          [Ninst.returndatacopy, Ninst.pushB256 0, Ninst.mload,
             Ninst.iszero, Ninst.iszero] ++
-          mstoreAt 0 ++ pushList [32, 0]) +++ Func.ret) final
+          mstoreAt 0 ++ pushList [32, 0]) +++ Func.return_) final
         at returnCursor
       have hdesc := returnCursor.finishTerminalChildlessLine (by
         simp [pushList, mstoreAt, NinstIsChildless, Ninst.pushB256])
       exact hdesc.trans (hreturnActions.trans
         (hshortActions.trans (hdecodeActions.trans
           (hiszeroActions.trans hbodyActions))))
-    · rcases hrev with ⟨revCursor, _⟩
-      exact absurd (Func.Run.of_runCompiled revCursor.run) not_run_rev
+    · rcases hrev with ⟨revertCursor, _⟩
+      exact absurd (Func.Run.of_runCompiled revertCursor.run) not_run_revert
   · rcases hbubble with ⟨bubbleCursor, _⟩
     rcases bubbleCursor.enterCall hcode with
       ⟨bubbleBody, hbubbleGet, bubbleBodyCursor, _⟩
@@ -3279,17 +3279,17 @@ private theorem withdrawFromCore_eq_valueRedemptionBody :
         etherTransferErrorSlot Func.stop := by
   rfl
 
-theorem not_run_call_revWith
+theorem not_run_call_revertWith
     {fs : List Func} {e : Sevm} {k : Nat} {reason : String}
     {final : Devm}
-    (hget : fs[k]? = some (Func.revWith reason)) :
+    (hget : fs[k]? = some (Func.revertWith reason)) :
     ∀ pre, ¬ Func.Run fs e pre (.call k) final := by
   intro pre run
   rcases of_run_call run with ⟨body, bodyPre, hbody, _hburn, hrun⟩
   rw [hget] at hbody
-  have heq : body = Func.revWith reason := Option.some.inj hbody.symm
+  have heq : body = Func.revertWith reason := Option.some.inj hbody.symm
   subst body
-  exact Func.not_run_revWith hrun
+  exact Func.not_run_revertWith hrun
 
 private theorem ProcessMessageTrace.rawCommits_of_clean
     {msg : Msg} {child : Devm}
@@ -3449,10 +3449,10 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
       ValueCallOperandPrefix frame.sevm pre callPre value target tail)
     (hburnError :
       (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance")))
+        some (Func.revertWith "WETH: burn amount exceeds balance")))
     (hsendError :
       (((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendErrorReason))) :
+        some (Func.revertWith sendErrorReason))) :
     ∃ (callPre : Devm)
         (successCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
@@ -3478,7 +3478,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
       (valueRedemptionCheckLine_childless source amountArg) with
     ⟨balanceBranchCursor, hcheck, hcheckActions⟩
   rcases balanceBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith hburnError) with
+      (not_run_call_revertWith hburnError) with
     ⟨successCursor, hbalancePopBy, hsuccessActions⟩
   have hbalancePop := Devm.PopBurn.of_popBurnBy hbalancePopBy
   unfold valueRedemptionCheckLine at hcheck
@@ -3575,7 +3575,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
     ⟨guardBranchCursor, _testSlot, hiszero, _testOccurrence,
       htestGuardActions⟩
   rcases guardBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith hsendError) with
+      (not_run_call_revertWith hsendError) with
     ⟨terminalCursor, hguardPopBy, hterminalActions⟩
   have hguardPop := Devm.PopBurn.of_popBurnBy hguardPopBy
   rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
@@ -3730,10 +3730,10 @@ theorem Exec.Frame.CompiledCursor.compiledValueRedemptionChronology
       ValueCallOperandPrefix frame.sevm pre callPre value target tail)
     (hburnError :
       (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance")))
+        some (Func.revertWith "WETH: burn amount exceeds balance")))
     (hsendError :
       (((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendErrorReason))) :
+        some (Func.revertWith sendErrorReason))) :
     Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame cursor.pre
       (source.word frame.sevm).toAdr
       (Sevm.argWord frame.sevm amountArg) target
@@ -3947,12 +3947,12 @@ private def returnTruePrefixCompiled : Line :=
   [Ninst.pushB256 1] ++ mstoreAt 0 ++ pushList [32, 0]
 
 private theorem returnTrue_eq_prefixCompiled :
-    returnTrue = returnTruePrefixCompiled +++ Func.ret := by
+    returnTrue = returnTruePrefixCompiled +++ Func.return_ := by
   rfl
 
 private theorem returnTrue_getCode_inv :
     Func.Inv Devm.getCode Devm.getCode
-      (returnTruePrefixCompiled +++ Func.ret) := by
+      (returnTruePrefixCompiled +++ Func.return_) := by
   intro fs e pre post run
   exact (of_returnTrue_exact nil_pref (by
     simpa only [returnTrue_eq_prefixCompiled] using run)).2
@@ -4037,7 +4037,7 @@ theorem Exec.Frame.compiledTransferZeroChronology
     (table 0 ((weth10 dp).main :: weth10Aux))
     (valueRedemptionBody .caller 1 sendValueToCallerPrefix
       ethTransferErrorSlot
-      (returnTruePrefixCompiled +++ Func.ret)) frame.post at zeroCursor
+      (returnTruePrefixCompiled +++ Func.return_)) frame.post at zeroCursor
   have hwfZero : Mem.Wf zeroCursor.pre.memory := by
     rw [← hownMemory]
     exact context.memory_wf
@@ -4045,7 +4045,7 @@ theorem Exec.Frame.compiledTransferZeroChronology
     rw [← hownMemory]
     exact context.memory_reads_empty
   have chronology := zeroCursor.compiledValueRedemptionChronology
-    (successLine := returnTruePrefixCompiled) (successLast := .ret)
+    (successLine := returnTruePrefixCompiled) (successLast := .return_)
     (sendErrorReason := "WETH: ETH transfer failed")
     nil_pref hwfZero hreadsZero
     (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
@@ -4362,7 +4362,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
           rw [hallowanceError] at hget
           exact Option.some.inj hget.symm
         subst body
-        exact (Func.not_run_revWith
+        exact (Func.not_run_revertWith
           (Func.Run.of_runCompiled bodyCursor.run)).elim
     · rcases hmax with ⟨maxCursor, hmaxActions⟩
       rcases maxCursor.peelChildlessLine
@@ -4493,7 +4493,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
           (Stack.prefix_of_swap hswapCore (of_run_swap hswap) hpAmount)
           hguard
       rcases spendBranchCursor.selectBranchLeftWithBurn
-          (not_run_call_revWith (by
+          (not_run_call_revertWith (by
             simpa only [allowanceError] using hallowanceError)) with
         ⟨successCursor, hsuccessPopBy, hsuccessActions⟩
       have hsuccessPrefix : allowance ::
@@ -4761,9 +4761,9 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     (table 0 ((weth10 dp).main :: weth10Aux))
     (valueRedemptionBody (.arg 0) 2 sendValueToCallerPrefix
       ethTransferErrorSlot
-      (returnTruePrefixCompiled +++ Func.ret)) frame.post at zeroCursor
+      (returnTruePrefixCompiled +++ Func.return_)) frame.post at zeroCursor
   have chronology := zeroCursor.compiledValueRedemptionChronology
-    (successLine := returnTruePrefixCompiled) (successLast := .ret)
+    (successLine := returnTruePrefixCompiled) (successLast := .return_)
     (sendErrorReason := "WETH: ETH transfer failed")
     nil_pref hwfZero hreadsZero
     (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
@@ -4924,7 +4924,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferFromBalanceCheckLine +++
       ((.call transferBalanceErrorSlot) <?>
-        (transferFromNonzeroSuccessLine +++ Func.ret)))
+        (transferFromNonzeroSuccessLine +++ Func.return_)))
     frame.post at nonzeroCursor
   rcases nonzeroCursor.peelChildlessLine
       (by simp [transferFromBalanceCheckLine, loadArgBalanceAmount,
@@ -4949,7 +4949,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
     have herrorBody : errorBody = transferBalanceError := by
       simpa [weth10Aux, transferBalanceErrorSlot] using herrorGet.symm
     subst errorBody
-    exact (Func.not_run_revWith
+    exact (Func.not_run_revertWith
       (Func.Run.of_runCompiled errorBodyCursor.run)).elim
 
 /-- The debit stored in a classified action is either absent, mechanically
@@ -5267,10 +5267,10 @@ theorem Exec.Frame.recognizedSelector_of_nonempty
           prefix_of_fsig nil_pref hfsig
         rcases recognized_of_run_dispatchWith
             (c := (weth10 dp).main :: weth10Aux)
-            (k := fallbackSlot) (fallback := Func.rev)
+            (k := fallbackSlot) (fallback := Func.revert)
             (tree := weth10Tree dp)
             (by simp [fallbackSlot, weth10, weth10Aux])
-            (fun {_ _} => not_run_rev)
+            (fun {_ _} => not_run_revert)
             hselectorPfx htreeRun with ⟨body, hmem⟩
         exact ⟨body, DispatchTree.mem_of_mem_ofSorted
           (by simp [weth10Funcs]) hmem⟩
@@ -7872,47 +7872,47 @@ private theorem prependStoresRev_sourceSstoreSiteCount
         prependStoresRev stores (prependStore iw.1 iw.2 rest) from rfl,
         ih, prependStore_sourceSstoreSiteCount]
 
-private theorem revWith_sourceSstoreSiteCount (reason : String) :
-    sourceSstoreSiteCount (Func.revWith reason) = 0 := by
-  unfold Func.revWith Func.revData
+private theorem revertWith_sourceSstoreSiteCount (reason : String) :
+    sourceSstoreSiteCount (Func.revertWith reason) = 0 := by
+  unfold Func.revertWith Func.revertData
   rw [prependStoresRev_sourceSstoreSiteCount]
   rfl
 
-private theorem rev_aux_sourceSstoreSiteCount :
-    sourceSstoreSiteCount Func.rev = 0 := by rfl
+private theorem revert_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount Func.revert = 0 := by rfl
 private theorem flashTokenError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount flashTokenError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem individualLimitError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount individualLimitError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem totalLimitError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount totalLimitError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem flashFailedError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount flashFailedError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem allowanceError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount allowanceError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem burnBalanceError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount burnBalanceError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem expiredPermitError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount expiredPermitError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem invalidPermitError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount invalidPermitError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem transferBalanceError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount transferBalanceError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem ethTransferError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount ethTransferError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem etherTransferError_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount etherTransferError = 0 := by
-  exact revWith_sourceSstoreSiteCount _
+  exact revertWith_sourceSstoreSiteCount _
 private theorem bubbleRevert_aux_sourceSstoreSiteCount :
     sourceSstoreSiteCount bubbleRevert = 0 := by rfl
 private theorem boolReturn_aux_sourceSstoreSiteCount :
@@ -7971,7 +7971,7 @@ theorem weth10Aux_sourceSstoreSiteCounts :
       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 1, 2, 1] := by
   rw [weth10Aux_shape]
   simp only [List.map_cons, List.map_nil,
-    rev_aux_sourceSstoreSiteCount,
+    revert_aux_sourceSstoreSiteCount,
     flashTokenError_aux_sourceSstoreSiteCount,
     individualLimitError_aux_sourceSstoreSiteCount,
     totalLimitError_aux_sourceSstoreSiteCount,

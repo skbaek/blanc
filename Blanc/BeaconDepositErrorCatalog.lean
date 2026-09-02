@@ -58,7 +58,7 @@ theorem ReachableReason.reason_ne_assertFalse (error : ReachableReason) :
 catalogued slot. -/
 theorem reachableError_lookup (error : ReachableReason) :
     (runtime.main :: runtime.aux)[error.slot]? =
-      some (Func.revWith (reasonString error.reason)) := by
+      some (Func.revertWith (reasonString error.reason)) := by
   cases error <;> rfl
 
 /-- Contract specialization of the shared constant-error guard walk. -/
@@ -143,6 +143,6 @@ theorem reachableErrorGuard_noRawSstorePath
           subst bodyEq
           exact .succ (nonzero := nonzero) (room := room) (pop := pop)
             (.call (lookup := lookup) (room := callRoom) (burn := burn)
-              (Func.RunCompiledTo.NoRawSstorePath.of_revWith errorRun))
+              (Func.RunCompiledTo.NoRawSstorePath.of_revertWith errorRun))
 
 end Blanc.BeaconDeposit

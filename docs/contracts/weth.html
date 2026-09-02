@@ -315,13 +315,13 @@ chainUsing_preserves_solvent           <span class="c">   crosses Prague, Osaka,
       <div class="devhead"><h3>Revert data on a failed guard</h3><span class="devtag agree">agreement since 2026-08-05</span></div>
       <p>The deployed WETH9 runtime contains fourteen <span class="mono">REVERT</span> sites and
         every one is <span class="mono">REVERT(0, 0)</span> — empty return data, unused gas
-        handed back. Blanc’s early <span class="mono">Func.rev</span> instead reverted over
+        handed back. Blanc’s early <span class="mono">Func.revert</span> instead reverted over
         whatever two stack words a guard left live: a garbage-data revert, a stack-underflow
         halt, or a memory-expansion out-of-gas halt — the latter two burning the frame’s entire
         gas, which WETH9 never does.</p>
-      <p><b>The resolution:</b> <span class="mono">Func.rev</span> was normalised to
+      <p><b>The resolution:</b> <span class="mono">Func.revert</span> was normalised to
         <span class="mono">PUSH0 PUSH0 REVERT</span> in the one shared definition, reaching both
-        WETH and FMINT at once — two bytes per rev site, twenty-one sites in the current
+        WETH and FMINT at once — two bytes per revert site, twenty-one sites in the current
         literal. Against WETH9, which encodes no reason either, the result is agreement; the
         discriminating fixture evidence lives in the
         <a href="fmint.html#evidence" style="text-decoration:underline;text-underline-offset:3px">FMINT suite</a>’s
@@ -375,7 +375,7 @@ chainUsing_preserves_solvent           <span class="c">   crosses Prague, Osaka,
         </p>
         <p class="dim" style="font-size:.93rem;margin-bottom:0">
           <b>Provenance and drift, stated:</b> the harness is not part of the committed gate
-          battery, and the measurement predates two runtime changes — the rev-site
+          battery, and the measurement predates two runtime changes — the revert-site
           normalisation (+22 B) and the nonpayable guard (+100 B, +19 gas per guarded call,
           <span class="mono">decimals</span> 139 → 158). From an EOA, the 21,000-gas intrinsic
           compresses everything: the best whole-transaction saving was 12.8%. The view
@@ -408,7 +408,7 @@ chainUsing_preserves_solvent           <span class="c">   crosses Prague, Osaka,
         <span class="tick">the registry as changelog</span>
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           Two of the five rows are agreements that used to be divergences, each closed by a
-          change the registry forced into the open: the rev-site normalisation (found while
+          change the registry forced into the open: the revert-site normalisation (found while
           building FMINT, and reaching WETH through the one shared definition) and the
           nonpayable guard (adjudicated under the then-standing porting wager, priced at 100
           bytes and 19 gas). A port that keeps its deviation history is telling you how it converges — and

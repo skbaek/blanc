@@ -31,7 +31,7 @@ This module shows the world is harmless instead, in four steps.
   WETH10 frame running under `STATIC` records `none` or a `.viewRead`.
 * Hence the whole attribution stream of a static subtree is write-free.
 
-`Blanc.Weth10.writeFreeLedger_statcallCrossing` and
+`Blanc.Weth10.writeFreeLedger_staticcallCrossing` and
 `Blanc.Weth10.AllowanceRegionEffect.snoc_writeFree` are the two lemmas the
 `permit` arm consumes in place of its precompile hypotheses.  The `snoc`
 form, rather than the `cons` form, is what the arm needs: `permit`'s
@@ -197,10 +197,10 @@ macro_rules
 
 /-- A guard arm dispatching to a constant `Error(string)` reverter never
 runs, so it stores vacuously. -/
-theorem storesOrHalts_revWithSlot {fs : List Func} {k : Nat} {reason : String}
-    (hget : fs[k]? = some (Func.revWith reason)) :
+theorem storesOrHalts_revertWithSlot {fs : List Func} {k : Nat} {reason : String}
+    (hget : fs[k]? = some (Func.revertWith reason)) :
     StoresOrHalts fs (Func.call k) :=
-  .call hget (.never Func.not_run_revWith)
+  .call hget (.never Func.not_run_revertWith)
 
 theorem storesOrHalts_approve {fs : List Func} :
     StoresOrHalts fs approve := by
@@ -215,38 +215,38 @@ theorem storesOrHalts_approveAndCall {fs : List Func} :
 theorem storesOrHalts_flashTokenErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call flashTokenErrorSlot) :=
-  storesOrHalts_revWithSlot (reason := "WETH: flash mint only WETH10")
+  storesOrHalts_revertWithSlot (reason := "WETH: flash mint only WETH10")
     (by simp [weth10Aux, flashTokenErrorSlot, flashTokenError])
 
 theorem storesOrHalts_individualLimitErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call individualLimitErrorSlot) :=
-  storesOrHalts_revWithSlot
+  storesOrHalts_revertWithSlot
     (reason := "WETH: individual loan limit exceeded")
     (by simp [weth10Aux, individualLimitErrorSlot, individualLimitError])
 
 theorem storesOrHalts_allowanceErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call allowanceErrorSlot) :=
-  storesOrHalts_revWithSlot (reason := "WETH: request exceeds allowance")
+  storesOrHalts_revertWithSlot (reason := "WETH: request exceeds allowance")
     (by simp [weth10Aux, allowanceErrorSlot, allowanceError])
 
 theorem storesOrHalts_burnBalanceErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call burnBalanceErrorSlot) :=
-  storesOrHalts_revWithSlot (reason := "WETH: burn amount exceeds balance")
+  storesOrHalts_revertWithSlot (reason := "WETH: burn amount exceeds balance")
     (by simp [weth10Aux, burnBalanceErrorSlot, burnBalanceError])
 
 theorem storesOrHalts_expiredPermitErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call expiredPermitErrorSlot) :=
-  storesOrHalts_revWithSlot (reason := "WETH: Expired permit")
+  storesOrHalts_revertWithSlot (reason := "WETH: Expired permit")
     (by simp [weth10Aux, expiredPermitErrorSlot, expiredPermitError])
 
 theorem storesOrHalts_transferBalanceErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call transferBalanceErrorSlot) :=
-  storesOrHalts_revWithSlot
+  storesOrHalts_revertWithSlot
     (reason := "WETH: transfer amount exceeds balance")
     (by simp [weth10Aux, transferBalanceErrorSlot, transferBalanceError])
 
@@ -611,11 +611,11 @@ hypotheses: whatever the EIP-7702 delegation designator at address `1`
 installs, the `STATICCALL` child's whole counted contribution is write-free,
 because every counted frame it can retain runs under `STATIC` and WETH10's
 writing selectors all execute an `SSTORE` on every committing path. -/
-theorem writeFreeLedger_statcallCrossing
+theorem writeFreeLedger_staticcallCrossing
     {dp : DeployParams} {ca : Adr}
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {f : Jaune.Frame} {rsm : Resume} {cevm : Evm} {raw : Execution}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall = .spawn f rsm pc')
+    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall = .spawn f rsm pc')
     (henter : f.enter = .run cevm)
     (child : Exec cevm.pc cevm.sta cevm.dyna raw) :
     WriteFreeLedger
@@ -626,7 +626,7 @@ theorem writeFreeLedger_statcallCrossing
           (Exec.attributionInner dp ca child)
        else []) := by
   have hstatic : cevm.sta.isStatic = true :=
-    Blanc.Ninst.step_statcall_run_isStatic hspawn henter
+    Blanc.Ninst.step_staticcall_run_isStatic hspawn henter
   split
   · exact writeFreeLedger_frameContribution hstatic
       (Exec.attributionInner_writeFree_of_static child hstatic)
@@ -634,16 +634,16 @@ theorem writeFreeLedger_statcallCrossing
 
 /-- Stream form of the crossing: a committed `STATICCALL` child's whole
 attribution stream is write-free. -/
-theorem Exec.attributionStream_writeFree_of_statcallChild
+theorem Exec.attributionStream_writeFree_of_staticcallChild
     {dp : DeployParams} {ca : Adr}
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {f : Jaune.Frame} {rsm : Resume} {cevm : Evm} {raw : Execution}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall = .spawn f rsm pc')
+    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall = .spawn f rsm pc')
     (henter : f.enter = .run cevm)
     (child : Exec cevm.pc cevm.sta cevm.dyna raw) :
     WriteFreeLedger (Exec.attributionStream dp ca child) :=
   Exec.attributionStream_writeFree_of_static child
-    (Blanc.Ninst.step_statcall_run_isStatic hspawn henter)
+    (Blanc.Ninst.step_staticcall_run_isStatic hspawn henter)
 
 end Weth10
 

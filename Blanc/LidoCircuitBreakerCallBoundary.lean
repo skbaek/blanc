@@ -222,7 +222,7 @@ def PauseStatBoundary (sevm : Sevm) (target : Adr)
     msg.tenv.transientStorage = statPre.transientStorage ∧
     Xlot.Filled xl ∧
     ProcessMessage msg xl (.ok child) ∧
-    (∀ pc, Ninst.StepRun pc sevm statPre (.exec .statcall) xl (.ok statPost)) ∧
+    (∀ pc, Ninst.StepRun pc sevm statPre (.exec .staticcall) xl (.ok statPost)) ∧
     (Resume.call parent 0 32).run (.ok child) = .ok statPost ∧
     statPost.memory = parent.memory.write 0 (child.output.take 32) ∧
     statPost.returnData = child.output ∧
@@ -273,11 +273,11 @@ def PauseStatExecutionWitness (sevm : Sevm) (target : Adr)
     msg.data = isPausedCalldata ∧
     msg.benv.stat.time = sevm.benvStat.time ∧
     msg.benv.stat.rules = sevm.benvStat.rules ∧
-    Ninst.step ⟨pc, sevm, statPre⟩ Ninst.statcall =
+    Ninst.step ⟨pc, sevm, statPre⟩ Ninst.staticcall =
       .spawn (Jaune.Frame.ofCall msg) resume nextPc ∧
     Xlot.Filled xl ∧
     ProcessMessage msg xl (.ok child) ∧
-    Ninst.StepRun pc sevm statPre Ninst.statcall xl (.ok statPost) ∧
+    Ninst.StepRun pc sevm statPre Ninst.staticcall xl (.ok statPost) ∧
     statPost.state = child.state ∧
     statPost.returnData = child.output
 
@@ -646,12 +646,12 @@ The observation's edge is inverted the same way, and for the same reason: an
 arbitrary derivation carries no gas premise, so the branch that cannot pay the
 call's own charge is refuted rather than assumed away.  The helper below is a
 private copy of `Blanc/LidoCircuitBreakerPauseJoin.lean`'s equally private
-`.statcall` sibling, which that module does not export. -/
+`.staticcall` sibling, which that module does not export. -/
 
-/-- The `.statcall` arm on a frame that cannot pay the call's own charge:
+/-- The `.staticcall` arm on a frame that cannot pay the call's own charge:
 `chargeGas` fails and the step is an out-of-gas halt.  The failing sibling of
-`Xinst.step_statcall_spawn`. -/
-private lemma statEdge_step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
+`Xinst.step_staticcall_spawn`. -/
+private lemma statEdge_step_staticcall_outOfGas {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
@@ -666,7 +666,7 @@ private lemma statEdge_step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : d1.gasLeft < mcc + ext) :
-    Xinst.step sevm devm .statcall =
+    Xinst.step sevm devm .staticcall =
       .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
   subst h_ext; subst h_acc
   show XStep.ofExcept (do
@@ -719,7 +719,7 @@ private lemma statEdge_step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
 
 
 /-- **The STATICCALL edge, inverted.**  Any derivation that crosses the pause's
-`.statcall` instruction satisfies `PauseStatBoundary`: the six operands, the
+`.staticcall` instruction satisfies `PauseStatBoundary`: the six operands, the
 argument window's bytes, the suspended parent frame, the spawned message and
 the 32-byte-window resume are all read off that derivation.
 
@@ -756,7 +756,7 @@ theorem pauseStat_boundary_with_execution
       gasWord :: target.toB256 :: 0x11c :: 4 :: 0 :: 32 :: rest)
     (h_window : (statPre.memory.read 0x11c 4).1 = isPausedCalldata)
     (h_depth : sevm.depth ≠ 0)
-    (run : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
+    (run : Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost) :
     PauseStatBoundary sevm target statPre statPost ∧
       PauseStatExecutionWitness sevm target statPre statPost := by
   obtain ⟨xl, hfill, hrun⟩ := run
@@ -787,7 +787,7 @@ theorem pauseStat_boundary_with_execution
     with ⟨mcc, mcs⟩
   by_cases hga : mcc + ext ≤ d1.gasLeft
   case neg =>
-    rw [statEdge_step_statcall_outOfGas h_stk hext h_del hacc hsplit
+    rw [statEdge_step_staticcall_outOfGas h_stk hext h_del hacc hsplit
       (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
@@ -829,7 +829,7 @@ theorem pauseStat_boundary_with_execution
     have hdata : parent.memory.data.sliceD ((284 : B256).toNat)
         ((4 : B256).toNat) 0 = isPausedCalldata := by
       rw [hpmem]; exact h_window
-    have hmsgeq : statcallSpawnMsg sevm parent mcs target dadr
+    have hmsgeq : staticcallSpawnMsg sevm parent mcs target dadr
         ((284 : B256).toNat) ((4 : B256).toNat) code dp =
         callMsg sevm parent mcs 0 sevm.currentTarget target dadr true true
           isPausedCalldata code dp := by
@@ -860,10 +860,10 @@ theorem pauseStat_boundary_with_execution
       hres.symm
     let msg := callMsg sevm parent mcs 0 sevm.currentTarget target dadr
       true true isPausedCalldata code dp
-    have hspawn : Ninst.step ⟨0, sevm, statPre⟩ Ninst.statcall =
+    have hspawn : Ninst.step ⟨0, sevm, statPre⟩ Ninst.staticcall =
         .spawn (Jaune.Frame.ofCall msg) (.call parent 0 32) 1 := by
-      simp only [Ninst.statcall, Ninst.step_exec]
-      change XStep.toStep 1 (Xinst.step sevm statPre .statcall) = _
+      simp only [Ninst.staticcall, Ninst.step_exec]
+      change XStep.toStep 1 (Xinst.step sevm statPre .staticcall) = _
       rw [hstep, hmsgeq]
       rfl
     have boundary : PauseStatBoundary sevm target statPre statPost := by
@@ -886,7 +886,7 @@ theorem pauseStat_boundary {sevm : Sevm} {statPre statPost : Devm}
       gasWord :: target.toB256 :: 0x11c :: 4 :: 0 :: 32 :: rest)
     (h_window : (statPre.memory.read 0x11c 4).1 = isPausedCalldata)
     (h_depth : sevm.depth ≠ 0)
-    (run : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
+    (run : Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost) :
     PauseStatBoundary sevm target statPre statPost :=
   (pauseStat_boundary_with_execution h_stk h_window h_depth run).1
 
@@ -903,7 +903,7 @@ paraphrase of it. -/
 `STATICCALL` itself, and the flag test that follows it. -/
 def pauseStatArm : Func :=
   pauseStatStaging +++
-    (Ninst.statcall ::: Ninst.iszero :::
+    (Ninst.staticcall ::: Ninst.iszero :::
       ((Func.call bubbleRevertSlot) <?> decodePausedResult))
 
 /-- Everything `pauseAfterSet` does after its `CALL`: the `ISZERO` that inverts
@@ -1059,7 +1059,7 @@ theorem pauseAfterCall_arms {fs : List Func} {sevm : Sevm} {target : Adr}
 /-! ## The failure arm: the bubble
 
 `bubbleRevertSlot` is `13`, and `aux`'s thirteenth entry — `aux[12]`, since the
-table is `main :: aux` — is `Func.revReturnData`, which copies the preceding
+table is `main :: aux` — is `Func.revertReturnData`, which copies the preceding
 call's complete returndata to memory `0` and reverts with it.  The lookup is a
 premise here rather than a computation, so that the statement is about
 *whatever* the table binds at that slot and a witness discharges it against the
@@ -1072,11 +1072,11 @@ split C6 asks for, not a premise about the callee: the sibling theorem below
 states the other case, and neither is assumed away. -/
 
 /-- The CircuitBreaker's own table binds `bubbleRevertSlot` to
-`Func.revReturnData`, so the lookup premise the bubble theorems carry is
+`Func.revertReturnData`, so the lookup premise the bubble theorems carry is
 discharged by the program itself rather than left to a consumer. -/
 theorem runtime_bubbleRevertSlot (dp : DeployParams) :
     ((runtime dp).main :: (runtime dp).aux)[bubbleRevertSlot]? =
-      some Func.revReturnData := rfl
+      some Func.revertReturnData := rfl
 
 /-- **The CALL's failure arm reaches the bubble, holding the callee's
 returndata.**  When the flag the CALL pushed is `0` the branch's nonzero arm is
@@ -1087,10 +1087,10 @@ the gas and nothing else.
 
 What this does **not** claim.  It does not say the bubbled bytes mean anything:
 `child.output` is whatever the hostile target chose to return, including
-nothing at all, and `Func.revReturnData`'s own docstring records that a
+nothing at all, and `Func.revertReturnData`'s own docstring records that a
 zero-length child revert is an ordinary empty revert.  It does not say the
 revert payload is byte-identical to `child.output` — that is the separate
-`Func.revReturnData` walk, and constructing it (`callbackBubble_runCompiledTo`
+`Func.revertReturnData` walk, and constructing it (`callbackBubble_runCompiledTo`
 is WETH10's instance) needs memory well-formedness, alignment and exact-gas
 premises this cut does not carry; see this section's closing note.  And it does
 not say this arm is reached: `h_fail` is the case hypothesis, discharged by a
@@ -1099,7 +1099,7 @@ behaves. -/
 theorem pauseCall_failureArm_bubbles {fs : List Func} {sevm : Sevm}
     {target : Adr} {duration : B256} {callPre callPost : Devm}
     {ex : Execution} {g : Func}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (boundary : PauseCallBoundary sevm target duration callPre callPost)
     (h_fail : callPost.stack.head? = some 0)
     (run : Func.RunCompiledTo fs sevm callPost
@@ -1108,7 +1108,7 @@ theorem pauseCall_failureArm_bubbles {fs : List Func} {sevm : Sevm}
       child.error.isSome = true ∧
       callPost.returnData = child.output ∧
       bubblePre.returnData = child.output ∧
-      Func.RunCompiledTo fs sevm bubblePre Func.revReturnData ex := by
+      Func.RunCompiledTo fs sevm bubblePre Func.revertReturnData ex := by
   obtain ⟨child, armPre, rest, hstk, hrd, hard, harm⟩ :=
     pauseAfterCall_arms boundary run
   rcases harm with ⟨herr, hcall⟩ | ⟨herr, -⟩
@@ -1224,12 +1224,12 @@ theorem pauseAfterCall_ok_depth_ne_zero {fs : List Func} {sevm : Sevm}
 
 Only here does the pause reach its second message.  The staging line and the
 `STATICCALL` are inside the branch's zero arm, so a derivation that gets to the
-`.statcall` instruction has already produced the CALL's success flag. -/
+`.staticcall` instruction has already produced the CALL's success flag. -/
 
 /-- **The CALL's success arm is the only route to the STATICCALL.**  When the
 flag the CALL pushed is `1` the branch's zero arm is taken, the walk runs
 `pauseStatStaging` — the `isPaused()` selector restage and the six operands —
-and then crosses the `.statcall` instruction itself, handing back exactly the
+and then crosses the `.staticcall` instruction itself, handing back exactly the
 `Ninst.RunCompiled` premise `pauseStat_boundary` consumes.
 
 What this does **not** claim.  It says nothing about the six operands' values:
@@ -1252,7 +1252,7 @@ theorem pauseCall_successArm_reachesStatcall {fs : List Func} {sevm : Sevm}
       callPost.returnData = child.output ∧
       armPre.returnData = child.output ∧
       Line.Run sevm armPre pauseStatStaging statPre ∧
-      Ninst.RunCompiled sevm statPre (.exec .statcall) statPost ∧
+      Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost ∧
       Func.RunCompiledTo fs sevm statPost
         (Ninst.iszero :::
           ((Func.call bubbleRevertSlot) <?> decodePausedResult)) ex := by
@@ -1271,7 +1271,7 @@ theorem pauseCall_successArm_reachesStatcall {fs : List Func} {sevm : Sevm}
 
 /-! ## What the failure arm settles at
 
-`Func.revReturnData` ends in `REVERT`, and `Blanc/SourceAttainment.lean`'s
+`Func.revertReturnData` ends in `REVERT`, and `Blanc/SourceAttainment.lean`'s
 finite certificate already knows what that means for a whole body.  Two
 consequences are worth naming separately, because together they are the honest
 statement of "the pause bubbles": the arm the failing call takes cannot commit,
@@ -1279,7 +1279,7 @@ and — contrapositively — a post-CALL walk that *does* commit was on the
 success arm all along.
 
 The byte-level payload is settled below by `pauseCall_failureArm_payload`,
-against `Func.runCompiledTo_revReturnData_inv`.  Of the three obstacles this
+against `Func.runCompiledTo_revertReturnData_inv`.  Of the three obstacles this
 note used to list, two are gone: the read-after-write lemma exists, and the
 `REVERT`'s memory expansion needed no gas premise at all, because every earlier
 step of `Func.RunCompiledTo` witnesses that its own instruction succeeded.
@@ -1296,21 +1296,21 @@ output length, which is not a fact about this edge but the invariant that every
 every precompile, belonging upstream rather than in a contract module.  The raw
 form is carried instead. -/
 
-/-- `Func.revReturnData` is certified-reverting against any table: it contains
+/-- `Func.revertReturnData` is certified-reverting against any table: it contains
 no `.call`, so the certificate does not consult one. -/
-private lemma revReturnData_alwaysReverts (fs : List Func) :
-    Func.alwaysRevertsWithin 7 fs Func.revReturnData = true := rfl
+private lemma revertReturnData_alwaysReverts (fs : List Func) :
+    Func.alwaysRevertsWithin 7 fs Func.revertReturnData = true := rfl
 
 /-- The bubble slot is certified-reverting once the table is known to bind it
-to `Func.revReturnData`. -/
+to `Func.revertReturnData`. -/
 private lemma bubbleCall_alwaysReverts {fs : List Func}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData) :
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData) :
     Func.alwaysRevertsWithin 8 fs (Func.call bubbleRevertSlot) = true := by
   show (match fs[bubbleRevertSlot]? with
     | none => false
     | some body => Func.alwaysRevertsWithin 7 fs body) = true
   rw [h_bubble]
-  exact revReturnData_alwaysReverts fs
+  exact revertReturnData_alwaysReverts fs
 
 /-- **The failure arm cannot commit.**  When the flag the CALL pushed is `0`,
 the walk of the pause's post-CALL fragment settles at an outcome that does not
@@ -1323,7 +1323,7 @@ not at all. -/
 theorem pauseCall_failureArm_neverCommits {fs : List Func} {sevm : Sevm}
     {target : Adr} {duration : B256} {callPre callPost : Devm}
     {ex : Execution} {g : Func}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (boundary : PauseCallBoundary sevm target duration callPre callPost)
     (h_fail : callPost.stack.head? = some 0)
     (run : Func.RunCompiledTo fs sevm callPost
@@ -1332,7 +1332,7 @@ theorem pauseCall_failureArm_neverCommits {fs : List Func} {sevm : Sevm}
   obtain ⟨child, bubblePre, -, -, -, hbody⟩ :=
     pauseCall_failureArm_bubbles h_bubble boundary h_fail run
   exact Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin 7 hbody
-    (revReturnData_alwaysReverts fs)
+    (revertReturnData_alwaysReverts fs)
 
 /-- **The observation is reachable only after a successful CALL.**  The
 ordering claim with no case hypothesis at all: any *successful* walk of the
@@ -1347,7 +1347,7 @@ without ever asking what the target did to succeed.  It still claims nothing
 about the observation that follows — only that the walk continues into it. -/
 theorem pauseAfterCall_ok_forces_callSuccess {fs : List Func} {sevm : Sevm}
     {target : Adr} {duration : B256} {callPre callPost post : Devm} {g : Func}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (boundary : PauseCallBoundary sevm target duration callPre callPost)
     (run : Func.RunCompiled fs sevm callPost
       (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> g)) post) :
@@ -1367,15 +1367,15 @@ theorem pauseAfterCall_ok_forces_callSuccess {fs : List Func} {sevm : Sevm}
 /-! ## What the failure arm outputs
 
 The note above listed three things standing between this boundary and the
-byte-level payload, and recorded that turning `Func.runCompiledTo_revReturnData`
+byte-level payload, and recorded that turning `Func.runCompiledTo_revertReturnData`
 into an inversion was separate work.  That work now exists upstream as
-`Func.runCompiledTo_revReturnData_inv`, which reads the settled outcome off an
+`Func.runCompiledTo_revertReturnData_inv`, which reads the settled outcome off an
 arbitrary derivation of the walk and carries no premise at all — not about gas,
 not about the frame's memory, not about the callee.  Applying it to the bubble
 that `pauseCall_failureArm_bubbles` already hands over is all that remains.
 
 One of the three obstructions survives the inversion, and it is stated rather
-than assumed away.  `Func.revReturnData` ends in a `REVERT` over the window it
+than assumed away.  `Func.revertReturnData` ends in a `REVERT` over the window it
 has just filled, and that `REVERT` pays its own memory-expansion charge; the
 walk says nothing about the gas left when the charge falls due, so the pause
 frame may settle at an out-of-gas exceptional halt instead.  No bound on
@@ -1409,7 +1409,7 @@ precompiles, not a consequence of this boundary.
 
 What this does **not** claim.  It does not say the bubbled bytes mean anything:
 `child.output` is whatever the hostile target chose to return, empty included,
-and `Func.revReturnData`'s own docstring records that a zero-length child
+and `Func.revertReturnData`'s own docstring records that a zero-length child
 revert is an ordinary empty revert.  And it does not say this arm is reached —
 `h_fail` is the case hypothesis, the sibling of
 `pauseCall_successArm_reachesStatcall`'s `h_ok`, and
@@ -1417,7 +1417,7 @@ revert is an ordinary empty revert.  And it does not say this arm is reached —
 theorem pauseCall_failureArm_payload {fs : List Func} {sevm : Sevm}
     {target : Adr} {duration : B256} {callPre callPost : Devm}
     {ex : Execution} {g : Func}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (boundary : PauseCallBoundary sevm target duration callPre callPost)
     (h_fail : callPost.stack.head? = some 0)
     (run : Func.RunCompiledTo fs sevm callPost
@@ -1432,7 +1432,7 @@ theorem pauseCall_failureArm_payload {fs : List Func} {sevm : Sevm}
   obtain ⟨child, bubblePre, herr, hrd, hard, hbody⟩ :=
     pauseCall_failureArm_bubbles h_bubble boundary h_fail run
   refine ⟨child, herr, hrd, ?_⟩
-  rcases Func.runCompiledTo_revReturnData_inv hbody with
+  rcases Func.runCompiledTo_revertReturnData_inv hbody with
     h_oog | ⟨post, hpost, hout⟩
   · exact Or.inl h_oog
   · exact Or.inr ⟨post, hpost, by rw [hout, hard]⟩
@@ -1854,7 +1854,7 @@ theorem pause_externalBoundary {sevm : Sevm} {target : Adr} {duration : B256}
     (hDynamic : sevm.isStatic = false)
     (hCall : Ninst.RunCompiled sevm callPre (.exec .call) callPost)
     (hStatStaging : Line.Run sevm callPost pauseStatStaging statPre)
-    (hStat : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
+    (hStat : Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost) :
     PauseCallBoundary sevm target duration callPre callPost ∧
       MemWordAt statPre (targetWord * 32).toNat target.toB256 ∧
       PauseStatBoundary sevm target statPre statPost := by

@@ -141,7 +141,7 @@ theorem prefix_of_allowanceKeyFromMemory {e : Sevm} {xs : Stack}
   have hp2 : (0 : B256) :: 64 :: xs <<+ s2.stack :=
     prefix_of_push (of_run_pushB256 hpush0) hp1
   rcases Line.of_run_cons run2 with ⟨s3, hkec, run3⟩
-  rcases prefix_of_kec hkec hp2 with ⟨hash, hp3⟩
+  rcases prefix_of_keccak256 hkec hp2 with ⟨hash, hp3⟩
   rcases Line.of_run_cons run3 with ⟨s4, hpushMask, run4⟩
   have hp4 : allowancePayloadMask :: hash :: xs <<+ s4.stack :=
     prefix_of_push (of_run_pushB256 hpushMask) hp3
@@ -303,15 +303,15 @@ theorem prefix_of_balanceTooSmall
   cases hnil
   exact prefix_of_lt hlt hp2
 
-/-- A successful conditional whose selected error arm is an exact `revWith`
+/-- A successful conditional whose selected error arm is an exact `revertWith`
 must have taken the zero/continuation arm. -/
-theorem of_run_branch_call_revWith
+theorem of_run_branch_call_revertWith
     {fs : List Func} {e : Sevm} {s r : Devm} {k : Nat}
     {payload : String} {next : Func}
-    (hget : fs[k]? = some (Func.revWith payload))
+    (hget : fs[k]? = some (Func.revertWith payload))
     (run : Func.Run fs e s ((.call k) <?> next) r) :
     ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs e s' next r := by
-  exact Blanc.of_run_branch_call_revWith hget run
+  exact Blanc.of_run_branch_call_revertWith hget run
 
 /-- Spending a caller allowance is backing-silent before its tail jump.  The
 self-owner and infinite-allowance paths leave storage unchanged; the finite
@@ -412,9 +412,9 @@ theorem of_run_spendCallerAllowanceThen
         exact prefix_of_balanceTooSmall hps htooSmall
       have h_allowance_lookup :
           ((weth10 dp).main :: weth10Aux)[allowanceErrorSlot]? =
-            some (Func.revWith "WETH: request exceeds allowance") := by
+            some (Func.revertWith "WETH: request exceeds allowance") := by
         simp [weth10, weth10Aux, allowanceErrorSlot, allowanceError]
-      rcases of_run_branch_call_revWith h_allowance_lookup runGuard with
+      rcases of_run_branch_call_revertWith h_allowance_lookup runGuard with
         ⟨sb, hguardPop, runMutate⟩
       have hguardStack := hguardPop.stack
       simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hguardStack
@@ -1150,10 +1150,10 @@ theorem backedPre_of_transferNonzeroThen (dp : DeployParams) (ca : Adr)
     prefix_of_balanceTooSmall hp1 hguard
   have h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
-        some (Func.revWith "WETH: transfer amount exceeds balance") := by
+        some (Func.revertWith "WETH: transfer amount exceeds balance") := by
     simp [weth10, weth10Aux, transferBalanceErrorSlot,
       transferBalanceError]
-  rcases of_run_branch_call_revWith h_error_lookup run2 with
+  rcases of_run_branch_call_revertWith h_error_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -1790,9 +1790,9 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -1859,9 +1859,9 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
-        some (Func.revWith "WETH: ETH transfer failed") := by
+        some (Func.revertWith "WETH: ETH transfer failed") := by
     simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
-  rcases of_run_branch_call_revWith h_eth_lookup run7 with
+  rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_eth_le :
       Sevm.argWord sevm 1 ≤ sc.getBal sevm.currentTarget :=
@@ -2011,9 +2011,9 @@ theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -2085,9 +2085,9 @@ theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
-        some (Func.revWith "WETH: ETH transfer failed") := by
+        some (Func.revertWith "WETH: ETH transfer failed") := by
     simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
-  rcases of_run_branch_call_revWith h_eth_lookup run7 with
+  rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hstop⟩
   have h_eth_le :
       Sevm.argWord sevm 0 ≤ sc.getBal sevm.currentTarget :=
@@ -2247,9 +2247,9 @@ theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -2319,9 +2319,9 @@ theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
-        some (Func.revWith "WETH: ETH transfer failed") := by
+        some (Func.revertWith "WETH: ETH transfer failed") := by
     simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
-  rcases of_run_branch_call_revWith h_eth_lookup run7 with
+  rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hstop⟩
   have h_eth_le :
       Sevm.argWord sevm 1 ≤ sc.getBal sevm.currentTarget :=
@@ -2416,10 +2416,10 @@ theorem backedPost_of_transferFromNonzero (dp : DeployParams) (ca : Adr)
     prefix_of_balanceTooSmall hp1 hguard
   have h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
-        some (Func.revWith "WETH: transfer amount exceeds balance") := by
+        some (Func.revertWith "WETH: transfer amount exceeds balance") := by
     simp [weth10, weth10Aux, transferBalanceErrorSlot,
       transferBalanceError]
-  rcases of_run_branch_call_revWith h_error_lookup run2 with
+  rcases of_run_branch_call_revertWith h_error_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -2532,9 +2532,9 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -2598,9 +2598,9 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
-        some (Func.revWith "WETH: ETH transfer failed") := by
+        some (Func.revertWith "WETH: ETH transfer failed") := by
     simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
-  rcases of_run_branch_call_revWith h_eth_lookup run7 with
+  rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hreturn⟩
   have h_eth_le :
       Sevm.argWord sevm 2 ≤ sc.getBal sevm.currentTarget :=
@@ -2797,9 +2797,9 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -2863,9 +2863,9 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[etherTransferErrorSlot]? =
-        some (Func.revWith "WETH: Ether transfer failed") := by
+        some (Func.revertWith "WETH: Ether transfer failed") := by
     simp [weth10, weth10Aux, etherTransferErrorSlot, etherTransferError]
-  rcases of_run_branch_call_revWith h_eth_lookup run7 with
+  rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hstop⟩
   have h_eth_le :
       Sevm.argWord sevm 2 ≤ sc.getBal sevm.currentTarget :=
@@ -2988,7 +2988,7 @@ theorem returnMemoryRange_preserves_code {fs : List Func} {e : Sevm}
     (run : Func.Run fs e s (returnMemoryRange i n) r) :
     Devm.getCode s = Devm.getCode r := by
   unfold returnMemoryRange at run
-  rcases of_run_prepend (pushList [n, i]) Func.ret run with
+  rcases of_run_prepend (pushList [n, i]) Func.return_ run with
     ⟨sm, hpushes, hret⟩
   have h_code_s_sm : Devm.getCode s = Devm.getCode sm :=
     Line.of_inv Devm.getCode (by line_inv) hpushes
@@ -3003,7 +3003,7 @@ no successful function-level run. -/
 theorem not_run_bubbleRevert {fs : List Func} {e : Sevm}
     {s r : Devm} : ¬ Func.Run fs e s bubbleRevert r := by
   intro run
-  simp only [bubbleRevert, Func.revReturnData] at run
+  simp only [bubbleRevert, Func.revertReturnData] at run
   rcases of_run_next run with ⟨s1, h1, run1⟩
   rcases of_run_next run1 with ⟨s2, h2, run2⟩
   rcases of_run_next run2 with ⟨s3, h3, run3⟩
@@ -3031,9 +3031,9 @@ theorem boolReturn_preserves_fields (dp : DeployParams)
   rcases of_run_branch run1 with
       ⟨s2, hpopCall, hcontinue⟩ |
       ⟨w, s2, s3, hnz, hpopCall, hburnCall, hbubbleCall⟩
-  · rcases of_run_prepend (retdataShorterThan 32) _ hcontinue with
+  · rcases of_run_prepend (returnDataShorterThan 32) _ hcontinue with
       ⟨s3, hshort, run3⟩
-    rcases of_run_branch_rev run3 with
+    rcases of_run_branch_revert run3 with
       ⟨s4, hpopShort, htail⟩
     have h_stor : Devm.getStor s = Devm.getStor r :=
       (Line.of_inv Devm.getStor (by line_inv)
@@ -3053,7 +3053,7 @@ theorem boolReturn_preserves_fields (dp : DeployParams)
                 (by func_inv) htail))))
     let decodeLine : Line :=
       pushList [32, 0, 0] ++
-        [retdatacopy, pushB256 0, mload, iszero, iszero] ++ mstoreAt 0
+        [returndatacopy, pushB256 0, mload, iszero, iszero] ++ mstoreAt 0
     rcases of_run_prepend decodeLine (returnMemoryRange 0 32) htail with
       ⟨sr, hdecode, hreturn⟩
     have h_tail_code : Devm.getCode s4 = Devm.getCode r :=
@@ -3131,7 +3131,7 @@ theorem of_run_callBoolCallback (dp : DeployParams)
   let checkLine : Line := arg target ++ [dup 0, extcodesize, iszero]
   rcases of_run_prepend checkLine _ run with
     ⟨s1, hcheck, run1⟩
-  rcases of_run_branch_rev run1 with
+  rcases of_run_branch_revert run1 with
     ⟨s2, hpopCheck, run2⟩
   rcases of_run_next run2 with
     ⟨s3, hpopTarget, run3⟩
@@ -4086,10 +4086,10 @@ theorem of_transferNonzeroThen_flash
     prefix_of_balanceTooSmall hp1 hguard
   have h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
-        some (Func.revWith "WETH: transfer amount exceeds balance") := by
+        some (Func.revertWith "WETH: transfer amount exceeds balance") := by
     simp [weth10, weth10Aux, transferBalanceErrorSlot,
       transferBalanceError]
-  rcases of_run_branch_call_revWith h_error_lookup run2 with
+  rcases of_run_branch_call_revertWith h_error_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -4172,7 +4172,7 @@ theorem of_callerBurnThen_floor
         s0.getCode = sc.getCode)
     (h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendError))
+        some (Func.revertWith sendError))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (loadCallerBalanceAmount amountArg +++ balanceTooSmall +++
         (.call burnBalanceErrorSlot) <?>
@@ -4199,9 +4199,9 @@ theorem of_callerBurnThen_floor
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -4249,7 +4249,7 @@ theorem of_callerBurnThen_floor
   obtain ⟨sc, g, target, hpCall, hcall, h_stor_s5_sc,
       h_code_s5_sc⟩ := h_send hp5 hsend
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
-  rcases of_run_branch_call_revWith h_error_lookup run7 with
+  rcases of_run_branch_call_revertWith h_error_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
     (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc
@@ -4294,10 +4294,10 @@ theorem transferFromNonzero_flashStable (dp : DeployParams) :
     prefix_of_balanceTooSmall hp1 hguard
   have h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
-        some (Func.revWith "WETH: transfer amount exceeds balance") := by
+        some (Func.revertWith "WETH: transfer amount exceeds balance") := by
     simp [weth10, weth10Aux, transferBalanceErrorSlot,
       transferBalanceError]
-  rcases of_run_branch_call_revWith h_error_lookup run2 with
+  rcases of_run_branch_call_revertWith h_error_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -4366,7 +4366,7 @@ theorem of_argBurnThen_floor
         s0.getCode = sc.getCode)
     (h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendError))
+        some (Func.revertWith sendError))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (loadArgBalanceAmount ownerArg amountArg +++ balanceTooSmall +++
         (.call burnBalanceErrorSlot) <?>
@@ -4392,9 +4392,9 @@ theorem of_argBurnThen_floor
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -4442,7 +4442,7 @@ theorem of_argBurnThen_floor
   obtain ⟨sc, g, target, hpCall, hcall, h_stor_s5_sc,
       h_code_s5_sc⟩ := h_send hp5 hsend
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
-  rcases of_run_branch_call_revWith h_error_lookup run7 with
+  rcases of_run_branch_call_revertWith h_error_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
     (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc
@@ -4500,9 +4500,9 @@ theorem of_transferZeroThen_floor
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -4552,9 +4552,9 @@ theorem of_transferZeroThen_floor
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
-        some (Func.revWith "WETH: ETH transfer failed") := by
+        some (Func.revertWith "WETH: ETH transfer failed") := by
     simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
-  rcases of_run_branch_call_revWith h_eth_lookup run7 with
+  rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
     (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc
@@ -5059,9 +5059,9 @@ theorem flashBurn_storage_at_receiver
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -5205,9 +5205,9 @@ theorem flashBurn_storage_get_of_not_valid
     prefix_of_balanceTooSmall hp1 hguard
   have hlookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith hlookup run2 with
+  rcases of_run_branch_call_revertWith hlookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -5380,9 +5380,9 @@ theorem of_run_flashSettle
       exact prefix_of_balanceTooSmall hps htooSmall
     have h_allowance_lookup :
         ((weth10 dp).main :: weth10Aux)[allowanceErrorSlot]? =
-          some (Func.revWith "WETH: request exceeds allowance") := by
+          some (Func.revertWith "WETH: request exceeds allowance") := by
       simp [weth10, weth10Aux, allowanceErrorSlot, allowanceError]
-    rcases of_run_branch_call_revWith h_allowance_lookup runGuard with
+    rcases of_run_branch_call_revertWith h_allowance_lookup runGuard with
       ⟨sb, hguardPop, runMutate⟩
     have hguardStack := hguardPop.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hguardStack
@@ -5638,9 +5638,9 @@ theorem flashSettle_balance
 def flashLoanFromCall : Func :=
   call ::: iszero :::
   (.call bubbleRevertSlot) <?>
-  (retdataShorterThan 32 +++
-    Func.rev <?>
-    (checkRetdataHead CALLBACK_SUCCESS 0 +++ iszero :::
+  (returnDataShorterThan 32 +++
+    Func.revert <?>
+    (checkReturnDataHead CALLBACK_SUCCESS 0 +++ iszero :::
       (.call flashFailedErrorSlot) <?>
       (pop ::: pop ::: .call flashSettleSlot)))
 
@@ -5909,9 +5909,9 @@ theorem of_flashLoan_toCall_frame
     exact prefix_of_iszero htZero hp3
   have h_token_lookup :
       ((weth10 dp).main :: weth10Aux)[flashTokenErrorSlot]? =
-        some (Func.revWith "WETH: flash mint only WETH10") := by
+        some (Func.revertWith "WETH: flash mint only WETH10") := by
     simp [weth10, weth10Aux, flashTokenErrorSlot, flashTokenError]
-  rcases of_run_branch_call_revWith h_token_lookup run0 with
+  rcases of_run_branch_call_revertWith h_token_lookup run0 with
     ⟨st1, htokenPop, run1⟩
   have htokenStack := htokenPop.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at htokenStack
@@ -5972,10 +5972,10 @@ theorem of_flashLoan_toCall_frame
     exact prefix_of_lt hlt hp3
   have h_individual_lookup :
       ((weth10 dp).main :: weth10Aux)[individualLimitErrorSlot]? =
-        some (Func.revWith "WETH: individual loan limit exceeded") := by
+        some (Func.revertWith "WETH: individual loan limit exceeded") := by
     simp [weth10, weth10Aux, individualLimitErrorSlot,
       individualLimitError]
-  rcases of_run_branch_call_revWith h_individual_lookup run2 with
+  rcases of_run_branch_call_revertWith h_individual_lookup run2 with
     ⟨sa5, hamountPop, run3⟩
   have hpopStack := hamountPop.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -6112,9 +6112,9 @@ theorem of_flashLoan_toCall_frame
     exact prefix_of_lt hltTotal hpT4
   have h_total_lookup :
       ((weth10 dp).main :: weth10Aux)[totalLimitErrorSlot]? =
-        some (Func.revWith "WETH: total loan limit exceeded") := by
+        some (Func.revertWith "WETH: total loan limit exceeded") := by
     simp [weth10, weth10Aux, totalLimitErrorSlot, totalLimitError]
-  rcases of_run_branch_call_revWith h_total_lookup run5 with
+  rcases of_run_branch_call_revertWith h_total_lookup run5 with
     ⟨st8, htotalPop, run6⟩
   have htotalStack := htotalPop.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at htotalStack
@@ -6315,7 +6315,7 @@ theorem of_flashLoan_toCall_frame
     (Line.of_inv Devm.output (by line_inv) hcheck)
   have hstor_smint_scheck : Devm.getStor smint = Devm.getStor scheck :=
     Line.of_inv Devm.getStor (by line_inv) hcheck
-  rcases of_run_branch_rev run9 with
+  rcases of_run_branch_revert run9 with
     ⟨sready, hcheckPop, run10⟩
   have hpReady : [Sevm.argWord sevm 2, key] <<+ sready.stack := by
     have hpopStack := hcheckPop.stack
@@ -6818,19 +6818,19 @@ theorem of_run_flashLoanFromCall
   rcases of_run_branch run2 with
       ⟨s2, hpopCall, hcontinue⟩ |
       ⟨w, s2, s3, hnz, hpopCall, hburnCall, hbubbleCall⟩
-  · rcases of_run_prepend (retdataShorterThan 32) _ hcontinue with
+  · rcases of_run_prepend (returnDataShorterThan 32) _ hcontinue with
       ⟨s3, hshort, run3⟩
-    rcases of_run_branch_rev run3 with
+    rcases of_run_branch_revert run3 with
       ⟨s4, hpopShort, run4⟩
     let checkLine : Line :=
-      checkRetdataHead CALLBACK_SUCCESS 0 ++ [iszero]
+      checkReturnDataHead CALLBACK_SUCCESS 0 ++ [iszero]
     rcases of_run_prepend checkLine _ run4 with
       ⟨s5, hcheck, run5⟩
     have h_failed_lookup :
         ((weth10 dp).main :: weth10Aux)[flashFailedErrorSlot]? =
-          some (Func.revWith "WETH: flash loan failed") := by
+          some (Func.revertWith "WETH: flash loan failed") := by
       simp [weth10, weth10Aux, flashFailedErrorSlot, flashFailedError]
-    rcases of_run_branch_call_revWith h_failed_lookup run5 with
+    rcases of_run_branch_call_revertWith h_failed_lookup run5 with
       ⟨s6, hpopCheck, run6⟩
     rcases of_run_next run6 with ⟨s7, hpop1, run7⟩
     rcases of_run_next run7 with ⟨s8, hpop2, hcallSettle⟩
@@ -7061,7 +7061,7 @@ theorem flashFloorPost_of_run_dispatch
     (dp : DeployParams) (ca : Adr)
     (h_funcs : ∀ p ∈ weth10Funcs dp,
       FloorRelFuncSound dp ca p.2)
-    (h_fall : FloorRelFuncSound dp ca Func.rev)
+    (h_fall : FloorRelFuncSound dp ca Func.revert)
     {floor : B256} {sevm : Sevm} {s r : Devm}
     (h_target : sevm.currentTarget = ca)
     (h_pre : (flashFloorSpec dp floor).Pre ca sevm s)
@@ -7071,7 +7071,7 @@ theorem flashFloorPost_of_run_dispatch
     (flashFloorSpec dp floor).Post ca sevm r := by
   apply
     (@dispatchWith_inv
-      ((weth10 dp).main :: weth10Aux) fallbackSlot Func.rev
+      ((weth10 dp).main :: weth10Aux) fallbackSlot Func.revert
       (fun e s =>
         e.currentTarget = ca ∧
         (flashFloorSpec dp floor).Pre ca e s ∧
@@ -7144,7 +7144,7 @@ theorem flashFloorsRel_of_prog_run
     exact flashFloorPost_of_run_dispatch dp ca h_funcs
       (by
         intro floor' e x y hct hp hih hrev
-        exact absurd hrev not_run_rev)
+        exact absurd hrev not_run_revert)
       h_target h_pre3 ih hdispatch'
   · exact h_receive h_target
       (h_pre1.state_eq (hburn.state.symm.trans hpop.state.symm))
@@ -7491,9 +7491,9 @@ theorem backedPost_of_static_call
       ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_pre : (backedSpec weth10 dp).Pre ca sevm s)
-    (h_run : Ninst.Run sevm s statcall sf) :
+    (h_run : Ninst.Run sevm s staticcall sf) :
     (backedSpec weth10 dp).Post ca sevm sf := by
-  rcases of_run_statcall_val_with_depth hp h_run with
+  rcases of_run_staticcall_val_with_depth hp h_run with
       ⟨_, h_world, _⟩ |
       ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
@@ -7636,9 +7636,9 @@ theorem flashExactRel_of_static_call
     (ih : FlashExactDepth dp ca sevm.depth)
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_run : Ninst.Run sevm s statcall sf) :
+    (h_run : Ninst.Run sevm s staticcall sf) :
     FlashExactRel dp ca sevm s sf := by
-  rcases of_run_statcall_val_with_depth hp h_run with
+  rcases of_run_staticcall_val_with_depth hp h_run with
       ⟨_, h_world, _⟩ |
       ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
@@ -7772,7 +7772,7 @@ inductive PermitBalanceOwnSilent (sevm : Sevm) (pre post : Devm) : Prop
         (Devm.getStor pre sevm.currentTarget)
         (Devm.getStor callPre sevm.currentTarget))
       (filled : Xlot.Filled slot)
-      (step : Ninst.StepRun pc sevm callPre statcall slot (.ok callPost))
+      (step : Ninst.StepRun pc sevm callPre staticcall slot (.ok callPost))
       (suffixSilent : Stor.Weth10Silent
         (Devm.getStor callPost sevm.currentTarget)
         (Devm.getStor post sevm.currentTarget))
@@ -8077,7 +8077,7 @@ private theorem recoverPermitSigner_balanceOwnSilent
     (run : Line.Run sevm s recoverPermitSigner r) :
     PermitBalanceOwnSilent sevm s r := by
   change Line.Run sevm s
-    (permitRecoverFlashPrepare ++ [statcall, pop, pushB256 128, mload]) r
+    (permitRecoverFlashPrepare ++ [staticcall, pop, pushB256 128, mload]) r
     at run
   rcases of_run_append permitRecoverFlashPrepare run with
     ⟨callPre, hprepare, run⟩
@@ -8108,7 +8108,7 @@ private theorem recoverPermitSigner_exactRel
     (run : Line.Run sevm s recoverPermitSigner r) :
     FlashExactRel dp ca sevm s r := by
   change Line.Run sevm s
-    (permitRecoverFlashPrepare ++ [statcall, pop, pushB256 128, mload]) r at run
+    (permitRecoverFlashPrepare ++ [staticcall, pop, pushB256 128, mload]) r at run
   rcases of_run_append permitRecoverFlashPrepare run with
     ⟨sp, hprep, run⟩
   have hfirst : ∃ s1,
@@ -8149,7 +8149,7 @@ private theorem recoverPermitSigner_backed
     (run : Line.Run sevm s recoverPermitSigner r) :
     (backedSpec weth10 dp).Post ca sevm r := by
   change Line.Run sevm s
-    (permitRecoverFlashPrepare ++ [statcall, pop, pushB256 128, mload]) r at run
+    (permitRecoverFlashPrepare ++ [staticcall, pop, pushB256 128, mload]) r at run
   rcases of_run_append permitRecoverFlashPrepare run with
     ⟨sp, hprep, run⟩
   have hfirst : ∃ s1,
@@ -8278,12 +8278,12 @@ private theorem permitSignerFlashGuards_balanceSilent
       have hf : f = invalidPermitError := by
         simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
       subst f
-      exact absurd hrev Func.not_run_revWith
+      exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
       simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-- The complete recovery auxiliary has the same retained static boundary;
 digest preparation is silent before it and the signer/allowance tail is
@@ -8355,13 +8355,13 @@ private theorem permitSignerFlashGuards_exactRel
       have hf : f = invalidPermitError := by
         simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
       subst f
-      exact absurd hrev Func.not_run_revWith
+      exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with
       ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
       simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-- Once recovery has established backing, the signer guards and successful
 tagged approval tail preserve that postcondition. -/
@@ -8426,13 +8426,13 @@ private theorem permitSignerFlashGuards_backedPost
       have hf : f = invalidPermitError := by
         simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
       subst f
-      exact absurd hrev Func.not_run_revWith
+      exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with
       ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
       simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-- The whole recovery function preserves the exact counter: digesting is
 local, recovery crosses the recursively-checked static subtree, and the only
@@ -8516,7 +8516,7 @@ private theorem permitRecover_backed
 private def permitStructFlashPrepare : Line :=
   [pushB256 PERMIT_TYPEHASH] ++ mstoreAt 0 ++
   argCopy 1 0 3 ++ arg 3 ++ mstoreAt 5 ++
-  pushList [192, 0] ++ [kec]
+  pushList [192, 0] ++ [keccak256]
 
 private def permitDomainFlashDispatch (dp : DeployParams) : Func :=
   dup 1 ::: pushDeployWord dp.deploymentChainId ::: eq :::
@@ -9015,7 +9015,7 @@ private theorem permitBody_balanceOwnSilent
     have hf : f = expiredPermitError := by
       simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 private theorem permitBody_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
@@ -9055,7 +9055,7 @@ private theorem permitBody_exactRelFuncSound
     have hf : f = expiredPermitError := by
       simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 private theorem permitBody_backed
     (dp : DeployParams) (ca : Adr)
@@ -9101,7 +9101,7 @@ private theorem permitBody_backed
     have hf : f = expiredPermitError := by
       simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-- Exact generated-program proof that public `permit` has no own
 balance-region write.  The only recursive machine step remains the concrete
@@ -9191,7 +9191,7 @@ theorem flashExactPost_of_run_dispatch
     (dp : DeployParams) (ca : Adr)
     (h_funcs : ∀ p ∈ weth10Funcs dp,
       ExactRelFuncSound dp ca p.2)
-    (h_fall : ExactRelFuncSound dp ca Func.rev)
+    (h_fall : ExactRelFuncSound dp ca Func.revert)
     {flash : B256} {sevm : Sevm} {s r : Devm}
     (h_target : sevm.currentTarget = ca)
     (h_pre : (flashExactSpec dp flash).Pre ca sevm s)
@@ -9201,7 +9201,7 @@ theorem flashExactPost_of_run_dispatch
     (flashExactSpec dp flash).Post ca sevm r := by
   apply
     (@dispatchWith_inv
-      ((weth10 dp).main :: weth10Aux) fallbackSlot Func.rev
+      ((weth10 dp).main :: weth10Aux) fallbackSlot Func.revert
       (fun e s =>
         e.currentTarget = ca ∧
         (flashExactSpec dp flash).Pre ca e s ∧
@@ -9277,7 +9277,7 @@ theorem flashExactSpecsRel_of_prog_run
     exact flashExactPost_of_run_dispatch dp ca h_funcs
       (by
         intro e x y hct hcode hih hrev
-        exact absurd hrev not_run_rev)
+        exact absurd hrev not_run_revert)
       h_target h_pre3 ih hdispatch'
   · have h_pre3 :=
       h_pre1.state_eq (hburn.state.symm.trans hpop.state.symm)
@@ -9390,9 +9390,9 @@ theorem of_transferZeroThen_exact
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -9442,9 +9442,9 @@ theorem of_transferZeroThen_exact
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
-        some (Func.revWith "WETH: ETH transfer failed") := by
+        some (Func.revertWith "WETH: ETH transfer failed") := by
     simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
-  rcases of_run_branch_call_revWith h_eth_lookup run7 with
+  rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
     (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc
@@ -9654,7 +9654,7 @@ theorem of_callerBurnThen_exact
         s0.getCode = sc.getCode)
     (h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendError))
+        some (Func.revertWith sendError))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (loadCallerBalanceAmount amountArg +++ balanceTooSmall +++
         (.call burnBalanceErrorSlot) <?>
@@ -9681,9 +9681,9 @@ theorem of_callerBurnThen_exact
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -9731,7 +9731,7 @@ theorem of_callerBurnThen_exact
   obtain ⟨sc, g, target, hpCall, hcall, h_stor_s5_sc,
       h_code_s5_sc⟩ := h_send hp5 hsend
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
-  rcases of_run_branch_call_revWith h_error_lookup run7 with
+  rcases of_run_branch_call_revertWith h_error_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
     (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc
@@ -9778,7 +9778,7 @@ theorem of_argBurnThen_exact
         s0.getCode = sc.getCode)
     (h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendError))
+        some (Func.revertWith sendError))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
       (loadArgBalanceAmount ownerArg amountArg +++ balanceTooSmall +++
         (.call burnBalanceErrorSlot) <?>
@@ -9804,9 +9804,9 @@ theorem of_argBurnThen_exact
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWith h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -9854,7 +9854,7 @@ theorem of_argBurnThen_exact
   obtain ⟨sc, g, target, hpCall, hcall, h_stor_s5_sc,
       h_code_s5_sc⟩ := h_send hp5 hsend
   rcases of_run_next run6 with ⟨si, hiszero, run7⟩
-  rcases of_run_branch_call_revWith h_error_lookup run7 with
+  rcases of_run_branch_call_revertWith h_error_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
     (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc

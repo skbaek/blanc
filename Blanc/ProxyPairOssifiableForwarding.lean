@@ -236,9 +236,9 @@ theorem forwardingCleanTailRun_of_budget
   have copiedRead : (copied.read 0 n).1 = child.output :=
     forwardingReadCopiedMemory resume.memory child.output
   change Func.RunCompiledTo ossifiableRuntimeFunctions sevm resume
-    (pushB256 0 ::: retdatasize ::: pushB256 0 ::: pushB256 0 :::
-      retdatacopy ::: retdatasize ::: swap 1 :::
-      Func.branch (Func.last .rev) (Func.last .ret)) _
+    (pushB256 0 ::: returndatasize ::: pushB256 0 ::: pushB256 0 :::
+      returndatacopy ::: returndatasize ::: swap 1 :::
+      Func.branch (Func.last .revert) (Func.last .return_)) _
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
       (G := gas + (25 + copyCost)) pushCost_zero ?_ ?_) ?_
@@ -257,7 +257,7 @@ theorem forwardingCleanTailRun_of_budget
     omega
   · try simp only [Devm.setMach_setMach]
     refine Func.RunCompiledTo.next
-      (Ninst.runCompiled_pushItem (r := .retdatasize) (x := w)
+      (Ninst.runCompiled_pushItem (r := .returndatasize) (x := w)
         (cost := gBase) (G := gas + (23 + copyCost))
         (by rintro ⟨⟩) ?_ ?_ ?_) ?_
     · rfl
@@ -284,7 +284,7 @@ theorem forwardingCleanTailRun_of_budget
       simp only [Devm.setMach_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
-        (Ninst.runCompiled_retdatacopy_of
+        (Ninst.runCompiled_returndatacopy_of
           (di := 0) (ri := 0) (sz := w)
           (s := 0 :: 1 :: d.parent.stack)
           (c := copyCost) (G := gas + 19) (M := copied)
@@ -305,7 +305,7 @@ theorem forwardingCleanTailRun_of_budget
         omega
       · simp only [Devm.setMach_setMach]
         refine Func.RunCompiledTo.next
-          (Ninst.runCompiled_pushItem (r := .retdatasize) (x := w)
+          (Ninst.runCompiled_pushItem (r := .returndatasize) (x := w)
             (cost := gBase) (G := gas + 17)
             (by rintro ⟨⟩) ?_
             (by
@@ -350,7 +350,7 @@ theorem forwardingCleanTailRun_of_budget
                     (copied.read 0 n).2 = readPost
               apply Devm.eq_of_proj <;> rfl
           have terminalMemory := congrArg Prod.snd terminalRead
-          have terminalRun := Func.runCompiledTo_ret_word
+          have terminalRun := Func.runCompiledTo_return_word
             (fs := ossifiableRuntimeFunctions) (sevm := sevm)
             (devm := resume.setMach
               ⟨0 :: w :: d.parent.stack, copied, gas⟩)
@@ -402,9 +402,9 @@ theorem forwardingFailedTailRun_of_budget
   have copiedRead : (copied.read 0 n).1 = child.output :=
     forwardingReadCopiedMemory resume.memory child.output
   change Func.RunCompiledTo ossifiableRuntimeFunctions sevm resume
-    (pushB256 0 ::: retdatasize ::: pushB256 0 ::: pushB256 0 :::
-      retdatacopy ::: retdatasize ::: swap 1 :::
-      Func.branch (Func.last .rev) (Func.last .ret)) _
+    (pushB256 0 ::: returndatasize ::: pushB256 0 ::: pushB256 0 :::
+      returndatacopy ::: returndatasize ::: swap 1 :::
+      Func.branch (Func.last .revert) (Func.last .return_)) _
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
       (G := gas + (24 + copyCost)) pushCost_zero ?_ ?_) ?_
@@ -423,7 +423,7 @@ theorem forwardingFailedTailRun_of_budget
     omega
   · try simp only [Devm.setMach_setMach]
     refine Func.RunCompiledTo.next
-      (Ninst.runCompiled_pushItem (r := .retdatasize) (x := w)
+      (Ninst.runCompiled_pushItem (r := .returndatasize) (x := w)
         (cost := gBase) (G := gas + (22 + copyCost))
         (by rintro ⟨⟩) ?_ ?_ ?_) ?_
     · rfl
@@ -450,7 +450,7 @@ theorem forwardingFailedTailRun_of_budget
       simp only [Devm.setMach_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
-        (Ninst.runCompiled_retdatacopy_of
+        (Ninst.runCompiled_returndatacopy_of
           (di := 0) (ri := 0) (sz := w)
           (s := 0 :: 0 :: d.parent.stack)
           (c := copyCost) (G := gas + 18) (M := copied)
@@ -471,7 +471,7 @@ theorem forwardingFailedTailRun_of_budget
         omega
       · simp only [Devm.setMach_setMach]
         refine Func.RunCompiledTo.next
-          (Ninst.runCompiled_pushItem (r := .retdatasize) (x := w)
+          (Ninst.runCompiled_pushItem (r := .returndatasize) (x := w)
             (cost := gBase) (G := gas + 16)
             (by rintro ⟨⟩) ?_
             (by
@@ -517,7 +517,7 @@ theorem forwardingFailedTailRun_of_budget
                     (copied.read 0 w.toNat).2 = readPost
               simp only [readPost, wordRoundtrip]
               apply Devm.eq_of_proj <;> rfl
-          have terminalRun := Func.runCompiledTo_rev_of
+          have terminalRun := Func.runCompiledTo_revert_of
             (fs := ossifiableRuntimeFunctions) (sevm := sevm)
             (devm := resume.setMach
               ⟨0 :: w :: d.parent.stack, copied, gas⟩)
@@ -647,7 +647,7 @@ theorem forwarding_atCall_execSat
       | .error _ => PUnit)
     (certificate : DelegatedChildCertificate d.child childOut) :
     Func.ExecSat ossifiableRuntimeFunctions sevm callPre
-      (delcall ::: proxyReturnTail)
+      (delegatecall ::: proxyReturnTail)
       (fun raw => ChildToWrapperSettledAt outer.currentTarget childOut
         ((Frame.ofCall outer).settle raw)) := by
   have childEnter := d.crossing.1
@@ -697,7 +697,7 @@ theorem forwarding_atCall_execSat
               forwardingCleanResume] using
               (Resume.run_call_ok status context.parentStackRoom)
           have callRun : Ninst.RunCompiled sevm callPre
-              (.exec .delcall) (forwardingCleanResume d child) :=
+              (.exec .delegatecall) (forwardingCleanResume d child) :=
             Ninst.runCompiled_exec_run d.step childEnter resume
           apply Func.execSat_of_runCompiledTo
             (Func.RunCompiledTo.next callRun tailRun)
@@ -713,7 +713,7 @@ theorem forwarding_atCall_execSat
               forwardingFailedResume] using
               (Resume.run_call_err status context.parentStackRoom)
           have callRun : Ninst.RunCompiled sevm callPre
-              (.exec .delcall) (forwardingFailedResume d child) :=
+              (.exec .delegatecall) (forwardingFailedResume d child) :=
             Ninst.runCompiled_exec_run d.step childEnter resume
           apply Func.execSat_of_runCompiledTo
             (Func.RunCompiledTo.next callRun tailRun)
@@ -804,7 +804,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
     (budget : OssifiableFallbackPrefixBudget sevm entry)
     {ex : Execution}
     (tail : Func.ExecWitness fs sevm budget.callPre
-      (delcall ::: proxyReturnTail) ex) :
+      (delegatecall ::: proxyReturnTail) ex) :
     Func.ExecWitness fs sevm entry proxyFallback ex := by
   let sizeWord := ossifiableFallbackSizeWord sevm
   let copied := ossifiableFallbackCopiedMemory sevm entry
@@ -1023,7 +1023,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
   change Func.ExecWitness fs sevm entry
     (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
       pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
-      pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+      pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
       proxyReturnTail) ex
   exact Func.ExecWitness.next h1
     (Func.ExecWitness.next h2
@@ -1193,7 +1193,7 @@ theorem OssifiableForwardingRoute.compiledPrefix
     {raw : Execution}
     (rawWitness : Func.ExecWitness ossifiableRuntimeFunctions
       (initSevm (outer.withBenv afterTransfer)) callPre
-      (delcall ::: proxyReturnTail) raw) :
+      (delegatecall ::: proxyReturnTail) raw) :
     Prog.ExecWitness (initSevm (outer.withBenv afterTransfer))
       (initDevm (outer.withBenv afterTransfer)) runtimeBaseline raw := by
   let sevm := initSevm (outer.withBenv afterTransfer)
@@ -1206,7 +1206,7 @@ theorem OssifiableForwardingRoute.compiledPrefix
     ⟨Sevm.selector sevm :: [], initial.memory,
       route.fallbackGas + dispatchCost⟩
   have htail : Func.ExecWitness ossifiableRuntimeFunctions sevm
-      route.prefixBudget.callPre (delcall ::: proxyReturnTail) raw := by
+      route.prefixBudget.callPre (delegatecall ::: proxyReturnTail) raw := by
     simpa only [sevm, route.callPreEq] using rawWitness
   have hfallback : Func.ExecWitness ossifiableRuntimeFunctions sevm
       (ossifiableRuntimeFallbackEntry outer afterTransfer route.fallbackGas)
@@ -1431,7 +1431,7 @@ theorem processMessage_forwardingEnvelope
       ((Frame.ofCall outer).settle raw)
   have atCall : Func.ExecSat ossifiableRuntimeFunctions
       (initSevm (outer.withBenv afterTransfer)) callPre
-      (delcall ::: proxyReturnTail) P :=
+      (delegatecall ::: proxyReturnTail) P :=
     forwarding_atCall_execSat outer d route.settlement childOut
       tail certificate
   rcases atCall with ⟨raw, rawWitness, observation⟩

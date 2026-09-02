@@ -179,8 +179,8 @@ example (devm : Devm) (index : Nat) (value : Bytes) :
 
 -- EXPECT: compiled-terminal-at-zero
 example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Func.RunCompiledTo fs sevm pre (Func.last .ret) out) :
-    Func.RunCompiledTo fs sevm pre (Func.last .ret) out := by
+    (run : Func.RunCompiledTo fs sevm pre (Func.last .return_) out) :
+    Func.RunCompiledTo fs sevm pre (Func.last .return_) out := by
   blanc_suggest
   exact run
 

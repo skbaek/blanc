@@ -461,13 +461,13 @@ macro_rules
               (congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run)
                 sevm.currentTarget))
 
-/-- The fallback, free.  fmint's fallback is `Func.rev` and `Blanc.not_run_rev`
+/-- The fallback, free.  fmint's fallback is `Func.revert` and `Blanc.not_run_revert`
 says no `Func.Run` witnesses it, so the obligation is vacuous — which is what
 "an unrecognized selector reverts" buys at the proof layer. -/
-theorem fmintSpec_funcSound_rev {fa : Adr} :
-    fmintSpec.FuncSoundNoMem fa Fmint.fmintAux Func.rev := by
+theorem fmintSpec_funcSound_revert {fa : Adr} :
+    fmintSpec.FuncSoundNoMem fa Fmint.fmintAux Func.revert := by
   intro _ _ _ _ _ _ h_run
-  exact absurd h_run not_run_rev
+  exact absurd h_run not_run_revert
 
 /-! ### The eight read-only targets
 
@@ -620,7 +620,7 @@ lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
   have hp₂ : [0, 64, wad] <<+ s₃.stack := by generalize_line_prefix
   clear_state s₂
   line_execute 1
-  rcases prefix_of_kec (of_run_singleton h₄) hp₂ with ⟨hash, hp₃⟩
+  rcases prefix_of_keccak256 (of_run_singleton h₄) hp₂ with ⟨hash, hp₃⟩
   clear_state s₃
   intro h
   rcases of_checkSlotCollides hp₃ h with ⟨vx, h_vx, h_iff⟩
@@ -637,11 +637,11 @@ lemma of_approve {sevm : Sevm} {s r : Devm}
     ∃ k v, ¬ ValidAdr k ∧ k ≠ supplySlot ∧
       Devm.getStor r sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set k v := by
   simp only [approve] at run
-  -- arg 0 ++ checkNonAddress, then the rev-branch on `guy`
+  -- arg 0 ++ checkNonAddress, then the revert-branch on `guy`
   rcases of_run_prepend (arg 0 ++ checkNonAddress) _ run with ⟨s0, h_s0, h_run'⟩; clear run
   have hg0 : Devm.getStor s sevm.currentTarget = Devm.getStor s0 sevm.currentTarget :=
     congr_fun (by invariance : Devm.getStor s = Devm.getStor s0) sevm.currentTarget
-  rcases of_run_branch_rev h_run' with ⟨s1, h_pop, h_run⟩; clear h_run'
+  rcases of_run_branch_revert h_run' with ⟨s1, h_pop, h_run⟩; clear h_run'
   have hg1 : Devm.getStor s0 sevm.currentTarget = Devm.getStor s1 sevm.currentTarget :=
     (Devm.PopBurn.getStor h_pop sevm.currentTarget).symm
   clear h_pop
@@ -651,8 +651,8 @@ lemma of_approve {sevm : Sevm} {s r : Devm}
   have hg2 : Devm.getStor s1 sevm.currentTarget = Devm.getStor s2 sevm.currentTarget :=
     congr_fun (by invariance : Devm.getStor s1 = Devm.getStor s2) sevm.currentTarget
   clear h_s2
-  -- rev-branch : the guard passed, so the flag is 0 and both conjuncts hold
-  rcases of_run_branch_rev h_run' with ⟨s3, h_pop', h_run⟩; clear h_run'
+  -- revert-branch : the guard passed, so the flag is 0 and both conjuncts hold
+  rcases of_run_branch_revert h_run' with ⟨s3, h_pop', h_run⟩; clear h_run'
   have h_pop_stk := h_pop'.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at h_pop_stk
   rw [h_pop_stk] at h_s2_stk
@@ -728,9 +728,9 @@ lemma of_updateAllowance {fs : List Func} {sevm : Sevm} {s r : Devm} {wad dst}
     have hsD : [0, 64, wad] <<+ sD.stack := by generalize_line_prefix
     rw [congr_fun (Line.of_inv Devm.getStor (by line_inv) hD) sevm.currentTarget]
     clear hD hsC
-    -- segment 5 : kec  ( 0 64 wad -- hash wad )
+    -- segment 5 : keccak256  ( 0 64 wad -- hash wad )
     rcases of_run_next h_runP with ⟨sE, rE, h_runP⟩
-    rcases prefix_of_kec rE hsD with ⟨hash, hsE⟩
+    rcases prefix_of_keccak256 rE hsD with ⟨hash, hsE⟩
     rw [congr_fun (Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons rE Line.Run.nil)) sevm.currentTarget]
     clear rE hsD
@@ -742,9 +742,9 @@ lemma of_updateAllowance {fs : List Func} {sevm : Sevm} {s r : Devm} {wad dst}
     rcases of_checkSlotCollides hsE hG with ⟨coll, hsG, h_guard⟩
     rw [congr_fun (Line.of_inv Devm.getStor (by line_inv) hG) sevm.currentTarget]
     clear hG hsE
-    -- rev-branch : the guard passed, so the key is neither address-shaped nor
+    -- revert-branch : the guard passed, so the key is neither address-shaped nor
     -- the supply slot
-    rcases of_run_branch_rev h_runP with ⟨sH, h_popH, h_runP⟩
+    rcases of_run_branch_revert h_runP with ⟨sH, h_popH, h_runP⟩
     have hpH := h_popH.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpH
     rw [hpH] at hsG
@@ -847,8 +847,8 @@ lemma of_updateAllowance {fs : List Func} {sevm : Sevm} {s r : Devm} {wad dst}
       rw [congr_fun (Line.of_inv Devm.getStor (by line_inv)
         (Line.Run.cons rN Line.Run.nil)) sevm.currentTarget]
       clear rN hsN2
-      -- rev-branch : guarantees allowance ≥ wad
-      rcases of_run_branch_rev h_runP with ⟨sO, h_popO, h_runP⟩
+      -- revert-branch : guarantees allowance ≥ wad
+      rcases of_run_branch_revert h_runP with ⟨sO, h_popO, h_runP⟩
       have hpO := h_popO.stack
       simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpO
       rw [hpO] at hsN
@@ -936,8 +936,8 @@ lemma of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   rcases of_check_non_address hs2 h3 with ⟨na_src, hs3, h_src_iff⟩
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h3)
   clear h3 hs2
-  -- rev-branch : src is a valid address
-  rcases of_run_branch_rev h_run with ⟨a4, hp4, h_run⟩
+  -- revert-branch : src is a valid address
+  rcases of_run_branch_revert h_run with ⟨a4, hp4, h_run⟩
   have hp4s := hp4.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp4s
   rw [hp4s] at hs3
@@ -1010,8 +1010,8 @@ lemma of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   have hs11 : (sbal <? wad) :: [sbal, wad, wad, src] <<+ a11.stack := prefix_of_lt r11 hs10
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r11 Line.Run.nil))
   clear r11 hs10
-  -- rev-branch : source balance ≥ wad
-  rcases of_run_branch_rev h_run with ⟨a12, hp12, h_run⟩
+  -- revert-branch : source balance ≥ wad
+  rcases of_run_branch_revert h_run with ⟨a12, hp12, h_run⟩
   have hp12s := hp12.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp12s
   rw [hp12s] at hs11
@@ -1055,8 +1055,8 @@ lemma of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   rcases of_check_non_address hs15 h16 with ⟨na_dst, hs16, h_dst_iff⟩
   have hg' := hg'.trans (Line.of_inv Devm.getStor (by line_inv) h16)
   clear h16 hs15
-  -- rev-branch : dst is a valid address
-  rcases of_run_branch_rev h_run with ⟨a17, hp17, h_run⟩
+  -- revert-branch : dst is a valid address
+  rcases of_run_branch_revert h_run with ⟨a17, hp17, h_run⟩
   have hp17s := hp17.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp17s
   rw [hp17s] at hs16
@@ -1536,8 +1536,8 @@ lemma of_burnAndReturn {fs : List Func} {sevm : Sevm} {s r : Devm} {wad receiver
   have hs5 : (rbal <? wad) :: [rbal, wad, a.toB256] <<+ s5.stack := prefix_of_lt r5 hs4
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r5 Line.Run.nil))
   clear r5 hs4
-  -- rev-branch : a.toB256 balance covers the burn
-  rcases of_run_branch_rev h_run with ⟨s6, hp6, h_run⟩
+  -- revert-branch : a.toB256 balance covers the burn
+  rcases of_run_branch_revert h_run with ⟨s6, hp6, h_run⟩
   have hp6s := hp6.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp6s
   rw [hp6s] at hs5
@@ -1829,9 +1829,9 @@ lemma of_spendAllowanceThenBurn {sevm : Sevm} {s r : Devm} {wad receiver : B256}
   have hs5 : [0, 64, wad, receiver] <<+ s5.stack := by generalize_line_prefix
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h5)
   clear h5 hs4
-  -- kec : [hash, wad, receiver]
+  -- keccak256 : [hash, wad, receiver]
   rcases of_run_next h_run with ⟨s6, r6, h_run⟩
-  rcases prefix_of_kec r6 hs5 with ⟨hash, hs6⟩
+  rcases prefix_of_keccak256 r6 hs5 with ⟨hash, hs6⟩
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r6 Line.Run.nil))
   clear r6 hs5
   -- checkSlotCollides : [collides?, hash, wad, receiver]
@@ -1839,8 +1839,8 @@ lemma of_spendAllowanceThenBurn {sevm : Sevm} {s r : Devm} {wad receiver : B256}
   rcases of_checkSlotCollides hs6 h7 with ⟨coll, hs7, h_guard⟩
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h7)
   clear h7 hs6
-  -- rev-branch : the slot aliases neither region
-  rcases of_run_branch_rev h_run with ⟨s8, hp8, h_run⟩
+  -- revert-branch : the slot aliases neither region
+  rcases of_run_branch_revert h_run with ⟨s8, hp8, h_run⟩
   have hp8s := hp8.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp8s
   rw [hp8s] at hs7
@@ -1932,8 +1932,8 @@ lemma of_spendAllowanceThenBurn {sevm : Sevm} {s r : Devm} {wad receiver : B256}
       prefix_of_lt r16 hs15
     have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r16 Line.Run.nil))
     clear r16 hs15
-    -- rev-branch : the allowance covers the amount owed
-    rcases of_run_branch_rev h_run with ⟨s17, hp17, h_run⟩
+    -- revert-branch : the allowance covers the amount owed
+    rcases of_run_branch_revert h_run with ⟨s17, hp17, h_run⟩
     have hp17s := hp17.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp17s
     rw [hp17s] at hs16
@@ -2102,7 +2102,7 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r4 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r4 Line.Run.nil))
   clear r4 hs3
-  rcases of_run_branch_rev h_run with ⟨s5, hp5, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s5, hp5, h_run⟩
   have hg := hg.trans (funext (fun x => (Devm.PopBurn.getStor hp5 x).symm))
   have hgc := hgc.trans (funext (fun x => getCode_eq_of_state_eq hp5.state x))
   clear hp5 hs4
@@ -2128,7 +2128,7 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h8)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h8)
   clear h8 hs7
-  rcases of_run_branch_rev h_run with ⟨s9, hp9, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s9, hp9, h_run⟩
   have hp9s := hp9.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp9s
   rw [hp9s] at hs8
@@ -2193,7 +2193,7 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r15 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r15 Line.Run.nil))
   clear r15 hs14
-  rcases of_run_branch_rev h_run with ⟨s16, hp16, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s16, hp16, h_run⟩
   have hp16s := hp16.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp16s
   rw [hp16s] at hs15
@@ -2458,7 +2458,7 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
   have hg4 : Devm.getStor s44 = Devm.getStor s45 :=
     Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r45 Line.Run.nil)
   clear r45 hs44
-  rcases of_run_branch_rev h_run with ⟨s46, hp46, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s46, hp46, h_run⟩
   have hp46s := hp46.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp46s
   rw [hp46s] at hs45
@@ -2466,11 +2466,11 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
   have hs46 : [amount, a.toB256] <<+ s46.stack := cons_pref_cons_inv hs45
   have hg4 := hg4.trans (funext (fun x => (Devm.PopBurn.getStor hp46 x).symm))
   clear hs45 hp46s hp46
-  rcases of_run_prepend (retdataShorterThan 32) _ h_run with ⟨s47, h47, h_run⟩
-  rcases of_retdataShorterThan hs46 h47 with ⟨f47, hs47⟩
+  rcases of_run_prepend (returnDataShorterThan 32) _ h_run with ⟨s47, h47, h_run⟩
+  rcases of_returnDataShorterThan hs46 h47 with ⟨f47, hs47⟩
   have hg4 := hg4.trans (Line.of_inv Devm.getStor (by line_inv) h47)
   clear h47 hs46
-  rcases of_run_branch_rev h_run with ⟨s48, hp48, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s48, hp48, h_run⟩
   have hp48s := hp48.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp48s
   rw [hp48s] at hs47
@@ -2478,15 +2478,15 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
   have hs48 : [amount, a.toB256] <<+ s48.stack := cons_pref_cons_inv hs47
   have hg4 := hg4.trans (funext (fun x => (Devm.PopBurn.getStor hp48 x).symm))
   clear hs47 hp48s hp48
-  rcases of_run_prepend (checkRetdataHead Fmint.erc3156Magic 0) _ h_run with ⟨s49, h49, h_run⟩
-  rcases of_checkRetdataHead hs48 h49 with ⟨f49, hs49⟩
+  rcases of_run_prepend (checkReturnDataHead Fmint.erc3156Magic 0) _ h_run with ⟨s49, h49, h_run⟩
+  rcases of_checkReturnDataHead hs48 h49 with ⟨f49, hs49⟩
   have hg4 := hg4.trans (Line.of_inv Devm.getStor (by line_inv) h49)
   clear h49 hs48
   rcases of_run_next h_run with ⟨s50, r50, h_run⟩
   have hs50 := prefix_of_iszero r50 hs49
   have hg4 := hg4.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r50 Line.Run.nil))
   clear r50 hs49
-  rcases of_run_branch_rev h_run with ⟨s51, hp51, h_run⟩
+  rcases of_run_branch_revert h_run with ⟨s51, hp51, h_run⟩
   have hp51s := hp51.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp51s
   rw [hp51s] at hs50
@@ -2557,9 +2557,9 @@ reduces — unlike `burnSlot`'s at index 2, which needs `get_burnSlot`'s explici
 `List.getElem?` route. -/
 theorem fmintSpec_soundNoMem (fa : Adr) : fmintSpec.SoundNoMem fa :=
   ContractSpec.soundNoMem_of_dispatch (k := Fmint.fallbackSlot)
-    (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.rev)
+    (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.revert)
     rfl (List.cons_ne_nil _ _) rfl (fmintSpec_funcSound_all fa)
-    fmintSpec_funcSound_rev
+    fmintSpec_funcSound_revert
 
 /-- The memory-carrying obligation, for any consumer that wants it: dropping a
 premise fmint never used. -/
@@ -2572,9 +2572,9 @@ same twelve obligations and the same vacuous fallback, consumed by the named
 theorem rather than by its proof pattern. -/
 theorem fmintSpec_preservesNoMem (fa : Adr) : fmintSpec.PreservesNoMem fa :=
   ContractSpec.preservesNoMem_of_dispatch (k := Fmint.fallbackSlot)
-    (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.rev)
+    (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.revert)
     rfl (List.cons_ne_nil _ _) rfl (fmintSpec_funcSound_all fa)
-    fmintSpec_funcSound_rev
+    fmintSpec_funcSound_revert
 
 /-- The memory-carrying form the message-, transaction- and block-level rungs
 consume. -/

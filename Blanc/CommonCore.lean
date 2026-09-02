@@ -28,22 +28,22 @@ def Func.stop : Func := .last .stop
 
 /-- The bare revert: `REVERT` over an empty data window.
 
-`Linst.run .rev` pops two operands and reads them as `(offset, size)`, so a
-`.last .rev` on its own reverts with *whatever two words happen to be on the
+`Linst.run .revert` pops two operands and reads them as `(offset, size)`, so a
+`.last .revert` on its own reverts with *whatever two words happen to be on the
 stack* — which, depending on the site, is an arbitrary window of frame memory
 as revert data, a stack-underflow halt, or an out-of-gas halt from the memory
-expansion a garbage `size` implies. The two `PUSH0`s make every rev site a
+expansion a garbage `size` implies. The two `PUSH0`s make every revert site a
 clean, empty-data `REVERT` that refunds the frame's remaining gas: two bytes
-per site, and invisible to every statement about `Func.rev`, since `Func.Run`
-has no derivation for it either way (`Blanc.not_run_rev`).
+per site, and invisible to every statement about `Func.revert`, since `Func.Run`
+has no derivation for it either way (`Blanc.not_run_revert`).
 
 Spelled with `Ninst.pushB256` and `.next` rather than the `pushB256 _ ::: _`
 idiom only because both that notation and the `Ninst` abbreviations are
 introduced further down this file. -/
-def Func.rev : Func :=
-  .next (Ninst.pushB256 0) (.next (Ninst.pushB256 0) (.last .rev))
+def Func.revert : Func :=
+  .next (Ninst.pushB256 0) (.next (Ninst.pushB256 0) (.last .revert))
 
-def Func.ret : Func := .last .ret
+def Func.return_ : Func := .last .return_
 
 abbrev Ninst.add : Ninst := Ninst.reg Rinst.add
 abbrev Ninst.mul : Ninst := Ninst.reg Rinst.mul
@@ -71,7 +71,7 @@ abbrev Ninst.shr : Ninst := Ninst.reg Rinst.shr
 abbrev Ninst.shl : Ninst := Ninst.reg Rinst.shl
 abbrev Ninst.sar : Ninst := Ninst.reg Rinst.sar
 abbrev Ninst.clz : Ninst := Ninst.reg Rinst.clz
-abbrev Ninst.kec : Ninst := Ninst.reg Rinst.kec
+abbrev Ninst.keccak256 : Ninst := Ninst.reg Rinst.keccak256
 abbrev Ninst.address : Ninst := Ninst.reg Rinst.address
 abbrev Ninst.balance : Ninst := Ninst.reg Rinst.balance
 abbrev Ninst.origin : Ninst := Ninst.reg Rinst.origin
@@ -85,8 +85,8 @@ abbrev Ninst.codecopy : Ninst := Ninst.reg Rinst.codecopy
 abbrev Ninst.gasprice : Ninst := Ninst.reg Rinst.gasprice
 abbrev Ninst.extcodesize : Ninst := Ninst.reg Rinst.extcodesize
 abbrev Ninst.extcodecopy : Ninst := Ninst.reg Rinst.extcodecopy
-abbrev Ninst.retdatasize : Ninst := Ninst.reg Rinst.retdatasize
-abbrev Ninst.retdatacopy : Ninst := Ninst.reg Rinst.retdatacopy
+abbrev Ninst.returndatasize : Ninst := Ninst.reg Rinst.returndatasize
+abbrev Ninst.returndatacopy : Ninst := Ninst.reg Rinst.returndatacopy
 abbrev Ninst.extcodehash : Ninst := Ninst.reg Rinst.extcodehash
 abbrev Ninst.blockhash : Ninst := Ninst.reg Rinst.blockhash
 abbrev Ninst.coinbase : Ninst := Ninst.reg Rinst.coinbase
@@ -117,9 +117,9 @@ abbrev Ninst.log (n : Fin 5) : Ninst := Ninst.reg (Rinst.log n)
 abbrev Ninst.create : Ninst := Ninst.exec Xinst.create
 abbrev Ninst.call : Ninst := Ninst.exec Xinst.call
 abbrev Ninst.callcode : Ninst := Ninst.exec Xinst.callcode
-abbrev Ninst.delcall : Ninst := Ninst.exec Xinst.delcall
+abbrev Ninst.delegatecall : Ninst := Ninst.exec Xinst.delegatecall
 abbrev Ninst.create2 : Ninst := Ninst.exec Xinst.create2
-abbrev Ninst.statcall : Ninst := Ninst.exec Xinst.statcall
+abbrev Ninst.staticcall : Ninst := Ninst.exec Xinst.staticcall
 
 abbrev Line : Type := List Ninst
 
@@ -166,7 +166,7 @@ def argCopy (x y z : B256) : Line :=
 
 def pushList : List B256 → Line := List.map pushB256
 
-def returnMemoryRange (x y : B256) : Func := pushList [y, x] +++ Func.ret
+def returnMemoryRange (x y : B256) : Func := pushList [y, x] +++ Func.return_
 
 def cdl (x : B256) : Line := [pushB256 x, calldataload]
 
@@ -395,25 +395,25 @@ def Bytes.writeAt (bs : Bytes) (n : Nat) (xs : Bytes) : Bytes :=
 
 -- Is the last call's return data shorter than `n` bytes?
 --
--- ( -- retdatasize <? n )
+-- ( -- returndatasize <? n )
 --
--- The companion guard to `checkRetdataHead` below, and it must be branched on
--- first: `retdatacopy` is an exceptional halt when the requested range runs
+-- The companion guard to `checkReturnDataHead` below, and it must be branched on
+-- first: `returndatacopy` is an exceptional halt when the requested range runs
 -- past the return data, so reading a head word that may not be there is not a
 -- check that fails, it is a check that aborts the frame.
-def retdataShorterThan (n : B256) : Line := [pushB256 n, retdatasize, lt]
+def returnDataShorterThan (n : B256) : Line := [pushB256 n, returndatasize, lt]
 
 -- Does the last call's return data begin with the word `w`?
 --
 -- ( -- head =? w ), clobbering memory word `m`.
 --
--- Assumes return data of at least 32 bytes; guard with `retdataShorterThan 32`
+-- Assumes return data of at least 32 bytes; guard with `returnDataShorterThan 32`
 -- first. Return data *longer* than a word passes: this compares the head word
 -- and says nothing about the rest, which is the same boundary Solidity's
 -- `bytes32` return decoder draws.
-def checkRetdataHead (w m : B256) : Line :=
+def checkReturnDataHead (w m : B256) : Line :=
   pushList [32, 0, m * 32] ++           -- m * 32 :: 0 :: 32
-  retdatacopy ::                        -- || mem[m] = the head word
+  returndatacopy ::                        -- || mem[m] = the head word
   pushB256 (m * 32) :: mload ::         -- head
   pushB256 w :: eq :: []                -- (head =? w)
 
@@ -441,12 +441,12 @@ def checkAddress : Line := checkNonAddress ++ [iszero]
 def returnTrue : Func :=
   pushB256 1 ::: mstoreAt 0 +++ -- || 1
   pushList [32, 0] +++ -- 0 :: 32 || 1
-  Func.ret
+  Func.return_
 
 /-- Solidity's nonpayable entry guard: it runs after selector dispatch and
 before the endpoint body, and reverts with empty data. -/
 def nonpayable (body : Func) : Func :=
-  callvalue ::: iszero ::: (body <?> Func.rev)
+  callvalue ::: iszero ::: (body <?> Func.revert)
 
 abbrev Exec.Pred : Type :=
   ∀ pc sevm devm exc, Exec pc sevm devm exc → Prop
@@ -505,9 +505,9 @@ def Xinst.toUInt8 : Xinst → UInt8
   | .create   => 0xF0
   | .call     => 0xF1
   | .callcode => 0xF2
-  | .delcall  => 0xF4
+  | .delegatecall  => 0xF4
   | .create2  => 0xF5
-  | .statcall => 0xFA
+  | .staticcall => 0xFA
 
 def Ninst.toBytes : Ninst → Bytes
   | .reg o => [Rinst.toUInt8 o]
@@ -1429,15 +1429,15 @@ lemma Devm.pushBurn_cons_popBurn_cons
     (h : Devm.PushBurn (x :: xs) s s')
     (h' : Devm.PopBurn (y :: ys) s' s'') :
     (x = y ∧ ∃ st, Devm.PushBurn xs s st ∧ Devm.PopBurn ys st s'') := by
-  rcases h with ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩
-  rcases h' with ⟨h'_stack, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
+  rcases h with ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩
+  rcases h' with ⟨h'_stack, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_return, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
   have push_pop_stack := Stack.push_cons_pop_cons h_stack h'_stack
   rcases push_pop_stack with ⟨h_eq, stk, h_push, h_pop⟩
   refine' ⟨
     h_eq,
     s'.withStack stk,
-    ⟨h_push, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩,
-    ⟨h_pop, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
+    ⟨h_push, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩,
+    ⟨h_pop, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_return, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
   ⟩
 
 lemma Devm.burn_of_popBurn_nil {s s'} (h : Devm.PopBurn [] s s') :
@@ -1447,14 +1447,14 @@ lemma Devm.burn_of_popBurn_nil {s s'} (h : Devm.PopBurn [] s s') :
 lemma Devm.burn_of_pushBurn_nil {s s'} (h : Devm.PushBurn [] s s') :
     Devm.Burn s s' := by
   rcases h with
-    ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err,
+    ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err,
       h_acc, h_keys, h_state, h_cas, h_trans⟩
-  refine ⟨?_, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩; change s.stack = s'.stack; simpa only [Stack.Push, Split, List.nil_append] using h_stack.symm
+  refine ⟨?_, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩; change s.stack = s'.stack; simpa only [Stack.Push, Split, List.nil_append] using h_stack.symm
 
 lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.Burn x z := by
-  rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_ret, h1_err, h1_acc, h1_keys, h1_state, h1_cas, h1_trans⟩
-  rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_ret, h2_err, h2_acc, h2_keys, h2_state, h2_cas, h2_trans⟩
-  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_ret h2_ret, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_cas h2_cas, Eq.trans h1_trans h2_trans⟩
+  rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_return, h1_err, h1_acc, h1_keys, h1_state, h1_cas, h1_trans⟩
+  rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_return, h2_err, h2_acc, h2_keys, h2_state, h2_cas, h2_trans⟩
+  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_return h2_return, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_cas h2_cas, Eq.trans h1_trans h2_trans⟩
 
 lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
     (burn : Devm.Burn devm devm')
@@ -2263,7 +2263,7 @@ def DispatchTree.sorted : List (B256 × Func) → Bool
 -- which blows `maxRecDepth` in any downstream proof that has to case on the
 -- resulting tree. Keeping the comparisons in `sorted` leaves the leaves opaque.
 def DispatchTree.build : Nat → List (B256 × Func) → DispatchTree
-  | _, [] => leaf 0 .rev
+  | _, [] => leaf 0 .revert
   | _, [(w, p)] => leaf w p
   | 0, (x :: _ :: _) => leaf x.fst x.snd
   | n + 1, xs =>
@@ -2294,7 +2294,7 @@ def dispatchWith (k : Nat) : DispatchTree → Func
     (dispatchWith k tl <?> dispatchWith k tr)
 
 def dispatch : DispatchTree → Func
-  | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .rev)
+  | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .revert)
   | DispatchTree.fork tl tr =>
     dup 0 :::
     pushB256 (leftmostFsig tr) ::: gt :::
@@ -2373,7 +2373,7 @@ def balanceOf : Func :=
 def allowance : Func :=
   argCopy 0 0 2 +++ -- || src dst
   pushList [64, 0] +++ -- 0 :: 64 || src dst
-  kec ::: -- hash ||
+  keccak256 ::: -- hash ||
   sload ::: -- allowAmnt ||
   mstoreAt 0 +++ -- || allow_amnt
   returnMemoryRange 0 32
@@ -2445,10 +2445,10 @@ def transferCore : Func :=
 -- assumes : arg = [dst, wad]
 def transfer : Func :=
   transferTestDst +++ -- dst_invalid? :: dst
-  .rev <?> -- [if dst is not a valid address, revert]
+  .revert <?> -- [if dst is not a valid address, revert]
            -- dst
   transferTestLt +++ -- (caller_bal < wad) :: caller :: caller_bal - wad :: wad :: dst
-  .rev <?> -- [if caller balance < transfer amount, revert]
+  .revert <?> -- [if caller balance < transfer amount, revert]
         -- caller :: caller_bal - wad :: wad :: dst
   transferCore
 

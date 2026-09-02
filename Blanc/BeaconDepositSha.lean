@@ -40,7 +40,7 @@ private theorem sha64_success_suffix_runCompiledTo
       (base.setMach ⟨1 :: stack, base.memory, K + 37⟩)
       (iszero :::
         (.call bubbleRevertSlot) <?>
-        (retdataShorterThan 32 +++
+        (returnDataShorterThan 32 +++
           ((.call emptyRevertSlot) <?> success))) ex := by
   func_run (6) [0, 0]
   all_goals try {
@@ -109,7 +109,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
-    Ninst.runCompiled_statcall_sha256_64_warm_ext
+    Ninst.runCompiled_staticcall_sha256_64_warm_ext
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)
@@ -184,7 +184,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
       (callPost.setMach ⟨1 :: stack, callPost.memory, K + 37⟩)
       (iszero :::
         (.call bubbleRevertSlot) <?>
-        (retdataShorterThan 32 +++
+        (returnDataShorterThan 32 +++
           ((.call emptyRevertSlot) <?> success))) ex :=
     sha64_success_suffix_runCompiledTo hge htail hroom
   let c32 := pushCost ((32 : B256).toBytes.sig)
@@ -332,8 +332,8 @@ storage and code. -/
 theorem sha64_success_of_run
     {fs : List Func} {sevm : Sevm} {s r : Devm}
     {inputWord outputWord : B256} {xs : Stack} {success : Func}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hnodeleg : getDelegatedCodeAddress (s.getCode 2) = none)
     (hp : xs <<+ s.stack)
@@ -394,12 +394,12 @@ theorem sha64_success_of_run
     rw [congrFun hcodeCall 2]
     exact hnodeleg
   rcases of_run_next run with ⟨callPost, qstat, run⟩
-  rcases of_run_statcall_val_with_depth_cause hpCall qstat with
+  rcases of_run_staticcall_val_with_depth_cause hpCall qstat with
       hfail | hsuccess
   · rcases hfail with ⟨hpPost, hworld, out, hret, hmem, hcause⟩
     rcases of_run_next run with ⟨afterIszero, qiszero, run⟩
     have hpFlag := prefix_of_iszero qiszero hpPost
-    rcases of_run_branch_call_revReturnData hbubble run with
+    rcases of_run_branch_call_revertReturnData hbubble run with
       ⟨afterBranch, hpop, hcontinue⟩
     have hpopStack := hpop.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -474,7 +474,7 @@ theorem sha64_success_of_run
         rcases of_run_reg qiszero with ⟨pc, hreg⟩
         simp only [Rinst.run, Rinst.runCore] at hreg
         exact Devm.diffBurn_of_applyUnary hreg
-      rcases of_run_branch_call_revReturnData hbubble run with
+      rcases of_run_branch_call_revertReturnData hbubble run with
         ⟨afterBranch, hpop, run⟩
       have hpopStack := hpop.stack
       simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -497,11 +497,11 @@ theorem sha64_success_of_run
         ((Ninst.Hinv.inv (f := Devm.memory) qiszero).trans hpop.memory).symm
       have hretBranch : afterBranch.returnData = callPost.returnData :=
         (hdbIszero.returnData.trans hpop.returnData).symm
-      rcases of_run_prepend (retdataShorterThan 32) _ run with
+      rcases of_run_prepend (returnDataShorterThan 32) _ run with
         ⟨afterShort, hshort, run⟩
-      rcases of_retdataShorterThan_val hpBranch hshort with
+      rcases of_returnDataShorterThan_val hpBranch hshort with
         ⟨hpShort, hmemShort, hretShort⟩
-      rcases of_run_branch_call_rev hrev run with
+      rcases of_run_branch_call_revert hrev run with
         ⟨q, hpopShort, hsuccess⟩
       have hpopShortStack := hpopShort.stack
       simp only [Stack.Pop, Split, List.nil_append,
@@ -527,13 +527,13 @@ theorem sha64_success_of_run
         funext a
         exact (getStor_eq_of_state_eq hpopShort.state a).symm.trans
           (congrFun (Line.of_inv Devm.getStor (by
-            unfold retdataShorterThan
+            unfold returnDataShorterThan
             line_inv) hshort) a).symm
       · rw [← hcodeBranch]
         funext a
         exact (getCode_eq_of_state_eq hpopShort.state a).symm.trans
           (congrFun (Line.of_inv Devm.getCode (by
-            unfold retdataShorterThan
+            unfold returnDataShorterThan
             line_inv) hshort) a).symm
     · change getDelegatedCodeAddress (callPre.getCode 2) = some d at hsome
       rw [hnodelegCall] at hsome

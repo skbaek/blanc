@@ -467,7 +467,7 @@ to its `REVERT`.
 the lock key push, `100` for the `TLOAD` and `3` for the `ISZERO`; `13` for the
 zero arm of the lock branch — a zero arm pays no `JUMPDEST`, which is the whole
 difference from the taken arm's `14`; `12` for the `.call` burn and `17` for
-`reentrantCallError`'s `revSelectorCost` against empty memory. -/
+`reentrantCallError`'s `revertSelectorCost` against empty memory. -/
 def pauseReentrantGas : Nat := 202
 
 set_option maxRecDepth 556 in
@@ -522,12 +522,12 @@ theorem pause_body_runCompiledTo_error_of_locked
       case h_val =>
         simp [B256.eqCheck, hlocked]
       case h_body =>
-        apply Func.runCompiledTo_revSelector (G := G)
+        apply Func.runCompiledTo_revertSelector (G := G)
         · simp [customErrorData, B256.length_toBytes]
         · exact Mem.wf_empty
         · exact Mem.reads_empty
         · rfl
-        · simp only [Devm.gasLeft_setMach, revSelectorCost]
+        · simp only [Devm.gasLeft_setMach, revertSelectorCost]
           rw [Devm.extCost_empty_word]
           norm_num [gVerylow, gBase, gMemory]
           omega

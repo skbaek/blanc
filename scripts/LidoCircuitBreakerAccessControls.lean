@@ -1820,7 +1820,7 @@ theorem call_boundary_arbitrary_target_code_control
     (hDynamic : sevm.isStatic = false)
     (hCall : Ninst.RunCompiled sevm callPre (.exec .call) callPost)
     (hStatStaging : Line.Run sevm callPost pauseStatStaging statPre)
-    (hStat : Ninst.RunCompiled sevm statPre (.exec .statcall) statPost) :
+    (hStat : Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost) :
     ((callPre.memory.read 0x11c 36).1 =
           abiSelectorBytes pauseForSelector ++ B256.toBytes duration ∧
         ∃ msg xl child, ProcessMessage msg xl (.ok child) ∧
@@ -1895,8 +1895,8 @@ None of the pinned headers states the conjunction, and none states (i), (ii) or
 theorem observation_arbitrary_answer_control
     (fs : List Func) (sevm : Sevm) (target : Adr) (duration : B256)
     (statPre statPost : Devm) (ex : Execution)
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (boundary : PauseStatBoundary sevm target statPre statPost)
     (run : Func.RunCompiledTo fs sevm statPost
@@ -2001,11 +2001,11 @@ success nor hides an out-of-gas/revert route. -/
 theorem success_commit_arbitrary_target_control
     (fs : List Func) (sevm : Sevm) (entry statPre statPost : Devm)
     (target : Adr) (duration : B256) (ex : Execution)
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (h_panic : fs[arithmeticPanicSlot]? =
-      some (Func.revData heartbeatArithmeticPanicData))
+      some (Func.revertData heartbeatArithmeticPanicData))
     (boundary : PauseStatBoundary sevm target statPre statPost)
     (targetWindow : MemWordAt statPre
       (targetWord * 32).toNat target.toB256)

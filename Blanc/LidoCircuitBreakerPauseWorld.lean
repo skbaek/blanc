@@ -22,7 +22,7 @@ Three layers, none of which composes the walk itself:
   state-changing operation, so the static flag of the second call costs it
   nothing.
 * **The crossings** (`runCompiled_call_zero_value_responder`,
-  `runCompiled_statcall_responder`): `Ninst.runCompiled_call_zero_value_codeFree`'s
+  `runCompiled_staticcall_responder`): `Ninst.runCompiled_call_zero_value_codeFree`'s
   skeleton with the code-free child replaced by the responder.  Each exports
   the full post-`CALL` projection list a continuation walk consumes — stack,
   memory, gas, error, output, returndata, logs, refund counter,
@@ -50,7 +50,7 @@ Selector-blind: returns the 32-byte canonical word `1` on every entry.  Serves
 word `1`) at once; no storage writes, no calls, static-safe. -/
 
 def calleeMain : Func :=
-  pushB256 1 ::: mstoreAt 0 +++ pushB256 32 ::: pushB256 0 ::: Func.last .ret
+  pushB256 1 ::: mstoreAt 0 +++ pushB256 32 ::: pushB256 0 ::: Func.last .return_
 
 def calleeProg : Prog := ⟨calleeMain, []⟩
 
@@ -95,7 +95,7 @@ theorem calleeMain_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
       rw [show ((0 : B256) * 32).toNat = 0 by decide]
       exact Devm.extCost_empty_word
     case a =>
-      apply Func.runCompiledTo_ret_word (i := 0) (sz := 32) (s := [])
+      apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
         (e := 0) (G := G) (out := (1 : B256).toBytes)
       · rfl
       · rw [show ((0 : B256)).toNat = 0 by decide,
@@ -349,7 +349,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
 of `CALL` minus the value word, same `callSpawnParent`, same `.call` resume
 tag, and the same responder child — entered static, which costs it nothing
 because `calleeMain` performs no state-changing operation. -/
-lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
+lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
@@ -370,7 +370,7 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
     (h_mcs : 17 ≤ mcs)
     (h_room : s.length < 1024) :
     ∃ post,
-      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
@@ -389,7 +389,7 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
         post.state = stmid.addBal tw.toAdr 0 := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := statcallSpawnMsg sevm p mcs tw.toAdr dadr
+  let msg := staticcallSpawnMsg sevm p mcs tw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < 0
@@ -442,9 +442,9 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
-  have hrun : Ninst.RunCompiled sevm devm (.exec .statcall) post :=
+  have hrun : Ninst.RunCompiled sevm devm (.exec .staticcall) post :=
     Ninst.runCompiled_exec_run
-      (Xinst.step_statcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+      (Xinst.step_staticcall_spawn h_stk h_ext h_del h_acc h_split h_gas
         h_depth)
       (by simpa [p, msg] using henter) (by simpa [p, msg] using hres)
   have hpask : p.accessedStorageKeys = devm.accessedStorageKeys := hd1wm.2
@@ -510,7 +510,7 @@ lemma runCompiled_statcall_responder {sevm : Sevm} {devm : Devm}
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, statcallSpawnMsg, callMsg] using hsub
+      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = stmid.addBal tw.toAdr 0

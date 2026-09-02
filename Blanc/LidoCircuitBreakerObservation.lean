@@ -218,7 +218,7 @@ by an assumption about how the target behaves; `pauseObservation_arms` shows
 the two arms exhaust the possibilities. -/
 theorem pauseObservation_failureArm_bubbles {fs : List Func} {sevm : Sevm}
     {target : Adr} {statPre statPost : Devm} {ex : Execution} {g : Func}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (boundary : PauseStatBoundary sevm target statPre statPost)
     (h_fail : statPost.stack.head? = some 0)
     (run : Func.RunCompiledTo fs sevm statPost
@@ -227,7 +227,7 @@ theorem pauseObservation_failureArm_bubbles {fs : List Func} {sevm : Sevm}
       child.error.isSome = true ∧
       statPost.returnData = child.output ∧
       bubblePre.returnData = child.output ∧
-      Func.RunCompiledTo fs sevm bubblePre Func.revReturnData ex := by
+      Func.RunCompiledTo fs sevm bubblePre Func.revertReturnData ex := by
   obtain ⟨child, armPre, rest, μ, hstk, hrd, hard, -, harm⟩ :=
     pauseObservation_arms boundary run
   rcases harm with ⟨herr, hcall⟩ | ⟨herr, -⟩
@@ -253,7 +253,7 @@ reachable under `Exec` rather than a fact about this edge, and belongs
 upstream. -/
 theorem pauseObservation_failureArm_payload {fs : List Func} {sevm : Sevm}
     {target : Adr} {statPre statPost : Devm} {ex : Execution} {g : Func}
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (boundary : PauseStatBoundary sevm target statPre statPost)
     (h_fail : statPost.stack.head? = some 0)
     (run : Func.RunCompiledTo fs sevm statPost
@@ -268,7 +268,7 @@ theorem pauseObservation_failureArm_payload {fs : List Func} {sevm : Sevm}
   obtain ⟨child, bubblePre, herr, hrd, hard, hbody⟩ :=
     pauseObservation_failureArm_bubbles h_bubble boundary h_fail run
   refine ⟨child, herr, hrd, ?_⟩
-  rcases Func.runCompiledTo_revReturnData_inv hbody with
+  rcases Func.runCompiledTo_revertReturnData_inv hbody with
     h_oog | ⟨post, hpost, hout⟩
   · exact Or.inl h_oog
   · exact Or.inr ⟨post, hpost, by rw [hout, hard]⟩
@@ -306,7 +306,7 @@ zero test, then the canonical-`1` test.
 
 ### The flag words, as facts about the answer
 
-`retdataShorterThan 32` pushes `ltCheck (length.toB256) 32`, so the guard's
+`returnDataShorterThan 32` pushes `ltCheck (length.toB256) 32`, so the guard's
 flag is a function of `child.output.length` and of nothing else.  Two of the
 three implications between that flag and the plain inequality are unconditional
 and are the only two used below:
@@ -480,7 +480,7 @@ theorem pauseDecode_arms {fs : List Func} {sevm : Sevm} {decodePre : Devm}
           Func.RunCompiledTo fs sevm armPre pauseSuccess ex)) := by
   rw [decodePausedResult] at run
   obtain ⟨s1, hguard, run⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨hflag, hs1mem, -⟩ := of_retdataShorterThan_val nil_pref hguard
+  obtain ⟨hflag, hs1mem, -⟩ := of_returnDataShorterThan_val nil_pref hguard
   rw [h_rd] at hflag
   rcases runCompiledTo_branch_inv run with
     ⟨armPre, hz, hpop, harm⟩ | ⟨w, armPre, hne, hwstk, hpop, harm⟩
@@ -557,15 +557,15 @@ theorem pauseDecode_arms {fs : List Func} {sevm : Sevm} {decodePre : Devm}
 /-! ## What the three revert arms output
 
 Three of the decode's four outcomes end in a revert, and two of them end in the
-*same* body — `emptyRevertSlot`'s `Func.rev`.  Neither that body nor
-`pauseFailedErrorSlot`'s `Func.revSelector` now uses the shared terminal
+*same* body — `emptyRevertSlot`'s `Func.revert`.  Neither that body nor
+`pauseFailedErrorSlot`'s `Func.revertSelector` now uses the shared terminal
 inversion lemmas in `Blanc.CompiledWalkInversion`, rather than duplicating them
 here.
 
-The two differ in one respect that matters.  `Func.rev`'s `REVERT` window is
+The two differ in one respect that matters.  `Func.revert`'s `REVERT` window is
 `(0, 0)`, and `Devm.extCost_empty_window` prices a zero-size window at zero
 unconditionally, so its charge can never be refused and its inversion has **no
-out-of-gas leg**.  `Func.revSelector`'s window is `(28, 4)`, whose expansion is
+out-of-gas leg**.  `Func.revertSelector`'s window is `(28, 4)`, whose expansion is
 free only once memory is known to be word-aligned and at least 32 bytes wide;
 alignment is a fact about the CircuitBreaker's prior memory that an arbitrary
 derivation does not carry, so that inversion keeps the explicit out-of-gas
@@ -581,7 +581,7 @@ witness settles it against the program actually running. -/
 revert. -/
 theorem runtime_emptyRevertSlot (dp : DeployParams) :
     ((runtime dp).main :: (runtime dp).aux)[emptyRevertSlot]? =
-      some Func.rev := rfl
+      some Func.revert := rfl
 
 /-- The CircuitBreaker's table binds `pauseFailedErrorSlot` to
 `PauseFailed()`'s named-error reverter. -/
@@ -600,7 +600,7 @@ names it.  The length guard is what makes the mixture unreachable, and this is
 the theorem that shows it. -/
 theorem pauseDecode_shortReturn_payload {fs : List Func} {sevm : Sevm}
     {decodePre : Devm} {μ : Mem} {out : Bytes} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
     (h_mem : decodePre.memory = μ.write 0 (out.take 32))
     (h_rd : decodePre.returnData = out)
     (h_short : out.length < 32)
@@ -611,7 +611,7 @@ theorem pauseDecode_shortReturn_payload {fs : List Func} {sevm : Sevm}
     toB256_lt_32_of_lt h_short
   rcases harm with ⟨-, hcall⟩ | ⟨hns, -⟩ | ⟨hns, -⟩ | ⟨hns, -⟩
   · obtain ⟨mid, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
-    exact runCompiledTo_rev_inv hbody
+    exact runCompiledTo_revert_inv hbody
   · exact absurd hshort hns
   · exact absurd hshort hns
   · exact absurd hshort hns
@@ -620,7 +620,7 @@ theorem pauseDecode_shortReturn_payload {fs : List Func} {sevm : Sevm}
 bytes.**
 
 The out-of-gas leg is explicit, for the reason
-`runCompiledTo_revSelector_inv` records.  `h_flag` is the guard's own verdict
+`runCompiledTo_revertSelector_inv` records.  `h_flag` is the guard's own verdict
 on the answer — a function of its length — and is what
 `pauseDecode_arms` produces on the arm that reads the word at all. -/
 theorem pauseDecode_false_payload {fs : List Func} {sevm : Sevm}
@@ -640,9 +640,9 @@ theorem pauseDecode_false_payload {fs : List Func} {sevm : Sevm}
   · exact absurd hs h_flag
   · obtain ⟨mid, -, hbody⟩ := runCompiledTo_call_inv h_failed hcall
     rw [show pauseFailedError =
-      Func.revSelector (customErrorData "PauseFailed")
+      Func.revertSelector (customErrorData "PauseFailed")
         (by simp [customErrorData, B256.length_toBytes]) from rfl] at hbody
-    exact runCompiledTo_revSelector_inv hbody
+    exact runCompiledTo_revertSelector_inv hbody
   · exact absurd h_zero hne0
   · exact absurd (h_zero.symm.trans hone) (by decide)
 
@@ -653,7 +653,7 @@ rejected without one.  The differential rows measure this against the oracle at
 `2`; the theorem covers every other word. -/
 theorem pauseDecode_noncanonical_payload {fs : List Func} {sevm : Sevm}
     {decodePre : Devm} {μ : Mem} {out : Bytes} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
     (h_mem : decodePre.memory = μ.write 0 (out.take 32))
     (h_rd : decodePre.returnData = out)
     (h_flag : ¬ Nat.toB256 out.length < (32 : B256))
@@ -667,7 +667,7 @@ theorem pauseDecode_noncanonical_payload {fs : List Func} {sevm : Sevm}
   · exact absurd hs h_flag
   · exact absurd hzero h_ne0
   · obtain ⟨mid, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
-    exact runCompiledTo_rev_inv hbody
+    exact runCompiledTo_revert_inv hbody
   · exact absurd hone h_ne1
 
 /-- **Outcome 7: a canonical `1` reaches `pauseSuccess`.**
@@ -742,8 +742,8 @@ a full word that is neither `0` nor `1` (6); or the canonical `1`, which
 reaches `pauseSuccess` (7). -/
 theorem pauseObservation_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
     {statPre statPost : Devm} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (boundary : PauseStatBoundary sevm target statPre statPost)
     (run : Func.RunCompiledTo fs sevm statPost
@@ -787,7 +787,7 @@ theorem pauseObservation_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
   · obtain ⟨bubblePre, hburn, hbody⟩ := runCompiledTo_call_inv h_bubble hcall
     have hbrd : bubblePre.returnData = child.output :=
       hburn.returnData.symm.trans hard
-    rcases Func.runCompiledTo_revReturnData_inv hbody with
+    rcases Func.runCompiledTo_revertReturnData_inv hbody with
       h_oog | ⟨post, hpost, hout⟩
     · exact Or.inl ⟨herr, Or.inl h_oog⟩
     · exact Or.inl ⟨herr, Or.inr ⟨post, hpost, by rw [hout, hbrd]⟩⟩
@@ -795,16 +795,16 @@ theorem pauseObservation_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
     rcases harm2 with ⟨hs, hcall⟩ | ⟨hns, hlong, hzero, hcall⟩ |
       ⟨hns, hlong, hne0, hne1, hcall⟩ | ⟨hns, hlong, hone, hsucc⟩
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
-      exact Or.inr (Or.inl ⟨herr, hs, runCompiledTo_rev_inv hbody⟩)
+      exact Or.inr (Or.inl ⟨herr, hs, runCompiledTo_revert_inv hbody⟩)
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_failed hcall
       rw [show pauseFailedError =
-        Func.revSelector (customErrorData "PauseFailed")
+        Func.revertSelector (customErrorData "PauseFailed")
           (by simp [customErrorData, B256.length_toBytes]) from rfl] at hbody
       exact Or.inr (Or.inr (Or.inl
-        ⟨herr, hns, hlong, hzero, runCompiledTo_revSelector_inv hbody⟩))
+        ⟨herr, hns, hlong, hzero, runCompiledTo_revertSelector_inv hbody⟩))
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
       exact Or.inr (Or.inr (Or.inr (Or.inl
-        ⟨herr, hns, hlong, hne0, hne1, runCompiledTo_rev_inv hbody⟩)))
+        ⟨herr, hns, hlong, hne0, hne1, runCompiledTo_revert_inv hbody⟩)))
     · exact Or.inr (Or.inr (Or.inr (Or.inr
         ⟨herr, hns, hlong, hone, armPre2, hsucc⟩)))
 
@@ -876,7 +876,7 @@ is the word the machine actually tests, and the two agree on every code object
 an execution can hold. -/
 theorem pauseAfterSet_codeGuard_arms {fs : List Func} {sevm : Sevm}
     {entry : Devm} {target : Adr} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
     (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
     ((entry.getCode target).size.toB256 = 0 ∧
@@ -922,7 +922,7 @@ theorem pauseAfterSet_codeGuard_arms {fs : List Func} {sevm : Sevm}
       exact (List.cons.inj hwstk).1
     obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty harm
     exact Or.inl ⟨eqCheck_ne_zero (fun h => hne (hflagw.symm.trans h)),
-      runCompiledTo_rev_inv hbody⟩
+      runCompiledTo_revert_inv hbody⟩
 
 /-! ## All seven, in one statement -/
 
@@ -963,8 +963,8 @@ completed pause.  And accepting `1` is still not evidence that the target is
 paused. -/
 theorem pauseAfterSet_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
     {duration : B256} {entry : Devm} {ex : Execution}
-    (h_empty : fs[emptyRevertSlot]? = some Func.rev)
-    (h_bubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
+    (h_empty : fs[emptyRevertSlot]? = some Func.revert)
+    (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
     (h_failed : fs[pauseFailedErrorSlot]? = some pauseFailedError)
     (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet ex) :
@@ -987,7 +987,7 @@ theorem pauseAfterSet_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
               -- outcomes 3 to 7: the observation happened
               (∃ armPre statPre statPost : Devm,
                 Line.Run sevm armPre pauseStatStaging statPre ∧
-                Ninst.RunCompiled sevm statPre (.exec .statcall) statPost ∧
+                Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost ∧
                 (PauseStatBoundary sevm target statPre statPost →
                   ∃ child : Devm,
                     statPost.returnData = child.output ∧
@@ -1036,7 +1036,7 @@ theorem pauseAfterSet_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
     obtain ⟨bubblePre, hburn, hbody⟩ := runCompiledTo_call_inv h_bubble hcall
     have hbrd : bubblePre.returnData = callChild.output :=
       hburn.returnData.symm.trans hard
-    rcases Func.runCompiledTo_revReturnData_inv hbody with
+    rcases Func.runCompiledTo_revertReturnData_inv hbody with
       h_oog | ⟨post, hpost, hout⟩
     · exact Or.inl h_oog
     · exact Or.inr ⟨post, hpost, by rw [hout, hbrd]⟩

@@ -117,8 +117,8 @@ private def staticDelcallPre : Devm :=
 private def staticCallFamilyControls : Bool :=
   spawnedStatic (Xinst.step staticSevm staticCallPre .call) &&
   spawnedStatic (Xinst.step staticSevm staticCallPre .callcode) &&
-  spawnedStatic (Xinst.step staticSevm staticDelcallPre .delcall) &&
-  spawnedStatic (Xinst.step dynamicSevm staticDelcallPre .statcall)
+  spawnedStatic (Xinst.step staticSevm staticDelcallPre .delegatecall) &&
+  spawnedStatic (Xinst.step dynamicSevm staticDelcallPre .staticcall)
 
 private def isNotSpawn : XStep → Bool
   | .spawn _ _ => false
@@ -151,7 +151,7 @@ private def directStatcallPre : Devm :=
     |>.withStack [50000, addressB.toB256, 0, 0, 0, 0]
 
 private def directStatcallControl : Bool :=
-  match Xinst.step dynamicSevm directStatcallPre .statcall with
+  match Xinst.step dynamicSevm directStatcallPre .staticcall with
   | .spawn frame _ =>
       let child := frame.inner
       child.currentTarget == addressB &&
@@ -167,7 +167,7 @@ address as the current frame. Their opcode edge—not a field inequality—is wh
 keeps them distinct from the direct CALL/STATICCALL projections. -/
 private def coincidentIndirectEdgesControl : Bool :=
   match Xinst.step dynamicSevm staticCallPre .callcode,
-      Xinst.step dynamicSevm staticDelcallPre .delcall with
+      Xinst.step dynamicSevm staticDelcallPre .delegatecall with
   | .spawn callcodeFrame _, .spawn delegateFrame _ =>
       callcodeFrame.inner.currentTarget == addressA &&
       callcodeFrame.inner.codeAddress == some addressA &&
@@ -530,7 +530,7 @@ private theorem required_positive_controls : True := by
   let _tload := @Blanc.tload_run_cell
   let _callNonzero := @Blanc.directCall_nonzero_spawn
   let _callZero := @Blanc.directCall_zero_spawn
-  let _statcall := @Blanc.directStatcall_spawn
+  let _staticcall := @Blanc.directStatcall_spawn
   let _caught := @Blanc.caughtCall_childSettlement
   let _clean := @Blanc.cleanCall_childSettlement
   let _prepared := @Blanc.preparedTransactionMessage_exists
@@ -539,7 +539,7 @@ private theorem required_positive_controls : True := by
   let _linked := @Blanc.PreparedTransactionMessage.error_logs_eq_nil
   let _sstore := @Blanc.of_run_sstore_not_static
   let _staticSpawn := @Blanc.Xinst.step_spawn_isStatic
-  let _staticCall := @Blanc.Ninst.step_statcall_run_isStatic
+  let _staticCall := @Blanc.Ninst.step_staticcall_run_isStatic
   let _concrete := concrete_controls
   exact True.intro
 

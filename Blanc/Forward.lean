@@ -545,12 +545,12 @@ lemma Rinst.runCore_mload_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
 /-- `KECCAK256`, evaluated forward.  The hash is *not* computed here: it stays
 `Bytes.keccak` applied to the read window, which the caller either names with a
 value obligation or carries symbolically. -/
-lemma Rinst.runCore_kec_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+lemma Rinst.runCore_keccak256_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {i sz : B256} {s : List B256} (h_stk : devm.stack = i :: sz :: s)
     (h_gas : gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
       + devm.extCost [⟨i.toNat, sz.toNat⟩] ≤ devm.gasLeft)
     (h_room : s.length < 1024) :
-    Rinst.runCore pc devm sevm .kec =
+    Rinst.runCore pc devm sevm .keccak256 =
       .ok (devm.setMach
         ⟨Bytes.keccak (devm.memory.read i.toNat sz.toNat).1 :: s,
           (devm.memory.read i.toNat sz.toNat).2,
@@ -652,13 +652,13 @@ lemma Rinst.runCore_codecopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
 /-- `RETURNDATACOPY`, evaluated forward.  The out-of-bounds guard is a premise,
 not a case split: a frame that copies a fixed window out of a child's return
 data has already established the length it needs. -/
-lemma Rinst.runCore_retdatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+lemma Rinst.runCore_returndatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {di ri sz : B256} {s : List B256}
     (h_stk : devm.stack = di :: ri :: sz :: s)
     (h_gas : gVerylow + gReturnDataCopy * ceilDiv sz.toNat 32
       + devm.extCost [⟨di.toNat, sz.toNat⟩] ≤ devm.gasLeft)
     (h_bound : ri.toNat + sz.toNat ≤ devm.returnData.length) :
-    Rinst.runCore pc devm sevm .retdatacopy =
+    Rinst.runCore pc devm sevm .returndatacopy =
       .ok (devm.setMach
         ⟨s, devm.memory.write di.toNat
               (devm.returnData.sliceD ri.toNat sz.toNat 0),
@@ -976,7 +976,7 @@ lemma Devm.extCost_word_word {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
     calculateMemoryGasCost, ceilDiv, h, gMemory]
 
 /-- `Mem.read_write_word` at the `Devm` altitude, in the exact shape
-`Func.RunCompiled`'s `.last .ret` premise wants.
+`Func.RunCompiled`'s `.last .return_` premise wants.
 
 Both the altitude and the `devm.memory` premise are load-bearing, and each cost
 a measured half-minute of elaboration to find.  `Devm.memRead` returns a
@@ -1317,21 +1317,21 @@ lemma Ninst.runCompiled_mload_of {sevm : Sevm} {devm : Devm} {i v : B256}
 
 /-- `KECCAK256`.  `h_val` is the hash: it is the caller's to justify, and
 nothing in this layer evaluates `Bytes.keccak`. -/
-lemma Ninst.runCompiled_kec_of {sevm : Sevm} {devm : Devm} {i sz v : B256}
+lemma Ninst.runCompiled_keccak256_of {sevm : Sevm} {devm : Devm} {i sz v : B256}
     {s : List B256} {c G : Nat} {M : Mem} (h_stk : devm.stack = i :: sz :: s)
     (h_cost : gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
       + devm.extCost [⟨i.toNat, sz.toNat⟩] = c)
     (h_val : Bytes.keccak (devm.memory.read i.toNat sz.toNat).1 = v)
     (h_mem : (devm.memory.read i.toNat sz.toNat).2 = M)
     (h_gas : devm.gasLeft = G + c) (h_room : s.length < 1024) :
-    Ninst.RunCompiled sevm devm (.reg .kec)
+    Ninst.RunCompiled sevm devm (.reg .keccak256)
       (devm.setMach ⟨v :: s, M, G⟩) := by
   subst h_cost; subst h_val; subst h_mem
   have h_eq : devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
       + devm.extCost [⟨i.toNat, sz.toNat⟩]) = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
-    (Rinst.runCore_kec_eq_ok h_stk (by omega) h_room)
+    (Rinst.runCore_keccak256_eq_ok h_stk (by omega) h_room)
 
 /-- `CALLDATACOPY`. -/
 lemma Ninst.runCompiled_calldatacopy_of {sevm : Sevm} {devm : Devm}
@@ -1370,7 +1370,7 @@ lemma Ninst.runCompiled_codecopy_of {sevm : Sevm} {devm : Devm}
     (Rinst.runCore_codecopy_eq_ok h_stk (by omega))
 
 /-- `RETURNDATACOPY`.  `h_bound` is the out-of-bounds guard, as a premise. -/
-lemma Ninst.runCompiled_retdatacopy_of {sevm : Sevm} {devm : Devm}
+lemma Ninst.runCompiled_returndatacopy_of {sevm : Sevm} {devm : Devm}
     {di ri sz : B256} {s : List B256} {c G : Nat} {M : Mem}
     (h_stk : devm.stack = di :: ri :: sz :: s)
     (h_cost : gVerylow + gReturnDataCopy * ceilDiv sz.toNat 32
@@ -1379,14 +1379,14 @@ lemma Ninst.runCompiled_retdatacopy_of {sevm : Sevm} {devm : Devm}
     (h_write : devm.memory.write di.toNat
       (devm.returnData.sliceD ri.toNat sz.toNat 0) = M)
     (h_gas : devm.gasLeft = G + c) :
-    Ninst.RunCompiled sevm devm (.reg .retdatacopy)
+    Ninst.RunCompiled sevm devm (.reg .returndatacopy)
       (devm.setMach ⟨s, M, G⟩) := by
   subst h_cost; subst h_write
   have h_eq : devm.gasLeft - (gVerylow + gReturnDataCopy * ceilDiv sz.toNat 32
       + devm.extCost [⟨di.toNat, sz.toNat⟩]) = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
-    (Rinst.runCore_retdatacopy_eq_ok h_stk (by omega) h_bound)
+    (Rinst.runCore_returndatacopy_eq_ok h_stk (by omega) h_bound)
 
 /-- `LOG n`.  The successor's base carries the appended entry; the `setMach`
 stays outermost so the walk can go on standing on it. -/
@@ -1463,19 +1463,19 @@ lemma Ninst.runCompiled_sstore_warm {sevm : Sevm} {devm : Devm} {k v : B256}
 /-! ## The terminal instruction
 
 `Func.RunCompiled`'s `.last` rule takes a `Linst.Run` unchanged — a `Linst`
-ends the frame, so there is no successor state to pin.  Only `.ret` is
-evaluated forward here; `.stop` needs nothing, and `.rev` and `.dest` do not
+ends the frame, so there is no successor state to pin.  Only `.return_` is
+evaluated forward here; `.stop` needs nothing, and `.revert` and `.selfdestruct` do not
 end in `.ok`. -/
 
 /-- `Linst.run` on a `RETURN`, evaluated forward. -/
-lemma Linst.run_ret_eq_ok {sevm : Sevm} {devm : Devm} {i sz : B256}
+lemma Linst.run_return_eq_ok {sevm : Sevm} {devm : Devm} {i sz : B256}
     {s : List B256} {out : Bytes} {d' : Devm}
     (h_stk : devm.stack = i :: sz :: s)
     (h_gas : devm.extCost [⟨i.toNat, sz.toNat⟩] ≤ devm.gasLeft)
     (h_read : (devm.setMach ⟨s, devm.memory,
         devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
           i.toNat sz.toNat = ⟨out, d'⟩) :
-    Linst.run sevm devm .ret = .ok (d'.withOutput out) := by
+    Linst.run sevm devm .return_ = .ok (d'.withOutput out) := by
   show (do
     let ⟨index, d⟩ ← devm.popToNat
     let ⟨size, d⟩ ← d.popToNat
@@ -1499,48 +1499,48 @@ lemma Linst.run_ret_eq_ok {sevm : Sevm} {devm : Devm} {i sz : B256}
 /-- `RETURN`.  The memory read is handed in rather than written out: it is a
 function of the post-charge state, and a target that fixes that state turns
 `h_read` into `rfl`. -/
-lemma Func.runCompiled_ret {fs : List Func} {sevm : Sevm} {devm : Devm}
+lemma Func.runCompiled_return {fs : List Func} {sevm : Sevm} {devm : Devm}
     {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G : Nat}
     (h_stk : devm.stack = i :: sz :: s)
     (h_gas : devm.gasLeft = G + devm.extCost [⟨i.toNat, sz.toNat⟩])
     (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
       = ⟨out, d'⟩) :
-    Func.RunCompiled fs sevm devm (.last .ret) (d'.withOutput out) := by
+    Func.RunCompiled fs sevm devm (.last .return_) (d'.withOutput out) := by
   have h_eq : devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩] = G := by omega
   refine Func.RunCompiled.last ?_
-  show Linst.run sevm devm .ret = _
-  exact Linst.run_ret_eq_ok (out := out) (d' := d') h_stk (by omega)
+  show Linst.run sevm devm .return_ = _
+  exact Linst.run_return_eq_ok (out := out) (d' := d') h_stk (by omega)
     (by rw [h_eq]; exact h_read)
 
 /-- `RETURN` with the read window's charge named, for the same reason
 `Ninst.runCompiled_mstore_of` exists: the successor's gas account cannot be
 written until the charge is a number. -/
-lemma Func.runCompiled_ret_of {fs : List Func} {sevm : Sevm} {devm : Devm}
+lemma Func.runCompiled_return_of {fs : List Func} {sevm : Sevm} {devm : Devm}
     {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G e : Nat}
     (h_stk : devm.stack = i :: sz :: s)
     (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
     (h_gas : devm.gasLeft = G + e)
     (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
       = ⟨out, d'⟩) :
-    Func.RunCompiled fs sevm devm (.last .ret) (d'.withOutput out) := by
+    Func.RunCompiled fs sevm devm (.last .return_) (d'.withOutput out) := by
   subst h_ext
-  exact Func.runCompiled_ret h_stk h_gas h_read
+  exact Func.runCompiled_return h_stk h_gas h_read
 
 /-- `RETURN` again, with the read-back reduced to its *first* component.  The
 pairing happens inside the lemma, where both sides are variables; done at the
 call site instead, `Prod.ext`'s second `rfl` forces the unifier through
 `Devm.memRead` on a concrete memory image. -/
-lemma Func.runCompiled_ret_word {fs : List Func} {sevm : Sevm} {devm : Devm}
+lemma Func.runCompiled_return_word {fs : List Func} {sevm : Sevm} {devm : Devm}
     {i sz : B256} {s : List B256} {out : Bytes} {G e : Nat}
     (h_stk : devm.stack = i :: sz :: s)
     (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
     (h_gas : devm.gasLeft = G + e)
     (h_out : ((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat).1
       = out) :
-    Func.RunCompiled fs sevm devm (.last .ret)
+    Func.RunCompiled fs sevm devm (.last .return_)
       (((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat).2.withOutput
         out) :=
-  Func.runCompiled_ret_of h_stk h_ext h_gas (Prod.ext h_out rfl)
+  Func.runCompiled_return_of h_stk h_ext h_gas (Prod.ext h_out rfl)
 
 /-! ## The exact-gas frames, constructed
 
@@ -2865,7 +2865,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         dischargeProfiled .gas hg (← gasTacs)
         dischargeProfiled .room hr (← roomTacs)
       | _ => throwError "func_run: MLOAD left {gs.length} obligations"
-    | (``Jaune.Rinst.kec, #[]) => do
+    | (``Jaune.Rinst.keccak256, #[]) => do
       let ([i, sz], s) ← popStack 2 stk | throwError "func_run: KECCAK256"
       let some cost ← nextHint g (mkConst ``Nat)
         | throwError m!"func_run: step {n + 1} is a KECCAK256. Supply its whole charge as the next hint."
@@ -2886,7 +2886,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       let gas' ← mkGas gb goff costN
       let succ ← mkState base (← mkAppM ``List.cons #[v, s]) m' gas'
       fixPost post succ
-      let gs ← applyLemma g ``Ninst.runCompiled_kec_of
+      let gs ← applyLemma g ``Ninst.runCompiled_keccak256_of
         [(0, sevm), (1, d), (2, i), (3, sz), (4, v), (5, s), (6, cost),
           (7, gas'), (8, m')] [9, 10, 11, 12, 13, 14]
       match gs with
@@ -2956,7 +2956,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         discharge hw (← rflTacs)
         dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: CALLDATACOPY left {gs.length} obligations"
-    | (``Jaune.Rinst.retdatacopy, #[]) => do
+    | (``Jaune.Rinst.returndatacopy, #[]) => do
       let ([di, ri, sz], s) ← popStack 3 stk
         | throwError "func_run: RETURNDATACOPY"
       let some cost ← nextHint g (mkConst ``Nat)
@@ -2974,7 +2974,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       let gas' ← mkGas gb goff costN
       let succ ← mkState base s img gas'
       fixPost post succ
-      let gs ← applyLemma g ``Ninst.runCompiled_retdatacopy_of
+      let gs ← applyLemma g ``Ninst.runCompiled_returndatacopy_of
         [(0, sevm), (1, d), (2, di), (3, ri), (4, sz), (5, s), (6, cost),
           (7, gas'), (8, img)] [9, 10, 11, 12, 13]
       let assum ← `(tactic| assumption)
@@ -3307,7 +3307,7 @@ decides which.
 
 Everything it could not close comes back as a goal, in the order the walk met
 it, ending with the frame's terminal instruction — which is where a
-`Func.RunCompiledTo` walk's `.rev` is evaluated.
+`Func.RunCompiledTo` walk's `.revert` is evaluated.
 
 `func_run (n) […]` walks at most `n` nodes and then hands the residual walk
 back as a goal, which is how a **prefix** of a `Func` is walked: a `Func` is

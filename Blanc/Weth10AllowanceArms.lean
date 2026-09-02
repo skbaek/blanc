@@ -69,7 +69,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_approve
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (approveLine +++ Func.last .ret)) ∈ weth10Funcs dp := by
+      nonpayable (approveLine +++ Func.last .return_)) ∈ weth10Funcs dp := by
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons]
     exact Or.inr (Or.inl (by rfl))
@@ -170,9 +170,9 @@ theorem Exec.Frame.attributionInner_eq_nil_of_allowance
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (allowanceLine +++ Func.last .ret)) ∈ weth10Funcs dp := by
+      nonpayable (allowanceLine +++ Func.last .return_)) ∈ weth10Funcs dp := by
     rw [hselector]
-    have hshape : nonpayable (allowanceLine +++ Func.last .ret) =
+    have hshape : nonpayable (allowanceLine +++ Func.last .return_) =
         nonpayable allowance := rfl
     rw [hshape]
     simp [weth10Funcs]

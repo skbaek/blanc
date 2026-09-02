@@ -27,7 +27,7 @@ private theorem sha64_success_suffix_storageEffectRun
       (base.setMach ⟨1 :: stack, base.memory, K + 37⟩)
       (Ninst.iszero :::
         (.call bubbleRevertSlot) <?>
-        (retdataShorterThan 32 +++
+        (returnDataShorterThan 32 +++
           ((.call emptyRevertSlot) <?> success))) ex effects := by
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_unary
@@ -50,7 +50,7 @@ private theorem sha64_success_suffix_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
   simp only [Devm.setMach_setMach, Devm.memory_setMach]
   change Func.StorageEffectRun fs sevm _
-    (Ninst.pushB256 32 ::: Ninst.retdatasize ::: Ninst.lt :::
+    (Ninst.pushB256 32 ::: Ninst.returndatasize ::: Ninst.lt :::
       ((.call emptyRevertSlot) <?> success)) ex effects
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256 (w := 32) (c := gVerylow)
@@ -66,7 +66,7 @@ private theorem sha64_success_suffix_storageEffectRun
       (sevm := sevm)
       (devm := base.setMach
         ⟨32 :: stack, base.memory, K + 18⟩)
-      (r := .retdatasize)
+      (r := .returndatasize)
       (x := Nat.toB256 base.returnData.length)
       (cost := gBase) (G := K + 16)
       (by rintro ⟨⟩) rfl
@@ -154,7 +154,7 @@ theorem sha64_success_prefix_storageEffectRun_ext
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
-    Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
+    Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)
@@ -228,7 +228,7 @@ theorem sha64_success_prefix_storageEffectRun_ext
       (callPost.setMach ⟨1 :: stack, callPost.memory, K + 37⟩)
       (Ninst.iszero :::
         (.call bubbleRevertSlot) <?>
-        (retdataShorterThan 32 +++
+        (returnDataShorterThan 32 +++
           ((.call emptyRevertSlot) <?> success))) ex effects :=
     sha64_success_suffix_storageEffectRun hge tail hroom
   let c32 := pushCost ((32 : B256).toBytes.sig)

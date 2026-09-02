@@ -651,7 +651,7 @@ theorem constructorSha64_success_storageEffectRun_ext
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, hrefund, hdelete, houtput, herror, stmid, hsub, hstate⟩ :=
-    Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
+    Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)
@@ -735,9 +735,9 @@ theorem constructorSha64_success_storageEffectRun_ext
       (callPost.setMach ⟨1 :: stack, callPost.memory, K + 37⟩)
       (iszero :::
         (.call constructorBubbleRevertSlot) <?>
-        (constructorRetdataShorterThan 32 +++
+        (constructorReturnDataShorterThan 32 +++
           ((.call constructorEmptyRevertSlot) <?> success))) ex effects := by
-    unfold constructorRetdataShorterThan
+    unfold constructorReturnDataShorterThan
     storage_effect_run (2) [0]
     all_goals try {
       simp only [Devm.stack_setMach, List.length_cons] at *
@@ -806,9 +806,9 @@ theorem constructorSha64_success_storageEffectRun_ext
                 · rfl
               rw [hpost] at suffix
               have statSuffix : Func.StorageEffectRun fs sevm callPre
-                  (statcall ::: iszero :::
+                  (staticcall ::: iszero :::
                     (.call constructorBubbleRevertSlot) <?>
-                    (constructorRetdataShorterThan 32 +++
+                    (constructorReturnDataShorterThan 32 +++
                       ((.call constructorEmptyRevertSlot) <?> success)))
                   ex effects := by
                 apply Func.StorageEffectRun.next hstat
@@ -1249,11 +1249,11 @@ theorem constructorFinish_storageEffectRun
                   ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K⟩).extCost
                   [⟨0, codeSize⟩] = 0 := by
               exact Devm.extCost_zero_of_le copiedMod (by omega)
-            have retRun : Func.RunCompiled fs sevm
+            have returnRun : Func.RunCompiled fs sevm
                 (base.setMach
                   ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K⟩)
-                (.last .ret) post := by
-              have raw := Func.runCompiled_ret_word
+                (.last .return_) post := by
+              have raw := Func.runCompiled_return_word
                 (fs := fs) (sevm := sevm)
                 (devm := base.setMach
                   ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K⟩)
@@ -1274,7 +1274,7 @@ theorem constructorFinish_storageEffectRun
               simpa only [Devm.memory_setMach, Devm.setMach_setMach,
                 show (0 : B256).toNat = 0 by decide +kernel,
                 B256.toNat_toB256_of_lt codeSizeBound] using raw
-            cases retRun with
+            cases returnRun with
             | last terminalRun =>
                 exact Func.StorageEffectRun.last terminalRun
 

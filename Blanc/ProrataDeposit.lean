@@ -71,7 +71,7 @@ private def depositTail : Func :=
   dup 2 ::: swap 0 ::: div :::
   dup 1 ::: dup 1 ::: add :::
   dup 0 ::: dup 6 ::: lt :::
-  .rev <?>
+  .revert <?>
   dup 6 ::: sstore :::
   dup 0 ::: caller ::: sload ::: add :::
   caller ::: sstore :::
@@ -205,7 +205,7 @@ private theorem deposit_guard_prefix
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <? sevm.value) ::
       B256.shiftRight B256.max 130 :: B256.max :: [] <<+ s13.stack :=
     prefix_of_add qadd p12
-  rcases of_run_branch_rev hbranch with ⟨after, hpop, hsuccess⟩
+  rcases of_run_branch_revert hbranch with ⟨after, hpop, hsuccess⟩
   have hzero := (popBurn_pref hpop p13).1.symm
   have hM : B256.shiftRight B256.max 130 = maxBalance := by decide +kernel
   have hV : B256.shiftRight maxBalance 30 = maxValue := by decide +kernel
@@ -375,7 +375,7 @@ theorem deposit_effect
     prefix_of_dup_val q17 (by show_nth) p16
   have p18 : (maxBalance <? (S + m)) :: (S + m) :: m :: S :: (B0 + 1) :: 0 ::
       maxBalance :: supplySlot :: [] <<+ s18.stack := prefix_of_lt q18 p17
-  rcases of_run_branch_rev hbranch with ⟨s19, hpop, hsuccess⟩
+  rcases of_run_branch_revert hbranch with ⟨s19, hpop, hsuccess⟩
   have hflag : maxBalance <? (S + m) = 0 := (popBurn_pref hpop p18).1.symm
   have hsum : S + m ≤ maxSupply := by
     apply B256.not_lt.mp

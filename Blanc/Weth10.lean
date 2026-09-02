@@ -50,7 +50,7 @@ def tagNonceKey : Line := [pushB256 nonceTagWord, Ninst.or]
 allowance key on the stack. -/
 def allowanceKeyFromMemory : Line :=
   pushList [64, 0] ++
-  [kec, pushB256 allowancePayloadMask, Ninst.and,
+  [keccak256, pushB256 allowancePayloadMask, Ninst.and,
     pushB256 allowanceTagWord, Ninst.or]
 
 /-- Canonicalize a raw ABI address word to its low 160 bits before using it as
@@ -94,19 +94,19 @@ def withdrawFromCoreSlot : Nat := 17
 def flashBurnSlot : Nat := 18
 def permitRecoverSlot : Nat := 19
 
-def flashTokenError : Func := Func.revWith "WETH: flash mint only WETH10"
+def flashTokenError : Func := Func.revertWith "WETH: flash mint only WETH10"
 def individualLimitError : Func :=
-  Func.revWith "WETH: individual loan limit exceeded"
-def totalLimitError : Func := Func.revWith "WETH: total loan limit exceeded"
-def flashFailedError : Func := Func.revWith "WETH: flash loan failed"
-def allowanceError : Func := Func.revWith "WETH: request exceeds allowance"
-def burnBalanceError : Func := Func.revWith "WETH: burn amount exceeds balance"
-def expiredPermitError : Func := Func.revWith "WETH: Expired permit"
-def invalidPermitError : Func := Func.revWith "WETH: invalid permit"
+  Func.revertWith "WETH: individual loan limit exceeded"
+def totalLimitError : Func := Func.revertWith "WETH: total loan limit exceeded"
+def flashFailedError : Func := Func.revertWith "WETH: flash loan failed"
+def allowanceError : Func := Func.revertWith "WETH: request exceeds allowance"
+def burnBalanceError : Func := Func.revertWith "WETH: burn amount exceeds balance"
+def expiredPermitError : Func := Func.revertWith "WETH: Expired permit"
+def invalidPermitError : Func := Func.revertWith "WETH: invalid permit"
 def transferBalanceError : Func :=
-  Func.revWith "WETH: transfer amount exceeds balance"
-def ethTransferError : Func := Func.revWith "WETH: ETH transfer failed"
-def etherTransferError : Func := Func.revWith "WETH: Ether transfer failed"
+  Func.revertWith "WETH: transfer amount exceeds balance"
+def ethTransferError : Func := Func.revertWith "WETH: ETH transfer failed"
+def etherTransferError : Func := Func.revertWith "WETH: Ether transfer failed"
 
 /-! ## Constant and storage views -/
 
@@ -167,7 +167,7 @@ def calculateDomainSeparator : Line :=
   [pushB256 NAME_HASH] ++ mstoreAt 1 ++
   [pushB256 VERSION_HASH] ++ mstoreAt 2 ++
   [address] ++ mstoreAt 4 ++
-  pushList [160, 0] ++ [kec]
+  pushList [160, 0] ++ [keccak256]
 
 def domainSeparator (dp : DeployParams) : Func :=
   chainid ::: dup 0 ::: pushDeployWord dp.deploymentChainId ::: eq :::
@@ -357,14 +357,14 @@ nonzero value becomes canonical ABI `true`. -/
 def boolReturn : Func :=
   iszero :::
   (.call bubbleRevertSlot) <?>
-  (retdataShorterThan 32 +++
-    Func.rev <?>
-    (pushList [32, 0, 0] +++ retdatacopy :::
+  (returnDataShorterThan 32 +++
+    Func.revert <?>
+    (pushList [32, 0, 0] +++ returndatacopy :::
       pushB256 0 ::: mload :::
       iszero ::: iszero :::
       mstoreAt 0 +++ returnMemoryRange 0 32))
 
-def bubbleRevert : Func := Func.revReturnData
+def bubbleRevert : Func := Func.revertReturnData
 
 /-- Typed zero-value callback with signature `sel(address,uint256,bytes)`.
 The source state/log prefix has already committed within the current frame.
@@ -373,7 +373,7 @@ no child call and empty-reverts. -/
 def callBoolCallback (sel : B256) (target dataArg : B256)
     (value : Line) : Func :=
   arg target +++ dup 0 ::: extcodesize ::: iszero :::
-  Func.rev <?>
+  Func.revert <?>
   (pop :::
     value +++ storeTokenCallbackHead sel +++
     pushList [0, 0] +++
@@ -461,16 +461,16 @@ def flashLoan : Func :=
         dup 1 ::: pushB256 0 ::: pushB256 Blanc.transferEvent :::
         logWith 2 0 1 +++
         dup 1 ::: extcodesize ::: iszero :::
-        Func.rev <?>
+        Func.revert <?>
         (dup 0 ::: storeFlashCallbackHead +++
           pushList [0, 0] +++
           forwardArgTail 3 6 +++ flashCallbackArgsSize +++
           pushB256 callbackArgsOffset ::: pushB256 0 :::
           dup 6 ::: gas ::: call ::: iszero :::
           (.call bubbleRevertSlot) <?>
-          (retdataShorterThan 32 +++
-            Func.rev <?>
-            (checkRetdataHead CALLBACK_SUCCESS 0 +++ iszero :::
+          (returnDataShorterThan 32 +++
+            Func.revert <?>
+            (checkReturnDataHead CALLBACK_SUCCESS 0 +++ iszero :::
               (.call flashFailedErrorSlot) <?>
               (pop ::: pop ::: .call flashSettleSlot)))))))
 
@@ -482,7 +482,7 @@ def eip712PrefixWord : B256 := Nat.toB256 (0x1901 * 2 ^ 240)
 def permitDigest : Line :=
   [swap 0, pushB256 34, mstore,
     pushB256 eip712PrefixWord] ++ mstoreAt 0 ++
-  [pushB256 2, mstore] ++ pushList [66, 0] ++ [kec]
+  [pushB256 2, mstore] ++ pushList [66, 0] ++ [keccak256]
 
 /-- Call precompile 1 exactly as Solidity's `ecrecover` builtin does.  The
 output word is pre-zeroed because precompile failure returns address zero. -/
@@ -492,7 +492,7 @@ def recoverPermitSigner : Line :=
   arg 5 ++ mstoreAt 2 ++
   arg 6 ++ mstoreAt 3 ++
   [pushB256 0] ++ mstoreAt 4 ++
-  pushList [32, 128, 128, 0, 1] ++ [gas, statcall, pop,
+  pushList [32, 128, 128, 0, 1] ++ [gas, staticcall, pop,
     pushB256 128, mload]
 
 def approvePermit : Func :=
@@ -520,7 +520,7 @@ def permit (dp : DeployParams) : Func :=
     pop :::
     pushB256 PERMIT_TYPEHASH ::: mstoreAt 0 +++
     argCopy 1 0 3 +++ arg 3 +++ mstoreAt 5 +++
-    pushList [192, 0] +++ kec :::
+    pushList [192, 0] +++ keccak256 :::
     dup 1 ::: pushDeployWord dp.deploymentChainId ::: eq :::
     (swap 0 ::: pop ::: pushDeployWord dp.cachedDomainSeparator :::
       .call permitRecoverSlot) <?>
@@ -529,7 +529,7 @@ def permit (dp : DeployParams) : Func :=
 /-- Dispatcher misses reach this slot.  Only truly empty calldata is receive;
 an unknown nonempty selector is an empty-data revert. -/
 def receiveOrRevert : Func :=
-  calldatasize ::: iszero ::: (receiveEther <?> Func.rev)
+  calldatasize ::: iszero ::: (receiveEther <?> Func.revert)
 
 /-! ## Complete runtime program -/
 
@@ -779,7 +779,7 @@ def weth10Main (dp : DeployParams) : Func :=
   (receiveEther <?> (fsig +++ dispatchWith fallbackSlot (weth10Tree dp)))
 
 def weth10Aux : List Func :=
-  [ Func.rev,
+  [ Func.revert,
     flashTokenError,
     individualLimitError,
     totalLimitError,

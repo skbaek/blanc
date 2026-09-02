@@ -1792,12 +1792,12 @@ theorem getDepositRootEndpoint_storageEffectRun
 
 private def getDepositRootLeafRoute : Func :=
   pushB256 getDepositRootSelector ::: eq :::
-    ((nonpayableEndpoint getDepositRootEndpoint) <?> Func.rev)
+    ((nonpayableEndpoint getDepositRootEndpoint) <?> Func.revert)
 
 private def getDepositRootInnerRoute : Func :=
   dup 0 ::: pushB256 getDepositRootSelector ::: gt :::
     ((pushB256 getDepositCountSelector ::: eq :::
-        ((nonpayableEndpoint getDepositCountEndpoint) <?> Func.rev)) <?>
+        ((nonpayableEndpoint getDepositCountEndpoint) <?> Func.revert)) <?>
       getDepositRootLeafRoute)
 
 private def getDepositRootMiddleRoute : Func :=
@@ -2399,7 +2399,7 @@ theorem getDepositRoot_route_storageEffectRun
           gVerylow, gHigh, gJumpdest])
   have hbranch : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm afterSize
-      (Func.main tree <?> Func.rev) out effects :=
+      (Func.main tree <?> Func.revert) out effects :=
     .succ hnonempty hroom hpop (by
       simpa only [afterBranch] using hmain)
   have hmainEffects : Func.StorageEffectRun
@@ -2512,12 +2512,12 @@ theorem getDepositRootEndpoint_nonpayable_nonzero_storageEffectRun
               simp only [Devm.gasLeft_setMach, gVerylow, gHigh,
                 gJumpdest]))
     have hrev : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-        (base.setMach ⟨base.stack, base.memory, G + 4⟩) Func.rev
+        (base.setMach ⟨base.stack, base.memory, G + 4⟩) Func.revert
         (.error (.revert,
           (base.setMach ⟨base.stack, base.memory, G⟩).withOutput [])) := by
       simpa only [Devm.setMach_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using
-        (Func.runCompiledTo_rev_func
+        (Func.runCompiledTo_revert_func
           (fs := runtime.main :: runtime.aux) (sevm := sevm)
           (devm := base.setMach ⟨base.stack, base.memory, G + 4⟩)
           (G := G) (by simp only [Devm.gasLeft_setMach, gBase])

@@ -254,7 +254,7 @@ theorem run_flashFee_observations_eq
     have hf : f = flashTokenError := by
       simpa [weth10, weth10Aux, flashTokenErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 theorem backedSpec_flashFee_funcSound (dp : DeployParams) (ca : Adr) :
     (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
@@ -303,11 +303,11 @@ theorem backedSpec_sound_of_funcSound_all
     (backedSpec weth10 dp).SoundNoMem ca := by
   refine ContractSpec.soundNoMem_of_receive_dispatch
     (k := fallbackSlot) (funcs := weth10Funcs dp) (aux := weth10Aux)
-    (fallback := Func.rev) (receive := receiveEther)
+    (fallback := Func.revert) (receive := receiveEther)
     rfl (List.cons_ne_nil _ _) rfl h_funcs ?_
     (backedSpec_receiveEther_funcSound dp ca)
   intro sevm s r h_target h_pre h_ih run
-  exact absurd run not_run_rev
+  exact absurd run not_run_revert
 
 /-- The frame-level soundness result has the same sole remaining selector-family
 premise; all receive-aware dispatcher and ladder plumbing is discharged. -/

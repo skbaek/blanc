@@ -215,7 +215,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
     (hallowanceError :
       (f₀ :: aux)[allowanceErrorSlot]? =
-        some (Func.revWith "WETH: request exceeds allowance"))
+        some (Func.revertWith "WETH: request exceeds allowance"))
     (hwf : Mem.Wf cursor.pre.memory)
     (hreads : Mem.Reads cursor.pre.memory img) :
     ∃ body,
@@ -377,7 +377,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
           Stack.prefix_of_swap hswapCore (of_run_swap hswap) hpArg
         exact prefix_of_balanceTooSmall hpSwap hguard
       rcases spendBranchCursor.selectBranchLeftWithBurn
-          (not_run_call_revWith hallowanceError) with
+          (not_run_call_revertWith hallowanceError) with
         ⟨successCursor, hcheckPopBy⟩
       have hcheckPop := Devm.PopBurn.of_popBurnBy hcheckPopBy
       have hpopStack := hcheckPop.stack
@@ -527,7 +527,7 @@ private theorem withdrawFromCore_eq_redeemFromBody :
 private theorem transferFromZero_eq_redeemFromBody :
     transferFromZero =
       redeemFromBody 0 2 redeemSendToCallerPrefix ethTransferErrorSlot
-        (redeemReturnTrueLine +++ Func.last .ret) := rfl
+        (redeemReturnTrueLine +++ Func.last .return_) := rfl
 
 /-- The shared delegated redemption walk: the guarded debit writes a single
 address-shaped balance key at the normalized owner argument, the external
@@ -545,7 +545,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
       (redeemFromBody ownerArg amountArg sendPrefix errSlot
         (successLine +++ Func.last successLast)) frame.post)
     (herr : ((weth10 dp).main :: weth10Aux)[errSlot]? =
-      some (Func.revWith reason))
+      some (Func.revertWith reason))
     (htarget : frame.sevm.currentTarget = ca)
     (hstack : [] <<+ cursor.pre.stack)
     (hwf : Mem.Wf cursor.pre.memory)
@@ -597,7 +597,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
             branchCursor.pre.stack :=
         prefix_of_balanceTooSmall hloadStack hguard
       rcases branchCursor.selectBranchLeftWithBurn
-          (not_run_call_revWith (burnBalanceError_lookup dp)) with
+          (not_run_call_revertWith (burnBalanceError_lookup dp)) with
         ⟨successCursor, hbalancePopBy⟩
       have hbalancePop := Devm.PopBurn.of_popBurnBy hbalancePopBy
       have hpopStack := hbalancePop.stack
@@ -744,7 +744,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
             Func.Run.of_runCompiled htailCompiled
           rcases of_run_next htailPlain with
             ⟨afterIszero, hiszeroRun, hbranchPlain⟩
-          rcases of_run_branch_call_revWith herr
+          rcases of_run_branch_call_revertWith herr
               hbranchPlain with
             ⟨afterGuard, hguardPop, _hsuccessRun⟩
           rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
@@ -1129,7 +1129,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemFromBody 0 2 redeemSendToCallerPrefix ethTransferErrorSlot
-      (redeemReturnTrueLine +++ Func.last .ret)) frame.post at zeroCursor
+      (redeemReturnTrueLine +++ Func.last .return_)) frame.post at zeroCursor
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
   have hstorage := zeroCursor.redeemFromAllowanceStorage
     (target := frame.sevm.caller.toB256)
@@ -1267,7 +1267,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
       (redeemFromBody ownerArg amountArg sendPrefix errSlot
         (successLine +++ Func.last successLast)) frame.post)
     (herr : ((weth10 dp).main :: weth10Aux)[errSlot]? =
-      some (Func.revWith reason))
+      some (Func.revertWith reason))
     (htarget : frame.sevm.currentTarget = ca)
     (hstack : [] <<+ cursor.pre.stack)
     (hwf : Mem.Wf cursor.pre.memory)
@@ -1321,7 +1321,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
             branchCursor.pre.stack :=
         prefix_of_balanceTooSmall hloadStack hguard
       rcases branchCursor.selectBranchLeftWithBurn
-          (not_run_call_revWith (burnBalanceError_lookup dp)) with
+          (not_run_call_revertWith (burnBalanceError_lookup dp)) with
         ⟨successCursor, hbalancePopBy⟩
       have hbalancePop := Devm.PopBurn.of_popBurnBy hbalancePopBy
       have hpopStack := hbalancePop.stack
@@ -1471,7 +1471,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
             Func.Run.of_runCompiled htailCompiled
           rcases of_run_next htailPlain with
             ⟨afterIszero, hiszeroRun, hbranchPlain⟩
-          rcases of_run_branch_call_revWith herr
+          rcases of_run_branch_call_revertWith herr
               hbranchPlain with
             ⟨afterGuard, hguardPop, _hsuccessRun⟩
           rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
@@ -1873,7 +1873,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemFromBody 0 2 redeemSendToCallerPrefix ethTransferErrorSlot
-      (redeemReturnTrueLine +++ Func.last .ret)) frame.post at zeroCursor
+      (redeemReturnTrueLine +++ Func.last .return_)) frame.post at zeroCursor
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
   have hzeroCode : frame.pre.getCode ca = zeroCursor.pre.getCode ca :=
     (getCode_eq_of_state_eq hspendSilent.state ca).trans

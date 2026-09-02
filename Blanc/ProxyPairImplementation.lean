@@ -25,10 +25,10 @@ def implReturnWord : B256 := 42
 def implSuccess : Func :=
   pushB256 1 ::: pushB256 implSlot ::: sstore :::
     pushB256 implReturnWord ::: mstoreAt 0 +++
-      pushB256 32 ::: pushB256 0 ::: Func.last .ret
+      pushB256 32 ::: pushB256 0 ::: Func.last .return_
 
 def implRevert : Func :=
-  pushB256 0 ::: pushB256 0 ::: Func.last .rev
+  pushB256 0 ::: pushB256 0 ::: Func.last .revert
 
 def implGuarded : Func :=
   cdl 0 +++ Ninst.iszero :::
@@ -148,7 +148,7 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
       rw [show ((0 : B256) * 32).toNat = 0 by decide]
       exact Devm.extCost_empty_word
     case a =>
-      apply Func.runCompiledTo_ret_word (i := 0) (sz := 32) (s := [])
+      apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
         (e := 0) (G := G) (out := implReturnWord.toBytes)
       · rfl
       · rw [show ((0 : B256)).toNat = 0 by decide,
@@ -167,9 +167,9 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
   · rfl
   · rw [Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state,
       Devm.setMach_state, Devm.sstoreBase_state, Devm.setMach_state]
-  · rw [Devm.retPost_getStorVal]
+  · rw [Devm.returnPost_getStorVal]
     rw [Devm.getStorVal_setMach, Devm.getStorVal_setStorVal_self]
-  · rw [Devm.retPost_transientStorage, Devm.setMach_transientStorage,
+  · rw [Devm.returnPost_transientStorage, Devm.setMach_transientStorage,
       Devm.sstoreBase_transientStorage, Devm.setMach_transientStorage]
   · rw [Devm.withOutput_logs, Devm.memRead_logs, Devm.setMach_logs,
       Devm.setMach_logs, Devm.sstoreBase_logs, Devm.setMach_logs]
@@ -212,7 +212,7 @@ theorem implGuarded_runCompiledTo_nonzero
       rw [show ((0 : B256) * 32).toNat = 0 by decide]
       exact Devm.extCost_empty_word
     case a =>
-      apply Func.runCompiledTo_ret_word (i := 0) (sz := 32) (s := [])
+      apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
         (e := 0) (G := G) (out := implReturnWord.toBytes)
       · rfl
       · rw [show ((0 : B256)).toNat = 0 by decide,
@@ -231,9 +231,9 @@ theorem implGuarded_runCompiledTo_nonzero
   · rfl
   · rw [Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state,
       Devm.setMach_state, Devm.sstoreBase_state, Devm.setMach_state]
-  · rw [Devm.retPost_getStorVal]
+  · rw [Devm.returnPost_getStorVal]
     rw [Devm.getStorVal_setMach, Devm.getStorVal_setStorVal_self]
-  · rw [Devm.retPost_transientStorage, Devm.setMach_transientStorage,
+  · rw [Devm.returnPost_transientStorage, Devm.setMach_transientStorage,
       Devm.sstoreBase_transientStorage, Devm.setMach_transientStorage]
   · rw [Devm.withOutput_logs, Devm.memRead_logs, Devm.setMach_logs,
       Devm.setMach_logs, Devm.sstoreBase_logs, Devm.setMach_logs]
@@ -258,7 +258,7 @@ theorem implGuarded_runCompiledTo_zero
     func_run [1]
     all_goals try {simp [B256.eqCheck, h_data]}
     simp only [Nat.add_sub_cancel]
-    apply Func.runCompiledTo_rev (G := G)
+    apply Func.runCompiledTo_revert (G := G)
     · rfl
     · rw [show ((0 : B256)).toNat = 0 by decide,
         Devm.extCost_empty_window]

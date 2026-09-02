@@ -167,13 +167,13 @@ private def StatcallSpawnFacts
         msg.code = pre.getCode delegatedTarget ∧
         msg.disablePrecompiles = true))
 
-private theorem Xinst.step_statcall_spawn_facts
+private theorem Xinst.step_staticcall_spawn_facts
     {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}
     (gasWord : B256) (tail : Stack)
     (operands : gasWord :: (1 : B256) :: (0 : B256) ::
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         devm.stack)
-    (hspawn : Xinst.step sevm devm .statcall = .spawn frame resume) :
+    (hspawn : Xinst.step sevm devm .staticcall = .spawn frame resume) :
     StatcallSpawnFacts sevm devm frame := by
   simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
   rcases eq1 : Devm.pop devm with err | ⟨actualGasWord, d1⟩ <;>
@@ -273,20 +273,20 @@ private theorem Xinst.step_statcall_spawn_facts
   exact ⟨_, rfl, congrArg some hresolvedAddress, rfl,
     by simpa only [callMsg] using hresolution⟩
 
-private theorem Ninst.step_statcall_spawn_facts
+private theorem Ninst.step_staticcall_spawn_facts
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {frame : Frame} {resume : Resume}
     (gasWord : B256) (tail : Stack)
     (operands : gasWord :: (1 : B256) :: (0 : B256) ::
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         pre.stack)
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall =
+    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall =
       .spawn frame resume pc') :
     StatcallSpawnFacts sevm pre frame := by
-  have hx : Xinst.step sevm pre .statcall = .spawn frame resume := by
+  have hx : Xinst.step sevm pre .staticcall = .spawn frame resume := by
     exact XStep.toStep_spawn (by
-      simpa only [Ninst.statcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_statcall_spawn_facts gasWord tail operands hx
+      simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
+  exact Xinst.step_staticcall_spawn_facts gasWord tail operands hx
 
 /-- Value transfer preserves the static block environment. -/
 private theorem benvAfterTransfer_stat {msg : Msg} {benv : Benv}
@@ -306,7 +306,7 @@ private theorem benvAfterTransfer_stat {msg : Msg} {benv : Benv}
 /-- No interpreted child can be spawned at the permit call boundary when
 the precompile is enabled and undelegated: frame entry would resolve the
 message synchronously. -/
-private theorem not_run_of_statcallSpawnFacts
+private theorem not_run_of_staticcallSpawnFacts
     {sevm : Sevm} {pre : Devm} {f : Frame} {childEvm : Evm}
     (hprecomp :
       decide (sevm.benvStat.rules.isPrecomp (1 : B256).toAdr) = true)
@@ -353,7 +353,7 @@ private theorem Exec.Deriv.ParentStepActions.counted_of_permitStatcall
     {dp : DeployParams} {ca : Adr}
     {next current : Exec.Deriv} {selected : List FlowAction}
     (edge : Exec.Deriv.ParentStepActions dp ca next current selected)
-    (hat : Ninst.At current.sevm.code current.pc Ninst.statcall)
+    (hat : Ninst.At current.sevm.code current.pc Ninst.staticcall)
     (hprecomp : decide
       (current.sevm.benvStat.rules.isPrecomp (1 : B256).toAdr) = true)
     (hnodeleg : getDelegatedCodeAddress
@@ -370,8 +370,8 @@ private theorem Exec.Deriv.ParentStepActions.counted_of_permitStatcall
       exfalso
       have hspawn := (Evm.step_next hat).symm.trans hstep
       have hfacts :=
-        Ninst.step_statcall_spawn_facts gasWord stack operands hspawn
-      exact not_run_of_statcallSpawnFacts hprecomp hnodeleg hfacts henter
+        Ninst.step_staticcall_spawn_facts gasWord stack operands hspawn
+      exact not_run_of_staticcallSpawnFacts hprecomp hnodeleg hfacts henter
 
 /-- Cross the permit `STATICCALL` while preserving the empty counted
 prefix.  With the precompile enabled and undelegated the crossing's
@@ -381,7 +381,7 @@ private theorem Exec.Frame.CountedCursor.crossPermitStaticcall
     {fs : List Func} {table : List (Nat × Func)}
     {tail : Func} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
-      (.next Ninst.statcall tail) final)
+      (.next Ninst.staticcall tail) final)
     (hprecomp : decide
       (frame.sevm.benvStat.rules.isPrecomp (1 : B256).toAdr) = true)
     (hnodeleg : getDelegatedCodeAddress
@@ -393,7 +393,7 @@ private theorem Exec.Frame.CountedCursor.crossPermitStaticcall
   have compiled := cursor.run
   cases compiled with
   | next hcompiled htail =>
-      have hat : Ninst.At frame.sevm.code cursor.pc Ninst.statcall :=
+      have hat : Ninst.At frame.sevm.code cursor.pc Ninst.staticcall :=
         ninstAt_of_subcode_next cursor.codeSlice
       rcases cursor.parentPrefix with ⟨before, hbefore⟩
       rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current hbefore hat
@@ -403,7 +403,7 @@ private theorem Exec.Frame.CountedCursor.crossPermitStaticcall
         hedge.counted_of_permitStatcall hat hprecomp hnodeleg operands
       obtain ⟨nextBoundary, nextSub⟩ :=
         Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
-      exact ⟨⟨cursor.pc + Ninst.statcall.size, _, continuation,
+      exact ⟨⟨cursor.pc + Ninst.staticcall.size, _, continuation,
         ⟨_, hnextPrefix⟩, cursor.countedPrefix.snoc hcountedEdge, htail,
         nextSub, nextBoundary⟩⟩
 
@@ -471,7 +471,7 @@ private theorem Exec.Frame.CountedCursor.finishPermitAfterStaticcall
               some invalidPermitError from by
             simp [weth10Aux, invalidPermitErrorSlot]] at hget
           cases Option.some.inj hget
-          exact absurd hbody' Func.not_run_revWith
+          exact absurd hbody' Func.not_run_revertWith
   · rcases herror with ⟨errorCursor, -, -⟩
     have hrun := Func.Run.of_runCompiled errorCursor.run
     cases hrun with
@@ -481,7 +481,7 @@ private theorem Exec.Frame.CountedCursor.finishPermitAfterStaticcall
             some invalidPermitError from by
           simp [weth10Aux, invalidPermitErrorSlot]] at hget
         cases Option.some.inj hget
-        exact absurd hbody' Func.not_run_revWith
+        exact absurd hbody' Func.not_run_revertWith
 
 /-! ## The unconditional reading of the crossing
 
@@ -493,17 +493,17 @@ commits an allowance word. -/
 
 /-- Whatever the permit `STATICCALL` edge turns out to be, its counted label
 is write-free. -/
-private theorem Exec.Deriv.ParentStepCounted.writeFree_of_statcall
+private theorem Exec.Deriv.ParentStepCounted.writeFree_of_staticcall
     {dp : DeployParams} {ca : Adr}
     {next current : Exec.Deriv} {counted : List CountedFrame}
     (edge : Exec.Deriv.ParentStepCounted dp ca next current counted)
-    (hat : Ninst.At current.sevm.code current.pc Ninst.statcall) :
+    (hat : Ninst.At current.sevm.code current.pc Ninst.staticcall) :
     WriteFreeLedger counted := by
   cases edge with
   | cont => exact writeFreeLedger_nil
   | doneOk => exact writeFreeLedger_nil
   | runOk hstep henter child _hresume _next =>
-      exact writeFreeLedger_statcallCrossing
+      exact writeFreeLedger_staticcallCrossing
         ((Evm.step_next hat).symm.trans hstep) henter child
 
 /-- Cross the permit `STATICCALL` with no routing premise at all: its counted
@@ -512,11 +512,11 @@ the frame's whole proper-descendant counted stream is write-free.  The suffix
 closer is supplied by the caller and applied at the *continuation* re-rooted
 as its own frame, whose counted prefix is empty by construction. -/
 private theorem
-    Exec.Frame.CountedCursor.attributionInner_writeFree_of_statcall
+    Exec.Frame.CountedCursor.attributionInner_writeFree_of_staticcall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)} {tail : Func}
     (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
-      (.next Ninst.statcall tail) frame.post)
+      (.next Ninst.staticcall tail) frame.post)
     (hfinish : ∀ suffixFrame : Exec.Frame,
       Blanc.Weth10.Exec.Frame.CountedCursor
         (frame := suffixFrame) dp ca fs table tail suffixFrame.post →
@@ -526,7 +526,7 @@ private theorem
   cases compiled with
   | next hcompiled htail =>
       rename_i stepPost
-      have hat : Ninst.At frame.sevm.code cursor.pc Ninst.statcall :=
+      have hat : Ninst.At frame.sevm.code cursor.pc Ninst.staticcall :=
         ninstAt_of_subcode_next cursor.codeSlice
       obtain ⟨nextBoundary, nextSub⟩ :=
         Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
@@ -536,11 +536,11 @@ private theorem
         ⟨_xl, continuation, _selected, _occurrence, hedge, _hnextPrefix⟩
       rcases hedge.exists_counted with ⟨counted, hcountedEdge⟩
       have hlabel : WriteFreeLedger counted :=
-        hcountedEdge.writeFree_of_statcall hat
+        hcountedEdge.writeFree_of_staticcall hat
       have htailNil : Exec.attributionInner dp ca continuation = [] :=
-        hfinish ⟨cursor.pc + Ninst.statcall.size, frame.sevm, stepPost,
+        hfinish ⟨cursor.pc + Ninst.staticcall.size, frame.sevm, stepPost,
             frame.out, continuation, frame.committed⟩
-          ⟨cursor.pc + Ninst.statcall.size, stepPost, continuation,
+          ⟨cursor.pc + Ninst.staticcall.size, stepPost, continuation,
             ⟨[], .refl _⟩, .refl _, htail, nextSub, nextBoundary⟩
       have hprefixSplit := cursor.countedPrefix.descendantCounted_eq
       change Exec.attributionInner dp ca frame.run =
@@ -599,9 +599,9 @@ private theorem genericCall.step_spawn_depth_pos
     split at hs <;> simp only [XStep.ofExcept, reduceCtorEq] at hs
   · exact hpos
 
-private theorem Xinst.step_statcall_spawn_message
+private theorem Xinst.step_staticcall_spawn_message
     {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}
-    (hspawn : Xinst.step sevm devm .statcall = .spawn frame resume) :
+    (hspawn : Xinst.step sevm devm .staticcall = .spawn frame resume) :
     StatcallSpawnMessage sevm devm frame := by
   simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
   rcases eq1 : Devm.pop devm with err | ⟨gasWord, d1⟩ <;>
@@ -696,27 +696,27 @@ private theorem Xinst.step_statcall_spawn_message
     omega
   · simpa only [callMsg] using hresolution.1
 
-private theorem Ninst.step_statcall_spawn_message
+private theorem Ninst.step_staticcall_spawn_message
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {frame : Frame} {resume : Resume}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall =
+    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall =
       .spawn frame resume pc') :
     StatcallSpawnMessage sevm pre frame := by
-  have hx : Xinst.step sevm pre .statcall = .spawn frame resume :=
+  have hx : Xinst.step sevm pre .staticcall = .spawn frame resume :=
     XStep.toStep_spawn (by
-      simpa only [Ninst.statcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_statcall_spawn_message hx
+      simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
+  exact Xinst.step_staticcall_spawn_message hx
 
 /-- Whatever the permit `STATICCALL` edge turns out to be, every record its
 counted label retains read the word the parent's storage held at the call
 boundary.  The interpreted-child arm is discharged by the read-sound
 recursion hypothesis, exactly as a callback arm discharges its `CALL`; the
 label-free arms are vacuous. -/
-private theorem entryReadSound_statcallCrossing
+private theorem entryReadSound_staticcallCrossing
     {dp : DeployParams} {ca : Adr}
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {f : Jaune.Frame} {rsm : Resume} {cevm : Evm} {raw : Execution}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall = .spawn f rsm pc')
+    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall = .spawn f rsm pc')
     (henter : f.enter = .run cevm)
     (child : Exec cevm.pc cevm.sta cevm.dyna raw)
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
@@ -740,7 +740,7 @@ private theorem entryReadSound_statcallCrossing
       rw [dif_pos hcommits]
     rw [← hstream]
     obtain ⟨msg, target, delegated, hframe, hcurrent, hcodeAddress, hstate,
-      hdepth, hres⟩ := Ninst.step_statcall_spawn_message hspawn
+      hdepth, hres⟩ := Ninst.step_staticcall_spawn_message hspawn
     have hrun : RunFrame f (some (cevm, raw)) (f.settle raw) :=
       RunFrame.of_run henter
     rcases hsettle : Jaune.Frame.settle f raw with err | settled
@@ -772,12 +772,12 @@ private theorem entryReadSound_statcallCrossing
 
 /-- Read-sound reading of one permit `STATICCALL` edge, in the shape the
 counted walk consumes; the entry-read sibling of
-`Exec.Deriv.ParentStepCounted.writeFree_of_statcall`. -/
-private theorem Exec.Deriv.ParentStepCounted.entryReadSound_of_statcall
+`Exec.Deriv.ParentStepCounted.writeFree_of_staticcall`. -/
+private theorem Exec.Deriv.ParentStepCounted.entryReadSound_of_staticcall
     {dp : DeployParams} {ca : Adr}
     {next current : Exec.Deriv} {counted : List CountedFrame}
     (edge : Exec.Deriv.ParentStepCounted dp ca next current counted)
-    (hat : Ninst.At current.sevm.code current.pc Ninst.statcall)
+    (hat : Ninst.At current.sevm.code current.pc Ninst.staticcall)
     (installed :
       some (current.devm.getCode ca).toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt current.sevm.depth ca (weth10 dp)
@@ -787,21 +787,21 @@ private theorem Exec.Deriv.ParentStepCounted.entryReadSound_of_statcall
   | cont => exact .nil _
   | doneOk => exact .nil _
   | runOk hstep henter child _hresume _next =>
-      exact entryReadSound_statcallCrossing
+      exact entryReadSound_staticcallCrossing
         ((Evm.step_next hat).symm.trans hstep) henter child installed hdeeper
 
 /-- Cross the permit `STATICCALL` read-soundly with no routing premise: the
 crossing's counted label is entry-read sound against the boundary storage,
 and the parent-only suffix behind it retains nothing, so the frame's whole
 proper-descendant counted stream is entry-read sound there.  The entry-read
-sibling of `attributionInner_writeFree_of_statcall`, with the same suffix
+sibling of `attributionInner_writeFree_of_staticcall`, with the same suffix
 closer supplied by the caller. -/
 private theorem
-    Exec.Frame.CountedCursor.attributionInner_entryReadSound_of_statcall
+    Exec.Frame.CountedCursor.attributionInner_entryReadSound_of_staticcall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)} {tail : Func}
     (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
-      (.next Ninst.statcall tail) frame.post)
+      (.next Ninst.staticcall tail) frame.post)
     (installed :
       some (cursor.pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -816,7 +816,7 @@ private theorem
   cases compiled with
   | next hcompiled htail =>
       rename_i stepPost
-      have hat : Ninst.At frame.sevm.code cursor.pc Ninst.statcall :=
+      have hat : Ninst.At frame.sevm.code cursor.pc Ninst.staticcall :=
         ninstAt_of_subcode_next cursor.codeSlice
       obtain ⟨nextBoundary, nextSub⟩ :=
         Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
@@ -827,11 +827,11 @@ private theorem
       rcases hedge.exists_counted with ⟨counted, hcountedEdge⟩
       have hlabel :
           AllowanceEntryReadSound (Devm.getStor cursor.pre ca) counted :=
-        hcountedEdge.entryReadSound_of_statcall hat installed hdeeper
+        hcountedEdge.entryReadSound_of_staticcall hat installed hdeeper
       have htailNil : Exec.attributionInner dp ca continuation = [] :=
-        hfinish ⟨cursor.pc + Ninst.statcall.size, frame.sevm, stepPost,
+        hfinish ⟨cursor.pc + Ninst.staticcall.size, frame.sevm, stepPost,
             frame.out, continuation, frame.committed⟩
-          ⟨cursor.pc + Ninst.statcall.size, stepPost, continuation,
+          ⟨cursor.pc + Ninst.staticcall.size, stepPost, continuation,
             ⟨[], .refl _⟩, .refl _, htail, nextSub, nextBoundary⟩
       have hprefixSplit := cursor.countedPrefix.descendantCounted_eq
       change Exec.attributionInner dp ca frame.run =
@@ -887,7 +887,7 @@ private theorem Exec.Frame.reachPermitStatcall
     (k : ∀ (boundaryCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
-          (Ninst.statcall ::: permitAfterStaticcall) frame.post)
+          (Ninst.staticcall ::: permitAfterStaticcall) frame.post)
         (gasWord : B256) (stack : Stack),
         gasWord :: (1 : B256) :: (0 : B256) :: (128 : B256) ::
             (128 : B256) :: (32 : B256) :: stack <<+ boundaryCursor.pre.stack →
@@ -1098,7 +1098,7 @@ private theorem Exec.Frame.reachPermitStatcall
             some expiredPermitError from by
           simp [weth10Aux, expiredPermitErrorSlot]] at hget
         cases Option.some.inj hget
-        exact absurd hbody' Func.not_run_revWith
+        exact absurd hbody' Func.not_run_revertWith
 
 /-! ## The two readings of the reached crossing -/
 
@@ -1141,7 +1141,7 @@ private theorem Exec.Frame.attributionInner_writeFree_of_permitBodyCursor
     WriteFreeLedger (Exec.attributionInner dp ca frame.run) := by
   refine Blanc.Weth10.Exec.Frame.reachPermitStatcall (frame := frame) hcode bodyCursor ?_
   intro boundaryCursor _gasWord _stack _hoperands _hcodeBoundary _hagree
-  exact Blanc.Weth10.Exec.Frame.CountedCursor.attributionInner_writeFree_of_statcall boundaryCursor
+  exact Blanc.Weth10.Exec.Frame.CountedCursor.attributionInner_writeFree_of_staticcall boundaryCursor
     (fun _ suffixCursor => suffixCursor.finishPermitAfterStaticcall)
 
 /-- Without any routing premise the crossing may retain an interpreted static
@@ -1174,7 +1174,7 @@ private theorem
     rw [← congrFun (hentryCode.trans hcodeBoundary) ca]
     exact installed
   refine AllowanceEntryReadSound.congr (fun key hkey => ?_)
-    (Blanc.Weth10.Exec.Frame.CountedCursor.attributionInner_entryReadSound_of_statcall boundaryCursor hinstalled
+    (Blanc.Weth10.Exec.Frame.CountedCursor.attributionInner_entryReadSound_of_staticcall boundaryCursor hinstalled
       hdeeper
       (fun _ suffixCursor => suffixCursor.finishPermitAfterStaticcall))
   have hfull := (hentryAgree.trans hagree) key hkey
@@ -1298,7 +1298,7 @@ private theorem permitStatcallRegionSilent_of_forallDeeperAt
   have hcodeAt : some (u.getCode ca).toList = Prog.compile (weth10 dp) := by
     rw [show u.getCode ca = pre.getCode ca from congrFun hcodeU ca]
     exact installed
-  rcases of_run_statcall_val_with_depth hoperands hrun with hfail | hsuccess
+  rcases of_run_staticcall_val_with_depth hoperands hrun with hfail | hsuccess
   · rw [← getStor_eq_of_state_eq hfail.2.1.1 ca]
   · rcases hsuccess with
       ⟨parent, child, xl, dpFlag, resolvedCallee, code, avail, hdepthPos,

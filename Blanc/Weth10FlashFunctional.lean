@@ -347,9 +347,9 @@ the state-soundness proof's internal factoring. -/
 def flashLoanSuccessTail : Func :=
   call ::: iszero :::
   (.call bubbleRevertSlot) <?>
-  (retdataShorterThan 32 +++
-    Func.rev <?>
-    (checkRetdataHead CALLBACK_SUCCESS 0 +++ iszero :::
+  (returnDataShorterThan 32 +++
+    Func.revert <?>
+    (checkReturnDataHead CALLBACK_SUCCESS 0 +++ iszero :::
       (.call flashFailedErrorSlot) <?>
       (pop ::: pop ::: .call flashSettleSlot)))
 
@@ -409,7 +409,7 @@ private theorem not_run_bubbleRevertFunctional
     {fs : List Func} {e : Sevm} {s r : Devm} :
     ¬ Func.Run fs e s bubbleRevert r := by
   intro run
-  simp only [bubbleRevert, Func.revReturnData] at run
+  simp only [bubbleRevert, Func.revertReturnData] at run
   rcases of_run_next run with ⟨s1, h1, run1⟩
   rcases of_run_next run1 with ⟨s2, h2, run2⟩
   rcases of_run_next run2 with ⟨s3, h3, run3⟩
@@ -425,11 +425,11 @@ private theorem not_run_bubbleRevertFunctional
     contradiction
 
 /-- A successful conditional whose nonzero arm calls an exact reverting
-`revWith` body necessarily follows the zero continuation. -/
-private theorem of_run_branch_call_revWithFunctional
+`revertWith` body necessarily follows the zero continuation. -/
+private theorem of_run_branch_call_revertWithFunctional
     {fs : List Func} {e : Sevm} {s r : Devm} {k : Nat}
     {payload : String} {next : Func}
-    (hget : fs[k]? = some (Func.revWith payload))
+    (hget : fs[k]? = some (Func.revertWith payload))
     (run : Func.Run fs e s ((.call k) <?> next) r) :
     ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs e s' next r := by
   rcases of_run_branch run with
@@ -438,11 +438,11 @@ private theorem of_run_branch_call_revWithFunctional
   · exact ⟨s', hpop, hnext⟩
   · rcases of_run_call hcall with
       ⟨f, s3, hlookup, hcallBurn, hrev⟩
-    have hf : f = Func.revWith payload := by
+    have hf : f = Func.revertWith payload := by
       rw [hget] at hlookup
       exact Option.some.inj hlookup.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-- The analogous continuation rule for the byte-for-byte bubbling helper. -/
 private theorem of_run_branch_call_bubbleFunctional
@@ -463,9 +463,9 @@ private theorem of_run_branch_call_bubbleFunctional
     exact absurd hbubble not_run_bubbleRevertFunctional
 
 /-- `RETURNDATACOPY` changes only the stack, gas, and memory. -/
-private theorem of_run_retdatacopy_frame
+private theorem of_run_returndatacopy_frame
     {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s retdatacopy s') :
+    (h : Ninst.Run e s returndatacopy s') :
     s.logs = s'.logs ∧ s.output = s'.output ∧ s.state = s'.state := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
@@ -505,15 +505,15 @@ private theorem of_run_mload_frame
     ((p1.state.trans hb.state).trans hs).trans hp.state⟩
 
 /-- The returndata-length comparison is log- and output-silent. -/
-private theorem of_retdataShorterThan_frame
+private theorem of_returnDataShorterThan_frame
     {e : Sevm} {s s' : Devm} {n : B256}
-    (h : Line.Run e s (retdataShorterThan n) s') :
+    (h : Line.Run e s (returnDataShorterThan n) s') :
     s.logs = s'.logs ∧ s.output = s'.output ∧ s.state = s'.state := by
-  simp only [retdataShorterThan] at h
+  simp only [returnDataShorterThan] at h
   rcases Line.of_run_cons h with ⟨u1, q1, h⟩
   have hb1 := of_run_pushB256 q1
   rcases Line.of_run_cons h with ⟨u2, q2, h⟩
-  have hb2 := of_run_retdatasize_val q2
+  have hb2 := of_run_returndatasize_val q2
   rcases Line.of_run_cons h with ⟨u3, q3, hnil⟩
   cases hnil
   obtain ⟨a, b, hdb⟩ :
@@ -526,11 +526,11 @@ private theorem of_retdataShorterThan_frame
     (hb1.state.trans hb2.state).trans hdb.state⟩
 
 /-- The returndata-head copy and comparison preserve logs and outer output. -/
-private theorem of_checkRetdataHead_frame
+private theorem of_checkReturnDataHead_frame
     {e : Sevm} {s s' : Devm} {w m : B256}
-    (h : Line.Run e s (checkRetdataHead w m) s') :
+    (h : Line.Run e s (checkReturnDataHead w m) s') :
     s.logs = s'.logs ∧ s.output = s'.output ∧ s.state = s'.state := by
-  simp only [checkRetdataHead, pushList, List.map] at h
+  simp only [checkReturnDataHead, pushList, List.map] at h
   rcases Line.of_run_cons h with ⟨u1, q1, h⟩
   have hb1 := of_run_pushB256 q1
   rcases Line.of_run_cons h with ⟨u2, q2, h⟩
@@ -538,7 +538,7 @@ private theorem of_checkRetdataHead_frame
   rcases Line.of_run_cons h with ⟨u3, q3, h⟩
   have hb3 := of_run_pushB256 q3
   rcases Line.of_run_cons h with ⟨u4, q4, h⟩
-  have hf4 := of_run_retdatacopy_frame q4
+  have hf4 := of_run_returndatacopy_frame q4
   rcases Line.of_run_cons h with ⟨u5, q5, h⟩
   have hb5 := of_run_pushB256 q5
   rcases Line.of_run_cons h with ⟨u6, q6, h⟩
@@ -664,10 +664,10 @@ theorem of_rawFlashLoanSuccessTail_step
       rw [B256.eqCheck, if_neg (fun h => B256.zero_ne_one h.symm)]] at hp1
     have hp2 : [amount, receiver.toB256] <<+ s2.stack :=
       cons_pref_cons_inv hp1
-    rcases of_run_prepend (retdataShorterThan 32) _ h_run with
+    rcases of_run_prepend (returnDataShorterThan 32) _ h_run with
       ⟨s3, h_rst, h_run⟩
-    rcases of_retdataShorterThan_val hp2 h_rst with ⟨hp3, hm3, hrd3⟩
-    rcases of_run_branch_rev h_run with ⟨s4, hpb4, h_run⟩
+    rcases of_returnDataShorterThan_val hp2 h_rst with ⟨hp3, hm3, hrd3⟩
+    rcases of_run_branch_revert h_run with ⟨s4, hpb4, h_run⟩
     have hps4 := hpb4.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps4
     rw [hps4] at hp3
@@ -686,9 +686,9 @@ theorem of_rawFlashLoanSuccessTail_step
     have h_rd4 : Mem.Reads s4.memory img := by
       rw [h_mem_s4]
       exact h_rd_mid
-    rcases of_run_prepend (checkRetdataHead CALLBACK_SUCCESS 0) _ h_run with
+    rcases of_run_prepend (checkReturnDataHead CALLBACK_SUCCESS 0) _ h_run with
       ⟨s5, h_crh, h_run⟩
-    rcases of_checkRetdataHead_val hp4 h_wf4 h_rd4 h_crh with
+    rcases of_checkReturnDataHead_val hp4 h_wf4 h_rd4 h_crh with
       ⟨hp5, hlen4, h_wf5, h_rd5, hrd5⟩
     rcases of_run_next h_run with ⟨s6, r_iz2, h_run⟩
     have hp6 := prefix_of_iszero r_iz2 hp5
@@ -698,9 +698,9 @@ theorem of_rawFlashLoanSuccessTail_step
       exact Devm.diffBurn_of_applyUnary run
     have h_failed_lookup :
         ((weth10 dp).main :: weth10Aux)[flashFailedErrorSlot]? =
-          some (Func.revWith "WETH: flash loan failed") := by
+          some (Func.revertWith "WETH: flash loan failed") := by
       simp [weth10, weth10Aux, flashFailedErrorSlot, flashFailedError]
-    rcases of_run_branch_call_revWithFunctional h_failed_lookup h_run with
+    rcases of_run_branch_call_revertWithFunctional h_failed_lookup h_run with
       ⟨s7, hpb7, h_run⟩
     have hps7 := hpb7.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps7
@@ -740,8 +740,8 @@ theorem of_rawFlashLoanSuccessTail_step
       rw [h_settle_lookup] at hget
       exact Option.some.inj hget.symm
     subst f
-    have hrstFrame := of_retdataShorterThan_frame h_rst
-    have hcrhFrame := of_checkRetdataHead_frame h_crh
+    have hrstFrame := of_returnDataShorterThan_frame h_rst
+    have hcrhFrame := of_checkReturnDataHead_frame h_crh
     have hstate : mid.state = settle.state :=
       hdb1.state.trans (hpb2.state.trans
         (hrstFrame.2.2.trans
@@ -1359,9 +1359,9 @@ theorem of_flashSettle_allowance
       exact prefix_of_balanceTooSmall hpS htooSmall
     have h_allowance_lookup :
         ((weth10 dp).main :: weth10Aux)[allowanceErrorSlot]? =
-          some (Func.revWith "WETH: request exceeds allowance") := by
+          some (Func.revertWith "WETH: request exceeds allowance") := by
       simp [weth10, weth10Aux, allowanceErrorSlot, allowanceError]
-    rcases of_run_branch_call_revWithFunctional h_allowance_lookup
+    rcases of_run_branch_call_revertWithFunctional h_allowance_lookup
         runGuard with ⟨sb, hguardPop, runMutate⟩
     have hguardStack := hguardPop.stack
     simp only [Stack.Pop, Split, List.nil_append,
@@ -1797,9 +1797,9 @@ theorem flashBurn_effect
     prefix_of_balanceTooSmall hp1 hguard
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revWith "WETH: burn amount exceeds balance") := by
+        some (Func.revertWith "WETH: burn amount exceeds balance") := by
     simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revWithFunctional h_burn_lookup run2 with
+  rcases of_run_branch_call_revertWithFunctional h_burn_lookup run2 with
     ⟨s3, hguardPop, run3⟩
   have hguardStack := hguardPop.stack
   simp only [Stack.Pop, Split, List.nil_append,

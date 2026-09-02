@@ -1145,7 +1145,7 @@ lemma Devm.eq_of_proj {a b : Devm}
     (h_refund : a.refundCounter = b.refundCounter)
     (h_output : a.output = b.output)
     (h_del : a.accountsToDelete = b.accountsToDelete)
-    (h_ret : a.returnData = b.returnData) (h_err : a.error = b.error)
+    (h_return : a.returnData = b.returnData) (h_err : a.error = b.error)
     (h_aa : a.accessedAddresses = b.accessedAddresses)
     (h_ask : a.accessedStorageKeys = b.accessedStorageKeys)
     (h_state : a.state = b.state) (h_ca : a.createdAccounts = b.createdAccounts)

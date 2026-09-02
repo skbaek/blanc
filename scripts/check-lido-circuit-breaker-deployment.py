@@ -62,7 +62,7 @@ PINS = {
     # Values are patched in with the parser below; an empty value fails closed.
     "OfficialConstructorEffectCheckpoints": "49ebc8bfbc946946b286b7b1cddf0e3cb4983c1fd6fc80fd9e149ead5ff85243",
     "OfficialValidationCheckpoints": "eee90b21c6badda76100e3521893ad199010d6d556c735b14f1980f030f7cdba",
-    "OfficialConstructorErrorArmLayout": "7794b05af6601aa1cc9af3785828fcd4e1ba5fcbbdf73313ca68af58005d6b12",
+    "OfficialConstructorErrorArmLayout": "80f93acfce83bba55420051c4ef35d0add6d305f5c367672a81563807ad4de02",
     "OfficialConstructorExecutionTrace": "65a6a11a222041800858428fceebe46d319e704bc27aec768d504e270d48b889",
     "OfficialCreateMessageExecution": "f3f2fbb91c379302af9eff908b70bb2761b3be215ce7a07049b269f23e64ec58",
     "OfficialCreateMessageResult": "846e6ca7c073eb4575bf827e1e68c4d671a3e35e13624b81c0766376f3263612",
@@ -269,7 +269,7 @@ REDUCTION_CERTIFICATE_PINS = {
     "storeByteOffsetForProof_eq":
         "1ec139ad147a1801a4f25652729dd959f6974d198f9a8282db32fa4f1a47bec0",
     "constructorErrorForProof_eq":
-        "f0c3c2c02858bd8653e8cb7b66e2628af9c4022125300b289d5843c3e0ef1406",
+        "ff541721e248d7f02be52facab2615accbb03c7bc39d05c304926c27fb320f41",
     "patchArgumentIndexForProof_eq":
         "ee7bb202f8884d084b181f6afbd4940ed2953d9529bdb2a7f9705fa3c7f5da52",
     "patchFieldLineForProof_eq":
@@ -277,9 +277,9 @@ REDUCTION_CERTIFICATE_PINS = {
     "patchRuntimeLineForProof_eq":
         "4aafe97642fcb39c5c4e6d28380a0364af7bcc22e3313456fb265368576aa702",
     "constructorBodyForProof_eq":
-        "0d4ab5a9de1607f52825f2016243799013b20ae6d10177ab30a750bf28d90db3",
+        "0561345328f7581e0ff45df3c50d58985173a68c6565ca380aa194787d453fb0",
     "constructorProgramForProof_eq":
-        "0d3810af42a58ab41a0d21cb190f2291ac8f00cf07f7fbda1cbc9db938ae0840",
+        "652f9723dc118af58d1e6f57cf9878ede05592e9091c29420f349c06ef767f9c",
     "provisionalConstructorPrefixForProof_eq":
         "25cb23715e608565d03eaae9b740fad0ecaea18d8bfc61289a4c5bcfda99bea9",
 }

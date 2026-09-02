@@ -33,7 +33,7 @@ delegate rather than to the callee. -/
 private theorem directExternalStep_codeAddress
     {sevm : Sevm} {devm : Devm} {x : Jaune.Xinst}
     {f : Jaune.Frame} {rsm : Resume}
-    (direct : x = Jaune.Xinst.call ∨ x = Jaune.Xinst.statcall)
+    (direct : x = Jaune.Xinst.call ∨ x = Jaune.Xinst.staticcall)
     (spawn : Jaune.Xinst.step sevm devm x = Jaune.XStep.spawn f rsm)
     (notDelegation :
       ¬ isValidDelegation (devm.getCode f.inner.currentTarget)) :
@@ -186,9 +186,9 @@ private theorem callStep_sameTarget_code
       exact congrArg devm.getCode hf.2.1.symm
 
 /-- STATICCALL has the same direct-code property as CALL. -/
-private theorem statcallStep_sameTarget_code
+private theorem staticcallStep_sameTarget_code
     {sevm : Sevm} {devm : Devm} {f : Jaune.Frame} {rsm : Resume}
-    (spawn : Jaune.Xinst.step sevm devm .statcall =
+    (spawn : Jaune.Xinst.step sevm devm .staticcall =
       Jaune.XStep.spawn f rsm)
     (sameTarget : f.inner.currentTarget = sevm.currentTarget)
     (notDelegation :
@@ -239,7 +239,7 @@ the same-target case. -/
 private theorem directExternalStep_sameTarget_code
     {sevm : Sevm} {devm : Devm} {x : Jaune.Xinst}
     {f : Jaune.Frame} {rsm : Resume}
-    (direct : x = Jaune.Xinst.call ∨ x = Jaune.Xinst.statcall)
+    (direct : x = Jaune.Xinst.call ∨ x = Jaune.Xinst.staticcall)
     (spawn : Jaune.Xinst.step sevm devm x = Jaune.XStep.spawn f rsm)
     (sameTarget : f.inner.currentTarget = sevm.currentTarget)
     (notDelegation :
@@ -247,7 +247,7 @@ private theorem directExternalStep_sameTarget_code
     f.inner.code = devm.getCode f.inner.currentTarget := by
   rcases direct with rfl | rfl
   · exact callStep_sameTarget_code spawn sameTarget notDelegation
-  · exact statcallStep_sameTarget_code spawn sameTarget notDelegation
+  · exact staticcallStep_sameTarget_code spawn sameTarget notDelegation
 
 /-- One successful driver step preserves the installed runtime account. -/
 private theorem step_ok_runtimeCode_eq

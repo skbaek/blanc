@@ -820,7 +820,7 @@ private theorem rawAttributionAvailable_eq_true :
 /-! Successful SSTORE attribution under three enclosing outcomes. -/
 
 private def revertedSourceProgram : Prog :=
-  ⟨.next (.reg .sstore) (.last .rev), []⟩
+  ⟨.next (.reg .sstore) (.last .revert), []⟩
 
 private def laterOogSourceProgram : Prog :=
   ⟨.next (.reg .sstore) (.next (.reg .sload) (.last .stop)), []⟩
@@ -1289,7 +1289,7 @@ private def fixture?
 private def branchEqProgram : Prog :=
   ⟨.branch
     (.next (.reg .eq) (.next (.reg .sstore) (.last .stop)))
-    (.next (.reg .eq) (.last .rev)), []⟩
+    (.next (.reg .eq) (.last .revert)), []⟩
 
 private def branchEqCode : ByteArray :=
   ByteArray.mk #[0x5b, 0x61, 0x00, 0x08, 0x57, 0x14, 0x55, 0x00,

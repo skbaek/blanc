@@ -418,7 +418,7 @@ private theorem transferNonzeroThen_allowanceKey (dp : DeployParams)
   have hp2 : (balance <? Sevm.argWord e 1) :: balance ::
       Sevm.argWord e 1 :: e.caller.toB256 :: [] <<+ s2.stack :=
     prefix_of_balanceTooSmall hp1 hguard
-  rcases of_run_branch_call_revWith
+  rcases of_run_branch_call_revertWith
       (transferBalanceError_lookup dp) run2 with
     ⟨s3, hguardPop, run3⟩
   have hguardStack := hguardPop.stack
@@ -570,7 +570,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferNonzero
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferBalanceCheckLine +++
       ((.call transferBalanceErrorSlot) <?>
-        (transferNonzeroSuccessLine +++ Func.last .ret)))
+        (transferNonzeroSuccessLine +++ Func.last .return_)))
     frame.post at nonzeroCursor
   rcases nonzeroCursor.peelChildlessLine
       (by simp [transferBalanceCheckLine, loadCallerBalanceAmount,
@@ -601,7 +601,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferNonzero
     | call hget _hburn hbody =>
         rw [transferBalanceError_lookup dp] at hget
         cases Option.some.inj hget
-        exact Func.not_run_revWith hbody
+        exact Func.not_run_revertWith hbody
 
 /-- Nonzero-recipient `transfer` transports the allowance region: the
 attribution stream is the frame's own record alone, its event is `none`

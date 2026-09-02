@@ -136,7 +136,7 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
             simp [B256.eqCheck, h_value]
           func_run [dcSel, 0, 1, 1, 1, 1, 1, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 158) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 158) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
@@ -218,7 +218,7 @@ post-state is unique; the proof re-derives `weth_balanceOf_runCompiled`'s
 witness rather than reusing that theorem's existential, because the existential
 does not expose which witness it constructed. The re-derivation calls
 `func_run` exactly once — the same walk, not a new one — and the extra conjunct
-falls out of a projection through the construction: `Func.runCompiled_ret_word`
+falls out of a projection through the construction: `Func.runCompiled_return_word`
 ends in `(_.memRead i sz).2.withOutput out`, `Devm.memRead` is
 `⟨val, devm.withMemory mem⟩`, and neither `withMemory` nor `withOutput` touches
 the `mach.gasLeft` field they leave untouched, so the post-state's `gasLeft` is
@@ -252,7 +252,7 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
               simp [B256.eqCheck, h_value]
             func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
             · exact Devm.extCost_empty_word
-            · exact Func.runCompiled_ret_word (G := g - 2260) (e := 0) rfl
+            · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl
                 (Devm.extCost_word_word Mem.size_write_word)
                 (by simp only [Devm.gasLeft_setMach]; omega)
                 (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))))
@@ -373,7 +373,7 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
             simp [B256.eqCheck, h_value]
           func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 260) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 260) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),

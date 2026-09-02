@@ -19,11 +19,11 @@ lemma prepend_append (left right : Line) (tail : Func) :
   | nil => rfl
   | cons head left ih => simp [prepend, ih]
 
--- The statement is unchanged by the `.rev` normalization (`Func.rev` in
--- `Blanc/CommonCore.lean`); only the walk is. `Func.rev` is now two `PUSH0`s
--- ahead of the failing `.rev`, so the run is peeled through two `next` binds
+-- The statement is unchanged by the `.revert` normalization (`Func.revert` in
+-- `Blanc/CommonCore.lean`); only the walk is. `Func.revert` is now two `PUSH0`s
+-- ahead of the failing `.revert`, so the run is peeled through two `next` binds
 -- before the `Linst.Run` contradiction that has always closed this.
-lemma not_run_rev {c e s r} : ¬ Func.Run c e s Func.rev r := by
+lemma not_run_revert {c e s r} : ¬ Func.Run c e s Func.revert r := by
   intro h
   cases h with
   | next _ h' =>
@@ -37,11 +37,11 @@ lemma not_run_rev {c e s r} : ¬ Func.Run c e s Func.rev r := by
     rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
     contradiction
 
-lemma of_run_branch_rev {c e s r} {p : Func} (h : Func.Run c e s (.rev <?> p) r) :
+lemma of_run_branch_revert {c e s r} {p : Func} (h : Func.Run c e s (.revert <?> p) r) :
     ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run c e s' p r := by
   rcases of_run_branch h with ⟨s', h_pb, h_run⟩ | ⟨w, s', s'', h_ne, h_pb, h_b, h_run⟩
   · exact ⟨s', h_pb, h_run⟩
-  · exfalso; exact not_run_rev h_run
+  · exfalso; exact not_run_revert h_run
 
 lemma dispatchWith_inv {c k f}
     (σ : Sevm → Devm → Prop)
@@ -88,10 +88,10 @@ lemma dispatchWith_inv {c k f}
     · apply htt' ⟨w, p⟩ rfl (h0 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
 
 /-- Transfer an invariant through the inline-revert dispatcher used by
-contracts whose selector miss is a direct `Func.rev`, rather than an indexed
+contracts whose selector miss is a direct `Func.revert`, rather than an indexed
 fallback call.  This is the exact analogue of `dispatchWith_inv`: comparison
 lines preserve the carried entry predicate, a successful leaf reaches its
-body, and the miss arm is impossible because `Func.rev` has no successful
+body, and the miss arm is impossible because `Func.revert` has no successful
 run. -/
 lemma dispatch_inv {c}
     (σ : Sevm → Devm → Prop)
@@ -139,7 +139,7 @@ lemma dispatch_inv {c}
       rcases of_run_branch h' with
         ⟨s₂, h_pop, h_run'⟩ |
           ⟨w', s₂, s₃, hw', h_pop, h_burn, h_run'⟩
-      · exact absurd h_run' not_run_rev
+      · exact absurd h_run' not_run_revert
       · exact htt' ⟨w, p⟩ rfl
           (h0 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
 
@@ -149,7 +149,7 @@ lemma dispatch_inv {c}
 -- tree shape. Only the forward direction is needed.
 --
 -- The fuel bound is the lemma's content, not decoration: `build`'s two
--- degenerate rows (`| _, [] => leaf 0 .rev` and `| 0, (x :: _ :: _) =>
+-- degenerate rows (`| _, [] => leaf 0 .revert` and `| 0, (x :: _ :: _) =>
 -- leaf x.fst x.snd`) both manufacture a leaf that need not be in the list.
 -- `xs ≠ []` kills the first; `xs.length ≤ n + 1` kills the second, because at
 -- fuel `0` the list then has length at most one and rows 1-2 fire instead.
@@ -1705,10 +1705,10 @@ lemma Rinst.mload_runCore_instructionFrame
     (Devm.memRead_instructionFrame d' start 32)
     (Devm.push_instructionFrame _ (d'.memRead start 32).2)
 
-lemma Rinst.kec_runCore_instructionFrame
+lemma Rinst.keccak256_runCore_instructionFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
     Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .kec) := by
+      (Rinst.runCore pc pre sevm .keccak256) := by
   simp only [Rinst.runCore]
   refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
     (Devm.popToNat_instructionFrame pre) (next := fun start d => do
@@ -1950,10 +1950,10 @@ lemma popAdrNat3Bind_instructionFrame (pre : Devm)
     (Devm.popToNat_instructionFrame d) (next := next a x y) ?_
   exact hnext a x y
 
-lemma Rinst.retdatacopy_runCore_instructionFrame
+lemma Rinst.returndatacopy_runCore_instructionFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
     Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .retdatacopy) := by
+      (Rinst.runCore pc pre sevm .returndatacopy) := by
   simp only [Rinst.runCore]
   refine popNat3Bind_instructionFrame pre (next := fun memoryStart returnStart size d => do
     let d ← chargeGas
@@ -2069,7 +2069,7 @@ theorem Rinst.runCore_instructionFrame
   all_goals try (
     with_reducible first
       | exact Rinst.exp_runCore_instructionFrame pc pre sevm
-      | exact Rinst.kec_runCore_instructionFrame pc pre sevm
+      | exact Rinst.keccak256_runCore_instructionFrame pc pre sevm
       | exact Rinst.balance_runCore_instructionFrame pc pre sevm
       | exact Rinst.blobhash_runCore_instructionFrame pc pre sevm
       | exact Rinst.calldataload_runCore_instructionFrame pc pre sevm
@@ -2077,7 +2077,7 @@ theorem Rinst.runCore_instructionFrame
       | exact Rinst.codecopy_runCore_instructionFrame pc pre sevm
       | exact Rinst.extcodesize_runCore_instructionFrame pc pre sevm
       | exact Rinst.extcodecopy_runCore_instructionFrame pc pre sevm
-      | exact Rinst.retdatacopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.returndatacopy_runCore_instructionFrame pc pre sevm
       | exact Rinst.extcodehash_runCore_instructionFrame pc pre sevm
       | exact Rinst.blockhash_runCore_instructionFrame pc pre sevm
       | exact Rinst.pop_runCore_instructionFrame pc pre sevm
@@ -2358,11 +2358,11 @@ theorem Jinst.run_instructionFrame (evm : Evm) (j : Jinst) :
   exact Jinst.runCore_instructionFrame evm.pc evm.sta evm.dyna j
 
 theorem Linst.run_instructionFrame
-    (sevm : Sevm) (pre : Devm) (l : Linst) (h_not_dest : l ≠ .dest) :
+    (sevm : Sevm) (pre : Devm) (l : Linst) (h_not_selfdestruct : l ≠ .selfdestruct) :
     Execution.Rel Devm.InstructionFrame pre (Linst.run sevm pre l) := by
   cases l <;> simp only [Linst.run]
   case stop => exact Devm.instructionFrame_refl pre
-  case ret =>
+  case return_ =>
     refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
       (Devm.popToNat_instructionFrame pre)
       (next := fun index d => do
@@ -2384,7 +2384,7 @@ theorem Linst.run_instructionFrame
     exact Devm.instructionFrame_trans
       (Devm.memRead_instructionFrame d' index size)
       (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl)
-  case rev =>
+  case revert =>
     refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
       (Devm.popToNat_instructionFrame pre)
       (next := fun index d => do
@@ -2406,7 +2406,7 @@ theorem Linst.run_instructionFrame
     exact Devm.instructionFrame_trans
       (Devm.memRead_instructionFrame d' index size)
       (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl)
-  case dest => contradiction
+  case selfdestruct => contradiction
 
 lemma Rinst.preserves_getCode
     {pc sevm devm r devm'}
@@ -3344,7 +3344,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     · exact Xinst.shape_call
         (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
         h7' (Or.inl ⟨rfl, rfl⟩) (Or.inl rfl)
-  | delcall =>
+  | delegatecall =>
     simp only [Xinst.step]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
       (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
@@ -3367,7 +3367,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     exact Xinst.shape_call
       (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
       h6' (Or.inr ⟨rfl, rfl⟩) (Or.inl rfl)
-  | statcall =>
+  | staticcall =>
     simp only [Xinst.step]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
       (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
@@ -3596,7 +3596,7 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
         | cases hs
         | have htgt := (genericCall.step_spawn_frame hs).2.1
           exact False.elim (hne htgt.symm)
-  | delcall =>
+  | delegatecall =>
       simp only [Xinst.step, Bind.bind, Except.bind] at hs
       repeat' split at hs
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
@@ -3604,7 +3604,7 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
         | cases hs
         | have htgt := (genericCall.step_spawn_frame hs).2.1
           exact False.elim (hne htgt.symm)
-  | statcall =>
+  | staticcall =>
       simp only [Xinst.step, Bind.bind, Except.bind] at hs
       split at hs
       · simp only [XStep.ofExcept, reduceCtorEq] at hs
@@ -3745,8 +3745,8 @@ lemma Jinst.preserves_getCode_gen
   rw [run] at hf
   cases ex <;> exact (hf.getCode a).symm
 
-lemma Linst.dest_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
-    (run : Linst.Run sevm devm .dest exn) :
+lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
+    (run : Linst.Run sevm devm .selfdestruct exn) :
     ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr := by
   intro adr
   dsimp [Linst.Run, Linst.run] at run
@@ -3817,9 +3817,9 @@ def Devm.CodeFrame (before after : Devm) : Prop :=
 theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
     {exn : Execution} (run : Linst.Run sevm devm l exn) :
     Execution.Rel Devm.CodeFrame devm exn := by
-  rcases eq_or_ne l .dest with rfl | h_not_dest
-  · cases exn <;> exact Linst.dest_preserves_getCode run
-  · have hf := Linst.run_instructionFrame sevm devm l h_not_dest
+  rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
+  · cases exn <;> exact Linst.selfdestruct_preserves_getCode run
+  · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
     rw [run] at hf
     cases exn <;> exact fun a => (hf.getCode a).symm
 
@@ -5003,7 +5003,7 @@ lemma of_run_calldataload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldatalo
 lemma Devm.memRead_stack (devm : Devm) (i n : Nat) :
     (devm.memRead i n).2.stack = devm.stack := rfl
 
-lemma of_run_kec {e : Sevm} {s s' : Devm} (h : Ninst.Run e s kec s') :
+lemma of_run_keccak256 {e : Sevm} {s s' : Devm} (h : Ninst.Run e s keccak256 s') :
     ∃ x y z, Stack.Diff [x, y] [z] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
@@ -5062,7 +5062,7 @@ lemma of_run_selfbalance {e : Sevm} {s s' : Devm}
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.pushBurn_of_pushItem run
 
-lemma of_run_retdatasize {e : Sevm} {s s' : Devm} (h : Ninst.Run e s retdatasize s') :
+lemma of_run_returndatasize {e : Sevm} {s s' : Devm} (h : Ninst.Run e s returndatasize s') :
     ∃ x, Devm.PushBurn [x] s s' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
@@ -5089,7 +5089,7 @@ lemma of_run_mload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mload s') :
   rw [show s₁.stack = s₂.stack from hb.stack, ← Devm.memRead_stack s₂ si 32]
   exact hpush.stack
 
-lemma of_run_retdatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s retdatacopy s') :
+lemma of_run_returndatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s returndatacopy s') :
     ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
@@ -5444,10 +5444,10 @@ lemma prefix_of_calldataload {e} {x xs} {s s' : Devm} :
     Ninst.Run e s calldataload s' → (x :: xs <<+ s.stack) → ∃ z, z :: xs <<+ s'.stack :=
   fun h0 h1 => ⟨_, prefix_of_calldataload_val h0 h1⟩
 
-lemma prefix_of_kec {e} {x y xs} {s s' : Devm} :
-    Ninst.Run e s kec s' → (x :: y :: xs <<+ s.stack) → ∃ z, z :: xs <<+ s'.stack := by
+lemma prefix_of_keccak256 {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s keccak256 s' → (x :: y :: xs <<+ s.stack) → ∃ z, z :: xs <<+ s'.stack := by
   intro h0 h1
-  rcases of_run_kec h0 with ⟨x', y', z', stk, h2, h3⟩
+  rcases of_run_keccak256 h0 with ⟨x', y', z', stk, h2, h3⟩
   rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩
   clear h; rw [hx, hy] at h1
   exact ⟨z', append_pref h3 (of_append_pref h2 h1)⟩
@@ -6004,10 +6004,10 @@ lemma prefix_of_mload {e x xs} {s s' : Devm} :
   rw [hx] at h1
   exact ⟨y', append_pref h3 (of_append_pref h2 h1)⟩
 
-lemma prefix_of_retdatacopy {e} {x y z xs} {s s' : Devm} :
-    Ninst.Run e s retdatacopy s' → (x :: y :: z :: xs <<+ s.stack) → (xs <<+ s'.stack) := by
+lemma prefix_of_returndatacopy {e} {x y z xs} {s s' : Devm} :
+    Ninst.Run e s returndatacopy s' → (x :: y :: z :: xs <<+ s.stack) → (xs <<+ s'.stack) := by
   intros h0 h1
-  rcases of_run_retdatacopy h0 with ⟨x', y', z', h2⟩
+  rcases of_run_returndatacopy h0 with ⟨x', y', z', h2⟩
   rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
     with ⟨hx, hy, ws, h, h'⟩
   rcases List.of_cons_pref_of_cons_pref h h' with ⟨hz, _⟩
@@ -6022,26 +6022,26 @@ lemma prefix_of_mstoreAt {e : Sevm} {s s' : Devm} {k x xs}
   cases hnil
   exact prefix_of_mstore qm (prefix_of_push (of_run_pushB256 qp) hp)
 
-/-- `retdataShorterThan` pushes one flag. -/
-lemma of_retdataShorterThan {e : Sevm} {s s' : Devm} {n : B256} {xs}
-    (hp : xs <<+ s.stack) (h : Line.Run e s (retdataShorterThan n) s') :
+/-- `returnDataShorterThan` pushes one flag. -/
+lemma of_returnDataShorterThan {e : Sevm} {s s' : Devm} {n : B256} {xs}
+    (hp : xs <<+ s.stack) (h : Line.Run e s (returnDataShorterThan n) s') :
     ∃ y, y :: xs <<+ s'.stack := by
-  simp only [retdataShorterThan] at h
+  simp only [returnDataShorterThan] at h
   rcases Line.of_run_cons h with ⟨u1, q1, h⟩
   have hp1 : n :: xs <<+ u1.stack := prefix_of_push (of_run_pushB256 q1) hp
   rcases Line.of_run_cons h with ⟨u2, q2, h⟩
-  rcases of_run_retdatasize q2 with ⟨rds, pb2⟩
+  rcases of_run_returndatasize q2 with ⟨rds, pb2⟩
   have hp2 : rds :: n :: xs <<+ u2.stack := prefix_of_push pb2 hp1
   rcases Line.of_run_cons h with ⟨u3, q3, hnil⟩
   cases hnil
   exact ⟨_, prefix_of_lt q3 hp2⟩
 
-/-- `checkRetdataHead` copies the head word into memory, reads it back, and
+/-- `checkReturnDataHead` copies the head word into memory, reads it back, and
 pushes one comparison flag. -/
-lemma of_checkRetdataHead {e : Sevm} {s s' : Devm} {w m : B256} {xs}
-    (hp : xs <<+ s.stack) (h : Line.Run e s (checkRetdataHead w m) s') :
+lemma of_checkReturnDataHead {e : Sevm} {s s' : Devm} {w m : B256} {xs}
+    (hp : xs <<+ s.stack) (h : Line.Run e s (checkReturnDataHead w m) s') :
     ∃ y, y :: xs <<+ s'.stack := by
-  simp only [checkRetdataHead, pushList, List.map] at h
+  simp only [checkReturnDataHead, pushList, List.map] at h
   rcases Line.of_run_cons h with ⟨u1, q1, h⟩
   have hp1 : (32 : B256) :: xs <<+ u1.stack := prefix_of_push (of_run_pushB256 q1) hp
   rcases Line.of_run_cons h with ⟨u2, q2, h⟩
@@ -6051,7 +6051,7 @@ lemma of_checkRetdataHead {e : Sevm} {s s' : Devm} {w m : B256} {xs}
   have hp3 : (m * 32) :: (0 : B256) :: (32 : B256) :: xs <<+ u3.stack :=
     prefix_of_push (of_run_pushB256 q3) hp2
   rcases Line.of_run_cons h with ⟨u4, q4, h⟩
-  have hp4 : xs <<+ u4.stack := prefix_of_retdatacopy q4 hp3
+  have hp4 : xs <<+ u4.stack := prefix_of_returndatacopy q4 hp3
   rcases Line.of_run_cons h with ⟨u5, q5, h⟩
   have hp5 : (m * 32) :: xs <<+ u5.stack := prefix_of_push (of_run_pushB256 q5) hp4
   rcases Line.of_run_cons h with ⟨u6, q6, h⟩
@@ -6374,7 +6374,7 @@ instance : Rinst.Hinv Devm.getStor Rinst.shr := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.shl := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.sar := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.clz := by show_hinv_stor
-instance : Rinst.Hinv Devm.getStor Rinst.kec := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.keccak256 := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.address := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.balance := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.origin := by show_hinv_stor
@@ -6388,8 +6388,8 @@ instance : Rinst.Hinv Devm.getStor Rinst.codecopy := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.gasprice := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.extcodesize := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.extcodecopy := by show_hinv_stor
-instance : Rinst.Hinv Devm.getStor Rinst.retdatasize := by show_hinv_stor
-instance : Rinst.Hinv Devm.getStor Rinst.retdatacopy := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.returndatasize := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.returndatacopy := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.extcodehash := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.blockhash := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.coinbase := by show_hinv_stor
@@ -6628,7 +6628,7 @@ instance : Rinst.Hinv Devm.memory Rinst.iszero := by show_hinv_mem_unary
 instance : Rinst.Hinv Devm.memory Rinst.address := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.caller := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.callvalue := by show_hinv_mem_push
-instance : Rinst.Hinv Devm.memory Rinst.retdatasize := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.returndatasize := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.calldatasize := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.selfbalance := by show_hinv_mem_push
 
@@ -7012,7 +7012,7 @@ scoped instance : Rinst.Hinv Devm.output Rinst.calldatacopy := ⟨by
   rw [← eq]
   exact ((hp1.trans hp2).trans hp3).trans hb⟩
 
-scoped instance : Rinst.Hinv Devm.logs Rinst.kec := ⟨by
+scoped instance : Rinst.Hinv Devm.logs Rinst.keccak256 := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
@@ -7024,7 +7024,7 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.kec := ⟨by
   have hpush := (Devm.push_of_push run₃).logs
   exact ((hp1.trans hp2).trans hb).trans hpush⟩
 
-scoped instance : Rinst.Hinv Devm.output Rinst.kec := ⟨by
+scoped instance : Rinst.Hinv Devm.output Rinst.keccak256 := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
@@ -7141,7 +7141,7 @@ scoped instance : Linst.Hinv Devm.logs Devm.logs Linst.stop := by
   rfl
 
 /-- `RETURN` changes output but leaves the accumulated event log untouched. -/
-scoped instance retLogs : Linst.Hinv Devm.logs Devm.logs Linst.ret := by
+scoped instance returnLogs : Linst.Hinv Devm.logs Devm.logs Linst.return_ := by
   constructor
   intro e s r h
   simp only [Linst.Run, Linst.run] at h
@@ -7220,7 +7220,7 @@ theorem run_body_of_run_nonpayable_frame
     prefix_of_iszero hiz hpv
   rcases of_run_branch hbranch with
     ⟨s2, hpop, hrev⟩ | ⟨w, s2, s3, hnz, hpop, hburn, hbody⟩
-  · exact absurd hrev not_run_rev
+  · exact absurd hrev not_run_revert
   · have hpop' := hpop.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpop'
     rw [hpop'] at hpflag
@@ -7964,8 +7964,8 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
   exact (Devm.InstructionFrame.delSets hf).symm
 
 -- Halting/terminal instructions (Linst) preserve NoDel.
-lemma Linst.dest_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
-    {exn : Execution} (run : Linst.Run sevm devm .dest exn)
+lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
+    {exn : Execution} (run : Linst.Run sevm devm .selfdestruct exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   dsimp [Linst.Run, Linst.run] at run
   revert run
@@ -8051,9 +8051,9 @@ lemma Linst.dest_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
 theorem Linst.run_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {l : Linst} {exn : Execution} (run : Linst.Run sevm devm l exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  rcases eq_or_ne l .dest with rfl | h_not_dest
-  · exact Linst.dest_preserves_noDel run h
-  · have hf := Linst.run_instructionFrame sevm devm l h_not_dest
+  rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
+  · exact Linst.selfdestruct_preserves_noDel run h
+  · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
     rw [run] at hf
     cases exn <;>
       exact Devm.NoDel.of_eqs (Devm.InstructionFrame.delSets hf) (hf.getCode wa) h
@@ -8538,8 +8538,8 @@ lemma Ninst.push_balance_effectRec {xs : Bytes} {hxs : xs.length ≤ 32} :
     (fun _ _ hf =>
       Devm.balNoninc_of_getBal_eq (funext fun a => (hf.getBal a).symm))
 
-lemma Linst.dest_balance_effect :
-    Linst.Effect Devm.BalNoninc .dest := by
+lemma Linst.selfdestruct_balance_effect :
+    Linst.Effect Devm.BalNoninc .selfdestruct := by
   intro sevm pre out run
   dsimp [Linst.Run, Linst.run] at run
   revert run
@@ -8645,10 +8645,10 @@ lemma Linst.dest_balance_effect :
 
 lemma Linst.balance_effect (l : Linst) :
     Linst.Effect Devm.BalNoninc l := by
-  rcases eq_or_ne l .dest with rfl | h_not_dest
-  · exact Linst.dest_balance_effect
+  rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
+  · exact Linst.selfdestruct_balance_effect
   · intro sevm pre out run
-    have hf := Linst.run_instructionFrame sevm pre l h_not_dest
+    have hf := Linst.run_instructionFrame sevm pre l h_not_selfdestruct
     rw [run] at hf
     cases out <;> exact Devm.balNoninc_of_getBal_eq
       (funext fun a => (hf.getBal a).symm)
@@ -9793,14 +9793,14 @@ lemma Devm.setCode_accountsToDelete (devm : Devm) (address : Adr)
 /-! ### Reusable projection cuts for compiled RETURN and SSTORE posts -/
 
 /-- A `setMach`/`memRead`/`withOutput` return post preserves the base world. -/
-lemma Devm.retPost_world (devm : Devm) (stack : List B256)
+lemma Devm.returnPost_world (devm : Devm) (stack : List B256)
     (gas index size : Nat) (output : Bytes) :
     ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
         ).withOutput output).world = devm.world := rfl
 
 /-- A `setMach`/`memRead`/`withOutput` return post preserves persistent
 storage reads. -/
-lemma Devm.retPost_getStorVal (devm : Devm) (stack : List B256)
+lemma Devm.returnPost_getStorVal (devm : Devm) (stack : List B256)
     (gas index size : Nat) (output : Bytes) (adr : Adr) (key : B256) :
     Devm.getStorVal
         ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
@@ -9810,20 +9810,20 @@ lemma Devm.retPost_getStorVal (devm : Devm) (stack : List B256)
   rw [show (((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
       ).withOutput output).state) = devm.state from
         congrArg World.state
-          (Devm.retPost_world devm stack gas index size output)]
+          (Devm.returnPost_world devm stack gas index size output)]
 
 /-- A `setMach`/`memRead`/`withOutput` return post preserves transient
 storage. -/
-lemma Devm.retPost_transientStorage (devm : Devm) (stack : List B256)
+lemma Devm.returnPost_transientStorage (devm : Devm) (stack : List B256)
     (gas index size : Nat) (output : Bytes) :
     ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
         ).withOutput output).transientStorage = devm.transientStorage :=
   congrArg World.transientStorage
-    (Devm.retPost_world devm stack gas index size output)
+    (Devm.returnPost_world devm stack gas index size output)
 
 /-- A `setMach`/`memRead`/`withOutput` return post preserves the warmed
 storage-key set. -/
-lemma Devm.retPost_accessedStorageKeys (devm : Devm) (stack : List B256)
+lemma Devm.returnPost_accessedStorageKeys (devm : Devm) (stack : List B256)
     (gas index size : Nat) (output : Bytes) :
     ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
         ).withOutput output).accessedStorageKeys =
@@ -9997,14 +9997,14 @@ theorem of_run_branch_call_of_not_run
     subst f
     exact (blocked_not_run hbody).elim
 
-/-- Successful fall-through past an auxiliary that is exactly `Func.rev`. -/
-theorem of_run_branch_call_rev
+/-- Successful fall-through past an auxiliary that is exactly `Func.revert`. -/
+theorem of_run_branch_call_revert
     {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat} {next : Func}
-    (hget : fs[k]? = some Func.rev)
+    (hget : fs[k]? = some Func.revert)
     (run : Func.Run fs sevm s ((.call k) <?> next) r) :
     ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run fs sevm s' next r := by
   exact of_run_branch_call_of_not_run hget
-    (fun hbody => not_run_rev hbody) run
+    (fun hbody => not_run_revert hbody) run
 
 /-! ### `transfer`'s fragments -/
 
@@ -10348,7 +10348,7 @@ lemma Bytes.writeAt_zero_of_le {bs xs : Bytes} (h : bs.length ≤ xs.length) :
     List.drop_eq_nil_of_le (by omega), List.append_nil]
 
 /-- Reading a write back at its own offset returns the payload.  The read-back
-step of every store-then-load fragment: `checkRetdataHead` clobbers a memory
+step of every store-then-load fragment: `checkReturnDataHead` clobbers a memory
 word and immediately `MLOAD`s it. -/
 lemma Bytes.sliceD_writeAt (bs xs : Bytes) (n : Nat) :
     (Bytes.writeAt bs n xs).sliceD n xs.length 0 = xs := by
@@ -11217,15 +11217,15 @@ lemma of_forwardArgTail_val {e : Sevm} {s s' : Devm} {k lenWord xs}
 
 /-! ### The returndata, value-carried
 
-Arc B consumed `of_retdataShorterThan` / `of_checkRetdataHead` to learn that a
+Arc B consumed `of_returnDataShorterThan` / `of_checkReturnDataHead` to learn that a
 flag was pushed; the callback boundary (`~/plans/fmint-flashloan.md`, Step 4)
 needs them to say what the returndata *is*.  The same projection-restoring
 move as Step 1's calldata layer, applied to `RETURNDATASIZE`, `RETURNDATACOPY`
 and `MLOAD`, then to the two `Line` fragments built from them. -/
 
 /-- `RETURNDATASIZE` pushes the length of the last call's return data. -/
-lemma of_run_retdatasize_val {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s retdatasize s') :
+lemma of_run_returndatasize_val {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s returndatasize s') :
     Devm.PushBurn [s.returnData.length.toB256] s s' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
@@ -11234,9 +11234,9 @@ lemma of_run_retdatasize_val {e : Sevm} {s s' : Devm}
 /-- `RETURNDATACOPY` writes *the returndata slice named by its operands* at
 *the offset it popped* — and it got there without overrunning the returndata,
 because an overrun is an exceptional halt, not a failed test (the reason
-`retdataShorterThan` must be branched on first). -/
-lemma of_run_retdatacopy_val {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s retdatacopy s') :
+`returnDataShorterThan` must be branched on first). -/
+lemma of_run_returndatacopy_val {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s returndatacopy s') :
     ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack ∧
       y.toNat + z.toNat ≤ s.returnData.length ∧
       s'.memory
@@ -11273,14 +11273,14 @@ lemma of_run_retdatacopy_val {e : Sevm} {s s' : Devm}
       rfl
 
 /-- `RETURNDATACOPY` at a *known* stack top. -/
-lemma prefix_of_retdatacopy_val {e} {x y z xs} {s s' : Devm}
-    (h0 : Ninst.Run e s retdatacopy s') (h1 : x :: y :: z :: xs <<+ s.stack) :
+lemma prefix_of_returndatacopy_val {e} {x y z xs} {s s' : Devm}
+    (h0 : Ninst.Run e s returndatacopy s') (h1 : x :: y :: z :: xs <<+ s.stack) :
     (xs <<+ s'.stack) ∧
       y.toNat + z.toNat ≤ s.returnData.length ∧
       s'.memory
         = s.memory.write x.toNat (s.returnData.sliceD y.toNat z.toNat 0) ∧
       s'.returnData = s.returnData := by
-  rcases of_run_retdatacopy_val h0 with ⟨x', y', z', h2, hle, hm, hrd⟩
+  rcases of_run_returndatacopy_val h0 with ⟨x', y', z', h2, hle, hm, hrd⟩
   rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
     with ⟨hx, hy, ws, hpf, hpf'⟩
   rcases List.of_cons_pref_of_cons_pref hpf hpf' with ⟨hz, -⟩
@@ -11643,18 +11643,18 @@ theorem of_run_loadWordAt_logs
   exact (of_run_pushB256 pushRun).logs.trans
     (((popped.logs.trans burned.logs).trans rfl).trans pushed.logs)
 
-/-- `retdataShorterThan n`, with its flag: the fragment pushes exactly the
-comparison `retdatasize <? n` and touches nothing else. -/
-lemma of_retdataShorterThan_val {e : Sevm} {s s' : Devm} {n : B256} {xs}
-    (hp : xs <<+ s.stack) (h : Line.Run e s (retdataShorterThan n) s') :
+/-- `returnDataShorterThan n`, with its flag: the fragment pushes exactly the
+comparison `returndatasize <? n` and touches nothing else. -/
+lemma of_returnDataShorterThan_val {e : Sevm} {s s' : Devm} {n : B256} {xs}
+    (hp : xs <<+ s.stack) (h : Line.Run e s (returnDataShorterThan n) s') :
     ((s.returnData.length.toB256 <? n) :: xs <<+ s'.stack) ∧
       s'.memory = s.memory ∧ s'.returnData = s.returnData := by
-  simp only [retdataShorterThan] at h
+  simp only [returnDataShorterThan] at h
   rcases Line.of_run_cons h with ⟨u1, q1, h⟩
   have hb1 := of_run_pushB256 q1
   have hp1 : n :: xs <<+ u1.stack := prefix_of_push hb1 hp
   rcases Line.of_run_cons h with ⟨u2, q2, h⟩
-  have hb2 := of_run_retdatasize_val q2
+  have hb2 := of_run_returndatasize_val q2
   rw [← hb1.returnData] at hb2
   have hp2 : s.returnData.length.toB256 :: n :: xs <<+ u2.stack :=
     prefix_of_push hb2 hp1
@@ -11668,22 +11668,22 @@ lemma of_retdataShorterThan_val {e : Sevm} {s s' : Devm} {n : B256} {xs}
   · rw [← hdb.memory, ← hb2.memory, ← hb1.memory]
   · rw [← hdb.returnData, ← hb2.returnData, ← hb1.returnData]
 
-/-- `checkRetdataHead w m`, with its flag: the word the fragment compares
+/-- `checkReturnDataHead w m`, with its flag: the word the fragment compares
 against `w` is *the returndata's head word*, read back through the memory word
 it clobbers.  Carries the non-overrun bound the copy enforces — returndata of
-at least a word, the reason `retdataShorterThan` is branched on first — and
+at least a word, the reason `returnDataShorterThan` is branched on first — and
 the memory image after the clobber. -/
-lemma of_checkRetdataHead_val {e : Sevm} {s s' : Devm} {w m : B256} {bs : Bytes}
+lemma of_checkReturnDataHead_val {e : Sevm} {s s' : Devm} {w m : B256} {bs : Bytes}
     {xs}
     (hp : xs <<+ s.stack) (hwf : Mem.Wf s.memory) (hr : Mem.Reads s.memory bs)
-    (h : Line.Run e s (checkRetdataHead w m) s') :
+    (h : Line.Run e s (checkReturnDataHead w m) s') :
     ((w =? Bytes.toB256 (s.returnData.sliceD 0 32 0)) :: xs <<+ s'.stack) ∧
       32 ≤ s.returnData.length ∧
       Mem.Wf s'.memory ∧
       Mem.Reads s'.memory
         (Bytes.writeAt bs (m * 32).toNat (s.returnData.sliceD 0 32 0)) ∧
       s'.returnData = s.returnData := by
-  simp only [checkRetdataHead, pushList, List.map] at h
+  simp only [checkReturnDataHead, pushList, List.map] at h
   rcases Line.of_run_cons h with ⟨u1, q1, h⟩
   have hb1 := of_run_pushB256 q1
   have hp1 : (32 : B256) :: xs <<+ u1.stack := prefix_of_push hb1 hp
@@ -11699,7 +11699,7 @@ lemma of_checkRetdataHead_val {e : Sevm} {s s' : Devm} {w m : B256} {bs : Bytes}
   have hrd3 : s.returnData = u3.returnData :=
     (hb1.returnData.trans hb2.returnData).trans hb3.returnData
   rcases Line.of_run_cons h with ⟨u4, q4, h⟩
-  rcases prefix_of_retdatacopy_val q4 hp3 with ⟨hp4, hle4, hm4, hrd4⟩
+  rcases prefix_of_returndatacopy_val q4 hp3 with ⟨hp4, hle4, hm4, hrd4⟩
   have hle : 32 ≤ s.returnData.length := by
     rw [hrd3]
     rw [show ((0 : B256)).toNat = 0 from rfl,

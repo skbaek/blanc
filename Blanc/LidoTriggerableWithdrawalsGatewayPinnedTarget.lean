@@ -100,7 +100,7 @@ private theorem pauseComponent_arithmeticPanic (dp : DeployParams) :
             body.callsIn (fun callee => callee ∈ pauseExecMembers)) = true := by
   have lookup :
       (runtime dp).function? arithmeticPanicSlot =
-        some (Func.revData
+        some (Func.revertData
           ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
             (Nat.toB256 0x11).toBytes)) := by
     simp [Prog.function?, runtime, aux, baseAux, arithmeticPanicSlot]
@@ -176,7 +176,7 @@ private theorem noExec_of_selectedRuntimeEntry
   change Exec.Deriv.SourceCursor
     (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) (runtime dp) ⟨0, []⟩
       ([Ninst.pushB256 4, Ninst.calldatasize, Ninst.lt] +++
-        (Func.rev <?>
+        (Func.revert <?>
           (fsig +++ linearDispatchWith fallbackSlot (funcs dp))))
     at mainCursor
   have mainRoute := mainCursor.toward compiled mainReached

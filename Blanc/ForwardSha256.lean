@@ -46,7 +46,7 @@ theorem Frame.enter_sha256_of_length_64 {f : Frame} {benv : Benv}
 /-- Assemble a successful, synchronously resolved 64-byte SHA-256 `STATICCALL`
 from the generic call-frame pieces while preserving its empty child slot.
 Arithmetic and delegation resolution remain explicit at this layer. -/
-theorem Ninst.childlessRunCompiled_statcall_sha256_64
+theorem Ninst.childlessRunCompiled_staticcall_sha256_64
     {sevm : Sevm} {devm parent : Devm} {benv : Benv}
     {gw iiw oiw : B256} {s : List B256}
     {code : ByteArray} {dgc : Nat} {d1 : Devm}
@@ -69,19 +69,19 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64
     (h_depth : sevm.depth ≠ 0)
     (h_parent : parent = callSpawnParent d1 (mcc + ext)
       iiw.toNat 64 oiw.toNat 32)
-    (h_bt : (statcallSpawnMsg sevm parent mcs 2 2
+    (h_bt : (staticcallSpawnMsg sevm parent mcs 2 2
       iiw.toNat 64 code false).benvAfterTransfer = .ok benv)
     (h_pre :
-      (!((statcallSpawnMsg sevm parent mcs 2 2
+      (!((staticcallSpawnMsg sevm parent mcs 2 2
           iiw.toNat 64 code false).withBenv benv).disablePrecompiles &&
-        decide (((statcallSpawnMsg sevm parent mcs 2 2
+        decide (((staticcallSpawnMsg sevm parent mcs 2 2
           iiw.toNat 64 code false).withBenv benv).benv.stat.rules.isPrecomp 2)) =
         true)
-    (h_len : (initEvm ((statcallSpawnMsg sevm parent mcs 2 2
+    (h_len : (initEvm ((staticcallSpawnMsg sevm parent mcs 2 2
       iiw.toNat 64 code false).withBenv benv)).sta.data.length = 64)
     (h_shaGas : 84 ≤ mcs)
     (h_room : parent.stack.length < 1024) :
-    let msg := statcallSpawnMsg sevm parent mcs 2 2
+    let msg := staticcallSpawnMsg sevm parent mcs 2 2
       iiw.toNat 64 code false
     let cev := initEvm (msg.withBenv benv)
     let child :=
@@ -92,11 +92,11 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64
         ⟨1 :: parent.stack, parent.memory,
           parent.gasLeft + child.gasLeft⟩).memWrite
             oiw.toNat (child.output.take 32))
-    Ninst.ChildlessRunCompiled sevm devm (.exec .statcall) post := by
+    Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post := by
   subst parent
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat 64 oiw.toNat 32
-  let msg := statcallSpawnMsg sevm p mcs 2 2
+  let msg := staticcallSpawnMsg sevm p mcs 2 2
     iiw.toNat 64 code false
   let cev := initEvm (msg.withBenv benv)
   let child :=
@@ -135,8 +135,8 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64
   have h64 : (64 : B256).toNat = 64 := rfl
   have h32 : (32 : B256).toNat = 32 := rfl
   have h2adr : (2 : B256).toAdr = 2 := rfl
-  have hrun : Ninst.ChildlessRunCompiled sevm devm (.exec .statcall) post :=
-    Ninst.childlessRunCompiled_statcall_doneFrame
+  have hrun : Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post :=
+    Ninst.childlessRunCompiled_staticcall_doneFrame
       h_stk (by simpa only [h64, h32] using h_ext) h_del h_acc
       (by simpa using h_split) h_gas h_depth
       (by simpa only [p, msg, h64, h32, h2adr] using henter)
@@ -144,8 +144,8 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64
   simpa only [p, msg, cev, child, post] using hrun
 
 /-- Ordinary compiled-step projection of
-`childlessRunCompiled_statcall_sha256_64`. -/
-theorem Ninst.runCompiled_statcall_sha256_64
+`childlessRunCompiled_staticcall_sha256_64`. -/
+theorem Ninst.runCompiled_staticcall_sha256_64
     {sevm : Sevm} {devm parent : Devm} {benv : Benv}
     {gw iiw oiw : B256} {s : List B256}
     {code : ByteArray} {dgc : Nat} {d1 : Devm}
@@ -168,19 +168,19 @@ theorem Ninst.runCompiled_statcall_sha256_64
     (h_depth : sevm.depth ≠ 0)
     (h_parent : parent = callSpawnParent d1 (mcc + ext)
       iiw.toNat 64 oiw.toNat 32)
-    (h_bt : (statcallSpawnMsg sevm parent mcs 2 2
+    (h_bt : (staticcallSpawnMsg sevm parent mcs 2 2
       iiw.toNat 64 code false).benvAfterTransfer = .ok benv)
     (h_pre :
-      (!((statcallSpawnMsg sevm parent mcs 2 2
+      (!((staticcallSpawnMsg sevm parent mcs 2 2
           iiw.toNat 64 code false).withBenv benv).disablePrecompiles &&
-        decide (((statcallSpawnMsg sevm parent mcs 2 2
+        decide (((staticcallSpawnMsg sevm parent mcs 2 2
           iiw.toNat 64 code false).withBenv benv).benv.stat.rules.isPrecomp 2)) =
         true)
-    (h_len : (initEvm ((statcallSpawnMsg sevm parent mcs 2 2
+    (h_len : (initEvm ((staticcallSpawnMsg sevm parent mcs 2 2
       iiw.toNat 64 code false).withBenv benv)).sta.data.length = 64)
     (h_shaGas : 84 ≤ mcs)
     (h_room : parent.stack.length < 1024) :
-    let msg := statcallSpawnMsg sevm parent mcs 2 2
+    let msg := staticcallSpawnMsg sevm parent mcs 2 2
       iiw.toNat 64 code false
     let cev := initEvm (msg.withBenv benv)
     let child :=
@@ -191,8 +191,8 @@ theorem Ninst.runCompiled_statcall_sha256_64
         ⟨1 :: parent.stack, parent.memory,
           parent.gasLeft + child.gasLeft⟩).memWrite
             oiw.toNat (child.output.take 32))
-    Ninst.RunCompiled sevm devm (.exec .statcall) post := by
-  exact (Ninst.childlessRunCompiled_statcall_sha256_64
+    Ninst.RunCompiled sevm devm (.exec .staticcall) post := by
+  exact (Ninst.childlessRunCompiled_staticcall_sha256_64
     h_stk h_ext h_del h_acc h_split h_gas h_depth h_parent h_bt h_pre
     h_len h_shaGas h_room).toRunCompiled
 
@@ -338,7 +338,7 @@ private lemma successfulCallPost_getCode
 output window succeeds with the exact SHA-256 image.  The net instruction
 cost is 184 gas plus the selected memory-expansion charge: 100 for the warm
 account access and 84 for the two-word precompile input. -/
-theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
+theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     {sevm : Sevm} {devm : Devm} {iiw oiw : B256}
     {s : List B256} {G ext : Nat}
     (hstk : devm.stack =
@@ -356,7 +356,7 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
     (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
-      Ninst.ChildlessRunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩]).write oiw.toNat
@@ -430,7 +430,7 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
     exact ⟨by omega, by omega, by omega⟩
   let p := callSpawnParent d0 (mcc + ext)
     iiw.toNat 64 oiw.toNat 32
-  let msg := statcallSpawnMsg sevm p mcs 2 2
+  let msg := staticcallSpawnMsg sevm p mcs 2 2
     iiw.toNat 64 (base.state.getCode 2) false
   have hafford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d0.getAcct sevm.currentTarget).bal < 0
@@ -459,9 +459,9 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
     (((incorporateChildOnSuccess p child child.output).setMach
       ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩).memWrite
         oiw.toNat (child.output.take 32))
-  have hrun : Ninst.ChildlessRunCompiled sevm devm (.exec .statcall) post := by
+  have hrun : Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post := by
     simpa only [msg, cev, child, post] using
-      (Ninst.childlessRunCompiled_statcall_sha256_64
+      (Ninst.childlessRunCompiled_staticcall_sha256_64
         (parent := p) (benv := benv') hstk hextBase hdel hacc hsplit
         (by rw [hd0gas]; exact hcross) hdepth rfl hbt hpre' hlen hmcs hproom)
   have hpmem : p.memory = devm.memory.extends
@@ -486,7 +486,7 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
   have hsub' :
       devm.state.subBal sevm.currentTarget 0 = some stmid := by
     have hp : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, statcallSpawnMsg, callMsg] using hsub
+      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
     exact hp
   have hchildState : child.state = stmid.addBal 2 0 := by
     rfl
@@ -601,7 +601,7 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
 /-- Compatibility projection of the full warm SHA-256 crossing.  Consumers
 that must settle a transaction should use the `_full` theorem so refund and
 account-deletion preservation remain explicit. -/
-theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
+theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
     {sevm : Sevm} {devm : Devm} {iiw oiw : B256}
     {s : List B256} {G ext : Nat}
     (hstk : devm.stack =
@@ -619,7 +619,7 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
     (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
-      Ninst.ChildlessRunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩]).write oiw.toNat
@@ -642,7 +642,7 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
   obtain ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage,
       hcode, haddresses, hkeys, hlogs, _hrefund, _hdelete, houtput,
       herror, stmid, hsub, hstate⟩ :=
-    Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full
+    Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       hstk hgas hext hnodeleg hwarm hpre hdepth hfloor hbound hroom
   exact ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage, hcode,
     haddresses, hkeys, hlogs, houtput, herror, stmid, hsub, hstate⟩
@@ -650,7 +650,7 @@ theorem Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
 /-- Ordinary compiled-step projection of the childless warm SHA-256 call.
 All state and gas facts are identical; only the empty child-slot fact is
 forgotten. -/
-theorem Ninst.runCompiled_statcall_sha256_64_warm_ext
+theorem Ninst.runCompiled_staticcall_sha256_64_warm_ext
     {sevm : Sevm} {devm : Devm} {iiw oiw : B256}
     {s : List B256} {G ext : Nat}
     (hstk : devm.stack =
@@ -668,7 +668,7 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm_ext
     (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
-      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩]).write oiw.toNat
@@ -691,15 +691,15 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm_ext
   obtain ⟨post, hrun, hstack, hmemory, hgas', hreturn,
       hstorage, hcode, haddresses, hkeys, hlogs, houtput, herror,
       stmid, hsub, hstate⟩ :=
-    Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext
+    Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
       hstk hgas hext hnodeleg hwarm hpre hdepth hfloor hbound hroom
   exact ⟨post, hrun.toRunCompiled, hstack, hmemory, hgas', hreturn,
     hstorage, hcode, haddresses, hkeys, hlogs, houtput, herror,
     stmid, hsub, hstate⟩
 
 /-- Covered-memory compatibility form of
-`runCompiled_statcall_sha256_64_warm_ext`. -/
-theorem Ninst.runCompiled_statcall_sha256_64_warm
+`runCompiled_staticcall_sha256_64_warm_ext`. -/
+theorem Ninst.runCompiled_staticcall_sha256_64_warm
     {sevm : Sevm} {devm : Devm} {iiw oiw : B256}
     {s : List B256} {G : Nat}
     (hstk : devm.stack =
@@ -716,7 +716,7 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
     (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
-      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = devm.memory.write oiw.toNat
         (Bytes.sha256
@@ -740,7 +740,7 @@ theorem Ninst.runCompiled_statcall_sha256_64_warm
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = 0 :=
     Devm.extCost_covered hcovered
   simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
-    (Ninst.runCompiled_statcall_sha256_64_warm_ext
+    (Ninst.runCompiled_staticcall_sha256_64_warm_ext
       (ext := 0) hstk hgas hext hnodeleg hwarm hpre hdepth
       (by omega) hbound hroom)
 

@@ -1832,7 +1832,7 @@ unchanged or credit it from the foreign source.  The latter is recorded as an
 unclassified inward transfer; the global balance bound rules out wrapping. -/
 theorem Linst.foreignDestEthBound
     {ca : Adr} {sevm : Sevm} {pre post : Devm}
-    (run : Linst.Run sevm pre .dest (.ok post))
+    (run : Linst.Run sevm pre .selfdestruct (.ok post))
     (hforeign : sevm.currentTarget ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state [] := by
@@ -1960,7 +1960,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_name
         mstoreAt 0 ++ mstoreAt 1 ++ mstoreAt 2 ++
         pushList [96, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "name" [], nonpayable name) ∈ weth10Funcs dp
         simp [weth10Funcs]
@@ -1992,7 +1992,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_symbol
         mstoreAt 0 ++ mstoreAt 1 ++ mstoreAt 2 ++
         pushList [96, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "symbol" [], nonpayable symbol) ∈ weth10Funcs dp
         simp [weth10Funcs]
@@ -2022,7 +2022,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_callbackSuccess
         [Ninst.pushB256 CALLBACK_SUCCESS] ++
         mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "CALLBACK_SUCCESS" [], nonpayable callbackSuccess) ∈
           weth10Funcs dp
@@ -2053,7 +2053,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_permitTypehash
         [Ninst.pushB256 PERMIT_TYPEHASH] ++
         mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "PERMIT_TYPEHASH" [], nonpayable permitTypehash) ∈
           weth10Funcs dp
@@ -2082,7 +2082,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_decimals
       let line : Line :=
         [Ninst.pushB256 0x12] ++ mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "decimals" [], nonpayable decimals) ∈ weth10Funcs dp
         simp [weth10Funcs]
@@ -2112,7 +2112,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_deploymentChainId
         [pushDeployWord dp.deploymentChainId] ++
         mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "deploymentChainId" [],
           nonpayable (deploymentChainId dp)) ∈ weth10Funcs dp
@@ -2151,7 +2151,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_domainSeparator
       apply
         Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildlessBranches_noFlow
           (head := head) (left := left) (right := right)
-          (leftLast := .ret) (rightLast := .ret)
+          (leftLast := .return_) (rightLast := .return_)
           context hnonempty classified
       · rw [hselector]
         change (selector "DOMAIN_SEPARATOR" [],
@@ -2193,7 +2193,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_maxFlashLoan
       apply
         Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildlessBranches_noFlow
           (head := head) (left := left) (right := right)
-          (leftLast := .ret) (rightLast := .ret)
+          (leftLast := .return_) (rightLast := .return_)
           context hnonempty classified
       · rw [hselector]
         change (selector "maxFlashLoan" [.address],
@@ -2253,7 +2253,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_balanceOf
       let line : Line :=
         arg 0 ++ [Ninst.sload] ++ mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "balanceOf" [.address],
           nonpayable balanceOfEndpoint) ∈ weth10Funcs dp
@@ -2284,7 +2284,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_allowance
         argCopy 0 0 2 ++ allowanceKeyFromMemory ++ [Ninst.sload] ++
         mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "allowance" [.address, .address],
           nonpayable allowance) ∈ weth10Funcs dp
@@ -2315,7 +2315,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_nonces
         arg 0 ++ tagNonceKey ++ [Ninst.sload] ++
         mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "nonces" [.address], nonpayable nonces) ∈
           weth10Funcs dp
@@ -2345,7 +2345,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_flashMinted
         pushFlashMintedSlot ++ [Ninst.sload] ++
         mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "flashMinted" [], nonpayable flashMinted) ∈
           weth10Funcs dp
@@ -2376,7 +2376,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_totalSupply
         [Ninst.selfbalance] ++ pushFlashMintedSlot ++
         [Ninst.sload, Ninst.add] ++ mstoreAt 0 ++ pushList [32, 0]
       apply Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
-        (line := line) (i := .ret) context hnonempty classified
+        (line := line) (i := .return_) context hnonempty classified
       · rw [hselector]
         change (selector "totalSupply" [], nonpayable totalSupply) ∈
           weth10Funcs dp

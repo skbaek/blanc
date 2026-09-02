@@ -198,7 +198,7 @@ private theorem Exec.Frame.CountedCursor.reachCallBoolCallbackCounted
         [Ninst.dup 0, Ninst.extcodesize, Ninst.iszero])
       (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
     ⟨branchCursor, hcheck⟩
-  rcases branchCursor.selectBranchLeftWithBurn (fun _ => not_run_rev) with
+  rcases branchCursor.selectBranchLeftWithBurn (fun _ => not_run_revert) with
     ⟨successCursor, hpopCheck⟩
   rcases successCursor.selectNextChildless (by simp [NinstIsChildless]) with
     ⟨valueCursor, hpop⟩
@@ -277,8 +277,8 @@ private theorem Exec.attributionInner_eq_nil_of_boolReturnTail
   rcases firstBranchCursor.selectBranchSplit with hdecode | hbubble
   · rcases hdecode with ⟨decodePrefixCursor⟩
     rcases decodePrefixCursor.peelChildlessLine
-        (line := retdataShorterThan 32)
-        (by simp [retdataShorterThan, NinstIsChildless,
+        (line := returnDataShorterThan 32)
+        (by simp [returnDataShorterThan, NinstIsChildless,
           Ninst.pushB256]) with
       ⟨secondBranchCursor, -⟩
     rcases secondBranchCursor.selectBranchSplit with hreturn | hrev
@@ -288,17 +288,17 @@ private theorem Exec.attributionInner_eq_nil_of_boolReturnTail
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         ((pushList [32, 0, 0] ++
-          [Ninst.retdatacopy, Ninst.pushB256 0, Ninst.mload,
+          [Ninst.returndatacopy, Ninst.pushB256 0, Ninst.mload,
             Ninst.iszero, Ninst.iszero] ++
-          mstoreAt 0 ++ pushList [32, 0]) +++ Func.ret) final
+          mstoreAt 0 ++ pushList [32, 0]) +++ Func.return_) final
         at returnCursor
       rcases returnCursor.peelChildlessLine
           (by simp [pushList, mstoreAt, NinstIsChildless,
             Ninst.pushB256]) with
         ⟨lastCursor, -⟩
       exact lastCursor.finishAttributionInner
-    · rcases hrev with ⟨revCursor⟩
-      exact absurd (Func.Run.of_runCompiled revCursor.run) not_run_rev
+    · rcases hrev with ⟨revertCursor⟩
+      exact absurd (Func.Run.of_runCompiled revertCursor.run) not_run_revert
   · rcases hbubble with ⟨bubbleCursor⟩
     rcases bubbleCursor.enterCall hcode with
       ⟨bubbleBody, hbubbleGet, ⟨bubbleBodyCursor⟩⟩
@@ -777,7 +777,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
         NinstIsChildless, Ninst.pushB256]) with
     ⟨guardBranchCursor, hguardLine⟩
   rcases guardBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (transferBalanceError_lookup dp)) with
+      (not_run_call_revertWith (transferBalanceError_lookup dp)) with
     ⟨successCursor, hsuccessPop⟩
   rcases of_run_append (loadCallerBalanceAmount 1) hguardLine with
     ⟨afterLoad, hload, hsmall⟩
@@ -1479,7 +1479,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
         NinstIsChildless, Ninst.pushB256]) with
     ⟨guardBranchCursor, hguardLine⟩
   rcases guardBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (transferBalanceError_lookup dp)) with
+      (not_run_call_revertWith (transferBalanceError_lookup dp)) with
     ⟨successCursor, hsuccessPop⟩
   rcases of_run_append (loadCallerBalanceAmount 1) hguardLine with
     ⟨afterLoad, hload, hsmall⟩

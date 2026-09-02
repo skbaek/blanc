@@ -366,10 +366,10 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
           ⟨body, bodyPre, hbody, _hburn, hrun⟩
         rw [transferBalanceError_lookup dp] at hbody
         have heq : body =
-            Func.revWith "WETH: transfer amount exceeds balance" :=
+            Func.revertWith "WETH: transfer amount exceeds balance" :=
           Option.some.inj hbody.symm
         subst body
-        exact Func.not_run_revWith hrun) with
+        exact Func.not_run_revertWith hrun) with
     ⟨successCursor, hsuccessPopBy, hsuccessActions⟩
   have hsuccessPop := Devm.PopBurn.of_popBurnBy hsuccessPopBy
   have hpopStack := hsuccessPop.stack

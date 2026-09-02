@@ -65,7 +65,7 @@ private def storeByteOffset (offset : Nat) : Line :=
   [pushDeployWord (Nat.toB256 offset), mstore]
 
 private def constructorError (name : String) : Func :=
-  Func.revSelector (customErrorData name) (by
+  Func.revertSelector (customErrorData name) (by
     simp [customErrorData, B256.length_toBytes])
 
 private def patchLocatorLine (runtimeBase : Nat) : Line :=
@@ -151,13 +151,13 @@ private def constructorBody
                                 patchLocatorLine constructorRuntimeBase ++
                                 [pushLayoutNat runtimeLength,
                                   pushLayoutNat constructorRuntimeBase]) +++
-                              Func.ret))))))))))))))
+                              Func.return_))))))))))))))
 
 private def constructorProgram
     (runtimeOffset argsOffset runtimeLength : Nat) : Prog :=
   { main := callvalue ::: iszero :::
       (constructorBody runtimeOffset argsOffset runtimeLength <?> .call 1)
-    aux := [Func.rev,
+    aux := [Func.revert,
       constructorError "AdminCannotBeZero",
       constructorError "TooLargeMaxExitRequestsLimit",
       constructorError "TooLargeFrameDuration",

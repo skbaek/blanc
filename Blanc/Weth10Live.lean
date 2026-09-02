@@ -313,32 +313,32 @@ private theorem returnWord_runCompiled
       post.gasLeft = G ∧
       Devm.output post = word.toBytes := by
   let M := Mem.empty.write 0 word.toBytes
-  let retPre := base.setMach
+  let returnPre := base.setMach
     ⟨[(0 : B256), (32 : B256)], M, g - 5⟩
-  let d := (retPre.setMach ⟨[], retPre.memory, g - 5⟩).memRead 0 32
+  let d := (returnPre.setMach ⟨[], returnPre.memory, g - 5⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, ?_, ?_⟩
   · simp only [returnWordPre, returnMemoryRange, pushList]
     func_run (2) []
     simp only [List.map, prepend]
-    change Func.RunCompiled fs sevm retPre Func.ret post
+    change Func.RunCompiled fs sevm returnPre Func.return_ post
     have h_ext :
-        retPre.extCost [⟨(0 : B256).toNat, (32 : B256).toNat⟩] = 0 := by
-      change retPre.extCost [((0 : Nat), (32 : Nat))] = 0
-      simpa only [retPre, M] using
+        returnPre.extCost [⟨(0 : B256).toNat, (32 : B256).toNat⟩] = 0 := by
+      change returnPre.extCost [((0 : Nat), (32 : Nat))] = 0
+      simpa only [returnPre, M] using
         (Devm.extCost_word_word Mem.size_write_word)
     have h_read :
-        (retPre.setMach ⟨[], retPre.memory, g - 5⟩).memRead 0 32 =
+        (returnPre.setMach ⟨[], returnPre.memory, g - 5⟩).memRead 0 32 =
           ⟨word.toBytes, d.2⟩ := by
       exact Prod.ext
         (Devm.memRead_word_fst
-          (by simp only [Devm.memory_setMach, retPre, M]))
+          (by simp only [Devm.memory_setMach, returnPre, M]))
         rfl
-    exact Func.runCompiled_ret_of (devm := retPre) (G := g - 5) (e := 0)
+    exact Func.runCompiled_return_of (devm := returnPre) (G := g - 5) (e := 0)
       (out := word.toBytes) (d' := d.2) rfl h_ext
-      (by simp only [retPre, Devm.gasLeft_setMach, Nat.add_zero])
+      (by simp only [returnPre, Devm.gasLeft_setMach, Nat.add_zero])
       h_read
-  · simp only [post, d, retPre, gasLeft_withOutput,
+  · simp only [post, d, returnPre, gasLeft_withOutput,
       gasLeft_memRead_snd, Devm.gasLeft_setMach]
     omega
   · rfl
@@ -931,7 +931,7 @@ theorem flashFee_runCompiled (dp : DeployParams) {sevm : Sevm} {pre : Devm}
           rw [weth10Main_eq_flashFee]
           func_run [0, (0xd9d98ce4 : B256), 0, 0, 0, 1, 0, 1, 1, 1, 0, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 222) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 222) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst
@@ -1044,7 +1044,7 @@ theorem balanceOf_warm_runCompiled (dp : DeployParams)
           rw [weth10Main_eq_balanceOf]
           func_run [0, (0x70a08231 : B256), 1, 0, 0, 0, 1, 1, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 277) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 277) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst
@@ -1167,7 +1167,7 @@ theorem totalSupply_warm_runCompiled (dp : DeployParams)
           · simp only [Devm.gasLeft_setMach, gLow]
             omega
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 309) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 309) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst
@@ -1298,7 +1298,7 @@ theorem maxFlashLoan_warm_runCompiled (dp : DeployParams)
               Devm.getStorVal pre sevm.currentTarget flashMintedSlot,
             3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 330) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 330) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst
@@ -1361,7 +1361,7 @@ theorem maxFlashLoan_other_runCompiled (dp : DeployParams)
           rw [weth10Main_eq_maxFlashLoan]
           func_run [0, (0x613255ab : B256), 1, 0, 0, 1, 0, 1, 1, 0, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 220) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 220) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst

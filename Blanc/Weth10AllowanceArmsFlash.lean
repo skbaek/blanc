@@ -82,7 +82,7 @@ private theorem flashSettlement_region_locality
 `Weth10HolderFlowFlashChronology` publishes its decomposition of the flash
 body, its post-callback decoder, the settlement and the burn continuation,
 so this module consumes those directly.  Only the reverter-arm exclusion it
-phrases in terms of `Func.revWith` is local. -/
+phrases in terms of `Func.revertWith` is local. -/
 
 /-! ## The childless prefix before the borrower callback
 
@@ -110,7 +110,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallback
         Ninst.pushB256]) with
     ⟨tokenBranchCursor, _htoken⟩
   rcases tokenBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (flashTokenError_lookup dp)) with
+      (not_run_call_revertWith (flashTokenError_lookup dp)) with
     ⟨amountCursor, -⟩
   unfold flashLoanPostAmount at amountCursor
   rcases amountCursor.peelChildlessLine (line := flashAmountLine) (by
@@ -118,7 +118,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallback
         Ninst.pushB256]) with
     ⟨amountBranchCursor, _hamount⟩
   rcases amountBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (individualLimitError_lookup dp)) with
+      (not_run_call_revertWith (individualLimitError_lookup dp)) with
     ⟨counterCursor, -⟩
   unfold flashLoanPostCounter at counterCursor
   rcases counterCursor.peelChildlessLine (line := flashCounterLine) (by
@@ -130,7 +130,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallback
         Ninst.pushB256]) with
     ⟨totalBranchCursor, _htotal⟩
   rcases totalBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (totalLimitError_lookup dp)) with
+      (not_run_call_revertWith (totalLimitError_lookup dp)) with
     ⟨popCursor, -⟩
   unfold flashLoanPostTotal at popCursor
   rcases popCursor.peelChildlessLine (line := [Ninst.pop])
@@ -145,7 +145,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallback
         Ninst.pushB256]) with
     ⟨codeBranchCursor, _hevent⟩
   rcases codeBranchCursor.selectBranchLeftWithBurn
-      (fun _ => not_run_rev) with
+      (fun _ => not_run_revert) with
     ⟨setupCursor, -⟩
   unfold flashLoanPostCode at setupCursor
   rcases setupCursor.peelChildlessLine (line := flashCallbackSetupLine)
@@ -176,7 +176,7 @@ private theorem Exec.Frame.CountedCursor.finishFlashBurn
         NinstIsChildless, Ninst.pushB256]) with
     ⟨branchCursor, _hguard⟩
   rcases branchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (burnBalanceError_lookup dp)) with
+      (not_run_call_revertWith (burnBalanceError_lookup dp)) with
     ⟨successCursor, -⟩
   rcases successCursor.peelChildlessLine (line := flashBurnSuccessLine) (by
       simp [flashBurnSuccessLine, debitLoadedBalance, addressArg,
@@ -208,7 +208,7 @@ private theorem Exec.Frame.CountedCursor.finishFlashSettle
           NinstIsChildless, Ninst.pushB256]) with
       ⟨guardBranchCursor, _hguard⟩
     rcases guardBranchCursor.selectBranchLeftWithBurn
-        (not_run_call_revWith (allowanceError_lookup dp)) with
+        (not_run_call_revertWith (allowanceError_lookup dp)) with
       ⟨successCursor, -⟩
     rcases successCursor.peelChildlessLine
         (line := flashSettleFiniteLine) (by
@@ -256,19 +256,19 @@ private theorem Exec.Frame.CountedCursor.finishFlashLoanAfterCallback
     exact not_run_bubbleRevert hrun
   rcases callbackBranchCursor.selectBranchLeftWithBurn hbubble with
     ⟨decodeCursor, -⟩
-  rcases decodeCursor.peelChildlessLine (line := retdataShorterThan 32)
-      (by simp [retdataShorterThan, NinstIsChildless, Ninst.pushB256]) with
+  rcases decodeCursor.peelChildlessLine (line := returnDataShorterThan 32)
+      (by simp [returnDataShorterThan, NinstIsChildless, Ninst.pushB256]) with
     ⟨lengthBranchCursor, _hlength⟩
   rcases lengthBranchCursor.selectBranchLeftWithBurn
-      (fun _ => not_run_rev) with
+      (fun _ => not_run_revert) with
     ⟨magicCursor, -⟩
   rcases magicCursor.peelChildlessLine
-      (line := checkRetdataHead CALLBACK_SUCCESS 0 ++ [Ninst.iszero]) (by
-        simp [checkRetdataHead, pushList, NinstIsChildless,
+      (line := checkReturnDataHead CALLBACK_SUCCESS 0 ++ [Ninst.iszero]) (by
+        simp [checkReturnDataHead, pushList, NinstIsChildless,
           Ninst.pushB256]) with
     ⟨magicBranchCursor, _hmagicLine⟩
   rcases magicBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (flashFailedError_lookup dp)) with
+      (not_run_call_revertWith (flashFailedError_lookup dp)) with
     ⟨settlePrefixCursor, -⟩
   rcases settlePrefixCursor.peelChildlessLine
       (line := [Ninst.pop, Ninst.pop]) (by simp [NinstIsChildless]) with
@@ -675,7 +675,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallbackWitnessed
         Ninst.pushB256]) with
     ⟨tokenBranchCursor, htoken⟩
   rcases tokenBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (flashTokenError_lookup dp)) with
+      (not_run_call_revertWith (flashTokenError_lookup dp)) with
     ⟨amountCursor, htokenPop⟩
   unfold flashLoanPostAmount at amountCursor
   rcases amountCursor.peelChildlessLine (line := flashAmountLine) (by
@@ -683,7 +683,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallbackWitnessed
         Ninst.pushB256]) with
     ⟨amountBranchCursor, hamount⟩
   rcases amountBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (individualLimitError_lookup dp)) with
+      (not_run_call_revertWith (individualLimitError_lookup dp)) with
     ⟨counterCursor, hamountPop⟩
   unfold flashLoanPostCounter at counterCursor
   rcases counterCursor.peelChildlessLine (line := flashCounterLine) (by
@@ -695,7 +695,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallbackWitnessed
         Ninst.pushB256]) with
     ⟨totalBranchCursor, htotal⟩
   rcases totalBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith (totalLimitError_lookup dp)) with
+      (not_run_call_revertWith (totalLimitError_lookup dp)) with
     ⟨popCursor, htotalPop⟩
   unfold flashLoanPostTotal at popCursor
   rcases popCursor.peelChildlessLine (line := [Ninst.pop])
@@ -710,7 +710,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallbackWitnessed
         Ninst.pushB256]) with
     ⟨codeBranchCursor, hevent⟩
   rcases codeBranchCursor.selectBranchLeftWithBurn
-      (fun _ => not_run_rev) with
+      (fun _ => not_run_revert) with
     ⟨setupCursor, hcodePop⟩
   unfold flashLoanPostCode at setupCursor
   rcases setupCursor.peelChildlessLine (line := flashCallbackSetupLine)
