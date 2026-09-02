@@ -203,11 +203,11 @@ def composition_edge_controls() -> None:
     """The five composition edges bite, around a classified positive witness.
 
     These are the stratum's rules from `lido-twg-pinned-target-closure-v1`
-    C1, landed ahead of their first inhabitant: an unclassified composition
-    module, shared \u2192 composition, contract \u2192 composition, and composition
-    \u2192 either root each fail with a verdict naming the edge, while a probe
-    importing the shared layer and two distinct contract families passes -- the
-    permission that is the stratum's point.
+    C1, now exercised alongside the shipped inhabitants: an unclassified
+    composition module, shared \u2192 composition, contract \u2192 composition,
+    and composition \u2192 either root each fail with a verdict naming the edge,
+    while a probe importing the shared layer and two distinct contract
+    families passes -- the permission that is the stratum's point.
     """
     probe = "Composition.Probe"
 

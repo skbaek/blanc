@@ -300,6 +300,10 @@ CONTRACTS = {
 COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
+    "Composition.ProrataWethVaultBoundary",
+    "Composition.ProrataWethVaultEffects",
+    "Composition.ProrataWethVaultStaging",
+    # Every joint owner is explicit; no family or shared module may import back.
 ]
 
 ROOTS = ["Blanc", "Main"]
