@@ -293,11 +293,11 @@ ROLES = {
             "5fe29bd85d1092b9ce8ab9f418f01522dfce2c921830c0ee411224d185c47253",
         # The two structural external edges are exactly CALL/STATICCALL.
         "runtimeExternalCallSourceSite_instruction_exact":
-            "6514ff9a4a6584f0519a61da213ca9a20a55e3714e898a51a8830e390cb24723",
+            "c0d71fdb211f48b48e1a40150d28a244c2823d788ff1c69bb0ac7941cd0bd379",
         # Executable-boundary version of the same fact: PUSH payload bytes that
         # look like opcodes are excluded by the `ParentPrefix` premise.
         "runtimeExec_instruction_exact":
-            "85ccc6c8341720c8d16d6e325abc6a25e4fdbc049af9cfd0b3c149b652f42a62",
+            "279092fd6e67da85c19a2dda261d0635d756ea7decb582d34c38e091c33b97da",
         # The three effect domains are pairwise disjoint.
         "runtimePersistent_effectDomains_separate":
             "bde74c901f9474287ea8116262a5c275319a938e79dd1bc7f7128d8bebdf2bc7",
@@ -744,9 +744,9 @@ ROLES = {
     "pauseOkRoute": {
         # The two route finals, one per arm.
         "runtimeMain_routeTo_pauseLastExpiry":
-            "3e75afe3366337ef76660926d0190bcc1d6af75483128b36d8f6f363b7e06aa5",
+            "ebf420c30d05be6aae05aed72a3e16530f84ff2881eaa517cc77b7c519b7c2f4",
         "runtimeMain_routeTo_pauseRetainedExpiry":
-            "5f290ce093f34d5a02363a28dd7e9a5085a871762a21b4b2c916c519617c2fd6",
+            "7a2ca5a2468a6037eb7606e08aac0da8d8110c46575271d8092aec2f480590ff",
         # The shared tail both witnesses route through -- the burn-carrying
         # sibling of `attainable_of_entryRoute_frame`, needed because this
         # route reads `transientStorage` and must pin its states against a
@@ -762,7 +762,7 @@ ROLES = {
         "setPauserKernel_routeTo_pauseAfterSetCall":
             "412ad15155258112fbd7dcafa6cc0c116e4da5705dccab4422c6e795e6270cc9",
         "pauseAfterSet_routeTo_countBranch":
-            "946c8717d0a918e16d37bf84bdead65a999597a17d5bf20d8d2d409043eaa260",
+            "c86eb84fb655d4029f7e358552a766697a4016ffb4d3e3ca699034c2cb061955",
     },
     "pauseJoin": {
         # J1/J2: the two rows attained at `.pauseExpiry`.
@@ -793,11 +793,11 @@ ROLES = {
         "responder_call_effects":
             "1e99a8c96ab905d1bfce1e4683e8186d200b37e487cf2dda97676266dc4964a2",
         "responder_staticcall_effects":
-            "0ebc83d783d16c055c8e9f4c7f41dea051fe58ae96de4ec0a82e3d54764128e7",
+            "54dba4bc7220dd379cde5fa6994a96f9403707bb52de7726bee8d8c5f964e7de",
         "responder_hcall":
             "742387998c56dd1902b6a24592238b48df17689b2af9c6c2512dd644d8dec7a5",
         "responder_hstat":
-            "b1bcfd15b76d6e617bb94d77319735ffa6dc0c117c4fc8cf54101fb9c656dbfa",
+            "0bac8a5fafb00f9064fdacda4e8f27603f01ffbeb35954074a1a84b7b707e9bf",
     },
     # ---- What the settled MESSAGE leaves behind, at the same two worlds ----
     #
@@ -912,7 +912,7 @@ ROLES = {
         "pauseCall_boundary":
             "5305fcec2a37665ade6f7b77d8edd2f493d8c65cb3a3f9f87ade7357d3a75499",
         "pauseStat_boundary":
-            "7ca1442b6252e24ef29693089cbd298a41e5a0b5d0993d30f00d688ba285ddfa",
+            "4d8a28b323e4f7d7bbda8d21025768ff2a0c5da9b60210db53ab90b0b2fbb7d1",
         # The program cut the ordering results are stated against.  It is a
         # `rfl` identity with `pauseAfterSet`, so the branch results below are
         # about the deployed program and not about a paraphrase of it.
@@ -933,7 +933,7 @@ ROLES = {
         # The bubble slot's binding, discharged by the deployed table itself so
         # the arm theorems' lookup premise is not left to a consumer.
         "runtime_bubbleRevertSlot":
-            "91f34f8b61dc1595aa321501e1a98956cc33125cc8a169d774079b6d04cc4ac6",
+            "fb159458e0636567fe71961b97259c1de98865d9a0fe4a18d34b22984f301d72",
         # The failure arm: it reaches the bubble still holding the child's
         # returndata, settles at an outcome that cannot commit, and outputs
         # either that returndata or the bubble's own memory-expansion refusal.
@@ -941,19 +941,19 @@ ROLES = {
         # bookkeeping -- collapsing it to `child.output` would take a premise
         # about what the callee returned, which this family admits nowhere.
         "pauseCall_failureArm_bubbles":
-            "4122d1ebc430e8a82a9182d29d55760499b472729afd6f5d2c80388ed5278ef7",
+            "cc74df9cc7bd417a99b53247fb2451cc2690b2f61514f74b9e2b0dc452be9da1",
         "pauseCall_failureArm_neverCommits":
-            "9a383c051c3f665a098f6f70123cceebdda5dd0bd0947e9c232a11037857f9a3",
+            "2ae1f014a20c9255e564ee963827abdd5b486aa5896aa6864304bc6d2df45fb3",
         "pauseCall_failureArm_payload":
-            "82a97e33bfab77f19d288436cc01e958a644ea15d531c3325335f64b11dc3f96",
+            "52bbc83209da1210cb039e98ed6452e084fcabf927e10abb7e8dd7a436241406",
         # The success arm is the only route to the STATICCALL, handing on the
         # crossing premise `pauseStat_boundary` consumes; and its `.ok` shadow,
         # which carries no case hypothesis at all and converts "the frame got
         # past the branch" into "the pauseFor(uint256) call succeeded".
         "pauseCall_successArm_reachesStatcall":
-            "623499f01e5574230c23b97bea25e9a782745487c9dfb40920894112ad71e3dc",
+            "28acb5699f8bd59181c4695c1bcf71d7b1b4d932d539f8b8172a3d5dcc7ad3b7",
         "pauseAfterCall_ok_forces_callSuccess":
-            "084d8e98ce45cd1fb40d975e73245ac9cb0fbe3a7e9f471b40f1617ed7d5c700",
+            "81e787056f24d0a6ced43fdcc6159636c1d63c406fb42d5eda5027b1530053bf",
         # The CALL's argument window built from the staged duration word by the
         # CircuitBreaker's own straight-line code.  No callee appears in the
         # statement, because the staging runs strictly before the crossing.
@@ -964,7 +964,7 @@ ROLES = {
         # second staging reached through the target word carried across the
         # callback.  The order is in the statement's own shape.
         "pause_externalBoundary":
-            "a85d61145a4f802704234fd2dae7e78629a73c2283377a2831fc3d0ebd76608c",
+            "6f46c940f4668ab02c2d82c4b2cc4449d95dd266fa6fca24dc2a9944e1afc3bb",
     },
     # Shared inversion facts for arbitrary compiled walks.  These declarations
     # are rooted at `Blanc`, not nested under a contract-family namespace.
@@ -982,9 +982,9 @@ ROLES = {
         "runCompiledTo_last_inv":
             "212935a36e629c97d8b84cb3ab7a7fd42afae88e77446e72c87b9a609408fe39",
         "runCompiledTo_revert_inv":
-            "4a7305a9f3950009b6f46121a7e9ba19cd748d3b23c6ce849fde3a17b60c3823",
+            "65c96a3939e58d5e0dfafaa66166820362f9824d2ce29807bf5bbcd04f199651",
         "runCompiledTo_revertSelector_inv":
-            "1a6c71f3ccbf28859fc5f4943ce70a8f3d9172db5db5298bc074d8a2dec4a4d7",
+            "11284daec3d8529a1e7176349e52a42443fa6498d5658ebeddc2eee74a98abc1",
     },
     # The observation cut: what the CircuitBreaker does with the target's
     # answer.  Every outcome is indexed to a projection of the child's
@@ -998,9 +998,9 @@ ROLES = {
         "pauseObservation_arms":
             "f65847961b539aec689255a7894acd4f4b11b7cb43342e6de47aba6228433362",
         "pauseObservation_failureArm_bubbles":
-            "2ab199bc7e200393783dd79e446834cd28ac520e9ef1fae53deedf0a271a3366",
+            "40edff6e53199d446ac7c4dd52362723009193dc05d56378376b3ba335e676ad",
         "pauseObservation_failureArm_payload":
-            "3f6f470536548f712f76f572c5231f9055fc64e31aa5b27a6b1436eeda71c666",
+            "1aad2bb790495fb88f9fe067fb9b003ee20a601ca497412b16f9188adc6cfb07",
         "pauseObservation_successArm_reachesDecode":
             "9cf326e7bee90e0142af6e60d9568422169162fe74521cfcba0ee12e4308726a",
         "toB256_lt_32_of_lt":
@@ -1012,25 +1012,25 @@ ROLES = {
         "pauseDecode_arms":
             "8f8e6421e31e8608159adc50ae600ac248141981cce9a0cdb2de70d65ac11006",
         "runtime_emptyRevertSlot":
-            "4a4f3ec95f01060c2d9d806322baa7566fe4df9686e86f3ba0b89c653b61d4af",
+            "7e8cd798fe133d0d02c1654327ad47bf8fe4c76340b66899a8ac16208c2ec654",
         "runtime_pauseFailedErrorSlot":
             "9b538e272656e8be46949c9a84e31cb595468beebabd7be5f015d473d6835921",
         "pauseDecode_shortReturn_payload":
-            "4ea8c2494c109b8ea43f5332b935ce82cd7fa5b31b4c25ee574d5ce8041766d7",
+            "506b893b81ca17392fa43d83504d1052f9dec11d9a67091c726d3018b1945476",
         "pauseDecode_false_payload":
             "196d728999b6d8e8c2e0ca8fa86a00d5b8bf4ea38e9d4d304a73539b52fa1315",
         "pauseDecode_noncanonical_payload":
-            "330e67ac43353358aa8bafcfd605f46c75d374dfb8a0c4debb2fd8ff08544efb",
+            "ee1586bad39e7d1b14c044ff39cd70cae5bedf12284aa50b55f798636636382a",
         "pauseDecode_accepts_one":
             "65e14cd6b758a0929a30f9297c32bb1a61a6929fb62843787d0a821e248059a5",
         "pauseDecode_accepts_one_withTail":
             "a7915d8553aef5031a4041a57bd7786da7bb04e8d4a856e0617f3d43a85ea4f6",
         "pauseObservation_outcomes":
-            "c76ce7cee3f7bd67079157693a9ba48fffac877ddf8b84dddf3240f25fb7a5f7",
+            "be688f2aec9a658cc383fc93c67b6f6040859ba5d70dc37cba88c1e741f604e4",
         "pauseAfterSet_codeGuard_arms":
-            "23b220b4371839569937945ba4b532ada6456c62d1610534100b160e4459926d",
+            "6e279988c2557eb9ad1de3b595b09f24cae7a68dab16e3f7cbbc23bfdd67f89a",
         "pauseAfterSet_outcomes":
-            "a51a3a9f543bc979c519e91d1733f807f0245f0d1168f4dde1fe808d8caa63c7",
+            "cf14ce1806c504034ebc2930090b68bef078c11a7914ffcf35375b34f2b50c70",
     },
     # Stage 6's final cut: the post-callback success walk and its composition
     # into the observation.  The result vocabulary is carried in `def`s, so
@@ -1047,11 +1047,11 @@ ROLES = {
         "PauseSuccessCommitTrace.result":
             "45baa21932f701cf7641a58b4aba7da4797a4be8b729390130d2e380fbe8317b",
         "pauseSuccess_outcome":
-            "22719c1fc4d3b2769870232e2bafc57554f21803386fc0d13efaecd16ea2a1a8",
+            "b2a25705fc65c0dc2e28eea0c5ab872e638c55fe3142dd4df8bfcc528e3b2c34",
         "pauseObservation_committed_outcomes":
-            "949fa243e627f679ee9c24c5f1d3f46a4847e936497905a03a1761b7603b4ea2",
+            "37ccc1e66b5a5507962702f44a273494e9f8ae47ac0156b7eb379ed8c9819b02",
         "pauseAfterSet_committed_outcomes":
-            "e20a928c42aee513bd2e5b7acc1238ecc37bcd7a1c79742b782ea038640eb9b9",
+            "b9806431536d5c620df6d14c266355d72f54dc0d5d80d2be5301c94a2af74ed5",
         "PauseSuccessInputs.of_noninterference":
             "4ed80d8e7d93fd675e24c28a6ee37b60e3f5b8240672c9a48a2cc980b7c191bf",
     },
@@ -1061,7 +1061,7 @@ ROLES = {
         "publicPause_reaches_pauseAfterSet":
             "ba22f7371cffca7434090f1f898c2b42d2c6eeb2565d035f344fffbbcb56a133",
         "pauseAfterSet_boundary_committed_outcomes":
-            "cfe3f72ee55de188ac5d47f5bec3fffb0fc8c2439b103d55d93a268a7ea4798c",
+            "773d53dc2933107f3119fe93223022ef7c9fa9166a16ff1ad650fecaed0eb3ef",
         "publicPause_committed_outcomes":
             "334ec0f7a5514ab18f27564be749c76faecfb1434b12b20aa7ba8b68f6941394",
     },
