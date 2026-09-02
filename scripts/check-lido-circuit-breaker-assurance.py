@@ -271,8 +271,9 @@ NONCLAIM_PHRASES = [
     "the history witness is existential, not the same list",
     # Reachability carries a wei bound inherited from the chain model.
     "below `2 ^ 256`",
-    # No liveness.
-    "nothing here says the contract can be paused",
+    # The two configured TWG worlds are reachable, but no universal liveness or
+    # all-world gas claim follows.
+    "no universal liveness or all-world gas claim",
     # Mid-callback count/expiry incoherence is real source behaviour.
     "no callback-time count/expiry coherence",
     # Finite evidence corroborates; it is never a Lean premise.
