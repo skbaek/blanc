@@ -208,6 +208,7 @@ CONTRACTS = {
     "prorata-weth-vault": ["ProrataWethVault", "ProrataWethVaultCode",
                             "ProrataWethVaultArtifact",
                             "ProrataWethVaultArithmetic",
+                            "ProrataWethVaultArithmeticExec",
                             "ProrataWethVaultFunctional",
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],

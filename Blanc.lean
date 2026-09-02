@@ -285,6 +285,7 @@ import Blanc.ProrataWethVault
 import Blanc.ProrataWethVaultCode
 import Blanc.ProrataWethVaultArtifact
 import Blanc.ProrataWethVaultArithmetic
+import Blanc.ProrataWethVaultArithmeticExec
 import Blanc.ProrataWethVaultFunctional
 import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary
