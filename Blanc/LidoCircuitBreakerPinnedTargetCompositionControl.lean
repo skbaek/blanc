@@ -181,7 +181,7 @@ composition threads. -/
 accessed-key set changed, so the error, output, accessed-address and code
 fields all pass through; the named projections below read this one case
 split. -/
-private theorem temporalSloadBase_carriers (sevm : Sevm) (base : Devm)
+theorem temporalSloadBase_carriers (sevm : Sevm) (base : Devm)
     (key : B256) :
     (temporalSloadBase sevm base key).error = base.error ∧
       (temporalSloadBase sevm base key).output = base.output ∧
@@ -264,7 +264,7 @@ private theorem temporalSloadBase_keys (sevm : Sevm) (base : Devm)
   unfold temporalSloadBase
   split <;> rfl
 
-private theorem temporalSloadBase_cold_keys (sevm : Sevm) (base : Devm)
+theorem temporalSloadBase_cold_keys (sevm : Sevm) (base : Devm)
     (key : B256)
     (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
     (temporalSloadBase sevm base key).accessedStorageKeys =
@@ -1323,7 +1323,7 @@ the old pauser at `previousPauserWord`, and the removal walk writes its three
 scratch words above it.  Every write stays inside the `768`-byte image, so no
 extension is ever charged. -/
 
-private theorem stubRunMem_wf1 : Mem.Wf ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
+theorem stubRunMem_wf1 : Mem.Wf ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) := by
   rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with ⟨hwf, -⟩
   exact hwf.write _ _
@@ -1357,34 +1357,34 @@ private theorem stubRunMem_stage1 :
   · rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
     exact hnew
 
-private theorem stubRunMem_reads1 : Mem.Reads ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
+theorem stubRunMem_reads1 : Mem.Reads ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) :=
   stubRunMem_stage1.1
 
-private theorem stubRunMem_size1 : ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
+theorem stubRunMem_size1 : ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).size = 768 :=
   stubRunMem_stage1.2.1
 
-private theorem stubRunMem_target1 :
+theorem stubRunMem_target1 :
     Bytes.toB256 ((Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).sliceD (targetWord * 32).toNat 32 0) =
       pauseWorldCallee.toB256 :=
   stubRunMem_stage1.2.2.1
 
-private theorem stubRunMem_new1 :
+theorem stubRunMem_new1 :
     Bytes.toB256 ((Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).sliceD (newPauserWord * 32).toNat 32 0) = 0 :=
   stubRunMem_stage1.2.2.2
 
-private theorem stubRunMem_wfLast : Mem.Wf (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
+theorem stubRunMem_wfLast : Mem.Wf (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
       (removedIndexWord * 32).toNat (1 : B256).toBytes).write
       (arrayLengthWord * 32).toNat (1 : B256).toBytes).write
       (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes) :=
   ((stubRunMem_wf1.write _ _).write _ _).write _ _
 
-private theorem stubRunMem_readsLast : Mem.Reads (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
+theorem stubRunMem_readsLast : Mem.Reads (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
       (removedIndexWord * 32).toNat (1 : B256).toBytes).write
       (arrayLengthWord * 32).toNat (1 : B256).toBytes).write
@@ -1414,7 +1414,7 @@ private theorem stubRunMem_sizeLen : ((((pauseMemory pauseWorldCallee.toB256 pau
     decide)]
   exact stubRunMem_sizeIdx
 
-private theorem stubRunMem_sizeLast : (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
+theorem stubRunMem_sizeLast : (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
       (removedIndexWord * 32).toNat (1 : B256).toBytes).write
       (arrayLengthWord * 32).toNat (1 : B256).toBytes).write
@@ -1424,7 +1424,7 @@ private theorem stubRunMem_sizeLast : (((((pauseMemory pauseWorldCallee.toB256 p
     decide)]
   exact stubRunMem_sizeLen
 
-private theorem stubRunMem_targetLast :
+theorem stubRunMem_targetLast :
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
@@ -1436,7 +1436,7 @@ private theorem stubRunMem_targetLast :
     Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
   exact stubRunMem_target1
 
-private theorem stubRunMem_newLast :
+theorem stubRunMem_newLast :
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
@@ -1493,7 +1493,7 @@ private theorem stubRunMem_lastWords :
         rw [B256.length_toBytes]; decide)]
     exact hdur
 
-private theorem stubRunMem_prevLast :
+theorem stubRunMem_prevLast :
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
@@ -1502,7 +1502,7 @@ private theorem stubRunMem_prevLast :
       pauseWorldPauser :=
   stubRunMem_lastWords.1
 
-private theorem stubRunMem_contLast :
+theorem stubRunMem_contLast :
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
@@ -1510,7 +1510,7 @@ private theorem stubRunMem_contLast :
       (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes).sliceD (continuationWord * 32).toNat 32 0) = 1 :=
   stubRunMem_lastWords.2.1
 
-private theorem stubRunMem_durLast :
+theorem stubRunMem_durLast :
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
@@ -1521,12 +1521,12 @@ private theorem stubRunMem_durLast :
 
 /-! ## Value charges -/
 
-private theorem stubRunSvc_reset {orig new : B256} (hnew : orig ≠ new)
+theorem stubRunSvc_reset {orig new : B256} (hnew : orig ≠ new)
     (hzero : ¬ orig = 0) : sstoreValueCost orig orig new = 2900 := by
   rw [sstoreValueCost, if_pos ⟨rfl, hnew⟩, if_neg hzero]
   norm_num [gasStorageUpdate, gasColdSload]
 
-private theorem stubRunSvc_noop {orig cur : B256} :
+theorem stubRunSvc_noop {orig cur : B256} :
     sstoreValueCost orig cur cur = 100 := by
   rw [sstoreValueCost, if_neg (by simp)]
   rfl
@@ -1575,7 +1575,7 @@ private theorem stubRunMem_sizeStaged3 : ((((((((pauseMemory pauseWorldCallee.to
     decide)]
   exact stubRunMem_sizeStaged2
 
-private theorem stubRunMem_size8 :
+theorem stubRunMem_size8 :
     (pauseDecodedMemory (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
       (removedIndexWord * 32).toNat (1 : B256).toBytes).write
@@ -1595,7 +1595,7 @@ writes -/
 /-- Neither the refund-counter update nor the storage-cell write inside
 `temporalSstorePost` touches any account's code, shown directly at the
 `State` level. -/
-private theorem temporalSstorePost_getCode (sevm : Sevm) (base : Devm)
+theorem temporalSstorePost_getCode (sevm : Sevm) (base : Devm)
     (k v : B256) (a : Adr) :
     (temporalSstorePost sevm base k v).getCode a = base.getCode a := by
   show (((base.withRefundCounter _).state.setStorVal
@@ -1863,7 +1863,7 @@ private theorem stubRunCode_B7 :
   rw [show pauseWorldCallee.toB256.toAdr = pauseWorldCallee from by decide]
   exact stubPauseWorld_targetCodeAt
 
-private theorem stubRunMem_wf8 :
+theorem stubRunMem_wf8 :
     Mem.Wf (pauseDecodedMemory (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
       (removedIndexWord * 32).toNat (1 : B256).toBytes).write
@@ -1872,7 +1872,7 @@ private theorem stubRunMem_wf8 :
   unfold pauseDecodedMemory pauseStagedMemory
   exact (((stubRunMem_wfLast.write _ _).write _ _).write _ _).write _ _
 
-private theorem stubRunMem_reads8 :
+theorem stubRunMem_reads8 :
     Mem.Reads (pauseDecodedMemory (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
       (removedIndexWord * 32).toNat (1 : B256).toBytes).write
@@ -1890,7 +1890,7 @@ private theorem stubRunMem_reads8 :
       (Mem.Reads.write (stubRunMem_wfLast.write _ _)
         (Mem.Reads.write stubRunMem_wfLast stubRunMem_readsLast _ _) _ _) _ _) _ _
 
-private theorem stubRunMem_target8 :
+theorem stubRunMem_target8 :
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
@@ -1909,7 +1909,7 @@ private theorem stubRunMem_target8 :
       rw [B256.length_toBytes]; decide)]
   exact stubRunMem_targetLast
 
-private theorem stubRunMem_dur8 :
+theorem stubRunMem_dur8 :
     Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
       (removedIndexWord * 32).toNat (1 : B256).toBytes)
@@ -1927,39 +1927,6 @@ private theorem stubRunMem_dur8 :
     Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes]; decide)]
   exact stubRunMem_durLast
-
-private theorem state_setBal_stor_local (st : State) (adr : Adr)
-    (val : B256) (a : Adr) :
-    ((st.setBal adr val).get a).stor = (st.get a).stor := by
-  by_cases h : adr = a
-  · subst h
-    unfold State.setBal
-    rw [State.get_set_self]
-    rfl
-  · exact congrArg Acct.stor (State.get_set_ne st h _)
-
-private theorem state_addBal_stor_local (st : State) (adr : Adr)
-    (val : B256) (a : Adr) :
-    ((st.addBal adr val).get a).stor = (st.get a).stor := by
-  unfold State.addBal
-  exact state_setBal_stor_local st adr _ a
-
-private theorem state_subBal_stor_local {st st' : State} {adr : Adr}
-    {val : B256} (h : st.subBal adr val = some st') (a : Adr) :
-    (st'.get a).stor = (st.get a).stor := by
-  unfold State.subBal at h
-  split at h
-  · contradiction
-  · injection h with hstate
-    subst hstate
-    exact state_setBal_stor_local st adr _ a
-
-private theorem state_setStorVal_stor_ne_local (st : State)
-    {writer reader : Adr} (h : writer ≠ reader) (key value : B256) :
-    ((st.setStorVal writer key value).get reader).stor =
-      (st.get reader).stor := by
-  unfold State.setStorVal
-  exact congrArg Acct.stor (State.get_set_ne st h _)
 
 private def stubRunKernelBase : Devm :=
   pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
@@ -1989,14 +1956,14 @@ private def stubRunAfterSetBase : Devm :=
       ⟨stubPauseWorldSevm.currentTarget,
         [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩
 
-private def stubRunMemoryLast : Mem :=
+def stubRunMemoryLast : Mem :=
   ((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
     (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
     (removedIndexWord * 32).toNat (1 : B256).toBytes).write
     (arrayLengthWord * 32).toNat (1 : B256).toBytes).write
     (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes
 
-private def stubRunImageLast : Bytes :=
+def stubRunImageLast : Bytes :=
   Bytes.writeAt
     (Bytes.writeAt
       (Bytes.writeAt
@@ -2059,7 +2026,7 @@ private theorem stubRunAfterSetBase_targetPausedCold :
     rw [← show pauseWorldCallee.toB256.toAdr = pauseWorldCallee from by decide]
     exact h.symm
 
-private theorem temporalSstorePost_getStorVal_otherAddress
+theorem temporalSstorePost_getStorVal_otherAddress
     (sevm : Sevm) (base : Devm) (writeKey value : B256)
     (a : Adr) (key : B256) (hne : a ≠ sevm.currentTarget) :
     (temporalSstorePost sevm base writeKey value).getStorVal a key =
@@ -2219,17 +2186,27 @@ private theorem stubPauseWorld_afterSetStubSeam :
   have hownerStor : (mid.state.get configWorldOwner).stor =
       (stubRunAfterSetBase.state.get configWorldOwner).stor := by
     rw [hstate]
-    exact (state_addBal_stor_local st₂ pauseWorldCallee.toB256.toAdr 0
-      configWorldOwner).trans
-      ((state_subBal_stor_local hsub₂ configWorldOwner).trans
-        ((state_setStorVal_stor_ne_local
-          (st₁.addBal pauseWorldCallee.toB256.toAdr 0) htargetOwner
-          PinnedTargetControl.pausedUntilSlot
+    have hadd₂ :
+        ((st₂.addBal pauseWorldCallee.toB256.toAdr 0).get
+          configWorldOwner).stor = (st₂.get configWorldOwner).stor := by
+      unfold State.addBal
+      exact State.setBal_get_stor
+    have hwrite :
+        (((st₁.addBal pauseWorldCallee.toB256.toAdr 0).setStorVal
+          pauseWorldCallee.toB256.toAdr PinnedTargetControl.pausedUntilSlot
           (pauseForProjection stubPauseWorldSevm.benvStat.time
-            pauseWorldDuration)).trans
-          ((state_addBal_stor_local st₁ pauseWorldCallee.toB256.toAdr 0
-            configWorldOwner).trans
-            (state_subBal_stor_local hsub₁ configWorldOwner))))
+            pauseWorldDuration)).get configWorldOwner).stor =
+          ((st₁.addBal pauseWorldCallee.toB256.toAdr 0).get
+            configWorldOwner).stor := by
+      unfold State.setStorVal
+      exact congrArg Acct.stor (State.get_set_ne _ htargetOwner _)
+    have hadd₁ :
+        ((st₁.addBal pauseWorldCallee.toB256.toAdr 0).get
+          configWorldOwner).stor = (st₁.get configWorldOwner).stor := by
+      unfold State.addBal
+      exact State.setBal_get_stor
+    exact hadd₂.trans ((Blanc.state_subBal_stor hsub₂).trans
+      (hwrite.trans (hadd₁.trans (Blanc.state_subBal_stor hsub₁))))
   have hstor : ∀ key : B256,
       mid.getStorVal configWorldOwner key =
         stubRunAfterSetBase.getStorVal configWorldOwner key := by
@@ -2529,30 +2506,30 @@ private theorem stubPauseWorldAfterSetEntry_memory :
     stubPauseWorldAfterSetEntry.memory = stubRunMemoryLast := by
   rw [stubPauseWorldAfterSetEntry, Devm.memory_setMach]
 
-private theorem stubRunMemoryLast_wf : Mem.Wf stubRunMemoryLast := by
+theorem stubRunMemoryLast_wf : Mem.Wf stubRunMemoryLast := by
   unfold stubRunMemoryLast
   exact stubRunMem_wfLast
 
-private theorem stubRunMemoryLast_reads :
+theorem stubRunMemoryLast_reads :
     Mem.Reads stubRunMemoryLast stubRunImageLast := by
   unfold stubRunMemoryLast stubRunImageLast
   exact stubRunMem_readsLast
 
-private theorem stubRunImageLast_target :
+theorem stubRunImageLast_target :
     Bytes.toB256
       (stubRunImageLast.sliceD (targetWord * 32).toNat 32 0) =
       pauseWorldCallee.toB256 := by
   unfold stubRunImageLast
   exact stubRunMem_targetLast
 
-private theorem stubRunImageLast_duration :
+theorem stubRunImageLast_duration :
     Bytes.toB256
       (stubRunImageLast.sliceD (durationWord * 32).toNat 32 0) =
       pauseWorldDuration := by
   unfold stubRunImageLast
   exact stubRunMem_durLast
 
-private theorem stubRunMemoryLast_targetWindow {devm : Devm}
+theorem stubRunMemoryLast_targetWindow {devm : Devm}
     (hmemory : devm.memory = stubRunMemoryLast) :
     MemWordAt devm (targetWord * 32).toNat pauseWorldCallee.toB256 := by
   unfold MemWordAt
@@ -2565,7 +2542,7 @@ private theorem stubRunMemoryLast_targetWindow {devm : Devm}
     rw [List.takeD_length]
   rw [← stubRunImageLast_target, Bytes.toBytes_toB256_of_length hlen]
 
-private theorem stubRunMemoryLast_durationWindow {devm : Devm}
+theorem stubRunMemoryLast_durationWindow {devm : Devm}
     (hmemory : devm.memory = stubRunMemoryLast) :
     MemWordAt devm (durationWord * 32).toNat pauseWorldDuration := by
   unfold MemWordAt

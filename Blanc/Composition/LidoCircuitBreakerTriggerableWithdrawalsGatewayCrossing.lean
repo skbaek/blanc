@@ -14,6 +14,7 @@ open Jaune
 open Jaune.Ninst Blanc.Ninst
 open Blanc.LidoCircuitBreaker
 open Blanc.LidoCircuitBreaker.PinnedTargetControl
+open Blanc.LidoCircuitBreaker.PinnedTargetStubWalk
 open Blanc.LidoTriggerableWithdrawalsGateway
 
 /-! ## Parent/child boundary helpers -/
@@ -403,7 +404,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
     exact hstateOut
 
 /-- Resolve the warm, non-delegated parent `CALL` completely.  The parent
-charge is the warm access `100` plus the compiled stub's `29772`. -/
+charge is the warm access `100` plus the compiled gateway's `29772`. -/
 private lemma gatewayPause_call_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw duration : B256}
     {s : List B256} {G : Nat}
@@ -603,8 +604,8 @@ private lemma gatewayPause_call_crossing
     · intro hx
       exact Std.HashSet.mem_insert.mpr (Or.inr hx)
 
-/-- The `STATICCALL` crossing whose child is the source-compiled pinned target
-stub on its warm canonical-true query route. -/
+/-- The `STATICCALL` crossing whose child is the source-compiled gateway on its
+warm canonical-true query route. -/
 private lemma runCompiled_statcall_gatewayQuery
     {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw storedUntil : B256} {s : List B256}
@@ -849,7 +850,7 @@ private lemma runCompiled_statcall_gatewayQuery
     exact hstateOut
 
 /-- Resolve the warm, non-delegated parent `STATICCALL` completely.  The
-parent charge is the warm access `100` plus the compiled stub's `220`. -/
+parent charge is the warm access `100` plus the compiled gateway's `220`. -/
 private lemma gatewayQuery_statcall_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw storedUntil : B256}
     {s : List B256} {G : Nat}
@@ -988,135 +989,6 @@ private lemma gatewayQuery_statcall_crossing
     · intro hx
       exact Std.HashSet.mem_insert.mpr (Or.inr hx)
 
-private lemma state_setStorVal_getCode (st : State) (owner a : Adr)
-    (key value : B256) :
-    (st.setStorVal owner key value).getCode a = st.getCode a := by
-  unfold State.getCode
-  have h := congrFun
-    (State.setStorVal_balCodeEq st owner key value) a
-  exact (congrArg Prod.snd h).symm
-
-/-! ## The installed-stub pause suffix -/
-
-private def installedQueryPost : Func :=
-  Ninst.iszero :::
-    ((Func.call bubbleRevertSlot) <?> decodePausedResult)
-
-private def installedQueryStage : Func :=
-  pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++
-    Ninst.gas ::: Ninst.statcall ::: installedQueryPost
-
-private def installedQueryWrite : Func :=
-  pushB256 isPausedSelector ::: mstoreAt 8 +++ installedQueryStage
-
-private def installedQueryPrelude : Func :=
-  Ninst.iszero :::
-    ((Func.call bubbleRevertSlot) <?> installedQueryWrite)
-
-private def installedCallStage : Func :=
-  pushList [0, 0, 36, 0x11c, 0] +++ loadWord targetWord +++
-    Ninst.gas ::: Ninst.call ::: installedQueryPrelude
-
-private def installedGuardPrelude : Func :=
-  Ninst.iszero :::
-    ((Func.call emptyRevertSlot) <?>
-      (Ninst.pop :::
-        pushB256 pauseForSelector ::: mstoreAt 8 +++
-        loadWord durationWord +++ mstoreAt 9 +++ installedCallStage))
-
-private theorem installedQueryGuard_runCompiled
-    (fs : List Func) (sevm : Sevm) (devm : Devm) (M : Mem)
-    (G : Nat) (tail : Func) (post : Devm)
-    (htail : Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M, G⟩) tail post) :
-    Func.RunCompiled fs sevm
-      (devm.setMach ⟨[1], M, G + 16⟩)
-      (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> tail)) post := by
-  func_run (2) [0]
-  case h_arm =>
-    have hg : G + 16 - 16 = G := by omega
-    rw [hg]
-    exact htail
-
-private theorem installedQueryWrite_runCompiled
-    (fs : List Func) (sevm : Sevm) (devm : Devm) (value : B256) (M : Mem)
-    (G : Nat) (tail : Func) (post : Devm)
-    (hvalue : value ≠ 0)
-    (halign : M.size % 32 = 0)
-    (hcover : 256 + 32 ≤ M.size)
-    (htail : Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M.write 256 value.toBytes, G⟩)
-      tail post) :
-    Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M, G + 9⟩)
-      (pushB256 value ::: mstoreAt 8 +++ tail) post := by
-  have hpush : Ninst.RunCompiled sevm
-      (devm.setMach ⟨[], M, G + 9⟩) (pushB256 value)
-      (devm.setMach ⟨[value], M, G + 6⟩) :=
-    Ninst.runCompiled_pushB256 (w := value) (c := 3) (G := G + 6)
-      (by simpa only [gVerylow] using pushCost_of_ne_zero hvalue)
-      (by show G + 9 = G + 6 + 3; omega)
-      (by show ([] : List B256).length < 1024; decide)
-  refine Func.RunCompiled.next hpush ?_
-  func_run (2) [0]
-  all_goals try simp_rw [show ((8 : B256) * 32).toNat = 256 by decide]
-  case h_ext =>
-    exact Devm.extCost_zero_of_le halign hcover
-  case a =>
-    have hg : G + 6 - 6 = G := by omega
-    rw [hg]
-    exact htail
-
-private theorem installedCallArgs_runCompiled
-    (fs : List Func) (sevm : Sevm) (devm : Devm)
-    (target : B256) (M : Mem) (G : Nat) (tail : Func) (post : Devm)
-    (halign : M.size % 32 = 0)
-    (hcover : (targetWord * 32).toNat + 32 ≤ M.size)
-    (hreadMemory : (M.read (targetWord * 32).toNat 32).2 = M)
-    (hreadValue : (M.read (targetWord * 32).toNat 32).1.toB256 = target)
-    (htail : Func.RunCompiled fs sevm
-      (devm.setMach
-        ⟨[Nat.toB256 G, target, 0, 284, 36, 0, 0], M, G⟩)
-      tail post) :
-    Func.RunCompiled fs sevm (devm.setMach ⟨[], M, G + 20⟩)
-      (pushList [0, 0, 36, 0x11c, 0] +++ loadWord targetWord +++
-        Ninst.gas ::: tail) post := by
-  func_run (8) [3]
-  all_goals try simp_rw [hreadMemory]
-  case h_cost =>
-    rw [Devm.extCost_zero_of_le halign hcover]
-    norm_num [gVerylow]
-  case a =>
-    rw [hreadValue]
-    have hg : G + 20 - 20 = G := by omega
-    rw [hg]
-    exact htail
-
-private theorem installedDurationWrite_runCompiled
-    (fs : List Func) (sevm : Sevm) (devm : Devm)
-    (duration : B256) (M : Mem) (G : Nat) (tail : Func) (post : Devm)
-    (halign : M.size % 32 = 0)
-    (hreadCover : (durationWord * 32).toNat + 32 ≤ M.size)
-    (hwriteCover : 288 + 32 ≤ M.size)
-    (hreadMemory : (M.read (durationWord * 32).toNat 32).2 = M)
-    (hreadValue : (M.read (durationWord * 32).toNat 32).1.toB256 = duration)
-    (htail : Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M.write 288 duration.toBytes, G⟩) tail post) :
-    Func.RunCompiled fs sevm (devm.setMach ⟨[], M, G + 12⟩)
-      (loadWord durationWord +++ mstoreAt 9 +++ tail) post := by
-  func_run (4) [3, 0]
-  all_goals try simp_rw [show ((9 : B256) * 32).toNat = 288 by decide]
-  all_goals try simp_rw [hreadMemory]
-  case h_cost =>
-    rw [Devm.extCost_zero_of_le halign hreadCover]
-    norm_num [gVerylow]
-  case h_ext =>
-    exact Devm.extCost_zero_of_le halign hwriteCover
-  case a =>
-    rw [hreadValue]
-    have hg : G + 12 - 12 = G := by omega
-    rw [hg]
-    exact htail
 
 private theorem installedCodeGuard_runCompiled
     (fs : List Func) (sevm : Sevm) (devm : Devm)
@@ -1276,7 +1148,8 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
           LidoTriggerableWithdrawalsGateway.pauseForCalldata duration := by
     rw [Mem.Reads.read hreads2]
     rw [pauseForCalldata_eq]
-    exact sliceD_stagedCalldata img pauseForSelector duration
+    exact Blanc.LidoCircuitBreaker.sliceD_stagedCalldata
+      img pauseForSelector duration
   have htargetMemory2 :
       (((M.write 256 pauseForSelector.toBytes).write 288
         duration.toBytes).read (targetWord * 32).toNat 32).2 =
@@ -1306,7 +1179,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
           284 4).1 = LidoTriggerableWithdrawalsGateway.isPausedCalldata := by
     rw [Mem.Reads.read hreads3]
     rw [isPausedCalldata_eq]
-    exact sliceD_stagedSelector
+    exact Blanc.LidoCircuitBreaker.sliceD_stagedSelector
       (Bytes.writeAt (Bytes.writeAt img 256 pauseForSelector.toBytes)
         288 duration.toBytes) isPausedSelector
   have htargetMemory3 :
@@ -1473,7 +1346,18 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     rw [← hstk1, ← hmem1', ← hgas1']
     rfl
   have hcode1 : post1.state.getCode target.toAdr = gatewayCode controlDeployParams := by
-    rw [hstate1, state_setStorVal_getCode, State.addBal_getCode,
+    have hwriteCode :
+        ((st₁.addBal target.toAdr 0).setStorVal target.toAdr
+          resumeSinceSlot (duration + sevm.benvStat.time)).getCode
+            target.toAdr =
+          (st₁.addBal target.toAdr 0).getCode target.toAdr := by
+      unfold State.getCode
+      have h := congrFun
+        (State.setStorVal_balCodeEq (st₁.addBal target.toAdr 0)
+          target.toAdr resumeSinceSlot (duration + sevm.benvStat.time))
+        target.toAdr
+      exact (congrArg Prod.snd h).symm
+    rw [hstate1, hwriteCode, State.addBal_getCode,
       State.subBal_getCode hsub1]
     show (temporalAccountAccessBase base target.toAdr).state.getCode
       target.toAdr = gatewayCode controlDeployParams

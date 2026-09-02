@@ -16,18 +16,10 @@ Every fact below is a theorem about that concrete world — the gateway account'
 code is the compiler's own output, kernel-reduced, and no evaluator output is
 reflected into a theorem anywhere in this file.
 
-**What this control does not yet establish.**  The one entry-3 premise it does
-not discharge in-world is the production run itself,
-`Prog.RunCompiledTo … (runtime officialParams) (.ok final)`.  The stub world
-obtains its counterpart from `stubPauseWorld_productionRun`, a hand-built
-symbolic walk whose gas accounting is specific to the ten-instruction stub at
-the two boundaries.  Reaching the same result with the full gateway runtime in
-those frames requires a gateway-side compiled walk and a re-derived gas
-schedule; that work is scoped separately and is recorded as an open row rather
-than papered over here.  `gatewayPauseWorld_closedPremises` therefore states
-exactly what is proved: every entry-3 premise except reachability, so that
-`publicPause_gatewayPinnedTarget` applies to any successful production run of
-this world.
+`gatewayPauseWorld_closedPremises` isolates the public theorem's premise
+closure.  The companion `LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun`
+module constructs the production run itself from this exact world, using the
+real gateway boundary walk and its derived gas schedule.
 -/
 
 namespace Blanc.Composition
@@ -76,7 +68,7 @@ def gatewayPauseWorldState : State :=
         stor := controlGatewayStor
         code := gatewayCode controlDeployParams }
 
-def gatewayPauseWorldGas : Nat := 100000
+def gatewayPauseWorldGas : Nat := 107635
 
 def gatewayPauseWorldMsg : Msg :=
   { (pauseWorldMsg pauseLastWorldStor gatewayPauseWorldGas) with
