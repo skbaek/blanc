@@ -44,16 +44,16 @@ private def RootSilentSlot (k : Nat) : Prop :=
     k = rootLoopSlot ∨ k = rootContinuationSlot
 
 private theorem silentIn_emptyRevert :
-    Func.SilentIn Devm.storageView RootSilentSlot Func.rev := by
-  unfold Func.rev
+    Func.SilentIn Devm.storageView RootSilentSlot Func.revert := by
+  unfold Func.revert
   repeat' first
     | exact Ninst.Hinv.inv
     | exact Linst.Hinv.inv
     | apply And.intro
 
 private theorem silentIn_bubbleRevert :
-    Func.SilentIn Devm.storageView RootSilentSlot Func.revReturnData := by
-  unfold Func.revReturnData
+    Func.SilentIn Devm.storageView RootSilentSlot Func.revertReturnData := by
+  unfold Func.revertReturnData
   repeat' first
     | exact Ninst.Hinv.inv
     | exact Linst.Hinv.inv
@@ -72,7 +72,7 @@ private theorem silentIn_rootContinuation :
 private theorem silentIn_rootLoop :
     Func.SilentIn Devm.storageView RootSilentSlot rootLoop := by
   unfold rootLoop rootLiveStep rootDeadStep rootFinish sha64 loadWord
-    mstoreAt storeLe64At retdataShorterThan returnMemoryRange pushList
+    mstoreAt storeLe64At returnDataShorterThan returnMemoryRange pushList
   repeat' first
     | exact Ninst.Hinv.inv
     | exact Linst.Hinv.inv
@@ -90,7 +90,7 @@ private theorem silentIn_rootLoop :
 private theorem silentIn_getDepositRoot :
   Func.SilentIn Devm.storageView RootSilentSlot
       (nonpayableEndpoint getDepositRootEndpoint) := by
-  unfold nonpayableEndpoint getDepositRootEndpoint mstoreAt Func.rev
+  unfold nonpayableEndpoint getDepositRootEndpoint mstoreAt Func.revert
   repeat' first
     | exact Ninst.Hinv.inv
     | exact Linst.Hinv.inv
@@ -105,14 +105,14 @@ private theorem rootSilentSlot_closed :
   intro k g allowed lookup
   rcases allowed with h | h | h | h
   · subst k
-    obtain rfl : Func.rev = g := Option.some.inj
-      ((show (runtime.main :: aux)[emptyRevertSlot]? = some Func.rev from rfl).symm.trans
+    obtain rfl : Func.revert = g := Option.some.inj
+      ((show (runtime.main :: aux)[emptyRevertSlot]? = some Func.revert from rfl).symm.trans
         lookup)
     exact silentIn_emptyRevert
   · subst k
-    obtain rfl : Func.revReturnData = g := Option.some.inj
+    obtain rfl : Func.revertReturnData = g := Option.some.inj
       ((show (runtime.main :: aux)[bubbleRevertSlot]? =
-          some Func.revReturnData from rfl).symm.trans lookup)
+          some Func.revertReturnData from rfl).symm.trans lookup)
     exact silentIn_bubbleRevert
   · subst k
     obtain rfl : rootLoop = g := Option.some.inj
@@ -133,8 +133,8 @@ private def NativeShaPreserves
 private theorem nativeShaPreserves_sha64
     {fs : List Func} {sevm : Sevm} {inputWord outputWord : B256}
     {success : Func}
-    (hbubble : fs[bubbleRevertSlot]? = some Func.revReturnData)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (successPreserves : NativeShaPreserves fs sevm success) :
     NativeShaPreserves fs sevm (sha64 inputWord outputWord success) := by
   intro s r native run
@@ -284,14 +284,14 @@ private theorem deposit_historyTarget
   exact depositEndpoint_history_success_of_run native memory
     (pre.inv.1 rfl) run
 
-private theorem of_run_branch_rev_fallback
+private theorem of_run_branch_revert_fallback
     {fs : List Func} {sevm : Sevm} {s r : Devm} {body : Func}
-    (run : Func.Run fs sevm s (body <?> Func.rev) r) :
+    (run : Func.Run fs sevm s (body <?> Func.revert) r) :
     ∃ w s', Devm.PopBurn [w] s s' ∧ Func.Run fs sevm s' body r := by
   rcases of_run_branch run with
-    ⟨s', _pop, revRun⟩ |
+    ⟨s', _pop, revertRun⟩ |
       ⟨w, _s', s'', _nonzero, pop, burn, bodyRun⟩
-  · exact absurd revRun not_run_rev
+  · exact absurd revertRun not_run_revert
   · exact ⟨w, s'', Devm.popBurn_of_popBurn_of_pop pop burn, bodyRun⟩
 
 private def HistoryDispatchState
@@ -409,7 +409,7 @@ private theorem historySpec_sound_of_targets
   have state₁ : HistoryDispatchState baseline ca sevm s₁ :=
     state₀.of_line h₁ (by line_inv) (by line_inv) (by line_inv) (by line_inv)
   clear state₀ h₁ run s₀
-  obtain ⟨_w, s₂, pop₂, run₂⟩ := of_run_branch_rev_fallback run₁
+  obtain ⟨_w, s₂, pop₂, run₂⟩ := of_run_branch_revert_fallback run₁
   have state₂ : HistoryDispatchState baseline ca sevm s₂ :=
     state₁.of_popBurn pop₂
   clear state₁ pop₂ run₁ s₁

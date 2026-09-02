@@ -156,7 +156,7 @@ def wrappingFuncs (dp : DeployParams) : List (B256 × Func) :=
 
 def wrappingRuntimeMain (dp : DeployParams) : Func :=
   pushB256 4 ::: calldatasize ::: lt :::
-    (Func.rev <?>
+    (Func.revert <?>
       (fsig +++ linearDispatchWith fallbackSlot (wrappingFuncs dp)))
 
 def wrappingPauseRuntime : Prog :=

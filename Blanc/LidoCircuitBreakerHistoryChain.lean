@@ -268,7 +268,7 @@ six-operand static form, which carries no value word: the operands are gas,
 target, input offset, input size, output offset and output size.  The frame it
 opens is the same one, entered with `value = 0` and the static flag set, so the
 child argument is shared verbatim. -/
-theorem coherent_of_statcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
+theorem coherent_of_staticcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
     {g t ii is oi os : B256} {xs : Stack}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
       ((registrySpec dp).PreWf sevm.currentTarget)
@@ -276,10 +276,10 @@ theorem coherent_of_statcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))
     (h_coh : RegistryCoherent (Devm.getStor s sevm.currentTarget))
-    (h_run : Ninst.Run sevm s statcall sf) :
+    (h_run : Ninst.Run sevm s staticcall sf) :
     RegistryCoherent (Devm.getStor sf sevm.currentTarget) ∧
       ∃ b, ((b :: xs) <<+ sf.stack) := by
-  rcases of_run_statcall_val_with_depth hp h_run with ⟨h_stk, h_world, -⟩ | h_enter
+  rcases of_run_staticcall_val_with_depth hp h_run with ⟨h_stk, h_world, -⟩ | h_enter
   · refine ⟨?_, 0, h_stk⟩
     rw [← h_world.getStor sevm.currentTarget]
     exact h_coh
@@ -425,7 +425,7 @@ private theorem coherent_registerPauser (dp : DeployParams)
   rcases of_run_next hrun with ⟨a₁, q₁, hrun⟩
   rcases of_run_next hrun with ⟨a₂, q₂, hrun⟩
   rcases of_run_next hrun with ⟨a₃, q₃, hrun⟩
-  rcases of_run_branch_rev hrun with ⟨a₄, p₄, hrun⟩
+  rcases of_run_branch_revert hrun with ⟨a₄, p₄, hrun⟩
   have hS : Devm.getStor s = Devm.getStor a₄ :=
     ((Ninst.Hinv.inv (f := Devm.getStor) q₁).trans
       ((Ninst.Hinv.inv (f := Devm.getStor) q₂).trans
@@ -443,7 +443,7 @@ private theorem coherent_registerPauser (dp : DeployParams)
   rcases of_run_branch hrun with ⟨a₆, p₆, hrun⟩ | ⟨w₆, b₆, c₆, hw₆, pb₆, bb₆, hrun⟩
   case inr =>
     exact Coherent.call (get_emptyRevertSlot dp)
-      (Coherent.of_storFixed StorFixed.rev) hrun
+      (Coherent.of_storFixed StorFixed.revert) hrun
       (coherent_of_stor_eq
         (hS.trans ((PopBurn.Inv.inv pb₆).trans (Burn.Inv.inv bb₆))) hcoh)
   have hvalid₀ : ValidAdr (Sevm.argWord sevm 0) :=
@@ -459,7 +459,7 @@ private theorem coherent_registerPauser (dp : DeployParams)
   rcases of_run_branch hrun with ⟨a₈, p₈, hrun⟩ | ⟨w₈, b₈, c₈, hw₈, pb₈, bb₈, hrun⟩
   case inr =>
     exact Coherent.call (get_emptyRevertSlot dp)
-      (Coherent.of_storFixed StorFixed.rev) hrun
+      (Coherent.of_storFixed StorFixed.revert) hrun
       (coherent_of_stor_eq
         (hS.trans ((PopBurn.Inv.inv pb₈).trans (Burn.Inv.inv bb₈))) hcoh)
   have hvalid₁ : ValidAdr (Sevm.argWord sevm 1) :=
@@ -619,15 +619,15 @@ theorem storFixed_pauseFailedError (dp : DeployParams) :
 theorem storFixed_reentrantCallError (dp : DeployParams) :
     StorFixed dp reentrantCallError := StorFixed.of_inv (by func_inv)
 
-theorem storFixed_revReturnData (dp : DeployParams) :
-    StorFixed dp Func.revReturnData := StorFixed.of_inv (by func_inv)
+theorem storFixed_revertReturnData (dp : DeployParams) :
+    StorFixed dp Func.revertReturnData := StorFixed.of_inv (by func_inv)
 
 /-- `bubbleRevertSlot` is index 13, and `aux`'s thirteenth entry is the
 returndata bubble. -/
 theorem get_bubbleRevertSlot (dp : DeployParams) :
-    ((runtime dp).main :: aux)[bubbleRevertSlot]? = some Func.revReturnData := rfl
+    ((runtime dp).main :: aux)[bubbleRevertSlot]? = some Func.revertReturnData := rfl
 
-/-- `Func.revData`'s node count depends on a Keccak image, so the arithmetic
+/-- `Func.revertData`'s node count depends on a Keccak image, so the arithmetic
 panic reverter is handled generically over the blob.  (The Endpoints module
 proves the same fact for its own use; that copy is `private`.) -/
 private theorem inv_prependStoresRev :
@@ -641,7 +641,7 @@ private theorem inv_prependStoresRev :
           (next_inv Ninst.Hinv.inv (next_inv Ninst.Hinv.inv h)))
 
 private theorem storFixed_panicData {dp : DeployParams} (blob : Bytes) :
-    StorFixed dp (Func.revData blob) :=
+    StorFixed dp (Func.revertData blob) :=
   StorFixed.of_inv
     (inv_prependStoresRev _
       (next_inv Ninst.Hinv.inv
@@ -676,14 +676,14 @@ theorem coherent_decodePausedResult (dp : DeployParams) :
   unfold decodePausedResult
   refine Coherent.prepend (by line_inv) (Coherent.branch ?_
     (Coherent.call (get_emptyRevertSlot dp)
-      (Coherent.of_storFixed StorFixed.rev)))
+      (Coherent.of_storFixed StorFixed.revert)))
   refine Coherent.prepend (by line_inv) (Coherent.next (Coherent.next
     (Coherent.branch ?_ (Coherent.call rfl
       (Coherent.of_storFixed (storFixed_pauseFailedError dp))))))
   exact Coherent.next (Coherent.next
     (Coherent.branch
       (Coherent.call (get_emptyRevertSlot dp)
-        (Coherent.of_storFixed StorFixed.rev))
+        (Coherent.of_storFixed StorFixed.revert))
       (coherent_pauseSuccess dp)))
 
 /-- The contract's own compiled program survives one instruction. -/
@@ -754,7 +754,7 @@ theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
   rcases of_run_branch hrun with ⟨c₅, p₅, hrun⟩ | ⟨wg, bg, cg, hwg, pbg, bbg, hrun⟩
   case inr =>
     exact Coherent.call (get_emptyRevertSlot dp)
-      (Coherent.of_storFixed StorFixed.rev) hrun
+      (Coherent.of_storFixed StorFixed.revert) hrun
       (coherent_of_stor_eq ((PopBurn.Inv.inv pbg).trans (Burn.Inv.inv bbg)) hC)
   have hC := coherent_of_stor_eq (PopBurn.Inv.inv p₅) hC
   have hK := code_of_getCode_eq (getCode_of_state p₅.state) hK
@@ -818,7 +818,7 @@ theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
   rcases of_run_branch hrun with ⟨f₀, pf₀, hrun⟩ | ⟨wb, bb, cb, hwb, pbb, bbb, hrun⟩
   case inr =>
     exact Coherent.call (get_bubbleRevertSlot dp)
-      (Coherent.of_storFixed (storFixed_revReturnData dp)) hrun
+      (Coherent.of_storFixed (storFixed_revertReturnData dp)) hrun
       (coherent_of_stor_eq ((PopBurn.Inv.inv pbb).trans (Burn.Inv.inv bbb)) hC)
   have hC := coherent_of_stor_eq (PopBurn.Inv.inv pf₀) hC
   have hK := code_of_getCode_eq (getCode_of_state pf₀.state) hK
@@ -858,13 +858,13 @@ theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
   have hpstat : gw2 :: tw2 :: (0x11c : B256) :: (4 : B256) :: (0 : B256) ::
       (32 : B256) :: ([] : Stack) <<+ g₅.stack := by
     simpa using prefix_of_push hgw2 hptw2
-  obtain ⟨hC, -⟩ := coherent_of_statcall ih hpstat hK hC qstat
+  obtain ⟨hC, -⟩ := coherent_of_staticcall ih hpstat hK hC qstat
   rcases of_run_next hrun with ⟨g₇, qiz2, hrun⟩
   have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qiz2) hC
   rcases of_run_branch hrun with ⟨h₀, ph₀, hrun⟩ | ⟨wb2, bb2, cb2, hwb2, pbb2, bbb2, hrun⟩
   case inr =>
     exact Coherent.call (get_bubbleRevertSlot dp)
-      (Coherent.of_storFixed (storFixed_revReturnData dp)) hrun
+      (Coherent.of_storFixed (storFixed_revertReturnData dp)) hrun
       (coherent_of_stor_eq ((PopBurn.Inv.inv pbb2).trans (Burn.Inv.inv bbb2)) hC)
   exact coherent_decodePausedResult dp hrun
     (coherent_of_stor_eq (PopBurn.Inv.inv ph₀) hC)
@@ -975,7 +975,7 @@ theorem coherent_pause (dp : DeployParams) {sevm : Sevm} {s r : Devm}
   rcases of_run_next hrun with ⟨a₁, q₁, hrun⟩
   rcases of_run_next hrun with ⟨a₂, q₂, hrun⟩
   rcases of_run_next hrun with ⟨a₃, q₃, hrun⟩
-  rcases of_run_branch_rev hrun with ⟨a₄, p₄, hrun⟩
+  rcases of_run_branch_revert hrun with ⟨a₄, p₄, hrun⟩
   have hS : Devm.getStor s = Devm.getStor a₄ :=
     ((Ninst.Hinv.inv (f := Devm.getStor) q₁).trans
       ((Ninst.Hinv.inv (f := Devm.getStor) q₂).trans
@@ -998,7 +998,7 @@ theorem coherent_pause (dp : DeployParams) {sevm : Sevm} {s r : Devm}
   rcases of_run_branch hrun with ⟨a₆, p₆, hrun⟩ | ⟨w₆, b₆, c₆, hw₆, pb₆, bb₆, hrun⟩
   case inr =>
     exact Coherent.call (get_emptyRevertSlot dp)
-      (Coherent.of_storFixed StorFixed.rev) hrun
+      (Coherent.of_storFixed StorFixed.revert) hrun
       (coherent_of_stor_eq
         (hS.trans ((PopBurn.Inv.inv pb₆).trans (Burn.Inv.inv bb₆))) hcoh)
   have hvalid₀ : ValidAdr (Sevm.argWord sevm 0) :=

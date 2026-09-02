@@ -142,11 +142,11 @@ theorem Exec.storageView_committedPost_eq_of_static
 
 /-- Every successful `STATICCALL` preserves persistent storage, including the
 case where it enters arbitrary interpreted code. -/
-theorem Ninst.statcall_inv_getStor :
-    Ninst.Inv Devm.storageView Ninst.statcall := by
+theorem Ninst.staticcall_inv_getStor :
+    Ninst.Inv Devm.storageView Ninst.staticcall := by
   intro sevm pre post run
   rcases run with ⟨slot, filled, pc, stepRun⟩
-  have xrun : Xinst.Run sevm pre .statcall slot (.ok post) := by
+  have xrun : Xinst.Run sevm pre .staticcall slot (.ok post) := by
     simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
       Xinst.Run] using stepRun
   cases slot with
@@ -163,7 +163,7 @@ theorem Ninst.statcall_inv_getStor :
         ⟨frame, resume, spawn, enter, resumed⟩
       have childStatic : cevm.sta.isStatic = true :=
         (Frame.enter_run_isStatic enter).trans
-          (Xinst.step_statcall_spawn_isStatic spawn)
+          (Xinst.step_staticcall_spawn_isStatic spawn)
       have frameRun : RunFrame frame (.some ⟨cevm, out⟩)
           (frame.settle out) := by
         unfold RunFrame
@@ -181,7 +181,7 @@ theorem Ninst.statcall_inv_getStor :
       simpa [Devm.storageView, Exec.StorageWrite.replayCell] using
         (replay owner key).symm
 
-instance : Ninst.Hinv Devm.storageView Ninst.statcall :=
-  ⟨Ninst.statcall_inv_getStor⟩
+instance : Ninst.Hinv Devm.storageView Ninst.staticcall :=
+  ⟨Ninst.staticcall_inv_getStor⟩
 
 end Blanc

@@ -860,7 +860,7 @@ sub-execution entry/exit case analyses the ladder above consumes. -/
 instance : Linst.Hinv Devm.getCode Devm.getCode Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
-instance : Linst.Hinv Devm.getCode Devm.getCode Linst.rev := by
+instance : Linst.Hinv Devm.getCode Devm.getCode Linst.revert := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
   rcases Except.bind_eq_ok h with ⟨v1, h1, h2⟩
@@ -871,7 +871,7 @@ instance : Linst.Hinv Devm.getCode Devm.getCode Linst.rev := by
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
-instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by
+instance : Linst.Hinv Devm.getBal Devm.getBal Linst.return_ := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
   rcases Except.bind_eq_ok h with ⟨⟨n1, s1⟩, h1, h2⟩
@@ -884,7 +884,7 @@ instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by
   show s.getBal a = (s3.memRead n1 n2).2.getBal a
   rw [memRead_getBal_eq h_mem a, chargeGas_getBal_eq h5 a, Devm.popToNat_getBal_eq h3 a, Devm.popToNat_getBal_eq h1 a]
 
-instance : Linst.Hinv Devm.getBal Devm.getBal Linst.rev := by
+instance : Linst.Hinv Devm.getBal Devm.getBal Linst.revert := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
   rcases Except.bind_eq_ok h with ⟨v1, h1, h2⟩
@@ -895,7 +895,7 @@ instance : Linst.Hinv Devm.getBal Devm.getBal Linst.rev := by
 instance : Linst.Hinv Devm.getStor Devm.getStor Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
-instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
+instance : Linst.Hinv Devm.getStor Devm.getStor Linst.return_ := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
   rcases Except.bind_eq_ok h with ⟨⟨n1, s1⟩, h1, h2⟩
@@ -907,7 +907,7 @@ instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
   show Devm.getStor s = Devm.getStor (s3.memRead n1 n2).2
   rw [memRead_getStor_eq h_mem, ← chargeGas_getStor_eq h5, ← Devm.popToNat_getStor_eq h3, ← Devm.popToNat_getStor_eq h1]
 
-instance : Linst.Hinv Devm.getStor Devm.getStor Linst.rev := by
+instance : Linst.Hinv Devm.getStor Devm.getStor Linst.revert := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
   rcases Except.bind_eq_ok h with ⟨v1, h1, h2⟩
@@ -1069,8 +1069,8 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
   rcases of_transferTestDst h1 with ⟨dst_invalid, dst, hp1, h_dst⟩
   have hg1 : Devm.getStor s = Devm.getStor s1 := Line.of_inv Devm.getStor (by line_inv) h1
   clear h1
-  -- rev-branch : dst is a valid address
-  rcases of_run_branch_rev h_run with ⟨s2, hp2b, h_run⟩
+  -- revert-branch : dst is a valid address
+  rcases of_run_branch_revert h_run with ⟨s2, hp2b, h_run⟩
   have hp2bs := hp2b.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp2bs
   rw [hp2bs] at hp1
@@ -1086,8 +1086,8 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
   have hg3 : Devm.getStor s = Devm.getStor s3 :=
     hg2.trans (Line.of_inv Devm.getStor (by line_inv) h3)
   clear h3 hp2
-  -- rev-branch : wad ≤ caller balance
-  rcases of_run_branch_rev h_run with ⟨s4, hp4b, h_run⟩
+  -- revert-branch : wad ≤ caller balance
+  rcases of_run_branch_revert h_run with ⟨s4, hp4b, h_run⟩
   have hp4bs := hp4b.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp4bs
   rw [hp4bs] at hp3
@@ -1562,14 +1562,14 @@ lemma calculateMsgCallGas_stipend {value gas gasLeft mem extra : Nat}
   · rw [if_neg hlow]
     exact ⟨gasLeft - mem - extra, rfl⟩
 
-/-- **The value-carrying `KECCAK256` inversion.**  `kec` pushes the hash of
-*the memory window its two operands name* — the fact `of_run_kec` forgets.
+/-- **The value-carrying `KECCAK256` inversion.**  `keccak256` pushes the hash of
+*the memory window its two operands name* — the fact `of_run_keccak256` forgets.
 
 A caller holding a `Mem.Reads` image rewrites the `Mem.read` with
 `Mem.Reads.read` and learns which bytes the hash is taken of, which is what
 turns "some hash" into "the allowance key of this pair of addresses".
 
-Placed here rather than beside `of_run_kec` in `Blanc/CommonProofs.lean` for
+Placed here rather than beside `of_run_keccak256` in `Blanc/CommonProofs.lean` for
 the same reason `of_run_call_val` is: the shared module is against this arc's
 predeclared elaboration falsifier with little margin, and this module has
 headroom.
@@ -1577,7 +1577,7 @@ headroom.
 Like `LOG`, `KECCAK256` only *extends* memory — it reads a window and hashes
 it — so the second conjunct is what carries a `Mem.Wf`/`Mem.Reads` pair across
 it. -/
-lemma of_run_kec_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s Ninst.kec s') :
+lemma of_run_keccak256_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s Ninst.keccak256 s') :
     ∃ x y, Stack.Diff [x, y] [(s.memory.read x.toNat y.toNat).1.keccak]
       s.stack s'.stack ∧ s'.memory = s.memory.extend x.toNat y.toNat := by
   rcases of_run_reg h with ⟨pc, run⟩
@@ -1601,25 +1601,25 @@ lemma of_run_kec_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s Ninst.kec s') :
       show (s₃.memRead x.toNat y.toNat).2.memory = s₃.memory.extend x.toNat y.toNat
         from rfl, hmem]
 
-/-- `prefix_of_kec`, with the hashed window named and the memory extension
+/-- `prefix_of_keccak256`, with the hashed window named and the memory extension
 recorded. -/
-lemma prefix_of_kec_val {e} {x y xs} {s s' : Devm}
-    (h : Ninst.Run e s Ninst.kec s') (hp : x :: y :: xs <<+ s.stack) :
+lemma prefix_of_keccak256_val {e} {x y xs} {s s' : Devm}
+    (h : Ninst.Run e s Ninst.keccak256 s') (hp : x :: y :: xs <<+ s.stack) :
     ((s.memory.read x.toNat y.toNat).1.keccak :: xs <<+ s'.stack) ∧
       s'.memory = s.memory.extend x.toNat y.toNat := by
-  rcases of_run_kec_val h with ⟨x', y', ⟨stk, h2, h3⟩, hm⟩
+  rcases of_run_keccak256_val h with ⟨x', y', ⟨stk, h2, h3⟩, hm⟩
   rcases of_cons_cons_pref_of_cons_cons_pref hp (pref_of_split h2) with ⟨hx, hy, -⟩
   rw [hx, hy] at hp ⊢
   exact ⟨append_pref h3 (of_append_pref h2 hp), hm⟩
 
-/-- **What a `RETURN` returns.**  `Linst.run .ret` pops the window, charges for
-it and sets `Devm.output` from *memory* — so a `Func` ending in `Func.ret` is
+/-- **What a `RETURN` returns.**  `Linst.run .return_` pops the window, charges for
+it and sets `Devm.output` from *memory* — so a `Func` ending in `Func.return_` is
 specified by an equation about `Devm.output`, never about a stack word, and a
 caller holding a `Mem.Reads` image reads the returned bytes off it.
 
 Same placement note as the two inversions above. -/
-lemma of_run_ret_val {fs : List Func} {sevm : Sevm} {s r : Devm} {i n : B256} {xs}
-    (hp : i :: n :: xs <<+ s.stack) (h : Func.Run fs sevm s Func.ret r) :
+lemma of_run_return_val {fs : List Func} {sevm : Sevm} {s r : Devm} {i n : B256} {xs}
+    (hp : i :: n :: xs <<+ s.stack) (h : Func.Run fs sevm s Func.return_ r) :
     Devm.output r = (s.memory.read i.toNat n.toNat).1 ∧
       Devm.getCode s = Devm.getCode r := by
   cases h with
@@ -1690,9 +1690,9 @@ lemma of_returnTrue_shared {fs : List Func} {sevm : Sevm} {s r : Devm}
     ((Ninst.Hinv.inv (f := Devm.getCode) r1).trans
       (Line.of_inv Devm.getCode (by line_inv) h2)).trans
       (Line.of_inv Devm.getCode (by line_inv) h3)
-  refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
+  refine ⟨?_, hgc.trans (of_run_return_val hu2 h).2⟩
   show Devm.output r = _
-  rw [(of_run_ret_val hu2 h).1,
+  rw [(of_run_return_val hu2 h).1,
     show (0 : B256).toNat = 0 from rfl,
     show (32 : B256).toNat = 32 from rfl,
     Mem.Reads.read (hm3 ▸ hrd2) 0 32,
@@ -1745,9 +1745,9 @@ lemma of_storeReturnWord {fs : List Func} {sevm : Sevm} {s r : Devm}
   have hgc : Devm.getCode s = Devm.getCode s3 :=
     (Line.of_inv Devm.getCode (by line_inv) h2).trans
       (Line.of_inv Devm.getCode (by line_inv) h3)
-  refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
+  refine ⟨?_, hgc.trans (of_run_return_val hu2 h).2⟩
   show Devm.output r = _
-  rw [(of_run_ret_val hu2 h).1,
+  rw [(of_run_return_val hu2 h).1,
     show (0 : B256).toNat = 0 from rfl,
     show (32 : B256).toNat = 32 from rfl,
     Mem.Reads.read (hm3 ▸ hrd2) 0 32,
@@ -1785,9 +1785,9 @@ lemma returnsWord_of_storeReturn
   have hcode : Devm.getCode s = Devm.getCode s3 :=
     (Line.of_inv Devm.getCode (by line_inv) h2).trans
       (Line.of_inv Devm.getCode (by line_inv) h3)
-  refine ⟨?_, hcode.trans (of_run_ret_val hu2 h).2⟩
+  refine ⟨?_, hcode.trans (of_run_return_val hu2 h).2⟩
   show Devm.output r = w.toBytes
-  rw [(of_run_ret_val hu2 h).1, ← hm3, hm2,
+  rw [(of_run_return_val hu2 h).1, ← hm3, hm2,
     show ((0 : B256) * 32).toNat = 0 from by decide,
     show (0 : B256).toNat = 0 from rfl,
     show (32 : B256).toNat = 32 from rfl,
@@ -2320,10 +2320,10 @@ The successful-child arm includes synchronous precompiles (`xl = .none`) as
 well as interpreted code.  In particular it does not assume that the target
 has code, that a precompile succeeds, or that the child returns any fixed
 number of bytes. -/
-lemma of_run_statcall_val_with_depth_cause
+lemma of_run_staticcall_val_with_depth_cause
     {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.statcall sf) :
+    (h_run : Ninst.Run sevm s Ninst.staticcall sf) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf ∧
       ∃ out : Bytes,
         sf.returnData = out ∧
@@ -2657,13 +2657,13 @@ lemma of_run_statcall_val_with_depth_cause
         by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
       simpa [ProcessMessage] using run_pm₀
 
-/-- The compatibility projection of `of_run_statcall_val_with_depth_cause`.
+/-- The compatibility projection of `of_run_staticcall_val_with_depth_cause`.
 Consumers that only need the flag/world/returndata dichotomy do not have to
 carry the failure-cause witness. -/
-lemma of_run_statcall_val_with_depth
+lemma of_run_staticcall_val_with_depth
     {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.statcall sf) :
+    (h_run : Ninst.Run sevm s Ninst.staticcall sf) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf ∧
       ∃ out : Bytes,
         sf.returnData = out ∧
@@ -2693,7 +2693,7 @@ lemma of_run_statcall_val_with_depth
       sf.returnData = child.output ∧
       sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
       sf.stack = (1 : B256) :: parent.stack := by
-  rcases of_run_statcall_val_with_depth_cause hp h_run with hfail | hsuccess
+  rcases of_run_staticcall_val_with_depth_cause hp h_run with hfail | hsuccess
   · rcases hfail with ⟨hstack, hworld, out, hret, hmem, hcause⟩
     exact Or.inl ⟨hstack, hworld, out, hret, hmem⟩
   · rcases hsuccess with
@@ -2870,17 +2870,17 @@ theorem Linst.getStor_eq
       simp [Linst.Run, Linst.run] at run
       subst post
       rfl
-  | ret =>
-      have hframe := Linst.run_instructionFrame sevm pre .ret (by decide)
+  | return_ =>
+      have hframe := Linst.run_instructionFrame sevm pre .return_ (by decide)
       rw [run] at hframe
       exact (hframe.getStor owner).symm
-  | rev =>
+  | revert =>
       dsimp [Linst.Run, Linst.run] at run
       rcases Except.bind_eq_ok run with ⟨first, hfirst, rest⟩
       rcases Except.bind_eq_ok rest with ⟨second, hsecond, rest⟩
       rcases Except.bind_eq_ok rest with ⟨third, hthird, rest⟩
       contradiction
-  | dest =>
+  | selfdestruct =>
       dsimp [Linst.Run, Linst.run] at run
       rcases Except.bind_eq_ok run with
         ⟨⟨donee, devm1⟩, pop, rest⟩
@@ -3289,12 +3289,12 @@ theorem Linst.targetBalanceMono_of_foreign
       simp [Linst.Run, Linst.run] at run
       subst post
       exact Nat.le_refl _
-  | ret =>
-      have frame := Linst.run_instructionFrame sevm pre .ret (by decide)
+  | return_ =>
+      have frame := Linst.run_instructionFrame sevm pre .return_ (by decide)
       rw [run] at frame
       exact Nat.le_of_eq
         (congrArg (fun state : State => (state.bal ca).toNat) frame.state)
-  | rev =>
+  | revert =>
       unfold Linst.Run Linst.run at run
       rcases firstPop : pre.popToNat with error | ⟨index, devm1⟩
       · simp [firstPop, bind, Except.bind] at run
@@ -3306,7 +3306,7 @@ theorem Linst.targetBalanceMono_of_foreign
               (devm2.extCost [(index, size)]) devm2 with error | devm3
           · simp [charged] at run
           · simp [charged] at run
-  | dest =>
+  | selfdestruct =>
       dsimp [Linst.Run, Linst.run] at run
       rcases Except.bind_eq_ok run with
         ⟨⟨destination, devm1⟩, popped, rest⟩
@@ -3504,9 +3504,9 @@ theorem genericCall.step_spawn_isStatic_of_staticcall
   all_goals obtain ⟨rfl, -⟩ := hs
   all_goals simp only [Jaune.Frame.ofCall, callMsg, Bool.true_or]
 
-theorem Xinst.step_statcall_spawn_isStatic
+theorem Xinst.step_staticcall_spawn_isStatic
     {sevm : Sevm} {devm : Devm} {f : Jaune.Frame} {rsm : Resume}
-    (hs : Xinst.step sevm devm .statcall = .spawn f rsm) :
+    (hs : Xinst.step sevm devm .staticcall = .spawn f rsm) :
     f.inner.isStatic = true := by
   simp only [Xinst.step, Bind.bind, Except.bind, Pure.pure,
     Except.pure] at hs
@@ -3514,25 +3514,25 @@ theorem Xinst.step_statcall_spawn_isStatic
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
   all_goals exact genericCall.step_spawn_isStatic_of_staticcall hs
 
-theorem Ninst.step_statcall_spawn_isStatic
+theorem Ninst.step_staticcall_spawn_isStatic
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {f : Jaune.Frame} {rsm : Resume}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall = .spawn f rsm pc') :
+    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall = .spawn f rsm pc') :
     f.inner.isStatic = true := by
-  have hx : Xinst.step sevm pre .statcall = .spawn f rsm :=
+  have hx : Xinst.step sevm pre .staticcall = .spawn f rsm :=
     XStep.toStep_spawn (by
-      simpa only [Ninst.statcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_statcall_spawn_isStatic hx
+      simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
+  exact Xinst.step_staticcall_spawn_isStatic hx
 
 /-- An interpreted child of a `STATICCALL` runs statically. -/
-theorem Ninst.step_statcall_run_isStatic
+theorem Ninst.step_staticcall_run_isStatic
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {f : Jaune.Frame} {rsm : Resume} {cevm : Evm}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall = .spawn f rsm pc')
+    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall = .spawn f rsm pc')
     (henter : f.enter = .run cevm) :
     cevm.sta.isStatic = true :=
   (Frame.enter_run_isStatic henter).trans
-    (Ninst.step_statcall_spawn_isStatic hspawn)
+    (Ninst.step_staticcall_spawn_isStatic hspawn)
 
 /-- Exact CALL frame and resumption selected by a successful generic spawn. -/
 theorem genericCall_step_spawn_exact
@@ -4448,7 +4448,7 @@ lemma Xinst.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} 
       · exact absurd ht h_ne
 
 
-lemma Post.dest_delete {ca : Adr} {sevm : Sevm} {devm : Devm}
+lemma Post.selfdestruct_delete {ca : Adr} {sevm : Sevm} {devm : Devm}
     (h_ne : sevm.currentTarget ≠ ca) (h_pc : c.Pre ca sevm devm) :
     c.Post ca sevm
       (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget) := by
@@ -4497,11 +4497,11 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     dsimp [Linst.Run, Linst.run] at h_run
     injection h_run with h_eq; subst h_eq
     exact post_of_pre h_pc
-  case ret =>
+  case return_ =>
     have h_bal : pre.getBal = post.getBal :=
-      ((inferInstance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret)).inv h_run
+      ((inferInstance : Linst.Hinv Devm.getBal Devm.getBal Linst.return_)).inv h_run
     have h_stor : Devm.getStor pre = Devm.getStor post :=
-      ((inferInstance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret)).inv h_run
+      ((inferInstance : Linst.Hinv Devm.getStor Devm.getStor Linst.return_)).inv h_run
     constructor
     · rw [← h_bal]; exact h_pc.side
     · show c.Inv (Devm.getStor post wa) 0 (post.getBal wa)
@@ -4509,13 +4509,13 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       have hs : Devm.getStor post wa = Devm.getStor pre wa := (congr_fun h_stor wa).symm
       rw [hb, hs]
       exact h_pc.inv.right h_ne
-  case rev =>
+  case revert =>
     dsimp [Linst.Run, Linst.run] at h_run
     rcases Except.bind_eq_ok h_run with ⟨_, _, h2⟩
     rcases Except.bind_eq_ok h2 with ⟨_, _, h4⟩
     rcases Except.bind_eq_ok h4 with ⟨_, _, h6⟩
     contradiction
-  case dest =>
+  case selfdestruct =>
     dsimp [Linst.Run, Linst.run] at h_run
     rcases Except.bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
     rcases Except.bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
@@ -4564,7 +4564,7 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     clear h_run h_run1 h_run2 h_run3
     split at h_run4
     · rw [← Except.ok.inj h_run4]
-      exact Post.dest_delete h_ne h_pc3
+      exact Post.selfdestruct_delete h_ne h_pc3
     · rw [← Except.ok.inj h_run4]
       exact post_of_pre h_pc3
 

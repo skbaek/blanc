@@ -76,7 +76,7 @@ def storeByteOffsetForProof_eq (offset : Nat) :
 
 def constructorErrorForProof_eq (name : String) :
     constructorErrorForProof name =
-      Func.revSelector (customErrorData name) (by
+      Func.revertSelector (customErrorData name) (by
         simp [customErrorData, B256.length_toBytes]) := by
   rfl
 
@@ -181,7 +181,7 @@ def constructorBodyForProof_eq
                                                   pushFixedNatForProof runtimeLength :::
                                                   pushCompactNatForProof
                                                     constructorRuntimeBaseForProof :::
-                                                  Func.ret)))))))))))))))))))))) := by
+                                                  Func.return_)))))))))))))))))))))) := by
   rfl
 
 def constructorProgramForProof_eq
@@ -190,7 +190,7 @@ def constructorProgramForProof_eq
       { main := callvalue ::: iszero :::
           (constructorBodyForProof runtimeOffset argsOffset runtimeLength <?>
             (.call 1))
-        aux := [Func.rev,
+        aux := [Func.revert,
           constructorErrorForProof "AdminZero",
           constructorErrorForProof "MinPauseDurationZero",
           constructorErrorForProof "MinPauseDurationExceedsMax",

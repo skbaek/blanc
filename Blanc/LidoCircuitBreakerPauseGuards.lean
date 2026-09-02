@@ -13,7 +13,7 @@ the six are free on this route, and the split is exactly the one
   *named* runtime error on the arm this walk does not take, so an empty raw
   payload refutes that arm outright;
 * `requireStaticArgs` and `canonicalAddressArg` revert through a bare
-  `Func.rev`, whose payload is also empty, so their words have to be computed.
+  `Func.revert`, whose payload is also empty, so their words have to be computed.
 
 Both surviving words are calldata-valued.  Nothing on this leg reads storage,
 transient storage or memory, so nothing is threaded across it.

@@ -582,10 +582,10 @@ def upgradeToAndCallDelegateSetup : Func :=
   loadUpgradeToAndCallWord upgradeToAndCallSetupLengthWord +++
   pushB256 upgradeToAndCallSetupMemoryBase :::
   loadUpgradeToAndCallWord upgradeToAndCallImplementationWord +++
-  gas ::: delcall :::
+  gas ::: delegatecall :::
   (Func.stop <?>
-    (retdatasize :::
-      (Func.revReturnData <?> (.call emptyDelegatecallErrorSlot))))
+    (returndatasize :::
+      (Func.revertReturnData <?> (.call emptyDelegatecallErrorSlot))))
 
 /-- The three setup branches: nonempty data calls unconditionally; empty data
 calls exactly when the decoded force word is nonzero. -/

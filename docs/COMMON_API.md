@@ -38,9 +38,9 @@ registry has identified the likely vocabulary.
 - For a successful source branch whose selected arm calls a known
   nonreturning auxiliary, use `of_run_branch_call_of_not_run` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).  Its shared
-  specializations `of_run_branch_call_rev`,
-  `of_run_branch_call_revWith`, and
-  `of_run_branch_call_revReturnData` cover the standard empty,
+  specializations `of_run_branch_call_revert`,
+  `of_run_branch_call_revertWith`, and
+  `of_run_branch_call_revertReturnData` cover the standard empty,
   constant-payload, and returndata-bubbling reverters.
 - Known stack steps without a tactic arm: `prefix_of_mul`, `prefix_of_div`,
   `prefix_of_timestamp`, `prefix_of_xor`, `prefix_of_extcodesize_val`, and
@@ -70,29 +70,29 @@ registry has identified the likely vocabulary.
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` and is the identity
-  on constant-data reverters by `Trigger.rebaseLocalCalls_revData` in
+  on constant-data reverters by `Trigger.rebaseLocalCalls_revertData` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
 - Invert an existing arbitrary-outcome compiled walk:
   [`Blanc/CompiledWalkInversion.lean`](../Blanc/CompiledWalkInversion.lean).
   Use `runCompiledTo_next_inv`, `runCompiledTo_branch_inv`,
   `runCompiledTo_call_inv`, and `runCompiledTo_prepend_inv` for structural
-  nodes; `runCompiledTo_last_inv`, `runCompiledTo_rev_inv`, and
-  `runCompiledTo_revSelector_inv` for terminal/revert nodes.  The shared
+  nodes; `runCompiledTo_last_inv`, `runCompiledTo_revert_inv`, and
+  `runCompiledTo_revertSelector_inv` for terminal/revert nodes.  The shared
   `iszero_stack_inv` also transports the unchanged memory and return data.
-  Known impossible successful terminals/calls use `Linst.not_run_rev_ok`,
-  `Func.RunCompiledTo.not_ok_revData`,
-  `Func.RunCompiledTo.not_ok_call_revData`,
-  `Func.RunCompiledTo.not_ok_call_rev`, and
-  `Func.RunCompiledTo.not_ok_call_revSelector`; successful `STOP` identity is
+  Known impossible successful terminals/calls use `Linst.not_run_revert_ok`,
+  `Func.RunCompiledTo.not_ok_revertData`,
+  `Func.RunCompiledTo.not_ok_call_revertData`,
+  `Func.RunCompiledTo.not_ok_call_revert`, and
+  `Func.RunCompiledTo.not_ok_call_revertSelector`; successful `STOP` identity is
   `Func.RunCompiledTo.stop_eq`.  For exact constant-data revert payloads and
   their persistent/transient/log frame, use
-  `runCompiledTo_revData_frame_inv`; when the reverter is reached through a
-  known auxiliary call, use `runCompiledTo_call_revData_frame_inv` so the
+  `runCompiledTo_revertData_frame_inv`; when the reverter is reached through a
+  known auxiliary call, use `runCompiledTo_call_revertData_frame_inv` so the
   payload conclusion remains tied to that call walk.  For a known branch-head prefix use
   `Func.RunCompiledTo.zero_branch_of_prefix` or
   `Func.RunCompiledTo.succ_branch_of_prefix`, both outcome-polymorphic.  A
   successful branch whose jumped arm is a fixed empty-data reverter can be
-  collapsed directly with `Func.RunCompiledTo.zero_branch_of_ok_call_rev`;
+  collapsed directly with `Func.RunCompiledTo.zero_branch_of_ok_call_revert`;
   it returns the fall-through walk and branch pop.  Use the neighboring
   `_of_prefix` form when the forced zero head and preserved known tail are
   also needed.  For any separately established nonreturning right arm, use
@@ -167,7 +167,7 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
 - `Ninst.ChildlessRunCompiled` strengthens one compiled instruction with a
   definitionally empty recursive slot; `.toRunCompiled` forgets that fact,
   while `childlessRunCompiled_exec_doneFrame` and
-  `childlessRunCompiled_statcall_doneFrame` construct it for synchronously
+  `childlessRunCompiled_staticcall_doneFrame` construct it for synchronously
   resolved frames.
 - `Func.exec_of_runCompiledTo` and its program bridge recover an `Exec`
   derivation from a completed arbitrary-outcome compiled walk.
@@ -178,7 +178,7 @@ For an exact `DELEGATECALL` boundary, use
 delegation-resolution, access-charge, EIP-150 split, depth, and precompile
 equations; its `parent`, `child`, and `resume` are the actual Jaune constructors,
 `.afterAccess_memory` records that delegation resolution preserves the call
-memory, `.step` recovers the exact `.delcall` spawn, `.child_data` exposes the
+memory, `.step` recovers the exact `.delegatecall` spawn, `.child_data` exposes the
 exact input-memory window, and `.crossing` discharges the entered child frame.  A
 `DelegatedChildCertificate` retains the recursive child trace without assuming
 an outer result; `.process` recovers its relational `ProcessMessage` witness and
@@ -190,7 +190,7 @@ requiring the consumer to reconstruct the recursive slot.  For a compiled step
 being constructed from an already-retained child trace, use
 `DelegatecallSpawnDescriptor.runCompiled_of_certificate`; it combines the
 certificate with the exact resume equation and derives the actual compiled
-`.delcall` step for the descriptor's own child.  For a compiled step
+`.delegatecall` step for the descriptor's own child.  For a compiled step
 that has already settled back into an ordinary parent state,
 `DelegatecallSpawnDescriptor.settled_of_runCompiled` packages the retained
 child as a `DelegatecallSettledBoundary`, including the exact returndata,
@@ -233,10 +233,10 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
 - `Func.RunCompiledTo.NoRawSstorePath` mirrors the chosen branches and
   internal calls and requires explicit childlessness at external instructions.
 - `NoRawSstorePath.of_execFree` discharges an execution-free, locally
-  SSTORE-free body; `NoRawSstorePath.of_revWith` is the symbolic
+  SSTORE-free body; `NoRawSstorePath.of_revertWith` is the symbolic
   constant-error specialization.
 - `NoRawSstorePath.of_emptyRevertGuard` certifies a selected nonzero guard
-  whose internal auxiliary is the common empty `Func.rev` body.
+  whose internal auxiliary is the common empty `Func.revert` body.
 - `NoRawSstorePath.of_prepend_nonexec` prepends an instruction-only line when
   every instruction is non-external and distinct from raw `SSTORE`; its tail
   certificate may depend on the intermediate compiled state.
@@ -252,10 +252,10 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
   can certify a prefix only with a harmless success continuation: the error
   proof establishes that the replaced continuation was not entered.
 - For a warm fixed-width SHA-256 precompile crossing, use
-  `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext` in
+  `Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext` in
   [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary
   `runCompiled_*` projection intentionally forgets the empty child slot. Use
-  `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext_full` when later
+  `Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full` when later
   transaction settlement also needs the crossing's exact refund preservation
   and account-deletion-set emptiness preservation.
 - `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
@@ -275,12 +275,12 @@ replace the selected-path certificate.
 
 Use [`Blanc/ExecutionTerminal.lean`](../Blanc/ExecutionTerminal.lean):
 
-- `Func.runCompiledTo_ret_word_at_zero` for a known 32-byte return at offset 0.
-- `Func.runCompiledTo_rev_empty_at_zero` for an empty revert at offset 0.
+- `Func.runCompiledTo_return_word_at_zero` for a known 32-byte return at offset 0.
+- `Func.runCompiledTo_revert_empty_at_zero` for an empty revert at offset 0.
 
 For different offsets, sizes, stack tails, or payloads, use the general
-`Func.runCompiledTo_ret_word` in `ForwardCall` or
-`Func.runCompiledTo_rev` / `Func.runCompiledTo_rev_of` in `Reverts`.
+`Func.runCompiledTo_return_word` in `ForwardCall` or
+`Func.runCompiledTo_revert` / `Func.runCompiledTo_revert_of` in `Reverts`.
 
 For a nonzero branch flag that tail-calls an empty-revert auxiliary, use
 `emptyRevertGuardCost` and `Func.runCompiledTo_emptyRevertGuard` in
@@ -418,7 +418,7 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
   `Rinst`/`Ninst` instances are registered beside the whole-family ones.
 - A terminal `Linst.Inv` goal is discharged from its registered `Linst.Hinv`
   instance with `exact Linst.Hinv.inv`; `Blanc/Ladder.lean` registers
-  `Devm.getCode` preservation for both `Linst.stop` and `Linst.rev`.
+  `Devm.getCode` preservation for both `Linst.stop` and `Linst.revert`.
 - A missing contract-neutral instance belongs in a shared module below every
   consumer, not in the first contract that needs it.
 
@@ -503,9 +503,9 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   `Devm.setCode_refundCounter`, and `Devm.setCode_accountsToDelete` carry the
   persistent storage and frame observations that code installation does not
   modify.
-- `Devm.retPost_world`, `Devm.retPost_getStorVal`,
-  `Devm.retPost_transientStorage`, and
-  `Devm.retPost_accessedStorageKeys` project through the common
+- `Devm.returnPost_world`, `Devm.returnPost_getStorVal`,
+  `Devm.returnPost_transientStorage`, and
+  `Devm.returnPost_accessedStorageKeys` project through the common
   `setMach`/`memRead`/`withOutput` return post.
 - `Devm.sstoreBase_state`, `Devm.sstoreBase_error`,
   `Devm.sstoreBase_transientStorage`, `Devm.sstoreBase_logs`, and

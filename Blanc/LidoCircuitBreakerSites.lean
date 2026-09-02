@@ -919,7 +919,7 @@ theorem runtimeExternalCallInstructions_official :
     (sites.filter fun site =>
         isExternalCallInstruction site.instruction).map
           (fun site => externalInstruction? site.instruction) =
-      [some .call, some .statcall] := by
+      [some .call, some .staticcall] := by
   decide +kernel
 
 /-- Exact execution opcodes of the two structural runtime external-call sites,
@@ -927,7 +927,7 @@ in source/compiler order. -/
 theorem runtimeExternalCallSourceSites_instructions (dp : DeployParams) :
     (runtimeExternalCallSourceSites dp).map
         (fun site => externalInstruction? site.instruction) =
-      [some .call, some .statcall] := by
+      [some .call, some .staticcall] := by
   unfold runtimeExternalCallSourceSites
   rw [← filterExternal_nonPush, persistentProgramSourceSites_eq,
     runtime_persistentProgramShape_eq]
@@ -971,7 +971,7 @@ theorem runtimeExternalCallSourceSite_instruction_exact
     {dp : DeployParams} {site : Prog.SourceSite}
     (member : site ∈ runtimeExternalCallSourceSites dp) :
     site.instruction = .exec .call ∨
-      site.instruction = .exec .statcall := by
+      site.instruction = .exec .staticcall := by
   have projected : externalInstruction? site.instruction ∈
       (runtimeExternalCallSourceSites dp).map
         (fun source => externalInstruction? source.instruction) := by
@@ -994,7 +994,7 @@ theorem runtimeExec_instruction_exact
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (instructionAt : Ninst.At target.sevm.code target.pc
       (.exec instruction)) :
-    instruction = .call ∨ instruction = .statcall := by
+    instruction = .call ∨ instruction = .staticcall := by
   rcases root.nonPush_sourceSite invocation sameFrame (by trivial)
       instructionAt with ⟨site, member, sitePc, siteInstruction⟩
   have external : site ∈ runtimeExternalCallSourceSites dp := by
@@ -1002,11 +1002,11 @@ theorem runtimeExec_instruction_exact
     rw [List.mem_filter]
     exact ⟨member, by simp [siteInstruction, isExternalCallInstruction]⟩
   rcases runtimeExternalCallSourceSite_instruction_exact external with
-    callEq | statcallEq
+    callEq | staticcallEq
   · rw [siteInstruction] at callEq
     exact Or.inl (by simpa using callEq)
-  · rw [siteInstruction] at statcallEq
-    exact Or.inr (by simpa using statcallEq)
+  · rw [siteInstruction] at staticcallEq
+    exact Or.inr (by simpa using staticcallEq)
 
 theorem runtimePersistent_effectDomains_separate
     {dp : DeployParams} {site : Prog.SourceSite}

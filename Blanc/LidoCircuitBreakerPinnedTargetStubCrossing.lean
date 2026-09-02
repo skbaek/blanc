@@ -480,7 +480,7 @@ private lemma stubPause_call_crossing
 
 /-- The `STATICCALL` crossing whose child is the source-compiled pinned target
 stub on its warm canonical-true query route. -/
-private lemma runCompiled_statcall_stubQuery
+private lemma runCompiled_staticcall_stubQuery
     {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw storedUntil : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
@@ -509,7 +509,7 @@ private lemma runCompiled_statcall_stubQuery
     (h_paused : sevm.benvStat.time < storedUntil)
     (h_room : s.length < 1024) :
     ∃ post,
-      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
@@ -529,7 +529,7 @@ private lemma runCompiled_statcall_stubQuery
         post.state = stmid.addBal tw.toAdr 0 := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := statcallSpawnMsg sevm p mcs tw.toAdr dadr
+  let msg := staticcallSpawnMsg sevm p mcs tw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < 0
@@ -644,9 +644,9 @@ private lemma runCompiled_statcall_stubQuery
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
-  have hrun : Ninst.RunCompiled sevm devm (.exec .statcall) post :=
+  have hrun : Ninst.RunCompiled sevm devm (.exec .staticcall) post :=
     Ninst.runCompiled_exec_run
-      (Xinst.step_statcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+      (Xinst.step_staticcall_spawn h_stk h_ext h_del h_acc h_split h_gas
         h_depth)
       (by simpa [p, msg] using henter) (by simpa [p, msg] using hres)
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
@@ -699,7 +699,7 @@ private lemma runCompiled_statcall_stubQuery
     exact heffectOut
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, statcallSpawnMsg, callMsg] using hsub
+      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = stmid.addBal tw.toAdr 0
@@ -707,7 +707,7 @@ private lemma runCompiled_statcall_stubQuery
 
 /-- Resolve the warm, non-delegated parent `STATICCALL` completely.  The
 parent charge is the warm access `100` plus the compiled stub's `172`. -/
-private lemma stubQuery_statcall_crossing
+private lemma stubQuery_staticcall_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw storedUntil : B256}
     {s : List B256} {G : Nat}
     (hstk : devm.stack =
@@ -729,7 +729,7 @@ private lemma stubQuery_statcall_crossing
     (hfloor : 274 ≤ G) (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
-      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
@@ -818,7 +818,7 @@ private lemma stubQuery_statcall_crossing
       d0.accessedStorageKeys := by exact hwarmSlot
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs,
     hrefund, hatd, htrans, hask, haa, heffect, stmid, hsub, hstate⟩ :=
-    runCompiled_statcall_stubQuery
+    runCompiled_staticcall_stubQuery
       (gw := Nat.toB256 G) (tw := target) (storedUntil := storedUntil)
       hstk
       (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
@@ -860,7 +860,7 @@ private def installedQueryPost : Func :=
 
 private def installedQueryStage : Func :=
   pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++
-    Ninst.gas ::: Ninst.statcall ::: installedQueryPost
+    Ninst.gas ::: Ninst.staticcall ::: installedQueryPost
 
 private def installedQueryWrite : Func :=
   pushB256 isPausedSelector ::: mstoreAt 8 +++ installedQueryStage
@@ -1237,7 +1237,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
   obtain ⟨post2, hrun2, hstk2, hmem2, hgas2, herr2, hout2, hret2, hlogs2,
     hrefund2, hatd2, htrans2, hask2, haa2, heffect2, st₂, hsub2,
     hstate2⟩ :=
-    stubQuery_statcall_crossing (sevm := sevm)
+    stubQuery_staticcall_crossing (sevm := sevm)
       (devm := post1.setMach
         ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
@@ -1385,7 +1385,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
           Gb + 334⟩)
-      (Ninst.statcall ::: installedQueryPost) post := by
+      (Ninst.staticcall ::: installedQueryPost) post := by
     refine Func.RunCompiled.next hrun2 ?_
     rw [heta2]
     exact hQueryPost

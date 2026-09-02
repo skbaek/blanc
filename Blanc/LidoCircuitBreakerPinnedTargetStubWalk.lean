@@ -168,7 +168,7 @@ theorem stubQuery_true_warm_runCompiledTo
       simp [B256.ltCheck, hpaused]
     case h_ext => exact Devm.extCost_empty_word
     case a =>
-      apply Func.runCompiledTo_ret_word (i := 0) (sz := 32) (s := [])
+      apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
         (e := 0) (G := G) (out := (1 : B256).toBytes)
       · rfl
       · rw [show ((0 : B256)).toNat = 0 by decide,
@@ -236,7 +236,7 @@ private theorem protected_zero_tail_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[selector], M, G + 19⟩)
       (pushB256 guardSelector ::: Ninst.eq :::
-        (Func.rev <?> stubBaseMain)) (.ok post) := by
+        (Func.revert <?> stubBaseMain)) (.ok post) := by
   apply Func.RunCompiledTo.next
   · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 16)
       (pushCost_of_ne_zero guardNonzero)

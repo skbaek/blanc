@@ -58,7 +58,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThen
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
     (hallowanceError :
       (f₀ :: aux)[allowanceErrorSlot]? =
-        some (Func.revWith "WETH: request exceeds allowance")) :
+        some (Func.revertWith "WETH: request exceeds allowance")) :
     ∃ body,
       (f₀ :: aux)[nextSlot]? = some body ∧
       Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux)
@@ -101,7 +101,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThen
         | call hget _hburn hbody =>
             rw [hallowanceError] at hget
             cases Option.some.inj hget
-            exact absurd hbody Func.not_run_revWith
+            exact absurd hbody Func.not_run_revertWith
     · rcases hmax with ⟨maxCursor⟩
       rcases maxCursor.peelChildlessLine
           (line := [Ninst.pop, Ninst.pop])
@@ -140,7 +140,7 @@ private theorem transferFromNonzero_allowanceKey (dp : DeployParams)
   have hp2 : (balance <? Sevm.argWord e 2) :: balance ::
       Sevm.argWord e 2 :: owner :: [] <<+ s2.stack :=
     prefix_of_balanceTooSmall hp1 hguard
-  rcases of_run_branch_call_revWith
+  rcases of_run_branch_call_revertWith
       (transferBalanceError_lookup dp) run2 with
     ⟨s3, hguardPop, run3⟩
   have hguardStack := hguardPop.stack
@@ -344,7 +344,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferFromBalanceCheckLine +++
       ((.call transferBalanceErrorSlot) <?>
-        (transferFromNonzeroSuccessLine +++ Func.last .ret)))
+        (transferFromNonzeroSuccessLine +++ Func.last .return_)))
     frame.post at nonzeroCursor
   rcases nonzeroCursor.peelChildlessLine
       (by simp [transferFromBalanceCheckLine, loadArgBalanceAmount,
@@ -366,7 +366,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero
     | call hget' _hburn hbody' =>
         rw [transferBalanceError_lookup dp] at hget'
         cases Option.some.inj hget'
-        exact absurd hbody' Func.not_run_revWith
+        exact absurd hbody' Func.not_run_revertWith
 
 /-- Nonzero-recipient `transferFrom` transports the allowance region: the
 attribution stream is the frame's own record alone, its event is the

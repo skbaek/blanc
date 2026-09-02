@@ -55,7 +55,7 @@ theorem missingRole_call_reverts_exact
     simp [runtime, aux, baseAux, missingRoleSlot]
   obtain ⟨_, _, hbody⟩ := runCompiledTo_call_inv hget hcall
   simpa [runtimeError, customErrorData] using
-    (runCompiledTo_revSelector_inv hbody)
+    (runCompiledTo_revertSelector_inv hbody)
 
 theorem pausedExpected_call_reverts_exact
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -69,7 +69,7 @@ theorem pausedExpected_call_reverts_exact
     simp [runtime, aux, baseAux, pausedExpectedSlot]
   obtain ⟨_, _, hbody⟩ := runCompiledTo_call_inv hget hcall
   simpa [runtimeError, customErrorData] using
-    (runCompiledTo_revSelector_inv hbody)
+    (runCompiledTo_revertSelector_inv hbody)
 
 /-! The A2 route consumer for the public dispatcher.  It exposes the exact
     selected body after the program entry guard and selector load. -/

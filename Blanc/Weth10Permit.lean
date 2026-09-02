@@ -192,7 +192,7 @@ def permitStructHash (owner spender : Adr) (value nonce deadline : B256) :
 def permitStructPrepare : Line :=
   [pushB256 PERMIT_TYPEHASH] ++ mstoreAt 0 ++
   argCopy 1 0 3 ++ arg 3 ++ mstoreAt 5 ++
-  pushList [192, 0] ++ [kec]
+  pushList [192, 0] ++ [keccak256]
 
 /-- The exact nonce-read/tentative-increment prefix embedded after permit's
 deadline guard.  It retains the chain id for domain selection. -/
@@ -1039,7 +1039,7 @@ def permitRecoverPrepare : Line := permitRecoverWrites ++ [gas]
 
 lemma recoverPermitSigner_eq_prepare :
     recoverPermitSigner =
-      permitRecoverPrepare ++ [statcall, pop, pushB256 128, mload] := by
+      permitRecoverPrepare ++ [staticcall, pop, pushB256 128, mload] := by
   rfl
 
 /-- The arbitrary word consumed into scratch word zero is enough to derive
@@ -1412,7 +1412,7 @@ theorem of_recoverPermitSigner
       permitEcrecoverImage digest v sigR sigS := by
     rw [Mem.Reads.read hrq 0 128, permitRecover_input_window]
   rcases Line.of_run_cons run with ⟨u, qstat, htail⟩
-  rcases of_run_statcall_val_with_depth_cause hpq qstat with
+  rcases of_run_staticcall_val_with_depth_cause hpq qstat with
       hfail | hsuccess
   · rcases hfail with ⟨hpU, hworld, out, hret, hmem, hcause⟩
     have hout : out = [] := by
@@ -1650,7 +1650,7 @@ theorem of_calculateDomainSeparator {sevm : Sevm} {s t : Devm}
     Ninst.Hinv.inv (f := Devm.memory) q11
   rcases Line.of_run_cons run with ⟨s12, q12, hnil⟩
   cases hnil
-  have hk := prefix_of_kec_val q12 hp11
+  have hk := prefix_of_keccak256_val q12 hp11
   have hread : (s11.memory.read 0 160).1 =
       permitDomainImage chainId sevm.currentTarget := by
     rw [Mem.Reads.read (hm11 ▸ hm10 ▸ hr9) 0 160,
@@ -2123,7 +2123,7 @@ theorem of_permitStructPrepare {sevm : Sevm} {s t : Devm}
     Ninst.Hinv.inv (f := Devm.memory) q7
   rcases Line.of_run_cons run with ⟨s8, q8, hnil⟩
   cases hnil
-  have hk := prefix_of_kec_val q8 hp7
+  have hk := prefix_of_keccak256_val q8 hp7
   have hread : (s7.memory.read 0 192).1 =
       permitStructImage owner spender value nonce deadline := by
     rw [Mem.Reads.read (hm7 ▸ hm6 ▸ hr5) 0 192, permitStruct_window]
@@ -2633,7 +2633,7 @@ theorem of_permitDigest {sevm : Sevm} {s t : Devm}
   have hm10 : s9.memory = s10.memory := hb10.memory
   rcases Line.of_run_cons run with ⟨s11, q11, hnil⟩
   cases hnil
-  have hk := prefix_of_kec_val q11 hp10
+  have hk := prefix_of_keccak256_val q11 hp10
   have hread : (s10.memory.read 0 66).1 =
       permitDigestImage domain structHash := by
     rw [Mem.Reads.read (hm10 ▸ hm9 ▸ hr8) 0 66, permitDigest_window]
@@ -2750,7 +2750,7 @@ theorem of_permitDeadlineLive (dp : DeployParams)
     have hf : f = expiredPermitError := by
       simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-- Exact successful prefix from the live deadline arm to the recovery
 function.  It exposes the original nonce in the signed struct, the tentative
@@ -2913,7 +2913,7 @@ def permitAfterStaticcall : Func :=
 theorem permitRecover_afterStaticcall_shape :
     permitRecover =
       (permitDigest ++ permitRecoverPrepare) +++
-        (Ninst.statcall ::: permitAfterStaticcall) := by
+        (Ninst.staticcall ::: permitAfterStaticcall) := by
   rw [permitRecover_eq, recoverPermitSigner_eq_prepare]
   unfold permitSignerGuards permitAfterStaticcall
     permitFirstSignerGuardLine permitSecondSignerGuardLine
@@ -3040,12 +3040,12 @@ theorem of_permitSignerGuards_frame (dp : DeployParams)
       have hf : f = invalidPermitError := by
         simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
       subst f
-      exact absurd hrev Func.not_run_revWith
+      exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
       simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-- Compatibility projection of `of_permitSignerGuards_frame`. -/
 theorem of_permitSignerGuards (dp : DeployParams)
@@ -3122,7 +3122,7 @@ private theorem of_permitAllowanceKeyFromMemory {e : Sevm}
       s.memory = u1.memory := Ninst.Hinv.inv (f := Devm.memory) q1
       _ = u2.memory := Ninst.Hinv.inv (f := Devm.memory) q2
   rcases Line.of_run_cons run with ⟨u3, q3, run⟩
-  rcases prefix_of_kec_val q3 hp2 with ⟨hp3raw, hm3⟩
+  rcases prefix_of_keccak256_val q3 hp2 with ⟨hp3raw, hm3⟩
   rw [show (0 : B256).toNat = 0 from rfl,
     show (64 : B256).toNat = 64 from rfl] at hp3raw hm3
   have hread : (u2.memory.read 0 64).1 =
@@ -3381,7 +3381,7 @@ private theorem permit_success_not_expired_core (dp : DeployParams)
     have hf : f = expiredPermitError := by
       simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-! ## Selected-body success composition -/
 

@@ -792,7 +792,7 @@ ROLES = {
         # either conclusion and the crossing stops being a crossing.
         "responder_call_effects":
             "1e99a8c96ab905d1bfce1e4683e8186d200b37e487cf2dda97676266dc4964a2",
-        "responder_statcall_effects":
+        "responder_staticcall_effects":
             "0ebc83d783d16c055c8e9f4c7f41dea051fe58ae96de4ec0a82e3d54764128e7",
         "responder_hcall":
             "742387998c56dd1902b6a24592238b48df17689b2af9c6c2512dd644d8dec7a5",
@@ -981,9 +981,9 @@ ROLES = {
             "906557b6157bed0f18371fc7fb7eed0eb6e6330d2dbf533927ca45787c0bdd60",
         "runCompiledTo_last_inv":
             "212935a36e629c97d8b84cb3ab7a7fd42afae88e77446e72c87b9a609408fe39",
-        "runCompiledTo_rev_inv":
+        "runCompiledTo_revert_inv":
             "4a7305a9f3950009b6f46121a7e9ba19cd748d3b23c6ce849fde3a17b60c3823",
-        "runCompiledTo_revSelector_inv":
+        "runCompiledTo_revertSelector_inv":
             "1a6c71f3ccbf28859fc5f4943ce70a8f3d9172db5db5298bc074d8a2dec4a4d7",
     },
     # The observation cut: what the CircuitBreaker does with the target's

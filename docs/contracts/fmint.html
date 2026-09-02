@@ -287,7 +287,7 @@ settles_with_error_of_* (+6)    <span class="c">-- error genre, 13 rows: 7 name 
     <div class="dev">
       <div class="devhead"><h3>Revert data: no error machinery, anywhere</h3><span class="devtag">deviation — row 20</span></div>
       <p>OpenZeppelin raises typed custom errors with arguments. FMINT reverts with empty
-        returndata on every failure path — every rev site in the runtime is
+        returndata on every failure path — every revert site in the runtime is
         <span class="mono">PUSH0 PUSH0 REVERT</span>.</p>
       <p><b>The argument:</b> deliberate. Blanc carries no reasons, selectors, or messages on
         any failure path; what the discipline buys is a single, provable failure shape — the
@@ -331,7 +331,7 @@ settles_with_error_of_* (+6)    <span class="c">-- error genre, 13 rows: 7 name 
           <tbody>
             <tr><td>runtime size</td><td class="num">1,257 B</td><td class="dim">committed literal, byte-checked by every fixture</td></tr>
             <tr><td><span class="mono">totalSupply</span> gas</td><td class="num">2,218</td><td class="dim">proved equation, with a constructed successful run</td></tr>
-            <tr><td>rev-site normalisation</td><td class="num">1,217 → 1,257 B</td><td class="dim">exactly two bytes per rev site</td></tr>
+            <tr><td>revert-site normalisation</td><td class="num">1,217 → 1,257 B</td><td class="dim">exactly two bytes per revert site</td></tr>
           </tbody>
         </table></div>
         <p class="cap" style="margin-top:12px">Closed forms and maxima for the remaining paths
@@ -380,7 +380,7 @@ settles_with_error_of_* (+6)    <span class="c">-- error genre, 13 rows: 7 name 
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           The clean-failure discipline was discovered here — the old bare revert produced three
           observably different failure shapes, one of them burning the frame’s whole gas — and
-          the fix landed in the one shared definition, normalising every rev site in both FMINT
+          the fix landed in the one shared definition, normalising every revert site in both FMINT
           and WETH at once. The sibling-module rule (no contract imports another’s modules;
           shared things move upstream) is what made a two-contract fix a one-line diff radius.
         </p>

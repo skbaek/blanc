@@ -812,7 +812,7 @@ theorem Exec.Frame.CountedCursor.enterNonpayable
     value_eq_zero_of_run_nonpayable
       (Func.Run.of_runCompiled cursor.run)
   change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
-    ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.rev)) final
+    ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final
     at cursor
   rcases cursor.peelChildlessLine
       (by simp [NinstIsChildless]) with
@@ -1330,7 +1330,7 @@ theorem Exec.Frame.CountedCursor.enterNonpayableSilent
     value_eq_zero_of_run_nonpayable
       (Func.Run.of_runCompiled cursor.run)
   change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
-    ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.rev)) final
+    ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final
     at cursor
   rcases cursor.peelChildlessLine
       (by simp [NinstIsChildless]) with

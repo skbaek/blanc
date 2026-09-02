@@ -206,20 +206,20 @@ private theorem prependStoresRev_localSstoreFree
 /-- Every compiled constant `Error(string)` body is raw-SSTORE-free.  The
 reason remains symbolic: the proof traverses the reverse-store constructor
 rather than reducing the payload's computed word list. -/
-theorem Func.RunCompiledTo.NoRawSstorePath.of_revWith
+theorem Func.RunCompiledTo.NoRawSstorePath.of_revertWith
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {reason : String} {out : Execution}
-    (run : Func.RunCompiledTo fs sevm pre (Func.revWith reason) out) :
+    (run : Func.RunCompiledTo fs sevm pre (Func.revertWith reason) out) :
     Func.RunCompiledTo.NoRawSstorePath run := by
   apply Func.RunCompiledTo.NoRawSstorePath.of_execFree run
-  · unfold Func.revWith Func.revData
+  · unfold Func.revertWith Func.revertData
     apply prependStoresRev_execFree
     simp [Ninst.pushB256, funcExecFree]
-  · unfold Func.revWith Func.revData
+  · unfold Func.revertWith Func.revertData
     apply prependStoresRev_localSstoreFree
     simp [Ninst.pushB256, Func.LocalSstoreFree]
 
-/-- A selected nonzero guard, internal call, and `Func.rev` auxiliary are
+/-- A selected nonzero guard, internal call, and `Func.revert` auxiliary are
 raw-SSTORE-free.  The stack facts rule out the continuation arm before the
 certificate enters the table body. -/
 theorem Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard
@@ -228,7 +228,7 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard
     {run : Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
       (.error (.revert,
         (devm.setMach ⟨stack, devm.memory, G⟩).withOutput []))}
-    (h_get : fs[slot]? = some Func.rev)
+    (h_get : fs[slot]? = some Func.revert)
     (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack) :
     Func.RunCompiledTo.NoRawSstorePath run := by
   cases run with
@@ -244,8 +244,8 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard
           exact .succ (nonzero := nonzero) (room := room) (pop := pop)
             (.call (lookup := lookup) (room := callRoom) (burn := burn)
               (Func.RunCompiledTo.NoRawSstorePath.of_execFree revertRun
-                (by simp [Func.rev, Ninst.pushB256, funcExecFree])
-                (by simp [Func.rev, Ninst.pushB256,
+                (by simp [Func.revert, Ninst.pushB256, funcExecFree])
+                (by simp [Func.revert, Ninst.pushB256,
                   Func.LocalSstoreFree])))
 
 /-- Prepending an instruction-only line that is externally execution-free and
@@ -402,11 +402,11 @@ theorem Func.RunCompiledTo.NoRawSstorePath.replaceStopWith_of_not_ok
       cases terminal with
       | stop =>
           exact (notOk pre' terminalRun.symm).elim
-      | ret =>
+      | return_ =>
           exact ⟨.last terminalRun, .last (terminalRun := terminalRun)⟩
-      | rev =>
+      | revert =>
           exact ⟨.last terminalRun, .last (terminalRun := terminalRun)⟩
-      | dest =>
+      | selfdestruct =>
           exact ⟨.last terminalRun, .last (terminalRun := terminalRun)⟩
   | next instructionNe instructionChildless tailSafe ih =>
       rcases ih notOk with ⟨tail, tailSafe⟩

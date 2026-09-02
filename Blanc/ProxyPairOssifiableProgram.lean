@@ -127,19 +127,19 @@ private def onlyActiveAdmin (body : Func) : Func :=
         (body <?> (.call notAdminErrorSlot)))))
 
 def notAdminError : Func :=
-  Func.revData notAdminErrorData
+  Func.revertData notAdminErrorData
 
 def proxyIsOssifiedError : Func :=
-  Func.revData proxyIsOssifiedErrorData
+  Func.revertData proxyIsOssifiedErrorData
 
 def zeroAdminError : Func :=
-  Func.revData zeroAdminErrorData
+  Func.revertData zeroAdminErrorData
 
 def noCodeImplementationError : Func :=
-  Func.revData noCodeImplementationErrorData
+  Func.revertData noCodeImplementationErrorData
 
 def emptyDelegatecallError : Func :=
-  Func.revData emptyDelegatecallErrorData
+  Func.revertData emptyDelegatecallErrorData
 
 /-! ## Getter bodies -/
 
@@ -191,10 +191,10 @@ private def delegateSetup : Func :=
   pushB256 setupMemoryBase :::
   loadScratchWord implementationWord +++
   gas :::
-  delcall :::
+  delegatecall :::
   (Func.stop <?>
-    (retdatasize :::
-      (Func.revReturnData <?> (.call emptyDelegatecallErrorSlot))))
+    (returndatasize :::
+      (Func.revertReturnData <?> (.call emptyDelegatecallErrorSlot))))
 
 /-- Skip only when both the decoded byte length and `forceCall_` are zero. -/
 private def afterUpgradeToAndCall : Func :=
@@ -245,13 +245,13 @@ def runtimeBaselineAux : List Func :=
     changeAdmin,
     upgradeTo,
     upgradeToAndCall,
-    Func.rev,
+    Func.revert,
     notAdminError,
     proxyIsOssifiedError,
     zeroAdminError,
     noCodeImplementationError,
     emptyDelegatecallError,
-    Func.revData allocationPanicData ]
+    Func.revertData allocationPanicData ]
 
 theorem runtimeBaselineAux_length : runtimeBaselineAux.length = 15 := by
   rfl

@@ -562,8 +562,8 @@ private lemma step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
   rw [chargeGas_eq_error (devm := d1) h_gas]
   rfl
 
-/-- The `.statcall` arm on a frame that cannot pay the call's own charge. -/
-private lemma step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
+/-- The `.staticcall` arm on a frame that cannot pay the call's own charge. -/
+private lemma step_staticcall_outOfGas {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
@@ -578,7 +578,7 @@ private lemma step_statcall_outOfGas {sevm : Sevm} {devm : Devm}
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : d1.gasLeft < mcc + ext) :
-    Xinst.step sevm devm .statcall =
+    Xinst.step sevm devm .staticcall =
       .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
   subst h_ext; subst h_acc
   show XStep.ofExcept (do
@@ -832,13 +832,13 @@ theorem responder_call_effects {sevm : Sevm} {preC postC : Devm}
     · intro a
       exact hcode' a
 
-theorem responder_statcall_effects {sevm : Sevm} {preC postC : Devm}
+theorem responder_staticcall_effects {sevm : Sevm} {preC postC : Devm}
     {gw tw iiw isw oiw osw : B256} {rest : List B256}
     (h_stk : preC.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: rest)
     (h_code : CodeAt preC tw.toAdr calleeCode)
     (h_depth : sevm.depth ≠ 0)
     (h_nonprecompile : sevm.benvStat.rules.isPrecomp tw.toAdr = false)
-    (run : Ninst.RunCompiled sevm preC (.exec .statcall) postC) :
+    (run : Ninst.RunCompiled sevm preC (.exec .staticcall) postC) :
     (∃ ys : Bytes, ys.length ≤ osw.toNat ∧
       postC.memory = (preC.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
@@ -870,11 +870,11 @@ theorem responder_statcall_effects {sevm : Sevm} {preC postC : Devm}
       (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩)
         tw.toAdr).gasLeft
   case neg =>
-    rw [step_statcall_outOfGas h_stk rfl h_del rfl hsplit (by omega)] at hx
+    rw [step_staticcall_outOfGas h_stk rfl h_del rfl hsplit (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
   case pos =>
-    rw [Xinst.step_statcall_spawn h_stk rfl h_del rfl hsplit hga
+    rw [Xinst.step_staticcall_spawn h_stk rfl h_del rfl hsplit hga
       h_depth] at hx
     obtain ⟨r, hframe, hres⟩ := hx
     obtain ⟨hmem, hstor, hcode'⟩ :=
@@ -925,7 +925,7 @@ theorem responder_hstat {sevm : Sevm} {target : B256}
       preC.stack = gw :: target :: 284 :: 4 :: 0 :: 32 :: rest →
       MemWordAt preC (targetWord * 32).toNat target →
       CodeAt preC target.toAdr calleeCode →
-      Ninst.RunCompiled sevm preC Ninst.statcall postC →
+      Ninst.RunCompiled sevm preC Ninst.staticcall postC →
       MemWordAt postC (targetWord * 32).toNat target ∧
         CodeAt postC target.toAdr calleeCode ∧
         Devm.getStorVal postC sevm.currentTarget
@@ -934,7 +934,7 @@ theorem responder_hstat {sevm : Sevm} {target : B256}
             (countSlot sevm.caller.toB256) := by
   intro preC postC gw rest hstk window codeAt run
   obtain ⟨⟨ys, hlen, hmem⟩, hstor, hcode⟩ :=
-    responder_statcall_effects hstk codeAt h_depth h_np run
+    responder_staticcall_effects hstk codeAt h_depth h_np run
   refine ⟨?_, ?_, hstor _ _⟩
   · refine MemWordAt.acrossExtendsWrite hmem (Or.inr ?_) window
     have h0 : ((0 : B256)).toNat = 0 := rfl

@@ -60,7 +60,7 @@ def Rinst.toUInt8 : Rinst → UInt8
   | .shr          => 0x1C
   | .sar          => 0x1D
   | .clz          => 0x1E
-  | .kec          => 0x20
+  | .keccak256          => 0x20
   | .address      => 0x30
   | .balance      => 0x31
   | .origin       => 0x32
@@ -74,8 +74,8 @@ def Rinst.toUInt8 : Rinst → UInt8
   | .gasprice     => 0x3A
   | .extcodesize  => 0x3B
   | .extcodecopy  => 0x3C
-  | .retdatasize  => 0x3D
-  | .retdatacopy  => 0x3E
+  | .returndatasize  => 0x3D
+  | .returndatacopy  => 0x3E
   | .extcodehash  => 0x3F
   | .blockhash    => 0x40
   | .coinbase     => 0x41

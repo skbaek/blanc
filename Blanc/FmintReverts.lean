@@ -32,7 +32,7 @@
 --   fixes its selector; a universally quantified "any unknown selector" is a
 --   different theorem and is not proved here.
 --
--- Both targets end in `Func.rev` — `PUSH0; PUSH0; REVERT` — which is why the
+-- Both targets end in `Func.revert` — `PUSH0; PUSH0; REVERT` — which is why the
 -- error is `EvmError.revert` and the output is empty.  Neither path crosses a
 -- `CALL`, so neither hands the error choice to a callee.
 
@@ -47,10 +47,10 @@ open Jaune
 /-! ## Target E-1 — a selector fmint does not have
 
 `fmint = ⟨Func.mainWith fallbackSlot fmintTree, fmintAux⟩` with
-`fallbackSlot = 1` and `fmintAux = [Func.rev, burnAndReturn]`, and
+`fallbackSlot = 1` and `fmintAux = [Func.revert, burnAndReturn]`, and
 `dispatchWith k (leaf w p) = pushB256 w ::: eq ::: (p <?> .call k)`.  So a
 selector that misses takes the leaf's `.zero` arm into `.call 1`, which is
-`Func.rev`.
+`Func.revert`.
 
 That makes this the first walk in the repository to use `func_run`'s `.call`
 rule at all.  The rule is `Func.runCompiledTo_call'`: a tail jump into the flat
@@ -67,7 +67,7 @@ floor here; the twelve keccaks the dispatch walk cannot avoid are enough. -/
 abbrev unknownSelector : B256 := 0xffffffff
 
 /-- The `.call` arm's table lookup, checked on its own rather than only inside
-the walk that uses it: aux slot `fallbackSlot` really is `Func.rev`.
+the walk that uses it: aux slot `fallbackSlot` really is `Func.revert`.
 
 `func_run`'s `.call` rule had never run before this module — every earlier walk
 was a dispatch *hit*, which takes the leaf's other arm — so its two mechanical
@@ -75,14 +75,14 @@ obligations are worth seeing separately.  This is the first; the second is the
 `gVerylow + gMid + gJumpdest` an internal call hides, which `unknownSelectorGas`
 below accounts for and which the walk would not close if it were wrong, because
 `Func.RunCompiledTo`'s frames are gas-exact. -/
-theorem fmint_fallback_is_rev :
-    (fmint.main :: fmint.aux)[fallbackSlot]? = some Func.rev := rfl
+theorem fmint_fallback_is_revert :
+    (fmint.main :: fmint.aux)[fallbackSlot]? = some Func.revert := rfl
 
 /-- Every gas constant the unknown-selector path charges, in the order it
 charges them: the program's entry `JUMPDEST`; `fsig`'s four instructions; three
 dispatch forks, each falling through because `0xffffffff` is above every pivot;
 the leaf's `PUSH`/`EQ` and its fall-through arm; the `.call` into aux slot 1;
-and `Func.rev`'s two `PUSH0`s — the `REVERT` itself is free, its `(0, 0)` window
+and `Func.revert`'s two `PUSH0`s — the `REVERT` itself is free, its `(0, 0)` window
 costing no expansion. -/
 def unknownSelectorGas : Nat :=
   gJumpdest
@@ -140,7 +140,7 @@ theorem unknownSelector_runCompiledTo {sevm : Sevm} {pre : Devm}
         (by rw [h_stack])
         (by
           func_run [unknownSelector, 0, 0, 0, 0]
-          exact Func.runCompiledTo_rev_of (i := 0) (sz := 0) (s := [])
+          exact Func.runCompiledTo_revert_of (i := 0) (sz := 0) (s := [])
             (G := g - 113) rfl Devm.extCost_empty_window rfl Devm.memRead_zero),
       rfl⟩
 
@@ -162,7 +162,7 @@ What it does **not** say:
   transaction's, and it is exact rather than a bound: `Func.RunCompiledTo` pins
   every hidden instruction's cost under `Blanc/Compiled.lean`'s compiler-shape
   assumption.
-* **The empty output is the contract's, not the EVM's.**  `Func.rev` reverts
+* **The empty output is the contract's, not the EVM's.**  `Func.revert` reverts
   through a `(0, 0)` memory window on purpose; a bare `REVERT` would have
   returned whatever two words were on the stack as offset and size. -/
 theorem fmint_unknown_selector_reverts {sevm : Sevm} {pre : Devm}
@@ -182,10 +182,10 @@ and fmint reaches it through one explicit guard placed *before* the bound check,
 so the reason does not depend on `amount` (`FMINT_DEVIATIONS.md` row 5).  That
 guard is the first thing `flashLoan` does:
 
-    arg 1 +++ address ::: eq ::: iszero ::: .rev <?> …
+    arg 1 +++ address ::: eq ::: iszero ::: .revert <?> …
 
 and `a <?> b = Func.branch b a`, so a *nonzero* condition takes the `.succ` arm
-into `Func.rev`.  `token ≠ self` makes the `EQ` `0` and the `ISZERO` `1`, which
+into `Func.revert`.  `token ≠ self` makes the `EQ` `0` and the `ISZERO` `1`, which
 is exactly that arm.
 
 Two things make this the cleanest target in the genre.  **The path reads no
@@ -199,7 +199,7 @@ independent statements — see this module's banner. -/
 them: the entry `JUMPDEST`; `fsig`; three dispatch forks, the first jumping and
 the other two falling through; the leaf's `PUSH`/`EQ` and its taken arm; guard
 (0)'s `PUSH`/`CALLDATALOAD`/`ADDRESS`/`EQ`/`ISZERO` and its jumped arm; and
-`Func.rev`'s two `PUSH0`s. -/
+`Func.revert`'s two `PUSH0`s. -/
 def tokenNeSelfGas : Nat :=
   gJumpdest
     + (gBase + gVerylow + gVerylow + gVerylow)
@@ -260,7 +260,7 @@ theorem tokenNeSelf_runCompiledTo {sevm : Sevm} {pre : Devm}
             rw [argWord_one_of_decodes h_dec]
             show (if sevm.currentTarget.toB256 = token then (1 : B256) else 0) = 0
             rw [if_neg (fun h => h_ne h.symm)]
-          · exact Func.runCompiledTo_rev_of (i := 0) (sz := 0) (s := [])
+          · exact Func.runCompiledTo_revert_of (i := 0) (sz := 0) (s := [])
               (G := g - 131) rfl Devm.extCost_empty_window rfl
               Devm.memRead_zero),
       rfl⟩

@@ -1359,7 +1359,7 @@ private theorem pausableZeroError_not_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm} :
     ¬ Func.Run fs sevm pre pausableZeroError post := by
   intro h
-  dsimp [pausableZeroError, Func.revSelector] at h
+  dsimp [pausableZeroError, Func.revertSelector] at h
   rcases of_run_next h with ⟨s1, _, h1⟩
   rcases of_run_next h1 with ⟨s2, _, h2⟩
   rcases of_run_next h2 with ⟨s3, _, h3⟩
@@ -4269,11 +4269,11 @@ theorem finishSetPauser_run_split_continuation
           exact (congrFun hstorBody ca).symm,
         hcodeBody, hbody⟩
 
-private theorem revData_not_run
+private theorem revertData_not_run
     {fs : List Func} {sevm : Sevm} {pre final : Devm} {blob : Bytes} :
-    ¬ Func.Run fs sevm pre (Func.revData blob) final := by
+    ¬ Func.Run fs sevm pre (Func.revertData blob) final := by
   have no_last : ∀ {s r : Devm},
-      ¬ Func.Run fs sevm s (.last .rev) r := by
+      ¬ Func.Run fs sevm s (.last .revert) r := by
     intro s r run
     cases run with
     | last hrun =>
@@ -4302,7 +4302,7 @@ private theorem revData_not_run
       rcases of_run_next run1 with ⟨s2, h2, run2⟩
       rcases of_run_next run2 with ⟨s3, h3, run3⟩
       exact h run3
-  unfold Func.revData
+  unfold Func.revertData
   apply no_stores
   intro s r run
   rcases of_run_next run with ⟨s1, h1, run1⟩
@@ -4386,7 +4386,7 @@ private lemma of_runTo_call {fs : List Func} {sevm : Sevm}
 /-- A source fragment whose successful prefix cannot touch persistent storage,
 even when its terminal instruction returns an error outcome. -/
 private inductive Func.StorSilent : Func → Prop
-  | last {l : Linst} (h : l ≠ .dest) : StorSilent (.last l)
+  | last {l : Linst} (h : l ≠ .selfdestruct) : StorSilent (.last l)
   | next {i : Ninst} {f : Func} [Ninst.Hinv Devm.getStor i]
       (hf : StorSilent f) : StorSilent (.next i f)
 
@@ -4421,9 +4421,9 @@ private theorem prependStoresRev_storSilent
       simp only [prependStoresRev]
       exact ih (.next (.next (.next hrest)))
 
-private theorem revData_storSilent (blob : Bytes) :
-    Func.StorSilent (Func.revData blob) := by
-  unfold Func.revData
+private theorem revertData_storSilent (blob : Bytes) :
+    Func.StorSilent (Func.revertData blob) := by
+  unfold Func.revertData
   apply prependStoresRev_storSilent
   exact .next (.next (.last (by decide)))
 
@@ -4588,7 +4588,7 @@ private theorem checkedHeartbeatExpiry_preserves_registry
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.RunTo fs sevm pre
       (checkedHeartbeatExpiry <|
         dup 0 ::: mstoreAt 0 +++
@@ -4654,7 +4654,7 @@ private theorem checkedHeartbeatExpiry_preserves_registry
         rw [← congrFun hstorPanic ca]
         exact hw
       exact hwPanic.of_storSilent_outcome
-        ((revData_storSilent panicData).effect hbody)
+        ((revertData_storSilent panicData).effect hbody)
 
 private theorem optional_new_preserves_registry
     {fs : List Func} {sevm : Sevm} {root pre : Devm} {out : Execution}
@@ -4669,7 +4669,7 @@ private theorem optional_new_preserves_registry
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.RunTo fs sevm pre
       (loadWord newPauserWord +++ iszero :::
         (Func.stop <?>
@@ -4743,7 +4743,7 @@ private theorem clear_old_then_new_preserves_registry
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.RunTo fs sevm pre
       (pushB256 0 ::: loadWord previousPauserWord +++ tagTop expiryRegion +++
         sstore ::: pushB256 0 ::: mstoreAt 0 +++
@@ -4875,7 +4875,7 @@ private theorem previous_count_branch_preserves_registry
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.RunTo fs sevm pre
       (previousCountKey +++ sload ::: iszero :::
         (pushB256 0 ::: loadWord previousPauserWord +++
@@ -4971,7 +4971,7 @@ private theorem registerAfterSet_runTo_preserves_registry
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.RunTo fs sevm pre registerAfterSet out) :
     Execution.Rel
       (fun _ post => RegistryWitness
@@ -5049,7 +5049,7 @@ theorem registerAfterSet_preserves_registry
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.Run fs sevm pre registerAfterSet final) :
     RegistryWitness
       (logicalStorageOfStor (Devm.getStor final ca)) entries := by
@@ -5079,7 +5079,7 @@ theorem registerAfterSet_runCompiledTo_preserves_registry
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.RunCompiledTo fs sevm pre registerAfterSet out) :
     Execution.Rel
       (fun _ post => RegistryWitness
@@ -6554,7 +6554,7 @@ private theorem Exec.DirectPausePath.noCallOrStaticcallAt
     (path : Exec.DirectPausePath ca target (phase := phase) run) :
     ∀ node ∈ Exec.rawNodes run,
       (¬ Ninst.At node.sevm.code node.pc (.exec .call)) ∧
-      (¬ Ninst.At node.sevm.code node.pc (.exec .statcall)) := by
+      (¬ Ninst.At node.sevm.code node.pc (.exec .staticcall)) := by
   induction path with
   | halt terminalAt =>
       intro node reached
@@ -6567,7 +6567,7 @@ private theorem Exec.DirectPausePath.noCallOrStaticcallAt
       intro node reached
       simp only [Exec.rawNodes, List.mem_cons] at reached
       rcases reached with rfl | reached
-      · exact ⟨rootChildless .call, rootChildless .statcall⟩
+      · exact ⟨rootChildless .call, rootChildless .staticcall⟩
       · exact ih node reached
   | zeroCode instructionAt instructionRun stack codeSize tailPath ih =>
       intro node reached
@@ -6595,7 +6595,7 @@ private theorem Exec.DirectPausePath.noCallOrStaticcall
     ∀ occurrence : Exec.NinstOccurrence
         (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
       occurrence.instruction ≠ .exec .call ∧
-      occurrence.instruction ≠ .exec .statcall := by
+      occurrence.instruction ≠ .exec .staticcall := by
   intro occurrence
   have excluded := path.noCallOrStaticcallAt
     occurrence.node occurrence.reached
@@ -6781,7 +6781,7 @@ private theorem Exec.DirectPausePath.beforeWriteEvidence
       ∀ occurrence : Exec.NinstOccurrence
           (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
         occurrence.instruction ≠ .exec .call ∧
-        occurrence.instruction ≠ .exec .statcall :=
+        occurrence.instruction ≠ .exec .staticcall :=
   ⟨exists_writeBeforeZeroCode_of_eq path rfl,
     path.noCallOrStaticcall⟩
 
@@ -6816,7 +6816,7 @@ private theorem Func.RunCompiledTo.exists_exec_directPauseEvidence
         ∀ occurrence : Exec.NinstOccurrence
             (⟨pc, sevm, pre, out, execution⟩ : Exec.Deriv),
           occurrence.instruction ≠ .exec .call ∧
-          occurrence.instruction ≠ .exec .statcall) := by
+          occurrence.instruction ≠ .exec .staticcall) := by
   rcases Func.RunCompiledTo.exists_exec_directPausePath run path compiled
       tableEq pc sub noPush with ⟨execution, executionPath⟩
   exact ⟨execution,
@@ -6876,7 +6876,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
     (haccess : PauseAfterSetAccessCase pre target codeCost codeBase)
     (hgas : pre.gasLeft = G + pauseAfterSetZeroCodeCost pre codeCost)
     (hroom : stack.length < 1022)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev) :
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert) :
     let M := (pre.memory.read (targetWord * 32).toNat 32).2
     let raw := (codeBase.setMach ⟨target :: stack, M, G⟩).withOutput []
     ∃ run : Func.RunCompiledTo fs sevm pre pauseAfterSet
@@ -6992,10 +6992,10 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
           omega)
   have hrev : Func.RunCompiledTo fs sevm
       (codeBase.setMach ⟨target :: stack, M, G + (gBase + gBase)⟩)
-      Func.rev (.error (.revert, raw)) := by
+      Func.revert (.error (.revert, raw)) := by
     simpa only [raw, Devm.setMach_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
-      Func.runCompiledTo_rev_func
+      Func.runCompiledTo_revert_func
         (fs := fs) (sevm := sevm)
         (devm := codeBase.setMach
           ⟨target :: stack, M, G + (gBase + gBase)⟩)
@@ -7076,7 +7076,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
           ((.call bubbleRevertSlot) <?>
             (pushB256 isPausedSelector ::: mstoreAt 8 +++
               pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++
-              gas ::: statcall ::: iszero :::
+              gas ::: staticcall ::: iszero :::
               ((.call bubbleRevertSlot) <?> decodePausedResult)))))
       (.error (.revert, raw)) :=
     .succ (by decide : (1 : B256) ≠ 0) hbranchRoom hbranchPop hcall
@@ -7185,7 +7185,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo_by_access
       (accessCost target.toAdr pre.accessedAddresses))
     (hroom : stack.length < 1022)
     (hstack : pre.stack = stack)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev) :
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert) :
     ∃ raw, ∃ run : Func.RunCompiledTo fs sevm pre pauseAfterSet
         (.error (.revert, raw)),
       raw.output = [] ∧
@@ -7229,7 +7229,7 @@ private theorem finishSetPauser_pause_call_runCompiledTo
     (haccess : target.toAdr ∈ base.accessedAddresses ∨
       target.toAdr ∉ base.accessedAddresses)
     (hroom : stack.length < 1019)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet) :
     ∃ raw, ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach ⟨stack, base.memory,
@@ -7307,7 +7307,7 @@ private theorem finishSetPauser_pause_branch_runCompiledTo
     (haccess : target.toAdr ∈ base.accessedAddresses ∨
       target.toAdr ∉ base.accessedAddresses)
     (hroom : stack.length < 1019)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet) :
     ∃ raw, ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach ⟨1 :: stack, base.memory,
@@ -7394,7 +7394,7 @@ private theorem finishSetPauser_pause_terminal_runCompiledTo
     (haccess : target.toAdr ∈ base.accessedAddresses ∨
       target.toAdr ∉ base.accessedAddresses)
     (hroom : stack.length < 1019)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet) :
     ∃ raw, ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach ⟨stack, base.memory,
@@ -7475,7 +7475,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
       target.toAdr ∉ base.accessedAddresses)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet) :
     ∃ raw, ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach ⟨target :: previousPauser :: newPauser :: stack,
@@ -7661,7 +7661,7 @@ private theorem finishSetPauser_pause_runCompiledTo
     (hgas : pre.gasLeft = G + finishSetPauserPauseCost pre target)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet) :
     ∃ raw, ∃ run : Func.RunCompiledTo fs sevm pre finishSetPauser
         (.error (.revert, raw)),
@@ -7800,7 +7800,7 @@ private theorem finishSetPauser_call_pause_runCompiledTo
       finishSetPauserPauseCost finishPre target)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hcallRoom : pre.stack.length < 1024)
@@ -7860,7 +7860,7 @@ private theorem removeTarget_final_pause_suffix_runCompiledTo
       pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hgas : pre.gasLeft = G + removeTargetFinalPauseCost pre target) :
@@ -8056,7 +8056,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hgas : pre.gasLeft = G + removeTargetLengthPauseCost pre target) :
@@ -8291,7 +8291,7 @@ private theorem removeTarget_tail_clear_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hgas : pre.gasLeft = G +
@@ -8510,7 +8510,7 @@ private theorem removeTarget_moved_index_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hgas : pre.gasLeft = G +
@@ -8768,7 +8768,7 @@ private theorem removeTarget_hole_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hgas : pre.gasLeft = G + removeTargetHolePauseCost pre target) :
@@ -9034,7 +9034,7 @@ private theorem removeTarget_last_save_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hgas : pre.gasLeft =
@@ -9374,7 +9374,7 @@ private theorem removeTarget_length_save_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hgas : pre.gasLeft = G +
@@ -9698,7 +9698,7 @@ private theorem removeTarget_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hgas : pre.gasLeft = G + removeTargetPauseCost pre target
@@ -10033,7 +10033,7 @@ private theorem afterOldPauser_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -10223,7 +10223,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -10668,7 +10668,7 @@ private theorem postAssignment_decrement_pause_branch_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -10823,7 +10823,7 @@ private theorem assignment_zero_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -11136,7 +11136,7 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -11520,7 +11520,7 @@ private theorem setPauserKernel_singletonRemoval_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -11679,7 +11679,7 @@ private theorem setPauserKernel_call_singletonRemoval_pause_runCompiledTo
         kernelPre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -11777,7 +11777,7 @@ private theorem continuation_save_setPauserKernel_call_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -11996,7 +11996,7 @@ private theorem previous_zero_continuation_kernel_call_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -12193,7 +12193,7 @@ private theorem new_zero_previous_continuation_kernel_call_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -12438,7 +12438,7 @@ private theorem target_arg_save_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -12632,7 +12632,7 @@ private theorem pauseDuration_save_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -12957,7 +12957,7 @@ private theorem liveExpiry_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -13302,7 +13302,7 @@ private theorem authorized_liveExpiry_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -13773,7 +13773,7 @@ private theorem lock_write_authorized_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -13989,7 +13989,7 @@ private theorem unlocked_guard_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -14291,7 +14291,7 @@ private theorem canonical_unlocked_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -14496,7 +14496,7 @@ private theorem exact_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1019)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -14574,7 +14574,7 @@ private theorem exact_pause_runCompiledTo
       (x := (0 : B256)) (s := stack) rfl hbranchGas using 1
     all_goals rfl
   let branchRun : Func.RunCompiledTo fs sevm branchPre
-      (Func.rev <?> canonicalAddressArg 0
+      (Func.revert <?> canonicalAddressArg 0
         (pushB256 lockKey ::: tload ::: iszero :::
           ((pushB256 1 ::: pushB256 lockKey ::: tstore :::
             arg 0 +++ tagTop assignmentRegion +++ sload ::: caller ::: eq :::
@@ -14724,7 +14724,7 @@ private theorem third_group_pause_dispatch_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1018)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -14938,7 +14938,7 @@ private theorem hybrid_pause_dispatch_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1017)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -15336,7 +15336,7 @@ private theorem fsig_hybrid_pause_dispatch_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1017)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -15486,7 +15486,7 @@ private theorem runtimeMain_pause_runCompiledTo
         pre.accessedStorageKeys)
     (hroom : stack.length < 1017)
     (hstatic : sevm.isStatic = false)
-    (hemptyLookup : fs[emptyRevertSlot]? = some Func.rev)
+    (hemptyLookup : fs[emptyRevertSlot]? = some Func.revert)
     (hpauseLookup : fs[pauseAfterSetSlot]? = some pauseAfterSet)
     (hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser)
     (hremoveLookup : fs[removeTargetSlot]? = some removeTarget)
@@ -15553,7 +15553,7 @@ private theorem runtimeMain_pause_runCompiledTo
       (x := (0 : B256)) (s := stack) rfl hbranchGas using 1
     all_goals rfl
   let branchRun : Func.RunCompiledTo fs sevm branchPre
-      (Func.rev <?> (fsig +++ hybridDispatchWith fallbackSlot (funcs dp)))
+      (Func.revert <?> (fsig +++ hybridDispatchWith fallbackSlot (funcs dp)))
       (.error (.revert, raw)) :=
     .zero hbranchRoom hbranchPop bodyRun
   have branchPath : Func.RunCompiledTo.DirectPausePath sevm.currentTarget
@@ -15731,7 +15731,7 @@ private theorem runtime_pause_runCompiledTo
     (hstatic : sevm.isStatic = false)
     (hemptyLookup :
       ((runtime dp).main :: (runtime dp).aux)[emptyRevertSlot]? =
-        some Func.rev)
+        some Func.revert)
     (hpauseLookup :
       ((runtime dp).main :: (runtime dp).aux)[pauseAfterSetSlot]? =
         some pauseAfterSet)
@@ -15912,7 +15912,7 @@ private theorem runtime_pause_exec
     (hstatic : sevm.isStatic = false)
     (hemptyLookup :
       ((runtime dp).main :: (runtime dp).aux)[emptyRevertSlot]? =
-        some Func.rev)
+        some Func.revert)
     (hpauseLookup :
       ((runtime dp).main :: (runtime dp).aux)[pauseAfterSetSlot]? =
         some pauseAfterSet)
@@ -16052,7 +16052,7 @@ theorem pause_direct_postWrite_revert_settles_and_restores_registry
     (hstatic : sevm.isStatic = false)
     (hemptyLookup :
       ((runtime dp).main :: (runtime dp).aux)[emptyRevertSlot]? =
-        some Func.rev)
+        some Func.revert)
     (hpauseLookup :
       ((runtime dp).main :: (runtime dp).aux)[pauseAfterSetSlot]? =
         some pauseAfterSet)
@@ -16091,7 +16091,7 @@ theorem pause_direct_postWrite_revert_settles_and_restores_registry
           ∀ occurrence : Exec.NinstOccurrence
               (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv),
             occurrence.instruction ≠ .exec .call ∧
-            occurrence.instruction ≠ .exec .statcall) ∧
+            occurrence.instruction ≠ .exec .staticcall) ∧
         ∃ post,
           ProcessMessage msg
               (.some ⟨⟨0, sevm, pre⟩, .error (.revert, raw)⟩)
@@ -16151,17 +16151,17 @@ private def setPauserZeroCost (pre : Devm) : Nat :=
     gVerylow +
     (gVerylow + gHigh + gJumpdest) +
     (gVerylow + gMid + gJumpdest) +
-    revSelectorCost
+    revertSelectorCost
       (pre.setMach ⟨pre.stack, setPauserZeroLoadMemory pre, 0⟩)
 
 /-- The fixed selector emitter contains only childless non-SSTORE `.next`
 nodes before its terminal `REVERT`. -/
-private theorem runCompiledTo_revSelector_targetZeroPathFree
+private theorem runCompiledTo_revertSelector_targetZeroPathFree
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {data : Bytes} {hlen : data.length = 4} {out : Execution}
-    (run : Func.RunCompiledTo fs sevm pre (Func.revSelector data hlen) out) :
+    (run : Func.RunCompiledTo fs sevm pre (Func.revertSelector data hlen) out) :
     Func.RunCompiledTo.TargetZeroPathFree run := by
-  dsimp only [Func.revSelector] at run
+  dsimp only [Func.revertSelector] at run
   cases run with
   | next firstRun firstTail =>
       refine .next (instructionRun := firstRun) (tail := firstTail)
@@ -16241,7 +16241,7 @@ private theorem setPauser_zero_runCompiledTo_source
   let branchCost : Nat := gVerylow + gHigh + gJumpdest
   let callCost : Nat := gVerylow + gMid + gJumpdest
   let selectorCost : Nat :=
-    revSelectorCost (pre.setMach ⟨stack, M, 0⟩)
+    revertSelectorCost (pre.setMach ⟨stack, M, 0⟩)
   have hoffset : offset ≠ 0 := by
     dsimp only [offset]
     exact targetWord_mul_32_ne_zero
@@ -16311,9 +16311,9 @@ private theorem setPauser_zero_runCompiledTo_source
           G⟩).withOutput data)) := by
     change Func.RunCompiledTo fs sevm
       (pre.setMach ⟨stack, M, G + selectorCost⟩)
-      (Func.revSelector data hdataLength) _
+      (Func.revertSelector data hdataLength) _
     simpa only [Devm.setMach_setMach, Devm.stack_setMach,
-      Devm.memory_setMach] using Func.runCompiledTo_revSelector
+      Devm.memory_setMach] using Func.runCompiledTo_revertSelector
       (fs := fs) (sevm := sevm) (devm :=
         pre.setMach ⟨stack, M, G + selectorCost⟩)
       (data := data) (img := img) (G := G) hdataLength hMwf hMreads
@@ -16322,7 +16322,7 @@ private theorem setPauser_zero_runCompiledTo_source
         dsimp only [selectorCost]
         rfl) (by simpa only [Devm.stack_setMach] using hstackRoom)
   have hbodyFree :=
-    runCompiledTo_revSelector_targetZeroPathFree
+    runCompiledTo_revertSelector_targetZeroPathFree
       (hlen := hdataLength) hbody
   have hcallRoom :
       (pre.setMach ⟨stack, M,
@@ -16455,7 +16455,7 @@ theorem runtime_caller_lookups (dp : DeployParams) :
     fs[registerAfterSetSlot]? = some registerAfterSet ∧
     fs[pauseAfterSetSlot]? = some pauseAfterSet ∧
     ∃ panicData,
-      fs[arithmeticPanicSlot]? = some (Func.revData panicData) := by
+      fs[arithmeticPanicSlot]? = some (Func.revertData panicData) := by
   simp [runtime, aux, registerAfterSetSlot, pauseAfterSetSlot,
     arithmeticPanicSlot]
 
@@ -16858,7 +16858,7 @@ private theorem directPauseControl_run :
               (⟨0, directPauseControlSevm, directPauseControlPre,
                 .error (.revert, raw), rootExec⟩ : Exec.Deriv),
             occurrence.instruction ≠ .exec .call ∧
-            occurrence.instruction ≠ .exec .statcall) ∧
+            occurrence.instruction ≠ .exec .staticcall) ∧
         ∃ post,
           ProcessMessage directPauseControlMsg
               (.some ⟨⟨0, directPauseControlSevm,
@@ -16883,7 +16883,7 @@ private theorem directPauseControl_run :
   have hempty :
       ((runtime officialParams).main ::
         (runtime officialParams).aux)[emptyRevertSlot]? =
-          some Func.rev := by
+          some Func.revert := by
     simp [runtime, aux, emptyRevertSlot]
   have hsetPauser :
       ((runtime officialParams).main ::
@@ -16972,7 +16972,7 @@ theorem directPause_zeroCode_postWrite_error_control :
           ∀ occurrence : Exec.NinstOccurrence
               (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv),
             occurrence.instruction ≠ .exec .call ∧
-            occurrence.instruction ≠ .exec .statcall) ∧
+            occurrence.instruction ≠ .exec .staticcall) ∧
         ∃ post,
           ProcessMessage msg
               (.some ⟨⟨0, sevm, pre⟩, .error (.revert, raw)⟩)
@@ -17045,7 +17045,7 @@ theorem setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
         (gVerylow + pre.extCost [⟨(targetWord * 32).toNat, 32⟩]) +
         gVerylow + (gVerylow + gHigh + gJumpdest) +
         (gVerylow + gMid + gJumpdest) +
-        revSelectorCost (pre.setMach ⟨pre.stack,
+        revertSelectorCost (pre.setMach ⟨pre.stack,
           (pre.memory.read (targetWord * 32).toNat 32).2, 0⟩)))
     (hroom : pre.stack.length < 1023) :
     let fs := (runtime dp).main :: (runtime dp).aux

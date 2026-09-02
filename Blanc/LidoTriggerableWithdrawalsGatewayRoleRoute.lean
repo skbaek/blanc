@@ -76,7 +76,7 @@ theorem requireStaticArgs_body_of_sufficient_calldata
   change Func.RunCompiledTo fs sevm pre
     (([Ninst.pushB256 (Nat.toB256 (4 + 32 * words)), Ninst.calldatasize,
       Ninst.lt]) +++
-      (Func.rev <?> body)) out at run
+      (Func.revert <?> body)) out at run
   obtain ⟨testPre, testLine, branchRun⟩ := runCompiledTo_prepend_inv run
   rcases Line.of_run_cons testLine with ⟨afterWord, qword, testLine⟩
   rcases Line.of_run_cons testLine with ⟨afterSize, qsize, testLine⟩
@@ -469,19 +469,19 @@ theorem onlyRole_body_of_ok
     have hget : ((runtime dp).main :: (runtime dp).aux)[missingRoleSlot]? =
         some (runtimeError "AccessControlUnauthorizedAccount" []) := by
       simp [runtime, aux, baseAux, missingRoleSlot]
-    exact (Func.RunCompiledTo.not_ok_call_revSelector
+    exact (Func.RunCompiledTo.not_ok_call_revertSelector
       (by simpa [runtimeError] using hget) callRun).elim
   | roleCollision callPre indexNonzero roleMismatch callRun stack storage =>
     have hget : ((runtime dp).main :: (runtime dp).aux)[collisionRefusalSlot]? =
-        some Func.rev := by
+        some Func.revert := by
       simp [runtime, aux, baseAux, collisionRefusalSlot]
-    exact (Func.RunCompiledTo.not_ok_call_rev hget callRun).elim
+    exact (Func.RunCompiledTo.not_ok_call_revert hget callRun).elim
   | accountCollision callPre indexNonzero roleMatch accountMismatch callRun
       stack storage =>
     have hget : ((runtime dp).main :: (runtime dp).aux)[collisionRefusalSlot]? =
-        some Func.rev := by
+        some Func.revert := by
       simp [runtime, aux, baseAux, collisionRefusalSlot]
-    exact (Func.RunCompiledTo.not_ok_call_rev hget callRun).elim
+    exact (Func.RunCompiledTo.not_ok_call_revert hget callRun).elim
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc

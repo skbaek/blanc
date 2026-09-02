@@ -1489,7 +1489,7 @@ private theorem heartbeatTarget
                 [arithmeticPanicSlot] (by
                   simp [Prog.entrySstoreFree, Prog.componentSstoreFree,
                     Prog.function?, runtime, aux, arithmeticPanicSlot,
-                    Func.revData, Func.localSstoreFree, Func.callsIn]
+                    Func.revertData, Func.localSstoreFree, Func.callsIn]
                   decide +kernel)
                 (Exec.Deriv.SourceCursor.Toward.chronology
                   errorRoute).cursorToTarget targetAt).elim
@@ -4363,7 +4363,7 @@ private theorem checkedPauseExpiryFinishTarget
         [arithmeticPanicSlot] (by
           simp [Prog.entrySstoreFree, Prog.componentSstoreFree,
             Prog.function?, runtime, aux, arithmeticPanicSlot,
-            Func.revData, Func.localSstoreFree, Func.callsIn]
+            Func.revertData, Func.localSstoreFree, Func.callsIn]
           decide +kernel)
         (Exec.Deriv.SourceCursor.Toward.chronology
           errorRoute).cursorToTarget targetAt).elim
@@ -4480,7 +4480,7 @@ private theorem pauseAfterSetTarget
           let staticLine : Line :=
             [Ninst.pushB256 isPausedSelector] ++ mstoreAt 8 ++
               pushList [32, 0, 4, 0x11c] ++ loadWord targetWord ++
-              [Ninst.gas, Ninst.statcall, Ninst.iszero]
+              [Ninst.gas, Ninst.staticcall, Ninst.iszero]
           rcases Exec.Deriv.SourceCursor.Toward.dropLineExact staticRoute
               (line := staticLine) (by
                 intro instruction member
@@ -4500,8 +4500,8 @@ private theorem pauseAfterSetTarget
           | branchLeft branchCursor chronology decodeCursor compilerPrefix decodeRoute =>
               unfold decodePausedResult at decodeCursor
               rcases Exec.Deriv.SourceCursor.Toward.dropLineExact decodeRoute
-                  (line := retdataShorterThan 32)
-                  (by simp [retdataShorterThan, Ninst.pushB256]) with
+                  (line := returnDataShorterThan 32)
+                  (by simp [returnDataShorterThan, Ninst.pushB256]) with
                 ⟨lengthBranchCursor, lengthBranchRoute⟩
               cases lengthBranchRoute with
               | branchRight branchCursor chronology errorCursor compilerPrefix errorRoute =>
@@ -4618,7 +4618,7 @@ private theorem checkedRegisterExpiryTarget
         [arithmeticPanicSlot] (by
           simp [Prog.entrySstoreFree, Prog.componentSstoreFree,
             Prog.function?, runtime, aux, arithmeticPanicSlot,
-            Func.revData, Func.localSstoreFree, Func.callsIn]
+            Func.revertData, Func.localSstoreFree, Func.callsIn]
           decide +kernel)
         (Exec.Deriv.SourceCursor.Toward.chronology
           errorRoute).cursorToTarget targetAt).elim

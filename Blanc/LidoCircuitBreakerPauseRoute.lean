@@ -14,9 +14,9 @@ the shared kernel and *then* calls its target, so the only pause execution this
 tree owns that reaches a Registry write is one whose target has no code, and
 which therefore ends `.error (.revert, raw)`.
 
-This module supplies the **dual** free crossing.  `Func.rev` reverts with an
+This module supplies the **dual** free crossing.  `Func.revert` reverts with an
 empty payload, but every named runtime error reverts through
-`Func.revSelector`, whose `REVERT` returns a four-byte window — so an untaken
+`Func.revertSelector`, whose `REVERT` returns a four-byte window — so an untaken
 error arm is refuted by the *outcome* exactly when the walk's own raw revert
 carries no output at all.  `raw.output = []` therefore does for this route what
 `.ok` does for the registration route: it settles the reentrancy-lock guard,
@@ -24,7 +24,7 @@ the caller-assignment guard, the heartbeat-liveness guard and the kernel's
 target-zero test without computing a single storage, transient or memory word.
 
 What it does not settle are the four crossings whose untaken arm is a bare
-`Func.rev`: `runtimeMain`'s entry guard, `requireStaticArgs`, the
+`Func.revert`: `runtimeMain`'s entry guard, `requireStaticArgs`, the
 canonical-address guard and the three dispatcher selector pivots.  Those words
 are calldata- and value-valued, so they cost no world threading either.
 
@@ -99,11 +99,11 @@ for the window's expansion — raise a `.halt` error rather than `.revert`, so
 neither can masquerade as the frame's own revert outcome. -/
 
 /-- A `REVERT` whose size operand is four leaves four bytes of output. -/
-theorem output_ne_nil_of_run_rev {sevm : Sevm} {devm raw : Devm}
+theorem output_ne_nil_of_run_revert {sevm : Sevm} {devm raw : Devm}
     {i sz : B256} {s : Stack}
     (hstack : devm.stack = i :: sz :: s)
     (hsize : sz.toNat = 4)
-    (run : Linst.Run sevm devm .rev (.error (.revert, raw))) :
+    (run : Linst.Run sevm devm .revert (.error (.revert, raw))) :
     raw.output ≠ [] := by
   simp only [Linst.Run, Linst.run] at run
   rw [Devm.popToNat_eq_ok hstack] at run
@@ -130,13 +130,13 @@ theorem output_ne_nil_of_run_rev {sevm : Sevm} {devm raw : Devm}
 /-- A walk that reverts through the compact selector reverter carries a
 nonempty payload.  Nothing about the memory image is used: the four bytes are
 whatever the window holds. -/
-theorem output_ne_nil_of_runCompiledTo_revSelector
+theorem output_ne_nil_of_runCompiledTo_revertSelector
     {fs : List Func} {sevm : Sevm} {devm raw : Devm}
     {data : Bytes} {hlen : data.length = 4}
-    (run : Func.RunCompiledTo fs sevm devm (Func.revSelector data hlen)
+    (run : Func.RunCompiledTo fs sevm devm (Func.revertSelector data hlen)
       (.error (.revert, raw))) :
     raw.output ≠ [] := by
-  unfold Func.revSelector at run
+  unfold Func.revertSelector at run
   rcases of_runCompiledTo_next run with ⟨_s1, _q1, run⟩
   rcases of_runCompiledTo_next run with ⟨_s2, _q2, run⟩
   rcases of_runCompiledTo_next run with ⟨_s3, _q3, run⟩
@@ -148,12 +148,12 @@ theorem output_ne_nil_of_runCompiledTo_revSelector
   have p5 : (28 : B256) :: (4 : B256) :: [] <<+ s5.stack :=
     prefix_of_push (of_run_pushB256 (Ninst.Run.of_runCompiled q5)) p4
   rcases p5 with ⟨rest, hrest⟩
-  exact output_ne_nil_of_run_rev (i := 28) (sz := 4) hrest (by decide) term
+  exact output_ne_nil_of_run_revert (i := 28) (sz := 4) hrest (by decide) term
 
 /-- An untaken named-error arm, refuted by the walk's own empty payload. -/
-theorem call_revSelector_refuted {fs : List Func} {sevm : Sevm}
+theorem call_revertSelector_refuted {fs : List Func} {sevm : Sevm}
     {devm raw : Devm} {slot : Nat} {data : Bytes} {hlen : data.length = 4}
-    (lookup : fs[slot]? = some (Func.revSelector data hlen))
+    (lookup : fs[slot]? = some (Func.revertSelector data hlen))
     (emptyOutput : raw.output = [])
     (run : Func.RunCompiledTo fs sevm devm (.call slot)
       (.error (.revert, raw))) : False := by
@@ -161,7 +161,7 @@ theorem call_revSelector_refuted {fs : List Func} {sevm : Sevm}
   | call lookup' _room _burn tail =>
       have bodyEq := Option.some.inj (lookup.symm.trans lookup')
       subst bodyEq
-      exact output_ne_nil_of_runCompiledTo_revSelector tail emptyOutput
+      exact output_ne_nil_of_runCompiledTo_revertSelector tail emptyOutput
 
 /-! ## The two free crossings
 
@@ -221,12 +221,12 @@ theorem customErrorData_length (name : String) :
 /-- A call to a named runtime error, refuted by the walk's empty payload. -/
 theorem call_namedError_refuted {fs : List Func} {sevm : Sevm}
     {devm raw : Devm} {slot : Nat} (name : String)
-    (lookup : fs[slot]? = some (Func.revSelector (customErrorData name)
+    (lookup : fs[slot]? = some (Func.revertSelector (customErrorData name)
       (customErrorData_length name)))
     (emptyOutput : raw.output = [])
     (run : Func.RunCompiledTo fs sevm devm (.call slot)
       (.error (.revert, raw))) : False :=
-  call_revSelector_refuted lookup emptyOutput run
+  call_revertSelector_refuted lookup emptyOutput run
 
 /-- The four named-error table entries this route's untaken arms call. -/
 theorem runtime_error_lookups (dp : DeployParams) :

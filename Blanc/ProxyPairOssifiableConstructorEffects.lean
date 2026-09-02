@@ -25,7 +25,7 @@ private def ossifiableConstructorCommitAndReturn
       ossifiablePushCreationCoordinate runtimeOffset :::
       pushB256 0 ::: codecopy :::
     ossifiablePushCreationCoordinate runtimeLength :::
-      pushB256 0 ::: Func.ret
+      pushB256 0 ::: Func.return_
 
 private def ossifiableConstructorAfterSetupBranch
     (runtimeOffset runtimeLength : Nat) : Func :=
@@ -224,7 +224,7 @@ private theorem ossifiableConstructorAfterSetup_success_of_checkpoint
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {tail : Stack} {image runtimeBytes : Bytes}
     {requestedAdmin : Adr}
-    (hZeroAdmin : fs[4]? = some (Func.revData zeroAdminErrorData))
+    (hZeroAdmin : fs[4]? = some (Func.revertData zeroAdminErrorData))
     (hrequested :
       Bytes.toB256 (image.sliceD 32 32 0) = requestedAdmin.toB256)
     (hruntime :
@@ -269,7 +269,7 @@ private theorem ossifiableConstructorAfterSetup_success_of_checkpoint
     obtain ⟨callPre, _, _, _, callRun, _⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne branchRun
-    exact (Func.RunCompiledTo.not_ok_call_revData hZeroAdmin callRun).elim
+    exact (Func.RunCompiledTo.not_ok_call_revertData hZeroAdmin callRun).elim
   · have requestedNonzero : requestedAdmin ≠ 0 := by
       intro requestedZero
       subst requestedAdmin
@@ -336,10 +336,10 @@ private theorem ossifiableConstructorAfterSetup_success_of_checkpoint
       (Ninst.Run.of_runCompiled qreturnZero)
     have pReturn : (0 : B256) :: Nat.toB256 runtimeLength :: tail <<+
         returnPre.stack := prefix_of_push returnZeroPush pReturnLength
-    have returnRunOk : Func.Run fs sevm returnPre Func.ret post :=
+    have returnRunOk : Func.Run fs sevm returnPre Func.return_ post :=
       Func.Run.of_runCompiled
         (Func.RunCompiled.of_runCompiledTo_ok returnRun)
-    have outputRaw := (of_run_ret_val pReturn returnRunOk).1
+    have outputRaw := (of_run_return_val pReturn returnRunOk).1
     have outputExact : post.output = runtimeBytes := by
       rw [outputRaw, show (0 : B256).toNat = 0 by rfl,
         B256.toNat_toB256_of_lt hlengthBound,
@@ -396,7 +396,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_exact
     {runtimeOffset runtimeLength : Nat}
     {fs : List Func} {sevm : Sevm} {pre : Devm}
     {tail : Stack} {image : Bytes} {out : Execution}
-    (hZeroAdmin : fs[4]? = some (Func.revData zeroAdminErrorData))
+    (hZeroAdmin : fs[4]? = some (Func.revertData zeroAdminErrorData))
     (hwf : Mem.Wf pre.memory)
     (hreads : Mem.Reads pre.memory image)
     (hrequested : Bytes.toB256 (image.sliceD 32 32 0) =
@@ -439,7 +439,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_exact
     branchPop.logs.symm.trans testLogs
   refine ⟨callPre, callStor, callLogs, ?_⟩
   simpa only [ControlErrorOutcome] using
-    runCompiledTo_call_revData_frame_inv hZeroAdmin callWf callReads
+    runCompiledTo_call_revertData_frame_inv hZeroAdmin callWf callReads
       (by decide +kernel) (by decide +kernel) callRun
 
 /-- The complete creation program rejects value before decoding or any
@@ -471,7 +471,7 @@ theorem ossifiableConstructorProgram_value_rejected
   obtain ⟨revertPre, _, revertRun⟩ := runCompiledTo_call_inv
     (ossifiableConstructorFunctions_emptyRevert runtimeOffset runtimeLength)
     callRun
-  exact runCompiledTo_rev_inv revertRun
+  exact runCompiledTo_revert_inv revertRun
 
 /-- Successful post-setup constructor execution reads the post-child admin
 word, appends `AdminChanged`, performs the packed admin-slot write, and returns
@@ -482,7 +482,7 @@ theorem ossifiableConstructorAfterSetup_success
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {tail : Stack} {image runtimeBytes : Bytes}
     {requestedAdmin : Adr}
-    (hZeroAdmin : fs[4]? = some (Func.revData zeroAdminErrorData))
+    (hZeroAdmin : fs[4]? = some (Func.revertData zeroAdminErrorData))
     (hwf : Mem.Wf pre.memory)
     (hreads : Mem.Reads pre.memory image)
     (hrequested :

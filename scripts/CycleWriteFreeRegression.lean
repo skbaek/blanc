@@ -32,7 +32,7 @@ private def outsideWriterProgram : Prog :=
 
 /-- A self-loop whose zero branch reverts after one witnessed loop traversal. -/
 private def selfLoopProgram : Prog :=
-  ⟨.branch (.last .rev) (.call 0), []⟩
+  ⟨.branch (.last .revert) (.call 0), []⟩
 
 /-- A two-node cycle.  The concrete execution takes `0 → 1 → 0`, then
 the second visit to node zero takes its stopping branch. -/

@@ -1314,15 +1314,15 @@ theorem rootFinishReturn_runCompiled
         List.length_nil]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
-  let retPre := base.setMach
+  let returnPre := base.setMach
     ⟨[(0 : B256), (32 : B256)], Mret, G⟩
-  have hext : retPre.extCost [⟨(0 : Nat), (32 : Nat)⟩] = 0 := by
+  have hext : returnPre.extCost [⟨(0 : Nat), (32 : Nat)⟩] = 0 := by
     apply Devm.extCost_zero_of_le
     · rw [hsizeRet]
     · rw [hsizeRet]
       omega
   have hretRead :
-      (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32 =
+      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32 =
         ⟨digest.toBytes, base.setMach ⟨[], Mret, G⟩⟩ := by
     apply Prod.ext
     · change (Mret.read 0 32).1 = digest.toBytes
@@ -1340,19 +1340,19 @@ theorem rootFinishReturn_runCompiled
       rw [Mem.read_snd_eq_self
         (memExtSize_of_le (by rw [hsizeRet])
           (by rw [hsizeRet]; omega))]
-  change Func.RunCompiled fs sevm retPre (.last .ret)
+  change Func.RunCompiled fs sevm returnPre (.last .return_)
     (rootFinishPost base memory digest G)
   simpa only [rootFinishPost, Mret] using
-    (Func.runCompiled_ret_of
-      (fs := fs) (sevm := sevm) (devm := retPre)
+    (Func.runCompiled_return_of
+      (fs := fs) (sevm := sevm) (devm := returnPre)
       (i := (0 : B256)) (sz := (32 : B256)) (s := [])
       (out := digest.toBytes)
       (d' := base.setMach ⟨[], Mret, G⟩)
       (G := G) (e := 0)
       rfl
       (by simpa only [h0, h32] using hext)
-      (by simp only [retPre, Devm.gasLeft_setMach, Nat.add_zero])
-      (by simpa only [retPre, Devm.memory_setMach, h0, h32] using
+      (by simp only [returnPre, Devm.gasLeft_setMach, Nat.add_zero])
+      (by simpa only [returnPre, Devm.memory_setMach, h0, h32] using
         hretRead))
 
 private theorem rootFinishShaReturn_runCompiled

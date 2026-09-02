@@ -68,7 +68,7 @@ review_date = "2026-08-20"
 id = "func-run-prefix-split"
 status = "active"
 triggers = ["implication-premise:Func.Run"]
-preferred_path = "Use `func_execute n` or `func_execute_with line` to expose a known prefix. For a successful conditional whose selected arm calls a known nonreturning auxiliary, use `of_run_branch_call_of_not_run`; the `rev`, `revWith`, and `revReturnData` specializations discharge the standard reverter bodies."
+preferred_path = "Use `func_execute n` or `func_execute_with line` to expose a known prefix. For a successful conditional whose selected arm calls a known nonreturning auxiliary, use `of_run_branch_call_of_not_run`; the `revert`, `revertWith`, and `revertReturnData` specializations discharge the standard reverter bodies."
 boundary = "This targets the older implication-shaped `Func.Run`; it is not `RunCompiled` construction and does not invert an arbitrary named derivation without first reverting it. The nonreturning-call inversion proves only that the successful walk selected the zero/fall-through arm; transport any stack or state observation separately from its returned `Devm.PopBurn`."
 owner_module = "Blanc/Tactics.lean"
 canonical_example = "Blanc/Solvent.lean:withdraw_preserves_solvent"
@@ -77,10 +77,10 @@ symbols = [
   "tactic:func_execute_with",
   "declaration:Func.Run",
   "declaration:Blanc.of_run_branch_call_of_not_run",
-  "declaration:Blanc.of_run_branch_call_rev",
-  "declaration:Blanc.of_run_branch_call_revWith",
-  "declaration:Blanc.of_run_branch_call_revReturnData",
-  "declaration:Blanc.Func.not_run_revReturnData",
+  "declaration:Blanc.of_run_branch_call_revert",
+  "declaration:Blanc.of_run_branch_call_revertWith",
+  "declaration:Blanc.of_run_branch_call_revertReturnData",
+  "declaration:Blanc.Func.not_run_revertReturnData",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-20"
@@ -392,7 +392,7 @@ review_date = "2026-09-01"
 id = "raw-sstore-free-compiled-path"
 status = "active"
 triggers = ["goal-shape:raw-sstore-free-compiled-path"]
-preferred_path = "Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_entrySstoreFree_reachableExecFree` when the executable finite-component checkers prove both local SSTORE freedom and reachable exec freedom; otherwise use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body, `NoRawSstorePath.of_prepend_nonexec` for an instruction-only prefix, `NoRawSstorePath.of_revWith` for a symbolic constant-error body, or `NoRawSstorePath.of_emptyRevertGuard` for a selected nonzero guard calling an empty-revert auxiliary. When a failing prefix is checker-safe only with a harmless success continuation, certify that source and use `NoRawSstorePath.replaceStopWith_of_error` to reinstate the production continuation that the exact error path never enters; `Func.replaceStopWith_prepend` normalizes an instruction-only prefix around that replacement. For a warm fixed-width SHA-256 precompile step, preserve the empty child slot with `Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext`; finish with `Prog.exists_exec_noRawSstore`. When an exact `Exec` already exists, use `Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree` to combine the two executable entry certificates occurrence-first."
+preferred_path = "Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_entrySstoreFree_reachableExecFree` when the executable finite-component checkers prove both local SSTORE freedom and reachable exec freedom; otherwise use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body, `NoRawSstorePath.of_prepend_nonexec` for an instruction-only prefix, `NoRawSstorePath.of_revertWith` for a symbolic constant-error body, or `NoRawSstorePath.of_emptyRevertGuard` for a selected nonzero guard calling an empty-revert auxiliary. When a failing prefix is checker-safe only with a harmless success continuation, certify that source and use `NoRawSstorePath.replaceStopWith_of_error` to reinstate the production continuation that the exact error path never enters; `Func.replaceStopWith_prepend` normalizes an instruction-only prefix around that replacement. For a warm fixed-width SHA-256 precompile step, preserve the empty child slot with `Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext`; finish with `Prog.exists_exec_noRawSstore`. When an exact `Exec` already exists, use `Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree` to combine the two executable entry certificates occurrence-first."
 boundary = "This is raw construction-direction chronology, not rollback reasoning. An empty retained-write list or reverted terminal state does not prove the certificate because an earlier raw SSTORE may have executed and then rolled back. Entered child frames require their own evidence; synchronously resolved childless precompiles may use the explicit done-frame constructor."
 owner_module = "Blanc/ForwardNoRawSstore.lean"
 canonical_example = "Blanc/ForwardNoRawSstore.lean:Func.RunCompiledTo.NoRawSstorePath.of_execFree"
@@ -401,14 +401,14 @@ symbols = [
   "declaration:Blanc.Ninst.ChildlessRunCompiled",
   "declaration:Blanc.Ninst.ChildlessRunCompiled.toRunCompiled",
   "declaration:Blanc.Ninst.childlessRunCompiled_exec_doneFrame",
-  "declaration:Blanc.Ninst.childlessRunCompiled_statcall_doneFrame",
-  "declaration:Blanc.Ninst.childlessRunCompiled_statcall_sha256_64_warm_ext",
+  "declaration:Blanc.Ninst.childlessRunCompiled_staticcall_doneFrame",
+  "declaration:Blanc.Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext",
   "declaration:Blanc.emptyRevertGuardCost",
   "declaration:Blanc.Func.runCompiledTo_emptyRevertGuard",
   "declaration:Blanc.Exec.NoRawSstore",
   "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath",
   "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_execFree",
-  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_revWith",
+  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_revertWith",
   "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard",
   "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_prepend_nonexec",
   "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree",
@@ -541,8 +541,8 @@ symbols = [
   "declaration:Devm.setCode_logs",
   "declaration:Devm.setCode_output",
   "declaration:Devm.setCode_error",
-  "declaration:Devm.retPost_getStorVal",
-  "declaration:Devm.retPost_accessedStorageKeys",
+  "declaration:Devm.returnPost_getStorVal",
+  "declaration:Devm.returnPost_accessedStorageKeys",
   "declaration:Devm.sstoreBase_state",
   "declaration:Devm.sstoreBase_accessedStorageKeys",
   "declaration:Devm.sstoreWarmBase_accessedStorageKeys",
@@ -561,14 +561,14 @@ review_date = "2026-08-30"
 id = "compiled-terminal-at-zero"
 status = "active"
 triggers = ["goal-shape:terminal-return-revert"]
-preferred_path = "For an offset-zero 32-byte RETURN or empty REVERT, use `Func.runCompiledTo_ret_word_at_zero` or `Func.runCompiledTo_rev_empty_at_zero`; use the more general `Func.runCompiledTo_ret_word` and `Func.runCompiledTo_rev` only when the offset, size, stack tail, or payload differs."
+preferred_path = "For an offset-zero 32-byte RETURN or empty REVERT, use `Func.runCompiledTo_return_word_at_zero` or `Func.runCompiledTo_revert_empty_at_zero`; use the more general `Func.runCompiledTo_return_word` and `Func.runCompiledTo_revert` only when the offset, size, stack tail, or payload differs."
 boundary = "These are construction lemmas for two common terminal shapes, not inversion theorems and not a replacement for the general terminal APIs."
 owner_module = "Blanc/ExecutionTerminal.lean"
-canonical_example = "Blanc/ExecutionTerminal.lean:Func.runCompiledTo_ret_word_at_zero"
+canonical_example = "Blanc/ExecutionTerminal.lean:Func.runCompiledTo_return_word_at_zero"
 symbols = [
   "module:Blanc/ExecutionTerminal.lean",
-  "declaration:Func.runCompiledTo_ret_word_at_zero",
-  "declaration:Func.runCompiledTo_rev_empty_at_zero",
+  "declaration:Func.runCompiledTo_return_word_at_zero",
+  "declaration:Func.runCompiledTo_revert_empty_at_zero",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-29"
@@ -703,7 +703,7 @@ review_date = "2026-08-30"
 id = "constant-error-guard"
 status = "active"
 triggers = ["goal-shape:constant-error-guard"]
-preferred_path = "Use `Func.runCompiledTo_errorGuard` when a nonzero branch flag tail-calls an auxiliary equal to `Func.revWith reason`. Supply the auxiliary lookup, exact entry-state memory image and alignment, payload bounds, gas expressed through `errorGuardCost`, and stack room; the theorem returns the complete ABI `Error(string)` payload with exact final memory, stack, and gas. When an existential carrier exposes a different state with the same memory size, transport that exact cost with `errorGuardCost_congr_memory_size`."
+preferred_path = "Use `Func.runCompiledTo_errorGuard` when a nonzero branch flag tail-calls an auxiliary equal to `Func.revertWith reason`. Supply the auxiliary lookup, exact entry-state memory image and alignment, payload bounds, gas expressed through `errorGuardCost`, and stack room; the theorem returns the complete ABI `Error(string)` payload with exact final memory, stack, and gas. When an existential carrier exposes a different state with the same memory size, transport that exact cost with `errorGuardCost_congr_memory_size`."
 boundary = "This proves the branch-and-internal-call walk only. It does not select a contract route, establish which flag is nonzero, authenticate a contract-specific reason/slot table, or turn the local revert into a public endpoint theorem. Keep `errorGuardCost` indexed by the actual entry state, or transport it only across a proved memory-size equality, so memory expansion is not silently weakened."
 owner_module = "Blanc/RevertPayload.lean"
 canonical_example = "Blanc/RevertPayload.lean:Func.runCompiledTo_errorGuard"
@@ -713,7 +713,7 @@ symbols = [
   "declaration:Blanc.errorCallCost",
   "declaration:Blanc.errorGuardCost",
   "declaration:Blanc.errorGuardCost_congr_memory_size",
-  "declaration:Blanc.Func.runCompiledTo_revWith",
+  "declaration:Blanc.Func.runCompiledTo_revertWith",
   "declaration:Blanc.Func.runCompiledTo_errorGuard",
 ]
 review_owner = "proof-infrastructure"
@@ -724,7 +724,7 @@ id = "one-word-source-return"
 status = "active"
 triggers = ["goal-head:ReturnsWord"]
 preferred_path = "For the source fragment `mstoreAt 0 +++ returnMemoryRange 0 32`, use `of_storeReturnWord` when a `Mem.Wf`/`Mem.Reads` image is already available, or `returnsWord_of_storeReturn` when no memory side condition is in context. Both prove `ReturnsWord` from the known stack head and preserve code."
-boundary = "This is the source-level one-word ABI observation. For a compiled terminal walk use `Func.runCompiledTo_ret_word_at_zero`; for other offsets, sizes, or payloads use the general return APIs."
+boundary = "This is the source-level one-word ABI observation. For a compiled terminal walk use `Func.runCompiledTo_return_word_at_zero`; for other offsets, sizes, or payloads use the general return APIs."
 owner_module = "Blanc/Ladder.lean"
 canonical_example = "Blanc/Ladder.lean:returnsWord_of_storeReturn"
 symbols = [

@@ -310,10 +310,10 @@ theorem collisionRefusal_call_reverts_exact
       sevm entry (.call collisionRefusalSlot) out) :
     ∃ post, out = .error (.revert, post) ∧ post.output = [] := by
   have hget : ((runtime dp).main :: (runtime dp).aux)[collisionRefusalSlot]? =
-      some Func.rev := by
+      some Func.revert := by
     simp [runtime, aux, baseAux, collisionRefusalSlot]
   obtain ⟨_, _, hbody⟩ := runCompiledTo_call_inv hget hcall
-  exact runCompiledTo_rev_inv hbody
+  exact runCompiledTo_revert_inv hbody
 
 /-! These route consumers are the exact negative-gate conclusions once the
    corresponding role-key walk has been inverted.  Keeping the route premise

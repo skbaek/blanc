@@ -21,24 +21,24 @@
   "frozenAssuranceFiles": {
     "Blanc/CycleWriteFree.lean": "6df69e846e5c165acb8ad12bedd7cb97503e9ee3eda8bee9553e3a8c8c706dac",
     "Blanc/ExecutionFrames.lean": "94c8b18e7064909eb1b7b27d333f9dbb1c6038e34346c2af66bc9c4710da6431",
-    "Blanc/ExecutionOccurrence.lean": "5091c3a63681386c21882ab1842d749da6e2a239ebe45c69349ac0e406be43b7",
+    "Blanc/ExecutionOccurrence.lean": "6ff78af0d97e3349013e26f34225fe039aa6129fd4a58c081da868c1c7bf4344",
     "Blanc/ExecutionSettlement.lean": "0e01d0a0ce1a571af2af61bc2af4bf5405bbade4b792879fb199ce468e7a5582",
-    "scripts/CycleWriteFreeRegression.lean": "972fb8c3d780e281490b80bb38c32e4aae4702b49a7f016a3c9313cd8fc5db7e",
-    "scripts/ExecutionOccurrenceControls.lean": "ac6514d9a410107e4d6b6ca7abc9443e9dc69e356033a2232ef465e85b9a16e8",
-    "scripts/ExecutionOccurrenceRegression.lean": "be45f9c8da0c52dd74af7e8f1612f34dd973d3a435e7a41ea0fb889dda831ebe",
+    "scripts/CycleWriteFreeRegression.lean": "4022d12d48c507273d8f6eef6b7f522a33db3c631d39904669122ab197779ffe",
+    "scripts/ExecutionOccurrenceControls.lean": "5e07b4c9ac517040727bd6a7ea7159a7d2ade66789c3f8300e1a78333d476410",
+    "scripts/ExecutionOccurrenceRegression.lean": "bacf089a0e3940ed63f5e54b3614beadfced1979373cee8c4ce253225cf3043f",
     "scripts/ExecutionSettlementRegression.lean": "d1e4fc1aeb4e31a9188af49a9df1ce2bf23b87571544f7f31e0af1abcea74c2f",
     "scripts/check-cycle-write-free.py": "c03c04e107b0e9c5bf409458458dfc6df5415bcdce8e7fa35e3bfe1d37cbf63f",
-    "scripts/check-execution-occurrence.py": "f1bf2e0c441d2960326f7222c2dd369aced71b47a552a01ed45c3ad8e87d5c3a",
+    "scripts/check-execution-occurrence.py": "6700cd5ddddc08e4f7d2b16ee2a1871042069b871e849cce349146acd440c71c",
     "scripts/check-execution-raw-attribution-ownership.py": "53772995c44874b8d92bf2aab2cfd6e171ed042297b5a13da4b292ab2c6cc01b",
     "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",
     "scripts/cycle-write-free-owner-manifest.json": "1436cc0ae9adf2d41cbf8b7966715174d518378ed8a2713e07420040d7c77e8b",
-    "scripts/execution-occurrence-lift-manifest.json": "964155f6cf91d3529d920d6d274a82cae2fd02d12c6c980c6e838fc1c729fd0b",
+    "scripts/execution-occurrence-lift-manifest.json": "a463d5559962eaa418152043e2c102188cc1ec24a155ee974a52a895aaec8c69",
     "scripts/execution-raw-attribution-owner-manifest.json": "803771c04e25de1b3b15607a4aaa82f654ebdb2a0ad96c7f5d5521a9b0aaef18",
     "scripts/execution-settlement-lift-manifest.json": "6d388528be7cfb64a324a8a3d1b9aaf9bf19d4f4525b02cd7f899f1a1bbcc9d7"
   },
   "jaunePinFiles": {
-    "lake-manifest.json": "3a740462158811b21fbc0923fa33976f6150260ca2521fbfe2e463711ab6d8f1",
-    "lakefile.lean": "7be0bdc822e1407a6521e620708d4808f8fbf81f33f490048df7f78552acb29e"
+    "lake-manifest.json": "6170c288489d1fb95d7937a745a87a8a79d8ba626f55c7f85ff9cfb70e363da0",
+    "lakefile.lean": "a43239130a8ac2fa0ec458dcfa714a13b1bfd54a60934a16a018cae0f7357729"
   },
   "movedDonors": [
     [
@@ -88,17 +88,17 @@
     ],
     [
       "Blanc/Ladder.lean",
-      "Xinst.step_statcall_spawn_isStatic",
+      "Xinst.step_staticcall_spawn_isStatic",
       "theorem"
     ],
     [
       "Blanc/Ladder.lean",
-      "Ninst.step_statcall_spawn_isStatic",
+      "Ninst.step_staticcall_spawn_isStatic",
       "theorem"
     ],
     [
       "Blanc/Ladder.lean",
-      "Ninst.step_statcall_run_isStatic",
+      "Ninst.step_staticcall_run_isStatic",
       "theorem"
     ]
   ],
@@ -106,10 +106,10 @@
     "Evm.step_run_isStatic": "d6e927015acc5aaa99737cee615651a2f48781c1821f03eeeda8fd6f6ffe34a5",
     "Evm.step_spawn_isStatic": "f8a6567e0f9f39a2a432936a7e29f5409d5cdaa791521493d29bc4fc98ad89f6",
     "Frame.enter_run_isStatic": "c9c6171d4815e1f6b6d6269e12ec6eeb3c8a9c516392dbaa862634a91ffa7a44",
-    "Ninst.step_statcall_run_isStatic": "b1941fc19755c7781d224e837870185c50a8b883c776577e50f111ca379ca49b",
-    "Ninst.step_statcall_spawn_isStatic": "8084f8dc73822367615944a60600a80b6d91d702d44acc15255bd933b0e5cfe5",
+    "Ninst.step_staticcall_run_isStatic": "e7b1604b4f962b50fda32fa5e5bc9bb7c7d7356c2d545390b77d16f0bade1ad6",
+    "Ninst.step_staticcall_spawn_isStatic": "f73f48de5e89aa10d751c51d85259608e0f01f8d649c94d650183a67aec68b53",
     "Xinst.step_spawn_isStatic": "fd45a6aa3873fec40528142a05e12824669b7894e509d7f8ba76580158bc3bd0",
-    "Xinst.step_statcall_spawn_isStatic": "ae1ebc067f0fbf46abf6785da0868c1488c107e557f11408bfd1668b04c718c5",
+    "Xinst.step_staticcall_spawn_isStatic": "a749650d8184c66eb41c4d9f16b31dc911ec48a5abb1c981ffbe6a81699a2a88",
     "executeCode.enter_inl_isStatic": "35b35f1fdab5b51851233946c59561550df2f4a0b0224ed203c7602d732cf49e",
     "genericCall.step_spawn_isStatic": "151609db791aaebf3f6dac11ce3face1b0f7db129bc15eb22a7d05ff1193f560",
     "genericCall.step_spawn_isStatic_of_staticcall": "24e560e5b03ba992788379a7ae16af0a87e06179c3534146e239594de98b6902",
@@ -190,8 +190,8 @@
     "cleanCall_childSettlement": "6fad9951db50be664cf79858c4c8a5d8a2dfe7096bcc7a054de6dcf9f6c5f1b7",
     "directCall_nonzero_spawn": "3145ede57457c8416943c29d2e46b1608818ee761e3986a141a692b8b919ba5a",
     "directCall_zero_spawn": "06c51ce00f630b75244b9b8e09cfadeb63f93ee363f265d30a420927b90405a1",
-    "directDelcall_spawn": "279ea4ee73e08c9b001c58d3b0345a52ed639c5368ada8aba4030e17b04e8697",
-    "directStatcall_spawn": "597ad74b118c74a0551c5c6d2ca727370af1156c98636c1b98268566310ea57f",
+    "directDelcall_spawn": "b6e719e055f401e70f66b4346bfa2e17c0c79c20b4781e9e27236afe27143d94",
+    "directStatcall_spawn": "9cff6ed2010dd875b747270d9d939e74e117fa2abed77fbf31c65f31e17216ed",
     "preparedTransactionMessage_exists": "466320301a1e39053c7be80b5e56b7b387d840cf4c4d9d4edd4dfd05d96d6b59",
     "processMessageCall_error_logs_eq_nil": "1721d1a3eb0d897da612cc3d3115fe0e4f7916c7d8103e9991d4554b3d6ffab6",
     "tload_run_cell": "74852521f83dbb2f0fff4fa5bdcd0d39d637a9d5f56a3f2d50090f1acf0d43fc",
@@ -199,12 +199,12 @@
     "tstore_run_zero": "1089beb9e6cdbef48a63c5bae7447b1638e40411969686992ea8fb4ec8fb673b"
   },
   "touchedConsumerHashes": {
-    "Blanc/Weth10AllowanceArmsPermit.lean": "9fa3a7e7121010bdc33c16ebd097e24ab0f447f0dedbd461f652c9c21491b44a",
-    "Blanc/Weth10StaticSilence.lean": "7d99de5ead573717042030decbcc18f341a7a3d7dcb68d15bf6334299ba5887a"
+    "Blanc/Weth10AllowanceArmsPermit.lean": "d6f88a595b2e70d552a7ffcd85886206625e1c9e9ff1908cecd2a1f94138a5b8",
+    "Blanc/Weth10StaticSilence.lean": "e218d347a46adef11c73a78d5066342e3d0277d7a2dc6ec7848312f42cee6643"
   },
   "touchedConsumers": [
     "Blanc/Weth10StaticSilence.lean",
     "Blanc/Weth10AllowanceArmsPermit.lean"
   ],
-  "wethPublicHeaderAggregate": "d2e25a9dffaaa89f90605fd14703df7cc4c5aa36bdac62390852cb9ebe7e1037"
+  "wethPublicHeaderAggregate": "b9431a14dee7b5bdc6cd1137afb921da705d9ae69de6710cdc12a915ab0cf9c0"
 }

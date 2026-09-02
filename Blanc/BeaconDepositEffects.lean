@@ -112,32 +112,32 @@ private theorem returnWord_runCompiled
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
   let M := Mem.empty.write 0 word.toBytes
-  let retPre := base.setMach
+  let returnPre := base.setMach
     ⟨[(0 : B256), (32 : B256)], M, g - 5⟩
-  let d := (retPre.setMach ⟨[], retPre.memory, g - 5⟩).memRead 0 32
+  let d := (returnPre.setMach ⟨[], returnPre.memory, g - 5⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, ?_, rfl, ?_, rfl⟩
   · simp only [returnWordPre, returnMemoryRange, pushList]
     func_run (2) []
     simp only [List.map, prepend]
-    change Func.RunCompiled fs sevm retPre Func.ret post
+    change Func.RunCompiled fs sevm returnPre Func.return_ post
     have hext :
-        retPre.extCost [⟨(0 : B256).toNat, (32 : B256).toNat⟩] = 0 := by
-      change retPre.extCost [((0 : Nat), (32 : Nat))] = 0
-      simpa only [retPre, M] using
+        returnPre.extCost [⟨(0 : B256).toNat, (32 : B256).toNat⟩] = 0 := by
+      change returnPre.extCost [((0 : Nat), (32 : Nat))] = 0
+      simpa only [returnPre, M] using
         (Devm.extCost_word_word Mem.size_write_word)
     have hread :
-        (retPre.setMach ⟨[], retPre.memory, g - 5⟩).memRead 0 32 =
+        (returnPre.setMach ⟨[], returnPre.memory, g - 5⟩).memRead 0 32 =
           ⟨word.toBytes, d.2⟩ := by
       exact Prod.ext
         (Devm.memRead_word_fst
-          (by simp only [Devm.memory_setMach, retPre, M]))
+          (by simp only [Devm.memory_setMach, returnPre, M]))
         rfl
-    exact Func.runCompiled_ret_of (devm := retPre) (G := g - 5) (e := 0)
+    exact Func.runCompiled_return_of (devm := returnPre) (G := g - 5) (e := 0)
       (out := word.toBytes) (d' := d.2) rfl hext
-      (by simp only [retPre, Devm.gasLeft_setMach, Nat.add_zero])
+      (by simp only [returnPre, Devm.gasLeft_setMach, Nat.add_zero])
       hread
-  · simp only [post, d, retPre, gasLeft_withOutput,
+  · simp only [post, d, returnPre, gasLeft_withOutput,
       gasLeft_memRead_snd, Devm.gasLeft_setMach]
     omega
   · exact ⟨rfl, rfl⟩
@@ -258,7 +258,7 @@ theorem supportsInterfaceEndpoint_short_runCompiledTo
     simp only [Devm.stack_setMach, List.length_cons] at *
     omega }
   all_goals try omega
-  exact Func.runCompiledTo_rev_func
+  exact Func.runCompiledTo_revert_func
     (devm := base.setMach
       ⟨base.stack, base.memory, G + 4⟩)
     (G := G)
@@ -337,7 +337,7 @@ theorem nonpayableEndpoint_nonzero_runCompiledTo
       omega
     · simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest]
       omega
-    · exact Func.runCompiledTo_rev_func
+    · exact Func.runCompiledTo_revert_func
         (devm := base.setMach ⟨base.stack, base.memory, G + 4⟩)
         (G := G) (by simp only [Devm.gasLeft_setMach, gBase])
         (by simp only [Devm.stack_setMach]; exact hroom)
@@ -348,7 +348,7 @@ def supportsInterfaceDispatchGas : Nat := 54
 
 private def supportsInterfaceLeaf : Func :=
   pushB256 supportsInterfaceSelector ::: eq :::
-    ((nonpayableEndpoint supportsInterfaceEndpoint) <?> Func.rev)
+    ((nonpayableEndpoint supportsInterfaceEndpoint) <?> Func.revert)
 
 private def supportsInterfaceRightTree : DispatchTree :=
   .fork
@@ -482,7 +482,7 @@ private theorem supportsInterfaceLeaf_runCompiledTo_with_path
         (by simp only [branchPre, Devm.gasLeft_setMach,
           gVerylow, gHigh, gJumpdest])
   let hbranch : Func.RunCompiledTo fs sevm branchPre
-      ((nonpayableEndpoint supportsInterfaceEndpoint) <?> Func.rev) out :=
+      ((nonpayableEndpoint supportsInterfaceEndpoint) <?> Func.revert) out :=
     .succ (by decide) hroom hpop hbody
   let run : Func.RunCompiledTo fs sevm
       (base.setMach ⟨[supportsInterfaceSelector], Mem.empty, G + 20⟩)
@@ -949,7 +949,7 @@ private theorem supportsInterfaceRoute_runCompiledTo_with_path
         (by simp only [afterSize, Devm.gasLeft_setMach,
           gVerylow, gHigh, gJumpdest])
   let hbranch : Func.RunCompiledTo (runtime.main :: runtime.aux)
-      sevm afterSize (Func.main tree <?> Func.rev) out :=
+      sevm afterSize (Func.main tree <?> Func.revert) out :=
     .succ hnonempty hroom hpop (by
       simpa only [afterBranch] using hmain)
   let mainRun : Func.RunCompiledTo (runtime.main :: runtime.aux)
@@ -1495,7 +1495,7 @@ theorem supportsInterface_ffffffff_runCompiled
 
 /-- Deposit selector leaf used by the ordinary and exact-effect route proofs. -/
 def depositLeafRoute : Func :=
-  pushB256 depositSelector ::: eq ::: (depositEndpoint <?> Func.rev)
+  pushB256 depositSelector ::: eq ::: (depositEndpoint <?> Func.revert)
 
 /-- Right-hand dispatcher subtree bypassed by the selected deposit path. -/
 def depositRightTree : DispatchTree :=
@@ -1622,7 +1622,7 @@ private theorem depositLeafRoute_runCompiledTo_with_path
         (by simp only [branchPre, Devm.gasLeft_setMach,
           gVerylow, gHigh, gJumpdest])
   let hbranch : Func.RunCompiledTo fs sevm branchPre
-      (depositEndpoint <?> Func.rev) out :=
+      (depositEndpoint <?> Func.revert) out :=
     .succ (by decide) hroom hpop hbody
   let run : Func.RunCompiledTo fs sevm
       (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
@@ -2201,7 +2201,7 @@ theorem deposit_route_runCompiledTo_with_path
         (by simp only [afterSize, Devm.gasLeft_setMach,
           gVerylow, gHigh, gJumpdest])
   let hbranch : Func.RunCompiledTo (runtime.main :: runtime.aux)
-      sevm afterSize (Func.main tree <?> Func.rev) out :=
+      sevm afterSize (Func.main tree <?> Func.revert) out :=
     .succ hnonempty hroom hpop (by
       simpa only [afterBranch] using hmain)
   let mainRun : Func.RunCompiledTo (runtime.main :: runtime.aux)

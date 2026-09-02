@@ -101,7 +101,7 @@ theorem runtime_rebasedTriggerRoleFailure_get (dp : DeployParams) :
   simp [rebasedTriggerRoleFailureSlot_eq, runtime, aux, baseAux,
     Trigger.rebasedLocalAuxWithRoleFailure,
     Trigger.localAuxWithRoleFailure, triggerAuxDelta, triggerRoleFailure,
-    Trigger.rebaseLocalCalls, runtimeError, Func.revSelector]
+    Trigger.rebaseLocalCalls, runtimeError, Func.revertSelector]
 
 theorem runtime_rebasedTriggerAfterValidation_get (dp : DeployParams) :
     ((runtime dp).main :: (runtime dp).aux)[rebasedTriggerAfterValidationSlot]?
@@ -115,10 +115,10 @@ theorem runtime_rebasedTriggerAfterValidation_get (dp : DeployParams) :
 empty-data reverter. -/
 theorem runtime_rebasedTriggerMalformedAbi_get (dp : DeployParams) :
     ((runtime dp).main :: (runtime dp).aux)[
-        triggerAuxDelta + Trigger.malformedAbiSlot]? = some Func.rev := by
+        triggerAuxDelta + Trigger.malformedAbiSlot]? = some Func.revert := by
   simp [runtime, aux, baseAux, Trigger.rebasedLocalAuxWithRoleFailure,
     Trigger.localAuxWithRoleFailure, triggerAuxDelta,
-    Trigger.malformedAbiSlot, Trigger.rebaseLocalCalls, Func.rev]
+    Trigger.malformedAbiSlot, Trigger.rebaseLocalCalls, Func.revert]
 
 private theorem rebasedTriggerArithmeticPanic_call_not_ok
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm}
@@ -127,12 +127,12 @@ private theorem rebasedTriggerArithmeticPanic_call_not_ok
         (.ok post)) : False := by
   have hget : ((runtime dp).main :: (runtime dp).aux)[
       triggerAuxDelta + Trigger.arithmeticPanicSlot]? =
-        some (Func.revData (Trigger.panicData 0x11)) := by
+        some (Func.revertData (Trigger.panicData 0x11)) := by
     simp [runtime, aux, baseAux, Trigger.rebasedLocalAuxWithRoleFailure,
       Trigger.localAuxWithRoleFailure, triggerAuxDelta,
       Trigger.arithmeticPanicSlot, Trigger.arithmeticPanicRevert,
-      Trigger.rebaseLocalCalls_revData]
-  exact Func.RunCompiledTo.not_ok_call_revData hget run
+      Trigger.rebaseLocalCalls_revertData]
+  exact Func.RunCompiledTo.not_ok_call_revertData hget run
 
 /-- Rebasing only renumbers local calls, so it passes through a prepended
 line untouched.  The walk needs this to expose a `+++` head that
@@ -201,7 +201,7 @@ theorem rebasedTriggerRoleFailure_call_reverts_exact
     (runtime_rebasedTriggerRoleFailure_get dp) run
   simpa [TriggerRoleFailure, triggerRoleFailure,
     runtimeError, customErrorData] using
-      runCompiledTo_revSelector_inv
+      runCompiledTo_revertSelector_inv
         (hlen := by simp [customErrorData, B256.length_toBytes]) bodyRun
 
 theorem rebasedTriggerResumedExpected_call_reverts_exact
@@ -213,7 +213,7 @@ theorem rebasedTriggerResumedExpected_call_reverts_exact
     (runtime_rebasedTriggerResumedExpected_get dp) run
   simpa [PausedTriggerFailure, Trigger.resumedExpectedRevert,
     Trigger.selectorRevert, Trigger.rebaseLocalCalls] using
-      runCompiledTo_revSelector_inv
+      runCompiledTo_revertSelector_inv
         (hlen := by simp [B256.length_toBytes]) bodyRun
 
 /-! The canonical empty-array image pins every calldata word used by the
@@ -1072,7 +1072,7 @@ theorem triggerFullWithdrawals_ok_reaches_afterValidation
   obtain ⟨g2, q2, run⟩ := runCompiledTo_next_inv run
   obtain ⟨guard1, q3, run⟩ := runCompiledTo_next_inv run
   obtain ⟨afterSize, pop1, run⟩ :=
-    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+    Func.RunCompiledTo.zero_branch_of_ok_call_revert malformed run
   have state1 : pre.state = afterSize.state :=
     (Ninst.Hinv.inv (f := Devm.state) (Ninst.Run.of_runCompiled q1)).trans
       ((Ninst.Hinv.inv (f := Devm.state)
@@ -1087,7 +1087,7 @@ theorem triggerFullWithdrawals_ok_reaches_afterValidation
   obtain ⟨size3, argAddress, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨guard2, checkAddress, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨afterAddress, pop2, run⟩ :=
-    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+    Func.RunCompiledTo.zero_branch_of_ok_call_revert malformed run
   have state2 : afterSize.state = afterAddress.state :=
     (Ninst.Hinv.inv (f := Devm.state)
       (Ninst.Run.of_runCompiled qsize)).trans
@@ -1107,7 +1107,7 @@ theorem triggerFullWithdrawals_ok_reaches_afterValidation
   obtain ⟨address6, argOffset, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨guard3, qgt, run⟩ := runCompiledTo_next_inv run
   obtain ⟨afterOffset, pop3, run⟩ :=
-    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+    Func.RunCompiledTo.zero_branch_of_ok_call_revert malformed run
   have state3 : afterAddress.state = afterOffset.state :=
     (Line.of_inv Devm.state (by line_inv) argRefund).trans
       ((Line.of_inv Devm.state (by line_inv) storeRefund).trans
@@ -1135,7 +1135,7 @@ theorem triggerFullWithdrawals_ok_reaches_afterValidation
   obtain ⟨offset10, loadSize, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨guard4, qltA, run⟩ := runCompiledTo_next_inv run
   obtain ⟨afterHeader, pop4, run⟩ :=
-    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+    Func.RunCompiledTo.zero_branch_of_ok_call_revert malformed run
   have state4 : afterOffset.state = afterHeader.state :=
     (Line.of_inv Devm.state (by line_inv) argOffsetA).trans
       ((Line.of_inv Devm.state (by line_inv) storeOffset).trans
@@ -1164,7 +1164,7 @@ theorem triggerFullWithdrawals_ok_reaches_afterValidation
   obtain ⟨header4, loadCount, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨guard5, qgtCount, run⟩ := runCompiledTo_next_inv run
   obtain ⟨afterCount, pop5, run⟩ :=
-    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+    Func.RunCompiledTo.zero_branch_of_ok_call_revert malformed run
   have state5 : afterHeader.state = afterCount.state :=
     (Line.of_inv Devm.state (by line_inv) loadCountData).trans
       ((Line.of_inv Devm.state (by line_inv) storeCount).trans
@@ -1190,7 +1190,7 @@ theorem triggerFullWithdrawals_ok_reaches_afterValidation
   obtain ⟨count10, loadCalldataSize, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨guard6, qltBounds, run⟩ := runCompiledTo_next_inv run
   obtain ⟨afterBounds, pop6, run⟩ :=
-    Func.RunCompiledTo.zero_branch_of_ok_call_rev malformed run
+    Func.RunCompiledTo.zero_branch_of_ok_call_revert malformed run
   have state6 : afterCount.state = afterBounds.state :=
     (Line.of_inv Devm.state (by line_inv) loadLengthPtr).trans
       ((Ninst.Hinv.inv (f := Devm.state)

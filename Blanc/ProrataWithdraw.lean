@@ -168,7 +168,7 @@ private theorem sendToCaller_frame
   simpa only [List.cons_append, List.nil_append] using prefix_of_push hgas p6
 
 private def withdrawAfterCall : Func :=
-  (mstoreAt 0 +++ returnMemoryRange 0 32) <?> .rev
+  (mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert
 
 /-- A successful raw withdrawal has settled both ledger writes before reaching
 the outbound `CALL`; callback-final state is intentionally not characterized. -/
@@ -240,7 +240,7 @@ theorem withdraw_settles_before_call
       (Devm.getStor pre sevm.currentTarget).get sevm.caller.toB256 ::
       Sevm.argWord sevm 0 :: Sevm.argWord sevm 0 :: supplySlot :: [] <<+
       u7.stack := prefix_of_lt qltC p6
-  rcases of_run_branch_rev hcoverBranch with ⟨u8, hcoverPop, hcoverSuccess⟩
+  rcases of_run_branch_revert hcoverBranch with ⟨u8, hcoverPop, hcoverSuccess⟩
   have hcoverFlag : (Devm.getStor pre sevm.currentTarget).get sevm.caller.toB256 <?
       Sevm.argWord sevm 0 = 0 := (popBurn_pref hcoverPop p7).1.symm
   have hcover : Sevm.argWord sevm 0 ≤
@@ -312,7 +312,7 @@ theorem withdraw_settles_before_call
   have r6 : (B256.shiftRight B256.max 130 <? Devm.getBal pre sevm.currentTarget) ::
       Devm.getBal pre sevm.currentTarget :: Sevm.argWord sevm 0 :: supplySlot :: [] <<+
       v6.stack := prefix_of_lt qltB r5
-  rcases of_run_branch_rev hbalanceBranch with ⟨v7, hbalancePop, hbalanceSuccess⟩
+  rcases of_run_branch_revert hbalanceBranch with ⟨v7, hbalancePop, hbalanceSuccess⟩
   have hBraw : B256.shiftRight B256.max 130 <? Devm.getBal pre sevm.currentTarget = 0 :=
     (popBurn_pref hbalancePop r6).1.symm
   have hBcap : B256.shiftRight B256.max 130 = maxBalance := by decide +kernel
@@ -628,7 +628,7 @@ theorem withdraw_pays_exactly
     Func.of_inv Devm.getBal Devm.getBal (by func_inv) htail
   rcases of_run_branch htail with
     ⟨_, hzero, hrev⟩ | ⟨w, guardPost, returnPre, hw, hpop, hburn, hreturn⟩
-  · exact (not_run_rev hrev).elim
+  · exact (not_run_revert hrev).elim
   have hpre := hpreRaw
   unfold WithdrawPreCallEffect at hpre
   dsimp at hpre

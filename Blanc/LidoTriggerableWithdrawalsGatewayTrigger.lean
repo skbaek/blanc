@@ -164,7 +164,7 @@ def calldataloadAtPlus (ptrWord delta : B256) : Line :=
   loadWord ptrWord ++ [pushB256 delta, add, calldataload]
 
 def copyReturndataWord : Line :=
-  pushList [32, 0, 0] ++ [retdatacopy]
+  pushList [32, 0, 0] ++ [returndatacopy]
 
 def storeSelectorAtZero (sel : B256) : Line :=
   pushB256 sel :: mstoreAt 0
@@ -200,14 +200,14 @@ def panicData (code : B256) : Bytes :=
   (signatureHash "Panic" [.uint256]).toBytes.take 4 ++ code.toBytes
 
 def selectorRevert (sel : B256) : Func :=
-  Func.revSelector (sel.toBytes.drop 28) (by
+  Func.revertSelector (sel.toBytes.drop 28) (by
     simp [B256.length_toBytes])
 
 def zeroMsgValueRevert : Func :=
-  Func.revData (zeroArgumentData "msg.value")
+  Func.revertData (zeroArgumentData "msg.value")
 
 def zeroValidatorsDataRevert : Func :=
-  Func.revData (zeroArgumentData "validatorsData")
+  Func.revertData (zeroArgumentData "validatorsData")
 
 def resumedExpectedRevert : Func :=
   selectorRevert resumedExpectedSelector
@@ -215,9 +215,9 @@ def resumedExpectedRevert : Func :=
 def feeRefundFailedRevert : Func :=
   selectorRevert feeRefundFailedSelector
 
-def arithmeticPanicRevert : Func := Func.revData (panicData 0x11)
-def divisionPanicRevert : Func := Func.revData (panicData 0x12)
-def assertionPanicRevert : Func := Func.revData (panicData 0x01)
+def arithmeticPanicRevert : Func := Func.revertData (panicData 0x11)
+def divisionPanicRevert : Func := Func.revertData (panicData 0x12)
+def assertionPanicRevert : Func := Func.revertData (panicData 0x01)
 
 /-- `InsufficientFee(totalFee, msg.value)`, with the selector occupying the
 four bytes immediately before the two argument words. -/
@@ -225,19 +225,19 @@ def insufficientFeeRevert : Func :=
   pushB256 insufficientFeeSelector ::: mstoreAt 0 +++
   loadWord totalFeeWord +++ mstoreAt 1 +++
   callvalue ::: mstoreAt 2 +++
-  pushB256 68 ::: pushB256 28 ::: .last .rev
+  pushB256 68 ::: pushB256 28 ::: .last .revert
 
 /-- `ExitRequestsLimitExceeded(requestsCount, currentLimit)`. -/
 def exitLimitExceededRevert : Func :=
   pushB256 exitLimitExceededSelector ::: mstoreAt 0 +++
   loadWord requestsCountWord +++ mstoreAt 1 +++
   loadWord currentLimitWord +++ mstoreAt 2 +++
-  pushB256 68 ::: pushB256 28 ::: .last .rev
+  pushB256 68 ::: pushB256 28 ::: .last .revert
 
 /-- Bubble the complete returndata of a failed high-level external call. -/
 def bubbleRevert : Func :=
-  retdatasize ::: dup 0 ::: pushB256 0 ::: pushB256 0 ::: retdatacopy :::
-  pushB256 0 ::: .last .rev
+  returndatasize ::: dup 0 ::: pushB256 0 ::: pushB256 0 ::: returndatacopy :::
+  pushB256 0 ::: .last .revert
 
 /-! ## Exact calldata validation -/
 
@@ -543,7 +543,7 @@ def requireTypedCallTarget (target : Line) (continuation : Func) : Func :=
   ((.call malformedAbiSlot) <?> (pop ::: continuation))
 
 def decodeAddressReturn (destinationWord : B256) (continuation : Func) : Func :=
-  retdataShorterThan 32 +++
+  returnDataShorterThan 32 +++
   ((.call malformedAbiSlot) <?>
     (copyReturndataWord +++ pushB256 0 ::: mload ::: checkNonAddress +++
      ((.call malformedAbiSlot) <?>
@@ -553,7 +553,7 @@ def decodeAddressReturn (destinationWord : B256) (continuation : Func) : Func :=
 def callLocatorWithdrawalVault (dp : DeployParams) (continuation : Func) : Func :=
   storeSelectorAtZero withdrawalVaultSelector +++
     (requireTypedCallTarget [pushImmutableWord dp.locator] <|
-      pushList [32, 0, 4, 28] +++ pushImmutableWord dp.locator ::: gas ::: statcall :::
+      pushList [32, 0, 4, 28] +++ pushImmutableWord dp.locator ::: gas ::: staticcall :::
         iszero :::
       ((.call bubbleRevertSlot) <?>
         decodeAddressReturn withdrawalVaultWord continuation))
@@ -561,10 +561,10 @@ def callLocatorWithdrawalVault (dp : DeployParams) (continuation : Func) : Func 
 def callWithdrawalRequestFee (continuation : Func) : Func :=
   storeSelectorAtZero withdrawalRequestFeeSelector +++
     (requireTypedCallTarget (loadWord withdrawalVaultWord) <|
-      pushList [32, 0, 4, 28] +++ loadWord withdrawalVaultWord +++ gas ::: statcall :::
+      pushList [32, 0, 4, 28] +++ loadWord withdrawalVaultWord +++ gas ::: staticcall :::
         iszero :::
       ((.call bubbleRevertSlot) <?>
-        (retdataShorterThan 32 +++
+        (returnDataShorterThan 32 +++
          ((.call malformedAbiSlot) <?>
            (copyReturndataWord +++ pushB256 0 ::: mload ::: storeWord feeWord +++
             continuation)))))
@@ -603,7 +603,7 @@ def afterEncoding : Func :=
 def callLocatorStakingRouter (dp : DeployParams) (continuation : Func) : Func :=
   storeSelectorAtZero stakingRouterSelector +++
     (requireTypedCallTarget [pushImmutableWord dp.locator] <|
-      pushList [32, 0, 4, 28] +++ pushImmutableWord dp.locator ::: gas ::: statcall :::
+      pushList [32, 0, 4, 28] +++ pushImmutableWord dp.locator ::: gas ::: staticcall :::
         iszero :::
       ((.call bubbleRevertSlot) <?>
         decodeAddressReturn stakingRouterWord continuation))
@@ -653,7 +653,7 @@ def triggerFullWithdrawals (dp : DeployParams) : Func :=
   validateCalldata
 
 def localAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) : List Func :=
-  [ Func.rev,
+  [ Func.revert,
     zeroMsgValueRevert,
     zeroValidatorsDataRevert,
     resumedExpectedRevert,
@@ -681,7 +681,7 @@ def localAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) : List Func
 policy boundary.  Runtime integration should normally use
 `localAuxWithRoleFailure` to install the family-wide role failure body. -/
 def localAux (dp : DeployParams) : List Func :=
-  localAuxWithRoleFailure dp Func.rev
+  localAuxWithRoleFailure dp Func.revert
 
 /-- Shift every local table call by `delta`.  If the first appended trigger aux
 body will occupy global table slot `base`, use `delta = base - 1`: local slot
@@ -694,7 +694,7 @@ def rebaseLocalCalls (delta : Nat) : Func → Func
   | .call slot => .call (delta + slot)
 
 /-- Local-call rebasing commutes with the constant-store prefix used by
-`Func.revData`.  The prefix contains no local calls, so only its tail can
+`Func.revertData`.  The prefix contains no local calls, so only its tail can
 change. -/
 theorem rebaseLocalCalls_prependStoresRev (delta : Nat)
     (stores : List (B256 × Nat)) (rest : Func) :
@@ -709,9 +709,9 @@ theorem rebaseLocalCalls_prependStoresRev (delta : Nat)
 
 /-- Constant-data reverters contain no local calls, so rebasing is the
 identity on them. -/
-theorem rebaseLocalCalls_revData (delta : Nat) (blob : Bytes) :
-    rebaseLocalCalls delta (Func.revData blob) = Func.revData blob := by
-  unfold Func.revData
+theorem rebaseLocalCalls_revertData (delta : Nat) (blob : Bytes) :
+    rebaseLocalCalls delta (Func.revertData blob) = Func.revertData blob := by
+  unfold Func.revertData
   rw [rebaseLocalCalls_prependStoresRev]
   rfl
 

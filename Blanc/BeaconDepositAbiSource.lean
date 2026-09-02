@@ -180,7 +180,7 @@ theorem validateDynamicTailAfterArg_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {head : Nat} {offsetWord lengthWord : B256} {tail : Stack}
     {body : Func}
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hp : depositOffsetWord sevm.data head :: tail <<+ pre.stack)
     (run : Func.Run fs sevm pre
       (validateDynamicTailAfterArg offsetWord lengthWord body) post) :
@@ -207,7 +207,7 @@ theorem validateDynamicTailAfterArg_success_of_run
       ((offset <? Nat.toB256 (2 ^ 32)) =? 0) :: offset :: tail <<+
         afterOffsetGuard.stack :=
     limitGuard_prefix (by simpa only [offset] using hp) offsetGuardRun
-  rcases of_run_branch_call_rev hrev run with
+  rcases of_run_branch_call_revert hrev run with
     ⟨afterOffset, offsetPop, run⟩
   have hOffsetFlag :
       ((offset <? Nat.toB256 (2 ^ 32)) =? 0) = 0 :=
@@ -234,7 +234,7 @@ theorem validateDynamicTailAfterArg_success_of_run
   have hpEndGuard :
       (sevm.data.length.toB256 <? (36 + offset)) :: offset :: tail <<+
         afterEndGuard.stack := endGuard_prefix hpOffset endGuardRun
-  rcases of_run_branch_call_rev hrev run with
+  rcases of_run_branch_call_revert hrev run with
     ⟨afterEnd, endPop, run⟩
   have hEndFlag : (sevm.data.length.toB256 <? (36 + offset)) = 0 :=
     (popBurn_pref endPop hpEndGuard).1.symm
@@ -281,7 +281,7 @@ theorem validateDynamicTailAfterArg_success_of_run
   have hpLengthGuard :
       ((length <? Nat.toB256 (2 ^ 32)) =? 0) :: length :: offset :: tail <<+
         afterLengthGuard.stack := limitGuard_prefix hpLoad lengthGuardRun
-  rcases of_run_branch_call_rev hrev run with
+  rcases of_run_branch_call_revert hrev run with
     ⟨afterLength, lengthPop, run⟩
   have hLengthFlag :
       ((length <? Nat.toB256 (2 ^ 32)) =? 0) = 0 :=
@@ -312,7 +312,7 @@ theorem validateDynamicTailAfterArg_success_of_run
         afterPaddedGuard.stack := by
     simpa only [paddedEnd, rounded] using
       paddedEndGuard_prefix hpLength paddedGuardRun
-  rcases of_run_branch_call_rev hrev run with
+  rcases of_run_branch_call_revert hrev run with
     ⟨afterPadded, paddedPop, run⟩
   have hPaddedFlag : (sevm.data.length.toB256 <? paddedEnd) = 0 :=
     (popBurn_pref paddedPop hpPaddedGuard).1.symm
@@ -443,7 +443,7 @@ private theorem validateDynamicTail_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {head : B256} {headNat : Nat} {offsetWord lengthWord : B256}
     {tail : Stack} {body : Func}
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (haddress : (32 * head) + 4 = Nat.toB256 (4 + 32 * headNat))
     (hheadBound : 4 + 32 * headNat < 2 ^ 256)
     (hp : tail <<+ pre.stack)
@@ -506,7 +506,7 @@ before entering the deposit body. -/
 theorem validateDepositAbi_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {tail : Stack} {body : Func}
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hp : tail <<+ pre.stack)
     (hmemory : pre.memory = Mem.empty)
     (run : Func.Run fs sevm pre (validateDepositAbi body) post) :
@@ -527,7 +527,7 @@ theorem validateDepositAbi_success_of_run
   have hpHeadGuard :
       (sevm.data.length.toB256 <? (132 : B256)) :: tail <<+
         afterHeadGuard.stack := depositHeadGuard_prefix hp headGuardRun
-  rcases of_run_branch_call_rev hrev run with
+  rcases of_run_branch_call_revert hrev run with
     ⟨afterHead, headPop, run⟩
   have hHeadFlag : (sevm.data.length.toB256 <? (132 : B256)) = 0 :=
     (popBurn_pref headPop hpHeadGuard).1.symm

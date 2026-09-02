@@ -219,9 +219,9 @@ theorem of_returnTrue_exact {fs : List Func} {e : Sevm} {s r : Devm}
     ((Ninst.Hinv.inv (f := Devm.getCode) htrue).trans
       (Line.of_inv Devm.getCode (by line_inv) hstore)).trans
       (Line.of_inv Devm.getCode (by line_inv) hwindow)
-  refine ⟨?_, hcode.trans (of_run_ret_val hpWindow hret).2⟩
+  refine ⟨?_, hcode.trans (of_run_return_val hpWindow hret).2⟩
   show Devm.output r = _
-  rw [(of_run_ret_val hpWindow hret).1,
+  rw [(of_run_return_val hpWindow hret).1,
     show (0 : B256).toNat = 0 from rfl,
     show (32 : B256).toNat = 32 from rfl,
     ← hm3, hm2,
@@ -738,7 +738,7 @@ theorem transferNonzeroThen_callbackPrefix_effect (dp : DeployParams)
   have hp2 : (balance <? Sevm.argWord e 1) :: balance ::
       Sevm.argWord e 1 :: e.caller.toB256 :: [] <<+ s2.stack :=
     prefix_of_balanceTooSmall hp1 hguard
-  rcases of_run_branch_call_revWith
+  rcases of_run_branch_call_revertWith
       (transferBalanceError_lookup dp) run2 with
     ⟨s3, hguardPop, run3⟩
   have hguardStack := hguardPop.stack
@@ -936,7 +936,7 @@ theorem of_callerBurnThen_callback_effect
         s0.memory = sc.memory)
     (h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendError))
+        some (Func.revertWith sendError))
     (h_wf : Mem.Wf s.memory)
     (h_reads : Mem.Reads s.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e s
@@ -963,7 +963,7 @@ theorem of_callerBurnThen_callback_effect
   have hp2 : (balance <? Sevm.argWord e amountArg) :: balance ::
       Sevm.argWord e amountArg :: e.caller.toB256 :: [] <<+ s2.stack :=
     prefix_of_balanceTooSmall hp1 hguard
-  rcases of_run_branch_call_revWith (burnBalanceError_lookup dp) run2 with
+  rcases of_run_branch_call_revertWith (burnBalanceError_lookup dp) run2 with
     ⟨s3, hguardPop, run3⟩
   have hguardStack := hguardPop.stack
   simp only [Stack.Pop, Split, List.nil_append,
@@ -1023,7 +1023,7 @@ theorem of_callerBurnThen_callback_effect
       hsendCode, hsendLogs, hsendOutput, hsendMemory⟩ :=
     h_send hp5 hsend
   rcases of_run_next run6 with ⟨testPost, hiszero, run7⟩
-  rcases of_run_branch_call_revWith h_error_lookup run7 with
+  rcases of_run_branch_call_revertWith h_error_lookup run7 with
     ⟨guardPost, hcallPop, hnext⟩
   rcases of_run_call_val_with_depth_frame hpCall hcall with
       hcallFailed | hcallSuccess
@@ -1133,7 +1133,7 @@ theorem of_callerBurnThen_effect
         s0.memory = sc.memory)
     (h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendError))
+        some (Func.revertWith sendError))
     (h_wf : Mem.Wf s.memory)
     (h_reads : Mem.Reads s.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e s
@@ -1742,7 +1742,7 @@ theorem of_argBurnThen_effect
         s0.memory = sc.memory)
     (h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revWith sendError))
+        some (Func.revertWith sendError))
     (h_wf : Mem.Wf s.memory)
     (h_reads : Mem.Reads s.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e s
@@ -1767,7 +1767,7 @@ theorem of_argBurnThen_effect
   have hp2 : (balance <? Sevm.argWord e amountArg) :: balance ::
       Sevm.argWord e amountArg :: owner :: [] <<+ s2.stack :=
     prefix_of_balanceTooSmall hp1 hguard
-  rcases of_run_branch_call_revWith (burnBalanceError_lookup dp) run2 with
+  rcases of_run_branch_call_revertWith (burnBalanceError_lookup dp) run2 with
     ⟨s3, hguardPop, run3⟩
   have hguardStack := hguardPop.stack
   simp only [Stack.Pop, Split, List.nil_append,
@@ -1828,7 +1828,7 @@ theorem of_argBurnThen_effect
       hsendCode, hsendLogs, hsendOutput, hsendMemory⟩ :=
     h_send hp5 hsend
   rcases of_run_next run6 with ⟨testPost, hiszero, run7⟩
-  rcases of_run_branch_call_revWith h_error_lookup run7 with
+  rcases of_run_branch_call_revertWith h_error_lookup run7 with
     ⟨guardPost, hcallPop, hnext⟩
   have hstor_s4_callPre : Devm.getStor s4 = Devm.getStor callPre :=
     (Line.of_inv Devm.getStor (by line_inv) hownerLine).trans
@@ -1960,7 +1960,7 @@ theorem transferFromNonzero_effect (dp : DeployParams)
   have hp2 : (balance <? Sevm.argWord e 2) :: balance ::
       Sevm.argWord e 2 :: owner :: [] <<+ s2.stack :=
     prefix_of_balanceTooSmall hp1 hguard
-  rcases of_run_branch_call_revWith
+  rcases of_run_branch_call_revertWith
       (transferBalanceError_lookup dp) run2 with
     ⟨s3, hguardPop, run3⟩
   have hguardStack := hguardPop.stack
@@ -2428,7 +2428,7 @@ theorem of_spendCallerAllowanceThen_effect
             callerAllowanceRuntimeKey e :: [] <<+ ss.stack :=
           Stack.prefix_of_swap hswapCore (of_run_swap hswap) hpA
         exact prefix_of_balanceTooSmall hpS htooSmall
-      rcases of_run_branch_call_revWith (allowanceError_lookup dp)
+      rcases of_run_branch_call_revertWith (allowanceError_lookup dp)
           runGuard with ⟨sb, hguardPop, runMutate⟩
       have hguardStack := hguardPop.stack
       simp only [Stack.Pop, Split, List.nil_append,

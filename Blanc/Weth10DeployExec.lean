@@ -341,8 +341,8 @@ private def weth10InitReturnPre
 
 private def weth10InitReturnRead
     (base : Devm) (M : Mem) (g : Nat) : Bytes × Devm :=
-  let retPre := weth10InitReturnPre base M g
-  (retPre.setMach ⟨[], retPre.memory, g - 1471⟩).memRead 0 6313
+  let returnPre := weth10InitReturnPre base M g
+  (returnPre.setMach ⟨[], returnPre.memory, g - 1471⟩).memRead 0 6313
 
 private theorem weth10InitReturnPre_stack
     (base : Devm) (M : Mem) (g : Nat) :
@@ -807,24 +807,24 @@ private theorem weth10InitMemory_size (sevm : Sevm) :
   exact hs9
 
 private theorem weth10InitRet_runCompiled
-    {fs : List Func} {sevm : Sevm} {retPre : Devm}
+    {fs : List Func} {sevm : Sevm} {returnPre : Devm}
     {rd : Bytes × Devm} {G : Nat}
-    (h_stack : retPre.stack = [(0 : B256), (6313 : B256)])
-    (h_size : retPre.memory.size = 6496)
-    (h_gas : retPre.gasLeft = G)
+    (h_stack : returnPre.stack = [(0 : B256), (6313 : B256)])
+    (h_size : returnPre.memory.size = 6496)
+    (h_gas : returnPre.gasLeft = G)
     (h_read :
-      (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 6313 = rd) :
-    Func.RunCompiled fs sevm retPre Func.ret
+      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 6313 = rd) :
+    Func.RunCompiled fs sevm returnPre Func.return_
       (rd.2.withOutput rd.1) := by
-  have h_ext : retPre.extCost [⟨(0 : Nat), (6313 : Nat)⟩] = 0 := by
+  have h_ext : returnPre.extCost [⟨(0 : Nat), (6313 : Nat)⟩] = 0 := by
     apply Devm.extCost_zero_of_le
-    · change retPre.memory.size % 32 = 0
+    · change returnPre.memory.size % 32 = 0
       rw [h_size]
-    · change 0 + 6313 ≤ retPre.memory.size
+    · change 0 + 6313 ≤ returnPre.memory.size
       rw [h_size]
       omega
   rcases rd with ⟨out, d'⟩
-  apply Func.runCompiled_ret_of (devm := retPre) (G := G)
+  apply Func.runCompiled_return_of (devm := returnPre) (G := G)
     (e := 0) (out := out) (d' := d')
   · exact h_stack
   · exact h_ext
@@ -863,10 +863,10 @@ private theorem weth10InitSuccess_runCompiled_zero
   have hret :
       Func.RunCompiled [weth10InitFunc] sevm
         (weth10InitAfterReturnArgs base (weth10InitMemory sevm) g)
-        Func.ret (weth10InitPost sevm base g) := by
+        Func.return_ (weth10InitPost sevm base g) := by
     rw [weth10InitAfterReturnArgs_eq, weth10InitPost_eq]
     apply weth10InitRet_runCompiled
-        (retPre := weth10InitReturnPre base (weth10InitMemory sevm) g)
+        (returnPre := weth10InitReturnPre base (weth10InitMemory sevm) g)
         (rd := weth10InitReturnRead base (weth10InitMemory sevm) g)
         (G := g - 1471)
     · exact weth10InitReturnPre_stack base (weth10InitMemory sevm) g
@@ -877,7 +877,7 @@ private theorem weth10InitSuccess_runCompiled_zero
   have hreturn :
       Func.RunCompiled [weth10InitFunc] sevm
         (base.setMach ⟨[], weth10InitMemory sevm, g - 1466⟩)
-        (weth10InitReturnLine 6313 +++ Func.ret)
+        (weth10InitReturnLine 6313 +++ Func.return_)
         (weth10InitPost sevm base g) :=
     weth10InitReturnLine_runCompiled h_gas hret
   have hafter :
@@ -888,7 +888,7 @@ private theorem weth10InitSuccess_runCompiled_zero
       Func.RunCompiled [weth10InitFunc] sevm
         (weth10InitBeforeSeparator base Mpre hash g)
         (weth10InitSeparatorLine +++
-          (weth10InitReturnLine 6313 +++ Func.ret))
+          (weth10InitReturnLine 6313 +++ Func.return_))
         (weth10InitPost sevm base g) := by
     apply weth10InitSeparatorLine_runCompiled hpre_size h_gas
     rw [hafter]
@@ -899,7 +899,7 @@ private theorem weth10InitSuccess_runCompiled_zero
         (base.setMach ⟨[], Mpre, g - 1380⟩)
         (weth10InitHashLine 6313 +++
           (weth10InitSeparatorLine +++
-            (weth10InitReturnLine 6313 +++ Func.ret)))
+            (weth10InitReturnLine 6313 +++ Func.return_)))
         (weth10InitPost sevm base g) := by
     apply weth10InitHashLine_runCompiled
         (g := g - 1380) (M := Mpre) (M' := Mpre) (hash := hash)
@@ -916,7 +916,7 @@ private theorem weth10InitSuccess_runCompiled_zero
         (weth10InitPreHashLine 6313 +++
           (weth10InitHashLine 6313 +++
             (weth10InitSeparatorLine +++
-              (weth10InitReturnLine 6313 +++ Func.ret))))
+              (weth10InitReturnLine 6313 +++ Func.return_))))
         (weth10InitPost sevm base g) := by
     apply weth10InitPreHashLine_runCompiled (g := g - 1318)
     · omega
@@ -929,7 +929,7 @@ private theorem weth10InitSuccess_runCompiled_zero
           (weth10InitPreHashLine 6313 +++
             (weth10InitHashLine 6313 +++
               (weth10InitSeparatorLine +++
-                (weth10InitReturnLine 6313 +++ Func.ret)))))
+                (weth10InitReturnLine 6313 +++ Func.return_)))))
         (weth10InitPost sevm base g) := by
     apply weth10InitChainLine_runCompiled (g := g - 1294)
     · omega
@@ -943,7 +943,7 @@ private theorem weth10InitSuccess_runCompiled_zero
             (weth10InitPreHashLine 6313 +++
               (weth10InitHashLine 6313 +++
                 (weth10InitSeparatorLine +++
-                  (weth10InitReturnLine 6313 +++ Func.ret))))))
+                  (weth10InitReturnLine 6313 +++ Func.return_))))))
         (weth10InitPost sevm base g) := by
     apply weth10InitCopyLine_runCompiled (g := g - 19)
     · omega
@@ -1045,7 +1045,7 @@ theorem weth10InitFunc_runCompiledTo_nonzero
   unfold weth10InitFunc weth10InitRejectPost
   func_run (3) [0]
   · simp [B256.eqCheck, h_value]
-  · exact Func.runCompiledTo_rev_func
+  · exact Func.runCompiledTo_revert_func
       (devm := base.setMach ⟨[], Mem.empty, g - 18⟩) (G := g - 22)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)

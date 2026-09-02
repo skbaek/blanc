@@ -224,7 +224,7 @@ retaining the complete entry-to-body storage equality. -/
 private theorem witness_selected_body_of_program
     (entries : List (B256 × Func)) (prog : Prog)
     (hshape : prog =
-      ⟨fsig +++ linearDispatchWith 0 entries, [Func.rev]⟩)
+      ⟨fsig +++ linearDispatchWith 0 entries, [Func.revert]⟩)
     {sevm : Sevm} {pre post : Devm} {selected : B256} {body : Func}
     (hprog : Prog.RunCompiledTo sevm pre prog (.ok post))
     (hstack : pre.stack = [])
@@ -233,7 +233,7 @@ private theorem witness_selected_body_of_program
     (hmember : (selected, nonpayable body) ∈ entries) :
     ∃ bodyPre,
       Func.RunCompiledTo
-          ((fsig +++ linearDispatchWith 0 entries) :: [Func.rev])
+          ((fsig +++ linearDispatchWith 0 entries) :: [Func.revert])
           sevm bodyPre body (.ok post) ∧
         ([] : Stack) <<+ bodyPre.stack ∧
         Devm.getStor pre = Devm.getStor bodyPre ∧
@@ -241,7 +241,7 @@ private theorem witness_selected_body_of_program
   subst prog
   obtain ⟨mid, hburn, hmain⟩ := hprog
   change Func.RunCompiledTo
-    ((fsig +++ linearDispatchWith 0 entries) :: [Func.rev])
+    ((fsig +++ linearDispatchWith 0 entries) :: [Func.revert])
       sevm mid (fsig +++ linearDispatchWith 0 entries) (.ok post) at hmain
   obtain ⟨afterSig, hsig, hdispatch⟩ := runCompiledTo_prepend_inv hmain
   have hmidStack : mid.stack = [] := by
@@ -571,7 +571,7 @@ theorem upgradeToAndCallDelegateTail_success_state
         Func.RunCompiledTo.zero_branch_of_prefix pZero run
       obtain ⟨sizePost, sizeRun, payloadBranch⟩ :=
         runCompiledTo_next_inv failedRun
-      have sizePush := of_run_retdatasize_val
+      have sizePush := of_run_returndatasize_val
         (Ninst.Run.of_runCompiled sizeRun)
       have failedReturnData : failedPre.returnData = child.output :=
         failedPop.returnData.symm.trans returnData
@@ -586,10 +586,10 @@ theorem upgradeToAndCallDelegateTail_success_state
         have hget :
             (runtimeBaseline.main :: runtimeBaseline.aux)[
                 emptyDelegatecallErrorSlot]? =
-              some (Func.revData emptyDelegatecallErrorData) := by
+              some (Func.revertData emptyDelegatecallErrorData) := by
           simp [runtimeBaseline, runtimeBaselineAux,
             emptyDelegatecallErrorSlot, emptyDelegatecallError]
-        exact (Func.RunCompiledTo.not_ok_call_revData hget errorRun).elim
+        exact (Func.RunCompiledTo.not_ok_call_revertData hget errorRun).elim
       · have pLength : Nat.toB256 child.output.length :: failedPre.stack <<+
             sizePost.stack :=
           ⟨[], by
@@ -597,7 +597,7 @@ theorem upgradeToAndCallDelegateTail_success_state
         obtain ⟨_, _, _, _, bubbleRun, _⟩ :=
           Func.RunCompiledTo.succ_branch_of_prefix
             lengthWordZero pLength payloadBranch
-        rcases Func.runCompiledTo_revReturnData_inv bubbleRun with
+        rcases Func.runCompiledTo_revertReturnData_inv bubbleRun with
           outOfGas | ⟨revertPost, revertOutcome, _⟩
         · rcases outOfGas with ⟨_, impossible⟩
           cases impossible
@@ -772,7 +772,7 @@ def PrimaryChildExecution
     (sevm : Sevm) (post : Devm) : Prop :=
   ∀ (delegatePre : Devm) (decodedImage : Bytes) (gasWord : B256)
       (callPre callPost : Devm)
-      (_callRun : Ninst.RunCompiled sevm callPre (.exec .delcall) callPost)
+      (_callRun : Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost)
       (_tailRun : Func.RunCompiledTo
         (runtimeBaseline.main :: runtimeBaseline.aux)
         sevm callPost upgradeToAndCallDelegateTail (.ok post))
@@ -786,7 +786,7 @@ def PrimaryChildExecution
       (_state : delegatePre.state = callPre.state)
       (_logs : delegatePre.logs = callPre.logs),
     ∃ (spawn : DelegatecallSpawnDescriptor sevm callPre) (child : Devm),
-      Ninst.RunCompiled sevm callPre (.exec .delcall) callPost ∧
+      Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost ∧
       Func.RunCompiledTo (runtimeBaseline.main :: runtimeBaseline.aux)
         sevm callPost upgradeToAndCallDelegateTail (.ok post) ∧
       spawn.codeWord = v2Implementation.toB256 ∧

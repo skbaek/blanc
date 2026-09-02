@@ -342,7 +342,7 @@ private theorem spawnChild_success
     rw [hafter]
     rfl
   have hchildStatic : (initSevm spawn.child).isStatic = false := by
-    simp only [DelegatecallSpawnDescriptor.child, delcallSpawnMsg, callMsg,
+    simp only [DelegatecallSpawnDescriptor.child, delegatecallSpawnMsg, callMsg,
       initSevm, Bool.false_or, hstatic]
   have hchildImplementationWarm :
       ((initSevm spawn.child).currentTarget, implementationSlotLit) ∈
@@ -470,7 +470,7 @@ private theorem callAndTail_success
     ∃ post,
       Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
         (callPre sevm base memory)
-        ((.exec .delcall) ::: ossifiableConstructorDelegateTail) post ∧
+        ((.exec .delegatecall) ::: ossifiableConstructorDelegateTail) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         postSetupImplementation.toB256 ∧
       post.getStorVal sevm.currentTarget adminSlotLit =
@@ -543,7 +543,7 @@ private theorem callAndTail_success
       hparentStack, hparentMemory, hparentGas, hchildGasLeft,
       resumedBase, resumed, callPost] using exactResume
   have hcall : Ninst.RunCompiled sevm (callPre sevm base memory)
-      (.exec .delcall) callPost :=
+      (.exec .delegatecall) callPost :=
     spawn.runCompiled_of_certificate certificate hresume
   have hresumedImplementation :
       resumed.getStorVal sevm.currentTarget implementationSlotLit =

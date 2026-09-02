@@ -136,7 +136,7 @@
 # (the `no_success_of_*` rows), and not that it settles with some unnamed error
 # (the `settles_with_error_of_*` rows), but that the frame settles with
 # `EvmError.revert` carrying no revert data. One is an unrecognised selector,
-# reaching `Func.rev` through the dispatcher's fallback slot; the other is
+# reaching `Func.revert` through the dispatcher's fallback slot; the other is
 # `flashLoan`'s `token ≠ self` guard, and is the direct counterpart of
 # `Blanc.Fmint.no_success_of_token_ne_self` above.
 #
@@ -393,10 +393,10 @@ Blanc.directCall_zero_spawn|$STANDARD
 Blanc.directStatcall_spawn|$STANDARD
 Blanc.directDelcall_spawn|$STANDARD
 Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget|$STANDARD
-Blanc.delcall_enters_with_parent_as_storage_owner|$STANDARD
-Blanc.control_delcall_separates_call_fuses|$STANDARD
-Blanc.control_delcall_inherits_caller_and_value|$STANDARD
-Blanc.delcall_child_observes_outer_caller_and_value|$STANDARD
+Blanc.delegatecall_enters_with_parent_as_storage_owner|$STANDARD
+Blanc.control_delegatecall_separates_call_fuses|$STANDARD
+Blanc.control_delegatecall_inherits_caller_and_value|$STANDARD
+Blanc.delegatecall_child_observes_outer_caller_and_value|$STANDARD
 Blanc.control_two_window_memory_premise_derivable|$STANDARD
 Blanc.control_sliceD_payload_size|$STANDARD
 Blanc.caughtCall_childSettlement|$STANDARD
@@ -414,9 +414,9 @@ Blanc.executeCode.enter_inl_isStatic|$STANDARD
 Blanc.Frame.enter_run_isStatic|$STANDARD
 Blanc.Evm.step_run_isStatic|$STANDARD
 Blanc.genericCall.step_spawn_isStatic_of_staticcall|$STANDARD
-Blanc.Xinst.step_statcall_spawn_isStatic|$STANDARD
-Blanc.Ninst.step_statcall_spawn_isStatic|$STANDARD
-Blanc.Ninst.step_statcall_run_isStatic|$STANDARD
+Blanc.Xinst.step_staticcall_spawn_isStatic|$STANDARD
+Blanc.Ninst.step_staticcall_spawn_isStatic|$STANDARD
+Blanc.Ninst.step_staticcall_run_isStatic|$STANDARD
 Blanc.Func.CompileShape.byteSize_compileShape|propext
 Blanc.Func.length_emitByShape|propext
 Blanc.Func.getD_emitByShape|propext
@@ -432,14 +432,14 @@ Blanc.Rinst.runCore_extcodesize_cold_eq_ok|$STANDARD
 Blanc.Rinst.runCore_extcodesize_warm_eq_ok|$STANDARD
 Blanc.Ninst.runCompiled_extcodesize_cold|$STANDARD
 Blanc.Ninst.runCompiled_extcodesize_warm|$STANDARD
-Blanc.Func.runCompiledTo_revReturnData|$STANDARD
+Blanc.Func.runCompiledTo_revertReturnData|$STANDARD
 Blanc.Frame.enter_eq_done_executePrecomp|$STANDARD
-Blanc.Xinst.step_statcall|$STANDARD
-Blanc.Xinst.step_statcall_spawn|$STANDARD
-Blanc.Ninst.runCompiled_statcall_doneFrame|$STANDARD
+Blanc.Xinst.step_staticcall|$STANDARD
+Blanc.Xinst.step_staticcall_spawn|$STANDARD
+Blanc.Ninst.runCompiled_staticcall_doneFrame|$STANDARD
 Blanc.of_run_call_val_with_depth|$STANDARD
-Blanc.of_run_statcall_val_with_depth_cause|$STANDARD
-Blanc.of_run_statcall_val_with_depth|$STANDARD
+Blanc.of_run_staticcall_val_with_depth_cause|$STANDARD
+Blanc.of_run_staticcall_val_with_depth|$STANDARD
 Blanc.Weth10.flashFee_runCompiled|$STANDARD
 Blanc.Weth10.balanceOf_cold_runCompiled|$STANDARD
 Blanc.Weth10.balanceOf_warm_runCompiled|$STANDARD
@@ -1282,14 +1282,14 @@ Blanc.BeaconDeposit.DeploymentRoot.future_count_root|$STANDARD
 Blanc.compact_pause_word_eq_projection|$STANDARD
 Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution|$STANDARD
 Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok|$STANDARD
-Blanc.Func.RunCompiledTo.zero_branch_of_ok_call_rev|$STANDARD
+Blanc.Func.RunCompiledTo.zero_branch_of_ok_call_revert|$STANDARD
 Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix|$STANDARD
-Blanc.Func.RunCompiledTo.zero_branch_of_ok_call_rev_of_prefix|$STANDARD
+Blanc.Func.RunCompiledTo.zero_branch_of_ok_call_revert_of_prefix|$STANDARD
 Blanc.acceptedBoolWord_iff_of_output|$STANDARD
 Blanc.acceptedBoolExecution_ok_iff|$STANDARD
 Blanc.boolQueryExecutionFailure_ok_iff|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.Trigger.rebaseLocalCalls_prependStoresRev|$STANDARD
-Blanc.LidoTriggerableWithdrawalsGateway.Trigger.rebaseLocalCalls_revData|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.Trigger.rebaseLocalCalls_revertData|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.runtime_guard_zero_of_prog_run_ok|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.runtime_rebasedTriggerMalformedAbi_get|$STANDARD
 Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_ok_reaches_afterValidation|$STANDARD

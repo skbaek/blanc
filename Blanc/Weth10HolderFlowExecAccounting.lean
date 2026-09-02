@@ -3097,7 +3097,7 @@ private theorem transferNonzeroThen_returnTrue_sourceShape :
     transferNonzeroThen returnTrue =
       transferBalanceCheckLine +++
         ((.call transferBalanceErrorSlot) <?>
-          (transferNonzeroSuccessLine +++ Func.ret)) := by
+          (transferNonzeroSuccessLine +++ Func.return_)) := by
   rfl
 
 /-- A successful ordinary `transfer` takes the nonzero-recipient branch.
@@ -3163,7 +3163,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
     have hbody : body = transferBalanceError := by
       simpa [weth10Aux, transferBalanceErrorSlot] using hget.symm
     subst body
-    exact (Func.not_run_revWith
+    exact (Func.not_run_revertWith
       (Func.Run.of_runCompiled bodyCursor.run)).elim
 
 private def returnTrueLine : Line :=
@@ -3271,7 +3271,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_approve
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (approveLine +++ Func.ret)) ∈ weth10Funcs dp := by
+      nonpayable (approveLine +++ Func.return_)) ∈ weth10Funcs dp := by
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons]
     exact Or.inr (Or.inl (by rfl))
@@ -3667,12 +3667,12 @@ private def nameLine : Line :=
   pushList [96, 0]
 
 private theorem name_childlessTerminal : ChildlessTerminal name := by
-  exact ⟨nameLine, .ret, rfl, by
+  exact ⟨nameLine, .return_, rfl, by
     simp [nameLine, NinstIsChildless, Ninst.pushB256,
       pushList, mstoreAt]⟩
 
 private theorem approve_childlessTerminal : ChildlessTerminal approve := by
-  exact ⟨approveLine, .ret, rfl, by
+  exact ⟨approveLine, .return_, rfl, by
     simp [approveLine, approvePrefix, returnTrueLine,
       argCopy, cdc, arg, cdl, allowanceKeyFromMemory, Blanc.logApprove,
       NinstIsChildless, Ninst.pushB256, mstoreAt, logWith, pushList]⟩
@@ -3700,7 +3700,7 @@ private def returnWordLine (w : B256) : Line :=
 
 private theorem returnWord_childlessTerminal (w : B256) :
     ChildlessTerminal (returnWord w) :=
-  ⟨returnWordLine w, .ret, rfl, by
+  ⟨returnWordLine w, .return_, rfl, by
     simp [returnWordLine, NinstIsChildless, Ninst.pushB256,
       mstoreAt, pushList]⟩
 
@@ -3738,7 +3738,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_decimals
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  · exact ⟨returnWordLine 0x12, .ret, rfl, by
+  · exact ⟨returnWordLine 0x12, .return_, rfl, by
       simp [returnWordLine, NinstIsChildless, Ninst.pushB256,
         mstoreAt, pushList]⟩
   · exact decimalsSelector_noPrimaryFlow.selectsNoPrimaryFlow
@@ -3776,7 +3776,7 @@ private def totalSupplyLine : Line :=
 
 private theorem totalSupply_childlessTerminal :
     ChildlessTerminal totalSupply :=
-  ⟨totalSupplyLine, .ret, rfl, by
+  ⟨totalSupplyLine, .return_, rfl, by
     simp [totalSupplyLine, pushFlashMintedSlot, NinstIsChildless,
       Ninst.pushB256, mstoreAt, pushList]⟩
 
@@ -3785,7 +3785,7 @@ private def balanceOfLine : Line :=
 
 private theorem balanceOf_childlessTerminal :
     ChildlessTerminal balanceOfEndpoint :=
-  ⟨balanceOfLine, .ret, rfl, by
+  ⟨balanceOfLine, .return_, rfl, by
     simp [balanceOfLine, arg, cdl, NinstIsChildless,
       Ninst.pushB256, mstoreAt, pushList]⟩
 
@@ -3793,7 +3793,7 @@ private def noncesLine : Line :=
   arg 0 ++ tagNonceKey ++ [sload] ++ mstoreAt 0 ++ pushList [32, 0]
 
 private theorem nonces_childlessTerminal : ChildlessTerminal nonces :=
-  ⟨noncesLine, .ret, rfl, by
+  ⟨noncesLine, .return_, rfl, by
     simp [noncesLine, arg, cdl, tagNonceKey, NinstIsChildless,
       Ninst.pushB256, mstoreAt, pushList]⟩
 
@@ -3802,7 +3802,7 @@ private def flashMintedLine : Line :=
 
 private theorem flashMinted_childlessTerminal :
     ChildlessTerminal flashMinted :=
-  ⟨flashMintedLine, .ret, rfl, by
+  ⟨flashMintedLine, .return_, rfl, by
     simp [flashMintedLine, pushFlashMintedSlot, NinstIsChildless,
       Ninst.pushB256, mstoreAt, pushList]⟩
 
@@ -3813,7 +3813,7 @@ private def symbolLine : Line :=
   pushList [96, 0]
 
 private theorem symbol_childlessTerminal : ChildlessTerminal symbol :=
-  ⟨symbolLine, .ret, rfl, by
+  ⟨symbolLine, .return_, rfl, by
     simp [symbolLine, NinstIsChildless, Ninst.pushB256,
       pushList, mstoreAt]⟩
 
@@ -3823,7 +3823,7 @@ private def deploymentChainIdLine (dp : DeployParams) : Line :=
 
 private theorem deploymentChainId_childlessTerminal (dp : DeployParams) :
     ChildlessTerminal (deploymentChainId dp) :=
-  ⟨deploymentChainIdLine dp, .ret, rfl, by
+  ⟨deploymentChainIdLine dp, .return_, rfl, by
     simp [deploymentChainIdLine, pushDeployWord, NinstIsChildless,
       Ninst.pushB256, mstoreAt, pushList]⟩
 
@@ -3832,7 +3832,7 @@ private def allowanceLine : Line :=
   mstoreAt 0 ++ pushList [32, 0]
 
 private theorem allowance_childlessTerminal : ChildlessTerminal allowance :=
-  ⟨allowanceLine, .ret, rfl, by
+  ⟨allowanceLine, .return_, rfl, by
     simp [allowanceLine, argCopy, cdc, allowanceKeyFromMemory,
       NinstIsChildless, Ninst.pushB256, mstoreAt, pushList]⟩
 
@@ -3990,8 +3990,8 @@ private def domainFreshLine : Line :=
 private theorem domainSeparator_sourceShape (dp : DeployParams) :
     domainSeparator dp =
       domainSelectLine dp +++
-        ((domainCachedLine dp +++ Func.ret) <?>
-          (domainFreshLine +++ Func.ret)) := by
+        ((domainCachedLine dp +++ Func.return_) <?>
+          (domainFreshLine +++ Func.return_)) := by
   rfl
 
 /-- Both executable arms of `DOMAIN_SEPARATOR` are childless, so its exact
@@ -4055,8 +4055,8 @@ private def maxFlashLoanAvailableLine : Line :=
 private theorem maxFlashLoan_sourceShape :
     maxFlashLoan =
       maxFlashLoanSelectLine +++
-        ((maxFlashLoanAvailableLine +++ Func.ret) <?>
-          (returnWordLine 0 +++ Func.ret)) := by
+        ((maxFlashLoanAvailableLine +++ Func.return_) <?>
+          (returnWordLine 0 +++ Func.return_)) := by
   rfl
 
 /-- Both successful `maxFlashLoan` result arms are childless. -/
@@ -4117,7 +4117,7 @@ private theorem flashFee_sourceShape :
     flashFee =
       flashFeeSelectLine +++
         ((.call flashTokenErrorSlot) <?>
-          (returnWordLine 0 +++ Func.ret)) := by
+          (returnWordLine 0 +++ Func.return_)) := by
   rfl
 
 /-- The successful `flashFee` arm is childless.  The other source arm enters
@@ -4157,7 +4157,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_flashFee
     have hbody : body = flashTokenError := by
       simpa [weth10Aux, flashTokenErrorSlot] using hget.symm
     subst body
-    exact (Func.not_run_revWith
+    exact (Func.not_run_revertWith
       (Func.Run.of_runCompiled errorBodyCursor.run)).elim
 
 /-- Exact proof-indexed accounting for successful `flashFee`. -/
@@ -5907,18 +5907,18 @@ theorem Linst.foreignStorageSegmentEffect
       simp [Linst.Run, Linst.run] at run
       subst post
       exact ⟨StorageSegmentEffect.refl ca pre⟩
-  | ret =>
-      have hframe := Linst.run_instructionFrame sevm pre .ret (by decide)
+  | return_ =>
+      have hframe := Linst.run_instructionFrame sevm pre .return_ (by decide)
       rw [run] at hframe
       exact ⟨StorageSegmentEffect.of_getStorCode_eq
         (hframe.getStor ca) hcode⟩
-  | rev =>
+  | revert =>
       dsimp [Linst.Run, Linst.run] at run
       rcases Except.bind_eq_ok run with ⟨first, hfirst, hrest⟩
       rcases Except.bind_eq_ok hrest with ⟨second, hsecond, hrest⟩
       rcases Except.bind_eq_ok hrest with ⟨third, hthird, hrest⟩
       contradiction
-  | dest =>
+  | selfdestruct =>
       dsimp [Linst.Run, Linst.run] at run
       rcases Except.bind_eq_ok run with
         ⟨⟨donee, devm1⟩, hpop, hrun1⟩

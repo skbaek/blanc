@@ -30,7 +30,7 @@ RETIRED_DIRECT_CODE = "Blanc.Weth10.xinst_spawn_direct"
 
 DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS = {
     "Blanc.ExecutionOccurrenceControls.call_direct_codeAddress_control",
-    "Blanc.ExecutionOccurrenceControls.statcall_direct_codeAddress_control",
+    "Blanc.ExecutionOccurrenceControls.staticcall_direct_codeAddress_control",
     "Blanc.ExecutionOccurrenceControls.create_empty_target_control",
     "Blanc.ExecutionOccurrenceControls.create2_empty_target_control",
     "Blanc.ExecutionOccurrenceControls.callcode_same_target_control",
@@ -196,7 +196,7 @@ private theorem chronologyRejectedBranchMutant :
           Chronology.branchEqProgram ⟨0, []⟩ Chronology.branchEqProgram.main,
         ∃ rejectedCursor : Exec.Deriv.SourceCursor w.root
             Chronology.branchEqProgram ⟨0, [.branchRight]⟩
-            (.next (.reg .eq) (.last .rev)),
+            (.next (.reg .eq) (.last .revert)),
           Exec.Deriv.SourceCursor.Chronology
             mainCursor rejectedCursor w.target := by
   rcases Chronology.chronology_branch_eq_before_sstore_control with

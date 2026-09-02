@@ -27,7 +27,7 @@ target was chosen rather than a second view of the same shape:
   `totalSupply()` sat in the left half of all three.  The walk therefore takes a
   four-fork path with a different pattern of taken and fall-through arms.
 * **`Func.mainWith`, not `Func.main`.**  WETH's leaf miss arm is `.call 1` into
-  the fallback rather than `.rev`.  That arm is not taken here — see the note at
+  the fallback rather than `.revert`.  That arm is not taken here — see the note at
   the end of this file.
 
 Nothing was added to `Blanc/Forward.lean` for this target. -/
@@ -82,7 +82,7 @@ abbrev boSel : B256 := selector "balanceOf" [.address]
   and the `.call 1` miss arm is not;
 * `1` — the `nonpayable` guard's fork.  `ISZERO` over `CALLVALUE` left
   `sevm.value =? 0` on the stack, which `h_value` makes `1`, so the body arm
-  is taken and the guard's `Func.rev` arm is not;
+  is taken and the guard's `Func.revert` arm is not;
 * `3` — `MSTORE`'s memory-expansion charge, one word into empty memory.
 
 Everything else is derived, including the `CALLDATALOAD` that reads the argument:
@@ -121,7 +121,7 @@ theorem weth_balanceOf_runCompiled {sevm : Sevm} {pre : Devm}
             simp [B256.eqCheck, h_value]
           func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 2260) (e := 0) rfl
+          · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),

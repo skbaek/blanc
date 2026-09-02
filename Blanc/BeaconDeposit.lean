@@ -107,35 +107,35 @@ empty-reverts; longer successful responses are accepted exactly as Solidity's
 `bytes32` decoder accepts them. -/
 def sha64 (inputWord outputWord : B256) (success : Func) : Func :=
   pushList [32, outputWord * 32, 64, inputWord * 32, 2] +++
-  gas ::: statcall ::: iszero :::
+  gas ::: staticcall ::: iszero :::
   ((.call bubbleRevertSlot) <?>
-    (retdataShorterThan 32 +++
+    (returnDataShorterThan 32 +++
       ((.call emptyRevertSlot) <?> success)))
 
 /-! ## Revert auxiliaries -/
 
 def pubkeyLengthError : Func :=
-  Func.revWith (reasonString .pubkey_length)
+  Func.revertWith (reasonString .pubkey_length)
 def withdrawalLengthError : Func :=
-  Func.revWith (reasonString .withdrawal_credentials_length)
+  Func.revertWith (reasonString .withdrawal_credentials_length)
 def signatureLengthError : Func :=
-  Func.revWith (reasonString .signature_length)
+  Func.revertWith (reasonString .signature_length)
 def valueTooLowError : Func :=
-  Func.revWith (reasonString .value_too_low)
+  Func.revertWith (reasonString .value_too_low)
 def valueNotGweiError : Func :=
-  Func.revWith (reasonString .value_not_gwei_multiple)
+  Func.revertWith (reasonString .value_not_gwei_multiple)
 def valueTooHighError : Func :=
-  Func.revWith (reasonString .value_too_high)
+  Func.revertWith (reasonString .value_too_high)
 def rootMismatchError : Func :=
-  Func.revWith (reasonString .deposit_data_root_mismatch)
+  Func.revertWith (reasonString .deposit_data_root_mismatch)
 def treeFullError : Func :=
-  Func.revWith (reasonString .merkle_tree_full)
+  Func.revertWith (reasonString .merkle_tree_full)
 
 /-! ## ERC-165 and count views -/
 
 def supportsInterfaceEndpoint : Func :=
   pushB256 36 ::: calldatasize ::: lt :::
-  (Func.rev <?>
+  (Func.revert <?>
     (arg 0 +++ pushB256 224 ::: shr :::
       dup 0 ::: pushB256 erc165InterfaceId ::: eq ::: swap 0 :::
       pushB256 depositInterfaceId ::: eq ::: Ninst.or :::
@@ -307,7 +307,7 @@ def depositEndpoint : Func := validateDepositAbi depositBody
 /-! ## Complete four-selector runtime -/
 
 def nonpayableEndpoint (body : Func) : Func :=
-  callvalue ::: (Func.rev <?> body)
+  callvalue ::: (Func.revert <?> body)
 
 def funcs : List (B256 × Func) :=
   [ (supportsInterfaceSelector, nonpayableEndpoint supportsInterfaceEndpoint),
@@ -353,8 +353,8 @@ theorem tree_funcs_exact :
   exact ⟨rfl, rfl⟩
 
 def aux : List Func :=
-  [ Func.rev,
-    Func.revReturnData,
+  [ Func.revert,
+    Func.revertReturnData,
     pubkeyLengthError,
     withdrawalLengthError,
     signatureLengthError,
@@ -369,6 +369,6 @@ def aux : List Func :=
     insertionContinuation ]
 
 def runtime : Prog :=
-  ⟨calldatasize ::: (Func.main tree <?> Func.rev), aux⟩
+  ⟨calldatasize ::: (Func.main tree <?> Func.revert), aux⟩
 
 end Blanc.BeaconDeposit

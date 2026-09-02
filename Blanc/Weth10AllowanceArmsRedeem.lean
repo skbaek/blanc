@@ -576,7 +576,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
             branchCursor.pre.stack :=
         prefix_of_balanceTooSmall hloadStack hguard
       rcases branchCursor.selectBranchLeftWithBurn
-          (not_run_call_revWith (burnBalanceError_lookup dp)) with
+          (not_run_call_revertWith (burnBalanceError_lookup dp)) with
         ⟨successCursor, hbalancePopBy⟩
       have hbalancePop := Devm.PopBurn.of_popBurnBy hbalancePopBy
       have hpopStack := hbalancePop.stack
@@ -731,7 +731,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
             Func.Run.of_runCompiled htailCompiled
           rcases of_run_next htailPlain with
             ⟨afterIszero, hiszeroRun, hbranchPlain⟩
-          rcases of_run_branch_call_revWith (ethTransferError_lookup dp)
+          rcases of_run_branch_call_revertWith (ethTransferError_lookup dp)
               hbranchPlain with
             ⟨afterGuard, hguardPop, _hsuccessRun⟩
           rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
@@ -949,7 +949,7 @@ def redeemReturnTrueLine : Line :=
   [pushB256 1] ++ mstoreAt 0 ++ pushList [32, 0]
 
 theorem returnTrue_eq_redeemReturnTrueLine :
-    returnTrue = redeemReturnTrueLine +++ Func.last .ret := rfl
+    returnTrue = redeemReturnTrueLine +++ Func.last .return_ := rfl
 
 /-- `withdraw` transports the allowance region.  Its own record has no
 allowance event, so the frame's record replays transparently; the caller-key
@@ -1181,7 +1181,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferZero
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemBody 1 redeemSendToCallerPrefix
-      (redeemReturnTrueLine +++ Func.last .ret))
+      (redeemReturnTrueLine +++ Func.last .return_))
     frame.post at bodyCursor
   have hstorage := bodyCursor.redeemAllowanceStorage
     (target := frame.sevm.caller.toB256)
@@ -1601,7 +1601,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
             branchCursor.pre.stack :=
         prefix_of_balanceTooSmall hloadStack hguard
       rcases branchCursor.selectBranchLeftWithBurn
-          (not_run_call_revWith (burnBalanceError_lookup dp)) with
+          (not_run_call_revertWith (burnBalanceError_lookup dp)) with
         ⟨successCursor, hbalancePopBy⟩
       have hbalancePop := Devm.PopBurn.of_popBurnBy hbalancePopBy
       have hpopStack := hbalancePop.stack
@@ -1759,7 +1759,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
             Func.Run.of_runCompiled htailCompiled
           rcases of_run_next htailPlain with
             ⟨afterIszero, hiszeroRun, hbranchPlain⟩
-          rcases of_run_branch_call_revWith (ethTransferError_lookup dp)
+          rcases of_run_branch_call_revertWith (ethTransferError_lookup dp)
               hbranchPlain with
             ⟨afterGuard, hguardPop, _hsuccessRun⟩
           rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
@@ -2251,7 +2251,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferZero
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemBody 1 redeemSendToCallerPrefix
-      (redeemReturnTrueLine +++ Func.last .ret))
+      (redeemReturnTrueLine +++ Func.last .return_))
     frame.post at bodyCursor
   obtain ⟨hstorage, hread⟩ := bodyCursor.redeemAllowanceSound
     (target := frame.sevm.caller.toB256)

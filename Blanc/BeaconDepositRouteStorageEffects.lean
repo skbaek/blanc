@@ -248,7 +248,7 @@ theorem deposit_route_storageEffectRun
           gVerylow, gHigh, gJumpdest])
   have hbranch : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm afterSize
-      (Func.main tree <?> Func.rev) out effects :=
+      (Func.main tree <?> Func.revert) out effects :=
     .succ hnonempty hroom hpop (by
       simpa only [afterBranch] using hmain)
   have hmainEffects : Func.StorageEffectRun

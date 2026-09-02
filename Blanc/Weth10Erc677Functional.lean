@@ -396,9 +396,9 @@ private lemma tokenCallbackWindow
 /-- Solidity-0.7 truthiness normalized to an ABI Boolean word. -/
 def normalizedBoolWord (w : B256) : B256 := (w =? 0) =? 0
 
-private lemma retdatacopy_logs
+private lemma returndatacopy_logs
     {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s retdatacopy s') : s.logs = s'.logs := by
+    (h : Ninst.Run e s returndatacopy s') : s.logs = s'.logs := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨⟨mi, s1⟩, h1, run1⟩
@@ -427,14 +427,14 @@ private lemma mload_logs
   have hp := Devm.push_of_push run2
   exact ((p1.logs.trans hb.logs).trans rfl).trans hp.logs
 
-private lemma retdataShorterThan_logs
+private lemma returnDataShorterThan_logs
     {e : Sevm} {s s' : Devm} {n : B256}
-    (h : Line.Run e s (retdataShorterThan n) s') : s.logs = s'.logs := by
-  simp only [retdataShorterThan] at h
+    (h : Line.Run e s (returnDataShorterThan n) s') : s.logs = s'.logs := by
+  simp only [returnDataShorterThan] at h
   rcases Line.of_run_cons h with ⟨u1, q1, h⟩
   have hb1 := of_run_pushB256 q1
   rcases Line.of_run_cons h with ⟨u2, q2, h⟩
-  have hb2 := of_run_retdatasize_val q2
+  have hb2 := of_run_returndatasize_val q2
   rcases Line.of_run_cons h with ⟨u3, q3, hnil⟩
   cases hnil
   obtain ⟨a, b, hdb⟩ :
@@ -474,11 +474,11 @@ private theorem boolReturn_success_effect
       List.cons_append] at hpopCallStack
     rw [hpopCallStack] at hp1
     have hp2 : xs <<+ s2.stack := cons_pref_cons_inv hp1
-    rcases of_run_prepend (retdataShorterThan 32) _ hcontinue with
+    rcases of_run_prepend (returnDataShorterThan 32) _ hcontinue with
       ⟨s3, hshort, run3⟩
-    rcases of_retdataShorterThan_val hp2 hshort with
+    rcases of_returnDataShorterThan_val hp2 hshort with
       ⟨hp3, hmem3, hrd3⟩
-    rcases of_run_branch_rev run3 with ⟨s4, hpopShort, hdecode⟩
+    rcases of_run_branch_revert run3 with ⟨s4, hpopShort, hdecode⟩
     have hpopShortStack := hpopShort.stack
     simp only [Stack.Pop, Split, List.nil_append,
       List.cons_append] at hpopShortStack
@@ -507,7 +507,7 @@ private theorem boolReturn_success_effect
 
     let decodePrefix : Line :=
       pushList [32, 0, 0] ++
-        [retdatacopy, pushB256 0, mload, iszero, iszero]
+        [returndatacopy, pushB256 0, mload, iszero, iszero]
     rcases of_run_prepend decodePrefix
         (mstoreAt 0 +++ returnMemoryRange 0 32) hdecode with
       ⟨st, hdecodePrefix, hreturn⟩
@@ -527,7 +527,7 @@ private theorem boolReturn_success_effect
       prefix_of_push (of_run_pushB256 hpushDst) hpD2
     rcases Line.of_run_cons hdecodePrefix with
       ⟨u4, hcopy, hdecodePrefix⟩
-    rcases prefix_of_retdatacopy_val hcopy hpD3 with
+    rcases prefix_of_returndatacopy_val hcopy hpD3 with
       ⟨hpD4, hcopyBound, hmem4, hrd4⟩
     have hmem_s4_u3 : s4.memory = u3.memory :=
       ((of_run_pushB256 hpush32).memory.trans
@@ -605,14 +605,14 @@ private theorem boolReturn_success_effect
       (((((((of_run_pushB256 hpush32).logs.trans
         (of_run_pushB256 hpushSrc).logs).trans
           (of_run_pushB256 hpushDst).logs).trans
-            (retdatacopy_logs hcopy)).trans
+            (returndatacopy_logs hcopy)).trans
               (of_run_pushB256 hpushLoad).logs).trans
                 (mload_logs hload)).trans hdbZero1.logs).trans
                   hdbZero2.logs
     have hlogs_s_s4 : s.logs = s4.logs :=
       hdbCall.logs.trans
         (hpopCall.logs.trans
-          ((retdataShorterThan_logs hshort).trans
+          ((returnDataShorterThan_logs hshort).trans
             hpopShort.logs))
     have hrd_s_s2 : s.returnData = s2.returnData :=
       hdbCall.returnData.trans hpopCall.returnData
@@ -669,7 +669,7 @@ private theorem of_run_callBoolCallback_frame
     arg targetArg ++ [dup 0, extcodesize, iszero]
   rcases of_run_prepend checkLine _ run with
     ⟨s1, hcheck, run1⟩
-  rcases of_run_branch_rev run1 with
+  rcases of_run_branch_revert run1 with
     ⟨s2, hpopCheck, run2⟩
   rcases of_run_next run2 with
     ⟨s3, hpopTarget, run3⟩
@@ -2989,7 +2989,7 @@ theorem erc677_codelessCallback_runCompiledTo
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
       (base.setMach ⟨0 :: stack, base.memory,
         G + codelessCallbackCost⟩)
-      (iszero ::: Func.rev <?>
+      (iszero ::: Func.revert <?>
         (pop ::: value +++ storeTokenCallbackHead sel +++
           pushList [0, 0] +++ forwardArgTail dataArg 4 +++
           tokenCallbackArgsSize +++

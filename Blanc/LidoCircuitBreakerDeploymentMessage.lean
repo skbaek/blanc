@@ -213,7 +213,7 @@ structure OfficialConstructorErrorArmLayout : Prop where
     Ninst.callvalue ::: Ninst.iszero :::
       (officialConstructorValidationBody <?> (.call 1))
   aux : lidoCircuitBreakerConstructorProgram.aux =
-    [Func.rev,
+    [Func.revert,
       constructorErrorForProof "AdminZero",
       constructorErrorForProof "MinPauseDurationZero",
       constructorErrorForProof "MinPauseDurationExceedsMax",

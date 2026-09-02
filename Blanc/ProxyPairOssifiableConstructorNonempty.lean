@@ -51,12 +51,12 @@ private theorem DelegatecallSpawnDescriptor.parent_logs_eq_callPre
 
 /-- A setup tail that finishes successfully can only have resumed a clean
 child.  The failed-child side always reaches either the inherited empty error
-or `revReturnData`; the proof does not need a mathematical bound on the
+or `revertReturnData`; the proof does not need a mathematical bound on the
 returndata list length because it branches on its actual `B256` length word. -/
 theorem OssifiableConstructorDelegateOutcome.success_of_ok
     {fs : List Func} {sevm : Sevm} {callPre callPost child post : Devm}
     {spawn : DelegatecallSpawnDescriptor sevm callPre} {image : Bytes}
-    (hEmpty : fs[3]? = some (Func.revData emptyDelegatecallErrorData))
+    (hEmpty : fs[3]? = some (Func.revertData emptyDelegatecallErrorData))
     (settled : DelegatecallSettledBoundary spawn child callPost)
     (memoryWf : Mem.Wf callPost.memory)
     (memoryReads : Mem.Reads callPost.memory image)
@@ -93,7 +93,7 @@ theorem OssifiableConstructorDelegateOutcome.success_of_ok
         Func.RunCompiledTo.zero_branch_of_prefix pZero run
       obtain ⟨sizePost, sizeRun, payloadBranch⟩ :=
         runCompiledTo_next_inv failedRun
-      have sizePush := of_run_retdatasize_val
+      have sizePush := of_run_returndatasize_val
         (Ninst.Run.of_runCompiled sizeRun)
       have failedReturnData : failedPre.returnData = child.output :=
         failedPop.returnData.symm.trans returnData
@@ -105,7 +105,7 @@ theorem OssifiableConstructorDelegateOutcome.success_of_ok
               using sizePush.stack⟩
         obtain ⟨_, _, errorRun, _⟩ :=
           Func.RunCompiledTo.zero_branch_of_prefix pLengthZero payloadBranch
-        exact (Func.RunCompiledTo.not_ok_call_revData hEmpty errorRun).elim
+        exact (Func.RunCompiledTo.not_ok_call_revertData hEmpty errorRun).elim
       · have pLength : Nat.toB256 child.output.length :: failedPre.stack <<+
             sizePost.stack :=
           ⟨[], by
@@ -113,7 +113,7 @@ theorem OssifiableConstructorDelegateOutcome.success_of_ok
         obtain ⟨_, _, _, _, bubbleRun, _⟩ :=
           Func.RunCompiledTo.succ_branch_of_prefix
             lengthWordZero pLength payloadBranch
-        rcases Func.runCompiledTo_revReturnData_inv bubbleRun with
+        rcases Func.runCompiledTo_revertReturnData_inv bubbleRun with
           outOfGas | ⟨revertPost, revertOutcome, _⟩
         · rcases outOfGas with ⟨_, impossible⟩
           cases impossible
@@ -145,7 +145,7 @@ theorem OssifiableConstructorDelegateBoundary.success_child_slots
     (hoffsetBound : runtimeOffset < 2 ^ 256)
     (hlengthBound : runtimeLength < 2 ^ 256) :
     ∃ gasWord callPre callPost,
-      Ninst.RunCompiled sevm callPre (.exec .delcall) callPost ∧
+      Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost ∧
       ∀ spawn : DelegatecallSpawnDescriptor sevm callPre,
         spawn.parent.stack.length < 1024 →
           spawn.gasWord = gasWord ∧
@@ -276,7 +276,7 @@ structure OssifiableConstructorNonemptySuccessResult
       [rawUpgradedLog sevm.currentTarget implementation] ∧
     Devm.getStor next = Devm.getStor delegatePre ∧
     next.logs = delegatePre.logs ∧
-    Ninst.RunCompiled sevm callPre (.exec .delcall) callPost ∧
+    Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost ∧
     ∀ spawn : DelegatecallSpawnDescriptor sevm callPre,
       spawn.parent.stack.length < 1024 →
         spawn.gasWord = gasWord ∧

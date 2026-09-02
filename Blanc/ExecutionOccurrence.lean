@@ -387,7 +387,7 @@ theorem Exec.ninstOccurrence_iff_mem_rawNodes
 reaches `.spawn` only through `Ninst.exec`.  Excluding every `Xinst` at every
 reached node therefore collapses the raw frame traversal to the outer root.
 The exclusion has to cover the whole `Xinst` family — `create`, `call`,
-`callcode`, `delcall`, `create2`, `statcall` — because any one of them alone
+`callcode`, `delegatecall`, `create2`, `staticcall` — because any one of them alone
 produces a descendant. -/
 
 /-- A derivation whose reached nodes never decode an executable instruction

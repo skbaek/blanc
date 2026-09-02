@@ -342,7 +342,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
     {memory : Mem} {stack : List B256} {G head : Nat}
     {offsetWord lengthWord : B256} {body : Func}
     (failure : DynamicTailFailureStage)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hfailure : DynamicTailFailsAt sevm.data head failure)
     (hroom : stack.length < 1018) :
@@ -983,7 +983,7 @@ private theorem validateDynamicTail_failure_runCompiledTo
     {memory : Mem} {stack : List B256}
     {G head headNat offsetWord lengthWord : Nat} {body : Func}
     (failure : DynamicTailFailureStage)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (haddress : (32 * Nat.toB256 head) + 4 =
       Nat.toB256 (4 + 32 * headNat))
     (hpushCost :
@@ -1205,7 +1205,7 @@ prefix to an empty revert, with no source guard or source body entered. -/
 theorem validateDepositAbi_failure_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
     {body : Func} (failure : DepositAbiFailure)
-    (hrev : fs[emptyRevertSlot]? = some Func.rev)
+    (hrev : fs[emptyRevertSlot]? = some Func.revert)
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hfailure : failure.Holds sevm.data) :
     Func.RunCompiledTo fs sevm

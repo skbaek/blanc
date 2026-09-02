@@ -35,7 +35,7 @@ private theorem selfbalance_logs_hinv : Rinst.Hinv Devm.logs Rinst.selfbalance :
   simp only [Rinst.run, Rinst.runCore] at run
   exact (Devm.pushBurn_of_pushItem run).logs⟩
 
-private theorem rev_logs_hinv : Linst.Hinv Devm.logs Devm.logs Linst.rev := by
+private theorem revert_logs_hinv : Linst.Hinv Devm.logs Devm.logs Linst.revert := by
   constructor
   intro e s r run
   simp only [Linst.Run, Linst.run] at run
@@ -70,7 +70,7 @@ theorem convertToShares_logs_inv :
   letI : Rinst.Hinv Devm.logs Rinst.mul := mul_logs_hinv
   letI : Rinst.Hinv Devm.logs Rinst.div := div_logs_hinv
   letI : Rinst.Hinv Devm.logs Rinst.selfbalance := selfbalance_logs_hinv
-  letI : Linst.Hinv Devm.logs Devm.logs Linst.rev := rev_logs_hinv
+  letI : Linst.Hinv Devm.logs Devm.logs Linst.revert := revert_logs_hinv
   func_inv
 
 
@@ -93,7 +93,7 @@ theorem convertToAssets_logs_inv :
   letI : Rinst.Hinv Devm.logs Rinst.mul := mul_logs_hinv
   letI : Rinst.Hinv Devm.logs Rinst.div := div_logs_hinv
   letI : Rinst.Hinv Devm.logs Rinst.selfbalance := selfbalance_logs_hinv
-  letI : Linst.Hinv Devm.logs Devm.logs Linst.rev := rev_logs_hinv
+  letI : Linst.Hinv Devm.logs Devm.logs Linst.revert := revert_logs_hinv
   func_inv
 
 /-- Exact successful-body observations for `convertToShares`.  The arithmetic
@@ -114,7 +114,7 @@ def SharesViewEffect (sevm : Sevm) (pre post : Devm) : Prop :=
 private def convertToSharesTail : Func :=
   pushB256 1 ::: add ::: dup 4 ::: sload ::: dup 0 ::: pushB256 offset ::: add :::
     dup 4 ::: mul ::: dup 2 ::: swap 0 ::: div ::: dup 1 ::: dup 1 ::: add :::
-    dup 6 ::: lt ::: .rev <?>
+    dup 6 ::: lt ::: .revert <?>
       (mstoreAt 0 +++ returnMemoryRange 0 32)
 
 
@@ -234,7 +234,7 @@ private theorem convertToShares_guardPrefix_effect
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <? Sevm.argWord sevm 0) ::
       Sevm.argWord sevm 0 :: B256.shiftRight B256.max 130 :: B256.max :: [] <<+ s12.stack :=
     prefix_of_add qadd p11
-  rcases of_run_branch_rev hbranch with ⟨after, hpop, hsuccess⟩
+  rcases of_run_branch_revert hbranch with ⟨after, hpop, hsuccess⟩
   have hzero := (popBurn_pref hpop p12).1.symm
   have hM : B256.shiftRight B256.max 130 = maxBalance := by decide +kernel
   have hV : B256.shiftRight maxBalance 30 = maxValue := by decide +kernel
@@ -417,7 +417,7 @@ private theorem convertToShares_tail_effect
     prefix_of_dup_val q16 (by show_nth) p15
   have p17 : (maxBalance <? (S + m)) :: m :: S :: (B + 1) :: 0 :: Sevm.argWord sevm 0 ::
       maxBalance :: supplySlot :: [] <<+ s17.stack := prefix_of_lt q17 p16
-  rcases of_run_branch_rev hbranch with ⟨after, hpop, hreturn⟩
+  rcases of_run_branch_revert hbranch with ⟨after, hpop, hreturn⟩
   have hflag : maxBalance <? (S + m) = 0 := (popBurn_pref hpop p17).1.symm
   have hsum : S + m ≤ maxSupply := by
     apply B256.not_lt.mp
@@ -593,7 +593,7 @@ private theorem convertToAssets_guardPrefix_effect
       (B256.shiftRight B256.max 130 <? Sevm.argWord sevm 0) ::
       Sevm.argWord sevm 0 :: B256.shiftRight B256.max 130 :: B256.max :: [] <<+ s9.stack :=
     prefix_of_add qadd p9
-  rcases of_run_branch_rev hbranch with ⟨after, hpop, hsuccess⟩
+  rcases of_run_branch_revert hbranch with ⟨after, hpop, hsuccess⟩
   have hzero := (popBurn_pref hpop p10).1.symm
   have hS : B256.shiftRight B256.max 130 = maxSupply := by decide +kernel
   have hB : B256.shiftRight B256.max 130 = maxBalance := by decide +kernel

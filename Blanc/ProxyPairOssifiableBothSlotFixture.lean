@@ -56,7 +56,7 @@ def setupMain : Func :=
     pushB256 implementationSlotLit ::: sstore :::
     pushB256 postSetupAdmin.toB256 :::
     pushB256 adminSlotLit ::: sstore :::
-    push1Zero ::: push1Zero ::: Func.last .ret
+    push1Zero ::: push1Zero ::: Func.last .return_
 
 theorem setupMain_compile :
     Func.compile [] 0 setupMain = some implementationCode.toList := by
@@ -140,7 +140,7 @@ theorem setupMain_runCompiledTo
         getStorVal_withRefundCounter]
       rw [hadminOriginal, hadminCurrent]
       decide
-    · apply Func.runCompiledTo_ret_word (i := 0) (sz := 0) (s := [])
+    · apply Func.runCompiledTo_return_word (i := 0) (sz := 0) (s := [])
         (e := 0) (G := G) (out := [])
       · rfl
       · exact Devm.extCost_empty_window
@@ -153,16 +153,16 @@ theorem setupMain_runCompiledTo
     rfl
   · rfl
   · rfl
-  · simp only [Devm.retPost_getStorVal, Devm.getStorVal_setMach,
+  · simp only [Devm.returnPost_getStorVal, Devm.getStorVal_setMach,
       getStorVal_sstoreBase_ne _ _ _ _ _ _
         (show adminSlotLit ≠ implementationSlotLit by decide),
       Devm.getStorVal_setStorVal_self]
-  · simp only [Devm.retPost_getStorVal, Devm.getStorVal_setMach,
+  · simp only [Devm.returnPost_getStorVal, Devm.getStorVal_setMach,
       Devm.getStorVal_setStorVal_self]
   · simp only [Devm.withOutput_logs, Devm.memRead_logs,
       Devm.setMach_logs, Devm.sstoreBase_logs]
     rfl
-  · simp only [Devm.retPost_accessedStorageKeys,
+  · simp only [Devm.returnPost_accessedStorageKeys,
       Devm.setMach_accessedStorageKeys,
       Devm.sstoreBase_accessedStorageKeys]
     simp only [Devm.setMach_accessedStorageKeys,

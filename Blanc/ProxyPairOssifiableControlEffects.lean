@@ -70,7 +70,7 @@ private theorem controlErrorCall_exact
     {out : Execution}
     (hget :
       (runtimeBaseline.main :: runtimeBaseline.aux)[slot]? =
-        some (Func.revData blob))
+        some (Func.revertData blob))
     (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
     (hblob : blob.length < 2 ^ 256)
     (hwords : 32 * (bytesWords blob).length < 2 ^ 256)
@@ -79,7 +79,7 @@ private theorem controlErrorCall_exact
       sevm pre (.call slot) out) :
     ControlErrorOutcome pre blob out := by
   simpa only [ControlErrorOutcome] using
-    runCompiledTo_call_revData_frame_inv hget hwf hreads hblob hwords run
+    runCompiledTo_call_revertData_frame_inv hget hwf hreads hblob hwords run
 
 theorem notAdmin_call_exact
     {sevm : Sevm} {pre : Devm} {image : Bytes} {out : Execution}
@@ -1398,7 +1398,7 @@ theorem upgradeImplementationControl_noCode_exact
     {fs : List Func} {sevm : Sevm} {pre : Devm} {tail : Stack}
     {continuation : Func} {image : Bytes} {out : Execution}
     (hNoCode : fs[noCodeImplementationErrorSlot]? =
-      some (Func.revData noCodeImplementationErrorData))
+      some (Func.revertData noCodeImplementationErrorData))
     (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
     (hp : tail <<+ pre.stack)
     (codeZero :
@@ -1420,7 +1420,7 @@ theorem upgradeImplementationControl_noCode_exact
       rw [← memoryEq]
       exact hreads
     simpa only [ControlErrorOutcome] using
-      runCompiledTo_call_revData_frame_inv hNoCode hwfCall hreadsCall
+      runCompiledTo_call_revertData_frame_inv hNoCode hwfCall hreadsCall
         (by decide +kernel) (by decide +kernel) callRun
   · exact (codeNonzero codeZero).elim
 
@@ -1429,7 +1429,7 @@ and emits exactly one source-shaped `Upgraded` log. -/
 theorem upgradeImplementationControl_success
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {tail : Stack}
     (hNoCode : fs[noCodeImplementationErrorSlot]? =
-      some (Func.revData noCodeImplementationErrorData))
+      some (Func.revertData noCodeImplementationErrorData))
     (hp : tail <<+ pre.stack)
     (run : Func.RunCompiledTo fs sevm pre
       (upgradeImplementationControl Func.stop) (.ok post)) :
@@ -1443,7 +1443,7 @@ theorem upgradeImplementationControl_success
   rcases upgradeImplementationControl_route hp run with
     ⟨_, callPre, callRun, _, _, _, _⟩ |
       ⟨hcode, commitPre, commitRun, pCommit, commitStor, commitLogs, _⟩
-  · exact (Func.RunCompiledTo.not_ok_call_revData hNoCode callRun).elim
+  · exact (Func.RunCompiledTo.not_ok_call_revertData hNoCode callRun).elim
   · unfold upgradeImplementationCommit at commitRun
     obtain ⟨dupPost, qdup, commitRun⟩ := runCompiledTo_next_inv commitRun
     obtain ⟨storePost, storeRun, commitRun⟩ :=
@@ -1503,7 +1503,7 @@ theorem upgradeImplementationControl_success
 theorem upgradeImplementationControl_same_value_logs
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {tail : Stack}
     (hNoCode : fs[noCodeImplementationErrorSlot]? =
-      some (Func.revData noCodeImplementationErrorData))
+      some (Func.revertData noCodeImplementationErrorData))
     (hp : tail <<+ pre.stack)
     (sameValue : Sevm.argWord sevm 0 =
       storedImplementationWord pre sevm.currentTarget)
@@ -1524,7 +1524,7 @@ theorem changeAdminMutation_success
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {tail : Stack} {image : Bytes}
     (hZeroAdmin : fs[zeroAdminErrorSlot]? =
-      some (Func.revData zeroAdminErrorData))
+      some (Func.revertData zeroAdminErrorData))
     (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
     (hp : tail <<+ pre.stack)
     (run : Func.RunCompiledTo fs sevm pre changeAdminMutation (.ok post)) :
@@ -1598,7 +1598,7 @@ theorem changeAdminMutation_success
     obtain ⟨callPre, _, _, _, callRun, _⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne branchRun
-    exact (Func.RunCompiledTo.not_ok_call_revData hZeroAdmin callRun).elim
+    exact (Func.RunCompiledTo.not_ok_call_revertData hZeroAdmin callRun).elim
   · have pZero : (0 : B256) :: tail <<+ testPre.stack := by
       simpa [hnewZero, B256.eqCheck] using pTest
     obtain ⟨writePre, hpop, writeRun, pWrite⟩ :=
@@ -1653,7 +1653,7 @@ theorem changeAdminMutation_same_value_logs
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {tail : Stack} {image : Bytes}
     (hZeroAdmin : fs[zeroAdminErrorSlot]? =
-      some (Func.revData zeroAdminErrorData))
+      some (Func.revertData zeroAdminErrorData))
     (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
     (hp : tail <<+ pre.stack)
     (sameValue : Sevm.argWord sevm 0 =

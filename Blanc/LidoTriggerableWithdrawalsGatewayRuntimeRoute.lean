@@ -97,7 +97,7 @@ theorem dispatcher_body_of_prog_run
   obtain ⟨mid, hburn, hmain⟩ := hprog
   change Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm mid
     ([Ninst.pushB256 4, Ninst.calldatasize, Ninst.lt] +++
-      (Func.rev <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp)))) out
+      (Func.revert <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp)))) out
     at hmain
   obtain ⟨afterGuard, hguardRun, hbranch⟩ :=
     runCompiledTo_prepend_inv hmain
@@ -195,7 +195,7 @@ theorem runtime_guard_zero_of_prog_run_ok
   obtain ⟨mid, hburn, hmain⟩ := hprog
   change Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm mid
     ([Ninst.pushB256 4, Ninst.calldatasize, Ninst.lt] +++
-      (Func.rev <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp))))
+      (Func.revert <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp))))
       (.ok post) at hmain
   obtain ⟨afterGuard, guardRun, branchRun⟩ :=
     runCompiledTo_prepend_inv hmain
@@ -209,8 +209,8 @@ theorem runtime_guard_zero_of_prog_run_ok
   have pGuard := prefix_of_lt ltRun pSize
   obtain ⟨_dispatchPre, guardZero, _pop, _dispatchRun, _tail⟩ :=
     Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix
-      (fun revRun => by
-        rcases runCompiledTo_rev_inv revRun with ⟨_rawPost, impossible, _output⟩
+      (fun revertRun => by
+        rcases runCompiledTo_revert_inv revertRun with ⟨_rawPost, impossible, _output⟩
         cases impossible)
       pGuard branchRun
   exact guardZero
@@ -234,7 +234,7 @@ theorem dispatcher_body_of_prog_run_empty_frame
   obtain ⟨mid, hburn, hmain⟩ := hprog
   change Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm mid
     ([Ninst.pushB256 4, Ninst.calldatasize, Ninst.lt] +++
-      (Func.rev <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp)))) out
+      (Func.revert <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp)))) out
     at hmain
   obtain ⟨afterGuard, hguardRun, hbranch⟩ :=
     runCompiledTo_prepend_inv hmain

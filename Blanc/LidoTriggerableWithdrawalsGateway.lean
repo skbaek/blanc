@@ -32,13 +32,13 @@ def returnWord : Func :=
   mstoreAt 0 +++ returnMemoryRange 0 32
 
 def returnWords (count : B256) : Func :=
-  pushB256 (count * 32) ::: pushB256 0 ::: Func.ret
+  pushB256 (count * 32) ::: pushB256 0 ::: Func.return_
 
 def customErrorData (name : String) (args : List ArgType := []) : Bytes :=
   (signatureHash name args).toBytes.take 4
 
 def runtimeError (name : String) (args : List ArgType := []) : Func :=
-  Func.revSelector (customErrorData name args) (by
+  Func.revertSelector (customErrorData name args) (by
     simp [customErrorData, B256.length_toBytes])
 
 def fallbackSlot : Nat := 1
@@ -113,11 +113,11 @@ def onlyRole (role : B256) (body : Func) : Func :=
 
 def requireStaticArgs (words : Nat) (body : Func) : Func :=
   pushB256 (Nat.toB256 (4 + 32 * words)) ::: calldatasize ::: lt :::
-    (Func.rev <?> body)
+    (Func.revert <?> body)
 
 def canonicalArg (index : B256) (body : Func) : Func :=
   (arg index ++ checkNonAddress) +++
-    (Func.rev <?> body)
+    (Func.revert <?> body)
 
 def emitOneWord (topic : B256) (word : B256) : Line :=
   [pushB256 word] ++ mstoreAt 0 ++ [pushB256 topic] ++ logWith 0 0 1
@@ -272,7 +272,7 @@ def roleMemberLoop : Func :=
             ((enumKeyFromMemoryAt 2 enumAccountRegion ++ [sload]) +++ returnWord)
               <?> roleMemberScanMatch))
           <?> roleMemberScanAdvance)
-      <?> Func.rev)
+      <?> Func.revert)
 
 def roleCountScanAdvance : Func :=
   (mloadWord 2 ++ [pushB256 1, add] ++ mstoreAt 2) +++
@@ -438,7 +438,7 @@ def revokeRole : Func :=
 
 def renounceRole : Func :=
   requireStaticArgs 2 <| canonicalArg 1 <|
-    (arg 1 ++ [caller, eq]) +++ (clearRoleMembership <?> Func.rev)
+    (arg 1 ++ [caller, eq]) +++ (clearRoleMembership <?> Func.revert)
 
 /-! ## Exit-limit setter and trigger boundary -/
 
@@ -512,10 +512,10 @@ def funcs (dp : DeployParams) : List (B256 × Func) :=
 
 def runtimeMain (dp : DeployParams) : Func :=
   pushB256 4 ::: calldatasize ::: lt :::
-    (Func.rev <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp)))
+    (Func.revert <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp)))
 
 def baseAux : List Func :=
-  [Func.rev,
+  [Func.revert,
    runtimeError "AccessControlUnauthorizedAccount",
    runtimeError "AdminCannotBeZero",
    runtimeError "ZeroArgument" [.dynBytes],
@@ -523,15 +523,15 @@ def baseAux : List Func :=
    runtimeError "ResumedExpected",
    runtimeError "ZeroPauseDuration",
    runtimeError "PauseUntilMustBeInFuture",
-   Func.revData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
+   Func.revertData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
      (Nat.toB256 0x11).toBytes),
    runtimeError "LimitExceeded",
    runtimeError "InsufficientFee" [.uint256, .uint256],
    runtimeError "FeeRefundFailed",
-   Func.rev,
+   Func.revert,
    roleMemberLoop,
    roleCountLoop,
-   Func.rev,
+   Func.revert,
    runtimeError "TooLargeMaxExitRequestsLimit",
    runtimeError "TooLargeFrameDuration",
    runtimeError "TooLargeExitsPerFrame",
@@ -544,7 +544,7 @@ def baseAux : List Func :=
    consumeAfterCurrent,
    ([pushB256 Trigger.exitLimitExceededSelector] ++ mstoreAt 0 ++
      mloadWord 14 ++ mstoreAt 1 ++ mloadWord 8 ++ mstoreAt 2 ++
-     [pushB256 68, pushB256 28]) +++ .last .rev]
+     [pushB256 68, pushB256 28]) +++ .last .revert]
 
 def triggerRoleFailure : Func :=
   runtimeError "AccessControlUnauthorizedAccount"

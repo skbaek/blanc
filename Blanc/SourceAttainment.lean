@@ -571,9 +571,9 @@ is not: `Execution.commits` is true only at `.ok`, and at `.ok post` it
 unfolds to `post.error.isNone` — a cleanliness fact that nothing in this
 repository propagates across a compiled walk, so every consumer would carry it
 as a dead antecedent.  A `REVERT` terminal cannot produce `.ok` at all, which
-is the contradiction `Linst.not_commits_of_run_rev` derives in its `.ok` case
+is the contradiction `Linst.not_commits_of_run_revert` derives in its `.ok` case
 and then discards in order to return `= false`; keeping it instead is
-`Linst.not_run_rev_ok` and costs the consumer nothing.
+`Linst.not_run_revert_ok` and costs the consumer nothing.
 
 The committing pair is still available one level down, as
 `Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin`, for a consumer that
@@ -588,7 +588,7 @@ def Func.alwaysRevertsWithin : Nat → List Func → Func → Bool
   | 0, _, _ => false
   | fuel + 1, fs, .branch left right =>
       alwaysRevertsWithin fuel fs left && alwaysRevertsWithin fuel fs right
-  | _fuel + 1, _, .last terminal => terminal == Linst.rev
+  | _fuel + 1, _, .last terminal => terminal == Linst.revert
   | fuel + 1, fs, .next _instruction tail => alwaysRevertsWithin fuel fs tail
   | fuel + 1, fs, .call index =>
       match fs[index]? with
@@ -596,10 +596,10 @@ def Func.alwaysRevertsWithin : Nat → List Func → Func → Bool
       | some body => alwaysRevertsWithin fuel fs body
 
 /-- `REVERT` never commits, however its operand reads fail.  Every arm of
-`Linst.run`'s `.rev` case ends in `.error`, so no `.ok` outcome has a `.rev`
+`Linst.run`'s `.revert` case ends in `.error`, so no `.ok` outcome has a `.revert`
 derivation. -/
-theorem Linst.not_commits_of_run_rev {sevm : Sevm} {devm : Devm}
-    {out : Execution} (run : Linst.Run sevm devm .rev out) :
+theorem Linst.not_commits_of_run_revert {sevm : Sevm} {devm : Devm}
+    {out : Execution} (run : Linst.Run sevm devm .revert out) :
     Execution.commits out = false := by
   cases out with
   | error _ => rfl
@@ -638,7 +638,7 @@ theorem Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin
           simp only [Func.alwaysRevertsWithin, beq_iff_eq] at certified
           subst certified
           cases run with
-          | last terminalRun => exact Linst.not_commits_of_run_rev terminalRun
+          | last terminalRun => exact Linst.not_commits_of_run_revert terminalRun
       | next instruction tail =>
           simp only [Func.alwaysRevertsWithin] at certified
           cases run with
@@ -679,7 +679,7 @@ theorem Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin
           simp only [Func.alwaysRevertsWithin, beq_iff_eq] at certified
           subst certified
           cases run with
-          | last terminalRun => exact Linst.not_run_rev_ok terminalRun
+          | last terminalRun => exact Linst.not_run_revert_ok terminalRun
       | next instruction tail =>
           simp only [Func.alwaysRevertsWithin] at certified
           cases run with

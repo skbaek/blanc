@@ -21,10 +21,10 @@ private theorem panic_call_not_ok
     (run : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
       e pre (.call arithmeticPanicSlot) (.ok post)) : False := by
   have hget : ((runtime dp).main :: (runtime dp).aux)[arithmeticPanicSlot]? =
-      some (Func.revData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
+      some (Func.revertData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
         (Nat.toB256 0x11).toBytes)) := by
     simp [runtime, aux, baseAux, arithmeticPanicSlot]
-  exact Func.RunCompiledTo.not_ok_call_revData hget run
+  exact Func.RunCompiledTo.not_ok_call_revertData hget run
 
 private theorem pauseForSentinel_effect
     {dp : DeployParams} {e : Sevm} {root pre post : Devm}
@@ -162,7 +162,7 @@ private theorem pauseForGuard_effect
           ((runtime dp).main :: (runtime dp).aux)[resumedExpectedSlot]? =
             some (runtimeError "ResumedExpected") := by
         simp [runtime, aux, baseAux, resumedExpectedSlot]
-      exact (Func.RunCompiledTo.not_ok_call_revSelector
+      exact (Func.RunCompiledTo.not_ok_call_revertSelector
         (by simpa [runtimeError] using hget) errorRun).elim
     · rcases hsucc with
         ⟨word, unpausedPre, -, hstack, hpop, unpausedRun⟩
@@ -227,7 +227,7 @@ private theorem pauseForGuard_effect
           ((runtime dp).main :: (runtime dp).aux)[zeroPauseDurationSlot]? =
             some (runtimeError "ZeroPauseDuration") := by
         simp [runtime, aux, baseAux, zeroPauseDurationSlot]
-      exact (Func.RunCompiledTo.not_ok_call_revSelector
+      exact (Func.RunCompiledTo.not_ok_call_revertSelector
         (by simpa [runtimeError] using hget) errorRun).elim
   have sentinelTestStor :
       Devm.getStor root = Devm.getStor sentinelTestPre :=

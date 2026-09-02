@@ -61,10 +61,10 @@ private def callStep : XStep := Xinst.step dynamicSevm directCallPre .call
 private def callFrame : Frame := spawnedFrame callStep
 private def callResume : Resume := spawnedResume callStep
 
-private def statcallStep : XStep :=
-  Xinst.step dynamicSevm directStatcallPre .statcall
-private def statcallFrame : Frame := spawnedFrame statcallStep
-private def statcallResume : Resume := spawnedResume statcallStep
+private def staticcallStep : XStep :=
+  Xinst.step dynamicSevm directStatcallPre .staticcall
+private def staticcallFrame : Frame := spawnedFrame staticcallStep
+private def staticcallResume : Resume := spawnedResume staticcallStep
 
 private def callcodeStep : XStep :=
   Xinst.step dynamicSevm callcodePre .callcode
@@ -72,14 +72,14 @@ private def callcodeFrame : Frame := spawnedFrame callcodeStep
 private def callcodeResume : Resume := spawnedResume callcodeStep
 
 private def delegatecallStep : XStep :=
-  Xinst.step dynamicSevm delegatecallPre .delcall
+  Xinst.step dynamicSevm delegatecallPre .delegatecall
 private def delegatecallFrame : Frame := spawnedFrame delegatecallStep
 private def delegatecallResume : Resume := spawnedResume delegatecallStep
 
 macro "dca_kernel_decide" : tactic => `(tactic|
-  (simp [spawned, spawnedFrame, spawnedResume, callStep, statcallStep,
+  (simp [spawned, spawnedFrame, spawnedResume, callStep, staticcallStep,
       callcodeStep, delegatecallStep,
-      callFrame, callResume, statcallFrame, statcallResume,
+      callFrame, callResume, staticcallFrame, staticcallResume,
       callcodeFrame, callcodeResume, delegatecallFrame, delegatecallResume,
       directCallPre, directStatcallPre, callcodePre,
       delegatecallPre, dynamicSevm, addressA, addressB, targetCode, parentCode,
@@ -120,21 +120,21 @@ theorem call_direct_codeAddress_control :
     call_spawn (by dca_kernel_decide) (by dca_kernel_decide)
     (by dca_kernel_decide)
 
-private theorem statcall_spawn :
-    Xinst.step dynamicSevm directStatcallPre .statcall =
-      .spawn statcallFrame statcallResume := by
-  exact eq_spawn_of_spawned statcallStep (by dca_kernel_decide)
+private theorem staticcall_spawn :
+    Xinst.step dynamicSevm directStatcallPre .staticcall =
+      .spawn staticcallFrame staticcallResume := by
+  exact eq_spawn_of_spawned staticcallStep (by dca_kernel_decide)
 
 /-- A concrete foreign STATICCALL is the second positive direct-code control. -/
-theorem statcall_direct_codeAddress_control :
-    Xinst.step dynamicSevm directStatcallPre .statcall =
-        .spawn statcallFrame statcallResume ∧
-      dynamicSevm.currentTarget ≠ statcallFrame.inner.currentTarget ∧
-      directStatcallPre.getCode statcallFrame.inner.currentTarget ≠ .empty ∧
-      statcallFrame.inner.codeAddress = some statcallFrame.inner.currentTarget := by
-  refine ⟨statcall_spawn, by dca_kernel_decide, by dca_kernel_decide, ?_⟩
+theorem staticcall_direct_codeAddress_control :
+    Xinst.step dynamicSevm directStatcallPre .staticcall =
+        .spawn staticcallFrame staticcallResume ∧
+      dynamicSevm.currentTarget ≠ staticcallFrame.inner.currentTarget ∧
+      directStatcallPre.getCode staticcallFrame.inner.currentTarget ≠ .empty ∧
+      staticcallFrame.inner.codeAddress = some staticcallFrame.inner.currentTarget := by
+  refine ⟨staticcall_spawn, by dca_kernel_decide, by dca_kernel_decide, ?_⟩
   exact Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
-    statcall_spawn (by dca_kernel_decide) (by dca_kernel_decide)
+    staticcall_spawn (by dca_kernel_decide) (by dca_kernel_decide)
     (by dca_kernel_decide)
 
 /-- Every actual CREATE spawn has empty installed target code and no direct
@@ -216,13 +216,13 @@ theorem callcode_same_target_control :
     by dca_kernel_decide, by dca_kernel_decide⟩
 
 private theorem delegatecall_spawn :
-    Xinst.step dynamicSevm delegatecallPre .delcall =
+    Xinst.step dynamicSevm delegatecallPre .delegatecall =
       .spawn delegatecallFrame delegatecallResume := by
   exact eq_spawn_of_spawned delegatecallStep (by dca_kernel_decide)
 
 /-- DELEGATECALL exposes the same retained-target boundary independently. -/
 theorem delegatecall_same_target_control :
-    Xinst.step dynamicSevm delegatecallPre .delcall =
+    Xinst.step dynamicSevm delegatecallPre .delegatecall =
         .spawn delegatecallFrame delegatecallResume ∧
       delegatecallFrame.inner.currentTarget = dynamicSevm.currentTarget ∧
       delegatecallPre.getCode delegatecallFrame.inner.currentTarget ≠ .empty ∧
@@ -239,11 +239,11 @@ theorem required_positive_controls :
         dynamicSevm.currentTarget ≠ callFrame.inner.currentTarget ∧
         directCallPre.getCode callFrame.inner.currentTarget ≠ .empty ∧
         callFrame.inner.codeAddress = some callFrame.inner.currentTarget) ∧
-    (Xinst.step dynamicSevm directStatcallPre .statcall =
-          .spawn statcallFrame statcallResume ∧
-        dynamicSevm.currentTarget ≠ statcallFrame.inner.currentTarget ∧
-        directStatcallPre.getCode statcallFrame.inner.currentTarget ≠ .empty ∧
-        statcallFrame.inner.codeAddress = some statcallFrame.inner.currentTarget) ∧
+    (Xinst.step dynamicSevm directStatcallPre .staticcall =
+          .spawn staticcallFrame staticcallResume ∧
+        dynamicSevm.currentTarget ≠ staticcallFrame.inner.currentTarget ∧
+        directStatcallPre.getCode staticcallFrame.inner.currentTarget ≠ .empty ∧
+        staticcallFrame.inner.codeAddress = some staticcallFrame.inner.currentTarget) ∧
     (∀ {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume},
       Xinst.step sevm devm .create = .spawn frame resume →
         devm.getCode frame.inner.currentTarget = .empty ∧
@@ -259,14 +259,14 @@ theorem required_positive_controls :
         callcodeFrame.inner.codeAddress = some addressB ∧
         callcodeFrame.inner.codeAddress ≠
           some callcodeFrame.inner.currentTarget) ∧
-    (Xinst.step dynamicSevm delegatecallPre .delcall =
+    (Xinst.step dynamicSevm delegatecallPre .delegatecall =
           .spawn delegatecallFrame delegatecallResume ∧
         delegatecallFrame.inner.currentTarget = dynamicSevm.currentTarget ∧
         delegatecallPre.getCode delegatecallFrame.inner.currentTarget ≠ .empty ∧
         delegatecallFrame.inner.codeAddress = some addressB ∧
         delegatecallFrame.inner.codeAddress ≠
           some delegatecallFrame.inner.currentTarget) := by
-  exact ⟨call_direct_codeAddress_control, statcall_direct_codeAddress_control,
+  exact ⟨call_direct_codeAddress_control, staticcall_direct_codeAddress_control,
     @create_empty_target_control, @create2_empty_target_control,
     callcode_same_target_control, delegatecall_same_target_control⟩
 

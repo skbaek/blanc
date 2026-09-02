@@ -74,7 +74,7 @@ code-present arm reaches the shared packed-write/`Upgraded` commit fragment.
 theorem ossifiableConstructorInitializeImplementation_route
     {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
     {tail : Stack} {image : Bytes} {implementation : B256}
-    (hNoCode : fs[2]? = some (Func.revData noCodeImplementationErrorData))
+    (hNoCode : fs[2]? = some (Func.revertData noCodeImplementationErrorData))
     (hp : tail <<+ pre.stack)
     (hwf : Mem.Wf pre.memory)
     (hreads : Mem.Reads pre.memory image)
@@ -151,7 +151,7 @@ theorem ossifiableConstructorInitializeImplementation_route
     have outcome :
         ControlErrorOutcome callPre noCodeImplementationErrorData out := by
       simpa only [ControlErrorOutcome] using
-        runCompiledTo_call_revData_frame_inv hNoCode callWf callReads
+        runCompiledTo_call_revertData_frame_inv hNoCode callWf callReads
           (by decide +kernel) (by decide +kernel) callRun
     exact .noCode ⟨callPre, hzero, callRun, pCall, callWf, callReads,
       callStor, callLogs, outcome⟩
@@ -288,7 +288,7 @@ theorem OssifiableConstructorDecodeBoundary.initializeImplementation
     {argsOffset : Nat} {tail : Stack} {image : Bytes} {out : Execution}
     (decode : OssifiableConstructorDecodeBoundary fs sevm entry
       ossifiableConstructorInitializeImplementation argsOffset tail image out)
-    (hNoCode : fs[2]? = some (Func.revData noCodeImplementationErrorData)) :
+    (hNoCode : fs[2]? = some (Func.revertData noCodeImplementationErrorData)) :
     ∃ bodyPre,
       entry.state = bodyPre.state ∧
       entry.logs = bodyPre.logs ∧

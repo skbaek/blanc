@@ -1376,7 +1376,7 @@ def case_wrong_magic():
     """The wrong-magic borrower: the callback runs (the mint happened, and
     the borrower's own observations were recorded), but it returns a word
     that provably is not the ERC-3156 magic, so `flashLoan`'s
-    `checkRetdataHead` guard fires and the WHOLE frame reverts -- including
+    `checkReturnDataHead` guard fires and the WHOLE frame reverts -- including
     the mint. Zoo member 2."""
     trigger_key = 2
     amount = 3 * WAD
@@ -1387,7 +1387,7 @@ def case_wrong_magic():
                 reverts_because=(
                     "the borrower returns a word that is not "
                     "keccak256('ERC3156FlashBorrower.onFlashLoan'), so "
-                    "flashLoan's checkRetdataHead guard rejects it"))
+                    "flashLoan's checkReturnDataHead guard rejects it"))
     trigger, tx = trigger_tx(trigger_key)
     alloc = {
         FMINT_ADDR: fmint_account(),
@@ -1473,7 +1473,7 @@ def case_returndata_spectrum():
     """The returndata shape spectrum (evidence plan): short (< 32 bytes --
     the EOA receiver, empty returndata, must fail the magic check even with
     no data at all), exactly 32 (the ordinary compliant path), and overlong
-    with a correct head (must PASS -- `checkRetdataHead` only pins the head
+    with a correct head (must PASS -- `checkReturnDataHead` only pins the head
     word, per `retdataShorterThan 32` branching first, row 10)."""
     trigger_key = 4
     amount_short = 1 * WAD

@@ -240,7 +240,7 @@ lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
   have hp₂ : [0, 64, wad] <<+ s₃.stack := by generalize_line_prefix
   clear_state s₂
   line_execute 1
-  rcases prefix_of_kec (of_run_singleton h₄) hp₂ with ⟨hash, hp₃⟩
+  rcases prefix_of_keccak256 (of_run_singleton h₄) hp₂ with ⟨hash, hp₃⟩
   clear_state s₃
   line_execute 1
   have hp₄ : [hash, hash, wad] <<+ s₅.stack := by generalize_line_prefix
@@ -291,7 +291,7 @@ lemma approve_preserves_wbal {sevm : Sevm} {s r : Devm}
   have h_s0_stor : Devm.getStor s sevm.currentTarget = Devm.getStor s0 sevm.currentTarget :=
     congr_fun h_s0_stor_eq sevm.currentTarget
   rw [h_s0_stor]; clear h_s0_stor h_s0_stor_eq h_s0 s
-  rcases of_run_branch_rev h_run' with ⟨s1, h_pop, h_run⟩; clear h_run'
+  rcases of_run_branch_revert h_run' with ⟨s1, h_pop, h_run⟩; clear h_run'
   have h_s1_stor : Devm.getStor s0 sevm.currentTarget = Devm.getStor s1 sevm.currentTarget :=
     (Devm.PopBurn.getStor h_pop sevm.currentTarget).symm
   rw [h_s1_stor]; clear h_s1_stor h_pop s0
@@ -303,7 +303,7 @@ lemma approve_preserves_wbal {sevm : Sevm} {s r : Devm}
   have h_s2_stor : Devm.getStor s1 sevm.currentTarget = Devm.getStor s2 sevm.currentTarget :=
     congr_fun h_s2_stor_eq sevm.currentTarget
   rw [h_s2_stor]; clear h_s2_stor h_s2_stor_eq h_s2 s1
-  rcases of_run_branch_rev h_run' with ⟨s3, h_pop, h_run⟩; clear h_run'
+  rcases of_run_branch_revert h_run' with ⟨s3, h_pop, h_run⟩; clear h_run'
   have h_hv_eq_zero : hash_valid = 0 := by
     have h_pop_stk := h_pop.stack
     simp [Stack.Pop, Split] at h_pop_stk
@@ -484,9 +484,9 @@ lemma updateAllowance_preserves_stor_rest {fs : List Func} {sevm : Sevm} {s r : 
     have hsD : [0, 64, wad] <<+ sD.stack := by generalize_line_prefix
     rw [congr_fun (Line.of_inv Devm.getStor (by line_inv) hD) sevm.currentTarget]
     clear hD hsC
-    -- segment 5 : kec  ( 0 64 wad -- hash wad )
+    -- segment 5 : keccak256  ( 0 64 wad -- hash wad )
     rcases of_run_next h_runP with ⟨sE, rE, h_runP⟩
-    rcases prefix_of_kec rE hsD with ⟨hash, hsE⟩
+    rcases prefix_of_keccak256 rE hsD with ⟨hash, hsE⟩
     rw [congr_fun (Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons rE Line.Run.nil)) sevm.currentTarget]
     clear rE hsD
@@ -517,8 +517,8 @@ lemma updateAllowance_preserves_stor_rest {fs : List Func} {sevm : Sevm} {s r : 
     rcases of_check_address hsG1 hG with ⟨va, hsG, h_iff⟩
     rw [congr_fun (Line.of_inv Devm.getStor (by line_inv) hG) sevm.currentTarget]
     clear hG hsG1
-    -- rev-branch : checkAddress guarantees `hash` is not a valid address
-    rcases of_run_branch_rev h_runP with ⟨sH, h_popH, h_runP⟩
+    -- revert-branch : checkAddress guarantees `hash` is not a valid address
+    rcases of_run_branch_revert h_runP with ⟨sH, h_popH, h_runP⟩
     have hpH := h_popH.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpH
     rw [hpH] at hsG
@@ -612,8 +612,8 @@ lemma updateAllowance_preserves_stor_rest {fs : List Func} {sevm : Sevm} {s r : 
       rw [congr_fun (Line.of_inv Devm.getStor (by line_inv)
         (Line.Run.cons rN Line.Run.nil)) sevm.currentTarget]
       clear rN hsN2
-      -- rev-branch : guarantees allowance ≥ wad
-      rcases of_run_branch_rev h_runP with ⟨sO, h_popO, h_runP⟩
+      -- revert-branch : guarantees allowance ≥ wad
+      rcases of_run_branch_revert h_runP with ⟨sO, h_popO, h_runP⟩
       have hpO := h_popO.stack
       simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpO
       rw [hpO] at hsN
@@ -684,8 +684,8 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   rcases of_check_non_address hs2 h3 with ⟨na_src, hs3, h_src_iff⟩
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h3)
   clear h3 hs2
-  -- rev-branch : src is a valid address
-  rcases of_run_branch_rev h_run with ⟨a4, hp4, h_run⟩
+  -- revert-branch : src is a valid address
+  rcases of_run_branch_revert h_run with ⟨a4, hp4, h_run⟩
   have hp4s := hp4.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp4s
   rw [hp4s] at hs3
@@ -758,8 +758,8 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   have hs11 : (sbal <? wad) :: [sbal, wad, wad, src] <<+ a11.stack := prefix_of_lt r11 hs10
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r11 Line.Run.nil))
   clear r11 hs10
-  -- rev-branch : source balance ≥ wad
-  rcases of_run_branch_rev h_run with ⟨a12, hp12, h_run⟩
+  -- revert-branch : source balance ≥ wad
+  rcases of_run_branch_revert h_run with ⟨a12, hp12, h_run⟩
   have hp12s := hp12.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp12s
   rw [hp12s] at hs11
@@ -803,8 +803,8 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   rcases of_check_non_address hs15 h16 with ⟨na_dst, hs16, h_dst_iff⟩
   have hg' := hg'.trans (Line.of_inv Devm.getStor (by line_inv) h16)
   clear h16 hs15
-  -- rev-branch : dst is a valid address
-  rcases of_run_branch_rev h_run with ⟨a17, hp17, h_run⟩
+  -- revert-branch : dst is a valid address
+  rcases of_run_branch_revert h_run with ⟨a17, hp17, h_run⟩
   have hp17s := hp17.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp17s
   rw [hp17s] at hs16
@@ -1326,8 +1326,8 @@ lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
     precond_of_precond cond h_bal h_stor h_code
   clear cond h₁ h_bal h_stor h_code
   intro h_run
-  -- rev-branch : the caller's WETH balance must cover the withdrawal
-  rcases of_run_branch_rev h_run with ⟨s₂, h_pop, h_run'⟩
+  -- revert-branch : the caller's WETH balance must cover the withdrawal
+  rcases of_run_branch_revert h_run with ⟨s₂, h_pop, h_run'⟩
   have hp2s := h_pop.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp2s
   rw [hp2s] at hp₁

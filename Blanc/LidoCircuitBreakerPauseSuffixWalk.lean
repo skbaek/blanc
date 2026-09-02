@@ -173,7 +173,7 @@ theorem temporal_extcodesize_runCompiled
 
 /-! ## The two crossings, resolved at a warm code-carrying callee
 
-`runCompiled_call_zero_value_responder` and `runCompiled_statcall_responder`
+`runCompiled_call_zero_value_responder` and `runCompiled_staticcall_responder`
 take the delegation resolution, the access charge and the EIP-150 split as
 premises because they are facts about the state *at the instruction*.  That
 state is reachable here only through the first crossing's existential
@@ -292,7 +292,7 @@ private lemma responder_call_crossing
     · intro hx
       exact Std.HashSet.mem_insert.mpr (Or.inr hx)
 
-private lemma responder_statcall_crossing
+private lemma responder_staticcall_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw : B256}
     {s : List B256} {G : Nat}
     (hstk : devm.stack =
@@ -307,7 +307,7 @@ private lemma responder_statcall_crossing
     (hfloor : 118 ≤ G) (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
-      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
@@ -377,7 +377,7 @@ private lemma responder_statcall_crossing
     exact ⟨by omega, by omega, by omega⟩
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs, hrefund,
     hatd, htrans, hask, haa, stmid, hsub, hstate⟩ :=
-    runCompiled_statcall_responder (gw := Nat.toB256 G) (tw := target)
+    runCompiled_staticcall_responder (gw := Nat.toB256 G) (tw := target)
       hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
       hdel hacc hsplit (by rw [hd0gas]; exact hcross) hdepth hnp
@@ -1219,7 +1219,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     exact hcalleeCode
   obtain ⟨post2, hrun2, hstk2, hmem2, hgas2, herr2, hout2, hret2, hlogs2,
     hrefund2, hatd2, htrans2, hask2, haa2, st₂, hsub2, hstate2⟩ :=
-    responder_statcall_crossing (sevm := sevm)
+    responder_staticcall_crossing (sevm := sevm)
       (devm := post1.setMach
         ⟨[Nat.toB256 (Gb + 198), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
@@ -1348,7 +1348,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
         ((Func.call bubbleRevertSlot) <?>
           (pushB256 isPausedSelector ::: mstoreAt 8 +++
             pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++
-            Ninst.gas ::: Ninst.statcall ::: Ninst.iszero :::
+            Ninst.gas ::: Ninst.staticcall ::: Ninst.iszero :::
             ((Func.call bubbleRevertSlot) <?> decodePausedResult)))) post := by
     func_run (12) [0, 0, 3]
     all_goals try simp_rw [show ((8 : B256) * 32).toNat = 256 by decide]
@@ -1381,7 +1381,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
             ((Func.call bubbleRevertSlot) <?>
               (pushB256 isPausedSelector ::: mstoreAt 8 +++
                 pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++
-                Ninst.gas ::: Ninst.statcall ::: Ninst.iszero :::
+                Ninst.gas ::: Ninst.staticcall ::: Ninst.iszero :::
                 ((Func.call bubbleRevertSlot) <?> decodePausedResult))))))
       post := by
     func_run (18) [0, 0, 3, 0, 3]

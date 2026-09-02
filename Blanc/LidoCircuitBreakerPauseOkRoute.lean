@@ -12,7 +12,7 @@ two returning external calls, and a walk that reaches either of their `SSTORE`s
 ends in `STOP`, so their routes need the `.ok` flavour throughout.
 
 Everything before `pauseSuccess`'s count branch is cheaper in this flavour
-than in the revert one: every untaken arm on the path is `Func.rev` or a
+than in the revert one: every untaken arm on the path is `Func.revert` or a
 `.call` to a certified-reverting table body, so
 `routeTo_branch*_of_*RevertsOk` settles fourteen of the fifteen branches
 without a branch word.  The count branch (`B7`) is the one branch with two
@@ -403,7 +403,7 @@ theorem pauseLiveTest_word {sevm : Sevm} {entry start finish : Devm}
 
 The revert flavour (`pause_routeTo_setPauserCall`) pays for the two calldata
 guards and refutes the three world-valued ones with the walk's empty payload.
-Here **all five** are free: `requireStaticArgs`' sibling is a bare `Func.rev`,
+Here **all five** are free: `requireStaticArgs`' sibling is a bare `Func.revert`,
 `canonicalAddressArg`'s is `.call emptyRevertSlot`, and the lock, assignment
 and liveness guards call named runtime errors — every one certified reverting,
 so a successful walk cannot have taken it.  No calldata hypothesis survives
@@ -2599,7 +2599,7 @@ theorem pauseAfterSet_routeTo_countBranch (dp : DeployParams)
       preC.stack = gw :: target :: 284 :: 4 :: 0 :: 32 :: rest →
       MemWordAt preC (targetWord * 32).toNat target →
       CodeAt preC target.toAdr code →
-      Ninst.RunCompiled sevm preC Ninst.statcall postC →
+      Ninst.RunCompiled sevm preC Ninst.staticcall postC →
       MemWordAt postC (targetWord * 32).toNat target ∧
         CodeAt postC target.toAdr code ∧
         Devm.getStorVal postC sevm.currentTarget
@@ -2736,10 +2736,10 @@ theorem pauseAfterSet_routeTo_countBranch (dp : DeployParams)
     (fun s9 hpop9 tail9 => ?_)
   have w9 := MemWordAt.of_memory_eq hpop9.memory.symm w8
   have k9 := (cellOf (getStor_of_state hpop9.state).symm).trans k8
-  refine routeTo_line (retdataShorterThan 32) tail9 (fun s10 r10 tail10 => ?_)
-  have w10 := w9.acrossLine (by unfold retdataShorterThan; line_inv) r10
+  refine routeTo_line (returnDataShorterThan 32) tail9 (fun s10 r10 tail10 => ?_)
+  have w10 := w9.acrossLine (by unfold returnDataShorterThan; line_inv) r10
   have k10 := (cellOf (Line.of_inv Devm.getStor
-    (by unfold retdataShorterThan; line_inv) r10).symm).trans k9
+    (by unfold returnDataShorterThan; line_inv) r10).symm).trans k9
   refine routeTo_branchLeft_of_rightRevertsOk_frame tail10 (fuel := 4) (by rfl)
     (fun s11 hpop11 tail11 => ?_)
   have w11 := MemWordAt.of_memory_eq hpop11.memory.symm w10
@@ -2859,7 +2859,7 @@ theorem runtimeMain_routeTo_pauseLastExpiry
       preC.stack = gw :: target :: 284 :: 4 :: 0 :: 32 :: rest →
       MemWordAt preC (targetWord * 32).toNat target →
       CodeAt preC target.toAdr code →
-      Ninst.RunCompiled sevm preC Ninst.statcall postC →
+      Ninst.RunCompiled sevm preC Ninst.staticcall postC →
       MemWordAt postC (targetWord * 32).toNat target ∧
         CodeAt postC target.toAdr code ∧
         Devm.getStorVal postC sevm.currentTarget
@@ -2992,7 +2992,7 @@ theorem runtimeMain_routeTo_pauseRetainedExpiry
       preC.stack = gw :: target :: 284 :: 4 :: 0 :: 32 :: rest →
       MemWordAt preC (targetWord * 32).toNat target →
       CodeAt preC target.toAdr code →
-      Ninst.RunCompiled sevm preC Ninst.statcall postC →
+      Ninst.RunCompiled sevm preC Ninst.staticcall postC →
       MemWordAt postC (targetWord * 32).toNat target ∧
         CodeAt postC target.toAdr code ∧
         Devm.getStorVal postC sevm.currentTarget

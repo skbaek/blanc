@@ -143,7 +143,7 @@ lemma prefix_of_allowanceKeyFromMemory_image
     exact hr1
   have hm2 : s.memory = s2.memory := hb64.memory.trans hb0.memory
   rcases Line.of_run_cons run2 with ⟨s3, hkec, run3⟩
-  rcases prefix_of_kec_val hkec hp2 with ⟨hp3, hm3⟩
+  rcases prefix_of_keccak256_val hkec hp2 with ⟨hp3, hm3⟩
   change (s2.memory.read 0 64).1.keccak :: xs <<+ s3.stack at hp3
   rw [Mem.Reads.read hr2 0 64] at hp3
   rcases Line.of_run_cons run3 with ⟨s4, hpushMask, run4⟩

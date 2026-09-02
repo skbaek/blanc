@@ -257,7 +257,7 @@ theorem proxyFallback_eq_prefix :
     proxyFallback =
       (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
         pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
-        pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+        pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
         proxySuccessTail) := by
   rfl
 
@@ -313,7 +313,7 @@ private def proxySuccessParent : Devm :=
   callSpawnParent proxySuccessD1 24744 0 32 0 0
 
 private def proxySuccessChild : Msg :=
-  delcallSpawnMsg (initSevm proxyMsgSuccess) proxySuccessParent 22144
+  delegatecallSpawnMsg (initSevm proxyMsgSuccess) proxySuccessParent 22144
     implAdr 0 32 implGuardedCode false
 
 private theorem proxy_success_child_enters :
@@ -493,8 +493,8 @@ private theorem proxy_success_h_depth :
     (initSevm proxyMsgSuccess).depth ≠ 0 := by
   decide
 
-private theorem proxy_success_delcall_spawn :
-    Xinst.step (initSevm proxyMsgSuccess) proxyCallPreSuccess .delcall =
+private theorem proxy_success_delegatecall_spawn :
+    Xinst.step (initSevm proxyMsgSuccess) proxyCallPreSuccess .delegatecall =
       .spawn (Frame.ofCall proxySuccessChild)
         (.call proxySuccessParent 0 0) := by
   have h_stk : proxyCallPreSuccess.stack =
@@ -510,21 +510,21 @@ private theorem proxy_success_delcall_spawn :
   simpa [proxySuccessParent, proxySuccessChild,
     show (0 : B256).toNat = 0 by decide,
     show (32 : B256).toNat = 32 by decide] using
-    (Xinst.step_delcall_spawn h_stk proxy_success_h_ext
+    (Xinst.step_delegatecall_spawn h_stk proxy_success_h_ext
       proxy_success_h_del proxy_success_h_acc h_split
       proxy_success_h_gas proxy_success_h_depth)
 
-private theorem proxy_success_delcall_allChildRoots {post : Devm} :
+private theorem proxy_success_delegatecall_allChildRoots {post : Devm} :
     ninstAllChildRoots
       (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
       (sevm := initSevm proxyMsgSuccess) (devm := proxyCallPreSuccess)
-      (n := .exec .delcall) (devm' := post) := by
-  exact ninstAllChildRoots_of_exec_spawn proxy_success_delcall_spawn
+      (n := .exec .delegatecall) (devm' := post) := by
+  exact ninstAllChildRoots_of_exec_spawn proxy_success_delegatecall_spawn
     proxy_success_child_enters (by
       intro raw child
       exact proxy_success_child_frame_roots child)
 
-private theorem proxy_success_delcall :
+private theorem proxy_success_delegatecall :
     ∃ childPost post,
       childPost.output = implReturnWord.toBytes ∧
       childPost.gasLeft = 0 ∧
@@ -532,7 +532,7 @@ private theorem proxy_success_delcall :
       childPost.transientStorage = proxyCallPreSuccess.transientStorage ∧
       childPost.logs = proxyCallPreSuccess.logs ∧
       Ninst.RunCompiled (initSevm proxyMsgSuccess) proxyCallPreSuccess
-        (.exec .delcall) post ∧
+        (.exec .delegatecall) post ∧
       post = (((incorporateChildOnSuccess proxySuccessParent childPost
         childPost.output).setMach
           ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory,
@@ -593,7 +593,7 @@ private theorem proxy_success_delcall :
             rw [hlogs]
             rfl
           · constructor
-            · apply Ninst.runCompiled_delcall h_stk
+            · apply Ninst.runCompiled_delegatecall h_stk
               · exact proxy_success_h_ext
               · exact h_del
               · exact proxy_success_h_acc
@@ -711,7 +711,7 @@ private theorem proxy_success_tail (childPost : Devm)
           decide
         rw [hm]
         decide
-      have hrun := Func.runCompiledTo_ret_word
+      have hrun := Func.runCompiledTo_return_word
         (fs := [proxyFallback]) (sevm := initSevm proxyMsgSuccess)
         (devm := base.setMach ⟨[0, 32], proxySuccessParent.memory.write 0
           implReturnWord.toBytes, 318⟩)
@@ -748,7 +748,7 @@ private theorem proxy_success_func_run :
       final.transientStorage = proxyCallPreSuccess.transientStorage ∧
       final.logs = proxyCallPreSuccess.logs := by
   obtain ⟨childPost, post, hout, hgas, hstate, htra, hlogs, hcall, hpost,
-      _hstack, _hmemory, _hcallgas, _hreturnData⟩ := proxy_success_delcall
+      _hstack, _hmemory, _hcallgas, _hreturnData⟩ := proxy_success_delegatecall
   obtain ⟨final, htail, hfout, hfgas, hfstate, hftra, hflogs⟩ :=
     proxy_success_tail childPost hout hstate htra hlogs
   rw [hpost] at hcall
@@ -759,7 +759,7 @@ private theorem proxy_success_func_run :
       ((initDevm proxyMsgSuccess).setMach ⟨[], Mem.empty, 27223⟩)
       (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
         pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
-        pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+        pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
         proxySuccessTail) (.ok final)
     proxy_rooted_run [9]
     all_goals simp_all
@@ -787,10 +787,10 @@ private theorem proxy_success_func_run :
           simp [proxySuccessTail, proxyReturnTail, funcExecFree, Ninst.pushB256])
       have known : proxyRootedRun [proxyFallback]
           (initSevm proxyMsgSuccess) proxyCallPreSuccess
-          (delcall ::: proxySuccessTail) (.ok final) := by
+          (delegatecall ::: proxySuccessTail) (.ok final) := by
         refine ⟨Func.RunCompiledTo.next hcall htail, ?_⟩
         exact rootedRunCompiledTo.next (step := hcall) (tail := htail)
-          proxy_success_delcall_allChildRoots tailRooted
+          proxy_success_delegatecall_allChildRoots tailRooted
       simpa only [proxyCallPreSuccess, Devm.setMach_setMach,
         Devm.addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
         Devm.memory_setMach, h_stk, hslot, hmem] using known
@@ -892,7 +892,7 @@ private def proxyRevertParent : Devm :=
   callSpawnParent proxyRevertD1 24744 0 32 0 0
 
 private def proxyRevertChild : Msg :=
-  delcallSpawnMsg (initSevm proxyMsgRevert) proxyRevertParent 22144
+  delegatecallSpawnMsg (initSevm proxyMsgRevert) proxyRevertParent 22144
     implAdr 0 32 implGuardedCode false
 
 private theorem proxy_revert_child_enters :
@@ -1078,8 +1078,8 @@ private theorem proxy_revert_h_depth :
     (initSevm proxyMsgRevert).depth ≠ 0 := by
   decide
 
-private theorem proxy_revert_delcall_spawn :
-    Xinst.step (initSevm proxyMsgRevert) proxyCallPreRevert .delcall =
+private theorem proxy_revert_delegatecall_spawn :
+    Xinst.step (initSevm proxyMsgRevert) proxyCallPreRevert .delegatecall =
       .spawn (Frame.ofCall proxyRevertChild)
         (.call proxyRevertParent 0 0) := by
   have h_stk : proxyCallPreRevert.stack =
@@ -1095,21 +1095,21 @@ private theorem proxy_revert_delcall_spawn :
   simpa [proxyRevertParent, proxyRevertChild,
     show (0 : B256).toNat = 0 by decide,
     show (32 : B256).toNat = 32 by decide] using
-    (Xinst.step_delcall_spawn h_stk proxy_revert_h_ext
+    (Xinst.step_delegatecall_spawn h_stk proxy_revert_h_ext
       proxy_revert_h_del proxy_revert_h_acc h_split
       proxy_revert_h_gas proxy_revert_h_depth)
 
-private theorem proxy_revert_delcall_allChildRoots {post : Devm} :
+private theorem proxy_revert_delegatecall_allChildRoots {post : Devm} :
     ninstAllChildRoots
       (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
       (sevm := initSevm proxyMsgRevert) (devm := proxyCallPreRevert)
-      (n := .exec .delcall) (devm' := post) := by
-  exact ninstAllChildRoots_of_exec_spawn proxy_revert_delcall_spawn
+      (n := .exec .delegatecall) (devm' := post) := by
+  exact ninstAllChildRoots_of_exec_spawn proxy_revert_delegatecall_spawn
     proxy_revert_child_enters (by
       intro raw child
       exact proxy_revert_child_frame_roots child)
 
-private theorem proxy_revert_delcall :
+private theorem proxy_revert_delegatecall :
     ∃ childPost post,
       childPost.error.isSome = true ∧
       childPost.output = [] ∧ childPost.gasLeft = 22117 ∧
@@ -1117,7 +1117,7 @@ private theorem proxy_revert_delcall :
       childPost.transientStorage = proxyCallPreRevert.transientStorage ∧
       childPost.logs = proxyCallPreRevert.logs ∧
       Ninst.RunCompiled (initSevm proxyMsgRevert) proxyCallPreRevert
-        (.exec .delcall) post ∧
+        (.exec .delegatecall) post ∧
       post = (((incorporateChildOnError proxyRevertParent childPost
         childPost.output).setMach
           ⟨0 :: proxyRevertParent.stack, proxyRevertParent.memory,
@@ -1200,7 +1200,7 @@ private theorem proxy_revert_delcall :
               rw [hlogs]
               rfl
             · constructor
-              · apply Ninst.runCompiled_delcall h_stk
+              · apply Ninst.runCompiled_delegatecall h_stk
                 · exact proxy_revert_h_ext
                 · exact h_del
                 · exact proxy_revert_h_acc
@@ -1276,7 +1276,7 @@ private theorem proxy_revert_tail (childPost : Devm)
       decide
     case h_arm =>
       dsimp [final]
-      have hrun := Func.runCompiledTo_rev
+      have hrun := Func.runCompiledTo_revert
         (fs := [proxyFallback]) (sevm := initSevm proxyMsgRevert)
         (devm := base.setMach ⟨[0, 0], proxyRevertParent.memory, 22439⟩)
         (i := 0) (sz := 0) (s := []) (out := []) (G := 22439)
@@ -1323,7 +1323,7 @@ private theorem proxy_revert_func_run :
       final.transientStorage = proxyCallPreRevert.transientStorage ∧
       final.logs = proxyCallPreRevert.logs := by
   obtain ⟨childPost, post, hce, hout, hgas, hstate, htra, hlogs, hcall, hpost,
-      _hstack, _hmemory, _hcallgas, _hreturnData⟩ := proxy_revert_delcall
+      _hstack, _hmemory, _hcallgas, _hreturnData⟩ := proxy_revert_delegatecall
   obtain ⟨final, htail, hfout, hfgas, hfstate, hftra, hflogs⟩ :=
     proxy_revert_tail childPost hout hstate htra
   rw [hpost] at hcall
@@ -1334,7 +1334,7 @@ private theorem proxy_revert_func_run :
       ((initDevm proxyMsgRevert).setMach ⟨[], Mem.empty, 27223⟩)
       (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
         pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
-        pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+        pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
         proxySuccessTail) (.error (.revert, final))
     proxy_rooted_run [9]
     all_goals simp_all
@@ -1362,10 +1362,10 @@ private theorem proxy_revert_func_run :
           simp [proxySuccessTail, proxyReturnTail, funcExecFree, Ninst.pushB256])
       have known : proxyRootedRun [proxyFallback]
           (initSevm proxyMsgRevert) proxyCallPreRevert
-          (delcall ::: proxySuccessTail) (.error (.revert, final)) := by
+          (delegatecall ::: proxySuccessTail) (.error (.revert, final)) := by
         refine ⟨Func.RunCompiledTo.next hcall htail, ?_⟩
         exact rootedRunCompiledTo.next (step := hcall) (tail := htail)
-          proxy_revert_delcall_allChildRoots tailRooted
+          proxy_revert_delegatecall_allChildRoots tailRooted
       simpa only [proxyCallPreRevert, Devm.setMach_setMach,
         Devm.addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
         Devm.memory_setMach, h_stk, hslot, hmem] using known

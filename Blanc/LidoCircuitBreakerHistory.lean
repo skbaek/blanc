@@ -306,8 +306,8 @@ theorem call {k : Nat} {g : Func}
     subst heq
     exact (hg hrun).trans (funext (getStor_eq_of_state_eq hburn.state.symm))
 
-/-- `Func.rev` has no successful run at all. -/
-theorem rev : StorFixed dp Func.rev := fun h => absurd h not_run_rev
+/-- `Func.revert` has no successful run at all. -/
+theorem revert : StorFixed dp Func.revert := fun h => absurd h not_run_revert
 
 end StorFixed
 
@@ -340,10 +340,10 @@ post-callback entry list with the entry list. -/
 
 /-- The reverting fallback and every reverting auxiliary target have no
 successful run at all, so their obligation is vacuous. -/
-private theorem funcSound_rev (dp : DeployParams) (ca : Adr) :
-    (registrySpec dp).FuncSound ca aux Func.rev := by
+private theorem funcSound_revert (dp : DeployParams) (ca : Adr) :
+    (registrySpec dp).FuncSound ca aux Func.revert := by
   intro _ _ _ _ _ _ _ h_run
-  exact absurd h_run not_run_rev
+  exact absurd h_run not_run_revert
 
 /-- `Sound` for the exact runtime, reduced to one obligation per dispatch
 target.  The five-instruction payable/calldata-size guard, the `fsig` selector
@@ -380,7 +380,7 @@ theorem registrySpec_sound_of_funcSound (dp : DeployParams) (ca : Adr)
   have h_wf₁ : Mem.Wf s₁.memory := by
     rw [← Line.of_inv Devm.memory (by line_inv) h₁]; exact h_wf₀
   clear h_pre₀ h_wf₀ h₁ run s₀
-  obtain ⟨s₂, h_pop, run₂⟩ := of_run_branch_rev run₁
+  obtain ⟨s₂, h_pop, run₂⟩ := of_run_branch_revert run₁
   have h_pre₂ : (registrySpec dp).Pre ca sevm s₂ :=
     h_pre₁.state_eq h_pop.state.symm
   have h_wf₂ : Mem.Wf s₂.memory := by rw [← h_pop.memory]; exact h_wf₁
@@ -394,8 +394,8 @@ theorem registrySpec_sound_of_funcSound (dp : DeployParams) (ca : Adr)
       (congrFun (Line.of_inv Devm.getStor (by line_inv) h₃).symm ca)
   have h_wf₃ : Mem.Wf s₃.memory := by
     rw [← Line.of_inv Devm.memory (by line_inv) h₃]; exact h_wf₂
-  exact post_of_run_hybridDispatch (k := fallbackSlot) (fallback := Func.rev)
-    rfl (funcSound_rev dp ca) (funcs dp) h_all ⟨h_ca, h_pre₃, h_wf₃, ih'⟩ run₃
+  exact post_of_run_hybridDispatch (k := fallbackSlot) (fallback := Func.revert)
+    rfl (funcSound_revert dp ca) (funcs dp) h_all ⟨h_ca, h_pre₃, h_wf₃, ih'⟩ run₃
 
 end LidoCircuitBreaker
 

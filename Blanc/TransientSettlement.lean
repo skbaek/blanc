@@ -258,7 +258,7 @@ theorem directCall_zero_spawn
   rw [h_del] at hf
   exact hf.transientStorage.symm
 
-/-- A STATICCALL's exact child message, tied to the actual `.statcall` edge. -/
+/-- A STATICCALL's exact child message, tied to the actual `.staticcall` edge. -/
 theorem directStatcall_spawn
     {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
@@ -277,9 +277,9 @@ theorem directStatcall_spawn
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
     let parent := callSpawnParent d1 (mcc + ext)
       iiw.toNat isw.toNat oiw.toNat osw.toNat
-    let child := statcallSpawnMsg sevm parent mcs tw.toAdr dadr
+    let child := staticcallSpawnMsg sevm parent mcs tw.toAdr dadr
       iiw.toNat isw.toNat code dp
-    Xinst.step sevm devm .statcall =
+    Xinst.step sevm devm .staticcall =
         .spawn (Frame.ofCall child) (.call parent oiw.toNat osw.toNat) ∧
       child.currentTarget = tw.toAdr ∧
       child.codeAddress = some dadr ∧
@@ -288,7 +288,7 @@ theorem directStatcall_spawn
       child.isStatic = true ∧
       child.tenv.transientStorage = devm.transientStorage := by
   dsimp only
-  refine ⟨Xinst.step_statcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+  refine ⟨Xinst.step_staticcall_spawn h_stk h_ext h_del h_acc h_split h_gas
     h_depth, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩
   have hf := accessDelegation_instructionFrame
     (addAccessedAddress
@@ -296,7 +296,7 @@ theorem directStatcall_spawn
   rw [h_del] at hf
   exact hf.transientStorage.symm
 
-/-- A DELEGATECALL's exact child message, tied to the actual `.delcall` edge.
+/-- A DELEGATECALL's exact child message, tied to the actual `.delegatecall` edge.
 Where the three siblings above put the popped operand in the storage-owner
 slot, this one puts `sevm.currentTarget`: the running account keeps its own
 storage while `dadr` supplies the code alone, and `caller`/`value` are the
@@ -321,9 +321,9 @@ theorem directDelcall_spawn
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
     let parent := callSpawnParent d1 (mcc + ext)
       iiw.toNat isw.toNat oiw.toNat osw.toNat
-    let child := delcallSpawnMsg sevm parent mcs dadr
+    let child := delegatecallSpawnMsg sevm parent mcs dadr
       iiw.toNat isw.toNat code dp
-    Xinst.step sevm devm .delcall =
+    Xinst.step sevm devm .delegatecall =
         .spawn (Frame.ofCall child) (.call parent oiw.toNat osw.toNat) ∧
       child.currentTarget = sevm.currentTarget ∧
       child.codeAddress = some dadr ∧
@@ -332,7 +332,7 @@ theorem directDelcall_spawn
       child.isStatic = sevm.isStatic ∧
       child.tenv.transientStorage = devm.transientStorage := by
   dsimp only
-  refine ⟨Xinst.step_delcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+  refine ⟨Xinst.step_delegatecall_spawn h_stk h_ext h_del h_acc h_split h_gas
     h_depth, rfl, rfl, rfl, rfl, rfl, ?_, ?_⟩
   · exact Bool.false_or _
   · have hf := accessDelegation_instructionFrame

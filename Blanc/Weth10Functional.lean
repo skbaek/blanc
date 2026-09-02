@@ -290,7 +290,7 @@ theorem run_body_of_run_nonpayable_frame_logs
     prefix_of_iszero hiz hpv
   rcases of_run_branch hbranch with
     ⟨s2, hpop, hrev⟩ | ⟨w, s2, s3, hnz, hpop, hburn, hbody⟩
-  · exact absurd hrev not_run_rev
+  · exact absurd hrev not_run_revert
   · have hpop' := hpop.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpop'
     rw [hpop'] at hpflag
@@ -473,9 +473,9 @@ lemma of_returnWord {fs : List Func} {sevm : Sevm} {s r : Devm}
     ((Ninst.Hinv.inv (f := Devm.getCode) r1).trans
       (Line.of_inv Devm.getCode (by line_inv) h2)).trans
       (Line.of_inv Devm.getCode (by line_inv) h3)
-  refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
+  refine ⟨?_, hgc.trans (of_run_return_val hu2 h).2⟩
   show Devm.output r = _
-  rw [(of_run_ret_val hu2 h).1,
+  rw [(of_run_return_val hu2 h).1,
     show (0 : B256).toNat = 0 from rfl,
     show (32 : B256).toNat = 32 from rfl,
     Mem.Reads.read (hm3 ▸ hrd2) 0 32,

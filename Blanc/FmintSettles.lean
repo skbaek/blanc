@@ -1065,12 +1065,12 @@ returndata checks, and the repayment.  `flashLoanFromCall` is definitionally
 `Ninst.call ::: flashLoanFromFlag`, which the `example` below pins. -/
 def flashLoanFromFlag : Func :=
   Ninst.iszero :::
-  .rev <?>
-  retdataShorterThan 32 +++
-  .rev <?>
-  checkRetdataHead erc3156Magic 0 +++
+  .revert <?>
+  returnDataShorterThan 32 +++
+  .revert <?>
+  checkReturnDataHead erc3156Magic 0 +++
   Ninst.iszero :::
-  .rev <?>
+  .revert <?>
   spendAllowanceThenBurn
 
 example : flashLoanFromCall = Ninst.call ::: flashLoanFromFlag := rfl
@@ -1210,9 +1210,9 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
       = (d1.gasLeft - 0 - acc) - (d1.gasLeft - 0 - acc) / 64 from rfl]
     exact le_trans (Nat.min_le_right _ _) (by omega)
   have h_gcross : (mcs + acc) + 0 ≤ d1.gasLeft := by omega
-  have h_ret := le_retained_of_calculateMsgCallGas_zero h_afford h_split
-  have h_K_ret : K ≤ d1.gasLeft - (mcs + acc + 0) := by
-    rw [hd1g'] at h_ret ⊢
+  have h_return := le_retained_of_calculateMsgCallGas_zero h_afford h_split
+  have h_K_return : K ≤ d1.gasLeft - (mcs + acc + 0) := by
+    rw [hd1g'] at h_return ⊢
     have h64 : 64 * K ≤ G - 0 - acc := by omega
     have h2 : K ≤ (G - 0 - acc) / 64 := by omega
     omega
@@ -1238,7 +1238,7 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
       rw [hP', callSpawnParent_memory, hd1m', Mem.extends_covered h_cov]
     have hP'g : P'.gasLeft = d1.gasLeft - (mcs + acc + 0) := by
       rw [hP', callSpawnParent_gasLeft]
-    have hP'K : K ≤ P'.gasLeft := by rw [hP'g]; exact h_K_ret
+    have hP'K : K ≤ P'.gasLeft := by rw [hP'g]; exact h_K_return
     have hroom : P'.stack.length < 1024 := by simp [hP's]
     rcases henter : (Frame.ofCall msg').enter with r | cevm
     · -- the frame resolves without entering: a precompile, or the transfer
@@ -1332,16 +1332,16 @@ lemma execSat_flagZero_leaf {sevm : Sevm} {d : Devm} {amount receiver : B256}
       (d.setMach ⟨0 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
   apply Func.execSat_of_runCompiledTo
   · func_run (2) [1]
-    exact Func.runCompiledTo_rev_func (G := Gc - 21)
+    exact Func.runCompiledTo_revert_func (G := Gc - 21)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
   · exact hP _
 
 /-- **The returndata-short leaf.**  The callback settled clean but answered
-fewer than 32 bytes: `retdataShorterThan 32` fires before any word is read —
-`retdatacopy` would abort the frame rather than fail a test — and `flashLoan`
+fewer than 32 bytes: `returnDataShorterThan 32` fires before any word is read —
+`returndatacopy` would abort the frame rather than fail a test — and `flashLoan`
 deliberately reverts. -/
-lemma execSat_retdataShort_leaf {sevm : Sevm} {d : Devm}
+lemma execSat_returnDataShort_leaf {sevm : Sevm} {d : Devm}
     {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
     (h_rd : d.returnData.length < 32)
     (h_gas : 42 ≤ Gc)
@@ -1358,16 +1358,16 @@ lemma execSat_retdataShort_leaf {sevm : Sevm} {d : Devm}
     exact h_rd
   apply Func.execSat_of_runCompiledTo
   · func_run (6) [0, 1]
-    exact Func.runCompiledTo_rev_func (G := Gc - 42)
+    exact Func.runCompiledTo_revert_func (G := Gc - 42)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
   · exact hP _
 
-/-- The word `checkRetdataHead erc3156Magic 0` reads back: the head word of the
-returndata, through the image `retdatacopy` wrote into memory word `0`.  Named
+/-- The word `checkReturnDataHead erc3156Magic 0` reads back: the head word of the
+returndata, through the image `returndatacopy` wrote into memory word `0`.  Named
 so the magic-mismatch premise and the assembly's case split are stated over the
 same term. -/
-def flashLoanRetdataHead (d : Devm) (M : Mem) : B256 :=
+def flashLoanReturnDataHead (d : Devm) (M : Mem) : B256 :=
   ((M.write ((0 * 32 : B256)).toNat
     (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32) (0 : UInt8))).read
       ((0 * 32 : B256)).toNat 32).1.toB256
@@ -1375,11 +1375,11 @@ def flashLoanRetdataHead (d : Devm) (M : Mem) : B256 :=
 set_option maxRecDepth 608 in
 /-- **The magic-mismatch leaf.**  The callback settled clean with a full word
 of returndata, but the head word is not `erc3156Magic`: `flashLoan` reads the
-word back through `retdatacopy`/`mload` and deliberately reverts. -/
+word back through `returndatacopy`/`mload` and deliberately reverts. -/
 lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
     {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
     (h_ge : (Nat.toB256 d.returnData.length <? (32 : B256)) = 0)
-    (h_neq : (erc3156Magic =? flashLoanRetdataHead d M) = 0)
+    (h_neq : (erc3156Magic =? flashLoanReturnDataHead d M) = 0)
     (h32 : M.size % 32 = 0)
     (h_msz : 64 ≤ M.size)
     (h_gas : 82 ≤ Gc)
@@ -1421,15 +1421,15 @@ lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
         rw [hs1, show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
         omega)]
       decide
-    · exact Func.runCompiledTo_rev_func (G := Gc - 82)
+    · exact Func.runCompiledTo_revert_func (G := Gc - 82)
         (by simp only [Devm.gasLeft_setMach, gBase]; omega)
         (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
             omega)
   · exact hP _
 
-/-- The lower bound `retdataShorterThan 32` establishes in the negative
-direction, in the shape the `retdatacopy` arm's guard wants. -/
-lemma retdata_bound_of_not_short {d : Devm}
+/-- The lower bound `returnDataShorterThan 32` establishes in the negative
+direction, in the shape the `returndatacopy` arm's guard wants. -/
+lemma returnData_bound_of_not_short {d : Devm}
     (h_ge : (Nat.toB256 d.returnData.length <? (32 : B256)) = 0) :
     B256.toNat 0 + B256.toNat 32 ≤ d.returnData.length := by
   have h1 : ¬ Nat.toB256 d.returnData.length < (32 : B256) := by
@@ -1444,9 +1444,9 @@ lemma retdata_bound_of_not_short {d : Devm}
   rw [show B256.toNat 0 + B256.toNat 32 = 32 from by decide]
   omega
 
-/-- The `retdatacopy` of `checkRetdataHead` keeps the size of the image it
+/-- The `returndatacopy` of `checkReturnDataHead` keeps the size of the image it
 writes into. -/
-lemma flashLoanRetdataImage_size {d : Devm} {M : Mem} (h_msz : 64 ≤ M.size) :
+lemma flashLoanReturnDataImage_size {d : Devm} {M : Mem} (h_msz : 64 ≤ M.size) :
     (M.write ((0 * 32 : B256)).toNat
       (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
         (0 : UInt8))).size = M.size := by
@@ -1458,14 +1458,14 @@ lemma flashLoanRetdataImage_size {d : Devm} {M : Mem} (h_msz : 64 ≤ M.size) :
 
 set_option maxRecDepth 605 in
 /-- **Into the repayment.**  The flag is `1` and both returndata checks pass:
-the walk crosses `retdataShorterThan 32` and `checkRetdataHead erc3156Magic 0`
+the walk crosses `returnDataShorterThan 32` and `checkReturnDataHead erc3156Magic 0`
 and hands the continuation the state entering `spendAllowanceThenBurn` — the
 memory image a variable with only its size pinned (F8), the gas account
 exact. -/
 lemma execSat_spend_step {sevm : Sevm} {d : Devm}
     {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
     (h_ge : (Nat.toB256 d.returnData.length <? (32 : B256)) = 0)
-    (h_eq : (erc3156Magic =? flashLoanRetdataHead d M) = 1)
+    (h_eq : (erc3156Magic =? flashLoanReturnDataHead d M) = 1)
     (h32 : M.size % 32 = 0)
     (h_msz : 64 ≤ M.size)
     (h_gas : 77 ≤ Gc)
@@ -1475,12 +1475,12 @@ lemma execSat_spend_step {sevm : Sevm} {d : Devm}
           spendAllowanceThenBurn P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
       (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
-  have h_len := retdata_bound_of_not_short h_ge
+  have h_len := returnData_bound_of_not_short h_ge
   have h_eq' : (erc3156Magic =?
       ((M.write ((0 * 32 : B256)).toNat
         (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
           (0 : UInt8))).read ((0 * 32 : B256)).toNat 32).1.toB256) = 1 := h_eq
-  have hs1 := flashLoanRetdataImage_size (d := d) (M := M) h_msz
+  have hs1 := flashLoanReturnDataImage_size (d := d) (M := M) h_msz
   have hs' : (((M.write ((0 * 32 : B256)).toNat
       (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
         (0 : UInt8))).read ((0 * 32 : B256)).toNat 32).2).size = M.size := by
@@ -1513,7 +1513,7 @@ def spendFromHash : Func :=
   ( pop ::: pop :::
     .call burnSlot ) <?>
   ( dup 2 ::: dup 1 ::: lt :::
-    .rev <?>
+    .revert <?>
     dup 2 ::: swap 0 ::: sub :::
     swap 0 ::: sstore :::
     .call burnSlot )
@@ -1523,9 +1523,9 @@ example : spendAllowanceThenBurn =
     dup 1 ::: mstoreAt 0 +++
     address ::: mstoreAt 1 +++
     pushList [64, 0] +++
-    kec :::
+    keccak256 :::
     checkSlotCollides +++
-    .rev <?>
+    .revert <?>
     spendFromHash := rfl
 
 /-- **Through the collision guard.**  The allowance key is hashed and collides
@@ -1633,7 +1633,7 @@ lemma execSat_slotCollision_leaf {sevm : Sevm} {d : Devm}
         rw [hw2, show B256.toNat 0 + B256.toNat 64 = 64 from by decide]
         omega)]
       decide
-    · exact Func.runCompiledTo_rev_func (G := Gc - 113)
+    · exact Func.runCompiledTo_revert_func (G := Gc - 113)
         (by simp only [Devm.gasLeft_setMach, gBase]; omega)
         (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
             omega)
@@ -1672,7 +1672,7 @@ lemma execSat_allowanceLow_leaf {sevm : Sevm} {d : Devm}
       omega
     apply Func.execSat_of_runCompiledTo
     · func_run (8) [~~~ amnt, 0, 1]
-      exact Func.runCompiledTo_rev_func (G := G - 49)
+      exact Func.runCompiledTo_revert_func (G := G - 49)
         (by simp only [Devm.gasLeft_setMach, gBase]; omega)
         (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
             omega)
@@ -1814,7 +1814,7 @@ lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
     have hG : 27 ≤ G1 := by omega
     apply Func.execSat_of_runCompiledTo
     · func_run (4) [1]
-      exact Func.runCompiledTo_rev_func (G := G1 - 27)
+      exact Func.runCompiledTo_revert_func (G := G1 - 27)
         (by simp only [Devm.gasLeft_setMach, gBase]; omega)
         (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
             omega)
@@ -1939,7 +1939,7 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
                       rw [hs2,
                         show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
                       omega)
-                  · exact Func.runCompiledTo_ret_word rfl
+                  · exact Func.runCompiledTo_return_word rfl
                       (Devm.extCost_zero_of_le (by rw [hs3]; exact h32) (by
                         rw [hs3, show ((0 : B256)).toNat + ((32 : B256)).toNat
                           = 32 from by decide]
@@ -1964,7 +1964,7 @@ it subsumes the EIP-2200 `gCallStipend < gasLeft` sentry — `gCallStipend =
 2300 < 20000` — so clearing the sentry costs the bound nothing extra. -/
 
 /-- The flag test and both returndata checks, flag `1`, both passing: the
-`ISZERO`/branch, `retdataShorterThan 32`, and `checkRetdataHead` with its
+`ISZERO`/branch, `returnDataShorterThan 32`, and `checkReturnDataHead` with its
 `RETURNDATACOPY` of one covered word.  77 gas. -/
 def flashLoanFlagCheckGas : Nat :=
   gVerylow + (gVerylow + gHigh)
@@ -2021,11 +2021,11 @@ def flashLoanContGasMax : Nat :=
 of `LOG3`, 42 of `KECCAK256`, and 304 of control flow. -/
 theorem flashLoanContGasMax_eq : flashLoanContGasMax = 68402 := by decide
 
-/-- Term-keyed sibling of `execSat_retdataShort_leaf`, for the assembly's
+/-- Term-keyed sibling of `execSat_returnDataShort_leaf`, for the assembly's
 case split: the machine compares `Nat.toB256 d.returnData.length` — the
 *wrapped* length — against 32, so exhaustive coverage splits on that
 comparison and not on the bare `Nat` bound, which the model does not cap. -/
-lemma execSat_retdataShort_leaf' {sevm : Sevm} {d : Devm}
+lemma execSat_returnDataShort_leaf' {sevm : Sevm} {d : Devm}
     {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
     (h_lt : (Nat.toB256 d.returnData.length <? (32 : B256)) = 1)
     (h_gas : 42 ≤ Gc)
@@ -2034,7 +2034,7 @@ lemma execSat_retdataShort_leaf' {sevm : Sevm} {d : Devm}
       (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
   apply Func.execSat_of_runCompiledTo
   · func_run (6) [0, 1]
-    exact Func.runCompiledTo_rev_func (G := Gc - 42)
+    exact Func.runCompiledTo_revert_func (G := Gc - 42)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)
@@ -2103,7 +2103,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
   · intro dd Gc hK hEr
     rw [flashLoanContGasMax_eq] at hK
     by_cases hLen : Nat.toB256 dd.returnData.length < (32 : B256)
-    · refine execSat_retdataShort_leaf' ?_ (by omega)
+    · refine execSat_returnDataShort_leaf' ?_ (by omega)
         (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
       rw [show (Nat.toB256 dd.returnData.length <? (32 : B256))
         = if Nat.toB256 dd.returnData.length < 32 then (1 : B256) else 0
@@ -2117,21 +2117,21 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
       have hmszc : 64 ≤ (flashLoanCallMem sevm amount data).size := by
         rw [flashLoanCallMem_size]; omega
       by_cases hMagic : erc3156Magic
-          = flashLoanRetdataHead dd (flashLoanCallMem sevm amount data)
+          = flashLoanReturnDataHead dd (flashLoanCallMem sevm amount data)
       case neg =>
         refine execSat_magicMismatch_leaf h_ge ?_ h32c hmszc (by omega)
           (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
-        rw [show (erc3156Magic =? flashLoanRetdataHead dd
+        rw [show (erc3156Magic =? flashLoanReturnDataHead dd
             (flashLoanCallMem sevm amount data))
-          = if erc3156Magic = flashLoanRetdataHead dd
+          = if erc3156Magic = flashLoanReturnDataHead dd
               (flashLoanCallMem sevm amount data) then (1 : B256) else 0
           from rfl, if_neg hMagic]
       case pos =>
-        have h_eq : (erc3156Magic =? flashLoanRetdataHead dd
+        have h_eq : (erc3156Magic =? flashLoanReturnDataHead dd
             (flashLoanCallMem sevm amount data)) = 1 := by
-          rw [show (erc3156Magic =? flashLoanRetdataHead dd
+          rw [show (erc3156Magic =? flashLoanReturnDataHead dd
               (flashLoanCallMem sevm amount data))
-            = if erc3156Magic = flashLoanRetdataHead dd
+            = if erc3156Magic = flashLoanReturnDataHead dd
                 (flashLoanCallMem sevm amount data) then (1 : B256) else 0
             from rfl, if_pos hMagic]
         refine execSat_spend_step h_ge h_eq h32c hmszc (by omega) ?_
@@ -2282,7 +2282,7 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
 
 /-! ## The two guard-failure walks the strengthening needs
 
-`Blanc/FmintReverts.lean` walks guard (0) — `token ≠ self` — to `Func.rev`.
+`Blanc/FmintReverts.lean` walks guard (0) — `token ≠ self` — to `Func.revert`.
 The unguarded form of the headline needs the other two pre-`CALL` guards
 walked the same way, so that a call which fails any of them is *still* inside
 the trichotomy (a deliberate revert), and the three guard premises can be
@@ -2345,7 +2345,7 @@ theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
                 List.length_nil]; omega)
               (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh,
                 gJumpdest]; omega) ?_
-            exact Func.runCompiledTo_rev_func (G := g - 167)
+            exact Func.runCompiledTo_revert_func (G := g - 167)
               (by simp only [Devm.gasLeft_setMach, gBase]; omega)
               (by simp only [Devm.stack_setMach, List.length_cons,
                 List.length_nil]; omega)),
@@ -2463,7 +2463,7 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
         then (1 : B256) else 0) = 1
       rw [if_pos h_lt]
     func_run (3) [~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot), 1]
-    exact Func.runCompiledTo_rev_func (G := G - 24)
+    exact Func.runCompiledTo_revert_func (G := G - 24)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)

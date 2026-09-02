@@ -180,10 +180,10 @@ theorem v2Entries_selectorUnique : selectorUnique v2Entries := by
   all_goals decide +kernel
 
 def v1Prog : Prog :=
-  ⟨fsig +++ linearDispatchWith 0 v1Entries, [Func.rev]⟩
+  ⟨fsig +++ linearDispatchWith 0 v1Entries, [Func.revert]⟩
 
 def v2Prog : Prog :=
-  ⟨fsig +++ linearDispatchWith 0 v2Entries, [Func.rev]⟩
+  ⟨fsig +++ linearDispatchWith 0 v2Entries, [Func.revert]⟩
 
 def v1Bytes : Bytes := (Prog.compile v1Prog).getD []
 def v2Bytes : Bytes := (Prog.compile v2Prog).getD []

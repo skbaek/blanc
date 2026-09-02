@@ -315,8 +315,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Jaune.Devm.setStorVal target
   | "goal-shape:terminal-return-revert" =>
       return head == some `Blanc.Func.RunCompiledTo &&
-        (proofRecipeContainsName `Jaune.Linst.ret target ||
-          proofRecipeContainsName `Jaune.Linst.rev target)
+        (proofRecipeContainsName `Jaune.Linst.return_ target ||
+          proofRecipeContainsName `Jaune.Linst.revert target)
   | "goal-shape:constant-error-guard" =>
       return head == some `Blanc.Func.RunCompiledTo &&
         proofRecipeContainsName `Blanc.Func.branch target &&

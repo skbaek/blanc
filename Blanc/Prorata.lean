@@ -81,7 +81,7 @@ def deposit : Func :=
   callvalue ::: selfbalance ::: sub ::: -- B₀ :: fₐ :: M :: U
   dup 0 ::: dup 3 ::: lt ::: dup 2 ::: add :::
     -- (fₐ+fᴮ) :: B₀ :: fₐ :: M :: U, fᴮ=(M <? B₀)
-  .rev <?> -- [either pre-arithmetic magnitude guard failed: revert]
+  .revert <?> -- [either pre-arithmetic magnitude guard failed: revert]
            -- B₀ :: 0 :: M :: U
   pushB256 1 ::: add ::: -- (B₀+1) :: 0 :: M :: U
   dup 3 ::: sload ::: -- S :: (B₀+1) :: 0 :: M :: U
@@ -91,7 +91,7 @@ def deposit : Func :=
   dup 2 ::: swap 0 ::: div ::: -- m :: S :: (B₀+1) :: 0 :: M :: U
   dup 1 ::: dup 1 ::: add ::: -- (S+m) :: m :: S :: (B₀+1) :: 0 :: M :: U
   dup 0 ::: dup 6 ::: lt ::: -- (M <? S+m) :: (S+m) :: m :: S :: (B₀+1) :: 0 :: M :: U
-  .rev <?> -- [post-deposit supply above maxSupply: revert]
+  .revert <?> -- [post-deposit supply above maxSupply: revert]
            -- (S+m) :: m :: S :: (B₀+1) :: 0 :: M :: U
   dup 6 ::: sstore ::: -- m :: S :: (B₀+1) :: 0 :: M :: U
                         -- [total supply is now up to date]
@@ -121,13 +121,13 @@ def withdraw : Func :=
   pushMaxWord +++ -- U=supplySlot
   arg 0 +++ dup 0 ::: caller ::: sload ::: -- bal :: s :: s :: U
   dup 1 ::: dup 1 ::: lt ::: -- (bal <? s) :: bal :: s :: s
-  .rev <?> -- [insufficient share balance: revert]
+  .revert <?> -- [insufficient share balance: revert]
            -- bal :: s :: s :: U
   sub ::: caller ::: sstore ::: -- s :: U
                                 -- [caller share balance is now up to date]
   selfbalance ::: dup 0 ::: dup 3 ::: pushB256 130 ::: shr ::: lt :::
     -- (maxBalance <? B) :: B :: s :: U
-  .rev <?> -- [balance above maxBalance: revert]
+  .revert <?> -- [balance above maxBalance: revert]
            -- B :: s :: U
   pushB256 1 ::: add ::: -- (B+1) :: s :: U
   dup 1 ::: mul ::: -- s·(B+1) :: s :: U
@@ -141,7 +141,7 @@ def withdraw : Func :=
                         --  state fully settled before the send]
   dup 0 ::: -- p :: p :: S :: (S+offset) :: s :: U
   sendToCaller +++ -- success? :: p :: S :: (S+offset) :: s :: U
-  (mstoreAt 0 +++ returnMemoryRange 0 32) <?> .rev
+  (mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert
   -- [revert if the send failed; otherwise return p]
 
 -- convertToShares(uint256 a) — view --
@@ -155,7 +155,7 @@ def convertToShares : Func :=
     -- fₐ :: a :: M :: U, where fₐ=(maxValue <? a)
   selfbalance ::: dup 0 ::: dup 4 ::: lt ::: dup 2 ::: add :::
     -- (fₐ+fᴮ) :: B :: fₐ :: a :: M :: U, fᴮ=(M <? B)
-  .rev <?> -- [either pre-arithmetic magnitude guard failed: revert]
+  .revert <?> -- [either pre-arithmetic magnitude guard failed: revert]
            -- B :: 0 :: a :: M :: U
   pushB256 1 ::: add ::: -- (B+1) :: 0 :: a :: M :: U
   dup 4 ::: sload ::: -- S :: (B+1) :: 0 :: a :: M :: U
@@ -165,7 +165,7 @@ def convertToShares : Func :=
   dup 2 ::: swap 0 ::: div ::: -- m :: S :: (B+1) :: 0 :: a :: M :: U
   dup 1 ::: dup 1 ::: add ::: -- (S+m) :: m :: S :: (B+1) :: 0 :: a :: M :: U
   dup 6 ::: lt ::: -- (M <? S+m) :: m :: S :: (B+1) :: 0 :: a :: M :: U
-  .rev <?> -- [hypothetical post-deposit supply above maxSupply: revert]
+  .revert <?> -- [hypothetical post-deposit supply above maxSupply: revert]
            -- m :: S :: (B+1) :: 0 :: a :: M :: U
   mstoreAt 0 +++ returnMemoryRange 0 32
 
@@ -181,7 +181,7 @@ def convertToAssets : Func :=
     -- fₛ :: s :: M :: U, where fₛ=(maxSupply <? s)
   selfbalance ::: dup 0 ::: dup 4 ::: lt ::: dup 2 ::: add :::
     -- (fₛ+fᴮ) :: B :: fₛ :: s :: M :: U, fᴮ=(M <? B)
-  .rev <?> -- [either pre-arithmetic magnitude guard failed: revert]
+  .revert <?> -- [either pre-arithmetic magnitude guard failed: revert]
            -- B :: 0 :: s :: M :: U
   pushB256 1 ::: add ::: -- (B+1) :: 0 :: s :: M :: U
   dup 2 ::: mul ::: -- s·(B+1) :: 0 :: s :: M :: U
@@ -196,7 +196,7 @@ def convertToAssets : Func :=
 -- fallback, so it must separate the two ways a call gets here: empty
 -- calldata is a donation and succeeds; any unmatched selector reverts.
 def donate : Func :=
-  calldatasize ::: .rev <?> Func.stop
+  calldatasize ::: .revert <?> Func.stop
 
 -- main --
 

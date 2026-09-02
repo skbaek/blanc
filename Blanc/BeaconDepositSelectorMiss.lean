@@ -228,7 +228,7 @@ theorem unmatched_selector_noRawSstore
   obtain ⟨hmain', hmainSafe'⟩ := mainPack
   let hbranch : Func.RunCompiledTo
       (runtime.main :: runtime.aux) sevm afterSize
-      (Func.main tree <?> Func.rev) out :=
+      (Func.main tree <?> Func.revert) out :=
     .succ hnonempty hroom hpop hmain'
   have hbranchSafe : Func.RunCompiledTo.NoRawSstorePath hbranch := by
     dsimp only [hbranch]

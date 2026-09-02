@@ -386,7 +386,7 @@ private def proxyParent (m : Msg) (atCallGas callCost : Nat) : Devm :=
 
 private def proxyChild
     (m : Msg) (atCallGas callCost childGas : Nat) : Msg :=
-  delcallSpawnMsg (initSevm m) (proxyParent m atCallGas callCost) childGas
+  delegatecallSpawnMsg (initSevm m) (proxyParent m atCallGas callCost) childGas
     implAdr 0 32 implGuardedCode false
 
 private theorem proxyCopiedMemory_size (m : Msg)
@@ -795,7 +795,7 @@ private theorem proxyCall_accessCost
 @[simp] private theorem proxyD1_gasLeft (m : Msg) (atCallGas : Nat) :
     (proxyD1 m atCallGas).gasLeft = atCallGas := rfl
 
-private theorem proxy_delcall_crossing
+private theorem proxy_delegatecall_crossing
     (m : Msg) (atCallGas callCost childGas : Nat)
     (premises : CorrespondencePremises m)
     (budget : ForwardBudgetWitness m.gas atCallGas callCost childGas)
@@ -809,7 +809,7 @@ private theorem proxy_delcall_crossing
             (exec (initEvm
               (proxyChild m atCallGas callCost childGas)))) = .ok post →
         Ninst.RunCompiled (initSevm m) (proxyCallPre m atCallGas)
-          (.exec .delcall) post := by
+          (.exec .delegatecall) post := by
   have h_stk : (proxyCallPre m atCallGas).stack =
       Nat.toB256 atCallGas :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
     rw [proxyCallPre_stack]
@@ -836,7 +836,7 @@ private theorem proxy_delcall_crossing
       (initSevm m).benvStat.rules.isPrecomp implAdr = false := by
     exact premises.implementationNotPrecompile
   obtain ⟨henter, _, _, _, _, hrun⟩ :=
-    delcall_enters_with_parent_as_storage_owner h_stk h_ext h_del h_acc
+    delegatecall_enters_with_parent_as_storage_owner h_stk h_ext h_del h_acc
       h_split h_gas h_depth h_nonprecompile
   have h0 : (0 : B256).toNat = 0 := by decide
   have h32 : (32 : B256).toNat = 32 := by decide
@@ -854,7 +854,7 @@ private def proxySuccessResume
       (proxyParent m atCallGas callCost).gasLeft + childPost.gasLeft⟩).memWrite
     0 (childPost.output.take 0))
 
-private theorem proxy_delcall_success
+private theorem proxy_delegatecall_success
     (m : Msg) (atCallGas callCost childGas : Nat)
     (premises : CorrespondencePremises m)
     (budget : ForwardBudgetWitness m.gas atCallGas callCost childGas)
@@ -873,7 +873,7 @@ private theorem proxy_delcall_success
         childPost.transientStorage = m.tenv.transientStorage ∧
         childPost.logs = [] ∧
         Ninst.RunCompiled (initSevm m) (proxyCallPre m atCallGas)
-          (.exec .delcall)
+          (.exec .delegatecall)
           (proxySuccessResume m atCallGas callCost childPost) := by
   obtain ⟨childPost, hchild, herr, hout, hgas, hstate, htra, hlogs⟩ :=
     proxyChild_exec_nonzero m atCallGas callCost childGas premises
@@ -898,7 +898,7 @@ private theorem proxy_delcall_success
       decide
     rw [hsettle, Resume.run_call_ok h_ok hroom]
     rfl
-  have hcross := proxy_delcall_crossing m atCallGas callCost childGas
+  have hcross := proxy_delegatecall_crossing m atCallGas callCost childGas
     premises budget implementationInstalled
   refine ⟨childPost, hchild, herr, hout, hgas, hstate, htra, hlogs, ?_⟩
   exact hcross.2 _ hresume
@@ -912,7 +912,7 @@ private def proxyErrorResume
       (proxyParent m atCallGas callCost).gasLeft + childPost.gasLeft⟩).memWrite
     0 (childPost.output.take 0))
 
-private theorem proxy_delcall_revert
+private theorem proxy_delegatecall_revert
     (m : Msg) (atCallGas callCost childGas : Nat)
     (premises : CorrespondencePremises m)
     (budget : ForwardBudgetWitness m.gas atCallGas callCost childGas)
@@ -927,7 +927,7 @@ private theorem proxy_delcall_revert
         childPost.transientStorage = m.tenv.transientStorage ∧
         childPost.logs = [] ∧
         Ninst.RunCompiled (initSevm m) (proxyCallPre m atCallGas)
-          (.exec .delcall)
+          (.exec .delegatecall)
           (proxyErrorResume m atCallGas callCost childPost) := by
   let child := proxyChild m atCallGas callCost childGas
   obtain ⟨raw, hchild, _, hout, hgas, _, _, hlogs⟩ :=
@@ -950,7 +950,7 @@ private theorem proxy_delcall_revert
       decide
     rw [hsettle, Resume.run_call_err hce hroom]
     rfl
-  have hcross := proxy_delcall_crossing m atCallGas callCost childGas
+  have hcross := proxy_delegatecall_crossing m atCallGas callCost childGas
     premises budget implementationInstalled
   refine ⟨childPost, rfl, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · change raw.output = []
@@ -964,7 +964,7 @@ private theorem proxy_delcall_revert
   · apply hcross.2 _
     simpa [child] using hresume
 
-private theorem proxy_delcall_halt
+private theorem proxy_delegatecall_halt
     (m : Msg) (atCallGas callCost childGas : Nat)
     (premises : CorrespondencePremises m)
     (budget : ForwardBudgetWitness m.gas atCallGas callCost childGas)
@@ -981,7 +981,7 @@ private theorem proxy_delcall_halt
         childPost.transientStorage = m.tenv.transientStorage ∧
         childPost.logs = [] ∧
         Ninst.RunCompiled (initSevm m) (proxyCallPre m atCallGas)
-          (.exec .delcall)
+          (.exec .delegatecall)
           (proxyErrorResume m atCallGas callCost childPost) := by
   let child := proxyChild m atCallGas callCost childGas
   obtain ⟨raw, hchild, _, _, hlogs⟩ :=
@@ -1003,7 +1003,7 @@ private theorem proxy_delcall_halt
       decide
     rw [hsettle, Resume.run_call_err hce hroom]
     rfl
-  have hcross := proxy_delcall_crossing m atCallGas callCost childGas
+  have hcross := proxy_delegatecall_crossing m atCallGas callCost childGas
     premises budget implementationInstalled
   refine ⟨childPost, rfl, rfl, rfl, rfl, rfl, ?_, ?_⟩
   · change raw.logs = []
@@ -1113,7 +1113,7 @@ private theorem proxy_success_tail
         rw [hm]
         decide
       rw [show resumeGas - 33 = finalGas by rfl]
-      exact Func.runCompiledTo_ret_word_at_zero [proxyFallback] (initSevm m) base
+      exact Func.runCompiledTo_return_word_at_zero [proxyFallback] (initSevm m) base
         (parent.memory.write 0 implReturnWord.toBytes) finalGas
         implReturnWord.toBytes hfinalext hread
   · rfl
@@ -1184,7 +1184,7 @@ private theorem proxy_error_tail
               (B256.toNat 0) 0) = parent.memory := by
         rw [hslice]
         rfl
-      have hrun := Func.runCompiledTo_rev_empty_at_zero [proxyFallback] (initSevm m) base
+      have hrun := Func.runCompiledTo_revert_empty_at_zero [proxyFallback] (initSevm m) base
         parent.memory finalGas
       rw [show resumeGas - 29 = finalGas by rfl]
       simpa [hmemzero, show Nat.toB256 0 = (0 : B256) by decide] using hrun
@@ -1210,14 +1210,14 @@ private theorem proxy_prefix
     {result : Execution}
     (rest : Func.RunCompiledTo [proxyFallback] (initSevm m)
       (proxyCallPre m atCallGas)
-      (delcall ::: proxySuccessTail) result) :
+      (delegatecall ::: proxySuccessTail) result) :
     Func.RunCompiledTo [proxyFallback] (initSevm m)
       (proxyEntry m atCallGas) proxyFallback result := by
   change Func.RunCompiledTo [proxyFallback] (initSevm m)
     (proxyEntry m atCallGas)
     (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
       pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
-      pushB256 implementationSlotLit ::: sload ::: gas ::: delcall :::
+      pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
       proxySuccessTail) result
   func_run [9]
   all_goals simp_all [proxyEntry, gBase, gVerylow, gasCopy,
@@ -1303,7 +1303,7 @@ private theorem proxy_exec_success
       final.transientStorage = m.tenv.transientStorage ∧
       final.logs = [] := by
   obtain ⟨childPost, _, _, hout, hgas, hstate, htra, hlogs, hcall⟩ :=
-    proxy_delcall_success m atCallGas callCost childGas premises budget
+    proxy_delegatecall_success m atCallGas callCost childGas premises budget
       implementationInstalled hstatic hdata
   obtain ⟨final, htail, hfout, hferror, hfstate, hftra, hflogs⟩ :=
     proxy_success_tail m atCallGas callCost childGas premises budget
@@ -1333,7 +1333,7 @@ private theorem proxy_exec_revert
       final.transientStorage = m.tenv.transientStorage ∧
       final.logs = [] := by
   obtain ⟨childPost, _, hout, hgas, hstate, htra, _, hcall⟩ :=
-    proxy_delcall_revert m atCallGas callCost childGas premises budget
+    proxy_delegatecall_revert m atCallGas callCost childGas premises budget
       implementationInstalled hdata
   have htailEnough : proxyErrorTailGas32 ≤
       (atCallGas - callCost) + childPost.gasLeft := by
@@ -1368,7 +1368,7 @@ private theorem proxy_exec_halt
       final.transientStorage = m.tenv.transientStorage ∧
       final.logs = [] := by
   obtain ⟨childPost, _, hout, hgas, hstate, htra, _, hcall⟩ :=
-    proxy_delcall_halt m atCallGas callCost childGas premises budget
+    proxy_delegatecall_halt m atCallGas callCost childGas premises budget
       implementationInstalled hstatic hdata
   have htailEnough : proxyErrorTailGas32 ≤
       (atCallGas - callCost) + childPost.gasLeft := by

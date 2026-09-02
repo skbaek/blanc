@@ -92,7 +92,7 @@ def storeWord (idx : B256) (push : Line) : Line :=
 `[0, 4 + 32n)`, landing one 32-byte return word at `RET_WORD`.
 `( -- success )`. -/
 def callBack (n : B256) : Line :=
-  pushList [32, RET_WORD * 32] ++    -- retSize=32 :: retOffset=0x200
+  pushList [32, RET_WORD * 32] ++    -- returnSize=32 :: returnOffset=0x200
   [pushB256 (4 + 32 * n)] ++         -- argsSize
   [pushB256 CALL_ARGS_OFFSET] ++     -- argsOffset
   [pushB256 0] ++                    -- value = 0
@@ -149,7 +149,7 @@ the calldata-building region above -- then hash exactly `len` bytes starting
 at the payload. `( -- hash )`. -/
 def hashData : Line :=
   forwardArgTail 4 20 ++             -- len, payload landed at word 21
-  [pushB256 (21 * 32), kec]          -- hash
+  [pushB256 (21 * 32), keccak256]          -- hash
 
 /-- The shared observation prologue every non-reverting borrower opens with.
 Six calldata-derived slots, then two calls back into the token to capture
@@ -199,7 +199,7 @@ def compliantBorrower : Func :=
 
 /-- **1b. Compliant, overlong return.** Identical, but returns 64 bytes
 instead of 32. ERC-3156 pins only the head word (proposal D4 step 5,
-`Blanc.Fmint.checkRetdataHead`), so a correct head with a longer payload must
+`Blanc.Fmint.checkReturnDataHead`), so a correct head with a longer payload must
 still be accepted -- the "overlong with a correct head" case the evidence
 plan's returndata spectrum names. -/
 def compliantOverlongBorrower : Func :=
@@ -217,16 +217,16 @@ def wrongMagicBorrower : Func :=
   pushB256 (Fmint.erc3156Magic + 1) ::: mstoreAt 0 +++
   returnMemoryRange 0 32
 
-/-- **3. Reverting.** `Func.rev` alone: the callback `CALL` fails outright,
+/-- **3. Reverting.** `Func.revert` alone: the callback `CALL` fails outright,
 before this borrower's code does anything at all -- a clean instance of
-`Blanc.Fmint.flashLoan`'s `iszero ::: .rev <?>` guard on the callback's own
+`Blanc.Fmint.flashLoan`'s `iszero ::: .revert <?>` guard on the callback's own
 success flag. No `Prog` wrapper needed at the call site since a bare `Func`
 compiles standalone; see `revertingBorrowerProg` below. -/
-def revertingBorrower : Func := Func.rev
+def revertingBorrower : Func := Func.revert
 
 -- 4. (EOA receiver) -- no Blanc program: an externally-owned account has
 -- no code at all, so `CALL`ing it "succeeds" with zero return data, which
--- fails `Blanc.Fmint.flashLoan`'s `retdataShorterThan 32` guard. The zoo has
+-- fails `Blanc.Fmint.flashLoan`'s `returnDataShorterThan 32` guard. The zoo has
 -- no entry for this member; the fixture generator gives the receiver
 -- address empty `code`.
 
@@ -284,7 +284,7 @@ def reentrantBorrower : Func :=
     pushB256 1 ::: pushB256 DEPTH_SLOT ::: sstore :::
     (buildFlashLoanEmpty [address] [caller] [pushB256 1] ++ callBack 5) +++
     iszero :::
-    .rev <?>                          -- [the nested flashLoan must succeed]
+    .revert <?>                          -- [the nested flashLoan must succeed]
     (buildApprove [caller] owedWad ++ callBack 2 ++ [pop]) +++
     returnMagic 32
   )

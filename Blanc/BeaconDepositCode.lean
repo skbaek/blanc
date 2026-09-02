@@ -63,7 +63,7 @@ private def isSstore : Ninst → Bool
   | _ => false
 
 private def isStaticcall : Ninst → Bool
-  | .exec .statcall => true
+  | .exec .staticcall => true
   | _ => false
 
 private def isLog1 : Ninst → Bool
@@ -169,7 +169,7 @@ theorem runtimeLog1SourceSites_pcs :
 theorem runtimeExternalExecutionSourceSites_all_staticcall :
     (runtimeExternalExecutionSourceSites.all fun site =>
       match site.instruction with
-      | .exec .statcall => true
+      | .exec .staticcall => true
       | _ => false) = true := by
   decide +kernel
 

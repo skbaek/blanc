@@ -113,7 +113,7 @@ lemma prefix_of_allowanceKeyFromMemory_val {e : Sevm} {xs : Stack}
   have hp2 : (0 : B256) :: 64 :: xs <<+ s2.stack := prefix_of_push hb0 hp1
   have hm2 : s.memory = s2.memory := hb64.memory.trans hb0.memory
   rcases Line.of_run_cons run2 with ⟨s3, hkec, run3⟩
-  rcases prefix_of_kec_val hkec hp2 with ⟨hp3, _⟩
+  rcases prefix_of_keccak256_val hkec hp2 with ⟨hp3, _⟩
   change (s2.memory.read 0 64).1.keccak :: xs <<+ s3.stack at hp3
   rw [← hm2, hread] at hp3
   rcases Line.of_run_cons run3 with ⟨s4, hpushMask, run4⟩
@@ -298,12 +298,12 @@ theorem of_permitSignerGuards_raw_frame (dp : DeployParams)
       have hf : f = invalidPermitError := by
         simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
       subst f
-      exact absurd hrev Func.not_run_revWith
+      exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
       simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-! ## The raw nonce prefix -/
 
@@ -562,7 +562,7 @@ theorem of_permitStructPrepare_raw {sevm : Sevm} {s t : Devm} {xs : Stack}
     exact hwf5
   rcases Line.of_run_cons run with ⟨s8, q8, hnil⟩
   cases hnil
-  rcases prefix_of_kec_val q8 hp7 with ⟨hp8, hm8⟩
+  rcases prefix_of_keccak256_val q8 hp7 with ⟨hp8, hm8⟩
   refine ⟨⟨_, hp8⟩, ?_⟩
   rw [hm8]
   exact hwf7.extend _ _
@@ -664,7 +664,7 @@ theorem of_recoverPermitSigner_raw
   rcases Line.of_run_cons run with ⟨u, qstat, htail⟩
   have hcross : (∃ w : B256, w :: xs <<+ u.stack) ∧
       Devm.getStor u = Devm.getStor q := by
-    rcases of_run_statcall_val_with_depth_cause hpq qstat with
+    rcases of_run_staticcall_val_with_depth_cause hpq qstat with
         hfail | hsuccess
     · rcases hfail with ⟨hpU, hworld, _⟩
       refine ⟨⟨0, hpU⟩, ?_⟩
@@ -897,7 +897,7 @@ def PermitStatcallRegionSilent (sevm : Sevm) (code : Adr → ByteArray) : Prop :
     Devm.getCode u = code →
     gasWord :: (1 : B256) :: (0 : B256) :: (128 : B256) ::
       (128 : B256) :: (32 : B256) :: tail <<+ u.stack →
-    Ninst.Run sevm u Ninst.statcall v →
+    Ninst.Run sevm u Ninst.staticcall v →
     ∀ key, InRegion .allowance key →
       (Devm.getStor v sevm.currentTarget).get key =
         (Devm.getStor u sevm.currentTarget).get key
@@ -933,7 +933,7 @@ theorem of_recoverPermitSigner_raw_region
         (Devm.getStor q sevm.currentTarget).get key :=
     hsilent hcodePrep.symm hpq qstat
   have hpU : ∃ w : B256, w :: xs <<+ u.stack := by
-    rcases of_run_statcall_val_with_depth hpq qstat with hfail | hsuccess
+    rcases of_run_staticcall_val_with_depth hpq qstat with hfail | hsuccess
     · exact ⟨0, hfail.1⟩
     · rcases hsuccess with
         ⟨parent, _child, _xl, _dpFlag, _na, _code, _avail,

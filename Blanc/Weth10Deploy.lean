@@ -1188,7 +1188,7 @@ private def permitCorePrefix : Line :=
   [Ninst.pushB256 1, Ninst.add, Ninst.swap 0, Ninst.sstore, Ninst.pop,
     Ninst.pushB256 PERMIT_TYPEHASH] ++ mstoreAt 0 ++
   argCopy 1 0 3 ++ arg 3 ++ mstoreAt 5 ++
-  pushList [192, 0] ++ [Ninst.kec, Ninst.dup 1]
+  pushList [192, 0] ++ [Ninst.keccak256, Ninst.dup 1]
 
 private def permitDynamicPath : Func :=
   Ninst.swap 0 ::: calculateDomainSeparator +++ .call permitRecoverSlot
@@ -1318,32 +1318,32 @@ private theorem nonpayablePermitByteAt_eq_zero_0_131
   change
     Func.byteAtByShape locations n
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (permit (⟨0, 0⟩ : DeployParams))).compileShape
-        (nonpayablePrefix +++ Func.branch Func.rev (permit dp)) i 0 =
+        (nonpayablePrefix +++ Func.branch Func.revert (permit dp)) i 0 =
       Func.byteAtByShape locations n
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (permit (⟨0, 0⟩ : DeployParams))).compileShape
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (permit (⟨0, 0⟩ : DeployParams))) i 0
   have hprefix : prefixByteSize nonpayablePrefix = 2 := by decide +kernel
-  have hrev : Func.rev.compileShape.byteSize = 3 := by decide +kernel
+  have hrev : Func.revert.compileShape.byteSize = 3 := by decide +kernel
   by_cases hpre : i < 2
   · apply byteAt_prepend_eq_prefix
     simpa only [hprefix] using hpre
   · conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (permit (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev (permit dp))
+      (p := Func.branch Func.revert (permit dp))
       (i := i) (d := 0) (by omega)]
     conv_rhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (permit (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev
+      (p := Func.branch Func.revert
         (permit (⟨0, 0⟩ : DeployParams)))
       (i := i) (d := 0) (by omega)]
     simp only [hprefix]
@@ -1352,19 +1352,19 @@ private theorem nonpayablePermitByteAt_eq_zero_0_131
       simpa only [hrev] using hbranch
     · change
         Func.byteAtByShape locations (n + 2)
-            (.branch Func.rev.compileShape
+            (.branch Func.revert.compileShape
               (permit (⟨0, 0⟩ : DeployParams)).compileShape)
-            (.branch Func.rev (permit dp)) (i - 2) 0 =
+            (.branch Func.revert (permit dp)) (i - 2) 0 =
           Func.byteAtByShape locations (n + 2)
-            (.branch Func.rev.compileShape
+            (.branch Func.revert.compileShape
               (permit (⟨0, 0⟩ : DeployParams)).compileShape)
-            (.branch Func.rev
+            (.branch Func.revert
               (permit (⟨0, 0⟩ : DeployParams))) (i - 2) 0
-      rw [byteAt_branch_to_right locations (n + 2) Func.rev
-          (permit (⟨0, 0⟩ : DeployParams)) Func.rev (permit dp)
+      rw [byteAt_branch_to_right locations (n + 2) Func.revert
+          (permit (⟨0, 0⟩ : DeployParams)) Func.revert (permit dp)
           (i - 2) 0 (by simp only [hrev, Nat.reduceAdd]; omega),
-        byteAt_branch_to_right locations (n + 2) Func.rev
-          (permit (⟨0, 0⟩ : DeployParams)) Func.rev
+        byteAt_branch_to_right locations (n + 2) Func.revert
+          (permit (⟨0, 0⟩ : DeployParams)) Func.revert
           (permit (⟨0, 0⟩ : DeployParams)) (i - 2) 0
           (by simp only [hrev, Nat.reduceAdd]; omega)]
       simp only [hrev]
@@ -1924,31 +1924,31 @@ private theorem nonpayableDeploymentChainIdByteAt_word
   change
     Func.byteAtByShape locations n
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (deploymentChainId
               (⟨0, 0⟩ : DeployParams))).compileShape
         (nonpayablePrefix +++
-          Func.branch Func.rev (deploymentChainId dp)) (11 + j) 0 = _
+          Func.branch Func.revert (deploymentChainId dp)) (11 + j) 0 = _
   have hpreSize : prefixByteSize nonpayablePrefix = 2 := by decide +kernel
-  have hrevSize : Func.rev.compileShape.byteSize = 3 := by decide +kernel
+  have hrevSize : Func.revert.compileShape.byteSize = 3 := by decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (deploymentChainId (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev (deploymentChainId dp))
+      (p := Func.branch Func.revert (deploymentChainId dp))
       (i := 11 + j) (d := 0) (by rw [hpreSize]; omega)]
   simp only [hpreSize]
   change
     Func.byteAtByShape locations (n + 2)
-        (.branch Func.rev.compileShape
+        (.branch Func.revert.compileShape
           (deploymentChainId
             (⟨0, 0⟩ : DeployParams)).compileShape)
-        (.branch Func.rev (deploymentChainId dp)) (11 + j - 2) 0 = _
+        (.branch Func.revert (deploymentChainId dp)) (11 + j - 2) 0 = _
   conv_lhs => rw [byteAt_branch_to_right
       (locations := locations) (n := n + 2)
-      (left0 := Func.rev)
+      (left0 := Func.revert)
       (right0 := deploymentChainId (⟨0, 0⟩ : DeployParams))
-      (left := Func.rev) (right := deploymentChainId dp)
+      (left := Func.revert) (right := deploymentChainId dp)
       (i := 11 + j - 2) (d := 0) (by rw [hrevSize]; omega)]
   simp only [hrevSize]
   have hi : 11 + j - 2 - (5 + 3) = 1 + j := by omega
@@ -2212,50 +2212,50 @@ private theorem deploymentChainIdLeafByteAt_eq_zero_58_64
   simp only [hcall]
   change
     Func.byteAtByShape locations (n + 15)
-        (nonpayablePrefix +++ Func.branch Func.rev
+        (nonpayablePrefix +++ Func.branch Func.revert
           (deploymentChainId (⟨0, 0⟩ : DeployParams))).compileShape
-        (nonpayablePrefix +++ Func.branch Func.rev
+        (nonpayablePrefix +++ Func.branch Func.revert
           (deploymentChainId dp)) (i - 15) 0 =
       Func.byteAtByShape locations (n + 15)
-        (nonpayablePrefix +++ Func.branch Func.rev
+        (nonpayablePrefix +++ Func.branch Func.revert
           (deploymentChainId (⟨0, 0⟩ : DeployParams))).compileShape
-        (nonpayablePrefix +++ Func.branch Func.rev
+        (nonpayablePrefix +++ Func.branch Func.revert
           (deploymentChainId (⟨0, 0⟩ : DeployParams))) (i - 15) 0
   have hnonpayable : prefixByteSize nonpayablePrefix = 2 := by
     decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n + 15) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (deploymentChainId (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev (deploymentChainId dp))
+      (p := Func.branch Func.revert (deploymentChainId dp))
       (i := i - 15) (d := 0) (by rw [hnonpayable]; omega)]
   conv_rhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n + 15) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (deploymentChainId (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev
+      (p := Func.branch Func.revert
         (deploymentChainId (⟨0, 0⟩ : DeployParams)))
       (i := i - 15) (d := 0) (by rw [hnonpayable]; omega)]
   simp only [hnonpayable]
-  have hrev : Func.rev.compileShape.byteSize = 3 := by decide +kernel
+  have hrev : Func.revert.compileShape.byteSize = 3 := by decide +kernel
   change
     Func.byteAtByShape locations (n + 17)
-        (.branch Func.rev.compileShape
+        (.branch Func.revert.compileShape
           (deploymentChainId
             (⟨0, 0⟩ : DeployParams)).compileShape)
-        (.branch Func.rev (deploymentChainId dp)) (i - 15 - 2) 0 =
+        (.branch Func.revert (deploymentChainId dp)) (i - 15 - 2) 0 =
       Func.byteAtByShape locations (n + 17)
-        (.branch Func.rev.compileShape
+        (.branch Func.revert.compileShape
           (deploymentChainId
             (⟨0, 0⟩ : DeployParams)).compileShape)
-        (.branch Func.rev
+        (.branch Func.revert
           (deploymentChainId (⟨0, 0⟩ : DeployParams)))
         (i - 15 - 2) 0
-  rw [byteAt_branch_to_right locations (n + 17) Func.rev
-      (deploymentChainId (⟨0, 0⟩ : DeployParams)) Func.rev
+  rw [byteAt_branch_to_right locations (n + 17) Func.revert
+      (deploymentChainId (⟨0, 0⟩ : DeployParams)) Func.revert
       (deploymentChainId dp) (i - 15 - 2) 0 (by rw [hrev]; omega),
-    byteAt_branch_to_right locations (n + 17) Func.rev
-      (deploymentChainId (⟨0, 0⟩ : DeployParams)) Func.rev
+    byteAt_branch_to_right locations (n + 17) Func.revert
+      (deploymentChainId (⟨0, 0⟩ : DeployParams)) Func.revert
       (deploymentChainId (⟨0, 0⟩ : DeployParams))
       (i - 15 - 2) 0 (by rw [hrev]; omega)]
   simp only [hrev]
@@ -2584,29 +2584,29 @@ private theorem nonpayablePermitByteAt_chainWord
   change
     Func.byteAtByShape locations n
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (permit (⟨0, 0⟩ : DeployParams))).compileShape
-        (nonpayablePrefix +++ Func.branch Func.rev (permit dp))
+        (nonpayablePrefix +++ Func.branch Func.revert (permit dp))
         (131 + j) 0 = _
   have hpreSize : prefixByteSize nonpayablePrefix = 2 := by decide +kernel
-  have hrevSize : Func.rev.compileShape.byteSize = 3 := by decide +kernel
+  have hrevSize : Func.revert.compileShape.byteSize = 3 := by decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (permit (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev (permit dp))
+      (p := Func.branch Func.revert (permit dp))
       (i := 131 + j) (d := 0) (by rw [hpreSize]; omega)]
   simp only [hpreSize]
   change
     Func.byteAtByShape locations (n + 2)
-        (.branch Func.rev.compileShape
+        (.branch Func.revert.compileShape
           (permit (⟨0, 0⟩ : DeployParams)).compileShape)
-        (.branch Func.rev (permit dp)) (131 + j - 2) 0 = _
+        (.branch Func.revert (permit dp)) (131 + j - 2) 0 = _
   conv_lhs => rw [byteAt_branch_to_right
       (locations := locations) (n := n + 2)
-      (left0 := Func.rev)
+      (left0 := Func.revert)
       (right0 := permit (⟨0, 0⟩ : DeployParams))
-      (left := Func.rev) (right := permit dp)
+      (left := Func.revert) (right := permit dp)
       (i := 131 + j - 2) (d := 0) (by rw [hrevSize]; omega)]
   simp only [hrevSize]
   have hi : 131 + j - 2 - (5 + 3) = 121 + j := by omega
@@ -3392,7 +3392,7 @@ def weth10InitPreHashLine (runtimeLength : Nat) : Line :=
 /-- Hash the completed deployment preimage. -/
 def weth10InitHashLine (runtimeLength : Nat) : Line :=
   let scratch := align32 runtimeLength
-  [initPush2Inst 160, initPush2Inst scratch, Ninst.kec]
+  [initPush2Inst 160, initPush2Inst scratch, Ninst.keccak256]
 
 /-- Patch the two cached-domain-separator words and discard the retained hash. -/
 def weth10InitSeparatorLine : Line :=
@@ -3417,7 +3417,7 @@ private def deploymentSuccessLine
 straight-line phases followed by `RETURN`. -/
 def weth10InitSuccess
     (runtimeLength codeOffset : Nat) : Func :=
-  deploymentSuccessLine runtimeLength codeOffset +++ Func.ret
+  deploymentSuccessLine runtimeLength codeOffset +++ Func.return_
 
 /-- The Blanc constructor's successful arm exposed as its six independently
 checkable straight-line phases. -/
@@ -3428,14 +3428,14 @@ theorem weth10InitSuccess_eq_phases :
           (weth10InitPreHashLine 6313 +++
             (weth10InitHashLine 6313 +++
               (weth10InitSeparatorLine +++
-                (weth10InitReturnLine 6313 +++ Func.ret))))) := by
+                (weth10InitReturnLine 6313 +++ Func.return_))))) := by
   rfl
 
 /-- The exact Blanc presentation of the hand-emitted constructor prefix. -/
 def weth10InitFunc : Func :=
   Ninst.callvalue ::: Ninst.iszero :::
     (weth10InitSuccess 6313 177 <?>
-      Func.rev)
+      Func.revert)
 
 private def lineByteSize (xs : Line) : Nat :=
   (xs.map Ninst.size).sum
@@ -3463,24 +3463,24 @@ private lemma deploymentSuccess_compile
     (entries : List (Nat × Func)) (n : Nat) :
     Func.compile entries n (weth10InitSuccess 6313 177) =
       some ((deploymentSuccessLine 6313 177).flatMap Ninst.toBytes ++
-        [Linst.toUInt8 .ret]) := by
+        [Linst.toUInt8 .return_]) := by
   unfold weth10InitSuccess
   apply Func.compile_prepend_of
   rfl
 
 private lemma deploymentReject_compile
     (entries : List (Nat × Func)) (n : Nat) :
-    Func.compile entries n Func.rev = some [0x5f, 0x5f, 0xfd] := by
+    Func.compile entries n Func.revert = some [0x5f, 0x5f, 0xfd] := by
   rfl
 
 private lemma deploymentBranch_compile (entries : List (Nat × Func)) :
     Func.compile entries 2
-        (weth10InitSuccess 6313 177 <?> Func.rev) =
+        (weth10InitSuccess 6313 177 <?> Func.revert) =
       some ([0x61, 0, 9, 0x57, 0x5f, 0x5f, 0xfd, 0x5b] ++
         (deploymentSuccessLine 6313 177).flatMap Ninst.toBytes ++
-        [Linst.toUInt8 .ret]) := by
+        [Linst.toUInt8 .return_]) := by
   change Func.compile entries 2
-    (Func.branch Func.rev (weth10InitSuccess 6313 177)) = _
+    (Func.branch Func.revert (weth10InitSuccess 6313 177)) = _
   simp only [Func.compile]
   rw [deploymentReject_compile entries 6]
   simp only [bind, Option.bind, pure, List.length_cons, List.length_nil,
@@ -3498,13 +3498,13 @@ theorem weth10InitFunc_compile :
   change Func.compile
     (table 0
       [Ninst.callvalue ::: Ninst.iszero :::
-        (weth10InitSuccess 6313 177 <?> Func.rev)])
+        (weth10InitSuccess 6313 177 <?> Func.revert)])
     0
     ([Ninst.callvalue, Ninst.iszero] +++
-      (weth10InitSuccess 6313 177 <?> Func.rev)) = some weth10InitPrefix
+      (weth10InitSuccess 6313 177 <?> Func.revert)) = some weth10InitPrefix
   rw [Func.compile_prepend_of
     (xs := [Ninst.callvalue, Ninst.iszero])
-    (f := weth10InitSuccess 6313 177 <?> Func.rev)
+    (f := weth10InitSuccess 6313 177 <?> Func.revert)
     (deploymentBranch_compile _)]
   have hprefix : weth10InitPrefix = deploymentPrefix 6313 177 := by
     unfold weth10InitPrefix
@@ -3517,11 +3517,11 @@ theorem weth10InitFunc_compile :
 walk depends only on the compiled prefix and may safely ignore the appended
 runtime-data suffix. -/
 theorem weth10InitFunc_noCalls : weth10InitFunc.NoCalls := by
-  change Func.rev.NoCalls ∧ (weth10InitSuccess 6313 177).NoCalls
+  change Func.revert.NoCalls ∧ (weth10InitSuccess 6313 177).NoCalls
   constructor
-  · simp [Func.rev, Func.NoCalls]
+  · simp [Func.revert, Func.NoCalls]
   · unfold weth10InitSuccess
-    exact Func.NoCalls.prepend _ (by simp [Func.ret, Func.NoCalls])
+    exact Func.NoCalls.prepend _ (by simp [Func.return_, Func.NoCalls])
 
 end Weth10
 

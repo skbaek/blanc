@@ -146,9 +146,9 @@ theorem Exec.Frame.attributionInner_eq_nil_of_name
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (nameLine +++ Func.last .ret)) ∈ weth10Funcs dp := by
+      nonpayable (nameLine +++ Func.last .return_)) ∈ weth10Funcs dp := by
     rw [hselector]
-    have hshape : nonpayable (nameLine +++ Func.last .ret) =
+    have hshape : nonpayable (nameLine +++ Func.last .return_) =
         nonpayable name := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -200,9 +200,9 @@ theorem Exec.Frame.attributionInner_eq_nil_of_symbol
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (symbolLine +++ Func.last .ret)) ∈ weth10Funcs dp := by
+      nonpayable (symbolLine +++ Func.last .return_)) ∈ weth10Funcs dp := by
     rw [hselector]
-    have hshape : nonpayable (symbolLine +++ Func.last .ret) =
+    have hshape : nonpayable (symbolLine +++ Func.last .return_) =
         nonpayable symbol := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -254,10 +254,10 @@ theorem Exec.Frame.attributionInner_eq_nil_of_decimals
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (returnWordLine 0x12 +++ Func.last .ret)) ∈
+      nonpayable (returnWordLine 0x12 +++ Func.last .return_)) ∈
         weth10Funcs dp := by
     rw [hselector]
-    have hshape : nonpayable (returnWordLine 0x12 +++ Func.last .ret) =
+    have hshape : nonpayable (returnWordLine 0x12 +++ Func.last .return_) =
         nonpayable decimals := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -312,11 +312,11 @@ theorem Exec.Frame.attributionInner_eq_nil_of_permitTypehash
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (returnWordLine PERMIT_TYPEHASH +++ Func.last .ret)) ∈
+      nonpayable (returnWordLine PERMIT_TYPEHASH +++ Func.last .return_)) ∈
         weth10Funcs dp := by
     rw [hselector]
     have hshape :
-        nonpayable (returnWordLine PERMIT_TYPEHASH +++ Func.last .ret) =
+        nonpayable (returnWordLine PERMIT_TYPEHASH +++ Func.last .return_) =
           nonpayable permitTypehash := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -374,11 +374,11 @@ theorem Exec.Frame.attributionInner_eq_nil_of_callbackSuccess
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (returnWordLine CALLBACK_SUCCESS +++ Func.last .ret)) ∈
+      nonpayable (returnWordLine CALLBACK_SUCCESS +++ Func.last .return_)) ∈
         weth10Funcs dp := by
     rw [hselector]
     have hshape :
-        nonpayable (returnWordLine CALLBACK_SUCCESS +++ Func.last .ret) =
+        nonpayable (returnWordLine CALLBACK_SUCCESS +++ Func.last .return_) =
           nonpayable callbackSuccess := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -435,9 +435,9 @@ theorem Exec.Frame.attributionInner_eq_nil_of_totalSupply
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (totalSupplyLine +++ Func.last .ret)) ∈ weth10Funcs dp := by
+      nonpayable (totalSupplyLine +++ Func.last .return_)) ∈ weth10Funcs dp := by
     rw [hselector]
-    have hshape : nonpayable (totalSupplyLine +++ Func.last .ret) =
+    have hshape : nonpayable (totalSupplyLine +++ Func.last .return_) =
         nonpayable totalSupply := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -493,9 +493,9 @@ theorem Exec.Frame.attributionInner_eq_nil_of_balanceOf
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (balanceOfLine +++ Func.last .ret)) ∈ weth10Funcs dp := by
+      nonpayable (balanceOfLine +++ Func.last .return_)) ∈ weth10Funcs dp := by
     rw [hselector]
-    have hshape : nonpayable (balanceOfLine +++ Func.last .ret) =
+    have hshape : nonpayable (balanceOfLine +++ Func.last .return_) =
         nonpayable balanceOfEndpoint := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -551,9 +551,9 @@ theorem Exec.Frame.attributionInner_eq_nil_of_nonces
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (noncesLine +++ Func.last .ret)) ∈ weth10Funcs dp := by
+      nonpayable (noncesLine +++ Func.last .return_)) ∈ weth10Funcs dp := by
     rw [hselector]
-    have hshape : nonpayable (noncesLine +++ Func.last .ret) =
+    have hshape : nonpayable (noncesLine +++ Func.last .return_) =
         nonpayable nonces := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -606,9 +606,9 @@ theorem Exec.Frame.attributionInner_eq_nil_of_flashMinted
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (flashMintedLine +++ Func.last .ret)) ∈ weth10Funcs dp := by
+      nonpayable (flashMintedLine +++ Func.last .return_)) ∈ weth10Funcs dp := by
     rw [hselector]
-    have hshape : nonpayable (flashMintedLine +++ Func.last .ret) =
+    have hshape : nonpayable (flashMintedLine +++ Func.last .return_) =
         nonpayable flashMinted := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -664,11 +664,11 @@ theorem Exec.Frame.attributionInner_eq_nil_of_deploymentChainId
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
-      nonpayable (deploymentChainIdLine dp +++ Func.last .ret)) ∈
+      nonpayable (deploymentChainIdLine dp +++ Func.last .return_)) ∈
         weth10Funcs dp := by
     rw [hselector]
     have hshape :
-        nonpayable (deploymentChainIdLine dp +++ Func.last .ret) =
+        nonpayable (deploymentChainIdLine dp +++ Func.last .return_) =
           nonpayable (deploymentChainId dp) := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -727,12 +727,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_domainSeparator
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
       nonpayable (domainSelectLine dp +++
-        Func.branch (domainFreshLine +++ Func.last .ret)
-          (domainCachedLine dp +++ Func.last .ret))) ∈ weth10Funcs dp := by
+        Func.branch (domainFreshLine +++ Func.last .return_)
+          (domainCachedLine dp +++ Func.last .return_))) ∈ weth10Funcs dp := by
     rw [hselector]
     have hshape : nonpayable (domainSelectLine dp +++
-        Func.branch (domainFreshLine +++ Func.last .ret)
-          (domainCachedLine dp +++ Func.last .ret)) =
+        Func.branch (domainFreshLine +++ Func.last .return_)
+          (domainCachedLine dp +++ Func.last .return_)) =
         nonpayable (domainSeparator dp) := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -804,13 +804,13 @@ theorem Exec.Frame.attributionInner_eq_nil_of_maxFlashLoan
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
       nonpayable (maxFlashLoanSelectLine +++
-        Func.branch (returnWordLine 0 +++ Func.last .ret)
-          (maxFlashLoanAvailableLine +++ Func.last .ret))) ∈
+        Func.branch (returnWordLine 0 +++ Func.last .return_)
+          (maxFlashLoanAvailableLine +++ Func.last .return_))) ∈
         weth10Funcs dp := by
     rw [hselector]
     have hshape : nonpayable (maxFlashLoanSelectLine +++
-        Func.branch (returnWordLine 0 +++ Func.last .ret)
-          (maxFlashLoanAvailableLine +++ Func.last .ret)) =
+        Func.branch (returnWordLine 0 +++ Func.last .return_)
+          (maxFlashLoanAvailableLine +++ Func.last .return_)) =
         nonpayable maxFlashLoan := rfl
     rw [hshape]
     simp [weth10Funcs]
@@ -883,11 +883,11 @@ theorem Exec.Frame.attributionInner_eq_nil_of_flashFee
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm,
       nonpayable (flashFeeSelectLine +++
-        Func.branch (returnWordLine 0 +++ Func.last .ret)
+        Func.branch (returnWordLine 0 +++ Func.last .return_)
           (Func.call flashTokenErrorSlot))) ∈ weth10Funcs dp := by
     rw [hselector]
     have hshape : nonpayable (flashFeeSelectLine +++
-        Func.branch (returnWordLine 0 +++ Func.last .ret)
+        Func.branch (returnWordLine 0 +++ Func.last .return_)
           (Func.call flashTokenErrorSlot)) =
         nonpayable flashFee := rfl
     rw [hshape]
@@ -913,7 +913,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_flashFee
             some flashTokenError from rfl] at hget
         injection hget with hf
         subst hf
-        exact Func.not_run_revWith (Func.Run.of_runCompiled hbody)
+        exact Func.not_run_revertWith (Func.Run.of_runCompiled hbody)
 
 /-- The `flashFee` view transports the allowance region. -/
 theorem Exec.Frame.allowanceRegionEffect_of_flashFee

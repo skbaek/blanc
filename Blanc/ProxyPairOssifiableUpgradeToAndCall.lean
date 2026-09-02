@@ -553,8 +553,8 @@ A clean child stops; a failed child first tests the complete returned length,
 then bubbles nonempty bytes or calls the inherited empty-error body. -/
 def upgradeToAndCallDelegateTail : Func :=
   Func.stop <?>
-    (retdatasize :::
-      (Func.revReturnData <?> (.call emptyDelegatecallErrorSlot)))
+    (returndatasize :::
+      (Func.revertReturnData <?> (.call emptyDelegatecallErrorSlot)))
 
 theorem upgradeToAndCallDelegateSetup_split_shape :
     upgradeToAndCallDelegateSetup =
@@ -563,7 +563,7 @@ theorem upgradeToAndCallDelegateSetup_split_shape :
       loadUpgradeToAndCallWord upgradeToAndCallSetupLengthWord +++
       pushB256 upgradeToAndCallSetupMemoryBase :::
       loadUpgradeToAndCallWord upgradeToAndCallImplementationWord +++
-      gas ::: delcall ::: upgradeToAndCallDelegateTail := by
+      gas ::: delegatecall ::: upgradeToAndCallDelegateTail := by
   rfl
 
 /-- Execution-derived setup-call cut.  The boundary retains the exact six
@@ -575,7 +575,7 @@ inductive UpgradeToAndCallDelegateBoundary
     (decodedImage : Bytes) (newImplementation : Adr)
     (setupCalldata : Bytes) (forceCall : Bool) (out : Execution) : Prop
   | intro (gasWord : B256) (callPre callPost : Devm)
-      (callRun : Ninst.RunCompiled sevm callPre (.exec .delcall) callPost)
+      (callRun : Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost)
       (tailRun : Func.RunCompiledTo fs sevm callPost
         upgradeToAndCallDelegateTail out)
       (stack :
@@ -787,7 +787,7 @@ theorem UpgradeToAndCallDelegateBoundary.settled_child
     (boundary : UpgradeToAndCallDelegateBoundary fs sevm pre tail
       decodedImage newImplementation setupCalldata forceCall out) :
     ∃ callPre callPost,
-      Ninst.RunCompiled sevm callPre (.exec .delcall) callPost ∧
+      Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost ∧
       Func.RunCompiledTo fs sevm callPost
         upgradeToAndCallDelegateTail out ∧
       ∀ spawn : DelegatecallSpawnDescriptor sevm callPre,
@@ -845,7 +845,7 @@ theorem upgradeToAndCallDelegateTail_outcome
         Func.RunCompiledTo.zero_branch_of_prefix pZero run
       obtain ⟨sizePost, sizeRun, payloadBranch⟩ :=
         runCompiledTo_next_inv failedRun
-      have sizePush := of_run_retdatasize_val
+      have sizePush := of_run_returndatasize_val
         (Ninst.Run.of_runCompiled sizeRun)
       have failedReturnData : failedPre.returnData = child.output :=
         failedPop.returnData.symm.trans returnData
@@ -901,7 +901,7 @@ theorem upgradeToAndCallDelegateTail_outcome
         have bubbleState : bubblePre.state = callPost.state :=
           bubblePop.state.symm.trans
             (sizePush.state.symm.trans failedPop.state.symm)
-        rcases Func.runCompiledTo_revReturnData_inv bubbleRun with
+        rcases Func.runCompiledTo_revertReturnData_inv bubbleRun with
           outOfGas | ⟨post, postOutcome, postOutput⟩
         · exact .bubbledFailure bubblePre ⟨childCertificate⟩ status
             outputEmpty returnData rolledState rolledTransient rolledLogs

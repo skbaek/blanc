@@ -126,7 +126,7 @@ theorem getDepositCountEndpoint_cold_runCompiled
 
 private def getDepositCountLeafRoute : Func :=
   pushB256 getDepositCountSelector ::: eq :::
-    ((nonpayableEndpoint getDepositCountEndpoint) <?> Func.rev)
+    ((nonpayableEndpoint getDepositCountEndpoint) <?> Func.revert)
 
 private def getDepositCountInnerDispatch : Func :=
   dup 0 ::: pushB256 getDepositRootSelector ::: gt :::
@@ -528,7 +528,7 @@ private theorem getDepositCountLeafRoute_runCompiledTo_with_path
         (by simp only [branchPre, Devm.gasLeft_setMach,
           gVerylow, gHigh, gJumpdest])
   let hbranch : Func.RunCompiledTo fs sevm branchPre
-      ((nonpayableEndpoint getDepositCountEndpoint) <?> Func.rev) out :=
+      ((nonpayableEndpoint getDepositCountEndpoint) <?> Func.revert) out :=
     .succ (by decide) hroom hpop hbody
   let run : Func.RunCompiledTo fs sevm
       (base.setMach
@@ -1340,7 +1340,7 @@ private theorem getDepositCount_route_runCompiledTo_with_path
         (by simp only [afterSize, Devm.gasLeft_setMach,
           gVerylow, gHigh, gJumpdest])
   let hbranch : Func.RunCompiledTo (runtime.main :: runtime.aux)
-      sevm afterSize (Func.main tree <?> Func.rev) out :=
+      sevm afterSize (Func.main tree <?> Func.revert) out :=
     .succ hnonempty hroom hpop (by
       simpa only [afterBranch] using hmain)
   let mainRun : Func.RunCompiledTo (runtime.main :: runtime.aux)

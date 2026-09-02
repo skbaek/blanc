@@ -1114,7 +1114,7 @@ private theorem fixtureV1ValueChild_run :
             gJumpdest, gasColdSload]
         case h_ext => decide
         case a =>
-          apply Func.runCompiledTo_ret_word
+          apply Func.runCompiledTo_return_word
             (i := 0) (sz := 32) (s := []) (e := 0) (G := 4914877)
             (out := (42 : B256).toBytes)
           · rfl
@@ -1165,7 +1165,7 @@ private theorem fixtureV2ValueChild_run :
             gJumpdest, gasColdSload]
         case h_ext => decide
         case a =>
-          apply Func.runCompiledTo_ret_word
+          apply Func.runCompiledTo_return_word
             (i := 0) (sz := 32) (s := []) (e := 0) (G := 4914877)
             (out := (42 : B256).toBytes)
           · rfl

@@ -114,7 +114,7 @@ The proof boundary names the pinned fork's precompile selection and absence of
 an EIP-7702 delegation designator at address `0x2`; it proves the 64-byte child
 input and instantiates the result exactly as `Bytes.sha256 input`. These are
 explicit environment facts, not a hash axiom. A `STATICCALL` that returns
-status zero takes the shared `Func.revReturnData` auxiliary and therefore
+status zero takes the shared `Func.revertReturnData` auxiliary and therefore
 bubbles the child returndata byte-for-byte (with empty returndata as the
 ordinary empty-revert subcase). Caller-frame exceptional halt while paying
 for or entering the instruction precedes any returned status and is not

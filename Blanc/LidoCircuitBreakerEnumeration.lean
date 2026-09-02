@@ -808,7 +808,7 @@ private theorem enumLoop_done_runCompiled
   · simp only [h32, enumPrefixMemory_read_length_snd,
       enumPrefixMemory_read_length_fst, B256.toB256_toBytes,
       hw.enumeration_total_word_arithmetic]
-    refine Func.runCompiled_ret_of (G := G) (e := 0) rfl ?_ ?_ ?_
+    refine Func.runCompiled_return_of (G := G) (e := 0) rfl ?_ ?_ ?_
     · rw [hw.enumeration_total_toB256_toNat]
       exact enumPrefixMemory_extCost_full base [] entries G
     · change G + 49 - 49 = G + 0
@@ -1245,23 +1245,23 @@ private theorem registryScalarReturn_runCompiled
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩)
-        Func.ret post ∧
+        Func.return_ post ∧
       Devm.output post = word.toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  let retPre := base.setMach
+  let returnPre := base.setMach
     ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩
-  let d := (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32
+  let d := (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, rfl, ?_, rfl⟩
   have hread :
-      (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32 =
+      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32 =
         ⟨word.toBytes, d.2⟩ := by
     exact Prod.ext
       (Devm.memRead_word_fst
-        (by simp only [retPre, Devm.memory_setMach]))
+        (by simp only [returnPre, Devm.memory_setMach]))
       rfl
-  exact Func.runCompiled_ret_of (devm := retPre) (G := G) (e := 0)
+  exact Func.runCompiled_return_of (devm := returnPre) (G := G) (e := 0)
     (out := word.toBytes) (d' := d.2) rfl
     (Devm.extCost_word_word Mem.size_write_word) rfl hread
   · exact ⟨rfl, rfl⟩
@@ -1678,11 +1678,11 @@ private theorem Func.LogsAppend.branch {left right : Func}
       rcases hr hrun with ⟨tail, ht⟩
       exact ⟨tail, by rw [ht, ← hburn.logs, ← hpop.logs]⟩
 
-private theorem revData_not_successful
+private theorem revertData_not_successful
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {blob : Bytes} :
-    ¬ Func.Run fs sevm pre (Func.revData blob) post := by
+    ¬ Func.Run fs sevm pre (Func.revertData blob) post := by
   have no_last : ∀ {s r : Devm},
-      ¬ Func.Run fs sevm s (.last .rev) r := by
+      ¬ Func.Run fs sevm s (.last .revert) r := by
     intro s r run
     cases run with
     | last hrun =>
@@ -1711,7 +1711,7 @@ private theorem revData_not_successful
         rcases of_run_next run1 with ⟨s2, h2, run2⟩
         rcases of_run_next run2 with ⟨s3, h3, run3⟩
         exact h run3
-  unfold Func.revData
+  unfold Func.revertData
   apply no_stores
   intro s r run
   rcases of_run_next run with ⟨s1, h1, run1⟩
@@ -1719,14 +1719,14 @@ private theorem revData_not_successful
   exact no_last run2
 
 private theorem Func.LogsAppend.callRevData {fs : List Func} {slot : Nat}
-    {blob : Bytes} (hlookup : fs[slot]? = some (Func.revData blob)) :
+    {blob : Bytes} (hlookup : fs[slot]? = some (Func.revertData blob)) :
     Func.LogsAppend fs (.call slot) := by
   intro sevm pre post run
   rcases of_run_call run with ⟨body, mid, hget, hburn, hbody⟩
   rw [hlookup] at hget
   injection hget with heq
   subst body
-  exact (revData_not_successful hbody).elim
+  exact (revertData_not_successful hbody).elim
 
 private theorem timestamp_logs_hinv :
     Rinst.Hinv Devm.logs Rinst.timestamp := ⟨by
@@ -1762,7 +1762,7 @@ private theorem registerWrite_logsAppend (fs : List Func) :
 
 private theorem checkedHeartbeatExpiry_logsAppend
     (fs : List Func) (blob : Bytes)
-    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob)) :
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revertData blob)) :
     Func.LogsAppend fs
       (checkedHeartbeatExpiry <|
         dup 0 ::: mstoreAt 0 +++
@@ -1781,7 +1781,7 @@ private theorem checkedHeartbeatExpiry_logsAppend
     · exact Func.LogsAppend.callRevData hlookup
 
 private theorem optionalNew_logsAppend (fs : List Func) (blob : Bytes)
-    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob)) :
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revertData blob)) :
     Func.LogsAppend fs
       (loadWord newPauserWord +++ iszero :::
         (Func.stop <?>
@@ -1800,7 +1800,7 @@ private theorem optionalNew_logsAppend (fs : List Func) (blob : Bytes)
     · exact Func.LogsAppend.stop
 
 private theorem clearOldThenNew_logsAppend (fs : List Func) (blob : Bytes)
-    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob)) :
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revertData blob)) :
     Func.LogsAppend fs
       (pushB256 0 ::: loadWord previousPauserWord +++ tagTop expiryRegion +++
         sstore ::: pushB256 0 ::: mstoreAt 0 +++
@@ -1825,7 +1825,7 @@ private theorem clearOldThenNew_logsAppend (fs : List Func) (blob : Bytes)
 
 private theorem previousCountBranch_logsAppend
     (fs : List Func) (blob : Bytes)
-    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob)) :
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revertData blob)) :
     Func.LogsAppend fs
       (previousCountKey +++ sload ::: iszero :::
         (pushB256 0 ::: loadWord previousPauserWord +++
@@ -1859,7 +1859,7 @@ private theorem previousCountBranch_logsAppend
 its entry, appending only its optional heartbeat records. -/
 theorem registerAfterSet_logsAppend
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {blob : Bytes}
-    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob))
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revertData blob))
     (hrun : Func.Run fs sevm pre registerAfterSet post) :
     ∃ suffix, post.logs = pre.logs ++ suffix := by
   letI : Rinst.Hinv Devm.logs Rinst.mload := mload_logs_hinv
@@ -2070,7 +2070,7 @@ private theorem registerContinuation_logsAppend
     (hcontinuation : continuation = 0)
     (hregisterLookup : fs[registerAfterSetSlot]? = some registerAfterSet)
     (hpanicLookup : fs[arithmeticPanicSlot]? =
-      some (Func.revData panicData))
+      some (Func.revertData panicData))
     (hrun : Func.Run fs sevm pre
       (loadWord continuationWord +++ Ninst.iszero :::
         (Func.call pauseAfterSetSlot).branch
@@ -2293,7 +2293,7 @@ theorem pauserSet_target_zero_error_logs_unchanged
         (gVerylow + pre.extCost [⟨(targetWord * 32).toNat, 32⟩]) +
         gVerylow + (gVerylow + gHigh + gJumpdest) +
         (gVerylow + gMid + gJumpdest) +
-        revSelectorCost (pre.setMach ⟨pre.stack,
+        revertSelectorCost (pre.setMach ⟨pre.stack,
           (pre.memory.read (targetWord * 32).toNat 32).2, 0⟩)))
     (hroom : pre.stack.length < 1023) :
     let fs := (runtime dp).main :: (runtime dp).aux

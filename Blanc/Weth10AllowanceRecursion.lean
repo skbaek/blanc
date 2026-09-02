@@ -697,18 +697,18 @@ theorem Linst.foreignAllowanceRegionEffect
       simp [Linst.Run, Linst.run] at run
       subst post
       exact AllowanceRegionEffect.refl
-  | ret =>
-      have hframe := Linst.run_instructionFrame sevm pre .ret (by decide)
+  | return_ =>
+      have hframe := Linst.run_instructionFrame sevm pre .return_ (by decide)
       rw [run] at hframe
       exact AllowanceRegionEffect.of_getStorCode_eq
         (hframe.getStor ca) hcode
-  | rev =>
+  | revert =>
       dsimp [Linst.Run, Linst.run] at run
       rcases Except.bind_eq_ok run with ⟨first, hfirst, hrest⟩
       rcases Except.bind_eq_ok hrest with ⟨second, hsecond, hrest⟩
       rcases Except.bind_eq_ok hrest with ⟨third, hthird, hrest⟩
       contradiction
-  | dest =>
+  | selfdestruct =>
       dsimp [Linst.Run, Linst.run] at run
       rcases Except.bind_eq_ok run with
         ⟨⟨donee, devm1⟩, hpop, hrun1⟩

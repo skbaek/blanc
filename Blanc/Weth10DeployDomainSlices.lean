@@ -851,26 +851,26 @@ private theorem nonpayableDomainByteAt_to_raw
   change
     Func.byteAtByShape locations n
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (domainSeparator (⟨0, 0⟩ : DeployParams))).compileShape
         (nonpayablePrefix +++
-          Func.branch Func.rev (domainSeparator dp)) i 0 = _
+          Func.branch Func.revert (domainSeparator dp)) i 0 = _
   have hprefix : lineByteSize nonpayablePrefix = 2 := by decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
     (locations := locations) (n := n) (l := nonpayablePrefix)
-    (p0 := Func.branch Func.rev
+    (p0 := Func.branch Func.revert
       (domainSeparator (⟨0, 0⟩ : DeployParams)))
-    (p := Func.branch Func.rev (domainSeparator dp))
+    (p := Func.branch Func.revert (domainSeparator dp))
     (i := i) (d := 0) (by simpa only [hprefix] using (show 2 ≤ i by omega))]
   simp only [hprefix]
-  have hrev : Func.rev.compileShape.byteSize = 3 := by decide +kernel
+  have hrev : Func.revert.compileShape.byteSize = 3 := by decide +kernel
   change
     Func.byteAtByShape locations (n + 2)
-        (.branch Func.rev.compileShape
+        (.branch Func.revert.compileShape
           (domainSeparator (⟨0, 0⟩ : DeployParams)).compileShape)
-        (.branch Func.rev (domainSeparator dp)) (i - 2) 0 = _
-  rw [byteAt_branch_to_right locations (n + 2) Func.rev
-      (domainSeparator (⟨0, 0⟩ : DeployParams)) Func.rev
+        (.branch Func.revert (domainSeparator dp)) (i - 2) 0 = _
+  rw [byteAt_branch_to_right locations (n + 2) Func.revert
+      (domainSeparator (⟨0, 0⟩ : DeployParams)) Func.revert
       (domainSeparator dp) (i - 2) 0
       (by simp only [hrev, Nat.reduceAdd]; omega)]
   simp only [hrev, Nat.reduceAdd]
@@ -959,16 +959,16 @@ private theorem nonpayableDomainByteAt_eq_zero_0_10
   change
     Func.byteAtByShape locations n
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (domainSeparator (⟨0, 0⟩ : DeployParams))).compileShape
         (nonpayablePrefix +++
-          Func.branch Func.rev (domainSeparator dp)) i 0 =
+          Func.branch Func.revert (domainSeparator dp)) i 0 =
       Func.byteAtByShape locations n
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (domainSeparator (⟨0, 0⟩ : DeployParams))).compileShape
         (nonpayablePrefix +++
-          Func.branch Func.rev
+          Func.branch Func.revert
             (domainSeparator (⟨0, 0⟩ : DeployParams))) i 0
   have hprefix : lineByteSize nonpayablePrefix = 2 := by decide +kernel
   by_cases hpre : i < 2
@@ -976,19 +976,19 @@ private theorem nonpayableDomainByteAt_eq_zero_0_10
     simpa only [hprefix] using hpre
   · conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (domainSeparator (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev (domainSeparator dp))
+      (p := Func.branch Func.revert (domainSeparator dp))
       (i := i) (d := 0) (by simpa only [hprefix] using (show 2 ≤ i by omega))]
     conv_rhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n) (l := nonpayablePrefix)
-      (p0 := Func.branch Func.rev
+      (p0 := Func.branch Func.revert
         (domainSeparator (⟨0, 0⟩ : DeployParams)))
-      (p := Func.branch Func.rev
+      (p := Func.branch Func.revert
         (domainSeparator (⟨0, 0⟩ : DeployParams)))
       (i := i) (d := 0) (by simpa only [hprefix] using (show 2 ≤ i by omega))]
     simp only [hprefix]
-    have hrev : Func.rev.compileShape.byteSize = 3 := by decide +kernel
+    have hrev : Func.revert.compileShape.byteSize = 3 := by decide +kernel
     apply byteAt_branch_eq_before_right
     simpa only [hrev, Nat.reduceAdd] using
       (show i - 2 < 8 by omega)

@@ -118,9 +118,9 @@ lemma of_storeReturnWords3 {fs : List Func} {sevm : Sevm} {s r : Devm}
       (Line.of_inv Devm.getCode (by line_inv) h2)).trans
       (Line.of_inv Devm.getCode (by line_inv) h3)).trans
       (Line.of_inv Devm.getCode (by line_inv) h4)
-  refine ⟨?_, hgc.trans (of_run_ret_val hu2 run4).2⟩
+  refine ⟨?_, hgc.trans (of_run_return_val hu2 run4).2⟩
   show Devm.output r = _
-  rw [(of_run_ret_val hu2 run4).1,
+  rw [(of_run_return_val hu2 run4).1,
     show (0 : B256).toNat = 0 from rfl,
     show (96 : B256).toNat = 96 from rfl,
     Mem.Reads.read (hm4 ▸ hrd3) 0 96,
@@ -509,7 +509,7 @@ theorem allowance_output
   have hk2 : (0 : B256) :: 64 :: xs <<+ u2.stack :=
     prefix_of_push (of_run_pushB256 q2) hk1
   rcases Line.of_run_cons k2 with ⟨u3, q3, k3⟩
-  rcases prefix_of_kec_val q3 hk2 with ⟨hk3, hmK⟩
+  rcases prefix_of_keccak256_val q3 hk2 with ⟨hk3, hmK⟩
   have hhash : Bytes.keccak (u2.memory.read 0 64).1 =
       Bytes.keccak payload := by
     rw [Mem.Reads.read (by
@@ -834,7 +834,7 @@ theorem flashFee_output
       rw [hlookup] at hget
       exact Option.some.inj hget.symm
     subst f
-    exact absurd hrev Func.not_run_revWith
+    exact absurd hrev Func.not_run_revertWith
 
 /-- The self-token branch of `maxFlashLoan` returns the unchecked remaining
 capacity from the exact entry `flashMinted` word. -/

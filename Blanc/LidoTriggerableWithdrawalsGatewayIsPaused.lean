@@ -160,7 +160,7 @@ theorem isPaused_exact_of_prog_run
     exact Mem.Reads.write beforeReturnWf beforeReturnReads 0 _
 
   rcases of_run_prepend (pushList [32, 0]) _ returnRun with
-    ⟨beforeRet, rangeRun, retRun⟩
+    ⟨beforeRet, rangeRun, returnRun⟩
   have rangeRunFull := rangeRun
   rcases Line.of_run_cons rangeRun with
     ⟨afterSize, sizeRun, rangeRun⟩
@@ -178,7 +178,7 @@ theorem isPaused_exact_of_prog_run
       post.output =
         (sevm.benvStat.time <?
           pre.getStorVal sevm.currentTarget resumeSinceSlot).toBytes := by
-    rw [(of_run_ret_val offsetPrefix retRun).1,
+    rw [(of_run_return_val offsetPrefix returnRun).1,
       show (0 : B256).toNat = 0 from rfl,
       show (32 : B256).toNat = 32 from rfl,
       Mem.Reads.read (rangeMemory ▸ storedReads) 0 32,

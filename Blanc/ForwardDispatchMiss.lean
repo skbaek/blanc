@@ -75,24 +75,24 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
         apply hmiss
         exact (DispatchTree.hasSelector_leaf_iff
           leafSelector selector body).2 heq.symm
-      let revPre := base.setMach ⟨[], Mem.empty, G + 4⟩
+      let revertPre := base.setMach ⟨[], Mem.empty, G + 4⟩
       let out : Execution :=
         .error (.revert,
           (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])
       have hrev : Func.RunCompiledTo (program.main :: program.aux) sevm
-          revPre Func.rev out := by
-        simpa only [revPre, out, Devm.setMach_setMach,
+          revertPre Func.revert out := by
+        simpa only [revertPre, out, Devm.setMach_setMach,
             Devm.stack_setMach, Devm.memory_setMach] using
-          (Func.runCompiledTo_rev_func
+          (Func.runCompiledTo_revert_func
             (fs := program.main :: program.aux) (sevm := sevm)
-            (devm := revPre) (G := G)
-            (by simp only [revPre, Devm.gasLeft_setMach, gBase])
-            (by simp only [revPre, Devm.stack_setMach,
+            (devm := revertPre) (G := G)
+            (by simp only [revertPre, Devm.gasLeft_setMach, gBase])
+            (by simp only [revertPre, Devm.stack_setMach,
               List.length_nil]; omega))
       have hrevSafe : Func.RunCompiledTo.NoRawSstorePath hrev :=
         Func.RunCompiledTo.NoRawSstorePath.of_execFree hrev
-          (by simp [Func.rev, Ninst.pushB256, funcExecFree])
-          (by simp [Func.rev, Ninst.pushB256,
+          (by simp [Func.revert, Ninst.pushB256, funcExecFree])
+          (by simp [Func.revert, Ninst.pushB256,
             Func.LocalSstoreFree])
       let branchPre := base.setMach ⟨[(0 : B256)], Mem.empty, G + 17⟩
       have hroom : branchPre.stack.length < 1024 := by
@@ -100,15 +100,15 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           List.length_nil]
         omega
       have hpop : Devm.PopBurnBy [0] (gVerylow + gHigh)
-          branchPre revPre := by
-        simpa only [branchPre, revPre, Devm.setMach_setMach,
+          branchPre revertPre := by
+        simpa only [branchPre, revertPre, Devm.setMach_setMach,
             Devm.stack_setMach, Devm.memory_setMach] using
           Devm.popBurnBy_setMach (devm := branchPre) (G := G + 4)
             (by simp only [branchPre, Devm.stack_setMach])
             (by simp only [branchPre, Devm.gasLeft_setMach,
               gVerylow, gHigh])
       let hbranch : Func.RunCompiledTo (program.main :: program.aux) sevm
-          branchPre (body <?> Func.rev) out :=
+          branchPre (body <?> Func.revert) out :=
         .zero hroom hpop hrev
       let afterPush := base.setMach
         ⟨[leafSelector, selector], Mem.empty, G + 20⟩

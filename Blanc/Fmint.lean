@@ -260,7 +260,7 @@ argument is invariant-dependent by design; Arc B discharges it. -/
 def burnAndReturn : Func :=
   dup 1 ::: sload :::           -- rbal :: wad :: receiver
   dup 1 ::: dup 1 ::: lt :::    -- (rbal <? wad) :: rbal :: wad :: receiver
-  .rev <?>                      -- [insufficient balance to burn: revert]
+  .revert <?>                      -- [insufficient balance to burn: revert]
                                 -- rbal :: wad :: receiver
   dup 1 ::: swap 0 ::: sub :::  -- (rbal - wad) :: wad :: receiver
   dup 2 ::: sstore :::          -- wad :: receiver
@@ -299,9 +299,9 @@ def spendAllowanceThenBurn : Func :=
   dup 1 ::: mstoreAt 0 +++      -- wad :: receiver || receiver
   address ::: mstoreAt 1 +++    -- wad :: receiver || receiver :: self
   pushList [64, 0] +++          -- 0 :: 64 :: wad :: receiver || receiver :: self
-  kec :::                       -- hash :: wad :: receiver
+  keccak256 :::                       -- hash :: wad :: receiver
   checkSlotCollides +++         -- collides? :: hash :: wad :: receiver
-  .rev <?>                      -- [the allowance slot would alias a balance slot
+  .revert <?>                      -- [the allowance slot would alias a balance slot
                                 --  or the supply slot: revert]
                                 -- hash :: wad :: receiver
   dup 0 ::: sload :::           -- amnt :: hash :: wad :: receiver
@@ -311,7 +311,7 @@ def spendAllowanceThenBurn : Func :=
     .call burnSlot ) <?>
   ( -- FINITE ARM
     dup 2 ::: dup 1 ::: lt :::  -- (amnt <? wad) :: amnt :: hash :: wad :: receiver
-    .rev <?>                    -- [allowance below the amount owed: revert]
+    .revert <?>                    -- [allowance below the amount owed: revert]
                                 -- amnt :: hash :: wad :: receiver
     dup 2 ::: swap 0 ::: sub ::: -- (amnt - wad) :: hash :: wad :: receiver
     swap 0 ::: sstore :::       -- wad :: receiver
@@ -409,7 +409,7 @@ where all the new machinery lands; the rest of the contract is pattern work.
 
 Two idioms recur below and are worth stating once.
 
-*Guards revert in the negative direction.*  `.rev <?> …` is the shape WETH uses:
+*Guards revert in the negative direction.*  `.revert <?> …` is the shape WETH uses:
 the branch fires when the tested word is nonzero, so a guard computes the
 *failure* condition and the success path continues in a straight line.  Where
 that means testing an equality, the pair is `eq ::: iszero` rather than a single
@@ -426,14 +426,14 @@ def flashLoan : Func :=
   -- the reason does not depend on `amount` as the reference's does
   -- (`FMINT_DEVIATIONS.md` row 5).
   arg 1 +++ address ::: eq ::: iszero :::
-  .rev <?>                        -- [token ≠ self: revert]
+  .revert <?>                        -- [token ≠ self: revert]
   -- (1) the receiver word must be address-shaped.  CONSERVATION-CRITICAL, not
   -- hygiene: a dirty word would be the mint's `SSTORE` key verbatim, while
   -- `balSum` sums address-shaped keys only and `CALL` truncates its target to
   -- 160 bits — supply would rise with the minted balance outside Σ, falsifying
   -- the invariant before the callback even runs (row 6).
   arg 0 +++ dup 0 ::: checkNonAddress +++ -- ¬va(receiver) :: receiver
-  .rev <?>                        -- [receiver is not address-shaped: revert]
+  .revert <?>                        -- [receiver is not address-shaped: revert]
                                   -- receiver
   -- (2) `amount ≤ maxFlashLoan`, where `maxFlashLoan = 2^256 - 1 - supply`.
   -- This is also the whole overflow argument for the mint below: the check
@@ -442,7 +442,7 @@ def flashLoan : Func :=
   arg 2 +++ dup 0 :::             -- amount :: amount :: receiver
   pushSupplySlot +++ sload ::: not ::: -- maxLoan :: amount :: amount :: receiver
   lt :::                          -- (maxLoan <? amount) :: amount :: receiver
-  .rev <?>                        -- [amount above the bound: revert]
+  .revert <?>                        -- [amount above the bound: revert]
                                   -- amount :: receiver
   -- (3) mint: both `SSTORE`s complete here, before the `CALL` (D5).
   dup 1 ::: sload :::             -- rbal :: amount :: receiver
@@ -467,10 +467,10 @@ def flashLoan : Func :=
   -- which is why the two return-window zeros are pushed before the argument
   -- window is even measured.  All gas is forwarded (EIP-150's 63/64 rule then
   -- applies); the return window is empty because the answer is read with
-  -- `retdatacopy` instead.
+  -- `returndatacopy` instead.
   dup 0 ::: storeCallbackHead +++ -- amount :: receiver || selector, head words
   pushList [0, 0] +++             -- 0 :: 0 :: amount :: receiver
-                                  --   (retSize, then retOffset)
+                                  --   (returnSize, then returnOffset)
   forwardCallbackData +++         -- dataLen :: 0 :: 0 :: amount :: receiver
                                   --   || … ; length word and payload
   callbackArgsSize +++            -- argsSize :: 0 :: 0 :: amount :: receiver
@@ -480,17 +480,17 @@ def flashLoan : Func :=
   gas :::                         -- gas :: receiver :: …
   call :::                        -- success? :: amount :: receiver
   iszero :::
-  .rev <?>                        -- [the callback failed: revert]
+  .revert <?>                        -- [the callback failed: revert]
                                   -- amount :: receiver
   -- (5) the return value: at least a word of it, and that word the magic
-  -- constant.  The length is branched on first because `retdatacopy` aborts
+  -- constant.  The length is branched on first because `returndatacopy` aborts
   -- the frame rather than failing a test when the range overruns (row 10).
-  retdataShorterThan 32 +++       -- (retdatasize <? 32) :: amount :: receiver
-  .rev <?>                        -- [returndata shorter than a word: revert]
+  returnDataShorterThan 32 +++       -- (returndatasize <? 32) :: amount :: receiver
+  .revert <?>                        -- [returndata shorter than a word: revert]
                                   -- amount :: receiver
-  checkRetdataHead erc3156Magic 0 +++ -- (head =? magic) :: amount :: receiver
+  checkReturnDataHead erc3156Magic 0 +++ -- (head =? magic) :: amount :: receiver
   iszero :::
-  .rev <?>                        -- [wrong magic word: revert]
+  .revert <?>                        -- [wrong magic word: revert]
                                   -- amount :: receiver
   -- (6) and (7): spend the allowance `receiver → self`, then burn.  Both arms
   -- of the allowance test converge on `burnAndReturn` in aux slot `burnSlot`,
@@ -521,7 +521,7 @@ which is the opposite of `maxFlashLoan`'s rule for the same input
 identically zero, not a function of anything (proposal D2). -/
 def flashFee : Func :=
   arg 0 +++ address ::: eq ::: iszero :::
-  .rev <?>                        -- [token ≠ self: revert]
+  .revert <?>                        -- [token ≠ self: revert]
   pushB256 0 ::: mstoreAt 0 +++
   returnMemoryRange 0 32
 
@@ -598,15 +598,15 @@ def prepApprove : Line :=
   caller :: mstoreAt 0 ++ -- || caller
   argCopy 1 0 1 ++ -- || caller :: guy
   arg 1 ++ pushList [64, 0] ++ -- 0 :: 64 :: wad || caller :: guy
-  kec :: checkSlotCollides -- collides? :: caller_guy_hash :: wad ||
+  keccak256 :: checkSlotCollides -- collides? :: caller_guy_hash :: wad ||
 
 /-- `approve(address guy, uint256 wad)`. -/
 def approve : Func :=
   arg 0 +++ -- guy ||
   checkNonAddress +++ -- guy_invalid? ||
-  .rev <?> -- [if guy is invalid, revert]
+  .revert <?> -- [if guy is invalid, revert]
   prepApprove +++ -- collides? :: hash :: wad ||
-  .rev <?> -- [ if the allowance slot would alias a balance slot or the
+  .revert <?> -- [ if the allowance slot would alias a balance slot or the
            --   supply slot, revert ]
            -- hash :: wad ||
   sstore :: -- ||
@@ -642,9 +642,9 @@ def updateAllowance : Func :=
   swap 0 :: mstoreAt 0 +++ -- wad || src
   caller ::: mstoreAt 1 +++ -- wad || src :: caller
   pushList [64, 0] +++ -- 0 :: 64 :: wad || src :: caller
-  kec ::: -- hash :: wad
+  keccak256 ::: -- hash :: wad
   checkSlotCollides +++ -- collides? :: hash :: wad
-  .rev <?> -- [ if the allowance slot would alias a balance slot or the
+  .revert <?> -- [ if the allowance slot would alias a balance slot or the
            --   supply slot, revert ]
            -- hash :: wad
   swap 0 ::: -- wad :: hash
@@ -653,7 +653,7 @@ def updateAllowance : Func :=
   returnTrue <?> -- if the allowed amount is infinite, do not update it
                  -- amnt :: wad :: hash
   dup 1 ::: dup 1 ::: lt ::: -- amnt <? wad :: amnt :: wad :: hash
-  .rev <?> -- if allowed amount < transfer amount, revert
+  .revert <?> -- if allowed amount < transfer amount, revert
            -- amnt :: wad :: hash
   sub ::: swap 0 ::: -- hash :: (amnt - wad)
   sstore ::: returnTrue -- [allowance amount is up to date]
@@ -661,15 +661,15 @@ def updateAllowance : Func :=
 /-- `transferFrom(address src, address dst, uint256 wad)`. -/
 def transferFrom : Func :=
   arg 0 +++ dup 0 ::: checkNonAddress +++ -- ¬ va(src) :: src
-  .rev <?> -- [if src is not a valid address, revert]
+  .revert <?> -- [if src is not a valid address, revert]
         -- src
   arg 2 +++ dup 0 ::: dup 2 ::: sload ::: -- sbal :: wad :: wad :: src
   dup 1 ::: dup 1 ::: lt ::: -- (sbal <? wad) :: sbal :: wad :: wad :: src
-  .rev <?> -- if source balance < wad, then revert
+  .revert <?> -- if source balance < wad, then revert
         -- sbal :: wad :: wad :: src
   transferFromUpdateSbal +++ -- wad :: src
   arg 1 +++ dup 0 ::: checkNonAddress +++ -- ¬ va(dst) :: dst :: wad :: src
-  .rev <?> -- [if dst is not a valid address, revert]
+  .revert <?> -- [if dst is not a valid address, revert]
         -- dst :: wad :: src
   dup 0 ::: dup 2 ::: -- wad :: dst :: dst :: wad :: src
   incrWbal +++ -- [destination balance is up to date]
@@ -719,10 +719,10 @@ theorem fmintFuncs_sorted : DispatchTree.sorted fmintFuncs = true := by decide +
 def fmintTree : DispatchTree := .ofSorted fmintFuncs
 
 /-- The aux table as frozen at the design freeze.  Append-only; see above. -/
-def fmintAux : List Func := [Func.rev, burnAndReturn]
+def fmintAux : List Func := [Func.revert, burnAndReturn]
 
 /-- The contract.  `Func.mainWith fallbackSlot` routes a dispatcher miss to aux
-slot 1, which is `Func.rev`: an unrecognized selector — and a bare value
+slot 1, which is `Func.revert`: an unrecognized selector — and a bare value
 transfer — reverts. -/
 def fmint : Prog := ⟨Func.mainWith fallbackSlot fmintTree, fmintAux⟩
 

@@ -140,7 +140,7 @@ private def twoBranchGuardedMain (dispatchBody : Func) : Func :=
 calldata bytes takes the one inline empty-revert arm. -/
 private def compactGuardedMain (dispatchBody : Func) : Func :=
   callvalue ::: pushB256 4 ::: calldatasize ::: lt ::: Ninst.or :::
-    (Func.rev <?> (fsig +++ dispatchBody))
+    (Func.revert <?> (fsig +++ dispatchBody))
 
 private def candidateSpecs : List CandidateSpec :=
   [ { label := "current-balanced", dispatch := .balanced,

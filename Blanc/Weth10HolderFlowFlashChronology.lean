@@ -120,7 +120,7 @@ def flashBurnSuccessLine : Line :=
 theorem flashBurn_shape :
     flashBurn = flashBurnGuardLine +++
       ((.call burnBalanceErrorSlot) <?>
-        (flashBurnSuccessLine +++ Func.ret)) := by
+        (flashBurnSuccessLine +++ Func.return_)) := by
   rfl
 
 /-- The repayment continuation has no external child after its entry.  Its
@@ -137,7 +137,7 @@ private theorem Exec.Frame.CompiledCursor.finishFlashBurn
     (table 0 ((weth10 dp).main :: weth10Aux))
     (flashBurnGuardLine +++
       ((.call burnBalanceErrorSlot) <?>
-        (flashBurnSuccessLine +++ Func.ret))) final at cursor
+        (flashBurnSuccessLine +++ Func.return_))) final at cursor
   rcases cursor.peelChildlessLine (line := flashBurnGuardLine) (by
       simp [flashBurnGuardLine, loadArgBalanceAmount, balanceTooSmall,
         addressArg, normalizeAddress, arg, cdl, pushAddressMask,
@@ -158,7 +158,7 @@ private theorem Exec.Frame.CompiledCursor.finishFlashBurn
     have hbody : body = burnBalanceError := by
       simpa [weth10, weth10Aux, burnBalanceErrorSlot] using hget.symm
     subst body
-    exact (Func.not_run_revWith
+    exact (Func.not_run_revertWith
       (Func.Run.of_runCompiled bodyCursor.run)).elim
 
 def flashSettleKeyLine : Line :=
@@ -235,7 +235,7 @@ private theorem Exec.Frame.CompiledCursor.finishFlashSettle
       have hbody : body = allowanceError := by
         simpa [weth10, weth10Aux, allowanceErrorSlot] using hget.symm
       subst body
-      exact (Func.not_run_revWith
+      exact (Func.not_run_revertWith
         (Func.Run.of_runCompiled bodyCursor.run)).elim
   · rcases hmax with ⟨maxCursor, hmaxActions⟩
     rcases maxCursor.peelChildlessLine (line := [Ninst.pop, Ninst.pop])
@@ -253,9 +253,9 @@ private theorem Exec.Frame.CompiledCursor.finishFlashSettle
 def flashLoanAfterCallback : Func :=
   Ninst.iszero :::
     (.call bubbleRevertSlot) <?>
-    (retdataShorterThan 32 +++
-      Func.rev <?>
-      (checkRetdataHead CALLBACK_SUCCESS 0 +++ Ninst.iszero :::
+    (returnDataShorterThan 32 +++
+      Func.revert <?>
+      (checkReturnDataHead CALLBACK_SUCCESS 0 +++ Ninst.iszero :::
         (.call flashFailedErrorSlot) <?>
         ([Ninst.pop, Ninst.pop] +++ .call flashSettleSlot)))
 
@@ -279,18 +279,18 @@ private theorem Exec.Frame.CompiledCursor.finishFlashLoanAfterCallback
   rcases callbackBranchCursor.selectBranchWithActions with
       hdecode | hbubble
   · rcases hdecode with ⟨decodeCursor, hdecodeActions⟩
-    rcases decodeCursor.peelChildlessLine (line := retdataShorterThan 32)
+    rcases decodeCursor.peelChildlessLine (line := returnDataShorterThan 32)
         (by
-          simp [retdataShorterThan, NinstIsChildless,
+          simp [returnDataShorterThan, NinstIsChildless,
             Ninst.pushB256]) with
       ⟨lengthBranchCursor, _hlength, hlengthActions⟩
     rcases lengthBranchCursor.selectBranchWithActions with
         hmagic | hshort
     · rcases hmagic with ⟨magicCursor, hmagicActions⟩
       rcases magicCursor.peelChildlessLine
-          (line := checkRetdataHead CALLBACK_SUCCESS 0 ++
+          (line := checkReturnDataHead CALLBACK_SUCCESS 0 ++
             [Ninst.iszero]) (by
-            simp [checkRetdataHead, pushList, NinstIsChildless,
+            simp [checkReturnDataHead, pushList, NinstIsChildless,
               Ninst.pushB256]) with
         ⟨magicBranchCursor, _hmagicLine, hmagicLineActions⟩
       rcases magicBranchCursor.selectBranchWithActions with
@@ -317,10 +317,10 @@ private theorem Exec.Frame.CompiledCursor.finishFlashLoanAfterCallback
         have hbody : body = flashFailedError := by
           simpa [weth10, weth10Aux, flashFailedErrorSlot] using hget.symm
         subst body
-        exact (Func.not_run_revWith
+        exact (Func.not_run_revertWith
           (Func.Run.of_runCompiled bodyCursor.run)).elim
     · rcases hshort with ⟨shortCursor, _hshortActions⟩
-      exact absurd (Func.Run.of_runCompiled shortCursor.run) not_run_rev
+      exact absurd (Func.Run.of_runCompiled shortCursor.run) not_run_revert
   · rcases hbubble with ⟨bubbleCursor, _hbubbleActions⟩
     rcases bubbleCursor.enterCall hcode with
       ⟨body, hget, bodyCursor, _hbodyActions⟩
@@ -365,7 +365,7 @@ def flashLoanPostCode : Func :=
 
 def flashLoanPostTotal : Func :=
   [Ninst.pop] +++ flashMintLine +++ flashEventCheckLine +++
-    (Func.rev <?> flashLoanPostCode)
+    (Func.revert <?> flashLoanPostCode)
 
 def flashLoanPostCounter : Func :=
   flashCounterLine +++ flashTotalLine +++
@@ -1345,7 +1345,7 @@ private theorem Exec.Frame.CompiledCursor.reachFlashLoanSuccessTailCursor
       ¬ Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm pre
         (.call flashTokenErrorSlot) post :=
     Func.not_run_call_of htokenLookup (fun {_ _} run =>
-      Func.not_run_revWith run)
+      Func.not_run_revertWith run)
   rcases tokenBranchCursor.selectBranchLeftWithBurn
       (fun _ => hnoToken) with
     ⟨amountCursor, htokenPop, htokenBranchActions⟩
@@ -1362,7 +1362,7 @@ private theorem Exec.Frame.CompiledCursor.reachFlashLoanSuccessTailCursor
       ¬ Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm pre
         (.call individualLimitErrorSlot) post :=
     Func.not_run_call_of hamountLookup (fun {_ _} run =>
-      Func.not_run_revWith run)
+      Func.not_run_revertWith run)
   rcases amountBranchCursor.selectBranchLeftWithBurn
       (fun _ => hnoAmount) with
     ⟨counterCursor, hamountPop, hamountBranchActions⟩
@@ -1383,7 +1383,7 @@ private theorem Exec.Frame.CompiledCursor.reachFlashLoanSuccessTailCursor
       ¬ Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm pre
         (.call totalLimitErrorSlot) post :=
     Func.not_run_call_of htotalLookup (fun {_ _} run =>
-      Func.not_run_revWith run)
+      Func.not_run_revertWith run)
   rcases totalBranchCursor.selectBranchLeftWithBurn
       (fun _ => hnoTotal) with
     ⟨popCursor, htotalPop, htotalBranchActions⟩
@@ -1400,7 +1400,7 @@ private theorem Exec.Frame.CompiledCursor.reachFlashLoanSuccessTailCursor
         Ninst.pushB256]) with
     ⟨codeBranchCursor, hevent, heventActions⟩
   rcases codeBranchCursor.selectBranchLeftWithBurn
-      (fun _ => not_run_rev) with
+      (fun _ => not_run_revert) with
     ⟨setupCursor, hcodePop, hcodeBranchActions⟩
   unfold flashLoanPostCode at setupCursor
   rcases setupCursor.peelChildlessLine (line := flashCallbackSetupLine)

@@ -31,7 +31,7 @@ Two disposable files under `/private/tmp` use the real Blanc compiler:
 
 Both stage exactly 64 input bytes and issue `STATICCALL` to address `0x2` with
 a 32-byte output window. Both route call failure through
-`Func.revReturnData`, reject a successful response shorter than 32 bytes via
+`Func.revertReturnData`, reject a successful response shorter than 32 bytes via
 the shared empty reverter, and otherwise consume the first output word,
 exactly as the pinned solc SHA wrapper does. The measured files have SHA-256
 digests
