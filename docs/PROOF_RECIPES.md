@@ -56,11 +56,11 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:stack-prefix-line-run`
-- Preferred path: Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm.
+- Preferred path: Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, ADDMOD, MULMOD, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm.
 - Boundary: `line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct `prefix_of_*` lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried.
 - Owner module: [Blanc/Tactics.lean](../Blanc/Tactics.lean)
 - Canonical example: [Blanc/Weth10HolderFlowCompiled.lean](../Blanc/Weth10HolderFlowCompiled.lean) — `recognized_of_run_dispatchWith`
-- Registered symbols: `tactic:line_prefix`, `tactic:generalize_line_prefix`, `tactic:show_pref`, `declaration:prefix_of_mul`, `declaration:prefix_of_div`, `declaration:prefix_of_timestamp`, `declaration:prefix_of_xor`, `declaration:prefix_of_argCheckNonAddress`
+- Registered symbols: `tactic:line_prefix`, `tactic:generalize_line_prefix`, `tactic:show_pref`, `declaration:prefix_of_mul`, `declaration:prefix_of_div`, `declaration:prefix_of_addmod`, `declaration:prefix_of_mulmod`, `declaration:prefix_of_timestamp`, `declaration:prefix_of_xor`, `declaration:prefix_of_argCheckNonAddress`
 - Review: `proof-infrastructure` on `2026-08-20`
 
 ## `state-context-cleanup`

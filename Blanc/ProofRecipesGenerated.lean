@@ -54,8 +54,8 @@ def recipes : List Recipe := [
     id := "stack-prefix-transport"
     status := "active"
     triggers := ["goal-shape:stack-prefix-line-run"]
-    preferredPath := "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm."
-    symbols := ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref", "declaration:prefix_of_mul", "declaration:prefix_of_div", "declaration:prefix_of_timestamp", "declaration:prefix_of_xor", "declaration:prefix_of_argCheckNonAddress"]
+    preferredPath := "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, ADDMOD, MULMOD, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm."
+    symbols := ["tactic:line_prefix", "tactic:generalize_line_prefix", "tactic:show_pref", "declaration:prefix_of_mul", "declaration:prefix_of_div", "declaration:prefix_of_addmod", "declaration:prefix_of_mulmod", "declaration:prefix_of_timestamp", "declaration:prefix_of_xor", "declaration:prefix_of_argCheckNonAddress"]
     boundary := "`line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct `prefix_of_*` lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried."
   },
   {

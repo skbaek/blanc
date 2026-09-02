@@ -13,6 +13,122 @@ the fixed-width word operations used by compiled EVM loops.
 namespace Blanc
 
 open Jaune
+open Jaune.Ninst Ninst
+
+/-! ## Ternary word-instruction transport -/
+
+/-- Blanc-side monadic normal form for Jaune's generic three-operand word
+instruction. This is the ternary companion of Jaune's `applyBinary_def`. -/
+theorem applyTernary_def
+    (f : B256 → B256 → B256 → B256) (cost : Nat) (devm : Devm) :
+    applyTernary f cost devm = (do
+      let ⟨x, devm'⟩ ← devm.pop
+      let ⟨y, devm''⟩ ← devm'.pop
+      let ⟨z, devm'''⟩ ← devm''.pop
+      pushItem (f x y z) cost devm''') := by
+  rcases devm with ⟨⟨stack, memory, gasLeft⟩, view, world⟩
+  cases stack with
+  | nil => rfl
+  | cons x xs =>
+    cases xs with
+    | nil => rfl
+    | cons y ys =>
+      cases ys with
+      | nil => rfl
+      | cons z zs =>
+        cases h : Mach.pushItem (f x y z) cost
+            { stack := zs, memory := memory, gasLeft := gasLeft } with
+        | error err =>
+          rcases err with ⟨msg, mach'⟩
+          cases mach'
+          simp only [applyTernary, Mach.applyTernary, Mach.pop, pushItem,
+            liftMachExecution, liftMach, Footprint.toExecution,
+            Footprint.liftOutcome, Devm.pop_def, Devm.stack, Devm.setMach,
+            bind, Except.bind, h]
+        | ok out =>
+          rcases out with ⟨_, mach'⟩
+          cases mach'
+          simp only [applyTernary, Mach.applyTernary, Mach.pop, pushItem,
+            liftMachExecution, liftMach, Footprint.toExecution,
+            Footprint.liftOutcome, Devm.pop_def, Devm.stack, Devm.setMach,
+            bind, Except.bind, h]
+
+/-- A successful generic ternary word instruction pops its three operands and
+pushes their exact result while preserving every non-machine observation. -/
+lemma Devm.diffBurn_of_applyTernary
+    {f : B256 → B256 → B256 → B256} {cost : Nat} {s s' : Devm}
+    (h : applyTernary f cost s = .ok s') :
+    ∃ x y z, Devm.DiffBurn [x, y, z] [f x y z] s s' := by
+  rw [applyTernary_def] at h
+  rcases Except.bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h'⟩
+  rcases Except.bind_eq_ok h' with ⟨⟨y, s₂⟩, h2, h''⟩
+  rcases Except.bind_eq_ok h'' with ⟨⟨z, s₃⟩, h3, h4⟩
+  simp only at h4
+  rw [pushItem_def] at h4
+  refine ⟨x, y, z, Devm.diffBurn_of_pop_of_pushBurn
+    (Devm.pop_append (Devm.pop_of_pop h1)
+      (Devm.pop_append (Devm.pop_of_pop h2) (Devm.pop_of_pop h3)))
+    (Devm.pushBurn_of_run h4)⟩
+
+/-- Transport a known three-word stack prefix through any successful ternary
+word operation represented as a `Devm.DiffBurn`. -/
+lemma prefix_of_diffBurn_three
+    (v : B256 → B256 → B256 → B256) {x y z xs} {s s' : Devm} :
+    (∃ x' y' z', Devm.DiffBurn [x', y', z'] [v x' y' z'] s s') →
+    (x :: y :: z :: xs <<+ s.stack) →
+      (v x y z :: xs <<+ s'.stack) := by
+  intros h0 h1
+  rcases h0 with ⟨x', y', z', h0⟩
+  rcases h0.stack with ⟨stk, h2, h3⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
+    with ⟨hx, hy, ws, h, h'⟩
+  rcases List.of_cons_pref_of_cons_pref h h' with ⟨hz, -⟩
+  cases hx
+  cases hy
+  cases hz
+  exact append_pref h3 (of_append_pref h2 h1)
+
+/-- `ADDMOD` replaces three known stack heads by their full-width modular
+sum. -/
+lemma prefix_of_addmod {e} {x y z xs} {s s' : Devm} :
+    Ninst.Run e s addmod s' → (x :: y :: z :: xs <<+ s.stack) →
+      (B256.addmod x y z :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_three B256.addmod ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyTernary run
+
+/-- `MULMOD` replaces three known stack heads by their full-width modular
+product. -/
+lemma prefix_of_mulmod {e} {x y z xs} {s s' : Devm} :
+    Ninst.Run e s mulmod s' → (x :: y :: z :: xs <<+ s.stack) →
+      (B256.mulmod x y z :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_three B256.mulmod ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyTernary run
+
+/- These contract-neutral instances intentionally live in the lower-fanout
+fixed-width module rather than extending the central `CommonProofs` rebuild
+cone. Importing `WordArithmetic` makes the ternary and XOR cases available to
+`line_inv`. -/
+instance : Rinst.Hinv Devm.state Rinst.xor := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.addmod := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.mulmod := by show_hinv_state
+
+instance : Rinst.Hinv Devm.memory Rinst.addmod := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact
+    (Devm.diffBurn_of_applyTernary run).choose_spec.choose_spec.choose_spec.memory⟩
+
+instance : Rinst.Hinv Devm.memory Rinst.mulmod := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact
+    (Devm.diffBurn_of_applyTernary run).choose_spec.choose_spec.choose_spec.memory⟩
 
 /-! ## EVM word bounds -/
 
@@ -32,6 +148,311 @@ theorem maxWordN_lt_wordModulusN : maxWordN < wordModulusN := by
 
 theorem maxWord_toNat : B256.max.toNat = maxWordN := by
   decide +kernel
+
+/-! ## Exact two-word multiplication -/
+
+/-- The low word of the exact 512-bit product of two EVM words. -/
+def productLowWord (x y : B256) : B256 := x * y
+
+/-- The high word of the exact 512-bit product, reconstructed from `MULMOD`
+with its carry correction. -/
+def productHighWord (x y : B256) : B256 :=
+  let low := productLowWord x y
+  let scratch := B256.mulmod x y B256.max
+  (scratch - low) - (if scratch < low then 1 else 0)
+
+theorem productLowWord_toNat (x y : B256) :
+    (productLowWord x y).toNat = x.toNat * y.toNat % wordModulusN := by
+  exact B256.toNat_mul_mod x y
+
+private theorem product_quotient_lt_pred
+    {m x y : Nat} (hm : 2 ≤ m) (hx : x < m) (hy : y < m) :
+    x * y / m < m - 1 := by
+  rw [Nat.div_lt_iff_lt_mul (by omega)]
+  calc
+    x * y ≤ (m - 1) * (m - 1) :=
+      Nat.mul_le_mul (by omega) (by omega)
+    _ < (m - 1) * m :=
+      Nat.mul_lt_mul_of_pos_left (by omega) (by omega)
+    _ = (m - 1) * m := rfl
+
+private theorem product_mod_pred_eq_quotient_add_remainder_mod
+    {m p : Nat} (hm : 2 ≤ m) :
+    p % (m - 1) = (p / m + p % m) % (m - 1) := by
+  have hsplit : p = p / m * m + p % m := (Nat.div_add_mod' p m).symm
+  have hmSplit : m = (m - 1) + 1 := by omega
+  calc
+    p % (m - 1) = (p / m * m + p % m) % (m - 1) :=
+      congrArg (fun n => n % (m - 1)) hsplit
+    _ = (p / m * ((m - 1) + 1) + p % m) % (m - 1) := by
+      rw [← hmSplit]
+    _ = (p / m * (m - 1) + (p / m + p % m)) % (m - 1) := by
+      simp only [Nat.mul_add, Nat.mul_one, Nat.add_assoc]
+    _ = (p / m + p % m) % (m - 1) := by simp
+
+/-- The staged high and low words recombine to the exact, untruncated product.
+There is no single-word product or magnitude premise. -/
+theorem productHighWord_mul_add_productLowWord_toNat (x y : B256) :
+    (productHighWord x y).toNat * wordModulusN +
+        (productLowWord x y).toNat =
+      x.toNat * y.toNat := by
+  let p := x.toNat * y.toNat
+  let q := p / wordModulusN
+  let r := p % wordModulusN
+  let scratch := p % maxWordN
+  have hmodulus : 2 ≤ wordModulusN := by
+    unfold wordModulusN
+    norm_num
+  have hmaxWord : maxWordN = wordModulusN - 1 := rfl
+  have hq : q < maxWordN := by
+    exact product_quotient_lt_pred hmodulus (B256.toNat_lt x)
+      (B256.toNat_lt y)
+  have hr : r < wordModulusN := by
+    exact Nat.mod_lt _ (by omega)
+  have hsplit : q * wordModulusN + r = p := by
+    exact Nat.div_add_mod' p wordModulusN
+  have hscratch : scratch = (q + r) % maxWordN := by
+    unfold scratch q r
+    rw [hmaxWord]
+    exact product_mod_pred_eq_quotient_add_remainder_mod hmodulus
+  have hlow : (productLowWord x y).toNat = r := by
+    unfold productLowWord r p wordModulusN
+    exact B256.toNat_mul_mod x y
+  have hscratchWord : (B256.mulmod x y B256.max).toNat = scratch := by
+    rw [B256.toNat_mulmod (by decide), maxWord_toNat]
+  by_cases hsum : q + r < maxWordN
+  · have hscratchSmall : scratch = q + r := by
+      rw [hscratch, Nat.mod_eq_of_lt hsum]
+    have hgeNat :
+        (productLowWord x y).toNat ≤
+          (B256.mulmod x y B256.max).toNat := by
+      calc
+        (productLowWord x y).toNat = r := hlow
+        _ ≤ q + r := Nat.le_add_left r q
+        _ = (B256.mulmod x y B256.max).toNat :=
+          (hscratchWord.trans hscratchSmall).symm
+    have hnotBorrow :
+        ¬B256.mulmod x y B256.max < productLowWord x y := by
+      intro hlt
+      exact (Nat.not_lt_of_ge hgeNat) (B256.toNat_lt_toNat hlt)
+    have hleWord :
+        productLowWord x y ≤ B256.mulmod x y B256.max :=
+      B256.le_of_toNat_le_toNat hgeNat
+    have hzeroLe :
+        (0 : B256) ≤ B256.mulmod x y B256.max - productLowWord x y :=
+      B256.le_of_toNat_le_toNat (Nat.zero_le _)
+    have hhigh : (productHighWord x y).toNat = q := by
+      rw [productHighWord, if_neg hnotBorrow]
+      rw [B256.toNat_sub_eq_of_le _ _ hzeroLe, B256.toNat_zero,
+        Nat.sub_zero]
+      rw [B256.toNat_sub_eq_of_le _ _ hleWord, hscratchWord, hlow,
+        hscratchSmall]
+      omega
+    rw [hhigh, hlow]
+    change q * wordModulusN + r = p
+    exact hsplit
+  · have hsumLe : maxWordN ≤ q + r := by omega
+    have hsumSub : q + r - maxWordN < maxWordN := by
+      unfold maxWordN at hq hr hsumLe ⊢
+      omega
+    have hscratchLarge : scratch = q + r - maxWordN := by
+      rw [hscratch, Nat.mod_eq_sub_mod hsumLe, Nat.mod_eq_of_lt hsumSub]
+    have hborrow : B256.mulmod x y B256.max < productLowWord x y := by
+      apply B256.lt_of_toNat_lt_toNat
+      calc
+        (B256.mulmod x y B256.max).toNat = q + r - maxWordN :=
+          hscratchWord.trans hscratchLarge
+        _ < r := by
+          unfold maxWordN at hq hsumLe ⊢
+          omega
+        _ = (productLowWord x y).toNat := hlow.symm
+    have hwrapped :
+        ((B256.mulmod x y B256.max - productLowWord x y).toNat) = q + 1 := by
+      rw [B256.toNat_sub, hscratchWord, hlow, hscratchLarge, Nat.lo_eq]
+      have hinner :
+          wordModulusN + (q + r - maxWordN) - r = q + 1 := by
+        unfold maxWordN at hq hr hsumLe ⊢
+        omega
+      unfold wordModulusN at hinner
+      rw [hinner, Nat.mod_eq_of_lt]
+      unfold maxWordN at hq
+      omega
+    have honeLe :
+        (1 : B256) ≤ B256.mulmod x y B256.max - productLowWord x y := by
+      apply B256.le_of_toNat_le_toNat
+      rw [B256.toNat_one, hwrapped]
+      omega
+    have hhigh : (productHighWord x y).toNat = q := by
+      rw [productHighWord, if_pos hborrow]
+      rw [B256.toNat_sub_eq_of_le _ _ honeLe, hwrapped, B256.toNat_one]
+      omega
+    rw [hhigh, hlow]
+    change q * wordModulusN + r = p
+    exact hsplit
+
+theorem productHighWord_toNat (x y : B256) :
+    (productHighWord x y).toNat =
+      x.toNat * y.toNat / wordModulusN := by
+  have hlow : (productLowWord x y).toNat < wordModulusN := by
+    simpa [wordModulusN] using B256.toNat_lt (productLowWord x y)
+  have hquotient :
+      ((productHighWord x y).toNat * wordModulusN +
+          (productLowWord x y).toNat) / wordModulusN =
+        (productHighWord x y).toNat := by
+    apply Nat.div_eq_of_lt_le
+    · exact Nat.le_add_right _ _
+    · rw [Nat.add_mul, Nat.one_mul]
+      exact Nat.add_lt_add_left hlow _
+  calc
+    (productHighWord x y).toNat =
+        ((productHighWord x y).toNat * wordModulusN +
+          (productLowWord x y).toNat) / wordModulusN := hquotient.symm
+    _ = x.toNat * y.toNat / wordModulusN := by
+      rw [productHighWord_mul_add_productLowWord_toNat]
+
+/-! ## Full-width division staging -/
+
+/-- The natural number represented by a high/low pair of EVM words. -/
+def wideNumeratorN (high low : B256) : Nat :=
+  high.toNat * wordModulusN + low.toNat
+
+/-- The word-level representation of `2^256 mod denominator` used by standard
+512-by-256 division. -/
+def wordModulusFactorWord (denominator : B256) : B256 :=
+  B256.addmod B256.max 1 denominator
+
+/-- The remainder of the exact two-word numerator `high * 2^256 + low`,
+computed without first constructing that unbounded natural number as a word. -/
+def wideRemainderWord (high low denominator : B256) : B256 :=
+  B256.addmod
+    (B256.mulmod high (wordModulusFactorWord denominator) denominator)
+    low denominator
+
+theorem wordModulusFactorWord_toNat
+    {denominator : B256} (nonzero : denominator ≠ 0) :
+    (wordModulusFactorWord denominator).toNat =
+      wordModulusN % denominator.toNat := by
+  rw [wordModulusFactorWord, B256.toNat_addmod nonzero,
+    maxWord_toNat, B256.toNat_one]
+  congr 1
+
+theorem wideRemainderWord_toNat
+    {high low denominator : B256} (nonzero : denominator ≠ 0) :
+    (wideRemainderWord high low denominator).toNat =
+      wideNumeratorN high low % denominator.toNat := by
+  rw [wideRemainderWord, B256.toNat_addmod nonzero,
+    B256.toNat_mulmod nonzero,
+    wordModulusFactorWord_toNat nonzero]
+  unfold wideNumeratorN
+  simp only [Nat.add_mod, Nat.mul_mod, Nat.mod_mod]
+
+theorem wideRemainderWord_le_numerator
+    {high low denominator : B256} (nonzero : denominator ≠ 0) :
+    (wideRemainderWord high low denominator).toNat ≤
+      wideNumeratorN high low := by
+  rw [wideRemainderWord_toNat nonzero]
+  exact Nat.mod_le _ _
+
+/-- The borrow bit produced while subtracting a remainder from the low word. -/
+def wideBorrowWord (low remainder : B256) : B256 :=
+  B256.ltCheck low remainder
+
+/-- Low word after subtracting a full-width remainder. -/
+def wideSubLowWord (low remainder : B256) : B256 :=
+  low - remainder
+
+/-- High word after propagating the remainder-subtraction borrow. -/
+def wideSubHighWord (high low remainder : B256) : B256 :=
+  high - wideBorrowWord low remainder
+
+/-- The two word-level subtraction results reconstruct exact natural-number
+subtraction whenever the remainder does not exceed the represented numerator. -/
+theorem wideSubWords_reconstruct
+    {high low remainder : B256}
+    (remainderLe : remainder.toNat ≤ wideNumeratorN high low) :
+    (wideSubHighWord high low remainder).toNat * wordModulusN +
+        (wideSubLowWord low remainder).toNat =
+      wideNumeratorN high low - remainder.toNat := by
+  unfold wideNumeratorN at remainderLe ⊢
+  by_cases borrow : low < remainder
+  · have lowLt : low.toNat < remainder.toNat :=
+      B256.toNat_lt_toNat borrow
+    have highPos : 0 < high.toNat := by
+      by_contra highNotPos
+      have highZero : high.toNat = 0 := by omega
+      simp only [highZero, Nat.zero_mul, Nat.zero_add] at remainderLe
+      omega
+    have oneLeHigh : (1 : B256) ≤ high := by
+      apply B256.le_of_toNat_le_toNat
+      rw [B256.toNat_one]
+      omega
+    have highSub :
+        (wideSubHighWord high low remainder).toNat = high.toNat - 1 := by
+      rw [wideSubHighWord, wideBorrowWord, B256.ltCheck, if_pos borrow,
+        B256.toNat_sub_eq_of_le _ _ oneLeHigh, B256.toNat_one]
+    have lowSub :
+        (wideSubLowWord low remainder).toNat =
+          wordModulusN + low.toNat - remainder.toNat := by
+      rw [wideSubLowWord, B256.toNat_sub]
+      change
+        (wordModulusN + low.toNat - remainder.toNat) ↾ 256 =
+          wordModulusN + low.toNat - remainder.toNat
+      rw [Nat.lo_eq_of_lt]
+      unfold wordModulusN
+      omega
+    have highSplit :
+        (high.toNat - 1) * wordModulusN + wordModulusN =
+          high.toNat * wordModulusN := by
+      calc
+        (high.toNat - 1) * wordModulusN + wordModulusN =
+            ((high.toNat - 1) + 1) * wordModulusN := by
+              rw [Nat.add_mul, Nat.one_mul]
+        _ = high.toNat * wordModulusN := by
+          rw [Nat.sub_add_cancel (by omega)]
+    have remainderLeModLow :
+        remainder.toNat ≤ wordModulusN + low.toNat := by
+      have remainderLt : remainder.toNat < wordModulusN := by
+        simpa [wordModulusN] using B256.toNat_lt remainder
+      exact (Nat.le_of_lt remainderLt).trans (Nat.le_add_right _ _)
+    rw [highSub, lowSub]
+    calc
+      (high.toNat - 1) * wordModulusN +
+          (wordModulusN + low.toNat - remainder.toNat) =
+        (high.toNat - 1) * wordModulusN +
+            (wordModulusN + low.toNat) - remainder.toNat :=
+          (Nat.add_sub_assoc remainderLeModLow _).symm
+      _ = ((high.toNat - 1) * wordModulusN + wordModulusN) +
+            low.toNat - remainder.toNat := by
+          rw [Nat.add_assoc]
+      _ = high.toNat * wordModulusN + low.toNat - remainder.toNat := by
+          rw [highSplit]
+  · have remainderLeLow : remainder ≤ low := B256.not_lt.mp borrow
+    have remainderLeLowNat : remainder.toNat ≤ low.toNat :=
+      B256.toNat_le_toNat remainderLeLow
+    have lowSub :
+        (wideSubLowWord low remainder).toNat =
+          low.toNat - remainder.toNat := by
+      exact B256.toNat_sub_eq_of_le _ _ remainderLeLow
+    have zeroLeHigh : (0 : B256) ≤ high :=
+      B256.le_of_toNat_le_toNat (Nat.zero_le _)
+    have highSub :
+        (wideSubHighWord high low remainder).toNat = high.toNat := by
+      rw [wideSubHighWord, wideBorrowWord, B256.ltCheck, if_neg borrow,
+        B256.toNat_sub_eq_of_le _ _ zeroLeHigh,
+        B256.toNat_zero, Nat.sub_zero]
+    rw [highSub, lowSub]
+    exact (Nat.add_sub_assoc remainderLeLowNat _).symm
+
+/-- Subtracting the computed remainder makes the represented numerator exactly
+divisible by the denominator. -/
+theorem wideNumerator_sub_remainder_mod_eq_zero
+    {high low denominator : B256} (nonzero : denominator ≠ 0) :
+    (wideNumeratorN high low -
+        (wideRemainderWord high low denominator).toNat) %
+      denominator.toNat = 0 := by
+  rw [wideRemainderWord_toNat nonzero]
+  apply Nat.sub_mod_eq_zero_of_mod_eq
+  exact (Nat.mod_mod _ _).symm
 
 theorem div_two_div_pow (n k : Nat) :
     n / 2 / 2 ^ k = n / 2 ^ (k + 1) := by

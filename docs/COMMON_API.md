@@ -411,9 +411,11 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
   also registered with the
   `stack-prefix-transport` recipe.
 - `Devm.state` is preserved by `mstore`, `mload` and the register arithmetic,
-  bitwise (including `Rinst.xor`), and comparison instructions
-  (`show_hinv_state` builds those from `Rinst.preserves_state`); `Devm.memory`
-  likewise now covers the full binary arithmetic family. A walk that tracks a
+  bitwise, and comparison instructions (`show_hinv_state` builds those from
+  `Rinst.preserves_state`); `Devm.memory` likewise covers the full binary
+  arithmetic family. Import [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean)
+  for the lower-fanout `Rinst.xor`, `Rinst.addmod`, and `Rinst.mulmod` state
+  instances and the ternary arithmetic memory instances. A walk that tracks a
   single account's balance states its
   invariant as the pointwise projection `fun d => Devm.getBal d a`, for which
   `Rinst`/`Ninst` instances are registered beside the whole-family ones.
@@ -589,6 +591,23 @@ representation. In `CommonProofs`,
 bitwise conjunction and exclusive-or, while `B256.and_idem_right` removes a
 repeated identical mask.
 
+For exact two-word multiplication, `productLowWord` and `productHighWord` name
+the standard `MUL`/`MULMOD` staging, while
+`productLowWord_toNat`, `productHighWord_toNat`, and
+`productHighWord_mul_add_productLowWord_toNat` recover the exact unbounded
+product without a single-word magnitude premise.
+
+For the first stage of exact two-word division,
+`wordModulusFactorWord` represents `2^256 mod denominator` and
+`wideRemainderWord` computes the remainder of `high * 2^256 + low` using
+`ADDMOD`/`MULMOD`; their corresponding `_toNat` theorems expose the exact
+natural-number values under only a nonzero-denominator premise.
+`wideNumeratorN`, `wideBorrowWord`, `wideSubLowWord`, and `wideSubHighWord`
+name the generic two-word subtraction stage;
+`wideSubWords_reconstruct` and
+`wideNumerator_sub_remainder_mod_eq_zero` recover its exact unbounded value
+and divisibility.
+
 For modular inverses, `inverseSeedWord`, `inverseNewtonStepWord`, and
 `inverseNewtonIter` name the standard seed and word-ring refinement.
 `newtonStep_modEq_square` is its unbounded algebraic core;
@@ -601,6 +620,13 @@ modulo the full word modulus. For an odd denominator,
 `inverseNewtonIter_six_seed_modEq_wordModulus` closes the complete refinement.
 These declarations are COMMON_API-only: an `Int.ModEq` goal is not reliably
 Newton-specific enough for an automatic proof recipe.
+
+For three-operand word instructions, `applyTernary_def` and
+`Devm.diffBurn_of_applyTernary` expose the generic execution shape,
+`prefix_of_diffBurn_three` transports a known stack prefix, and
+`prefix_of_addmod` / `prefix_of_mulmod` are the direct compiled-instruction
+bridges. The latter two are registered with the `stack-prefix-transport`
+recipe.
 
 For the pause face specifically, `pauseInfiniteSentinel`, `pauseForProjection`,
 and `compact_pause_word_eq_projection` in

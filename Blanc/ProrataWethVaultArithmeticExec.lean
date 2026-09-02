@@ -346,6 +346,622 @@ theorem inverseSeedAndSixNewtonSteps_trace
   · simpa [seedImage, seed] using finalDenominatorAt
   · simpa [seedImage, seed] using finalInverseAt
 
+/-! ## Full-width remainder staging -/
+
+/-- The initial `ADDMOD`/`MULMOD` prefix of `divideWideCore`, through the
+exact two-word numerator remainder store. -/
+def wideRemainderLine : Line :=
+  loadWord denominatorWord ++
+  [pushB256 1, pushB256 B256.max, addmod] ++
+  mstoreAt factorWord ++
+  loadWord denominatorWord ++ loadWord factorWord ++ loadWord highWord ++
+  [mulmod] ++ mstoreAt scratchWord ++
+  loadWord denominatorWord ++ loadWord lowWord ++ loadWord scratchWord ++
+  [addmod] ++ mstoreAt remainderWord
+
+/-- The proof-carrying memory image produced by `wideRemainderLine`. -/
+def wideRemainderTraceImage
+    (image : Bytes) (high low denominator : B256) : Bytes :=
+  let factor := wordModulusFactorWord denominator
+  let scratch := B256.mulmod high factor denominator
+  let remainder := B256.addmod scratch low denominator
+  Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt image (factorWord * 32).toNat factor.toBytes)
+      (scratchWord * 32).toNat scratch.toBytes)
+    (remainderWord * 32).toNat remainder.toBytes
+
+theorem wideRemainderTraceImage_denominator
+    {image : Bytes} {high low denominator : B256}
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator) :
+    Bytes.toB256
+        ((wideRemainderTraceImage image high low denominator).sliceD
+          (denominatorWord * 32).toNat 32 0) = denominator := by
+  unfold wideRemainderTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · rw [Bytes.readWord_writeAt_of_disjoint]
+      · exact denominatorAt
+      · left
+        decide +kernel
+    · left
+      decide +kernel
+  · left
+    decide +kernel
+
+theorem wideRemainderTraceImage_high
+    {image : Bytes} {high low denominator : B256}
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high) :
+    Bytes.toB256
+        ((wideRemainderTraceImage image high low denominator).sliceD
+          (highWord * 32).toNat 32 0) = high := by
+  unfold wideRemainderTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · rw [Bytes.readWord_writeAt_of_disjoint]
+      · exact highAt
+      · left
+        decide +kernel
+    · left
+      decide +kernel
+  · left
+    decide +kernel
+
+theorem wideRemainderTraceImage_low
+    {image : Bytes} {high low denominator : B256}
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low) :
+    Bytes.toB256
+        ((wideRemainderTraceImage image high low denominator).sliceD
+          (lowWord * 32).toNat 32 0) = low := by
+  unfold wideRemainderTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · rw [Bytes.readWord_writeAt_of_disjoint]
+      · exact lowAt
+      · left
+        decide +kernel
+    · left
+      decide +kernel
+  · left
+    decide +kernel
+
+theorem wideRemainderTraceImage_remainder
+    (image : Bytes) (high low denominator : B256) :
+    Bytes.toB256
+        ((wideRemainderTraceImage image high low denominator).sliceD
+          (remainderWord * 32).toNat 32 0) =
+      wideRemainderWord high low denominator := by
+  unfold wideRemainderTraceImage wideRemainderWord wordModulusFactorWord
+  exact Bytes.readWord_writeAt_self _ _ _
+
+/-- The compiled remainder prefix computes and stores the exact shared
+`wideRemainderWord`, preserving the surrounding stack and persistent state. -/
+theorem wideRemainder_trace
+    {sevm : Sevm} {pre post : Devm}
+    {image : Bytes} {high low denominator : B256} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (stack : tail <<+ pre.stack)
+    (run : Line.Run sevm pre wideRemainderLine post) :
+    tail <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory
+        (wideRemainderTraceImage image high low denominator) ∧
+      pre.state = post.state := by
+  have state :=
+    Line.of_inv Devm.state
+      (by unfold wideRemainderLine loadWord mstoreAt; line_inv) run
+  unfold wideRemainderLine at run
+
+  rcases of_run_append (loadWord denominatorWord) run with
+    ⟨s1, denominatorRun, run⟩
+  obtain ⟨p1, wf1, reads1, -⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads denominatorAt
+      denominatorRun
+  rcases of_run_append [pushB256 1, pushB256 B256.max, addmod] run with
+    ⟨s4, factorRun, run⟩
+  rcases Line.of_run_cons factorRun with
+    ⟨s2, pushOneRun, factorRun⟩
+  rcases Line.of_run_cons factorRun with
+    ⟨s3, pushMaxRun, factorRun⟩
+  rcases Line.of_run_cons factorRun with
+    ⟨s4', addmodRun, factorRun⟩
+  cases factorRun
+  have p2 := prefix_of_push (of_run_pushB256 pushOneRun) p1
+  have p3 := prefix_of_push (of_run_pushB256 pushMaxRun) p2
+  have p4raw := prefix_of_addmod addmodRun p3
+  have p4 :
+      wordModulusFactorWord denominator :: tail <<+ s4.stack := by
+    simpa [wordModulusFactorWord] using p4raw
+  have factorMemory : s1.memory = s4.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons pushOneRun
+        (Line.Run.cons pushMaxRun
+          (Line.Run.cons addmodRun Line.Run.nil)))
+  have wf4 : Mem.Wf s4.memory := by
+    rw [← factorMemory]
+    exact wf1
+  have reads4 : Mem.Reads s4.memory image := by
+    rw [← factorMemory]
+    exact reads1
+  rcases of_run_append (mstoreAt factorWord) run with
+    ⟨s5, factorStoreRun, run⟩
+  obtain ⟨p5, wf5, reads5, -⟩ :=
+    of_run_mstoreAt_image p4 wf4 reads4 factorStoreRun
+  let factor := wordModulusFactorWord denominator
+  let image1 :=
+    Bytes.writeAt image (factorWord * 32).toNat factor.toBytes
+  change Mem.Reads s5.memory image1 at reads5
+  have denominatorAt1 : Bytes.toB256
+      (image1.sliceD (denominatorWord * 32).toNat 32 0) = denominator := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact denominatorAt
+    · left
+      decide +kernel
+  have factorAt1 : Bytes.toB256
+      (image1.sliceD (factorWord * 32).toNat 32 0) = factor := by
+    unfold image1
+    exact Bytes.readWord_writeAt_self _ _ _
+  have highAt1 : Bytes.toB256
+      (image1.sliceD (highWord * 32).toNat 32 0) = high := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact highAt
+    · left
+      decide +kernel
+
+  rcases of_run_append (loadWord denominatorWord) run with
+    ⟨s6, denominatorRun2, run⟩
+  obtain ⟨p6, wf6, reads6, -⟩ :=
+    of_run_loadWordAt_image p5 wf5 reads5 denominatorAt1 denominatorRun2
+  rcases of_run_append (loadWord factorWord) run with
+    ⟨s7, factorLoadRun, run⟩
+  obtain ⟨p7, wf7, reads7, -⟩ :=
+    of_run_loadWordAt_image p6 wf6 reads6 factorAt1 factorLoadRun
+  rcases of_run_append (loadWord highWord) run with
+    ⟨s8, highRun, run⟩
+  obtain ⟨p8, wf8, reads8, -⟩ :=
+    of_run_loadWordAt_image p7 wf7 reads7 highAt1 highRun
+  rcases of_run_append [mulmod] run with
+    ⟨s9, mulmodLineRun, run⟩
+  rcases Line.of_run_cons mulmodLineRun with
+    ⟨s9', mulmodRun, mulmodLineRun⟩
+  cases mulmodLineRun
+  have p9raw := prefix_of_mulmod mulmodRun p8
+  let scratch := B256.mulmod high factor denominator
+  have p9 : scratch :: tail <<+ s9.stack := by
+    simpa [scratch] using p9raw
+  have mulmodMemory : s8.memory = s9.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons mulmodRun Line.Run.nil)
+  have wf9 : Mem.Wf s9.memory := by
+    rw [← mulmodMemory]
+    exact wf8
+  have reads9 : Mem.Reads s9.memory image1 := by
+    rw [← mulmodMemory]
+    exact reads8
+  rcases of_run_append (mstoreAt scratchWord) run with
+    ⟨s10, scratchStoreRun, run⟩
+  obtain ⟨p10, wf10, reads10, -⟩ :=
+    of_run_mstoreAt_image p9 wf9 reads9 scratchStoreRun
+  let image2 :=
+    Bytes.writeAt image1 (scratchWord * 32).toNat scratch.toBytes
+  change Mem.Reads s10.memory image2 at reads10
+  have denominatorAt2 : Bytes.toB256
+      (image2.sliceD (denominatorWord * 32).toNat 32 0) = denominator := by
+    unfold image2
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact denominatorAt1
+    · left
+      decide +kernel
+  have lowAt1 : Bytes.toB256
+      (image1.sliceD (lowWord * 32).toNat 32 0) = low := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact lowAt
+    · left
+      decide +kernel
+  have lowAt2 : Bytes.toB256
+      (image2.sliceD (lowWord * 32).toNat 32 0) = low := by
+    unfold image2
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact lowAt1
+    · left
+      decide +kernel
+  have scratchAt2 : Bytes.toB256
+      (image2.sliceD (scratchWord * 32).toNat 32 0) = scratch := by
+    unfold image2
+    exact Bytes.readWord_writeAt_self _ _ _
+
+  rcases of_run_append (loadWord denominatorWord) run with
+    ⟨s11, denominatorRun3, run⟩
+  obtain ⟨p11, wf11, reads11, -⟩ :=
+    of_run_loadWordAt_image p10 wf10 reads10 denominatorAt2 denominatorRun3
+  rcases of_run_append (loadWord lowWord) run with
+    ⟨s12, lowRun, run⟩
+  obtain ⟨p12, wf12, reads12, -⟩ :=
+    of_run_loadWordAt_image p11 wf11 reads11 lowAt2 lowRun
+  rcases of_run_append (loadWord scratchWord) run with
+    ⟨s13, scratchRun, run⟩
+  obtain ⟨p13, wf13, reads13, -⟩ :=
+    of_run_loadWordAt_image p12 wf12 reads12 scratchAt2 scratchRun
+  rcases of_run_append [addmod] run with
+    ⟨s14, addmodLineRun2, run⟩
+  rcases Line.of_run_cons addmodLineRun2 with
+    ⟨s14', addmodRun2, addmodLineRun2⟩
+  cases addmodLineRun2
+  have p14raw := prefix_of_addmod addmodRun2 p13
+  let remainder := B256.addmod scratch low denominator
+  have p14 : remainder :: tail <<+ s14.stack := by
+    simpa [remainder] using p14raw
+  have addmodMemory : s13.memory = s14.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons addmodRun2 Line.Run.nil)
+  have wf14 : Mem.Wf s14.memory := by
+    rw [← addmodMemory]
+    exact wf13
+  have reads14 : Mem.Reads s14.memory image2 := by
+    rw [← addmodMemory]
+    exact reads13
+  obtain ⟨p15, wf15, reads15, -⟩ :=
+    of_run_mstoreAt_image p14 wf14 reads14 run
+  refine ⟨p15, wf15, ?_, state⟩
+  simpa [wideRemainderTraceImage, image2, image1, remainder, scratch,
+    factor, wideRemainderWord, wordModulusFactorWord] using reads15
+
+/-- The exact remainder-subtraction block of `divideWideCore`. -/
+def wideSubtractRemainderLine : Line :=
+  loadWord remainderWord ++ loadWord lowWord ++ [lt] ++
+  mstoreAt borrowWord ++
+  loadWord remainderWord ++ loadWord lowWord ++ [sub] ++
+  mstoreAt lowWord ++
+  loadWord borrowWord ++ loadWord highWord ++ [sub] ++
+  mstoreAt highWord
+
+/-- Proof-carrying image after subtracting the staged remainder from the
+two-word numerator and propagating the low-word borrow. -/
+def wideSubtractRemainderTraceImage
+    (image : Bytes) (high low remainder : B256) : Bytes :=
+  let borrow := wideBorrowWord low remainder
+  let low' := wideSubLowWord low remainder
+  let high' := wideSubHighWord high low remainder
+  Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt image (borrowWord * 32).toNat borrow.toBytes)
+      (lowWord * 32).toNat low'.toBytes)
+    (highWord * 32).toNat high'.toBytes
+
+theorem wideSubtractRemainderTraceImage_denominator
+    {image : Bytes} {high low remainder denominator : B256}
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator) :
+    Bytes.toB256
+        ((wideSubtractRemainderTraceImage image high low remainder).sliceD
+          (denominatorWord * 32).toNat 32 0) = denominator := by
+  unfold wideSubtractRemainderTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · rw [Bytes.readWord_writeAt_of_disjoint]
+      · exact denominatorAt
+      · left
+        decide +kernel
+    · left
+      decide +kernel
+  · left
+    decide +kernel
+
+theorem wideSubtractRemainderTraceImage_remainder
+    {image : Bytes} {high low remainder : B256}
+    (remainderAt : Bytes.toB256
+      (image.sliceD (remainderWord * 32).toNat 32 0) = remainder) :
+    Bytes.toB256
+        ((wideSubtractRemainderTraceImage image high low remainder).sliceD
+          (remainderWord * 32).toNat 32 0) = remainder := by
+  unfold wideSubtractRemainderTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · rw [Bytes.readWord_writeAt_of_disjoint]
+      · exact remainderAt
+      · left
+        decide +kernel
+    · right
+      decide +kernel
+  · right
+    decide +kernel
+
+theorem wideSubtractRemainderTraceImage_low
+    (image : Bytes) (high low remainder : B256) :
+    Bytes.toB256
+        ((wideSubtractRemainderTraceImage image high low remainder).sliceD
+          (lowWord * 32).toNat 32 0) = wideSubLowWord low remainder := by
+  unfold wideSubtractRemainderTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · exact Bytes.readWord_writeAt_self _ _ _
+  · right
+    decide +kernel
+
+theorem wideSubtractRemainderTraceImage_high
+    (image : Bytes) (high low remainder : B256) :
+    Bytes.toB256
+        ((wideSubtractRemainderTraceImage image high low remainder).sliceD
+          (highWord * 32).toNat 32 0) =
+      wideSubHighWord high low remainder := by
+  unfold wideSubtractRemainderTraceImage
+  exact Bytes.readWord_writeAt_self _ _ _
+
+/-- The compiled subtraction block writes the shared exact high/low
+subtraction words while preserving the surrounding stack and persistent
+state. -/
+theorem wideSubtractRemainder_trace
+    {sevm : Sevm} {pre post : Devm}
+    {image : Bytes} {high low remainder : B256} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (remainderAt : Bytes.toB256
+      (image.sliceD (remainderWord * 32).toNat 32 0) = remainder)
+    (stack : tail <<+ pre.stack)
+    (run : Line.Run sevm pre wideSubtractRemainderLine post) :
+    tail <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory
+        (wideSubtractRemainderTraceImage image high low remainder) ∧
+      pre.state = post.state := by
+  have state :=
+    Line.of_inv Devm.state
+      (by unfold wideSubtractRemainderLine loadWord mstoreAt; line_inv) run
+  unfold wideSubtractRemainderLine at run
+
+  rcases of_run_append (loadWord remainderWord) run with
+    ⟨s1, remainderRun, run⟩
+  obtain ⟨p1, wf1, reads1, -⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads remainderAt remainderRun
+  rcases of_run_append (loadWord lowWord) run with
+    ⟨s2, lowRun, run⟩
+  obtain ⟨p2, wf2, reads2, -⟩ :=
+    of_run_loadWordAt_image p1 wf1 reads1 lowAt lowRun
+  rcases of_run_append [lt] run with
+    ⟨s3, ltLineRun, run⟩
+  rcases Line.of_run_cons ltLineRun with
+    ⟨s3', ltRun, ltLineRun⟩
+  cases ltLineRun
+  have p3raw := prefix_of_lt ltRun p2
+  let borrow := wideBorrowWord low remainder
+  have p3 : borrow :: tail <<+ s3.stack := by
+    change B256.ltCheck low remainder :: tail <<+ s3.stack
+    exact p3raw
+  have ltMemory : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons ltRun Line.Run.nil)
+  have wf3 : Mem.Wf s3.memory := by
+    rw [← ltMemory]
+    exact wf2
+  have reads3 : Mem.Reads s3.memory image := by
+    rw [← ltMemory]
+    exact reads2
+  rcases of_run_append (mstoreAt borrowWord) run with
+    ⟨s4, borrowStoreRun, run⟩
+  obtain ⟨p4, wf4, reads4, -⟩ :=
+    of_run_mstoreAt_image p3 wf3 reads3 borrowStoreRun
+  let image1 :=
+    Bytes.writeAt image (borrowWord * 32).toNat borrow.toBytes
+  change Mem.Reads s4.memory image1 at reads4
+  have remainderAt1 : Bytes.toB256
+      (image1.sliceD (remainderWord * 32).toNat 32 0) = remainder := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact remainderAt
+    · left
+      decide +kernel
+  have lowAt1 : Bytes.toB256
+      (image1.sliceD (lowWord * 32).toNat 32 0) = low := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact lowAt
+    · left
+      decide +kernel
+  have highAt1 : Bytes.toB256
+      (image1.sliceD (highWord * 32).toNat 32 0) = high := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact highAt
+    · left
+      decide +kernel
+  have borrowAt1 : Bytes.toB256
+      (image1.sliceD (borrowWord * 32).toNat 32 0) = borrow := by
+    unfold image1
+    exact Bytes.readWord_writeAt_self _ _ _
+
+  rcases of_run_append (loadWord remainderWord) run with
+    ⟨s5, remainderRun2, run⟩
+  obtain ⟨p5, wf5, reads5, -⟩ :=
+    of_run_loadWordAt_image p4 wf4 reads4 remainderAt1 remainderRun2
+  rcases of_run_append (loadWord lowWord) run with
+    ⟨s6, lowRun2, run⟩
+  obtain ⟨p6, wf6, reads6, -⟩ :=
+    of_run_loadWordAt_image p5 wf5 reads5 lowAt1 lowRun2
+  rcases of_run_append [sub] run with
+    ⟨s7, lowSubLineRun, run⟩
+  rcases Line.of_run_cons lowSubLineRun with
+    ⟨s7', lowSubRun, lowSubLineRun⟩
+  cases lowSubLineRun
+  have p7raw := prefix_of_sub lowSubRun p6
+  let low' := wideSubLowWord low remainder
+  have p7 : low' :: tail <<+ s7.stack := by
+    simpa [low', wideSubLowWord] using p7raw
+  have lowSubMemory : s6.memory = s7.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons lowSubRun Line.Run.nil)
+  have wf7 : Mem.Wf s7.memory := by
+    rw [← lowSubMemory]
+    exact wf6
+  have reads7 : Mem.Reads s7.memory image1 := by
+    rw [← lowSubMemory]
+    exact reads6
+  rcases of_run_append (mstoreAt lowWord) run with
+    ⟨s8, lowStoreRun, run⟩
+  obtain ⟨p8, wf8, reads8, -⟩ :=
+    of_run_mstoreAt_image p7 wf7 reads7 lowStoreRun
+  let image2 :=
+    Bytes.writeAt image1 (lowWord * 32).toNat low'.toBytes
+  change Mem.Reads s8.memory image2 at reads8
+  have borrowAt2 : Bytes.toB256
+      (image2.sliceD (borrowWord * 32).toNat 32 0) = borrow := by
+    unfold image2
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact borrowAt1
+    · right
+      decide +kernel
+  have highAt2 : Bytes.toB256
+      (image2.sliceD (highWord * 32).toNat 32 0) = high := by
+    unfold image2
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact highAt1
+    · left
+      decide +kernel
+
+  rcases of_run_append (loadWord borrowWord) run with
+    ⟨s9, borrowRun, run⟩
+  obtain ⟨p9, wf9, reads9, -⟩ :=
+    of_run_loadWordAt_image p8 wf8 reads8 borrowAt2 borrowRun
+  rcases of_run_append (loadWord highWord) run with
+    ⟨s10, highRun, run⟩
+  obtain ⟨p10, wf10, reads10, -⟩ :=
+    of_run_loadWordAt_image p9 wf9 reads9 highAt2 highRun
+  rcases of_run_append [sub] run with
+    ⟨s11, highSubLineRun, run⟩
+  rcases Line.of_run_cons highSubLineRun with
+    ⟨s11', highSubRun, highSubLineRun⟩
+  cases highSubLineRun
+  have p11raw := prefix_of_sub highSubRun p10
+  let high' := wideSubHighWord high low remainder
+  have p11 : high' :: tail <<+ s11.stack := by
+    simpa [high', wideSubHighWord] using p11raw
+  have highSubMemory : s10.memory = s11.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons highSubRun Line.Run.nil)
+  have wf11 : Mem.Wf s11.memory := by
+    rw [← highSubMemory]
+    exact wf10
+  have reads11 : Mem.Reads s11.memory image2 := by
+    rw [← highSubMemory]
+    exact reads10
+  obtain ⟨p12, wf12, reads12, -⟩ :=
+    of_run_mstoreAt_image p11 wf11 reads11 run
+  refine ⟨p12, wf12, ?_, state⟩
+  simpa [wideSubtractRemainderTraceImage, image2, image1, high', low',
+    borrow] using reads12
+
+/-- The exact reduction prefix of `divideWideCore`: compute the two-word
+remainder and subtract it from the staged numerator. -/
+def wideReductionLine : Line :=
+  wideRemainderLine ++ wideSubtractRemainderLine
+
+/-- Proof-carrying image after the exact remainder has been computed and
+subtracted from the two-word numerator. -/
+def wideReductionTraceImage
+    (image : Bytes) (high low denominator : B256) : Bytes :=
+  wideSubtractRemainderTraceImage
+    (wideRemainderTraceImage image high low denominator)
+    high low (wideRemainderWord high low denominator)
+
+theorem wideReductionTraceImage_denominator
+    {image : Bytes} {high low denominator : B256}
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator) :
+    Bytes.toB256
+        ((wideReductionTraceImage image high low denominator).sliceD
+          (denominatorWord * 32).toNat 32 0) = denominator := by
+  unfold wideReductionTraceImage
+  apply wideSubtractRemainderTraceImage_denominator
+  exact wideRemainderTraceImage_denominator denominatorAt
+
+theorem wideReductionTraceImage_remainder
+    (image : Bytes) (high low denominator : B256) :
+    Bytes.toB256
+        ((wideReductionTraceImage image high low denominator).sliceD
+          (remainderWord * 32).toNat 32 0) =
+      wideRemainderWord high low denominator := by
+  unfold wideReductionTraceImage
+  apply wideSubtractRemainderTraceImage_remainder
+  exact wideRemainderTraceImage_remainder image high low denominator
+
+theorem wideReductionTraceImage_low
+    (image : Bytes) (high low denominator : B256) :
+    Bytes.toB256
+        ((wideReductionTraceImage image high low denominator).sliceD
+          (lowWord * 32).toNat 32 0) =
+      wideSubLowWord low (wideRemainderWord high low denominator) := by
+  unfold wideReductionTraceImage
+  exact wideSubtractRemainderTraceImage_low _ _ _ _
+
+theorem wideReductionTraceImage_high
+    (image : Bytes) (high low denominator : B256) :
+    Bytes.toB256
+        ((wideReductionTraceImage image high low denominator).sliceD
+          (highWord * 32).toNat 32 0) =
+      wideSubHighWord high low (wideRemainderWord high low denominator) := by
+  unfold wideReductionTraceImage
+  exact wideSubtractRemainderTraceImage_high _ _ _ _
+
+/-- The compiled reduction prefix realizes the generic full-width remainder
+and subtraction words while preserving the surrounding stack and persistent
+state. -/
+theorem wideReduction_trace
+    {sevm : Sevm} {pre post : Devm}
+    {image : Bytes} {high low denominator : B256} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (stack : tail <<+ pre.stack)
+    (run : Line.Run sevm pre wideReductionLine post) :
+    tail <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory
+        (wideReductionTraceImage image high low denominator) ∧
+      pre.state = post.state := by
+  unfold wideReductionLine at run
+  rcases of_run_append wideRemainderLine run with
+    ⟨mid, remainderRun, subtractionRun⟩
+  obtain ⟨midPrefix, midWf, midReads, state1⟩ :=
+    wideRemainder_trace memoryWf memoryReads denominatorAt highAt lowAt stack
+      remainderRun
+  have midHighAt : Bytes.toB256
+      ((wideRemainderTraceImage image high low denominator).sliceD
+        (highWord * 32).toNat 32 0) = high :=
+    wideRemainderTraceImage_high highAt
+  have midLowAt : Bytes.toB256
+      ((wideRemainderTraceImage image high low denominator).sliceD
+        (lowWord * 32).toNat 32 0) = low :=
+    wideRemainderTraceImage_low lowAt
+  have midRemainderAt : Bytes.toB256
+      ((wideRemainderTraceImage image high low denominator).sliceD
+        (remainderWord * 32).toNat 32 0) =
+      wideRemainderWord high low denominator :=
+    wideRemainderTraceImage_remainder image high low denominator
+  obtain ⟨finalPrefix, finalWf, finalReads, state2⟩ :=
+    wideSubtractRemainder_trace midWf midReads midHighAt midLowAt
+      midRemainderAt midPrefix subtractionRun
+  exact ⟨finalPrefix, finalWf, finalReads, state1.trans state2⟩
+
 /-! ## Division arms -/
 
 /-- A successful floor-mode walk through the single-word arm of `divide512`
