@@ -1,7 +1,7 @@
 # Lido CircuitBreaker — end-to-end assurance register
 
 **Status:** authoritative claim map for Blanc's Lido CircuitBreaker port.
-**Reconciled:** 2026-08-27.
+**Reconciled:** 2026-09-03.
 **Machine-checked by:** `scripts/check-lido-circuit-breaker-assurance.sh`.
 
 This register maps every assurance claim Blanc makes about its Lido
@@ -130,8 +130,11 @@ lost.
   below `2 ^ 256`. Histories crossing that ceiling are simply not among those
   quantified over. The Registry invariant never consults the figure; the
   restriction is inherited from the shared chain model.
-- **No liveness.** Nothing here says the contract can be paused, only what
-  happens when it is.
+- **No universal liveness or all-world gas claim.** TWG-3 constructs successful
+  public pauses for two finite configured worlds (the ordinary duration and
+  the infinite-sentinel duration). Nothing here says every admissible world can
+  be paused, that an external actor will submit such a transaction, or that one
+  gas bound suffices universally.
 - **No callback-time count/expiry coherence.** Mid-call, after the target is
   unregistered and before the callback returns, the count is already zero and
   the expiry is stale. That is real source behaviour, and no theorem claims
