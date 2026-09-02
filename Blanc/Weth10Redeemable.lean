@@ -157,14 +157,16 @@ def redemptionCallWorstGas (q : Nat) : Nat :=
   gasColdAccountAccess +
     (if q = 0 then 0 else gNewAccount + gasCallValue)
 
-/-- All explicit Prague components, before taking the mechanized proof floor. -/
+/-- All explicit modeled fee-schedule components, before taking the mechanized
+proof floor. -/
 def redemptionModeledRuntime (q : Nat) : Nat :=
   redemptionSelectorDispatchGas + redemptionFixedModelGas +
     redemptionStorageReadWorstGas + redemptionStorageWriteWorstGas +
     redemptionCallWorstGas q + redemptionSuccessTailGas
 
-/-- Closed conservative Prague runtime bound.  It is the maximum of the exact
-forward-proof budget and the explicit worst-case component schedule. -/
+/-- Closed conservative runtime bound under Jaune's modeled global fee
+schedule.  It is the maximum of the exact forward-proof budget and the
+explicit worst-case component schedule. -/
 def redemptionRuntimeCeiling (q : Nat) : Nat :=
   max redemptionExecutionGasFloor (redemptionModeledRuntime q)
 
@@ -367,10 +369,10 @@ theorem redemptionRuntimeCeiling_eq (q : Nat) :
 
 /-- Fields common to the actual `withdrawTo` and `withdraw` message wrappers. -/
 structure AdmissibleRedemptionMessageCore
-    (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
+    (rules : ForkRules) (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
     (w : State) (msg : Msg) : Prop where
   state_eq : msg.benv.state = w
-  rules_eq : msg.benv.stat.rules = pragueRules
+  rules_eq : msg.benv.stat.rules = rules
   target_eq : msg.target = some ca
   currentTarget_eq : msg.currentTarget = ca
   codeAddress_eq : msg.codeAddress = some ca
@@ -383,9 +385,9 @@ structure AdmissibleRedemptionMessageCore
   isStatic_eq : msg.isStatic = false
   auths_eq : msg.tenv.stat.auths = []
   disablePrecompiles_eq : msg.disablePrecompiles = false
-  target_not_precompile : pragueRules.isPrecomp ca = false
+  target_not_precompile : rules.isPrecomp ca = false
   recipient_ne_zero : recipient ≠ 0
-  recipient_not_precompile : pragueRules.isPrecomp recipient = false
+  recipient_not_precompile : rules.isPrecomp recipient = false
   recipient_code_free : (w.getCode recipient).toList = []
   original_storage_eq : msg.benv.stat.origState.getStor ca = w.getStor ca
   target_access : AddressAccessCase msg.accessedAddresses ca
@@ -398,17 +400,17 @@ structure AdmissibleRedemptionMessageCore
 /-- Canonical generic `withdrawTo` envelope.  No field contains an execution
 result, post-state, recipient-child success, or receipt. -/
 structure AdmissibleRedemptionMessage
-    (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
+    (rules : ForkRules) (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
     (w : State) (msg : Msg) : Prop
-    extends AdmissibleRedemptionMessageCore dp ca owner recipient q w msg where
+    extends AdmissibleRedemptionMessageCore rules dp ca owner recipient q w msg where
   data_eq : msg.data = withdrawToCalldata recipient q
   selector_eq : Sevm.selector (initSevm msg) = withdrawToSelector
 
 /-- Canonical direct-holder `withdraw` envelope. -/
 structure AdmissibleSelfRedemptionMessage
-    (dp : DeployParams) (ca owner : Adr) (q : Nat)
+    (rules : ForkRules) (dp : DeployParams) (ca owner : Adr) (q : Nat)
     (w : State) (msg : Msg) : Prop
-    extends AdmissibleRedemptionMessageCore dp ca owner owner q w msg where
+    extends AdmissibleRedemptionMessageCore rules dp ca owner owner q w msg where
   data_eq : msg.data = withdrawCalldata q
   selector_eq : Sevm.selector (initSevm msg) = withdrawSelector
 
@@ -597,9 +599,9 @@ theorem checkTransactionSenderCode_of_admissible
 target, access-list, and gas facts are explicit, but whose fields contain no
 message execution or receipt result. -/
 structure AdmissibleRedemptionTx
-    (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
+    (rules : ForkRules) (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
     (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) : Prop where
-  rules_eq : benv.stat.rules = pragueRules
+  rules_eq : benv.stat.rules = rules
   type_eq : ∃ maxPriorityFee maxFee,
     tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) []
   data_eq : tx.data = withdrawToCalldata recipient q
@@ -612,7 +614,8 @@ structure AdmissibleRedemptionTx
   owner_ne_zero : owner ≠ 0
   owner_sender_admissible : TransactionSenderAdmissible benv.state owner
   validated :
-    validateTransaction pragueRules tx = .ok (calculateIntrinsicCost tx)
+    validateTransaction rules tx = .ok (calculateIntrinsicCost tx)
+  gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ()
   checked :
     checkTransaction benv.beginTransaction
       (redemptionTxPreludeBout bout tx index) tx =
@@ -627,10 +630,10 @@ structure AdmissibleRedemptionTx
     tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
   target_code :
     some (benv.state.getCode ca).toList = Prog.compile (weth10 dp)
-  target_not_precompile : pragueRules.isPrecomp ca = false
+  target_not_precompile : rules.isPrecomp ca = false
   target_not_created : ca ∉ benv.createdAccounts
   recipient_ne_zero : recipient ≠ 0
-  recipient_not_precompile : pragueRules.isPrecomp recipient = false
+  recipient_not_precompile : rules.isPrecomp recipient = false
   recipient_code_free : (benv.state.getCode recipient).toList = []
   recipient_account : RecipientAccountCase benv.state recipient
 
@@ -638,9 +641,9 @@ structure AdmissibleRedemptionTx
 sender itself, code-freedom is retained as the receiver-safety premise; this is
 strictly stronger than the transaction sender boundary used by `withdrawTo`. -/
 structure AdmissibleSelfRedemptionTx
-    (dp : DeployParams) (ca owner : Adr) (q : Nat)
+    (rules : ForkRules) (dp : DeployParams) (ca owner : Adr) (q : Nat)
     (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) : Prop where
-  rules_eq : benv.stat.rules = pragueRules
+  rules_eq : benv.stat.rules = rules
   type_eq : ∃ maxPriorityFee maxFee,
     tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) []
   data_eq : tx.data = withdrawCalldata q
@@ -651,10 +654,11 @@ structure AdmissibleSelfRedemptionTx
   nonce_not_max : tx.nonce ≠ UInt64.max
   recoveredSender : recoverSender benv.stat.chainId tx = .ok owner
   owner_ne_zero : owner ≠ 0
-  owner_not_precompile : pragueRules.isPrecomp owner = false
+  owner_not_precompile : rules.isPrecomp owner = false
   owner_code_free : (benv.state.getCode owner).toList = []
   validated :
-    validateTransaction pragueRules tx = .ok (calculateIntrinsicCost tx)
+    validateTransaction rules tx = .ok (calculateIntrinsicCost tx)
+  gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ()
   checked :
     checkTransaction benv.beginTransaction
       (redemptionTxPreludeBout bout tx index) tx =
@@ -669,7 +673,7 @@ structure AdmissibleSelfRedemptionTx
     tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
   target_code :
     some (benv.state.getCode ca).toList = Prog.compile (weth10 dp)
-  target_not_precompile : pragueRules.isPrecomp ca = false
+  target_not_precompile : rules.isPrecomp ca = false
   target_not_created : ca ∉ benv.createdAccounts
   owner_account : RecipientAccountCase benv.state owner
 
@@ -678,10 +682,10 @@ Together they discharge validation, transaction checking, fee accounting, and
 every remaining field of `AdmissibleRedemptionTx`; sender recovery is kept out
 as the sole cryptographic input. -/
 structure NonSignatureRedemptionTxEnvelope
-    (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
+    (rules : ForkRules) (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
     (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat)
     (maxPriorityFee maxFee : Nat) : Prop where
-  rules_eq : benv.stat.rules = pragueRules
+  rules_eq : benv.stat.rules = rules
   type_eq : tx.type =
     .two benv.stat.chainId maxPriorityFee maxFee (some ca) []
   data_eq : tx.data = withdrawToCalldata recipient q
@@ -695,31 +699,32 @@ structure NonSignatureRedemptionTxEnvelope
   max_fee_fits : tx.gas * maxFee ≤ B256.max.toNat
   max_fee_funded :
     tx.gas * maxFee ≤ (benv.state.bal owner).toNat
+  gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ()
   gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas
   block_gas_room :
     tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
   target_code :
     some (benv.state.getCode ca).toList = Prog.compile (weth10 dp)
-  target_not_precompile : pragueRules.isPrecomp ca = false
+  target_not_precompile : rules.isPrecomp ca = false
   target_not_created : ca ∉ benv.createdAccounts
   recipient_ne_zero : recipient ≠ 0
-  recipient_not_precompile : pragueRules.isPrecomp recipient = false
+  recipient_not_precompile : rules.isPrecomp recipient = false
   recipient_code_free : (benv.state.getCode recipient).toList = []
   recipient_account : RecipientAccountCase benv.state recipient
 
 /-- Once the non-signature envelope is present, the holder's own recovered
 signature is the only missing input to transaction admissibility. -/
 theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
     (henv : NonSignatureRedemptionTxEnvelope
-      dp ca owner recipient q benv bout tx index maxPriorityFee maxFee)
+      rules dp ca owner recipient q benv bout tx index maxPriorityFee maxFee)
     (hrecovered : recoverSender benv.stat.chainId tx = .ok owner) :
     AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index := by
+      rules dp ca owner recipient q benv bout tx index := by
   have hvalidated :
-      validateTransaction pragueRules tx = .ok (calculateIntrinsicCost tx) := by
+      validateTransaction rules tx = .ok (calculateIntrinsicCost tx) := by
     rcases hcost : calculateIntrinsicCost tx with ⟨intrinsic, floor⟩
     have hgas :
         max floor (intrinsic + redemptionRuntimeCeiling q) ≤ tx.gas := by
@@ -734,9 +739,13 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     rw [hcost]
     simp only
     rw [if_neg (by omega)]
-    simp [pragueRules, pragueTransactionLimits, pragueCodeLimits,
-      checkInitcodeSize, TxType.receiver?, henv.type_eq,
-      henv.nonce_not_max]
+    cases hmax : rules.tx.maxGas with
+    | none =>
+        simp [checkInitcodeSize, TxType.receiver?, henv.type_eq,
+          henv.nonce_not_max]
+    | some maxGas =>
+        simp [checkInitcodeSize, TxType.receiver?, henv.type_eq,
+          henv.gas_cap, henv.nonce_not_max]
   have hchecked :
       checkTransaction benv.beginTransaction
           (redemptionTxPreludeBout bout tx index) tx =
@@ -820,6 +829,7 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     owner_ne_zero := henv.owner_ne_zero
     owner_sender_admissible := henv.owner_sender_admissible
     validated := hvalidated
+    gas_cap := henv.gas_cap
     checked := hchecked
     base_fee_le_effective := ?_
     upfront_funded := ?_
@@ -848,7 +858,7 @@ structure TransactionRedemptionTrace
   execution :
     ∃ intrinsicGas calldataFloorGasCost effectiveGasPrice
         debitState msg messagePost messageOut,
-      validateTransaction pragueRules tx =
+      validateTransaction benv.stat.rules tx =
           .ok (intrinsicGas, calldataFloorGasCost) ∧
       checkTransaction benv.beginTransaction
           (redemptionTxPreludeBout bout tx index) tx =
@@ -946,10 +956,10 @@ structure TransactionDebitOutcome
   sumDebit : sum debit.bal + fee = sum w.bal
 
 theorem AdmissibleRedemptionTx.upfrontDebit_exists
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (henv : AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index) :
+      rules dp ca owner recipient q benv bout tx index) :
     ∃ debit,
       TransactionDebitOutcome owner
         (tx.gas * redemptionEffectiveGasPrice benv tx)
@@ -1012,10 +1022,10 @@ theorem AdmissibleRedemptionTx.upfrontDebit_exists
     simpa [State.balSum, State.incrNonce_bal, fee] using hsum
 
 theorem AdmissibleSelfRedemptionTx.upfrontDebit_exists
-    {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (henv : AdmissibleSelfRedemptionTx
-      dp ca owner q benv bout tx index) :
+      rules dp ca owner q benv bout tx index) :
     ∃ debit,
       TransactionDebitOutcome owner
         (tx.gas * redemptionEffectiveGasPrice benv tx)
@@ -2349,12 +2359,12 @@ structure MessageFrameRedemptionOutcome
   outAccountsToDeleteEmpty : out.accountsToDelete.isEmpty = true
 
 theorem Stable.withdrawTo_messageFrame_of_le
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)
     (hq : q ≤ bookedBalanceNat w ca owner)
     (henv : AdmissibleRedemptionMessage
-      dp ca owner recipient q w msg) :
+      rules dp ca owner recipient q w msg) :
     ∃ entry post out,
       MessageFrameRedemptionOutcome
         dp ca owner recipient q w msg entry post out := by
@@ -2497,11 +2507,11 @@ theorem Stable.withdrawTo_messageFrame_of_le
 /-- The canonical direct-holder entry point executes the actual `withdraw`
 dispatcher branch and body, rather than deriving its result from `withdrawTo`. -/
 theorem Stable.withdraw_messageFrame_of_le
-    {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)
     (hq : q ≤ bookedBalanceNat w ca owner)
-    (henv : AdmissibleSelfRedemptionMessage dp ca owner q w msg) :
+    (henv : AdmissibleSelfRedemptionMessage rules dp ca owner q w msg) :
     ∃ entry post out,
       MessageFrameRedemptionOutcome
         dp ca owner owner q w msg entry post out := by
@@ -2639,12 +2649,12 @@ theorem Stable.withdraw_messageFrame_of_le
     rfl
 
 theorem Stable.messageRedemption_enabled_of_frame
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)
     (hq : q ≤ bookedBalanceNat w ca owner)
     (henv : AdmissibleRedemptionMessageCore
-      dp ca owner recipient q w msg)
+      rules dp ca owner recipient q w msg)
     (hrun : ∃ entry post out,
       MessageFrameRedemptionOutcome
         dp ca owner recipient q w msg entry post out) :
@@ -2799,12 +2809,12 @@ theorem Stable.messageRedemption_enabled_of_frame
     exact hframe.entryOutput
 
 theorem Stable.messageRedemption_enabled_of_le
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)
     (hq : q ≤ bookedBalanceNat w ca owner)
     (henv : AdmissibleRedemptionMessage
-      dp ca owner recipient q w msg) :
+      rules dp ca owner recipient q w msg) :
     MessageRedemptionEnabled dp ca owner recipient q w msg :=
   hstable.messageRedemption_enabled_of_frame hq
     henv.toAdmissibleRedemptionMessageCore
@@ -2813,11 +2823,11 @@ theorem Stable.messageRedemption_enabled_of_le
 /-- A direct holder can redeem through the canonical `withdraw(q)` selector.
 Its execution witness is constructed by `withdraw_messageFrame_of_le`. -/
 theorem Stable.selfRedemption_enabled_of_le
-    {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)
     (hq : q ≤ bookedBalanceNat w ca owner)
-    (henv : AdmissibleSelfRedemptionMessage dp ca owner q w msg) :
+    (henv : AdmissibleSelfRedemptionMessage rules dp ca owner q w msg) :
     MessageRedemptionEnabled dp ca owner owner q w msg :=
   hstable.messageRedemption_enabled_of_frame hq
     henv.toAdmissibleRedemptionMessageCore
@@ -2826,12 +2836,12 @@ theorem Stable.selfRedemption_enabled_of_le
 /-! ## Canonical transaction construction -/
 
 theorem Stable.preparedRedemptionMessage_exists
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hstable : Stable dp ca benv.state)
     (hq : q ≤ bookedBalanceNat benv.state ca owner)
     (henv : AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index) :
+      rules dp ca owner recipient q benv bout tx index) :
     ∃ debit msg entry messagePost messageOut,
       TransactionDebitOutcome owner
           (tx.gas * redemptionEffectiveGasPrice benv tx)
@@ -2885,7 +2895,7 @@ theorem Stable.preparedRedemptionMessage_exists
     simp only [htype]
     rfl
   have hmsg : AdmissibleRedemptionMessage
-      dp ca owner recipient q debit msg := by
+      rules dp ca owner recipient q debit msg := by
     refine {
       state_eq := ?_
       rules_eq := ?_
@@ -2974,12 +2984,12 @@ theorem Stable.preparedRedemptionMessage_exists
     hdebit, hprepare, hframe, heffect⟩
 
 theorem Stable.preparedSelfRedemptionMessage_exists
-    {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hstable : Stable dp ca benv.state)
     (hq : q ≤ bookedBalanceNat benv.state ca owner)
     (henv : AdmissibleSelfRedemptionTx
-      dp ca owner q benv bout tx index) :
+      rules dp ca owner q benv bout tx index) :
     ∃ debit msg entry messagePost messageOut,
       TransactionDebitOutcome owner
           (tx.gas * redemptionEffectiveGasPrice benv tx)
@@ -3019,7 +3029,7 @@ theorem Stable.preparedSelfRedemptionMessage_exists
     simp only [htype]
     rfl
   have hmsg : AdmissibleSelfRedemptionMessage
-      dp ca owner q debit msg := by
+      rules dp ca owner q debit msg := by
     refine {
       state_eq := ?_
       rules_eq := ?_
@@ -3109,10 +3119,10 @@ theorem Stable.preparedSelfRedemptionMessage_exists
 
 
 theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (henv : AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index)
+      rules dp ca owner recipient q benv bout tx index)
     {debit : State} {msg : Msg} {entry messagePost : Devm}
     {messageOut : MsgCallOutput}
     (hdebit : TransactionDebitOutcome owner
@@ -3139,7 +3149,7 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
   unfold processTransaction
   simp only [bind, Except.bind]
-  have hrules : benv.beginTransaction.stat.rules = pragueRules := by
+  have hrules : benv.beginTransaction.stat.rules = rules := by
     simpa only [Benv.beginTransaction] using henv.rules_eq
   rw [hrules, henv.validated]
   simp only [Except.mapError]
@@ -3164,10 +3174,10 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   rfl
 
 theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
-    {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (henv : AdmissibleSelfRedemptionTx
-      dp ca owner q benv bout tx index)
+      rules dp ca owner q benv bout tx index)
     {debit : State} {msg : Msg} {entry messagePost : Devm}
     {messageOut : MsgCallOutput}
     (hdebit : TransactionDebitOutcome owner
@@ -3194,7 +3204,7 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
   rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
   unfold processTransaction
   simp only [bind, Except.bind]
-  have hrules : benv.beginTransaction.stat.rules = pragueRules := by
+  have hrules : benv.beginTransaction.stat.rules = rules := by
     simpa only [Benv.beginTransaction] using henv.rules_eq
   rw [hrules, henv.validated]
   simp only [Except.mapError]
@@ -3242,10 +3252,10 @@ lemma addBal_toNat_eq_add_if
     rfl
 
 theorem AdmissibleRedemptionTx.usedGas_le
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (henv : AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index)
+      rules dp ca owner recipient q benv bout tx index)
     (out : MsgCallOutput) (refundCounter : Nat) :
     redemptionUsedGasFromMessage tx out refundCounter ≤ tx.gas := by
   have hfloor :=
@@ -3256,10 +3266,10 @@ theorem AdmissibleRedemptionTx.usedGas_le
   · exact hfloor
 
 theorem AdmissibleSelfRedemptionTx.usedGas_le
-    {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (henv : AdmissibleSelfRedemptionTx
-      dp ca owner q benv bout tx index)
+      rules dp ca owner q benv bout tx index)
     (out : MsgCallOutput) (refundCounter : Nat) :
     redemptionUsedGasFromMessage tx out refundCounter ≤ tx.gas := by
   have hfloor :=
@@ -3280,12 +3290,12 @@ theorem redemptionFinalBout_gasUsed
   omega
 
 theorem Stable.transactionRedemption_enabled_of_le
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hstable : Stable dp ca benv.state)
     (hq : q ≤ bookedBalanceNat benv.state ca owner)
     (henv : AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index) :
+      rules dp ca owner recipient q benv bout tx index) :
     TransactionRedemptionEnabled
       dp ca owner recipient q benv bout tx index := by
   rcases hstable.preparedRedemptionMessage_exists hq henv with
@@ -3474,7 +3484,8 @@ theorem Stable.transactionRedemption_enabled_of_le
       redemptionEffectiveGasPrice benv tx, debit, msg, messagePost.state,
       messageOut, ?_, henv.checked, hdebit.subBal, ?_, hframe.process,
       heffect⟩
-    · simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas] using
+    · rw [henv.rules_eq]
+      simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas] using
         henv.validated
     · simpa [redemptionTenv] using hprepare
   · rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
@@ -3512,12 +3523,12 @@ theorem Stable.transactionRedemption_enabled_of_le
     exact heffect.flashZero
 
 theorem Stable.selfTransactionRedemption_enabled_of_le
-    {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hstable : Stable dp ca benv.state)
     (hq : q ≤ bookedBalanceNat benv.state ca owner)
     (henv : AdmissibleSelfRedemptionTx
-      dp ca owner q benv bout tx index) :
+      rules dp ca owner q benv bout tx index) :
     TransactionRedemptionEnabled
       dp ca owner owner q benv bout tx index := by
   rcases hstable.preparedSelfRedemptionMessage_exists hq henv with
@@ -3706,7 +3717,8 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
       redemptionEffectiveGasPrice benv tx, debit, msg, messagePost.state,
       messageOut, ?_, henv.checked, hdebit.subBal, ?_, hframe.process,
       heffect⟩
-    · simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas] using
+    · rw [henv.rules_eq]
+      simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas] using
         henv.validated
     · simpa [redemptionTenv] using hprepare
   · rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
@@ -3760,116 +3772,116 @@ theorem activeFlash_not_stable
   exact hactive hstable.flashZero
 
 theorem staticMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg} (hstatic : msg.isStatic = true) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   rw [henv.isStatic_eq] at hstatic
   cases hstatic
 
 theorem precompileTargetMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
-    (hprecompile : pragueRules.isPrecomp ca = true) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    (hprecompile : rules.isPrecomp ca = true) :
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   have h := henv.target_not_precompile
   rw [hprecompile] at h
   contradiction
 
 theorem precompileRecipientMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
-    (hprecompile : pragueRules.isPrecomp recipient = true) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    (hprecompile : rules.isPrecomp recipient = true) :
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   have h := henv.recipient_not_precompile
   rw [hprecompile] at h
   contradiction
 
 theorem zeroRecipientMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg} (hzero : recipient = 0) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   exact henv.recipient_ne_zero hzero
 
 theorem codedRecipientMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hcoded : (w.getCode recipient).toList ≠ []) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   exact hcoded henv.recipient_code_free
 
 theorem wrongInstalledCodeMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hcode : some (w.getCode ca).toList ≠ Prog.compile (weth10 dp)) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   apply hcode
   rw [← henv.installedCode_eq]
   exact henv.code_eq
 
 theorem dirtyOriginalStorageMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hdirty : msg.benv.stat.origState.getStor ca ≠ w.getStor ca) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   exact hdirty henv.original_storage_eq
 
 theorem nonemptyAuthorizationMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg} (hauth : msg.tenv.stat.auths ≠ []) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   exact hauth henv.auths_eq
 
 theorem lowGasMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hlow : msg.gas < redemptionRuntimeCeiling q) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   exact Nat.not_le_of_lt hlow henv.gas_bound
 
 theorem noncanonicalCalldataMessage_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hdata : msg.data ≠ withdrawToCalldata recipient q) :
-    ¬ AdmissibleRedemptionMessage dp ca owner recipient q w msg := by
+    ¬ AdmissibleRedemptionMessage rules dp ca owner recipient q w msg := by
   intro henv
   exact hdata henv.data_eq
 
 theorem lowGasTransaction_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hlow : tx.gas < redemptionTransactionGasBound q tx) :
     ¬ AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index := by
+      rules dp ca owner recipient q benv bout tx index := by
   intro henv
   exact Nat.not_le_of_lt hlow henv.gas_bound
 
 theorem noncanonicalCalldataTransaction_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hdata : tx.data ≠ withdrawToCalldata recipient q) :
     ¬ AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index := by
+      rules dp ca owner recipient q benv bout tx index := by
   intro henv
   exact hdata henv.data_eq
 
 theorem nonemptyAccessListTransaction_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {priority fee : Nat} {accessList : AccessList}
     (hne : accessList ≠ [])
     (htype : tx.type =
       .two benv.stat.chainId priority fee (some ca) accessList) :
     ¬ AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index := by
+      rules dp ca owner recipient q benv bout tx index := by
   intro henv
   rcases henv.type_eq with ⟨p, f, htwo⟩
   rw [htype] at htwo
@@ -3877,28 +3889,28 @@ theorem nonemptyAccessListTransaction_not_admissible
   exact hne rfl
 
 theorem typeThreeTransaction_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {chainId : UInt64} {priority fee blobFee : Nat} {target : Adr}
     {accessList : AccessList} {blobHashes : List B256}
     (htype : tx.type =
       .three chainId priority fee target accessList blobFee blobHashes) :
     ¬ AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index := by
+      rules dp ca owner recipient q benv bout tx index := by
   intro henv
   rcases henv.type_eq with ⟨p, f, htwo⟩
   rw [htype] at htwo
   cases htwo
 
 theorem typeFourTransaction_not_admissible
-    {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {chainId : UInt64} {priority fee : Nat} {target : Adr}
     {accessList : AccessList} {auths : List Auth}
     (htype : tx.type =
       .four chainId priority fee target accessList auths) :
     ¬ AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index := by
+      rules dp ca owner recipient q benv bout tx index := by
   intro henv
   rcases henv.type_eq with ⟨p, f, htwo⟩
   rw [htype] at htwo
@@ -3923,41 +3935,41 @@ theorem outerOkWithFailedReceipt_not_redemptionEnabled
   contradiction
 
 theorem Stable.zeroMessageRedemption_enabled
-    {dp : DeployParams} {ca owner recipient : Adr}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)
     (henv : AdmissibleRedemptionMessage
-      dp ca owner recipient 0 w msg) :
+      rules dp ca owner recipient 0 w msg) :
     MessageRedemptionEnabled dp ca owner recipient 0 w msg := by
   exact hstable.messageRedemption_enabled_of_le (Nat.zero_le _) henv
 
 theorem Stable.unitMessageRedemption_enabled
-    {dp : DeployParams} {ca owner recipient : Adr}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)
     (hbooked : 1 ≤ bookedBalanceNat w ca owner)
     (henv : AdmissibleRedemptionMessage
-      dp ca owner recipient 1 w msg) :
+      rules dp ca owner recipient 1 w msg) :
     MessageRedemptionEnabled dp ca owner recipient 1 w msg := by
   exact hstable.messageRedemption_enabled_of_le hbooked henv
 
 theorem Stable.zeroTransactionRedemption_enabled
-    {dp : DeployParams} {ca owner recipient : Adr}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hstable : Stable dp ca benv.state)
     (henv : AdmissibleRedemptionTx
-      dp ca owner recipient 0 benv bout tx index) :
+      rules dp ca owner recipient 0 benv bout tx index) :
     TransactionRedemptionEnabled
       dp ca owner recipient 0 benv bout tx index := by
   exact hstable.transactionRedemption_enabled_of_le (Nat.zero_le _) henv
 
 theorem Stable.unitTransactionRedemption_enabled
-    {dp : DeployParams} {ca owner recipient : Adr}
+    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hstable : Stable dp ca benv.state)
     (hbooked : 1 ≤ bookedBalanceNat benv.state ca owner)
     (henv : AdmissibleRedemptionTx
-      dp ca owner recipient 1 benv bout tx index) :
+      rules dp ca owner recipient 1 benv bout tx index) :
     TransactionRedemptionEnabled
       dp ca owner recipient 1 benv bout tx index := by
   exact hstable.transactionRedemption_enabled_of_le hbooked henv

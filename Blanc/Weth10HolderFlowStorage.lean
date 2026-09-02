@@ -508,20 +508,20 @@ theorem AppliedBodyTrace.hasExecOrigin_of_mem_flowActions
       trace.requests hrequests
 
 theorem AccountedBlock.hasExecOrigin_of_mem_actions
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (accounted : AccountedBlock chainId dp ca pre post)
+    (accounted : AccountedBlock cfg dp ca pre post)
     {action : FlowAction} (h : action ∈ accounted.actions) :
     action.HasExecOrigin dp ca := by
   rw [accounted.actions_eq] at h
   exact AppliedBodyTrace.hasExecOrigin_of_mem_flowActions accounted.bodyTrace h
 
-/-- Every action in the full Prague history has an actual retained `Exec`
+/-- Every action in the full configured history has an actual retained `Exec`
 origin and therefore inherits the rollback-pruned committed boundary. -/
 theorem AccountedHistory.hasExecOrigin_of_mem_flowActions
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     {action : FlowAction} (h : action ∈ history.flowActions) :
     action.HasExecOrigin dp ca := by
   induction history with

@@ -18,18 +18,18 @@ namespace Weth10
 /-- Total modular credit loss attributed to one holder by the provenance-rich
 action ledger. -/
 def AccountedHistory.holderCreditLoss
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (u : Adr) : Nat :=
   holderCreditLossOfActions history.flowActions u
 
 /-- The deterministic public observations are exactly the projection of the
 provenance-rich action ledger retained by the same history. -/
 theorem AccountedHistory.flowObservations_eq_map_flowActions
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     history.flowObservations =
       history.flowActions.map FlowAction.observation := by
   induction history with
@@ -46,9 +46,9 @@ theorem AccountedHistory.flowObservations_eq_map_flowActions
 /-- The public executable fold and the provenance-rich action fold compute the
 same holder totals. -/
 theorem AccountedHistory.weth10Flow_eq_holderFlowOfActions
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (u : Adr) :
     history.weth10Flow u = holderFlowOfActions history.flowActions u := by
   unfold AccountedHistory.weth10Flow
@@ -305,23 +305,23 @@ theorem FlowActionsCreditNof.of_supply_eth
     (supplyFlowOfActions_flash_eq actions) initialBacked ethMovement finalEthLt
 
 def AccountedHistory.supplyFlow
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) : SupplyFlow :=
+    (history : AccountedHistory cfg dp ca checkpoint future) : SupplyFlow :=
   supplyFlowOfActions history.flowActions
 
 def AccountedHistory.creditLoss
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) : Nat :=
+    (history : AccountedHistory cfg dp ca checkpoint future) : Nat :=
   creditLossOfActions history.flowActions
 
 /-- Once the two execution-derived equations are available, stable-root
 backing and the word bound force every retained credit to be non-wrapping. -/
 theorem AccountedHistory.flowActionsCreditNof_of_supply_eth_equations
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state)
     (supplyEquation :
       balSum (checkpoint.state.getStor ca) + history.supplyFlow.ordinaryIn +
@@ -337,9 +337,9 @@ theorem AccountedHistory.flowActionsCreditNof_of_supply_eth_equations
   exact B256.toNat_lt _
 
 theorem AccountedHistory.holderCreditLoss_eq_zero_of_supply_eth_equations
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state)
     (supplyEquation :
       balSum (checkpoint.state.getStor ca) + history.supplyFlow.ordinaryIn +

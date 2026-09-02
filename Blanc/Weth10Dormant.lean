@@ -54,10 +54,10 @@ namespace Weth10
 /-- A holder's checkpoint booked balance is covered by its future booked
 balance plus the hardened sub-sum of its permanent outflow. -/
 theorem holderFlow_hardened_floor
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history) :
     bookedBalanceNat checkpoint.state ca u <=
       bookedBalanceNat future.state ca u + hardenedOutflow history u := by
@@ -469,9 +469,9 @@ record debits that holder's balance through a checkpoint-governed allowance
 branch.  The residual hypothesis is exactly the shape left standing by
 `CountedFrame.checkpointRooted_of_dormant`. -/
 theorem AccountedHistory.permanentOutflow_eq_zero_of_dormant
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history)
     (hdormant : NoAuthorizingActBy u history)
     (hcheckpoint : ∀ earlier record later,
@@ -498,10 +498,10 @@ checkpoint-governed allowance debit reads the checkpoint value, which
 itself.  The residual-free `dormant_holder_balance_monotone` below consumes
 it for real. -/
 theorem dormant_holder_balance_monotone_of_checkpointRooted
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history)
     (_hquiet : AllowanceQuiescent ca u checkpoint.state)
     (hdormant : NoAuthorizingActBy u history)
@@ -530,9 +530,9 @@ own keys is zero — with no reference to attribution roots at all. -/
 /-- A dormant holder's public permanent outflow is zero, provided every
 counted allowance visit at one of that holder's own keys read a zero word. -/
 theorem AccountedHistory.permanentOutflow_eq_zero_of_zeroReads
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history)
     (hdormant : NoAuthorizingActBy u history)
     (hreads : ∀ record ∈ history.attributionLedger, ∀ event,
@@ -564,10 +564,10 @@ from that transport, so this form is a waypoint rather than an endpoint.
 `AllowanceQuiescent` is the base case of that replay and is carried there
 rather than here. -/
 theorem dormant_holder_balance_monotone_of_zeroReads
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history)
     (hdormant : NoAuthorizingActBy u history)
     (hreads : ∀ record ∈ history.attributionLedger, ∀ event,
@@ -987,10 +987,10 @@ private theorem CountedFrame.permanentOutflow_eq_zero_of_delegated_read_zero
 /-- Empty-checkpoint histories cannot carry a nonzero permanent-outflow debit
 whose governing allowance chain still roots at the checkpoint. -/
 theorem AccountedHistory.attributionRootAt_ne_checkpoint_of_emptyStorage
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hempty : checkpoint.state.getStor ca = Stor.empty)
     {earlier later : List CountedFrame} {record : CountedFrame}
     {action : FlowAction} {debit : DebitProvenance}
@@ -1049,10 +1049,10 @@ inductive PermanentOutflowAuthorization
 empty-checkpoint history is an actual holder call or is governed by an
 in-window `approve`/`permit` authorization of that holder. -/
 theorem AccountedHistory.permanentOutflowAuthorization_of_emptyStorage
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hempty : checkpoint.state.getStor ca = Stor.empty)
     (hnc : NoAllowanceKeyCollision history)
     {earlier later : List CountedFrame} {record : CountedFrame}
@@ -1228,10 +1228,10 @@ the residual hypothesis of `dormant_holder_balance_monotone_of_zeroReads`. -/
 `AllowanceQuiescent` is the base of the replay and trace-local collision
 freedom is what identifies a visited key with the holder's own raw pair. -/
 theorem AccountedHistory.zeroReads_of_dormant
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history)
     (hquiet : AllowanceQuiescent ca u checkpoint.state)
     (hdormant : NoAuthorizingActBy u history) :
@@ -1254,10 +1254,10 @@ theorem AccountedHistory.zeroReads_of_dormant
 act and held no allowance at the checkpoint cannot have lost a wei across an
 authentic collision-free history. -/
 theorem dormant_holder_balance_monotone
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history)
     (hquiet : AllowanceQuiescent ca u checkpoint.state)
     (hdormant : NoAuthorizingActBy u history) :
@@ -1290,10 +1290,10 @@ show is that the fixture's ledger shape discharges the corollary's
 ledger-side premise, and that the corollary then delivers monotonicity of `u`'s
 booked balance from the checkpoint to the future. -/
 theorem dormantFixture_balance_monotone
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} {u other w fl : Adr} {spW caWord : B256}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history)
     (hquiet : AllowanceQuiescent ca u checkpoint.state)
     (hledger : history.attributionLedger = dormantLedger other u w fl spW caWord)
@@ -1311,10 +1311,10 @@ that history.  Nothing is claimed about the balances there: a refuted premise
 leaves the conclusion open, and it would be dishonest to record it either
 way. -/
 theorem nonDormantFixture_no_dormancy_premise
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} {u other w fl : Adr}
     {spW caWord owU spU : B256}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hledger : history.attributionLedger =
       nonDormantApproveFrameByU u owU spU :: dormantLedger other u w fl spW caWord) :
     ¬ NoAuthorizingActBy u history :=

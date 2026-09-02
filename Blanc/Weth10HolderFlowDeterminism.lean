@@ -350,9 +350,9 @@ instance AppliedBodyTrace.instSubsingleton
 /-- For fixed endpoints, the applied block determines all retained replay and
 flow data. -/
 theorem AccountedBlock.eq_of_block_eq
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (left right : AccountedBlock chainId dp ca pre post)
+    (left right : AccountedBlock cfg dp ca pre post)
     (hblock : left.block = right.block) : left = right := by
   cases left
   cases right
@@ -360,9 +360,9 @@ theorem AccountedBlock.eq_of_block_eq
   aesop (add safe forward AppliedBodyTrace.eq_of_same)
 
 theorem AccountedBlock.observations_eq_of_block_eq
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (left right : AccountedBlock chainId dp ca pre post)
+    (left right : AccountedBlock cfg dp ca pre post)
     (hblock : left.block = right.block) :
     left.observations = right.observations := by
   rw [AccountedBlock.eq_of_block_eq left right hblock]
@@ -380,10 +380,10 @@ private theorem append_singleton_eq_append_singleton
 /-- Replaying the same block list from a fixed checkpoint has a unique
 endpoint. -/
 theorem AccountedHistory.endpoint_eq_of_appliedBlocks_eq
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint leftFuture rightFuture : BlockChain}
-    (left : AccountedHistory chainId dp ca checkpoint leftFuture)
-    (right : AccountedHistory chainId dp ca checkpoint rightFuture)
+    (left : AccountedHistory cfg dp ca checkpoint leftFuture)
+    (right : AccountedHistory cfg dp ca checkpoint rightFuture)
     (hblocks : left.appliedBlocks = right.appliedBlocks) :
     leftFuture = rightFuture := by
   induction left generalizing rightFuture with
@@ -403,16 +403,16 @@ theorem AccountedHistory.endpoint_eq_of_appliedBlocks_eq
             ⟨hprior, hblock⟩
           have hcurrent := ih rightPrior hprior
           have hsame := congrArg₂
-            (stateTransitionUsing (ChainConfig.pragueOnly chainId))
+            (stateTransitionUsing cfg)
             hcurrent hblock
           exact Except.ok.inj
             (leftBlock.transition.symm.trans
               (hsame.trans rightBlock.transition))
 
 theorem AccountedHistory.flowObservations_eq_of_appliedBlocks_eq
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (left right : AccountedHistory chainId dp ca checkpoint future)
+    (left right : AccountedHistory cfg dp ca checkpoint future)
     (hblocks : left.appliedBlocks = right.appliedBlocks) :
     left.flowObservations = right.flowObservations := by
   induction left with
@@ -442,10 +442,10 @@ theorem AccountedHistory.flowObservations_eq_of_appliedBlocks_eq
           rw [hprefix, hlast]
 
 theorem AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (history₁ history₂ :
-      AccountedHistory chainId dp ca checkpoint future)
+      AccountedHistory cfg dp ca checkpoint future)
     (hblocks : history₁.appliedBlocks = history₂.appliedBlocks) :
     history₁.weth10Flow u = history₂.weth10Flow u := by
   unfold AccountedHistory.weth10Flow

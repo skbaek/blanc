@@ -64,13 +64,22 @@ def deploymentFinalBout
 system-address fields describe only pre-state code; no system-call result or
 post-state is admitted here. -/
 structure CanonicalDeploymentBase
-    (chainId : UInt64) (base : BlockChain) (sender ca : Adr) : Prop where
-  chainId_eq : chainId = base.chainId
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (sender ca : Adr) : Prop where
+  configValid : cfg.Valid
+  chainId_eq : cfg.chainId = base.chainId
   validContext : base.ValidContext
   sumNof : SumNof base.state.bal
   target_eq : ca = computeContractAddress sender (base.state.getNonce sender)
   target_ne_zero : ca ≠ 0
-  target_not_precompile : ¬ pragueRules.isPrecomp ca
+  target_not_precompile : ∀ {timestamp selected},
+    cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca
+  beacon_not_precompile : ¬ rules.isPrecomp beaconRootsAddress
+  history_not_precompile : ¬ rules.isPrecomp historyStorageAddress
+  withdrawalRequest_not_precompile :
+    ¬ rules.isPrecomp withdrawalRequestPredeployAddress
+  consolidationRequest_not_precompile :
+    ¬ rules.isPrecomp consolidationRequestPredeployAddress
   sender_ne_target : sender ≠ ca
   withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca
   consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca
@@ -91,42 +100,45 @@ structure CanonicalDeploymentBase
     some (base.state.getCode consolidationRequestPredeployAddress).toList =
       Prog.compile deploymentSystemProgram
 
-/-- The strict Prague block and type-2 creation transaction profile.  The
+/-- A strict configured block and type-2 creation transaction profile.  The
 `CanonicalBlock` parameter itself retains the original bytes, strict
 `rlpToBlock` equation, and exact re-encoding equation.  Every field below is
 available before execution. -/
 structure CanonicalWeth10DeploymentBlock
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx)
     (sender ca : Adr) : Prop where
   txs_eq : cb.block.txs = [.inl deploymentTxBytes]
   decode_eq : decodeTx (.inl deploymentTxBytes) = .ok deploymentTx
   ommers_eq : cb.block.ommers = []
   withdrawals_eq : cb.block.wds = []
+  rulesAt : cfg.rulesAt cb.block.header.timestamp = .ok rules
   type_eq : ∃ maxPriorityFee maxFee,
-    deploymentTx.type = .two chainId maxPriorityFee maxFee none []
+    deploymentTx.type = .two cfg.chainId maxPriorityFee maxFee none []
   value_eq : deploymentTx.value = 0
   data_eq : deploymentTx.data = weth10InitCode
   nonce_eq : deploymentTx.nonce = base.state.getNonce sender
   nonce_not_max : deploymentTx.nonce ≠ UInt64.max
-  recoveredSender : recoverSender chainId deploymentTx = .ok sender
-  validated : validateTransaction pragueRules deploymentTx =
+  recoveredSender : recoverSender cfg.chainId deploymentTx = .ok sender
+  validated : validateTransaction rules deploymentTx =
     .ok (calculateIntrinsicCost deploymentTx)
   checked :
-    let benv := initBenv pragueRules base cb.block.header
+    let benv := initBenv rules base cb.block.header
     checkTransaction benv.beginTransaction
       (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
       .ok (sender, deploymentEffectiveGasPrice benv deploymentTx, [], 0)
   base_fee_le_effective :
     cb.block.header.baseFeePerGas ≤
       deploymentEffectiveGasPrice
-        (initBenv pragueRules base cb.block.header) deploymentTx
+        (initBenv rules base cb.block.header) deploymentTx
   upfront_funded :
     deploymentTx.gas *
         deploymentEffectiveGasPrice
-          (initBenv pragueRules base cb.block.header) deploymentTx ≤
+          (initBenv rules base cb.block.header) deploymentTx ≤
       (base.state.bal sender).toNat
   gas_bound : deploymentTransactionGasBound deploymentTx ≤ deploymentTx.gas
+  runtime_code_fits : 6313 ≤ rules.code.maxCodeSize
   block_gas_room :
     deploymentTx.gas ≤ cb.block.header.gasLimit
   target_eq : ca = computeContractAddress sender deploymentTx.nonce
@@ -136,6 +148,7 @@ structure CanonicalWeth10DeploymentBlock
 /-- The mandatory beacon-roots and history-storage calls recovered from the
 real block prefix. This structure is conclusion evidence, never input data. -/
 structure DeploymentSystemPrefix
+    (rules : ForkRules)
     (base : BlockChain) (block : Block) (txInput : Benv) : Type where
   stBeacon : State
   outBeacon : MsgCallOutput
@@ -144,22 +157,22 @@ structure DeploymentSystemPrefix
   outHistory : MsgCallOutput
   beaconRun :
     processUncheckedSystemTransaction
-      (initBenv pragueRules base block.header)
+      (initBenv rules base block.header)
       beaconRootsAddress block.header.parentBeaconBlockRoot.toBytes =
       .ok (stBeacon, outBeacon)
   lastHashEq :
     List.getLast?
-      ((initBenv pragueRules base block.header).withState stBeacon).stat.blockHashes =
+      ((initBenv rules base block.header).withState stBeacon).stat.blockHashes =
         some lastHash
   historyRun :
-    processUncheckedSystemTransaction
-      ((initBenv pragueRules base block.header).withState stBeacon)
+      processUncheckedSystemTransaction
+      ((initBenv rules base block.header).withState stBeacon)
       historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory)
   txInput_eq :
     txInput =
-      ((initBenv pragueRules base block.header).withState stBeacon).withState
+      ((initBenv rules base block.header).withState stBeacon).withState
         stHistory
-  environment_eq : txInput = initBenv pragueRules base block.header
+  environment_eq : txInput = initBenv rules base block.header
   state_eq : txInput.state = base.state
   createdAccounts_eq : txInput.createdAccounts = .emptyWithCapacity
 
@@ -167,14 +180,15 @@ structure DeploymentSystemPrefix
 `beginTransaction`, nonce/fee-updated state, and the actual prepared message.
 Collision freedom is stated at exactly `msg.benv.state`. -/
 structure PreparedDeploymentContext
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTx : Tx) (sender ca : Adr) : Type where
   txInput : Benv
   begun : Benv
   debit : State
   tenv : Tenv
   msg : Msg
-  systemPrefix : DeploymentSystemPrefix base cb.block txInput
+  systemPrefix : DeploymentSystemPrefix rules base cb.block txInput
   begun_eq : begun = txInput.beginTransaction
   debit_eq :
     (begun.state.incrNonce sender).subBal sender
@@ -193,12 +207,12 @@ structure PreparedDeploymentContext
   msg_codeAddress_eq : msg.codeAddress = none
   msg_shouldTransferValue_eq : msg.shouldTransferValue = true
   msg_auths_eq : msg.tenv.stat.auths = []
-  msg_rules_eq : msg.benv.stat.rules = pragueRules
-  msg_chainId_eq : msg.benv.stat.chainId = chainId
+  msg_rules_eq : msg.benv.stat.rules = rules
+  msg_chainId_eq : msg.benv.stat.chainId = cfg.chainId
   target_eq : msg.currentTarget = ca
   params_eq :
     freshDeployParams msg.benv.stat.chainId.toB256 msg.currentTarget =
-      freshDeployParams chainId.toB256 ca
+      freshDeployParams cfg.chainId.toB256 ca
   noCodeOrNonce : accountHasCodeOrNonce msg.benv.state ca = false
   noStorage : accountHasStorage msg.benv.state ca = false
 
@@ -239,71 +253,56 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
   exact Blanc.processCheckedSystemTransaction_deploymentSystemProgram
     benv target data hcode hnp
 
-private theorem canonicalDeploymentBaseToShared
-    (hbase : CanonicalDeploymentBase chainId base sender ca) :
-    Blanc.CanonicalDeploymentBase chainId base sender ca where
-  chainId_eq := hbase.chainId_eq
-  validContext := hbase.validContext
-  sumNof := hbase.sumNof
-  target_eq := hbase.target_eq
-  target_ne_zero := hbase.target_ne_zero
-  target_not_precompile := hbase.target_not_precompile
-  sender_ne_target := hbase.sender_ne_target
-  withdrawalRequest_ne_target := hbase.withdrawalRequest_ne_target
-  consolidationRequest_ne_target := hbase.consolidationRequest_ne_target
-  target_noCodeOrNonce := hbase.target_noCodeOrNonce
-  target_noStorage := hbase.target_noStorage
-  lastBlockHash := hbase.lastBlockHash
-  beaconCode := by
-    simpa only [deploymentSystemProgram] using hbase.beaconCode
-  historyCode := by
-    simpa only [deploymentSystemProgram] using hbase.historyCode
-  withdrawalRequestCode := by
-    simpa only [deploymentSystemProgram] using hbase.withdrawalRequestCode
-  consolidationRequestCode := by
-    simpa only [deploymentSystemProgram] using hbase.consolidationRequestCode
-
-private def deploymentSystemPrefixOfShared
-    (hprefix : Blanc.DeploymentSystemPrefix base block txInput) :
-    DeploymentSystemPrefix base block txInput where
-  stBeacon := hprefix.stBeacon
-  outBeacon := hprefix.outBeacon
-  lastHash := hprefix.lastHash
-  stHistory := hprefix.stHistory
-  outHistory := hprefix.outHistory
-  beaconRun := hprefix.beaconRun
-  lastHashEq := hprefix.lastHashEq
-  historyRun := hprefix.historyRun
-  txInput_eq := hprefix.txInput_eq
-  environment_eq := hprefix.environment_eq
-  state_eq := hprefix.state_eq
-  createdAccounts_eq := hprefix.createdAccounts_eq
-
 /-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
 canonical pre-state; neither call is smuggled into the input record. -/
 theorem canonicalDeploymentSystemPrefix
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca) :
-    Nonempty (Σ txInput, DeploymentSystemPrefix base cb.block txInput) := by
-  obtain ⟨⟨txInput, hprefix⟩⟩ :=
-    Blanc.canonicalDeploymentSystemPrefix chainId base cb sender ca
-      (canonicalDeploymentBaseToShared hbase)
-  exact ⟨⟨txInput, deploymentSystemPrefixOfShared hprefix⟩⟩
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca) :
+    Nonempty (Σ txInput, DeploymentSystemPrefix rules base cb.block txInput) := by
+  let initial := initBenv rules base cb.block.header
+  obtain ⟨outBeacon, hbeacon, _⟩ :=
+    processUncheckedSystemTransaction_deploymentSystemProgram
+      initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
+      (by simpa [initial, initBenv] using hbase.beaconCode)
+      hbase.beacon_not_precompile
+  obtain ⟨lastHash, hlast⟩ := hbase.lastBlockHash
+  obtain ⟨outHistory, hhistory, _⟩ :=
+    processUncheckedSystemTransaction_deploymentSystemProgram
+      (initial.withState base.state) historyStorageAddress lastHash.toBytes
+      (by simpa [initial, initBenv, Benv.withState] using hbase.historyCode)
+      hbase.history_not_precompile
+  refine ⟨⟨initial, {
+    stBeacon := base.state
+    outBeacon := outBeacon
+    lastHash := lastHash
+    stHistory := base.state
+    outHistory := outHistory
+    beaconRun := hbeacon
+    lastHashEq := ?_
+    historyRun := ?_
+    txInput_eq := by rfl
+    environment_eq := by rfl
+    state_eq := by rfl
+    createdAccounts_eq := by rfl }⟩⟩
+  · simpa [initial, initBenv, initBenvStat, Benv.withState] using hlast
+  · simpa [initial, Benv.withState] using hhistory
 
 /-- Produce the real transaction input, transaction-local origin boundary,
 upfront nonce/fee debit, and the message returned by `prepareMessage`.
 Collision freedom is derived at that message's own state. -/
 theorem prepareCanonicalDeploymentContext
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca) :
     Nonempty
-      (PreparedDeploymentContext chainId base cb deploymentTx sender ca) := by
+      (PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) := by
   obtain ⟨⟨txInput, hprefix⟩⟩ :=
-    canonicalDeploymentSystemPrefix chainId base cb sender ca hbase
+    canonicalDeploymentSystemPrefix cfg rules base cb sender ca hbase
   let begun := txInput.beginTransaction
   let fee := deploymentTx.gas *
     deploymentEffectiveGasPrice txInput deploymentTx
@@ -313,7 +312,7 @@ theorem prepareCanonicalDeploymentContext
     rw [hbegun_state]
     have hprice : deploymentEffectiveGasPrice txInput deploymentTx =
         deploymentEffectiveGasPrice
-          (initBenv pragueRules base cb.block.header) deploymentTx := by
+          (initBenv rules base cb.block.header) deploymentTx := by
       rw [hprefix.txInput_eq]
       rfl
     simpa [fee, hprice] using henv.upfront_funded
@@ -386,14 +385,14 @@ theorem prepareCanonicalDeploymentContext
   have htx_chain : txInput.stat.chainId = base.chainId := by
     rw [hprefix.txInput_eq]
     rfl
-  have htx_rules : txInput.stat.rules = pragueRules := by
+  have htx_rules : txInput.stat.rules = rules := by
     rw [hprefix.txInput_eq]
     rfl
-  have hmsg_chain : msg.benv.stat.chainId = chainId := by
+  have hmsg_chain : msg.benv.stat.chainId = cfg.chainId := by
     dsimp only [msg, msgBenv, begun]
     simpa [Benv.beginTransaction] using
       htx_chain.trans hbase.chainId_eq.symm
-  have hmsg_rules : msg.benv.stat.rules = pragueRules := by
+  have hmsg_rules : msg.benv.stat.rules = rules := by
     dsimp only [msg, msgBenv, begun]
     simpa [Benv.beginTransaction] using htx_rules
   have hdebit_ca : debit.get ca = base.state.get ca := by
@@ -447,18 +446,18 @@ theorem prepareCanonicalDeploymentContext
   }⟩
 
 structure CanonicalDeploymentMessageResult
-    (chainId : UInt64) (ca : Adr)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca)
+    (cfg : ChainConfig) (rules : ForkRules) (ca : Adr)
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
     (post : State) (out : MsgCallOutput) : Prop where
   run : processMessageCall ctx.msg = .ok (post, out)
-  stable : Stable (freshDeployParams chainId.toB256 ca) ca post
+  stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post
   installed : some (post.getCode ca).toList =
-    Prog.compile (weth10 (freshDeployParams chainId.toB256 ca))
+    Prog.compile (weth10 (freshDeployParams cfg.chainId.toB256 ca))
   emptyStorage : post.getStor ca = Stor.empty
   storageInv : Stor.Weth10Inv (post.getStor ca) 0 0
   logs : out.logs = []
   returnData : out.returnData =
-    weth10Code (freshDeployParams chainId.toB256 ca)
+    weth10Code (freshDeployParams cfg.chainId.toB256 ca)
   gasLeft : out.gasLeft =
     ctx.msg.gas - weth10CreateMessageGasAccounting
   error : out.error = none
@@ -475,13 +474,14 @@ structure CanonicalDeploymentMessageResult
 collision checks at its own state, executes the real WETH10 constructor, and
 packages the exact successful message-call output. -/
 theorem canonicalDeploymentMessage_succeeds
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca) :
-    ∃ post out, CanonicalDeploymentMessageResult chainId ca ctx post out := by
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) :
+    ∃ post out, CanonicalDeploymentMessageResult cfg rules ca ctx post out := by
   have htotal : deploymentIntrinsicGas deploymentTx +
       weth10CreateMessageGasAccounting ≤ deploymentTx.gas :=
     (le_max_right _ _).trans henv.gas_bound
@@ -490,7 +490,7 @@ theorem canonicalDeploymentMessage_succeeds
     omega
   have hmax : 6313 ≤ ctx.msg.benv.stat.rules.code.maxCodeSize := by
     rw [ctx.msg_rules_eq]
-    decide
+    exact henv.runtime_code_fits
   have hdebitSum := State.balSum_subBal ctx.debit_eq
   dsimp only [State.balSum] at hdebitSum
   rw [State.incrNonce_bal] at hdebitSum
@@ -516,7 +516,7 @@ theorem canonicalDeploymentMessage_succeeds
   injection hstableRun with hstablePostEq
   subst stablePost
   have hstable' :
-      Stable (freshDeployParams chainId.toB256 ca) ca post.state := by
+      Stable (freshDeployParams cfg.chainId.toB256 ca) ca post.state := by
     simpa [ctx.msg_chainId_eq, ctx.target_eq] using hstable
   rcases of_processCreateMessage ctx.msg (.ok post) hcreate with
     ⟨xl, hfilled, hcreateRel⟩
@@ -598,13 +598,13 @@ theorem canonicalDeploymentMessage_succeeds
   · simpa [out] using hdelete
 
 structure CanonicalDeploymentTransactionResult
-    (chainId : UInt64) (ca : Adr)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca)
+    (cfg : ChainConfig) (rules : ForkRules) (ca : Adr)
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
     (post : State) (bout : BlockOutput) : Prop where
   run : processTransaction ctx.txInput .init deploymentTx 0 = .ok (post, bout)
-  stable : Stable (freshDeployParams chainId.toB256 ca) ca post
+  stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post
   installed : some (post.getCode ca).toList =
-    Prog.compile (weth10 (freshDeployParams chainId.toB256 ca))
+    Prog.compile (weth10 (freshDeployParams cfg.chainId.toB256 ca))
   emptyStorage : post.getStor ca = Stor.empty
   blockLogs : bout.blockLogs = []
   requests : bout.requests = []
@@ -623,17 +623,18 @@ structure CanonicalDeploymentTransactionResult
 pipeline, including validation, checking, upfront debit, refund/tip settlement,
 receipt insertion, and the final stable state. -/
 theorem canonicalDeploymentTransaction_succeeds
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca) :
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) :
     ∃ post bout,
-      CanonicalDeploymentTransactionResult chainId ca ctx post bout := by
+      CanonicalDeploymentTransactionResult cfg rules ca ctx post bout := by
   obtain ⟨messagePost, messageOut, hmessage⟩ :=
-    canonicalDeploymentMessage_succeeds chainId base cb deploymentTx sender ca
-      hbase henv ctx
+    canonicalDeploymentMessage_succeeds cfg rules base cb deploymentTx sender
+      ca hbase henv ctx
   let usedGas := deploymentUsedGasFromMessage deploymentTx messageOut
   let post := deploymentFinalState ctx.txInput deploymentTx sender
     messagePost usedGas
@@ -647,11 +648,11 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [Std.HashSet.isEmpty_toList, hmessage.accountsToDelete]
     rfl
   obtain ⟨maxPriorityFee, maxFee, htype⟩ := henv.type_eq
-  have hrules : ctx.txInput.beginTransaction.stat.rules = pragueRules := by
+  have hrules : ctx.txInput.beginTransaction.stat.rules = rules := by
     rw [ctx.systemPrefix.environment_eq]
     rfl
   have hprice : deploymentEffectiveGasPrice
-      (initBenv pragueRules base cb.block.header) deploymentTx =
+      (initBenv rules base cb.block.header) deploymentTx =
       deploymentEffectiveGasPrice ctx.txInput deploymentTx := by
     rw [ctx.systemPrefix.environment_eq]
   have hchecked :
@@ -696,7 +697,7 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [hinput] at hle
     exact hle.trans_lt hbase.sumNof
   have hcode : some (post.getCode ca).toList =
-      Prog.compile (weth10 (freshDeployParams chainId.toB256 ca)) := by
+      Prog.compile (weth10 (freshDeployParams cfg.chainId.toB256 ca)) := by
     dsimp only [post, deploymentFinalState, Blanc.deploymentFinalState]
     rw [State.addBal_getCode, State.addBal_getCode]
     exact hmessage.installed
@@ -726,11 +727,11 @@ theorem canonicalDeploymentTransaction_succeeds
     dsimp only [post, deploymentFinalState, Blanc.deploymentFinalState]
     rw [State.addBal_getCode, State.addBal_getCode]
     exact hmessage.consolidationRequestCode
-  have hstable : Stable (freshDeployParams chainId.toB256 ca) ca post := by
+  have hstable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post := by
     refine ⟨hcode, hsum, ?_, ?_⟩
     · rw [hstor]
       apply (backedSpec weth10
-        (freshDeployParams chainId.toB256 ca)).inv_mono
+        (freshDeployParams cfg.chainId.toB256 ca)).inv_mono
           Stor.Weth10Inv.of_empty
       exact Nat.zero_le _
     · rw [hstor]
@@ -773,12 +774,12 @@ theorem canonicalDeploymentTransaction_succeeds
 
 /-! ## Exact post-transaction request suffix -/
 
-/-- Conclusion evidence for Prague's two checked request-system calls.  Both
+/-- Conclusion evidence for the selected rules' two checked request-system calls.  Both
 calls execute the installed nonempty system program, return no request bytes,
 and leave the constructor post-state and block output unchanged. -/
 structure CanonicalDeploymentSuffixResult
-    (chainId : UInt64) (ca : Adr)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca)
+    (cfg : ChainConfig) (rules : ForkRules) (ca : Adr)
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
     (post : State) (bout : BlockOutput) : Type where
   withdrawalOut : MsgCallOutput
   consolidationOut : MsgCallOutput
@@ -794,28 +795,29 @@ structure CanonicalDeploymentSuffixResult
   run : processGeneralPurposeRequests (ctx.txInput.withState post) bout =
     .ok (post, bout)
   backedStateInv :
-    (backedSpec weth10 (freshDeployParams chainId.toB256 ca)).StateInv ca post
+    (backedSpec weth10 (freshDeployParams cfg.chainId.toB256 ca)).StateInv ca post
   flashStateInv :
-    (flashExactSpec (freshDeployParams chainId.toB256 ca) 0).StateInv ca post
-  stable : Stable (freshDeployParams chainId.toB256 ca) ca post
+    (flashExactSpec (freshDeployParams cfg.chainId.toB256 ca) 0).StateInv ca post
+  stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post
 
 /-- Execute the exact request suffix and apply the generic preservation rung
 separately to WETH10's backing and exact-zero-flash specifications. -/
 theorem canonicalDeploymentSuffix_succeeds
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTx : Tx) (sender ca : Adr)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca)
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
     (post : State) (bout : BlockOutput)
-    (htx : CanonicalDeploymentTransactionResult chainId ca ctx post bout) :
-    Nonempty (CanonicalDeploymentSuffixResult chainId ca ctx post bout) := by
+    (htx : CanonicalDeploymentTransactionResult cfg rules ca ctx post bout) :
+    Nonempty (CanonicalDeploymentSuffixResult cfg rules ca ctx post bout) := by
   obtain ⟨withdrawalOut, hwithdrawal, _, _, _, _, hwithdrawalReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       (ctx.txInput.withState post) withdrawalRequestPredeployAddress []
       (by simpa [Benv.withState] using htx.withdrawalRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
-        change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress
-        decide)
+        exact hbase.withdrawalRequest_not_precompile)
   obtain ⟨consolidationOut, hconsolidation, _, _, _, _,
       hconsolidationReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
@@ -824,8 +826,7 @@ theorem canonicalDeploymentSuffix_succeeds
       (by simpa [Benv.withState] using htx.consolidationRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
-        change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress
-        decide)
+        exact hbase.consolidationRequest_not_precompile)
   have hrun : processGeneralPurposeRequests
       (ctx.txInput.withState post) bout = .ok (post, bout) := by
     unfold processGeneralPurposeRequests
@@ -854,23 +855,23 @@ theorem canonicalDeploymentSuffix_succeeds
     simp
   have hbackedInput :
       (backedSpec weth10
-        (freshDeployParams chainId.toB256 ca)).BenvInv ca
+        (freshDeployParams cfg.chainId.toB256 ca)).BenvInv ca
           (ctx.txInput.withState post) :=
     ⟨⟨htx.installed, htx.stable.sumNof, htx.stable.backed⟩, hnotcreated⟩
   have hflashInput :
       (flashExactSpec
-        (freshDeployParams chainId.toB256 ca) 0).BenvInv ca
+        (freshDeployParams cfg.chainId.toB256 ca) 0).BenvInv ca
           (ctx.txInput.withState post) :=
     ⟨⟨htx.installed, trivial, htx.stable.flashZero⟩, hnotcreated⟩
   have hbacked :=
     ContractSpec.processGeneralPurposeRequests_preserves_inv_sum_le ca
-      (backedSpec_preserves (freshDeployParams chainId.toB256 ca) ca)
+      (backedSpec_preserves (freshDeployParams cfg.chainId.toB256 ca) ca)
       (ctx.txInput.withState post) bout post bout hrun hbackedInput
   have hflash :=
     ContractSpec.processGeneralPurposeRequests_preserves_inv_sum_le ca
-      (flashExactSpec_preserves (freshDeployParams chainId.toB256 ca) ca 0)
+      (flashExactSpec_preserves (freshDeployParams cfg.chainId.toB256 ca) ca 0)
       (ctx.txInput.withState post) bout post bout hrun hflashInput
-  have hstable : Stable (freshDeployParams chainId.toB256 ca) ca post :=
+  have hstable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post :=
     ⟨hbacked.1.code, hbacked.1.side, hbacked.1.inv, hflash.1.inv⟩
   exact ⟨⟨withdrawalOut, consolidationOut, hwithdrawal,
     hwithdrawalReturn, hconsolidation, hconsolidationReturn, hrun,
@@ -879,22 +880,23 @@ theorem canonicalDeploymentSuffix_succeeds
 /-- Compose the recovered prefix, singleton decoded transaction, empty
 withdrawal stage, and exact request suffix into Jaune's real block body. -/
 theorem canonicalDeploymentApplyBody_succeeds
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca)
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
     (post : State) (bout : BlockOutput)
-    (htx : CanonicalDeploymentTransactionResult chainId ca ctx post bout)
-    (hsuffix : CanonicalDeploymentSuffixResult chainId ca ctx post bout) :
-    applyBody (initBenv pragueRules base cb.block.header)
+    (htx : CanonicalDeploymentTransactionResult cfg rules ca ctx post bout)
+    (hsuffix : CanonicalDeploymentSuffixResult cfg rules ca ctx post bout) :
+    applyBody (initBenv rules base cb.block.header)
       cb.block.txs cb.block.wds = .ok (post, bout) := by
   unfold applyBody
   have hbeacon := ctx.systemPrefix.beaconRun
   change processUncheckedSystemTransaction
-    (initBenv pragueRules base cb.block.header)
+    (initBenv rules base cb.block.header)
     beaconRootsAddress
-    (initBenv pragueRules base cb.block.header).stat.parentBeaconBlockRoot.toBytes =
+    (initBenv rules base cb.block.header).stat.parentBeaconBlockRoot.toBytes =
       .ok (ctx.systemPrefix.stBeacon, ctx.systemPrefix.outBeacon) at hbeacon
   rw [hbeacon]
   simp only [Except.mapError, bind, Except.bind]
@@ -921,66 +923,68 @@ theorem canonicalDeploymentApplyBody_succeeds
 /-! ## Deployment-root adapter -/
 
 structure DeploymentRoot
-    (chainId : UInt64) (base deployed : BlockChain)
+    (cfg : ChainConfig) (base deployed : BlockChain)
     (dp : DeployParams) (ca : Adr) : Prop where
-  execution : ∃ (cb : CanonicalBlock) (deploymentTxBytes : Bytes)
+  execution : ∃ (rules : ForkRules) (cb : CanonicalBlock)
+      (deploymentTxBytes : Bytes)
       (deploymentTx : Tx) (sender : Adr)
-      (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca)
+      (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
       (post : State) (bout : BlockOutput),
-    CanonicalDeploymentBase chainId base sender ca ∧
-    CanonicalWeth10DeploymentBlock chainId base cb deploymentTxBytes
+    CanonicalDeploymentBase cfg rules base sender ca ∧
+    CanonicalWeth10DeploymentBlock cfg rules base cb deploymentTxBytes
       deploymentTx sender ca ∧
-    CanonicalDeploymentTransactionResult chainId ca ctx post bout ∧
-    Nonempty (CanonicalDeploymentSuffixResult chainId ca ctx post bout) ∧
-    stateTransitionUsing (ChainConfig.pragueOnly chainId)
+    CanonicalDeploymentTransactionResult cfg rules ca ctx post bout ∧
+    Nonempty (CanonicalDeploymentSuffixResult cfg rules ca ctx post bout) ∧
+    stateTransitionUsing cfg
         base cb.block = .ok deployed ∧
-    applyBody (initBenv pragueRules base cb.block.header)
+    applyBody (initBenv rules base cb.block.header)
         cb.block.txs cb.block.wds = .ok (post, bout) ∧
     post = deployed.state ∧
     (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.succeeded) = some true
-  params_eq : dp = freshDeployParams chainId.toB256 ca
+  params_eq : dp = freshDeployParams cfg.chainId.toB256 ca
+  configValid : cfg.Valid
   target_ne_zero : ca ≠ 0
-  target_not_precompile : ¬ pragueRules.isPrecomp ca
+  target_not_precompile : ∀ {timestamp rules},
+    cfg.rulesAt timestamp = .ok rules → ¬ rules.isPrecomp ca
   emptyStorage : deployed.state.getStor ca = Stor.empty
   stable : Stable dp ca deployed.state
   deployed_validContext : deployed.ValidContext
-  deployed_chainId : chainId = deployed.chainId
+  deployed_chainId : cfg.chainId = deployed.chainId
 
-/-- A successful configured Prague-only step over the strict canonical
+/-- A successful configured step over the strict canonical
 envelope establishes the deployment root; all execution contexts and receipt
 facts are constructed in this proof rather than admitted by the envelope. -/
 theorem canonicalDeploymentStep_establishes_root
-    (chainId : UInt64) (base deployed : BlockChain)
+    (cfg : ChainConfig) (rules : ForkRules) (base deployed : BlockChain)
     (cb : CanonicalBlock) (deploymentTxBytes : Bytes)
     (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca)
-    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
+    (hstep : stateTransitionUsing cfg
       base cb.block = .ok deployed) :
-    DeploymentRoot chainId base deployed
-      (freshDeployParams chainId.toB256 ca) ca := by
+    DeploymentRoot cfg base deployed
+      (freshDeployParams cfg.chainId.toB256 ca) ca := by
   obtain ⟨ctx⟩ :=
-    prepareCanonicalDeploymentContext chainId base cb deploymentTx sender ca
+    prepareCanonicalDeploymentContext cfg rules base cb deploymentTx sender ca
       hbase henv
   obtain ⟨post, bout, htx⟩ :=
-    canonicalDeploymentTransaction_succeeds chainId base cb deploymentTx
+    canonicalDeploymentTransaction_succeeds cfg rules base cb deploymentTx
       sender ca hbase henv ctx
   obtain ⟨suffix⟩ :=
-    canonicalDeploymentSuffix_succeeds chainId base cb deploymentTx sender ca
-      ctx post bout htx
-  have happly : applyBody (initBenv pragueRules base cb.block.header)
+    canonicalDeploymentSuffix_succeeds cfg rules base cb deploymentTx sender ca
+      hbase ctx post bout htx
+  have happly : applyBody (initBenv rules base cb.block.header)
       cb.block.txs cb.block.wds = .ok (post, bout) :=
-    canonicalDeploymentApplyBody_succeeds chainId base cb deploymentTxBytes
+    canonicalDeploymentApplyBody_succeeds cfg rules base cb deploymentTxBytes
       deploymentTx sender ca henv ctx post bout htx suffix
-  have hwith : stateTransitionWith pragueRules base cb.block = .ok deployed := by
+  have hwith : stateTransitionWith rules base cb.block = .ok deployed := by
     have h := hstep
     rw [stateTransitionUsing_eq_of_chainId_eq
-      (cfg := ChainConfig.pragueOnly chainId) (ch := base)
-      (show chainId = base.chainId from hbase.chainId_eq)] at h
-    simpa [ChainConfig.pragueOnly_rulesAt, Except.mapError, Bind.bind,
-      Except.bind] using h
+      (cfg := cfg) (ch := base) hbase.chainId_eq] at h
+    rw [henv.rulesAt] at h
+    simpa [Except.mapError, Bind.bind, Except.bind] using h
   have hstate : post = deployed.state := by
     have hinvert := hwith
     rw [stateTransitionWith_eq_ok_iff, stateTransitionE] at hinvert
@@ -997,8 +1001,8 @@ theorem canonicalDeploymentStep_establishes_root
     rw [← Except.ok.inj hinvert]
   let checkedBase := CheckedBlockChain.ofValidContext hbase.validContext
   have hwithChecked :
-      stateTransitionWith pragueRules checkedBase.val cb.block = .ok deployed := by
-    change stateTransitionWith pragueRules base cb.block = .ok deployed
+      stateTransitionWith rules checkedBase.val cb.block = .ok deployed := by
+    change stateTransitionWith rules base cb.block = .ok deployed
     exact hwith
   have hcontext := BlockChain.validContext_of_transition
     (cc := checkedBase) (cb := cb) hwithChecked
@@ -1006,11 +1010,12 @@ theorem canonicalDeploymentStep_establishes_root
     let checkedDeployed := CheckedBlockChain.ofEvidence deployed cb.block
       hcontext.1 hcontext.2.1 hcontext.2.2.1 hcontext.2.2.2
     exact checkedDeployed.validContext
-  have hchain : chainId = deployed.chainId :=
+  have hchain : cfg.chainId = deployed.chainId :=
     hbase.chainId_eq.trans (stateTransitionWith_preserves_chainId hwith).symm
-  refine ⟨?_, rfl, hbase.target_ne_zero, hbase.target_not_precompile,
+  refine ⟨?_, rfl, hbase.configValid, hbase.target_ne_zero,
+    hbase.target_not_precompile,
     ?_, ?_, hvalid, hchain⟩
-  · exact ⟨cb, deploymentTxBytes, deploymentTx, sender, ctx, post, bout,
+  · exact ⟨rules, cb, deploymentTxBytes, deploymentTx, sender, ctx, post, bout,
       hbase, henv, htx, ⟨suffix⟩, hstep, happly, hstate,
       htx.receiptSucceeded⟩
   · rw [← hstate]
@@ -1019,38 +1024,32 @@ theorem canonicalDeploymentStep_establishes_root
     exact suffix.stable
 
 theorem DeploymentRoot.reflReach
-    (hroot : DeploymentRoot chainId base deployed dp ca) :
-    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed deployed := by
-  exact .refl deployed (ChainConfig.pragueOnly_valid chainId)
-    hroot.deployed_validContext
-    (by simpa [ChainConfig.pragueOnly] using hroot.deployed_chainId)
+    (hroot : DeploymentRoot cfg base deployed dp ca) :
+    BlockChain.ReachUsing cfg deployed deployed := by
+  exact .refl deployed hroot.configValid hroot.deployed_validContext
+    hroot.deployed_chainId
 
 theorem DeploymentRoot.reachable_stable
-    (hroot : DeploymentRoot chainId base deployed dp ca)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed future) :
+    (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) :
     Stable dp ca future.state :=
   chainUsing_preserves_stable dp ca _ deployed future hreach hroot.stable
 
 theorem DeploymentRoot.reachable_code
-    (hroot : DeploymentRoot chainId base deployed dp ca)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed future) :
+    (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) :
     some (future.state.getCode ca).toList = Prog.compile (weth10 dp) :=
   (hroot.reachable_stable hreach).code
 
 theorem DeploymentRoot.reachable_flashZero
-    (hroot : DeploymentRoot chainId base deployed dp ca)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed future) :
+    (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) :
     (future.state.getStor ca).get flashMintedSlot = 0 :=
   (hroot.reachable_stable hreach).flashZero
 
 theorem DeploymentRoot.reachable_solvent
-    (hroot : DeploymentRoot chainId base deployed dp ca)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed future) :
+    (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) :
     balSum (future.state.getStor ca) ≤ (future.state.bal ca).toNat :=
   (hroot.reachable_stable hreach).solvent
 

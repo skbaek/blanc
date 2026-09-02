@@ -771,9 +771,9 @@ theorem AppliedBodyTrace.storageAccounting
     List.append_assoc] using htotal
 
 theorem AccountedBlock.storageAccounting
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (accounted : AccountedBlock chainId dp ca pre post)
+    (accounted : AccountedBlock cfg dp ca pre post)
     (hmessage : MessageStorageSound dp ca)
     (hstable : Stable dp ca pre.state) :
     StateStorageFlowAccounting ca pre.state post.state accounted.actions := by
@@ -784,10 +784,10 @@ theorem AccountedBlock.storageAccounting
   simpa [initBenv, accounted.actions_eq, hpost] using hbody
 
 theorem AccountedHistory.storageAccounting
-    (chainId : UInt64) (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
     (hmessage : MessageStorageSound dp ca) :
     {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory chainId dp ca checkpoint future) →
+    (history : AccountedHistory cfg dp ca checkpoint future) →
     Stable dp ca checkpoint.state →
     StateStorageFlowAccounting ca checkpoint.state future.state
       history.flowActions
@@ -795,20 +795,20 @@ theorem AccountedHistory.storageAccounting
       StateStorageFlowAccounting.refl ca _
   | _, _, .step prior accounted, hstable =>
       StateStorageFlowAccounting.append
-        (AccountedHistory.storageAccounting chainId dp ca hmessage
+        (AccountedHistory.storageAccounting cfg dp ca hmessage
           prior hstable)
         (AccountedBlock.storageAccounting accounted hmessage
           (prior.future_stable hstable))
 
 theorem AccountedHistory.storageAccounting_of_committedExecSound
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (hsound : CommittedExecStorageSound dp ca)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     StateStorageFlowAccounting ca checkpoint.state future.state
       history.flowActions :=
-  AccountedHistory.storageAccounting chainId dp ca
+  AccountedHistory.storageAccounting cfg dp ca
     hsound.messageStorageSound history hstable
 
 theorem flowActionsEthMint_eq_supplyFlowOrdinaryIn
@@ -866,16 +866,16 @@ theorem committedExecEthSound
 /-- Every credit occurrence retained by an authentic stable-root history is a
 natural, non-wrapping `B256` addition. -/
 theorem AccountedHistory.noCommittedCreditWrap_of_sounds
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (hstorageSound : CommittedExecStorageSound dp ca)
     (hethSound : CommittedExecEthSound dp ca)
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     FlowActionsCreditNof history.flowActions := by
   have hstorage :=
     history.storageAccounting_of_committedExecSound hstorageSound hstable
-  have heth := AccountedHistory.ethBound chainId dp ca
+  have heth := AccountedHistory.ethBound cfg dp ca
     hethSound.messageEthSound history hstable
   have hethMovement :
       (checkpoint.state.bal ca).toNat +
@@ -889,24 +889,24 @@ theorem AccountedHistory.noCommittedCreditWrap_of_sounds
     hstorage.supplyEquation hethMovement
 
 theorem AccountedHistory.holderCreditLoss_eq_zero_of_sounds
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstorageSound : CommittedExecStorageSound dp ca)
     (hethSound : CommittedExecEthSound dp ca)
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     holderCreditLossOfActions history.flowActions u = 0 :=
   holderCreditLossOfActions_eq_zero_of_creditNof
     (history.noCommittedCreditWrap_of_sounds
       hstorageSound hethSound hstable) u
 
 theorem holderFlow_conserved_of_sounds
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstorageSound : CommittedExecStorageSound dp ca)
     (hethSound : CommittedExecEthSound dp ca)
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u +
         (history.weth10Flow u).ordinaryIn +
         (history.weth10Flow u).selfTransfer +
@@ -918,7 +918,7 @@ theorem holderFlow_conserved_of_sounds
         (history.weth10Flow u).flashRepayment := by
   have hstorage :=
     history.storageAccounting_of_committedExecSound hstorageSound hstable
-  have heth := AccountedHistory.ethBound chainId dp ca
+  have heth := AccountedHistory.ethBound cfg dp ca
     hethSound.messageEthSound history hstable
   have hethMovement :
       (checkpoint.state.bal ca).toNat +
@@ -941,12 +941,12 @@ theorem holderFlow_conserved_of_sounds
   simpa [bookedBalanceNat] using hconserved
 
 theorem holderFlow_flash_cancelled_of_sounds
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstorageSound : CommittedExecStorageSound dp ca)
     (hethSound : CommittedExecEthSound dp ca)
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     (history.weth10Flow u).flashCredit =
         (history.weth10Flow u).flashRepayment ∧
     bookedBalanceNat checkpoint.state ca u +
@@ -962,12 +962,12 @@ theorem holderFlow_flash_cancelled_of_sounds
       hstable history)
 
 theorem holderFlow_residual_floor_of_sounds
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstorageSound : CommittedExecStorageSound dp ca)
     (hethSound : CommittedExecEthSound dp ca)
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u ≤
       bookedBalanceNat future.state ca u +
         ((history.weth10Flow u).redeemed +
@@ -977,12 +977,12 @@ theorem holderFlow_residual_floor_of_sounds
       hstable history).2
 
 theorem holderFlow_truncated_floor_of_sounds
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstorageSound : CommittedExecStorageSound dp ca)
     (hethSound : CommittedExecEthSound dp ca)
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u -
         ((history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut) ≤
@@ -992,12 +992,12 @@ theorem holderFlow_truncated_floor_of_sounds
       hstable history)
 
 theorem holderFlow_withdrawal_floor_of_sounds
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstorageSound : CommittedExecStorageSound dp ca)
     (hethSound : CommittedExecEthSound dp ca)
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (noExternalTransfer :
       (history.weth10Flow u).externalTransferredOut = 0) :
     bookedBalanceNat checkpoint.state ca u ≤
@@ -1012,10 +1012,10 @@ theorem holderFlow_withdrawal_floor_of_sounds
 /-- Every committed protected-holder credit in an authentic stable-root
 history is a non-wrapping `B256` addition. -/
 theorem AccountedHistory.noCommittedCreditWrap
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     FlowActionsCreditNof history.flowActions :=
   history.noCommittedCreditWrap_of_sounds
     (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
@@ -1024,10 +1024,10 @@ theorem AccountedHistory.noCommittedCreditWrap
 /-- The committed no-wrap theorem eliminates the holder's aggregate modular
 credit-loss term. -/
 theorem AccountedHistory.holderCreditLoss_eq_zero
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     holderCreditLossOfActions history.flowActions u = 0 :=
   history.holderCreditLoss_eq_zero_of_sounds
     (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
@@ -1036,10 +1036,10 @@ theorem AccountedHistory.holderCreditLoss_eq_zero
 /-- Gross natural-number conservation, retaining the exact self-transfer and
 flash-pair terms on both sides. -/
 theorem holderFlow_conserved
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u +
         (history.weth10Flow u).ordinaryIn +
         (history.weth10Flow u).selfTransfer +
@@ -1056,10 +1056,10 @@ theorem holderFlow_conserved
 /-- Exact flash pairing and cancellation reduce the gross equation to the
 public permanent-flow equation. -/
 theorem holderFlow_flash_cancelled
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     (history.weth10Flow u).flashCredit =
         (history.weth10Flow u).flashRepayment ∧
     bookedBalanceNat checkpoint.state ca u +
@@ -1074,10 +1074,10 @@ theorem holderFlow_flash_cancelled
 /-- A holder's initial booked balance remains covered by its final booked
 balance plus runtime-authorized redemption and external transfer out. -/
 theorem holderFlow_residual_floor
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u ≤
       bookedBalanceNat future.state ca u +
         ((history.weth10Flow u).redeemed +
@@ -1088,10 +1088,10 @@ theorem holderFlow_residual_floor
 
 /-- Equivalent truncated form of the residual floor. -/
 theorem holderFlow_truncated_floor
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u -
         ((history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut) ≤
@@ -1103,10 +1103,10 @@ theorem holderFlow_truncated_floor
 /-- When no external transfer leaves the holder, redeemed ETH plus the final
 booked balance covers the initial booked balance. -/
 theorem holderFlow_withdrawal_floor
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (noExternalTransfer :
       (history.weth10Flow u).externalTransferredOut = 0) :
     bookedBalanceNat checkpoint.state ca u ≤

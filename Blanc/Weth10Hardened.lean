@@ -340,9 +340,9 @@ theorem AppliedBodyTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
         (RequestsTrace.ledgerMirrors dp ca trace.requests)
 
 theorem AccountedBlock.ledgerMirrors
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (accounted : AccountedBlock chainId dp ca pre post) :
+    (accounted : AccountedBlock cfg dp ca pre post) :
     LedgerMirrors dp ca (accounted.attributionStream dp ca)
       accounted.actions := by
   rw [accounted.actions_eq]
@@ -352,9 +352,9 @@ theorem AccountedBlock.ledgerMirrors
 action ledger: every record is retained, and both carry the same permanent
 outflow for every holder. -/
 theorem AccountedHistory.ledgerMirrors
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     LedgerMirrors dp ca history.attributionLedger history.flowActions := by
   induction history with
   | refl hcfg hctx hid => exact .nil dp ca
@@ -582,18 +582,18 @@ theorem AppliedBodyTrace.rootedLedger (dp : DeployParams) (ca : Adr)
         (RequestsTrace.rootedLedger dp ca trace.requests)
 
 theorem AccountedBlock.rootedLedger
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (accounted : AccountedBlock chainId dp ca pre post) :
+    (accounted : AccountedBlock cfg dp ca pre post) :
     RootedLedger dp ca (accounted.attributionStream dp ca) :=
   AppliedBodyTrace.rootedLedger dp ca accounted.bodyTrace
 
 /-- Every record of a history's chronological attribution ledger carries the
 root context of the committed frame that produced it. -/
 theorem AccountedHistory.rootedLedger
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     RootedLedger dp ca history.attributionLedger := by
   induction history with
   | refl hcfg hctx hid => exact .nil dp ca
@@ -604,9 +604,9 @@ theorem AccountedHistory.rootedLedger
 /-- The public observation ledger is the deterministic projection of the
 retained action ledger. -/
 theorem AccountedHistory.flowObservations_eq_map
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     history.flowObservations =
       history.flowActions.map FlowAction.observation := by
   induction history with
@@ -636,9 +636,9 @@ theorem actionOutflow_eq_holderFlow (u : Adr) (actions : List FlowAction) :
 attribution ledger is exactly the public redeemed-plus-transferred-out total
 of the holder-flow fold. -/
 theorem AccountedHistory.ledgerOutflow_eq_permanentOutflow
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     ledgerOutflow u history.attributionLedger =
       (history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut := by
@@ -863,9 +863,9 @@ def touchedPairs (ledger : List CountedFrame) : List (B256 × B256) :=
     record.allowance.map fun event => (event.owner, event.spender)
 
 theorem touchedAllowancePairs_eq_touchedPairs
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     touchedAllowancePairs history = touchedPairs history.attributionLedger :=
   rfl
 
@@ -1021,9 +1021,9 @@ theorem CountedFrame.hardenedContribution_eq_permanentOutflow
 hypothesis, stability, or execution authenticity is involved: every counted
 record's hardened contribution is bounded by its own permanent outflow. -/
 theorem hardenedOutflow_le_permanentOutflow
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     hardenedOutflow history u ≤
       (history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut := by
@@ -1054,10 +1054,10 @@ the surrounding redeemability development and is deliberately unused: the
 attribution root of a debit is read off the chronological ledger itself, so no
 allowance value has to be transported from the checkpoint. -/
 theorem permanentOutflow_eq_hardenedOutflow_of_noCollision
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (_hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history) :
     (history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut =

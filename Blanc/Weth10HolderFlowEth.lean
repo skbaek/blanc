@@ -1755,9 +1755,9 @@ theorem AppliedBodyTrace.ethBound
     List.append_assoc] using htotal
 
 theorem AccountedBlock.ethBound
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (accounted : AccountedBlock chainId dp ca pre post)
+    (accounted : AccountedBlock cfg dp ca pre post)
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca pre.state) :
     EthBound ca pre.state post.state accounted.actions := by
@@ -1768,35 +1768,35 @@ theorem AccountedBlock.ethBound
     accounted.postEq
   simpa [initBenv, accounted.actions_eq, hpost] using hbody
 
-/-- Global contract-ETH accounting across a proof-carrying committed Prague
+/-- Global contract-ETH accounting across a proof-carrying configured
 history.  Once `MessageEthSound` is discharged from retained recursive
 execution, this is the unconditional execution-side inequality needed for
 credit no-wrap. -/
 theorem AccountedHistory.ethBound
-    (chainId : UInt64) (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
     (hmessage : MessageEthSound dp ca) :
     {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory chainId dp ca checkpoint future) →
+    (history : AccountedHistory cfg dp ca checkpoint future) →
     Stable dp ca checkpoint.state →
     EthBound ca checkpoint.state future.state history.flowActions
   | _, _, .refl _ _ _, _ =>
       EthBound.refl ca _
   | _, _, .step prior accounted, hstable =>
       EthBound.trans
-        (AccountedHistory.ethBound chainId dp ca hmessage prior hstable)
+        (AccountedHistory.ethBound cfg dp ca hmessage prior hstable)
         (AccountedBlock.ethBound accounted hmessage
           (prior.future_stable hstable))
 
 /-- Full history accounting with all settlement/wrapper premises discharged;
 only the concrete committed raw-`Exec` theorem remains to be supplied. -/
 theorem AccountedHistory.ethBound_of_committedExecSound
-    (chainId : UInt64) (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
     (hsound : CommittedExecEthSound dp ca) :
     {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory chainId dp ca checkpoint future) →
+    (history : AccountedHistory cfg dp ca checkpoint future) →
     Stable dp ca checkpoint.state →
     EthBound ca checkpoint.state future.state history.flowActions :=
-  AccountedHistory.ethBound chainId dp ca hsound.messageEthSound
+  AccountedHistory.ethBound cfg dp ca hsound.messageEthSound
 
 end Weth10
 

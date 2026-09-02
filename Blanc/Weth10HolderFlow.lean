@@ -1,5 +1,5 @@
 import Blanc.ExecutionSettlement
-import Blanc.ExecutionTrace
+import Blanc.ExecutionHistory
 import Blanc.Weth10HolderFlowAlgebra
 import Blanc.Weth10Redeemable
 import Blanc.Weth10Erc677Functional
@@ -826,21 +826,22 @@ def AppliedBodyTrace.flowObservations (dp : DeployParams) (ca : Adr)
 
 /-! ## Full applied-block history -/
 
-/-- One configured Prague transition together with the body output and every
-retained message execution that produced it. -/
+/-- One configured transition together with the selected rules, body output,
+and every retained message execution that produced it. -/
 structure AccountedBlock
-    (chainId : UInt64) (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
     (pre post : BlockChain) : Type where
   block : Block
   bound : sum pre.state.bal + wdsum block.wds < 2 ^ 256
-  transition :
-    stateTransitionUsing (ChainConfig.pragueOnly chainId) pre block = .ok post
+  rules : ForkRules
+  rulesAt : cfg.rulesAt block.header.timestamp = .ok rules
+  transition : stateTransitionUsing cfg pre block = .ok post
   bodyState : State
   blockOutput : BlockOutput
-  bodyRun : applyBody (initBenv pragueRules pre block.header)
+  bodyRun : applyBody (initBenv rules pre block.header)
     block.txs block.wds = .ok (bodyState, blockOutput)
   bodyTrace : AppliedBodyTrace
-    (initBenv pragueRules pre block.header)
+    (initBenv rules pre block.header)
     block.txs block.wds bodyState blockOutput
   actions : List FlowAction
   actions_eq : actions =
@@ -850,69 +851,94 @@ structure AccountedBlock
     Blanc.Weth10.AppliedBodyTrace.flowObservations dp ca bodyTrace
   postEq : post = ⟨appendBlock pre.blocks block, bodyState, pre.chainId⟩
 
+/-- Forgetting WETH10's deterministic ledgers recovers the common configured
+block trace literally, without rebuilding any execution evidence. -/
+def AccountedBlock.toConfiguredBlockTrace
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {pre post : BlockChain}
+    (accounted : AccountedBlock cfg dp ca pre post) :
+    ExecutionTrace.ConfiguredBlockTrace cfg pre post := {
+  block := accounted.block
+  bound := accounted.bound
+  rules := accounted.rules
+  rulesAt := accounted.rulesAt
+  transition := accounted.transition
+  bodyState := accounted.bodyState
+  blockOutput := accounted.blockOutput
+  bodyRun := accounted.bodyRun
+  bodyTrace := accounted.bodyTrace
+  postEq := accounted.postEq
+}
+
+/-- Enrich a common configured block trace with the deterministic WETH10
+action and observation ledgers computed from its retained body trace. -/
+def AccountedBlock.ofConfiguredBlockTrace
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {pre post : BlockChain}
+    (trace : ExecutionTrace.ConfiguredBlockTrace cfg pre post) :
+    AccountedBlock cfg dp ca pre post := {
+  block := trace.block
+  bound := trace.bound
+  rules := trace.rules
+  rulesAt := trace.rulesAt
+  transition := trace.transition
+  bodyState := trace.bodyState
+  blockOutput := trace.blockOutput
+  bodyRun := trace.bodyRun
+  bodyTrace := trace.bodyTrace
+  actions := Blanc.Weth10.AppliedBodyTrace.flowActions dp ca trace.bodyTrace
+  actions_eq := rfl
+  observations :=
+    Blanc.Weth10.AppliedBodyTrace.flowObservations dp ca trace.bodyTrace
+  observations_eq := rfl
+  postEq := trace.postEq
+}
+
+theorem AccountedBlock.toConfiguredBlockTrace_ofConfiguredBlockTrace
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {pre post : BlockChain}
+    (trace : ExecutionTrace.ConfiguredBlockTrace cfg pre post) :
+    (AccountedBlock.ofConfiguredBlockTrace
+      (dp := dp) (ca := ca) trace).toConfiguredBlockTrace = trace := by
+  cases trace
+  rfl
+
 theorem AccountedBlock.exists_of_transition
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain} {block : Block}
     (bound : sum pre.state.bal + wdsum block.wds < 2 ^ 256)
-    (h : stateTransitionUsing (ChainConfig.pragueOnly chainId) pre block =
-      .ok post) :
-    Nonempty (AccountedBlock chainId dp ca pre post) := by
-  have hId : (ChainConfig.pragueOnly chainId).chainId = pre.chainId :=
-    stateTransitionUsing_success_chainId_eq h
-  have hWith := h
-  rw [stateTransitionUsing_eq_of_chainId_eq hId] at hWith
-  simp only [ChainConfig.pragueOnly_rulesAt, Except.mapError,
-    Except.bind] at hWith
-  rw [stateTransitionWith_eq_ok_iff, stateTransitionE] at hWith
-  obtain ⟨_, _, hWith⟩ := Except.bind_eq_ok hWith
-  obtain ⟨_, _, hWith⟩ := Except.bind_eq_ok hWith
-  dsimp only at hWith
-  obtain ⟨⟨bodyState, blockOutput⟩, hBody, hWith⟩ :=
-    Except.bind_eq_ok hWith
-  dsimp only at hWith
-  obtain ⟨_, _, hFinal⟩ := Except.bind_eq_ok hWith
-  rcases exists_appliedBodyTrace hBody with ⟨bodyTrace⟩
-  exact ⟨{
-    block := block
-    bound := bound
-    transition := h
-    bodyState := bodyState
-    blockOutput := blockOutput
-    bodyRun := hBody
-    bodyTrace := bodyTrace
-    actions := Blanc.Weth10.AppliedBodyTrace.flowActions dp ca bodyTrace
-    actions_eq := rfl
-    observations :=
-      Blanc.Weth10.AppliedBodyTrace.flowObservations dp ca bodyTrace
-    observations_eq := rfl
-    postEq := (Except.ok.inj hFinal).symm
-  }⟩
+    (h : stateTransitionUsing cfg pre block = .ok post) :
+    Nonempty (AccountedBlock cfg dp ca pre post) := by
+  rcases ExecutionTrace.exists_configuredBlockTrace_of_transition bound h with
+    ⟨trace⟩
+  exact ⟨AccountedBlock.ofConfiguredBlockTrace
+    (dp := dp) (ca := ca) trace⟩
 
-/-- A proof-carrying Prague-only replay from a checkpoint to an endpoint. -/
+/-- A proof-carrying configured replay from a checkpoint to an endpoint. -/
 inductive AccountedHistory
-    (chainId : UInt64) (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
     (checkpoint : BlockChain) : BlockChain → Type
   | refl
-      (hcfg : (ChainConfig.pragueOnly chainId).Valid)
+      (hcfg : cfg.Valid)
       (hctx : checkpoint.ValidContext)
-      (hid : chainId = checkpoint.chainId) :
-      AccountedHistory chainId dp ca checkpoint checkpoint
+      (hid : cfg.chainId = checkpoint.chainId) :
+      AccountedHistory cfg dp ca checkpoint checkpoint
   | step {current future : BlockChain} :
-      AccountedHistory chainId dp ca checkpoint current →
-      AccountedBlock chainId dp ca current future →
-      AccountedHistory chainId dp ca checkpoint future
+      AccountedHistory cfg dp ca checkpoint current →
+      AccountedBlock cfg dp ca current future →
+      AccountedHistory cfg dp ca checkpoint future
 
 def AccountedHistory.appliedBlocks
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
-    AccountedHistory chainId dp ca checkpoint future → List Block
+    AccountedHistory cfg dp ca checkpoint future → List Block
   | .refl _ _ _ => []
   | .step prior accounted => prior.appliedBlocks ++ [accounted.block]
 
 def AccountedHistory.flowObservations
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
-    AccountedHistory chainId dp ca checkpoint future → List FlowObservation
+    AccountedHistory cfg dp ca checkpoint future → List FlowObservation
   | .refl _ _ _ => []
   | .step prior accounted =>
       prior.flowObservations ++ accounted.observations
@@ -921,17 +947,17 @@ def AccountedHistory.flowObservations
 analyses.  The public numeric fold deliberately uses its deterministic
 observation projection only. -/
 def AccountedHistory.flowActions
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
-    AccountedHistory chainId dp ca checkpoint future → List FlowAction
+    AccountedHistory cfg dp ca checkpoint future → List FlowAction
   | .refl _ _ _ => []
   | .step prior accounted =>
       prior.flowActions ++ accounted.actions
 
 def AccountedHistory.weth10Flow
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (u : Adr) : HolderFlow u :=
   holderFlowOfObservations history.flowObservations u
 
@@ -939,40 +965,75 @@ def AccountedHistory.weth10Flow
 repayment as one pair, so successful committed pairs cancel numerically before
 any conservation reasoning. -/
 theorem AccountedHistory.flash_pair_totals_eq
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     (history.weth10Flow u).flashCredit =
       (history.weth10Flow u).flashRepayment :=
   holderFlowOfObservations_flash_eq history.flowObservations u
 
-theorem AccountedHistory.toReachUsing
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+/-- Forget WETH10's ledgers throughout a configured retained history. -/
+def AccountedHistory.toConfiguredHistoryTrace
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} :
+    AccountedHistory cfg dp ca checkpoint future →
+      ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future
+  | .refl hcfg hctx hid => .refl hcfg hctx hid
+  | .step prior accounted =>
+      .step prior.toConfiguredHistoryTrace accounted.toConfiguredBlockTrace
+
+/-- Enrich every block of a common configured history with its deterministic
+WETH10 ledgers. -/
+def AccountedHistory.ofConfiguredHistoryTrace
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} :
+    ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future →
+      AccountedHistory cfg dp ca checkpoint future
+  | .refl hcfg hctx hid => .refl hcfg hctx hid
+  | .step prior block =>
+      .step (AccountedHistory.ofConfiguredHistoryTrace
+        (dp := dp) (ca := ca) prior)
+        (AccountedBlock.ofConfiguredBlockTrace
+          (dp := dp) (ca := ca) block)
+
+theorem AccountedHistory.toConfiguredHistoryTrace_ofConfiguredHistoryTrace
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
-    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      checkpoint future := by
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) :
+    (AccountedHistory.ofConfiguredHistoryTrace
+      (dp := dp) (ca := ca) history).toConfiguredHistoryTrace = history := by
   induction history with
-  | refl hcfg hctx hid =>
-      exact .refl checkpoint hcfg hctx hid
-  | step prior accounted ih =>
-      exact .step ih accounted.bound accounted.transition
+  | refl => rfl
+  | step prior block ih =>
+      simp only [AccountedHistory.ofConfiguredHistoryTrace,
+        AccountedHistory.toConfiguredHistoryTrace,
+        AccountedBlock.toConfiguredBlockTrace_ofConfiguredBlockTrace, ih]
+
+theorem exists_accountedHistory_of_configuredHistoryTrace
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) :
+    Nonempty (AccountedHistory cfg dp ca checkpoint future) :=
+  ⟨AccountedHistory.ofConfiguredHistoryTrace
+    (dp := dp) (ca := ca) history⟩
+
+theorem AccountedHistory.toReachUsing
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory cfg dp ca checkpoint future) :
+    BlockChain.ReachUsing cfg checkpoint future :=
+  history.toConfiguredHistoryTrace.toReachUsing
 
 theorem exists_accountedHistory_of_reachUsing
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (_hstable : Stable dp ca checkpoint.state)
-    (h : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) checkpoint future) :
-    Nonempty (AccountedHistory chainId dp ca checkpoint future) := by
-  induction h with
-  | refl hcfg hctx hid =>
-      exact ⟨.refl hcfg hctx hid⟩
-  | step prior bound transition ih =>
-      rcases ih with ⟨history⟩
-      rcases AccountedBlock.exists_of_transition
-        (dp := dp) (ca := ca) bound transition with ⟨block⟩
-      exact ⟨.step history block⟩
+    (h : BlockChain.ReachUsing cfg checkpoint future) :
+    Nonempty (AccountedHistory cfg dp ca checkpoint future) := by
+  rcases ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing h with
+    ⟨history⟩
+  exact exists_accountedHistory_of_configuredHistoryTrace
+    (dp := dp) (ca := ca) history
 
 end Weth10
 
