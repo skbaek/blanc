@@ -2910,6 +2910,638 @@ theorem multiply512Arithmetic_trace
   simpa [multiply512ArithmeticTraceImage, image4, image3, image2, image1]
     using reads21
 
+/-! ## Product-producer composition -/
+
+/-- A family-local interface for a straight-line producer: against one exact
+proof-carrying memory image, the line pushes its named word without disturbing
+that image, memory well-formedness, the surrounding stack, or persistent
+state. -/
+def ProducesWord
+    (sevm : Sevm) (line : Line) (image : Bytes) (value : B256) : Prop :=
+  ∀ {pre post : Devm} {tail : Stack},
+    Mem.Wf pre.memory →
+    Mem.Reads pre.memory image →
+    tail <<+ pre.stack →
+    Line.Run sevm pre line post →
+      value :: tail <<+ post.stack ∧
+        Mem.Wf post.memory ∧
+        Mem.Reads post.memory image ∧
+        pre.state = post.state
+
+theorem ProducesWord.pushB256
+    (sevm : Sevm) (image : Bytes) (value : B256) :
+    ProducesWord sevm [Ninst.pushB256 value] image value := by
+  intro pre post tail memoryWf memoryReads stack run
+  have state := Line.of_inv Devm.state (by line_inv) run
+  have memory := Line.of_inv Devm.memory (by line_inv) run
+  rcases Line.of_run_cons run with ⟨afterPush, pushRun, run⟩
+  cases run
+  have valuePrefix : value :: tail <<+ post.stack := by
+    simpa only [List.singleton_append] using
+      prefix_of_push (of_run_pushB256 pushRun) stack
+  refine ⟨valuePrefix, ?_, ?_, state⟩
+  · rw [← memory]
+    exact memoryWf
+  · rw [← memory]
+    exact memoryReads
+
+theorem ProducesWord.loadWord
+    {sevm : Sevm} {image : Bytes} {word value : B256}
+    (valueAt : Bytes.toB256
+      (image.sliceD (word * 32).toNat 32 0) = value) :
+    ProducesWord sevm (ProrataWethVault.loadWord word) image value := by
+  intro pre post tail memoryWf memoryReads stack run
+  exact of_run_loadWordAt_image stack memoryWf memoryReads valueAt run
+
+theorem ProducesWord.arg
+    (sevm : Sevm) (image : Bytes) (index : B256) :
+    ProducesWord sevm (Blanc.arg index) image
+      (Sevm.argWord sevm index) := by
+  intro pre post tail memoryWf memoryReads stack run
+  have state := Line.of_inv Devm.state (by unfold Blanc.arg cdl; line_inv) run
+  have memory := Line.of_inv Devm.memory (by unfold Blanc.arg cdl; line_inv) run
+  refine ⟨prefix_of_arg stack run, ?_, ?_, state⟩
+  · rw [← memory]
+    exact memoryWf
+  · rw [← memory]
+    exact memoryReads
+
+/-- Store the word produced by a `ProducesWord` line and expose the following
+continuation with the proof-carrying memory image advanced exactly once. -/
+theorem ProducesWord.store_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {line : Line} {image : Bytes} {value word : B256}
+    {body : Func} {tail : Stack}
+    (produces : ProducesWord sevm line image value)
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (line +++ mstoreAt word +++ body) (.ok final)) :
+    ∃ bodyPre,
+      tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory
+        (Bytes.writeAt image (word * 32).toNat value.toBytes) ∧
+      pre.state = bodyPre.state ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨linePost, lineRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨valuePrefix, lineWf, lineReads, lineState⟩ :=
+    produces memoryWf memoryReads stack lineRun
+  obtain ⟨bodyPre, storeRun, bodyRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bodyPrefix, bodyWf, bodyReads, storeState⟩ :=
+    of_run_mstoreAt_image valuePrefix lineWf lineReads storeRun
+  exact ⟨bodyPre, bodyPrefix, bodyWf, bodyReads,
+    lineState.trans storeState, bodyRun⟩
+
+/-- The complete proof image after the two producer values and the exact
+two-word product have been staged. -/
+def multiply512TraceImage (image : Bytes) (x y : B256) : Bytes :=
+  multiply512ArithmeticTraceImage
+    (Bytes.writeAt
+      (Bytes.writeAt image (xWord * 32).toNat x.toBytes)
+      (yWord * 32).toNat y.toBytes)
+    x y
+
+theorem multiply512TraceImage_low (image : Bytes) (x y : B256) :
+    Bytes.toB256
+        ((multiply512TraceImage image x y).sliceD
+          (lowWord * 32).toNat 32 0) =
+      productLowWord x y := by
+  exact multiply512ArithmeticTraceImage_low _ _ _
+
+theorem multiply512TraceImage_high (image : Bytes) (x y : B256) :
+    Bytes.toB256
+        ((multiply512TraceImage image x y).sliceD
+          (highWord * 32).toNat 32 0) =
+      productHighWord x y := by
+  exact multiply512ArithmeticTraceImage_high _ _ _
+
+theorem multiply512TraceImage_denominator
+    {image : Bytes} {x y denominator : B256}
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator) :
+    Bytes.toB256
+        ((multiply512TraceImage image x y).sliceD
+          (denominatorWord * 32).toNat 32 0) = denominator := by
+  apply multiply512ArithmeticTraceImage_denominator
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact denominatorAt
+    · right
+      decide +kernel
+  · right
+    decide +kernel
+
+theorem multiply512_eq_producers_arithmetic
+    (x y : Line) (body : Func) :
+    multiply512 x y body =
+      x +++ mstoreAt xWord +++
+      y +++ mstoreAt yWord +++
+      multiply512ArithmeticLine +++
+      body := by
+  rfl
+
+/-- Compose two independently proved word producers with the shared exact
+`multiply512` suffix and expose the continuation state. -/
+theorem multiply512_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y : B256} {xLine yLine : Line}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (xProduces : ProducesWord sevm xLine image x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt image (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (multiply512 xLine yLine body) (.ok final)) :
+    ∃ bodyPre,
+      tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory (multiply512TraceImage image x y) ∧
+      pre.state = bodyPre.state ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  rw [multiply512_eq_producers_arithmetic] at run
+  obtain ⟨xPost, xRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨xPrefix, xWf, xReads, xState⟩ :=
+    xProduces memoryWf memoryReads stack xRun
+  obtain ⟨xStored, xStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨xStoredPrefix, xStoredWf, xStoredReads, xStoreState⟩ :=
+    of_run_mstoreAt_image xPrefix xWf xReads xStoreRun
+  let image1 := Bytes.writeAt image (xWord * 32).toNat x.toBytes
+  change Mem.Reads xStored.memory image1 at xStoredReads
+
+  obtain ⟨yPost, yRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨yPrefix, yWf, yReads, yState⟩ :=
+    yProduces xStoredWf xStoredReads xStoredPrefix yRun
+  obtain ⟨yStored, yStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨yStoredPrefix, yStoredWf, yStoredReads, yStoreState⟩ :=
+    of_run_mstoreAt_image yPrefix yWf yReads yStoreRun
+  let image2 := Bytes.writeAt image1 (yWord * 32).toNat y.toBytes
+  change Mem.Reads yStored.memory image2 at yStoredReads
+  have xAt2 : Bytes.toB256
+      (image2.sliceD (xWord * 32).toNat 32 0) = x := by
+    unfold image2 image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · left
+      decide +kernel
+  have yAt2 : Bytes.toB256
+      (image2.sliceD (yWord * 32).toNat 32 0) = y := by
+    unfold image2
+    exact Bytes.readWord_writeAt_self _ _ _
+
+  obtain ⟨bodyPre, arithmeticRun, bodyRun⟩ :=
+    runCompiledTo_prepend_inv run
+  obtain ⟨bodyPrefix, bodyWf, bodyReads, arithmeticState⟩ :=
+    multiply512Arithmetic_trace yStoredWf yStoredReads xAt2 yAt2
+      yStoredPrefix arithmeticRun
+  refine ⟨bodyPre, bodyPrefix, bodyWf, ?_, ?_, bodyRun⟩
+  · simpa [multiply512TraceImage, image2, image1] using bodyReads
+  · exact xState.trans
+      (xStoreState.trans (yState.trans (yStoreState.trans arithmeticState)))
+
+/-! ## Full-width multiply/divide composition -/
+
+/-- A successful floor-mode `mulDiv` executes the exact full-width product
+and passes its unbounded-natural floor quotient to the continuation. -/
+theorem mulDiv_down_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y denominator : B256}
+    {xLine yLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorProduces :
+      ProducesWord sevm denominatorLine image denominator)
+    (xProduces : ProducesWord sevm xLine
+      (Bytes.writeAt image (denominatorWord * 32).toNat
+        denominator.toBytes) x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (denominatorWord * 32).toNat
+          denominator.toBytes)
+        (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (mulDiv xLine yLine denominatorLine .down continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256 (x.toNat * y.toNat / denominator.toNat) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  unfold mulDiv at run
+  obtain ⟨multiplyPre, multiplyPrefix, multiplyWf, multiplyReads, -, multiplyRun⟩ :=
+    denominatorProduces.store_trace memoryWf memoryReads stack run
+  let denominatorImage :=
+    Bytes.writeAt image (denominatorWord * 32).toNat denominator.toBytes
+  change Mem.Reads multiplyPre.memory denominatorImage at multiplyReads
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
+    multiply512_trace multiplyWf multiplyReads xProduces yProduces
+      multiplyPrefix multiplyRun
+  have denominatorAt : Bytes.toB256
+      ((multiply512TraceImage denominatorImage x y).sliceD
+        (denominatorWord * 32).toNat 32 0) = denominator := by
+    apply multiply512TraceImage_denominator
+    unfold denominatorImage
+    exact Bytes.readWord_writeAt_self _ _ _
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    divide512_down_trace divideWf divideReads denominatorAt
+      (multiply512TraceImage_high denominatorImage x y)
+      (multiply512TraceImage_low denominatorImage x y)
+      dividePrefix lookup divideRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [wideNumeratorN_productWords] using quotientPrefix
+
+/-- A successful ceiling-mode `mulDiv` executes the exact full-width product
+and passes its unbounded-natural ceiling quotient to the continuation. -/
+theorem mulDiv_up_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y denominator : B256}
+    {xLine yLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorProduces :
+      ProducesWord sevm denominatorLine image denominator)
+    (xProduces : ProducesWord sevm xLine
+      (Bytes.writeAt image (denominatorWord * 32).toNat
+        denominator.toBytes) x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (denominatorWord * 32).toNat
+          denominator.toBytes)
+        (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (mulDiv xLine yLine denominatorLine .up continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256 (ceilDiv (x.toNat * y.toNat) denominator.toNat) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  unfold mulDiv at run
+  obtain ⟨multiplyPre, multiplyPrefix, multiplyWf, multiplyReads, -, multiplyRun⟩ :=
+    denominatorProduces.store_trace memoryWf memoryReads stack run
+  let denominatorImage :=
+    Bytes.writeAt image (denominatorWord * 32).toNat denominator.toBytes
+  change Mem.Reads multiplyPre.memory denominatorImage at multiplyReads
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
+    multiply512_trace multiplyWf multiplyReads xProduces yProduces
+      multiplyPrefix multiplyRun
+  have denominatorAt : Bytes.toB256
+      ((multiply512TraceImage denominatorImage x y).sliceD
+        (denominatorWord * 32).toNat 32 0) = denominator := by
+    apply multiply512TraceImage_denominator
+    unfold denominatorImage
+    exact Bytes.readWord_writeAt_self _ _ _
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    divide512_up_trace divideWf divideReads denominatorAt
+      (multiply512TraceImage_high denominatorImage x y)
+      (multiply512TraceImage_low denominatorImage x y)
+      dividePrefix lookup divideRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [wideNumeratorN_productWords] using quotientPrefix
+
+/-! ## Shifted full-width division -/
+
+def shiftedDivTraceImage
+    (image : Bytes) (high denominator : B256) : Bytes :=
+  Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt image (highWord * 32).toNat high.toBytes)
+      (lowWord * 32).toNat (0 : B256).toBytes)
+    (denominatorWord * 32).toNat denominator.toBytes
+
+theorem shiftedDivTraceImage_high
+    (image : Bytes) (high denominator : B256) :
+    Bytes.toB256
+        ((shiftedDivTraceImage image high denominator).sliceD
+          (highWord * 32).toNat 32 0) = high := by
+  unfold shiftedDivTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · left
+      decide +kernel
+  · right
+    decide +kernel
+
+theorem shiftedDivTraceImage_low
+    (image : Bytes) (high denominator : B256) :
+    Bytes.toB256
+        ((shiftedDivTraceImage image high denominator).sliceD
+          (lowWord * 32).toNat 32 0) = 0 := by
+  unfold shiftedDivTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · exact Bytes.readWord_writeAt_self _ _ _
+  · right
+    decide +kernel
+
+theorem shiftedDivTraceImage_denominator
+    (image : Bytes) (high denominator : B256) :
+    Bytes.toB256
+        ((shiftedDivTraceImage image high denominator).sliceD
+          (denominatorWord * 32).toNat 32 0) = denominator := by
+  unfold shiftedDivTraceImage
+  exact Bytes.readWord_writeAt_self _ _ _
+
+theorem shiftedDiv_staging_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high denominator : B256}
+    {highLine denominatorLine : Line} {mode : QuotientMode}
+    {continuation : Nat} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (highProduces : ProducesWord sevm highLine image high)
+    (denominatorProduces : ProducesWord sevm denominatorLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (highWord * 32).toNat high.toBytes)
+        (lowWord * 32).toNat (0 : B256).toBytes) denominator)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (shiftedDiv highLine denominatorLine mode continuation) (.ok final)) :
+    ∃ dividePre,
+      tail <<+ dividePre.stack ∧
+      Mem.Wf dividePre.memory ∧
+      Mem.Reads dividePre.memory
+        (shiftedDivTraceImage image high denominator) ∧
+      pre.state = dividePre.state ∧
+      Func.RunCompiledTo fs sevm dividePre
+        (divide512 mode continuation) (.ok final) := by
+  unfold shiftedDiv at run
+  obtain ⟨lowPre, lowPrefix, lowWf, lowReads, highState, run⟩ :=
+    highProduces.store_trace memoryWf memoryReads stack run
+  let image1 := Bytes.writeAt image (highWord * 32).toNat high.toBytes
+  change Mem.Reads lowPre.memory image1 at lowReads
+  obtain ⟨denominatorPre, denominatorPrefix, denominatorWf,
+      denominatorReads, lowState, run⟩ :=
+    ProducesWord.store_trace (ProducesWord.pushB256 sevm image1 0)
+      lowWf lowReads lowPrefix run
+  let image2 := Bytes.writeAt image1 (lowWord * 32).toNat
+    (0 : B256).toBytes
+  change Mem.Reads denominatorPre.memory image2 at denominatorReads
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads,
+      denominatorState, divideRun⟩ :=
+    denominatorProduces.store_trace denominatorWf denominatorReads
+      denominatorPrefix run
+  refine ⟨dividePre, dividePrefix, divideWf, ?_, ?_, divideRun⟩
+  · simpa [shiftedDivTraceImage, image2, image1] using divideReads
+  · exact highState.trans (lowState.trans denominatorState)
+
+theorem shiftedDiv_down_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high denominator : B256}
+    {highLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (highProduces : ProducesWord sevm highLine image high)
+    (denominatorProduces : ProducesWord sevm denominatorLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (highWord * 32).toNat high.toBytes)
+        (lowWord * 32).toNat (0 : B256).toBytes) denominator)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (shiftedDiv highLine denominatorLine .down continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (high.toNat * wordModulusN / denominator.toNat) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
+    shiftedDiv_staging_trace memoryWf memoryReads highProduces
+      denominatorProduces stack run
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    divide512_down_trace divideWf divideReads
+      (shiftedDivTraceImage_denominator image high denominator)
+      (shiftedDivTraceImage_high image high denominator)
+      (shiftedDivTraceImage_low image high denominator)
+      dividePrefix lookup divideRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using
+    quotientPrefix
+
+theorem shiftedDiv_up_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high denominator : B256}
+    {highLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (highProduces : ProducesWord sevm highLine image high)
+    (denominatorProduces : ProducesWord sevm denominatorLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (highWord * 32).toNat high.toBytes)
+        (lowWord * 32).toNat (0 : B256).toBytes) denominator)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (shiftedDiv highLine denominatorLine .up continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (ceilDiv (high.toNat * wordModulusN) denominator.toNat) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
+    shiftedDiv_staging_trace memoryWf memoryReads highProduces
+      denominatorProduces stack run
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    divide512_up_trace divideWf divideReads
+      (shiftedDivTraceImage_denominator image high denominator)
+      (shiftedDivTraceImage_high image high denominator)
+      (shiftedDivTraceImage_low image high denominator)
+      dividePrefix lookup divideRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using
+    quotientPrefix
+
+/-! ## Product division by exactly `2^256` -/
+
+theorem finishQuotient_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {quotient : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (quotientAt : Bytes.toB256
+      (image.sliceD (quotientWord * 32).toNat 32 0) = quotient)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (finishQuotient .capDown continuation) (.ok final)) :
+    ∃ bodyPre,
+      quotient :: tail <<+ bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  apply finishQuotient_down_trace memoryWf memoryReads quotientAt stack
+    lookup
+  simpa only [finishQuotient] using run
+
+def productOverTwoPow256TraceImage
+    (image : Bytes) (x y : B256) : Bytes :=
+  Bytes.writeAt
+    (Bytes.writeAt (multiply512TraceImage image x y)
+      (quotientWord * 32).toNat (productHighWord x y).toBytes)
+    (remainderWord * 32).toNat (productLowWord x y).toBytes
+
+theorem productOverTwoPow256TraceImage_quotient
+    (image : Bytes) (x y : B256) :
+    Bytes.toB256
+        ((productOverTwoPow256TraceImage image x y).sliceD
+          (quotientWord * 32).toNat 32 0) = productHighWord x y := by
+  unfold productOverTwoPow256TraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · exact Bytes.readWord_writeAt_self _ _ _
+  · right
+    decide +kernel
+
+theorem productOverTwoPow256TraceImage_remainder
+    (image : Bytes) (x y : B256) :
+    Bytes.toB256
+        ((productOverTwoPow256TraceImage image x y).sliceD
+          (remainderWord * 32).toNat 32 0) = productLowWord x y := by
+  unfold productOverTwoPow256TraceImage
+  exact Bytes.readWord_writeAt_self _ _ _
+
+theorem productOverTwoPow256_staging_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y : B256} {xLine yLine : Line}
+    {mode : QuotientMode} {continuation : Nat} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (xProduces : ProducesWord sevm xLine image x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt image (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (productOverTwoPow256 xLine yLine mode continuation) (.ok final)) :
+    ∃ finishPre,
+      tail <<+ finishPre.stack ∧
+      Mem.Wf finishPre.memory ∧
+      Mem.Reads finishPre.memory
+        (productOverTwoPow256TraceImage image x y) ∧
+      pre.state = finishPre.state ∧
+      Func.RunCompiledTo fs sevm finishPre
+        (finishQuotient mode continuation) (.ok final) := by
+  unfold productOverTwoPow256 at run
+  obtain ⟨quotientPre, quotientPrefix, quotientWf, quotientReads,
+      multiplyState, run⟩ :=
+    multiply512_trace memoryWf memoryReads xProduces yProduces stack run
+  have highAt : Bytes.toB256
+      ((multiply512TraceImage image x y).sliceD
+        (highWord * 32).toNat 32 0) = productHighWord x y :=
+    multiply512TraceImage_high image x y
+  obtain ⟨remainderPre, remainderPrefix, remainderWf, remainderReads,
+      quotientState, run⟩ :=
+    ProducesWord.store_trace (ProducesWord.loadWord highAt)
+      quotientWf quotientReads quotientPrefix run
+  let image1 := Bytes.writeAt (multiply512TraceImage image x y)
+    (quotientWord * 32).toNat (productHighWord x y).toBytes
+  change Mem.Reads remainderPre.memory image1 at remainderReads
+  have lowAt1 : Bytes.toB256
+      (image1.sliceD (lowWord * 32).toNat 32 0) =
+        productLowWord x y := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact multiply512TraceImage_low image x y
+    · left
+      decide +kernel
+  obtain ⟨finishPre, finishPrefix, finishWf, finishReads,
+      remainderState, finishRun⟩ :=
+    ProducesWord.store_trace (ProducesWord.loadWord lowAt1)
+      remainderWf remainderReads remainderPrefix run
+  refine ⟨finishPre, finishPrefix, finishWf, ?_, ?_, finishRun⟩
+  · simpa [productOverTwoPow256TraceImage, image1] using finishReads
+  · exact multiplyState.trans (quotientState.trans remainderState)
+
+theorem productOverTwoPow256_down_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y : B256} {xLine yLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (xProduces : ProducesWord sevm xLine image x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt image (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (productOverTwoPow256 xLine yLine .down continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256 (x.toNat * y.toNat / wordModulusN) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨finishPre, finishPrefix, finishWf, finishReads, -, finishRun⟩ :=
+    productOverTwoPow256_staging_trace memoryWf memoryReads xProduces
+      yProduces stack run
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    finishQuotient_down_trace finishWf finishReads
+      (productOverTwoPow256TraceImage_quotient image x y)
+      finishPrefix lookup finishRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [productHighWord_eq_toB256_div_wordModulus] using
+    quotientPrefix
+
+theorem productOverTwoPow256_up_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y : B256} {xLine yLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (xProduces : ProducesWord sevm xLine image x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt image (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (productOverTwoPow256 xLine yLine .up continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256 (ceilDiv (x.toNat * y.toNat) wordModulusN) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨finishPre, finishPrefix, finishWf, finishReads, -, finishRun⟩ :=
+    productOverTwoPow256_staging_trace memoryWf memoryReads xProduces
+      yProduces stack run
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    finishQuotient_up_trace finishWf finishReads
+      (productOverTwoPow256TraceImage_quotient image x y)
+      (productOverTwoPow256TraceImage_remainder image x y)
+      finishPrefix lookup finishRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [roundedProductHighWord_eq_toB256_ceilDiv] using
+    quotientPrefix
+
+theorem productOverTwoPow256_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y : B256} {xLine yLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (xProduces : ProducesWord sevm xLine image x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt image (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (productOverTwoPow256 xLine yLine .capDown continuation)
+        (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256 (x.toNat * y.toNat / wordModulusN) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨finishPre, finishPrefix, finishWf, finishReads, -, finishRun⟩ :=
+    productOverTwoPow256_staging_trace memoryWf memoryReads xProduces
+      yProduces stack run
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    finishQuotient_capDown_trace finishWf finishReads
+      (productOverTwoPow256TraceImage_quotient image x y)
+      finishPrefix lookup finishRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [productHighWord_eq_toB256_div_wordModulus] using
+    quotientPrefix
+
 end ProrataWethVault
 
 end Blanc
