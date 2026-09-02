@@ -592,8 +592,9 @@ through the nested word representation. In `CommonProofs`,
 bitwise conjunction and exclusive-or, while `B256.and_idem_right` removes a
 repeated identical mask.
 
-For exact two-word multiplication, `productLowWord` and `productHighWord` name
-the standard `MUL`/`MULMOD` staging, while
+For exact two-word multiplication, `productLowWord`, `productScratchWord`,
+`productHighBeforeBorrowWord`, `productBorrowWord`, and `productHighWord` name
+the standard `MUL`/`MULMOD` staging and carry correction, while
 `productLowWord_toNat`, `productHighWord_toNat`, and
 `productHighWord_mul_add_productLowWord_toNat` recover the exact unbounded
 product without a single-word magnitude premise.

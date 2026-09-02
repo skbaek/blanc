@@ -156,12 +156,31 @@ theorem maxWord_toNat : B256.max.toNat = maxWordN := by
 /-- The low word of the exact 512-bit product of two EVM words. -/
 def productLowWord (x y : B256) : B256 := x * y
 
+/-- The `MULMOD` scratch word used to reconstruct the high half of an exact
+512-bit product. -/
+def productScratchWord (x y : B256) : B256 :=
+  B256.mulmod x y B256.max
+
+/-- The wrapped scratch-minus-low value before carry correction. -/
+def productHighBeforeBorrowWord (x y : B256) : B256 :=
+  productScratchWord x y - productLowWord x y
+
+/-- Carry bit correcting wrapped `scratch - low` in the standard full-width
+multiplication algorithm. -/
+def productBorrowWord (x y : B256) : B256 :=
+  B256.ltCheck (productScratchWord x y) (productLowWord x y)
+
 /-- The high word of the exact 512-bit product, reconstructed from `MULMOD`
 with its carry correction. -/
 def productHighWord (x y : B256) : B256 :=
   let low := productLowWord x y
   let scratch := B256.mulmod x y B256.max
   (scratch - low) - (if scratch < low then 1 else 0)
+
+theorem productHighWord_eq_beforeBorrow_sub_borrow (x y : B256) :
+    productHighWord x y =
+      productHighBeforeBorrowWord x y - productBorrowWord x y := by
+  rfl
 
 theorem productLowWord_toNat (x y : B256) :
     (productLowWord x y).toNat = x.toNat * y.toNat % wordModulusN := by
