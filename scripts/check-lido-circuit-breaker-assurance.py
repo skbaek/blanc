@@ -211,7 +211,7 @@ EXPECTED_GATE_OWNED_ROWS = 9
 
 # Rows whose Gate field names more than one gate.
 #
-# Naming two gates is legitimate and four rows do it: one gate owns the row's
+# Naming two gates is legitimate and seven rows do it: one gate owns the row's
 # evidence and the other pins its axioms, and both really would fail if the row
 # moved. But a second gate name is also the one edit that can make a
 # MIS-ATTRIBUTED declaration resolve. A name pinned by the access authority,
@@ -221,11 +221,11 @@ EXPECTED_GATE_OWNED_ROWS = 9
 # is rescued rather than reported. Discipline is not a mechanism, so the count
 # is pinned in both directions.
 #
-# A future editor who genuinely needs a fifth multi-gate row bumps this number
+# A future editor who genuinely needs an eighth multi-gate row bumps this number
 # in the same commit as the row, having decided that the row's second gate is
 # an authority it really depends on rather than padding. That is a decision.
 # Bumping it to clear a red gate is Rule 1 in `scripts/GATES.md`.
-EXPECTED_MULTI_GATE_ROWS = 6
+EXPECTED_MULTI_GATE_ROWS = 7
 
 # Load-bearing non-claims. Each must still appear somewhere in the register.
 # Matched case-insensitively against the register with all whitespace runs

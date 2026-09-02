@@ -32,6 +32,8 @@ import Blanc.BeaconDepositSelectorMiss
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositEffects
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
+import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
+import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 import Blanc.BeaconDepositHistoryChain
 
 /-!
@@ -5687,6 +5689,85 @@ example
   Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget
     premises targetNe nonprecompile publicRun success
 
+/-! Reachability closure: the finite concrete world now supplies the production
+run, exact after-set cut, boundary executions, noninterference and headline
+conclusion rather than only the premise bundle above. -/
+
+example :
+    ∃ entry successPre final : Devm,
+      Prog.RunCompiledTo gatewayPauseWorldSevm gatewayPauseWorldPre
+          (runtime officialParams) (.ok final) ∧
+      PublicPauseAfterSetAt
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          gatewayPauseWorldSevm gatewayPauseWorldPre pauseWorldCallee.toB256
+          pauseWorldDuration (gatewayCode controlDeployParams) (.ok final) entry ∧
+      Func.RunCompiledTo
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          gatewayPauseWorldSevm successPre pauseSuccess (.ok final) ∧
+      PauseSuccessNoninterference gatewayPauseWorldSevm entry successPre ∧
+      LidoPinnedBoundaryExecutions
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          gatewayPauseWorldSevm entry pauseWorldCallee
+          (LidoTriggerableWithdrawalsGateway.runtime controlDeployParams)
+          pauseWorldDuration (.ok final) ∧
+      PublicPauseCommittedOutcomes gatewayPauseWorldSevm gatewayPauseWorldPre
+          pauseWorldCallee.toB256 pauseWorldDuration
+          (gatewayCode controlDeployParams) (.ok final) ∧
+      PublicPausePinnedTargetConclusion gatewayPauseWorldSevm
+          gatewayPauseWorldPre pauseWorldCallee.toB256 pauseWorldDuration
+          (gatewayCode controlDeployParams)
+          (LidoTriggerableWithdrawalsGateway.runtime controlDeployParams)
+          LidoTriggerableWithdrawalsGateway.pausedUntil (.ok final) final :=
+  Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause
+
 end Composition.LidoCircuitBreakerTwg
+
+namespace Composition.LidoCircuitBreakerTwgSentinel
+
+open Blanc.LidoCircuitBreaker
+open Blanc.Composition.LidoCircuitBreakerTwg
+
+/-! The second exact pin holds the independently executed infinite-sentinel
+world and the final storage projection that rules out modular addition. -/
+
+example :
+    ∃ entry successPre final : Devm,
+      Prog.RunCompiledTo sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
+          (runtime officialParams) (.ok final) ∧
+      PublicPauseAfterSetAt
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
+          pauseWorldCallee.toB256 pauseInfiniteSentinel
+          (gatewayCode controlDeployParams) (.ok final) entry ∧
+      Func.RunCompiledTo
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          sentinelGatewayPauseWorldSevm successPre pauseSuccess (.ok final) ∧
+      PauseSuccessNoninterference
+          sentinelGatewayPauseWorldSevm entry successPre ∧
+      LidoPinnedBoundaryExecutions
+          ((runtime officialParams).main :: (runtime officialParams).aux)
+          sentinelGatewayPauseWorldSevm entry pauseWorldCallee
+          (LidoTriggerableWithdrawalsGateway.runtime controlDeployParams)
+          pauseInfiniteSentinel (.ok final) ∧
+      PublicPauseCommittedOutcomes sentinelGatewayPauseWorldSevm
+          sentinelGatewayPauseWorldPre pauseWorldCallee.toB256
+          pauseInfiniteSentinel (gatewayCode controlDeployParams) (.ok final) ∧
+      PublicPausePinnedTargetConclusion sentinelGatewayPauseWorldSevm
+          sentinelGatewayPauseWorldPre pauseWorldCallee.toB256
+          pauseInfiniteSentinel (gatewayCode controlDeployParams)
+          (LidoTriggerableWithdrawalsGateway.runtime controlDeployParams)
+          LidoTriggerableWithdrawalsGateway.pausedUntil (.ok final) final :=
+  Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause
+
+example :
+    ∃ final : Devm,
+      Prog.RunCompiledTo sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
+          (runtime officialParams) (.ok final) ∧
+      final.getStorVal pauseWorldCallee
+          LidoTriggerableWithdrawalsGateway.resumeSinceSlot =
+            pauseInfiniteSentinel :=
+  Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel
+
+end Composition.LidoCircuitBreakerTwgSentinel
 
 end Blanc

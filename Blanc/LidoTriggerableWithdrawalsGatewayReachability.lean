@@ -793,7 +793,7 @@ private theorem pauseEvent_exact_runCompiledTo
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
-    Devm.memory_setMach, Devm.gasLeft_setMach]
+    Devm.memory_setMach]
   apply Func.RunCompiledTo.next
   · exact Ninst.runCompiled_log_of
       (n := (0 : Fin 4).succ) (i := (0 : B256)) (sz := (32 : B256))
@@ -2142,7 +2142,7 @@ private theorem isPaused_true_warm_runCompiledTo
       simp [B256.ltCheck, hpaused]
     case h_ext => exact Devm.extCost_empty_word
     case a =>
-      apply Func.runCompiledTo_ret_word (i := 0) (sz := 32) (s := [])
+      apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
         (e := 0) (G := G) (out := (1 : B256).toBytes)
       · rfl
       · rw [show ((0 : B256)).toNat = 0 by decide,
@@ -2317,7 +2317,7 @@ private theorem isPaused_true_cold_runCompiledTo
       simp [B256.ltCheck, hpaused]
     case h_ext => exact Devm.extCost_empty_word
     case a =>
-      apply Func.runCompiledTo_ret_word (i := 0) (sz := 32) (s := [])
+      apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
         (e := 0) (G := G) (out := (1 : B256).toBytes)
       · rfl
       · rw [show ((0 : B256)).toNat = 0 by decide,

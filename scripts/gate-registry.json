@@ -2337,7 +2337,8 @@
     },
     {
       "command": [
-        "scripts/check-elab.sh"
+        "scripts/check-elab.sh",
+        "--no-build"
       ],
       "id": "elab",
       "inputs": {
@@ -2373,7 +2374,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes — the whole Lean corpus including Main.lean, the shared Lean/Lake configuration, the Lake-recorded artifact identity of the default Blanc library root, its ignored host-local baseline (including absence before genesis), and its own implementation. Main is a non-default executable target and has no trace after the authoritative catalogue `lake build`; its source and complete local import population are already direct inputs here, while the Blanc trace binds the toolchain and imported artifacts. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see — a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
+      "note": "Composed specialist: the preceding exact goal-owned build and build certificate satisfy its precondition, so the registered timing row is explicitly no-build. Its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes — the whole Lean corpus including Main.lean, the shared Lean/Lake configuration, the Lake-recorded artifact identity of the default Blanc library root, its ignored host-local baseline (including absence before genesis), and its own implementation. Main is a non-default executable target and has no trace after the authoritative catalogue build; its source and complete local import population are already direct inputs here, while the Blanc trace binds the toolchain and imported artifacts. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see — a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
       "order": 50,
       "verdict": {
         "expect_exit": 0,
@@ -2834,11 +2835,11 @@
       },
       "kind": "cacheable",
       "note": "Finite model-boundary BPO2 replay of the exact compiler-emitted official CircuitBreaker and locator-0x800 gateway runtimes. The shell independently pins the four-row/five-channel contract, artifact identities, ledger digest, runtime-lock digest, EIP-7825 gas bound and the independently derived EIP-7934 singleton-block RLP bound; the generator checks exact tagged storage, ordered events, captured outputs and receipt gas for both duration arms without supplying any theorem premise or live-chain attestation.",
-      "order": 61,
+      "order": 62,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — checked Lido CircuitBreaker × TWG BPO2 replay: 2 composed duration arms \\+ 2 family pause/query arms, zero semantic mismatches$"
+          "^OK — checked Lido CircuitBreaker × TWG BPO2 replay: 2 composed duration arms \\+ 2 family pause/query arms, 2 execution mutants rejected, zero semantic mismatches$"
         ]
       }
     }

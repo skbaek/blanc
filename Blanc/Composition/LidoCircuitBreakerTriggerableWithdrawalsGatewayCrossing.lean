@@ -707,7 +707,7 @@ private lemma runCompiled_statcall_gatewayQuery
     (h_paused : sevm.benvStat.time < storedUntil)
     (h_room : s.length < 1024) :
     ∃ post,
-      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
@@ -727,7 +727,7 @@ private lemma runCompiled_statcall_gatewayQuery
         post.state = stmid.addBal tw.toAdr 0 := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := statcallSpawnMsg sevm p mcs tw.toAdr dadr
+  let msg := staticcallSpawnMsg sevm p mcs tw.toAdr dadr
     iiw.toNat isw.toNat code dp
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < 0
@@ -752,7 +752,7 @@ private lemma runCompiled_statcall_gatewayQuery
     exact h_data
   have hsubD1 : d1.state.subBal sevm.currentTarget 0 = some stmid := by
     have hsubP : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, statcallSpawnMsg, callMsg] using hsub
+      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
     rw [show p.state = d1.state from rfl] at hsubP
     exact hsubP
   have hchildStored :
@@ -858,9 +858,9 @@ private lemma runCompiled_statcall_gatewayQuery
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
-  have hrun : Ninst.RunCompiled sevm devm (.exec .statcall) post :=
+  have hrun : Ninst.RunCompiled sevm devm (.exec .staticcall) post :=
     Ninst.runCompiled_exec_run
-      (Xinst.step_statcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+      (Xinst.step_staticcall_spawn h_stk h_ext h_del h_acc h_split h_gas
         h_depth)
       (by simpa only [p, msg] using henter)
       (by simpa only [p, msg] using hres)
@@ -914,7 +914,7 @@ private lemma runCompiled_statcall_gatewayQuery
     exact heffectOut
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, statcallSpawnMsg, callMsg] using hsub
+      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = stmid.addBal tw.toAdr 0
@@ -945,7 +945,7 @@ private lemma gatewayQuery_statcall_crossing
     (hfloor : 323 ≤ G) (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
-      Ninst.RunCompiled sevm devm (.exec .statcall) post ∧
+      Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
       post.stack = 1 :: s ∧
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
@@ -1608,7 +1608,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
           Gb + 382⟩)
-      (Ninst.statcall ::: installedQueryPost) post := by
+      (Ninst.staticcall ::: installedQueryPost) post := by
     refine Func.RunCompiled.next hrun2 ?_
     rw [heta2]
     exact hQueryPost
