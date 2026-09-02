@@ -597,7 +597,12 @@ For exact two-word multiplication, `productLowWord`, `productScratchWord`,
 the standard `MUL`/`MULMOD` staging and carry correction, while
 `productLowWord_toNat`, `productHighWord_toNat`, and
 `productHighWord_mul_add_productLowWord_toNat` recover the exact unbounded
-product without a single-word magnitude premise.
+product without a single-word magnitude premise;
+`wideNumeratorN_productWords` packages the same fact through the shared
+high/low numerator representation. `productHighWord_eq_toB256_div_wordModulus`,
+`productLowWord_eq_zero_iff`, and
+`roundedProductHighWord_eq_toB256_ceilDiv` provide the floor and ceiling
+bridges for division by exactly `2^256`.
 
 For the first stage of exact two-word division,
 `wordModulusFactorWord` represents `2^256 mod denominator` and

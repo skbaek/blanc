@@ -331,11 +331,42 @@ theorem productHighWord_toNat (x y : B256) :
     _ = x.toNat * y.toNat / wordModulusN := by
       rw [productHighWord_mul_add_productLowWord_toNat]
 
+theorem productHighWord_eq_toB256_div_wordModulus (x y : B256) :
+    productHighWord x y =
+      Nat.toB256 (x.toNat * y.toNat / wordModulusN) := by
+  have quotientBound :
+      x.toNat * y.toNat / wordModulusN < 2 ^ 256 := by
+    rw [← productHighWord_toNat]
+    exact B256.toNat_lt _
+  apply B256.toNat_inj
+  rw [productHighWord_toNat,
+    B256.toNat_toB256_of_lt quotientBound]
+
+theorem productLowWord_eq_zero_iff (x y : B256) :
+    productLowWord x y = 0 ↔
+      x.toNat * y.toNat % wordModulusN = 0 := by
+  constructor
+  · intro lowZero
+    have lowNat := congrArg B256.toNat lowZero
+    rw [productLowWord_toNat] at lowNat
+    exact lowNat
+  · intro remainderZero
+    apply B256.toNat_inj
+    rw [productLowWord_toNat, remainderZero]
+    rfl
+
 /-! ## Full-width division staging -/
 
 /-- The natural number represented by a high/low pair of EVM words. -/
 def wideNumeratorN (high low : B256) : Nat :=
   high.toNat * wordModulusN + low.toNat
+
+/-- The high/low words reconstructed by the full-width multiplication staging
+encode the original unbounded product. -/
+theorem wideNumeratorN_productWords (x y : B256) :
+    wideNumeratorN (productHighWord x y) (productLowWord x y) =
+      x.toNat * y.toNat := by
+  exact productHighWord_mul_add_productLowWord_toNat x y
 
 /-- Removing a natural number's remainder leaves its exact quotient times the
 divisor. This identity also covers the divisor-zero convention. -/
@@ -821,9 +852,20 @@ theorem roundedQuotientWord_eq_toB256_ceilDiv
   by_cases exactDivision : n % d = 0
   · rw [if_pos (remainderZero.mpr exactDivision), quotientEq]
     simp [ceilDiv, exactDivision]
+
   · rw [if_neg (fun h => exactDivision (remainderZero.mp h)), quotientEq,
       toB256_add_one]
     simp [ceilDiv, exactDivision]
+
+/-- Rounding the reconstructed high word upward exactly implements division
+of the unbounded product by `2^256`. -/
+theorem roundedProductHighWord_eq_toB256_ceilDiv (x y : B256) :
+    (if productLowWord x y = 0 then productHighWord x y
+      else productHighWord x y + 1) =
+      Nat.toB256 (ceilDiv (x.toNat * y.toNat) wordModulusN) := by
+  exact roundedQuotientWord_eq_toB256_ceilDiv
+    (productHighWord_eq_toB256_div_wordModulus x y)
+    (productLowWord_eq_zero_iff x y)
 
 theorem toB256_add_one_of_lt (n : Nat) (_hn : n + 1 < 2 ^ 256) :
     Nat.toB256 n + 1 = Nat.toB256 (n + 1) := by
