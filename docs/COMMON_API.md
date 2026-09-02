@@ -585,8 +585,9 @@ destructing a `B256`. `wordModulusN`, `maxWordN`, `wordModulusN_pos`,
 bounds. `div_two_div_pow`, `div_pow_div_two`,
 `one_and_toB256_eq_mod_two`, and `toB256_shiftRight_one` bridge recurring
 natural-number calculations to exact word operations. `Nat.xor_or_shiftLeft`,
-`B128.toNat_xor`, and `B256.toNat_xor` expose `xor` through the nested word
-representation. In `CommonProofs`,
+`B128.toNat_xor`, and `B256.toNat_xor` expose `xor`, while
+`Nat.or_or_shiftLeft`, `B128.toNat_or`, and `B256.toNat_or` expose `or`
+through the nested word representation. In `CommonProofs`,
 `B256.and_comm` and `B256.xor_comm` provide the shared commutativity facts for
 bitwise conjunction and exclusive-or, while `B256.and_idem_right` removes a
 repeated identical mask.
@@ -607,6 +608,21 @@ name the generic two-word subtraction stage;
 `wideSubWords_reconstruct` and
 `wideNumerator_sub_remainder_mod_eq_zero` recover its exact unbounded value
 and divisibility.
+
+For the factor-and-fold stage of full-width division, `Nat.lowestSetBit` and
+`Nat.lowestSetBit_spec` isolate the largest power of two dividing any nonzero
+bounded natural. `lowestSetBitWord`, `removeLowestSetBitWord`, and
+`wordModulusDivFactorWord` are the corresponding word operations; their
+`_toNat`, `_spec`, `_ne_zero`, and `_odd` theorems expose the positivity,
+divisibility, and odd-denominator facts needed downstream. The generic
+`Nat.fold_divided_words` identity and `foldDividedWords_toNat` justify folding
+a divided high/low pair back into one word. `wideReducedLowWord`,
+`wideReducedHighWord`, `wideReducedNumeratorN`, and
+`wideFoldedDividendWord` compose that machinery with remainder subtraction;
+`wideReducedWords_reconstruct`, `denominator_dvd_wideReducedNumerator`,
+`lowestSetBitWord_dvd_wideReducedLow`, and
+`wideFoldedDividendWord_toNat` provide the exact reconstruction and
+divisibility interface.
 
 For modular inverses, `inverseSeedWord`, `inverseNewtonStepWord`, and
 `inverseNewtonIter` name the standard seed and word-ring refinement.

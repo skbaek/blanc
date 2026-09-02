@@ -1,6 +1,8 @@
 import Blanc.CommonProofs
 import Jaune.MulDiv
 import Mathlib.Data.Int.ModEq
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Data.Nat.Prime.Basic
 import Mathlib.Tactic.Ring
 
 /-!
@@ -454,6 +456,213 @@ theorem wideNumerator_sub_remainder_mod_eq_zero
   apply Nat.sub_mod_eq_zero_of_mod_eq
   exact (Nat.mod_mod _ _).symm
 
+/-! ## Lowest-set-bit factorization -/
+
+/-- Isolate the lowest set bit of a nonzero `width`-bit natural using its
+bounded two's complement. This is the unbounded model of `x & (0 - x)` in a
+fixed-width word. -/
+def Nat.lowestSetBit (width n : Nat) : Nat :=
+  n &&& (2 ^ width - n)
+
+private theorem Nat.and_two_mul (a b : Nat) :
+    (2 * a) &&& (2 * b) = 2 * (a &&& b) := by
+  simpa [Nat.bit_false_apply] using Nat.land_bit false a false b
+
+private theorem Nat.lowestSetBit_eq_one_of_odd
+    {width n : Nat} (positive : 0 < n) (bound : n < 2 ^ width)
+    (odd : n % 2 = 1) :
+    Nat.lowestSetBit width n = 1 := by
+  have widthPositive : 0 < width := by
+    by_contra notPositive
+    have widthZero : width = 0 := by omega
+    subst width
+    norm_num at bound
+    omega
+  unfold Nat.lowestSetBit
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [Nat.testBit_and]
+  have predBound : n - 1 < 2 ^ width := by omega
+  have subEq : 2 ^ width - n = 2 ^ width - ((n - 1) + 1) := by omega
+  rw [subEq, Nat.testBit_two_pow_sub_succ predBound]
+  cases i with
+  | zero =>
+      have nBit : n.testBit 0 = true :=
+        Nat.mod_two_eq_one_iff_testBit_zero.mp odd
+      have predEven : (n - 1) % 2 = 0 := by omega
+      have predBit : (n - 1).testBit 0 = false :=
+        Nat.mod_two_eq_zero_iff_testBit_zero.mp predEven
+      simp [nBit, predBit, widthPositive]
+  | succ i =>
+      have halves : (n - 1) / 2 = n / 2 := by omega
+      simp [Nat.testBit_succ, halves]
+      tauto
+
+private theorem Nat.lowestSetBit_succ_of_even
+    {width n : Nat} (bound : n < 2 ^ (width + 1))
+    (even : n % 2 = 0) :
+    Nat.lowestSetBit (width + 1) n =
+      2 * Nat.lowestSetBit width (n / 2) := by
+  have nEq : n = 2 * (n / 2) := by omega
+  have halfBound : n / 2 < 2 ^ width := by
+    rw [Nat.pow_succ] at bound
+    omega
+  have subEq :
+      2 ^ (width + 1) - n = 2 * (2 ^ width - n / 2) := by
+    rw [Nat.pow_succ]
+    omega
+  unfold Nat.lowestSetBit
+  calc
+    n &&& (2 ^ (width + 1) - n) =
+        (2 * (n / 2)) &&& (2 * (2 ^ width - n / 2)) :=
+      congrArg₂ (fun a b : Nat => a &&& b) nEq subEq
+    _ = 2 * ((n / 2) &&& (2 ^ width - n / 2)) :=
+      Nat.and_two_mul _ _
+
+/-- The isolated lowest set bit is a positive common power-of-two factor of
+the input and the word modulus, and removing it leaves an odd quotient. -/
+theorem Nat.lowestSetBit_spec
+    {width n : Nat} (positive : 0 < n) (bound : n < 2 ^ width) :
+    let twos := Nat.lowestSetBit width n
+    0 < twos ∧ twos ∣ n ∧ twos ∣ 2 ^ width ∧
+      (n / twos) % 2 = 1 := by
+  induction width generalizing n with
+  | zero =>
+      norm_num at bound
+      omega
+  | succ width ih =>
+      rcases Nat.mod_two_eq_zero_or_one n with even | odd
+      · have halfPositive : 0 < n / 2 := by omega
+        have halfBound : n / 2 < 2 ^ width := by
+          rw [Nat.pow_succ] at bound
+          omega
+        have halfSpec := ih halfPositive halfBound
+        let halfTwos := Nat.lowestSetBit width (n / 2)
+        change
+          0 < Nat.lowestSetBit (width + 1) n ∧
+          Nat.lowestSetBit (width + 1) n ∣ n ∧
+          Nat.lowestSetBit (width + 1) n ∣ 2 ^ (width + 1) ∧
+          (n / Nat.lowestSetBit (width + 1) n) % 2 = 1
+        change
+          0 < halfTwos ∧ halfTwos ∣ n / 2 ∧
+            halfTwos ∣ 2 ^ width ∧ ((n / 2) / halfTwos) % 2 = 1
+          at halfSpec
+        rcases halfSpec with ⟨halfTwosPositive, halfTwosDvdN,
+          halfTwosDvdModulus, halfQuotientOdd⟩
+        have lowBitEq :
+            Nat.lowestSetBit (width + 1) n = 2 * halfTwos := by
+          simpa [halfTwos] using Nat.lowestSetBit_succ_of_even bound even
+        have nEq : n = 2 * (n / 2) := by omega
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · rw [lowBitEq]
+          omega
+        · rw [lowBitEq, nEq]
+          exact Nat.mul_dvd_mul_left 2 halfTwosDvdN
+        · rw [lowBitEq, Nat.pow_succ]
+          simpa [Nat.mul_comm] using
+            Nat.mul_dvd_mul_left 2 halfTwosDvdModulus
+        · rw [lowBitEq, nEq,
+            Nat.mul_div_mul_left _ _ (by omega : 0 < 2)]
+          exact halfQuotientOdd
+      · have lowBitEq : Nat.lowestSetBit (width + 1) n = 1 :=
+          Nat.lowestSetBit_eq_one_of_odd positive bound odd
+        simp [lowBitEq, odd]
+
+/-- The exact word operation used to isolate the largest power of two dividing
+a nonzero word. -/
+def lowestSetBitWord (x : B256) : B256 :=
+  x &&& (B256.zero - x)
+
+private theorem zero_sub_word_toNat
+    {x : B256} (nonzero : x ≠ B256.zero) :
+    (B256.zero - x).toNat = wordModulusN - x.toNat := by
+  have xNatPositive : 0 < x.toNat := by
+    by_contra notPositive
+    have xNatZero : x.toNat = 0 := by omega
+    apply nonzero
+    exact B256.toNat_inj x B256.zero
+      (xNatZero.trans (show 0 = B256.zero.toNat by rfl))
+  rw [B256.toNat_sub]
+  change (wordModulusN - x.toNat) ↾ 256 = wordModulusN - x.toNat
+  rw [Nat.lo_eq_of_lt]
+  unfold wordModulusN
+  omega
+
+theorem lowestSetBitWord_toNat
+    {x : B256} (nonzero : x ≠ B256.zero) :
+    (lowestSetBitWord x).toNat = Nat.lowestSetBit 256 x.toNat := by
+  rw [lowestSetBitWord, B256.toNat_and, zero_sub_word_toNat nonzero]
+  rfl
+
+/-- Word-level lowest-set-bit factorization: the factor is positive, divides
+both the input and `2^256`, and the reduced input is odd. -/
+theorem lowestSetBitWord_spec
+    {x : B256} (nonzero : x ≠ B256.zero) :
+    let twos := (lowestSetBitWord x).toNat
+    0 < twos ∧ twos ∣ x.toNat ∧ twos ∣ wordModulusN ∧
+      (x.toNat / twos) % 2 = 1 := by
+  have xNatPositive : 0 < x.toNat := by
+    by_contra notPositive
+    have xNatZero : x.toNat = 0 := by omega
+    apply nonzero
+    exact B256.toNat_inj x B256.zero
+      (xNatZero.trans (show 0 = B256.zero.toNat by rfl))
+  have spec := Nat.lowestSetBit_spec xNatPositive (B256.toNat_lt x)
+  simpa [lowestSetBitWord_toNat nonzero, wordModulusN] using spec
+
+theorem lowestSetBitWord_ne_zero
+    {x : B256} (nonzero : x ≠ B256.zero) :
+    lowestSetBitWord x ≠ B256.zero := by
+  have positive := (lowestSetBitWord_spec nonzero).1
+  intro zero
+  rw [zero] at positive
+  change 0 < 0 at positive
+  omega
+
+/-- Divide a nonzero word by its largest power-of-two factor. -/
+def removeLowestSetBitWord (x : B256) : B256 :=
+  x / lowestSetBitWord x
+
+theorem removeLowestSetBitWord_toNat
+    {x : B256} (nonzero : x ≠ B256.zero) :
+    (removeLowestSetBitWord x).toNat =
+      x.toNat / (lowestSetBitWord x).toNat := by
+  exact B256.toNat_div (lowestSetBitWord_ne_zero nonzero)
+
+/-- Removing the isolated power-of-two factor leaves an odd word. -/
+theorem removeLowestSetBitWord_odd
+    {x : B256} (nonzero : x ≠ B256.zero) :
+    (removeLowestSetBitWord x).toNat % 2 = 1 := by
+  rw [removeLowestSetBitWord_toNat nonzero]
+  exact (lowestSetBitWord_spec nonzero).2.2.2
+
+/-- Fixed-width representation of `2^256 / twos`. For `twos = 1` the
+mathematical value is `2^256`, whose correct word representation is zero. -/
+def wordModulusDivFactorWord (twos : B256) : B256 :=
+  (B256.zero - twos) / twos + 1
+
+theorem wordModulusDivFactorWord_toNat
+    {twos : B256} (nonzero : twos ≠ B256.zero) :
+    (wordModulusDivFactorWord twos).toNat =
+      wordModulusN / twos.toNat % wordModulusN := by
+  have twosPositive : 0 < twos.toNat := by
+    by_contra notPositive
+    have twosZero : twos.toNat = 0 := by omega
+    apply nonzero
+    exact B256.toNat_inj twos B256.zero
+      (twosZero.trans (show 0 = B256.zero.toNat by rfl))
+  have twosLe : twos.toNat ≤ wordModulusN := by
+    have bound := B256.toNat_lt twos
+    unfold wordModulusN
+    omega
+  rw [wordModulusDivFactorWord, B256.toNat_add,
+    B256.toNat_div nonzero, zero_sub_word_toNat nonzero,
+    B256.toNat_one]
+  change
+    ((wordModulusN - twos.toNat) / twos.toNat + 1) % wordModulusN =
+      wordModulusN / twos.toNat % wordModulusN
+  rw [← Nat.div_eq_sub_div twosPositive twosLe]
+
 theorem div_two_div_pow (n k : Nat) :
     n / 2 / 2 ^ k = n / 2 ^ (k + 1) := by
   rw [Nat.div_div_eq_div_mul, Nat.pow_succ, Nat.mul_comm]
@@ -544,6 +753,38 @@ theorem toB256_shiftRight_one (n : Nat) (hn : n < 2 ^ 64) :
 
 /-! ## Bitwise word projections -/
 
+/-- Bitwise `or` distributes over a shift-and-or split of both sides when the
+low halves fit below the shift. -/
+theorem Nat.or_or_shiftLeft {a b c d k : Nat}
+    (hb : b < 2 ^ k) (hd : d < 2 ^ k) :
+    ((a <<< k ||| b) ||| (c <<< k ||| d)) =
+      ((a ||| c) <<< k) ||| (b ||| d) := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  simp only [Nat.testBit_or, Nat.testBit_shiftLeft]
+  by_cases hi : k ≤ i
+  · have hpow : (2 : Nat) ^ k ≤ 2 ^ i :=
+      Nat.pow_le_pow_right (by omega) hi
+    rw [Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hb hpow),
+      Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hd hpow)]
+    simp [hi]
+  · simp [hi]
+
+theorem B128.toNat_or (x y : B128) :
+    (x ||| y).toNat = x.toNat ||| y.toNat := by
+  show ((x.1 ||| y.1).toNat <<< 64) ||| (x.2 ||| y.2).toNat = _
+  rw [UInt64.toNat_or, UInt64.toNat_or]
+  exact (Nat.or_or_shiftLeft (UInt64.toNat_lt x.2)
+    (UInt64.toNat_lt y.2)).symm
+
+/-- `B256.toNat` preserves bitwise `or`. -/
+theorem B256.toNat_or (x y : B256) :
+    (x ||| y).toNat = x.toNat ||| y.toNat := by
+  show ((x.1 ||| y.1).toNat <<< 128) ||| (x.2 ||| y.2).toNat = _
+  rw [B128.toNat_or, B128.toNat_or]
+  exact (Nat.or_or_shiftLeft (B128.toNat_lt (x := x.2))
+    (B128.toNat_lt (x := y.2))).symm
+
 /-- Bitwise `xor` distributes over a shift-and-or split of both sides when
 the low halves fit below the shift. -/
 theorem Nat.xor_or_shiftLeft {a b c d k : Nat}
@@ -574,6 +815,190 @@ theorem B256.toNat_xor (x y : B256) :
   rw [B128.toNat_xor, B128.toNat_xor]
   exact (Nat.xor_or_shiftLeft (B128.toNat_lt (x := x.2))
     (B128.toNat_lt (x := y.2))).symm
+
+/-! ## High-word folding after power-of-two division -/
+
+/-- Dividing both words by a common power-of-two factor and shifting the high
+word into the vacated low bits reconstructs division of the exact two-word
+number, modulo the word width. -/
+theorem Nat.fold_divided_words
+    {width high low twos : Nat}
+    (twosPositive : 0 < twos)
+    (twosDvdModulus : twos ∣ 2 ^ width)
+    (twosDvdLow : twos ∣ low)
+    (lowBound : low < 2 ^ width) :
+    low / twos ||| (high * (2 ^ width / twos) % 2 ^ width) =
+      (high * 2 ^ width + low) / twos % 2 ^ width := by
+  let modulus := 2 ^ width
+  let factor := modulus / twos
+  let lowQuotient := low / twos
+  have modulusPositive : 0 < modulus := by
+    simp [modulus]
+  have factorPositive : 0 < factor := by
+    unfold factor
+    exact Nat.div_pos
+      (Nat.le_of_dvd modulusPositive twosDvdModulus) twosPositive
+  have factorMulTwos : factor * twos = modulus := by
+    exact Nat.div_mul_cancel twosDvdModulus
+  have factorDvdModulus : factor ∣ modulus := by
+    exact ⟨twos, factorMulTwos.symm⟩
+  obtain ⟨shift, -, factorEq⟩ :=
+    (Nat.dvd_prime_pow Nat.prime_two).mp
+      (show factor ∣ 2 ^ width by
+        simpa [modulus] using factorDvdModulus)
+  have lowQuotientLtFactor : lowQuotient < factor := by
+    exact (Nat.div_lt_div_right (Nat.ne_of_gt twosPositive)
+      twosDvdLow twosDvdModulus).2 lowBound
+  let shifted := high * factor % modulus
+  have factorDvdShifted : factor ∣ shifted := by
+    apply (Nat.dvd_mod_iff factorDvdModulus).2
+    exact Nat.dvd_mul_left factor high
+  obtain ⟨shiftedHigh, shiftedEq⟩ := factorDvdShifted
+  have shiftedBound : shifted < modulus := by
+    exact Nat.mod_lt _ modulusPositive
+  have shiftedHighLtTwos : shiftedHigh < twos := by
+    rw [shiftedEq, ← factorMulTwos] at shiftedBound
+    exact (Nat.mul_lt_mul_left factorPositive).mp shiftedBound
+  have sumBound : shifted + lowQuotient < modulus := by
+    rw [shiftedEq, ← factorMulTwos]
+    calc
+      factor * shiftedHigh + lowQuotient <
+          factor * shiftedHigh + factor :=
+        Nat.add_lt_add_left lowQuotientLtFactor _
+      _ = factor * (shiftedHigh + 1) := by
+        rw [Nat.mul_add, Nat.mul_one]
+      _ ≤ factor * twos :=
+        Nat.mul_le_mul_left factor (by omega)
+  have orEq : lowQuotient ||| shifted = shifted + lowQuotient := by
+    calc
+      lowQuotient ||| shifted = shifted ||| lowQuotient :=
+        Nat.or_comm _ _
+      _ = factor * shiftedHigh ||| lowQuotient := by rw [shiftedEq]
+      _ = 2 ^ shift * shiftedHigh ||| lowQuotient := by rw [factorEq]
+      _ = 2 ^ shift * shiftedHigh + lowQuotient :=
+        (Nat.two_pow_add_eq_or_of_lt
+          (by simpa [factorEq] using lowQuotientLtFactor)
+          shiftedHigh).symm
+      _ = shifted + lowQuotient := by rw [shiftedEq, factorEq]
+  have quotientEq :
+      (high * modulus + low) / twos =
+        high * factor + lowQuotient := by
+    rw [Nat.add_div_of_dvd_left twosDvdLow,
+      Nat.mul_div_assoc high twosDvdModulus]
+  change lowQuotient ||| shifted =
+    (high * modulus + low) / twos % modulus
+  rw [orEq, quotientEq, Nat.add_mod]
+  change shifted + lowQuotient =
+    (shifted + lowQuotient % modulus) % modulus
+  rw [Nat.mod_eq_of_lt (lowQuotientLtFactor.trans_le
+      (Nat.le_of_dvd modulusPositive factorDvdModulus))]
+  exact (Nat.mod_eq_of_lt sumBound).symm
+
+/-- Fold a divided low word and the complementary shifted high word into one
+word, matching the full-width division algorithm. -/
+def foldDividedWords (high low twos : B256) : B256 :=
+  (low / twos) ||| (high * wordModulusDivFactorWord twos)
+
+theorem foldDividedWords_toNat
+    {high low twos : B256}
+    (twosNonzero : twos ≠ B256.zero)
+    (twosDvdModulus : twos.toNat ∣ wordModulusN)
+    (twosDvdLow : twos.toNat ∣ low.toNat) :
+    (foldDividedWords high low twos).toNat =
+      wideNumeratorN high low / twos.toNat % wordModulusN := by
+  have twosPositive : 0 < twos.toNat := by
+    by_contra notPositive
+    have twosZero : twos.toNat = 0 := by omega
+    apply twosNonzero
+    exact B256.toNat_inj twos B256.zero
+      (twosZero.trans (show 0 = B256.zero.toNat by rfl))
+  rw [foldDividedWords, B256.toNat_or,
+    B256.toNat_div twosNonzero, B256.toNat_mul_mod,
+    wordModulusDivFactorWord_toNat twosNonzero]
+  have folded := Nat.fold_divided_words
+    (width := 256) (high := high.toNat) (low := low.toNat)
+    (twos := twos.toNat) twosPositive
+    (by simpa [wordModulusN] using twosDvdModulus)
+    twosDvdLow (B256.toNat_lt low)
+  simpa [wideNumeratorN, wordModulusN, Nat.mul_mod,
+    Nat.mod_mod] using folded
+
+/-- Low word of the exact numerator after subtracting its denominator
+remainder. -/
+def wideReducedLowWord (high low denominator : B256) : B256 :=
+  wideSubLowWord low (wideRemainderWord high low denominator)
+
+/-- High word of the exact numerator after subtracting its denominator
+remainder and propagating the low-word borrow. -/
+def wideReducedHighWord (high low denominator : B256) : B256 :=
+  wideSubHighWord high low (wideRemainderWord high low denominator)
+
+/-- Exact natural numerator after remainder subtraction. -/
+def wideReducedNumeratorN (high low denominator : B256) : Nat :=
+  wideNumeratorN high low - (wideRemainderWord high low denominator).toNat
+
+theorem wideReducedWords_reconstruct
+    {high low denominator : B256} (nonzero : denominator ≠ B256.zero) :
+    (wideReducedHighWord high low denominator).toNat * wordModulusN +
+        (wideReducedLowWord high low denominator).toNat =
+      wideReducedNumeratorN high low denominator := by
+  unfold wideReducedHighWord wideReducedLowWord wideReducedNumeratorN
+  apply wideSubWords_reconstruct
+  exact wideRemainderWord_le_numerator nonzero
+
+theorem denominator_dvd_wideReducedNumerator
+    {high low denominator : B256} (nonzero : denominator ≠ B256.zero) :
+    denominator.toNat ∣ wideReducedNumeratorN high low denominator := by
+  apply Nat.dvd_of_mod_eq_zero
+  exact wideNumerator_sub_remainder_mod_eq_zero nonzero
+
+/-- The denominator's isolated power-of-two factor also divides the reduced
+low word; this is what makes the compiled word division exact. -/
+theorem lowestSetBitWord_dvd_wideReducedLow
+    {high low denominator : B256} (nonzero : denominator ≠ B256.zero) :
+    (lowestSetBitWord denominator).toNat ∣
+      (wideReducedLowWord high low denominator).toNat := by
+  have spec := lowestSetBitWord_spec nonzero
+  have twosDvdReduced : (lowestSetBitWord denominator).toNat ∣
+      wideReducedNumeratorN high low denominator :=
+    spec.2.1.trans (denominator_dvd_wideReducedNumerator nonzero)
+  have twosDvdHigh : (lowestSetBitWord denominator).toNat ∣
+      (wideReducedHighWord high low denominator).toNat * wordModulusN :=
+    Nat.dvd_mul_left_of_dvd spec.2.2.1 _
+  have reconstruct := wideReducedWords_reconstruct
+    (high := high) (low := low) nonzero
+  have highLe :
+      (wideReducedHighWord high low denominator).toNat * wordModulusN ≤
+        wideReducedNumeratorN high low denominator := by
+    rw [← reconstruct]
+    exact Nat.le_add_right _ _
+  have lowEq :
+      (wideReducedLowWord high low denominator).toNat =
+        wideReducedNumeratorN high low denominator -
+          (wideReducedHighWord high low denominator).toNat *
+            wordModulusN := by
+    omega
+  rw [lowEq]
+  exact Nat.dvd_sub twosDvdReduced twosDvdHigh
+
+/-- Exact folded dividend produced after factoring powers of two out of the
+denominator and reduced numerator. -/
+def wideFoldedDividendWord (high low denominator : B256) : B256 :=
+  foldDividedWords
+    (wideReducedHighWord high low denominator)
+    (wideReducedLowWord high low denominator)
+    (lowestSetBitWord denominator)
+
+theorem wideFoldedDividendWord_toNat
+    {high low denominator : B256} (nonzero : denominator ≠ B256.zero) :
+    (wideFoldedDividendWord high low denominator).toNat =
+      wideReducedNumeratorN high low denominator /
+          (lowestSetBitWord denominator).toNat % wordModulusN := by
+  have spec := lowestSetBitWord_spec nonzero
+  rw [wideFoldedDividendWord, foldDividedWords_toNat
+    (lowestSetBitWord_ne_zero nonzero) spec.2.2.1
+    (lowestSetBitWord_dvd_wideReducedLow nonzero)]
+  rw [wideNumeratorN, wideReducedWords_reconstruct nonzero]
 
 /-! ## Newton inverse refinement -/
 
