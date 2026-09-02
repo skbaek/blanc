@@ -49,7 +49,7 @@ namespace Blanc
 open Jaune
 
 /-- A member of the right input belongs to a `HashSet` union.  Keeping this
-bridge opaque prevents contract proofs from unfolding concrete hashed keys
+bridge unexpanded prevents contract proofs from unfolding concrete hashed keys
 while converting between membership notation and `contains` equations. -/
 theorem hashSetPair_mem_union_right
     (left right : Std.HashSet (Adr × B256)) (key : Adr × B256)
