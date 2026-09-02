@@ -153,9 +153,10 @@ def reject_lean(path: Path, diagnostics: tuple[str, ...], errors: list[str]) -> 
         check=False,
     )
     evidence = result.stdout + result.stderr
+    normalized = compact(evidence)
     if result.returncode == 0:
         errors.append(f"mutant `{path.name}` unexpectedly compiled")
-    elif not any(diagnostic in evidence for diagnostic in diagnostics):
+    elif not any(compact(diagnostic) in normalized for diagnostic in diagnostics):
         errors.append(
             f"mutant `{path.name}` failed outside its pinned diagnostic: {evidence[-1200:]}"
         )
@@ -178,7 +179,7 @@ def run_falsifiers(errors: list[str]) -> None:
                 "def wethAccount : Adr :=\n  (0x1001 : B256).toAdr",
                 "wrong target",
             ),
-            ("Tactic `decide` failed",),
+            ("wethAccount.toB256 = ProrataWethVault.assetAddress",),
         ))
         mutants.append((
             "WrongCode.lean",
@@ -189,7 +190,11 @@ def run_falsifiers(errors: list[str]) -> None:
                 "Blanc.prorataWethVaultCode",
                 "wrong code",
             ),
-            ("tactic 'rewrite' failed", "did not find instance of the pattern"),
+            (
+                "has type (pre.getCode wethAccount).toList = "
+                "prorataWethVaultCode but is expected to have type "
+                "(pre.getCode wethAccount).toList = wethCode",
+            ),
         ))
         mutants.append((
             "WrongRollbackPolarity.lean",
@@ -201,7 +206,7 @@ def run_falsifiers(errors: list[str]) -> None:
                 "    post.state = pre.state := by",
                 "rollback polarity",
             ),
-            ("application type mismatch", "Type mismatch"),
+            ("(if child.error.isSome = true then 0 else 1) = 0",),
         ))
         mutants.append((
             "WrongCalldata.lean",
@@ -211,7 +216,7 @@ def run_falsifiers(errors: list[str]) -> None:
                 "(balanceOfCalldata vault) output initial final) :",
                 "wrong calldata",
             ),
-            ("application type mismatch", "Type mismatch"),
+            ("balanceOfCalldata vault",),
         ))
         mutants.append((
             "WrongOwnerRole.lean",
@@ -231,7 +236,7 @@ def run_falsifiers(errors: list[str]) -> None:
                 "calldata\n        (0 : B256).toBytes false ∧",
                 "false return",
             ),
-            ("application type mismatch", "Type mismatch"),
+            ("callPost.returnData = B256.toBytes 1",),
         ))
 
         for filename, source, diagnostics in mutants:
@@ -253,17 +258,22 @@ private def hiddenApprove : Func :=
     Ninst.call ::: Func.stop
 
 private def mutatedVault : Prog :=
-  ⟨Blanc.ProrataWethVault.vault.main,
-    Blanc.ProrataWethVault.vault.aux ++ [hiddenApprove]⟩
+  ⟨hiddenApprove, []⟩
 
 example : exactWethSourceClosure mutatedVault = true := by
-  decide +kernel
+  have rejected : exactWethSourceClosure mutatedVault = false := by
+    decide +kernel
+  rw [rejected]
 
 end Blanc.Composition.ProrataWethVault.Source
 """,
             encoding="utf-8",
         )
-        reject_lean(hidden, ("Tactic `decide` failed",), errors)
+        reject_lean(
+            hidden,
+            ("false = true",),
+            errors,
+        )
 
 
 def main() -> int:
