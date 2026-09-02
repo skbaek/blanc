@@ -658,6 +658,9 @@ staged floor quotient/remainder pair with the correct zero test into the
 re-embedded natural ceiling quotient. Under a positive dividend,
 `ceilPredQuotientWord_eq_toB256` similarly turns the capacity finisher into
 `ceilDiv - 1`, while `ceilDiv_sub_one_le_div` records its generic floor bound.
+`ceilDiv_lt_wordModulusN_of_floor_lt` upgrades a fitting floor quotient to a
+fitting ceiling quotient from the exact guard that forbids rounding the
+largest word upward.
 The generic
 `Nat.fold_divided_words` identity and `foldDividedWords_toNat` justify folding
 a divided high/low pair back into one word. `wideReducedLowWord`,

@@ -75,6 +75,8 @@ theorem readTotalAssets_conversion_body_effect
       ∃ supply,
         supply = Devm.getStorVal bodyPre sevm.currentTarget supplySlot ∧
         supply.toNat ≤ maxSupplyN ∧
+        calculate (Sevm.argWord sevm 0).toNat
+            assets.toNat supply.toNat < wordModulusN ∧
         WordViewEffect
           (Nat.toB256 (calculate (Sevm.argWord sevm 0).toNat
             assets.toNat supply.toNat)) bodyPre post)
@@ -83,6 +85,9 @@ theorem readTotalAssets_conversion_body_effect
     ∃ supply,
       supply = Devm.getStorVal entry sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      calculate (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (calculate (Sevm.argWord sevm 0).toNat
           ((entry.state.getStor wethAccount).get
@@ -111,7 +116,8 @@ theorem readTotalAssets_conversion_body_effect
       Mem.Reads bodyPre.memory bodyPre.memory.data.toList := by
     intro index
     simp
-  obtain ⟨supply, supplyEq, stable, result, resultStorage, resultLogs⟩ :=
+  obtain ⟨supply, supplyEq, stable, resultFits, result,
+      resultStorage, resultLogs⟩ :=
     localEffect bodyWf bodyReads wordPrefix bodyRun
   have stagingStorage : Devm.getStor entry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by line_inv) staging
@@ -139,8 +145,8 @@ theorem readTotalAssets_conversion_body_effect
     exact (congrArg
       (fun storage : Stor => storage.get supplySlot)
       (congrFun entryStorage sevm.currentTarget)).symm
-  rw [entryWord] at result
-  exact ⟨supply, entrySupply, stable, result,
+  rw [entryWord] at resultFits result
+  exact ⟨supply, entrySupply, stable, resultFits, result,
     entryStorage.trans resultStorage, entryLogs.trans resultLogs⟩
 
 /-! ## Four distinct composed arithmetic bodies -/
@@ -157,6 +163,9 @@ theorem convertToShares_body_effect
     ∃ supply,
       supply = Devm.getStorVal entry sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      convertToSharesN (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (convertToSharesN (Sevm.argWord sevm 0).toNat
           ((entry.state.getStor wethAccount).get
@@ -182,6 +191,9 @@ theorem convertToAssets_body_effect
     ∃ supply,
       supply = Devm.getStorVal entry sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      convertToAssetsN (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (convertToAssetsN (Sevm.argWord sevm 0).toNat
           ((entry.state.getStor wethAccount).get
@@ -207,6 +219,9 @@ theorem previewMint_body_effect
     ∃ supply,
       supply = Devm.getStorVal entry sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      previewMintN (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (previewMintN (Sevm.argWord sevm 0).toNat
           ((entry.state.getStor wethAccount).get
@@ -232,6 +247,9 @@ theorem previewWithdraw_body_effect
     ∃ supply,
       supply = Devm.getStorVal entry sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      previewWithdrawN (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (previewWithdrawN (Sevm.argWord sevm 0).toNat
           ((entry.state.getStor wethAccount).get
@@ -263,6 +281,9 @@ private theorem conversion_compiled_effect
       ∃ supply,
         supply = Devm.getStorVal entry sevm.currentTarget supplySlot ∧
         supply.toNat ≤ maxSupplyN ∧
+        calculate (Sevm.argWord sevm 0).toNat
+            ((entry.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
         WordViewEffect
           (Nat.toB256 (calculate (Sevm.argWord sevm 0).toNat
             ((entry.state.getStor wethAccount).get
@@ -272,6 +293,11 @@ private theorem conversion_compiled_effect
     sevm.value = 0 ∧
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
         maxSupplyN ∧
+      calculate (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (calculate (Sevm.argWord sevm 0).toNat
           ((pre.state.getStor wethAccount).get
@@ -290,7 +316,7 @@ private theorem conversion_compiled_effect
   have bodyMemoryWf : Mem.Wf bodyPre.memory := by
     rw [← entryMemory]
     exact memoryWf
-  obtain ⟨supply, supplyEq, stable, result⟩ :=
+  obtain ⟨supply, supplyEq, stable, resultFits, result⟩ :=
     bodyEffect bodyConfig bodyMemoryWf (resources bodyPre bodyRun) bodyRun
   rcases result with ⟨output, bodyStorage, bodyLogs⟩
   have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
@@ -305,13 +331,19 @@ private theorem conversion_compiled_effect
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
         maxSupplyN := by
     simpa only [entrySupply] using stable
+  have resultFits' : calculate (Sevm.argWord sevm 0).toNat
+      ((pre.state.getStor wethAccount).get
+        sevm.currentTarget.toB256).toNat
+      (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat <
+      wordModulusN := by
+    simpa only [entryState, entrySupply] using resultFits
   have output' : ReturnsWord
       (Nat.toB256 (calculate (Sevm.argWord sevm 0).toNat
         ((pre.state.getStor wethAccount).get
           sevm.currentTarget.toB256).toNat
         (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat)) post := by
     simpa only [entryState, entrySupply] using output
-  exact ⟨valueZero, stable', output',
+  exact ⟨valueZero, stable', resultFits', output',
     entryStorage.trans bodyStorage, entryLogs.trans bodyLogs⟩
 
 private theorem returnWord_lookup :
@@ -333,6 +365,11 @@ theorem convertToShares_compiled_effect
     sevm.value = 0 ∧
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
         maxSupplyN ∧
+      convertToSharesN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (convertToSharesN (Sevm.argWord sevm 0).toNat
           ((pre.state.getStor wethAccount).get
@@ -359,6 +396,11 @@ theorem convertToAssets_compiled_effect
     sevm.value = 0 ∧
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
         maxSupplyN ∧
+      convertToAssetsN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (convertToAssetsN (Sevm.argWord sevm 0).toNat
           ((pre.state.getStor wethAccount).get
@@ -384,6 +426,11 @@ theorem previewDeposit_compiled_effect
     sevm.value = 0 ∧
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
         maxSupplyN ∧
+      previewDepositN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (previewDepositN (Sevm.argWord sevm 0).toNat
           ((pre.state.getStor wethAccount).get
@@ -411,6 +458,11 @@ theorem previewRedeem_compiled_effect
     sevm.value = 0 ∧
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
         maxSupplyN ∧
+      previewRedeemN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (previewRedeemN (Sevm.argWord sevm 0).toNat
           ((pre.state.getStor wethAccount).get
@@ -437,6 +489,11 @@ theorem previewMint_compiled_effect
     sevm.value = 0 ∧
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
         maxSupplyN ∧
+      previewMintN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (previewMintN (Sevm.argWord sevm 0).toNat
           ((pre.state.getStor wethAccount).get
@@ -462,6 +519,11 @@ theorem previewWithdraw_compiled_effect
     sevm.value = 0 ∧
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
         maxSupplyN ∧
+      previewWithdrawN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (previewWithdrawN (Sevm.argWord sevm 0).toNat
           ((pre.state.getStor wethAccount).get

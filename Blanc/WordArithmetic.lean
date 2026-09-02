@@ -893,6 +893,22 @@ theorem roundedQuotientWord_eq_toB256_ceilDiv
       toB256_add_one]
     simp [ceilDiv, exactDivision]
 
+/-- Ceiling division fits in one EVM word when its floor quotient fits and a
+nonzero remainder cannot round the largest word upward.  The second premise
+is the abstract form of the overflow guard used by compiled quotient
+finishers. -/
+theorem ceilDiv_lt_wordModulusN_of_floor_lt
+    {n d : Nat}
+    (floorFits : n / d < wordModulusN)
+    (roundingFits : n % d ≠ 0 → n / d ≠ maxWordN) :
+    ceilDiv n d < wordModulusN := by
+  by_cases exactDivision : n % d = 0
+  · simpa [ceilDiv, exactDivision] using floorFits
+  · have notMax := roundingFits exactDivision
+    simp [ceilDiv, exactDivision]
+    unfold maxWordN wordModulusN at *
+    omega
+
 /-- A staged floor quotient and remainder implement `ceilDiv n d - 1` when
 the dividend and divisor are positive and the floor quotient fits in one
 word.  Positivity is essential in the exact-division branch: it rules out the
