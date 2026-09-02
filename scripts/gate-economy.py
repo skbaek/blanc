@@ -83,6 +83,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "beacon-deposit-assurance",
             "beacon-deposit-deployment",
             "weth10-current-mainnet",
+            "lido-twg-pinned-target-current-mainnet",
         ],
     }
     for key, expected in expected_meta.items():

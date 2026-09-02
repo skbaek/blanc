@@ -14,7 +14,8 @@
   "post_launch_gates": [
     "beacon-deposit-assurance",
     "beacon-deposit-deployment",
-    "weth10-current-mainnet"
+    "weth10-current-mainnet",
+    "lido-twg-pinned-target-current-mainnet"
   ],
   "rows": [
     {"id":"doc-counts","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale published theorem counts"]},
@@ -68,6 +69,7 @@
     {"id":"beacon-deposit-deployment","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"output-aware: deterministic evaluator stdout binds exact deployment artifacts, storage projection, gas coordinates, and system programs"},
     {"id":"prorata-current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":["current-mainnet"],"historical_catches":[],"material_identity":"already precise: no broad Lean identity; exact fixtures, references, target and runtime closure are inputs"},
     {"id":"lido-ossifiable-proxy-current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":["current-mainnet"],"historical_catches":[],"material_identity":"already precise: generated artifact JSON, result, target and runtime closure are direct inputs"},
+    {"id":"lido-twg-pinned-target-current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":["current-mainnet"],"historical_catches":[],"material_identity":"already precise: exact compiler-owned artifacts, generated result, applicability ledger, target and runtime closure are direct inputs"},
     {"id":"axiom-audit","work":["candidate-positive","static-corpus"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
     {"id":"claims","work":["candidate-positive","static-corpus"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":["stale claim metadata"]},
     {"id":"elab","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"already precise: content-addressed module selection is the measured subject"},

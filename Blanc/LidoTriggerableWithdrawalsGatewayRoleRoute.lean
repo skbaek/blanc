@@ -17,7 +17,10 @@ open Jaune
 
 namespace LidoTriggerableWithdrawalsGateway
 
-private theorem roleKeyWord_eq (role account : B256) (region : Nat) :
+/-- The executable role-key expression is the tagged logical slot used by the
+gateway's storage model.  Successful forward witnesses reuse this equality
+rather than restating the role-route arithmetic. -/
+theorem roleKeyWord_eq (role account : B256) (region : Nat) :
     regionWord region |||
         (low252Mask &&& ((addressMask &&& account) ^^^ role)) =
       taggedSlot region (roleLookupPayload role account) := by

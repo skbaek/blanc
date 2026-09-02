@@ -196,18 +196,18 @@ EXPECTED_ROWS_PER_PILLAR = {
     "Hostile-world results (Stage 6)": 5,
     "Deployment and history": 13,
     "Artifact conformance and cost": 4,
-    "Pinned-target composition (entry 3)": 3,
+    "Pinned-target composition (entry 3)": 4,
 }
 
 # The total is pinned SEPARATELY from the per-pillar map rather than derived
 # from it. Deriving it would let a single edit move a row between pillars and a
 # matching edit here keep the gate green with no total to disagree with; two
 # independent pins have to be falsified together.
-EXPECTED_TOTAL_ROWS = 74
+EXPECTED_TOTAL_ROWS = 75
 
 # Rows whose Declarations field is the gate-owned literal. Pinned so the
 # escape hatch cannot widen quietly: convert one normal row and this fails.
-EXPECTED_GATE_OWNED_ROWS = 8
+EXPECTED_GATE_OWNED_ROWS = 9
 
 # Rows whose Gate field names more than one gate.
 #
@@ -280,6 +280,9 @@ NONCLAIM_PHRASES = [
     # The synthetic satisfying world is an anti-vacuity exhibit, not a
     # deployment.
     "the synthetic stable world receives no deployment credit",
+    # The BPO2 lane replays rules against closed fixtures; it does not inspect
+    # current chain roles or state.
+    "not a live-chain role/state attestation",
 ]
 # END PINNED EXPECTATIONS
 # ---------------------------------------------------------------------------

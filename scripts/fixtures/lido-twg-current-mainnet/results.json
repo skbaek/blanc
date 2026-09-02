@@ -1,0 +1,208 @@
+{
+  "artifacts": {
+    "circuitBreakerOfficialRuntime": {
+      "byteLength": 4282,
+      "sha256": "ff8eb66d66f8e4668af9bf5b687dda082c3729f8cd5ffd24a4b14697389d1505"
+    },
+    "gatewayControlRuntime": {
+      "byteLength": 15948,
+      "locator": "0x0000000000000000000000000000000000000000000000000000000000000800",
+      "sha256": "3b9a9442dd0a33d8fc39471bab2f42aed7189859a2c106709631b2c16e6a22e0"
+    }
+  },
+  "boundary": {
+    "claim": "finite replay of the compiler-owned artifacts under literal BPO2 rules; model-boundary evidence only and never a theorem premise",
+    "date": "2026-09-02",
+    "liveChainAttestation": false,
+    "signedEnvelopeSubstitution": "the composed row preserves the proved last-assignment shape but uses a non-precompile transaction driver as the pauser because the proof world's numeric address 0x09 cannot originate a signed transaction"
+  },
+  "channels": [
+    "status",
+    "storage",
+    "events",
+    "outputs",
+    "gas"
+  ],
+  "format": "blanc.lido-twg-pinned-target.current-mainnet-replay",
+  "network": {
+    "bpo2HeaderFieldBytesUpperBound": 256,
+    "bpo2HeaderFieldCountUpperBound": 32,
+    "checkoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae",
+    "eip7934MaxRlpBlockBytes": 8388608,
+    "executionFork": "BPO2",
+    "executionModule": "ethereum.forks.bpo2",
+    "logicalCompilerFork": "Osaka",
+    "maximumAuthoredTransactionDataBytes": 36,
+    "singletonRlpBlockUpperBoundBelowEip7934Cap": true,
+    "singletonRlpBlockUpperBoundBytes": 8435,
+    "testingBackend": "cancun",
+    "transactionGasLimit": 1000000,
+    "transactionGasLimitAtOrBelowEip7825Cap": true,
+    "zeroBlobInputs": true
+  },
+  "provenance": {
+    "breakerManifestSha256": "c5525f6d53f96c502cecbb5bbb676ad858bf9edcfd5b29b54b6c0e5203fbd951",
+    "breakerReferenceSha256": "09e1732d8226b301bb8013ffecdd89a13fc174b736bb60e382bcfa8504fff909",
+    "currentMainnetHelperSha256": "4b66f81325a1bf17d0c193b1973fe6db051fa6504176fbc83af94dc94ccab450",
+    "evaluatorSha256": "7727a46df26adc6621645cbaeba19edc73ca965ce0c81b5eeebd24d9c51c66cd",
+    "gatewayManifestSha256": "4dea3481b12f12a751af1bdae602a8e5d6d7055f6359795fdd89950b3e0ae4d4",
+    "gatewayReferenceSha256": "8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f",
+    "generatorSha256": "707945e70d4c26c7cb7cde384a7227804a4efc4ab3013b8315b053f48f166bde",
+    "ledgerSha256": "b92017f766d205b1a49dc210f2f4f322f27fdba427ff433cb90d5457583d4bf0",
+    "profileSha256": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
+    "runtimeLockSha256": "9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c",
+    "wrapperSha256": "68bbb6b1419f3303bc09354c6b4e89696e2c7b43c7144d48667c14eca77044b6"
+  },
+  "rows": {
+    "composed-public-pause-finite": {
+      "duration": "0x00000000000000000000000000000000000000000000000000000000001baf80",
+      "expectedPausedUntil": "0x0000000000000000000000000000000000000000000000000000000069795fd7",
+      "expectedPublicPauseOutputBytes": 0,
+      "gasUsed": {
+        "publicPauseViaDriver": 80378
+      },
+      "logs": [
+        {
+          "address": "0x0000000000000000000000000000000000000064",
+          "data": "0x",
+          "topics": [
+            "0xd92c3c28ed17463268f864776463c4c2154f89b18156d3edf77c0e37d0476913",
+            "0x0000000000000000000000000000000000000000000000000000000000000077",
+            "0x0000000000000000000000000000000000000000000000000000000000000099",
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+          ]
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000077",
+          "data": "0x00000000000000000000000000000000000000000000000000000000001baf80",
+          "topics": [
+            "0x32fb7c9891bc4f963c7de9f1186d2a7755c7d6e9f4604dabe1d8bb3027c2f49e"
+          ]
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000064",
+          "data": "0x00000000000000000000000000000000000000000000000000000000001baf80",
+          "topics": [
+            "0x9628d25c6e4299393a2779652c1df703eb599acae5fc406c6ef98e92c9ccd93e",
+            "0x0000000000000000000000000000000000000000000000000000000000000077",
+            "0x0000000000000000000000000000000000000000000000000000000000000099"
+          ]
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000064",
+          "data": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "topics": [
+            "0x4ea9e94baeeb3668b47d8d9b4cc8f5a1784d783dd263d7d76f8c10d6a10aed44",
+            "0x0000000000000000000000000000000000000000000000000000000000000099"
+          ]
+        }
+      ],
+      "receiptStatus": "0x1",
+      "semanticMismatches": []
+    },
+    "composed-public-pause-sentinel": {
+      "duration": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expectedPausedUntil": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expectedPublicPauseOutputBytes": 0,
+      "gasUsed": {
+        "publicPauseViaDriver": 80353
+      },
+      "logs": [
+        {
+          "address": "0x0000000000000000000000000000000000000064",
+          "data": "0x",
+          "topics": [
+            "0xd92c3c28ed17463268f864776463c4c2154f89b18156d3edf77c0e37d0476913",
+            "0x0000000000000000000000000000000000000000000000000000000000000077",
+            "0x0000000000000000000000000000000000000000000000000000000000000099",
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+          ]
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000077",
+          "data": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "topics": [
+            "0x32fb7c9891bc4f963c7de9f1186d2a7755c7d6e9f4604dabe1d8bb3027c2f49e"
+          ]
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000064",
+          "data": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "topics": [
+            "0x9628d25c6e4299393a2779652c1df703eb599acae5fc406c6ef98e92c9ccd93e",
+            "0x0000000000000000000000000000000000000000000000000000000000000077",
+            "0x0000000000000000000000000000000000000000000000000000000000000099"
+          ]
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000064",
+          "data": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "topics": [
+            "0x4ea9e94baeeb3668b47d8d9b4cc8f5a1784d783dd263d7d76f8c10d6a10aed44",
+            "0x0000000000000000000000000000000000000000000000000000000000000099"
+          ]
+        }
+      ],
+      "receiptStatus": "0x1",
+      "semanticMismatches": []
+    },
+    "family-pause-query-finite": {
+      "duration": "0x00000000000000000000000000000000000000000000000000000000001baf80",
+      "expectedIsPausedOutput": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "expectedIsPausedOutputBytes": 32,
+      "expectedPauseForOutputBytes": 0,
+      "expectedPausedUntil": "0x0000000000000000000000000000000000000000000000000000000069795fd7",
+      "gasUsed": {
+        "isPaused": 53062,
+        "pauseFor": 53875
+      },
+      "logs": [
+        {
+          "address": "0x0000000000000000000000000000000000000077",
+          "data": "0x00000000000000000000000000000000000000000000000000000000001baf80",
+          "topics": [
+            "0x32fb7c9891bc4f963c7de9f1186d2a7755c7d6e9f4604dabe1d8bb3027c2f49e"
+          ]
+        }
+      ],
+      "receiptStatuses": [
+        "0x1",
+        "0x1"
+      ],
+      "semanticMismatches": []
+    },
+    "family-pause-query-sentinel": {
+      "duration": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expectedIsPausedOutput": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "expectedIsPausedOutputBytes": 32,
+      "expectedPauseForOutputBytes": 0,
+      "expectedPausedUntil": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "gasUsed": {
+        "isPaused": 53062,
+        "pauseFor": 54192
+      },
+      "logs": [
+        {
+          "address": "0x0000000000000000000000000000000000000077",
+          "data": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "topics": [
+            "0x32fb7c9891bc4f963c7de9f1186d2a7755c7d6e9f4604dabe1d8bb3027c2f49e"
+          ]
+        }
+      ],
+      "receiptStatuses": [
+        "0x1",
+        "0x1"
+      ],
+      "semanticMismatches": []
+    }
+  },
+  "scenarioOrder": [
+    "family-pause-query-finite",
+    "family-pause-query-sentinel",
+    "composed-public-pause-finite",
+    "composed-public-pause-sentinel"
+  ],
+  "schema": 1,
+  "semanticMismatches": []
+}
