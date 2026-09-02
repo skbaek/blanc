@@ -452,27 +452,33 @@ theorem convertToShares_arithmetic_trace
             returnWordSlot <?>
           mulDiv (arg 0) stagedDenominator stagedAssetFactor .down
             returnWordSlot)) (.ok final)) :
-    ReturnsWord
-      (Nat.toB256 (convertToSharesN
-        (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
+    convertToSharesN
+        (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
+        wordModulusN ∧
+      ReturnsWord
+        (Nat.toB256 (convertToSharesN
+          (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
   rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
       ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
-    obtain ⟨returnPre, quotientStack, returnRun⟩ :=
+    obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       productOverTwoPow256_down_trace bodyWf bodyReads
         (ProducesWord.arg sevm image 0)
         (ProducesWord.stagedDenominator_after_productScratch supplyAt)
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [convertToSharesN, assetsMax, maxWord_toNat,
-      assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
+    constructor
+    · simpa [convertToSharesN, assetsMax, maxWord_toNat,
+        assetFactorN_maxWord, stagedDenominator_toNat stable] using quotientFits
+    · simpa [convertToSharesN, assetsMax, maxWord_toNat,
+        assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
     let factor := Nat.toB256 (assetFactorN assets.toNat)
     let amount := Sevm.argWord sevm 0
-    obtain ⟨returnPre, quotientStack, returnRun⟩ :=
+    obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       mulDiv_down_trace bodyWf bodyReads
         (ProducesWord.stagedAssetFactor assetsAt)
         (ProducesWord.arg sevm
@@ -481,9 +487,13 @@ theorem convertToShares_arithmetic_trace
         (ProducesWord.stagedDenominator_after_mulDivScratch supplyAt)
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [convertToSharesN, factor, amount,
-      stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    constructor
+    · simpa [convertToSharesN, factor, amount,
+        stagedDenominator_toNat stable,
+        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
+    · simpa [convertToSharesN, factor, amount,
+        stagedDenominator_toNat stable,
+        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
 
 /-- The conversion-to-assets arithmetic suffix returns exactly the G1
 full-width natural formula in either asset arm. -/
@@ -504,27 +514,33 @@ theorem convertToAssets_arithmetic_trace
         (shiftedDiv (arg 0) stagedDenominator .down returnWordSlot <?>
           mulDiv (arg 0) stagedAssetFactor stagedDenominator .down
             returnWordSlot)) (.ok final)) :
-    ReturnsWord
-      (Nat.toB256 (convertToAssetsN
-        (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
+    convertToAssetsN
+        (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
+        wordModulusN ∧
+      ReturnsWord
+        (Nat.toB256 (convertToAssetsN
+          (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
   rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
       ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
-    obtain ⟨returnPre, quotientStack, returnRun⟩ :=
+    obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       shiftedDiv_down_trace bodyWf bodyReads
         (ProducesWord.arg sevm image 0)
         (ProducesWord.stagedDenominator_after_shiftedScratch supplyAt)
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [convertToAssetsN, assetsMax, maxWord_toNat,
-      assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
+    constructor
+    · simpa [convertToAssetsN, assetsMax, maxWord_toNat,
+        assetFactorN_maxWord, stagedDenominator_toNat stable] using quotientFits
+    · simpa [convertToAssetsN, assetsMax, maxWord_toNat,
+        assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     let amount := Sevm.argWord sevm 0
-    obtain ⟨returnPre, quotientStack, returnRun⟩ :=
+    obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       mulDiv_down_trace bodyWf bodyReads
         (ProducesWord.stagedDenominator supplyAt)
         (ProducesWord.arg sevm
@@ -533,9 +549,13 @@ theorem convertToAssets_arithmetic_trace
         (ProducesWord.stagedAssetFactor_after_mulDivScratch assetsAt)
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [convertToAssetsN, denominator, amount,
-      stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    constructor
+    · simpa [convertToAssetsN, denominator, amount,
+        stagedDenominator_toNat stable,
+        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
+    · simpa [convertToAssetsN, denominator, amount,
+        stagedDenominator_toNat stable,
+        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
 
 /-- `previewMint` uses the same full-width asset ratio as
 `convertToAssets`, with exact ceiling division. -/
@@ -556,27 +576,33 @@ theorem previewMint_arithmetic_trace
         (shiftedDiv (arg 0) stagedDenominator .up returnWordSlot <?>
           mulDiv (arg 0) stagedAssetFactor stagedDenominator .up
             returnWordSlot)) (.ok final)) :
-    ReturnsWord
-      (Nat.toB256 (previewMintN
-        (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
+    previewMintN
+        (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
+        wordModulusN ∧
+      ReturnsWord
+        (Nat.toB256 (previewMintN
+          (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
   rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
       ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
-    obtain ⟨returnPre, quotientStack, returnRun⟩ :=
+    obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       shiftedDiv_up_trace bodyWf bodyReads
         (ProducesWord.arg sevm image 0)
         (ProducesWord.stagedDenominator_after_shiftedScratch supplyAt)
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [previewMintN, assetsMax, maxWord_toNat,
-      assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
+    constructor
+    · simpa [previewMintN, assetsMax, maxWord_toNat,
+        assetFactorN_maxWord, stagedDenominator_toNat stable] using quotientFits
+    · simpa [previewMintN, assetsMax, maxWord_toNat,
+        assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     let amount := Sevm.argWord sevm 0
-    obtain ⟨returnPre, quotientStack, returnRun⟩ :=
+    obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       mulDiv_up_trace bodyWf bodyReads
         (ProducesWord.stagedDenominator supplyAt)
         (ProducesWord.arg sevm
@@ -585,9 +611,13 @@ theorem previewMint_arithmetic_trace
         (ProducesWord.stagedAssetFactor_after_mulDivScratch assetsAt)
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [previewMintN, denominator, amount,
-      stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    constructor
+    · simpa [previewMintN, denominator, amount,
+        stagedDenominator_toNat stable,
+        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
+    · simpa [previewMintN, denominator, amount,
+        stagedDenominator_toNat stable,
+        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
 
 /-- `previewWithdraw` uses the same full-width share ratio as
 `convertToShares`, with exact ceiling division. -/
@@ -609,27 +639,33 @@ theorem previewWithdraw_arithmetic_trace
             returnWordSlot <?>
           mulDiv (arg 0) stagedDenominator stagedAssetFactor .up
             returnWordSlot)) (.ok final)) :
-    ReturnsWord
-      (Nat.toB256 (previewWithdrawN
-        (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
+    previewWithdrawN
+        (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
+        wordModulusN ∧
+      ReturnsWord
+        (Nat.toB256 (previewWithdrawN
+          (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
   rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
       ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
-    obtain ⟨returnPre, quotientStack, returnRun⟩ :=
+    obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       productOverTwoPow256_up_trace bodyWf bodyReads
         (ProducesWord.arg sevm image 0)
         (ProducesWord.stagedDenominator_after_productScratch supplyAt)
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [previewWithdrawN, assetsMax, maxWord_toNat,
-      assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
+    constructor
+    · simpa [previewWithdrawN, assetsMax, maxWord_toNat,
+        assetFactorN_maxWord, stagedDenominator_toNat stable] using quotientFits
+    · simpa [previewWithdrawN, assetsMax, maxWord_toNat,
+        assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
     let factor := Nat.toB256 (assetFactorN assets.toNat)
     let amount := Sevm.argWord sevm 0
-    obtain ⟨returnPre, quotientStack, returnRun⟩ :=
+    obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       mulDiv_up_trace bodyWf bodyReads
         (ProducesWord.stagedAssetFactor assetsAt)
         (ProducesWord.arg sevm
@@ -638,9 +674,13 @@ theorem previewWithdraw_arithmetic_trace
         (ProducesWord.stagedDenominator_after_mulDivScratch supplyAt)
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [previewWithdrawN, factor, amount,
-      stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    constructor
+    · simpa [previewWithdrawN, factor, amount,
+        stagedDenominator_toNat stable,
+        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
+    · simpa [previewWithdrawN, factor, amount,
+        stagedDenominator_toNat stable,
+        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
 
 /-! ## Staged endpoint-body effects -/
 
@@ -665,7 +705,7 @@ without weakening the exact returned word. -/
 theorem stagedConversion_body_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {image : Bytes} {assets : B256} {tail : Stack}
-    {arithmetic : Func} {result : B256 → B256}
+    {arithmetic : Func} {calculate : B256 → Nat}
     (memoryWf : Mem.Wf pre.memory)
     (memoryReads : Mem.Reads pre.memory image)
     (stack : assets :: tail <<+ pre.stack)
@@ -684,7 +724,8 @@ theorem stagedConversion_body_effect
         (conversionStagingImage image assets supply) →
       tail <<+ bodyPre.stack →
       Func.RunCompiledTo fs sevm bodyPre arithmetic (.ok post) →
-      ReturnsWord (result supply) post)
+      calculate supply < wordModulusN ∧
+        ReturnsWord (Nat.toB256 (calculate supply)) post)
     (run : Func.RunCompiledTo fs sevm pre
       (mstoreAt assetsWord +++
         pushSupplySlot +++ sload ::: mstoreAt supplyWord +++
@@ -692,12 +733,14 @@ theorem stagedConversion_body_effect
     ∃ supply,
       supply = Devm.getStorVal pre sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
-      WordViewEffect (result supply) pre post := by
+      calculate supply < wordModulusN ∧
+      WordViewEffect (Nat.toB256 (calculate supply)) pre post := by
   obtain ⟨supply, bodyPre, supplyEq, stable, bodyStack, bodyWf,
       bodyReads, -, bodyRun⟩ :=
     conversionStaging_trace memoryWf memoryReads stack run
-  exact ⟨supply, supplyEq, stable,
-    arithmeticEffect stable bodyWf bodyReads bodyStack bodyRun,
+  obtain ⟨resultFits, returned⟩ :=
+    arithmeticEffect stable bodyWf bodyReads bodyStack bodyRun
+  exact ⟨supply, supplyEq, stable, resultFits, returned,
     storageInv run, logsInv run⟩
 
 /-- After the exact WETH balance word has been booked on the stack,
@@ -723,6 +766,9 @@ theorem convertToShares_body_effect
     ∃ supply,
       supply = Devm.getStorVal pre sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      convertToSharesN
+          (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (convertToSharesN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) pre post := by
@@ -780,6 +826,9 @@ theorem convertToAssets_body_effect
     ∃ supply,
       supply = Devm.getStorVal pre sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      convertToAssetsN
+          (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (convertToAssetsN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) pre post := by
@@ -834,6 +883,9 @@ theorem previewMint_body_effect
     ∃ supply,
       supply = Devm.getStorVal pre sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      previewMintN
+          (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (previewMintN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) pre post := by
@@ -889,6 +941,9 @@ theorem previewWithdraw_body_effect
     ∃ supply,
       supply = Devm.getStorVal pre sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
+      previewWithdrawN
+          (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
+        wordModulusN ∧
       WordViewEffect
         (Nat.toB256 (previewWithdrawN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) pre post := by
