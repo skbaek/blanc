@@ -2,6 +2,8 @@ import Lake
 open Lake DSL
 
 package «blanc» where
+  enableArtifactCache := true
+  restoreAllArtifacts := true
   leanOptions := #[
     ⟨`pp.unicode.fun, true⟩ -- pretty-prints `fun a ↦ b`
   ]
