@@ -139,17 +139,18 @@ non-precompile account.  A holder redeeming to itself qualifies exactly when
 the holder does.  The contract itself is excluded automatically rather than by
 a field — see `ClaimAdmissible.recipient_ne_target`. -/
 structure ClaimAdmissible
-    (_ca : Adr) (w : State) (c : RedemptionClaim) : Prop where
+    (rules : ForkRules) (_ca : Adr) (w : State) (c : RedemptionClaim) : Prop where
   recipient_ne_zero : c.recipient ≠ 0
-  recipient_not_precompile : ¬ pragueRules.isPrecomp c.recipient
+  recipient_not_precompile : ¬ rules.isPrecomp c.recipient
   recipient_code_free : (w.getCode c.recipient).toList = []
 
 /-- A payable recipient is never the contract: at a stable boundary the
 installed WETH10 runtime is 6313 bytes long, while every claim's recipient is
 code-free.  Nothing has to assume this. -/
 theorem ClaimAdmissible.recipient_ne_target
-    {dp : DeployParams} {ca : Adr} {w : State} {c : RedemptionClaim}
-    (hstable : Stable dp ca w) (hadm : ClaimAdmissible ca w c) :
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr}
+    {w : State} {c : RedemptionClaim}
+    (hstable : Stable dp ca w) (hadm : ClaimAdmissible rules ca w c) :
     c.recipient ≠ ca := by
   intro hEq
   have hinstalled : (w.getCode ca).toList = weth10Code dp := by
@@ -164,18 +165,18 @@ theorem ClaimAdmissible.recipient_ne_target
 
 /-- A whole list is admissible when each claim's recipient is payable and each
 owner's **aggregate** booking fits inside that owner's booked balance. -/
-structure ClaimsAdmissible (ca : Adr) (w : State)
+structure ClaimsAdmissible (rules : ForkRules) (ca : Adr) (w : State)
     (cs : List RedemptionClaim) : Prop where
-  recipients : ∀ c ∈ cs, ClaimAdmissible ca w c
+  recipients : ∀ c ∈ cs, ClaimAdmissible rules ca w c
   budget : ∀ u : Adr, ownerClaimTotal cs u ≤ bookedBalanceNat w ca u
 
 /-- Overbooking is refused by the admission record itself: no list that books
 an owner beyond that owner's booked balance is admissible, however its claims
 are ordered or split. -/
-theorem overbooked_not_admissible {ca : Adr} {w : State}
+theorem overbooked_not_admissible {rules : ForkRules} {ca : Adr} {w : State}
     {cs : List RedemptionClaim} {u : Adr}
     (h : bookedBalanceNat w ca u < ownerClaimTotal cs u) :
-    ¬ ClaimsAdmissible ca w cs := fun hadm =>
+    ¬ ClaimsAdmissible rules ca w cs := fun hadm =>
   absurd (hadm.budget u) (Nat.not_le_of_lt h)
 
 /-- Two claims on one owner are admissible only against their **sum**. -/
@@ -186,10 +187,10 @@ theorem ownerClaimTotal_repeated_owner
 
 /-- Admission is order-insensitive, which is what lets a single admission
 record serve every permutation. -/
-theorem ClaimsAdmissible.perm {ca : Adr} {w : State}
+theorem ClaimsAdmissible.perm {rules : ForkRules} {ca : Adr} {w : State}
     {cs ds : List RedemptionClaim}
-    (h : ClaimsAdmissible ca w cs) (hperm : cs.Perm ds) :
-    ClaimsAdmissible ca w ds where
+    (h : ClaimsAdmissible rules ca w cs) (hperm : cs.Perm ds) :
+    ClaimsAdmissible rules ca w ds where
   recipients c hc := h.recipients c (hperm.mem_iff.mpr hc)
   budget u := by
     rw [← ownerClaimTotal_perm hperm u]
@@ -205,12 +206,12 @@ records an execution. -/
 /-- The fresh `withdrawTo` envelope this development hands to the sibling
 redemption theorem at each step. -/
 def canonicalRedemptionMessage
-    (ca : Adr) (c : RedemptionClaim) (w : State) : Msg :=
+    (rules : ForkRules) (ca : Adr) (c : RedemptionClaim) (w : State) : Msg :=
   { benv :=
       { state := w
         createdAccounts := .ofList []
         stat :=
-          { rules := pragueRules
+          { rules := rules
             chainId := 0
             origState := w
             blockGasLimit := 0
@@ -254,12 +255,13 @@ by the definition above, by the boundary's stability, or by the claim's own
 recipient facts and the independently supplied non-precompile fact about the
 contract. -/
 theorem canonicalRedemptionMessage_admissible
-    {dp : DeployParams} {ca : Adr} {w : State} {c : RedemptionClaim}
-    (hca : ¬ pragueRules.isPrecomp ca)
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr}
+    {w : State} {c : RedemptionClaim}
+    (hca : ¬ rules.isPrecomp ca)
     (hstable : Stable dp ca w)
-    (hadm : ClaimAdmissible ca w c) :
-    AdmissibleRedemptionMessage dp ca c.owner c.recipient c.amount w
-      (canonicalRedemptionMessage ca c w) where
+    (hadm : ClaimAdmissible rules ca w c) :
+    AdmissibleRedemptionMessage rules dp ca c.owner c.recipient c.amount w
+      (canonicalRedemptionMessage rules ca c w) where
   state_eq := rfl
   rules_eq := rfl
   target_eq := rfl
@@ -281,17 +283,17 @@ theorem canonicalRedemptionMessage_admissible
   original_storage_eq := rfl
   target_access :=
     (Classical.em
-        (ca ∈ (canonicalRedemptionMessage ca c w).accessedAddresses)).elim
+        (ca ∈ (canonicalRedemptionMessage rules ca c w).accessedAddresses)).elim
       .warm .cold
   recipient_access :=
     (Classical.em
         (c.recipient ∈
-          (canonicalRedemptionMessage ca c w).accessedAddresses)).elim
+          (canonicalRedemptionMessage rules ca c w).accessedAddresses)).elim
       .warm .cold
   owner_storage_access :=
     (Classical.em
       ((ca, c.owner.toB256) ∈
-        (canonicalRedemptionMessage ca c w).accessedStorageKeys)).elim
+        (canonicalRedemptionMessage rules ca c w).accessedStorageKeys)).elim
       .warm .cold
   recipient_account :=
     (Classical.em ((w.get c.recipient).Empty)).elim .empty .existing
@@ -309,19 +311,19 @@ history, and nothing below may be read as saying these messages were mined. -/
 
 /-- A finite chain of successful canonical redemptions paying `cs` in order,
 carrying each step's constructed envelope and exact effect. -/
-inductive RedemptionRun (dp : DeployParams) (ca : Adr) :
+inductive RedemptionRun (rules : ForkRules) (dp : DeployParams) (ca : Adr) :
     List RedemptionClaim → State → State → Prop
-  | nil (w : State) : RedemptionRun dp ca [] w w
+  | nil (w : State) : RedemptionRun rules dp ca [] w w
   | cons {c : RedemptionClaim} {cs : List RedemptionClaim}
       {w mid post : State} {msg : Msg} {out : MsgCallOutput}
       (henv : AdmissibleRedemptionMessage
-        dp ca c.owner c.recipient c.amount w msg)
-      (message_eq : msg = canonicalRedemptionMessage ca c w)
+        rules dp ca c.owner c.recipient c.amount w msg)
+      (message_eq : msg = canonicalRedemptionMessage rules ca c w)
       (hrun : processMessageCall msg = .ok (mid, out))
       (heffect : MessageRedemptionExactEffect
         dp ca c.owner c.recipient c.amount w mid out)
-      (htail : RedemptionRun dp ca cs mid post) :
-      RedemptionRun dp ca (c :: cs) w post
+      (htail : RedemptionRun rules dp ca cs mid post) :
+      RedemptionRun rules dp ca (c :: cs) w post
 
 /-! ## The one-step preservation lemma
 
@@ -335,14 +337,14 @@ owner's aggregate still fits. -/
 shrinks by exactly the amount paid, so a repeated owner's remaining claims stay
 within its remaining booked balance. -/
 theorem ClaimsAdmissible.step
-    {dp : DeployParams} {ca : Adr} {w post : State}
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w post : State}
     {c : RedemptionClaim} {cs : List RedemptionClaim} {out : MsgCallOutput}
-    (hadm : ClaimsAdmissible ca w (c :: cs))
+    (hadm : ClaimsAdmissible rules ca w (c :: cs))
     (heffect : MessageRedemptionExactEffect
       dp ca c.owner c.recipient c.amount w post out) :
-    ClaimsAdmissible ca post cs where
+    ClaimsAdmissible rules ca post cs where
   recipients c' hc' :=
-    have hc : ClaimAdmissible ca w c' :=
+    have hc : ClaimAdmissible rules ca w c' :=
       hadm.recipients c' (List.mem_cons_of_mem _ hc')
     { recipient_ne_zero := hc.recipient_ne_zero
       recipient_not_precompile := hc.recipient_not_precompile
@@ -368,9 +370,9 @@ theorem ClaimsAdmissible.step
 itself, a stable end state, the exact aggregate projection on booked balances
 and ETH, code preservation, and — the reason the induction closes — the fact
 that claims left over are still admissible at the end. -/
-structure RedemptionOutcome (dp : DeployParams) (ca : Adr)
+structure RedemptionOutcome (rules : ForkRules) (dp : DeployParams) (ca : Adr)
     (cs : List RedemptionClaim) (w post : State) : Prop where
-  run : RedemptionRun dp ca cs w post
+  run : RedemptionRun rules dp ca cs w post
   stable : Stable dp ca post
   booked : ∀ v : Adr,
     bookedBalanceNat post ca v + ownerClaimTotal cs v = bookedBalanceNat w ca v
@@ -380,7 +382,8 @@ structure RedemptionOutcome (dp : DeployParams) (ca : Adr)
   sumPreserved : sum post.bal = sum w.bal
   codePreserved : ∀ a : Adr, post.getCode a = w.getCode a
   remaining : ∀ es : List RedemptionClaim,
-    ClaimsAdmissible ca w (cs ++ es) → ClaimsAdmissible ca post es
+    ClaimsAdmissible rules ca w (cs ++ es) →
+      ClaimsAdmissible rules ca post es
 
 /-! ## The induction -/
 
@@ -394,11 +397,11 @@ successful prefixes, no envelope supplied from outside, and no accounted
 history: each step's envelope is constructed by
 `canonicalRedemptionMessage` from that step's own state. -/
 theorem redeemClaims_run
-    {dp : DeployParams} {ca : Adr}
-    (hca : ¬ pragueRules.isPrecomp ca) :
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr}
+    (hca : ¬ rules.isPrecomp ca) :
     ∀ (cs : List RedemptionClaim) (w : State),
-      Stable dp ca w → ClaimsAdmissible ca w cs →
-      ∃ post, RedemptionOutcome dp ca cs w post := by
+      Stable dp ca w → ClaimsAdmissible rules ca w cs →
+      ∃ post, RedemptionOutcome rules dp ca cs w post := by
   intro cs
   induction cs with
   | nil =>
@@ -407,7 +410,7 @@ theorem redeemClaims_run
         fun _ => rfl, fun es h => by simpa using h⟩
   | cons c cs ih =>
       intro w hstable hadm
-      have hcadm : ClaimAdmissible ca w c :=
+      have hcadm : ClaimAdmissible rules ca w c :=
         hadm.recipients c List.mem_cons_self
       have henv := canonicalRedemptionMessage_admissible hca hstable hcadm
       have hq : c.amount ≤ bookedBalanceNat w ca c.owner := by
@@ -449,13 +452,13 @@ theorem redeemClaims_run
           rw [if_neg hr]
           omega
       · intro es hes
-        have hcons : ClaimsAdmissible ca w (c :: (cs ++ es)) := hes
+        have hcons : ClaimsAdmissible rules ca w (c :: (cs ++ es)) := hes
         exact hout.remaining es (hcons.step heffect)
 
 /-! ## Any order -/
 
 /-- **The finite any-order corollary.** At a stable boundary carrying an
-independently supplied `¬ pragueRules.isPrecomp ca`, an admissible finite list
+independently supplied `¬ rules.isPrecomp ca`, an admissible finite list
 of claims is payable in **every** order: each permutation has its own
 successful message-level redemption sequence, ending stable, with the exact
 aggregate projection and the remaining claims still admissible.
@@ -464,28 +467,28 @@ Repeated owners are aggregated rather than forbidden: `ClaimsAdmissible`'s
 budget field bounds each owner's *total* booking, so no ordering can overbook.
 Nothing here asserts that these messages were included in a block. -/
 theorem redeemClaims_anyOrder
-    {dp : DeployParams} {ca : Adr} {w : State}
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
     {cs ds : List RedemptionClaim}
-    (hca : ¬ pragueRules.isPrecomp ca)
+    (hca : ¬ rules.isPrecomp ca)
     (hstable : Stable dp ca w)
-    (hadm : ClaimsAdmissible ca w cs)
+    (hadm : ClaimsAdmissible rules ca w cs)
     (hperm : cs.Perm ds) :
-    ∃ post, RedemptionOutcome dp ca ds w post :=
+    ∃ post, RedemptionOutcome rules dp ca ds w post :=
   redeemClaims_run hca ds w hstable (hadm.perm hperm)
 
 /-- Order does not matter economically either: two permutations of one
 admissible list end at states with the same booked balances and the same ETH
 balance at every address. -/
 theorem redeemClaims_order_independent
-    {dp : DeployParams} {ca : Adr} {w : State}
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
     {cs ds es : List RedemptionClaim}
-    (hca : ¬ pragueRules.isPrecomp ca)
+    (hca : ¬ rules.isPrecomp ca)
     (hstable : Stable dp ca w)
-    (hadm : ClaimsAdmissible ca w cs)
+    (hadm : ClaimsAdmissible rules ca w cs)
     (hd : cs.Perm ds) (he : cs.Perm es) :
     ∃ post post',
-      RedemptionOutcome dp ca ds w post ∧
-      RedemptionOutcome dp ca es w post' ∧
+      RedemptionOutcome rules dp ca ds w post ∧
+      RedemptionOutcome rules dp ca es w post' ∧
       (∀ v : Adr, bookedBalanceNat post ca v = bookedBalanceNat post' ca v) ∧
       (∀ a : Adr, (post.bal a).toNat = (post'.bal a).toNat) := by
   obtain ⟨post, hpost⟩ := redeemClaims_anyOrder hca hstable hadm hd
@@ -513,13 +516,14 @@ theorem redeemClaims_order_independent
 
 /-- The two opposite orders of one admissible list, side by side. -/
 theorem redeemClaims_reverse_order
-    {dp : DeployParams} {ca : Adr} {w : State} {cs : List RedemptionClaim}
-    (hca : ¬ pragueRules.isPrecomp ca)
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr}
+    {w : State} {cs : List RedemptionClaim}
+    (hca : ¬ rules.isPrecomp ca)
     (hstable : Stable dp ca w)
-    (hadm : ClaimsAdmissible ca w cs) :
+    (hadm : ClaimsAdmissible rules ca w cs) :
     ∃ post post',
-      RedemptionOutcome dp ca cs w post ∧
-      RedemptionOutcome dp ca cs.reverse w post' ∧
+      RedemptionOutcome rules dp ca cs w post ∧
+      RedemptionOutcome rules dp ca cs.reverse w post' ∧
       (∀ v : Adr, bookedBalanceNat post ca v = bookedBalanceNat post' ca v) ∧
       (∀ a : Adr, (post.bal a).toNat = (post'.bal a).toNat) :=
   redeemClaims_order_independent hca hstable hadm (List.Perm.refl cs)
@@ -527,23 +531,25 @@ theorem redeemClaims_reverse_order
 
 /-- Both orders of a two-claim list execute. -/
 theorem redeemClaims_twoOrders
-    {dp : DeployParams} {ca : Adr} {w : State} {c₁ c₂ : RedemptionClaim}
-    (hca : ¬ pragueRules.isPrecomp ca)
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr}
+    {w : State} {c₁ c₂ : RedemptionClaim}
+    (hca : ¬ rules.isPrecomp ca)
     (hstable : Stable dp ca w)
-    (hadm : ClaimsAdmissible ca w [c₁, c₂]) :
-    (∃ post, RedemptionOutcome dp ca [c₁, c₂] w post) ∧
-      (∃ post, RedemptionOutcome dp ca [c₂, c₁] w post) :=
+    (hadm : ClaimsAdmissible rules ca w [c₁, c₂]) :
+    (∃ post, RedemptionOutcome rules dp ca [c₁, c₂] w post) ∧
+      (∃ post, RedemptionOutcome rules dp ca [c₂, c₁] w post) :=
   ⟨redeemClaims_anyOrder hca hstable hadm (List.Perm.refl _),
     redeemClaims_anyOrder hca hstable hadm (List.Perm.swap c₂ c₁ [])⟩
 
 /-- Two claims on the *same* owner are admissible exactly against their sum;
 `redeemClaims_twoOrders` then pays them in either order. -/
 theorem repeatedOwner_admissible
-    {ca : Adr} {w : State} {u r₁ r₂ : Adr} {a₁ a₂ : Nat}
-    (h₁ : ClaimAdmissible ca w ⟨u, a₁, r₁⟩)
-    (h₂ : ClaimAdmissible ca w ⟨u, a₂, r₂⟩)
+    {rules : ForkRules} {ca : Adr} {w : State}
+    {u r₁ r₂ : Adr} {a₁ a₂ : Nat}
+    (h₁ : ClaimAdmissible rules ca w ⟨u, a₁, r₁⟩)
+    (h₂ : ClaimAdmissible rules ca w ⟨u, a₂, r₂⟩)
     (hbudget : a₁ + a₂ ≤ bookedBalanceNat w ca u) :
-    ClaimsAdmissible ca w [⟨u, a₁, r₁⟩, ⟨u, a₂, r₂⟩] where
+    ClaimsAdmissible rules ca w [⟨u, a₁, r₁⟩, ⟨u, a₂, r₂⟩] where
   recipients c hc := by
     rcases List.mem_cons.mp hc with h | h
     · exact h ▸ h₁
@@ -592,18 +598,18 @@ theorem ownerClaimTotal_fullBalanceClaims
 claims runs successfully, provided its explicitly chosen recipients are
 admissible.  This is the precise finite-list “everyone out” instance. -/
 theorem redeemEveryoneList_anyOrder
-    {dp : DeployParams} {ca : Adr} {w : State}
+    {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
     {holders : List Adr} {recipient : Adr → Adr}
     {claims : List RedemptionClaim}
-    (hca : ¬ pragueRules.isPrecomp ca)
+    (hca : ¬ rules.isPrecomp ca)
     (hstable : Stable dp ca w)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
-      ClaimAdmissible ca w
+      ClaimAdmissible rules ca w
         ⟨u, bookedBalanceNat w ca u, recipient u⟩)
     (hperm : (fullBalanceClaims ca w holders recipient).Perm claims) :
-    ∃ post, RedemptionOutcome dp ca claims w post := by
-  have hadm : ClaimsAdmissible ca w
+    ∃ post, RedemptionOutcome rules dp ca claims w post := by
+  have hadm : ClaimsAdmissible rules ca w
       (fullBalanceClaims ca w holders recipient) := by
     refine ⟨?_, ?_⟩
     · intro c hc
@@ -624,15 +630,16 @@ def selfClaim (u : Adr) (a : Nat) : RedemptionClaim := ⟨u, a, u⟩
 
 /-- A self-paying claim is admissible on exactly the holder's own qualifying
 facts. -/
-theorem ClaimAdmissible.self {ca : Adr} {w : State} {u : Adr} {a : Nat}
-    (hzero : u ≠ 0) (hprecomp : ¬ pragueRules.isPrecomp u)
+theorem ClaimAdmissible.self {rules : ForkRules} {ca : Adr}
+    {w : State} {u : Adr} {a : Nat}
+    (hzero : u ≠ 0) (hprecomp : ¬ rules.isPrecomp u)
     (hcode : (w.getCode u).toList = []) :
-    ClaimAdmissible ca w (selfClaim u a) where
+    ClaimAdmissible rules ca w (selfClaim u a) where
   recipient_ne_zero := hzero
   recipient_not_precompile := hprecomp
   recipient_code_free := hcode
 
-/-- **The flagship instance.** At any ordinary Prague-only future of a verified
+/-- **The flagship instance.** At any configured future of a verified
 WETH10 deployment, every permutation of an admissible finite claim list has a
 successful message-level redemption sequence.
 
@@ -641,34 +648,36 @@ here, and the boundary's stability comes from the stability development.  This
 remains a message/state-level statement: it does not claim a block step,
 transaction inclusion, or that any of these messages was mined. -/
 theorem deployment_reachable_redeemClaims_anyOrder
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
+    {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
-    (hadm : ClaimsAdmissible ca future.state cs)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hrules : cfg.rulesAt timestamp = .ok rules)
+    (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
-    ∃ post, RedemptionOutcome dp ca ds future.state post :=
-  redeemClaims_anyOrder hroot.target_not_precompile
+    ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
+  redeemClaims_anyOrder (hroot.target_not_precompile hrules)
     (hroot.reachable_stable hfuture) hadm hperm
 
 /-- The deployment-rooted full-balance instance for any supplied
 duplicate-free holder list and admissible recipient map. -/
 theorem deployment_reachable_redeemEveryoneList_anyOrder
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
+    {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {holders : List Adr}
     {recipient : Adr → Adr} {claims : List RedemptionClaim}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hrules : cfg.rulesAt timestamp = .ok rules)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
-      ClaimAdmissible ca future.state
+      ClaimAdmissible rules ca future.state
         ⟨u, bookedBalanceNat future.state ca u, recipient u⟩)
     (hperm :
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
-    ∃ post, RedemptionOutcome dp ca claims future.state post :=
-  redeemEveryoneList_anyOrder hroot.target_not_precompile
+    ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
+  redeemEveryoneList_anyOrder (hroot.target_not_precompile hrules)
     (hroot.reachable_stable hfuture) hnodup hrecipients hperm
 
 end Weth10

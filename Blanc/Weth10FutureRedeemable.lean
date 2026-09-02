@@ -6,7 +6,7 @@ import Blanc.Weth10DeploymentRoot
 Deployment-rooted future redemption for the exact Blanc WETH10 runtime.
 
 This module assembles the flagship guarantee: from a deployment root and any
-two configured Prague-only legs — one to a checkpoint, one onward to an
+two configured-schedule legs — one to a checkpoint, one onward to an
 arbitrary future snapshot — a holder's booked balance at the checkpoint is
 still covered at the future snapshot, up to the outflow that the runtime
 itself authorized, and every residual unit remains redeemable there.
@@ -62,17 +62,17 @@ fresh admissible redemption message at any later snapshot the accounted
 history reaches.  The residual bound is stated at the checkpoint; the
 enabledness conclusion is at the future snapshot. -/
 theorem deployment_reachable_residual_messageRedemption_enabled
-    {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future} {msg : Msg}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q <= bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
     (henv : AdmissibleRedemptionMessage
-      dp ca u recipient q future.state msg) :
+      rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
     hroot.reachable_stable hcheckpoint
@@ -86,20 +86,20 @@ theorem deployment_reachable_residual_messageRedemption_enabled
 enables a whole admissible redemption transaction whose entry state is the
 future snapshot. -/
 theorem deployment_reachable_residual_transactionRedemption_enabled
-    {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future}
+    {history : AccountedHistory cfg dp ca checkpoint future}
     {benv : Benv} {bout : BlockOutput}
     {tx : Tx} {index : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q <= bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
     (hentry : benv.state = future.state)
     (henv : AdmissibleRedemptionTx
-      dp ca u recipient q benv bout tx index) :
+      rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
     hroot.reachable_stable hcheckpoint
@@ -115,16 +115,15 @@ theorem deployment_reachable_residual_transactionRedemption_enabled
 /-- The checkpoint residual is also enabled through the direct-holder
 `withdraw(q)` message selector. -/
 theorem deployment_reachable_residual_selfMessageRedemption_enabled
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future} {msg : Msg}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q <= bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
-    (henv : AdmissibleSelfRedemptionMessage dp ca u q future.state msg) :
+    (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
     MessageRedemptionEnabled dp ca u u q future.state msg := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
     hroot.reachable_stable hcheckpoint
@@ -137,18 +136,17 @@ theorem deployment_reachable_residual_selfMessageRedemption_enabled
 /-- The transaction-altitude counterpart for the direct-holder
 `withdraw(q)` selector. -/
 theorem deployment_reachable_residual_selfTransactionRedemption_enabled
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future}
+    {history : AccountedHistory cfg dp ca checkpoint future}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q <= bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
     (hentry : benv.state = future.state)
-    (henv : AdmissibleSelfRedemptionTx dp ca u q benv bout tx index) :
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
     hroot.reachable_stable hcheckpoint
@@ -165,13 +163,13 @@ theorem deployment_reachable_residual_selfTransactionRedemption_enabled
 the *entire booked balance* at any reachable snapshot — not merely a
 checkpoint residual — is message-redemption enabled there. -/
 theorem deployment_reachable_booked_messageRedemption_enabled
-    {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain} {msg : Msg}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hq : q <= bookedBalanceNat future.state ca u)
-    (henv : AdmissibleRedemptionMessage dp ca u recipient q future.state msg) :
+    (henv : AdmissibleRedemptionMessage rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
   (hroot.reachable_stable hfuture).messageRedemption_enabled_of_le hq henv
 
@@ -179,15 +177,15 @@ theorem deployment_reachable_booked_messageRedemption_enabled
 balance at any reachable snapshot is transaction-redemption enabled from that
 snapshot as the entry state. -/
 theorem deployment_reachable_booked_transactionRedemption_enabled
-    {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q <= bookedBalanceNat future.state ca u)
-    (henv : AdmissibleRedemptionTx dp ca u recipient q benv bout tx index) :
+    (henv : AdmissibleRedemptionTx rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index := by
   have hstable : Stable dp ca benv.state := by
     rw [hentry]
@@ -199,15 +197,14 @@ theorem deployment_reachable_booked_transactionRedemption_enabled
 /-- In a rebased future window, the holder's full booked balance is enabled
 through `withdraw(q)` at transaction altitude. -/
 theorem deployment_reachable_booked_selfTransactionRedemption_enabled
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q <= bookedBalanceNat future.state ca u)
-    (henv : AdmissibleSelfRedemptionTx dp ca u q benv bout tx index) :
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index := by
   have hstable : Stable dp ca benv.state := by
     rw [hentry]
@@ -220,17 +217,17 @@ theorem deployment_reachable_booked_selfTransactionRedemption_enabled
 canonical payload, nonce, fees and gas envelope, sender recovery is the only
 missing input between the holder and transaction-altitude redemption. -/
 theorem deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
-    {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q <= bookedBalanceNat future.state ca u)
     (henv : NonSignatureRedemptionTxEnvelope
-      dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
+      rules dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
     (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_booked_transactionRedemption_enabled
@@ -248,12 +245,11 @@ collision hypothesis.  `hardenedDescription` is the only field that mentions
 that cannot discharge collision-freedom still gets the floor and the
 redeemability. -/
 structure FutureRedemptionGuarantee
-    (chainId : UInt64) (dp : DeployParams) (ca u : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca u : Adr)
     (checkpoint future : BlockChain)
-    (history : AccountedHistory chainId dp ca checkpoint future) : Prop where
+    (history : AccountedHistory cfg dp ca checkpoint future) : Prop where
   futureStable : Weth10.Stable dp ca future.state
-  reachable : BlockChain.ReachUsing
-    (ChainConfig.pragueOnly chainId) checkpoint future
+  reachable : BlockChain.ReachUsing cfg checkpoint future
   conserved :
     bookedBalanceNat checkpoint.state ca u +
         (history.weth10Flow u).ordinaryIn =
@@ -270,43 +266,43 @@ structure FutureRedemptionGuarantee
       (history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut =
         hardenedOutflow history u
-  messageEnabled : ∀ (q : Nat) (recipient : Adr) (msg : Msg),
+  messageEnabled : ∀ (rules : ForkRules) (q : Nat) (recipient : Adr) (msg : Msg),
     q <= bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut) ->
-    AdmissibleRedemptionMessage dp ca u recipient q future.state msg ->
+    AdmissibleRedemptionMessage rules dp ca u recipient q future.state msg ->
     MessageRedemptionEnabled dp ca u recipient q future.state msg
-  transactionEnabled : ∀ (q : Nat) (recipient : Adr)
+  transactionEnabled : ∀ (rules : ForkRules) (q : Nat) (recipient : Adr)
       (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat),
     benv.state = future.state ->
     q <= bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut) ->
-    AdmissibleRedemptionTx dp ca u recipient q benv bout tx index ->
+    AdmissibleRedemptionTx rules dp ca u recipient q benv bout tx index ->
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index
 
 /-- The flagship redemption package with both public selectors present at
 message and transaction altitude.  The inherited guarantee carries
 `withdrawTo`; these two fields add direct-holder `withdraw`. -/
 structure FutureDualSelectorRedemptionGuarantee
-    (chainId : UInt64) (dp : DeployParams) (ca u : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca u : Adr)
     (checkpoint future : BlockChain)
-    (history : AccountedHistory chainId dp ca checkpoint future) : Prop where
+    (history : AccountedHistory cfg dp ca checkpoint future) : Prop where
   toFutureRedemptionGuarantee :
-    FutureRedemptionGuarantee chainId dp ca u checkpoint future history
-  selfMessageEnabled : ∀ (q : Nat) (msg : Msg),
+    FutureRedemptionGuarantee cfg dp ca u checkpoint future history
+  selfMessageEnabled : ∀ (rules : ForkRules) (q : Nat) (msg : Msg),
     q <= bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut) ->
-    AdmissibleSelfRedemptionMessage dp ca u q future.state msg ->
+    AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg ->
     MessageRedemptionEnabled dp ca u u q future.state msg
-  selfTransactionEnabled : ∀ (q : Nat) (benv : Benv)
+  selfTransactionEnabled : ∀ (rules : ForkRules) (q : Nat) (benv : Benv)
       (bout : BlockOutput) (tx : Tx) (index : Nat),
     benv.state = future.state ->
     q <= bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut) ->
-    AdmissibleSelfRedemptionTx dp ca u q benv bout tx index ->
+    AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index ->
     TransactionRedemptionEnabled dp ca u u q benv bout tx index
 
 /-- The flagship: a deployment root, a leg to a checkpoint and a further leg
@@ -317,15 +313,13 @@ The history is existential because it is recovered from the reachability
 derivation rather than reconstructed from the endpoints; that is what makes
 this a logical guarantee about the window and not a trace extractor. -/
 theorem deployment_reachable_future_redeemable
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureRedemptionGuarantee
-      chainId dp ca u checkpoint future history := by
+      cfg dp ca u checkpoint future history := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
     hroot.reachable_stable hcheckpoint
   have hfutureStable : Stable dp ca future.state :=
@@ -340,32 +334,30 @@ theorem deployment_reachable_future_redeemable
   · exact fun hnc =>
       permanentOutflow_eq_hardenedOutflow_of_noCollision
         hcheckpointStable history hnc
-  · exact fun _ _ _ hq henv =>
+  · exact fun _ _ _ _ hq henv =>
       deployment_reachable_residual_messageRedemption_enabled
         hroot hcheckpoint hq henv
-  · exact fun _ _ _ _ _ _ hentry hq henv =>
+  · exact fun _ _ _ _ _ _ _ hentry hq henv =>
       deployment_reachable_residual_transactionRedemption_enabled
         hroot hcheckpoint hq hentry henv
 
 /-- The dual-selector flagship: the same accounted history packages
 `withdrawTo` and direct-holder `withdraw` at both altitudes. -/
 theorem deployment_reachable_future_dualSelector_redeemable
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureDualSelectorRedemptionGuarantee
-      chainId dp ca u checkpoint future history := by
+      cfg dp ca u checkpoint future history := by
   rcases deployment_reachable_future_redeemable
       hroot hcheckpoint hfuture with ⟨history, hguarantee⟩
   refine ⟨history, hguarantee, ?_, ?_⟩
-  · exact fun _ _ hq henv =>
+  · exact fun _ _ _ hq henv =>
       deployment_reachable_residual_selfMessageRedemption_enabled
         hroot hcheckpoint hq henv
-  · exact fun _ _ _ _ _ hentry hq henv =>
+  · exact fun _ _ _ _ _ _ hentry hq henv =>
       deployment_reachable_residual_selfTransactionRedemption_enabled
         hroot hcheckpoint hq hentry henv
 
@@ -374,15 +366,13 @@ recovered from the reachability derivation alone, one history carries the
 whole guarantee for *every* holder at once — `∃ history, ∀ u`, not merely
 `∀ u, ∃ history`. -/
 theorem deployment_reachable_future_redeemable_allHolders
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {base deployed checkpoint future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
-      chainId dp ca u checkpoint future history := by
+      cfg dp ca u checkpoint future history := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
     hroot.reachable_stable hcheckpoint
   have hfutureStable : Stable dp ca future.state :=
@@ -399,10 +389,10 @@ theorem deployment_reachable_future_redeemable_allHolders
   · exact fun hnc =>
       permanentOutflow_eq_hardenedOutflow_of_noCollision
         hcheckpointStable history hnc
-  · exact fun _ _ _ hq henv =>
+  · exact fun _ _ _ _ hq henv =>
       deployment_reachable_residual_messageRedemption_enabled
         hroot hcheckpoint hq henv
-  · exact fun _ _ _ _ _ _ hentry hq henv =>
+  · exact fun _ _ _ _ _ _ _ hentry hq henv =>
       deployment_reachable_residual_transactionRedemption_enabled
         hroot hcheckpoint hq hentry henv
 
@@ -418,9 +408,9 @@ slot — over every raw owner word normalizing to the holder and every spender
 word — is zero.  This is what makes the deployment-rooted window a full-window
 attribution: no allowance predates it. -/
 theorem deploymentRoot_allowanceQuiescent
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca) :
     AllowanceQuiescent ca u deployed.state := by
   intro owner spender _
   rw [hroot.emptyStorage]
@@ -430,24 +420,23 @@ theorem deploymentRoot_allowanceQuiescent
 the guarantee holds over the contract's whole life and its window starts
 allowance-quiescent. -/
 theorem deployment_fullWindow_future_redeemable
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future) :
     AllowanceQuiescent ca u deployed.state ∧
       ∃ history, FutureRedemptionGuarantee
-        chainId dp ca u deployed future history :=
+        cfg dp ca u deployed future history :=
   ⟨deploymentRoot_allowanceQuiescent hroot,
     deployment_reachable_future_redeemable hroot hroot.reflReach hfuture⟩
 
 /-- In a deployment-rooted history, no nonzero delegated permanent outflow
 can retain the empty deployment checkpoint as its governing allowance root. -/
 theorem deployment_fullWindow_attributionRootAt_ne_checkpoint
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (history : AccountedHistory chainId dp ca deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (history : AccountedHistory cfg dp ca deployed future)
     {earlier later : List CountedFrame} {record : CountedFrame}
     {action : FlowAction} {debit : DebitProvenance}
     {event : AllowanceEvent}
@@ -465,10 +454,10 @@ theorem deployment_fullWindow_attributionRootAt_ne_checkpoint
 for every nonzero permanent-outflow record: the holder's own call, an
 in-window `approve`, or an in-window `permit` signature. -/
 theorem deployment_fullWindow_permanentOutflowAuthorization
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (history : AccountedHistory chainId dp ca deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (history : AccountedHistory cfg dp ca deployed future)
     (hnc : NoAllowanceKeyCollision history)
     {earlier later : List CountedFrame} {record : CountedFrame}
     (hsplit : history.attributionLedger = earlier ++ record :: later)
@@ -481,10 +470,10 @@ theorem deployment_fullWindow_permanentOutflowAuthorization
 whole permanent outflow, and every nonzero contributing record has only a
 direct, `approve`, or `permit` authorization root. -/
 theorem deployment_fullWindow_hardenedOutflow_only_authorizingRoots
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (history : AccountedHistory chainId dp ca deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (history : AccountedHistory cfg dp ca deployed future)
     (hnc : NoAllowanceKeyCollision history) :
     ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut =
@@ -504,10 +493,10 @@ theorem deployment_fullWindow_hardenedOutflow_only_authorizingRoots
 effectful authorization by `u` suffice for booked-balance monotonicity; the
 deployment root discharges allowance quiescence. -/
 theorem deployment_fullWindow_dormant_holder_balance_monotone
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (history : AccountedHistory chainId dp ca deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (history : AccountedHistory cfg dp ca deployed future)
     (hnc : NoAllowanceKeyCollision history)
     (hdormant : NoAuthorizingActBy u history) :
     bookedBalanceNat deployed.state ca u ≤
@@ -519,12 +508,11 @@ theorem deployment_fullWindow_dormant_holder_balance_monotone
 trace-local collision property and the holder's effective dormancy remain as
 conditional premises. -/
 theorem deployment_reachable_dormant_holder_balance_monotone
-    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future) :
-    ∃ history : AccountedHistory chainId dp ca deployed future,
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future) :
+    ∃ history : AccountedHistory cfg dp ca deployed future,
       NoAllowanceKeyCollision history →
       NoAuthorizingActBy u history →
       bookedBalanceNat deployed.state ca u ≤

@@ -408,14 +408,18 @@ This repo contains the following files:
   span proofs, the separate generic constructor, exact runtime-parameter
   patching, phase-composed constructor execution, fresh-state invariant,
   creation-message settlement, and Blanc deployment-gas evidence.
-- [Weth10Stable.lean](Blanc/Weth10Stable.lean) and
-  [Weth10DeploymentRoot.lean](Blanc/Weth10DeploymentRoot.lean): the packaged
-  code/backing/zero-flash stable predicate, its configured-chain preservation,
-  and the strict canonical singleton Prague deployment bridge. The latter
-  crosses Jaune's system prefix, transaction preparation and collision check,
+- [Weth10Stable.lean](Blanc/Weth10Stable.lean),
+  [Weth10DeploymentRoot.lean](Blanc/Weth10DeploymentRoot.lean),
+  [Weth10Mainnet.lean](Blanc/Weth10Mainnet.lean), and
+  [Weth10PragueCompat.lean](Blanc/Weth10PragueCompat.lean): the packaged
+  code/backing/zero-flash stable predicate, schedule-parametric preservation
+  and deployment root, the public Ethereum-mainnet specialization, and the
+  retained Prague compatibility corollaries. The generic root crosses Jaune's
+  selected-rule system prefix, transaction preparation and collision check,
   successful receipt insertion, empty withdrawals, both checked request-system
-  suffix calls, and deployed-context reconstruction before exporting future
-  configured-chain stability and its literal code/flash/solvency projections.
+  suffix calls, and deployed-context reconstruction. The mainnet module
+  specializes that root to BPO2 and exports future configured-chain stability
+  plus literal code/flash/solvency projections.
 
 Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
 are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md). FMINT's
@@ -935,9 +939,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 998 named results and
+   current source inventory pins the exact axiom set of 1069 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `998/998` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `1069/1069` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -965,7 +969,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **998** top theorems. `scripts/check.sh`'s
+current source inventory contains **1069** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
@@ -1272,8 +1276,8 @@ the synthetic chain-31337/address-`0x1000` member has SHA-256
 
 | Assurance class | What is established | Artifact boundary |
 |---|---|---|
-| Formally proved | Compilation to each named Blanc runtime; compiled endpoint effects; backing preservation; exact flash-counter restoration; transaction/block/chain preservation of `Weth10.Stable`; a direct creation-message seed; and a strict canonical singleton type-2 deployment through Jaune's actual configured Prague block pipeline into a `DeploymentRoot` with successful receipt, exact installed runtime, empty storage/logs/requests, deployed `ValidContext`, and stable future reachability. Constructive canonical `withdraw`/`withdrawTo` redemption is also proved at ordinary-message and Prague type-2 transaction altitude. The root projections literally conclude exact code, `flashMinted = 0`, and `balSum ≤ ETH balance` at every reachable configured-chain boundary. Committed balance credits are proved not to wrap, and holder flow is proved in `Nat` for the exact Blanc runtime over a proof-carrying Prague-only `AccountedHistory`: with `B0`/`Bt` the checkpoint/later booked balances, `B0 + ordinaryIn + selfTransfer + flashCredit = Bt + redeemed + externalTransferredOut + selfTransfer + flashRepayment`; exact flash pairing and cancellation give `B0 + ordinaryIn = Bt + redeemed + externalTransferredOut`, hence `B0 ≤ Bt + redeemed + externalTransferredOut` and the corresponding truncated and withdrawal-only floors. The history retains the full applied block sequence, ordinary transaction roots, `BlockOutput`, and the beacon, history, withdrawal-request, and consolidation-request system roots, and its fold includes only settlement-surviving effects. It projects to ordinary Prague reach, which admits such a history from every stable checkpoint. Hardened authorization provenance is proved over that same runtime and history: unconditionally `hardenedOutflow ≤ permanentOutflow` per holder, and under a trace-local `NoAllowanceKeyCollision` hypothesis — that distinct touched raw `(owner, spender)` word pairs project to distinct allowance keys — the two are equal as a literal `Nat`. For arbitrary checkpoints the root taxonomy includes a value already present at the checkpoint. Across the full window from a proved deployment's empty storage, every nonzero permanent-outflow record instead traces exactly to the holder's own call, an in-window `approve` called by that holder, or an in-window `permit` signature recovering to that holder; the checkpoint case is eliminated by replaying the rooted allowance ledger. Corollaries give the hardened floor `B0 ≤ Bt + hardenedOutflow` and a deployment-rooted dormant-holder theorem: if the holder performs no effectful authorizing act — no debit as actual caller, `approve` write as caller, or `permit` recovering to it — then its booked balance cannot decrease across a collision-free history; same-caller reads and other inert calls do not void the premise, and deployment-root empty storage discharges allowance quiescence over all raw aliases. The dual-selector future-redeemability flagship packages, for every ordinary Prague-only reachable future of a constructed `DeploymentRoot`, an authentic accounted history with its cancelled conservation equation, residual floor, and `withdraw`/`withdrawTo` message and transaction enabledness for every amount within that residual, with rebased full-booked-balance corollaries and the `NoCollision`-conditional hardened description. A supplied-list any-order corollary proves that, for any duplicate-free holder list and admissible recipient map, every permutation of one full-booked-balance claim per listed holder succeeds at message altitude, one canonical message at a time, with stable boundaries and remaining claims. | All results are about the Blanc program and generated runtime. The deployment/root results use their explicit valid-base, strict-block, collision-free, funding, gas, system-predeploy, arithmetic, and successful configured-transition premises. The holder-flow family itself is about the exact compiled Blanc runtime and assumes no `NoCollision` condition: each debit is only **runtime-authorized**, with the actual caller and accepted direct, allowance, or flash branch recorded; raw branch words remain distinct from normalized storage addresses. The hardened family adds exactly one hypothesis, `NoAllowanceKeyCollision`, and consumes it solely for **attribution**: redemption success, message and transaction enabledness, and the residual floor are never conditioned on it. Collision-freedom is a stated hypothesis, not a proved property, and its scope is the pairs the trace actually recorded. Attribution names the account whose recorded act the runtime accepted; it is not evidence that the holder consented to, intended, or was aware of that act — a relayed `permit` signature and a phished `approve` both attribute to the signing account. Its exact-invocation witness excludes WETH bytes run by `DELEGATECALL`/`CALLCODE` against another account's storage and foreign lookalike slots or logs. Raw-message theorems inject a caller and prove execution only; they do not authenticate that caller or mine a transaction. At transaction altitude, admissible senders are exactly the senders Ethereum's modeled rules admit: code-free or valid EIP-7702-delegated accounts. Direct `withdraw` pays the sender and therefore retains the code-free-recipient restriction; `withdrawTo` permits any nonzero, non-precompile, code-free recipient. For a funded code-free external holder with canonical nonce, fees, gas, and payload, the non-signature transaction envelope proves every other admission obligation, leaving only recovery of that holder's own signature. No theorem forges it. A holder with non-delegation contract code that cannot call WETH10 — WETH10 itself remains an example, because it can legally receive its own token — keeps a conserved balance but has no transaction-altitude exit of its own. The supplied everyone-list is input; no theorem enumerates holders from state. The results do not verify the deployed oracle, establish holder consent, intent, or awareness, construct keys or signatures, promise inclusion, generalize to arbitrary deployment shapes, or cover arbitrary receiver code. |
-| Executably tested | `scripts/check-weth10-differential.sh` executes 147 generated canonical-call rows against both the literal deployed runtime and the exact named Blanc family members, covering all 27 selectors plus receive in two identity worlds with zero mismatches. `scripts/check-weth10-redemption.sh --no-build` separately replays two committed Prague blockchain fixtures: a type-2 zero/nonzero/failed-redemption sequence with receipt statuses `[true, true, false]`, and a valid type-4 authorization that changes the recipient's code and nonce. `scripts/check-weth10-deployment.sh` additionally generates one fresh singleton type-2 creation block in memory, checks 16 semantic assertions including its successful receipt and exact installed runtime, and replays it through Jaune at Prague. | Finite differential rows and transaction fixtures on chosen inputs, not semantic equivalence or a proof. The generated deployment fixture is temporary evidence and does not claim a signing-key or inclusion construction in Lean. |
+| Formally proved | Compilation to each named Blanc runtime; compiled endpoint effects; backing preservation; exact flash-counter restoration; and transaction/block/chain preservation of `Weth10.Stable`. The holder-flow carrier, deployment root, redemption envelopes, and protected headlines quantify over an arbitrary `ChainConfig` or selected `ForkRules`: the block retains its own `cfg.rulesAt` witness, executes under those rules, and steps with `stateTransitionUsing cfg`. A strict canonical singleton type-2 deployment generically establishes `DeploymentRoot cfg`; `canonicalMainnetBpo2DeploymentStep_establishes_root` specializes it to Ethereum mainnet's configured Prague → Osaka → BPO1 → BPO2 schedule, and the public `_mainnet` theorems carry that root through arbitrary later `ReachUsing mainnetChainConfig` histories. Prague-only forms remain audited compatibility corollaries. Constructive canonical `withdraw`/`withdrawTo` redemption is proved at message and rule-parametric type-2 transaction altitude with the precompile set, transaction validation, and EIP-7825 gas cap explicit. Root projections conclude exact code, `flashMinted = 0`, and `balSum ≤ ETH balance` at every reachable configured-chain boundary. Committed credits do not wrap, and a proof-carrying `AccountedHistory cfg` gives the exact `Nat` flow identity; exact flash pairing and cancellation yield `B0 + ordinaryIn = Bt + redeemed + externalTransferredOut`, the residual floors, and the dual-selector enabledness guarantee at every configured future. Hardened provenance remains conditional only on trace-local `NoAllowanceKeyCollision`; the conservation, floor, and redemption results do not use it. Full-window corollaries trace permanent outflow to the holder's own call, `approve`, or recovered `permit`, give dormant-holder monotonicity, and establish any-order message redemption for every permutation of an admissible supplied holder list. | All results are about the Blanc program and generated runtime. The mainnet schedule is Jaune's `mainnetChainConfig`, not an assertion that arbitrary unknown forks preserve semantics. Deployment and redemption consume explicit selected-rule, valid-base, strict-block, collision-free, funding, gas, system-predeploy, arithmetic, and successful-transition premises. Debits are only **runtime-authorized**; attribution is not consent, intent, or awareness. Exact invocation excludes `DELEGATECALL`/`CALLCODE` against another account's storage and foreign lookalike slots or logs. Raw-message theorems do not authenticate a caller or mine a transaction; transaction theorems do not manufacture a signature. Direct `withdraw` retains the code-free-recipient restriction, while `withdrawTo` permits an explicit nonzero, selected-rule nonprecompile, code-free recipient. A non-delegation contract holder unable to call WETH10 keeps a conserved balance but has no transaction-altitude exit of its own. The supplied everyone-list is input, not state enumeration. The results do not verify the deployed oracle, construct keys, promise inclusion, generalize to arbitrary deployment shapes, or cover arbitrary receiver code. |
+| Executably tested | `scripts/check-weth10-current-mainnet.sh` consumes the shared locked BPO2 lane: it byte-compares one fresh singleton type-2 creation block at the Lean-pinned mainnet timestamp, the zero/nonzero/failed type-2 redemption sequence, one valid type-4 authorization mutation, and a 28-row selector-plus-receive matrix, then replays all three blocks through Jaune at `--network BPO2`. The matrix records status, receipt gas, exact logs, projected storage, and fee-normalized ETH against both the locked deployed runtime and evaluated Blanc runtime. The preserved Prague owners remain unchanged: `scripts/check-weth10-differential.sh` executes 147 canonical-call rows with exact returndata and live CALL traces, `scripts/check-weth10-redemption.sh --no-build` replays its two committed fixtures, and `scripts/check-weth10-deployment.sh` checks and replays its temporary creation block. | Finite differential rows and transaction fixtures on chosen inputs, not semantic equivalence or a proof. The BPO2 lane supplies executable non-vacuity for the current-mainnet specialization; Prague remains the historical evidence lane. Neither constructs a signing key or proves inclusion. |
 | Not established | Verification of the deployed runtime; deployed-vs-Blanc semantic equivalence; arbitrary co-block/factory/CREATE2 deployment shapes; key custody, propagation, or inclusion; malformed/noncanonical input-calldata closure; arbitrary receiver/borrower liveness or settlement; exact deployed gas, storage, or codehash parity. | These are non-claims, not assumptions supplied by the proof or test suites. See `WETH10_COMPATIBILITY.md` and `WETH10_DEVIATIONS.md`. |
 
 The generated differential gate's 147 rows include 69 live
@@ -1289,11 +1293,12 @@ preservation through recursive calls. `Weth10Live.lean` gives exact Blanc
 cold/warm gas for the required views.
 
 The separate constructor is 6,490 bytes: a 177-byte prefix copies and patches
-the 6,313-byte zero-parameter template. The deployment gate executes it in two
-fresh identity worlds under the pinned Prague EELS and also generates a strict
-singleton type-2 creation block whose successful receipt, exact installed
-family member, empty storage/logs, fee accounting, and state-neutral system
-predeploys are checked before Jaune replays the block. It checks nonpayability,
+the 6,313-byte zero-parameter template. The historical deployment gate executes
+it in two fresh identity worlds under the pinned Prague EELS. The additive
+current-mainnet gate executes a fresh strict singleton type-2 creation block at
+a BPO2 timestamp and checks its successful receipt, exact installed family
+member, empty storage/logs, fee accounting, and state-neutral system predeploys
+before Jaune replays it at BPO2. The constructor family checks nonpayability,
 independently derived chain and domain words, no constructor
 calls/logs/storage instructions, and six falsifiers. Blanc's
 closed accounting is 1,471 init-execution gas, 1,262,600 code-deposit gas,
@@ -1309,19 +1314,33 @@ storage empty satisfying `Weth10Inv`, emits no logs, returns the runtime bytes,
 and subtracts the named direct creation-message cost.
 
 `canonicalDeploymentStep_establishes_root` is the transaction/block crossing:
-from a valid configured base, strict `CanonicalBlock` evidence, the closed
-type-2 envelope, and an actual `stateTransitionUsing` success, it reconstructs
+for arbitrary `cfg` and selected `rules`, from a valid configured base, strict
+`CanonicalBlock` evidence, the closed type-2 envelope, and an actual
+`stateTransitionUsing cfg` success, it reconstructs
 the post-system prepared message rather than assuming it, proves the collision
 branch and receipt success, preserves backing and zero flash debt across both
 checked request-predeploy suffix calls, and derives the deployed valid context.
 `DeploymentRoot.reachable_stable` then composes that root with the existing
-configured-chain preservation theorem. The result is deliberately specific to
-the named Prague-only anchor and does not turn the finite fixture into a proof.
+configured-chain preservation theorem. The strict shape remains deliberately
+specific — no factory, CREATE2, or co-block anchor — while
+`canonicalMainnetBpo2DeploymentStep_establishes_root` supplies the BPO2
+mainnet instance. The finite fixture witnesses that specialization but is not
+admitted as a proof premise.
 
 Both the Blanc runtime and initcode contain `PUSH0`, so Shanghai is the minimum
-execution fork. The executable evidence is specifically under the pinned
-Prague EELS; neither fact implies deployability on pre-Shanghai forks or a
-broader fork-parametric claim.
+execution fork. Current executable evidence is under the pinned BPO2 lane, with
+the pinned Prague EELS retained as history. Neither fact implies deployability
+on pre-Shanghai forks.
+
+Here “mainnet” means Jaune's configured Ethereum schedule: Prague at Unix
+`1746612311`, Osaka at `1764798551`, BPO1 at `1765290071`, and BPO2 at
+`1767747671`; BPO2 has been live on mainnet since 2026-01-07. A future fork
+that changes only rule data Jaune already models — blob parameters, the
+precompile set, transaction/block/code limits, or opcode activation — is a
+Jaune pin bump and re-verification, with any new rule facts stated as explicit
+premises. A fork that changes execution semantics, such as Amsterdam gas
+metering or block-level access lists, changes Jaune itself and every Blanc
+theorem is re-proved against that change.
 
 The execution proof is deliberately compositional: copy, chain-word patches,
 five prehash writes, hash, separator patches, and return are proved separately

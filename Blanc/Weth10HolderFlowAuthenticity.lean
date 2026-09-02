@@ -298,13 +298,13 @@ theorem ProcessCreateMessageTrace.allFramesRoot
 theorem; its ordinary reach projection transports the checkpoint invariant to
 the endpoint. -/
 theorem AccountedHistory.future_stable
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     Stable dp ca future.state :=
   chainUsing_preserves_stable dp ca
-    (ChainConfig.pragueOnly chainId) checkpoint future
+    cfg checkpoint future
     history.toReachUsing hstable
 
 end Weth10

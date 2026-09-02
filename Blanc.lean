@@ -102,6 +102,8 @@ import Blanc.Weth10MainnetCodeEq
 import Blanc.Weth10DeployProof
 import Blanc.Weth10Stable
 import Blanc.Weth10DeploymentRoot
+import Blanc.Weth10Mainnet
+import Blanc.Weth10PragueCompat
 import Blanc.Weth10Functional
 import Blanc.Weth10FlashFunctional
 import Blanc.Weth10StateFunctional

@@ -299,7 +299,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `nonpayable`; input `(value: uint256)`; no outputs; selector `0x2e1a7d4d`. |
 | Guard/effects | Require caller balance `>= value` or exact `WETH: burn amount exceeds balance`; debit and emit `Transfer(msg.sender, 0, value)`. |
 | External call | Low-level call to `msg.sender` with `value` ETH and empty calldata after the debit/log. False result, regardless of child revert bytes, becomes exact `WETH: ETH transfer failed`; success returns empty data. Failure rolls everything back. |
-| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`, `TH-redeem`. For the exact compiled Blanc runtime, `Stable.selfRedemption_enabled_of_le` constructively proves the canonical authorization-free call succeeds for every natural amount within the caller's booked balance when the nonzero owner is code-free, Prague-nonprecompile, transaction-capable, and adequately funded/gassed. This theorem is not about the deployed Solidity runtime. Status: complete. |
+| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`, `TH-redeem`. For the exact compiled Blanc runtime, `Stable.selfRedemption_enabled_of_le` constructively proves the canonical authorization-free call succeeds for every natural amount within the caller's booked balance when the nonzero owner is code-free, nonprecompile under the selected rules, transaction-capable, within the selected EIP-7825 gas cap, and adequately funded/gassed. The theorem is rule-parametric and is not about the deployed Solidity runtime. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"withdrawFrom(address,address,uint256)","selector":"0x9555a942"} -->
 ### `withdrawFrom(address,address,uint256)`
@@ -320,7 +320,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `nonpayable`; inputs `(to: address payable, value: uint256)`; no outputs; selector `0x205c2878`. |
 | Guard/effects | Require caller balance `>= value` or exact `WETH: burn amount exceeds balance`; debit and emit `Transfer(msg.sender, 0, value)`. |
 | External call | Low-level call to `to` with `value` ETH and empty calldata. False result is replaced by exact `WETH: ETH transfer failed`; success returns empty data. The target observes the debit/log. Failure rolls everything back. Address zero can succeed as an ETH target. |
-| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`, `TH-redeem`. For the exact compiled Blanc runtime, `Stable.messageRedemption_enabled_of_le` and `Stable.transactionRedemption_enabled_of_le` construct successful canonical Prague message and type-2 transaction executions for every natural amount within the caller's booked balance, under their explicit code-free nonzero nonprecompile-recipient, original/current-storage, access, fee-funding, and gas envelopes. These theorems are not claims about arbitrary receiver code, inclusion, or the deployed Solidity runtime. Status: complete. |
+| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`, `TH-redeem`. For the exact compiled Blanc runtime, `Stable.messageRedemption_enabled_of_le` and `Stable.transactionRedemption_enabled_of_le` construct successful canonical selected-rule message and type-2 transaction executions for every natural amount within the caller's booked balance, under explicit code-free nonzero nonprecompile-recipient, validation, EIP-7825 gas-cap, original/current-storage, access, fee-funding, and gas envelopes. Prague remains a compatibility corollary; the public mainnet instance covers every rule selected by `mainnetChainConfig`. These theorems are not claims about arbitrary receiver code, inclusion, or the deployed Solidity runtime. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"receive","selector":null} -->
 ### `receive`
@@ -416,17 +416,20 @@ can make the floor strict. Zero transfers contribute zero, while a transfer
 whose normalized source and recipient are the same holder is recorded as a
 self-transfer and is not public permanent outflow.
 
-The premise is a proof-carrying Prague-only `AccountedHistory`, not an endpoint
-balance comparison or supplied event list. It retains the entire applied block
-sequence even beyond the endpoint's 255-block window, each configured
-transition and `applyBody` result, `BlockOutput`, every ordinary transaction
-root, and all four Prague system-message roots: beacon, history, withdrawal
-request, and consolidation request. The fold follows actual settlement:
+The premise is a proof-carrying `AccountedHistory cfg`, not an endpoint balance
+comparison or supplied event list. It retains the entire applied block sequence
+even beyond the endpoint's 255-block window, each block's selected `rules` and
+`cfg.rulesAt` witness, configured transition and `applyBody` result,
+`BlockOutput`, every ordinary transaction root, and the beacon, history,
+withdrawal-request, and consolidation-request system roots. The fold follows
+actual settlement:
 failed, reverted, or exceptional child, outer, and top-level effects are
 pruned, including failures caught by a committing caller. Every ordinary
-Prague-only reachable endpoint from a stable checkpoint admits such a history;
-the history projects back to ordinary reach, and equal applied block sequences
-produce equal holder-flow totals.
+`ReachUsing cfg` endpoint from a stable checkpoint admits such a history; the
+history projects back to that configured reach, and equal applied block
+sequences produce equal holder-flow totals. The current-mainnet instance uses
+Jaune's Prague → Osaka → BPO1 → BPO2 schedule; Prague-only remains an
+audited corollary.
 
 `Runtime-authorized` means only that the exact WETH10 runtime accepted the
 committed debit. The retained data records the actual caller and the direct,
@@ -443,7 +446,7 @@ and code address together with the compiled-runtime witness. WETH bytes run by
 lookalike balance slots or logs, cannot enter this ledger. `TH-holder-flow`
 assumes no `NoCollision` condition and does not verify the deployed Solidity
 runtime, prove future enabledness or liveness, or establish the successor's
-any-order claim. The committed redemption fixtures exercise chosen concrete
+any-order claim. The committed Prague and BPO2 redemption fixtures exercise chosen concrete
 histories only; they are not proof-carrying `AccountedHistory` values and do
 not enlarge these theorems.
 
@@ -466,10 +469,13 @@ Adequate gas means each execution can reach the compared behavior. Low-level
 ETH calls and typed callbacks use their actual remaining-gas behavior, but
 Blanc need not match exact gas consumption, access lists, or callback-observed
 `gasleft()`. The landed exact-gas claims measure Blanc's own compiled bytes
-only. `TH-redeem` fixes Prague and proves the conservative Blanc runtime ceiling
-`100182`; the mandatory canonical type-2 envelope separately covers the maximum
-of calldata-floor gas and intrinsic gas plus that runtime ceiling. This is a
-sufficient bound, not deployed-artifact gas equality or a tight threshold.
+only. `TH-redeem` uses Jaune's modeled global fee schedule to prove the
+conservative Blanc runtime ceiling `100182`; the rule-parametric canonical
+type-2 envelope separately covers the maximum of calldata-floor gas and
+intrinsic gas plus that runtime ceiling and carries the selected rule record's
+EIP-7825 cap explicitly. Prague, Osaka, BPO1, and BPO2 all discharge the closed
+ceiling. This is a sufficient bound, not deployed-artifact gas equality or a
+tight threshold.
 
 <!-- WETH10-CROSSCUT malformed-calldata-exclusion -->
 ### Malformed-calldata exclusion
@@ -530,6 +536,34 @@ ETH, and trace-local for allowances under the collision premise above. Raw
 Solidity slots, storage roots/proofs, code/codehash, and source layout are not
 compatibility surfaces.
 
+## Configured-mainnet proof and evidence boundary
+
+The generic holder-flow, deployment-root, conservation, redemption, dormant,
+and any-order statements quantify over an explicit `ChainConfig` or selected
+`ForkRules`. The public mainnet instances use Jaune's `mainnetChainConfig`:
+Prague at Unix `1746612311`, Osaka at `1764798551`, BPO1 at `1765290071`, and
+BPO2 at `1767747671`. BPO2 has been live on mainnet since 2026-01-07 and is the
+current executable specialization. Prague-only forms remain audited
+compatibility corollaries and the historical differential/deployment/redemption
+evidence lane.
+
+`scripts/check-weth10-current-mainnet.sh` ties the BPO2 specialization to the
+exact Lean evaluators and a kernel-decided timestamp pin. It byte-compares and
+replays one fresh creation block, the type-2 redemption block, and the type-4
+authorization block through Jaune at `--network BPO2`; its separate 28-row
+ordinary-call matrix credits status, receipt gas, exact logs, projected
+storage, and fee-normalized ETH. Exact returndata, live CALL traces, and the
+malformed/precompile/OOG corpus remain owned by the preserved Prague
+differential. These are finite witnesses, not proof premises or semantic
+equivalence.
+
+A future fork that changes only rule data Jaune already models — blob
+parameters, the precompile set, transaction/block/code limits, or opcode
+activation — is a Jaune pin bump and re-verification, with any new facts stated
+as explicit premises. A fork that changes execution semantics, such as
+Amsterdam gas metering or block-level access lists, changes Jaune itself and
+every Blanc theorem is re-proved against that change.
+
 ## Deployment boundary
 
 <!-- WETH10-DEPLOYMENT constructor -->
@@ -554,3 +588,12 @@ of the named direct creation-message gas accounting. The companion
 runtime compilation, constructor call-freedom, empty-state initialization, and
 the closed Blanc gas ceiling. None of these statements claims deployed-gas
 parity or source-initcode identity.
+
+At block altitude, `canonicalDeploymentStep_establishes_root` is generic in
+`cfg` and the block's selected `rules`; the root records the `rulesAt` witness,
+uses `stateTransitionUsing cfg`, and carries the schedule-wide target
+nonprecompile fact needed by future redemption. The public
+`canonicalMainnetBpo2DeploymentStep_establishes_root` discharges selection for
+a strict mainnet BPO2 block and establishes `MainnetDeploymentRoot`. This does
+not generalize the accepted deployment shape beyond the same singleton direct
+CREATE boundary.

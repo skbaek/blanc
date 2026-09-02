@@ -966,6 +966,44 @@ For schedule-parametric block/history state boundaries and replay, use
 `ExecutionTrace.ConfiguredBlockStateChronology` and
 `ExecutionTrace.ConfiguredHistoryStateChronology` from E8.
 
+#### Contract-local fixed-fork to configured-schedule migration
+
+When a contract-local carrier still fixes one fork, keep the common carrier as
+the schedule-neutral spine and make the local extension follow its fields:
+
+1. Replace the local `chainId`/fixed-fork parameter with `cfg : ChainConfig`.
+   Each block retains its selected `rules`, the equation
+   `cfg.rulesAt block.header.timestamp = .ok rules`, the
+   `stateTransitionUsing cfg` result, and the body trace produced from
+   `initBenv rules`. Project literally to `ConfiguredBlockTrace cfg`; recurse
+   over those projections for `ConfiguredHistoryTrace cfg` and derive the
+   inverse local history by recomputing only contract-owned ledgers.
+2. Parameterize a deployment root and every constructor/result carrier by
+   `cfg` and the selected `rules`. State rule-sensitive facts — precompile
+   membership, transaction gas caps, code limits, or opcode availability — as
+   explicit premises or selected-record fields. A root intended to support
+   arbitrary future blocks also needs the corresponding schedule-wide fact,
+   such as target nonprecompile membership for every successful `rulesAt`.
+3. Keep the generic theorem over `ReachUsing cfg`. Publish the named-network
+   surface as a thin specialization, with local lemmas that classify every
+   successful `rulesAt` and select the current rule record after its activation.
+   Pair that specialization with an executable lane witness tied to a
+   kernel-decided timestamp pin; retain the former fixed-fork API as a thin
+   audited compatibility corollary.
+
+This pattern does not make the contract-local carrier common infrastructure.
+A literal block/history adapter or repeated schedule-selection lemma is a
+hoisting candidate only after another consumer needs the same shape.
+
+The shared current-mainnet executable lane deliberately exposes no fork
+override, so it cannot supply a cross-activation witness. Consumers deployed
+before the current fork need a historical deployment root at the rule record
+selected at their actual deployment timestamp, followed by one configured
+history that crosses later activations; a fresh current-fork creation block is
+evidence for a different claim. If a future fork changes execution semantics
+rather than rule data already represented by Jaune, update Jaune and re-prove
+the consumer instead of adding a premise that assumes the new semantics away.
+
 ## C — compilation and deployment
 
 ### C1. I need source-to-compiled execution

@@ -5,9 +5,9 @@ import Blanc.Weth10HolderFlowResult
 History-level allowance-region transport.
 
 The recursion layer works with concrete `Devm` endpoints.  This module lifts
-that operational result through Jaune's settled messages, transactions, Prague
-block bodies, and proof-carrying `AccountedHistory`, exactly as
-`Blanc.Weth10HolderFlowResult` lifts the balance-region accounting.
+that operational result through Jaune's settled messages, transactions,
+configured-schedule block bodies, and proof-carrying `AccountedHistory`,
+exactly as `Blanc.Weth10HolderFlowResult` lifts the balance-region accounting.
 
 The mirror is a substitution: every envelope step of the balance chain is
 discharged by a full `getStor ca` equality, which is region-agnostic, so the
@@ -460,9 +460,9 @@ theorem AppliedBodyTrace.allowanceTransported
     List.append_assoc] using htotal
 
 theorem AccountedBlock.allowanceTransported
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (accounted : AccountedBlock chainId dp ca pre post)
+    (accounted : AccountedBlock cfg dp ca pre post)
     (hmessage : MessageAllowanceSound dp ca)
     (hstable : Stable dp ca pre.state) :
     AllowanceTransported ca pre.state post.state
@@ -476,10 +476,10 @@ theorem AccountedBlock.allowanceTransported
 /-! ## History-level allowance transport -/
 
 theorem AccountedHistory.allowanceTransported_of_messageSound
-    (chainId : UInt64) (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
     (hmessage : MessageAllowanceSound dp ca) :
     {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory chainId dp ca checkpoint future) →
+    (history : AccountedHistory cfg dp ca checkpoint future) →
     Stable dp ca checkpoint.state →
     AllowanceTransported ca checkpoint.state future.state
       history.attributionLedger
@@ -487,7 +487,7 @@ theorem AccountedHistory.allowanceTransported_of_messageSound
       AllowanceTransported.refl ca _
   | _, _, .step prior accounted, hstable =>
       AllowanceTransported.append
-        (AccountedHistory.allowanceTransported_of_messageSound chainId dp ca
+        (AccountedHistory.allowanceTransported_of_messageSound cfg dp ca
           hmessage prior hstable)
         (AccountedBlock.allowanceTransported accounted hmessage
           (prior.future_stable hstable))
@@ -497,14 +497,14 @@ exactly the last committed write recorded by the history's chronological
 attribution ledger, or its checkpoint value when no counted write touches
 it. -/
 theorem AccountedHistory.allowanceTransported
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (sound : CommittedExecAllowanceSound dp ca)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransported ca checkpoint.state future.state
       history.attributionLedger :=
-  AccountedHistory.allowanceTransported_of_messageSound chainId dp ca
+  AccountedHistory.allowanceTransported_of_messageSound cfg dp ca
     sound.messageAllowanceSound history hstable
 
 /-! ## The read-sound world-state carrier
@@ -957,9 +957,9 @@ theorem AppliedBodyTrace.allowanceTransportedSound
     List.append_assoc] using htotal
 
 theorem AccountedBlock.allowanceTransportedSound
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
-    (accounted : AccountedBlock chainId dp ca pre post)
+    (accounted : AccountedBlock cfg dp ca pre post)
     (hmessage : MessageAllowanceReadSound dp ca)
     (hstable : Stable dp ca pre.state) :
     AllowanceTransportedSound ca pre.state post.state
@@ -973,10 +973,10 @@ theorem AccountedBlock.allowanceTransportedSound
 /-! ## History-level allowance transport -/
 
 theorem AccountedHistory.allowanceTransportedSound_of_messageSound
-    (chainId : UInt64) (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
     (hmessage : MessageAllowanceReadSound dp ca) :
     {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory chainId dp ca checkpoint future) →
+    (history : AccountedHistory cfg dp ca checkpoint future) →
     Stable dp ca checkpoint.state →
     AllowanceTransportedSound ca checkpoint.state future.state
       history.attributionLedger
@@ -984,7 +984,7 @@ theorem AccountedHistory.allowanceTransportedSound_of_messageSound
       AllowanceTransportedSound.refl ca _
   | _, _, .step prior accounted, hstable =>
       AllowanceTransportedSound.append
-        (AccountedHistory.allowanceTransportedSound_of_messageSound chainId dp
+        (AccountedHistory.allowanceTransportedSound_of_messageSound cfg dp
           ca hmessage prior hstable)
         (AccountedBlock.allowanceTransportedSound accounted hmessage
           (prior.future_stable hstable))
@@ -994,14 +994,14 @@ exactly the last committed write recorded by the history's chronological
 attribution ledger, or its checkpoint value when no counted write touches
 it. -/
 theorem AccountedHistory.allowanceTransportedSound
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (sound : CommittedExecAllowanceReadSound dp ca)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransportedSound ca checkpoint.state future.state
       history.attributionLedger :=
-  AccountedHistory.allowanceTransportedSound_of_messageSound chainId dp ca
+  AccountedHistory.allowanceTransportedSound_of_messageSound cfg dp ca
     sound.messageAllowanceReadSound history hstable
 
 end Weth10

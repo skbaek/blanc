@@ -164,9 +164,9 @@ exactly the last committed write recorded by the history's chronological
 attribution ledger, or its checkpoint value when no counted write touches it.
 Downstream consumers supply only the history and its stable checkpoint. -/
 theorem AccountedHistory.allowanceTransported_of_compiled
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransported ca checkpoint.state future.state
       history.attributionLedger :=
@@ -316,9 +316,9 @@ and every allowance event in that ledger was read from the storage the ledger
 replays from.  Downstream consumers supply only the history and its stable
 checkpoint. -/
 theorem AccountedHistory.allowanceTransportedSound_of_compiled
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransportedSound ca checkpoint.state future.state
       history.attributionLedger :=
@@ -335,9 +335,9 @@ example (dp : DeployParams) (ca : Adr) : CommittedExecAllowanceSound dp ca :=
   CommittedExecAllowanceReadSound.committedExecAllowanceSound
     (committedExecAllowanceReadSound dp ca)
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransported ca checkpoint.state future.state
       history.attributionLedger :=

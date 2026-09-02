@@ -4043,17 +4043,17 @@ theorem CompiledBodyEthHandler.messageEthSound
   CommittedExecEthSound.messageEthSound
     (CompiledBodyEthHandler.committedExecEthSound handler)
 
-/-- Full retained Prague-history contract-ETH inequality, conditional only on
+/-- Full retained configured-history contract-ETH inequality, conditional only on
 the exact installed compiled-frame handler. -/
 theorem CompiledBodyEthHandler.accountedHistoryEthBound
-    (chainId : UInt64) (dp : DeployParams) (ca : Adr)
+    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
     (handler : CompiledBodyEthHandler dp ca) :
     {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory chainId dp ca checkpoint future) →
+    (history : AccountedHistory cfg dp ca checkpoint future) →
     Stable dp ca checkpoint.state →
     EthBound ca checkpoint.state future.state history.flowActions :=
   AccountedHistory.ethBound_of_committedExecSound
-    chainId dp ca
+    cfg dp ca
       (CompiledBodyEthHandler.committedExecEthSound handler)
 
 end Weth10

@@ -109,22 +109,6 @@ theorem stateTransitionUsing_preserves_stable
       (flashExactSpec_preserves dp ca 0) cfg ch ch' block h_run h_wds
       h_inv.flashStateInv)
 
-/-- The pinned Prague transition preserves WETH10 stability. -/
-theorem stateTransition_preserves_stable
-    (dp : DeployParams) (ca : Adr)
-    (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransition ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : Stable dp ca ch.state) :
-    Stable dp ca ch'.state :=
-  Stable.ofStateInvs
-    (ContractSpec.stateTransition_preserves_inv ca
-      (backedSpec_preserves dp ca) ch ch' block h_run h_wds
-      h_inv.backedStateInv)
-    (ContractSpec.stateTransition_preserves_inv ca
-      (flashExactSpec_preserves dp ca 0) ch ch' block h_run h_wds
-      h_inv.flashStateInv)
-
 /-- Reachability on a configured chain preserves WETH10 stability across its
 fork schedule. -/
 theorem chainUsing_preserves_stable
@@ -139,19 +123,6 @@ theorem chainUsing_preserves_stable
     (ContractSpec.chainUsing_preserves_inv ca
       (flashExactSpec_preserves dp ca 0) cfg ch ch' h_reach
       h_inv.flashStateInv)
-
-/-- Reachability under the pinned Prague transition preserves WETH10
-stability. -/
-theorem chain_preserves_stable
-    (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
-    (h_reach : BlockChain.Reach ch ch')
-    (h_inv : Stable dp ca ch.state) :
-    Stable dp ca ch'.state :=
-  Stable.ofStateInvs
-    (ContractSpec.chain_preserves_inv ca
-      (backedSpec_preserves dp ca) ch ch' h_reach h_inv.backedStateInv)
-    (ContractSpec.chain_preserves_inv ca
-      (flashExactSpec_preserves dp ca 0) ch ch' h_reach h_inv.flashStateInv)
 
 /-- Rules-explicit block import preserves WETH10 stability. -/
 theorem addBlockToChainWith_preserves_stable
@@ -187,23 +158,6 @@ theorem addBlockToChainUsing_preserves_stable
       (flashExactSpec_preserves dp ca 0) cfg ch ch' rlp h_run h_wds
       h_inv.flashStateInv)
 
-/-- Block import under the pinned Prague rules preserves WETH10 stability. -/
-theorem addBlockToChain_preserves_stable
-    (dp : DeployParams) (ca : Adr)
-    (ch ch' : BlockChain) (rlp : Bytes)
-    (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
-    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
-      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : Stable dp ca ch.state) :
-    Stable dp ca ch'.state :=
-  Stable.ofStateInvs
-    (ContractSpec.addBlockToChain_preserves_inv ca
-      (backedSpec_preserves dp ca) ch ch' rlp h_run h_wds
-      h_inv.backedStateInv)
-    (ContractSpec.addBlockToChain_preserves_inv ca
-      (flashExactSpec_preserves dp ca 0) ch ch' rlp h_run h_wds
-      h_inv.flashStateInv)
-
 /-- The literal solvency consequence of a stable WETH10 state. -/
 theorem Stable.solvent
     {dp : DeployParams} {ca : Adr} {w : Jaune.State}
@@ -213,15 +167,16 @@ theorem Stable.solvent
   rw [h.flashZero, B256.toNat_zero, Nat.add_zero] at h_backed
   simpa only [B256.toNat_zero, Nat.add_zero] using h_backed
 
-/-- Headline Prague-chain theorem: readers get the exact zero flash counter
+/-- Headline configured-chain theorem: readers get the exact zero flash counter
 and backing inequality directly, without unpacking either `ContractSpec`. -/
 theorem chain_reachable_backed_and_flash_zero
-    (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
-    (h_reach : BlockChain.Reach ch ch')
+    (dp : DeployParams) (ca : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing cfg ch ch')
     (h_inv : Stable dp ca ch.state) :
     (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat := by
-  have h := chain_preserves_stable dp ca ch ch' h_reach h_inv
+  have h := chainUsing_preserves_stable dp ca cfg ch ch' h_reach h_inv
   exact ⟨h.flashZero, h.solvent⟩
 
 /-- A successful direct creation message establishes the stable predicate on

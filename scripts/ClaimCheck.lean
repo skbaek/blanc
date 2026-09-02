@@ -10,6 +10,8 @@ import Blanc.Weth10Hardened
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
+import Blanc.Weth10Mainnet
+import Blanc.Weth10PragueCompat
 import Blanc.LidoCircuitBreakerDeploy
 import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreakerRegistry
@@ -199,12 +201,13 @@ example (chainId : B256) (contractAddress : Adr) :
     weth10TopLevelDeploymentGasBound = 1421317 :=
   freshDeployment_staticCertificate chainId contractAddress
 
-example (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
-    (h_reach : BlockChain.Reach ch ch')
+example (dp : DeployParams) (ca : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing cfg ch ch')
     (h_inv : Stable dp ca ch.state) :
     (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
-  chain_reachable_backed_and_flash_zero dp ca ch ch' h_reach h_inv
+  chain_reachable_backed_and_flash_zero dp ca cfg ch ch' h_reach h_inv
 
 example (msg : Msg)
     (h_value : msg.value = 0)
@@ -235,10 +238,10 @@ example (w : State) (ca owner : Adr) :
 example : Adr → Adr → Nat → Log :=
   redemptionBurnLog
 
-example : DeployParams → Adr → Adr → Adr → Nat → State → Msg → Prop :=
+example : ForkRules → DeployParams → Adr → Adr → Adr → Nat → State → Msg → Prop :=
   AdmissibleRedemptionMessage
 
-example : DeployParams → Adr → Adr → Nat → State → Msg → Prop :=
+example : ForkRules → DeployParams → Adr → Adr → Nat → State → Msg → Prop :=
   AdmissibleSelfRedemptionMessage
 
 example : DeployParams → Adr → Adr → Adr → Nat →
@@ -248,15 +251,15 @@ example : DeployParams → Adr → Adr → Adr → Nat →
 example : DeployParams → Adr → Adr → Adr → Nat → State → Msg → Prop :=
   MessageRedemptionEnabled
 
-example : DeployParams → Adr → Adr → Adr → Nat →
+example : ForkRules → DeployParams → Adr → Adr → Adr → Nat →
     Benv → BlockOutput → Tx → Nat → Prop :=
   AdmissibleRedemptionTx
 
-example : DeployParams → Adr → Adr → Nat →
+example : ForkRules → DeployParams → Adr → Adr → Nat →
     Benv → BlockOutput → Tx → Nat → Prop :=
   AdmissibleSelfRedemptionTx
 
-example : DeployParams → Adr → Adr → Adr → Nat →
+example : ForkRules → DeployParams → Adr → Adr → Adr → Nat →
     Benv → BlockOutput → Tx → Nat → Nat → Nat → Prop :=
   NonSignatureRedemptionTxEnvelope
 
@@ -281,10 +284,11 @@ example : DeployParams → Adr → Adr → Adr → Nat →
 checking each record's outer function type would not detect a field-level
 weakening or a hidden success premise. -/
 
-example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams}
+    {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (state_eq : msg.benv.state = w)
-    (rules_eq : msg.benv.stat.rules = pragueRules)
+    (rules_eq : msg.benv.stat.rules = rules)
     (target_eq : msg.target = some ca)
     (currentTarget_eq : msg.currentTarget = ca)
     (codeAddress_eq : msg.codeAddress = some ca)
@@ -297,9 +301,9 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (isStatic_eq : msg.isStatic = false)
     (auths_eq : msg.tenv.stat.auths = [])
     (disablePrecompiles_eq : msg.disablePrecompiles = false)
-    (target_not_precompile : pragueRules.isPrecomp ca = false)
+    (target_not_precompile : rules.isPrecomp ca = false)
     (recipient_ne_zero : recipient ≠ 0)
-    (recipient_not_precompile : pragueRules.isPrecomp recipient = false)
+    (recipient_not_precompile : rules.isPrecomp recipient = false)
     (recipient_code_free : (w.getCode recipient).toList = [])
     (original_storage_eq : msg.benv.stat.origState.getStor ca = w.getStor ca)
     (target_access : AddressAccessCase msg.accessedAddresses ca)
@@ -308,7 +312,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
       StorageAccessCase msg.accessedStorageKeys ca owner.toB256)
     (recipient_account : RecipientAccountCase w recipient)
     (gas_bound : redemptionRuntimeCeiling q ≤ msg.gas) :
-    AdmissibleRedemptionMessageCore dp ca owner recipient q w msg :=
+    AdmissibleRedemptionMessageCore rules dp ca owner recipient q w msg :=
   { state_eq := state_eq
     rules_eq := rules_eq
     target_eq := target_eq
@@ -334,28 +338,30 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     recipient_account := recipient_account
     gas_bound := gas_bound }
 
-example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams}
+    {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (core : AdmissibleRedemptionMessageCore
-      dp ca owner recipient q w msg)
+      rules dp ca owner recipient q w msg)
     (data_eq : msg.data = withdrawToCalldata recipient q)
     (selector_eq : Sevm.selector (initSevm msg) = withdrawToSelector) :
-    AdmissibleRedemptionMessage dp ca owner recipient q w msg :=
+    AdmissibleRedemptionMessage rules dp ca owner recipient q w msg :=
   { toAdmissibleRedemptionMessageCore := core
     data_eq := data_eq
     selector_eq := selector_eq }
 
-example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {w : State} {msg : Msg}
-    (core : AdmissibleRedemptionMessageCore dp ca owner owner q w msg)
+    (core : AdmissibleRedemptionMessageCore rules dp ca owner owner q w msg)
     (data_eq : msg.data = withdrawCalldata q)
     (selector_eq : Sevm.selector (initSevm msg) = withdrawSelector) :
-    AdmissibleSelfRedemptionMessage dp ca owner q w msg :=
+    AdmissibleSelfRedemptionMessage rules dp ca owner q w msg :=
   { toAdmissibleRedemptionMessageCore := core
     data_eq := data_eq
     selector_eq := selector_eq }
 
-example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams}
+    {ca owner recipient : Adr} {q : Nat}
     {w post : State} {out : MsgCallOutput}
     (outError : out.error = none)
     (ownerDebit : bookedBalanceNat post ca owner + q =
@@ -389,7 +395,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
 
 example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (rules_eq : benv.stat.rules = pragueRules)
+    (rules_eq : benv.stat.rules = rules)
     (type_eq : ∃ maxPriorityFee maxFee,
       tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawToCalldata recipient q)
@@ -402,7 +408,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (owner_ne_zero : owner ≠ 0)
     (owner_sender_admissible : TransactionSenderAdmissible benv.state owner)
     (validated :
-      validateTransaction pragueRules tx = .ok (calculateIntrinsicCost tx))
+      validateTransaction rules tx = .ok (calculateIntrinsicCost tx))
     (checked :
       checkTransaction benv.beginTransaction
         (redemptionTxPreludeBout bout tx index) tx =
@@ -411,18 +417,19 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
       benv.stat.baseFeePerGas ≤ redemptionEffectiveGasPrice benv tx)
     (upfront_funded : tx.gas * redemptionEffectiveGasPrice benv tx ≤
       (benv.state.bal owner).toNat)
+    (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
     (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
-    (target_not_precompile : pragueRules.isPrecomp ca = false)
+    (target_not_precompile : rules.isPrecomp ca = false)
     (target_not_created : ca ∉ benv.createdAccounts)
     (recipient_ne_zero : recipient ≠ 0)
-    (recipient_not_precompile : pragueRules.isPrecomp recipient = false)
+    (recipient_not_precompile : rules.isPrecomp recipient = false)
     (recipient_code_free : (benv.state.getCode recipient).toList = [])
     (recipient_account : RecipientAccountCase benv.state recipient) :
     AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index :=
+      rules dp ca owner recipient q benv bout tx index :=
   { rules_eq := rules_eq
     type_eq := type_eq
     data_eq := data_eq
@@ -437,6 +444,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     checked := checked
     base_fee_le_effective := base_fee_le_effective
     upfront_funded := upfront_funded
+    gas_cap := gas_cap
     gas_bound := gas_bound
     block_gas_room := block_gas_room
     target_code := target_code
@@ -447,9 +455,9 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     recipient_code_free := recipient_code_free
     recipient_account := recipient_account }
 
-example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (rules_eq : benv.stat.rules = pragueRules)
+    (rules_eq : benv.stat.rules = rules)
     (type_eq : ∃ maxPriorityFee maxFee,
       tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawCalldata q)
@@ -460,10 +468,10 @@ example {dp : DeployParams} {ca owner : Adr} {q : Nat}
     (nonce_not_max : tx.nonce ≠ UInt64.max)
     (recoveredSender : recoverSender benv.stat.chainId tx = .ok owner)
     (owner_ne_zero : owner ≠ 0)
-    (owner_not_precompile : pragueRules.isPrecomp owner = false)
+    (owner_not_precompile : rules.isPrecomp owner = false)
     (owner_code_free : (benv.state.getCode owner).toList = [])
     (validated :
-      validateTransaction pragueRules tx = .ok (calculateIntrinsicCost tx))
+      validateTransaction rules tx = .ok (calculateIntrinsicCost tx))
     (checked :
       checkTransaction benv.beginTransaction
         (redemptionTxPreludeBout bout tx index) tx =
@@ -472,14 +480,15 @@ example {dp : DeployParams} {ca owner : Adr} {q : Nat}
       benv.stat.baseFeePerGas ≤ redemptionEffectiveGasPrice benv tx)
     (upfront_funded : tx.gas * redemptionEffectiveGasPrice benv tx ≤
       (benv.state.bal owner).toNat)
+    (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
     (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
-    (target_not_precompile : pragueRules.isPrecomp ca = false)
+    (target_not_precompile : rules.isPrecomp ca = false)
     (target_not_created : ca ∉ benv.createdAccounts)
     (owner_account : RecipientAccountCase benv.state owner) :
-    AdmissibleSelfRedemptionTx dp ca owner q benv bout tx index :=
+    AdmissibleSelfRedemptionTx rules dp ca owner q benv bout tx index :=
   { rules_eq := rules_eq
     type_eq := type_eq
     data_eq := data_eq
@@ -495,6 +504,7 @@ example {dp : DeployParams} {ca owner : Adr} {q : Nat}
     checked := checked
     base_fee_le_effective := base_fee_le_effective
     upfront_funded := upfront_funded
+    gas_cap := gas_cap
     gas_bound := gas_bound
     block_gas_room := block_gas_room
     target_code := target_code
@@ -502,10 +512,11 @@ example {dp : DeployParams} {ca owner : Adr} {q : Nat}
     target_not_created := target_not_created
     owner_account := owner_account }
 
-example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams}
+    {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
-    (rules_eq : benv.stat.rules = pragueRules)
+    (rules_eq : benv.stat.rules = rules)
     (type_eq : tx.type =
       .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawToCalldata recipient q)
@@ -518,17 +529,18 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (base_fee_le_max : benv.stat.baseFeePerGas ≤ maxFee)
     (max_fee_fits : tx.gas * maxFee ≤ B256.max.toNat)
     (max_fee_funded : tx.gas * maxFee ≤ (benv.state.bal owner).toNat)
+    (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
     (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
-    (target_not_precompile : pragueRules.isPrecomp ca = false)
+    (target_not_precompile : rules.isPrecomp ca = false)
     (target_not_created : ca ∉ benv.createdAccounts)
     (recipient_ne_zero : recipient ≠ 0)
-    (recipient_not_precompile : pragueRules.isPrecomp recipient = false)
+    (recipient_not_precompile : rules.isPrecomp recipient = false)
     (recipient_code_free : (benv.state.getCode recipient).toList = [])
     (recipient_account : RecipientAccountCase benv.state recipient) :
-    NonSignatureRedemptionTxEnvelope dp ca owner recipient q benv bout tx
+    NonSignatureRedemptionTxEnvelope rules dp ca owner recipient q benv bout tx
       index maxPriorityFee maxFee :=
   { rules_eq := rules_eq
     type_eq := type_eq
@@ -542,6 +554,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     base_fee_le_max := base_fee_le_max
     max_fee_fits := max_fee_fits
     max_fee_funded := max_fee_funded
+    gas_cap := gas_cap
     gas_bound := gas_bound
     block_gas_room := block_gas_room
     target_code := target_code
@@ -552,7 +565,8 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     recipient_code_free := recipient_code_free
     recipient_account := recipient_account }
 
-example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams}
+    {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {post : State} {bout' : BlockOutput}
     (perAddress : ∀ a,
@@ -615,48 +629,50 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (hstable : Stable dp ca w)
     (hq : q ≤ bookedBalanceNat w ca owner)
     (henv : AdmissibleRedemptionMessage
-      dp ca owner recipient q w msg) :
+      rules dp ca owner recipient q w msg) :
     MessageRedemptionEnabled dp ca owner recipient q w msg :=
   hstable.messageRedemption_enabled_of_le hq henv
 
-example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)
     (hq : q ≤ bookedBalanceNat w ca owner)
-    (henv : AdmissibleSelfRedemptionMessage dp ca owner q w msg) :
+    (henv : AdmissibleSelfRedemptionMessage rules dp ca owner q w msg) :
     MessageRedemptionEnabled dp ca owner owner q w msg :=
   hstable.selfRedemption_enabled_of_le hq henv
 
-example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams}
+    {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hstable : Stable dp ca benv.state)
     (hq : q ≤ bookedBalanceNat benv.state ca owner)
     (henv : AdmissibleRedemptionTx
-      dp ca owner recipient q benv bout tx index) :
+      rules dp ca owner recipient q benv bout tx index) :
     TransactionRedemptionEnabled
       dp ca owner recipient q benv bout tx index :=
   hstable.transactionRedemption_enabled_of_le hq henv
 
-example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams}
+    {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
     (henv : NonSignatureRedemptionTxEnvelope
-      dp ca owner recipient q benv bout tx index maxPriorityFee maxFee)
+      rules dp ca owner recipient q benv bout tx index maxPriorityFee maxFee)
     (hrecovered : recoverSender benv.stat.chainId tx = .ok owner) :
-    AdmissibleRedemptionTx dp ca owner recipient q benv bout tx index :=
+    AdmissibleRedemptionTx rules dp ca owner recipient q benv bout tx index :=
   henv.admissible_of_recoveredSender hrecovered
 
-example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hstable : Stable dp ca benv.state)
     (hq : q ≤ bookedBalanceNat benv.state ca owner)
-    (henv : AdmissibleSelfRedemptionTx dp ca owner q benv bout tx index) :
+    (henv : AdmissibleSelfRedemptionTx rules dp ca owner q benv bout tx index) :
     TransactionRedemptionEnabled dp ca owner owner q benv bout tx index :=
   hstable.selfTransactionRedemption_enabled_of_le hq henv
 
-example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (henv : AdmissibleSelfRedemptionTx dp ca owner q benv bout tx index)
+    (henv : AdmissibleSelfRedemptionTx rules dp ca owner q benv bout tx index)
     {debit : State} {msg : Msg} {entry messagePost : Devm}
     {messageOut : MsgCallOutput}
     (hdebit : TransactionDebitOutcome owner
@@ -676,13 +692,22 @@ example {dp : DeployParams} {ca owner : Adr} {q : Nat}
 /-! Deployment constructor pins make the pre-execution/result boundary fail
 closed on record-field additions, removals, or type changes. -/
 
-example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
-    (chainId_eq : chainId = base.chainId)
+example {cfg : ChainConfig} {rules : ForkRules}
+    {base : BlockChain} {sender ca : Adr}
+    (configValid : cfg.Valid)
+    (chainId_eq : cfg.chainId = base.chainId)
     (validContext : base.ValidContext)
     (sumNof : SumNof base.state.bal)
     (target_eq : ca = computeContractAddress sender (base.state.getNonce sender))
     (target_ne_zero : ca ≠ 0)
-    (target_not_precompile : ¬ pragueRules.isPrecomp ca)
+    (target_not_precompile : ∀ {timestamp selected},
+      cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca)
+    (beacon_not_precompile : ¬ rules.isPrecomp beaconRootsAddress)
+    (history_not_precompile : ¬ rules.isPrecomp historyStorageAddress)
+    (withdrawalRequest_not_precompile :
+      ¬ rules.isPrecomp withdrawalRequestPredeployAddress)
+    (consolidationRequest_not_precompile :
+      ¬ rules.isPrecomp consolidationRequestPredeployAddress)
     (sender_ne_target : sender ≠ ca)
     (withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca)
     (consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca)
@@ -700,13 +725,18 @@ example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
     (consolidationRequestCode :
       some (base.state.getCode consolidationRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram) :
-    CanonicalDeploymentBase chainId base sender ca :=
-  { chainId_eq := chainId_eq
+    CanonicalDeploymentBase cfg rules base sender ca :=
+  { configValid := configValid
+    chainId_eq := chainId_eq
     validContext := validContext
     sumNof := sumNof
     target_eq := target_eq
     target_ne_zero := target_ne_zero
     target_not_precompile := target_not_precompile
+    beacon_not_precompile := beacon_not_precompile
+    history_not_precompile := history_not_precompile
+    withdrawalRequest_not_precompile := withdrawalRequest_not_precompile
+    consolidationRequest_not_precompile := consolidationRequest_not_precompile
     sender_ne_target := sender_ne_target
     withdrawalRequest_ne_target := withdrawalRequest_ne_target
     consolidationRequest_ne_target := consolidationRequest_ne_target
@@ -718,42 +748,46 @@ example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode }
 
-example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+example {cfg : ChainConfig} {rules : ForkRules}
+    {base : BlockChain} {cb : CanonicalBlock}
     {deploymentTxBytes : Bytes} {deploymentTx : Tx} {sender ca : Adr}
     (txs_eq : cb.block.txs = [.inl deploymentTxBytes])
     (decode_eq : decodeTx (.inl deploymentTxBytes) = .ok deploymentTx)
     (ommers_eq : cb.block.ommers = [])
     (withdrawals_eq : cb.block.wds = [])
+    (rulesAt : cfg.rulesAt cb.block.header.timestamp = .ok rules)
     (type_eq : ∃ maxPriorityFee maxFee,
-      deploymentTx.type = .two chainId maxPriorityFee maxFee none [])
+      deploymentTx.type = .two cfg.chainId maxPriorityFee maxFee none [])
     (value_eq : deploymentTx.value = 0)
     (data_eq : deploymentTx.data = weth10InitCode)
     (nonce_eq : deploymentTx.nonce = base.state.getNonce sender)
     (nonce_not_max : deploymentTx.nonce ≠ UInt64.max)
-    (recoveredSender : recoverSender chainId deploymentTx = .ok sender)
-    (validated : validateTransaction pragueRules deploymentTx =
+    (recoveredSender : recoverSender cfg.chainId deploymentTx = .ok sender)
+    (validated : validateTransaction rules deploymentTx =
       .ok (calculateIntrinsicCost deploymentTx))
     (checked :
-      let benv := initBenv pragueRules base cb.block.header
+      let benv := initBenv rules base cb.block.header
       checkTransaction benv.beginTransaction
         (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
         .ok (sender, deploymentEffectiveGasPrice benv deploymentTx, [], 0))
     (base_fee_le_effective : cb.block.header.baseFeePerGas ≤
       deploymentEffectiveGasPrice
-        (initBenv pragueRules base cb.block.header) deploymentTx)
+        (initBenv rules base cb.block.header) deploymentTx)
     (upfront_funded :
       deploymentTx.gas * deploymentEffectiveGasPrice
-        (initBenv pragueRules base cb.block.header) deploymentTx ≤
+        (initBenv rules base cb.block.header) deploymentTx ≤
       (base.state.bal sender).toNat)
     (gas_bound : deploymentTransactionGasBound deploymentTx ≤ deploymentTx.gas)
+    (runtime_code_fits : 6313 ≤ rules.code.maxCodeSize)
     (block_gas_room : deploymentTx.gas ≤ cb.block.header.gasLimit)
     (target_eq : ca = computeContractAddress sender deploymentTx.nonce) :
-    CanonicalWeth10DeploymentBlock chainId base cb deploymentTxBytes
+    CanonicalWeth10DeploymentBlock cfg rules base cb deploymentTxBytes
       deploymentTx sender ca :=
   { txs_eq := txs_eq
     decode_eq := decode_eq
     ommers_eq := ommers_eq
     withdrawals_eq := withdrawals_eq
+    rulesAt := rulesAt
     type_eq := type_eq
     value_eq := value_eq
     data_eq := data_eq
@@ -765,13 +799,15 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
     base_fee_le_effective := base_fee_le_effective
     upfront_funded := upfront_funded
     gas_bound := gas_bound
+    runtime_code_fits := runtime_code_fits
     block_gas_room := block_gas_room
     target_eq := target_eq }
 
-example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+example {cfg : ChainConfig} {rules : ForkRules}
+    {base : BlockChain} {cb : CanonicalBlock}
     {deploymentTx : Tx} {sender ca : Adr}
     (txInput : Benv) (begun : Benv) (debit : State) (tenv : Tenv) (msg : Msg)
-    (systemPrefix : DeploymentSystemPrefix base cb.block txInput)
+    (systemPrefix : DeploymentSystemPrefix rules base cb.block txInput)
     (begun_eq : begun = txInput.beginTransaction)
     (debit_eq :
       (begun.state.incrNonce sender).subBal sender
@@ -790,15 +826,15 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
     (msg_codeAddress_eq : msg.codeAddress = none)
     (msg_shouldTransferValue_eq : msg.shouldTransferValue = true)
     (msg_auths_eq : msg.tenv.stat.auths = [])
-    (msg_rules_eq : msg.benv.stat.rules = pragueRules)
-    (msg_chainId_eq : msg.benv.stat.chainId = chainId)
+    (msg_rules_eq : msg.benv.stat.rules = rules)
+    (msg_chainId_eq : msg.benv.stat.chainId = cfg.chainId)
     (target_eq : msg.currentTarget = ca)
     (params_eq :
       freshDeployParams msg.benv.stat.chainId.toB256 msg.currentTarget =
-        freshDeployParams chainId.toB256 ca)
+        freshDeployParams cfg.chainId.toB256 ca)
     (noCodeOrNonce : accountHasCodeOrNonce msg.benv.state ca = false)
     (noStorage : accountHasStorage msg.benv.state ca = false) :
-    PreparedDeploymentContext chainId base cb deploymentTx sender ca :=
+    PreparedDeploymentContext cfg rules base cb deploymentTx sender ca :=
   { txInput := txInput
     begun := begun
     debit := debit
@@ -826,18 +862,18 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
     noCodeOrNonce := noCodeOrNonce
     noStorage := noStorage }
 
-example {chainId : UInt64} {ca : Adr}
-    {ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
     {post : State} {out : MsgCallOutput}
     (run : processMessageCall ctx.msg = .ok (post, out))
-    (stable : Stable (freshDeployParams chainId.toB256 ca) ca post)
+    (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post)
     (installed : some (post.getCode ca).toList =
-      Prog.compile (weth10 (freshDeployParams chainId.toB256 ca)))
+      Prog.compile (weth10 (freshDeployParams cfg.chainId.toB256 ca)))
     (emptyStorage : post.getStor ca = Stor.empty)
     (storageInv : Stor.Weth10Inv (post.getStor ca) 0 0)
     (logs : out.logs = [])
     (returnData : out.returnData =
-      weth10Code (freshDeployParams chainId.toB256 ca))
+      weth10Code (freshDeployParams cfg.chainId.toB256 ca))
     (gasLeft : out.gasLeft = ctx.msg.gas - weth10CreateMessageGasAccounting)
     (error : out.error = none)
     (refundCounter : out.refundCounter = 0)
@@ -848,7 +884,7 @@ example {chainId : UInt64} {ca : Adr}
     (consolidationRequestCode :
       some (post.getCode consolidationRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram) :
-    CanonicalDeploymentMessageResult chainId ca ctx post out :=
+    CanonicalDeploymentMessageResult cfg rules ca ctx post out :=
   { run := run
     stable := stable
     installed := installed
@@ -863,13 +899,13 @@ example {chainId : UInt64} {ca : Adr}
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode }
 
-example {chainId : UInt64} {ca : Adr}
-    {ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
     {post : State} {bout : BlockOutput}
     (run : processTransaction ctx.txInput .init deploymentTx 0 = .ok (post, bout))
-    (stable : Stable (freshDeployParams chainId.toB256 ca) ca post)
+    (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post)
     (installed : some (post.getCode ca).toList =
-      Prog.compile (weth10 (freshDeployParams chainId.toB256 ca)))
+      Prog.compile (weth10 (freshDeployParams cfg.chainId.toB256 ca)))
     (emptyStorage : post.getStor ca = Stor.empty)
     (blockLogs : bout.blockLogs = [])
     (requests : bout.requests = [])
@@ -883,7 +919,7 @@ example {chainId : UInt64} {ca : Adr}
     (receiptSucceeded :
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.succeeded) = some true) :
-    CanonicalDeploymentTransactionResult chainId ca ctx post bout :=
+    CanonicalDeploymentTransactionResult cfg rules ca ctx post bout :=
   { run := run
     stable := stable
     installed := installed
@@ -895,8 +931,8 @@ example {chainId : UInt64} {ca : Adr}
     consolidationRequestCode := consolidationRequestCode
     receiptSucceeded := receiptSucceeded }
 
-example {chainId : UInt64} {ca : Adr}
-    {ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
     {post : State} {bout : BlockOutput}
     (withdrawalOut : MsgCallOutput) (consolidationOut : MsgCallOutput)
     (withdrawalRun :
@@ -912,12 +948,12 @@ example {chainId : UInt64} {ca : Adr}
       .ok (post, bout))
     (backedStateInv :
       (backedSpec weth10
-        (freshDeployParams chainId.toB256 ca)).StateInv ca post)
+        (freshDeployParams cfg.chainId.toB256 ca)).StateInv ca post)
     (flashStateInv :
       (flashExactSpec
-        (freshDeployParams chainId.toB256 ca) 0).StateInv ca post)
-    (stable : Stable (freshDeployParams chainId.toB256 ca) ca post) :
-    CanonicalDeploymentSuffixResult chainId ca ctx post bout :=
+        (freshDeployParams cfg.chainId.toB256 ca) 0).StateInv ca post)
+    (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post) :
+    CanonicalDeploymentSuffixResult cfg rules ca ctx post bout :=
   { withdrawalOut := withdrawalOut
     consolidationOut := consolidationOut
     withdrawalRun := withdrawalRun
@@ -929,34 +965,37 @@ example {chainId : UInt64} {ca : Adr}
     flashStateInv := flashStateInv
     stable := stable }
 
-example {chainId : UInt64} {base deployed : BlockChain}
+example {cfg : ChainConfig} {base deployed : BlockChain}
     {dp : DeployParams} {ca : Adr}
-    (execution : ∃ (cb : CanonicalBlock) (deploymentTxBytes : Bytes)
-        (deploymentTx : Tx) (sender : Adr)
-        (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca)
+    (execution : ∃ (rules : ForkRules) (cb : CanonicalBlock)
+        (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender : Adr)
+        (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
         (post : State) (bout : BlockOutput),
-      CanonicalDeploymentBase chainId base sender ca ∧
-      CanonicalWeth10DeploymentBlock chainId base cb deploymentTxBytes
+      CanonicalDeploymentBase cfg rules base sender ca ∧
+      CanonicalWeth10DeploymentBlock cfg rules base cb deploymentTxBytes
         deploymentTx sender ca ∧
-      CanonicalDeploymentTransactionResult chainId ca ctx post bout ∧
-      Nonempty (CanonicalDeploymentSuffixResult chainId ca ctx post bout) ∧
-      stateTransitionUsing (ChainConfig.pragueOnly chainId)
+      CanonicalDeploymentTransactionResult cfg rules ca ctx post bout ∧
+      Nonempty (CanonicalDeploymentSuffixResult cfg rules ca ctx post bout) ∧
+      stateTransitionUsing cfg
           base cb.block = .ok deployed ∧
-      applyBody (initBenv pragueRules base cb.block.header)
+      applyBody (initBenv rules base cb.block.header)
           cb.block.txs cb.block.wds = .ok (post, bout) ∧
       post = deployed.state ∧
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
           (fun entry => entry.2.succeeded) = some true)
-    (params_eq : dp = freshDeployParams chainId.toB256 ca)
+    (params_eq : dp = freshDeployParams cfg.chainId.toB256 ca)
+    (configValid : cfg.Valid)
     (target_ne_zero : ca ≠ 0)
-    (target_not_precompile : ¬ pragueRules.isPrecomp ca)
+    (target_not_precompile : ∀ {timestamp rules},
+      cfg.rulesAt timestamp = .ok rules → ¬ rules.isPrecomp ca)
     (emptyStorage : deployed.state.getStor ca = Stor.empty)
     (stable : Stable dp ca deployed.state)
     (deployed_validContext : deployed.ValidContext)
-    (deployed_chainId : chainId = deployed.chainId) :
-    DeploymentRoot chainId base deployed dp ca :=
+    (deployed_chainId : cfg.chainId = deployed.chainId) :
+    DeploymentRoot cfg base deployed dp ca :=
   { execution := execution
     params_eq := params_eq
+    configValid := configValid
     target_ne_zero := target_ne_zero
     target_not_precompile := target_not_precompile
     emptyStorage := emptyStorage
@@ -964,75 +1003,79 @@ example {chainId : UInt64} {base deployed : BlockChain}
     deployed_validContext := deployed_validContext
     deployed_chainId := deployed_chainId }
 
-example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+example (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca) :
     Nonempty
-      (PreparedDeploymentContext chainId base cb deploymentTx sender ca) :=
-  prepareCanonicalDeploymentContext chainId base cb deploymentTx sender ca
+      (PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) :=
+  prepareCanonicalDeploymentContext cfg rules base cb deploymentTx sender ca
     hbase henv
 
-example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+example (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca) :
-    ∃ post out, CanonicalDeploymentMessageResult chainId ca ctx post out :=
-  canonicalDeploymentMessage_succeeds chainId base cb deploymentTx sender ca
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) :
+    ∃ post out, CanonicalDeploymentMessageResult cfg rules ca ctx post out :=
+  canonicalDeploymentMessage_succeeds cfg rules base cb deploymentTx sender ca
     hbase henv ctx
 
-example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+example (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca)
-    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca) :
+    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) :
     ∃ post bout,
-      CanonicalDeploymentTransactionResult chainId ca ctx post bout :=
-  canonicalDeploymentTransaction_succeeds chainId base cb deploymentTx
+      CanonicalDeploymentTransactionResult cfg rules ca ctx post bout :=
+  canonicalDeploymentTransaction_succeeds cfg rules base cb deploymentTx
     sender ca hbase henv ctx
 
-example (chainId : UInt64) (base deployed : BlockChain)
+example (cfg : ChainConfig) (rules : ForkRules)
+    (base deployed : BlockChain)
     (cb : CanonicalBlock) (deploymentTxBytes : Bytes)
     (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
       deploymentTxBytes deploymentTx sender ca)
-    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
+    (hstep : stateTransitionUsing cfg
       base cb.block = .ok deployed) :
-    DeploymentRoot chainId base deployed
-      (freshDeployParams chainId.toB256 ca) ca :=
-  canonicalDeploymentStep_establishes_root chainId base deployed cb
+    DeploymentRoot cfg base deployed
+      (freshDeployParams cfg.chainId.toB256 ca) ca :=
+  canonicalDeploymentStep_establishes_root cfg rules base deployed cb
     deploymentTxBytes deploymentTx sender ca hbase henv hstep
 
-example (hroot : DeploymentRoot chainId base deployed dp ca) :
-    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+example (hroot : DeploymentRoot cfg base deployed dp ca) :
+    BlockChain.ReachUsing cfg
       deployed deployed :=
   hroot.reflReach
 
-example (hroot : DeploymentRoot chainId base deployed dp ca)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+example (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg
       deployed future) :
     Stable dp ca future.state :=
   hroot.reachable_stable hreach
 
-example (hroot : DeploymentRoot chainId base deployed dp ca)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+example (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg
       deployed future) :
     some (future.state.getCode ca).toList = Prog.compile (weth10 dp) :=
   hroot.reachable_code hreach
 
-example (hroot : DeploymentRoot chainId base deployed dp ca)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+example (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg
       deployed future) :
     (future.state.getStor ca).get flashMintedSlot = 0 :=
   hroot.reachable_flashZero hreach
 
-example (hroot : DeploymentRoot chainId base deployed dp ca)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+example (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg
       deployed future) :
     balSum (future.state.getStor ca) ≤ (future.state.bal ca).toNat :=
   hroot.reachable_solvent hreach
@@ -1100,60 +1143,60 @@ example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
       trace.requests.consolidationState trace.requests.consolidationOut :=
   trace.requests.consolidation
 
-example : UInt64 → DeployParams → Adr → BlockChain → BlockChain → Type :=
+example : ChainConfig → DeployParams → Adr → BlockChain → BlockChain → Type :=
   AccountedHistory
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
-    AccountedHistory chainId dp ca checkpoint future → List Block :=
+    AccountedHistory cfg dp ca checkpoint future → List Block :=
   AccountedHistory.appliedBlocks
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint : BlockChain}
-    (hcfg : (ChainConfig.pragueOnly chainId).Valid)
+    (hcfg : cfg.Valid)
     (hctx : checkpoint.ValidContext)
-    (hid : chainId = checkpoint.chainId) :
+    (hid : cfg.chainId = checkpoint.chainId) :
     (AccountedHistory.refl (dp := dp) (ca := ca)
       hcfg hctx hid).appliedBlocks = [] := by
   rfl
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint current future : BlockChain}
-    (prior : AccountedHistory chainId dp ca checkpoint current)
-    (accounted : AccountedBlock chainId dp ca current future) :
+    (prior : AccountedHistory cfg dp ca checkpoint current)
+    (accounted : AccountedBlock cfg dp ca current future) :
     (AccountedHistory.step prior accounted).appliedBlocks =
       prior.appliedBlocks ++ [accounted.block] := by
   rfl
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
-    AccountedHistory chainId dp ca checkpoint future → List FlowAction :=
+    AccountedHistory cfg dp ca checkpoint future → List FlowAction :=
   AccountedHistory.flowActions
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
-    AccountedHistory chainId dp ca checkpoint future →
+    AccountedHistory cfg dp ca checkpoint future →
       (u : Adr) → HolderFlow u :=
   AccountedHistory.weth10Flow
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
-    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+    (history : AccountedHistory cfg dp ca checkpoint future) :
+    BlockChain.ReachUsing cfg
       checkpoint future :=
   history.toReachUsing
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+    (hreach : BlockChain.ReachUsing cfg
       checkpoint future) :
-    Nonempty (AccountedHistory chainId dp ca checkpoint future) :=
+    Nonempty (AccountedHistory cfg dp ca checkpoint future) :=
   exists_accountedHistory_of_reachUsing hstable hreach
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history₁ history₂ : AccountedHistory chainId dp ca checkpoint future)
+    (history₁ history₂ : AccountedHistory cfg dp ca checkpoint future)
     (hblocks : history₁.appliedBlocks = history₂.appliedBlocks) :
     history₁.weth10Flow u = history₂.weth10Flow u :=
   history₁.weth10Flow_eq_of_appliedBlocks_eq history₂ hblocks
@@ -1365,31 +1408,31 @@ example (dp : DeployParams) (ca : Adr) :
     CommittedExecEthSound dp ca :=
   committedExecEthSound dp ca
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     (history.weth10Flow u).flashCredit =
       (history.weth10Flow u).flashRepayment :=
   history.flash_pair_totals_eq
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     FlowActionsCreditNof history.flowActions :=
   history.noCommittedCreditWrap hstable
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     holderCreditLossOfActions history.flowActions u = 0 :=
   history.holderCreditLoss_eq_zero hstable
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u +
         (history.weth10Flow u).ordinaryIn +
         (history.weth10Flow u).selfTransfer +
@@ -1401,10 +1444,10 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
         (history.weth10Flow u).flashRepayment :=
   holderFlow_conserved hstable history
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     (history.weth10Flow u).flashCredit =
         (history.weth10Flow u).flashRepayment ∧
     bookedBalanceNat checkpoint.state ca u +
@@ -1414,30 +1457,30 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
         (history.weth10Flow u).externalTransferredOut :=
   holderFlow_flash_cancelled hstable history
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u ≤
       bookedBalanceNat future.state ca u +
         ((history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut) :=
   holderFlow_residual_floor hstable history
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     bookedBalanceNat checkpoint.state ca u -
         ((history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut) ≤
       bookedBalanceNat future.state ca u :=
   holderFlow_truncated_floor hstable history
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (noExternalTransfer :
       (history.weth10Flow u).externalTransferredOut = 0) :
     bookedBalanceNat checkpoint.state ca u ≤
@@ -1686,43 +1729,43 @@ example (e : Sevm) :
         e.currentTarget.toB256 :=
   flashAllowanceRuntimeKey_eq_projected e
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     List (B256 × B256) :=
   touchedAllowancePairs history
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     touchedAllowancePairs history =
       history.attributionLedger.filterMap fun frame =>
         frame.allowance.map fun event => (event.owner, event.spender) :=
   rfl
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) : Prop :=
+    (history : AccountedHistory cfg dp ca checkpoint future) : Prop :=
   NoAllowanceKeyCollision history
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     NoAllowanceKeyCollision history ↔
       (touchedAllowancePairs history).Pairwise fun p q =>
         p ≠ q →
           projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2 :=
   Iff.rfl
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     Decidable (NoAllowanceKeyCollision history) :=
   inferInstance
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) (u : Adr) :
+    (history : AccountedHistory cfg dp ca checkpoint future) (u : Adr) :
     Nat :=
   hardenedOutflow history u
 
@@ -1734,9 +1777,9 @@ resolving because the fold was renamed or exposed fails closed, exactly as a
 rewritten body does. -/
 
 open private hardenedOutflowGo from Blanc.Weth10Attribution in
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) (u : Adr) :
+    (history : AccountedHistory cfg dp ca checkpoint future) (u : Adr) :
     hardenedOutflow history u =
       hardenedOutflowGo u [] history.attributionLedger :=
   rfl
@@ -1794,21 +1837,21 @@ example (frame : CountedFrame) (u : Adr) :
       | none => false) :=
   rfl
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} (u : Adr)
-    (history : AccountedHistory chainId dp ca checkpoint future) : Prop :=
+    (history : AccountedHistory cfg dp ca checkpoint future) : Prop :=
   NoAuthorizingActBy u history
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} (u : Adr)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     NoAuthorizingActBy u history ↔
       ∀ frame ∈ history.attributionLedger, frame.authorizes u = false :=
   Iff.rfl
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} (u : Adr)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     Decidable (NoAuthorizingActBy u history) :=
   inferInstance
 
@@ -1821,9 +1864,9 @@ example (dp : DeployParams) (ca : Adr) :
     CommittedExecAllowanceSound dp ca :=
   committedExecAllowanceSound dp ca
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransported ca checkpoint.state future.state
       history.attributionLedger :=
@@ -1907,9 +1950,9 @@ example (dp : DeployParams) (ca : Adr) :
     CommittedExecAllowanceReadSound dp ca :=
   committedExecAllowanceReadSound dp ca
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransportedSound ca checkpoint.state future.state
       history.attributionLedger :=
@@ -1924,9 +1967,9 @@ example (dp : DeployParams) (ca : Adr) :
   CommittedExecAllowanceReadSound.committedExecAllowanceSound
     (committedExecAllowanceReadSound dp ca)
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransported ca checkpoint.state future.state
       history.attributionLedger :=
@@ -1936,28 +1979,28 @@ example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
 and equals it under trace-local collision-freedom. The collision hypothesis
 appears on the equality and nowhere else. -/
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     hardenedOutflow history u ≤
       (history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut :=
   hardenedOutflow_le_permanentOutflow history
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history) :
     (history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut =
       hardenedOutflow history u :=
   permanentOutflow_eq_hardenedOutflow_of_noCollision hstable history hnc
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history) :
     bookedBalanceNat checkpoint.state ca u ≤
       bookedBalanceNat future.state ca u + hardenedOutflow history u :=
@@ -1971,10 +2014,10 @@ ledger-side absence of any authorizing act by `u`, and the conclusion is a bare
 inequality on booked balances with no outflow term at all. Adding a hypothesis,
 or weakening the conclusion to mention an outflow, breaks this pin. -/
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
     (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hnc : NoAllowanceKeyCollision history)
     (hquiet : AllowanceQuiescent ca u checkpoint.state)
     (hdormant : NoAuthorizingActBy u history) :
@@ -1987,64 +2030,62 @@ and discharge redemption at the future snapshot. Neither takes a collision
 hypothesis; a holder's ability to redeem never rests on an assumption about
 hash keys. -/
 
-example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+example {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future} {msg : Msg}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
     (henv : AdmissibleRedemptionMessage
-      dp ca u recipient q future.state msg) :
+      rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
   deployment_reachable_residual_messageRedemption_enabled
     hroot hcheckpoint hq henv
 
-example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+example {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future}
+    {history : AccountedHistory cfg dp ca checkpoint future}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
     (hentry : benv.state = future.state)
     (henv : AdmissibleRedemptionTx
-      dp ca u recipient q benv bout tx index) :
+      rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_residual_transactionRedemption_enabled
     hroot hcheckpoint hq hentry henv
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future} {msg : Msg}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
-    (henv : AdmissibleSelfRedemptionMessage dp ca u q future.state msg) :
+    (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
     MessageRedemptionEnabled dp ca u u q future.state msg :=
   deployment_reachable_residual_selfMessageRedemption_enabled
     hroot hcheckpoint hq henv
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future}
+    {history : AccountedHistory cfg dp ca checkpoint future}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
     (hentry : benv.state = future.state)
-    (henv : AdmissibleSelfRedemptionTx dp ca u q benv bout tx index) :
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
   deployment_reachable_residual_selfTransactionRedemption_enabled
     hroot hcheckpoint hq hentry henv
@@ -2053,53 +2094,52 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
 future snapshot itself*: rebasing the window at the future collapses the
 outflow terms, so no residual subtraction appears in either statement. -/
 
-example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+example {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain} {msg : Msg}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hq : q ≤ bookedBalanceNat future.state ca u)
-    (henv : AdmissibleRedemptionMessage dp ca u recipient q future.state msg) :
+    (henv : AdmissibleRedemptionMessage rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
   deployment_reachable_booked_messageRedemption_enabled hroot hfuture hq henv
 
-example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+example {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
-    (henv : AdmissibleRedemptionTx dp ca u recipient q benv bout tx index) :
+    (henv : AdmissibleRedemptionTx rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_booked_transactionRedemption_enabled
     hroot hfuture hentry hq henv
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
-    (henv : AdmissibleSelfRedemptionTx dp ca u q benv bout tx index) :
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
   deployment_reachable_booked_selfTransactionRedemption_enabled
     hroot hfuture hentry hq henv
 
-example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+example {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
     (henv : NonSignatureRedemptionTxEnvelope
-      dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
+      rules dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
     (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
@@ -2112,12 +2152,11 @@ the goal's central invariant: `hardenedDescription` carries
 checked up to definitional equality, so moving the collision hypothesis onto
 an enabledness field — or off `hardenedDescription` — breaks this example. -/
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future}
+    {history : AccountedHistory cfg dp ca checkpoint future}
     (futureStable : Weth10.Stable dp ca future.state)
-    (reachable : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) checkpoint future)
+    (reachable : BlockChain.ReachUsing cfg checkpoint future)
     (conserved :
       bookedBalanceNat checkpoint.state ca u +
           (history.weth10Flow u).ordinaryIn =
@@ -2134,21 +2173,21 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
         (history.weth10Flow u).redeemed +
             (history.weth10Flow u).externalTransferredOut =
           hardenedOutflow history u)
-    (messageEnabled : ∀ (q : Nat) (recipient : Adr) (msg : Msg),
+    (messageEnabled : ∀ (rules : ForkRules) (q : Nat) (recipient : Adr) (msg : Msg),
       q ≤ bookedBalanceNat checkpoint.state ca u -
         ((history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut) →
-      AdmissibleRedemptionMessage dp ca u recipient q future.state msg →
+      AdmissibleRedemptionMessage rules dp ca u recipient q future.state msg →
       MessageRedemptionEnabled dp ca u recipient q future.state msg)
-    (transactionEnabled : ∀ (q : Nat) (recipient : Adr)
+    (transactionEnabled : ∀ (rules : ForkRules) (q : Nat) (recipient : Adr)
         (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat),
       benv.state = future.state →
       q ≤ bookedBalanceNat checkpoint.state ca u -
         ((history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut) →
-      AdmissibleRedemptionTx dp ca u recipient q benv bout tx index →
+      AdmissibleRedemptionTx rules dp ca u recipient q benv bout tx index →
       TransactionRedemptionEnabled dp ca u recipient q benv bout tx index) :
-    FutureRedemptionGuarantee chainId dp ca u checkpoint future history :=
+    FutureRedemptionGuarantee cfg dp ca u checkpoint future history :=
   { futureStable := futureStable
     reachable := reachable
     conserved := conserved
@@ -2157,88 +2196,81 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     messageEnabled := messageEnabled
     transactionEnabled := transactionEnabled }
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
-    {history : AccountedHistory chainId dp ca checkpoint future}
+    {history : AccountedHistory cfg dp ca checkpoint future}
     (base : FutureRedemptionGuarantee
-      chainId dp ca u checkpoint future history)
-    (selfMessageEnabled : ∀ (q : Nat) (msg : Msg),
+      cfg dp ca u checkpoint future history)
+    (selfMessageEnabled : ∀ (rules : ForkRules) (q : Nat) (msg : Msg),
       q ≤ bookedBalanceNat checkpoint.state ca u -
         ((history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut) →
-      AdmissibleSelfRedemptionMessage dp ca u q future.state msg →
+      AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg →
       MessageRedemptionEnabled dp ca u u q future.state msg)
-    (selfTransactionEnabled : ∀ (q : Nat) (benv : Benv)
+    (selfTransactionEnabled : ∀ (rules : ForkRules) (q : Nat) (benv : Benv)
         (bout : BlockOutput) (tx : Tx) (index : Nat),
       benv.state = future.state →
       q ≤ bookedBalanceNat checkpoint.state ca u -
         ((history.weth10Flow u).redeemed +
           (history.weth10Flow u).externalTransferredOut) →
-      AdmissibleSelfRedemptionTx dp ca u q benv bout tx index →
+      AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index →
       TransactionRedemptionEnabled dp ca u u q benv bout tx index) :
     FutureDualSelectorRedemptionGuarantee
-      chainId dp ca u checkpoint future history :=
+      cfg dp ca u checkpoint future history :=
   { toFutureRedemptionGuarantee := base
     selfMessageEnabled := selfMessageEnabled
     selfTransactionEnabled := selfTransactionEnabled }
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureRedemptionGuarantee
-      chainId dp ca u checkpoint future history :=
+      cfg dp ca u checkpoint future history :=
   deployment_reachable_future_redeemable hroot hcheckpoint hfuture
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureDualSelectorRedemptionGuarantee
-      chainId dp ca u checkpoint future history :=
+      cfg dp ca u checkpoint future history :=
   deployment_reachable_future_dualSelector_redeemable
     hroot hcheckpoint hfuture
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {base deployed checkpoint future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hcheckpoint : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed checkpoint)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
-      chainId dp ca u checkpoint future history :=
+      cfg dp ca u checkpoint future history :=
   deployment_reachable_future_redeemable_allHolders hroot hcheckpoint hfuture
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca) :
     AllowanceQuiescent ca u deployed.state :=
   deploymentRoot_allowanceQuiescent hroot
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future) :
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future) :
     AllowanceQuiescent ca u deployed.state ∧
       ∃ history, FutureRedemptionGuarantee
-        chainId dp ca u deployed future history :=
+        cfg dp ca u deployed future history :=
   deployment_fullWindow_future_redeemable hroot hfuture
 
 example : CountedFrame → List CountedFrame → Adr → Prop :=
   PermanentOutflowAuthorization
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (history : AccountedHistory chainId dp ca deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (history : AccountedHistory cfg dp ca deployed future)
     {earlier later : List CountedFrame} {record : CountedFrame}
     {action : FlowAction} {debit : DebitProvenance}
     {event : AllowanceEvent}
@@ -2252,10 +2284,22 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
   deployment_fullWindow_attributionRootAt_ne_checkpoint
     hroot history hsplit hout haction hdebit hevent hkey
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (history : AccountedHistory chainId dp ca deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (history : AccountedHistory cfg dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history)
+    {earlier later : List CountedFrame} {record : CountedFrame}
+    (hsplit : history.attributionLedger = earlier ++ record :: later)
+    (hout : record.permanentOutflow u ≠ 0) :
+    PermanentOutflowAuthorization record earlier.reverse u :=
+  deployment_fullWindow_permanentOutflowAuthorization
+    hroot history hnc hsplit hout
+
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (history : AccountedHistory cfg dp ca deployed future)
     (hnc : NoAllowanceKeyCollision history) :
     ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut =
@@ -2267,12 +2311,22 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
   deployment_fullWindow_hardenedOutflow_only_authorizingRoots
     hroot history hnc
 
-example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future) :
-    ∃ history : AccountedHistory chainId dp ca deployed future,
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (history : AccountedHistory cfg dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hdormant : NoAuthorizingActBy u history) :
+    bookedBalanceNat deployed.state ca u ≤
+      bookedBalanceNat future.state ca u :=
+  deployment_fullWindow_dormant_holder_balance_monotone
+    hroot history hnc hdormant
+
+example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future) :
+    ∃ history : AccountedHistory cfg dp ca deployed future,
       NoAllowanceKeyCollision history →
       NoAuthorizingActBy u history →
       bookedBalanceNat deployed.state ca u ≤
@@ -2285,24 +2339,24 @@ would silently permit overbooking by splitting one owner's claim in two, and a
 `remaining` field weakened to anything less than "every extension admissible
 before is admissible after" would gut the any-order induction. -/
 
-example {ca : Adr} {w : State} {cs : List RedemptionClaim}
-    (recipients : ∀ c ∈ cs, ClaimAdmissible ca w c)
+example {rules : ForkRules} {ca : Adr} {w : State} {cs : List RedemptionClaim}
+    (recipients : ∀ c ∈ cs, ClaimAdmissible rules ca w c)
     (budget : ∀ u : Adr, ownerClaimTotal cs u ≤ bookedBalanceNat w ca u) :
-    ClaimsAdmissible ca w cs :=
+    ClaimsAdmissible rules ca w cs :=
   { recipients := recipients
     budget := budget }
 
-example {dp : DeployParams} {ca : Adr}
+example {rules : ForkRules} {dp : DeployParams} {ca : Adr}
     {c : RedemptionClaim} {cs : List RedemptionClaim}
     {w mid post : State} {msg : Msg} {out : MsgCallOutput}
     (henv : AdmissibleRedemptionMessage
-      dp ca c.owner c.recipient c.amount w msg)
-    (message_eq : msg = canonicalRedemptionMessage ca c w)
+      rules dp ca c.owner c.recipient c.amount w msg)
+    (message_eq : msg = canonicalRedemptionMessage rules ca c w)
     (hrun : processMessageCall msg = .ok (mid, out))
     (heffect : MessageRedemptionExactEffect
       dp ca c.owner c.recipient c.amount w mid out)
-    (htail : RedemptionRun dp ca cs mid post) :
-    RedemptionRun dp ca (c :: cs) w post :=
+    (htail : RedemptionRun rules dp ca cs mid post) :
+    RedemptionRun rules dp ca (c :: cs) w post :=
   .cons henv message_eq hrun heffect htail
 
 example (ca : Adr) (w : State) (holders : List Adr)
@@ -2312,9 +2366,10 @@ example (ca : Adr) (w : State) (holders : List Adr)
         ⟨u, bookedBalanceNat w ca u, recipient u⟩ :=
   rfl
 
-example {dp : DeployParams} {ca : Adr} {cs : List RedemptionClaim}
+example {rules : ForkRules} {dp : DeployParams} {ca : Adr}
+    {cs : List RedemptionClaim}
     {w post : State}
-    (run : RedemptionRun dp ca cs w post)
+    (run : RedemptionRun rules dp ca cs w post)
     (stable : Stable dp ca post)
     (booked : ∀ v : Adr,
       bookedBalanceNat post ca v + ownerClaimTotal cs v =
@@ -2325,8 +2380,9 @@ example {dp : DeployParams} {ca : Adr} {cs : List RedemptionClaim}
     (sumPreserved : sum post.bal = sum w.bal)
     (codePreserved : ∀ a : Adr, post.getCode a = w.getCode a)
     (remaining : ∀ es : List RedemptionClaim,
-      ClaimsAdmissible ca w (cs ++ es) → ClaimsAdmissible ca post es) :
-    RedemptionOutcome dp ca cs w post :=
+      ClaimsAdmissible rules ca w (cs ++ es) →
+        ClaimsAdmissible rules ca post es) :
+    RedemptionOutcome rules dp ca cs w post :=
   { run := run
     stable := stable
     booked := booked
@@ -2336,53 +2392,1000 @@ example {dp : DeployParams} {ca : Adr} {cs : List RedemptionClaim}
     codePreserved := codePreserved
     remaining := remaining }
 
-example {dp : DeployParams} {ca : Adr} {w : State}
+example {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
     {cs ds : List RedemptionClaim}
-    (hca : ¬ pragueRules.isPrecomp ca)
+    (hca : ¬ rules.isPrecomp ca)
     (hstable : Stable dp ca w)
-    (hadm : ClaimsAdmissible ca w cs)
+    (hadm : ClaimsAdmissible rules ca w cs)
     (hperm : cs.Perm ds) :
-    ∃ post, RedemptionOutcome dp ca ds w post :=
+    ∃ post, RedemptionOutcome rules dp ca ds w post :=
   redeemClaims_anyOrder hca hstable hadm hperm
 
-example {dp : DeployParams} {ca : Adr} {w : State}
+example {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
     {holders : List Adr} {recipient : Adr → Adr}
     {claims : List RedemptionClaim}
-    (hca : ¬ pragueRules.isPrecomp ca)
+    (hca : ¬ rules.isPrecomp ca)
     (hstable : Stable dp ca w)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
-      ClaimAdmissible ca w
+      ClaimAdmissible rules ca w
         ⟨u, bookedBalanceNat w ca u, recipient u⟩)
     (hperm : (fullBalanceClaims ca w holders recipient).Perm claims) :
-    ∃ post, RedemptionOutcome dp ca claims w post :=
+    ∃ post, RedemptionOutcome rules dp ca claims w post :=
   redeemEveryoneList_anyOrder hca hstable hnodup hrecipients hperm
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
+    {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
-    (hadm : ClaimsAdmissible ca future.state cs)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hrules : cfg.rulesAt timestamp = .ok rules)
+    (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
-    ∃ post, RedemptionOutcome dp ca ds future.state post :=
-  deployment_reachable_redeemClaims_anyOrder hroot hfuture hadm hperm
+    ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
+  deployment_reachable_redeemClaims_anyOrder hroot hfuture hrules hadm hperm
 
-example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
+    {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {holders : List Adr}
     {recipient : Adr → Adr} {claims : List RedemptionClaim}
-    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
-    (hfuture : BlockChain.ReachUsing
-      (ChainConfig.pragueOnly chainId) deployed future)
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hrules : cfg.rulesAt timestamp = .ok rules)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
-      ClaimAdmissible ca future.state
+      ClaimAdmissible rules ca future.state
         ⟨u, bookedBalanceNat future.state ca u, recipient u⟩)
     (hperm :
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
-    ∃ post, RedemptionOutcome dp ca claims future.state post :=
+    ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
   deployment_reachable_redeemEveryoneList_anyOrder
-    hroot hfuture hnodup hrecipients hperm
+    hroot hfuture hrules hnodup hrecipients hperm
+
+
+/-! ## Current-mainnet and Prague specialization pins -/
+
+example
+    {timestamp : Nat} {rules : ForkRules}
+    (h : mainnetChainConfig.rulesAt timestamp = .ok rules) :
+    rules = pragueRules ∨ rules = osakaRules ∨
+      rules = bpo1Rules ∨ rules = bpo2Rules :=
+  by
+    exact mainnet_rulesAt_eq_named
+      (timestamp := timestamp) (rules := rules) (h := h)
+
+example
+    {timestamp : Nat} (h : mainnetBpo2Timestamp ≤ timestamp) :
+    mainnetChainConfig.rulesAt timestamp = .ok bpo2Rules :=
+  by
+    exact mainnet_rulesAt_eq_bpo2_of_ge
+      (timestamp := timestamp) (h := h)
+
+example (q : Nat) :
+    checkTransactionGasCap pragueRules.tx (redemptionRuntimeCeiling q) =
+      .ok () :=
+  by
+    exact pragueRules_redemptionRuntimeCeiling_gasCap
+      (q := q)
+
+example (q : Nat) :
+    checkTransactionGasCap osakaRules.tx (redemptionRuntimeCeiling q) =
+      .ok () :=
+  by
+    exact osakaRules_redemptionRuntimeCeiling_gasCap
+      (q := q)
+
+example (q : Nat) :
+    checkTransactionGasCap bpo1Rules.tx (redemptionRuntimeCeiling q) =
+      .ok () :=
+  by
+    exact bpo1Rules_redemptionRuntimeCeiling_gasCap
+      (q := q)
+
+example (q : Nat) :
+    checkTransactionGasCap bpo2Rules.tx (redemptionRuntimeCeiling q) =
+      .ok () :=
+  by
+    exact bpo2Rules_redemptionRuntimeCeiling_gasCap
+      (q := q)
+
+example :
+    mainnetChainConfig.rulesAt 1_767_747_683 = .ok bpo2Rules :=
+  by
+    exact weth10CurrentMainnetCreation_rulesAt
+
+example
+    (base deployed : BlockChain) (cb : CanonicalBlock)
+    (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
+    (htimestamp : mainnetBpo2Timestamp ≤ cb.block.header.timestamp)
+    (hbase : CanonicalDeploymentBase mainnetChainConfig bpo2Rules
+      base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock mainnetChainConfig bpo2Rules
+      base cb deploymentTxBytes deploymentTx sender ca)
+    (hstep : stateTransitionUsing mainnetChainConfig
+      base cb.block = .ok deployed) :
+    MainnetDeploymentRoot base deployed
+      (freshDeployParams mainnetChainConfig.chainId.toB256 ca) ca :=
+  by
+    exact canonicalMainnetBpo2DeploymentStep_establishes_root
+      (base := base) (deployed := deployed) (cb := cb) (deploymentTxBytes := deploymentTxBytes) (deploymentTx := deploymentTx) (sender := sender) (ca := ca) (htimestamp := htimestamp) (hbase := hbase) (henv := henv) (hstep := hstep)
+
+example
+    (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
+    (hreach : BlockChain.ReachUsing mainnetChainConfig ch ch')
+    (hstable : Stable dp ca ch.state) :
+    Stable dp ca ch'.state :=
+  by
+    exact chainUsing_preserves_stable_mainnet
+      (dp := dp) (ca := ca) (ch := ch) (ch' := ch') (hreach := hreach) (hstable := hstable)
+
+example
+    (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
+    (hreach : BlockChain.ReachUsing mainnetChainConfig ch ch')
+    (hstable : Stable dp ca ch.state) :
+    (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
+      balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
+  by
+    exact chain_reachable_backed_and_flash_zero_mainnet
+      (dp := dp) (ca := ca) (ch := ch) (ch' := ch') (hreach := hreach) (hstable := hstable)
+
+example
+    {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory mainnetChainConfig dp ca checkpoint future}
+    {msg : Msg}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing mainnetChainConfig deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (henv : AdmissibleRedemptionMessage
+      rules dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  by
+    exact deployment_reachable_residual_messageRedemption_enabled_mainnet
+      (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (history := history) (msg := msg) (hroot := hroot) (hcheckpoint := hcheckpoint) (hq := hq) (henv := henv)
+
+example
+    {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory mainnetChainConfig dp ca checkpoint future}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing mainnetChainConfig deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (hentry : benv.state = future.state)
+    (henv : AdmissibleRedemptionTx
+      rules dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  by
+    exact deployment_reachable_residual_transactionRedemption_enabled_mainnet
+      (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (history := history) (benv := benv) (bout := bout) (tx := tx) (index := index) (hroot := hroot) (hcheckpoint := hcheckpoint) (hq := hq) (hentry := hentry) (henv := henv)
+
+example
+    {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory mainnetChainConfig dp ca checkpoint future}
+    {msg : Msg}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing mainnetChainConfig deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
+    MessageRedemptionEnabled dp ca u u q future.state msg :=
+  by
+    exact deployment_reachable_residual_selfMessageRedemption_enabled_mainnet
+      (rules := rules) (dp := dp) (ca := ca) (u := u) (q := q) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (history := history) (msg := msg) (hroot := hroot) (hcheckpoint := hcheckpoint) (hq := hq) (henv := henv)
+
+example
+    {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory mainnetChainConfig dp ca checkpoint future}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing mainnetChainConfig deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (hentry : benv.state = future.state)
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
+  by
+    exact deployment_reachable_residual_selfTransactionRedemption_enabled_mainnet
+      (rules := rules) (dp := dp) (ca := ca) (u := u) (q := q) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (history := history) (benv := benv) (bout := bout) (tx := tx) (index := index) (hroot := hroot) (hcheckpoint := hcheckpoint) (hq := hq) (hentry := hentry) (henv := henv)
+
+example
+    {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain} {msg : Msg}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionMessage
+      rules dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  by
+    exact deployment_reachable_booked_messageRedemption_enabled_mainnet
+      (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (future := future) (msg := msg) (hroot := hroot) (hfuture := hfuture) (hq := hq) (henv := henv)
+
+example
+    {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionTx
+      rules dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  by
+    exact deployment_reachable_booked_transactionRedemption_enabled_mainnet
+      (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (future := future) (benv := benv) (bout := bout) (tx := tx) (index := index) (hroot := hroot) (hfuture := hfuture) (hentry := hentry) (hq := hq) (henv := henv)
+
+example
+    {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
+  by
+    exact deployment_reachable_booked_selfTransactionRedemption_enabled_mainnet
+      (rules := rules) (dp := dp) (ca := ca) (u := u) (q := q) (base := base) (deployed := deployed) (future := future) (benv := benv) (bout := bout) (tx := tx) (index := index) (hroot := hroot) (hfuture := hfuture) (hentry := hentry) (hq := hq) (henv := henv)
+
+example
+    {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {maxPriorityFee maxFee : Nat}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : NonSignatureRedemptionTxEnvelope
+      rules dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
+    (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  by
+    exact deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_mainnet
+      (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (future := future) (benv := benv) (bout := bout) (tx := tx) (index := index) (maxPriorityFee := maxPriorityFee) (maxFee := maxFee) (hroot := hroot) (hfuture := hfuture) (hentry := hentry) (hq := hq) (henv := henv) (hrecovered := hrecovered)
+
+example
+    {dp : DeployParams} {ca u : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing mainnetChainConfig deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig checkpoint future) :
+    ∃ history, FutureRedemptionGuarantee
+      mainnetChainConfig dp ca u checkpoint future history :=
+  by
+    exact deployment_reachable_future_redeemable_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (hroot := hroot) (hcheckpoint := hcheckpoint) (hfuture := hfuture)
+
+example
+    {dp : DeployParams} {ca u : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing mainnetChainConfig deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig checkpoint future) :
+    ∃ history, FutureDualSelectorRedemptionGuarantee
+      mainnetChainConfig dp ca u checkpoint future history :=
+  by
+    exact deployment_reachable_future_dualSelector_redeemable_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (hroot := hroot) (hcheckpoint := hcheckpoint) (hfuture := hfuture)
+
+example
+    {dp : DeployParams} {ca : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing mainnetChainConfig deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig checkpoint future) :
+    ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
+      mainnetChainConfig dp ca u checkpoint future history :=
+  by
+    exact deployment_reachable_future_redeemable_allHolders_mainnet
+      (dp := dp) (ca := ca) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (hroot := hroot) (hcheckpoint := hcheckpoint) (hfuture := hfuture)
+
+example
+    {dp : DeployParams} {ca u : Adr} {base deployed : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca) :
+    AllowanceQuiescent ca u deployed.state :=
+  by
+    exact deploymentRoot_allowanceQuiescent_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (hroot := hroot)
+
+example
+    {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future) :
+    AllowanceQuiescent ca u deployed.state ∧
+      ∃ history, FutureRedemptionGuarantee
+        mainnetChainConfig dp ca u deployed future history :=
+  by
+    exact deployment_fullWindow_future_redeemable_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (hfuture := hfuture)
+
+example
+    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (history : AccountedHistory mainnetChainConfig dp ca deployed future)
+    {earlier later : List CountedFrame} {record : CountedFrame}
+    {action : FlowAction} {debit : DebitProvenance} {event : AllowanceEvent}
+    (hsplit : history.attributionLedger = earlier ++ record :: later)
+    (hout : record.permanentOutflow u ≠ 0)
+    (haction : record.action = some action)
+    (hdebit : action.debit = some debit)
+    (hevent : record.allowance = some event)
+    (hkey : delegatedKey? debit.branch = some event.key) :
+    attributionRootAt earlier.reverse event.key ≠ .checkpoint :=
+  by
+    exact deployment_fullWindow_attributionRootAt_ne_checkpoint_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (history := history) (earlier := earlier) (later := later) (record := record) (action := action) (debit := debit) (event := event) (hsplit := hsplit) (hout := hout) (haction := haction) (hdebit := hdebit) (hevent := hevent) (hkey := hkey)
+
+example
+    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (history : AccountedHistory mainnetChainConfig dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history)
+    {earlier later : List CountedFrame} {record : CountedFrame}
+    (hsplit : history.attributionLedger = earlier ++ record :: later)
+    (hout : record.permanentOutflow u ≠ 0) :
+    PermanentOutflowAuthorization record earlier.reverse u :=
+  by
+    exact deployment_fullWindow_permanentOutflowAuthorization_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (history := history) (hnc := hnc) (earlier := earlier) (later := later) (record := record) (hsplit := hsplit) (hout := hout)
+
+example
+    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (history : AccountedHistory mainnetChainConfig dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history) :
+    ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut =
+      hardenedOutflow history u) ∧
+      ∀ earlier record later,
+        history.attributionLedger = earlier ++ record :: later →
+        record.permanentOutflow u ≠ 0 →
+        PermanentOutflowAuthorization record earlier.reverse u :=
+  by
+    exact deployment_fullWindow_hardenedOutflow_only_authorizingRoots_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (history := history) (hnc := hnc)
+
+example
+    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (history : AccountedHistory mainnetChainConfig dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hdormant : NoAuthorizingActBy u history) :
+    bookedBalanceNat deployed.state ca u ≤
+      bookedBalanceNat future.state ca u :=
+  by
+    exact deployment_fullWindow_dormant_holder_balance_monotone_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (history := history) (hnc := hnc) (hdormant := hdormant)
+
+example
+    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future) :
+    ∃ history : AccountedHistory mainnetChainConfig dp ca deployed future,
+      NoAllowanceKeyCollision history →
+      NoAuthorizingActBy u history →
+      bookedBalanceNat deployed.state ca u ≤
+        bookedBalanceNat future.state ca u :=
+  by
+    exact deployment_reachable_dormant_holder_balance_monotone_mainnet
+      (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (hfuture := hfuture)
+
+example
+    {rules : ForkRules} {timestamp : Nat} {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    (hadm : ClaimsAdmissible rules ca future.state cs)
+    (hperm : cs.Perm ds) :
+    ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
+  by
+    exact deployment_reachable_redeemClaims_anyOrder_mainnet
+      (rules := rules) (timestamp := timestamp) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (future := future) (cs := cs) (ds := ds) (hroot := hroot) (hfuture := hfuture) (hrules := hrules) (hadm := hadm) (hperm := hperm)
+
+example
+    {rules : ForkRules} {timestamp : Nat} {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {holders : List Adr}
+    {recipient : Adr → Adr} {claims : List RedemptionClaim}
+    (hroot : MainnetDeploymentRoot base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    (hnodup : holders.Nodup)
+    (hrecipients : ∀ u ∈ holders,
+      ClaimAdmissible rules ca future.state
+        ⟨u, bookedBalanceNat future.state ca u, recipient u⟩)
+    (hperm :
+      (fullBalanceClaims ca future.state holders recipient).Perm claims) :
+    ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
+  by
+    exact deployment_reachable_redeemEveryoneList_anyOrder_mainnet
+      (rules := rules) (timestamp := timestamp) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (future := future) (holders := holders) (recipient := recipient) (claims := claims) (hroot := hroot) (hfuture := hfuture) (hrules := hrules) (hnodup := hnodup) (hrecipients := hrecipients) (hperm := hperm)
+
+example
+    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
+    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
+    (history.weth10Flow u).flashCredit =
+      (history.weth10Flow u).flashRepayment :=
+  by
+    exact AccountedHistory.flash_pair_totals_eq_mainnet
+      (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (history := history)
+
+example
+    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
+    (history₁ history₂ :
+      AccountedHistory mainnetChainConfig dp ca checkpoint future)
+    (hblocks : history₁.appliedBlocks = history₂.appliedBlocks) :
+    history₁.weth10Flow u = history₂.weth10Flow u :=
+  by
+    exact AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq_mainnet
+      (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (history₁ := history₁) (history₂ := history₂) (hblocks := hblocks)
+
+example
+    {dp : DeployParams} {ca : Adr} {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
+    FlowActionsCreditNof history.flowActions :=
+  by
+    exact AccountedHistory.noCommittedCreditWrap_mainnet
+      (dp := dp) (ca := ca) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
+    holderCreditLossOfActions history.flowActions u = 0 :=
+  by
+    exact AccountedHistory.holderCreditLoss_eq_zero_mainnet
+      (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u +
+        (history.weth10Flow u).ordinaryIn +
+        (history.weth10Flow u).selfTransfer +
+        (history.weth10Flow u).flashCredit =
+      bookedBalanceNat future.state ca u +
+        (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut +
+        (history.weth10Flow u).selfTransfer +
+        (history.weth10Flow u).flashRepayment :=
+  by
+    exact holderFlow_conserved_mainnet
+      (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
+    (history.weth10Flow u).flashCredit =
+        (history.weth10Flow u).flashRepayment ∧
+      bookedBalanceNat checkpoint.state ca u +
+          (history.weth10Flow u).ordinaryIn =
+        bookedBalanceNat future.state ca u +
+          (history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut :=
+  by
+    exact holderFlow_flash_cancelled_mainnet
+      (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      bookedBalanceNat future.state ca u +
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) :=
+  by
+    exact holderFlow_residual_floor_mainnet
+      (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u -
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) ≤
+      bookedBalanceNat future.state ca u :=
+  by
+    exact holderFlow_truncated_floor_mainnet
+      (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future)
+    (hnoExternalTransfer :
+      (history.weth10Flow u).externalTransferredOut = 0) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      (history.weth10Flow u).redeemed +
+        bookedBalanceNat future.state ca u :=
+  by
+    exact holderFlow_withdrawal_floor_mainnet
+      (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history) (hnoExternalTransfer := hnoExternalTransfer)
+
+example
+    {chainId : UInt64} (dp : DeployParams) (ca : Adr)
+    (ch ch' : BlockChain)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch')
+    (hstable : Stable dp ca ch.state) :
+    Stable dp ca ch'.state :=
+  by
+    exact chainUsing_preserves_stable_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (ch := ch) (ch' := ch') (hreach := hreach) (hstable := hstable)
+
+example
+    {chainId : UInt64} (dp : DeployParams) (ca : Adr)
+    (ch ch' : BlockChain)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch')
+    (hstable : Stable dp ca ch.state) :
+    (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
+      balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
+  by
+    exact chain_reachable_backed_and_flash_zero_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (ch := ch) (ch' := ch') (hreach := hreach) (hstable := hstable)
+
+example
+    {chainId : UInt64} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future} {msg : Msg}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (henv : AdmissibleRedemptionMessage
+      rules dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  by
+    exact deployment_reachable_residual_messageRedemption_enabled_prague
+      (chainId := chainId) (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (history := history) (msg := msg) (hroot := hroot) (hcheckpoint := hcheckpoint) (hq := hq) (henv := henv)
+
+example
+    {chainId : UInt64} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (hentry : benv.state = future.state)
+    (henv : AdmissibleRedemptionTx
+      rules dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  by
+    exact deployment_reachable_residual_transactionRedemption_enabled_prague
+      (chainId := chainId) (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (history := history) (benv := benv) (bout := bout) (tx := tx) (index := index) (hroot := hroot) (hcheckpoint := hcheckpoint) (hq := hq) (hentry := hentry) (henv := henv)
+
+example
+    {chainId : UInt64} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future} {msg : Msg}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
+    MessageRedemptionEnabled dp ca u u q future.state msg :=
+  by
+    exact deployment_reachable_residual_selfMessageRedemption_enabled_prague
+      (chainId := chainId) (rules := rules) (dp := dp) (ca := ca) (u := u) (q := q) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (history := history) (msg := msg) (hroot := hroot) (hcheckpoint := hcheckpoint) (hq := hq) (henv := henv)
+
+example
+    {chainId : UInt64} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (hentry : benv.state = future.state)
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
+  by
+    exact deployment_reachable_residual_selfTransactionRedemption_enabled_prague
+      (chainId := chainId) (rules := rules) (dp := dp) (ca := ca) (u := u) (q := q) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (history := history) (benv := benv) (bout := bout) (tx := tx) (index := index) (hroot := hroot) (hcheckpoint := hcheckpoint) (hq := hq) (hentry := hentry) (henv := henv)
+
+example
+    {chainId : UInt64} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain} {msg : Msg}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionMessage
+      rules dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  by
+    exact deployment_reachable_booked_messageRedemption_enabled_prague
+      (chainId := chainId) (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (future := future) (msg := msg) (hroot := hroot) (hfuture := hfuture) (hq := hq) (henv := henv)
+
+example
+    {chainId : UInt64} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionTx
+      rules dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  by
+    exact deployment_reachable_booked_transactionRedemption_enabled_prague
+      (chainId := chainId) (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (future := future) (benv := benv) (bout := bout) (tx := tx) (index := index) (hroot := hroot) (hfuture := hfuture) (hentry := hentry) (hq := hq) (henv := henv)
+
+example
+    {chainId : UInt64} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
+  by
+    exact deployment_reachable_booked_selfTransactionRedemption_enabled_prague
+      (chainId := chainId) (rules := rules) (dp := dp) (ca := ca) (u := u) (q := q) (base := base) (deployed := deployed) (future := future) (benv := benv) (bout := bout) (tx := tx) (index := index) (hroot := hroot) (hfuture := hfuture) (hentry := hentry) (hq := hq) (henv := henv)
+
+example
+    {chainId : UInt64} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {maxPriorityFee maxFee : Nat}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : NonSignatureRedemptionTxEnvelope
+      rules dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
+    (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  by
+    exact deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_prague
+      (chainId := chainId) (rules := rules) (dp := dp) (ca := ca) (u := u) (recipient := recipient) (q := q) (base := base) (deployed := deployed) (future := future) (benv := benv) (bout := bout) (tx := tx) (index := index) (maxPriorityFee := maxPriorityFee) (maxFee := maxFee) (hroot := hroot) (hfuture := hfuture) (hentry := hentry) (hq := hq) (henv := henv) (hrecovered := hrecovered)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    ∃ history, FutureRedemptionGuarantee
+      (ChainConfig.pragueOnly chainId) dp ca u checkpoint future history :=
+  by
+    exact deployment_reachable_future_redeemable_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (hroot := hroot) (hcheckpoint := hcheckpoint) (hfuture := hfuture)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    ∃ history, FutureDualSelectorRedemptionGuarantee
+      (ChainConfig.pragueOnly chainId) dp ca u checkpoint future history :=
+  by
+    exact deployment_reachable_future_dualSelector_redeemable_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (hroot := hroot) (hcheckpoint := hcheckpoint) (hfuture := hfuture)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
+      (ChainConfig.pragueOnly chainId) dp ca u checkpoint future history :=
+  by
+    exact deployment_reachable_future_redeemable_allHolders_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (checkpoint := checkpoint) (future := future) (hroot := hroot) (hcheckpoint := hcheckpoint) (hfuture := hfuture)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca) :
+    AllowanceQuiescent ca u deployed.state :=
+  by
+    exact deploymentRoot_allowanceQuiescent_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (hroot := hroot)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future) :
+    AllowanceQuiescent ca u deployed.state ∧
+      ∃ history, FutureRedemptionGuarantee
+        (ChainConfig.pragueOnly chainId) dp ca u deployed future history :=
+  by
+    exact deployment_fullWindow_future_redeemable_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (hfuture := hfuture)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca deployed future)
+    {earlier later : List CountedFrame} {record : CountedFrame}
+    {action : FlowAction} {debit : DebitProvenance} {event : AllowanceEvent}
+    (hsplit : history.attributionLedger = earlier ++ record :: later)
+    (hout : record.permanentOutflow u ≠ 0)
+    (haction : record.action = some action)
+    (hdebit : action.debit = some debit)
+    (hevent : record.allowance = some event)
+    (hkey : delegatedKey? debit.branch = some event.key) :
+    attributionRootAt earlier.reverse event.key ≠ .checkpoint :=
+  by
+    exact deployment_fullWindow_attributionRootAt_ne_checkpoint_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (history := history) (earlier := earlier) (later := later) (record := record) (action := action) (debit := debit) (event := event) (hsplit := hsplit) (hout := hout) (haction := haction) (hdebit := hdebit) (hevent := hevent) (hkey := hkey)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history)
+    {earlier later : List CountedFrame} {record : CountedFrame}
+    (hsplit : history.attributionLedger = earlier ++ record :: later)
+    (hout : record.permanentOutflow u ≠ 0) :
+    PermanentOutflowAuthorization record earlier.reverse u :=
+  by
+    exact deployment_fullWindow_permanentOutflowAuthorization_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (history := history) (hnc := hnc) (earlier := earlier) (later := later) (record := record) (hsplit := hsplit) (hout := hout)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history) :
+    ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut =
+      hardenedOutflow history u) ∧
+      ∀ earlier record later,
+        history.attributionLedger = earlier ++ record :: later →
+        record.permanentOutflow u ≠ 0 →
+        PermanentOutflowAuthorization record earlier.reverse u :=
+  by
+    exact deployment_fullWindow_hardenedOutflow_only_authorizingRoots_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (history := history) (hnc := hnc)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hdormant : NoAuthorizingActBy u history) :
+    bookedBalanceNat deployed.state ca u ≤
+      bookedBalanceNat future.state ca u :=
+  by
+    exact deployment_fullWindow_dormant_holder_balance_monotone_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (history := history) (hnc := hnc) (hdormant := hdormant)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future) :
+    ∃ history : AccountedHistory (ChainConfig.pragueOnly chainId)
+        dp ca deployed future,
+      NoAllowanceKeyCollision history →
+      NoAuthorizingActBy u history →
+      bookedBalanceNat deployed.state ca u ≤
+        bookedBalanceNat future.state ca u :=
+  by
+    exact deployment_reachable_dormant_holder_balance_monotone_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (hfuture := hfuture)
+
+example
+    {chainId : UInt64} {rules : ForkRules} {timestamp : Nat}
+    {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hrules : (ChainConfig.pragueOnly chainId).rulesAt timestamp = .ok rules)
+    (hadm : ClaimsAdmissible rules ca future.state cs)
+    (hperm : cs.Perm ds) :
+    ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
+  by
+    exact deployment_reachable_redeemClaims_anyOrder_prague
+      (chainId := chainId) (rules := rules) (timestamp := timestamp) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (future := future) (cs := cs) (ds := ds) (hroot := hroot) (hfuture := hfuture) (hrules := hrules) (hadm := hadm) (hperm := hperm)
+
+example
+    {chainId : UInt64} {rules : ForkRules} {timestamp : Nat}
+    {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {holders : List Adr}
+    {recipient : Adr → Adr} {claims : List RedemptionClaim}
+    (hroot : PragueDeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hrules : (ChainConfig.pragueOnly chainId).rulesAt timestamp = .ok rules)
+    (hnodup : holders.Nodup)
+    (hrecipients : ∀ u ∈ holders,
+      ClaimAdmissible rules ca future.state
+        ⟨u, bookedBalanceNat future.state ca u, recipient u⟩)
+    (hperm :
+      (fullBalanceClaims ca future.state holders recipient).Perm claims) :
+    ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
+  by
+    exact deployment_reachable_redeemEveryoneList_anyOrder_prague
+      (chainId := chainId) (rules := rules) (timestamp := timestamp) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (future := future) (holders := holders) (recipient := recipient) (claims := claims) (hroot := hroot) (hfuture := hfuture) (hrules := hrules) (hnodup := hnodup) (hrecipients := hrecipients) (hperm := hperm)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future) :
+    (history.weth10Flow u).flashCredit =
+      (history.weth10Flow u).flashRepayment :=
+  by
+    exact AccountedHistory.flash_pair_totals_eq_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (history := history)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (history₁ history₂ : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future)
+    (hblocks : history₁.appliedBlocks = history₂.appliedBlocks) :
+    history₁.weth10Flow u = history₂.weth10Flow u :=
+  by
+    exact AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (history₁ := history₁) (history₂ := history₂) (hblocks := hblocks)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future) :
+    FlowActionsCreditNof history.flowActions :=
+  by
+    exact AccountedHistory.noCommittedCreditWrap_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future) :
+    holderCreditLossOfActions history.flowActions u = 0 :=
+  by
+    exact AccountedHistory.holderCreditLoss_eq_zero_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u +
+        (history.weth10Flow u).ordinaryIn +
+        (history.weth10Flow u).selfTransfer +
+        (history.weth10Flow u).flashCredit =
+      bookedBalanceNat future.state ca u +
+        (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut +
+        (history.weth10Flow u).selfTransfer +
+        (history.weth10Flow u).flashRepayment :=
+  by
+    exact holderFlow_conserved_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future) :
+    (history.weth10Flow u).flashCredit =
+        (history.weth10Flow u).flashRepayment ∧
+      bookedBalanceNat checkpoint.state ca u +
+          (history.weth10Flow u).ordinaryIn =
+        bookedBalanceNat future.state ca u +
+          (history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut :=
+  by
+    exact holderFlow_flash_cancelled_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      bookedBalanceNat future.state ca u +
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) :=
+  by
+    exact holderFlow_residual_floor_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u -
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) ≤
+      bookedBalanceNat future.state ca u :=
+  by
+    exact holderFlow_truncated_floor_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history)
+
+example
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory (ChainConfig.pragueOnly chainId)
+      dp ca checkpoint future)
+    (hnoExternalTransfer :
+      (history.weth10Flow u).externalTransferredOut = 0) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      (history.weth10Flow u).redeemed +
+        bookedBalanceNat future.state ca u :=
+  by
+    exact holderFlow_withdrawal_floor_prague
+      (chainId := chainId) (dp := dp) (ca := ca) (u := u) (checkpoint := checkpoint) (future := future) (hstable := hstable) (history := history) (hnoExternalTransfer := hnoExternalTransfer)
 
 end Weth10
 

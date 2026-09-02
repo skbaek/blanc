@@ -213,6 +213,7 @@ CONTRACTS = {
                "Weth10DeployDomainSlices", "Weth10DeployUpperSlices",
                "Weth10Deploy", "Weth10MainnetCodeEq", "Weth10DeployExec",
                "Weth10DeployProof", "Weth10Stable", "Weth10DeploymentRoot",
+               "Weth10Mainnet", "Weth10PragueCompat",
                "Weth10Errors", "Weth10Functional",
                "Weth10FlashFunctional", "Weth10Live",
                "Weth10Permit", "Weth10Read", "Weth10StateFunctional",

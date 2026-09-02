@@ -379,8 +379,8 @@ def AppliedBodyTrace.attributionStream (dp : DeployParams) (ca : Adr)
     Blanc.Weth10.RequestsTrace.attributionStream dp ca trace.requests
 
 def AccountedBlock.attributionStream (dp : DeployParams) (ca : Adr)
-    {chainId : UInt64} {pre post : BlockChain}
-    (accounted : AccountedBlock chainId dp ca pre post) :
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (accounted : AccountedBlock cfg dp ca pre post) :
     List CountedFrame :=
   Blanc.Weth10.AppliedBodyTrace.attributionStream dp ca accounted.bodyTrace
 
@@ -388,9 +388,9 @@ def AccountedBlock.attributionStream (dp : DeployParams) (ca : Adr)
 one record per counted committed exact WETH10 invocation, in committed
 runtime order. -/
 def AccountedHistory.attributionLedger
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
-    AccountedHistory chainId dp ca checkpoint future → List CountedFrame
+    AccountedHistory cfg dp ca checkpoint future → List CountedFrame
   | .refl _ _ _ => []
   | .step prior accounted =>
       prior.attributionLedger ++ accounted.attributionStream dp ca
@@ -401,9 +401,9 @@ def AccountedHistory.attributionLedger
 allowance keys during counted execution, in trace order, duplicates
 retained, raw words undisturbed. -/
 def touchedAllowancePairs
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     List (B256 × B256) :=
   history.attributionLedger.filterMap fun frame =>
     frame.allowance.map fun event => (event.owner, event.spender)
@@ -412,16 +412,16 @@ def touchedAllowancePairs
 decidable property of the explicit history's finitely many touched pairs,
 never a global injectivity assumption. -/
 def NoAllowanceKeyCollision
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) : Prop :=
+    (history : AccountedHistory cfg dp ca checkpoint future) : Prop :=
   (touchedAllowancePairs history).Pairwise fun p q =>
     p ≠ q →
       projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2
 
-instance {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+instance {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     Decidable (NoAllowanceKeyCollision history) := by
   unfold NoAllowanceKeyCollision
   infer_instance
@@ -539,9 +539,9 @@ private def hardenedOutflowGo (u : Adr) :
 hardened attribution witness, computed over the chronological attribution
 ledger of the history. -/
 def hardenedOutflow
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (u : Adr) : Nat :=
   hardenedOutflowGo u [] history.attributionLedger
 
@@ -578,15 +578,15 @@ def CountedFrame.authorizes (frame : CountedFrame) (u : Adr) : Bool :=
 by `u`, no allowance write by `u`, and no successful `permit` recovering to
 `u`. -/
 def NoAuthorizingActBy
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (u : Adr)
-    (history : AccountedHistory chainId dp ca checkpoint future) : Prop :=
+    (history : AccountedHistory cfg dp ca checkpoint future) : Prop :=
   ∀ frame ∈ history.attributionLedger, frame.authorizes u = false
 
-instance {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+instance {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} (u : Adr)
-    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history : AccountedHistory cfg dp ca checkpoint future) :
     Decidable (NoAuthorizingActBy u history) := by
   unfold NoAuthorizingActBy
   infer_instance
@@ -1428,9 +1428,9 @@ hypothesis itself: a history that touches the two fixture pairs and nothing
 else satisfies `NoAllowanceKeyCollision` by keccak evaluation, with no
 appeal to global key injectivity. -/
 theorem dirtyPair_noAllowanceKeyCollision
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} (u : Adr)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hledger : history.attributionLedger =
       [dirtyApproveFrame u dirtyOwnerWord fixtureSpenderWord,
         dirtyApproveFrame u cleanOwnerWord fixtureSpenderWord]) :
@@ -1445,9 +1445,9 @@ outright.  Mints to `u`, transfers to `u`, another holder's approve and spend,
 and a third party's flash settlement are all consistent with `u` never having
 authorized anything. -/
 theorem dormantLedger_noAuthorizingActBy
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} (other u w fl : Adr) (spW caWord : B256)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hledger : history.attributionLedger = dormantLedger other u w fl spW caWord)
     (hother : other ≠ u) (hw : w ≠ u) (hsp : spW.toAdr ≠ u) (hfl : fl ≠ u) :
     NoAuthorizingActBy u history := by
@@ -1459,9 +1459,9 @@ theorem dormantLedger_noAuthorizingActBy
 the same scenario and the corollary's dormancy premise is *refuted*, not
 merely unproved. -/
 theorem nonDormantLedger_not_noAuthorizingActBy
-    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} (other u w fl : Adr) (spW caWord owU spU : B256)
-    (history : AccountedHistory chainId dp ca checkpoint future)
+    (history : AccountedHistory cfg dp ca checkpoint future)
     (hledger : history.attributionLedger =
       nonDormantApproveFrameByU u owU spU :: dormantLedger other u w fl spW caWord) :
     ¬ NoAuthorizingActBy u history := by
