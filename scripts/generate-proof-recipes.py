@@ -18,6 +18,7 @@ import re
 import shutil
 import sys
 import tempfile
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
@@ -330,7 +331,13 @@ def declarations_in(path: Path) -> Set[str]:
 def lean_sources(root: Path, aggregate_raw: str = "Blanc.lean") -> List[Path]:
     try:
         paths: List[Path] = []
-        if aggregate_raw != "Blanc.lean" or "Blanc.lean" in os.listdir(str(root)):
+        root_names = os.listdir(str(root))
+        aggregate_alias = any(
+            unicodedata.normalize("NFC", name).casefold()
+            == unicodedata.normalize("NFC", aggregate_raw).casefold()
+            for name in root_names
+        )
+        if aggregate_raw != "Blanc.lean" or aggregate_raw in root_names or aggregate_alias:
             paths.append(resolve_source_file(
                 root, aggregate_raw, site="proof-recipe-root-aggregate"
             ))
@@ -984,6 +991,22 @@ def self_test(root: Path) -> None:
             "OK — proof recipe explicit module paths: 4/4 symbol, owner, "
             "canonical-example, and root-aggregate out-and-back controls live"
         )
+        alias_root = Path(directory) / "aggregate-alias"
+        (alias_root / "Blanc").mkdir(parents=True)
+        (alias_root / "Blanc" / "Inside.lean").write_text(
+            "def inside := True\n", encoding="utf-8"
+        )
+        (alias_root / "blanc.lean").write_text(
+            "import Blanc.Inside\n", encoding="utf-8"
+        )
+        try:
+            lean_sources(alias_root)
+        except RecipeError as error:
+            if "exact directory entry" not in str(error):
+                raise
+        else:
+            raise RecipeError("self-test root-aggregate wrong-case alias passed")
+        print("OK — proof recipe root aggregate: 1/1 wrong-case alias control live")
     if controls != 9:
         raise RecipeError(f"self-test accounting: expected 9 controls, ran {controls}")
 
