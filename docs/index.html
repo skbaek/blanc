@@ -67,7 +67,7 @@
       <div>
         <div class="term" id="heroterm"><span class="p">$</span> lake build
 <span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: 998/998 audited theorems depend on exactly their pinned axiom sets</span>
+<span class="ok">OK — axiom audit: 1069/1069 audited theorems depend on exactly their pinned axiom sets</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
         <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (latest run 2026-09-01): the
@@ -77,7 +77,7 @@
         <div class="pills">
           <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
           <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>998-theorem audit in CI</span>
+          <span class="pill"><span class="d"></span>1069-theorem audit in CI</span>
           <span class="pill">Jaune pinned by commit</span>
         </div>
       </div>
@@ -106,7 +106,9 @@
       equation at every reachable future, and every wei of the residual it grants is
       redemption-enabled through canonical
       <span class="mono">withdraw</span> and <span class="mono">withdrawTo</span> at both message and
-      Prague type-2 transaction altitude. For a funded code-free external holder with the canonical
+      selected-rule type-2 transaction altitude. Its public mainnet instances use Jaune’s configured
+      Prague → Osaka → BPO1 → BPO2 schedule, with BPO2 the current specialization and Prague the
+      retained compatibility corollary. For a funded code-free external holder with the canonical
       transaction fields, only recovery of its own signature remains to admit the transaction; no
       theorem manufactures that signature. Under one stated hash hypothesis, every nonzero
       permanent outflow in the full deployment window traces exactly to the holder’s own call, its
@@ -124,7 +126,7 @@
     <div class="factbar">
       <div class="fact"><span class="n">4</span>
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">998<span class="dimmer" style="font-size:1.05rem">/998</span></span>
+      <div class="fact"><span class="n">1069<span class="dimmer" style="font-size:1.05rem">/1069</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
       <div class="fact"><span class="n">4</span>
         <span class="l">contracts in — a WETH, a flash-mint token, a 27-selector WETH10, Lido’s CircuitBreaker — each with a page of receipts</span></div>
@@ -391,19 +393,21 @@
 
       <div class="thm" style="margin-top:26px">
         <span class="stamp">machine-checked</span>
-        <div class="head">Theorem (<span class="mono">deployment_reachable_future_dualSelector_redeemable</span>, Blanc/Weth10FutureRedeemable.lean).</div>
+        <div class="head">Theorem (<span class="mono">deployment_reachable_future_dualSelector_redeemable_mainnet</span>, Blanc/Weth10Mainnet.lean).</div>
         <p class="stmt">From a proved deployment of the exact compiled WETH10 runtime, any leg of valid
-          Prague blocks to a checkpoint, and any further leg to an arbitrary future snapshot, there is
-          an accounted history of the window carrying the dual-selector redemption guarantee below
-          for an arbitrary holder <span class="mono">u</span>.</p>
-<pre><span class="k">theorem</span> <span class="d">deployment_reachable_future_dualSelector_redeemable</span>
-    {chainId : <span class="t">UInt64</span>} {dp : <span class="t">DeployParams</span>} {ca u : <span class="t">Adr</span>}
+          blocks selected by Jaune’s configured mainnet schedule to a checkpoint, and any further
+          configured leg to an arbitrary future snapshot, there is an accounted history of the
+          window carrying the dual-selector redemption guarantee below for an arbitrary holder
+          <span class="mono">u</span>. The unsuffixed theorem has the same shape for arbitrary
+          <span class="mono">cfg</span>.</p>
+<pre><span class="k">theorem</span> <span class="d">deployment_reachable_future_dualSelector_redeemable_mainnet</span>
+    {dp : <span class="t">DeployParams</span>} {ca u : <span class="t">Adr</span>}
     {base deployed checkpoint future : <span class="t">BlockChain</span>}
-    (hroot : <span class="t">Weth10.DeploymentRoot</span> chainId base deployed dp ca)
-    (hcheckpoint : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId) deployed checkpoint)
-    (hfuture : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId) checkpoint future) :
+    (hroot : <span class="t">MainnetDeploymentRoot</span> base deployed dp ca)
+    (hcheckpoint : <span class="t">BlockChain.ReachUsing</span> mainnetChainConfig deployed checkpoint)
+    (hfuture : <span class="t">BlockChain.ReachUsing</span> mainnetChainConfig checkpoint future) :
     ∃ history, <span class="t">FutureDualSelectorRedemptionGuarantee</span>
-      chainId dp ca u checkpoint future history</pre>
+      mainnetChainConfig dp ca u checkpoint future history</pre>
       </div>
       <p class="cap"><b>Read the quantifiers</b> — <span class="mono">u</span> is <em>every</em> holder,
         not a specially chosen one. <span class="mono">ReachUsing</span> is Jaune’s configured-chain
@@ -412,10 +416,11 @@
         withdrawals stays below 2<sup>256</sup> wei. The history is <em>obtained from the
         reachability derivation</em>, not reconstructed from the endpoints — a logical guarantee
         about the window, not a trace extractor. The deployment root is no opaque axiom: from one
-        successful canonical creation-block transition through Jaune’s actual Prague block pipeline,
-        <span class="mono">DeploymentRoot</span> — receipt success, exact installed runtime, empty
-        storage — is derived, not assumed. And an all-holders sibling delivers one history carrying
-        the guarantee for every holder at once, without the dual-selector packaging.</p>
+        successful canonical creation-block transition through Jaune’s selected configured rules,
+        <span class="mono">DeploymentRoot cfg</span> — receipt success, exact installed runtime,
+        empty storage — is derived, not assumed. The public mainnet constructor selects BPO2. And
+        an all-holders sibling delivers one history carrying the guarantee for every holder at once,
+        without the dual-selector packaging.</p>
 
       <div class="grid2" style="margin-top:26px;align-items:start">
         <div class="panel">
@@ -450,8 +455,8 @@
         <div class="panel">
           <span class="tick">where it stops</span>
           <p class="dim" style="font-size:.93rem;margin-bottom:0">
-            The subject is the exact compiled Blanc runtime on a Prague-only configured chain, from
-            its proved deployment root — never the Solidity artifact deployed at
+            The subject is the exact compiled Blanc runtime on an explicit configured schedule,
+            from its proved deployment root — never the Solidity artifact deployed at
             <span class="mono">0xf4BB…8A9F</span>, which nothing here verifies. Attribution names
             the account whose recorded act the runtime accepted, not consent or intent: a phished
             <span class="mono">approve</span> and a relayed <span class="mono">permit</span> both
@@ -467,6 +472,17 @@
         </div>
       </div>
     </div>
+
+    <p class="note" style="margin-top:24px">
+      WETH10’s mainnet schedule is exact: Prague at Unix <span class="mono">1746612311</span>,
+      Osaka at <span class="mono">1764798551</span>, BPO1 at
+      <span class="mono">1765290071</span>, and BPO2 at
+      <span class="mono">1767747671</span>; BPO2 has been live on mainnet since 2026-01-07.
+      A later fork that changes only rule data Jaune already models is a pin bump and
+      re-verification with any new facts explicit. A fork that changes execution semantics, such
+      as Amsterdam gas metering or block-level access lists, changes Jaune itself and every Blanc
+      theorem is re-proved against it.
+    </p>
 
     <h3 class="subhead" style="margin-top:48px">Six more kinds <i>— still uncommon</i></h3>
     <div class="grid3" style="margin-top:16px">
@@ -507,11 +523,12 @@
         <h3>Creation, through the real pipeline</h3>
         <p class="dim" style="font-size:.93rem">
           WETH10’s deployment root is derived, not axiomatized: from one successful strict
-          singleton type-2 creation block through Jaune’s configured Prague transition, the proof
+          singleton type-2 creation block through Jaune’s selected configured transition, the proof
           reconstructs receipt success, exact installed runtime, empty storage, and the crossed
           request-system calls — establishing the
           <span class="mono">DeploymentRoot</span> the guarantee above stands on, with the creation
-          message’s 1,264,071-gas cost as a closed form.
+          message’s 1,264,071-gas cost as a closed form. The public current-mainnet root is witnessed
+          by a committed BPO2 block and replayed through Jaune; the Prague form remains a corollary.
         </p>
       </div>
       <div class="panel">
@@ -1267,7 +1284,7 @@
 <span class="p">$</span> scripts/check.sh --no-build
 <span class="p">$</span> scripts/check-claims.sh</div>
         <p class="dim" style="font-size:.88rem;margin:14px 0 0">
-          <span class="mono">check.sh</span> audits all 998 theorems against their pinned axiom
+          <span class="mono">check.sh</span> audits all 1069 theorems against their pinned axiom
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of

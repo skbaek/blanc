@@ -48,12 +48,16 @@ The compatibility claim deliberately excludes:
   shape, and bytecode identity;
 - exact gas, access lists, or equality of callback-observed `gasleft()`;
 - liveness under inadequate gas and deployed-vs-Blanc liveness/gas parity. The
-  Blanc-only `TH-redeem` result instead uses a named conservative Prague bound;
+  Blanc-only `TH-redeem` result instead uses Jaune's modeled global fee
+  schedule and an explicit selected-rule EIP-7825 cap;
 - guarantees that arbitrary hostile callback code returns successfully,
   permits withdrawal, or establishes another useful postcondition. The
   Blanc-only constructive redemption theorem is deliberately narrower:
   canonical `withdraw`/`withdrawTo`, `Stable`, and a nonzero code-free
-  Prague-nonprecompile recipient under an explicit fresh execution envelope.
+  recipient that is not a precompile under the selected rules, under an
+  explicit fresh execution envelope. The public mainnet instance ranges over
+  Jaune's configured Prague → Osaka → BPO1 → BPO2 schedule; Prague-only is
+  retained as a compatibility corollary.
   The present verification program also makes no no-borrower-premise gas-
   settlement theorem for arbitrary receiver code; no such theorem is claimed;
 - source-initcode, CREATE2-address, and deployment-gas equality; and

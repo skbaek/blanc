@@ -91,19 +91,21 @@
 
     <div class="thm" style="margin-top:26px">
       <span class="stamp">machine-checked</span>
-      <div class="head">Theorem (<span class="mono">deployment_reachable_future_dualSelector_redeemable</span>, Blanc/Weth10FutureRedeemable.lean).</div>
+      <div class="head">Theorem (<span class="mono">deployment_reachable_future_dualSelector_redeemable_mainnet</span>, Blanc/Weth10Mainnet.lean).</div>
       <p class="stmt">From a proved deployment of the exact compiled WETH10 runtime, any leg of valid
-        Prague blocks to a checkpoint, and any further leg to an arbitrary future snapshot, there is
-        an accounted history of the window carrying the dual-selector redemption guarantee below
-        for an arbitrary holder <span class="mono">u</span>.</p>
-<pre><span class="k">theorem</span> <span class="d">deployment_reachable_future_dualSelector_redeemable</span>
-    {chainId : <span class="t">UInt64</span>} {dp : <span class="t">DeployParams</span>} {ca u : <span class="t">Adr</span>}
+        blocks selected by Jaune’s configured mainnet schedule to a checkpoint, and any further
+        configured leg to an arbitrary future snapshot, there is an accounted history of the
+        window carrying the dual-selector redemption guarantee below for an arbitrary holder
+        <span class="mono">u</span>. The unsuffixed theorem has the same shape for arbitrary
+        <span class="mono">cfg</span>.</p>
+<pre><span class="k">theorem</span> <span class="d">deployment_reachable_future_dualSelector_redeemable_mainnet</span>
+    {dp : <span class="t">DeployParams</span>} {ca u : <span class="t">Adr</span>}
     {base deployed checkpoint future : <span class="t">BlockChain</span>}
-    (hroot : <span class="t">Weth10.DeploymentRoot</span> chainId base deployed dp ca)
-    (hcheckpoint : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId) deployed checkpoint)
-    (hfuture : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId) checkpoint future) :
+    (hroot : <span class="t">MainnetDeploymentRoot</span> base deployed dp ca)
+    (hcheckpoint : <span class="t">BlockChain.ReachUsing</span> mainnetChainConfig deployed checkpoint)
+    (hfuture : <span class="t">BlockChain.ReachUsing</span> mainnetChainConfig checkpoint future) :
     ∃ history, <span class="t">FutureDualSelectorRedemptionGuarantee</span>
-      chainId dp ca u checkpoint future history</pre>
+      mainnetChainConfig dp ca u checkpoint future history</pre>
     </div>
     <p class="cap"><b>Read the quantifiers</b> — <span class="mono">u</span> is <em>every</em>
       holder, not a specially chosen one. <span class="mono">ReachUsing</span> is Jaune’s
@@ -195,8 +197,10 @@
         post-system message rather than assuming it, and proves the collision branch, receipt
         success, the exact installed runtime, empty storage, and the deployed valid context, with
         the creation message’s 1,264,071-gas cost as a closed form. The result is deliberately
-        specific: one strict singleton Prague-only anchor — no factory, CREATE2, or co-block
-        shapes — and it does not turn the finite deployment fixture into a proof.</p>
+        specific in shape: one strict singleton anchor — no factory, CREATE2, or co-block shapes.
+        The theorem itself is schedule-parametric; the public mainnet constructor selects BPO2,
+        and the finite BPO2 deployment fixture witnesses that specialization without becoming a
+        proof premise.</p>
     </div>
     <div class="dev">
       <div class="devhead"><h3>And the everyone-out run — is that a real bank run?</h3><span class="devtag">pushback</span></div>
@@ -211,8 +215,13 @@
 
     <p class="note" style="margin-top:26px">
       Boundary, stated early: every theorem above is about the exact compiled Blanc runtime on a
-      Prague-only configured chain, from its proved deployment root — never the Solidity artifact
-      at <span class="mono">0xf4BB…8A9F</span>, which nothing here verifies. The statements in
+      configured chain, from its proved deployment root — never the Solidity artifact at
+      <span class="mono">0xf4BB…8A9F</span>, which nothing here verifies. The public mainnet
+      instances use Jaune’s Prague (<span class="mono">1746612311</span>) → Osaka
+      (<span class="mono">1764798551</span>) → BPO1 (<span class="mono">1765290071</span>) →
+      BPO2 (<span class="mono">1767747671</span>) activation schedule; BPO2 has been live on mainnet
+      since 2026-01-07, while Prague remains an audited compatibility corollary and the historical
+      executable lane. The statements in
       <span class="mono">Weth10*.lean</span> are the authority on their own premises, and the full
       non-claim register — no semantic equivalence, no malformed-calldata closure, no key custody
       or inclusion, no gas, storage, or codehash parity — lives in
@@ -251,7 +260,13 @@
           between the paired mint and settlement burn.
         </p>
         <p class="dim">
-          Two further gates execute what the theorems then quantify.
+          The current-mainnet witness is
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth10-current-mainnet.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-weth10-current-mainnet.sh</span></a>:
+          one fresh BPO2 creation block at the Lean-pinned timestamp, the type-2 redemption
+          sequence, the type-4 authorization mutation, and 28 ordinary selector-plus-receive rows.
+          It compares status, receipt gas, logs, projected storage, and fee-normalized ETH and
+          replays all three committed blocks through Jaune at BPO2. Prague remains the historical
+          evidence lane. In that preserved lane,
           <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth10-deployment.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-weth10-deployment.sh</span></a>
           generates a fresh strict singleton type-2 creation block in memory, checks sixteen
           semantic assertions — successful receipt, exact installed runtime among them — and
@@ -388,11 +403,19 @@ canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing 
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           One floor is a fact about the bytes: both runtime and initcode contain
           <span class="mono">PUSH0</span>, so Shanghai is the minimum execution fork, and the
-          executable evidence is specifically under the pinned Prague EELS. Neither fact implies
-          deployability on earlier forks, and the page will not imply it either.
+          executable specialization is BPO2 on Jaune’s current-mainnet lane, with the pinned Prague
+          EELS retained as historical evidence. Neither fact implies deployability on earlier
+          forks, and the page will not imply it either.
         </p>
       </div>
     </div>
+    <p class="note" style="margin-top:24px">
+      Fork boundary: a future fork that changes only rule data Jaune already models — blob
+      parameters, the precompile set, transaction/block/code limits, or opcode activation — is a
+      Jaune pin bump and re-verification, with any new facts stated as explicit premises. A fork
+      that changes execution semantics, such as Amsterdam gas metering or block-level access
+      lists, changes Jaune itself and every Blanc theorem is re-proved against that change.
+    </p>
   </div>
 </section>
 
