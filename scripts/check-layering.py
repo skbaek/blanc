@@ -271,6 +271,7 @@ CONTRACTS = {
                             "ProrataWethVaultArtifact",
                             "ProrataWethVaultArithmetic",
                             "ProrataWethVaultArithmeticExec",
+                            "ProrataWethVaultCapacities",
                             "ProrataWethVaultConversions",
                             "ProrataWethVaultFunctional",
                             "ProrataWethVaultViews"],
@@ -372,6 +373,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultStaging",
     "Composition.ProrataWethVaultViews",
     "Composition.ProrataWethVaultConversions",
+    "Composition.ProrataWethVaultCapacities",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

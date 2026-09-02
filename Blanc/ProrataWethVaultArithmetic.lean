@@ -60,6 +60,48 @@ def maxRedeemN (balance : Nat) : Nat := balance
 def maxWithdrawN (balance assets supply : Nat) : Nat :=
   convertToAssetsN balance assets supply
 
+/-- Exact public `maxMint` result, including the frozen zero-receiver and
+unstable-supply policy. -/
+def maxMintViewN (receiver assets supply : Nat) : Nat :=
+  if receiver = 0 then 0
+  else if maxSupplyN < supply then 0
+  else maxMintN assets supply
+
+/-- Exact public `maxDeposit` result, including the frozen zero-receiver and
+unstable-supply policy. -/
+def maxDepositViewN (receiver assets supply : Nat) : Nat :=
+  if receiver = 0 then 0
+  else if maxSupplyN < supply then 0
+  else maxDepositN assets supply
+
+/-- Exact public `maxWithdraw` result.  The arithmetic claim is saturated at
+one EVM word until the reachable-ledger premise `balance ≤ supply` removes
+that saturation. -/
+def maxWithdrawViewN (balance assets supply : Nat) : Nat :=
+  if maxSupplyN < supply then 0
+  else min maxWordN (maxWithdrawN balance assets supply)
+
+theorem shareRoomN_lt_wordModulusN (supply : Nat) :
+    shareRoomN supply < wordModulusN := by
+  unfold shareRoomN maxSupplyN maxWordN
+  have modulusPositive := wordModulusN_pos
+  omega
+
+theorem shareRoomN_add_one_lt_wordModulusN (supply : Nat) :
+    shareRoomN supply + 1 < wordModulusN := by
+  have roomLe : shareRoomN supply ≤ maxSupplyN := by
+    unfold shareRoomN
+    exact Nat.sub_le _ _
+  have maxSupplyPlusOffset : maxSupplyN + offsetN = maxWordN := by
+    unfold maxSupplyN
+    exact Nat.sub_add_cancel (by
+      unfold maxWordN wordModulusN offsetN
+      norm_num)
+  have offsetPositive : 0 < offsetN := by decide
+  have roomPlusOneLe : shareRoomN supply + 1 ≤ maxWordN := by
+    omega
+  exact roomPlusOneLe.trans_lt maxWordN_lt_wordModulusN
+
 theorem virtualShares_toNat : virtualShares.toNat = offsetN := by
   decide +kernel
 
@@ -237,6 +279,22 @@ theorem le_maxMintN_iff (shares assets supply : Nat) :
 theorem maxMintN_le_shareRoom (assets supply : Nat) :
     maxMintN assets supply ≤ shareRoomN supply :=
   (le_maxMintN_iff (maxMintN assets supply) assets supply).mp le_rfl |>.1
+
+/-- Saturating the arithmetic asset cap at the largest word before taking
+the share-room minimum does not change `maxMint`: stable or unstable, the
+declared room itself is already no larger than one word. -/
+theorem min_shareRoomN_min_maxWord (supply cap : Nat) :
+    min (shareRoomN supply) (min maxWordN cap) =
+      min (shareRoomN supply) cap := by
+  have roomLe : shareRoomN supply ≤ maxWordN := by
+    unfold shareRoomN maxSupplyN
+    omega
+  calc
+    min (shareRoomN supply) (min maxWordN cap) =
+        min (min (shareRoomN supply) maxWordN) cap :=
+      (Nat.min_assoc _ _ _).symm
+    _ = min (shareRoomN supply) cap := by
+      rw [Nat.min_eq_left roomLe]
 
 theorem previewMintN_maxMintN_le_maxWord (assets supply : Nat) :
     previewMintN (maxMintN assets supply) assets supply ≤ maxWordN :=

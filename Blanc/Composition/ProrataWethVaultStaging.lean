@@ -1,5 +1,6 @@
 import Blanc.CompiledWalkInversion
 import Blanc.CompiledFixedInvariance
+import Blanc.MemoryImage
 import Blanc.Composition.ProrataWethVaultEffects
 import Blanc.Ladder
 
@@ -161,8 +162,8 @@ theorem withdrawSelector_not_staged :
 
 /-! ## Proof-carrying source memory -/
 
-def MemoryImage (devm : Devm) (image : Bytes) : Prop :=
-  Mem.Wf devm.memory ∧ Mem.Reads devm.memory image
+abbrev MemoryImage (devm : Devm) (image : Bytes) : Prop :=
+  Blanc.MemImage devm image
 
 def ImageWordAt (image : Bytes) (word : B256) (value : B256) : Prop :=
   image.sliceD (word * 32).toNat 32 0 = value.toBytes
@@ -394,6 +395,34 @@ theorem balanceOfStaging_boundary
         sevm.currentTarget.toB256
   · rw [← finalMemory]
     exact wf4
+
+/-- The balance-query staging prefix writes only the two calldata words below
+byte offset `64`.  Any selected word at or above that boundary survives to
+the STATICCALL edge. -/
+theorem _root_.Blanc.MemWordAt.acrossBalanceOfStaging
+    {sevm : Sevm} {entry callPre : Devm} {offset : Nat} {word : B256}
+    (afterCalldata : 64 ≤ offset)
+    (run : Line.Run sevm entry balanceOfStaging callPre)
+    (window : MemWordAt entry offset word) :
+    MemWordAt callPre offset word := by
+  simp only [balanceOfStaging, List.append_assoc] at run
+  obtain ⟨s1, r1, run⟩ :=
+    of_run_append
+      [pushB256 Blanc.ProrataWethVault.wethBalanceOfSelector] run
+  have w1 := window.acrossLine (by line_inv) r1
+  obtain ⟨s2, r2, run⟩ := of_run_append (mstoreAt 0) run
+  have w2 := w1.acrossMstoreAt (Or.inr (by
+    change 32 ≤ offset
+    omega)) r2
+  obtain ⟨s3, r3, run⟩ := of_run_append [address] run
+  have w3 := w2.acrossLine (by line_inv) r3
+  obtain ⟨s4, r4, run⟩ := of_run_append (mstoreAt 1) run
+  have w4 := w3.acrossMstoreAt (Or.inr (by
+    change 64 ≤ offset
+    exact afterCalldata)) r4
+  exact w4.acrossLine (by
+    simp only [pushList, List.map]
+    line_inv) run
 
 theorem transferFromStaging_boundary
     {sevm : Sevm} {entry callPre : Devm} {image : Bytes}
@@ -1102,6 +1131,8 @@ theorem checkedBalanceOf_success
       bodyPre.state = callPost.state ∧
       bodyPre.logs = callPost.logs ∧
       Mem.Wf bodyPre.memory ∧
+      (∀ {offset : Nat} {w : B256}, MemWordAt callPost offset w →
+        MemWordAt bodyPre offset w) ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨status, statusTail, sizePre, statusStack, statusNonzero,
     sizeState, sizeLogs, sizeMemory, sizeReturnData, sizeRun⟩ :=
@@ -1150,9 +1181,16 @@ theorem checkedBalanceOf_success
     (Ninst.Hinv.inv (f := Devm.logs)
       (Ninst.Run.of_runCompiled mloadRun)).symm.trans
         (pushZero.logs.symm.trans (decodeLogs.trans sizeLogs))
+  have preservesWindow : ∀ {offset : Nat} {w : B256},
+      MemWordAt callPost offset w → MemWordAt bodyPre offset w := by
+    intro offset w window
+    obtain ⟨loadedOffset, -, loadMemory, -⟩ :=
+      of_run_mload_val (Ninst.Run.of_runCompiled mloadRun)
+    apply window.extend
+    rw [loadMemory, mloadMemory]
   refine ⟨word, bodyPre,
     occurrence.success_of_post successFlag outputEq, outputEq, ?_,
-    bodyState, bodyLogs, bodyWf, bodyRun⟩
+    bodyState, bodyLogs, bodyWf, preservesWindow, bodyRun⟩
   exact wordPrefix
 
 /-- A successful mutating WETH suffix proves both layers of the vault's
@@ -1280,6 +1318,8 @@ theorem readTotalAssets_exactEffect
             sevm.currentTarget.toB256).toBytes ∧
       word :: [] <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
+      (∀ {offset : Nat} {w : B256}, 64 ≤ offset →
+        MemWordAt entry offset w → MemWordAt bodyPre offset w) ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨gasWord, rest, stack, -, callPreWf⟩ :=
     balanceOfStaging_boundary memory staging
@@ -1324,15 +1364,31 @@ theorem readTotalAssets_exactEffect
     rw [returnDataLength]
     decide +kernel
   obtain ⟨word, bodyPre, _, returnedWord, wordPrefix, bodyState,
-      checkedLogs, bodyWf, bodyRun⟩ :=
+      checkedLogs, bodyWf, checkedPreservesWindow, bodyRun⟩ :=
     checkedBalanceOf_success occurrence stack crossing returndataBound
       callPostWf suffix
   have bodyStorage : Devm.getStor bodyPre = Devm.getStor callPre :=
     (funext (getStor_eq_of_state_eq bodyState)).trans storage
   have bodyLogs : bodyPre.logs = callPre.logs :=
     checkedLogs.trans logs
+  have preservesWindow : ∀ {offset : Nat} {w : B256}, 64 ≤ offset →
+      MemWordAt entry offset w → MemWordAt bodyPre offset w := by
+    intro offset w afterCalldata window
+    have callPreWindow := window.acrossBalanceOfStaging afterCalldata staging
+    have operandPrefix :
+        gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest <<+
+          callPre.stack := by
+      rw [stack]
+      exact ⟨[], by simp [Split]⟩
+    have callPostWindow := callPreWindow.acrossStaticcall
+      (by
+        change 32 ≤ offset
+        omega)
+      operandPrefix (Ninst.Run.of_runCompiled crossing)
+    exact checkedPreservesWindow callPostWindow
   exact ⟨word, bodyPre, storage, logs, bodyStorage, bodyLogs,
-    returnedWord.symm.trans output, wordPrefix, bodyWf, bodyRun⟩
+    returnedWord.symm.trans output, wordPrefix, bodyWf, preservesWindow,
+    bodyRun⟩
 
 /-- A successful source-level delegated transfer executes exact WETH
 `transferFrom(owner,vault,assets)` and exposes its exact balance-row movement

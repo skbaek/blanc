@@ -76,7 +76,7 @@ theorem totalAssets_body_effect
     rw [← congrFun stagingCode wethAccount]
     exact config.code
   obtain ⟨word, returnPre, -, -, bodyStorage, bodyLogs, returnedWord,
-      wordPrefix, -, returnRun⟩ :=
+      wordPrefix, -, -, returnRun⟩ :=
     readTotalAssets_exactEffect callConfig memory staging resources.1
       (resources.2 callPre staging) crossing suffix
   have stagingStorage : Devm.getStor entry = Devm.getStor callPre :=

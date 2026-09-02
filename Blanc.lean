@@ -299,6 +299,7 @@ import Blanc.ProrataWethVaultArtifact
 import Blanc.ProrataWethVaultArithmetic
 import Blanc.ProrataWethVaultArithmeticExec
 import Blanc.ProrataWethVaultConversions
+import Blanc.ProrataWethVaultCapacities
 import Blanc.ProrataWethVaultFunctional
 import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary
@@ -306,6 +307,7 @@ import Blanc.Composition.ProrataWethVaultEffects
 import Blanc.Composition.ProrataWethVaultStaging
 import Blanc.Composition.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultConversions
+import Blanc.Composition.ProrataWethVaultCapacities
 
 import Blanc.DripStackSafetyCertificate
 

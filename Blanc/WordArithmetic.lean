@@ -909,6 +909,36 @@ theorem ceilDiv_lt_wordModulusN_of_floor_lt
     unfold maxWordN wordModulusN at *
     omega
 
+/-- Comparing a fitting natural against an EVM word and selecting the smaller
+word implements natural-number `min` exactly.  This is the bridge used by
+compiled capacity helpers whose second candidate is already represented as a
+word. -/
+theorem minWord_eq_toB256_min
+    {a : Nat} (aFits : a < wordModulusN) (b : B256) :
+    (if Nat.toB256 a < b then Nat.toB256 a else b) =
+      Nat.toB256 (min a b.toNat) := by
+  by_cases less : a < b.toNat
+  · have wordLess : Nat.toB256 a < b := by
+      rw [B256.lt_iff_toNat_lt_toNat,
+        B256.toNat_toB256_of_lt (by simpa [wordModulusN] using aFits)]
+      exact less
+    rw [if_pos wordLess, Nat.min_eq_left (Nat.le_of_lt less)]
+  · have wordNotLess : ¬ Nat.toB256 a < b := by
+      rw [B256.lt_iff_toNat_lt_toNat,
+        B256.toNat_toB256_of_lt (by simpa [wordModulusN] using aFits)]
+      exact less
+    rw [if_neg wordNotLess, Nat.min_eq_right (Nat.le_of_not_gt less),
+      Jaune.toB256_toNat]
+
+/-- Saturating a natural at the largest EVM word before conversion makes the
+word round-trip exact.  Capacity endpoints use this bridge to expose their
+unbounded arithmetic result without a hidden magnitude premise. -/
+theorem toNat_toB256_min_maxWord (n : Nat) :
+    (Nat.toB256 (min maxWordN n)).toNat = min maxWordN n := by
+  apply B256.toNat_toB256_of_lt
+  exact (Nat.min_le_left maxWordN n).trans_lt
+    maxWordN_lt_wordModulusN
+
 /-- A staged floor quotient and remainder implement `ceilDiv n d - 1` when
 the dividend and divisor are positive and the floor quotient fits in one
 word.  Positivity is essential in the exact-division branch: it rules out the
