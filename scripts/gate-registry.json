@@ -2783,7 +2783,7 @@
       },
       "kind": "cacheable",
       "note": "The focused Lean root supplies Lake's transitive depHash for the program, generated literal, artifact pins, toolchain, and Jaune dependency; the static checker independently binds the expected ABI, storage/configuration, literal shape, size, and digest.",
-      "order": 61,
+      "order": 62,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2816,11 +2816,11 @@
       },
       "kind": "cacheable",
       "note": "The focused Lean root supplies Lake's transitive depHash for the exact WETH boundary, effects and source-staging owners. The static checker directly reads the root import and COMPOSITION table, while the registered layering dependency supplies the independent total-architecture verdict. Optional --falsify mutants are a hard-hold campaign and are deliberately outside the cached default command.",
-      "order": 62,
+      "order": 63,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — PRORATA WETH vault boundary: 3 exact child forms; 14 G3 headline axiom owners; whole-source call closure and no-alias pins green$"
+          "^OK — PRORATA WETH vault boundary: 3 exact child forms; 16 G3 headline axiom owners; whole-source call closure and no-alias pins green$"
         ]
       }
     }

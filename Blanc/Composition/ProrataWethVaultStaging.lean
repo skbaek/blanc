@@ -1,4 +1,5 @@
 import Blanc.CompiledWalkInversion
+import Blanc.CompiledFixedInvariance
 import Blanc.Composition.ProrataWethVaultEffects
 import Blanc.Ladder
 
@@ -21,6 +22,7 @@ namespace Blanc.Composition.ProrataWethVault
 
 open Jaune
 open Jaune.Ninst Ninst
+open scoped LogOutputHinv
 
 namespace Source
 
@@ -67,7 +69,7 @@ private def exactWethSourceBody (history : Line) : Func → Bool
   | .next instruction tail =>
       let allowed :=
         match instruction with
-        | .exec .statcall => lineCodeEndsWith history balanceOfStaging
+        | .exec .staticcall => lineCodeEndsWith history balanceOfStaging
         | .exec .call =>
             lineCodeEndsWith history
                 (transferFromStaging Blanc.ProrataWethVault.amountWord) ||
@@ -102,10 +104,10 @@ theorem vault_externalWethCallSites_complete :
 theorem readTotalAssets_sourceShape (body : Func) :
     Blanc.ProrataWethVault.readTotalAssets body =
       balanceOfStaging +++
-        (statcall ::: iszero :::
-          (Func.rev <?>
-            (pushB256 32 ::: retdatasize ::: eq ::: iszero :::
-              (Func.rev <?> (pushB256 0 ::: mload ::: body))))) := by
+        (staticcall ::: iszero :::
+          (Func.revert <?>
+            (pushB256 32 ::: returndatasize ::: eq ::: iszero :::
+              (Func.revert <?> (pushB256 0 ::: mload ::: body))))) := by
   rfl
 
 theorem callWethTransferFrom_sourceShape
@@ -114,7 +116,7 @@ theorem callWethTransferFrom_sourceShape
         (Blanc.ProrataWethVault.loadWord assetsWord) body =
       transferFromStaging assetsWord +++
         (call ::: iszero :::
-          (Func.rev <?>
+          (Func.revert <?>
             Blanc.ProrataWethVault.requireCanonicalWethTrue body)) := by
   rfl
 
@@ -125,7 +127,7 @@ theorem callWethTransfer_sourceShape
         (Blanc.ProrataWethVault.loadWord assetsWord) body =
       transferStaging receiverWord assetsWord +++
         (call ::: iszero :::
-          (Func.rev <?>
+          (Func.revert <?>
             Blanc.ProrataWethVault.requireCanonicalWethTrue body)) := by
   rfl
 
@@ -302,7 +304,8 @@ theorem balanceOfStaging_boundary
       callPre.stack =
         gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest ∧
       (callPre.memory.read 28 36).1 =
-        balanceOfCalldata sevm.currentTarget := by
+        balanceOfCalldata sevm.currentTarget ∧
+      Mem.Wf callPre.memory := by
   obtain ⟨wf0, reads0⟩ := memory
   simp only [balanceOfStaging, List.append_assoc] at run
   obtain ⟨s1, r1, run⟩ :=
@@ -379,7 +382,7 @@ theorem balanceOfStaging_boundary
   have finalReads : Mem.Reads callPre.memory staged := by
     rw [← finalMemory]
     exact reads4
-  refine ⟨gasWord, rest, ?_, ?_⟩
+  refine ⟨gasWord, rest, ?_, ?_, ?_⟩
   · unfold Split at stack
     simpa only [wethAccount_toB256, List.cons_append,
       List.nil_append] using stack
@@ -389,6 +392,8 @@ theorem balanceOfStaging_boundary
       selectorOneWordImage image
         Blanc.ProrataWethVault.wethBalanceOfSelector
         sevm.currentTarget.toB256
+  · rw [← finalMemory]
+    exact wf4
 
 theorem transferFromStaging_boundary
     {sevm : Sevm} {entry callPre : Devm} {image : Bytes}
@@ -652,12 +657,12 @@ theorem readTotalAssets_trace
       (Blanc.ProrataWethVault.readTotalAssets body) execution) :
     ∃ callPre callPost,
       Line.Run sevm entry balanceOfStaging callPre ∧
-      Ninst.RunCompiled sevm callPre statcall callPost ∧
+      Ninst.RunCompiled sevm callPre staticcall callPost ∧
       Func.RunCompiledTo fs sevm callPost
         (iszero :::
-          (Func.rev <?>
-            (pushB256 32 ::: retdatasize ::: eq ::: iszero :::
-              (Func.rev <?> (pushB256 0 ::: mload ::: body))))) execution := by
+          (Func.revert <?>
+            (pushB256 32 ::: returndatasize ::: eq ::: iszero :::
+              (Func.revert <?> (pushB256 0 ::: mload ::: body))))) execution := by
   rw [readTotalAssets_sourceShape] at run
   obtain ⟨callPre, staging, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨callPost, crossing, suffix⟩ := runCompiledTo_next_inv run
@@ -674,7 +679,7 @@ theorem callWethTransferFrom_trace
       Ninst.RunCompiled sevm callPre call callPost ∧
       Func.RunCompiledTo fs sevm callPost
         (iszero :::
-          (Func.rev <?>
+          (Func.revert <?>
             Blanc.ProrataWethVault.requireCanonicalWethTrue body))
         execution := by
   rw [callWethTransferFrom_sourceShape] at run
@@ -695,7 +700,7 @@ theorem callWethTransfer_trace
       Ninst.RunCompiled sevm callPre call callPost ∧
       Func.RunCompiledTo fs sevm callPost
         (iszero :::
-          (Func.rev <?>
+          (Func.revert <?>
             Blanc.ProrataWethVault.requireCanonicalWethTrue body))
         execution := by
   rw [callWethTransfer_sourceShape] at run
@@ -739,10 +744,10 @@ theorem balanceOfStaging_occurrence
     (staging : Line.Run sevm entry balanceOfStaging callPre)
     (depth : sevm.depth ≠ 0)
     (gasAvailable : StaticGasAvailable callPre 36)
-    (crossing : Ninst.RunCompiled sevm callPre statcall callPost) :
-    ExactWethChildOccurrence sevm callPre callPost statcall
+    (crossing : Ninst.RunCompiled sevm callPre staticcall callPost) :
+    ExactWethChildOccurrence sevm callPre callPost staticcall
       (balanceOfCalldata sevm.currentTarget) true := by
-  obtain ⟨gasWord, rest, stack, window⟩ :=
+  obtain ⟨gasWord, rest, stack, window, -⟩ :=
     balanceOfStaging_boundary memory staging
   apply exactWethStatcallOccurrence_of_runCompiled config stack window depth
   · exact gasAvailable gasWord rest stack
@@ -810,10 +815,10 @@ private theorem iszeroRun_shape
   exact ⟨word, tail, popped, pushed, diff.memory.symm,
     diff.returnData.symm⟩
 
-private theorem rev_not_ok
+private theorem revert_not_ok
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
-    (run : Func.RunCompiledTo fs sevm pre Func.rev (.ok final)) : False := by
-  rcases runCompiledTo_rev_inv run with ⟨_, impossible, -⟩
+    (run : Func.RunCompiledTo fs sevm pre Func.revert (.ok final)) : False := by
+  rcases runCompiledTo_revert_inv run with ⟨_, impossible, -⟩
   cases impossible
 
 /-- A successful source suffix after a CALL-family instruction cannot have
@@ -823,10 +828,12 @@ retained-child relation below supplies the EVM's stronger `{0,1}` fact. -/
 theorem checkedCall_status_nonzero
     {fs : List Func} {sevm : Sevm} {callPost final : Devm} {body : Func}
     (run : Func.RunCompiledTo fs sevm callPost
-      (iszero ::: (Func.rev <?> body)) (.ok final)) :
+      (iszero ::: (Func.revert <?> body)) (.ok final)) :
     ∃ (status : B256) (tail : List B256) (bodyPre : Devm),
       callPost.stack = status :: tail ∧
       status ≠ 0 ∧
+      bodyPre.state = callPost.state ∧
+      bodyPre.logs = callPost.logs ∧
       bodyPre.memory = callPost.memory ∧
       bodyPre.returnData = callPost.returnData ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
@@ -844,10 +851,16 @@ theorem checkedCall_status_nonzero
       subst statusZero
       rw [B256.eqCheck, if_pos rfl] at flagZero
       exact B256.zero_ne_one flagZero.symm
+    have zeroSource := Ninst.Run.of_runCompiled zeroRun
+    have bodyState : bodyPre.state = callPost.state :=
+      ((Ninst.Hinv.inv (f := Devm.state) zeroSource).trans pop.state).symm
+    have bodyLogs : bodyPre.logs = callPost.logs :=
+      ((Ninst.Hinv.inv (f := Devm.logs) zeroSource).trans pop.logs).symm
     exact ⟨status, tail, bodyPre, callStack, statusNonzero,
+      bodyState, bodyLogs,
       pop.memory.symm.trans branchMemory,
       pop.returnData.symm.trans branchReturnData, bodyRun⟩
-  · exact (rev_not_ok revertRun).elim
+  · exact (revert_not_ok revertRun).elim
 
 /-- The retained EVM call flag is exactly `1` once the source has ruled out
 zero.  The proof opens the actual child occurrence; it does not assume a token
@@ -881,10 +894,12 @@ private theorem exactSizeGuard_of_ok
     {fs : List Func} {sevm : Sevm} {pre final : Devm} {body : Func}
     (returndataBound : pre.returnData.length < 2 ^ 256)
     (run : Func.RunCompiledTo fs sevm pre
-      (pushB256 32 ::: retdatasize ::: eq ::: iszero :::
-        (Func.rev <?> body)) (.ok final)) :
+      (pushB256 32 ::: returndatasize ::: eq ::: iszero :::
+        (Func.revert <?> body)) (.ok final)) :
     pre.returnData.length = 32 ∧
       ∃ bodyPre,
+        bodyPre.state = pre.state ∧
+        bodyPre.logs = pre.logs ∧
         bodyPre.memory = pre.memory ∧
         bodyPre.returnData = pre.returnData ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
@@ -901,7 +916,7 @@ private theorem exactSizeGuard_of_ok
   have push32 := of_run_pushB256 (Ninst.Run.of_runCompiled q1)
   have p1 : (32 : B256) :: [] <<+ s1.stack :=
     prefix_of_push push32 nil_pref
-  have returnSize := of_run_retdatasize_val (Ninst.Run.of_runCompiled q2)
+  have returnSize := of_run_returndatasize_val (Ninst.Run.of_runCompiled q2)
   rw [← push32.returnData] at returnSize
   have p2 : pre.returnData.length.toB256 :: 32 :: [] <<+ s2.stack :=
     prefix_of_push returnSize p1
@@ -925,7 +940,26 @@ private theorem exactSizeGuard_of_ok
         exact (B256.zero_ne_one testZero.symm).elim
     have sizeNat := congrArg B256.toNat sizeWord
     rw [B256.toNat_toB256_of_lt returndataBound] at sizeNat
-    refine ⟨sizeNat, bodyPre, ?_, ?_, bodyRun⟩
+    have prefixState : pre.state = bodyPre.state := by
+      calc
+        pre.state = s1.state := Ninst.Hinv.inv
+          (Ninst.Run.of_runCompiled q1)
+        _ = s2.state := returnSize.state
+        _ = s3.state := Ninst.Hinv.inv (Ninst.Run.of_runCompiled q3)
+        _ = branchPre.state := Ninst.Hinv.inv
+          (Ninst.Run.of_runCompiled q4)
+        _ = bodyPre.state := pop.state
+    have prefixLogs : pre.logs = bodyPre.logs := by
+      calc
+        pre.logs = s1.logs := Ninst.Hinv.inv
+          (Ninst.Run.of_runCompiled q1)
+        _ = s2.logs := Ninst.Hinv.inv (Ninst.Run.of_runCompiled q2)
+        _ = s3.logs := Ninst.Hinv.inv (Ninst.Run.of_runCompiled q3)
+        _ = branchPre.logs := Ninst.Hinv.inv
+          (Ninst.Run.of_runCompiled q4)
+        _ = bodyPre.logs := pop.logs
+    refine ⟨sizeNat, bodyPre, prefixState.symm, prefixLogs.symm,
+      ?_, ?_, bodyRun⟩
     · exact pop.memory.symm.trans
         (q4Memory.trans
           ((Ninst.Hinv.inv (f := Devm.memory)
@@ -935,7 +969,7 @@ private theorem exactSizeGuard_of_ok
         (q4ReturnData.trans
           (q3ReturnData.trans
             (returnSize.returnData.symm.trans push32.returnData.symm)))
-  · exact (rev_not_ok revertRun).elim
+  · exact (revert_not_ok revertRun).elim
 
 /-! ## The 32-byte return window copied by CALL and STATICCALL -/
 
@@ -995,12 +1029,12 @@ private theorem call_outputWindow_of_success
     simpa only [childLength] using
       Mem.read_write_zero parent.memory childNonempty
 
-private theorem statcall_outputWindow_of_success
+private theorem staticcall_outputWindow_of_success
     {sevm : Sevm} {pre post : Devm}
     {gasWord target inputSize : B256} {rest : List B256}
     (stack : pre.stack =
       gasWord :: target :: 28 :: inputSize :: 0 :: 32 :: rest)
-    (crossing : Ninst.RunCompiled sevm pre statcall post)
+    (crossing : Ninst.RunCompiled sevm pre staticcall post)
     (successFlag : ∃ tail, post.stack = (1 : B256) :: tail)
     (returnDataLength : post.returnData.length = 32) :
     (post.memory.read 0 32).1 = post.returnData := by
@@ -1009,7 +1043,7 @@ private theorem statcall_outputWindow_of_success
         pre.stack := by
     rw [stack]
     exact ⟨[], by simp [Split]⟩
-  rcases of_run_statcall_val_with_depth operandPrefix
+  rcases of_run_staticcall_val_with_depth operandPrefix
       (Ninst.Run.of_runCompiled crossing) with failure | success
   · obtain ⟨zeroPrefix, -, -⟩ := failure
     obtain ⟨tail, successStack⟩ := successFlag
@@ -1041,31 +1075,36 @@ private theorem statcall_outputWindow_of_success
 
 /-- A successful `readTotalAssets` suffix turns its actual retained STATICCALL
 into an exact successful WETH child and hands the returned balance word to the
-continuation.  The only length premise excludes mathematical `Nat → B256`
-wraparound; no WETH result is accepted as an assumption. -/
+continuation.  The only numeric side condition excludes mathematical
+`Nat → B256` wraparound; memory well-formedness is threaded structurally
+through the final `MLOAD`, and no WETH result is accepted as an assumption. -/
 theorem checkedBalanceOf_success
     {fs : List Func} {sevm : Sevm} {callPre callPost final : Devm}
     {body : Func} {gasWord : B256} {rest : List B256}
-    (occurrence : ExactWethChildOccurrence sevm callPre callPost statcall
+    (occurrence : ExactWethChildOccurrence sevm callPre callPost staticcall
       (balanceOfCalldata sevm.currentTarget) true)
     (stack : callPre.stack =
       gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest)
-    (crossing : Ninst.RunCompiled sevm callPre statcall callPost)
+    (crossing : Ninst.RunCompiled sevm callPre staticcall callPost)
     (returndataBound : callPost.returnData.length < 2 ^ 256)
+    (memoryWf : Mem.Wf callPost.memory)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
-        (Func.rev <?>
-          (pushB256 32 ::: retdatasize ::: eq ::: iszero :::
-            (Func.rev <?> (pushB256 0 ::: mload ::: body)))))
+        (Func.revert <?>
+          (pushB256 32 ::: returndatasize ::: eq ::: iszero :::
+            (Func.revert <?> (pushB256 0 ::: mload ::: body)))))
       (.ok final)) :
     ∃ (word : B256) (bodyPre : Devm),
-      ExactWethChildSuccess sevm callPre callPost statcall
+      ExactWethChildSuccess sevm callPre callPost staticcall
         (balanceOfCalldata sevm.currentTarget) word.toBytes true ∧
       callPost.returnData = word.toBytes ∧
       word :: [] <<+ bodyPre.stack ∧
+      bodyPre.state = callPost.state ∧
+      bodyPre.logs = callPost.logs ∧
+      Mem.Wf bodyPre.memory ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨status, statusTail, sizePre, statusStack, statusNonzero,
-    sizeMemory, sizeReturnData, sizeRun⟩ :=
+    sizeState, sizeLogs, sizeMemory, sizeReturnData, sizeRun⟩ :=
     checkedCall_status_nonzero suffix
   have successFlag :=
     ExactWethChildOccurrence.successFlag_of_nonzero occurrence
@@ -1073,12 +1112,13 @@ theorem checkedBalanceOf_success
   have sizeBound : sizePre.returnData.length < 2 ^ 256 := by
     rw [sizeReturnData]
     exact returndataBound
-  obtain ⟨sizeLength, decodePre, decodeMemory, -, decodeRun⟩ :=
+  obtain ⟨sizeLength, decodePre, decodeState, decodeLogs, decodeMemory,
+      -, decodeRun⟩ :=
     exactSizeGuard_of_ok sizeBound sizeRun
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [← sizeReturnData]
     exact sizeLength
-  have outputWindow := statcall_outputWindow_of_success stack crossing
+  have outputWindow := staticcall_outputWindow_of_success stack crossing
     successFlag returnDataLength
   obtain ⟨mloadPre, pushZeroRun, decodeRun⟩ :=
     runCompiledTo_next_inv decodeRun
@@ -1097,8 +1137,22 @@ theorem checkedBalanceOf_success
   let word := Bytes.toB256 callPost.returnData
   have outputEq : callPost.returnData = word.toBytes := by
     exact (Bytes.toBytes_toB256_of_length returnDataLength).symm
+  have bodyWf : Mem.Wf bodyPre.memory := by
+    obtain ⟨offset, -, loadMemory, -⟩ :=
+      of_run_mload_val (Ninst.Run.of_runCompiled mloadRun)
+    rw [loadMemory, mloadMemory]
+    exact memoryWf.extend offset.toNat 32
+  have bodyState : bodyPre.state = callPost.state :=
+    (Ninst.Hinv.inv (f := Devm.state)
+      (Ninst.Run.of_runCompiled mloadRun)).symm.trans
+        (pushZero.state.symm.trans (decodeState.trans sizeState))
+  have bodyLogs : bodyPre.logs = callPost.logs :=
+    (Ninst.Hinv.inv (f := Devm.logs)
+      (Ninst.Run.of_runCompiled mloadRun)).symm.trans
+        (pushZero.logs.symm.trans (decodeLogs.trans sizeLogs))
   refine ⟨word, bodyPre,
-    occurrence.success_of_post successFlag outputEq, outputEq, ?_, bodyRun⟩
+    occurrence.success_of_post successFlag outputEq, outputEq, ?_,
+    bodyState, bodyLogs, bodyWf, bodyRun⟩
   exact wordPrefix
 
 /-- A successful mutating WETH suffix proves both layers of the vault's
@@ -1117,7 +1171,7 @@ theorem checkedCanonicalTrue_success
     (returndataBound : callPost.returnData.length < 2 ^ 256)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
-        (Func.rev <?>
+        (Func.revert <?>
           Blanc.ProrataWethVault.requireCanonicalWethTrue body))
       (.ok final)) :
     ∃ bodyPre,
@@ -1125,7 +1179,7 @@ theorem checkedCanonicalTrue_success
         (1 : B256).toBytes false ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨status, statusTail, sizePre, statusStack, statusNonzero,
-    sizeMemory, sizeReturnData, sizeRun⟩ :=
+    -, -, sizeMemory, sizeReturnData, sizeRun⟩ :=
     checkedCall_status_nonzero suffix
   have successFlag :=
     ExactWethChildOccurrence.successFlag_of_nonzero occurrence
@@ -1134,7 +1188,8 @@ theorem checkedCanonicalTrue_success
   have sizeBound : sizePre.returnData.length < 2 ^ 256 := by
     rw [sizeReturnData]
     exact returndataBound
-  obtain ⟨sizeLength, canonicalPre, canonicalMemory, -, canonicalRun⟩ :=
+  obtain ⟨sizeLength, canonicalPre, -, -, canonicalMemory, -,
+      canonicalRun⟩ :=
     exactSizeGuard_of_ok sizeBound sizeRun
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [← sizeReturnData]
@@ -1192,7 +1247,7 @@ theorem checkedCanonicalTrue_success
         _ = (1 : B256).toBytes := congrArg B256.toBytes loadedEq
     exact ⟨bodyPre,
       occurrence.success_of_post successFlag outputEq, bodyRun⟩
-  · exact (rev_not_ok revertRun).elim
+  · exact (revert_not_ok revertRun).elim
 
 /-! ## Source-level exact effects and rollback -/
 
@@ -1208,32 +1263,56 @@ theorem readTotalAssets_exactEffect
     (staging : Line.Run sevm entry balanceOfStaging callPre)
     (depth : sevm.depth ≠ 0)
     (gasAvailable : StaticGasAvailable callPre 36)
-    (crossing : Ninst.RunCompiled sevm callPre statcall callPost)
+    (crossing : Ninst.RunCompiled sevm callPre staticcall callPost)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
-        (Func.rev <?>
-          (pushB256 32 ::: retdatasize ::: eq ::: iszero :::
-            (Func.rev <?> (pushB256 0 ::: mload ::: body)))))
+        (Func.revert <?>
+          (pushB256 32 ::: returndatasize ::: eq ::: iszero :::
+            (Func.revert <?> (pushB256 0 ::: mload ::: body)))))
       (.ok final)) :
     ∃ (word : B256) (bodyPre : Devm),
       Devm.getStor callPost = Devm.getStor callPre ∧
       callPost.logs = callPre.logs ∧
+      Devm.getStor bodyPre = Devm.getStor callPre ∧
+      bodyPre.logs = callPre.logs ∧
       word.toBytes =
           ((callPre.state.getStor wethAccount).get
             sevm.currentTarget.toB256).toBytes ∧
       word :: [] <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨gasWord, rest, stack, -⟩ :=
+  obtain ⟨gasWord, rest, stack, -, callPreWf⟩ :=
     balanceOfStaging_boundary memory staging
   have occurrence := balanceOfStaging_occurrence config memory staging depth
     gasAvailable crossing
-  obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _⟩ :=
+  obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
     checkedCall_status_nonzero suffix
   have successFlag :=
     ExactWethChildOccurrence.successFlag_of_nonzero occurrence
       statusStack statusNonzero
+  have callPostWf : Mem.Wf callPost.memory := by
+    have operandPrefix :
+        gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest <<+
+          callPre.stack := by
+      rw [stack]
+      exact ⟨[], by simp [Split]⟩
+    rcases of_run_staticcall_val_with_depth operandPrefix
+        (Ninst.Run.of_runCompiled crossing) with failure | success
+    · obtain ⟨zeroPrefix, -, -⟩ := failure
+      obtain ⟨tail, successStack⟩ := successFlag
+      have onePrefix : (1 : B256) :: [] <<+ callPost.stack := by
+        rw [successStack]
+        exact pref_append [1] tail
+      have impossible : (0 : B256) = 1 :=
+        pref_head_unique zeroPrefix onePrefix
+      exact (B256.zero_ne_one impossible).elim
+    · rcases success with
+        ⟨parent, child, _, _, _, _, _, -, -, -, parentMemory, -, -, -, -,
+          -, -, -, finalMemory, -⟩
+      rw [finalMemory, parentMemory]
+      exact (Mem.Wf.extends _ callPreWf).write _ _
   have rawSuccess :
-      ExactWethChildSuccess sevm callPre callPost statcall
+      ExactWethChildSuccess sevm callPre callPost staticcall
         (balanceOfCalldata sevm.currentTarget) callPost.returnData true :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
   have worldRun := ExactWethChildSuccess.worldProgramRun rawSuccess
@@ -1244,10 +1323,16 @@ theorem readTotalAssets_exactEffect
   have returndataBound : callPost.returnData.length < 2 ^ 256 := by
     rw [returnDataLength]
     decide +kernel
-  obtain ⟨word, bodyPre, _, returnedWord, wordPrefix, bodyRun⟩ :=
-    checkedBalanceOf_success occurrence stack crossing returndataBound suffix
-  exact ⟨word, bodyPre, storage, logs, returnedWord.symm.trans output,
-    wordPrefix, bodyRun⟩
+  obtain ⟨word, bodyPre, _, returnedWord, wordPrefix, bodyState,
+      checkedLogs, bodyWf, bodyRun⟩ :=
+    checkedBalanceOf_success occurrence stack crossing returndataBound
+      callPostWf suffix
+  have bodyStorage : Devm.getStor bodyPre = Devm.getStor callPre :=
+    (funext (getStor_eq_of_state_eq bodyState)).trans storage
+  have bodyLogs : bodyPre.logs = callPre.logs :=
+    checkedLogs.trans logs
+  exact ⟨word, bodyPre, storage, logs, bodyStorage, bodyLogs,
+    returnedWord.symm.trans output, wordPrefix, bodyWf, bodyRun⟩
 
 /-- A successful source-level delegated transfer executes exact WETH
 `transferFrom(owner,vault,assets)` and exposes its exact balance-row movement
@@ -1268,7 +1353,7 @@ theorem callWethTransferFrom_exactEffect
     (crossing : Ninst.RunCompiled sevm callPre call callPost)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
-        (Func.rev <?>
+        (Func.revert <?>
           Blanc.ProrataWethVault.requireCanonicalWethTrue body))
       (.ok final)) :
     ∃ bodyPre,
@@ -1282,7 +1367,7 @@ theorem callWethTransferFrom_exactEffect
     transferFromStaging_boundary memory assetsAt assetsAboveCalldata staging
   have occurrence := transferFromStaging_occurrence config memory assetsAt
     assetsAboveCalldata staging depth dynamic gasAvailable crossing
-  obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _⟩ :=
+  obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
     checkedCall_status_nonzero suffix
   have successFlag :=
     ExactWethChildOccurrence.successFlag_of_nonzero occurrence
@@ -1326,7 +1411,7 @@ theorem callWethTransfer_exactEffect
     (crossing : Ninst.RunCompiled sevm callPre call callPost)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
-        (Func.rev <?>
+        (Func.revert <?>
           Blanc.ProrataWethVault.requireCanonicalWethTrue body))
       (.ok final)) :
     ∃ bodyPre,
@@ -1345,7 +1430,7 @@ theorem callWethTransfer_exactEffect
   have occurrence := transferStaging_occurrence config memory receiverAt
     assetsAt receiverAboveSelector assetsAboveReceiver staging depth dynamic
     gasAvailable crossing
-  obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _⟩ :=
+  obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
     checkedCall_status_nonzero suffix
   have successFlag :=
     ExactWethChildOccurrence.successFlag_of_nonzero occurrence
@@ -1375,7 +1460,7 @@ theorem balanceOfStaging_rollback
     (staging : Line.Run sevm entry balanceOfStaging callPre)
     (depth : sevm.depth ≠ 0)
     (gasAvailable : StaticGasAvailable callPre 36)
-    (crossing : Ninst.RunCompiled sevm callPre statcall callPost)
+    (crossing : Ninst.RunCompiled sevm callPre staticcall callPost)
     (failureFlag : ∃ tail, callPost.stack = (0 : B256) :: tail) :
     callPost.state = callPre.state := by
   exact ExactWethChildOccurrence.rollback_of_post

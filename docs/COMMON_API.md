@@ -110,6 +110,24 @@ registry has identified the likely vocabulary.
   This remains COMMON_API-only: the same `Func.RunCompiledTo` head is also the
   reliable trigger for construction recipes, so an automatic recipe would
   conflate constructing and inverting a walk.
+- Carry an observable through a successful compiled walk with a fixed
+  function table using `Func.CompiledInv` in
+  [`Blanc/CompiledFixedInvariance.lean`](../Blanc/CompiledFixedInvariance.lean).
+  Its `call` rule requires both the exact table lookup and the callee
+  invariant, closing the soundness gap that makes table-polymorphic
+  `func_inv` refuse `Func.call`.  `compiled_inv` walks ordinary lines,
+  instructions, branches, and terminals and consumes an already-proved exact
+  call invariant at each tail jump.  The same module completes the opt-in
+  `LogOutputHinv` scope for ordinary arithmetic (`MUL`, `SUB`, `DIV`, `MOD`,
+  `ADDMOD`, `MULMOD`, `XOR`, `RETURNDATASIZE`, and `MLOAD`) and exposes
+  generic branch/call burn preservation, so contract modules do not redeclare
+  those instances privately.
+- Peel a successful source-level `nonpayable` wrapper while retaining state,
+  memory, logs, and output with `run_body_of_run_nonpayable_frame_logs` in
+  [`Blanc/NonpayableInversion.lean`](../Blanc/NonpayableInversion.lean).
+  This is the stronger event/returndata-sensitive companion of
+  `run_body_of_run_nonpayable_frame`; product modules should consume it rather
+  than restating the wrapper walk.
 - Recover a selected body from a linear selector dispatcher:
   [`Blanc/LinearDispatch.lean`](../Blanc/LinearDispatch.lean) defines the
   shared `Blanc.linearDispatchWith` and `Blanc.selectorUnique`; the companion

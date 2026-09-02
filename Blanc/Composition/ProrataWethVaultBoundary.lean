@@ -542,8 +542,8 @@ theorem exactWethStatcallOccurrence_of_runCompiled
         (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).accessedAddresses
       (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext acc).1 + ext ≤
         base.gasLeft)
-    (run : Ninst.RunCompiled sevm pre Ninst.statcall post) :
-    ExactWethChildOccurrence sevm pre post Ninst.statcall calldata true := by
+    (run : Ninst.RunCompiled sevm pre Ninst.staticcall post) :
+    ExactWethChildOccurrence sevm pre post Ninst.staticcall calldata true := by
   obtain ⟨xl, hfill, hrun⟩ := run
   have hx := hrun 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
@@ -588,7 +588,7 @@ theorem exactWethStatcallOccurrence_of_runCompiled
       inputSize.toNat 0 = calldata := by
     rw [hpmem]
     exact h_window
-  have hmsgeq : statcallSpawnMsg sevm parent mcs wethAccount wethAccount
+  have hmsgeq : staticcallSpawnMsg sevm parent mcs wethAccount wethAccount
       inputOffset.toNat inputSize.toNat (pre.getCode wethAccount) false =
       callMsg sevm parent mcs 0 sevm.currentTarget wethAccount wethAccount
         true true calldata (pre.getCode wethAccount) false := by
@@ -608,14 +608,14 @@ theorem exactWethStatcallOccurrence_of_runCompiled
         (.ok child) = .ok post := hres.symm
   let msg := callMsg sevm parent mcs 0 sevm.currentTarget wethAccount
     wethAccount true true calldata (pre.getCode wethAccount) false
-  have hxspawn : Xinst.step sevm pre .statcall =
+  have hxspawn : Xinst.step sevm pre .staticcall =
       .spawn (Jaune.Frame.ofCall msg)
         (.call parent outputOffset.toNat outputSize.toNat) := by
     rw [hstep, hmsgeq]
   have executes : MessageExecutesProgram msg xl Blanc.weth := by
     apply spawnedMessage_executes_weth config (msg := msg) (child := child)
       (resume := .call parent outputOffset.toNat outputSize.toNat)
-      (x := .statcall)
+      (x := .staticcall)
     · rfl
     · rfl
     · rfl
@@ -624,11 +624,11 @@ theorem exactWethStatcallOccurrence_of_runCompiled
     · exact hxspawn
     · exact hfill
     · exact hframe
-  have hspawn : Ninst.step ⟨0, sevm, pre⟩ Ninst.statcall =
+  have hspawn : Ninst.step ⟨0, sevm, pre⟩ Ninst.staticcall =
       .spawn (Jaune.Frame.ofCall msg)
         (.call parent outputOffset.toNat outputSize.toNat) 1 := by
-    simp only [Ninst.statcall, Ninst.step_exec]
-    change XStep.toStep 1 (Xinst.step sevm pre .statcall) = _
+    simp only [Ninst.staticcall, Ninst.step_exec]
+    change XStep.toStep 1 (Xinst.step sevm pre .staticcall) = _
     rw [hxspawn]
     rfl
   have postLogs : post.logs = if child.error.isSome then pre.logs

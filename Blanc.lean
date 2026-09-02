@@ -123,6 +123,8 @@ import Blanc.ForwardMstore8
 import Blanc.Reverts
 import Blanc.RevertPayload
 import Blanc.CompiledWalkInversion
+import Blanc.CompiledFixedInvariance
+import Blanc.NonpayableInversion
 import Blanc.LinearDispatch
 import Blanc.AddressSlot
 import Blanc.AddressSlotProofs
@@ -286,12 +288,14 @@ import Blanc.ProrataWethVaultCode
 import Blanc.ProrataWethVaultArtifact
 import Blanc.ProrataWethVaultArithmetic
 import Blanc.ProrataWethVaultArithmeticExec
+import Blanc.ProrataWethVaultConversions
 import Blanc.ProrataWethVaultFunctional
 import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary
 import Blanc.Composition.ProrataWethVaultEffects
 import Blanc.Composition.ProrataWethVaultStaging
 import Blanc.Composition.ProrataWethVaultViews
+import Blanc.Composition.ProrataWethVaultConversions
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.

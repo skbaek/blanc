@@ -47,21 +47,21 @@ def returnConstant (w : B256) : Func := pushB256 w ::: returnWord
 /-- Reject selector-matched calldata shorter than its static ABI head. -/
 def requireStaticArgs (words : Nat) (body : Func) : Func :=
   pushB256 (Nat.toB256 (4 + 32 * words)) ::: calldatasize ::: lt :::
-  (Func.rev <?> body)
+  (Func.revert <?> body)
 
 /-- Reject dirty address words while retaining the zero address for views. -/
 def canonicalAddressArg (k : B256) (body : Func) : Func :=
-  arg k +++ checkNonAddress +++ (Func.rev <?> body)
+  arg k +++ checkNonAddress +++ (Func.revert <?> body)
 
 /-- Reject dirty and zero address words. -/
 def nonzeroAddressArg (k : B256) (body : Func) : Func :=
   arg k +++ dup 0 ::: checkNonAddress +++
-  (Func.rev <?>
-    (iszero ::: (Func.rev <?> body)))
+  (Func.revert <?>
+    (iszero ::: (Func.revert <?> body)))
 
 /-- Mutating share operations also reject the zero EVM caller. -/
 def nonzeroCaller (body : Func) : Func :=
-  caller ::: iszero ::: (Func.rev <?> body)
+  caller ::: iszero ::: (Func.revert <?> body)
 
 def endpoint (words : Nat) (body : Func) : Func :=
   nonpayable (requireStaticArgs words body)
@@ -107,7 +107,7 @@ def finishQuotient (mode : QuotientMode) (continuation : Nat) : Func :=
       loadWord remainderWord +++ iszero :::
       ( (loadWord quotientWord +++ .call continuation) <?>
         (loadWord quotientWord +++ dup 0 ::: isMax +++
-          (Func.rev <?>
+          (Func.revert <?>
             (pushB256 1 ::: add ::: .call continuation))) )
   | .capCeilPred =>
       loadWord remainderWord +++ iszero :::
@@ -119,7 +119,7 @@ def divisionOverflow (mode : QuotientMode) (continuation : Nat) : Func :=
   match mode with
   | .capDown => pushB256 B256.max ::: .call continuation
   | .capCeilPred => pushB256 B256.max ::: .call continuation
-  | _ => Func.rev
+  | _ => Func.revert
 
 def divideSimple (mode : QuotientMode) (continuation : Nat) : Func :=
   loadWord denominatorWord +++ loadWord lowWord +++ mod :::
@@ -185,7 +185,7 @@ def divideWide (mode : QuotientMode) (continuation : Nat) : Func :=
 
 def divide512 (mode : QuotientMode) (continuation : Nat) : Func :=
   loadWord denominatorWord +++ iszero :::
-  (Func.rev <?>
+  (Func.revert <?>
     (loadWord highWord +++ iszero :::
       (divideSimple mode continuation <?>
         divideWide mode continuation)))
@@ -238,19 +238,19 @@ def readTotalAssets (body : Func) : Func :=
   pushB256 wethBalanceOfSelector ::: mstoreAt 0 +++
   address ::: mstoreAt 1 +++
   pushList [32, 0, 36, 28] +++
-  pushB256 assetAddress ::: gas ::: statcall :::
+  pushB256 assetAddress ::: gas ::: staticcall :::
   iszero :::
-  (Func.rev <?>
-    (pushB256 32 ::: retdatasize ::: eq ::: iszero :::
-      (Func.rev <?>
+  (Func.revert <?>
+    (pushB256 32 ::: returndatasize ::: eq ::: iszero :::
+      (Func.revert <?>
         (pushB256 0 ::: mload ::: body))))
 
 /-- Require an exact one-word canonical `true` return after a WETH mutation. -/
 def requireCanonicalWethTrue (body : Func) : Func :=
-  pushB256 32 ::: retdatasize ::: eq ::: iszero :::
-  (Func.rev <?>
+  pushB256 32 ::: returndatasize ::: eq ::: iszero :::
+  (Func.revert <?>
     (pushB256 0 ::: mload ::: pushB256 1 ::: eq ::: iszero :::
-      (Func.rev <?> body)))
+      (Func.revert <?> body)))
 
 /-! ## Long-lived operation memory -/
 
@@ -271,7 +271,7 @@ def stagedAssetFactor : Line :=
 
 def guardStableSupply (body : Func) : Func :=
   loadWord supplyWord +++ pushB256 maxSupply ::: lt :::
-  (Func.rev <?> body)
+  (Func.revert <?> body)
 
 /-! ## Aux-table indices
 
@@ -318,9 +318,9 @@ def allowance : Func :=
   canonicalAddressArg 0 <| canonicalAddressArg 1 <|
     arg 0 +++ mstoreAt 0 +++
     arg 1 +++ mstoreAt 1 +++
-    pushList [64, 0] +++ kec :::
+    pushList [64, 0] +++ keccak256 :::
     checkAllowanceSlotCollision +++
-    (Func.rev <?> (sload ::: returnWord))
+    (Func.revert <?> (sload ::: returnWord))
 
 /-! ## Converters and previews -/
 
@@ -427,16 +427,16 @@ def maxWithdraw : Func :=
 
 def nonzeroStagedAddress (word : B256) (body : Func) : Func :=
   loadWord word +++ dup 0 ::: checkNonAddress +++
-  (Func.rev <?>
-    (iszero ::: (Func.rev <?> body)))
+  (Func.revert <?>
+    (iszero ::: (Func.revert <?> body)))
 
 /-- Hash two staged address words and reject balance/supply aliases. -/
 def guardedAllowanceKey (owner spender : Line) (body : Func) : Func :=
   owner +++ mstoreAt 0 +++
   spender +++ mstoreAt 1 +++
-  pushList [64, 0] +++ kec :::
+  pushList [64, 0] +++ keccak256 :::
   checkAllowanceSlotCollision +++
-  (Func.rev <?> body)
+  (Func.revert <?> body)
 
 /-- Spend a finite staged allowance, preserving `U`, then tail-jump. -/
 def spendAllowance (owner spender amount : Line) (continuation : Nat) : Func :=
@@ -446,7 +446,7 @@ def spendAllowance (owner spender amount : Line) (continuation : Nat) : Func :=
     loadWord allowanceWord +++ isMax +++
     (.call continuation <?>
       (amount +++ loadWord allowanceWord +++ lt :::
-        (Func.rev <?>
+        (Func.revert <?>
           (amount +++ loadWord allowanceWord +++ sub :::
             loadWord scratchWord +++ sstore :::
             .call continuation))))
@@ -474,14 +474,14 @@ def approve : Func :=
 def transferStaged : Func :=
   loadWord ownerWord +++ sload ::: mstoreAt balanceWord +++
   loadWord amountWord +++ loadWord balanceWord +++ lt :::
-  (Func.rev <?>
+  (Func.revert <?>
     (loadWord amountWord +++ loadWord balanceWord +++ sub :::
       loadWord ownerWord +++ sstore :::
       loadWord receiverWord +++ sload ::: mstoreAt balanceWord +++
       loadWord amountWord +++ loadWord balanceWord +++ add :::
       mstoreAt scratchWord +++
       loadWord balanceWord +++ loadWord scratchWord +++ lt :::
-      (Func.rev <?>
+      (Func.revert <?>
         (loadWord scratchWord +++ loadWord receiverWord +++ sstore :::
           logStagedTransfer +++ returnTrue))))
 
@@ -509,7 +509,7 @@ def callWethTransferFrom (assets : Line) (body : Func) : Func :=
   assets +++ mstoreAt 3 +++
   pushList [32, 0, 100, 28, 0] +++
   pushB256 assetAddress ::: gas ::: call :::
-  iszero ::: (Func.rev <?> requireCanonicalWethTrue body)
+  iszero ::: (Func.revert <?> requireCanonicalWethTrue body)
 
 def callWethTransfer (receiver assets : Line) (body : Func) : Func :=
   pushB256 wethTransferSelector ::: mstoreAt 0 +++
@@ -517,7 +517,7 @@ def callWethTransfer (receiver assets : Line) (body : Func) : Func :=
   assets +++ mstoreAt 2 +++
   pushList [32, 0, 68, 28, 0] +++
   pushB256 assetAddress ::: gas ::: call :::
-  iszero ::: (Func.rev <?> requireCanonicalWethTrue body)
+  iszero ::: (Func.revert <?> requireCanonicalWethTrue body)
 
 /-! ## ERC-4626 event helpers -/
 
@@ -563,13 +563,13 @@ def snapshotQuoteState (body : Func) : Func :=
 def finishInbound (shares assets returned : Line) : Func :=
   -- Supply room is checked before the WETH child.
   shares +++ shareRoom +++ lt :::
-  (Func.rev <?>
+  (Func.revert <?>
     (callWethTransferFrom assets <|
       -- Receiver balance addition is checked independently of PairStable.
       loadWord receiverWord +++ sload ::: mstoreAt balanceWord +++
       shares +++ loadWord balanceWord +++ add ::: mstoreAt scratchWord +++
       loadWord balanceWord +++ loadWord scratchWord +++ lt :::
-      (Func.rev <?>
+      (Func.revert <?>
         (loadWord scratchWord +++ loadWord receiverWord +++ sstore :::
           shares +++ loadWord supplyWord +++ add :::
           pushSupplySlot +++ sstore :::
@@ -612,7 +612,7 @@ def mint : Func :=
 def ownerHasShares (shares : Line) (body : Func) : Func :=
   loadWord ownerWord +++ sload ::: mstoreAt balanceWord +++
   shares +++ loadWord balanceWord +++ lt :::
-  (Func.rev <?> body)
+  (Func.revert <?> body)
 
 def withdrawAfterQuote : Func :=
   mstoreAt quoteWord +++
@@ -661,7 +661,7 @@ def finishOutbound (shares assets returned : Line) : Func :=
   shares +++ loadWord balanceWord +++ sub :::
   loadWord ownerWord +++ sstore :::
   shares +++ loadWord supplyWord +++ lt :::
-  (Func.rev <?>
+  (Func.revert <?>
     (shares +++ loadWord supplyWord +++ sub :::
       pushSupplySlot +++ sstore :::
       logBurnTransfer shares +++
@@ -714,7 +714,7 @@ theorem vaultFuncs_sorted : DispatchTree.sorted vaultFuncs = true := by
 def vaultTree : DispatchTree := .ofSorted vaultFuncs
 
 def vaultAux : List Func :=
-  [ Func.rev,
+  [ Func.revert,
     returnWord,
     depositAfterQuote,
     mintAfterQuote,

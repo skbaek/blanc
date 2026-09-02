@@ -1660,7 +1660,7 @@ theorem finishQuotient_up_trace
         Func.RunCompiledTo.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) maxOnePrefix maxBranchRun
       obtain ⟨overflowPost, impossible, -⟩ :=
-        runCompiledTo_rev_inv overflowRun
+        runCompiledTo_revert_inv overflowRun
       cases impossible
     · have notNonzero : (~~~ quotient) ≠ 0 := by
         intro notZero
@@ -2219,7 +2219,7 @@ theorem divideWide_core_trace
     (lowAt : Bytes.toB256
       (image.sliceD (lowWord * 32).toNat 32 0) = low)
     (stack : tail <<+ pre.stack)
-    (overflowReverts : divisionOverflow mode continuation = Func.rev)
+    (overflowReverts : divisionOverflow mode continuation = Func.revert)
     (run : Func.RunCompiledTo fs sevm pre
       (divideWide mode continuation) (.ok final)) :
     ∃ corePre,
@@ -2237,7 +2237,7 @@ theorem divideWide_core_trace
   · exact ⟨corePre, noOverflow, corePrefix, coreWf, coreReads, coreRun⟩
   · rw [overflowReverts] at overflowRun
     obtain ⟨overflowPost, impossible, -⟩ :=
-      runCompiledTo_rev_inv overflowRun
+      runCompiledTo_revert_inv overflowRun
     cases impossible
 
 /-- Either capacity mode's overflow body pushes the all-ones saturation word
@@ -2940,7 +2940,7 @@ theorem divide512_arm_trace
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     obtain ⟨revertPost, impossible, -⟩ :=
-      runCompiledTo_rev_inv revertRun
+      runCompiledTo_revert_inv revertRun
     cases impossible
 
 /-- A successful floor-mode `divide512` walk with a zero high word reaches the
