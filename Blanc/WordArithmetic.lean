@@ -151,6 +151,11 @@ theorem maxWordN_lt_wordModulusN : maxWordN < wordModulusN := by
 theorem maxWord_toNat : B256.max.toNat = maxWordN := by
   decide +kernel
 
+/-- Re-embedding the largest natural word value gives the EVM all-ones word. -/
+theorem toB256_maxWordN : Nat.toB256 maxWordN = B256.max := by
+  apply B256.toNat_inj
+  rw [B256.toNat_toB256_of_lt maxWordN_lt_wordModulusN, maxWord_toNat]
+
 /-! ## Exact two-word multiplication -/
 
 /-- The low word of the exact 512-bit product of two EVM words. -/
@@ -416,6 +421,21 @@ theorem Nat.two_word_div_lt_modulus
     _ ≤ denominator * 2 ^ width :=
       Nat.mul_le_mul_right (2 ^ width) (by omega)
     _ = 2 ^ width * denominator := Nat.mul_comm _ _
+
+/-- A two-word numerator's quotient reaches at least one full word whenever
+the single-word denominator is no larger than the high word.  This is the
+overflow-side companion to `Nat.two_word_div_lt_modulus`. -/
+theorem Nat.pow_le_two_word_div_of_le_high
+    {width high low denominator : Nat}
+    (denominatorPositive : 0 < denominator)
+    (denominatorLeHigh : denominator ≤ high) :
+    2 ^ width ≤ (high * 2 ^ width + low) / denominator := by
+  apply (Nat.le_div_iff_mul_le denominatorPositive).2
+  calc
+    2 ^ width * denominator ≤ 2 ^ width * high :=
+      Nat.mul_le_mul_left _ denominatorLeHigh
+    _ = high * 2 ^ width := Nat.mul_comm _ _
+    _ ≤ high * 2 ^ width + low := Nat.le_add_right _ _
 
 /-- EVM word addition is natural-number addition re-embedded modulo the word
 modulus.  This is the unconditional bridge: callers that need the unwrapped
@@ -869,9 +889,48 @@ theorem roundedQuotientWord_eq_toB256_ceilDiv
   by_cases exactDivision : n % d = 0
   · rw [if_pos (remainderZero.mpr exactDivision), quotientEq]
     simp [ceilDiv, exactDivision]
-
   · rw [if_neg (fun h => exactDivision (remainderZero.mp h)), quotientEq,
       toB256_add_one]
+    simp [ceilDiv, exactDivision]
+
+/-- A staged floor quotient and remainder implement `ceilDiv n d - 1` when
+the dividend and divisor are positive and the floor quotient fits in one
+word.  Positivity is essential in the exact-division branch: it rules out the
+word underflow in `quotient - 1`. -/
+theorem ceilPredQuotientWord_eq_toB256
+    {n d : Nat} {quotient remainder : B256}
+    (nPositive : 0 < n)
+    (quotientBound : n / d < wordModulusN)
+    (quotientEq : quotient = Nat.toB256 (n / d))
+    (remainderZero : remainder = 0 ↔ n % d = 0) :
+    (if remainder = 0 then quotient - 1 else quotient) =
+      Nat.toB256 (ceilDiv n d - 1) := by
+  by_cases exactDivision : n % d = 0
+  · have division := Nat.mod_add_div n d
+    rw [exactDivision] at division
+    have quotientPositive : 0 < n / d := by
+      by_contra quotientNotPositive
+      have quotientZero : n / d = 0 := Nat.eq_zero_of_not_pos quotientNotPositive
+      rw [quotientZero] at division
+      simp at division
+      omega
+    have oneLe : (1 : B256) ≤ Nat.toB256 (n / d) := by
+      rw [B256.le_iff_toNat_le_toNat,
+        B256.toNat_toB256_of_lt quotientBound]
+      change 1 ≤ n / d
+      omega
+    rw [if_pos (remainderZero.mpr exactDivision), quotientEq,
+      wordSub_eq_toB256_sub_of_le oneLe,
+      B256.toNat_toB256_of_lt quotientBound, B256.toNat_one]
+    simp [ceilDiv, exactDivision]
+  · rw [if_neg (fun h => exactDivision (remainderZero.mp h)), quotientEq]
+    simp [ceilDiv, exactDivision]
+
+/-- Removing one from a ceiling quotient never exceeds the corresponding
+floor quotient. -/
+theorem ceilDiv_sub_one_le_div (n d : Nat) :
+    ceilDiv n d - 1 ≤ n / d := by
+  by_cases exactDivision : n % d = 0 <;>
     simp [ceilDiv, exactDivision]
 
 /-- Rounding the reconstructed high word upward exactly implements division
