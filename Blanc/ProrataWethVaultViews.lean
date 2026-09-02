@@ -26,6 +26,10 @@ def WordViewEffect (word : B256) (pre post : Devm) : Prop :=
     Devm.getStor pre = Devm.getStor post ∧
     pre.logs = post.logs
 
+/-- Exact raw allowance key computed by the vault from canonical ABI words. -/
+def allowanceKey (owner spender : B256) : B256 :=
+  Bytes.keccak (owner.toBytes ++ spender.toBytes)
+
 private theorem returnConstant_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {word : B256}
     (run : Func.RunCompiledTo fs sevm pre (returnConstant word) (.ok post)) :
@@ -115,6 +119,7 @@ private theorem canonicalAddressArg_body_of_ok
       Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
       tail <<+ bodyPre.stack ∧
       pre.state = bodyPre.state ∧
+      pre.memory = bodyPre.memory ∧
       pre.logs = bodyPre.logs := by
   unfold canonicalAddressArg at run
   obtain ⟨afterArg, argLine, run⟩ :=
@@ -137,12 +142,138 @@ private theorem canonicalAddressArg_body_of_ok
       (Line.of_inv Devm.state (by line_inv) argLine).trans
         ((Line.of_inv Devm.state (by line_inv) guardLine).trans
           guardPop.state),
+      (Line.of_inv Devm.memory (by line_inv) argLine).trans
+        ((Line.of_inv Devm.memory (by line_inv) guardLine).trans
+          guardPop.memory),
       (Line.of_inv Devm.logs (by line_inv) argLine).trans
         ((Line.of_inv Devm.logs (by line_inv) guardLine).trans
           guardPop.logs)⟩
   · rcases revertRoute with ⟨_, revertPre, -, -, -, revertRun⟩
     rcases runCompiledTo_rev_inv revertRun with ⟨_, impossible, -⟩
     cases impossible
+
+/-- The vault's allowance guard retains the raw key below its collision flag.
+When that flag is zero, the key is neither address-shaped nor the reserved
+supply word. -/
+private theorem of_checkAllowanceSlotCollision
+    {sevm : Sevm} {pre post : Devm} {key : B256} {tail : Stack}
+    (hp : key :: tail <<+ pre.stack)
+    (run : Line.Run sevm pre checkAllowanceSlotCollision post) :
+    ∃ flag,
+      flag :: key :: tail <<+ post.stack ∧
+      (flag = 0 → ¬ ValidAdr key ∧ key ≠ supplySlot) := by
+  simp only [checkAllowanceSlotCollision] at run
+  rcases of_run_append _ run with ⟨beforeOr, guardRun, orRun⟩
+  rcases of_run_append _ guardRun with
+    ⟨beforeMax, addressRun, maxRun⟩
+  rcases Line.of_run_cons addressRun with
+    ⟨afterDup, dupRun, checkRun⟩
+  rcases of_run_dup dupRun with ⟨word, wordAt, pushed⟩
+  have wordEq : word = key := by
+    have hget : pre.stack[(0 : Fin 16).val]? = some key :=
+      Stack.nth_getElem (Stack.Nth.head key tail) hp
+    rw [hget] at wordAt
+    injection wordAt with wordAt
+    exact wordAt.symm
+  subst word
+  have duplicated : key :: key :: tail <<+ afterDup.stack :=
+    prefix_of_push pushed hp
+  rcases of_check_address duplicated checkRun with
+    ⟨addressFlag, addressPrefix, addressZero⟩
+  rcases Line.of_run_cons maxRun with ⟨afterMaxDup, maxDupRun, isMaxRun⟩
+  rcases of_run_dup maxDupRun with ⟨word, wordAt, pushed⟩
+  have wordEq : word = key := by
+    have hget : beforeMax.stack[(1 : Fin 16).val]? = some key :=
+      Stack.nth_getElem
+        (Stack.Nth.tail 0 key addressFlag (key :: tail)
+          (Stack.Nth.head key tail))
+        addressPrefix
+    rw [hget] at wordAt
+    injection wordAt with wordAt
+    exact wordAt.symm
+  subst word
+  have maxInput : key :: addressFlag :: key :: tail <<+
+      afterMaxDup.stack :=
+    prefix_of_push pushed addressPrefix
+  simp only [isMax] at isMaxRun
+  rcases Line.of_run_cons isMaxRun with ⟨afterNot, notRun, isZeroRun⟩
+  rcases Line.of_run_cons isZeroRun with ⟨afterMax, zeroRun, hnil⟩
+  cases hnil
+  have notPrefix : (~~~ key) :: addressFlag :: key :: tail <<+
+      afterNot.stack := prefix_of_not notRun maxInput
+  have maxPrefix : ((~~~ key) =? 0) :: addressFlag :: key :: tail <<+
+      beforeOr.stack := prefix_of_iszero zeroRun notPrefix
+  refine ⟨((~~~ key) =? 0) ||| addressFlag,
+    prefix_of_or (of_run_singleton orRun) maxPrefix, ?_⟩
+  intro guardZero
+  rcases B256.of_or_eq_zero guardZero with ⟨maxZero, addressFlagZero⟩
+  refine ⟨addressZero.mp addressFlagZero, ?_⟩
+  intro keyEq
+  rw [keyEq] at maxZero
+  have maxIsOne : B256.eqCheck (~~~ supplySlot) 0 = 1 := by
+    decide +kernel
+  rw [maxIsOne] at maxZero
+  exact B256.zero_ne_one maxZero.symm
+
+/-- A successful compiled allowance-collision branch reaches its body with the
+raw key retained and derives both namespace-separation facts from the executed
+guard. -/
+private theorem allowanceCollisionGuard_body_of_ok
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {key : B256} {tail : Stack} {body : Func}
+    (hp : key :: tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (checkAllowanceSlotCollision +++ (Func.rev <?> body)) (.ok post)) :
+    ∃ bodyPre,
+      ¬ ValidAdr key ∧ key ≠ supplySlot ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
+      key :: tail <<+ bodyPre.stack ∧
+      pre.state = bodyPre.state ∧
+      pre.logs = bodyPre.logs := by
+  obtain ⟨guardPost, guardLine, branchRun⟩ :=
+    runCompiledTo_prepend_inv run
+  obtain ⟨flag, guardPrefix, safeOfZero⟩ :=
+    of_checkAllowanceSlotCollision hp guardLine
+  rcases runCompiledTo_branch_inv branchRun with bodyRoute | revertRoute
+  · rcases bodyRoute with ⟨bodyPre, guardStack, guardPop, bodyRun⟩
+    have zeroPrefix : (0 : B256) :: [] <<+ guardPost.stack :=
+      ⟨bodyPre.stack, by simpa [Split] using guardStack⟩
+    have flagZero : flag = 0 :=
+      pref_head_unique guardPrefix zeroPrefix
+    rcases safeOfZero flagZero with ⟨notAddress, notSupply⟩
+    have bodyPrefix : key :: tail <<+ bodyPre.stack :=
+      (popBurn_pref (Devm.PopBurn.of_popBurnBy guardPop) guardPrefix).2
+    exact ⟨bodyPre, notAddress, notSupply, bodyRun, bodyPrefix,
+      (Line.of_inv Devm.state (by line_inv) guardLine).trans guardPop.state,
+      (Line.of_inv Devm.logs (by line_inv) guardLine).trans guardPop.logs⟩
+  · rcases revertRoute with ⟨_, revertPre, -, -, -, revertRun⟩
+    rcases runCompiledTo_rev_inv revertRun with ⟨_, impossible, -⟩
+    cases impossible
+
+private theorem stackStorageWord_effect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {key : B256} {tail : Stack}
+    (hp : key :: tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (sload ::: returnWord) (.ok post)) :
+    WordViewEffect (Devm.getStorVal pre sevm.currentTarget key) pre post := by
+  have sourceRun : Func.Run fs sevm pre (sload ::: returnWord) post :=
+    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+  have storage : Devm.getStor pre = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by
+      unfold returnWord
+      func_inv) sourceRun
+  have logs : pre.logs = post.logs :=
+    Func.of_inv Devm.logs Devm.logs (by
+      unfold returnWord
+      func_inv) sourceRun
+  rcases of_run_next sourceRun with ⟨afterLoad, loadRun, returnRun⟩
+  rcases prefix_of_sload loadRun hp with
+    ⟨loaded, loadedPrefix, loadedEq⟩
+  obtain ⟨output, -⟩ := returnsWord_of_storeReturn loadedPrefix (by
+    simpa only [returnWord] using returnRun)
+  rw [loadedEq] at output
+  exact ⟨output, storage, logs⟩
 
 /-- Exact read-only effect of the storage-word body shared by `balanceOf` and
 `maxRedeem`. -/
@@ -182,21 +313,145 @@ private theorem argStorageWord_effect
   rw [← entryStorage] at output
   exact ⟨output, storage, logs⟩
 
+private theorem lift_storage_word_view_of_storage
+    {pre bodyPre post : Devm} {target : Adr} {slot : B256}
+    (entryStorage : Devm.getStor pre = Devm.getStor bodyPre)
+    (entryLogs : pre.logs = bodyPre.logs)
+    (effect : WordViewEffect
+      (Devm.getStorVal bodyPre target slot) bodyPre post) :
+    WordViewEffect (Devm.getStorVal pre target slot) pre post := by
+  rcases effect with ⟨output, storage, logs⟩
+  refine ⟨?_, entryStorage.trans storage, entryLogs.trans logs⟩
+  change ReturnsWord ((Devm.getStor pre target).get slot) post
+  change ReturnsWord ((Devm.getStor bodyPre target).get slot) post at output
+  rw [entryStorage]
+  exact output
+
 private theorem lift_storage_word_view
     {pre bodyPre post : Devm} {target : Adr} {slot : B256}
     (entryState : pre.state = bodyPre.state)
     (entryLogs : pre.logs = bodyPre.logs)
     (effect : WordViewEffect
       (Devm.getStorVal bodyPre target slot) bodyPre post) :
-    WordViewEffect (Devm.getStorVal pre target slot) pre post := by
-  rcases effect with ⟨output, storage, logs⟩
-  have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
-    funext (getStor_eq_of_state_eq entryState)
-  refine ⟨?_, entryStorage.trans storage, entryLogs.trans logs⟩
-  change ReturnsWord ((Devm.getStor pre target).get slot) post
-  change ReturnsWord ((Devm.getStor bodyPre target).get slot) post at output
-  rw [entryStorage]
-  exact output
+    WordViewEffect (Devm.getStorVal pre target slot) pre post :=
+  lift_storage_word_view_of_storage
+    (funext (getStor_eq_of_state_eq entryState)) entryLogs effect
+
+/-- Exact body effect of the two-address allowance view.  Canonicality and
+namespace separation are conclusions of the successful compiled walk; only
+ordinary EVM memory well-formedness is supplied by the caller. -/
+private theorem allowance_body_effect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Func.RunCompiledTo fs sevm pre allowance (.ok post)) :
+    ValidAdr (Sevm.argWord sevm 0) ∧
+      ValidAdr (Sevm.argWord sevm 1) ∧
+      ¬ ValidAdr
+        (allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)) ∧
+      allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1) ≠
+        supplySlot ∧
+      WordViewEffect
+        (Devm.getStorVal pre sevm.currentTarget
+          (allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)))
+        pre post := by
+  unfold allowance at run
+  rcases canonicalAddressArg_body_of_ok nil_pref run with
+    ⟨ownerPre, ownerValid, ownerRun, -, ownerState, ownerMemory, ownerLogs⟩
+  rcases canonicalAddressArg_body_of_ok nil_pref ownerRun with
+    ⟨bodyPre, spenderValid, bodyRun, -, spenderState, spenderMemory,
+      spenderLogs⟩
+  have bodyMemory : pre.memory = bodyPre.memory :=
+    ownerMemory.trans spenderMemory
+  have bodyMemoryWf : Mem.Wf bodyPre.memory := by
+    rw [← bodyMemory]
+    exact memoryWf
+
+  obtain ⟨afterOwnerArg, ownerArgRun, bodyRun⟩ :=
+    runCompiledTo_prepend_inv bodyRun
+  have ownerPrefix : Sevm.argWord sevm 0 :: [] <<+ afterOwnerArg.stack :=
+    prefix_of_arg nil_pref ownerArgRun
+  obtain ⟨afterOwnerStore, ownerStoreRun, bodyRun⟩ :=
+    runCompiledTo_prepend_inv bodyRun
+  obtain ⟨ownerTail, ownerStoreMemory⟩ :=
+    of_run_mstoreAt_val ownerStoreRun ownerPrefix
+
+  obtain ⟨afterSpenderArg, spenderArgRun, bodyRun⟩ :=
+    runCompiledTo_prepend_inv bodyRun
+  have spenderPrefix : Sevm.argWord sevm 1 :: [] <<+
+      afterSpenderArg.stack :=
+    prefix_of_arg ownerTail spenderArgRun
+  obtain ⟨afterSpenderStore, spenderStoreRun, bodyRun⟩ :=
+    runCompiledTo_prepend_inv bodyRun
+  obtain ⟨spenderTail, spenderStoreMemory⟩ :=
+    of_run_mstoreAt_val spenderStoreRun spenderPrefix
+
+  obtain ⟨kecPre, pushWindowRun, bodyRun⟩ :=
+    runCompiledTo_prepend_inv bodyRun
+  have pushWindowLine := pushWindowRun
+  simp only [pushList, List.map] at pushWindowRun
+  rcases Line.of_run_cons pushWindowRun with
+    ⟨afterPush64, push64Run, pushWindowRun⟩
+  rcases Line.of_run_cons pushWindowRun with
+    ⟨afterPush0, push0Run, hnil⟩
+  cases hnil
+  have push64 := of_run_pushB256 push64Run
+  have push0 := of_run_pushB256 push0Run
+  have windowPrefix : (0 : B256) :: 64 :: [] <<+ kecPre.stack :=
+    prefix_of_push push0 (prefix_of_push push64 spenderTail)
+
+  obtain ⟨afterKec, kecRun, collisionRun⟩ :=
+    runCompiledTo_next_inv bodyRun
+  have kecSource := Ninst.Run.of_runCompiled kecRun
+  rcases prefix_of_kec_val kecSource windowPrefix with
+    ⟨hashPrefix, -⟩
+  have memoryWindow : (kecPre.memory.read 0 64).1 =
+      (Sevm.argWord sevm 0).toBytes ++
+        (Sevm.argWord sevm 1).toBytes := by
+    rw [← push0.memory, ← push64.memory, spenderStoreMemory,
+      ← (Line.of_inv Devm.memory (by line_inv) spenderArgRun),
+      ownerStoreMemory,
+      ← (Line.of_inv Devm.memory (by line_inv) ownerArgRun)]
+    exact Mem.read_two_word_writes
+      (image := bodyPre.memory.data.toList) bodyMemoryWf (by
+        intro i
+        simp) _ _
+  have keyPrefix :
+      allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1) :: [] <<+
+        afterKec.stack := by
+    change (kecPre.memory.read 0 64).1.keccak :: [] <<+
+      afterKec.stack at hashPrefix
+    rw [memoryWindow] at hashPrefix
+    simpa only [allowanceKey] using hashPrefix
+
+  rcases allowanceCollisionGuard_body_of_ok keyPrefix collisionRun with
+    ⟨readPre, keyNotAddress, keyNotSupply, readRun, readPrefix,
+      collisionState, collisionLogs⟩
+  have readEffect := stackStorageWord_effect readPrefix readRun
+
+  have stagedStorage : Devm.getStor bodyPre = Devm.getStor afterKec :=
+    (Line.of_inv Devm.getStor (by line_inv) ownerArgRun).trans
+      ((Line.of_inv Devm.getStor (by line_inv) ownerStoreRun).trans
+        ((Line.of_inv Devm.getStor (by line_inv) spenderArgRun).trans
+          ((Line.of_inv Devm.getStor (by line_inv) spenderStoreRun).trans
+            ((Line.of_inv Devm.getStor (by line_inv) pushWindowLine).trans
+              (Ninst.Hinv.inv (f := Devm.getStor) kecSource)))))
+  have stagedLogs : bodyPre.logs = afterKec.logs :=
+    (Line.of_inv Devm.logs (by line_inv) ownerArgRun).trans
+      ((Line.of_inv Devm.logs (by line_inv) ownerStoreRun).trans
+        ((Line.of_inv Devm.logs (by line_inv) spenderArgRun).trans
+          ((Line.of_inv Devm.logs (by line_inv) spenderStoreRun).trans
+            ((Line.of_inv Devm.logs (by line_inv) pushWindowLine).trans
+              (Ninst.Hinv.inv (f := Devm.logs) kecSource)))))
+  have entryStorage : Devm.getStor pre = Devm.getStor readPre :=
+    (funext (getStor_eq_of_state_eq ownerState)).trans
+      ((funext (getStor_eq_of_state_eq spenderState)).trans
+        (stagedStorage.trans
+          (funext (getStor_eq_of_state_eq collisionState))))
+  have entryLogs : pre.logs = readPre.logs :=
+    ownerLogs.trans (spenderLogs.trans
+      (stagedLogs.trans collisionLogs))
+  exact ⟨ownerValid, spenderValid, keyNotAddress, keyNotSupply,
+    lift_storage_word_view_of_storage entryStorage entryLogs readEffect⟩
 
 /-! ## Public compiled selectors -/
 
@@ -274,7 +529,7 @@ theorem balanceOf_compiled_effect
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨guardPre, hvalue, -, entryState, -, entryLogs, -, guardRun⟩
   rcases canonicalAddressArg_body_of_ok nil_pref guardRun with
-    ⟨bodyPre, hvalid, bodyRun, -, guardState, guardLogs⟩
+    ⟨bodyPre, hvalid, bodyRun, -, guardState, -, guardLogs⟩
   exact ⟨hvalue, hvalid,
     lift_storage_word_view (entryState.trans guardState)
       (entryLogs.trans guardLogs) (argStorageWord_effect bodyRun)⟩
@@ -298,10 +553,46 @@ theorem maxRedeem_compiled_effect
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨guardPre, hvalue, -, entryState, -, entryLogs, -, guardRun⟩
   rcases canonicalAddressArg_body_of_ok nil_pref guardRun with
-    ⟨bodyPre, hvalid, bodyRun, -, guardState, guardLogs⟩
+    ⟨bodyPre, hvalid, bodyRun, -, guardState, -, guardLogs⟩
   exact ⟨hvalue, hvalid,
     lift_storage_word_view (entryState.trans guardState)
       (entryLogs.trans guardLogs) (argStorageWord_effect bodyRun)⟩
+
+/-- `allowance(owner,spender)` returns the exact raw-key storage word.  The
+single successful call proves both ABI words canonical and proves the derived
+key is outside the balance and supply regions.  Logical pair attribution over
+multiple touched keys is deliberately left to the later finite trace-local
+collision premise. -/
+theorem allowance_compiled_effect
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (hselector : Sevm.selector sevm =
+      selector "allowance" [.address, .address]) :
+    sevm.value = 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      ValidAdr (Sevm.argWord sevm 1) ∧
+      ¬ ValidAdr
+        (allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)) ∧
+      allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1) ≠
+        supplySlot ∧
+      WordViewEffect
+        (Devm.getStorVal pre sevm.currentTarget
+          (allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)))
+        pre post := by
+  have hmember :
+      (selector "allowance" [.address, .address], routed 2 allowance) ∈
+        vaultFuncs := by
+    simp [vaultFuncs]
+  rcases runCompiled_enters_body_compiled_logs run hselector hmember with
+    ⟨bodyPre, hvalue, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyMemoryWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  rcases allowance_body_effect bodyMemoryWf bodyRun with
+    ⟨ownerValid, spenderValid, keyNotAddress, keyNotSupply, effect⟩
+  exact ⟨hvalue, ownerValid, spenderValid, keyNotAddress, keyNotSupply,
+    lift_storage_word_view entryState entryLogs effect⟩
 
 end ProrataWethVault
 
