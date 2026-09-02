@@ -159,6 +159,7 @@
           "scripts/proof-recipe-exceptions.json",
           "docs/PROOF_RECIPES.md",
           "Blanc/ProofRecipesGenerated.lean",
+          "Blanc/ProofRecipeTactic.lean",
           "Blanc/Tactics.lean",
           "Blanc.lean",
           ".gitignore",

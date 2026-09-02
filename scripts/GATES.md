@@ -24,6 +24,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | you changed | run this first | then, before pushing |
 |---|---|---|
 | anything at all | `scripts/check-doc-counts.sh` + `scripts/check-layering.sh` + `lake build` | `scripts/check.sh --no-build` |
+| a Lean source while iterating inside a goal | the narrowest Lake consumer target that reaches the change | `lake build` at the next checkpoint, then the change-specific row below |
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
 | the proof-recipe registry, generator, generated documentation/Lean lookup, recipe tactic, or changed proof declarations | `scripts/check-proof-recipes.sh --base main` | the **full set**, in the order below |
 | a `maxHeartbeats` or `maxRecDepth` scope, its debt baseline, or a bounded debt exception | `scripts/check-proof-debt.sh` | the **full set**, in the order below |
@@ -248,6 +249,69 @@ then refuses until the fixture runner exists; `--fresh` always forces the build.
 Source/configuration, toolchain, package-pin, trace, and runner-artifact movement
 are independently controlled.
 
+### Local Lake artifact-cache trust boundary
+
+Blanc enables Lake's local artifact cache for immutable build artifacts. Cache
+identity, not worktree location, is the reuse boundary: worktrees may share the
+toolchain-local cache only on the same host and user account, with the exact
+toolchain and dependency identity selected by Lake. They never share a writable
+`.lake`, trace, source-hash sidecar, build certificate, gate manifest, report,
+or elaboration-timing state. Restored build artifacts are read-only hard links
+or copies; every worktree keeps its own mutable metadata. Lake's artifact-file
+insertion tolerates a same-name race, but its input-to-output maps overwrite;
+Blanc therefore claims no general multiwriter safety and serializes managed
+cache writers and maintenance through Creme's semaphore.
+
+The cache key is Lake's 64-bit non-cryptographic artifact hash. An ordinary
+local restore trusts the keyed artifact and its sidecar; `lake --rehash
+--no-build build` rechecks task inputs but does not authenticate restored output
+bytes. The Blanc build certificate records Lake's trace identity, but is not a
+signature over those bytes. The corruption controls showed all three facts
+directly: Lake restored and accepted a byte flip, a truncation, and another
+module's bytes under the expected name, and the certificate minted over the
+flipped restore. Consequently a restored build must run this integrity check
+immediately before certification:
+
+```
+scripts/check-lake-artifact-cache.sh
+scripts/check-gates.sh --certify-build
+```
+
+The first command runs a small checker against the active toolchain's own
+`Lake.computeBinFileHash`. It recomputes every cache artifact's hash and
+compares it with the cache filename, then recomputes every materialized output
+whose hexadecimal sidecar names a current cache artifact. Thus the measured
+flip, truncation, and name swap all fail before certification. The explicit
+accepted residuals inside this one-host, one-user, one-toolchain trust domain
+are a collision in Lake's 64-bit non-cryptographic hash and substitution of a
+valid artifact through Lake's separate input-hash-to-output mapping. The
+checker authenticates artifact names and bytes, not that mapping's binding,
+and does not claim cryptographic collision resistance. Certification does not
+invoke the checker: the adjacent commands above are a mandatory procedural
+sequence, not an integrated certificate property. The checker also does not
+repair a corrupt cache.
+On failure, preserve the evidence, disable cache restore if necessary with
+`LAKE_ARTIFACT_CACHE=false`, run `lake cache clean`, and perform the
+repository-prescribed authoritative build before trying the integrity check
+and certification again. Never weaken a certificate or trace to accept a
+restore.
+
+Cache collection uses `scripts/gc-lake-artifact-cache.py`. Its default is a
+non-mutating dry run over every live worktree in this clone that enables both
+cache settings. Worktrees without those settings are reported as
+nonparticipants: they neither restore from nor write to this cache. The
+collector retains every recognized artifact named by a participant's live Lake
+build trace or materialized-output hash sidecar and every output mapping whose
+`depHash` is live. Recognized legacy decimal-hash traces are normalized to the
+same 64-bit identity; every other malformed or unrecognized participant build
+state is refused before deletion. Execution additionally requires an exclusive
+Creme semaphore admission and the explicit `--execute
+--ack-exclusive-semaphore` pair. The collector's file lock serializes
+collectors; Lake itself does not honor that lock, so the external exclusive
+hold is mandatory. `lake cache clean` remains the supported full reset and must
+be followed by an authoritative build and the integrity
+check above.
+
 A clean exact-HEAD goal worktree with no `.lake` can preview and then receive
 an isolated copy of a certified peer worktree's state:
 
@@ -266,6 +330,11 @@ the elaboration gate's established `scripts/baseline-elab.txt` path. The
 validated baseline is also retained inside isolated `.lake` as provenance. It
 never uses a symlink or common writable build directory. Any uncertainty
 refuses or falls back to ordinary build/genesis work.
+
+This seeder remains useful when a new goal needs a host-local elaboration
+baseline or an already-certified candidate state. It is not required merely to
+reuse immutable Lake artifacts: a fresh worktree can restore those through the
+identity-keyed local cache while keeping all worktree-local state isolated.
 
 One consequence is worth knowing, because it is measured rather than assumed: a
 comment-only edit to a Lean module moves that module's own `depHash`, since its
@@ -371,7 +440,7 @@ against the gate.
 | `scripts/check-proof-duplication.sh` | blocking, shrink-only ratchet on K1: production declarations that are byte-identical after the proof-recipe gate's own name-and-documentation normalization, at its 160-byte / 5-substantive-line floor, grouped into families by normalized bytes over the whole recursive `Blanc/**/*.lean` corpus. Every family's site count and the total may fall freely; any rise, any new family, and any module the census cannot read that is not already pinned exits nonzero without a matching bounded exception. The baseline is evidence, not a knob: each entry recomputes its own id from its own `normalized_sha256`, the floor constants are re-verified against the code at load, the whole document carries a digest, and `--write-baseline` refuses to raise any value. A run that inspected zero declarations FAILS rather than reporting zero families, and a baseline family that no longer exists in the tree is reported as an improvement rather than a stale-baseline error. Exceptions name exactly one concrete 16-hex-digit family, must equal its current site count exactly, expire, and reject wildcards, duplicates and orphans. Only K1 is ratcheted; the whole-corpus census is the deliberate out-of-band instrument, not a per-commit number | 352 modules, 14,629 declarations; 50 K1 families, 110 sites, 60 restated lines; 0 pinned unparsable modules; 18 controls | ~1.4 s |
 | `scripts/check-proof-residue.sh` | blocking, whole-tree shrink-only ratchet over the UTF-8 production files named by each registry predicate. Every predicate is a stable ID with owner/reopen/boundary metadata and a multiline source regex; comments and string literals are masked, every hit is reported as file:line, and any per-predicate or total rise, malformed registry/baseline, unreadable file, invalid/outside-root glob, or zero-file inspection fails. `--write-baseline` is explicit: it may lower counts; a new nonzero predicate needs its exact repeatable writer admission, while zero predicates auto-admit. Existing pattern/digest changes require the writer and are announced. The five ceiling-debt predicates hold ambient scopes at zero and registration/pause/Lido-core/pre-Lido family counts at 3/11/53/27 | 13 predicates; 96 residual hits; 20 controls | sub-second |
 | `scripts/check-extraction-ownership.sh` | the manifest's 14 execution-settlement declarations exist only under their common owners; no donor declaration or common-owner basename shadow survives across the historical WETH10 donor family or the Lido family; all 21 exact compatibility abbreviations are present without drift; no alias/export survives; and `Weth10HolderFlow` directly imports the common module. Eight temp-tree mutation controls plus one parser control exercise every audited channel | 14 moved declarations; 21 exact abbreviations; 9 controls | sub-second |
-| `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 353 closure modules; 21 exact allowlisted occurrences | sub-second |
+| `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 352 closure modules; 21 exact allowlisted occurrences | sub-second |
 | `scripts/check-execution-settlement.sh` | compiles the concrete execution-level CREATE code-deposit rollback fixture, requires its constructor SSTORE and branch conditions to evaluate exactly true, pins the required proof declarations with a live deletion control, proves canonical `rawFrameRoots` retains the entered child while settlement traversal prunes it, and requires both the legacy raw-commit and settlement-filtered raw-root mutants to fail for pinned reasons | 1 concrete `Exec.runOk` fixture; 3 required positive proofs + 1 deletion control; 2 raw-traversal mutants | ~8 s |
 | `scripts/check-execution-occurrence.sh --static-only` | corpus-wide occurrence owner, header, consumer, shadow, alias, export and proposition-copy controls | 10 moved-owner rows + exact headers and parser controls | unmeasured after split |
 | `scripts/check-cycle-write-free.sh --static-only` | exact owner/signature/exemption manifest and contract-wide shadow/alias/export controls | 22 positive proof pins; 19 owners; 7 signatures; parser controls | unmeasured after split |
@@ -425,7 +494,7 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | affected-module elaboration time vs the ignored host-local `scripts/baseline-elab.txt`; the first green run initializes a full baseline without comparison, and later runs represent every file while reusing unchanged recursive local-source/Lake fingerprints | 0–354 measured files; 354 represented; host-dependent local total | from a few seconds when nothing is affected to ~21 min cache-cold or first-run/`--full` historically |
+| `scripts/check-elab.sh` | affected-module elaboration time vs the ignored host-local `scripts/baseline-elab.txt`; the first green run initializes a full baseline without comparison, and later runs represent every file while reusing unchanged recursive local-source/Lake fingerprints | 0–355 measured files; 355 represented; host-dependent local total | from a few seconds when nothing is affected to ~21 min cache-cold or first-run/`--full` historically |
 | `scripts/check-elab.sh --calibrate` | initializes every module with no local row while checking a commit-seeded stratified sample of provably-unaffected modules against this host's existing rows, refusing at `2.0x` and annotating at `1.5x`. It writes green new rows to the ignored baseline but nothing to the selection cache | sample bands recomputed from this host's current rows | ordinary isolated additions remain a small fraction of a whole-tree pass; with no local baseline it falls back to full genesis |
 
 No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
@@ -446,7 +515,7 @@ invoked by the scripts above and should not be run directly in a report:
 | helper | used by | what it does |
 |---|---|---|
 | `scripts/module_path_policy.py` | the proof-recipe and proof-module-size helpers | owns the one raw module-path language and the reject-all filesystem-alias implementation: raw slash splitting precedes path construction; exact NFC Unicode-identifier components, literal prefix/suffix, exact directory spellings, no symlink component/file, link count one, and canonical containment are mandatory. It scans every `scripts/**/*.py` consumer and statically matches every literal policy-call site bidirectionally against `scripts/module-path-dereference-census.json`; the three consuming gate fingerprints include that complete Python population. Its 15-control campaign removes a live census row, attacks all five falsified raw spellings, rejects an empty walk, and covers file/directory symlinks, an external hardlink, wrong case, NFD, and a generated-write alias. Case/normalization aliases that the host cannot express skip closed and are reported; the five actual explicit-site out-and-back controls and optional-aggregate wrong-case control live in the two consumers |
-| `scripts/generate-proof-recipes.py` | `check-proof-recipes.sh` and explicit `--write` regeneration | validates the strict TOML registry, referenced symbols, example anchors and review dates through the shared module-path policy, then deterministically generates `docs/PROOF_RECIPES.md` and the import-safe `Blanc.ProofRecipesGenerated` lookup table through raw-string, alias-checked output bindings; `--check` byte-compares both outputs and `--self-test` exercises 9 schema/trigger/symbol/anchor/drift controls, the shared 15-control path campaign, 4 actual registry/aggregate out-and-back controls, and the optional aggregate wrong-case control |
+| `scripts/generate-proof-recipes.py` | `check-proof-recipes.sh` and explicit `--write` regeneration | validates the strict TOML registry, referenced symbols, example anchors and review dates through the shared module-path policy, then deterministically generates `docs/PROOF_RECIPES.md` and the import-safe `Blanc.ProofRecipesGenerated` lookup table, consumed only by the unimported `Blanc.ProofRecipeTactic` leaf, through raw-string, alias-checked output bindings; `--check` byte-compares both outputs and `--self-test` exercises 9 schema/trigger/symbol/anchor/drift controls, the shared 15-control path campaign, 4 actual registry/aggregate out-and-back controls, and the optional aggregate wrong-case control |
 | `scripts/check-proof-recipes.py` | `check-proof-recipes.sh` and `check-proof-duplication.sh` | parses same-line declarations and the exact production wrapped-header form from original source spans while failing closed on unsupported declaration-looking syntax; all Git/import-derived and walked source dereferences use the shared exact-spelling, alias-rejecting, root-contained policy. In ordinary mode it runs the generator check, computes changed declarations from Git including untracked files, traverses local imports, reports only high-confidence normalized declaration copies and misplaced selector tables, and validates narrow expiring exceptions fail-closed; in `--duplication` mode it reuses that same parser, normalization and substantive floor to inventory every K1 family over the whole production corpus, compares it with the digest-sealed shrink-only baseline, validates family-scoped expiring exceptions, and blocks on any rise. `--write-baseline` is its shrink-only evidence refresh, `--list` prints where each live family's sites are, and `--self-test` runs the three parser-header controls, anonymous-instance boundary and seven detector controls together with the generator/path controls and 18 duplication controls while `check-proof-duplication.sh --self-test` runs the duplication controls alone |
 | `scripts/check-proof-debt.py` | `check-proof-debt.sh` | lexes production Lean without counting comments or literals, assigns resource settings to declaration/local/ambient scopes, blocks unexcepted new or increased ceilings against the monotone baseline, validates exact writer-only permanent admissions for reviewed new command/local scopes, and validates declaration-scoped expiring exceptions |
 | `scripts/check-proof-module-size.py` | `check-proof-module-size.sh` | counts physical source lines in direct production modules, compares known-module membership and shrink-only ceilings, reports warning/hard-cap findings, and validates bounded evidence-bearing exceptions |
