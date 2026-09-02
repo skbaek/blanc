@@ -367,6 +367,26 @@ theorem Nat.two_word_div_lt_modulus
       Nat.mul_le_mul_right (2 ^ width) (by omega)
     _ = 2 ^ width * denominator := Nat.mul_comm _ _
 
+/-- EVM word division is natural-number division re-embedded into one word,
+including the EVM convention that division by zero returns zero. -/
+theorem wordDiv_eq_toB256_div (x y : B256) :
+    x / y = Nat.toB256 (x.toNat / y.toNat) := by
+  by_cases yZero : y = B256.zero
+  · subst y
+    change (B256.divMod x B256.zero).fst =
+      Nat.toB256 (x.toNat / B256.zero.toNat)
+    unfold B256.divMod
+    have zeroEq : B256.zero = (0 : B256) := by rfl
+    rw [if_pos zeroEq]
+    change (0 : B256) = Nat.toB256 (x.toNat / 0)
+    rw [Nat.div_zero]
+    rfl
+  · have quotientBound : x.toNat / y.toNat < 2 ^ 256 :=
+      (Nat.div_le_self x.toNat y.toNat).trans_lt (B256.toNat_lt x)
+    apply B256.toNat_inj
+    rw [B256.toNat_div yZero,
+      B256.toNat_toB256_of_lt quotientBound]
+
 /-- The word-level representation of `2^256 mod denominator` used by standard
 512-by-256 division. -/
 def wordModulusFactorWord (denominator : B256) : B256 :=
@@ -1348,5 +1368,18 @@ theorem wideQuotientWord_toNat
     simpa [wordModulusN] using
       B256.toNat_lt (wideQuotientWord high low denominator)
   exact Nat.ModEq.eq_of_lt_of_lt outputMod outputBound quotientBound
+
+theorem wideQuotientWord_eq_toB256
+    {high low denominator : B256}
+    (nonzero : denominator ≠ B256.zero)
+    (noOverflow : high < denominator) :
+    wideQuotientWord high low denominator =
+      Nat.toB256 (wideNumeratorN high low / denominator.toNat) := by
+  apply B256.toNat_inj
+  rw [wideQuotientWord_toNat nonzero noOverflow]
+  rw [B256.toNat_toB256_of_lt]
+  unfold wideNumeratorN wordModulusN
+  exact Nat.two_word_div_lt_modulus
+    (B256.toNat_lt low) (B256.toNat_lt_toNat noOverflow)
 
 end Blanc

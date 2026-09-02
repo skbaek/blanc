@@ -617,7 +617,9 @@ bounded natural. `lowestSetBitWord`, `removeLowestSetBitWord`, and
 divisibility, and odd-denominator facts needed downstream.
 `Nat.sub_mod_eq_div_mul`, `Nat.sub_mod_div_factor`, and
 `Nat.two_word_div_lt_modulus` provide the generic remainder-removal,
-factor-removal, and quotient-width bounds. The generic
+factor-removal, and quotient-width bounds. `wordDiv_eq_toB256_div` identifies
+ordinary EVM word division with re-embedded natural division, including the
+zero-divisor convention. The generic
 `Nat.fold_divided_words` identity and `foldDividedWords_toNat` justify folding
 a divided high/low pair back into one word. `wideReducedLowWord`,
 `wideReducedHighWord`, `wideReducedNumeratorN`, and
@@ -639,7 +641,8 @@ modulo the full word modulus. For an odd denominator,
 `inverseNewtonIter_six_seed_modEq_wordModulus` closes the complete refinement.
 Finally, `wideQuotientWord` composes reduction, folding, and refinement, while
 `wideQuotientWord_toNat` proves its exact floor-division result from the
-standard `high < denominator` branch guard, with no extra magnitude premise.
+standard `high < denominator` branch guard, with no extra magnitude premise;
+`wideQuotientWord_eq_toB256` gives the corresponding word equality directly.
 These declarations are COMMON_API-only: an `Int.ModEq` goal is not reliably
 Newton-specific enough for an automatic proof recipe.
 
