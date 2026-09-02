@@ -48,6 +48,14 @@ namespace Blanc
 
 open Jaune
 
+/-- A member of the right input belongs to a `HashSet` union.  Keeping this
+bridge opaque prevents contract proofs from unfolding concrete hashed keys
+while converting between membership notation and `contains` equations. -/
+theorem hashSetPair_mem_union_right
+    (left right : Std.HashSet (Adr × B256)) (key : Adr × B256)
+    (hkey : key ∈ right) : key ∈ left.union right :=
+  Std.HashSet.mem_union_iff.mpr (Or.inr hkey)
+
 /-- A successful outcome-generalized walk is the ordinary successful walk.
 This is the inverse needed by constructive callers after a prefix was phrased
 uniformly over success and revert outcomes. -/
@@ -3239,6 +3247,39 @@ lemma accessDelegation_frame {devm d1 : Devm} {a dadr : Adr} {dp : Bool}
     simp only [hd] at h
   · cases h; exact ⟨rfl, rfl, rfl, rfl, rfl⟩
   · cases h; exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+
+/-- Delegation resolution does not touch either transient storage or the
+storage-access warm set.  These projections are shared by concrete call
+crossings when they settle a child back into its parent frame. -/
+lemma accessDelegation_worldMeta {devm d1 : Devm} {a dadr : Adr}
+    {dp : Bool} {code : ByteArray} {dgc : Nat}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    d1.transientStorage = devm.transientStorage ∧
+      d1.accessedStorageKeys = devm.accessedStorageKeys := by
+  unfold accessDelegation at h
+  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
+    simp only [hd] at h
+  · cases h
+    exact ⟨rfl, rfl⟩
+  · cases h
+    exact ⟨rfl, rfl⟩
+
+/-- Subtracting a balance changes no account's storage.  The statement is
+kept at the call boundary because zero-value call settlement needs precisely
+this projection, independently of any contract-specific code. -/
+lemma state_subBal_stor {st stmid : State} {sender a : Adr}
+    {value : B256} (h : st.subBal sender value = some stmid) :
+    (stmid.get a).stor = (st.get a).stor := by
+  unfold State.subBal at h
+  split at h
+  · contradiction
+  · cases h
+    unfold State.setBal
+    by_cases hsa : sender = a
+    · subst a
+      rw [State.get_set_self]
+      rfl
+    · rw [State.get_set_ne st hsa]
 
 /-- The account-access charge is at most the cold price. -/
 lemma accessCost_le {x : Adr} {a : AdrSet} : accessCost x a ≤ gasColdAccountAccess := by

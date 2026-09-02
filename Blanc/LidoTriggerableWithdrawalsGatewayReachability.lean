@@ -1864,6 +1864,51 @@ theorem isPaused_true_warm_runtime_runCompiledTo
   · simpa only [runtime, fs, Devm.setMach_setMach,
       show G + 140 + 79 = G + 219 by omega] using mainRun
 
+/-- Total-execution wrapper for an enclosing warm `STATICCALL`.  The program
+walk remains the source of the result; the installed code witness only
+connects that walk to `exec`. -/
+theorem isPaused_true_warm_exec
+    (m : Msg) (dp : DeployParams) (storedUntil : B256) (G : Nat)
+    (hcompile : some m.code.toList = Prog.compile (runtime dp))
+    (hdata : m.data = isPausedCalldata)
+    (hgas : m.gas = G + 220)
+    (hvalue : m.value = 0)
+    (hstored : (initDevm m).getStorVal (initSevm m).currentTarget
+      resumeSinceSlot = storedUntil)
+    (hwarm : ((initSevm m).currentTarget, resumeSinceSlot) ∈
+      (initDevm m).accessedStorageKeys)
+    (hpaused : (initSevm m).benvStat.time < storedUntil) :
+    ∃ post,
+      exec (initEvm m) = .ok post ∧
+      post.output = (1 : B256).toBytes ∧
+      post.getStorVal (initSevm m).currentTarget resumeSinceSlot =
+        storedUntil ∧
+      post.gasLeft = G ∧
+      post.error = (initDevm m).error ∧
+      post.meta = ((initDevm m).withOutput (1 : B256).toBytes).meta ∧
+      post.world = (initDevm m).world := by
+  have hdata' : (initSevm m).data = isPausedCalldata := hdata
+  have hguard : (initSevm m).data.length.toB256 <? (4 : B256) = 0 := by
+    rw [hdata', isPausedCalldata_length]
+    decide
+  have hselector : Sevm.selector (initSevm m) = selIsPaused := by
+    apply selector_eq_of_data_eq_abiSelectorBytes_append
+      (selected := selIsPaused) (tail := [])
+    · rfl
+    · simpa [isPausedCalldata] using hdata'
+  obtain ⟨post, walk, output, stored, gas, error, hmeta, world⟩ :=
+    isPaused_true_warm_runtime_runCompiledTo
+      (dp := dp) (sevm := initSevm m) (base := initDevm m)
+      (storedUntil := storedUntil) (G := G) hguard hselector hvalue
+      hstored hwarm hpaused
+  have hbase : (initDevm m).setMach
+      ⟨[], Mem.empty, G + 220⟩ = initDevm m := by
+    rw [← hgas]
+    rfl
+  rw [hbase] at walk
+  exact ⟨post, Prog.exec_of_runCompiledTo walk hcompile, output, stored,
+    gas, error, hmeta, world⟩
+
 /-- The same successful query from a cold resume slot costs exactly `2121`
 gas in the body: precisely 2000 more than the warm case. -/
 private theorem isPaused_true_cold_runCompiledTo
