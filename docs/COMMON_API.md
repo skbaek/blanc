@@ -614,7 +614,10 @@ For the factor-and-fold stage of full-width division, `Nat.lowestSetBit` and
 bounded natural. `lowestSetBitWord`, `removeLowestSetBitWord`, and
 `wordModulusDivFactorWord` are the corresponding word operations; their
 `_toNat`, `_spec`, `_ne_zero`, and `_odd` theorems expose the positivity,
-divisibility, and odd-denominator facts needed downstream. The generic
+divisibility, and odd-denominator facts needed downstream.
+`Nat.sub_mod_eq_div_mul`, `Nat.sub_mod_div_factor`, and
+`Nat.two_word_div_lt_modulus` provide the generic remainder-removal,
+factor-removal, and quotient-width bounds. The generic
 `Nat.fold_divided_words` identity and `foldDividedWords_toNat` justify folding
 a divided high/low pair back into one word. `wideReducedLowWord`,
 `wideReducedHighWord`, `wideReducedNumeratorN`, and
@@ -634,6 +637,9 @@ For modular inverses, `inverseSeedWord`, `inverseNewtonStepWord`, and
 modulo the full word modulus. For an odd denominator,
 `inverseSeedWord_modEq_sixteen` proves the standard seed correct and
 `inverseNewtonIter_six_seed_modEq_wordModulus` closes the complete refinement.
+Finally, `wideQuotientWord` composes reduction, folding, and refinement, while
+`wideQuotientWord_toNat` proves its exact floor-division result from the
+standard `high < denominator` branch guard, with no extra magnitude premise.
 These declarations are COMMON_API-only: an `Int.ModEq` goal is not reliably
 Newton-specific enough for an automatic proof recipe.
 

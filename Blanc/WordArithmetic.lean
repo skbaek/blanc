@@ -318,6 +318,55 @@ theorem productHighWord_toNat (x y : B256) :
 def wideNumeratorN (high low : B256) : Nat :=
   high.toNat * wordModulusN + low.toNat
 
+/-- Removing a natural number's remainder leaves its exact quotient times the
+divisor. This identity also covers the divisor-zero convention. -/
+theorem Nat.sub_mod_eq_div_mul (n d : Nat) :
+    n - n % d = n / d * d := by
+  have division := Nat.mod_add_div n d
+  rw [Nat.mul_comm d (n / d)] at division
+  omega
+
+/-- After remainder removal, dividing out any positive factor of the divisor
+leaves the original quotient times the correspondingly reduced divisor. -/
+theorem Nat.sub_mod_div_factor
+    {n d twos : Nat}
+    (twosPositive : 0 < twos)
+    (twosDvdDenominator : twos ∣ d) :
+    (n - n % d) / twos = n / d * (d / twos) := by
+  rw [Nat.sub_mod_eq_div_mul]
+  obtain ⟨factor, factorEq⟩ := twosDvdDenominator
+  subst d
+  let quotient := n / (twos * factor)
+  change quotient * (twos * factor) / twos =
+    quotient * ((twos * factor) / twos)
+  calc
+    quotient * (twos * factor) / twos =
+        twos * (quotient * factor) / twos := by
+      congr 1
+      ring
+    _ = quotient * factor :=
+      Nat.mul_div_cancel_left _ twosPositive
+    _ = quotient * ((twos * factor) / twos) := by
+      rw [Nat.mul_div_cancel_left factor twosPositive]
+
+/-- A two-word numerator divided by a single-word denominator fits in one
+word whenever the high word is smaller than the denominator. -/
+theorem Nat.two_word_div_lt_modulus
+    {width high low denominator : Nat}
+    (lowBound : low < 2 ^ width)
+    (highLt : high < denominator) :
+    (high * 2 ^ width + low) / denominator < 2 ^ width := by
+  have denominatorPositive : 0 < denominator := by omega
+  rw [Nat.div_lt_iff_lt_mul denominatorPositive]
+  calc
+    high * 2 ^ width + low <
+        high * 2 ^ width + 2 ^ width :=
+      Nat.add_lt_add_left lowBound _
+    _ = (high + 1) * 2 ^ width := by ring
+    _ ≤ denominator * 2 ^ width :=
+      Nat.mul_le_mul_right (2 ^ width) (by omega)
+    _ = 2 ^ width * denominator := Nat.mul_comm _ _
+
 /-- The word-level representation of `2^256 mod denominator` used by standard
 512-by-256 division. -/
 def wordModulusFactorWord (denominator : B256) : B256 :=
@@ -1225,5 +1274,79 @@ theorem inverseNewtonIter_six_seed_modEq_wordModulus
           (inverseSeedWord denominator)).toNat : Int) ≡ 1
       [ZMOD (wordModulusN : Int)] :=
   inverseNewtonIter_six_modEq (inverseSeedWord_modEq_sixteen odd)
+
+/-! ## Exact full-width quotient -/
+
+/-- The single-word quotient produced by remainder reduction, power-of-two
+factor folding, and six Newton inverse refinements. -/
+def wideQuotientWord (high low denominator : B256) : B256 :=
+  wideFoldedDividendWord high low denominator *
+    inverseNewtonIter
+      (removeLowestSetBitWord denominator) 6
+      (inverseSeedWord (removeLowestSetBitWord denominator))
+
+/-- The standard full-width word algorithm returns the exact floor quotient
+whenever its branch guard `high < denominator` establishes that the quotient
+fits in one EVM word. -/
+theorem wideQuotientWord_toNat
+    {high low denominator : B256}
+    (nonzero : denominator ≠ B256.zero)
+    (noOverflow : high < denominator) :
+    (wideQuotientWord high low denominator).toNat =
+      wideNumeratorN high low / denominator.toNat := by
+  let twos := (lowestSetBitWord denominator).toNat
+  let reducedDenominator := removeLowestSetBitWord denominator
+  let inverse := inverseNewtonIter reducedDenominator 6
+    (inverseSeedWord reducedDenominator)
+  let quotient := wideNumeratorN high low / denominator.toNat
+  have twosSpec := lowestSetBitWord_spec nonzero
+  have reducedDivision :
+      wideReducedNumeratorN high low denominator / twos =
+        quotient * reducedDenominator.toNat := by
+    have factored := Nat.sub_mod_div_factor
+      (n := wideNumeratorN high low) (d := denominator.toNat)
+      (twos := twos) twosSpec.1 twosSpec.2.1
+    simpa [twos, reducedDenominator, quotient,
+      wideReducedNumeratorN, wideRemainderWord_toNat nonzero,
+      removeLowestSetBitWord_toNat nonzero] using factored
+  have foldedMod :
+      (wideFoldedDividendWord high low denominator).toNat ≡
+        quotient * reducedDenominator.toNat [MOD wordModulusN] := by
+    rw [wideFoldedDividendWord_toNat nonzero, reducedDivision]
+    exact Nat.mod_modEq _ _
+  have inverseCorrect :
+      reducedDenominator.toNat * inverse.toNat ≡
+        1 [MOD wordModulusN] := by
+    rw [← Int.natCast_modEq_iff]
+    exact inverseNewtonIter_six_seed_modEq_wordModulus
+      (removeLowestSetBitWord_odd nonzero)
+  have productMod :
+      (wideFoldedDividendWord high low denominator).toNat *
+          inverse.toNat ≡ quotient [MOD wordModulusN] := by
+    calc
+      (wideFoldedDividendWord high low denominator).toNat *
+          inverse.toNat ≡
+        (quotient * reducedDenominator.toNat) * inverse.toNat
+          [MOD wordModulusN] :=
+          foldedMod.mul (Nat.ModEq.refl _)
+      _ = quotient * (reducedDenominator.toNat * inverse.toNat) := by
+        ring
+      _ ≡ quotient * 1 [MOD wordModulusN] :=
+        (Nat.ModEq.refl quotient).mul inverseCorrect
+      _ = quotient := by simp
+  have outputMod :
+      (wideQuotientWord high low denominator).toNat ≡
+        quotient [MOD wordModulusN] := by
+    rw [wideQuotientWord, B256.toNat_mul_mod]
+    exact (Nat.mod_modEq _ _).trans productMod
+  have quotientBound : quotient < wordModulusN := by
+    unfold quotient wideNumeratorN wordModulusN
+    exact Nat.two_word_div_lt_modulus
+      (B256.toNat_lt low) (B256.toNat_lt_toNat noOverflow)
+  have outputBound :
+      (wideQuotientWord high low denominator).toNat < wordModulusN := by
+    simpa [wordModulusN] using
+      B256.toNat_lt (wideQuotientWord high low denominator)
+  exact Nat.ModEq.eq_of_lt_of_lt outputMod outputBound quotientBound
 
 end Blanc
