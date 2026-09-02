@@ -387,6 +387,22 @@ theorem wordDiv_eq_toB256_div (x y : B256) :
     rw [B256.toNat_div yZero,
       B256.toNat_toB256_of_lt quotientBound]
 
+/-- The EVM word remainder is zero exactly when the corresponding natural
+remainder is zero, under the ordinary nonzero-divisor premise. -/
+theorem wordMod_eq_zero_iff
+    {x y : B256} (nonzero : y ≠ B256.zero) :
+    x % y = 0 ↔ x.toNat % y.toNat = 0 := by
+  constructor
+  · intro wordZero
+    have natZero := congrArg B256.toNat wordZero
+    rw [B256.toNat_mod nonzero] at natZero
+    change x.toNat % y.toNat = 0 at natZero
+    exact natZero
+  · intro natZero
+    apply B256.toNat_inj
+    rw [B256.toNat_mod nonzero, natZero]
+    rfl
+
 /-- The word-level representation of `2^256 mod denominator` used by standard
 512-by-256 division. -/
 def wordModulusFactorWord (denominator : B256) : B256 :=
@@ -416,6 +432,23 @@ theorem wideRemainderWord_toNat
     wordModulusFactorWord_toNat nonzero]
   unfold wideNumeratorN
   simp only [Nat.add_mod, Nat.mul_mod, Nat.mod_mod]
+
+/-- The full-width remainder word is zero exactly on an exact natural
+division. -/
+theorem wideRemainderWord_eq_zero_iff
+    {high low denominator : B256} (nonzero : denominator ≠ B256.zero) :
+    wideRemainderWord high low denominator = 0 ↔
+      wideNumeratorN high low % denominator.toNat = 0 := by
+  constructor
+  · intro wordZero
+    have natZero := congrArg B256.toNat wordZero
+    rw [wideRemainderWord_toNat nonzero] at natZero
+    change wideNumeratorN high low % denominator.toNat = 0 at natZero
+    exact natZero
+  · intro natZero
+    apply B256.toNat_inj
+    rw [wideRemainderWord_toNat nonzero, natZero]
+    rfl
 
 theorem wideRemainderWord_le_numerator
     {high low denominator : B256} (nonzero : denominator ≠ 0) :
@@ -747,16 +780,35 @@ theorem one_and_toB256_eq_mod_two (n : Nat) (hn : n < 2 ^ 256) :
   rw [B256.toNat_toB256_of_lt (by omega : n % 2 < 2 ^ 256)]
   exact Nat.one_and_eq_mod_two n
 
-theorem toB256_add_one_of_lt (n : Nat) (hn : n + 1 < 2 ^ 256) :
+/-- Adding one after embedding a natural into an EVM word agrees with
+embedding the successor. Both sides use the same modulo-`2^256`
+representation, so this identity needs no no-overflow premise. -/
+theorem toB256_add_one (n : Nat) :
     Nat.toB256 n + 1 = Nat.toB256 (n + 1) := by
   apply B256.toNat_inj
-  rw [B256.toNat_add_eq_of_nof]
-  · rw [B256.toNat_toB256_of_lt (by omega : n < 2 ^ 256),
-      B256.toNat_toB256_of_lt hn]
-    rfl
-  · unfold B256.Nof
-    rw [B256.toNat_toB256_of_lt (by omega : n < 2 ^ 256)]
-    exact hn
+  rw [B256.toNat_add, B256.toNat_toB256, B256.toNat_one,
+    B256.toNat_toB256]
+  exact Nat.lo_add_lo n 1 256
+
+/-- A staged floor quotient and remainder implement ceiling division when the
+remainder's zero test agrees with the natural remainder. This bridge is
+independent of how either word was computed. -/
+theorem roundedQuotientWord_eq_toB256_ceilDiv
+    {n d : Nat} {quotient remainder : B256}
+    (quotientEq : quotient = Nat.toB256 (n / d))
+    (remainderZero : remainder = 0 ↔ n % d = 0) :
+    (if remainder = 0 then quotient else quotient + 1) =
+      Nat.toB256 (ceilDiv n d) := by
+  by_cases exactDivision : n % d = 0
+  · rw [if_pos (remainderZero.mpr exactDivision), quotientEq]
+    simp [ceilDiv, exactDivision]
+  · rw [if_neg (fun h => exactDivision (remainderZero.mp h)), quotientEq,
+      toB256_add_one]
+    simp [ceilDiv, exactDivision]
+
+theorem toB256_add_one_of_lt (n : Nat) (_hn : n + 1 < 2 ^ 256) :
+    Nat.toB256 n + 1 = Nat.toB256 (n + 1) := by
+  exact toB256_add_one n
 
 theorem toUInt64_shiftRight_one (n : Nat) (hn : n < 2 ^ 64) :
     n.toUInt64 >>> (1 : Nat).toUInt64 = (n / 2).toUInt64 := by
