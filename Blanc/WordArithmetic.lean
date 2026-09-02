@@ -417,6 +417,23 @@ theorem Nat.two_word_div_lt_modulus
       Nat.mul_le_mul_right (2 ^ width) (by omega)
     _ = 2 ^ width * denominator := Nat.mul_comm _ _
 
+/-- EVM word addition is natural-number addition re-embedded modulo the word
+modulus.  This is the unconditional bridge: callers that need the unwrapped
+natural sum should separately establish the corresponding bound. -/
+theorem wordAdd_eq_toB256_add (x y : B256) :
+    x + y = Nat.toB256 (x.toNat + y.toNat) := by
+  apply B256.toNat_inj
+  rw [B256.toNat_add, B256.toNat_toB256]
+
+/-- When the subtrahend is no larger than the minuend, EVM word subtraction
+is the ordinary natural difference re-embedded as one word. -/
+theorem wordSub_eq_toB256_sub_of_le
+    {x y : B256} (h : y ≤ x) :
+    x - y = Nat.toB256 (x.toNat - y.toNat) := by
+  apply B256.toNat_inj
+  rw [B256.toNat_sub_eq_of_le x y h, B256.toNat_toB256_of_lt]
+  exact Nat.lt_of_le_of_lt (Nat.sub_le _ _) (B256.toNat_lt x)
+
 /-- EVM word division is natural-number division re-embedded into one word,
 including the EVM convention that division by zero returns zero. -/
 theorem wordDiv_eq_toB256_div (x y : B256) :

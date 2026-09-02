@@ -623,7 +623,10 @@ bounded natural. `lowestSetBitWord`, `removeLowestSetBitWord`, and
 divisibility, and odd-denominator facts needed downstream.
 `Nat.sub_mod_eq_div_mul`, `Nat.sub_mod_div_factor`, and
 `Nat.two_word_div_lt_modulus` provide the generic remainder-removal,
-factor-removal, and quotient-width bounds. `wordDiv_eq_toB256_div` identifies
+factor-removal, and quotient-width bounds. `wordAdd_eq_toB256_add` identifies
+wrapped word addition with natural addition re-embedded modulo `2^256`, while
+`wordSub_eq_toB256_sub_of_le` identifies non-underflowing word subtraction
+with the re-embedded natural difference. `wordDiv_eq_toB256_div` identifies
 ordinary EVM word division with re-embedded natural division, including the
 zero-divisor convention, while `wordMod_eq_zero_iff` identifies its exact-
 division test. `toB256_add_one` records the unconditional modular
