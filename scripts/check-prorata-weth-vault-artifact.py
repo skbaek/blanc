@@ -47,7 +47,7 @@ ABI = [
 ]
 
 AUX = [
-    "Func.rev",
+    "Func.revert",
     "returnWord",
     "depositAfterQuote",
     "mintAfterQuote",
@@ -240,7 +240,7 @@ def check_pins(source: str, artifact: str, generator: str, errors: list[str]) ->
         "def endpoint (words : Nat) (body : Func) : Func := nonpayable (requireStaticArgs words body)",
         "def routed (words : Nat) (body : Func) : Func := endpoint words body",
         "def balanceOf : Func := canonicalAddressArg 0 <| arg 0 +++ sload ::: returnWord",
-        "pushList [64, 0] +++ kec ::: checkAllowanceSlotCollision +++ (Func.rev <?> (sload ::: returnWord))",
+        "pushList [64, 0] +++ keccak256 ::: checkAllowanceSlotCollision +++ (Func.revert <?> (sload ::: returnWord))",
         "def maxMintAfterAssetCapSlot : Nat := 10",
         "loadWord quoteWord +++ shareRoom +++ lt ::: ((shareRoom +++ .call returnWordSlot) <?> (loadWord quoteWord +++ .call returnWordSlot))",
         "productOverTwoPow256 [pushB256 B256.max] stagedDenominator .down maxMintAfterAssetCapSlot",
@@ -276,7 +276,7 @@ def check_pins(source: str, artifact: str, generator: str, errors: list[str]) ->
         errors.append("artifact: auxLayout_exact is missing")
     else:
         observed_aux = re.findall(
-            r"Func\.rev|returnWord|depositAfterQuote|mintAfterQuote|withdrawAfterQuote|"
+            r"Func\.revert|returnWord|depositAfterQuote|mintAfterQuote|withdrawAfterQuote|"
             r"redeemAfterQuote|transferStaged|withdrawBurn|redeemBurn|maxMintAfterAssetCap",
             aux_match.group(1),
         )

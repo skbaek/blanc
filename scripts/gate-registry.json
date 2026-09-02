@@ -3008,7 +3008,7 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — PRORATA WETH vault boundary: 3 exact child forms; 14 G3 headline axiom owners; whole-source call closure and no-alias pins green$"
+          "^OK — PRORATA WETH vault boundary: 3 exact child forms; 16 G3 headline axiom owners; whole-source call closure and no-alias pins green$"
         ]
       }
     }

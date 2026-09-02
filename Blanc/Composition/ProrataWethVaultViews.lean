@@ -1,4 +1,5 @@
 import Blanc.ProrataWethVaultViews
+import Blanc.CompiledFixedInvariance
 import Blanc.Composition.ProrataWethVaultStaging
 
 /-!
@@ -17,34 +18,6 @@ open Jaune.Ninst Ninst
 open scoped LogOutputHinv
 open Source
 
-private instance : PopBurn.Inv Devm.logs := ⟨fun run => run.logs⟩
-private instance : Burn.Inv Devm.logs := ⟨fun run => run.logs⟩
-
-private instance : Rinst.Hinv Devm.logs Rinst.retdatasize := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).logs
-
-private instance : Rinst.Hinv Devm.logs Rinst.mload := ⟨by
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨offset, popped⟩, pop, run⟩
-  rcases Except.bind_eq_ok run with ⟨burned, burn, pushed⟩
-  rcases Devm.pop_of_popToNat pop with ⟨actual, popDiff⟩
-  have burnDiff := Devm.burn_of_chargeGas burn
-  have pushDiff := Devm.push_of_push pushed
-  exact ((popDiff.logs.trans burnDiff.logs).trans rfl).trans pushDiff.logs⟩
-
-private instance : Linst.Hinv Devm.logs Devm.logs Linst.rev := by
-  constructor
-  intro sevm pre post run
-  simp only [Linst.Run, Linst.run] at run
-  rcases Except.bind_eq_ok run with ⟨s1, h1, run⟩
-  rcases Except.bind_eq_ok run with ⟨s2, h2, run⟩
-  rcases Except.bind_eq_ok run with ⟨s3, h3, impossible⟩
-  contradiction
-
 /-- Resources required by the exact WETH child reached from one
 `totalAssets` body entry.  The gas premise is restricted to the call state
 actually produced by the fixed staging line; it is not a universal gas claim. -/
@@ -54,14 +27,23 @@ def TotalAssetsResources (sevm : Sevm) (entry : Devm) : Prop :=
       Line.Run sevm entry balanceOfStaging callPre →
       StaticGasAvailable callPre 36
 
-/-- The body-entry resource package for one exact compiled endpoint run. -/
-def TotalAssetsCompiledResources (sevm : Sevm) (post : Devm) : Prop :=
+/-- The body-entry resource package for a selected compiled endpoint whose
+body contains one `totalAssets` crossing.  Quantifying over the body here
+keeps the gas premise tied to the exact selector occurrence rather than to a
+universal source function. -/
+def TotalAssetsCompiledResourcesFor
+    (sevm : Sevm) (post : Devm) (body : Func) : Prop :=
   ∀ bodyPre,
     Func.RunCompiledTo
         (Blanc.ProrataWethVault.vault.main ::
           Blanc.ProrataWethVault.vault.aux)
-        sevm bodyPre Blanc.ProrataWethVault.totalAssets (.ok post) →
+        sevm bodyPre body (.ok post) →
       TotalAssetsResources sevm bodyPre
+
+/-- Existing specialization for the public `totalAssets()` endpoint. -/
+def TotalAssetsCompiledResources (sevm : Sevm) (post : Devm) : Prop :=
+  TotalAssetsCompiledResourcesFor sevm post
+    Blanc.ProrataWethVault.totalAssets
 
 /-- Exact body effect of `totalAssets`: the configured WETH program is read at
 the vault address, every account's storage and the parent log frame are
@@ -93,27 +75,10 @@ theorem totalAssets_body_effect
     refine ⟨config.distinct, config.nonprecompile, ?_⟩
     rw [← congrFun stagingCode wethAccount]
     exact config.code
-  obtain ⟨word, returnPre, callStorage, callLogs, returnedWord,
-      wordPrefix, returnRun⟩ :=
+  obtain ⟨word, returnPre, -, -, bodyStorage, bodyLogs, returnedWord,
+      wordPrefix, -, returnRun⟩ :=
     readTotalAssets_exactEffect callConfig memory staging resources.1
       (resources.2 callPre staging) crossing suffix
-  have suffixSource : Func.Run fs sevm callPost
-      (iszero :::
-        (Func.rev <?>
-          (pushB256 32 ::: retdatasize ::: eq ::: iszero :::
-            (Func.rev <?>
-              (pushB256 0 ::: mload :::
-                Blanc.ProrataWethVault.returnWord))))) post :=
-    Func.Run.of_runCompiled
-      (Func.RunCompiled.of_runCompiledTo_ok suffix)
-  have suffixStorage : Devm.getStor callPost = Devm.getStor post :=
-    Func.of_inv Devm.getStor Devm.getStor (by
-      unfold Blanc.ProrataWethVault.returnWord
-      func_inv) suffixSource
-  have suffixLogs : callPost.logs = post.logs :=
-    Func.of_inv Devm.logs Devm.logs (by
-      unfold Blanc.ProrataWethVault.returnWord
-      func_inv) suffixSource
   have stagingStorage : Devm.getStor entry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by line_inv) staging
   have stagingLogs : entry.logs = callPre.logs :=
@@ -122,6 +87,14 @@ theorem totalAssets_body_effect
       Blanc.ProrataWethVault.returnWord post :=
     Func.Run.of_runCompiled
       (Func.RunCompiled.of_runCompiledTo_ok returnRun)
+  have returnStorage : Devm.getStor returnPre = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by
+      unfold Blanc.ProrataWethVault.returnWord
+      func_inv) returnSource
+  have returnLogs : returnPre.logs = post.logs :=
+    Func.of_inv Devm.logs Devm.logs (by
+      unfold Blanc.ProrataWethVault.returnWord
+      func_inv) returnSource
   have output : ReturnsWord word post := by
     simpa only [Blanc.ProrataWethVault.returnWord] using
       (returnsWord_of_storeReturn wordPrefix (by
@@ -140,8 +113,8 @@ theorem totalAssets_body_effect
       (congrFun stagingStorage wethAccount)).symm
   rw [entryWord] at output
   exact ⟨output,
-    stagingStorage.trans (callStorage.symm.trans suffixStorage),
-    stagingLogs.trans (callLogs.symm.trans suffixLogs)⟩
+    stagingStorage.trans (bodyStorage.symm.trans returnStorage),
+    stagingLogs.trans (bodyLogs.symm.trans returnLogs)⟩
 
 /-- Compiled `totalAssets()` returns the exact pre-state WETH balance booked
 to the vault.  Direct code identity, non-precompile routing, distinct accounts,

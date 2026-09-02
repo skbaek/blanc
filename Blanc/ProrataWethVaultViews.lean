@@ -148,7 +148,7 @@ private theorem shortString_body_effect
     Line.of_inv Devm.memory (by line_inv) returnRangeLine
   have output : Devm.output post =
       shortStringOutput word shift length := by
-    rw [(of_run_ret_val p10 returnRun).1,
+    rw [(of_run_return_val p10 returnRun).1,
       show (0 : B256).toNat = 0 from rfl,
       show (96 : B256).toNat = 96 from rfl,
       Mem.Reads.read (returnMemory ▸ reads7) 0 96,
@@ -285,7 +285,7 @@ private theorem canonicalAddressArg_body_of_ok
         ((Line.of_inv Devm.logs (by line_inv) guardLine).trans
           guardPop.logs)⟩
   · rcases revertRoute with ⟨_, revertPre, -, -, -, revertRun⟩
-    rcases runCompiledTo_rev_inv revertRun with ⟨_, impossible, -⟩
+    rcases runCompiledTo_revert_inv revertRun with ⟨_, impossible, -⟩
     cases impossible
 
 /-- The vault's allowance guard retains the raw key below its collision flag.
@@ -359,7 +359,7 @@ private theorem allowanceCollisionGuard_body_of_ok
     {key : B256} {tail : Stack} {body : Func}
     (hp : key :: tail <<+ pre.stack)
     (run : Func.RunCompiledTo fs sevm pre
-      (checkAllowanceSlotCollision +++ (Func.rev <?> body)) (.ok post)) :
+      (checkAllowanceSlotCollision +++ (Func.revert <?> body)) (.ok post)) :
     ∃ bodyPre,
       ¬ ValidAdr key ∧ key ≠ supplySlot ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
@@ -383,7 +383,7 @@ private theorem allowanceCollisionGuard_body_of_ok
       (Line.of_inv Devm.state (by line_inv) guardLine).trans guardPop.state,
       (Line.of_inv Devm.logs (by line_inv) guardLine).trans guardPop.logs⟩
   · rcases revertRoute with ⟨_, revertPre, -, -, -, revertRun⟩
-    rcases runCompiledTo_rev_inv revertRun with ⟨_, impossible, -⟩
+    rcases runCompiledTo_revert_inv revertRun with ⟨_, impossible, -⟩
     cases impossible
 
 private theorem stackStorageWord_effect
@@ -521,7 +521,7 @@ private theorem allowance_body_effect
   obtain ⟨spenderTail, spenderStoreMemory⟩ :=
     of_run_mstoreAt_val spenderStoreRun spenderPrefix
 
-  obtain ⟨kecPre, pushWindowRun, bodyRun⟩ :=
+  obtain ⟨keccak256Pre, pushWindowRun, bodyRun⟩ :=
     runCompiledTo_prepend_inv bodyRun
   have pushWindowLine := pushWindowRun
   simp only [pushList, List.map] at pushWindowRun
@@ -532,15 +532,15 @@ private theorem allowance_body_effect
   cases hnil
   have push64 := of_run_pushB256 push64Run
   have push0 := of_run_pushB256 push0Run
-  have windowPrefix : (0 : B256) :: 64 :: [] <<+ kecPre.stack :=
+  have windowPrefix : (0 : B256) :: 64 :: [] <<+ keccak256Pre.stack :=
     prefix_of_push push0 (prefix_of_push push64 spenderTail)
 
-  obtain ⟨afterKec, kecRun, collisionRun⟩ :=
+  obtain ⟨afterKec, keccak256Run, collisionRun⟩ :=
     runCompiledTo_next_inv bodyRun
-  have kecSource := Ninst.Run.of_runCompiled kecRun
-  rcases prefix_of_kec_val kecSource windowPrefix with
+  have keccak256Source := Ninst.Run.of_runCompiled keccak256Run
+  rcases prefix_of_keccak256_val keccak256Source windowPrefix with
     ⟨hashPrefix, -⟩
-  have memoryWindow : (kecPre.memory.read 0 64).1 =
+  have memoryWindow : (keccak256Pre.memory.read 0 64).1 =
       (Sevm.argWord sevm 0).toBytes ++
         (Sevm.argWord sevm 1).toBytes := by
     rw [← push0.memory, ← push64.memory, spenderStoreMemory,
@@ -554,7 +554,7 @@ private theorem allowance_body_effect
   have keyPrefix :
       allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1) :: [] <<+
         afterKec.stack := by
-    change (kecPre.memory.read 0 64).1.keccak :: [] <<+
+    change (keccak256Pre.memory.read 0 64).1.keccak :: [] <<+
       afterKec.stack at hashPrefix
     rw [memoryWindow] at hashPrefix
     simpa only [allowanceKey] using hashPrefix
@@ -570,14 +570,14 @@ private theorem allowance_body_effect
         ((Line.of_inv Devm.getStor (by line_inv) spenderArgRun).trans
           ((Line.of_inv Devm.getStor (by line_inv) spenderStoreRun).trans
             ((Line.of_inv Devm.getStor (by line_inv) pushWindowLine).trans
-              (Ninst.Hinv.inv (f := Devm.getStor) kecSource)))))
+              (Ninst.Hinv.inv (f := Devm.getStor) keccak256Source)))))
   have stagedLogs : bodyPre.logs = afterKec.logs :=
     (Line.of_inv Devm.logs (by line_inv) ownerArgRun).trans
       ((Line.of_inv Devm.logs (by line_inv) ownerStoreRun).trans
         ((Line.of_inv Devm.logs (by line_inv) spenderArgRun).trans
           ((Line.of_inv Devm.logs (by line_inv) spenderStoreRun).trans
             ((Line.of_inv Devm.logs (by line_inv) pushWindowLine).trans
-              (Ninst.Hinv.inv (f := Devm.logs) kecSource)))))
+              (Ninst.Hinv.inv (f := Devm.logs) keccak256Source)))))
   have entryStorage : Devm.getStor pre = Devm.getStor readPre :=
     (funext (getStor_eq_of_state_eq ownerState)).trans
       ((funext (getStor_eq_of_state_eq spenderState)).trans

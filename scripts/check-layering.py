@@ -122,7 +122,9 @@ SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesG
           "BalanceAlgebra", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "CompiledStackSafety", "AbstractStackSafety", "AbstractStackTransfer", "AbstractStackCertificate",
-          "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
+          "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance",
+          "NonpayableInversion",
+          "LinearDispatch", "LinearDispatchCorrectness",
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
           "ExecutionMessageStateTrace", "ExecutionTransactionStateTrace",
           "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryStateTrace",
@@ -269,6 +271,7 @@ CONTRACTS = {
                             "ProrataWethVaultArtifact",
                             "ProrataWethVaultArithmetic",
                             "ProrataWethVaultArithmeticExec",
+                            "ProrataWethVaultConversions",
                             "ProrataWethVaultFunctional",
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
@@ -368,6 +371,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultEffects",
     "Composition.ProrataWethVaultStaging",
     "Composition.ProrataWethVaultViews",
+    "Composition.ProrataWethVaultConversions",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

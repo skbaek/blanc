@@ -1,5 +1,6 @@
 import Blanc.Composition.ProrataWethVaultBoundary
 import Blanc.Ladder
+import Blanc.NonpayableInversion
 import Blanc.Solvent
 import Blanc.WethLive
 
@@ -94,7 +95,7 @@ private theorem updateAllowance_output
     rcases of_run_next run with ⟨_, _, run⟩
     rcases of_run_next run with ⟨_, _, run⟩
     rcases of_run_prepend checkAddress _ run with ⟨_, _, run⟩
-    rcases of_run_branch_rev run with ⟨_, _, run⟩
+    rcases of_run_branch_revert run with ⟨_, _, run⟩
     rcases of_run_next run with ⟨_, _, run⟩
     rcases of_run_next run with ⟨_, _, run⟩
     rcases of_run_next run with ⟨_, _, run⟩
@@ -104,7 +105,7 @@ private theorem updateAllowance_output
     · rcases of_run_next finiteRun with ⟨_, _, finiteRun⟩
       rcases of_run_next finiteRun with ⟨_, _, finiteRun⟩
       rcases of_run_next finiteRun with ⟨_, _, finiteRun⟩
-      rcases of_run_branch_rev finiteRun with ⟨_, _, finiteRun⟩
+      rcases of_run_branch_revert finiteRun with ⟨_, _, finiteRun⟩
       rcases of_run_next finiteRun with ⟨_, _, finiteRun⟩
       rcases of_run_next finiteRun with ⟨_, _, finiteRun⟩
       rcases of_run_next finiteRun with ⟨_, _, trueRun⟩
@@ -113,53 +114,6 @@ private theorem updateAllowance_output
   · exact returnTrue_output callerReturn
 
 /-! ## Exact selector entry -/
-
-/-- The shared nonpayable wrapper is silent in the log and output frames in
-addition to preserving the state and memory exported by the neutral inversion
-theorem. -/
-private theorem run_body_of_run_nonpayable_frame_logs
-    {fs : List Func} {sevm : Sevm} {s r : Devm} {body : Func}
-    (run : Func.Run fs sevm s (nonpayable body) r) :
-    ∃ mid, sevm.value = 0 ∧ s.state = mid.state ∧
-      s.memory = mid.memory ∧ s.logs = mid.logs ∧
-      s.output = mid.output ∧ Func.Run fs sevm mid body r := by
-  unfold nonpayable at run
-  refine run_prepend_elim _ [callvalue, iszero] ?_ run
-  intro s1 hline hbranch
-  rcases Line.of_run_cons hline with ⟨s0, hcv, hline'⟩
-  rcases Line.of_run_cons hline' with ⟨s1', hiz, hnil⟩
-  cases hnil
-  have hpv : [sevm.value] <<+ s0.stack :=
-    prefix_of_push (of_run_callvalue hcv) nil_pref
-  have hpflag : [sevm.value =? 0] <<+ s1.stack :=
-    prefix_of_iszero hiz hpv
-  rcases of_run_branch hbranch with
-    ⟨s2, hpop, hrev⟩ |
-    ⟨w, s2, s3, hnz, hpop, hburn, hbody⟩
-  · exact absurd hrev not_run_rev
-  · have hpop' := hpop.stack
-    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpop'
-    rw [hpop'] at hpflag
-    have hw : (sevm.value =? 0) = w :=
-      pref_head_unique hpflag (pref_append [w] s2.stack)
-    have hflag : (sevm.value =? 0) ≠ 0 := by
-      rw [hw]
-      exact hnz
-    have hvalue : sevm.value = 0 := by
-      by_cases hvalue : sevm.value = 0
-      · exact hvalue
-      · simp [B256.eqCheck, hvalue] at hflag
-    refine ⟨s3, hvalue, ?_, ?_, ?_, ?_, hbody⟩
-    · exact (Line.of_inv Devm.state (by line_inv) hline).trans
-        (hpop.state.trans hburn.state)
-    · exact (Line.of_inv Devm.memory (by line_inv) hline).trans
-        (hpop.memory.trans hburn.memory)
-    · exact ((of_run_callvalue hcv).logs.trans
-        (Ninst.Hinv.inv (f := Devm.logs) hiz)).trans
-          (hpop.logs.trans hburn.logs)
-    · exact ((of_run_callvalue hcv).output.trans
-        (Ninst.Hinv.inv (f := Devm.output) hiz)).trans
-          (hpop.output.trans hburn.output)
 
 /-- A successful exact compiled WETH run with a recognized selector reaches
 that selector's actual nonpayable body.  This is the composition-owned WETH
@@ -329,7 +283,7 @@ private theorem transferBody_exactEffect
   have storage1 : Devm.getStor s = Devm.getStor s1 :=
     Line.of_inv Devm.getStor (by line_inv) h1
   clear h1
-  rcases of_run_branch_rev run with ⟨s2, pop2, run⟩
+  rcases of_run_branch_revert run with ⟨s2, pop2, run⟩
   have popStack2 := pop2.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack2
   rw [popStack2] at hp1
@@ -346,7 +300,7 @@ private theorem transferBody_exactEffect
   have storage3 : Devm.getStor s = Devm.getStor s3 :=
     storage2.trans (Line.of_inv Devm.getStor (by line_inv) h3)
   clear h3 hp2
-  rcases of_run_branch_rev run with ⟨s4, pop4, run⟩
+  rcases of_run_branch_revert run with ⟨s4, pop4, run⟩
   have popStack4 := pop4.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack4
   rw [popStack4] at hp3
@@ -462,7 +416,7 @@ private theorem transferFromBody_exactEffect
   rcases of_check_non_address hs2 h3 with ⟨invalidSrc, hs3, srcIff⟩
   have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) h3)
   clear h3 hs2
-  rcases of_run_branch_rev run with ⟨a4, pop4, run⟩
+  rcases of_run_branch_revert run with ⟨a4, pop4, run⟩
   have popStack4 := pop4.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack4
   rw [popStack4] at hs3
@@ -552,7 +506,7 @@ private theorem transferFromBody_exactEffect
   have storage := storage.trans
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r11 Line.Run.nil))
   clear r11 hs10
-  rcases of_run_branch_rev run with ⟨a12, pop12, run⟩
+  rcases of_run_branch_revert run with ⟨a12, pop12, run⟩
   have popStack12 := pop12.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack12
   rw [popStack12] at hs11
@@ -605,7 +559,7 @@ private theorem transferFromBody_exactEffect
   have storage' := storage'.trans
     (Line.of_inv Devm.getStor (by line_inv) h16)
   clear h16 hs15
-  rcases of_run_branch_rev run with ⟨a17, pop17, run⟩
+  rcases of_run_branch_revert run with ⟨a17, pop17, run⟩
   have popStack17 := pop17.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack17
   rw [popStack17] at hs16

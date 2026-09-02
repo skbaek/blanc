@@ -73,8 +73,8 @@ host-local observations; `unmeasured` is preserved honestly and no parallel sums
 | 61 | `scripts/check-transient-settlement.sh --semantic-only` | yes | — | yes | `lake-build` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
 | 62 | `scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites` | yes | — | yes | `lake-build`, `layering` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
 | 63 | `scripts/check-drip-stack-certificate.sh` | — | yes | yes | — | files, tools | not expensive | unmeasured on this candidate (LOCAL DRAFT) | light | none known |
-| 64 | `scripts/check-prorata-weth-vault-artifact.sh` | yes | yes | — | `lake-build` | files, lean_entries, tools | not expensive | ~21 s from an incremental source change; sub-second when built | elaboration | none known |
-| 65 | `scripts/check-prorata-weth-vault-boundary.sh` | yes | yes | — | `lake-build`, `layering` | files, lean_entries, tools | not expensive | unmeasured | elaboration | none known |
+| 64 | `scripts/check-prorata-weth-vault-artifact.sh` | yes | yes | — | `lake-build` | files, lean_entries, tools | not expensive | sub-second after its owner-managed build prerequisite | light | none known |
+| 65 | `scripts/check-prorata-weth-vault-boundary.sh` | yes | yes | — | `lake-build`, `layering` | files, lean_entries, tools | not expensive | sub-second by default; optional mutation campaign unmeasured | light | none known |
 
 ## Population reconciliation
 

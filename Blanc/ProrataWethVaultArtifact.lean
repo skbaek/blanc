@@ -57,7 +57,7 @@ theorem fallback_exact : revertSlot = 1 := rfl
 
 theorem auxLayout_exact :
     vaultAux =
-      [ Func.rev,
+      [ Func.revert,
         returnWord,
         depositAfterQuote,
         mintAfterQuote,
