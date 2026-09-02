@@ -206,5 +206,5 @@
     "Blanc/Weth10StaticSilence.lean",
     "Blanc/Weth10AllowanceArmsPermit.lean"
   ],
-  "wethPublicHeaderAggregate": "d2e25a9dffaaa89f90605fd14703df7cc4c5aa36bdac62390852cb9ebe7e1037"
+  "wethPublicHeaderAggregate": "fd49d032c7dbe77084d7b3ef179aae13ed4e893068a1156af3bf48b0d0968038"
 }
