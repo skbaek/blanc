@@ -2790,6 +2790,39 @@
           "^OK — PRORATA WETH vault artifact: 25 selectors; 10 auxiliaries; 17481 runtime bytes; sha256 e57aebd462ffb71c703194f18b1577f3a58b8287a440b89619e9e62a5ded6770; kernel compile witness green$"
         ]
       }
+    },
+    {
+      "command": [
+        "scripts/check-prorata-weth-vault-boundary.sh"
+      ],
+      "depends_on": [
+        "layering"
+      ],
+      "id": "prorata-weth-vault-boundary",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata-weth-vault-boundary.sh",
+          "scripts/check-prorata-weth-vault-boundary.py",
+          "Blanc.lean",
+          "scripts/check-layering.py"
+        ],
+        "lean_entries": [
+          "Blanc/Composition/ProrataWethVaultStaging.lean"
+        ],
+        "tools": [
+          "lean",
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The focused Lean root supplies Lake's transitive depHash for the exact WETH boundary, effects and source-staging owners. The static checker directly reads the root import and COMPOSITION table, while the registered layering dependency supplies the independent total-architecture verdict. Optional --falsify mutants are a hard-hold campaign and are deliberately outside the cached default command.",
+      "order": 62,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — PRORATA WETH vault boundary: 3 exact child forms; 14 G3 headline axiom owners; whole-source call closure and no-alias pins green$"
+        ]
+      }
     }
   ],
   "schema": 1

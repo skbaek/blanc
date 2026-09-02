@@ -15,7 +15,8 @@
     "beacon-deposit-assurance",
     "beacon-deposit-deployment",
     "weth10-current-mainnet",
-    "prorata-weth-vault-artifact"
+    "prorata-weth-vault-artifact",
+    "prorata-weth-vault-boundary"
   ],
   "rows": [
     {"id":"doc-counts","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale published theorem counts"]},
@@ -79,6 +80,7 @@
     {"id":"weth-coverage","work":["candidate-positive","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"proxy-pair-upgrade-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"proxy-pair-upgrade-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build","layering"],"historical_catches":[]},
-    {"id":"prorata-weth-vault-artifact","work":["candidate-positive","static-corpus"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]}
+    {"id":"prorata-weth-vault-artifact","work":["candidate-positive","static-corpus"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
+    {"id":"prorata-weth-vault-boundary","work":["candidate-positive","static-corpus"],"resource_class":"elaboration","prerequisites":["lake-build","layering"],"historical_catches":[]}
   ]
 }

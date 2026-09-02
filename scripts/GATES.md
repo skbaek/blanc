@@ -77,6 +77,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | the elaboration selector, cache contract, or timing-gate implementation | `scripts/check-elab.sh --self-test` | `scripts/check-elab.sh --full` |
 | FMINT or WETH compiled bytes | `scripts/check-fmint.sh --no-build` + `scripts/check-weth.sh --no-build` | both `scripts/check-*-coverage.sh` |
 | PRORATA compiled bytes or conformance artifacts | `scripts/check-prorata.sh --no-build` | — |
+| the PRORATA vault/WETH exact-call composition, source staging, effect adapters, or G3 boundary checker | `scripts/check-prorata-weth-vault-boundary.sh` | the **full set**, in the order below |
 | a FMINT or WETH fixture, fixture generator, or borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
 | the pinned Jaune revision (`lakefile.lean` + `lake-manifest.json`) | `lake build` | the **full set**, in the order below |
 
@@ -162,6 +163,7 @@ scripts/check-cycle-write-free.sh --semantic-only
 scripts/check-transient-settlement.sh --semantic-only
 scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites
 scripts/check-prorata-weth-vault-artifact.sh
+scripts/check-prorata-weth-vault-boundary.sh
 ```
 
 Even the full set normally uses bare `check-elab.sh`: its content-addressed
@@ -485,6 +487,7 @@ against the gate.
 | `scripts/check-transient-settlement.sh --semantic-only` | concrete evaluator, mutants and live positive-deletion controls | 25 evaluator controls; 22 Lean mutants | unmeasured after split |
 | `scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites` | axiom and executable witness evidence after consuming total layering | 13 axiom pins; 12 evaluator rows | unmeasured after split |
 | `scripts/check-prorata-weth-vault-artifact.sh` | builds the family-owned G2 artifact and fail-closed binds its complete selector/name/type/arity/body routing surface, nonpayable/static-ABI/default behavior, configured WETH and virtual-offset constants, flat storage-key scheme, append-only auxiliary layout, approved full-width `maxMint` cap, event and code-size theorem pins, contiguous generated literal with repeated chunks canonicalized, exact runtime SHA-256, EIP-170 bound, and kernel compile equality | 25 selectors; 10 auxiliaries; 69 logical chunks (68 literals + 1 canonical alias); 17,481 runtime bytes; 1 kernel compile witness | ~21 s from an incremental source change; sub-second when built |
+| `scripts/check-prorata-weth-vault-boundary.sh` | builds the composition-owned G3 root, then fail-closed pins the exact configured WETH account and code, retained CALL/STATICCALL program occurrences, success and rollback projections, source-derived calldata and caller/owner/receiver roles, canonical true-return checks, whole-vault exclusion of hidden external call sites, absence of WETH10 imports and alias premises, and root/layering admission. `--falsify` is optional and requires the semaphore's exclusive hard hold; it compiles seven isolated diagnostic-pinned mutants covering wrong target, code, rollback polarity, calldata, owner role, false return, and a hidden `approve` path | 3 exact child forms; 14 G3 headline axiom owners; whole-source call closure; 7 optional Lean mutants | unmeasured |
 | `scripts/check-fmint.sh --no-build` | fmint fixture conformance, the manifest cross-check, independent source-hash verification for the Solidity borrower, and byte-equality of every fixture's fmint pre-state code against the committed `Blanc.fmintCode` literal | 11 fixtures, 188 assertions, 4617 source bytes, 1257 runtime bytes | sub-second |
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 988 bytes | sub-second |
 | `scripts/check-prorata.sh --no-build` | replays the 14 committed BPO2 PRORATA blocks through Jaune, checks their bidirectional manifest, timing-free canonical oracle-vector bytes, and byte-equality of every fixture's PRORATA pre-state code against frozen `Blanc.prorataCode`. This CI-safe replay deliberately needs no external target; `check-prorata-current-mainnet.sh` separately regenerates the documents. `--self-test` requires a deleted manifest expectation and a mutated canonical vector both to fail in isolated copies | 14 BPO2 fixtures, 131 generation-time assertions, 4 canonical oracle vectors; 2 self-test falsifiers | sub-second |
