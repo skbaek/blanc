@@ -2064,10 +2064,71 @@ theorem divideWideCore_up_trace
   exact finishQuotient_up_trace finishWf finishReads quotientAt remainderAt
     finishStack lookup finishRun
 
-/-- When a division mode rejects wide overflow, every successful `divideWide`
-walk proves the guard `high < denominator` and reaches the shared wide core.
-The guard walk is independent of the core's rounding policy. -/
-theorem divideWide_core_trace
+/-- Capped-floor wide-core finishing passes the same staged quotient as floor
+mode.  Saturation is handled by the guard outside this core. -/
+theorem divideWideCore_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high low denominator : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divideWideCore .capDown continuation) (.ok final)) :
+    ∃ bodyPre,
+      wideQuotientWord high low denominator :: tail <<+ bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨finishPre, finishImage, finishStack, finishWf, finishReads,
+      quotientAt, remainderAt, finishRun⟩ :=
+    divideWideCore_staging_trace memoryWf memoryReads denominatorAt highAt
+      lowAt stack run
+  exact finishQuotient_capDown_trace finishWf finishReads quotientAt
+    finishStack lookup finishRun
+
+/-- Capped ceiling-predecessor wide-core finishing exposes the exact staged
+floor quotient/remainder pair.  The natural `ceilDiv - 1` bridge is applied
+only after the surrounding theorem establishes a positive numerator. -/
+theorem divideWideCore_capCeilPred_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high low denominator : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divideWideCore .capCeilPred continuation) (.ok final)) :
+    ∃ bodyPre,
+      (if wideRemainderWord high low denominator = 0 then
+          wideQuotientWord high low denominator - 1
+        else wideQuotientWord high low denominator) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨finishPre, finishImage, finishStack, finishWf, finishReads,
+      quotientAt, remainderAt, finishRun⟩ :=
+    divideWideCore_staging_trace memoryWf memoryReads denominatorAt highAt
+      lowAt stack run
+  exact finishQuotient_capCeilPred_trace finishWf finishReads quotientAt
+    remainderAt finishStack lookup finishRun
+
+/-- Every `divideWide` walk follows its word comparison into either the
+shared arithmetic core or the mode-specific overflow body.  Keeping both arms
+here lets reverting modes eliminate overflow while capacity modes prove
+saturation without replaying the guard. -/
+theorem divideWide_arm_trace
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {high low denominator : B256} {continuation : Nat}
     {mode : QuotientMode} {tail : Stack}
@@ -2080,16 +2141,22 @@ theorem divideWide_core_trace
     (_lowAt : Bytes.toB256
       (image.sliceD (lowWord * 32).toNat 32 0) = low)
     (stack : tail <<+ pre.stack)
-    (overflowReverts : divisionOverflow mode continuation = Func.rev)
     (run : Func.RunCompiledTo fs sevm pre
       (divideWide mode continuation) (.ok final)) :
-    ∃ corePre,
-      high < denominator ∧
-      tail <<+ corePre.stack ∧
-      Mem.Wf corePre.memory ∧
-      Mem.Reads corePre.memory image ∧
-      Func.RunCompiledTo fs sevm corePre
-        (divideWideCore mode continuation) (.ok final) := by
+    (high < denominator ∧
+      ∃ corePre,
+        tail <<+ corePre.stack ∧
+        Mem.Wf corePre.memory ∧
+        Mem.Reads corePre.memory image ∧
+        Func.RunCompiledTo fs sevm corePre
+          (divideWideCore mode continuation) (.ok final)) ∨
+    (¬ high < denominator ∧
+      ∃ overflowPre,
+        tail <<+ overflowPre.stack ∧
+        Mem.Wf overflowPre.memory ∧
+        Mem.Reads overflowPre.memory image ∧
+        Func.RunCompiledTo fs sevm overflowPre
+          (divisionOverflow mode continuation) (.ok final)) := by
   unfold divideWide at run
   obtain ⟨s1, denominatorRun, run⟩ :=
     runCompiledTo_prepend_inv run
@@ -2123,15 +2190,80 @@ theorem divideWide_core_trace
     have coreReads : Mem.Reads corePre.memory image := by
       rw [← corePop.memory]
       exact reads3
-    exact ⟨corePre, noOverflow, corePrefix, coreWf, coreReads, coreRun⟩
+    exact Or.inl ⟨noOverflow, corePre, corePrefix, coreWf, coreReads, coreRun⟩
   · have zeroPrefix : (0 : B256) :: tail <<+ s3.stack := by
       simpa [B256.ltCheck, noOverflow] using p3
     obtain ⟨overflowPre, overflowPop, overflowRun, overflowPrefix⟩ :=
       Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
-    rw [overflowReverts] at overflowRun
+    have overflowWf : Mem.Wf overflowPre.memory := by
+      rw [← overflowPop.memory]
+      exact wf3
+    have overflowReads : Mem.Reads overflowPre.memory image := by
+      rw [← overflowPop.memory]
+      exact reads3
+    exact Or.inr ⟨noOverflow, overflowPre, overflowPrefix, overflowWf,
+      overflowReads, overflowRun⟩
+
+/-- When a division mode rejects wide overflow, every successful `divideWide`
+walk proves the guard `high < denominator` and reaches the shared wide core. -/
+theorem divideWide_core_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high low denominator : B256} {continuation : Nat}
+    {mode : QuotientMode} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (stack : tail <<+ pre.stack)
+    (overflowReverts : divisionOverflow mode continuation = Func.rev)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divideWide mode continuation) (.ok final)) :
+    ∃ corePre,
+      high < denominator ∧
+      tail <<+ corePre.stack ∧
+      Mem.Wf corePre.memory ∧
+      Mem.Reads corePre.memory image ∧
+      Func.RunCompiledTo fs sevm corePre
+        (divideWideCore mode continuation) (.ok final) := by
+  rcases divideWide_arm_trace memoryWf memoryReads denominatorAt highAt lowAt
+      stack run with
+    ⟨noOverflow, corePre, corePrefix, coreWf, coreReads, coreRun⟩ |
+    ⟨overflow, overflowPre, overflowPrefix, overflowWf, overflowReads,
+      overflowRun⟩
+  · exact ⟨corePre, noOverflow, corePrefix, coreWf, coreReads, coreRun⟩
+  · rw [overflowReverts] at overflowRun
     obtain ⟨overflowPost, impossible, -⟩ :=
       runCompiledTo_rev_inv overflowRun
     cases impossible
+
+/-- Either capacity mode's overflow body pushes the all-ones saturation word
+and calls the selected continuation. -/
+theorem divisionOverflow_max_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {mode : QuotientMode} {continuation : Nat} {body : Func} {tail : Stack}
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (caps : divisionOverflow mode continuation =
+      (pushB256 B256.max ::: .call continuation))
+    (run : Func.RunCompiledTo fs sevm pre
+      (divisionOverflow mode continuation) (.ok final)) :
+    ∃ bodyPre,
+      B256.max :: tail <<+ bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  rw [caps] at run
+  obtain ⟨pushPost, pushRun, callRun⟩ := runCompiledTo_next_inv run
+  have pushSource := Ninst.Run.of_runCompiled pushRun
+  have maxPrefix : B256.max :: tail <<+ pushPost.stack :=
+    prefix_of_push (of_run_pushB256 pushSource) stack
+  obtain ⟨bodyPre, callBurn, bodyRun⟩ :=
+    runCompiledTo_call_inv lookup callRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  rw [← callBurn.stack]
+  exact maxPrefix
 
 /-- A successful floor-mode wide-arm walk proves its own overflow guard and
 passes the exact full-width quotient word to the continuation. The rejected
@@ -2227,6 +2359,156 @@ theorem divideWide_up_trace
   refine ⟨bodyPre, ?_, bodyRun⟩
   rw [roundedEq] at roundedPrefix
   exact roundedPrefix
+
+/-- Capped-floor wide division returns the mathematical floor quotient when
+it fits and the all-ones word otherwise. -/
+theorem divideWide_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high low denominator : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (denominatorNonzero : denominator ≠ B256.zero)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divideWide .capDown continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (min maxWordN
+            (wideNumeratorN high low / denominator.toNat)) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  rcases divideWide_arm_trace memoryWf memoryReads denominatorAt highAt lowAt
+      stack run with
+    ⟨noOverflow, corePre, corePrefix, coreWf, coreReads, coreRun⟩ |
+    ⟨overflow, overflowPre, overflowPrefix, overflowWf, overflowReads,
+      overflowRun⟩
+  · obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+      divideWideCore_capDown_trace coreWf coreReads denominatorAt highAt lowAt
+        corePrefix lookup coreRun
+    have quotientEq :
+        wideQuotientWord high low denominator =
+          Nat.toB256 (wideNumeratorN high low / denominator.toNat) :=
+      wideQuotientWord_eq_toB256 denominatorNonzero noOverflow
+    have quotientBound :
+        wideNumeratorN high low / denominator.toNat < wordModulusN := by
+      unfold wideNumeratorN wordModulusN
+      exact Nat.two_word_div_lt_modulus
+        (B256.toNat_lt low) (B256.toNat_lt_toNat noOverflow)
+    have quotientLeMax :
+        wideNumeratorN high low / denominator.toNat ≤ maxWordN := by
+      unfold maxWordN
+      omega
+    refine ⟨bodyPre, ?_, bodyRun⟩
+    rw [quotientEq] at quotientPrefix
+    rw [Nat.min_eq_right quotientLeMax]
+    exact quotientPrefix
+  · obtain ⟨bodyPre, maxPrefix, bodyRun⟩ :=
+      divisionOverflow_max_trace overflowPrefix lookup rfl overflowRun
+    have denominatorLeHigh : denominator.toNat ≤ high.toNat :=
+      B256.toNat_le_toNat (le_of_not_gt overflow)
+    have quotientLarge :
+        wordModulusN ≤
+          wideNumeratorN high low / denominator.toNat := by
+      unfold wideNumeratorN wordModulusN
+      exact Nat.pow_le_two_word_div_of_le_high
+        (B256.toNat_pos denominatorNonzero) denominatorLeHigh
+    have maxLeQuotient :
+        maxWordN ≤ wideNumeratorN high low / denominator.toNat :=
+      (Nat.le_of_lt maxWordN_lt_wordModulusN).trans quotientLarge
+    refine ⟨bodyPre, ?_, bodyRun⟩
+    rw [Nat.min_eq_left maxLeQuotient, toB256_maxWordN]
+    exact maxPrefix
+
+/-- Capped ceiling-predecessor wide division returns
+`min maxWordN (ceilDiv numerator denominator - 1)`.  A positive numerator is
+required exactly for the finisher's exact-division subtraction. -/
+theorem divideWide_capCeilPred_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high low denominator : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (denominatorNonzero : denominator ≠ B256.zero)
+    (numeratorPositive : 0 < wideNumeratorN high low)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divideWide .capCeilPred continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (min maxWordN
+            (ceilDiv (wideNumeratorN high low) denominator.toNat - 1)) ::
+        tail <<+ bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  rcases divideWide_arm_trace memoryWf memoryReads denominatorAt highAt lowAt
+      stack run with
+    ⟨noOverflow, corePre, corePrefix, coreWf, coreReads, coreRun⟩ |
+    ⟨overflow, overflowPre, overflowPrefix, overflowWf, overflowReads,
+      overflowRun⟩
+  · obtain ⟨bodyPre, roundedPrefix, bodyRun⟩ :=
+      divideWideCore_capCeilPred_trace coreWf coreReads denominatorAt highAt
+        lowAt corePrefix lookup coreRun
+    have quotientEq :
+        wideQuotientWord high low denominator =
+          Nat.toB256 (wideNumeratorN high low / denominator.toNat) :=
+      wideQuotientWord_eq_toB256 denominatorNonzero noOverflow
+    have quotientBound :
+        wideNumeratorN high low / denominator.toNat < wordModulusN := by
+      unfold wideNumeratorN wordModulusN
+      exact Nat.two_word_div_lt_modulus
+        (B256.toNat_lt low) (B256.toNat_lt_toNat noOverflow)
+    have roundedEq :
+        (if wideRemainderWord high low denominator = 0 then
+            wideQuotientWord high low denominator - 1
+          else wideQuotientWord high low denominator) =
+          Nat.toB256
+            (ceilDiv (wideNumeratorN high low) denominator.toNat - 1) :=
+      ceilPredQuotientWord_eq_toB256 numeratorPositive quotientBound
+        quotientEq (wideRemainderWord_eq_zero_iff denominatorNonzero)
+    have roundedLeMax :
+        ceilDiv (wideNumeratorN high low) denominator.toNat - 1 ≤
+          maxWordN := by
+      exact (ceilDiv_sub_one_le_div _ _).trans (by
+        unfold maxWordN
+        omega)
+    refine ⟨bodyPre, ?_, bodyRun⟩
+    rw [roundedEq] at roundedPrefix
+    rw [Nat.min_eq_right roundedLeMax]
+    exact roundedPrefix
+  · obtain ⟨bodyPre, maxPrefix, bodyRun⟩ :=
+      divisionOverflow_max_trace overflowPrefix lookup rfl overflowRun
+    have denominatorLeHigh : denominator.toNat ≤ high.toNat :=
+      B256.toNat_le_toNat (le_of_not_gt overflow)
+    have quotientLarge :
+        wordModulusN ≤
+          wideNumeratorN high low / denominator.toNat := by
+      unfold wideNumeratorN wordModulusN
+      exact Nat.pow_le_two_word_div_of_le_high
+        (B256.toNat_pos denominatorNonzero) denominatorLeHigh
+    have maxLeRounded :
+        maxWordN ≤
+          ceilDiv (wideNumeratorN high low) denominator.toNat - 1 := by
+      by_cases exactDivision :
+          wideNumeratorN high low % denominator.toNat = 0 <;>
+        simp [ceilDiv, exactDivision] <;>
+        unfold maxWordN at * <;> omega
+    refine ⟨bodyPre, ?_, bodyRun⟩
+    rw [Nat.min_eq_left maxLeRounded, toB256_maxWordN]
+    exact maxPrefix
 
 /-- Proof-carrying memory image after the quotient/remainder staging shared by
 all `divideSimple` rounding modes. -/
@@ -2450,6 +2732,81 @@ theorem divideSimple_up_toB256_trace
         else low / denominator + 1) =
         Nat.toB256 (ceilDiv low.toNat denominator.toNat) :=
     roundedQuotientWord_eq_toB256_ceilDiv quotientEq
+      (wordMod_eq_zero_iff denominatorNonzero)
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  rw [roundedEq] at roundedPrefix
+  exact roundedPrefix
+
+/-- The capped-floor simple arm has no saturation case: a single-word
+numerator's floor quotient always fits in one word. -/
+theorem divideSimple_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {denominator low : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divideSimple .capDown continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256 (low.toNat / denominator.toNat) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨finishPre, finishStack, finishWf, finishReads, finishRun⟩ :=
+    divideSimple_staging_trace memoryWf memoryReads denominatorAt lowAt stack
+      run
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    finishQuotient_capDown_trace finishWf finishReads
+      (simpleDivisionTraceImage_quotient image low denominator) finishStack
+      lookup finishRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  rw [wordDiv_eq_toB256_div] at quotientPrefix
+  exact quotientPrefix
+
+/-- On a positive single-word numerator, the capped ceiling-predecessor arm
+implements the exact natural `ceilDiv - 1` result without saturation. -/
+theorem divideSimple_capCeilPred_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {denominator low : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (denominatorNonzero : denominator ≠ B256.zero)
+    (numeratorPositive : 0 < low.toNat)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divideSimple .capCeilPred continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256 (ceilDiv low.toNat denominator.toNat - 1) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨finishPre, finishStack, finishWf, finishReads, finishRun⟩ :=
+    divideSimple_staging_trace memoryWf memoryReads denominatorAt lowAt stack
+      run
+  obtain ⟨bodyPre, roundedPrefix, bodyRun⟩ :=
+    finishQuotient_capCeilPred_trace finishWf finishReads
+      (simpleDivisionTraceImage_quotient image low denominator)
+      (simpleDivisionTraceImage_remainder image low denominator) finishStack
+      lookup finishRun
+  have quotientBound : low.toNat / denominator.toNat < wordModulusN := by
+    exact (Nat.div_le_self _ _).trans_lt (by
+      simpa [wordModulusN] using B256.toNat_lt low)
+  have roundedEq :
+      (if low % denominator = 0 then low / denominator - 1
+        else low / denominator) =
+        Nat.toB256 (ceilDiv low.toNat denominator.toNat - 1) :=
+    ceilPredQuotientWord_eq_toB256 numeratorPositive quotientBound
+      (wordDiv_eq_toB256_div low denominator)
       (wordMod_eq_zero_iff denominatorNonzero)
   refine ⟨bodyPre, ?_, bodyRun⟩
   rw [roundedEq] at roundedPrefix
@@ -2709,6 +3066,114 @@ theorem divide512_up_trace
     exact quotientPrefix
   · exact divideWide_up_trace wideWf wideReads denominatorAt highAt lowAt
       widePrefix lookup wideRun
+
+/-- Every successful capped-floor `divide512` walk returns the exact natural
+floor quotient saturated at the largest word. -/
+theorem divide512_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {denominator high low : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divide512 .capDown continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (min maxWordN
+            (wideNumeratorN high low / denominator.toNat)) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨denominatorNonzero, arms⟩ :=
+    divide512_arm_trace memoryWf memoryReads denominatorAt highAt stack run
+  rcases arms with
+    ⟨highZero, simplePre, simplePrefix, simpleWf, simpleReads, simpleRun⟩ |
+    ⟨highNonzero, widePre, widePrefix, wideWf, wideReads, wideRun⟩
+  · obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+      divideSimple_capDown_trace simpleWf simpleReads denominatorAt lowAt
+        simplePrefix lookup simpleRun
+    have zeroNumerator : wideNumeratorN high low = low.toNat := by
+      unfold wideNumeratorN
+      rw [highZero]
+      change 0 * wordModulusN + low.toNat = low.toNat
+      omega
+    have quotientBound :
+        low.toNat / denominator.toNat < wordModulusN :=
+      (Nat.div_le_self _ _).trans_lt (by
+        simpa [wordModulusN] using B256.toNat_lt low)
+    have quotientLeMax :
+        low.toNat / denominator.toNat ≤ maxWordN := by
+      unfold maxWordN
+      omega
+    refine ⟨bodyPre, ?_, bodyRun⟩
+    rw [zeroNumerator, Nat.min_eq_right quotientLeMax]
+    exact quotientPrefix
+  · exact divideWide_capDown_trace wideWf wideReads denominatorAt highAt
+      lowAt denominatorNonzero widePrefix lookup wideRun
+
+/-- For a positive full-width numerator, every successful capped
+ceiling-predecessor `divide512` walk returns
+`min maxWordN (ceilDiv numerator denominator - 1)`. -/
+theorem divide512_capCeilPred_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {denominator high low : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = high)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (numeratorPositive : 0 < wideNumeratorN high low)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divide512 .capCeilPred continuation) (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (min maxWordN
+            (ceilDiv (wideNumeratorN high low) denominator.toNat - 1)) ::
+        tail <<+ bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨denominatorNonzero, arms⟩ :=
+    divide512_arm_trace memoryWf memoryReads denominatorAt highAt stack run
+  rcases arms with
+    ⟨highZero, simplePre, simplePrefix, simpleWf, simpleReads, simpleRun⟩ |
+    ⟨highNonzero, widePre, widePrefix, wideWf, wideReads, wideRun⟩
+  · have zeroNumerator : wideNumeratorN high low = low.toNat := by
+      unfold wideNumeratorN
+      rw [highZero]
+      change 0 * wordModulusN + low.toNat = low.toNat
+      omega
+    have lowPositive : 0 < low.toNat := by
+      rw [zeroNumerator] at numeratorPositive
+      exact numeratorPositive
+    obtain ⟨bodyPre, roundedPrefix, bodyRun⟩ :=
+      divideSimple_capCeilPred_trace simpleWf simpleReads denominatorAt lowAt
+        denominatorNonzero lowPositive simplePrefix lookup simpleRun
+    have quotientBound :
+        low.toNat / denominator.toNat < wordModulusN :=
+      (Nat.div_le_self _ _).trans_lt (by
+        simpa [wordModulusN] using B256.toNat_lt low)
+    have roundedLeMax :
+        ceilDiv low.toNat denominator.toNat - 1 ≤ maxWordN :=
+      (ceilDiv_sub_one_le_div _ _).trans (by
+        unfold maxWordN
+        omega)
+    refine ⟨bodyPre, ?_, bodyRun⟩
+    rw [zeroNumerator, Nat.min_eq_right roundedLeMax]
+    exact roundedPrefix
+  · exact divideWide_capCeilPred_trace wideWf wideReads denominatorAt highAt
+      lowAt denominatorNonzero numeratorPositive widePrefix lookup wideRun
 
 /-! ## Exact product staging -/
 
@@ -3391,6 +3856,83 @@ theorem multiply512_trace
 
 /-! ## Full-width multiply/divide composition -/
 
+/-- Proof-carrying image after `mulDiv` stores its denominator and stages the
+exact two-word product. -/
+def mulDivTraceImage
+    (image : Bytes) (x y denominator : B256) : Bytes :=
+  multiply512TraceImage
+    (Bytes.writeAt image (denominatorWord * 32).toNat denominator.toBytes)
+    x y
+
+theorem mulDivTraceImage_denominator
+    (image : Bytes) (x y denominator : B256) :
+    Bytes.toB256
+        ((mulDivTraceImage image x y denominator).sliceD
+          (denominatorWord * 32).toNat 32 0) = denominator := by
+  unfold mulDivTraceImage
+  apply multiply512TraceImage_denominator
+  exact Bytes.readWord_writeAt_self _ _ _
+
+theorem mulDivTraceImage_high
+    (image : Bytes) (x y denominator : B256) :
+    Bytes.toB256
+        ((mulDivTraceImage image x y denominator).sliceD
+          (highWord * 32).toNat 32 0) = productHighWord x y := by
+  unfold mulDivTraceImage
+  exact multiply512TraceImage_high _ _ _
+
+theorem mulDivTraceImage_low
+    (image : Bytes) (x y denominator : B256) :
+    Bytes.toB256
+        ((mulDivTraceImage image x y denominator).sliceD
+          (lowWord * 32).toNat 32 0) = productLowWord x y := by
+  unfold mulDivTraceImage
+  exact multiply512TraceImage_low _ _ _
+
+/-- Mode-independent `mulDiv` staging: produce and store the denominator,
+stage the exact product, then hand the proof-carrying image to `divide512`. -/
+theorem mulDiv_staging_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y denominator : B256}
+    {xLine yLine denominatorLine : Line} {mode : QuotientMode}
+    {continuation : Nat} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorProduces :
+      ProducesWord sevm denominatorLine image denominator)
+    (xProduces : ProducesWord sevm xLine
+      (Bytes.writeAt image (denominatorWord * 32).toNat
+        denominator.toBytes) x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (denominatorWord * 32).toNat
+          denominator.toBytes)
+        (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (mulDiv xLine yLine denominatorLine mode continuation) (.ok final)) :
+    ∃ dividePre,
+      tail <<+ dividePre.stack ∧
+      Mem.Wf dividePre.memory ∧
+      Mem.Reads dividePre.memory (mulDivTraceImage image x y denominator) ∧
+      pre.state = dividePre.state ∧
+      Func.RunCompiledTo fs sevm dividePre
+        (divide512 mode continuation) (.ok final) := by
+  unfold mulDiv at run
+  obtain ⟨multiplyPre, multiplyPrefix, multiplyWf, multiplyReads,
+      denominatorState, multiplyRun⟩ :=
+    denominatorProduces.store_trace memoryWf memoryReads stack run
+  let denominatorImage :=
+    Bytes.writeAt image (denominatorWord * 32).toNat denominator.toBytes
+  change Mem.Reads multiplyPre.memory denominatorImage at multiplyReads
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, multiplyState,
+      divideRun⟩ :=
+    multiply512_trace multiplyWf multiplyReads xProduces yProduces
+      multiplyPrefix multiplyRun
+  refine ⟨dividePre, dividePrefix, divideWf, ?_, ?_, divideRun⟩
+  · simpa [mulDivTraceImage, denominatorImage] using divideReads
+  · exact denominatorState.trans multiplyState
+
 /-- A successful floor-mode `mulDiv` executes the exact full-width product
 and passes its unbounded-natural floor quotient to the continuation. -/
 theorem mulDiv_down_trace
@@ -3418,25 +3960,14 @@ theorem mulDiv_down_trace
       Nat.toB256 (x.toNat * y.toNat / denominator.toNat) :: tail <<+
         bodyPre.stack ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  unfold mulDiv at run
-  obtain ⟨multiplyPre, multiplyPrefix, multiplyWf, multiplyReads, -, multiplyRun⟩ :=
-    denominatorProduces.store_trace memoryWf memoryReads stack run
-  let denominatorImage :=
-    Bytes.writeAt image (denominatorWord * 32).toNat denominator.toBytes
-  change Mem.Reads multiplyPre.memory denominatorImage at multiplyReads
   obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
-    multiply512_trace multiplyWf multiplyReads xProduces yProduces
-      multiplyPrefix multiplyRun
-  have denominatorAt : Bytes.toB256
-      ((multiply512TraceImage denominatorImage x y).sliceD
-        (denominatorWord * 32).toNat 32 0) = denominator := by
-    apply multiply512TraceImage_denominator
-    unfold denominatorImage
-    exact Bytes.readWord_writeAt_self _ _ _
+    mulDiv_staging_trace memoryWf memoryReads denominatorProduces xProduces
+      yProduces stack run
   obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
-    divide512_down_trace divideWf divideReads denominatorAt
-      (multiply512TraceImage_high denominatorImage x y)
-      (multiply512TraceImage_low denominatorImage x y)
+    divide512_down_trace divideWf divideReads
+      (mulDivTraceImage_denominator image x y denominator)
+      (mulDivTraceImage_high image x y denominator)
+      (mulDivTraceImage_low image x y denominator)
       dividePrefix lookup divideRun
   refine ⟨bodyPre, ?_, bodyRun⟩
   simpa only [wideNumeratorN_productWords] using quotientPrefix
@@ -3468,25 +3999,101 @@ theorem mulDiv_up_trace
       Nat.toB256 (ceilDiv (x.toNat * y.toNat) denominator.toNat) :: tail <<+
         bodyPre.stack ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  unfold mulDiv at run
-  obtain ⟨multiplyPre, multiplyPrefix, multiplyWf, multiplyReads, -, multiplyRun⟩ :=
-    denominatorProduces.store_trace memoryWf memoryReads stack run
-  let denominatorImage :=
-    Bytes.writeAt image (denominatorWord * 32).toNat denominator.toBytes
-  change Mem.Reads multiplyPre.memory denominatorImage at multiplyReads
   obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
-    multiply512_trace multiplyWf multiplyReads xProduces yProduces
-      multiplyPrefix multiplyRun
-  have denominatorAt : Bytes.toB256
-      ((multiply512TraceImage denominatorImage x y).sliceD
-        (denominatorWord * 32).toNat 32 0) = denominator := by
-    apply multiply512TraceImage_denominator
-    unfold denominatorImage
-    exact Bytes.readWord_writeAt_self _ _ _
+    mulDiv_staging_trace memoryWf memoryReads denominatorProduces xProduces
+      yProduces stack run
   obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
-    divide512_up_trace divideWf divideReads denominatorAt
-      (multiply512TraceImage_high denominatorImage x y)
-      (multiply512TraceImage_low denominatorImage x y)
+    divide512_up_trace divideWf divideReads
+      (mulDivTraceImage_denominator image x y denominator)
+      (mulDivTraceImage_high image x y denominator)
+      (mulDivTraceImage_low image x y denominator)
+      dividePrefix lookup divideRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [wideNumeratorN_productWords] using quotientPrefix
+
+/-- Capped-floor `mulDiv` returns the exact product quotient saturated at the
+largest EVM word. -/
+theorem mulDiv_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y denominator : B256}
+    {xLine yLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorProduces :
+      ProducesWord sevm denominatorLine image denominator)
+    (xProduces : ProducesWord sevm xLine
+      (Bytes.writeAt image (denominatorWord * 32).toNat
+        denominator.toBytes) x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (denominatorWord * 32).toNat
+          denominator.toBytes)
+        (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (mulDiv xLine yLine denominatorLine .capDown continuation)
+        (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (min maxWordN (x.toNat * y.toNat / denominator.toNat)) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
+    mulDiv_staging_trace memoryWf memoryReads denominatorProduces xProduces
+      yProduces stack run
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    divide512_capDown_trace divideWf divideReads
+      (mulDivTraceImage_denominator image x y denominator)
+      (mulDivTraceImage_high image x y denominator)
+      (mulDivTraceImage_low image x y denominator)
+      dividePrefix lookup divideRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [wideNumeratorN_productWords] using quotientPrefix
+
+/-- For a positive product, capped ceiling-predecessor `mulDiv` returns the
+exact `ceilDiv - 1` result saturated at the largest word. -/
+theorem mulDiv_capCeilPred_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y denominator : B256}
+    {xLine yLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorProduces :
+      ProducesWord sevm denominatorLine image denominator)
+    (xProduces : ProducesWord sevm xLine
+      (Bytes.writeAt image (denominatorWord * 32).toNat
+        denominator.toBytes) x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (denominatorWord * 32).toNat
+          denominator.toBytes)
+        (xWord * 32).toNat x.toBytes) y)
+    (productPositive : 0 < x.toNat * y.toNat)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (mulDiv xLine yLine denominatorLine .capCeilPred continuation)
+        (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (min maxWordN
+            (ceilDiv (x.toNat * y.toNat) denominator.toNat - 1)) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
+    mulDiv_staging_trace memoryWf memoryReads denominatorProduces xProduces
+      yProduces stack run
+  have stagedPositive :
+      0 < wideNumeratorN (productHighWord x y) (productLowWord x y) := by
+    simpa only [wideNumeratorN_productWords] using productPositive
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    divide512_capCeilPred_trace divideWf divideReads
+      (mulDivTraceImage_denominator image x y denominator)
+      (mulDivTraceImage_high image x y denominator)
+      (mulDivTraceImage_low image x y denominator) stagedPositive
       dividePrefix lookup divideRun
   refine ⟨bodyPre, ?_, bodyRun⟩
   simpa only [wideNumeratorN_productWords] using quotientPrefix
@@ -3640,6 +4247,86 @@ theorem shiftedDiv_up_trace
       (shiftedDivTraceImage_denominator image high denominator)
       (shiftedDivTraceImage_high image high denominator)
       (shiftedDivTraceImage_low image high denominator)
+      dividePrefix lookup divideRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using
+    quotientPrefix
+
+/-- Capped-floor shifted division returns the exact quotient of
+`high * 2^256`, saturated at the largest word. -/
+theorem shiftedDiv_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high denominator : B256}
+    {highLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (highProduces : ProducesWord sevm highLine image high)
+    (denominatorProduces : ProducesWord sevm denominatorLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (highWord * 32).toNat high.toBytes)
+        (lowWord * 32).toNat (0 : B256).toBytes) denominator)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (shiftedDiv highLine denominatorLine .capDown continuation)
+        (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (min maxWordN
+            (high.toNat * wordModulusN / denominator.toNat)) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
+    shiftedDiv_staging_trace memoryWf memoryReads highProduces
+      denominatorProduces stack run
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    divide512_capDown_trace divideWf divideReads
+      (shiftedDivTraceImage_denominator image high denominator)
+      (shiftedDivTraceImage_high image high denominator)
+      (shiftedDivTraceImage_low image high denominator)
+      dividePrefix lookup divideRun
+  refine ⟨bodyPre, ?_, bodyRun⟩
+  simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using
+    quotientPrefix
+
+/-- For a positive high word, capped ceiling-predecessor shifted division
+returns the exact `ceilDiv - 1` result saturated at the largest word. -/
+theorem shiftedDiv_capCeilPred_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high denominator : B256}
+    {highLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (highProduces : ProducesWord sevm highLine image high)
+    (denominatorProduces : ProducesWord sevm denominatorLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (highWord * 32).toNat high.toBytes)
+        (lowWord * 32).toNat (0 : B256).toBytes) denominator)
+    (highPositive : 0 < high.toNat)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (shiftedDiv highLine denominatorLine .capCeilPred continuation)
+        (.ok final)) :
+    ∃ bodyPre,
+      Nat.toB256
+          (min maxWordN
+            (ceilDiv (high.toNat * wordModulusN) denominator.toNat - 1)) ::
+        tail <<+ bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, -, divideRun⟩ :=
+    shiftedDiv_staging_trace memoryWf memoryReads highProduces
+      denominatorProduces stack run
+  have numeratorPositive : 0 < wideNumeratorN high 0 := by
+    simp only [wideNumeratorN, B256.toNat_zero, Nat.add_zero]
+    exact Nat.mul_pos highPositive wordModulusN_pos
+  obtain ⟨bodyPre, quotientPrefix, bodyRun⟩ :=
+    divide512_capCeilPred_trace divideWf divideReads
+      (shiftedDivTraceImage_denominator image high denominator)
+      (shiftedDivTraceImage_high image high denominator)
+      (shiftedDivTraceImage_low image high denominator) numeratorPositive
       dividePrefix lookup divideRun
   refine ⟨bodyPre, ?_, bodyRun⟩
   simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using

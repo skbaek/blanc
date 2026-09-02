@@ -623,7 +623,11 @@ bounded natural. `lowestSetBitWord`, `removeLowestSetBitWord`, and
 divisibility, and odd-denominator facts needed downstream.
 `Nat.sub_mod_eq_div_mul`, `Nat.sub_mod_div_factor`, and
 `Nat.two_word_div_lt_modulus` provide the generic remainder-removal,
-factor-removal, and quotient-width bounds. `wordAdd_eq_toB256_add` identifies
+factor-removal, and fitting quotient-width bounds;
+`Nat.pow_le_two_word_div_of_le_high` is the overflow-side companion when the
+denominator is no larger than the high word. `toB256_maxWordN` identifies the
+re-embedded largest natural word with `B256.max`.
+`wordAdd_eq_toB256_add` identifies
 wrapped word addition with natural addition re-embedded modulo `2^256`, while
 `wordSub_eq_toB256_sub_of_le` identifies non-underflowing word subtraction
 with the re-embedded natural difference. `wordDiv_eq_toB256_div` identifies
@@ -633,7 +637,10 @@ division test. `toB256_add_one` records the unconditional modular
 successor bridge; `toB256_add_one_of_lt` retains the bounded compatibility
 name used by older callers. `roundedQuotientWord_eq_toB256_ceilDiv` turns any
 staged floor quotient/remainder pair with the correct zero test into the
-re-embedded natural ceiling quotient. The generic
+re-embedded natural ceiling quotient. Under a positive dividend,
+`ceilPredQuotientWord_eq_toB256` similarly turns the capacity finisher into
+`ceilDiv - 1`, while `ceilDiv_sub_one_le_div` records its generic floor bound.
+The generic
 `Nat.fold_divided_words` identity and `foldDividedWords_toNat` justify folding
 a divided high/low pair back into one word. `wideReducedLowWord`,
 `wideReducedHighWord`, `wideReducedNumeratorN`, and
