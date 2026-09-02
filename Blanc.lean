@@ -300,6 +300,7 @@ import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary
 import Blanc.Composition.ProrataWethVaultEffects
 import Blanc.Composition.ProrataWethVaultStaging
+import Blanc.Composition.ProrataWethVaultViews
 
 import Blanc.DripStackSafetyCertificate
 

@@ -36,6 +36,29 @@ def SuccessfulWethProgramRun
     final = rawPost.state.getStor wethAccount ∧
     rawPost.output = output
 
+/-- The same exact child execution at the frame strength needed by composed
+read-only views.  `State` equality would be too strong here: even a zero-value
+message entry may normalize an account map.  The observable storage world and
+log frame are retained instead. -/
+def SuccessfulWethWorldProgramRun
+    (caller : Adr) (calldata output : Bytes)
+    (initial final : Adr → Stor) (initialLogs finalLogs : List Log) : Prop :=
+  ∃ (childSevm : Sevm) (childPre rawPost : Devm),
+    childSevm.currentTarget = wethAccount ∧
+    childSevm.codeAddress = some wethAccount ∧
+    childSevm.caller = caller ∧
+    childSevm.value = 0 ∧
+    childSevm.data = calldata ∧
+    childPre.stack = [] ∧
+    childPre.memory = Mem.empty ∧
+    childPre.logs = [] ∧
+    Devm.getStor childPre = initial ∧
+    Prog.RunCompiled childSevm childPre Blanc.weth rawPost ∧
+    rawPost.error = none ∧
+    final = Devm.getStor rawPost ∧
+    finalLogs = initialLogs ++ rawPost.logs ∧
+    rawPost.output = output
+
 private theorem weth_pcFree : Prog.pcFree Blanc.weth = true := by
   decide +kernel
 
@@ -689,20 +712,22 @@ private theorem transferFromBody_exactEffect
       exact destinationIncrease
   exact ⟨by simpa only [src, dst, wad] using effect, outputTrue⟩
 
-/-- Recover the successful compiled WETH run from the actual retained child
-slot and the parent's raw status/returndata refinement. -/
-theorem ExactWethChildSuccess.programRun
+/-- Recover the successful compiled WETH run together with the parent-visible
+storage world and log frame.  This is the strong occurrence projection used
+by composed read-only endpoints. -/
+theorem ExactWethChildSuccess.worldProgramRun
     {parentSevm : Sevm} {parentPre parentPost : Devm}
     {instruction : Ninst} {calldata output : Bytes} {static : Bool}
     (success : ExactWethChildSuccess parentSevm parentPre parentPost
       instruction calldata output static) :
-    SuccessfulWethProgramRun parentSevm.currentTarget calldata output
-      (parentPre.state.getStor wethAccount)
-      (parentPost.state.getStor wethAccount) := by
+    SuccessfulWethWorldProgramRun parentSevm.currentTarget calldata output
+      (Devm.getStor parentPre) (Devm.getStor parentPost)
+      parentPre.logs parentPost.logs := by
   unfold ExactWethChildSuccess ExactWethChildExecution at success
   rcases success with ⟨msg, xl, child, pc, nextPc, resume,
     target, executes, childWorld, childRules, spawn, filled, process,
-    stepRun, postState, postReturnData, statusTail, statusEq, childClean⟩
+    stepRun, postState, postReturnData, postLogs, statusTail, statusEq,
+    childClean⟩
   rcases executes with ⟨uses, childEvm, raw, slotEq, childExec⟩
   subst xl
   obtain ⟨errorNone, childOutput⟩ := childClean
@@ -710,6 +735,11 @@ theorem ExactWethChildSuccess.programRun
   obtain ⟨rawPost, rawEq, rawError, settledState, settledOutput⟩ :=
     Blanc.MessageExecution.processMessage_clean_rawPost process clean
   subst raw
+  have settleEq := (RunFrame.some_inv process).2
+  have settledLogs : child.logs = rawPost.logs := by
+    simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
+      executeCode.handleError, processMessage.settle, rawError] at settleEq
+    exact congrArg Devm.logs settleEq
   obtain ⟨pcZero, codeEq, currentTarget, codeAddress, dataEq, -, storageEq,
     -⟩ := Blanc.MessageExecution.processMessage_entry_facts
       wethAccount process
@@ -719,8 +749,16 @@ theorem ExactWethChildSuccess.programRun
   rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
   have callerEq := congrArg (fun evm : Evm => evm.sta.caller) evmEq
   have valueEq := congrArg (fun evm : Evm => evm.sta.value) evmEq
+  have logsEq := congrArg (fun evm : Evm => evm.dyna.logs) evmEq
   dsimp [Jaune.Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv]
-    at callerEq valueEq
+    at callerEq valueEq logsEq
+  have storageWorld : Devm.getStor childEvm.dyna =
+      Devm.getStor parentPre := by
+    funext owner
+    obtain ⟨-, -, -, -, -, -, ownerStorage, -⟩ :=
+      Blanc.MessageExecution.processMessage_entry_facts owner process
+    exact ownerStorage.trans
+      (congrArg (fun state : State => state.getStor owner) childWorld)
   have exactCode : some childEvm.sta.code.toList = Prog.compile Blanc.weth := by
     rw [codeEq]
     exact uses
@@ -730,18 +768,88 @@ theorem ExactWethChildSuccess.programRun
       rawPost :=
     Prog.runCompiled_of_exec childEvm.sta childEvm.dyna Blanc.weth rawPost
       weth_pcFree run exactCode
+  have finalStorage : Devm.getStor parentPost = Devm.getStor rawPost := by
+    exact funext (getStor_eq_of_state_eq (postState.trans settledState))
+  have childNotError : ¬ child.error.isSome := by
+    simpa using clean
+  have finalLogs : parentPost.logs = parentPre.logs ++ rawPost.logs := by
+    rw [if_neg childNotError, settledLogs] at postLogs
+    exact postLogs
   refine ⟨childEvm.sta, childEvm.dyna, rawPost, ?_, ?_, ?_, ?_, ?_,
-    stackEq, memoryEq, ?_, compiled, rawError, ?_, ?_⟩
+    stackEq, memoryEq, logsEq, storageWorld, compiled, rawError,
+    finalStorage, finalLogs, ?_⟩
   · exact currentTarget.trans target.currentTarget
   · exact codeAddress.trans target.codeAddress
   · exact callerEq.trans target.callerAddress
   · exact valueEq.trans target.valueZero
   · exact dataEq.trans target.data
-  · rw [storageEq, childWorld]
-  · rw [postState, settledState]
   · exact settledOutput.symm.trans childOutput
 
+/-- Compatibility projection retaining the established WETH-row interface for
+the mutating call effects. -/
+theorem ExactWethChildSuccess.programRun
+    {parentSevm : Sevm} {parentPre parentPost : Devm}
+    {instruction : Ninst} {calldata output : Bytes} {static : Bool}
+    (success : ExactWethChildSuccess parentSevm parentPre parentPost
+      instruction calldata output static) :
+    SuccessfulWethProgramRun parentSevm.currentTarget calldata output
+      (parentPre.state.getStor wethAccount)
+      (parentPost.state.getStor wethAccount) := by
+  rcases ExactWethChildSuccess.worldProgramRun success with
+    ⟨childSevm, childPre, rawPost, currentTarget, codeAddress, caller,
+      valueZero, dataEq, stackEmpty, memoryEmpty, logsEmpty, initialEq,
+      compiled, rawError, finalEq, finalLogs, outputEq⟩
+  exact ⟨childSevm, childPre, rawPost, currentTarget, codeAddress, caller,
+    valueZero, dataEq, stackEmpty, memoryEmpty,
+    congrFun initialEq wethAccount, compiled, rawError,
+    congrFun finalEq wethAccount, outputEq⟩
+
 /-! ## Asset-query effect -/
+
+/-- The world-strength balance query: all account storage is unchanged, the
+child emits no logs, and the output is the configured vault's exact WETH
+balance. -/
+theorem SuccessfulWethWorldProgramRun.balanceOf_effect
+    {vault : Adr} {output : Bytes} {initial final : Adr → Stor}
+    {initialLogs finalLogs : List Log}
+    (run : SuccessfulWethWorldProgramRun vault (balanceOfCalldata vault)
+      output initial final initialLogs finalLogs) :
+    final = initial ∧ finalLogs = initialLogs ∧
+      output = ((initial wethAccount).get vault.toB256).toBytes := by
+  rcases run with ⟨childSevm, childPre, rawPost,
+    currentTarget, codeAddress, caller, valueZero, dataEq, stackEmpty,
+    memoryEmpty, childLogs, initialEq, compiled, rawError, finalEq,
+    finalLogsEq, outputEq⟩
+  obtain ⟨selectorEq, vaultArg⟩ := balanceOfCalldata_facts dataEq
+  have member :
+      (selector "balanceOf" [.address], nonpayable balanceOf) ∈
+        Blanc.wethFuncs := by
+    simp [Blanc.wethFuncs]
+  obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
+      entryOutput, bodyRun⟩ :=
+    runCompiled_enters_wethNonpayable compiled selectorEq member
+  obtain ⟨bodyOutput, bodyStorage⟩ := balanceOfBody_effect bodyRun
+  have bodyLogs : bodyPre.logs = rawPost.logs :=
+    Func.of_inv Devm.logs Devm.logs (by
+      unfold balanceOf
+      func_inv) bodyRun
+  have entryStorage : Devm.getStor childPre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  have finalInitial : final = initial :=
+    finalEq.trans
+      (bodyStorage.symm.trans (entryStorage.symm.trans initialEq))
+  have rawLogsEmpty : rawPost.logs = [] :=
+    bodyLogs.symm.trans (entryLogs.symm.trans childLogs)
+  have logsInitial : finalLogs = initialLogs := by
+    rw [finalLogsEq, rawLogsEmpty, List.append_nil]
+  have bodyInitial : Devm.getStor bodyPre wethAccount =
+      initial wethAccount :=
+    congrFun (entryStorage.symm.trans initialEq) wethAccount
+  change rawPost.output =
+      ((Devm.getStor bodyPre childSevm.currentTarget).get
+        (Sevm.dataWord childSevm 4)).toBytes at bodyOutput
+  rw [currentTarget, vaultArg, bodyInitial] at bodyOutput
+  exact ⟨finalInitial, logsInitial, outputEq.symm.trans bodyOutput⟩
 
 /-- The exact successful WETH child for `balanceOf(vault)` reads precisely the
 configured vault's WETH balance, changes no WETH storage, and returns that

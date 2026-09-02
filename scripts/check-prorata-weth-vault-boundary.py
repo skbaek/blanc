@@ -19,14 +19,16 @@ LAYERING = ROOT / "scripts/check-layering.py"
 
 SUMMARY = (
     "OK — PRORATA WETH vault boundary: 3 exact child forms; "
-    "14 G3 headline axiom owners; whole-source call closure and no-alias pins green"
+    "16 G3 headline axiom owners; whole-source call closure and no-alias pins green"
 )
 
 HEADLINES = [
     "DirectWethConfiguration.installed",
     "exactWethCallOccurrence_of_runCompiled",
     "exactWethStatcallOccurrence_of_runCompiled",
+    "ExactWethChildSuccess.worldProgramRun",
     "ExactWethChildSuccess.programRun",
+    "SuccessfulWethWorldProgramRun.balanceOf_effect",
     "SuccessfulWethProgramRun.balanceOf_effect",
     "SuccessfulWethProgramRun.transfer_effect",
     "SuccessfulWethProgramRun.transferFrom_effect",
@@ -89,6 +91,7 @@ def check_static(errors: list[str]) -> None:
         (boundary, "MessageExecutesProgram msg xl Blanc.weth", "boundary"),
         (boundary, "post.state = child.state", "boundary"),
         (boundary, "post.returnData = child.output", "boundary"),
+        (boundary, "post.logs = (if child.error.isSome then pre.logs else pre.logs ++ child.logs)", "boundary"),
         (boundary, "post.state = pre.state", "boundary"),
         (boundary, "selector \"approve\" [.address, .uint256] ∉ allowedWethSelectors", "boundary"),
         (boundary, "selector \"withdraw\" [.uint256] ∉ allowedWethSelectors", "boundary"),

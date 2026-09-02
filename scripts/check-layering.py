@@ -366,6 +366,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultBoundary",
     "Composition.ProrataWethVaultEffects",
     "Composition.ProrataWethVaultStaging",
+    "Composition.ProrataWethVaultViews",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
