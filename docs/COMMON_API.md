@@ -619,7 +619,12 @@ divisibility, and odd-denominator facts needed downstream.
 `Nat.two_word_div_lt_modulus` provide the generic remainder-removal,
 factor-removal, and quotient-width bounds. `wordDiv_eq_toB256_div` identifies
 ordinary EVM word division with re-embedded natural division, including the
-zero-divisor convention. The generic
+zero-divisor convention, while `wordMod_eq_zero_iff` identifies its exact-
+division test. `toB256_add_one` records the unconditional modular
+successor bridge; `toB256_add_one_of_lt` retains the bounded compatibility
+name used by older callers. `roundedQuotientWord_eq_toB256_ceilDiv` turns any
+staged floor quotient/remainder pair with the correct zero test into the
+re-embedded natural ceiling quotient. The generic
 `Nat.fold_divided_words` identity and `foldDividedWords_toNat` justify folding
 a divided high/low pair back into one word. `wideReducedLowWord`,
 `wideReducedHighWord`, `wideReducedNumeratorN`, and
@@ -627,7 +632,8 @@ a divided high/low pair back into one word. `wideReducedLowWord`,
 `wideReducedWords_reconstruct`, `denominator_dvd_wideReducedNumerator`,
 `lowestSetBitWord_dvd_wideReducedLow`, and
 `wideFoldedDividendWord_toNat` provide the exact reconstruction and
-divisibility interface.
+divisibility interface. `wideRemainderWord_eq_zero_iff` exposes the analogous
+exact-division test for a two-word numerator.
 
 For modular inverses, `inverseSeedWord`, `inverseNewtonStepWord`, and
 `inverseNewtonIter` name the standard seed and word-ring refinement.
