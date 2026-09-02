@@ -7,9 +7,9 @@ History-level storage accounting and the public WETH10 holder-conservation
 surface.
 
 The execution layer works with concrete `Devm` endpoints.  This module lifts
-that operational result through Jaune's settled messages, transactions, Prague
-block bodies, and proof-carrying `AccountedHistory`, then combines it with the
-independent ETH bound to eliminate modular credit loss.
+that operational result through Jaune's settled messages, transactions,
+configured-schedule block bodies, and proof-carrying `AccountedHistory`, then
+combines it with the independent ETH bound to eliminate modular credit loss.
 -/
 
 namespace Blanc

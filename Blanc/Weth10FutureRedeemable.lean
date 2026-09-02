@@ -6,7 +6,7 @@ import Blanc.Weth10DeploymentRoot
 Deployment-rooted future redemption for the exact Blanc WETH10 runtime.
 
 This module assembles the flagship guarantee: from a deployment root and any
-two configured Prague-only legs — one to a checkpoint, one onward to an
+two configured-schedule legs — one to a checkpoint, one onward to an
 arbitrary future snapshot — a holder's booked balance at the checkpoint is
 still covered at the future snapshot, up to the outflow that the runtime
 itself authorized, and every residual unit remains redeemable there.

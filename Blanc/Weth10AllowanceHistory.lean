@@ -5,9 +5,9 @@ import Blanc.Weth10HolderFlowResult
 History-level allowance-region transport.
 
 The recursion layer works with concrete `Devm` endpoints.  This module lifts
-that operational result through Jaune's settled messages, transactions, Prague
-block bodies, and proof-carrying `AccountedHistory`, exactly as
-`Blanc.Weth10HolderFlowResult` lifts the balance-region accounting.
+that operational result through Jaune's settled messages, transactions,
+configured-schedule block bodies, and proof-carrying `AccountedHistory`,
+exactly as `Blanc.Weth10HolderFlowResult` lifts the balance-region accounting.
 
 The mirror is a substitution: every envelope step of the balance chain is
 discharged by a full `getStor ca` equality, which is region-agnostic, so the

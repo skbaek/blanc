@@ -264,8 +264,9 @@
           <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth10-current-mainnet.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-weth10-current-mainnet.sh</span></a>:
           one fresh BPO2 creation block at the Lean-pinned timestamp, the type-2 redemption
           sequence, the type-4 authorization mutation, and 28 ordinary selector-plus-receive rows.
-          It compares status, receipt gas, logs, projected storage, and fee-normalized ETH and
-          replays all three committed blocks through Jaune at BPO2. Prague remains the historical
+          It compares status, logs, projected storage, and fee-normalized ETH, records both
+          receipt-gas values without claiming equality, and replays all three committed blocks
+          through Jaune at BPO2. Prague remains the historical
           evidence lane. In that preserved lane,
           <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-weth10-deployment.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-weth10-deployment.sh</span></a>
           generates a fresh strict singleton type-2 creation block in memory, checks sixteen
