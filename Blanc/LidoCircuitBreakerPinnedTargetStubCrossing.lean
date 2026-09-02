@@ -822,33 +822,33 @@ private lemma state_setStorVal_getCode (st : State) (owner a : Adr)
 
 /-! ## The installed-stub pause suffix -/
 
-private def installedQueryPost : Func :=
+def installedQueryPost : Func :=
   Ninst.iszero :::
     ((Func.call bubbleRevertSlot) <?> decodePausedResult)
 
-private def installedQueryStage : Func :=
+def installedQueryStage : Func :=
   pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++
     Ninst.gas ::: Ninst.staticcall ::: installedQueryPost
 
-private def installedQueryWrite : Func :=
+def installedQueryWrite : Func :=
   pushB256 isPausedSelector ::: mstoreAt 8 +++ installedQueryStage
 
-private def installedQueryPrelude : Func :=
+def installedQueryPrelude : Func :=
   Ninst.iszero :::
     ((Func.call bubbleRevertSlot) <?> installedQueryWrite)
 
-private def installedCallStage : Func :=
+def installedCallStage : Func :=
   pushList [0, 0, 36, 0x11c, 0] +++ loadWord targetWord +++
     Ninst.gas ::: Ninst.call ::: installedQueryPrelude
 
-private def installedGuardPrelude : Func :=
+def installedGuardPrelude : Func :=
   Ninst.iszero :::
     ((Func.call emptyRevertSlot) <?>
       (Ninst.pop :::
         pushB256 pauseForSelector ::: mstoreAt 8 +++
         loadWord durationWord +++ mstoreAt 9 +++ installedCallStage))
 
-private theorem installedQueryGuard_runCompiled
+theorem installedQueryGuard_runCompiled
     (fs : List Func) (sevm : Sevm) (devm : Devm) (M : Mem)
     (G : Nat) (tail : Func) (post : Devm)
     (htail : Func.RunCompiled fs sevm
@@ -862,7 +862,7 @@ private theorem installedQueryGuard_runCompiled
     rw [hg]
     exact htail
 
-private theorem installedQueryWrite_runCompiled
+theorem installedQueryWrite_runCompiled
     (fs : List Func) (sevm : Sevm) (devm : Devm) (value : B256) (M : Mem)
     (G : Nat) (tail : Func) (post : Devm)
     (hvalue : value ≠ 0)
@@ -891,7 +891,7 @@ private theorem installedQueryWrite_runCompiled
     rw [hg]
     exact htail
 
-private theorem installedCallArgs_runCompiled
+theorem installedCallArgs_runCompiled
     (fs : List Func) (sevm : Sevm) (devm : Devm)
     (target : B256) (M : Mem) (G : Nat) (tail : Func) (post : Devm)
     (halign : M.size % 32 = 0)
@@ -916,7 +916,7 @@ private theorem installedCallArgs_runCompiled
     rw [hg]
     exact htail
 
-private theorem installedDurationWrite_runCompiled
+theorem installedDurationWrite_runCompiled
     (fs : List Func) (sevm : Sevm) (devm : Devm)
     (duration : B256) (M : Mem) (G : Nat) (tail : Func) (post : Devm)
     (halign : M.size % 32 = 0)

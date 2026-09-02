@@ -359,6 +359,8 @@ CONTRACTS = {
 COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun",
 ]
 
 ROOTS = ["Blanc", "Main"]
