@@ -26,9 +26,135 @@ def WordViewEffect (word : B256) (pre post : Devm) : Prop :=
     Devm.getStor pre = Devm.getStor post ∧
     pre.logs = post.logs
 
+/-- Exact observation made by a successful read-only dynamic-byte endpoint. -/
+def BytesViewEffect (output : Bytes) (pre post : Devm) : Prop :=
+  Devm.output post = output ∧
+    Devm.getStor pre = Devm.getStor post ∧
+    pre.logs = post.logs
+
+/-- Canonical three-word ABI encoding used by the vault's short strings. -/
+def shortStringOutput (word shift length : B256) : Bytes :=
+  (32 : B256).toBytes ++ length.toBytes ++
+    (word <<< shift.toNat).toBytes
+
+def nameOutput : Bytes :=
+  shortStringOutput
+    (Blanc.String.toBytes "PRORATA WETH Vault").toB256 112 18
+
+def symbolOutput : Bytes :=
+  shortStringOutput (Blanc.String.toBytes "prWETH").toB256 208 6
+
 /-- Exact raw allowance key computed by the vault from canonical ABI words. -/
 def allowanceKey (owner spender : B256) : B256 :=
   Bytes.keccak (owner.toBytes ++ spender.toBytes)
+
+private lemma slice_three_words (image : Bytes) (a b c : B256) :
+    (Bytes.writeAt
+      (Bytes.writeAt
+        (Bytes.writeAt image 0 a.toBytes)
+        32 b.toBytes)
+      64 c.toBytes).sliceD 0 96 0 =
+        a.toBytes ++ b.toBytes ++ c.toBytes := by
+  rw [show (96 : Nat) = 64 + 32 by omega, List.sliceD_split]
+  congr 1
+
+/-- Exact body effect of the compact three-word ABI string emitter. -/
+private theorem shortString_body_effect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    {word shift length : B256}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Func.RunCompiledTo fs sevm pre
+      (pushB256 word ::: pushB256 shift ::: shl :::
+        pushList [length, 32] +++
+        mstoreAt 0 +++ mstoreAt 1 +++ mstoreAt 2 +++
+        returnMemoryRange 0 96) (.ok post)) :
+    BytesViewEffect (shortStringOutput word shift length) pre post := by
+  have sourceRun : Func.Run fs sevm pre
+      (pushB256 word ::: pushB256 shift ::: shl :::
+        pushList [length, 32] +++
+        mstoreAt 0 +++ mstoreAt 1 +++ mstoreAt 2 +++
+        returnMemoryRange 0 96) post :=
+    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+  have storage : Devm.getStor pre = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by func_inv) sourceRun
+  have logs : pre.logs = post.logs :=
+    Func.of_inv Devm.logs Devm.logs (by func_inv) sourceRun
+
+  obtain ⟨s1, pushWordRun, sourceRun⟩ := of_run_next sourceRun
+  have p1 : word :: [] <<+ s1.stack :=
+    prefix_of_push (of_run_pushB256 pushWordRun) nil_pref
+  obtain ⟨s2, pushShiftRun, sourceRun⟩ := of_run_next sourceRun
+  have p2 : shift :: word :: [] <<+ s2.stack :=
+    prefix_of_push (of_run_pushB256 pushShiftRun) p1
+  obtain ⟨s3, shiftRun, sourceRun⟩ := of_run_next sourceRun
+  have p3 : (word <<< shift.toNat) :: [] <<+ s3.stack :=
+    prefix_of_shl shiftRun p2
+  obtain ⟨s4, pushHeaderRun, sourceRun⟩ :=
+    of_run_prepend (pushList [length, 32]) _ sourceRun
+  have pushHeaderLine := pushHeaderRun
+  rcases Line.of_run_cons pushHeaderRun with
+    ⟨afterLength, pushLengthRun, pushHeaderTail⟩
+  rcases Line.of_run_cons pushHeaderTail with
+    ⟨afterOffset, pushOffsetRun, emptyRun⟩
+  cases emptyRun
+  have p4 : length :: (word <<< shift.toNat) :: [] <<+
+      afterLength.stack :=
+    prefix_of_push (of_run_pushB256 pushLengthRun) p3
+  have p5 : (32 : B256) :: length :: (word <<< shift.toNat) :: [] <<+
+      s4.stack :=
+    prefix_of_push (of_run_pushB256 pushOffsetRun) p4
+  have entryMemory : pre.memory = s4.memory :=
+    (((Ninst.Hinv.inv (f := Devm.memory) pushWordRun).trans
+      (Ninst.Hinv.inv (f := Devm.memory) pushShiftRun)).trans
+      (Ninst.Hinv.inv (f := Devm.memory) shiftRun)).trans
+      (Line.of_inv Devm.memory (by line_inv) pushHeaderLine)
+  have reads4 : Mem.Reads s4.memory pre.memory.data.toList := by
+    rw [← entryMemory]
+    intro index
+    simp
+  have wf4 : Mem.Wf s4.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+
+  obtain ⟨s5, storeOffsetRun, sourceRun⟩ :=
+    of_run_prepend (mstoreAt 0) _ sourceRun
+  obtain ⟨p6, wf5, reads5, -⟩ :=
+    of_run_mstoreAt_image p5 wf4 reads4 storeOffsetRun
+  obtain ⟨s6, storeLengthRun, sourceRun⟩ :=
+    of_run_prepend (mstoreAt 1) _ sourceRun
+  obtain ⟨p7, wf6, reads6, -⟩ :=
+    of_run_mstoreAt_image p6 wf5 reads5 storeLengthRun
+  obtain ⟨s7, storePayloadRun, sourceRun⟩ :=
+    of_run_prepend (mstoreAt 2) _ sourceRun
+  obtain ⟨p8, -, reads7, -⟩ :=
+    of_run_mstoreAt_image p7 wf6 reads6 storePayloadRun
+  simp only [show ((0 : B256) * 32).toNat = 0 by decide +kernel,
+    show ((1 : B256) * 32).toNat = 32 by decide +kernel,
+    show ((2 : B256) * 32).toNat = 64 by decide +kernel] at reads7
+
+  obtain ⟨returnPre, returnRangeRun, returnRun⟩ :=
+    of_run_prepend (pushList [96, 0]) _ sourceRun
+  have returnRangeLine := returnRangeRun
+  rcases Line.of_run_cons returnRangeRun with
+    ⟨afterSize, pushSizeRun, returnRangeTail⟩
+  rcases Line.of_run_cons returnRangeTail with
+    ⟨afterStart, pushStartRun, emptyRun⟩
+  cases emptyRun
+  have p9 : (96 : B256) :: [] <<+ afterSize.stack :=
+    prefix_of_push (of_run_pushB256 pushSizeRun) p8
+  have p10 : (0 : B256) :: (96 : B256) :: [] <<+ returnPre.stack :=
+    prefix_of_push (of_run_pushB256 pushStartRun) p9
+  have returnMemory : s7.memory = returnPre.memory :=
+    Line.of_inv Devm.memory (by line_inv) returnRangeLine
+  have output : Devm.output post =
+      shortStringOutput word shift length := by
+    rw [(of_run_ret_val p10 returnRun).1,
+      show (0 : B256).toNat = 0 from rfl,
+      show (96 : B256).toNat = 96 from rfl,
+      Mem.Reads.read (returnMemory ▸ reads7) 0 96,
+      slice_three_words]
+    rfl
+  exact ⟨output, storage, logs⟩
 
 private theorem returnConstant_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {word : B256}
@@ -103,6 +229,16 @@ private theorem lift_word_view
     WordViewEffect word pre post := by
   rcases effect with ⟨output, storage, logs⟩
   refine ⟨output, ?_, entryLogs.trans logs⟩
+  exact (funext (getStor_eq_of_state_eq entryState)).trans storage
+
+private theorem lift_bytes_view
+    {pre bodyPre post : Devm} {output : Bytes}
+    (entryState : pre.state = bodyPre.state)
+    (entryLogs : pre.logs = bodyPre.logs)
+    (effect : BytesViewEffect output bodyPre post) :
+    BytesViewEffect output pre post := by
+  rcases effect with ⟨result, storage, logs⟩
+  refine ⟨result, ?_, entryLogs.trans logs⟩
   exact (funext (getStor_eq_of_state_eq entryState)).trans storage
 
 /-- A successful canonical-address guard reaches its body and proves that the
@@ -454,6 +590,45 @@ private theorem allowance_body_effect
     lift_storage_word_view_of_storage entryStorage entryLogs readEffect⟩
 
 /-! ## Public compiled selectors -/
+
+/-- `name()` returns the exact canonical dynamic ABI encoding of
+`PRORATA WETH Vault`. -/
+theorem name_compiled_effect
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (hselector : Sevm.selector sevm = selector "name" []) :
+    sevm.value = 0 ∧ BytesViewEffect nameOutput pre post := by
+  have hmember : (selector "name" [], routed 0 name) ∈ vaultFuncs := by
+    simp [vaultFuncs]
+  rcases runCompiled_enters_body_compiled_logs run hselector hmember with
+    ⟨bodyPre, hvalue, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyMemoryWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  have effect : BytesViewEffect nameOutput bodyPre post := by
+    simpa only [name, nameOutput] using
+      (shortString_body_effect bodyMemoryWf bodyRun)
+  exact ⟨hvalue, lift_bytes_view entryState entryLogs effect⟩
+
+/-- `symbol()` returns the exact canonical dynamic ABI encoding of `prWETH`. -/
+theorem symbol_compiled_effect
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (hselector : Sevm.selector sevm = selector "symbol" []) :
+    sevm.value = 0 ∧ BytesViewEffect symbolOutput pre post := by
+  have hmember : (selector "symbol" [], routed 0 symbol) ∈ vaultFuncs := by
+    simp [vaultFuncs]
+  rcases runCompiled_enters_body_compiled_logs run hselector hmember with
+    ⟨bodyPre, hvalue, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyMemoryWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  have effect : BytesViewEffect symbolOutput bodyPre post := by
+    simpa only [symbol, symbolOutput] using
+      (shortString_body_effect bodyMemoryWf bodyRun)
+  exact ⟨hvalue, lift_bytes_view entryState entryLogs effect⟩
 
 /-- `asset()` returns the exact configured WETH address word. -/
 theorem asset_compiled_effect
