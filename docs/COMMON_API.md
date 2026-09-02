@@ -410,10 +410,11 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
   `prefix_of_xor`, and `prefix_of_argCheckNonAddress`. These declarations are
   also registered with the
   `stack-prefix-transport` recipe.
-- `Devm.state` is preserved by `mstore`, `mload` and the register arithmetic
-  and comparison instructions (`show_hinv_state` builds those from
-  `Rinst.preserves_state`); `Devm.memory` likewise now covers the full binary
-  arithmetic family.  A walk that tracks a single account's balance states its
+- `Devm.state` is preserved by `mstore`, `mload` and the register arithmetic,
+  bitwise (including `Rinst.xor`), and comparison instructions
+  (`show_hinv_state` builds those from `Rinst.preserves_state`); `Devm.memory`
+  likewise now covers the full binary arithmetic family. A walk that tracks a
+  single account's balance states its
   invariant as the pointwise projection `fun d => Devm.getBal d a`, for which
   `Rinst`/`Ninst` instances are registered beside the whole-family ones.
 - A terminal `Linst.Inv` goal is discharged from its registered `Linst.Hinv`
@@ -574,11 +575,32 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
 
 ### S6. I need a basic EVM-word identity
 
-Use the word/arithmetic declarations in
-[`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before destructing a
-`B256`. In particular, `B256.and_comm` and `B256.xor_comm` provide the shared
-commutativity facts for bitwise conjunction and exclusive-or, while
-`B256.and_idem_right` removes a repeated identical mask.
+Use the fixed-width arithmetic declarations in
+[`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean) and the basic word
+identities in [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before
+destructing a `B256`. `wordModulusN`, `maxWordN`, `wordModulusN_pos`,
+`maxWordN_lt_wordModulusN`, and `maxWord_toNat` name the standard `2^256`
+bounds. `div_two_div_pow`, `div_pow_div_two`,
+`one_and_toB256_eq_mod_two`, and `toB256_shiftRight_one` bridge recurring
+natural-number calculations to exact word operations. `Nat.xor_or_shiftLeft`,
+`B128.toNat_xor`, and `B256.toNat_xor` expose `xor` through the nested word
+representation. In `CommonProofs`,
+`B256.and_comm` and `B256.xor_comm` provide the shared commutativity facts for
+bitwise conjunction and exclusive-or, while `B256.and_idem_right` removes a
+repeated identical mask.
+
+For modular inverses, `inverseSeedWord`, `inverseNewtonStepWord`, and
+`inverseNewtonIter` name the standard seed and word-ring refinement.
+`newtonStep_modEq_square` is its unbounded algebraic core;
+`b256_mul_modEq_wordModulus`, `b256_sub_modEq_wordModulus`, and
+`inverseNewtonStepWord_modEq_wordModulus` bridge wrapped word operations to
+`Int.ModEq`; `inverseNewtonStepWord_modEq_square` lifts one known inverse; and
+`inverseNewtonIter_six_modEq` turns any proved four-bit seed into an inverse
+modulo the full word modulus. For an odd denominator,
+`inverseSeedWord_modEq_sixteen` proves the standard seed correct and
+`inverseNewtonIter_six_seed_modEq_wordModulus` closes the complete refinement.
+These declarations are COMMON_API-only: an `Int.ModEq` goal is not reliably
+Newton-specific enough for an automatic proof recipe.
 
 For the pause face specifically, `pauseInfiniteSentinel`, `pauseForProjection`,
 and `compact_pause_word_eq_projection` in

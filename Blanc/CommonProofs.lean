@@ -6316,6 +6316,7 @@ instance : Rinst.Hinv Devm.state Rinst.mul := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.sub := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.and := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.or := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.xor := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.not := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.eq := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.shl := by show_hinv_state

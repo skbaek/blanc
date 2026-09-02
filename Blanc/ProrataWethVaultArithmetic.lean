@@ -1,6 +1,7 @@
 -- ProrataWethVaultArithmetic.lean : full-width ERC-4626 ratio arithmetic.
 
 import Blanc.ProrataWethVault
+import Blanc.WordArithmetic
 import Jaune.MulDiv
 
 namespace Blanc
@@ -18,10 +19,6 @@ module reduces a product to one EVM word.  The compiled arithmetic owner can
 therefore refine the simple, wide, and exact-`2^256` source branches to one
 common specification without adding a magnitude premise.
 -/
-
-def wordModulusN : Nat := 2 ^ 256
-
-def maxWordN : Nat := wordModulusN - 1
 
 def offsetN : Nat := 1000
 
@@ -66,19 +63,8 @@ def maxWithdrawN (balance assets supply : Nat) : Nat :=
 theorem virtualShares_toNat : virtualShares.toNat = offsetN := by
   decide +kernel
 
-theorem maxWord_toNat : B256.max.toNat = maxWordN := by
-  decide +kernel
-
 theorem maxSupply_toNat : maxSupply.toNat = maxSupplyN := by
   decide +kernel
-
-theorem wordModulusN_pos : 0 < wordModulusN := by
-  simp [wordModulusN]
-
-theorem maxWordN_lt_wordModulusN : maxWordN < wordModulusN := by
-  unfold maxWordN
-  have := wordModulusN_pos
-  omega
 
 theorem offsetN_pos : 0 < offsetN := by
   decide
