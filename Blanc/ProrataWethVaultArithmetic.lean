@@ -130,6 +130,169 @@ theorem supply_add_le_maxSupplyN_of_le_shareRoomN
   rw [← supply_add_shareRoomN stable]
   exact Nat.add_le_add_left room supply
 
+/-! ## Exact two-word multiplication staging -/
+
+/-- The low word staged by `multiply512`.  This family-local name records the
+exact word expression used by the compiled vault helper. -/
+def productLowWord (x y : B256) : B256 := x * y
+
+/-- The high word staged by `multiply512`, including its `mulmod` carry
+correction.  The definition deliberately mirrors the source helper instruction
+for instruction; its correctness theorem below is over the untruncated product. -/
+def productHighWord (x y : B256) : B256 :=
+  let low := productLowWord x y
+  let scratch := B256.mulmod x y B256.max
+  (scratch - low) - (if scratch < low then 1 else 0)
+
+theorem productLowWord_toNat (x y : B256) :
+    (productLowWord x y).toNat = x.toNat * y.toNat % wordModulusN := by
+  exact B256.toNat_mul_mod x y
+
+private theorem product_quotient_lt_pred
+    {m x y : Nat} (hm : 2 ≤ m) (hx : x < m) (hy : y < m) :
+    x * y / m < m - 1 := by
+  rw [Nat.div_lt_iff_lt_mul (by omega)]
+  calc
+    x * y ≤ (m - 1) * (m - 1) :=
+      Nat.mul_le_mul (by omega) (by omega)
+    _ < (m - 1) * m :=
+      Nat.mul_lt_mul_of_pos_left (by omega) (by omega)
+    _ = (m - 1) * m := rfl
+
+private theorem product_mod_pred_eq_quotient_add_remainder_mod
+    {m p : Nat} (hm : 2 ≤ m) :
+    p % (m - 1) = (p / m + p % m) % (m - 1) := by
+  have hsplit : p = p / m * m + p % m := (Nat.div_add_mod' p m).symm
+  have hmSplit : m = (m - 1) + 1 := by omega
+  calc
+    p % (m - 1) = (p / m * m + p % m) % (m - 1) :=
+      congrArg (fun n => n % (m - 1)) hsplit
+    _ = (p / m * ((m - 1) + 1) + p % m) % (m - 1) := by rw [← hmSplit]
+    _ = (p / m * (m - 1) + (p / m + p % m)) % (m - 1) := by
+      simp only [Nat.mul_add, Nat.mul_one, Nat.add_assoc]
+    _ = (p / m + p % m) % (m - 1) := by simp
+
+/-- The staged high and low words recombine to the exact, untruncated product.
+This is the arithmetic identity implemented by `multiply512`; there is no
+single-word product or magnitude premise. -/
+theorem productHighWord_mul_add_productLowWord_toNat (x y : B256) :
+    (productHighWord x y).toNat * wordModulusN +
+        (productLowWord x y).toNat =
+      x.toNat * y.toNat := by
+  let p := x.toNat * y.toNat
+  let q := p / wordModulusN
+  let r := p % wordModulusN
+  let scratch := p % maxWordN
+  have hmodulus : 2 ≤ wordModulusN := by
+    unfold wordModulusN
+    norm_num
+  have hmaxWord : maxWordN = wordModulusN - 1 := rfl
+  have hq : q < maxWordN := by
+    exact product_quotient_lt_pred hmodulus (B256.toNat_lt x)
+      (B256.toNat_lt y)
+  have hr : r < wordModulusN := by
+    exact Nat.mod_lt _ (by omega)
+  have hsplit : q * wordModulusN + r = p := by
+    exact Nat.div_add_mod' p wordModulusN
+  have hscratch : scratch = (q + r) % maxWordN := by
+    unfold scratch q r
+    rw [hmaxWord]
+    exact product_mod_pred_eq_quotient_add_remainder_mod hmodulus
+  have hlow : (productLowWord x y).toNat = r := by
+    unfold productLowWord r p wordModulusN
+    exact B256.toNat_mul_mod x y
+  have hscratchWord : (B256.mulmod x y B256.max).toNat = scratch := by
+    rw [B256.toNat_mulmod (by decide), maxWord_toNat]
+  by_cases hsum : q + r < maxWordN
+  · have hscratchSmall : scratch = q + r := by
+      rw [hscratch, Nat.mod_eq_of_lt hsum]
+    have hgeNat :
+        (productLowWord x y).toNat ≤
+          (B256.mulmod x y B256.max).toNat := by
+      calc
+        (productLowWord x y).toNat = r := hlow
+        _ ≤ q + r := Nat.le_add_left r q
+        _ = (B256.mulmod x y B256.max).toNat :=
+          (hscratchWord.trans hscratchSmall).symm
+    have hnotBorrow :
+        ¬B256.mulmod x y B256.max < productLowWord x y := by
+      intro hlt
+      exact (Nat.not_lt_of_ge hgeNat) (B256.toNat_lt_toNat hlt)
+    have hleWord :
+        productLowWord x y ≤ B256.mulmod x y B256.max :=
+      B256.le_of_toNat_le_toNat hgeNat
+    have hzeroLe :
+        (0 : B256) ≤ B256.mulmod x y B256.max - productLowWord x y :=
+      B256.le_of_toNat_le_toNat (Nat.zero_le _)
+    have hhigh : (productHighWord x y).toNat = q := by
+      rw [productHighWord, if_neg hnotBorrow]
+      rw [B256.toNat_sub_eq_of_le _ _ hzeroLe, B256.toNat_zero,
+        Nat.sub_zero]
+      rw [B256.toNat_sub_eq_of_le _ _ hleWord, hscratchWord, hlow,
+        hscratchSmall]
+      omega
+    rw [hhigh, hlow]
+    change q * wordModulusN + r = p
+    exact hsplit
+  · have hsumLe : maxWordN ≤ q + r := by omega
+    have hsumSub : q + r - maxWordN < maxWordN := by
+      unfold maxWordN at hq hr hsumLe ⊢
+      omega
+    have hscratchLarge : scratch = q + r - maxWordN := by
+      rw [hscratch, Nat.mod_eq_sub_mod hsumLe, Nat.mod_eq_of_lt hsumSub]
+    have hborrow : B256.mulmod x y B256.max < productLowWord x y := by
+      apply B256.lt_of_toNat_lt_toNat
+      calc
+        (B256.mulmod x y B256.max).toNat = q + r - maxWordN :=
+          hscratchWord.trans hscratchLarge
+        _ < r := by
+          unfold maxWordN at hq hsumLe ⊢
+          omega
+        _ = (productLowWord x y).toNat := hlow.symm
+    have hwrapped :
+        ((B256.mulmod x y B256.max - productLowWord x y).toNat) = q + 1 := by
+      rw [B256.toNat_sub, hscratchWord, hlow, hscratchLarge, Nat.lo_eq]
+      have hinner :
+          wordModulusN + (q + r - maxWordN) - r = q + 1 := by
+        unfold maxWordN at hq hr hsumLe ⊢
+        omega
+      unfold wordModulusN at hinner
+      rw [hinner, Nat.mod_eq_of_lt]
+      unfold maxWordN at hq
+      omega
+    have honeLe :
+        (1 : B256) ≤ B256.mulmod x y B256.max - productLowWord x y := by
+      apply B256.le_of_toNat_le_toNat
+      rw [B256.toNat_one, hwrapped]
+      omega
+    have hhigh : (productHighWord x y).toNat = q := by
+      rw [productHighWord, if_pos hborrow]
+      rw [B256.toNat_sub_eq_of_le _ _ honeLe, hwrapped, B256.toNat_one]
+      omega
+    rw [hhigh, hlow]
+    change q * wordModulusN + r = p
+    exact hsplit
+
+theorem productHighWord_toNat (x y : B256) :
+    (productHighWord x y).toNat =
+      x.toNat * y.toNat / wordModulusN := by
+  have hlow : (productLowWord x y).toNat < wordModulusN := by
+    simpa [wordModulusN] using B256.toNat_lt (productLowWord x y)
+  have hquotient :
+      ((productHighWord x y).toNat * wordModulusN +
+          (productLowWord x y).toNat) / wordModulusN =
+        (productHighWord x y).toNat := by
+    apply Nat.div_eq_of_lt_le
+    · exact Nat.le_add_right _ _
+    · rw [Nat.add_mul, Nat.one_mul]
+      exact Nat.add_lt_add_left hlow _
+  calc
+    (productHighWord x y).toNat =
+        ((productHighWord x y).toNat * wordModulusN +
+          (productLowWord x y).toNat) / wordModulusN := hquotient.symm
+    _ = x.toNat * y.toNat / wordModulusN := by
+      rw [productHighWord_mul_add_productLowWord_toNat]
+
 private theorem maxWord_mul_div_wordModulus
     {d : Nat} (hd : 0 < d) (hle : d ≤ maxWordN) :
     maxWordN * d / wordModulusN = d - 1 := by
