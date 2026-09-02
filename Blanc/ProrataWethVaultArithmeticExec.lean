@@ -134,6 +134,107 @@ theorem divideSimple_down_trace
   rw [← callBurn.stack]
   exact quotientPrefix
 
+/-- A successful floor-mode `divide512` walk with a zero high word reaches the
+simple arm and passes its exact quotient to the continuation.  Success itself
+eliminates the zero-denominator revert arm, so the theorem needs neither a
+nonzero-denominator premise nor a numerator-magnitude premise. -/
+theorem divide512_down_high_zero_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {denominator low : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
+    (highAt : Bytes.toB256
+      (image.sliceD (highWord * 32).toNat 32 0) = 0)
+    (lowAt : Bytes.toB256
+      (image.sliceD (lowWord * 32).toNat 32 0) = low)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (divide512 .down continuation) (.ok final)) :
+    ∃ bodyPre,
+      (low / denominator) :: tail <<+ bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  unfold divide512 at run
+
+  obtain ⟨denominatorPost, denominatorRun, run⟩ :=
+    runCompiledTo_prepend_inv run
+  obtain ⟨denominatorPrefix, denominatorWf, denominatorReads, -⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads denominatorAt
+      denominatorRun
+
+  obtain ⟨denominatorTest, denominatorZeroRun, branchRun⟩ :=
+    runCompiledTo_next_inv run
+  have denominatorZeroSource :=
+    Ninst.Run.of_runCompiled denominatorZeroRun
+  have denominatorTestPrefix :=
+    prefix_of_iszero denominatorZeroSource denominatorPrefix
+  have denominatorTestMemory :
+      denominatorPost.memory = denominatorTest.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) denominatorZeroSource
+  have denominatorTestWf : Mem.Wf denominatorTest.memory := by
+    rw [← denominatorTestMemory]
+    exact denominatorWf
+  have denominatorTestReads : Mem.Reads denominatorTest.memory image := by
+    rw [← denominatorTestMemory]
+    exact denominatorReads
+
+  rcases runCompiledTo_branch_inv branchRun with
+    denominatorNonzeroRoute | denominatorZeroRoute
+  · rcases denominatorNonzeroRoute with
+      ⟨highPre, denominatorStack, denominatorPop, highGuardRun⟩
+    have highPrePrefix : tail <<+ highPre.stack :=
+      (popBurn_pref (Devm.PopBurn.of_popBurnBy denominatorPop)
+        denominatorTestPrefix).2
+    have highPreWf : Mem.Wf highPre.memory := by
+      rw [← denominatorPop.memory]
+      exact denominatorTestWf
+    have highPreReads : Mem.Reads highPre.memory image := by
+      rw [← denominatorPop.memory]
+      exact denominatorTestReads
+
+    obtain ⟨highPost, highRun, highGuardRun⟩ :=
+      runCompiledTo_prepend_inv highGuardRun
+    obtain ⟨highPrefix, highWf, highReads, -⟩ :=
+      of_run_loadWordAt_image highPrePrefix highPreWf highPreReads highAt
+        highRun
+
+    obtain ⟨highTest, highZeroRun, highBranchRun⟩ :=
+      runCompiledTo_next_inv highGuardRun
+    have highZeroSource := Ninst.Run.of_runCompiled highZeroRun
+    have highTestPrefix := prefix_of_iszero highZeroSource highPrefix
+    have highTestMemory : highPost.memory = highTest.memory :=
+      Ninst.Hinv.inv (f := Devm.memory) highZeroSource
+    have highTestWf : Mem.Wf highTest.memory := by
+      rw [← highTestMemory]
+      exact highWf
+    have highTestReads : Mem.Reads highTest.memory image := by
+      rw [← highTestMemory]
+      exact highReads
+    have highOnePrefix : (1 : B256) :: tail <<+ highTest.stack := by
+      simpa [B256.eqCheck] using highTestPrefix
+
+    obtain ⟨simplePre, branchWord, branchWordNe, simplePop,
+        simpleRun, simplePrefix⟩ :=
+      Func.RunCompiledTo.succ_branch_of_prefix
+        (by decide : (1 : B256) ≠ 0) highOnePrefix highBranchRun
+    have simpleWf : Mem.Wf simplePre.memory := by
+      rw [← simplePop.memory]
+      exact highTestWf
+    have simpleReads : Mem.Reads simplePre.memory image := by
+      rw [← simplePop.memory]
+      exact highTestReads
+    exact divideSimple_down_trace simpleWf simpleReads denominatorAt lowAt
+      simplePrefix lookup simpleRun
+  · rcases denominatorZeroRoute with
+      ⟨branchWord, revertPre, branchWordNe, denominatorStack,
+        denominatorPop, revertRun⟩
+    obtain ⟨revertPost, impossible, -⟩ :=
+      runCompiledTo_rev_inv revertRun
+    cases impossible
+
 end ProrataWethVault
 
 end Blanc
