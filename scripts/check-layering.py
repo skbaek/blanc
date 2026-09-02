@@ -224,6 +224,7 @@ CONTRACTS = {
         "LidoTriggerableWithdrawalsGatewayTriggerAuthorizationRoute",
         "LidoTriggerableWithdrawalsGatewayAuthorization",
         "LidoTriggerableWithdrawalsGatewayPinnedTarget",
+        "LidoTriggerableWithdrawalsGatewayReachability",
     ],
     "proxy-pair": ["ProxyPairSlots", "ProxyPairProgram",
                    "ProxyPairOssifiableSurface",

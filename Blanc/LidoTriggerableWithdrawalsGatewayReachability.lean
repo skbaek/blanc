@@ -1,6 +1,7 @@
 import Blanc.ForwardLog
 import Blanc.ForwardStorageAccess
 import Blanc.LidoTriggerableWithdrawalsGatewayPauseFor
+import Blanc.LidoTriggerableWithdrawalsGatewayRoleRoute
 
 /-!
 # Constructive Triggerable Withdrawals Gateway reachability
@@ -16,18 +17,6 @@ namespace Blanc
 open Jaune
 
 namespace LidoTriggerableWithdrawalsGateway
-
-private theorem roleKeyWord_eq (role account : B256) (region : Nat) :
-    regionWord region |||
-        (low252Mask &&& ((addressMask &&& account) ^^^ role)) =
-      taggedSlot region (roleLookupPayload role account) := by
-  unfold taggedSlot roleLookupPayload canonicalAccount
-  rw [B256.and_comm addressMask account,
-    B256.xor_comm (account &&& addressMask) role,
-    B256.and_comm low252Mask (role ^^^ (account &&& addressMask))]
-  exact congrArg (regionWord region ||| ·)
-    (B256.and_idem_right
-      (role ^^^ (account &&& addressMask)) low252Mask).symm
 
 private theorem accessedStorageKeys_setMach
     {base : Devm} {mach : Mach} :
