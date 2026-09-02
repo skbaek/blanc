@@ -257,7 +257,10 @@ toolchain-local cache only on the same host and user account, with the exact
 toolchain and dependency identity selected by Lake. They never share a writable
 `.lake`, trace, source-hash sidecar, build certificate, gate manifest, report,
 or elaboration-timing state. Restored build artifacts are read-only hard links
-or copies; every worktree keeps its own mutable metadata.
+or copies; every worktree keeps its own mutable metadata. Lake's artifact-file
+insertion tolerates a same-name race, but its input-to-output maps overwrite;
+Blanc therefore claims no general multiwriter safety and serializes managed
+cache writers and maintenance through Creme's semaphore.
 
 The cache key is Lake's 64-bit non-cryptographic artifact hash. An ordinary
 local restore trusts the keyed artifact and its sidecar; `lake --rehash
@@ -279,9 +282,14 @@ The first command runs a small checker against the active toolchain's own
 compares it with the cache filename, then recomputes every materialized output
 whose hexadecimal sidecar names a current cache artifact. Thus the measured
 flip, truncation, and name swap all fail before certification. The explicit
-accepted residual inside this one-host, one-user, one-toolchain trust domain is
-a collision in Lake's 64-bit non-cryptographic hash; the checker does not claim
-cryptographic collision resistance. It also does not repair a corrupt cache.
+accepted residuals inside this one-host, one-user, one-toolchain trust domain
+are a collision in Lake's 64-bit non-cryptographic hash and substitution of a
+valid artifact through Lake's separate input-hash-to-output mapping. The
+checker authenticates artifact names and bytes, not that mapping's binding,
+and does not claim cryptographic collision resistance. Certification does not
+invoke the checker: the adjacent commands above are a mandatory procedural
+sequence, not an integrated certificate property. The checker also does not
+repair a corrupt cache.
 On failure, preserve the evidence, disable cache restore if necessary with
 `LAKE_ARTIFACT_CACHE=false`, run `lake cache clean`, and perform the
 repository-prescribed authoritative build before trying the integrity check

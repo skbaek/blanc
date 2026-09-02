@@ -45,10 +45,13 @@ own artifact hash for the cache and materialized outputs; ordinary restore,
 `--no-build`, and `--rehash` do not authenticate those bytes. The check detects
 accidental corruption and wrong-name restores, with collision resistance of
 Lake's 64-bit non-cryptographic hash explicitly remaining inside the local
-trust boundary. If a restore is suspect, preserve the failure evidence, run
-`lake cache clean`, and rebuild. Setting `LAKE_ARTIFACT_CACHE=false` for that
-rebuild disables local artifact-cache restore without changing the repository
-configuration.
+trust boundary. It does not authenticate Lake's separate input-hash-to-output
+mapping files, and certification does not invoke it automatically; the two
+commands above are therefore one required operator sequence within the
+same-user trust boundary. If a restore is suspect, preserve the failure
+evidence, run `lake cache clean`, and rebuild. Setting
+`LAKE_ARTIFACT_CACHE=false` for that rebuild disables local artifact-cache
+restore without changing the repository configuration.
 
 Cache garbage collection is a coordinated maintenance operation. From a Creme
 goal that holds the exclusive host semaphore, preview and then execute it with:
