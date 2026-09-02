@@ -1684,6 +1684,135 @@ theorem finishQuotient_up_trace
       rw [← callBurn.stack]
       exact sumPrefix
 
+/-- Capped floor finishing has the same successful continuation effect as
+ordinary floor finishing; only the earlier wide-overflow branch differs. -/
+theorem finishQuotient_capDown_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {quotient : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (quotientAt : Bytes.toB256
+      (image.sliceD (quotientWord * 32).toNat 32 0) = quotient)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (finishQuotient .capDown continuation) (.ok final)) :
+    ∃ bodyPre,
+      quotient :: tail <<+ bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  apply finishQuotient_down_trace memoryWf memoryReads quotientAt stack
+    lookup
+  simpa only [finishQuotient] using run
+
+/-- Capped ceiling-predecessor finishing returns `quotient - 1` on an exact
+division and `quotient` otherwise.  The subtraction is intentionally stated
+as a word operation here; the positive-numerator bridge belongs to the
+capacity theorem that rules out the zero-underflow case. -/
+theorem finishQuotient_capCeilPred_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {quotient remainder : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (quotientAt : Bytes.toB256
+      (image.sliceD (quotientWord * 32).toNat 32 0) = quotient)
+    (remainderAt : Bytes.toB256
+      (image.sliceD (remainderWord * 32).toNat 32 0) = remainder)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (finishQuotient .capCeilPred continuation) (.ok final)) :
+    ∃ bodyPre,
+      (if remainder = 0 then quotient - 1 else quotient) :: tail <<+
+        bodyPre.stack ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  simp only [finishQuotient] at run
+  obtain ⟨remainderPost, remainderRun, run⟩ :=
+    runCompiledTo_prepend_inv run
+  obtain ⟨remainderPrefix, remainderWf, remainderReads, -⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads remainderAt
+      remainderRun
+  obtain ⟨remainderTest, remainderZeroRun, branchRun⟩ :=
+    runCompiledTo_next_inv run
+  have remainderZeroSource := Ninst.Run.of_runCompiled remainderZeroRun
+  have remainderTestPrefix :=
+    prefix_of_iszero remainderZeroSource remainderPrefix
+  have remainderTestMemory :
+      remainderPost.memory = remainderTest.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) remainderZeroSource
+  have remainderTestWf : Mem.Wf remainderTest.memory := by
+    rw [← remainderTestMemory]
+    exact remainderWf
+  have remainderTestReads : Mem.Reads remainderTest.memory image := by
+    rw [← remainderTestMemory]
+    exact remainderReads
+
+  by_cases remainderZero : remainder = 0
+  · have onePrefix : (1 : B256) :: tail <<+ remainderTest.stack := by
+      simpa [B256.eqCheck, remainderZero] using remainderTestPrefix
+    obtain ⟨exactPre, branchWord, branchWordNe, exactPop, exactRun,
+        exactPrefix⟩ :=
+      Func.RunCompiledTo.succ_branch_of_prefix
+        (by decide : (1 : B256) ≠ 0) onePrefix branchRun
+    have exactWf : Mem.Wf exactPre.memory := by
+      rw [← exactPop.memory]
+      exact remainderTestWf
+    have exactReads : Mem.Reads exactPre.memory image := by
+      rw [← exactPop.memory]
+      exact remainderTestReads
+    obtain ⟨onePost, oneRun, exactRun⟩ :=
+      runCompiledTo_next_inv exactRun
+    have oneSource := Ninst.Run.of_runCompiled oneRun
+    have oneValuePrefix : (1 : B256) :: tail <<+ onePost.stack :=
+      prefix_of_push (of_run_pushB256 oneSource) exactPrefix
+    have oneMemory : exactPre.memory = onePost.memory :=
+      Ninst.Hinv.inv (f := Devm.memory) oneSource
+    have oneWf : Mem.Wf onePost.memory := by
+      rw [← oneMemory]
+      exact exactWf
+    have oneReads : Mem.Reads onePost.memory image := by
+      rw [← oneMemory]
+      exact exactReads
+    obtain ⟨quotientPost, quotientRun, exactRun⟩ :=
+      runCompiledTo_prepend_inv exactRun
+    obtain ⟨quotientPrefix, quotientWf, quotientReads, -⟩ :=
+      of_run_loadWordAt_image oneValuePrefix oneWf oneReads quotientAt
+        quotientRun
+    obtain ⟨differencePost, differenceRun, callRun⟩ :=
+      runCompiledTo_next_inv exactRun
+    have differenceSource := Ninst.Run.of_runCompiled differenceRun
+    have differencePrefix : (quotient - 1) :: tail <<+
+        differencePost.stack :=
+      prefix_of_sub differenceSource quotientPrefix
+    obtain ⟨bodyPre, callBurn, bodyRun⟩ :=
+      runCompiledTo_call_inv lookup callRun
+    refine ⟨bodyPre, ?_, bodyRun⟩
+    simp only [if_pos remainderZero]
+    rw [← callBurn.stack]
+    exact differencePrefix
+  · have zeroPrefix : (0 : B256) :: tail <<+ remainderTest.stack := by
+      simpa [B256.eqCheck, remainderZero] using remainderTestPrefix
+    obtain ⟨inexactPre, inexactPop, inexactRun, inexactPrefix⟩ :=
+      Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+    have inexactWf : Mem.Wf inexactPre.memory := by
+      rw [← inexactPop.memory]
+      exact remainderTestWf
+    have inexactReads : Mem.Reads inexactPre.memory image := by
+      rw [← inexactPop.memory]
+      exact remainderTestReads
+    obtain ⟨callPre, quotientRun, callRun⟩ :=
+      runCompiledTo_prepend_inv inexactRun
+    obtain ⟨quotientPrefix, -, -, -⟩ :=
+      of_run_loadWordAt_image inexactPrefix inexactWf inexactReads quotientAt
+        quotientRun
+    obtain ⟨bodyPre, callBurn, bodyRun⟩ :=
+      runCompiledTo_call_inv lookup callRun
+    refine ⟨bodyPre, ?_, bodyRun⟩
+    simp only [if_neg remainderZero]
+    rw [← callBurn.stack]
+    exact quotientPrefix
+
 /-- The mode-independent arithmetic prefix of `divideWideCore` stages its
 exact full-width quotient and remainder before handing control to the selected
 rounding finisher. -/
@@ -2966,6 +3095,164 @@ theorem ProducesWord.arg
   · rw [← memory]
     exact memoryReads
 
+/-- Extend a proved producer by pushing a constant and adding it.  The result
+uses the source-order value even though `ADD` sees the pushed constant first. -/
+theorem ProducesWord.addConst
+    {sevm : Sevm} {line : Line} {image : Bytes} {value : B256}
+    (produces : ProducesWord sevm line image value)
+    (constant : B256) :
+    ProducesWord sevm
+      (line ++ [Ninst.pushB256 constant, Ninst.add]) image
+      (value + constant) := by
+  intro pre post tail memoryWf memoryReads stack run
+  rcases of_run_append line run with ⟨linePost, lineRun, suffixRun⟩
+  obtain ⟨valuePrefix, lineWf, lineReads, lineState⟩ :=
+    produces memoryWf memoryReads stack lineRun
+  have suffixState :=
+    Line.of_inv Devm.state (by line_inv) suffixRun
+  have suffixMemory :=
+    Line.of_inv Devm.memory (by line_inv) suffixRun
+  rcases Line.of_run_cons suffixRun with
+    ⟨pushPost, pushRun, suffixRun⟩
+  rcases Line.of_run_cons suffixRun with
+    ⟨addPost, addRun, suffixRun⟩
+  cases suffixRun
+  have constantPrefix :=
+    prefix_of_push (of_run_pushB256 pushRun) valuePrefix
+  have resultPrefix : (value + constant) :: tail <<+ post.stack := by
+    simpa only [B256.add_comm] using
+      prefix_of_add addRun constantPrefix
+  refine ⟨resultPrefix, ?_, ?_, lineState.trans suffixState⟩
+  · rw [← suffixMemory]
+    exact lineWf
+  · rw [← suffixMemory]
+    exact lineReads
+
+/-- Extend a proved producer by pushing a minuend and subtracting the produced
+word from it. -/
+theorem ProducesWord.subFromConst
+    {sevm : Sevm} {line : Line} {image : Bytes} {value : B256}
+    (produces : ProducesWord sevm line image value)
+    (constant : B256) :
+    ProducesWord sevm
+      (line ++ [Ninst.pushB256 constant, Ninst.sub]) image
+      (constant - value) := by
+  intro pre post tail memoryWf memoryReads stack run
+  rcases of_run_append line run with ⟨linePost, lineRun, suffixRun⟩
+  obtain ⟨valuePrefix, lineWf, lineReads, lineState⟩ :=
+    produces memoryWf memoryReads stack lineRun
+  have suffixState :=
+    Line.of_inv Devm.state (by line_inv) suffixRun
+  have suffixMemory :=
+    Line.of_inv Devm.memory (by line_inv) suffixRun
+  rcases Line.of_run_cons suffixRun with
+    ⟨pushPost, pushRun, suffixRun⟩
+  rcases Line.of_run_cons suffixRun with
+    ⟨subPost, subRun, suffixRun⟩
+  cases suffixRun
+  have constantPrefix :=
+    prefix_of_push (of_run_pushB256 pushRun) valuePrefix
+  have resultPrefix : (constant - value) :: tail <<+ post.stack :=
+    prefix_of_sub subRun constantPrefix
+  refine ⟨resultPrefix, ?_, ?_, lineState.trans suffixState⟩
+  · rw [← suffixMemory]
+    exact lineWf
+  · rw [← suffixMemory]
+    exact lineReads
+
+/-! ## Concrete vault word producers -/
+
+/-- The staged share denominator produces the modular embedding of
+`supply + virtualShares`.  Stable-supply consumers can then recover the
+unwrapped natural value with `denominatorN_le_maxWord`. -/
+theorem ProducesWord.stagedDenominator
+    {sevm : Sevm} {image : Bytes} {supply : B256}
+    (supplyAt : Bytes.toB256
+      (image.sliceD (supplyWord * 32).toNat 32 0) = supply) :
+    ProducesWord sevm stagedDenominator image
+      (Nat.toB256 (denominatorN supply.toNat)) := by
+  intro pre post tail memoryWf memoryReads stack run
+  have rawRun : Line.Run sevm pre
+      (ProrataWethVault.loadWord supplyWord ++
+        [Ninst.pushB256 virtualShares, Ninst.add]) post := by
+    simpa only [ProrataWethVault.stagedDenominator] using run
+  have effect :=
+    @ProducesWord.addConst sevm (ProrataWethVault.loadWord supplyWord)
+      image supply (ProducesWord.loadWord (sevm := sevm) supplyAt)
+      virtualShares pre post tail memoryWf memoryReads stack rawRun
+  simpa [denominatorN, offsetN, wordAdd_eq_toB256_add,
+    virtualShares_toNat] using effect
+
+/-- The staged asset factor produces the word embedding of `assets + 1`.
+For the all-ones asset word this is deliberately zero; callers select the
+dedicated exact-`2^256` branch before using it as a denominator. -/
+theorem ProducesWord.stagedAssetFactor
+    {sevm : Sevm} {image : Bytes} {assets : B256}
+    (assetsAt : Bytes.toB256
+      (image.sliceD (assetsWord * 32).toNat 32 0) = assets) :
+    ProducesWord sevm stagedAssetFactor image
+      (Nat.toB256 (assetFactorN assets.toNat)) := by
+  intro pre post tail memoryWf memoryReads stack run
+  have rawRun : Line.Run sevm pre
+      (ProrataWethVault.loadWord assetsWord ++
+        [Ninst.pushB256 1, Ninst.add]) post := by
+    simpa only [ProrataWethVault.stagedAssetFactor] using run
+  have effect :=
+    @ProducesWord.addConst sevm (ProrataWethVault.loadWord assetsWord)
+      image assets (ProducesWord.loadWord (sevm := sevm) assetsAt)
+      1 pre post tail memoryWf memoryReads stack rawRun
+  simpa [assetFactorN, wordAdd_eq_toB256_add, B256.toNat_one] using
+    effect
+
+/-- Under the executed stable-supply guard, the compiled subtraction produces
+the exact remaining mintable share room. -/
+theorem ProducesWord.shareRoom
+    {sevm : Sevm} {image : Bytes} {supply : B256}
+    (supplyAt : Bytes.toB256
+      (image.sliceD (supplyWord * 32).toNat 32 0) = supply)
+    (stable : supply.toNat ≤ maxSupplyN) :
+    ProducesWord sevm shareRoom image
+      (Nat.toB256 (shareRoomN supply.toNat)) := by
+  have wordLe : supply ≤ maxSupply := by
+    rw [B256.le_iff_toNat_le_toNat, maxSupply_toNat]
+    exact stable
+  have roomEq :
+      maxSupply - supply = Nat.toB256 (shareRoomN supply.toNat) := by
+    rw [wordSub_eq_toB256_sub_of_le wordLe, shareRoomN,
+      maxSupply_toNat]
+  intro pre post tail memoryWf memoryReads stack run
+  have rawRun : Line.Run sevm pre
+      (ProrataWethVault.loadWord supplyWord ++
+        [Ninst.pushB256 maxSupply, Ninst.sub]) post := by
+    simpa only [ProrataWethVault.shareRoom] using run
+  have effect :=
+    @ProducesWord.subFromConst sevm
+      (ProrataWethVault.loadWord supplyWord) image supply
+      (ProducesWord.loadWord (sevm := sevm) supplyAt) maxSupply
+      pre post tail memoryWf memoryReads stack rawRun
+  simpa only [roomEq] using effect
+
+/-- The threshold numerator used by `maxDeposit` is the exact successor of
+the remaining stable-supply room. -/
+theorem ProducesWord.shareRoomPlusOne
+    {sevm : Sevm} {image : Bytes} {supply : B256}
+    (supplyAt : Bytes.toB256
+      (image.sliceD (supplyWord * 32).toNat 32 0) = supply)
+    (stable : supply.toNat ≤ maxSupplyN) :
+    ProducesWord sevm shareRoomPlusOne image
+      (Nat.toB256 (shareRoomN supply.toNat + 1)) := by
+  intro pre post tail memoryWf memoryReads stack run
+  have rawRun : Line.Run sevm pre
+      (ProrataWethVault.shareRoom ++
+        [Ninst.pushB256 1, Ninst.add]) post := by
+    simpa only [ProrataWethVault.shareRoomPlusOne] using run
+  have effect :=
+    @ProducesWord.addConst sevm ProrataWethVault.shareRoom image
+      (Nat.toB256 (shareRoomN supply.toNat))
+      (ProducesWord.shareRoom (sevm := sevm) supplyAt stable) 1
+      pre post tail memoryWf memoryReads stack rawRun
+  simpa only [toB256_add_one] using effect
+
 /-- Store the word produced by a `ProducesWord` line and expose the following
 continuation with the proof-carrying memory image advanced exactly once. -/
 theorem ProducesWord.store_trace
@@ -3359,25 +3646,6 @@ theorem shiftedDiv_up_trace
     quotientPrefix
 
 /-! ## Product division by exactly `2^256` -/
-
-theorem finishQuotient_capDown_trace
-    {fs : List Func} {sevm : Sevm} {pre final : Devm}
-    {image : Bytes} {quotient : B256} {continuation : Nat}
-    {body : Func} {tail : Stack}
-    (memoryWf : Mem.Wf pre.memory)
-    (memoryReads : Mem.Reads pre.memory image)
-    (quotientAt : Bytes.toB256
-      (image.sliceD (quotientWord * 32).toNat 32 0) = quotient)
-    (stack : tail <<+ pre.stack)
-    (lookup : fs[continuation]? = some body)
-    (run : Func.RunCompiledTo fs sevm pre
-      (finishQuotient .capDown continuation) (.ok final)) :
-    ∃ bodyPre,
-      quotient :: tail <<+ bodyPre.stack ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  apply finishQuotient_down_trace memoryWf memoryReads quotientAt stack
-    lookup
-  simpa only [finishQuotient] using run
 
 def productOverTwoPow256TraceImage
     (image : Bytes) (x y : B256) : Bytes :=
