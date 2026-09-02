@@ -64,6 +64,11 @@ private theorem addAccessedStorageKey_accountsToDelete_local
     (addAccessedStorageKey base a k).accountsToDelete =
       base.accountsToDelete := rfl
 
+private theorem addAccessedStorageKey_refundCounter_local
+    (base : Devm) (a : Adr) (k : B256) :
+    (addAccessedStorageKey base a k).refundCounter =
+      base.refundCounter := rfl
+
 private theorem addAccessedStorageKey_transientStorage_local
     (base : Devm) (a : Adr) (k : B256) :
     (addAccessedStorageKey base a k).transientStorage =
@@ -146,6 +151,12 @@ private theorem pauseResumeWarm_accountsToDelete
   simp only [pauseResumeWarm, pauseRoleWarm,
     addAccessedStorageKey_accountsToDelete_local]
 
+private theorem pauseResumeWarm_refundCounter
+    (sevm : Sevm) (base : Devm) :
+    (pauseResumeWarm sevm base).refundCounter = base.refundCounter := by
+  simp only [pauseResumeWarm, pauseRoleWarm,
+    addAccessedStorageKey_refundCounter_local]
+
 private theorem pauseResumeWarm_transientStorage
     (sevm : Sevm) (base : Devm) :
     (pauseResumeWarm sevm base).transientStorage = base.transientStorage := by
@@ -168,6 +179,12 @@ private theorem pauseResumeWarm_getCode
     (pauseResumeWarm sevm base).getCode a = base.getCode a := by
   simp only [pauseResumeWarm, pauseRoleWarm,
     addAccessedStorageKey_getCode_local]
+
+private theorem pauseResumeWarm_getStorVal
+    (sevm : Sevm) (base : Devm) (a : Adr) (key : B256) :
+    (pauseResumeWarm sevm base).getStorVal a key = base.getStorVal a key := by
+  simp only [pauseResumeWarm, pauseRoleWarm,
+    getStorVal_addAccessedStorageKey]
 
 /-- Persistent-state/refund carrier immediately after the finite write. -/
 def pauseStored (sevm : Sevm) (base : Devm) (duration : B256) : Devm :=
@@ -198,6 +215,9 @@ private theorem setMach_logs_local (base : Devm) (mach : Mach) :
 
 private theorem setMach_accountsToDelete_local (base : Devm) (mach : Mach) :
     (base.setMach mach).accountsToDelete = base.accountsToDelete := rfl
+
+private theorem setMach_refundCounter_local (base : Devm) (mach : Mach) :
+    (base.setMach mach).refundCounter = base.refundCounter := rfl
 
 private theorem setMach_transientStorage_local (base : Devm) (mach : Mach) :
     (base.setMach mach).transientStorage = base.transientStorage := rfl
@@ -232,6 +252,9 @@ private theorem addLog_logs_local (base : Devm) (event : Log) :
 
 private theorem addLog_accountsToDelete_local (base : Devm) (event : Log) :
     (base.addLog event).accountsToDelete = base.accountsToDelete := rfl
+
+private theorem addLog_refundCounter_local (base : Devm) (event : Log) :
+    (base.addLog event).refundCounter = base.refundCounter := rfl
 
 private theorem addLog_transientStorage_local (base : Devm) (event : Log) :
     (base.addLog event).transientStorage = base.transientStorage := rfl
@@ -286,6 +309,16 @@ private theorem pauseStored_accountsToDelete
       base.accountsToDelete := by
   rw [pauseStored, afterSstore_accountsToDelete,
     pauseResumeWarm_accountsToDelete]
+
+private theorem pauseStored_refundCounter
+    (sevm : Sevm) (base : Devm) (duration : B256) :
+    (pauseStored sevm base duration).refundCounter =
+      sstoreNewRefundCounter (duration + sevm.benvStat.time)
+        (getOrigStorVal sevm sevm.currentTarget resumeSinceSlot)
+        (base.getStorVal sevm.currentTarget resumeSinceSlot)
+        base.refundCounter := by
+  rw [pauseStored, afterSstore_refundCounter,
+    pauseResumeWarm_getStorVal, pauseResumeWarm_refundCounter]
 
 private theorem pauseStored_transientStorage
     (sevm : Sevm) (base : Devm) (duration : B256) :
@@ -349,6 +382,16 @@ private theorem pauseStored_getCode
   rw [pauseFinitePost, setMach_accountsToDelete_local, pauseLogged,
     addLog_accountsToDelete_local, pauseStored_accountsToDelete]
 
+@[simp] theorem pauseFinitePost_refundCounter
+    (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
+    (pauseFinitePost sevm base duration G).refundCounter =
+      sstoreNewRefundCounter (duration + sevm.benvStat.time)
+        (getOrigStorVal sevm sevm.currentTarget resumeSinceSlot)
+        (base.getStorVal sevm.currentTarget resumeSinceSlot)
+        base.refundCounter := by
+  rw [pauseFinitePost, setMach_refundCounter_local, pauseLogged,
+    addLog_refundCounter_local, pauseStored_refundCounter]
+
 @[simp] theorem pauseFinitePost_transientStorage
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).transientStorage =
@@ -401,6 +444,20 @@ theorem pauseFinitePost_warm
   unfold sloadAccessedStorageKeys
   rw [if_pos hwarm]
   exact hwarm
+
+theorem pauseFinitePost_accessedStorageKeys
+    (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
+    (pauseFinitePost sevm base duration G).accessedStorageKeys =
+      (pauseResumeWarm sevm base).accessedStorageKeys := by
+  rw [pauseFinitePost, setMach_accessedStorageKeys_local, pauseLogged,
+    addLog_accessedStorageKeys_local, pauseStored,
+    afterSstore_accessedStorageKeys]
+  have hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
+      (pauseResumeWarm sevm base).accessedStorageKeys := by
+    unfold pauseResumeWarm
+    exact Std.HashSet.mem_insert_self
+  unfold sloadAccessedStorageKeys
+  rw [if_pos hwarm]
 
 /-! ## The authorization prefix -/
 
