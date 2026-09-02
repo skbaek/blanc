@@ -2581,6 +2581,335 @@ theorem divide512_up_trace
   · exact divideWide_up_trace wideWf wideReads denominatorAt highAt lowAt
       widePrefix lookup wideRun
 
+/-! ## Exact product staging -/
+
+/-- The mode-independent arithmetic suffix of `multiply512`, after its two
+word-valued producer lines have been stored at `xWord` and `yWord`. -/
+def multiply512ArithmeticLine : Line :=
+  loadWord xWord ++ loadWord yWord ++ [mul] ++ mstoreAt lowWord ++
+  [pushB256 B256.max] ++ loadWord yWord ++ loadWord xWord ++ [mulmod] ++
+  mstoreAt scratchWord ++
+  loadWord lowWord ++ loadWord scratchWord ++ [sub] ++ mstoreAt highWord ++
+  loadWord lowWord ++ loadWord scratchWord ++ [lt] ++ mstoreAt borrowWord ++
+  loadWord borrowWord ++ loadWord highWord ++ [sub] ++ mstoreAt highWord
+
+/-- Proof-carrying memory image for the exact low word, `MULMOD` scratch,
+borrow correction, and final high word staged by `multiply512ArithmeticLine`.
+The nested image intentionally retains both writes to `highWord`. -/
+def multiply512ArithmeticTraceImage
+    (image : Bytes) (x y : B256) : Bytes :=
+  Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt
+        (Bytes.writeAt
+          (Bytes.writeAt image (lowWord * 32).toNat
+            (productLowWord x y).toBytes)
+          (scratchWord * 32).toNat (productScratchWord x y).toBytes)
+        (highWord * 32).toNat
+          (productHighBeforeBorrowWord x y).toBytes)
+      (borrowWord * 32).toNat (productBorrowWord x y).toBytes)
+    (highWord * 32).toNat (productHighWord x y).toBytes
+
+theorem multiply512ArithmeticTraceImage_low (image : Bytes) (x y : B256) :
+    Bytes.toB256
+        ((multiply512ArithmeticTraceImage image x y).sliceD
+          (lowWord * 32).toNat 32 0) =
+      productLowWord x y := by
+  unfold multiply512ArithmeticTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · rw [Bytes.readWord_writeAt_of_disjoint]
+      · rw [Bytes.readWord_writeAt_of_disjoint]
+        · exact Bytes.readWord_writeAt_self _ _ _
+        · left
+          decide +kernel
+      · right
+        decide +kernel
+    · left
+      decide +kernel
+  · right
+    decide +kernel
+
+theorem multiply512ArithmeticTraceImage_high (image : Bytes) (x y : B256) :
+    Bytes.toB256
+        ((multiply512ArithmeticTraceImage image x y).sliceD
+          (highWord * 32).toNat 32 0) =
+      productHighWord x y := by
+  unfold multiply512ArithmeticTraceImage
+  exact Bytes.readWord_writeAt_self _ _ _
+
+theorem multiply512ArithmeticTraceImage_denominator
+    {image : Bytes} {x y denominator : B256}
+    (denominatorAt : Bytes.toB256
+      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator) :
+    Bytes.toB256
+        ((multiply512ArithmeticTraceImage image x y).sliceD
+          (denominatorWord * 32).toNat 32 0) = denominator := by
+  unfold multiply512ArithmeticTraceImage
+  rw [Bytes.readWord_writeAt_of_disjoint]
+  · rw [Bytes.readWord_writeAt_of_disjoint]
+    · rw [Bytes.readWord_writeAt_of_disjoint]
+      · rw [Bytes.readWord_writeAt_of_disjoint]
+        · rw [Bytes.readWord_writeAt_of_disjoint]
+          · exact denominatorAt
+          · left
+            decide +kernel
+        · left
+          decide +kernel
+      · left
+        decide +kernel
+    · left
+      decide +kernel
+  · left
+    decide +kernel
+
+/-- The compiled arithmetic suffix reconstructs and stages the exact two-word
+product while preserving the surrounding stack and persistent state. -/
+theorem multiply512Arithmetic_trace
+    {sevm : Sevm} {pre post : Devm}
+    {image : Bytes} {x y : B256} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (xAt : Bytes.toB256
+      (image.sliceD (xWord * 32).toNat 32 0) = x)
+    (yAt : Bytes.toB256
+      (image.sliceD (yWord * 32).toNat 32 0) = y)
+    (stack : tail <<+ pre.stack)
+    (run : Line.Run sevm pre multiply512ArithmeticLine post) :
+    tail <<+ post.stack ∧
+      Mem.Wf post.memory ∧
+      Mem.Reads post.memory (multiply512ArithmeticTraceImage image x y) ∧
+      pre.state = post.state := by
+  have state :=
+    Line.of_inv Devm.state
+      (by unfold multiply512ArithmeticLine loadWord mstoreAt; line_inv) run
+  unfold multiply512ArithmeticLine at run
+
+  rcases of_run_append (loadWord xWord) run with ⟨s1, xRun, run⟩
+  obtain ⟨p1, wf1, reads1, -⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads xAt xRun
+  rcases of_run_append (loadWord yWord) run with ⟨s2, yRun, run⟩
+  obtain ⟨p2, wf2, reads2, -⟩ :=
+    of_run_loadWordAt_image p1 wf1 reads1 yAt yRun
+  rcases of_run_append [mul] run with ⟨s3, mulLineRun, run⟩
+  rcases Line.of_run_cons mulLineRun with ⟨s3', mulRun, mulLineRun⟩
+  cases mulLineRun
+  have p3raw := prefix_of_mul mulRun p2
+  have p3 : productLowWord x y :: tail <<+ s3.stack := by
+    have lowEq : y * x = productLowWord x y := by
+      change (y.toNat * x.toNat).toB256 =
+        (x.toNat * y.toNat).toB256
+      rw [Nat.mul_comm]
+    exact lowEq ▸ p3raw
+  have mulMemory : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons mulRun Line.Run.nil)
+  have wf3 : Mem.Wf s3.memory := by
+    rw [← mulMemory]
+    exact wf2
+  have reads3 : Mem.Reads s3.memory image := by
+    rw [← mulMemory]
+    exact reads2
+  rcases of_run_append (mstoreAt lowWord) run with
+    ⟨s4, lowStoreRun, run⟩
+  obtain ⟨p4, wf4, reads4, -⟩ :=
+    of_run_mstoreAt_image p3 wf3 reads3 lowStoreRun
+  let image1 := Bytes.writeAt image (lowWord * 32).toNat
+    (productLowWord x y).toBytes
+  change Mem.Reads _ image1 at reads4
+  have xAt1 : Bytes.toB256
+      (image1.sliceD (xWord * 32).toNat 32 0) = x := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact xAt
+    · left
+      decide +kernel
+  have yAt1 : Bytes.toB256
+      (image1.sliceD (yWord * 32).toNat 32 0) = y := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact yAt
+    · left
+      decide +kernel
+
+  rcases of_run_append [pushB256 B256.max] run with
+    ⟨s5, maxLineRun, run⟩
+  rcases Line.of_run_cons maxLineRun with
+    ⟨s5', maxRun, maxLineRun⟩
+  cases maxLineRun
+  have p5 : B256.max :: tail <<+ s5.stack := by
+    simpa only [List.singleton_append] using
+      prefix_of_push (of_run_pushB256 maxRun) p4
+  have maxMemory : s4.memory = s5.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons maxRun Line.Run.nil)
+  have wf5 : Mem.Wf s5.memory := by
+    rw [← maxMemory]
+    exact wf4
+  have reads5 : Mem.Reads s5.memory image1 := by
+    rw [← maxMemory]
+    exact reads4
+  rcases of_run_append (loadWord yWord) run with ⟨s6, yRun2, run⟩
+  obtain ⟨p6, wf6, reads6, -⟩ :=
+    of_run_loadWordAt_image p5 wf5 reads5 yAt1 yRun2
+  rcases of_run_append (loadWord xWord) run with ⟨s7, xRun2, run⟩
+  obtain ⟨p7, wf7, reads7, -⟩ :=
+    of_run_loadWordAt_image p6 wf6 reads6 xAt1 xRun2
+  rcases of_run_append [mulmod] run with
+    ⟨s8, mulmodLineRun, run⟩
+  rcases Line.of_run_cons mulmodLineRun with
+    ⟨s8', mulmodRun, mulmodLineRun⟩
+  cases mulmodLineRun
+  have p8raw := prefix_of_mulmod mulmodRun p7
+  have p8 : productScratchWord x y :: tail <<+ s8.stack := by
+    simpa only [productScratchWord, List.nil_append] using p8raw
+  have mulmodMemory : s7.memory = s8.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons mulmodRun Line.Run.nil)
+  have wf8 : Mem.Wf s8.memory := by
+    rw [← mulmodMemory]
+    exact wf7
+  have reads8 : Mem.Reads s8.memory image1 := by
+    rw [← mulmodMemory]
+    exact reads7
+  rcases of_run_append (mstoreAt scratchWord) run with
+    ⟨s9, scratchStoreRun, run⟩
+  obtain ⟨p9, wf9, reads9, -⟩ :=
+    of_run_mstoreAt_image p8 wf8 reads8 scratchStoreRun
+  let image2 := Bytes.writeAt image1 (scratchWord * 32).toNat
+    (productScratchWord x y).toBytes
+  change Mem.Reads _ image2 at reads9
+  have lowAt2 : Bytes.toB256
+      (image2.sliceD (lowWord * 32).toNat 32 0) = productLowWord x y := by
+    unfold image2 image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · left
+      decide +kernel
+  have scratchAt2 : Bytes.toB256
+      (image2.sliceD (scratchWord * 32).toNat 32 0) =
+        productScratchWord x y := by
+    unfold image2
+    exact Bytes.readWord_writeAt_self _ _ _
+
+  rcases of_run_append (loadWord lowWord) run with ⟨s10, lowRun, run⟩
+  obtain ⟨p10, wf10, reads10, -⟩ :=
+    of_run_loadWordAt_image p9 wf9 reads9 lowAt2 lowRun
+  rcases of_run_append (loadWord scratchWord) run with
+    ⟨s11, scratchRun, run⟩
+  obtain ⟨p11, wf11, reads11, -⟩ :=
+    of_run_loadWordAt_image p10 wf10 reads10 scratchAt2 scratchRun
+  rcases of_run_append [sub] run with ⟨s12, subLineRun, run⟩
+  rcases Line.of_run_cons subLineRun with ⟨s12', subRun, subLineRun⟩
+  cases subLineRun
+  have p12raw := prefix_of_sub subRun p11
+  have p12 : productHighBeforeBorrowWord x y :: tail <<+ s12.stack := by
+    simpa only [productHighBeforeBorrowWord, List.nil_append] using p12raw
+  have subMemory : s11.memory = s12.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons subRun Line.Run.nil)
+  have wf12 : Mem.Wf s12.memory := by
+    rw [← subMemory]
+    exact wf11
+  have reads12 : Mem.Reads s12.memory image2 := by
+    rw [← subMemory]
+    exact reads11
+  rcases of_run_append (mstoreAt highWord) run with
+    ⟨s13, provisionalHighStoreRun, run⟩
+  obtain ⟨p13, wf13, reads13, -⟩ :=
+    of_run_mstoreAt_image p12 wf12 reads12 provisionalHighStoreRun
+  let image3 := Bytes.writeAt image2 (highWord * 32).toNat
+    (productHighBeforeBorrowWord x y).toBytes
+  change Mem.Reads _ image3 at reads13
+  have lowAt3 : Bytes.toB256
+      (image3.sliceD (lowWord * 32).toNat 32 0) = productLowWord x y := by
+    unfold image3
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact lowAt2
+    · right
+      decide +kernel
+  have scratchAt3 : Bytes.toB256
+      (image3.sliceD (scratchWord * 32).toNat 32 0) =
+        productScratchWord x y := by
+    unfold image3
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact scratchAt2
+    · right
+      decide +kernel
+
+  rcases of_run_append (loadWord lowWord) run with ⟨s14, lowRun2, run⟩
+  obtain ⟨p14, wf14, reads14, -⟩ :=
+    of_run_loadWordAt_image p13 wf13 reads13 lowAt3 lowRun2
+  rcases of_run_append (loadWord scratchWord) run with
+    ⟨s15, scratchRun2, run⟩
+  obtain ⟨p15, wf15, reads15, -⟩ :=
+    of_run_loadWordAt_image p14 wf14 reads14 scratchAt3 scratchRun2
+  rcases of_run_append [lt] run with ⟨s16, ltLineRun, run⟩
+  rcases Line.of_run_cons ltLineRun with ⟨s16', ltRun, ltLineRun⟩
+  cases ltLineRun
+  have p16raw := prefix_of_lt ltRun p15
+  have p16 : productBorrowWord x y :: tail <<+ s16.stack := by
+    simpa only [productBorrowWord, List.nil_append] using p16raw
+  have ltMemory : s15.memory = s16.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons ltRun Line.Run.nil)
+  have wf16 : Mem.Wf s16.memory := by
+    rw [← ltMemory]
+    exact wf15
+  have reads16 : Mem.Reads s16.memory image3 := by
+    rw [← ltMemory]
+    exact reads15
+  rcases of_run_append (mstoreAt borrowWord) run with
+    ⟨s17, borrowStoreRun, run⟩
+  obtain ⟨p17, wf17, reads17, -⟩ :=
+    of_run_mstoreAt_image p16 wf16 reads16 borrowStoreRun
+  let image4 := Bytes.writeAt image3 (borrowWord * 32).toNat
+    (productBorrowWord x y).toBytes
+  change Mem.Reads _ image4 at reads17
+  have borrowAt4 : Bytes.toB256
+      (image4.sliceD (borrowWord * 32).toNat 32 0) =
+        productBorrowWord x y := by
+    unfold image4
+    exact Bytes.readWord_writeAt_self _ _ _
+  have highAt4 : Bytes.toB256
+      (image4.sliceD (highWord * 32).toNat 32 0) =
+        productHighBeforeBorrowWord x y := by
+    unfold image4 image3
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · left
+      decide +kernel
+
+  rcases of_run_append (loadWord borrowWord) run with
+    ⟨s18, borrowRun, run⟩
+  obtain ⟨p18, wf18, reads18, -⟩ :=
+    of_run_loadWordAt_image p17 wf17 reads17 borrowAt4 borrowRun
+  rcases of_run_append (loadWord highWord) run with ⟨s19, highRun, run⟩
+  obtain ⟨p19, wf19, reads19, -⟩ :=
+    of_run_loadWordAt_image p18 wf18 reads18 highAt4 highRun
+  rcases of_run_append [sub] run with ⟨s20, finalSubLineRun, run⟩
+  rcases Line.of_run_cons finalSubLineRun with
+    ⟨s20', finalSubRun, finalSubLineRun⟩
+  cases finalSubLineRun
+  have p20raw := prefix_of_sub finalSubRun p19
+  have p20 : productHighWord x y :: tail <<+ s20.stack := by
+    rw [productHighWord_eq_beforeBorrow_sub_borrow]
+    exact p20raw
+  have finalSubMemory : s19.memory = s20.memory :=
+    Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons finalSubRun Line.Run.nil)
+  have wf20 : Mem.Wf s20.memory := by
+    rw [← finalSubMemory]
+    exact wf19
+  have reads20 : Mem.Reads s20.memory image4 := by
+    rw [← finalSubMemory]
+    exact reads19
+  obtain ⟨p21, wf21, reads21, -⟩ :=
+    of_run_mstoreAt_image p20 wf20 reads20 run
+  refine ⟨p21, wf21, ?_, state⟩
+  simpa [multiply512ArithmeticTraceImage, image4, image3, image2, image1]
+    using reads21
+
 end ProrataWethVault
 
 end Blanc
