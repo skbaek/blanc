@@ -153,6 +153,8 @@
           "scripts/check-proof-recipes.sh",
           "scripts/check-proof-recipes.py",
           "scripts/generate-proof-recipes.py",
+          "scripts/module_path_policy.py",
+          "scripts/module-path-dereference-census.json",
           "scripts/proof-recipes.toml",
           "scripts/proof-recipe-exceptions.json",
           "docs/PROOF_RECIPES.md",
@@ -243,6 +245,8 @@
         "files": [
           "scripts/check-proof-module-size.sh",
           "scripts/check-proof-module-size.py",
+          "scripts/module_path_policy.py",
+          "scripts/module-path-dereference-census.json",
           "scripts/proof-module-size-baseline.json",
           "scripts/proof-module-size-exceptions.json"
         ],
@@ -281,6 +285,8 @@
         "files": [
           "scripts/check-proof-duplication.sh",
           "scripts/check-proof-recipes.py",
+          "scripts/module_path_policy.py",
+          "scripts/module-path-dereference-census.json",
           "scripts/proof-duplication-baseline.json",
           "scripts/proof-duplication-exceptions.json"
         ],

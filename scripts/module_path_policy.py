@@ -105,8 +105,8 @@ def _exact_child(parent: Path, component: str, *, final: bool) -> Path:
     if component not in names:
         aliases = sorted(
             name for name in names
-            if name.casefold() == component.casefold()
-            or unicodedata.normalize("NFC", name) == unicodedata.normalize("NFC", component)
+            if unicodedata.normalize("NFC", name).casefold()
+            == unicodedata.normalize("NFC", component).casefold()
         )
         detail = f"; aliases present: {aliases}" if aliases else ""
         raise ModulePathPolicyError(
@@ -176,10 +176,21 @@ def resolve_bound_file(
     for component in components[:-1]:
         current = _exact_child(current, component, final=False)
     leaf = components[-1]
-    if leaf in _directory_names(current):
+    names = _directory_names(current)
+    if leaf in names:
         current = _exact_child(current, leaf, final=True)
         _contained(current, canonical_root)
         return current
+    aliases = sorted(
+        name for name in names
+        if unicodedata.normalize("NFC", name).casefold()
+        == unicodedata.normalize("NFC", leaf).casefold()
+    )
+    if aliases:
+        raise ModulePathPolicyError(
+            f"bound-file spelling is a filesystem alias under {current}: "
+            f"{leaf!r}; exact entries {aliases}"
+        )
     if not allow_missing:
         raise ModulePathPolicyError(f"bound file does not exist: {raw!r}")
     candidate = current / leaf
@@ -235,6 +246,18 @@ def load_census(root: Path) -> Mapping[str, object]:
     return value
 
 
+def _consumer_scripts(root: Path) -> Tuple[str, ...]:
+    scripts_root = root / "scripts"
+    try:
+        return tuple(sorted(
+            path.relative_to(root).as_posix()
+            for path in scripts_root.rglob("*.py")
+            if path.name != Path(__file__).name
+        ))
+    except OSError as error:
+        raise ModulePathPolicyError(f"cannot enumerate Python consumers: {error}") from error
+
+
 def _static_sites(root: Path, scripts: Iterable[str]) -> Dict[str, Tuple[str, str, int]]:
     found: Dict[str, Tuple[str, str, int]] = {}
     for relative in scripts:
@@ -244,9 +267,13 @@ def _static_sites(root: Path, scripts: Iterable[str]) -> Dict[str, Tuple[str, st
         except (OSError, SyntaxError) as error:
             raise ModulePathPolicyError(f"cannot audit {relative}: {error}") from error
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            if not isinstance(node, ast.Call):
                 continue
-            call = node.func.id
+            call = (
+                node.func.id if isinstance(node.func, ast.Name)
+                else node.func.attr if isinstance(node.func, ast.Attribute)
+                else ""
+            )
             if call not in AUDITED_CALLS:
                 continue
             keyword = next((item for item in node.keywords if item.arg == "site"), None)
@@ -272,7 +299,6 @@ def audit_census(root: Path, document: Optional[Mapping[str, object]] = None) ->
     if not isinstance(rows, list) or not rows:
         raise ModulePathPolicyError("module-path census must contain at least one site")
     expected: Dict[str, Tuple[str, str, str]] = {}
-    scripts = set()
     fields = {"id", "script", "call", "class", "source"}
     for index, row in enumerate(rows):
         if not isinstance(row, dict) or set(row) != fields:
@@ -285,8 +311,7 @@ def audit_census(root: Path, document: Optional[Mapping[str, object]] = None) ->
         if row["call"] not in AUDITED_CALLS or AUDITED_CALLS[row["call"]] != row["class"]:
             raise ModulePathPolicyError(f"module-path census site {site!r} class/call mismatch")
         expected[site] = (row["script"], row["call"], row["class"])
-        scripts.add(row["script"])
-    actual = _static_sites(root, scripts)
+    actual = _static_sites(root, _consumer_scripts(root))
     if set(expected) != set(actual):
         raise ModulePathPolicyError(
             f"module-path census/site mismatch: missing rows {sorted(set(actual) - set(expected))}; "
@@ -330,7 +355,7 @@ def policy_self_test(root: Path) -> Tuple[int, int, int]:
     census = load_census(root)
     mutated = copy.deepcopy(census)
     assert isinstance(mutated["sites"], list)
-    mutated["sites"].pop()
+    mutated["sites"].pop(0)
     try:
         audit_census(root, mutated)
     except ModulePathPolicyError as error:
