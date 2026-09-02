@@ -536,7 +536,11 @@ def self_test() -> int:
         rejected("orphan", [orphan], "orphan exception")
         wildcard = dict(valid_row)
         wildcard["module"] = "Blanc/*.lean"
-        rejected("file-wide", [wildcard], "wildcards and file-wide selectors are forbidden")
+        rejected(
+            "file-wide",
+            [wildcard],
+            "wildcards, aliases, and file-wide selectors are forbidden",
+        )
 
         write_atomic(root / EXCEPTIONS_REL, exception_document([]))
         stale_doc = json.loads(baseline_document(baseline))
