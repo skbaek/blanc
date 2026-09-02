@@ -19,8 +19,19 @@ import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+
+from module_path_policy import (
+    ModulePathPolicyError,
+    audit_census,
+    policy_self_test,
+    resolve_bound_file,
+    resolve_module_file,
+    resolve_source_file,
+    validate_module_path,
+    walk_module_files,
+)
 
 
 REGISTRY_PATH = Path("scripts/proof-recipes.toml")
@@ -56,9 +67,6 @@ ID_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 SLUG_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 LEAN_PART = r"[A-Za-z_][A-Za-z0-9_']*[?!]?"
 LEAN_NAME_RE = re.compile(rf"{LEAN_PART}(?:\.{LEAN_PART})*\Z")
-# Module paths are checked only by the normalization-based validator below;
-# see its docstring for the exact accepted/rejected boundary and for the
-# `blanc-module-path-policy-v1` ownership of everything stricter.
 REVIEW_OWNER_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 DECL_KINDS = {
     "abbrev",
@@ -319,54 +327,16 @@ def declarations_in(path: Path) -> Set[str]:
     return found
 
 
-def _valid_module_path(value: str) -> bool:
-    """A repository-relative `Blanc/**/*.lean` path, checked after normalization.
-
-    Deliberately not a character class: the corpus walk is recursive, so the
-    writers emit whatever names the tree actually holds, and Lean module names
-    are not confined to ASCII. Honest scope: `PurePosixPath` normalizes before
-    the component check, so `..` and absolute paths are rejected, while
-    normalized-away spellings -- doubled or `.` components and a trailing
-    slash -- are accepted as aliases of their normalized form, and nothing here
-    constrains symlinks, hardlinks, case, or Unicode normalization aliases.
-    Raw-string validation before any path object exists, universal resolved
-    containment, and the filesystem-alias policy are contracted to
-    `blanc-module-path-policy-v1`; this check is not claimed as structural.
-    """
-    if not isinstance(value, str) or not value or value != value.strip():
-        return False
-    pure = PurePosixPath(value)
-    if pure.is_absolute() or len(pure.parts) < 2:
-        return False
-    if pure.parts[0] != "Blanc" or pure.suffix != ".lean":
-        return False
-    return all(part not in ("", ".", "..") for part in pure.parts)
-
-
-def _under_root(path, root) -> bool:
-    """The resolved path stays inside the nominated root.
-
-    `rglob` returns a symlinked *file* under `Blanc/`, and reading it would
-    leave the tree under test entirely. The residue gate already refuses that
-    class; these censuses now refuse it too.
-    """
-    try:
-        path.resolve().relative_to(root.resolve())
-    except (OSError, ValueError):
-        return False
-    return True
-
-
 def lean_sources(root: Path) -> List[Path]:
-    paths = sorted((root / "Blanc").rglob("*.lean"))
-    for path in paths:
-        if not _under_root(path, root):
-            raise RecipeError(f"resolved path escapes repository root: {path}")
-    if (root / "Blanc.lean").is_file():
-        paths.append(root / "Blanc.lean")
-    if not paths:
-        raise RecipeError(f"no Blanc Lean sources found under {root}")
-    return paths
+    try:
+        paths = walk_module_files(root, site="proof-recipe-source-walk")
+        if "Blanc.lean" in os.listdir(str(root)):
+            paths.append(resolve_source_file(
+                root, "Blanc.lean", site="proof-recipe-root-aggregate"
+            ))
+        return paths
+    except ModulePathPolicyError as error:
+        raise RecipeError(f"module-path policy: {error}") from error
 
 
 def declaration_inventory(root: Path) -> Tuple[Set[str], Dict[Path, Set[str]]]:
@@ -552,10 +522,10 @@ def validate_symbol(
         if name not in declarations:
             raise RecipeError(f"{where}: declaration {value!r} ({name}) was not found")
     else:
-        if not _valid_module_path(value):
-            raise RecipeError(f"{where}: module {value!r} must be a Blanc/*.lean path")
-        if not (root / value).is_file():
-            raise RecipeError(f"{where}: module {value!r} does not exist")
+        try:
+            resolve_module_file(root, value, site="proof-recipe-symbol-module")
+        except ModulePathPolicyError as error:
+            raise RecipeError(f"{where}: invalid module {value!r}: {error}") from error
 
 
 def load_and_validate(root: Path) -> Registry:
@@ -613,17 +583,26 @@ def load_and_validate(root: Path) -> Registry:
         preferred_path = expect_string(raw, "preferred_path", where)
         boundary = expect_string(raw, "boundary", where)
         owner_module = expect_string(raw, "owner_module", where)
-        if not _valid_module_path(owner_module) or not (root / owner_module).is_file():
-            raise RecipeError(f"{where}.owner_module: missing Blanc module {owner_module!r}")
+        try:
+            resolve_module_file(root, owner_module, site="proof-recipe-owner-module")
+        except ModulePathPolicyError as error:
+            raise RecipeError(
+                f"{where}.owner_module: invalid Blanc module {owner_module!r}: {error}"
+            ) from error
         canonical_example = expect_string(raw, "canonical_example", where)
         example_file, separator, example_decl = canonical_example.partition(":")
-        if not separator or not _valid_module_path(example_file) or not LEAN_NAME_RE.fullmatch(example_decl):
+        if not separator or not LEAN_NAME_RE.fullmatch(example_decl):
             raise RecipeError(
                 f"{where}.canonical_example: expected Blanc/File.lean:Declaration.Name"
             )
-        example_path = (root / example_file).resolve()
-        if not example_path.is_file():
-            raise RecipeError(f"{where}.canonical_example: file {example_file!r} does not exist")
+        try:
+            example_path = resolve_module_file(
+                root, example_file, site="proof-recipe-canonical-example"
+            )
+        except ModulePathPolicyError as error:
+            raise RecipeError(
+                f"{where}.canonical_example: invalid file {example_file!r}: {error}"
+            ) from error
         example_name = resolve_example_declaration(
             example_decl, per_file.get(example_path, set())
         )
@@ -798,10 +777,13 @@ def write_atomic(path: Path, text: str) -> None:
 def compare_surfaces(root: Path, expected: Dict[Path, str]) -> List[str]:
     failures: List[str] = []
     for relative, wanted in expected.items():
-        path = root / relative
         try:
+            path = resolve_bound_file(
+                root, relative.as_posix(), allow_missing=False,
+                site="proof-recipe-generated-read",
+            )
             actual = path.read_text(encoding="utf-8")
-        except OSError as exc:
+        except (OSError, ModulePathPolicyError) as exc:
             failures.append(f"{relative}: cannot read generated surface: {exc}")
             continue
         if actual != wanted:
@@ -813,12 +795,14 @@ def compare_surfaces(root: Path, expected: Dict[Path, str]) -> List[str]:
 
 
 def make_self_test_root(root: Path, target: Path) -> None:
+    sources = lean_sources(root)
     (target / "scripts").mkdir(parents=True)
     (target / "docs").mkdir()
     shutil.copy2(root / REGISTRY_PATH, target / REGISTRY_PATH)
     shutil.copytree(root / "Blanc", target / "Blanc")
-    if (root / "Blanc.lean").is_file():
-        shutil.copy2(root / "Blanc.lean", target / "Blanc.lean")
+    aggregate = next((path for path in sources if path.name == "Blanc.lean"), None)
+    if aggregate is not None:
+        shutil.copy2(aggregate, target / "Blanc.lean")
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -842,6 +826,15 @@ def remove_first_scalar_field(text: str, key: str, label: str) -> str:
 
 
 def self_test(root: Path) -> None:
+    policy_controls, closed_skips, explicit_sites = policy_self_test(
+        Path(__file__).resolve().parents[1]
+    )
+    print(
+        "OK — module-path policy self-test: "
+        f"{policy_controls}/{policy_controls} raw, census, containment, and alias controls; "
+        f"{explicit_sites} explicit dereference site(s); {closed_skips} host-inexpressible "
+        "case/normalization alias control(s) skipped closed"
+    )
     controls = 0
     with tempfile.TemporaryDirectory(prefix="proof-recipes-") as directory:
         test_root = Path(directory) / "blanc"
@@ -971,6 +964,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     root = args.root.resolve()
     try:
+        audit_census(Path(__file__).resolve().parents[1])
         if args.self_test:
             self_test(root)
             print("OK — proof recipes self-test: 9/9 drift, schema, trigger, and symbol controls live")
@@ -979,7 +973,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         surfaces = generated_surfaces(registry)
         if args.write:
             for relative, text in surfaces.items():
-                write_atomic(root / relative, text)
+                path = resolve_bound_file(
+                    root, relative.as_posix(), allow_missing=True,
+                    site="proof-recipe-generated-write",
+                )
+                write_atomic(path, text)
             print(
                 f"OK — proof recipes: {len(registry.recipes)} recipes validated; "
                 "generated Markdown and Lean lookup written"
@@ -998,6 +996,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
     except RecipeError as exc:
         print(f"REGRESSION — proof recipes: {exc}")
+        return 1
+    except ModulePathPolicyError as exc:
+        print(f"REGRESSION — proof recipes: module-path policy: {exc}")
         return 1
     except OSError as exc:
         print(f"REGRESSION — proof recipes: filesystem failure: {exc}")

@@ -492,6 +492,20 @@ regenerate the surfaces rather than editing either generated file by hand.
 `blanc_suggest` prints each matching recipe's validated registered symbols as
 well as its route and boundary.
 
+Every registry module name is validated as raw text before a path object is
+constructed. The accepted language begins with the literal `Blanc/`, ends with
+the literal `.lean`, and has only nonempty NFC Unicode-identifier components;
+empty, `.`, `..`, absolute, trailing-separator, backslash, whitespace-alias,
+and non-NFC spellings are rejected. Dereferencing then requires every directory
+entry to have the exact requested spelling, forbids file and component
+symlinks, forbids multiply linked files, and verifies canonical containment
+under the repository root. This deliberately rejects wrong-case and Unicode
+normalization aliases on hosts that resolve them. The checked census in
+`scripts/module-path-dereference-census.json` binds that policy to the module
+size walk, both proof-recipe corpus consumers, Git/import-derived source reads,
+all registry module/owner/example reads, and both generated-output bindings; a
+zero-module walk fails closed.
+
 For need-first declaration discovery that does not depend on a goal matcher,
 start at the branching [common API registry](docs/COMMON_API.md). Follow its
 execution, invariance, state-update, memory, settlement, or compilation branch

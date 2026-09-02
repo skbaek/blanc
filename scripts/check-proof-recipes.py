@@ -46,6 +46,15 @@ import tempfile
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+from module_path_policy import (
+    ModulePathPolicyError,
+    audit_census,
+    resolve_source_file,
+    validate_module_path,
+    validate_source_path,
+    walk_module_files,
+)
+
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GENERATOR_REL = pathlib.Path("scripts/generate-proof-recipes.py")
@@ -529,12 +538,12 @@ class SourceIndex:
     def parse_worktree(self, rel: str) -> ParsedFile:
         if rel in self.cache:
             return self.cache[rel]
-        path = self.root / rel
-        if not path.is_file():
-            raise GateError(f"missing local imported module: {rel}")
         try:
+            path = resolve_source_file(
+                self.root, rel, site="proof-recipe-source-index"
+            )
             text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
+        except (OSError, UnicodeError, ModulePathPolicyError) as error:
             raise GateError(f"cannot read {rel}: {error}") from error
         parsed = parse_lean_file(text, rel)
         self.cache[rel] = parsed
@@ -608,8 +617,10 @@ def changed_paths(root: pathlib.Path, base: str) -> Dict[str, Optional[str]]:
         if path.endswith(".lean"):
             changed[path] = None
     for path in changed:
-        if not (path == "Blanc.lean" or path.startswith("Blanc/")) or ".." in pathlib.PurePosixPath(path).parts:
-            raise GateError(f"unsafe changed path from Git: {path!r}")
+        try:
+            validate_source_path(path)
+        except ModulePathPolicyError as error:
+            raise GateError(f"unsafe changed path from Git: {path!r}: {error}") from error
     return changed
 
 
@@ -838,9 +849,6 @@ DUPLICATION_BASELINE_COMMENT = (
     "module. A family id is the first 16 hex digits of its own normalized_sha256; "
     "run the gate with --list to see where a family's sites currently are."
 )
-# Module paths are checked only by the normalization-based validator below;
-# see its docstring for the exact accepted/rejected boundary and for the
-# `blanc-module-path-policy-v1` ownership of everything stricter.
 FAMILY_ID_RE = re.compile(r"[0-9a-f]{16}\Z")
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
 SLUG_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
@@ -952,44 +960,6 @@ def load_strict_json(text: str, where: str):
         raise GateError(f"{where}: invalid JSON: {error}") from error
 
 
-def _valid_module_path(value: str) -> bool:
-    """A repository-relative `Blanc/**/*.lean` path, checked after normalization.
-
-    Deliberately not a character class: the corpus walk is recursive, so the
-    writers emit whatever names the tree actually holds, and Lean module names
-    are not confined to ASCII. Honest scope: `PurePosixPath` normalizes before
-    the component check, so `..` and absolute paths are rejected, while
-    normalized-away spellings -- doubled or `.` components and a trailing
-    slash -- are accepted as aliases of their normalized form, and nothing here
-    constrains symlinks, hardlinks, case, or Unicode normalization aliases.
-    Raw-string validation before any path object exists, universal resolved
-    containment, and the filesystem-alias policy are contracted to
-    `blanc-module-path-policy-v1`; this check is not claimed as structural.
-    """
-    if not isinstance(value, str) or not value or value != value.strip():
-        return False
-    pure = pathlib.PurePosixPath(value)
-    if pure.is_absolute() or len(pure.parts) < 2:
-        return False
-    if pure.parts[0] != "Blanc" or pure.suffix != ".lean":
-        return False
-    return all(part not in ("", ".", "..") for part in pure.parts)
-
-
-def _under_root(path, root) -> bool:
-    """The resolved path stays inside the nominated root.
-
-    `rglob` returns a symlinked *file* under `Blanc/`, and reading it would
-    leave the tree under test entirely. The residue gate already refuses that
-    class; these censuses now refuse it too.
-    """
-    try:
-        path.resolve().relative_to(root.resolve())
-    except (OSError, ValueError):
-        return False
-    return True
-
-
 def production_modules(root: pathlib.Path) -> List[str]:
     """The ratchet's corpus.
 
@@ -1004,19 +974,14 @@ def production_modules(root: pathlib.Path) -> List[str]:
     count and pass, which is the one direction this shrink-only gate cannot
     detect on its own.
     """
-    source = root / DUPLICATION_SCAN_ROOT
-    if not source.is_dir():
-        raise GateError(f"production source directory not found: {source}")
-    discovered = sorted(source.rglob("*.lean"))
-    for path in discovered:
-        if not _under_root(path, root):
-            raise GateError(f"resolved path escapes repository root: {path}")
-    modules = [path.relative_to(root).as_posix() for path in discovered]
-    if not modules:
-        raise GateError(
-            f"no production {DUPLICATION_SCAN_ROOT}/**/*.lean modules found under {root}"
+    try:
+        discovered = walk_module_files(
+            root, site="proof-duplication-production-walk"
         )
-    return modules
+    except ModulePathPolicyError as error:
+        raise GateError(f"module-path policy: {error}") from error
+    canonical_root = root.resolve()
+    return [path.relative_to(canonical_root).as_posix() for path in discovered]
 
 
 def duplication_inventory(
@@ -1146,7 +1111,9 @@ def load_duplication_baseline_text(text: str, where: str) -> DuplicationBaseline
         raise GateError(f"{where}: unparsable_modules must be a list")
     unparsable: List[str] = []
     for item in unparsable_raw:
-        if not _valid_module_path(item):
+        try:
+            validate_module_path(item)
+        except ModulePathPolicyError:
             raise GateError(
                 f"{where}: unparsable_modules must name concrete Blanc/*.lean modules"
             )
@@ -1976,6 +1943,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
     root = args.root.resolve()
+    try:
+        audit_census(pathlib.Path(__file__).resolve().parent.parent)
+    except ModulePathPolicyError as error:
+        raise GateError(f"module-path census: {error}") from error
 
     if args.write_baseline or args.duplication:
         # The duplication ratchet owns its own verdict prefix so an exit code is

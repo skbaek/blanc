@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "policy": "reject-all-filesystem-aliases",
+  "sites": [
+    {
+      "id": "module-size-production-walk",
+      "script": "scripts/check-proof-module-size.py",
+      "call": "walk_module_files",
+      "class": "walk",
+      "source": "recursive production Blanc module census"
+    },
+    {
+      "id": "proof-duplication-production-walk",
+      "script": "scripts/check-proof-recipes.py",
+      "call": "walk_module_files",
+      "class": "walk",
+      "source": "recursive production Blanc duplication census"
+    },
+    {
+      "id": "proof-recipe-source-index",
+      "script": "scripts/check-proof-recipes.py",
+      "call": "resolve_source_file",
+      "class": "explicit dereference",
+      "source": "Git and parsed local-import module names"
+    },
+    {
+      "id": "proof-recipe-source-walk",
+      "script": "scripts/generate-proof-recipes.py",
+      "call": "walk_module_files",
+      "class": "walk",
+      "source": "declaration and tactic inventory corpus"
+    },
+    {
+      "id": "proof-recipe-root-aggregate",
+      "script": "scripts/generate-proof-recipes.py",
+      "call": "resolve_source_file",
+      "class": "explicit dereference",
+      "source": "static Blanc.lean aggregate included in the source inventory"
+    },
+    {
+      "id": "proof-recipe-symbol-module",
+      "script": "scripts/generate-proof-recipes.py",
+      "call": "resolve_module_file",
+      "class": "explicit dereference",
+      "source": "registry symbols module: value"
+    },
+    {
+      "id": "proof-recipe-owner-module",
+      "script": "scripts/generate-proof-recipes.py",
+      "call": "resolve_module_file",
+      "class": "explicit dereference",
+      "source": "registry owner_module value"
+    },
+    {
+      "id": "proof-recipe-canonical-example",
+      "script": "scripts/generate-proof-recipes.py",
+      "call": "resolve_module_file",
+      "class": "explicit dereference",
+      "source": "registry canonical_example file value"
+    },
+    {
+      "id": "proof-recipe-generated-read",
+      "script": "scripts/generate-proof-recipes.py",
+      "call": "resolve_bound_file",
+      "class": "generator output binding",
+      "source": "generated Markdown and Lean comparison targets"
+    },
+    {
+      "id": "proof-recipe-generated-write",
+      "script": "scripts/generate-proof-recipes.py",
+      "call": "resolve_bound_file",
+      "class": "generator output binding",
+      "source": "generated Markdown and Lean write targets"
+    }
+  ]
+}

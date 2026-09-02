@@ -18,8 +18,15 @@ import re
 import sys
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+
+from module_path_policy import (
+    ModulePathPolicyError,
+    audit_census,
+    validate_module_path,
+    walk_module_files,
+)
 
 
 WARNING_THRESHOLD = 1250
@@ -28,9 +35,6 @@ THRESHOLD_SOURCE = "README.md:417-425"
 SCHEMA_VERSION = 1
 BASELINE_REL = Path("scripts/proof-module-size-baseline.json")
 EXCEPTIONS_REL = Path("scripts/proof-module-size-exceptions.json")
-# Module paths are checked only by the normalization-based validator below;
-# see its docstring for the exact accepted/rejected boundary and for the
-# `blanc-module-path-policy-v1` ownership of everything stricter.
 ID_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 OWNER_RE = ID_RE
 FINDING_KINDS = {
@@ -109,11 +113,13 @@ def positive_int(value: Any, where: str) -> int:
 
 
 def module_path(value: Any, where: str) -> str:
-    if not _valid_module_path(value):
+    try:
+        return validate_module_path(value)
+    except ModulePathPolicyError as error:
         raise ModuleSizeError(
-            f"{where}: expected one concrete Blanc/*.lean module; wildcards and file-wide selectors are forbidden"
-        )
-    return value
+            f"{where}: expected one exact concrete Blanc/**/*.lean module; "
+            f"wildcards, aliases, and file-wide selectors are forbidden: {error}"
+        ) from error
 
 
 def nonempty(value: Any, where: str) -> str:
@@ -122,62 +128,19 @@ def nonempty(value: Any, where: str) -> str:
     return value
 
 
-def _valid_module_path(value: str) -> bool:
-    """A repository-relative `Blanc/**/*.lean` path, checked after normalization.
-
-    Deliberately not a character class: the corpus walk is recursive, so the
-    writers emit whatever names the tree actually holds, and Lean module names
-    are not confined to ASCII. Honest scope: `PurePosixPath` normalizes before
-    the component check, so `..` and absolute paths are rejected, while
-    normalized-away spellings -- doubled or `.` components and a trailing
-    slash -- are accepted as aliases of their normalized form, and nothing here
-    constrains symlinks, hardlinks, case, or Unicode normalization aliases.
-    Raw-string validation before any path object exists, universal resolved
-    containment, and the filesystem-alias policy are contracted to
-    `blanc-module-path-policy-v1`; this check is not claimed as structural.
-    """
-    if not isinstance(value, str) or not value or value != value.strip():
-        return False
-    pure = PurePosixPath(value)
-    if pure.is_absolute() or len(pure.parts) < 2:
-        return False
-    if pure.parts[0] != "Blanc" or pure.suffix != ".lean":
-        return False
-    return all(part not in ("", ".", "..") for part in pure.parts)
-
-
-def _under_root(path, root) -> bool:
-    """The resolved path stays inside the nominated root.
-
-    `rglob` returns a symlinked *file* under `Blanc/`, and reading it would
-    leave the tree under test entirely. The residue gate already refuses that
-    class; these censuses now refuse it too.
-    """
-    try:
-        path.resolve().relative_to(root.resolve())
-    except (OSError, ValueError):
-        return False
-    return True
-
-
 def production_modules(root: Path) -> Dict[str, int]:
-    source = root / "Blanc"
-    if not source.is_dir():
-        raise ModuleSizeError(f"production source directory not found: {source}")
+    try:
+        paths = walk_module_files(root, site="module-size-production-walk")
+    except ModulePathPolicyError as error:
+        raise ModuleSizeError(f"module-path policy: {error}") from error
     result: Dict[str, int] = {}
-    for path in sorted(source.rglob("*.lean")):
-        if not _under_root(path, root):
-            raise ModuleSizeError(
-                f"resolved path escapes repository root: {path}")
+    canonical_root = root.resolve()
+    for path in paths:
         try:
             lines = len(path.read_text(encoding="utf-8").splitlines())
         except OSError as exc:
             raise ModuleSizeError(f"cannot read {path}: {exc}") from exc
-        result[path.relative_to(root).as_posix()] = lines
-    if not result:
-        raise ModuleSizeError(
-            f"no production Blanc/**/*.lean modules found under {root}"
-        )
+        result[path.relative_to(canonical_root).as_posix()] = lines
     return result
 
 
@@ -609,6 +572,7 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser().parse_args(argv)
     try:
+        audit_census(Path(__file__).resolve().parents[1])
         if args.self_test:
             return self_test()
         root = args.root.resolve()
@@ -617,6 +581,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return ordinary(root)
     except ModuleSizeError as exc:
         print(f"REGRESSION — proof module size: {exc}")
+        return 1
+    except ModulePathPolicyError as exc:
+        print(f"REGRESSION — proof module size: module-path policy: {exc}")
         return 1
     except OSError as exc:
         print(f"REGRESSION — proof module size: filesystem failure: {exc}")
