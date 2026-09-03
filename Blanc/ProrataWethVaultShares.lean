@@ -35,6 +35,7 @@ the same amount, emits the ERC-20 `Transfer`, and returns canonical true.
 The receiver's row is read *after* the debit, so a self-transfer nets to zero
 rather than double-counting.  The supply slot is never written. -/
 theorem transferStaged_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {image : Bytes} {owner receiver amount : B256}
     (memoryWf : Mem.Wf pre.memory)
@@ -46,7 +47,7 @@ theorem transferStaged_trace
     (amountAt : Bytes.toB256
       (image.sliceD (amountWord * 32).toNat 32 0) = amount)
     (stack : [] <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre transferStaged (.ok post)) :
+    (run : R fs sevm pre transferStaged post) :
     ∃ ownerBalance receiverBalance,
       ownerBalance = Devm.getStorVal pre sevm.currentTarget owner ∧
       amount.toNat ≤ ownerBalance.toNat ∧
@@ -96,16 +97,16 @@ theorem transferStaged_trace
 
   -- Debit the owner's row.
   obtain ⟨debitLoadPre, debitAmountRun, debitRun⟩ :=
-    runCompiledTo_prepend_inv debitRun
+    Func.WalkInv.prepend debitRun
   obtain ⟨debitAmountPrefix, debitLoadWf, debitLoadReads, debitAmountState⟩ :=
     of_run_loadWordAt_image debitStack debitWf debitReads amountAtBalance
       debitAmountRun
-  obtain ⟨subPre, debitLoadRun, debitRun⟩ := runCompiledTo_prepend_inv debitRun
+  obtain ⟨subPre, debitLoadRun, debitRun⟩ := Func.WalkInv.prepend debitRun
   obtain ⟨debitLoadPrefix, subWf, subReads, debitLoadState⟩ :=
     of_run_loadWordAt_image debitAmountPrefix debitLoadWf debitLoadReads
       balanceAtBalance debitLoadRun
-  obtain ⟨ownerLoadPre, subRun, debitRun⟩ := runCompiledTo_next_inv debitRun
-  have subSource := Ninst.Run.of_runCompiled subRun
+  obtain ⟨ownerLoadPre, subRun, debitRun⟩ := Func.WalkInv.next debitRun
+  have subSource := subRun
   have subPrefix : (ownerBalance - amount) :: [] <<+ ownerLoadPre.stack :=
     prefix_of_sub subSource debitLoadPrefix
   have subMemory : subPre.memory = ownerLoadPre.memory :=
@@ -117,12 +118,12 @@ theorem transferStaged_trace
   have ownerLoadReads : Mem.Reads ownerLoadPre.memory balanceImage := by
     rw [← subMemory]; exact subReads
   obtain ⟨debitStorePre, ownerLoadRun, debitRun⟩ :=
-    runCompiledTo_prepend_inv debitRun
+    Func.WalkInv.prepend debitRun
   obtain ⟨ownerPrefix, debitStoreWf, debitStoreReads, ownerLoadState⟩ :=
     of_run_loadWordAt_image subPrefix ownerLoadWf ownerLoadReads
       ownerAtBalance ownerLoadRun
-  obtain ⟨creditPre, debitStoreRun, creditRun⟩ := runCompiledTo_next_inv debitRun
-  have debitStoreSource := Ninst.Run.of_runCompiled debitStoreRun
+  obtain ⟨creditPre, debitStoreRun, creditRun⟩ := Func.WalkInv.next debitRun
+  have debitStoreSource := debitStoreRun
   have debitSet : Devm.getStor creditPre sevm.currentTarget =
       (Devm.getStor debitStorePre sevm.currentTarget).set owner
         (ownerBalance - amount) :=
@@ -183,18 +184,18 @@ theorem transferStaged_trace
 
   -- Write the credited row.
   obtain ⟨creditLoadPre, scratchRun, settleRun⟩ :=
-    runCompiledTo_prepend_inv settleRun
+    Func.WalkInv.prepend settleRun
   obtain ⟨scratchPrefix, creditLoadWf, creditLoadReads, scratchState⟩ :=
     of_run_loadWordAt_image settleStack settleWf settleReads scratchAtCredit
       scratchRun
   obtain ⟨creditStorePre, creditReceiverRun, settleRun⟩ :=
-    runCompiledTo_prepend_inv settleRun
+    Func.WalkInv.prepend settleRun
   obtain ⟨creditReceiverPrefix, creditStoreWf, creditStoreReads,
       creditReceiverState⟩ :=
     of_run_loadWordAt_image scratchPrefix creditLoadWf creditLoadReads
       receiverAtCredit creditReceiverRun
-  obtain ⟨logPre, creditStoreRun, settleRun⟩ := runCompiledTo_next_inv settleRun
-  have creditStoreSource := Ninst.Run.of_runCompiled creditStoreRun
+  obtain ⟨logPre, creditStoreRun, settleRun⟩ := Func.WalkInv.next settleRun
+  have creditStoreSource := creditStoreRun
   have creditSet : Devm.getStor logPre sevm.currentTarget =
       (Devm.getStor creditStorePre sevm.currentTarget).set receiver
         (receiverBalance + amount) :=
@@ -212,7 +213,7 @@ theorem transferStaged_trace
     rw [← creditStoreMemory]; exact creditStoreReads
 
   -- Emit the ERC-20 transfer and return canonical true.
-  obtain ⟨truePre, logRun, trueRun⟩ := runCompiledTo_prepend_inv settleRun
+  obtain ⟨truePre, logRun, trueRun⟩ := Func.WalkInv.prepend settleRun
   have logLineRun := logRun
   have logStorage : Devm.getStor logPre = Devm.getStor truePre := by
     refine Line.of_inv Devm.getStor ?_ logLineRun
@@ -279,7 +280,7 @@ theorem transferStaged_trace
         (of_run_loadWordAt_logs logReceiverRun).trans <|
           (of_run_loadWordAt_logs logOwnerRun).trans eventPush.logs
   have trueSourceRun : Func.Run fs sevm truePre returnTrue post :=
-    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok trueRun)
+    Func.WalkInv.toRun trueRun
   obtain ⟨returnsTrue, -⟩ :=
     of_returnTrue_shared trueStack trueWf trueReads trueSourceRun
   have trueStorage : Devm.getStor truePre = Devm.getStor post :=
@@ -351,6 +352,7 @@ def shareArgImage (image : Bytes) (owner receiver amount : B256) : Bytes :=
     (amountWord * 32).toNat amount.toBytes
 
 theorem shareArgs_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {ownerLine receiverLine amountLine : Line}
     {owner receiver amount : B256} {body : Func} {tail : Stack}
@@ -364,21 +366,21 @@ theorem shareArgs_trace
         (Bytes.writeAt image (ownerWord * 32).toNat owner.toBytes)
         (receiverWord * 32).toNat receiver.toBytes) amount)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (ownerLine +++ mstoreAt ownerWord +++
         receiverLine +++ mstoreAt receiverWord +++
-        amountLine +++ mstoreAt amountWord +++ body) (.ok final)) :
+        amountLine +++ mstoreAt amountWord +++ body) final) :
     ∃ bodyPre,
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory (shareArgImage image owner receiver amount) ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨ownerStorePre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+      R fs sevm bodyPre body final := by
+  obtain ⟨ownerStorePre, ownerRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨ownerPrefix, ownerStoreWf, ownerStoreReads, ownerQuiet⟩ :=
     ownerProduces memoryWf memoryReads stack ownerRun
-  obtain ⟨receiverPre, ownerStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverPre, ownerStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨receiverStack, receiverWf, receiverReads, ownerStoreState⟩ :=
     of_run_mstoreAt_image ownerPrefix ownerStoreWf ownerStoreReads
       ownerStoreRun
@@ -386,11 +388,11 @@ theorem shareArgs_trace
     refine Line.of_inv Devm.logs ?_ ownerStoreRun
     unfold mstoreAt
     line_inv
-  obtain ⟨receiverStorePre, receiverRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverStorePre, receiverRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨receiverPrefix, receiverStoreWf, receiverStoreReads,
       receiverQuiet⟩ :=
     receiverProduces receiverWf receiverReads receiverStack receiverRun
-  obtain ⟨amountPre, receiverStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨amountPre, receiverStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨amountStack, amountWf, amountReads, receiverStoreState⟩ :=
     of_run_mstoreAt_image receiverPrefix receiverStoreWf receiverStoreReads
       receiverStoreRun
@@ -398,10 +400,10 @@ theorem shareArgs_trace
     refine Line.of_inv Devm.logs ?_ receiverStoreRun
     unfold mstoreAt
     line_inv
-  obtain ⟨amountStorePre, amountRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨amountStorePre, amountRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨amountPrefix, amountStoreWf, amountStoreReads, amountQuiet⟩ :=
     amountProduces amountWf amountReads amountStack amountRun
-  obtain ⟨bodyPre, amountStoreRun, bodyRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bodyPre, amountStoreRun, bodyRun⟩ := Func.WalkInv.prepend run
   obtain ⟨bodyStack, bodyWf, bodyReads, amountStoreState⟩ :=
     of_run_mstoreAt_image amountPrefix amountStoreWf amountStoreReads
       amountStoreRun
@@ -433,10 +435,11 @@ neither address-shaped nor the reserved supply word.  That is what makes an
 approval unable to move any economic quantity: it cannot alias a share row and
 it cannot alias the supply. -/
 theorem approve_body_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (memoryWf : Mem.Wf pre.memory)
     (stack : [] <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre approve (.ok post)) :
+    (run : R fs sevm pre approve post) :
     sevm.caller.toB256 ≠ 0 ∧
       ValidAdr (Sevm.argWord sevm 0) ∧
       Sevm.argWord sevm 0 ≠ 0 ∧
@@ -457,7 +460,7 @@ theorem approve_body_effect
     intro index
     simp
   obtain ⟨spenderPre, callerNonzero, spenderStack, callerMemory, callerState,
-      callerLogs, run⟩ := nonzeroCaller_trace (R := Func.RunOk) stack run
+      callerLogs, run⟩ := nonzeroCaller_trace stack run
   have spenderWf : Mem.Wf spenderPre.memory := by
     rw [← callerMemory]; exact memoryWf
   have spenderReads :
@@ -469,8 +472,8 @@ theorem approve_body_effect
       (ProducesWord.arg sevm _ 0) spenderStack run
 
   -- Stage the caller, the spender and the amount.
-  obtain ⟨ownerStorePre, ownerRun, run⟩ := runCompiledTo_next_inv run
-  have ownerSource := Ninst.Run.of_runCompiled ownerRun
+  obtain ⟨ownerStorePre, ownerRun, run⟩ := Func.WalkInv.next run
+  have ownerSource := ownerRun
   have ownerPush := of_run_caller ownerSource
   have ownerPrefix : sevm.caller.toB256 :: [] <<+ ownerStorePre.stack :=
     prefix_of_push ownerPush stageStack
@@ -479,11 +482,11 @@ theorem approve_body_effect
   have ownerStoreReads :
       Mem.Reads ownerStorePre.memory pre.memory.data.toList := by
     rw [← ownerPush.memory]; exact stageReads
-  obtain ⟨spenderArgPre, ownerStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨spenderArgPre, ownerStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨spenderArgStack, spenderArgWf, spenderArgReads, ownerStoreState⟩ :=
     of_run_mstoreAt_image ownerPrefix ownerStoreWf ownerStoreReads
       ownerStoreRun
-  obtain ⟨spenderStorePre, spenderArgRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨spenderStorePre, spenderArgRun, run⟩ := Func.WalkInv.prepend run
   have spenderArgPrefix := prefix_of_arg spenderArgStack spenderArgRun
   have spenderArgQuiet :=
     ProducesWord.arg sevm
@@ -492,16 +495,16 @@ theorem approve_body_effect
       spenderArgStack spenderArgRun
   obtain ⟨-, spenderStoreWf, spenderStoreReads, spenderArgFrame⟩ :=
     spenderArgQuiet
-  obtain ⟨amountArgPre, spenderStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨amountArgPre, spenderStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨amountArgStack, amountArgWf, amountArgReads, spenderStoreState⟩ :=
     of_run_mstoreAt_image spenderArgPrefix spenderStoreWf spenderStoreReads
       spenderStoreRun
-  obtain ⟨amountStorePre, amountArgRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨amountStorePre, amountArgRun, run⟩ := Func.WalkInv.prepend run
   have amountArgPrefix := prefix_of_arg amountArgStack amountArgRun
   obtain ⟨-, amountStoreWf, amountStoreReads, amountArgFrame⟩ :=
     ProducesWord.arg sevm _ 1 amountArgWf amountArgReads amountArgStack
       amountArgRun
-  obtain ⟨keyPre, amountStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨keyPre, amountStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨keyStack, keyWf, keyReads, amountStoreState⟩ :=
     of_run_mstoreAt_image amountArgPrefix amountStoreWf amountStoreReads
       amountStoreRun
@@ -569,11 +572,11 @@ theorem approve_body_effect
       decide +kernel
 
   -- Write the allowance.
-  obtain ⟨swapPre, amountRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨swapPre, amountRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨amountPrefix, swapWf, swapReads, amountState⟩ :=
     of_run_loadWordAt_image keyPrefix storeWf storeReads amountAtKey amountRun
-  obtain ⟨sstorePre, swapRun, run⟩ := runCompiledTo_next_inv run
-  have swapSource := Ninst.Run.of_runCompiled swapRun
+  obtain ⟨sstorePre, swapRun, run⟩ := Func.WalkInv.next run
+  have swapSource := swapRun
   have swapShape : Stack.Swap (0 : Fin 16).val
       [Sevm.argWord sevm 1, aKey] [aKey, Sevm.argWord sevm 1] :=
     Stack.swapCore_zero
@@ -585,8 +588,8 @@ theorem approve_body_effect
     rw [← swapMemory]; exact swapWf
   have sstoreReads : Mem.Reads sstorePre.memory keyImage := by
     rw [← swapMemory]; exact swapReads
-  obtain ⟨logPre, sstoreRun, run⟩ := runCompiledTo_next_inv run
-  have sstoreSource := Ninst.Run.of_runCompiled sstoreRun
+  obtain ⟨logPre, sstoreRun, run⟩ := Func.WalkInv.next run
+  have sstoreSource := sstoreRun
   have allowanceSet : Devm.getStor logPre sevm.currentTarget =
       (Devm.getStor sstorePre sevm.currentTarget).set aKey
         (Sevm.argWord sevm 1) :=
@@ -604,7 +607,7 @@ theorem approve_body_effect
     rw [← sstoreMemory]; exact sstoreReads
 
   -- Emit the approval and return canonical true.
-  obtain ⟨truePre, logRun, trueRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨truePre, logRun, trueRun⟩ := Func.WalkInv.prepend run
   have logLineRun := logRun
   have logStorage : Devm.getStor logPre = Devm.getStor truePre := by
     refine Line.of_inv Devm.getStor ?_ logLineRun
@@ -665,7 +668,7 @@ theorem approve_body_effect
         (of_run_loadWordAt_logs logReceiverRun).trans <|
           logCallerPush.logs.trans eventPush.logs
   have trueSourceRun : Func.Run fs sevm truePre returnTrue post :=
-    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok trueRun)
+    Func.WalkInv.toRun trueRun
   obtain ⟨returnsTrue, -⟩ :=
     of_returnTrue_shared trueStack trueWf trueReads trueSourceRun
   have trueStorage : Devm.getStor truePre = Devm.getStor post :=
@@ -720,11 +723,12 @@ theorem approve_body_effect
 
 /-- `transfer(receiver, amount)` moves the caller's own shares. -/
 theorem transfer_body_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (memoryWf : Mem.Wf pre.memory)
     (lookup : fs[transferFromAfterAllowanceSlot]? = some transferStaged)
     (stack : [] <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre transfer (.ok post)) :
+    (run : R fs sevm pre transfer post) :
     sevm.caller.toB256 ≠ 0 ∧
       ValidAdr (Sevm.argWord sevm 0) ∧
       Sevm.argWord sevm 0 ≠ 0 ∧
@@ -754,7 +758,7 @@ theorem transfer_body_effect
     intro index
     simp
   obtain ⟨receiverPre, callerNonzero, receiverStack, callerMemory,
-      callerState, callerLogs, run⟩ := nonzeroCaller_trace (R := Func.RunOk) stack run
+      callerState, callerLogs, run⟩ := nonzeroCaller_trace stack run
   have receiverWf : Mem.Wf receiverPre.memory := by
     rw [← callerMemory]; exact memoryWf
   have receiverReads :
@@ -768,7 +772,9 @@ theorem transfer_body_effect
       callRun⟩ :=
     shareArgs_trace stageWf stageReads ProducesWord.caller
       (ProducesWord.arg sevm _ 0) (ProducesWord.arg sevm _ 1) stageStack run
-  obtain ⟨settlePre, burn, settleRun⟩ := runCompiledTo_call_inv lookup callRun
+  obtain ⟨callBody, settlePre, callLookup, burn, settleRun⟩ :=
+    Func.WalkInv.call callRun
+  obtain rfl := Option.some.inj (callLookup.symm.trans lookup)
   have settleWf : Mem.Wf settlePre.memory := by
     rw [← burn.memory]; exact callWf
   have settleReads : Mem.Reads settlePre.memory
@@ -853,11 +859,12 @@ infinite or decremented by exactly it.  `afterAllowance` names the share ledger
 between the allowance write and the transfer, which is what lets the settlement
 be stated as one exact equation without hiding the allowance step. -/
 theorem transferFrom_body_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (memoryWf : Mem.Wf pre.memory)
     (lookup : fs[transferFromAfterAllowanceSlot]? = some transferStaged)
     (stack : [] <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre transferFrom (.ok post)) :
+    (run : R fs sevm pre transferFrom post) :
     sevm.caller.toB256 ≠ 0 ∧
       ValidAdr (Sevm.argWord sevm 0) ∧
       Sevm.argWord sevm 0 ≠ 0 ∧
@@ -898,7 +905,7 @@ theorem transferFrom_body_effect
     intro index
     simp
   obtain ⟨ownerPre, callerNonzero, ownerStack, callerMemory, callerState,
-      callerLogs, run⟩ := nonzeroCaller_trace (R := Func.RunOk) stack run
+      callerLogs, run⟩ := nonzeroCaller_trace stack run
   have ownerWf : Mem.Wf ownerPre.memory := by
     rw [← callerMemory]; exact memoryWf
   have ownerReads : Mem.Reads ownerPre.memory pre.memory.data.toList := by
@@ -1094,7 +1101,7 @@ theorem approve_compiled_effect
     exact memoryWf
   obtain ⟨callerNonzero, spenderValid, spenderNonzero, keyNotAddress,
       keyNotSupply, returnsTrue, allowanceSet, foreign, logged⟩ :=
-    approve_body_effect bodyWf nil_pref bodyRun
+    approve_body_effect (R := Func.RunOk) bodyWf nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
   refine ⟨valueZero, callerNonzero, spenderValid, spenderNonzero,
@@ -1148,7 +1155,7 @@ theorem transfer_compiled_effect
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, returnsTrue,
       supplyKept, ownerBalance, receiverBalance, ownerBalanceEq, covered,
       receiverBalanceEq, noWrap, settleStorage, foreign, logged⟩ :=
-    transfer_body_effect bodyWf transferStaged_lookup nil_pref bodyRun
+    transfer_body_effect (R := Func.RunOk) bodyWf transferStaged_lookup nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
   have storVal : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
@@ -1225,7 +1232,7 @@ theorem transferFrom_compiled_effect
       allowance, afterAllowance, ownerBalance, receiverBalance, allowanceEq,
       amountFits, route, ownerBalanceEq, covered, receiverBalanceEq, noWrap,
       settleStorage, foreign, logged⟩ :=
-    transferFrom_body_effect bodyWf transferStaged_lookup nil_pref bodyRun
+    transferFrom_body_effect (R := Func.RunOk) bodyWf transferStaged_lookup nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
   have storVal : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
@@ -1263,37 +1270,45 @@ a conservative rearrangement that leaves the supply alone. -/
 /-- The vault's share ledger is conserved. -/
 abbrev Conserved (s : Stor) : Prop := LedgerConserved supplySlot s
 
+/-! ## Conservation, at the body
+
+Stated over the shared walk vocabulary so that one proof serves both consumers:
+the compiled wrappers below, and the ladder obligation in
+`Blanc/ProrataWethVaultLedgerSpec.lean`, which instantiates them at
+`Func.Run`. -/
+
 /-- `approve` cannot move the invariant: its write lands at a key the collision
 guard has proved is not address-shaped, so the balances cannot see it, and not
 the supply slot, so the supply cannot see it either. -/
-theorem approve_preserves_conserved
-    {sevm : Sevm} {pre post : Devm}
+theorem approve_body_preserves_conserved
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre vault post)
-    (selectorEq :
-      Sevm.selector sevm = selector "approve" [.address, .uint256])
+    (stack : [] <<+ pre.stack)
+    (run : R fs sevm pre approve post)
     (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
     Conserved (Devm.getStor post sevm.currentTarget) := by
-  obtain ⟨-, -, -, -, keyNotAddress, keyNotSupply, -, allowanceSet, -, -⟩ :=
-    approve_compiled_effect memoryWf run selectorEq
+  obtain ⟨-, -, -, keyNotAddress, keyNotSupply, -, allowanceSet, -, -⟩ :=
+    approve_body_effect memoryWf stack run
   refine conserved.of_rest_eq ?_ ?_
   · rw [allowanceSet, rest_set_of_not_validAdr keyNotAddress]
   · rw [allowanceSet, Stor.get_set_ne _ keyNotSupply]
 
 /-- `transfer` is a conservative rearrangement: the supply word does not move,
 so the sum cannot either. -/
-theorem transfer_preserves_conserved
-    {sevm : Sevm} {pre post : Devm}
+theorem transfer_body_preserves_conserved
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre vault post)
-    (selectorEq :
-      Sevm.selector sevm = selector "transfer" [.address, .uint256])
+    (lookup : fs[transferFromAfterAllowanceSlot]? = some transferStaged)
+    (stack : [] <<+ pre.stack)
+    (run : R fs sevm pre transfer post)
     (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
     Conserved (Devm.getStor post sevm.currentTarget) := by
-  obtain ⟨-, -, receiverValid, -, -, supplyKept, ownerBalance,
+  obtain ⟨-, receiverValid, -, -, supplyKept, ownerBalance,
       receiverBalance, ownerBalanceEq, covered, receiverBalanceEq, -,
       settleStorage, -, -⟩ :=
-    transfer_compiled_effect memoryWf run selectorEq
+    transfer_body_effect memoryWf lookup stack run
   obtain ⟨receiverAdr, receiverAdrEq⟩ := receiverValid
   have coveredRest :
       Sevm.argWord sevm 1 ≤ Stor.rest (Devm.getStor pre sevm.currentTarget)
@@ -1324,19 +1339,20 @@ theorem transfer_preserves_conserved
 
 /-- `transferFrom` is the same rearrangement, after an allowance write the
 invariant cannot see. -/
-theorem transferFrom_preserves_conserved
-    {sevm : Sevm} {pre post : Devm}
+theorem transferFrom_body_preserves_conserved
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre vault post)
-    (selectorEq : Sevm.selector sevm =
-      selector "transferFrom" [.address, .address, .uint256])
+    (lookup : fs[transferFromAfterAllowanceSlot]? = some transferStaged)
+    (stack : [] <<+ pre.stack)
+    (run : R fs sevm pre transferFrom post)
     (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
     Conserved (Devm.getStor post sevm.currentTarget) := by
-  obtain ⟨-, -, ownerValid, -, receiverValid, -, -, keyNotAddress,
+  obtain ⟨-, ownerValid, -, receiverValid, -, -, keyNotAddress,
       keyNotSupply, supplyKept, allowance, afterAllowance, ownerBalance,
       receiverBalance, -, -, route, ownerBalanceEq, covered,
       receiverBalanceEq, -, settleStorage, -, -⟩ :=
-    transferFrom_compiled_effect memoryWf run selectorEq
+    transferFrom_body_effect memoryWf lookup stack run
   obtain ⟨ownerAdr, ownerAdrEq⟩ := ownerValid
   obtain ⟨receiverAdr, receiverAdrEq⟩ := receiverValid
   have spentConserved : Conserved afterAllowance := by
@@ -1376,6 +1392,76 @@ theorem transferFrom_preserves_conserved
       exact supplyKept
     · rw [decremented, Stor.get_set_ne _ keyNotSupply]
       exact supplyKept
+
+/-! ## Conservation, at the public compiled endpoint
+
+Each is its body theorem after the dispatch entry, which moves no storage. -/
+
+/-- Enter a share endpoint's body from a whole-program compiled run, retaining
+the storage and memory frames the body obligations need. -/
+private theorem enter_share_body
+    {sevm : Sevm} {pre post : Devm} {sig : B256} {words : Nat} {body : Func}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq : Sevm.selector sevm = sig)
+    (member : (sig, routed words body) ∈ vaultFuncs) :
+    ∃ bodyPre, Mem.Wf bodyPre.memory ∧
+      Devm.getStor pre = Devm.getStor bodyPre ∧
+      Func.RunCompiledTo (vault.main :: vault.aux) sevm bodyPre body
+        (.ok post) := by
+  rcases runCompiled_enters_body_compiled_logs run selectorEq member with
+    ⟨bodyPre, -, -, entryState, entryMemory, -, -, bodyRun⟩
+  refine ⟨bodyPre, ?_, funext (getStor_eq_of_state_eq entryState), bodyRun⟩
+  rw [← entryMemory]
+  exact memoryWf
+
+theorem approve_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "approve" [.address, .uint256])
+    (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
+    Conserved (Devm.getStor post sevm.currentTarget) := by
+  have member : (selector "approve" [.address, .uint256], routed 2 approve) ∈ vaultFuncs := by
+    simp [vaultFuncs]
+  obtain ⟨bodyPre, bodyWf, storEq, bodyRun⟩ :=
+    enter_share_body memoryWf run selectorEq member
+  rw [congrFun storEq sevm.currentTarget] at conserved
+  exact approve_body_preserves_conserved (R := Func.RunOk) bodyWf nil_pref
+    bodyRun conserved
+
+theorem transfer_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "transfer" [.address, .uint256])
+    (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
+    Conserved (Devm.getStor post sevm.currentTarget) := by
+  have member : (selector "transfer" [.address, .uint256], routed 2 transfer) ∈ vaultFuncs := by
+    simp [vaultFuncs]
+  obtain ⟨bodyPre, bodyWf, storEq, bodyRun⟩ :=
+    enter_share_body memoryWf run selectorEq member
+  rw [congrFun storEq sevm.currentTarget] at conserved
+  exact transfer_body_preserves_conserved (R := Func.RunOk) bodyWf
+    transferStaged_lookup nil_pref bodyRun conserved
+
+theorem transferFrom_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256])
+    (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
+    Conserved (Devm.getStor post sevm.currentTarget) := by
+  have member : (selector "transferFrom" [.address, .address, .uint256], routed 3 transferFrom) ∈ vaultFuncs := by
+    simp [vaultFuncs]
+  obtain ⟨bodyPre, bodyWf, storEq, bodyRun⟩ :=
+    enter_share_body memoryWf run selectorEq member
+  rw [congrFun storEq sevm.currentTarget] at conserved
+  exact transferFrom_body_preserves_conserved (R := Func.RunOk) bodyWf
+    transferStaged_lookup nil_pref bodyRun conserved
 
 end ProrataWethVault
 

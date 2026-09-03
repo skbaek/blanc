@@ -30,6 +30,7 @@ remains downstream in the composition stratum.
 producer followed by the shared `isMax` line.  Both arms retain the producer's
 proof-carrying memory image and surrounding stack. -/
 theorem ProducesWord.isMax_arm_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {line : Line} {image : Bytes} {value : B256}
     {maxBody ordinaryBody : Func} {tail : Stack}
@@ -37,27 +38,27 @@ theorem ProducesWord.isMax_arm_trace
     (memoryWf : Mem.Wf pre.memory)
     (memoryReads : Mem.Reads pre.memory image)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (line +++ isMax +++ (maxBody <?> ordinaryBody)) (.ok final)) :
+    (run : R fs sevm pre
+      (line +++ isMax +++ (maxBody <?> ordinaryBody)) final) :
     (value = B256.max ∧
       ∃ bodyPre,
         tail <<+ bodyPre.stack ∧
         Mem.Wf bodyPre.memory ∧
         Mem.Reads bodyPre.memory image ∧
         Devm.QuietFrame pre bodyPre ∧
-        Func.RunCompiledTo fs sevm bodyPre maxBody (.ok final)) ∨
+        R fs sevm bodyPre maxBody final) ∨
     (value ≠ B256.max ∧
       ∃ bodyPre,
         tail <<+ bodyPre.stack ∧
         Mem.Wf bodyPre.memory ∧
         Mem.Reads bodyPre.memory image ∧
         Devm.QuietFrame pre bodyPre ∧
-        Func.RunCompiledTo fs sevm bodyPre ordinaryBody (.ok final)) := by
-  obtain ⟨valuePre, valueRun, run⟩ := runCompiledTo_prepend_inv run
+        R fs sevm bodyPre ordinaryBody final) := by
+  obtain ⟨valuePre, valueRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨valuePrefix, valueWf, valueReads, valueState⟩ :=
     produces memoryWf memoryReads stack valueRun
   obtain ⟨testPre, testRun, branchRun⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   simp only [isMax] at testRun
   rcases Line.of_run_cons testRun with
     ⟨notPre, notRun, testRun⟩
@@ -82,9 +83,8 @@ theorem ProducesWord.isMax_arm_trace
   by_cases valueMax : value = B256.max
   · have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
       simpa [valueMax, B256.not_max, B256.eqCheck] using testPrefix
-    obtain ⟨bodyPre, branchWord, branchWordNe, bodyPop, bodyRun,
-        bodyPrefix⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
       rw [← bodyPop.memory]
@@ -93,14 +93,14 @@ theorem ProducesWord.isMax_arm_trace
       rw [← bodyPop.memory]
       exact testReads
     exact Or.inl ⟨valueMax, bodyPre, bodyPrefix, bodyWf, bodyReads,
-      testState.trans (Devm.QuietFrame.ofPopBurnBy bodyPop), bodyRun⟩
+      testState.trans (Devm.QuietFrame.ofPopBurn bodyPop), bodyRun⟩
   · have notNonzero : (~~~ value) ≠ 0 := by
       intro notZero
       exact valueMax (B256.eq_max_of_not_eq_zero notZero)
     have zeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
       simpa [B256.eqCheck, notNonzero] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-      Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+      Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
       rw [← bodyPop.memory]
       exact testWf
@@ -108,7 +108,7 @@ theorem ProducesWord.isMax_arm_trace
       rw [← bodyPop.memory]
       exact testReads
     exact Or.inr ⟨valueMax, bodyPre, bodyPrefix, bodyWf, bodyReads,
-      testState.trans (Devm.QuietFrame.ofPopBurnBy bodyPop), bodyRun⟩
+      testState.trans (Devm.QuietFrame.ofPopBurn bodyPop), bodyRun⟩
 
 /-- A successful stable-supply guard proves the staged word is within the
 declared supply cap and exposes the guarded body without changing the
@@ -497,7 +497,7 @@ theorem convertToShares_arithmetic_trace
       ReturnsWord
         (Nat.toB256 (convertToSharesN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -559,7 +559,7 @@ theorem convertToAssets_arithmetic_trace
       ReturnsWord
         (Nat.toB256 (convertToAssetsN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -621,7 +621,7 @@ theorem previewMint_arithmetic_trace
       ReturnsWord
         (Nat.toB256 (previewMintN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -684,7 +684,7 @@ theorem previewWithdraw_arithmetic_trace
       ReturnsWord
         (Nat.toB256 (previewWithdrawN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with

@@ -199,7 +199,7 @@ theorem outboundAfterQuote_effect
   -- Owner share-balance guard.
   obtain ⟨authPre, balance, balanceEq, covered, authStack, authWf, authReads,
       balanceStorage, balanceCode, balanceLogs, authRun⟩ :=
-    Blanc.ProrataWethVault.ownerHasShares_trace sharesWf sharesReads
+    Blanc.ProrataWethVault.ownerHasShares_trace (R := Func.RunOk) sharesWf sharesReads
       ownerAtQuote sharesAt sharesBelow sharesStack sharesRun
   set balanceImage := Bytes.writeAt quoteImage
     (Blanc.ProrataWethVault.balanceWord * 32).toNat balance.toBytes
