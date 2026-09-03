@@ -319,6 +319,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultCapacities",
     "Composition.ProrataWethVaultInbound",
     "Composition.ProrataWethVaultOutbound",
+    "Composition.ProrataWethVaultBacking",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
