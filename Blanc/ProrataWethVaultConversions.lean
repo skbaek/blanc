@@ -114,6 +114,7 @@ theorem ProducesWord.isMax_arm_trace
 declared supply cap and exposes the guarded body without changing the
 proof-carrying memory image, surrounding stack, or persistent state. -/
 theorem guardStableSupply_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {supply : B256} {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -121,8 +122,8 @@ theorem guardStableSupply_trace
     (supplyAt : Bytes.toB256
       (image.sliceD (supplyWord * 32).toNat 32 0) = supply)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (guardStableSupply body) (.ok final)) :
+    (run : R fs sevm pre
+      (guardStableSupply body) final) :
     ∃ bodyPre,
       supply.toNat ≤ maxSupplyN ∧
       tail <<+ bodyPre.stack ∧
@@ -130,17 +131,17 @@ theorem guardStableSupply_trace
       Mem.Reads bodyPre.memory image ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   unfold guardStableSupply at run
   obtain ⟨supplyPre, supplyRun, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨supplyPrefix, supplyWf, supplyReads, supplyState⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads supplyAt supplyRun
-  obtain ⟨maxPre, maxRun, run⟩ := runCompiledTo_next_inv run
-  have maxSource := Ninst.Run.of_runCompiled maxRun
+  obtain ⟨maxPre, maxRun, run⟩ := Func.WalkInv.next run
+  have maxSource := maxRun
   have maxPrefix := prefix_of_push (of_run_pushB256 maxSource) supplyPrefix
-  obtain ⟨testPre, testRun, branchRun⟩ := runCompiledTo_next_inv run
-  have testSource := Ninst.Run.of_runCompiled testRun
+  obtain ⟨testPre, testRun, branchRun⟩ := Func.WalkInv.next run
+  have testSource := testRun
   have testPrefix := prefix_of_lt testSource maxPrefix
   have suffixState : supplyPre.state = testPre.state :=
     (Ninst.Hinv.inv (f := Devm.state) maxSource).trans
@@ -164,17 +165,14 @@ theorem guardStableSupply_trace
   by_cases overflow : maxSupply < supply
   · have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
       simpa [B256.ltCheck, overflow] using testPrefix
-    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun,
-        revertPrefix⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨revertPre, revertPop, revertRun, revertPrefix⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
-    obtain ⟨revertPost, impossible, -⟩ :=
-      runCompiledTo_revert_inv revertRun
-    cases impossible
+    exact absurd revertRun Func.WalkInv.noRevert
   · have zeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
       simpa [B256.ltCheck, overflow] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-      Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+      Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have stableWord : supply ≤ maxSupply := B256.not_lt.mp overflow
     have stable : supply.toNat ≤ maxSupplyN := by
       rw [B256.le_iff_toNat_le_toNat, maxSupply_toNat] at stableWord
@@ -220,15 +218,16 @@ theorem conversionStagingImage_supply
 /-- Stage the booked asset word supplied by `readTotalAssets`, read and stage
 the exact share supply, and discharge the common stable-supply guard. -/
 theorem conversionStaging_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {assets : B256} {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
     (memoryReads : Mem.Reads pre.memory image)
     (stack : assets :: tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (mstoreAt assetsWord +++
         pushSupplySlot +++ sload ::: mstoreAt supplyWord +++
-        guardStableSupply body) (.ok final)) :
+        guardStableSupply body) final) :
     ∃ supply bodyPre,
       supply = Devm.getStorVal pre sevm.currentTarget supplySlot ∧
       supply.toNat ≤ maxSupplyN ∧
@@ -239,16 +238,16 @@ theorem conversionStaging_trace
       Devm.getStor pre = Devm.getStor bodyPre ∧
       Devm.getCode pre = Devm.getCode bodyPre ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   obtain ⟨slotPre, assetsStoreRun, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨slotPrefix, slotWf, slotReads, assetsState⟩ :=
     of_run_mstoreAt_image stack memoryWf memoryReads assetsStoreRun
   let image1 := Bytes.writeAt image (assetsWord * 32).toNat assets.toBytes
   change Mem.Reads slotPre.memory image1 at slotReads
 
   obtain ⟨sloadPre, slotRun, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   simp only [pushSupplySlot] at slotRun
   rcases Line.of_run_cons slotRun with
     ⟨notPre, zeroRun, slotRun⟩
@@ -277,8 +276,8 @@ theorem conversionStaging_trace
     exact slotReads
 
   obtain ⟨supplyStorePre, sloadRun, run⟩ :=
-    runCompiledTo_next_inv run
-  have sloadSource := Ninst.Run.of_runCompiled sloadRun
+    Func.WalkInv.next run
+  have sloadSource := sloadRun
   obtain ⟨supply, supplyPrefix, supplyEq⟩ :=
     prefix_of_sload sloadSource supplySlotPrefix
   have sloadStorage :
@@ -294,7 +293,7 @@ theorem conversionStaging_trace
     exact sloadReads
 
   obtain ⟨guardPre, supplyStoreRun, guardRun⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨guardPrefix, guardWf, guardReads, supplyStoreState⟩ :=
     of_run_mstoreAt_image supplyPrefix supplyStoreWf supplyStoreReads
       supplyStoreRun
@@ -353,13 +352,14 @@ theorem conversionStaging_trace
 
 /-- The vault's shared return continuation ABI-encodes the known stack head. -/
 theorem returnWord_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {word : B256} {tail : Stack}
     (stack : word :: tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre returnWord (.ok post)) :
+    (run : R fs sevm pre returnWord post) :
     ReturnsWord word post := by
   have sourceRun : Func.Run fs sevm pre returnWord post :=
-    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+    Func.WalkInv.toRun run
   simpa only [returnWord] using
     (returnsWord_of_storeReturn stack (by
       simpa only [returnWord] using sourceRun)).1
@@ -474,6 +474,7 @@ theorem ProducesWord.stagedAssetFactor_after_mulDivScratch
 /-- The conversion-to-shares arithmetic suffix returns exactly the G1
 full-width natural formula in either the exact-`2^256` or ordinary arm. -/
 theorem convertToShares_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -485,19 +486,19 @@ theorem convertToShares_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (lookup : fs[returnWordSlot]? = some returnWord)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (productOverTwoPow256 (arg 0) stagedDenominator .down
             returnWordSlot <?>
           mulDiv (arg 0) stagedDenominator stagedAssetFactor .down
-            returnWordSlot)) (.ok final)) :
+            returnWordSlot)) final) :
     convertToSharesN
         (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
         wordModulusN ∧
       ReturnsWord
         (Nat.toB256 (convertToSharesN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -537,6 +538,7 @@ theorem convertToShares_arithmetic_trace
 /-- The conversion-to-assets arithmetic suffix returns exactly the G1
 full-width natural formula in either asset arm. -/
 theorem convertToAssets_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -548,18 +550,18 @@ theorem convertToAssets_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (lookup : fs[returnWordSlot]? = some returnWord)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (shiftedDiv (arg 0) stagedDenominator .down returnWordSlot <?>
           mulDiv (arg 0) stagedAssetFactor stagedDenominator .down
-            returnWordSlot)) (.ok final)) :
+            returnWordSlot)) final) :
     convertToAssetsN
         (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
         wordModulusN ∧
       ReturnsWord
         (Nat.toB256 (convertToAssetsN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -599,6 +601,7 @@ theorem convertToAssets_arithmetic_trace
 /-- `previewMint` uses the same full-width asset ratio as
 `convertToAssets`, with exact ceiling division. -/
 theorem previewMint_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -610,18 +613,18 @@ theorem previewMint_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (lookup : fs[returnWordSlot]? = some returnWord)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (shiftedDiv (arg 0) stagedDenominator .up returnWordSlot <?>
           mulDiv (arg 0) stagedAssetFactor stagedDenominator .up
-            returnWordSlot)) (.ok final)) :
+            returnWordSlot)) final) :
     previewMintN
         (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
         wordModulusN ∧
       ReturnsWord
         (Nat.toB256 (previewMintN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -661,6 +664,7 @@ theorem previewMint_arithmetic_trace
 /-- `previewWithdraw` uses the same full-width share ratio as
 `convertToShares`, with exact ceiling division. -/
 theorem previewWithdraw_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -672,19 +676,19 @@ theorem previewWithdraw_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (lookup : fs[returnWordSlot]? = some returnWord)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (productOverTwoPow256 (arg 0) stagedDenominator .up
             returnWordSlot <?>
           mulDiv (arg 0) stagedDenominator stagedAssetFactor .up
-            returnWordSlot)) (.ok final)) :
+            returnWordSlot)) final) :
     previewWithdrawN
         (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat <
         wordModulusN ∧
       ReturnsWord
         (Nat.toB256 (previewWithdrawN
           (Sevm.argWord sevm 0).toNat assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -776,7 +780,7 @@ theorem stagedConversion_body_effect
       WordViewEffect (Nat.toB256 (calculate supply)) pre post := by
   obtain ⟨supply, bodyPre, supplyEq, stable, bodyStack, bodyWf,
       bodyReads, -, -, -, bodyRun⟩ :=
-    conversionStaging_trace memoryWf memoryReads stack run
+    conversionStaging_trace (R := Func.RunOk) memoryWf memoryReads stack run
   obtain ⟨resultFits, returned⟩ :=
     arithmeticEffect stable bodyWf bodyReads bodyStack bodyRun
   exact ⟨supply, supplyEq, stable, resultFits, returned,
@@ -840,7 +844,7 @@ theorem convertToShares_body_effect
   apply stagedConversion_body_effect memoryWf memoryReads stack
     storageInv logsInv _ run
   intro supply bodyPre stable bodyWf bodyReads bodyStack bodyRun
-  exact convertToShares_arithmetic_trace bodyWf bodyReads
+  exact convertToShares_arithmetic_trace (R := Func.RunOk) bodyWf bodyReads
     (conversionStagingImage_assets image assets supply)
     (conversionStagingImage_supply image assets supply)
     stable bodyStack lookup bodyRun
@@ -898,7 +902,7 @@ theorem convertToAssets_body_effect
   apply stagedConversion_body_effect memoryWf memoryReads stack
     storageInv logsInv _ run
   intro supply bodyPre stable bodyWf bodyReads bodyStack bodyRun
-  exact convertToAssets_arithmetic_trace bodyWf bodyReads
+  exact convertToAssets_arithmetic_trace (R := Func.RunOk) bodyWf bodyReads
     (conversionStagingImage_assets image assets supply)
     (conversionStagingImage_supply image assets supply)
     stable bodyStack lookup bodyRun
@@ -955,7 +959,7 @@ theorem previewMint_body_effect
   apply stagedConversion_body_effect memoryWf memoryReads stack
     storageInv logsInv _ run
   intro supply bodyPre stable bodyWf bodyReads bodyStack bodyRun
-  exact previewMint_arithmetic_trace bodyWf bodyReads
+  exact previewMint_arithmetic_trace (R := Func.RunOk) bodyWf bodyReads
     (conversionStagingImage_assets image assets supply)
     (conversionStagingImage_supply image assets supply)
     stable bodyStack lookup bodyRun
@@ -1015,7 +1019,7 @@ theorem previewWithdraw_body_effect
   apply stagedConversion_body_effect memoryWf memoryReads stack
     storageInv logsInv _ run
   intro supply bodyPre stable bodyWf bodyReads bodyStack bodyRun
-  exact previewWithdraw_arithmetic_trace bodyWf bodyReads
+  exact previewWithdraw_arithmetic_trace (R := Func.RunOk) bodyWf bodyReads
     (conversionStagingImage_assets image assets supply)
     (conversionStagingImage_supply image assets supply)
     stable bodyStack lookup bodyRun

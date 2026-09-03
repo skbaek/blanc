@@ -67,21 +67,22 @@ private lemma slice_three_words (image : Bytes) (a b c : B256) :
 
 /-- Exact body effect of the compact three-word ABI string emitter. -/
 private theorem shortString_body_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {word shift length : B256}
     (memoryWf : Mem.Wf pre.memory)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (pushB256 word ::: pushB256 shift ::: shl :::
         pushList [length, 32] +++
         mstoreAt 0 +++ mstoreAt 1 +++ mstoreAt 2 +++
-        returnMemoryRange 0 96) (.ok post)) :
+        returnMemoryRange 0 96) post) :
     BytesViewEffect (shortStringOutput word shift length) pre post := by
   have sourceRun : Func.Run fs sevm pre
       (pushB256 word ::: pushB256 shift ::: shl :::
         pushList [length, 32] +++
         mstoreAt 0 +++ mstoreAt 1 +++ mstoreAt 2 +++
         returnMemoryRange 0 96) post :=
-    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+    Func.WalkInv.toRun run
   have storage : Devm.getStor pre = Devm.getStor post :=
     Func.of_inv Devm.getStor Devm.getStor (by func_inv) sourceRun
   have logs : pre.logs = post.logs :=
@@ -164,11 +165,12 @@ private theorem shortString_body_effect
   exact ⟨output, storage, logs⟩
 
 theorem returnConstant_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {word : B256}
-    (run : Func.RunCompiledTo fs sevm pre (returnConstant word) (.ok post)) :
+    (run : R fs sevm pre (returnConstant word) post) :
     WordViewEffect word pre post := by
   have sourceRun : Func.Run fs sevm pre (returnConstant word) post :=
-    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+    Func.WalkInv.toRun run
   have storage : Devm.getStor pre = Devm.getStor post :=
     Func.of_inv Devm.getStor Devm.getStor (by
       unfold returnConstant returnWord
@@ -187,12 +189,13 @@ theorem returnConstant_effect
   exact ⟨output, storage, logs⟩
 
 private theorem totalSupply_body_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    (run : Func.RunCompiledTo fs sevm pre totalSupply (.ok post)) :
+    (run : R fs sevm pre totalSupply post) :
     WordViewEffect
       (Devm.getStorVal pre sevm.currentTarget supplySlot) pre post := by
   have sourceRun : Func.Run fs sevm pre totalSupply post :=
-    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+    Func.WalkInv.toRun run
   have storage : Devm.getStor pre = Devm.getStor post :=
     Func.of_inv Devm.getStor Devm.getStor (by
       unfold totalSupply pushSupplySlot returnWord
@@ -404,14 +407,15 @@ theorem allowanceCollisionGuard_body_of_ok
     exact absurd revertRun Func.WalkInv.noRevert
 
 private theorem stackStorageWord_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {key : B256} {tail : Stack}
     (hp : key :: tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (sload ::: returnWord) (.ok post)) :
+    (run : R fs sevm pre
+      (sload ::: returnWord) post) :
     WordViewEffect (Devm.getStorVal pre sevm.currentTarget key) pre post := by
   have sourceRun : Func.Run fs sevm pre (sload ::: returnWord) post :=
-    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+    Func.WalkInv.toRun run
   have storage : Devm.getStor pre = Devm.getStor post :=
     Func.of_inv Devm.getStor Devm.getStor (by
       unfold returnWord
@@ -431,15 +435,16 @@ private theorem stackStorageWord_effect
 /-- Exact read-only effect of the storage-word body shared by `balanceOf` and
 `maxRedeem`. -/
 private theorem argStorageWord_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {index : B256}
-    (run : Func.RunCompiledTo fs sevm pre
-      (arg index +++ sload ::: returnWord) (.ok post)) :
+    (run : R fs sevm pre
+      (arg index +++ sload ::: returnWord) post) :
     WordViewEffect
       (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm index))
       pre post := by
   have sourceRun : Func.Run fs sevm pre
       (arg index +++ sload ::: returnWord) post :=
-    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+    Func.WalkInv.toRun run
   have storage : Devm.getStor pre = Devm.getStor post :=
     Func.of_inv Devm.getStor Devm.getStor (by
       unfold returnWord
@@ -494,9 +499,10 @@ private theorem lift_storage_word_view
 namespace separation are conclusions of the successful compiled walk; only
 ordinary EVM memory well-formedness is supplied by the caller. -/
 private theorem allowance_body_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     (memoryWf : Mem.Wf pre.memory)
-    (run : Func.RunCompiledTo fs sevm pre allowance (.ok post)) :
+    (run : R fs sevm pre allowance post) :
     ValidAdr (Sevm.argWord sevm 0) ∧
       ValidAdr (Sevm.argWord sevm 1) ∧
       ¬ ValidAdr
@@ -508,9 +514,9 @@ private theorem allowance_body_effect
           (allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)))
         pre post := by
   unfold allowance at run
-  rcases canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref run with
+  rcases canonicalAddressArg_body_of_ok nil_pref run with
     ⟨ownerPre, ownerValid, ownerRun, -, ownerState, ownerMemory, ownerLogs⟩
-  rcases canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref ownerRun with
+  rcases canonicalAddressArg_body_of_ok nil_pref ownerRun with
     ⟨bodyPre, spenderValid, bodyRun, -, spenderState, spenderMemory,
       spenderLogs⟩
   have bodyMemory : pre.memory = bodyPre.memory :=
@@ -520,26 +526,26 @@ private theorem allowance_body_effect
     exact memoryWf
 
   obtain ⟨afterOwnerArg, ownerArgRun, bodyRun⟩ :=
-    runCompiledTo_prepend_inv bodyRun
+    Func.WalkInv.prepend bodyRun
   have ownerPrefix : Sevm.argWord sevm 0 :: [] <<+ afterOwnerArg.stack :=
     prefix_of_arg nil_pref ownerArgRun
   obtain ⟨afterOwnerStore, ownerStoreRun, bodyRun⟩ :=
-    runCompiledTo_prepend_inv bodyRun
+    Func.WalkInv.prepend bodyRun
   obtain ⟨ownerTail, ownerStoreMemory⟩ :=
     of_run_mstoreAt_val ownerStoreRun ownerPrefix
 
   obtain ⟨afterSpenderArg, spenderArgRun, bodyRun⟩ :=
-    runCompiledTo_prepend_inv bodyRun
+    Func.WalkInv.prepend bodyRun
   have spenderPrefix : Sevm.argWord sevm 1 :: [] <<+
       afterSpenderArg.stack :=
     prefix_of_arg ownerTail spenderArgRun
   obtain ⟨afterSpenderStore, spenderStoreRun, bodyRun⟩ :=
-    runCompiledTo_prepend_inv bodyRun
+    Func.WalkInv.prepend bodyRun
   obtain ⟨spenderTail, spenderStoreMemory⟩ :=
     of_run_mstoreAt_val spenderStoreRun spenderPrefix
 
   obtain ⟨keccak256Pre, pushWindowRun, bodyRun⟩ :=
-    runCompiledTo_prepend_inv bodyRun
+    Func.WalkInv.prepend bodyRun
   have pushWindowLine := pushWindowRun
   simp only [pushList, List.map] at pushWindowRun
   rcases Line.of_run_cons pushWindowRun with
@@ -553,8 +559,8 @@ private theorem allowance_body_effect
     prefix_of_push push0 (prefix_of_push push64 spenderTail)
 
   obtain ⟨afterKec, keccak256Run, collisionRun⟩ :=
-    runCompiledTo_next_inv bodyRun
-  have keccak256Source := Ninst.Run.of_runCompiled keccak256Run
+    Func.WalkInv.next bodyRun
+  have keccak256Source := keccak256Run
   rcases prefix_of_keccak256_val keccak256Source windowPrefix with
     ⟨hashPrefix, -⟩
   have memoryWindow : (keccak256Pre.memory.read 0 64).1 =
@@ -576,7 +582,7 @@ private theorem allowance_body_effect
     rw [memoryWindow] at hashPrefix
     simpa only [allowanceKey] using hashPrefix
 
-  rcases allowanceCollisionGuard_body_of_ok (R := Func.RunOk) keyPrefix collisionRun with
+  rcases allowanceCollisionGuard_body_of_ok keyPrefix collisionRun with
     ⟨readPre, keyNotAddress, keyNotSupply, readRun, readPrefix,
       collisionState, collisionLogs, -⟩
   have readEffect := stackStorageWord_effect readPrefix readRun
@@ -625,7 +631,7 @@ theorem name_compiled_effect
     exact memoryWf
   have effect : BytesViewEffect nameOutput bodyPre post := by
     simpa only [name, nameOutput] using
-      (shortString_body_effect bodyMemoryWf bodyRun)
+      (shortString_body_effect (R := Func.RunOk) bodyMemoryWf bodyRun)
   exact ⟨hvalue, lift_bytes_view entryState entryLogs effect⟩
 
 /-- `symbol()` returns the exact canonical dynamic ABI encoding of `prWETH`. -/
@@ -644,7 +650,7 @@ theorem symbol_compiled_effect
     exact memoryWf
   have effect : BytesViewEffect symbolOutput bodyPre post := by
     simpa only [symbol, symbolOutput] using
-      (shortString_body_effect bodyMemoryWf bodyRun)
+      (shortString_body_effect (R := Func.RunOk) bodyMemoryWf bodyRun)
   exact ⟨hvalue, lift_bytes_view entryState entryLogs effect⟩
 
 /-- `asset()` returns the exact configured WETH address word. -/
@@ -658,7 +664,7 @@ theorem asset_compiled_effect
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, -, entryLogs, -, bodyRun⟩
   exact ⟨hvalue,
-    lift_word_view entryState entryLogs (returnConstant_effect bodyRun)⟩
+    lift_word_view entryState entryLogs (returnConstant_effect (R := Func.RunOk) bodyRun)⟩
 
 /-- `decimals()` returns the frozen 21-decimal share precision. -/
 theorem decimals_compiled_effect
@@ -672,7 +678,7 @@ theorem decimals_compiled_effect
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, -, entryLogs, -, bodyRun⟩
   exact ⟨hvalue,
-    lift_word_view entryState entryLogs (returnConstant_effect bodyRun)⟩
+    lift_word_view entryState entryLogs (returnConstant_effect (R := Func.RunOk) bodyRun)⟩
 
 /-- `totalSupply()` returns the exact share-supply storage word. -/
 theorem totalSupply_compiled_effect
@@ -687,7 +693,7 @@ theorem totalSupply_compiled_effect
     simp [vaultFuncs]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, -, entryLogs, -, bodyRun⟩
-  have effect := totalSupply_body_effect bodyRun
+  have effect := totalSupply_body_effect (R := Func.RunOk) bodyRun
   have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
   have effect' : WordViewEffect
@@ -724,7 +730,7 @@ theorem balanceOf_compiled_effect
     ⟨bodyPre, hvalid, bodyRun, -, guardState, -, guardLogs⟩
   exact ⟨hvalue, hvalid,
     lift_storage_word_view (entryState.trans guardState)
-      (entryLogs.trans guardLogs) (argStorageWord_effect bodyRun)⟩
+      (entryLogs.trans guardLogs) (argStorageWord_effect (R := Func.RunOk) bodyRun)⟩
 
 /-- `maxRedeem(owner)` is the exact share balance of an address-shaped owner
 word; in particular the zero address remains an admitted read key. -/
@@ -748,7 +754,7 @@ theorem maxRedeem_compiled_effect
     ⟨bodyPre, hvalid, bodyRun, -, guardState, -, guardLogs⟩
   exact ⟨hvalue, hvalid,
     lift_storage_word_view (entryState.trans guardState)
-      (entryLogs.trans guardLogs) (argStorageWord_effect bodyRun)⟩
+      (entryLogs.trans guardLogs) (argStorageWord_effect (R := Func.RunOk) bodyRun)⟩
 
 /-- `allowance(owner,spender)` returns the exact raw-key storage word.  The
 single successful call proves both ABI words canonical and proves the derived
@@ -781,7 +787,7 @@ theorem allowance_compiled_effect
   have bodyMemoryWf : Mem.Wf bodyPre.memory := by
     rw [← entryMemory]
     exact memoryWf
-  rcases allowance_body_effect bodyMemoryWf bodyRun with
+  rcases allowance_body_effect (R := Func.RunOk) bodyMemoryWf bodyRun with
     ⟨ownerValid, spenderValid, keyNotAddress, keyNotSupply, effect⟩
   exact ⟨hvalue, ownerValid, spenderValid, keyNotAddress, keyNotSupply,
     lift_storage_word_view entryState entryLogs effect⟩

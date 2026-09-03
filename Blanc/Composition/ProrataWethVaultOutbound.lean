@@ -163,7 +163,7 @@ theorem outboundAfterQuote_effect
   obtain ⟨sharesPre, callerNonzero, receiverValid, receiverNonzero,
       ownerValid, ownerNonzero, sharesStack, sharesWf, sharesReads,
       guardState, guardLogs, sharesRun⟩ :=
-    Blanc.ProrataWethVault.outboundGuards_trace memoryWf memoryReads
+    Blanc.ProrataWethVault.outboundGuards_trace (R := Func.RunOk) memoryWf memoryReads
       receiverAt ownerAt stack run
   have guardStorage : Devm.getStor entry = Devm.getStor sharesPre :=
     funext (getStor_eq_of_state_eq guardState)
@@ -231,7 +231,7 @@ theorem outboundAfterQuote_effect
       exact sharesBelow
   obtain ⟨burnPre, burnImage, ledger, authForeign, authLogs, authCode,
       allowanceSpent, burnStack, burnWf, burnReads, staged, burnRun⟩ :=
-    Blanc.ProrataWethVault.outboundAuthorization_trace authWf authReads
+    Blanc.ProrataWethVault.outboundAuthorization_trace (R := Func.RunOk) authWf authReads
       ownerAtBalance sharesAtBalance (by omega) (by omega) (by omega)
       authStack lookup authRun
 
@@ -283,7 +283,7 @@ theorem outboundAfterQuote_effect
   rw [Blanc.ProrataWethVault.finishOutbound_shape] at burnRun
   obtain ⟨childEntry, roomFits, burnSet, burnForeign, burnLogged, burnCode,
       childStack, childWf, childReads, childRun⟩ :=
-    Blanc.ProrataWethVault.outboundBurn_trace burnWf burnReads
+    Blanc.ProrataWethVault.outboundBurn_trace (R := Func.RunOk) burnWf burnReads
       (carryStaged (by omega) (by omega) (by omega) sharesAtBalance)
       (carryStaged (by decide +kernel) (by decide +kernel) (by decide +kernel)
         ownerAtBalance)
@@ -363,7 +363,7 @@ theorem outboundAfterQuote_effect
 
   -- Settle: the exact `Withdraw` entry and the returned word.
   obtain ⟨returns, settleStorage, settleLogged⟩ :=
-    Blanc.ProrataWethVault.outboundSettle_trace tailWf tailReads
+    Blanc.ProrataWethVault.outboundSettle_trace (R := Func.RunOk) tailWf tailReads
       (carryChild (by omega) (by omega) (by omega) (by omega) assetsAtBalance)
       (carryChild (by omega) (by omega) (by omega) (by omega) sharesAtBalance)
       (carryChild (by decide +kernel) (by decide +kernel) (by decide +kernel)
@@ -531,7 +531,7 @@ theorem outboundQuoteStaging_effect
     simp
   obtain ⟨readPre, readStack, readWf, readReads, argState, argLogs,
       readRun⟩ :=
-    Blanc.ProrataWethVault.outboundArgs_trace memoryWf entryReads stack run
+    Blanc.ProrataWethVault.outboundArgs_trace (R := Func.RunOk) memoryWf entryReads stack run
   have argStorage : Devm.getStor entry = Devm.getStor readPre :=
     funext (getStor_eq_of_state_eq argState)
   have argCode : Devm.getCode entry = Devm.getCode readPre :=
@@ -842,7 +842,7 @@ theorem withdraw_body_effect
     outboundQuoteStaging_effect config memoryWf readResources stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
-    Blanc.ProrataWethVault.withdrawQuote_arithmetic_trace quoteWf quoteReads
+    Blanc.ProrataWethVault.withdrawQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
       amountAt assetsAt supplyAt stable quoteStack afterLookup quoteRun
   rw [Blanc.ProrataWethVault.withdrawAfterQuote_shape] at afterRun
   rw [Blanc.ProrataWethVault.withdrawBurn_shape] at burnLookup
@@ -944,7 +944,7 @@ theorem redeem_body_effect
     outboundQuoteStaging_effect config memoryWf readResources stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
-    Blanc.ProrataWethVault.redeemQuote_arithmetic_trace quoteWf quoteReads
+    Blanc.ProrataWethVault.redeemQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
       amountAt assetsAt supplyAt stable quoteStack afterLookup quoteRun
   rw [Blanc.ProrataWethVault.redeemAfterQuote_shape] at afterRun
   rw [Blanc.ProrataWethVault.redeemBurn_shape] at burnLookup

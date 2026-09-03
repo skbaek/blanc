@@ -121,7 +121,7 @@ theorem inboundAfterQuote_effect
       Blanc.ProrataWethVault.arithmeticScratchEnd = 896 := by decide +kernel
   obtain ⟨guardPre, callerNonzero, receiverValid, receiverNonzero,
       guardStack, guardWf, guardReads, guardState, guardLogs, guardRun⟩ :=
-    Blanc.ProrataWethVault.inboundGuards_trace memoryWf memoryReads
+    Blanc.ProrataWethVault.inboundGuards_trace (R := Func.RunOk) memoryWf memoryReads
       receiverAt stack run
   have guardStorage : Devm.getStor entry = Devm.getStor guardPre :=
     funext (getStor_eq_of_state_eq guardState)
@@ -152,7 +152,7 @@ theorem inboundAfterQuote_effect
   rw [Blanc.ProrataWethVault.finishInbound_shape] at guardRun
   obtain ⟨childEntry, roomFits, childStack, childWf, childReads, childState,
       childLogs, childRun⟩ :=
-    Blanc.ProrataWethVault.shareRoomGuard_trace guardWf guardReads sharesAt
+    Blanc.ProrataWethVault.shareRoomGuard_trace (R := Func.RunOk) guardWf guardReads sharesAt
       supplyAtQuote stable guardStack guardRun
   have childStorage : Devm.getStor guardPre = Devm.getStor childEntry :=
     funext (getStor_eq_of_state_eq childState)
@@ -210,7 +210,7 @@ theorem inboundAfterQuote_effect
 
   obtain ⟨balance, balanceEq, noWrap, returned, tailStorage, tailForeign,
       tailLogged⟩ :=
-    Blanc.ProrataWethVault.inboundTail_effect tailWf tailReads
+    Blanc.ProrataWethVault.inboundTail_effect (R := Func.RunOk) tailWf tailReads
       (carry (by decide +kernel) receiverAtQuote)
       (carry (by decide +kernel) supplyAtQuote)
       (carry (by omega) sharesAt)
@@ -303,7 +303,7 @@ theorem inboundQuoteStaging_effect
     simp
   obtain ⟨readPre, readStack, readWf, readReads, argState, argLogs,
       readRun⟩ :=
-    Blanc.ProrataWethVault.inboundArgs_trace memoryWf entryReads stack run
+    Blanc.ProrataWethVault.inboundArgs_trace (R := Func.RunOk) memoryWf entryReads stack run
   have argStorage : Devm.getStor entry = Devm.getStor readPre :=
     funext (getStor_eq_of_state_eq argState)
   have argCode : Devm.getCode entry = Devm.getCode readPre :=
@@ -545,7 +545,7 @@ theorem deposit_body_effect
     inboundQuoteStaging_effect config memoryWf readResources stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
-    Blanc.ProrataWethVault.depositQuote_arithmetic_trace quoteWf quoteReads
+    Blanc.ProrataWethVault.depositQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
       amountAt assetsAt supplyAt stable quoteStack lookup quoteRun
   rw [Blanc.ProrataWethVault.depositAfterQuote_shape] at afterRun
   have amountAtAfter : Bytes.toB256
@@ -621,7 +621,7 @@ theorem mint_body_effect
     inboundQuoteStaging_effect config memoryWf readResources stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
-    Blanc.ProrataWethVault.mintQuote_arithmetic_trace quoteWf quoteReads
+    Blanc.ProrataWethVault.mintQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
       amountAt assetsAt supplyAt stable quoteStack lookup quoteRun
   rw [Blanc.ProrataWethVault.mintAfterQuote_shape] at afterRun
   have amountAtAfter : Bytes.toB256
