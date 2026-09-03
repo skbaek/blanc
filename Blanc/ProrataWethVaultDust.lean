@@ -2,6 +2,7 @@
 
 import Blanc.ProrataWethVaultArithmetic
 import Blanc.ProrataAttackModel
+import Blanc.ProrataAttackPath
 
 /-!
 # Dust and attack headlines, WETH-denominated
@@ -172,6 +173,55 @@ theorem donationStep {amount : Nat} (assets supply : Nat)
       ⟨supply, assets + amount⟩ :=
   Blanc.Prorata.ProrataAccountingEffect.externalCredit supply assets amount
     hpositive
+
+
+
+/-! ## The P4 headlines, coalition-priced
+
+`Blanc/ProrataAttackPath.lean` carries the attacker/victim bookkeeping: an
+attack state records everything the coalition put in (`inA`), everything it
+took out (`outA`), and — separately — every asset that entered the coalition
+from outside it (`outsideSubsidy`). Pricing the outside gift explicitly is what
+stops an unaccounted transfer from being read as attack profit.
+
+The three headlines below are those results at `offsetN`. None of them carries
+a callee-honesty or no-donation premise: donations are a step class the carrier
+already admits, and the open-context bound prices them rather than excluding
+them. -/
+
+/-- The offset is at least two, which is the guard the no-profit bounds carry. -/
+theorem two_le_offsetN : 2 ≤ offsetN := by decide
+
+/-- **Open context.**  Whatever the coalition takes out is at most what it put
+in, plus whatever it was given from outside.  A gift cannot masquerade as
+profit because it is on the right-hand side by name. -/
+theorem attacker_open_context
+    {state : Blanc.Prorata.ProrataAttackState offsetN}
+    (path : Blanc.Prorata.ProrataAttackPath offsetN state) :
+    state.outA ≤ state.inA + state.outsideSubsidy :=
+  path.attacker_open_context_of_attackPath two_le_offsetN
+
+/-- **No profit in a closed context.**  With no outside subsidy, the coalition
+cannot end ahead. -/
+theorem attacker_no_profit
+    {state : Blanc.Prorata.ProrataAttackState offsetN}
+    (path : Blanc.Prorata.ProrataAttackPath offsetN state)
+    (hclosed : state.outsideSubsidy = 0) :
+    state.outA ≤ state.inA :=
+  path.attacker_no_profit_of_attackPath two_le_offsetN hclosed
+
+/-- **Victim loss, over an attack path.**  A victim who has deposited and
+exited loses at most the pre-deposit price plus one, whatever the coalition did
+in between. -/
+theorem victim_loss_bound
+    {state : Blanc.Prorata.ProrataAttackState offsetN}
+    (path : Blanc.Prorata.ProrataAttackPath offsetN state)
+    {deposit : Blanc.Prorata.VictimDeposit offsetN}
+    {exit : Blanc.Prorata.VictimExit offsetN deposit}
+    (hphase : state.phase = .exited deposit exit) :
+    deposit.amount - exit.payout ≤
+      Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + offsetN) + 1 :=
+  path.victim_loss_bound_of_attackPath offsetN_ne_zero hphase
 
 end ProrataWethVault
 

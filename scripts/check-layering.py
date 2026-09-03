@@ -119,7 +119,7 @@ import tomllib
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
-          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "OffsetPricing", "ProrataAccounting", "ProrataAttackModel", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
+          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "OffsetPricing", "ProrataAccounting", "ProrataAttackModel", "ProrataAttackPath", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "CompiledStackSafety", "AbstractStackSafety", "AbstractStackTransfer", "AbstractStackCertificate",
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance",
@@ -265,7 +265,7 @@ CONTRACTS = {
                 "ProrataDeposit", "ProrataRead", "ProrataWithdraw",
                 "ProrataConsistency", "ProrataCompiledEffects", "ProrataInvariant",
                 "ProrataPreservation", "ProrataSound", "ProrataDeploymentRoot",
-                "ProrataAttackPath",
+                
                 "ProrataAttackTrace"],
     "prorata-weth-vault": ["ProrataWethVault", "ProrataWethVaultCode",
                             "ProrataWethVaultArtifact",
