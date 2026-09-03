@@ -439,4 +439,104 @@ theorem outboundAfterQuote_effect
         rw [← receiverAdrEq, toAdr_toB256]]
     simp [List.append_assoc]
 
+/-- Shared outbound prefix: stage the three ABI arguments, price the quote from
+the booked WETH balance, stage the exact share supply, and discharge the
+stable-supply guard.  The result is the state at which each flow's own quote
+arithmetic begins.
+
+The snapshot is `quoteSnapshot_effect`, shared with the inbound flows; only the
+argument staging in front of it is outbound-specific, and it stages three
+arguments rather than two because the owner may not be the caller. -/
+theorem outboundQuoteStaging_effect
+    {fs : List Func} {sevm : Sevm} {entry post : Devm} {arithmetic : Func}
+    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (memoryWf : Mem.Wf entry.memory)
+    (resources : QuoteReadResources sevm)
+    (stack : [] <<+ entry.stack)
+    (run : Func.RunCompiledTo fs sevm entry
+      (Blanc.arg 0 +++ mstoreAt Blanc.ProrataWethVault.amountWord +++
+        Blanc.arg 1 +++ mstoreAt Blanc.ProrataWethVault.receiverWord +++
+        Blanc.arg 2 +++ mstoreAt Blanc.ProrataWethVault.ownerWord +++
+        Blanc.ProrataWethVault.snapshotQuoteState arithmetic) (.ok post)) :
+    ∃ quotePre image supply,
+      supply = Devm.getStorVal entry sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot ∧
+      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+      Mem.Wf quotePre.memory ∧
+      Mem.Reads quotePre.memory image ∧
+      Bytes.toB256
+        (image.sliceD
+          (Blanc.ProrataWethVault.amountWord * 32).toNat 32 0) =
+        Sevm.argWord sevm 0 ∧
+      Bytes.toB256
+        (image.sliceD
+          (Blanc.ProrataWethVault.receiverWord * 32).toNat 32 0) =
+        Sevm.argWord sevm 1 ∧
+      Bytes.toB256
+        (image.sliceD
+          (Blanc.ProrataWethVault.ownerWord * 32).toNat 32 0) =
+        Sevm.argWord sevm 2 ∧
+      Bytes.toB256
+        (image.sliceD
+          (Blanc.ProrataWethVault.assetsWord * 32).toNat 32 0) =
+        (entry.state.getStor wethAccount).get sevm.currentTarget.toB256 ∧
+      Bytes.toB256
+        (image.sliceD
+          (Blanc.ProrataWethVault.supplyWord * 32).toNat 32 0) = supply ∧
+      [] <<+ quotePre.stack ∧
+      Devm.getStor entry = Devm.getStor quotePre ∧
+      entry.logs = quotePre.logs ∧
+      quotePre.getCode wethAccount = entry.getCode wethAccount ∧
+      Devm.getStorVal entry sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot =
+        Devm.getStorVal quotePre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+      Func.RunCompiledTo fs sevm quotePre arithmetic (.ok post) := by
+  have entryReads : Mem.Reads entry.memory entry.memory.data.toList := by
+    intro index
+    simp
+  obtain ⟨readPre, readStack, readWf, readReads, argState, argLogs,
+      readRun⟩ :=
+    Blanc.ProrataWethVault.outboundArgs_trace memoryWf entryReads stack run
+  have argStorage : Devm.getStor entry = Devm.getStor readPre :=
+    funext (getStor_eq_of_state_eq argState)
+  have argCode : Devm.getCode entry = Devm.getCode readPre :=
+    funext (getCode_eq_of_state_eq argState)
+  have readConfig :
+      DirectWethConfiguration sevm.currentTarget sevm readPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← congrFun argCode wethAccount]
+    exact config.code
+  obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
+      carry, assetsAt, supplyAt, quoteStack, snapStorage, snapLogs, snapCode,
+      quoteRun⟩ :=
+    quoteSnapshot_effect readConfig readWf readReads resources readRun
+  have entryStorage : Devm.getStor entry = Devm.getStor quotePre :=
+    argStorage.trans snapStorage
+  refine ⟨quotePre, image, supply, ?_, stable, quoteWf, quoteReads,
+    carry (by decide +kernel) (by decide +kernel)
+      (Blanc.ProrataWethVault.outboundArgImage_amount _ _ _ _),
+    carry (by decide +kernel) (by decide +kernel)
+      (Blanc.ProrataWethVault.outboundArgImage_receiver _ _ _ _),
+    carry (by decide +kernel) (by decide +kernel)
+      (Blanc.ProrataWethVault.outboundArgImage_owner _ _ _ _),
+    ?_, supplyAt, quoteStack, entryStorage, argLogs.trans snapLogs, ?_, ?_,
+    quoteRun⟩
+  · rw [supplyEq]
+    change (Devm.getStor readPre sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot =
+      (Devm.getStor entry sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot
+    rw [argStorage]
+  · rw [assetsAt]
+    exact (congrArg
+      (fun storage : Stor => storage.get sevm.currentTarget.toB256)
+      (congrFun argStorage wethAccount)).symm
+  · rw [snapCode, ← congrFun argCode wethAccount]
+  · change (Devm.getStor entry sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot =
+      (Devm.getStor quotePre sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot
+    rw [entryStorage]
+
 end Blanc.Composition.ProrataWethVault

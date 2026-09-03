@@ -250,24 +250,18 @@ theorem inboundAfterQuote_effect
   · rw [tailLogged, childLogged, ← entryLogs, List.append_assoc]
     rfl
 
-/-- Resources required by the exact WETH asset query that prices an inbound
-quote.  Like `InboundChildResources`, the gas obligation is tied to the fixed
-staging line that produces the call state. -/
-def InboundReadResources (sevm : Sevm) : Prop :=
-  sevm.depth ≠ 0 ∧
-    ∀ stagingEntry callPre,
-      Line.Run sevm stagingEntry balanceOfStaging callPre →
-      StaticGasAvailable callPre 36
-
 /-- Shared inbound prefix: stage the two ABI arguments, price the quote from
 the booked WETH balance *before* the transfer, stage the exact share supply,
 and discharge the stable-supply guard.  The result is the state at which each
-flow's own quote arithmetic begins. -/
+flow's own quote arithmetic begins.
+
+The snapshot itself is `quoteSnapshot_effect`, shared with the outbound flows;
+only the argument staging in front of it is inbound-specific. -/
 theorem inboundQuoteStaging_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm} {arithmetic : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : InboundReadResources sevm)
+    (resources : QuoteReadResources sevm)
     (stack : [] <<+ entry.stack)
     (run : Func.RunCompiledTo fs sevm entry
       (Blanc.arg 0 +++ mstoreAt Blanc.ProrataWethVault.amountWord +++
@@ -299,11 +293,10 @@ theorem inboundQuoteStaging_effect
       entry.logs = quotePre.logs ∧
       quotePre.getCode wethAccount = entry.getCode wethAccount ∧
       Devm.getStorVal entry sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot =
+          Blanc.ProrataWethVault.supplySlot =
         Devm.getStorVal quotePre sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot ∧
       Func.RunCompiledTo fs sevm quotePre arithmetic (.ok post) := by
-  obtain ⟨depth, gasAvailable⟩ := resources
   have entryReads : Mem.Reads entry.memory entry.memory.data.toList := by
     intro index
     simp
@@ -319,118 +312,34 @@ theorem inboundQuoteStaging_effect
     refine ⟨config.distinct, config.nonprecompile, ?_⟩
     rw [← congrFun argCode wethAccount]
     exact config.code
-
-  -- Price the quote from the WETH balance booked before the transfer.
-  unfold Blanc.ProrataWethVault.snapshotQuoteState at readRun
-  obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
-    readTotalAssets_trace readRun
-  have stagingCode : Devm.getCode readPre = Devm.getCode callPre :=
-    Line.of_inv Devm.getCode (by
-      unfold balanceOfStaging mstoreAt pushList
-      simp only [List.map, List.cons_append, List.nil_append]
-      line_inv) staging
-  have callConfig :
-      DirectWethConfiguration sevm.currentTarget sevm callPre := by
-    refine ⟨config.distinct, config.nonprecompile, ?_⟩
-    rw [← congrFun (argCode.trans stagingCode) wethAccount]
-    exact config.code
-  obtain ⟨assets, stagePre, -, -, stageStorage, stageLogs, returnedWord,
-      assetsPrefix, stageWf, stageCode, stageWindow, stageRun⟩ :=
-    readTotalAssets_exactEffect callConfig ⟨readWf, readReads⟩ staging depth
-      (gasAvailable readPre callPre staging) crossing suffix
-  have stagingStorage : Devm.getStor readPre = Devm.getStor callPre :=
-    Line.of_inv Devm.getStor (by line_inv) staging
-  have stagingLogs : readPre.logs = callPre.logs :=
-    Line.of_inv Devm.logs (by line_inv) staging
-  have stageReads : Mem.Reads stagePre.memory stagePre.memory.data.toList := by
-    intro index
-    simp
-  have carryArg : ∀ {offset : Nat} {w : B256}, 64 ≤ offset →
-      Bytes.toB256
-        ((Blanc.ProrataWethVault.inboundArgImage entry.memory.data.toList
-          (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)).sliceD
-            offset 32 0) = w →
-      Bytes.toB256 (stagePre.memory.data.toList.sliceD offset 32 0) = w := by
-    intro offset w above value
-    have readWindow : MemWordAt readPre offset w :=
-      MemWordAt.of_memImage ⟨readWf, readReads⟩ (sliceBytes_of_toB256 value)
-    exact toB256_of_sliceBytes
-      ((stageWindow above readWindow).slice_eq stageReads)
-
-  -- Stage the exact share supply and discharge the stable-supply guard.
-  obtain ⟨supply, quotePre, supplyEq, stable, quoteStack, quoteWf,
-      quoteReads, quoteStorage, quoteCode, quoteLogs, quoteRun⟩ :=
-    Blanc.ProrataWethVault.conversionStaging_trace stageWf stageReads
-      assetsPrefix stageRun
-
-  -- Assemble against the endpoint entry.
+  obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
+      carry, assetsAt, supplyAt, quoteStack, snapStorage, snapLogs, snapCode,
+      quoteRun⟩ :=
+    quoteSnapshot_effect readConfig readWf readReads resources readRun
   have entryStorage : Devm.getStor entry = Devm.getStor quotePre :=
-    argStorage.trans (stagingStorage.trans (stageStorage.symm.trans
-      quoteStorage))
-  have entryLogsAll : entry.logs = quotePre.logs :=
-    argLogs.trans (stagingLogs.trans (stageLogs.symm.trans quoteLogs))
-  have entryCode : quotePre.getCode wethAccount = entry.getCode wethAccount := by
-    rw [← congrFun quoteCode wethAccount, stageCode,
-      ← congrFun stagingCode wethAccount, ← congrFun argCode wethAccount]
-  have entryToCallStorage : Devm.getStor entry = Devm.getStor callPre :=
-    argStorage.trans stagingStorage
-  have assetsEq : assets =
-      (entry.state.getStor wethAccount).get sevm.currentTarget.toB256 := by
-    have bytes := congrArg Bytes.toB256 returnedWord
-    simp only [B256.toB256_toBytes] at bytes
-    rw [bytes]
-    exact (congrArg
-      (fun storage : Stor => storage.get sevm.currentTarget.toB256)
-      (congrFun entryToCallStorage wethAccount)).symm
-  have stageToQuoteStorage :
-      Devm.getStor stagePre = Devm.getStor quotePre := quoteStorage
-  have supplyProjection :
-      Devm.getStorVal entry sevm.currentTarget
+    argStorage.trans snapStorage
+  refine ⟨quotePre, image, supply, ?_, stable, quoteWf, quoteReads,
+    carry (by decide +kernel) (by decide +kernel)
+      (Blanc.ProrataWethVault.inboundArgImage_amount _ _ _),
+    carry (by decide +kernel) (by decide +kernel)
+      (Blanc.ProrataWethVault.inboundArgImage_receiver _ _ _),
+    ?_, supplyAt, quoteStack, entryStorage, argLogs.trans snapLogs, ?_, ?_,
+    quoteRun⟩
+  · rw [supplyEq]
+    change (Devm.getStor readPre sevm.currentTarget).get
         Blanc.ProrataWethVault.supplySlot =
-      Devm.getStorVal quotePre sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot := by
-    change (Devm.getStor entry sevm.currentTarget).get
+      (Devm.getStor entry sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot
+    rw [argStorage]
+  · rw [assetsAt]
+    exact (congrArg (fun storage : Stor => storage.get sevm.currentTarget.toB256)
+      (congrFun argStorage wethAccount)).symm
+  · rw [snapCode, ← congrFun argCode wethAccount]
+  · change (Devm.getStor entry sevm.currentTarget).get
         Blanc.ProrataWethVault.supplySlot =
       (Devm.getStor quotePre sevm.currentTarget).get
         Blanc.ProrataWethVault.supplySlot
     rw [entryStorage]
-  refine ⟨quotePre,
-    Blanc.ProrataWethVault.conversionStagingImage
-      stagePre.memory.data.toList assets supply,
-    supply, ?_, stable, quoteWf, quoteReads, ?_, ?_, ?_, ?_, quoteStack,
-    entryStorage, entryLogsAll, entryCode, supplyProjection, quoteRun⟩
-  · rw [supplyEq]
-    change (Devm.getStor stagePre sevm.currentTarget).get
-        Blanc.ProrataWethVault.supplySlot =
-      (Devm.getStor entry sevm.currentTarget).get
-        Blanc.ProrataWethVault.supplySlot
-    rw [entryToCallStorage, ← stageStorage]
-  · unfold Blanc.ProrataWethVault.conversionStagingImage
-    rw [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint]
-    · exact carryArg (by decide +kernel)
-        (Blanc.ProrataWethVault.inboundArgImage_amount _ _ _)
-    · left
-      decide +kernel
-    · left
-      decide +kernel
-  · unfold Blanc.ProrataWethVault.conversionStagingImage
-    rw [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint]
-    · exact carryArg (by decide +kernel)
-        (Blanc.ProrataWethVault.inboundArgImage_receiver _ _ _)
-    · left
-      decide +kernel
-    · left
-      decide +kernel
-  · rw [← assetsEq]
-    unfold Blanc.ProrataWethVault.conversionStagingImage
-    rw [Bytes.readWord_writeAt_of_disjoint]
-    · exact toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _)
-    · right
-      decide +kernel
-  · unfold Blanc.ProrataWethVault.conversionStagingImage
-    exact toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _)
-
-/-! ## Compiled inbound bodies -/
 
 /-- Join one flow's quote arithmetic to the shared settlement.
 
@@ -555,7 +464,7 @@ theorem deposit_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (readResources : InboundReadResources sevm)
+    (readResources : QuoteReadResources sevm)
     (childResources :
       InboundChildResources sevm Blanc.ProrataWethVault.amountWord)
     (lookup : fs[Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
@@ -633,7 +542,7 @@ theorem mint_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (readResources : InboundReadResources sevm)
+    (readResources : QuoteReadResources sevm)
     (childResources :
       InboundChildResources sevm Blanc.ProrataWethVault.quoteWord)
     (lookup : fs[Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
@@ -760,7 +669,7 @@ private theorem mint_mem_vaultFuncs :
 /-- Resources for a compiled inbound endpoint, tied to the exact selector's
 body rather than asserted for every state. -/
 def InboundCompiledResources (sevm : Sevm) (assetsSourceWord : B256) : Prop :=
-  InboundReadResources sevm ∧ InboundChildResources sevm assetsSourceWord
+  QuoteReadResources sevm ∧ InboundChildResources sevm assetsSourceWord
 
 /-- Public compiled `deposit(assets, receiver)`.
 
