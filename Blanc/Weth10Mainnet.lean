@@ -69,6 +69,25 @@ theorem bpo2Rules_redemptionRuntimeCeiling_gasCap (q : Nat) :
   rw [redemptionRuntimeCeiling_eq]
   decide
 
+/-- EIP-7825's ceiling, discharged for a *realizable* redemption transaction.
+
+The four facts above bound `redemptionRuntimeCeiling`, which
+`AdmissibleRedemptionTx.gas_bound` only places *below* `tx.gas`; on their own
+they therefore never discharge `AdmissibleRedemptionTx.gas_cap`, whose
+obligation is on `tx.gas` itself.  This does: every rule record the modeled
+mainnet schedule can select admits any transaction gas limit up to EIP-7825's
+`2 ^ 24`, so a caller holding `tx.gas ≤ 2 ^ 24` closes that obligation without
+knowing which rules the block selects. -/
+theorem mainnet_checkTransactionGasCap_of_le
+    {timestamp gas : Nat} {rules : ForkRules}
+    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    (hgas : gas ≤ 2 ^ 24) :
+    checkTransactionGasCap rules.tx gas = .ok () := by
+  rcases mainnet_rulesAt_eq_named hrules with h | h | h | h <;> subst h <;>
+    simp [checkTransactionGasCap, pragueRules, osakaRules, bpo1Rules,
+      bpo2Rules, pragueTransactionLimits, osakaTransactionLimits] <;>
+    omega
+
 /-! ## BPO2 deployment root -/
 
 /-- The exact creation-block timestamp committed by the executable WETH10
