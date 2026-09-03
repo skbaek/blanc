@@ -77,22 +77,57 @@ class FixtureError(Exception):
     mismatching account) of the expected runtime length. Always fatal."""
 
 
-def parse_lean_literal(lean_path, name):
+def parse_lean_literal(lean_path, name, _resolving=None):
+    if _resolving is None:
+        _resolving = set()
     if not os.path.isfile(lean_path):
         raise ParseError(f"{lean_path} not found")
     text = open(lean_path, encoding="utf-8").read()
 
     def_re = re.compile(
-        r"def\s+" + re.escape(name) + r"\s*:\s*Bytes\s*:=\s*\n?\s*\["
+        r"(?:private\s+)?def\s+" + re.escape(name) + r"\s*:\s*Bytes\s*:=\s*\n?\s*\["
         r"(?P<body>.*?)\]", re.DOTALL)
     m = def_re.search(text)
-    if not m:
-        raise ParseError(
-            f"{lean_path}: no `def {name} : Bytes := [...]` literal found "
-            f"-- the file's shape has drifted from what this parser knows "
-            f"how to read")
-
-    body = m.group("body")
+    if m:
+        body = m.group("body")
+    else:
+        # A literal too long for one list is committed as `++`-joined chunk
+        # definitions; the PRORATA WETH vault's 17481 bytes are the first such
+        # in the tree. Resolve each chunk as its own literal and concatenate,
+        # so the same gate covers both shapes.
+        chunk_re = re.compile(
+            r"(?:private\s+)?def\s+" + re.escape(name) + r"\s*:\s*Bytes\s*:=[ \t]*\n"
+            # Zero or more `name ++` lines, then a final bare `name` line. The
+            # final line has no `++`, which is what stops the match running on
+            # into the next definition.
+            r"(?P<body>(?:[ \t]*\w+[ \t]*\+\+[ \t]*\n)*[ \t]*\w+[ \t]*\n)")
+        cm = chunk_re.search(text)
+        if not cm:
+            raise ParseError(
+                f"{lean_path}: no `def {name} : Bytes := [...]` literal and no "
+                f"`++`-joined chunk definition found -- the file's shape has "
+                f"drifted from what this parser knows how to read")
+        chunks = [part.strip() for part in re.split(r"\+\+", cm.group("body"))
+                  if part.strip()]
+        pieces = []
+        for chunk_name in chunks:
+            if not chunk_name.isidentifier():
+                raise ParseError(
+                    f"{lean_path}: `{name}` names {chunk_name!r}, which is not "
+                    f"a plain chunk name")
+            if chunk_name in _resolving:
+                raise ParseError(
+                    f"{lean_path}: `{name}` resolves through a cycle at "
+                    f"{chunk_name!r}")
+            _resolving.add(chunk_name)
+            try:
+                # A single name is an alias — the generator emits one when a
+                # chunk repeats — and is resolved the same way as a join.
+                pieces.append(parse_lean_literal(lean_path, chunk_name,
+                                                 _resolving))
+            finally:
+                _resolving.discard(chunk_name)
+        return b"".join(pieces)
     # Fail loudly on anything other than a plain comma-separated list of
     # `0xNN` tokens. A scan that merely pulled out every `0xNN`-shaped
     # substring and ignored the rest would silently accept a body holding
