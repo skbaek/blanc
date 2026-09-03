@@ -925,4 +925,228 @@ theorem redeem_body_effect
     congrArg B256.toNat supplyEq
   omega
 
+private theorem withdrawAfterQuote_lookup :
+    (Blanc.ProrataWethVault.vault.main ::
+      Blanc.ProrataWethVault.vault.aux)[
+        Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
+      some Blanc.ProrataWethVault.withdrawAfterQuote := by
+  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+    Blanc.ProrataWethVault.withdrawAfterQuoteSlot]
+
+private theorem redeemAfterQuote_lookup :
+    (Blanc.ProrataWethVault.vault.main ::
+      Blanc.ProrataWethVault.vault.aux)[
+        Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
+      some Blanc.ProrataWethVault.redeemAfterQuote := by
+  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+    Blanc.ProrataWethVault.redeemAfterQuoteSlot]
+
+private theorem withdrawBurn_lookup :
+    (Blanc.ProrataWethVault.vault.main ::
+      Blanc.ProrataWethVault.vault.aux)[
+        Blanc.ProrataWethVault.withdrawBurnSlot]? =
+      some Blanc.ProrataWethVault.withdrawBurn := by
+  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+    Blanc.ProrataWethVault.withdrawBurnSlot]
+
+private theorem redeemBurn_lookup :
+    (Blanc.ProrataWethVault.vault.main ::
+      Blanc.ProrataWethVault.vault.aux)[
+        Blanc.ProrataWethVault.redeemBurnSlot]? =
+      some Blanc.ProrataWethVault.redeemBurn := by
+  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+    Blanc.ProrataWethVault.redeemBurnSlot]
+
+private theorem withdraw_mem_vaultFuncs :
+    (selector "withdraw" [.uint256, .address, .address],
+      Blanc.ProrataWethVault.routed 3 Blanc.ProrataWethVault.withdraw) ∈
+      Blanc.ProrataWethVault.vaultFuncs := by
+  simp [Blanc.ProrataWethVault.vaultFuncs]
+
+private theorem redeem_mem_vaultFuncs :
+    (selector "redeem" [.uint256, .address, .address],
+      Blanc.ProrataWethVault.routed 3 Blanc.ProrataWethVault.redeem) ∈
+      Blanc.ProrataWethVault.vaultFuncs := by
+  simp [Blanc.ProrataWethVault.vaultFuncs]
+
+/-- Resources for a compiled outbound endpoint, tied to the exact selector's
+body rather than asserted for every state. -/
+def OutboundCompiledResources (sevm : Sevm) (assetsSel : B256) : Prop :=
+  QuoteReadResources sevm ∧ OutboundChildResources sevm assetsSel
+
+/-- Public compiled `withdraw(amount, receiver, owner)`.
+
+The vault burns exactly `ceil(assets * D / X)` shares from the owner, pays the
+receiver exactly `assets` WETH through the exact configured `transfer` child,
+decreases the supply, emits the burn `Transfer` then the child's `Transfer`
+then `Withdraw`, and returns the burnt shares.  The rounding is *up*, against
+the redeemer and in the vault's favour.  No other share row and no other
+account's storage moves. -/
+theorem withdraw_compiled_effect
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources : OutboundCompiledResources sevm
+      Blanc.ProrataWethVault.amountWord)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address]) :
+    sevm.value = 0 ∧
+      ∃ supply,
+        supply = Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+        supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+        Blanc.ProrataWethVault.previewWithdrawN (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+        sevm.caller.toB256 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 1) ∧
+        Sevm.argWord sevm 1 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 2) ∧
+        Sevm.argWord sevm 2 ≠ 0 ∧
+        (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤
+          (Devm.getStorVal pre sevm.currentTarget
+            (Sevm.argWord sevm 2)).toNat ∧
+        (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤ supply.toNat ∧
+        OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+          (Sevm.argWord sevm 0)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+          (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+          pre post := by
+  rcases Blanc.ProrataWethVault.runCompiled_enters_body_compiled_logs
+      run selectorEq withdraw_mem_vaultFuncs with
+    ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyConfig :
+      DirectWethConfiguration sevm.currentTarget sevm bodyPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← getCode_eq_of_state_eq entryState wethAccount]
+    exact config.code
+  have bodyWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
+      receiverNonzero, ownerValid, ownerNonzero, covered, roomFits, effect⟩ :=
+    withdraw_body_effect bodyConfig bodyWf resources.1 resources.2
+      withdrawAfterQuote_lookup withdrawBurn_lookup nil_pref bodyRun
+  have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  have storValEq : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
+      Devm.getStorVal bodyPre sevm.currentTarget k := by
+    intro k
+    change (Devm.getStor pre sevm.currentTarget).get k =
+      (Devm.getStor bodyPre sevm.currentTarget).get k
+    rw [congrFun storEq sevm.currentTarget]
+  have wethEq :
+      (pre.state.getStor wethAccount).get sevm.currentTarget.toB256 =
+        (bodyPre.state.getStor wethAccount).get
+          sevm.currentTarget.toB256 := by
+    rw [entryState]
+  refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
+    receiverNonzero, ownerValid, ownerNonzero, ?_, ?_, ?_⟩
+  · rw [supplyEq, storValEq Blanc.ProrataWethVault.supplySlot]
+  · rw [wethEq]
+    exact quoteFits
+  · rw [storValEq (Sevm.argWord sevm 2), wethEq]
+    exact covered
+  · rw [wethEq]
+    exact roomFits
+  · rw [wethEq]
+    exact outboundEffect_lift storEq entryLogs effect
+
+/-- Public compiled `redeem(amount, receiver, owner)`.
+
+The vault burns exactly `shares` from the owner, pays the receiver exactly
+`floor(shares * X / D)` WETH through the exact configured `transfer` child,
+decreases the supply, emits the burn `Transfer` then the child's `Transfer`
+then `Withdraw`, and returns the assets paid.  The rounding is *down*, against
+the redeemer and in the vault's favour.  No other share row and no other
+account's storage moves. -/
+theorem redeem_compiled_effect
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources : OutboundCompiledResources sevm
+      Blanc.ProrataWethVault.quoteWord)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    sevm.value = 0 ∧
+      ∃ supply,
+        supply = Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+        supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+        Blanc.ProrataWethVault.previewRedeemN (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+        sevm.caller.toB256 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 1) ∧
+        Sevm.argWord sevm 1 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 2) ∧
+        Sevm.argWord sevm 2 ≠ 0 ∧
+        (Sevm.argWord sevm 0).toNat ≤
+          (Devm.getStorVal pre sevm.currentTarget
+            (Sevm.argWord sevm 2)).toNat ∧
+        (Sevm.argWord sevm 0).toNat ≤ supply.toNat ∧
+        OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewRedeemN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+          (Sevm.argWord sevm 0)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewRedeemN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+          pre post := by
+  rcases Blanc.ProrataWethVault.runCompiled_enters_body_compiled_logs
+      run selectorEq redeem_mem_vaultFuncs with
+    ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyConfig :
+      DirectWethConfiguration sevm.currentTarget sevm bodyPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← getCode_eq_of_state_eq entryState wethAccount]
+    exact config.code
+  have bodyWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
+      receiverNonzero, ownerValid, ownerNonzero, covered, roomFits, effect⟩ :=
+    redeem_body_effect bodyConfig bodyWf resources.1 resources.2
+      redeemAfterQuote_lookup redeemBurn_lookup nil_pref bodyRun
+  have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  have storValEq : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
+      Devm.getStorVal bodyPre sevm.currentTarget k := by
+    intro k
+    change (Devm.getStor pre sevm.currentTarget).get k =
+      (Devm.getStor bodyPre sevm.currentTarget).get k
+    rw [congrFun storEq sevm.currentTarget]
+  have wethEq :
+      (pre.state.getStor wethAccount).get sevm.currentTarget.toB256 =
+        (bodyPre.state.getStor wethAccount).get
+          sevm.currentTarget.toB256 := by
+    rw [entryState]
+  refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
+    receiverNonzero, ownerValid, ownerNonzero, ?_, ?_, ?_⟩
+  · rw [supplyEq, storValEq Blanc.ProrataWethVault.supplySlot]
+  · rw [wethEq]
+    exact quoteFits
+  · rw [storValEq (Sevm.argWord sevm 2)]
+    exact covered
+  · exact roomFits
+  · rw [wethEq]
+    exact outboundEffect_lift storEq entryLogs effect
+
 end Blanc.Composition.ProrataWethVault
