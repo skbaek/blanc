@@ -619,7 +619,8 @@ theorem transferStaging_boundary
       callPre.stack =
         gasWord :: wethAccount.toB256 :: 0 :: 28 :: 68 :: 0 :: 32 :: rest ∧
       (callPre.memory.read 28 68).1 =
-        transferCalldata receiver assets := by
+        transferCalldata receiver assets ∧
+      Mem.Wf callPre.memory := by
   obtain ⟨wf0, reads0⟩ := memory
   simp only [transferStaging, List.append_assoc] at run
   obtain ⟨s1, r1, run⟩ :=
@@ -713,7 +714,7 @@ theorem transferStaging_boundary
   have finalReads : Mem.Reads callPre.memory image6 := by
     rw [← finalMemory]
     exact reads6
-  refine ⟨gasWord, rest, ?_, ?_⟩
+  refine ⟨gasWord, rest, ?_, ?_, ?_⟩
   · unfold Split at stack
     simpa only [wethAccount_toB256, List.cons_append,
       List.nil_append] using stack
@@ -724,6 +725,52 @@ theorem transferStaging_boundary
         selectorTwoWordImage image
           Blanc.ProrataWethVault.wethTransferSelector
           receiver.toB256 assets
+  · rw [← finalMemory]
+    exact wf6
+
+/-- The direct-transfer staging prefix writes only the three calldata words
+below byte offset `96`.  Any selected word at or above that boundary survives
+to the CALL edge; the vault's long-lived operation words all sit there.
+
+The sibling of `MemWordAt.acrossTransferFromStaging`, one word lower: the
+outbound call carries no `from` argument, so its calldata frame is 68 bytes
+rather than 100. -/
+theorem _root_.Blanc.MemWordAt.acrossTransferStaging
+    {sevm : Sevm} {entry callPre : Devm} {offset : Nat}
+    {receiverWord assetsWord word : B256}
+    (afterCalldata : 96 ≤ offset)
+    (run : Line.Run sevm entry
+      (transferStaging receiverWord assetsWord) callPre)
+    (window : MemWordAt entry offset word) :
+    MemWordAt callPre offset word := by
+  simp only [transferStaging, List.append_assoc] at run
+  obtain ⟨s1, r1, run⟩ :=
+    of_run_append
+      [pushB256 Blanc.ProrataWethVault.wethTransferSelector] run
+  have w1 := window.acrossLine (by line_inv) r1
+  obtain ⟨s2, r2, run⟩ := of_run_append (mstoreAt 0) run
+  have w2 := w1.acrossMstoreAt (Or.inr (by
+    change 32 ≤ offset
+    omega)) r2
+  obtain ⟨s3, r3, run⟩ :=
+    of_run_append (Blanc.ProrataWethVault.loadWord receiverWord) run
+  have w3 := w2.acrossLoadWord r3
+  obtain ⟨s4, r4, run⟩ := of_run_append (mstoreAt 1) run
+  have w4 := w3.acrossMstoreAt (Or.inr (by
+    change 64 ≤ offset
+    omega)) r4
+  obtain ⟨s5, r5, run⟩ :=
+    of_run_append (Blanc.ProrataWethVault.loadWord assetsWord) run
+  have w5 := w4.acrossLoadWord r5
+  obtain ⟨s6, r6, run⟩ := of_run_append (mstoreAt 2) run
+  have w6 := w5.acrossMstoreAt (Or.inr (by
+    change 96 ≤ offset
+    exact afterCalldata)) r6
+  obtain ⟨s7, r7, run⟩ := of_run_append (pushList [32, 0, 68, 28, 0]) run
+  have w7 := w6.acrossLine (by
+    simp only [pushList, List.map]
+    line_inv) r7
+  exact w7.acrossLine (by line_inv) run
 
 /-! ## Source-walk extraction -/
 
@@ -868,7 +915,7 @@ theorem transferStaging_occurrence
     (crossing : Ninst.RunCompiled sevm callPre call callPost) :
     ExactWethChildOccurrence sevm callPre callPost call
       (transferCalldata receiver assets) false := by
-  obtain ⟨gasWord, rest, stack, window⟩ :=
+  obtain ⟨gasWord, rest, stack, window, -⟩ :=
     transferStaging_boundary memory receiverAt assetsAt
       receiverAboveSelector assetsAboveReceiver staging
   apply exactWethCallOccurrence_of_runCompiled config stack window depth dynamic
@@ -1740,6 +1787,116 @@ theorem callWethTransferFrom_exactEffect
     checkedCanonicalTrue_success occurrence stack crossing returndataBound
       suffix
   exact ⟨bodyPre, movement, output, bodyRun⟩
+
+/-- World-strength direct transfer: a successful source-level outbound
+transfer executes exact WETH `transfer(receiver,assets)` and reaches the vault
+continuation with the debited row, every other account's exact storage, the
+child's `Transfer` entry appended to the parent log frame, and every memory
+word at or above the 68-byte calldata frame preserved.
+
+The mirror of `callWethTransferFrom_worldEffect`.  The vault's own share ledger
+is a foreign account to the WETH child, so it survives the crossing; that is
+what lets an outbound redemption burn shares and pay assets in one proof. -/
+theorem callWethTransfer_worldEffect
+    {fs : List Func} {sevm : Sevm}
+    {entry callPre callPost final : Devm} {image : Bytes}
+    {receiverWord assetsWord assets : B256} {receiver : Adr} {body : Func}
+    (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (memory : MemoryImage entry image)
+    (receiverAt : ImageWordAt image receiverWord receiver.toB256)
+    (assetsAt : ImageWordAt image assetsWord assets)
+    (receiverAboveSelector : 32 ≤ (receiverWord * 32).toNat)
+    (assetsAboveReceiver : 64 ≤ (assetsWord * 32).toNat)
+    (staging : Line.Run sevm entry
+      (transferStaging receiverWord assetsWord) callPre)
+    (depth : sevm.depth ≠ 0)
+    (dynamic : sevm.isStatic = false)
+    (gasAvailable : CallGasAvailable callPre 68)
+    (crossing : Ninst.RunCompiled sevm callPre call callPost)
+    (suffix : Func.RunCompiledTo fs sevm callPost
+      (iszero :::
+        (Func.revert <?>
+          Blanc.ProrataWethVault.requireCanonicalWethTrue body))
+      (.ok final)) :
+    ∃ bodyPre,
+      Transfer
+          (Stor.rest (Devm.getStor callPre wethAccount))
+          sevm.currentTarget assets receiver
+          (Stor.rest (Devm.getStor bodyPre wethAccount)) ∧
+      (∀ account, wethAccount ≠ account →
+        Devm.getStor bodyPre account = Devm.getStor callPre account) ∧
+      bodyPre.logs = callPre.logs ++
+        [wethTransferLog sevm.currentTarget receiver assets] ∧
+      callPost.returnData = (1 : B256).toBytes ∧
+      Mem.Wf bodyPre.memory ∧
+      (∀ {offset : Nat} {w : B256}, 96 ≤ offset →
+        MemWordAt entry offset w → MemWordAt bodyPre offset w) ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨gasWord, rest, stack, -, callPreWf⟩ :=
+    transferStaging_boundary memory receiverAt assetsAt
+      receiverAboveSelector assetsAboveReceiver staging
+  have occurrence := transferStaging_occurrence config memory receiverAt
+    assetsAt receiverAboveSelector assetsAboveReceiver staging depth dynamic
+    gasAvailable crossing
+  obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
+    checkedCall_status_nonzero suffix
+  have successFlag :=
+    ExactWethChildOccurrence.successFlag_of_nonzero occurrence
+      statusStack statusNonzero
+  have operandPrefix :
+      gasWord :: wethAccount.toB256 :: 0 :: 28 :: 68 :: 0 :: 32 :: rest <<+
+        callPre.stack := by
+    rw [stack]
+    exact ⟨[], by simp [Split]⟩
+  have callPostWf : Mem.Wf callPost.memory := by
+    rcases of_run_call_val_with_depth operandPrefix
+        (Ninst.Run.of_runCompiled crossing) with failure | success
+    · obtain ⟨zeroPrefix, -⟩ := failure
+      obtain ⟨tail, successStack⟩ := successFlag
+      have onePrefix : (1 : B256) :: [] <<+ callPost.stack := by
+        rw [successStack]
+        exact pref_append [1] tail
+      exact absurd (pref_head_unique zeroPrefix onePrefix) (by decide)
+    · rcases success with
+        ⟨parent, child, _, _, _, _, _, -, -, -, parentMemory, -, -, -, -,
+          -, -, -, finalMemory, -⟩
+      rw [finalMemory, parentMemory]
+      exact (Mem.Wf.extends _ callPreWf).write _ _
+  have rawSuccess :
+      ExactWethChildSuccess sevm callPre callPost call
+        (transferCalldata receiver assets)
+        callPost.returnData false :=
+    ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
+  have worldRun := ExactWethChildSuccess.worldProgramRun rawSuccess
+  obtain ⟨movement, foreign, logged, output⟩ :=
+    SuccessfulWethWorldProgramRun.transfer_effect worldRun
+  have returnDataLength : callPost.returnData.length = 32 := by
+    rw [output, B256.length_toBytes]
+  have returndataBound : callPost.returnData.length < 2 ^ 256 := by
+    rw [returnDataLength]
+    decide +kernel
+  obtain ⟨bodyPre, -, bodyState, bodyLogs, bodyWf, checkedWindow, bodyRun⟩ :=
+    checkedCanonicalTrue_successFrame occurrence stack crossing
+      returndataBound callPostWf suffix
+  have bodyStorage : Devm.getStor bodyPre = Devm.getStor callPost :=
+    funext (getStor_eq_of_state_eq bodyState)
+  refine ⟨bodyPre, ?_, ?_, ?_, output, bodyWf, ?_, bodyRun⟩
+  · rw [congrFun bodyStorage wethAccount]
+    exact movement
+  · intro account accountNe
+    rw [congrFun bodyStorage account]
+    exact foreign account accountNe
+  · rw [bodyLogs]
+    exact logged
+  · intro offset w afterCalldata window
+    have callPreWindow := window.acrossTransferStaging afterCalldata staging
+    have callPostWindow := MemWordAt.acrossSuccessfulCall
+      (by
+        change 32 ≤ offset
+        omega)
+      operandPrefix (Ninst.Run.of_runCompiled crossing) successFlag
+      callPreWindow
+    exact checkedWindow callPostWindow
 
 /-- A successful source-level outbound transfer executes exact WETH
 `transfer(receiver,assets)`, debits the vault, credits the canonical receiver,
