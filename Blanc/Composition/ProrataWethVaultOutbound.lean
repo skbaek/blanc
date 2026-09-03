@@ -1217,4 +1217,44 @@ theorem redeem_compiled_effect
   · rw [wethEq]
     exact outboundEffect_lift storEq entryLogs effect
 
+
+/-! ## Conservation at the public outbound endpoints
+
+Each is `outboundEffect_preserves_conserved` after the compiled effect.  The
+configuration premise carries the same weight it does inbound: the settlement
+writes the supply from a pre-child snapshot. -/
+
+theorem withdraw_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources : OutboundCompiledResources sevm
+      Blanc.ProrataWethVault.amountWord)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address])
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, supply, -, -, -, -, -, -, ownerValid, -, covered, -, effect⟩ :=
+    withdraw_compiled_effect config memoryWf resources run selectorEq
+  exact outboundEffect_preserves_conserved ownerValid covered effect conserved
+
+theorem redeem_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources : OutboundCompiledResources sevm
+      Blanc.ProrataWethVault.quoteWord)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address])
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, supply, -, -, -, -, -, -, ownerValid, -, covered, -, effect⟩ :=
+    redeem_compiled_effect config memoryWf resources run selectorEq
+  exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 end Blanc.Composition.ProrataWethVault

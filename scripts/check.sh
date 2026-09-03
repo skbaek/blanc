@@ -1267,6 +1267,7 @@ Blanc.Composition.ProrataWethVault.redeem_compiled_effect|$STANDARD
 Blanc.ProrataWethVault.approve_compiled_effect|$STANDARD
 Blanc.ProrataWethVault.transfer_compiled_effect|$STANDARD
 Blanc.ProrataWethVault.transferFrom_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved|$STANDARD
 Blanc.Exec.Deriv.SourceCursor.branchFlagToward|$STANDARD
 Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero|$STANDARD
 Blanc.Func.localExecFree_iff|propext, Quot.sound
