@@ -14,6 +14,8 @@ import subprocess
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Sequence
 
+import eels_semantic_closure
+
 
 def verify_eels_pin(root: Path, expected_pin: str,
                     fail: Callable[[str], object]) -> None:
@@ -24,6 +26,10 @@ def verify_eels_pin(root: Path, expected_pin: str,
     if head != expected_pin or dirty:
         fail(f"pinned EELS must be clean at {expected_pin}; "
              f"found {head}, dirty={bool(dirty)}")
+
+    # The commit pins the specification's source; this pins what that source
+    # imports.  Both must hold before an oracle comparison means anything.
+    eels_semantic_closure.assert_prague_environment(fail)
 
 
 def environments(state, timestamp: int, gas: int, *,

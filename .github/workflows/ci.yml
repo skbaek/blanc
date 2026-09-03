@@ -120,9 +120,19 @@ jobs:
           path: execution-specs
           fetch-depth: 1
       - name: Install pinned execution-specs environment
+        # The checkout pins the specification's source; the constraints file
+        # pins what that source imports.  Without it pip resolves keccak-256,
+        # secp256k1 recovery, the BN254/BLS/KZG precompiles, RLP encoding and
+        # U256 arithmetic from declared *ranges*, and the differential oracle
+        # is whatever was released that morning.
         run: |
           python -m venv execution-specs/venv
-          execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs
+          execution-specs/venv/bin/python -m pip install --disable-pip-version-check \
+            -c scripts/eels-prague-constraints.txt -e execution-specs
+      - name: Pinned EELS Prague semantic closure
+        env:
+          EELS_ROOT: ${{ github.workspace }}/execution-specs
+        run: scripts/check-eels-prague-closure.sh
       - name: Build the Jaune fixture runner
         run: lake build jaune/jaune
       - name: Lido CircuitBreaker direct deployment-root S9 assurance

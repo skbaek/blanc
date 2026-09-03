@@ -36,13 +36,13 @@
   "cacheInputs": {
     "repositoryFiles": {
       "BEACON_DEPOSIT_DEVIATIONS.md": "13643d8c2f33188cbd3a2f80a740c24d2b2caba0b2d753caace895fb7c65cb45",
-      "scripts/check-beacon-deposit-current-mainnet.sh": "0bffc871fc348700d7ebf4c2153886e9ce4a0f29fddc99f34cf43547da61b583",
-      "scripts/current-mainnet-runtime-lock.json": "9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c",
+      "scripts/check-beacon-deposit-current-mainnet.sh": "af0af3e0a404d67a26ef536d7b0bf336281dbb3411296cbacd51f94ce6b3db36",
+      "scripts/current-mainnet-runtime-lock.json": "5bb601aadee5b44774694483c9a141c7158de4d2157a64acd27311dd5186e62d",
       "scripts/current-mainnet-target.json": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
-      "scripts/current_mainnet.py": "4b66f81325a1bf17d0c193b1973fe6db051fa6504176fbc83af94dc94ccab450",
+      "scripts/current_mainnet.py": "f8f1fc8e67eec4db5efccb0af17997675e2f0b645fe16037a19285e3e43f59ed",
       "scripts/eval-beacon-deposit-differential-code.lean": "72794ddd1d076c6e0551169f4ef4df791ebdcb2521ad024147422136328da103",
-      "scripts/gen-beacon-deposit-current-mainnet.py": "c3e68a3f3a6cf2e9f5bd4228d9c9fc7defb58d188157ebe0ba87e2ea0c94d023",
-      "scripts/gen-current-mainnet-runtime-lock.py": "e0213d2428fd4009980bbef1e396480ce32469d57449ee81e654365675478071",
+      "scripts/gen-beacon-deposit-current-mainnet.py": "3d2ce1e5e1aaf608eec3ab4fa825fd0ecaa0b4fa2cf32d7201381d5c05f168e8",
+      "scripts/gen-current-mainnet-runtime-lock.py": "74aa826232ede5d9a0cca4102bd806d52431de9475b172e74d558e9c45281c90",
       "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex": "867e261f9811c5227ff0e2ec5d7803156f1af3428e49d6ffc041102da3050432",
       "scripts/reference/beacon-deposit/inputs/deposit_contract.json": "fbb573648e4fe96a6b731768cbf5165f5037d7bd29f43359c5316eeb9edc78e6",
       "scripts/reference/beacon-deposit/inputs/deposit_contract.sol": "2a8db249155e8502e1132f14410b8d7b2a924512723ed07a08167477d8f8c073"
@@ -53,9 +53,9 @@
         "linux-x86_64"
       ],
       "relativePath": "scripts/current-mainnet-runtime-lock.json",
-      "sha256": "9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c"
+      "sha256": "5bb601aadee5b44774694483c9a141c7158de4d2157a64acd27311dd5186e62d"
     },
-    "sharedGateOwnership": "the shared runtime lock owns exact macOS arm64 and Linux x86_64 native closures; the gate registry additionally fingerprints the selected exact checkout, site-packages population, and CPython 3.11.9 standard library"
+    "sharedGateOwnership": "the shared runtime lock owns the reference environment's semantic closure: exact versions on every platform and exact installed bytes on each platform whose row has been generated there; the gate registry additionally fingerprints the selected exact checkout, site-packages population, and CPython 3.11.9 standard library"
   },
   "channel": "finite-bpo2-execution-witness-not-a-lean-premise",
   "counts": {

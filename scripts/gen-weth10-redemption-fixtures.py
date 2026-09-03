@@ -71,6 +71,8 @@ from ethereum_types.bytes import Bytes  # noqa: E402
 from ethereum_types.numeric import U8, U64, U256, Uint  # noqa: E402
 from ethereum.utils.hexadecimal import hex_to_bytes  # noqa: E402
 
+import eels_semantic_closure
+
 
 WETH10 = "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f"
 RECIPIENT = "0x2222222222222222222222222222222222222222"
@@ -718,6 +720,12 @@ def case_authorization(runtime: str):
     return build_fixture("02-authorization-mutation", alloc, [tx], expect), [tx]
 
 
+def _closure_refusal(message: str):
+    """Route a semantic-closure refusal into this script's own failure path."""
+
+    raise RuntimeError(message)
+
+
 def verify_eels_pin():
     actual = support.subprocess.check_output(
         ["git", "-C", str(EELS), "rev-parse", "HEAD"], text=True
@@ -730,6 +738,10 @@ def verify_eels_pin():
             f"EELS checkout must be clean at {EELS_PIN}; got {actual}, "
             f"dirty={bool(dirty)}"
         )
+
+    # The commit pins the specification's source; this pins what that source
+    # imports.  Both must hold before an oracle comparison means anything.
+    eels_semantic_closure.assert_prague_environment(_closure_refusal)
 
 
 def main(argv=None) -> int:
