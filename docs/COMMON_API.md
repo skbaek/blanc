@@ -652,7 +652,10 @@ re-embedded largest natural word with `B256.max`.
 `wordAdd_eq_toB256_add` identifies
 wrapped word addition with natural addition re-embedded modulo `2^256`, while
 `wordSub_eq_toB256_sub_of_le` identifies non-underflowing word subtraction
-with the re-embedded natural difference. `wordDiv_eq_toB256_div` identifies
+with the re-embedded natural difference. `wordAdd_lt_left_iff` is the
+companion overflow test: a compiled unsigned addition guarded by comparing its
+stored sum with one summand wraps exactly when the natural sum leaves the word
+domain. `wordDiv_eq_toB256_div` identifies
 ordinary EVM word division with re-embedded natural division, including the
 zero-divisor convention, while `wordMod_eq_zero_iff` identifies its exact-
 division test. `toB256_add_one` records the unconditional modular
