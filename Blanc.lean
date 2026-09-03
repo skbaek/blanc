@@ -293,6 +293,7 @@ import Blanc.ProrataWethVaultConversions
 import Blanc.ProrataWethVaultCapacities
 import Blanc.ProrataWethVaultInbound
 import Blanc.ProrataWethVaultOutbound
+import Blanc.ProrataWethVaultShares
 import Blanc.ProrataWethVaultFunctional
 import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary

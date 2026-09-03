@@ -215,6 +215,7 @@ CONTRACTS = {
                             "ProrataWethVaultConversions",
                             "ProrataWethVaultInbound",
                             "ProrataWethVaultOutbound",
+                            "ProrataWethVaultShares",
                             "ProrataWethVaultFunctional",
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
