@@ -3,6 +3,7 @@
 import Blanc.ProrataWethVault
 import Blanc.WordArithmetic
 import Jaune.MulDiv
+import Blanc.OffsetPricing
 
 namespace Blanc
 
@@ -389,6 +390,31 @@ theorem previewMintN_zero (assets supply : Nat) :
 theorem previewWithdrawN_zero (assets supply : Nat) :
     previewWithdrawN 0 assets supply = 0 := by
   simp [previewWithdrawN, ceilDiv_zero_dividend]
+
+
+/-! ## The port is the same pricing, at the same offset
+
+`Blanc/OffsetPricing.lean` states virtual-offset pricing over the naturals with
+the offset as a parameter.  The vault's converters are that pricing at
+`offsetN`, with the held asset in the `balance` position — which is the whole
+content of "the port changes the asset, not the arithmetic".
+
+Both bridges are `rfl`: `convertToSharesN amount assets supply` and
+`mintN offsetN amount supply assets` are the same term, not merely equal ones.
+That is what lets the ETH-denominated dust and attack results apply here
+without restating a line of their arithmetic. -/
+
+theorem convertToSharesN_eq_mintN (amount assets supply : Nat) :
+    convertToSharesN amount assets supply =
+      Blanc.Prorata.mintN offsetN amount supply assets := rfl
+
+theorem convertToAssetsN_eq_payN (shares assets supply : Nat) :
+    convertToAssetsN shares assets supply =
+      Blanc.Prorata.payN offsetN shares supply assets := rfl
+
+/-- The offset is nonzero, which is the side condition every offset-parameterised
+result carries. -/
+theorem offsetN_ne_zero : offsetN ≠ 0 := by decide
 
 end ProrataWethVault
 
