@@ -327,8 +327,13 @@ explicit premise of the envelope rather than a fact about one named fork.
 `canonicalDeploymentStep_establishes_root_mainnet` and the `_mainnet` history
 rungs are the published specialization at Ethereum mainnet's configured
 schedule; `canonicalDeploymentStep_establishes_root_prague` and the `_prague`
-rungs retain the exact statements this contract published before that
-migration, and `pragueOnly_history_extends` keeps its name.
+rungs carry the same conclusions this contract published before that migration
+under stable names, and `pragueOnly_history_extends` keeps its name. Their
+premises are deliberately larger, not identical: the facts named in the
+previous paragraph became explicit obligations on the envelope instead of
+`decide` steps against a named fork. Every one of them is provable outright at
+Prague, so no caller loses applicability — but the retained corollaries are
+instances of the configured statements, not verbatim copies of the old ones.
 
 That specialization is a statement about a schedule and nothing more. **No
 executable lane witnesses the mainnet deployment root.** The BPO2 consumer

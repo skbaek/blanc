@@ -6,8 +6,19 @@ deployment root and history rungs.
 
 Every declaration below is the `ChainConfig.pragueOnly` instance of an
 already-audited generic theorem.  They exist so the fixed-Prague API this
-contract published before its configured migration survives unchanged in
-meaning; they say nothing that the generic statements do not already say.
+contract published before its configured migration remains available under a
+stable name; they say nothing the generic statements do not already say.
+
+They are **not** byte-for-byte the pre-migration statements.  The migration
+made three facts explicit that the fixed-Prague forms used to discharge
+internally by computation — the envelope's `rulesAt` selection, its
+`runtime_code_fits` code-size bound, and its `sha_precompile` membership for
+address `0x2` — and added `configValid` plus four selected-rules
+precompile-membership fields to `CanonicalDeploymentBase`.  At
+`ChainConfig.pragueOnly`/`pragueRules` every one of them is provable outright
+(`ChainConfig.pragueOnly_valid`, and `decide` for the addresses), so a caller
+loses no applicability; but a caller does have to supply them, and that is a
+premise change rather than an identity.
 -/
 
 namespace Blanc

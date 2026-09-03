@@ -32,6 +32,8 @@ import Blanc.BeaconDepositSelectorMiss
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositEffects
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
+import Blanc.Solvent
+import Blanc.Conserved
 import Blanc.BeaconDepositHistoryChain
 import Blanc.BeaconDepositMainnet
 import Blanc.BeaconDepositPragueCompat
@@ -48,6 +50,31 @@ not.  `Stor.Weth10Inv` is pinned separately by definitional unfolding.
 namespace Blanc
 
 open Jaune
+
+/-! ## Chain-level WETH solvency and FMINT conservation — the configured rungs'
+published mainnet specializations and their retained Prague corollaries.  The
+generic parents are audited; these pin that the published instances are the
+instances they claim to be, at the schedule they name. -/
+
+example (wa : Adr) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing mainnetChainConfig ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+  chainUsing_preserves_solvent_mainnet wa ch ch' h_reach h_inv
+
+example (wa : Adr) (chainId : UInt64) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+  chainUsing_preserves_solvent_prague wa chainId ch ch' h_reach h_inv
+
+example (fa : Adr) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing mainnetChainConfig ch ch')
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  chainUsing_preserves_conserved_mainnet fa ch ch' h_reach h_inv
+
+example (fa : Adr) (chainId : UInt64) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch')
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  chainUsing_preserves_conserved_prague fa chainId ch ch' h_reach h_inv
 
 example {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume}
@@ -5695,7 +5722,12 @@ example
   DeploymentRoot.future_count_root_mainnet root reach native
 
 /-! ### Beacon deposit — the retained Prague-only corollaries.  These are the
-exact statements this contract published before its configured migration. -/
+`ChainConfig.pragueOnly` instances of the configured statements above.  Their
+conclusions are what this contract published before its configured migration;
+their premises are strictly larger, because the migration made the selected
+rules, the code-size bound and the address-`0x2` precompile membership explicit
+instead of discharging them by `decide` against a named fork.  Each addition is
+provable outright at Prague, so applicability is unchanged. -/
 
 example
     (chainId : UInt64) (base deployed : BlockChain)
