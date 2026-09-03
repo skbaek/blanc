@@ -119,7 +119,7 @@ import tomllib
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
-          "BalanceAlgebra", "LedgerConservation", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
+          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "CompiledStackSafety", "AbstractStackSafety", "AbstractStackTransfer", "AbstractStackCertificate",
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance",
@@ -277,6 +277,7 @@ CONTRACTS = {
                             "ProrataWethVaultOutbound",
                             "ProrataWethVaultShares",
                             "ProrataWethVaultFunctional",
+                            "ProrataWethVaultLedgerSpec",
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
