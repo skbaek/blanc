@@ -115,6 +115,19 @@ theorem of_empty : LedgerConserved slot Stor.empty :=
 theorem of_eq {s s' : Stor} (h : LedgerConserved slot s) (h_eq : s = s') :
     LedgerConserved slot s' := h_eq ▸ h
 
+/-- The invariant is extensional in `Stor.get`.  `Stor` is a tree whose raw
+equality distinguishes redundant zero entries, so a step that is only known to
+preserve the *observation* — every `STATICCALL`, via
+`Blanc/StaticStorage.lean`'s `Devm.storageView` — delivers this hypothesis and
+not a `Stor` equality. -/
+theorem of_get_eq {s s' : Stor} (h : LedgerConserved slot s)
+    (h_eq : ∀ k, s.get k = s'.get k) : LedgerConserved slot s' := by
+  have h_rest : Stor.rest s = Stor.rest s' :=
+    funext fun a => h_eq a.toB256
+  show _ = balSum s'
+  rw [← h_eq slot, h]
+  simp only [balSum, h_rest]
+
 /-- A write whose key is neither address-shaped nor the supply slot leaves both
 sides of the invariant alone.  This is what a guarded allowance write
 delivers. -/

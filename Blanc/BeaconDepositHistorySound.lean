@@ -46,37 +46,26 @@ private def RootSilentSlot (k : Nat) : Prop :=
 private theorem silentIn_emptyRevert :
     Func.SilentIn Devm.storageView RootSilentSlot Func.revert := by
   unfold Func.revert
-  repeat' first
-    | exact Ninst.Hinv.inv
-    | exact Linst.Hinv.inv
-    | apply And.intro
+  silent_structure
 
 private theorem silentIn_bubbleRevert :
     Func.SilentIn Devm.storageView RootSilentSlot Func.revertReturnData := by
   unfold Func.revertReturnData
-  repeat' first
-    | exact Ninst.Hinv.inv
-    | exact Linst.Hinv.inv
-    | apply And.intro
+  silent_structure
 
 private theorem silentIn_rootContinuation :
     Func.SilentIn Devm.storageView RootSilentSlot rootContinuation := by
   unfold rootContinuation loadWord mstoreAt
-  repeat' first
-    | exact Ninst.Hinv.inv
-    | exact Linst.Hinv.inv
-    | apply And.intro
-  change RootSilentSlot rootLoopSlot
-  simp [RootSilentSlot, rootLoopSlot, emptyRevertSlot, bubbleRevertSlot]
+  silent_structure with
+    (change RootSilentSlot rootLoopSlot
+     simp [RootSilentSlot, rootLoopSlot, emptyRevertSlot, bubbleRevertSlot])
 
 private theorem silentIn_rootLoop :
     Func.SilentIn Devm.storageView RootSilentSlot rootLoop := by
   unfold rootLoop rootLiveStep rootDeadStep rootFinish sha64 loadWord
     mstoreAt storeLe64At returnDataShorterThan returnMemoryRange pushList
-  repeat' first
-    | exact Ninst.Hinv.inv
-    | exact Linst.Hinv.inv
-    | apply And.intro
+  silent_structure with
+    first
     | (change RootSilentSlot emptyRevertSlot
        simp [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot,
          rootLoopSlot, rootContinuationSlot])
@@ -91,10 +80,8 @@ private theorem silentIn_getDepositRoot :
   Func.SilentIn Devm.storageView RootSilentSlot
       (nonpayableEndpoint getDepositRootEndpoint) := by
   unfold nonpayableEndpoint getDepositRootEndpoint mstoreAt Func.revert
-  repeat' first
-    | exact Ninst.Hinv.inv
-    | exact Linst.Hinv.inv
-    | apply And.intro
+  silent_structure with
+    first
     | (change RootSilentSlot rootLoopSlot
        simp [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot,
          rootLoopSlot, rootContinuationSlot])

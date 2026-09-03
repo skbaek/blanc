@@ -6,6 +6,7 @@ import Blanc.Upgrade
 import Blanc.StaticPrecompileMessage
 import Blanc.BalanceAlgebra
 import Blanc.LedgerConservation
+import Blanc.StorageOnlySpec
 import Blanc.WordArithmetic
 import Blanc.MemoryImage
 import Blanc.BytesWrite
@@ -304,6 +305,7 @@ import Blanc.ProrataWethVaultCapacities
 import Blanc.ProrataWethVaultInbound
 import Blanc.ProrataWethVaultOutbound
 import Blanc.ProrataWethVaultShares
+import Blanc.ProrataWethVaultLedgerSpec
 import Blanc.ProrataWethVaultFunctional
 import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary

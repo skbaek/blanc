@@ -46,6 +46,7 @@
 
 import Blanc.BalanceAlgebra
 import Blanc.Fmint
+import Blanc.StorageOnlySpec
 
 namespace Blanc
 
@@ -314,40 +315,15 @@ theorem Stor.Conserved.burn_set {s : Stor} {a : Adr} {v : B256}
 /-- The flash-mint instance.  `Inv` ignores both the callvalue and the ETH
 balance, and `Side` is trivial: this contract declines the `nof`-class side
 condition, which is precisely why every balance-movement slot carries `Side`
-in hypothesis position rather than demanding a concrete bound. -/
-def fmintSpec : ContractSpec where
-  prog := Fmint.fmint
-  Inv := fun s _ _ => Stor.Conserved s
-  Side := fun _ => True
-  inv_forget := id
-  inv_mono := fun h _ => h
-  inv_recv := fun h _ => h
-  side_le := fun _ _ => trivial
-  side_transfer := fun _ _ => trivial
-  side_addBal := fun _ _ => trivial
-  inv_transfer := by
-    intro st st' caller callee ca wad v h_sub h_ne _ h_inv
-    show Stor.Conserved _
-    have h_stor : (st'.addBal callee wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal callee _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
-    rw [h_stor]; exact h_inv
-  inv_recv_transfer := by
-    intro st st' caller ca wad h_sub h_ne _ h_inv
-    show Stor.Conserved _
-    have h_stor : (st'.addBal ca wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal ca _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
-    rw [h_stor]; exact h_inv
-  inv_addBal := by
-    intro w ca a val v _ _ h_inv
-    show Stor.Conserved _
-    have h_stor : (w.addBal a val).getStor ca = w.getStor ca := by
-      show ((w.setBal a _).get ca).stor = (w.get ca).stor
-      rw [State.setBal_get_stor]
-    rw [h_stor]; exact h_inv
+in hypothesis position rather than demanding a concrete bound.
+
+That combination is exactly `ContractSpec.ofStorageOnly`
+(`Blanc/StorageOnlySpec.lean`), which was hoisted out of the eight obligations
+this definition used to state inline once the WETH-backed PRORATA vault became
+their second consumer.  The record below is definitionally the one that stood
+here, so every downstream `fmintSpec.*` projection is unchanged. -/
+def fmintSpec : ContractSpec :=
+  ContractSpec.ofStorageOnly Fmint.fmint Stor.Conserved
 
 /-- `PrecondC` of the proposal, as the record's frame-entry bundle.  Its
 `side` field is `True`: the `nof` hypothesis WETH carries is absent. -/
@@ -396,13 +372,8 @@ non-target — are the same proposition, and the whole bundle is just
 the callvalue, which is exactly what makes `Devm.PreSolvent` a genuine
 conjunction. -/
 theorem fmintSpec_preInv_iff {ca : Adr} {sevm : Sevm} {devm : Devm} :
-    fmintSpec.PreInv devm ca sevm ↔ Stor.Conserved (Devm.getStor devm ca) := by
-  constructor
-  · intro h
-    by_cases h_ct : sevm.currentTarget = ca
-    · exact h.1 h_ct
-    · exact h.2 h_ct
-  · exact fun h => ⟨fun _ => h, fun _ => h⟩
+    fmintSpec.PreInv devm ca sevm ↔ Stor.Conserved (Devm.getStor devm ca) :=
+  ContractSpec.ofStorageOnly_preInv_iff
 
 theorem fmintSpec_postInv_iff {ca : Adr} {devm : Devm} :
     fmintSpec.PostInv devm ca ↔ Stor.Conserved (Devm.getStor devm ca) := Iff.rfl
@@ -427,10 +398,8 @@ theorem fmintSpec_funcSound {fa : Adr} (f : Func)
         Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s f r →
         Stor.Conserved (Devm.getStor s sevm.currentTarget) →
         Stor.Conserved (Devm.getStor r sevm.currentTarget) ) :
-    fmintSpec.FuncSoundNoMem fa Fmint.fmintAux f := by
-  intro sevm s r h_ct h_pre _ h_run
-  subst h_ct
-  exact ⟨trivial, h_cons h_run (fmintSpec_preInv_iff.mp h_pre.inv)⟩
+    fmintSpec.FuncSoundNoMem fa Fmint.fmintAux f :=
+  ContractSpec.ofStorageOnly_funcSound f h_cons
 
 /-! ## The effect-free nine
 
@@ -449,17 +418,13 @@ required *strictly cheaper in both*, so it is dropped and the walks stand.  The
 measurement is recorded in `~/plans/reports/fmint-conserved-step-2.md`; do not
 re-open it without new evidence. -/
 
-/-- Discharge an effect-free target: `func_inv` shows the run leaves
-`Devm.getStor` alone, and the no-op combinator does the rest.  The counterpart
-of `Blanc/Solvent.lean`'s `simple_solvent`, and shorter than it because there
-is no callvalue to forget. -/
+/-- Discharge an effect-free target.  The tactic itself is
+`Blanc/StorageOnlySpec.lean`'s `storage_silent`, hoisted there once the
+WETH-backed PRORATA vault became its second consumer; this alias keeps the
+fmint-local spelling the eight lemmas below already use. -/
 syntax "simple_conserved" : tactic
-set_option hygiene false in
 macro_rules
-| `(tactic| simple_conserved) =>
-  `(tactic| exact h.of_eq
-              (congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run)
-                sevm.currentTarget))
+| `(tactic| simple_conserved) => `(tactic| storage_silent)
 
 /-- The fallback, free.  fmint's fallback is `Func.revert` and `Blanc.not_run_revert`
 says no `Func.Run` witnesses it, so the obligation is vacuous — which is what
