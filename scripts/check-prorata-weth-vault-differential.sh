@@ -16,7 +16,12 @@
 # Every case is chosen so its divisions are inexact -- floor and ceil differ --
 # because a case that divides evenly cannot observe a rounding direction. The
 # gate was mutation-tested against five perturbations of the oracle (the offset
-# and each of the four rounding directions) and catches all five.
+# and each of the four rounding directions) and catches all five; the
+# revert and event-order checks were separately shown to reject a valid call
+# and a swapped event sequence.
+#
+# Gas is deliberately not compared. The oracle does not model it, so a gas row
+# here would be a golden value dressed up as a differential.
 #
 # Needs the Jaune fixture runner built; exits 2 if it is absent, rather than
 # passing vacuously.
