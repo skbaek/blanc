@@ -170,14 +170,17 @@ theorem depositQuote_arithmetic_trace
           tail <<+ bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
+        pre.state = bodyPre.state ∧
         Func.RunCompiledTo fs sevm bodyPre depositAfterQuote (.ok final) := by
   rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyState,
+        bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
-    obtain ⟨quotientFits, quotePre, quoteStack, quoteImage, quoteRun⟩ :=
+    obtain ⟨quotientFits, quotePre, quoteStack, quoteImage, quoteState,
+        quoteRun⟩ :=
       productOverTwoPow256_down_image_trace bodyWf bodyReads
         (ProducesWord.loadWord amountAt)
         (ProducesWord.stagedDenominator_after_productScratch supplyAt)
@@ -185,7 +188,7 @@ theorem depositQuote_arithmetic_trace
     refine ⟨?_, quotePre,
       productOverTwoPow256TraceImage image amount denominator, ?_, quoteImage,
       productOverTwoPow256TraceImage_wordFrame image amount denominator,
-      quoteRun⟩
+      bodyState.trans quoteState, quoteRun⟩
     · simpa [convertToSharesN, denominator, assetsMax, maxWord_toNat,
         assetFactorN_maxWord, stagedDenominator_toNat stable] using
         quotientFits
@@ -193,16 +196,17 @@ theorem depositQuote_arithmetic_trace
         assetFactorN_maxWord, stagedDenominator_toNat stable] using
         quoteStack
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyState,
+        bodyRun⟩
     obtain ⟨quotientFits, quotePre, quoteImage, quoteStack, quoteMemImage,
-        quoteFrame, quoteRun⟩ :=
+        quoteFrame, quoteState, quoteRun⟩ :=
       mulDiv_down_image_trace bodyWf bodyReads
         (ProducesWord.stagedAssetFactor assetsAt)
         (ProducesWord.amount_after_denominatorScratch amountAt)
         (ProducesWord.stagedDenominator_after_mulDivScratch supplyAt)
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
-      quoteRun⟩
+      bodyState.trans quoteState, quoteRun⟩
     · simpa [convertToSharesN, stagedDenominator_toNat stable,
         stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
     · simpa [convertToSharesN, stagedDenominator_toNat stable,
@@ -236,35 +240,38 @@ theorem mintQuote_arithmetic_trace
           tail <<+ bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
+        pre.state = bodyPre.state ∧
         Func.RunCompiledTo fs sevm bodyPre mintAfterQuote (.ok final) := by
   rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyState,
+        bodyRun⟩
     obtain ⟨ceilingFits, quotePre, quoteImage, quoteStack, quoteMemImage,
-        quoteFrame, quoteRun⟩ :=
+        quoteFrame, quoteState, quoteRun⟩ :=
       shiftedDiv_up_image_trace bodyWf bodyReads
         (ProducesWord.loadWord amountAt)
         (ProducesWord.stagedDenominator_after_shiftedScratch supplyAt)
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
-      quoteRun⟩
+      bodyState.trans quoteState, quoteRun⟩
     · simpa [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
         stagedDenominator_toNat stable] using ceilingFits
     · simpa [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
         stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyState,
+        bodyRun⟩
     obtain ⟨ceilingFits, quotePre, quoteImage, quoteStack, quoteMemImage,
-        quoteFrame, quoteRun⟩ :=
+        quoteFrame, quoteState, quoteRun⟩ :=
       mulDiv_up_image_trace bodyWf bodyReads
         (ProducesWord.stagedDenominator supplyAt)
         (ProducesWord.amount_after_denominatorScratch amountAt)
         (ProducesWord.stagedAssetFactor_after_mulDivScratch assetsAt)
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
-      quoteRun⟩
+      bodyState.trans quoteState, quoteRun⟩
     · simpa [previewMintN, stagedDenominator_toNat stable,
         stagedAssetFactor_toNat_of_ne_max assetsNotMax] using ceilingFits
     · simpa [previewMintN, stagedDenominator_toNat stable,
