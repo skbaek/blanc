@@ -237,7 +237,7 @@ theorem withdrawQuote_arithmetic_trace
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
         Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre withdrawAfterQuote (.ok final) := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -310,7 +310,7 @@ theorem redeemQuote_arithmetic_trace
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
         Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre redeemAfterQuote (.ok final) := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -395,7 +395,7 @@ theorem outboundGuards_trace
       decide +kernel
   obtain ⟨bodyPre, ownerValid, ownerNonzero, bodyStack, bodyWf,
       bodyReads, bodyState, bodyLogs, bodyRun⟩ :=
-    canonicalNonzeroAddress_trace ownerWf ownerReads
+    canonicalNonzeroAddress_trace (R := Func.RunOk) ownerWf ownerReads
       (ProducesWord.loadWord ownerAtQuote) ownerStack ownerRun
   exact ⟨bodyPre, callerNonzero, receiverValid, receiverNonzero, ownerValid,
     ownerNonzero, bodyStack, bodyWf, bodyReads,
@@ -412,6 +412,7 @@ untouched.
 this returns storage equality rather than whole-state equality, exactly as the
 inbound credit walk does. -/
 theorem ownerHasShares_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {sharesWord owner shares : B256}
     {body : Func} {tail : Stack}
@@ -423,8 +424,8 @@ theorem ownerHasShares_trace
       (image.sliceD (sharesWord * 32).toNat 32 0) = shares)
     (sharesBelow : (sharesWord * 32).toNat + 32 ≤ (balanceWord * 32).toNat)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (ownerHasShares (loadWord sharesWord) body) (.ok final)) :
+    (run : R fs sevm pre
+      (ownerHasShares (loadWord sharesWord) body) final) :
     ∃ bodyPre balance,
       balance = Devm.getStorVal pre sevm.currentTarget owner ∧
       shares.toNat ≤ balance.toNat ∧
@@ -435,19 +436,19 @@ theorem ownerHasShares_trace
       Devm.getStor pre = Devm.getStor bodyPre ∧
       Devm.getCode pre = Devm.getCode bodyPre ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   simp only [ownerHasShares] at run
 
   -- Read the owner's share row.
-  obtain ⟨sloadPre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨sloadPre, ownerRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨ownerPrefix, sloadWf, sloadReads, ownerState⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads ownerAt ownerRun
   have ownerLogs : pre.logs = sloadPre.logs := by
     refine Line.of_inv Devm.logs ?_ ownerRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨balanceStorePre, sloadRun, run⟩ := runCompiledTo_next_inv run
-  have sloadSource := Ninst.Run.of_runCompiled sloadRun
+  obtain ⟨balanceStorePre, sloadRun, run⟩ := Func.WalkInv.next run
+  have sloadSource := sloadRun
   obtain ⟨balance, balancePrefix, balanceEq⟩ :=
     prefix_of_sload sloadSource ownerPrefix
   have sloadStorage : Devm.getStor sloadPre = Devm.getStor balanceStorePre :=
@@ -462,7 +463,7 @@ theorem ownerHasShares_trace
     rw [← sloadMemory]; exact sloadReads
 
   -- Stage the balance.
-  obtain ⟨sharesPre, balanceStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨sharesPre, balanceStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨sharesStack, sharesWf, sharesReads, balanceStoreState⟩ :=
     of_run_mstoreAt_image balancePrefix balanceStoreWf balanceStoreReads
       balanceStoreRun
@@ -485,7 +486,7 @@ theorem ownerHasShares_trace
     exact Bytes.readWord_writeAt_self _ _ _
 
   -- Compare the burn amount against the staged balance.
-  obtain ⟨balanceLoadPre, sharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨balanceLoadPre, sharesRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨sharesPrefix, balanceLoadWf, balanceLoadReads, sharesState⟩ :=
     of_run_loadWordAt_image sharesStack sharesWf sharesReads sharesAt1
       sharesRun
@@ -493,7 +494,7 @@ theorem ownerHasShares_trace
     refine Line.of_inv Devm.logs ?_ sharesRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨testPre, balanceLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨testPre, balanceLoadRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨balanceLoadPrefix, testWf, testReads, balanceLoadState⟩ :=
     of_run_loadWordAt_image sharesPrefix balanceLoadWf balanceLoadReads
       balanceAt1 balanceLoadRun
@@ -501,8 +502,8 @@ theorem ownerHasShares_trace
     refine Line.of_inv Devm.logs ?_ balanceLoadRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨branchPre, testRun, branchRun⟩ := runCompiledTo_next_inv run
-  have testSource := Ninst.Run.of_runCompiled testRun
+  obtain ⟨branchPre, testRun, branchRun⟩ := Func.WalkInv.next run
+  have testSource := testRun
   have testPrefix := prefix_of_lt testSource balanceLoadPrefix
   have testMemory : testPre.memory = branchPre.memory :=
     Ninst.Hinv.inv (f := Devm.memory) testSource
@@ -514,15 +515,14 @@ theorem ownerHasShares_trace
     intro balanceLt
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.ltCheck, balanceLt] using testPrefix
-    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨succArmPre, -, revertRun, -⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
-    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-    cases impossible
+    exact absurd revertRun Func.WalkInv.noRevert
   have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
     simpa [B256.ltCheck, balanceLarge] using testPrefix
   obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-    Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+    Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
   have bodyWf : Mem.Wf bodyPre.memory := by
     rw [← bodyPop.memory, ← testMemory]
     exact testWf
@@ -576,6 +576,7 @@ and reaches its body only when that hash aliases neither a share row nor the
 reserved supply word.  Both hashed words land in the low scratch region, so
 every long-lived operation word survives. -/
 theorem allowanceKey_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {ownerLine spenderLine : Line} {owner spender : B256}
     {body : Func} {tail : Stack}
@@ -585,8 +586,8 @@ theorem allowanceKey_trace
     (spenderProduces : ProducesWord sevm spenderLine
       (Bytes.writeAt image ((0 : B256) * 32).toNat owner.toBytes) spender)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (guardedAllowanceKey ownerLine spenderLine body) (.ok final)) :
+    (run : R fs sevm pre
+      (guardedAllowanceKey ownerLine spenderLine body) final) :
     ∃ bodyPre,
       ¬ ValidAdr (allowanceKey owner spender) ∧
       allowanceKey owner spender ≠ supplySlot ∧
@@ -597,16 +598,16 @@ theorem allowanceKey_trace
       Devm.getStor pre = Devm.getStor bodyPre ∧
       Devm.getCode pre = Devm.getCode bodyPre ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   simp only [guardedAllowanceKey] at run
 
   -- Stage the owner into scratch word zero.
-  obtain ⟨ownerStorePre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨ownerStorePre, ownerRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨ownerPrefix, ownerStoreWf, ownerStoreReads, ownerQuiet⟩ :=
     ownerProduces memoryWf memoryReads stack ownerRun
   have ownerState : pre.state = ownerStorePre.state := ownerQuiet.1
   have ownerLogs : pre.logs = ownerStorePre.logs := ownerQuiet.2
-  obtain ⟨spenderPre, ownerStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨spenderPre, ownerStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨spenderStack, spenderWf, spenderReads, ownerStoreState⟩ :=
     of_run_mstoreAt_image ownerPrefix ownerStoreWf ownerStoreReads
       ownerStoreRun
@@ -616,10 +617,10 @@ theorem allowanceKey_trace
     line_inv
 
   -- Stage the spender into scratch word one.
-  obtain ⟨spenderStorePre, spenderRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨spenderStorePre, spenderRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨spenderPrefix, spenderStoreWf, spenderStoreReads, spenderQuiet⟩ :=
     spenderProduces spenderWf spenderReads spenderStack spenderRun
-  obtain ⟨windowPre, spenderStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨windowPre, spenderStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨windowStack, windowWf, windowReads, spenderStoreState⟩ :=
     of_run_mstoreAt_image spenderPrefix spenderStoreWf spenderStoreReads
       spenderStoreRun
@@ -634,7 +635,7 @@ theorem allowanceKey_trace
       show ((1 : B256) * 32).toNat = 32 by decide +kernel] using windowReads
 
   -- Push the hash window and hash it.
-  obtain ⟨keccakPre, pushWindowRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨keccakPre, pushWindowRun, run⟩ := Func.WalkInv.prepend run
   have pushWindowLine := pushWindowRun
   simp only [pushList, List.map] at pushWindowRun
   rcases Line.of_run_cons pushWindowRun with ⟨_, push64Run, pushWindowRun⟩
@@ -649,8 +650,8 @@ theorem allowanceKey_trace
   have keccakReads : Mem.Reads keccakPre.memory
       (allowanceKeyImage image owner spender) := by
     rw [← push0.memory, ← push64.memory]; exact windowImage
-  obtain ⟨collisionPre, keccakRun, run⟩ := runCompiledTo_next_inv run
-  have keccakSource := Ninst.Run.of_runCompiled keccakRun
+  obtain ⟨collisionPre, keccakRun, run⟩ := Func.WalkInv.next run
+  have keccakSource := keccakRun
   obtain ⟨hashPrefix, keccakMemory⟩ :=
     prefix_of_keccak256_val keccakSource windowPrefix
   have windowRead :
@@ -727,6 +728,7 @@ finds it finite, proves it covers the amount, and decrements exactly that one
 slot.  In both routes the key is neither address-shaped nor the reserved supply
 word, so no share row and not the supply can have moved. -/
 theorem spendAllowance_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {amountSel owner amount : B256} {continuation : Nat}
     {body : Func} {tail : Stack}
@@ -743,9 +745,9 @@ theorem spendAllowance_trace
       (amountSel * 32).toNat + 32 ≤ (allowanceWord * 32).toNat)
     (stack : tail <<+ pre.stack)
     (lookup : fs[continuation]? = some body)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (spendAllowance (loadWord ownerWord) [caller] (loadWord amountSel)
-        continuation) (.ok final)) :
+        continuation) final) :
     ∃ bodyPre allowance,
       ¬ ValidAdr (allowanceKey owner sevm.caller.toB256) ∧
       allowanceKey owner sevm.caller.toB256 ≠ supplySlot ∧
@@ -767,7 +769,7 @@ theorem spendAllowance_trace
       Mem.Reads bodyPre.memory
         (allowanceStagingImage image owner sevm.caller.toB256
           (allowanceKey owner sevm.caller.toB256) allowance) ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   simp only [spendAllowance] at run
 
   -- Hash and guard the allowance key.
@@ -778,7 +780,7 @@ theorem spendAllowance_trace
   set key := allowanceKey owner sevm.caller.toB256 with keyDef
 
   -- Stage the key.
-  obtain ⟨scratchLoadPre, scratchStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨scratchLoadPre, scratchStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨scratchLoadStack, scratchLoadWf, scratchLoadReads,
       scratchStoreState⟩ :=
     of_run_mstoreAt_image keyPrefix keyWf keyReads scratchStoreRun
@@ -796,7 +798,7 @@ theorem spendAllowance_trace
     exact Bytes.readWord_writeAt_self _ _ _
 
   -- Read the allowance.
-  obtain ⟨sloadPre, scratchLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨sloadPre, scratchLoadRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨scratchPrefix, sloadWf, sloadReads, scratchLoadState⟩ :=
     of_run_loadWordAt_image scratchLoadStack scratchLoadWf scratchLoadReads
       scratchAt scratchLoadRun
@@ -804,8 +806,8 @@ theorem spendAllowance_trace
     refine Line.of_inv Devm.logs ?_ scratchLoadRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨allowanceStorePre, sloadRun, run⟩ := runCompiledTo_next_inv run
-  have sloadSource := Ninst.Run.of_runCompiled sloadRun
+  obtain ⟨allowanceStorePre, sloadRun, run⟩ := Func.WalkInv.next run
+  have sloadSource := sloadRun
   obtain ⟨allowance, allowancePrefix, allowanceEq⟩ :=
     prefix_of_sload sloadSource scratchPrefix
   have sloadStorage : Devm.getStor sloadPre = Devm.getStor allowanceStorePre :=
@@ -820,7 +822,7 @@ theorem spendAllowance_trace
     rw [← sloadMemory]; exact sloadReads
 
   -- Stage the allowance.
-  obtain ⟨branchPre, allowanceStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨branchPre, allowanceStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨branchStack, branchWf, branchReads, allowanceStoreState⟩ :=
     of_run_mstoreAt_image allowancePrefix allowanceStoreWf
       allowanceStoreReads allowanceStoreRun
@@ -887,7 +889,9 @@ theorem spendAllowance_trace
       branchWf branchReads branchStack run with maxArm | ordinaryArm
   · obtain ⟨allowanceMax, callPre, callStack, callWf, callReads, callQuiet,
       callRun⟩ := maxArm
-    obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv lookup callRun
+    obtain ⟨callBody, bodyPre, callLookup, burn, bodyRun⟩ :=
+      Func.WalkInv.call callRun
+    obtain rfl := Option.some.inj (callLookup.symm.trans lookup)
     have amountFits : amount.toNat ≤ allowance.toNat := by
       rw [allowanceMax, maxWord_toNat]
       have bound := B256.toNat_lt amount
@@ -916,7 +920,7 @@ theorem spendAllowance_trace
       ordinaryArm
 
     -- Require the allowance to cover the amount.
-    obtain ⟨coverLoadPre, coverAmountRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨coverLoadPre, coverAmountRun, run⟩ := Func.WalkInv.prepend run
     obtain ⟨coverAmountPrefix, coverLoadWf, coverLoadReads,
         coverAmountState⟩ :=
       of_run_loadWordAt_image testStack testWf testReads amountAtStaged
@@ -925,7 +929,7 @@ theorem spendAllowance_trace
       refine Line.of_inv Devm.logs ?_ coverAmountRun
       unfold ProrataWethVault.loadWord
       line_inv
-    obtain ⟨coverTestPre, coverLoadRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨coverTestPre, coverLoadRun, run⟩ := Func.WalkInv.prepend run
     obtain ⟨coverLoadPrefix, coverTestWf, coverTestReads, coverLoadState⟩ :=
       of_run_loadWordAt_image coverAmountPrefix coverLoadWf coverLoadReads
         allowanceAt coverLoadRun
@@ -934,8 +938,8 @@ theorem spendAllowance_trace
       unfold ProrataWethVault.loadWord
       line_inv
     obtain ⟨coverBranchPre, coverTestRun, coverBranchRun⟩ :=
-      runCompiledTo_next_inv run
-    have coverTestSource := Ninst.Run.of_runCompiled coverTestRun
+      Func.WalkInv.next run
+    have coverTestSource := coverTestRun
     have coverTestPrefix := prefix_of_lt coverTestSource coverLoadPrefix
     have coverTestMemory : coverTestPre.memory = coverBranchPre.memory :=
       Ninst.Hinv.inv (f := Devm.memory) coverTestSource
@@ -948,22 +952,21 @@ theorem spendAllowance_trace
       intro allowanceLt
       have onePrefix : (1 : B256) :: tail <<+ coverBranchPre.stack := by
         simpa [B256.ltCheck, allowanceLt] using coverTestPrefix
-      obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
-        Func.RunCompiledTo.succ_branch_of_prefix
+      obtain ⟨succArmPre, -, revertRun, -⟩ :=
+        Func.WalkInv.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) onePrefix coverBranchRun
-      obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-      cases impossible
+      exact absurd revertRun Func.WalkInv.noRevert
     have coverZeroPrefix : (0 : B256) :: tail <<+ coverBranchPre.stack := by
       simpa [B256.ltCheck, covered] using coverTestPrefix
     obtain ⟨spendPre, coverPop, run, spendStack⟩ :=
-      Func.RunCompiledTo.zero_branch_of_prefix coverZeroPrefix coverBranchRun
+      Func.WalkInv.zero_branch_of_prefix coverZeroPrefix coverBranchRun
     have spendWf : Mem.Wf spendPre.memory := by
       rw [← coverPop.memory, ← coverTestMemory]; exact coverTestWf
     have spendReads : Mem.Reads spendPre.memory stagedImage := by
       rw [← coverPop.memory, ← coverTestMemory]; exact coverTestReads
 
     -- Decrement exactly the allowance slot.
-    obtain ⟨spendLoadPre, spendAmountRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨spendLoadPre, spendAmountRun, run⟩ := Func.WalkInv.prepend run
     obtain ⟨spendAmountPrefix, spendLoadWf, spendLoadReads, spendAmountState⟩ :=
       of_run_loadWordAt_image spendStack spendWf spendReads amountAtStaged
         spendAmountRun
@@ -971,7 +974,7 @@ theorem spendAllowance_trace
       refine Line.of_inv Devm.logs ?_ spendAmountRun
       unfold ProrataWethVault.loadWord
       line_inv
-    obtain ⟨subPre, spendLoadRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨subPre, spendLoadRun, run⟩ := Func.WalkInv.prepend run
     obtain ⟨spendLoadPrefix, subWf, subReads, spendLoadState⟩ :=
       of_run_loadWordAt_image spendAmountPrefix spendLoadWf spendLoadReads
         allowanceAt spendLoadRun
@@ -979,8 +982,8 @@ theorem spendAllowance_trace
       refine Line.of_inv Devm.logs ?_ spendLoadRun
       unfold ProrataWethVault.loadWord
       line_inv
-    obtain ⟨keyLoadPre, subRun, run⟩ := runCompiledTo_next_inv run
-    have subSource := Ninst.Run.of_runCompiled subRun
+    obtain ⟨keyLoadPre, subRun, run⟩ := Func.WalkInv.next run
+    have subSource := subRun
     have subPrefix : (allowance - amount) :: tail <<+ keyLoadPre.stack :=
       prefix_of_sub subSource spendLoadPrefix
     have subMemory : subPre.memory = keyLoadPre.memory :=
@@ -1000,7 +1003,7 @@ theorem spendAllowance_trace
       · exact Bytes.readWord_writeAt_self _ _ _
       · left
         decide +kernel
-    obtain ⟨storePre, keyLoadRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨storePre, keyLoadRun, run⟩ := Func.WalkInv.prepend run
     obtain ⟨keyLoadPrefix, storeWf, storeReads, keyLoadState⟩ :=
       of_run_loadWordAt_image subPrefix keyLoadWf keyLoadReads scratchAtStaged
         keyLoadRun
@@ -1008,8 +1011,8 @@ theorem spendAllowance_trace
       refine Line.of_inv Devm.logs ?_ keyLoadRun
       unfold ProrataWethVault.loadWord
       line_inv
-    obtain ⟨callPre, storeRun, run⟩ := runCompiledTo_next_inv run
-    have storeSource := Ninst.Run.of_runCompiled storeRun
+    obtain ⟨callPre, storeRun, run⟩ := Func.WalkInv.next run
+    have storeSource := storeRun
     have storeSet : Devm.getStor callPre sevm.currentTarget =
         (Devm.getStor storePre sevm.currentTarget).set key
           (allowance - amount) :=
@@ -1023,7 +1026,11 @@ theorem spendAllowance_trace
       prefix_of_sstore storeSource keyLoadPrefix
     have storeLogs : storePre.logs = callPre.logs :=
       Ninst.Hinv.inv (f := Devm.logs) storeSource
-    obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv lookup run
+    obtain ⟨callBody, bodyPre, callLookup, burn, bodyRun⟩ :=
+
+      Func.WalkInv.call run
+
+    obtain rfl := Option.some.inj (callLookup.symm.trans lookup)
 
     have preStore : Devm.getStor pre = Devm.getStor storePre :=
       branchStorage.trans ((funext (getStor_eq_of_state_eq testQuiet.1)).trans
@@ -1267,7 +1274,7 @@ theorem outboundAuthorization_trace
     obtain ⟨bodyPre, allowance, keyNotAddress, keyNotSupply, allowanceValue,
         amountFits, allowanceRoute, foreign, logs, spendCode, bodyStack,
         bodyWf, bodyReads, bodyRun⟩ :=
-      spendAllowance_trace spendWf spendReads spendOwnerAt amountAt
+      spendAllowance_trace (R := Func.RunOk) spendWf spendReads spendOwnerAt amountAt
         amountAboveKeyWords amountAboveScratch amountBelowAllowance
         spendStack lookup spendRun
     have spendStorage : Devm.getStor pre = Devm.getStor spendPre :=

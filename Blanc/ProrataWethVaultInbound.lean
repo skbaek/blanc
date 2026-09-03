@@ -172,7 +172,7 @@ theorem depositQuote_arithmetic_trace
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
         Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre depositAfterQuote (.ok final) := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -242,7 +242,7 @@ theorem mintQuote_arithmetic_trace
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
         Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre mintAfterQuote (.ok final) := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -312,7 +312,7 @@ theorem nonzeroCaller_trace
     intro callerZero
     have onePrefix : (1 : B256) :: tail <<+ zeroTest.stack := by
       simpa [B256.eqCheck, callerZero] using zeroTestPrefix
-    obtain ⟨armPre, armMid, -, -, revertRun, -⟩ :=
+    obtain ⟨succArmPre, -, revertRun, -⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix callerBranchRun
     exact absurd revertRun Func.WalkInv.noRevert
@@ -332,16 +332,17 @@ Stated over the guard's raw shape and over an arbitrary word producer, so the
 staged-word guard `nonzeroStagedAddress` and the ABI-argument guard
 `nonzeroAddressArg` are both instances of it. -/
 theorem canonicalNonzeroAddress_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {line : Line} {value : B256} {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
     (memoryReads : Mem.Reads pre.memory image)
     (produces : ProducesWord sevm line image value)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (line +++ dup 0 ::: checkNonAddress +++
         (Func.revert <?>
-          (iszero ::: (Func.revert <?> body)))) (.ok final)) :
+          (iszero ::: (Func.revert <?> body)))) final) :
     ∃ bodyPre,
       ValidAdr value ∧
       value ≠ 0 ∧
@@ -350,63 +351,62 @@ theorem canonicalNonzeroAddress_trace
       Mem.Reads bodyPre.memory image ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
 
-  obtain ⟨checkPre, valueRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨checkPre, valueRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨valuePrefix, checkWf, checkReads, valueQuiet⟩ :=
     produces memoryWf memoryReads stack valueRun
   have valueState : pre.state = checkPre.state := valueQuiet.1
   have valueLogs : pre.logs = checkPre.logs := valueQuiet.2
-  obtain ⟨dupPre, dupRun, run⟩ := runCompiledTo_next_inv run
-  have dupSource := Ninst.Run.of_runCompiled dupRun
+  obtain ⟨dupPre, dupRun, run⟩ := Func.WalkInv.next run
   have dupPrefix : value :: value :: tail <<+ dupPre.stack :=
-    prefix_of_dup_val dupSource (by show_nth) valuePrefix
-  obtain ⟨checkPost, checkRun, branchRun⟩ := runCompiledTo_prepend_inv run
+    prefix_of_dup_val dupRun (by show_nth) valuePrefix
+  obtain ⟨checkPost, checkRun, branchRun⟩ := Func.WalkInv.prepend run
   obtain ⟨flag, flagPrefix, flagValid⟩ := of_check_non_address dupPrefix checkRun
   have checkMemory : checkPre.memory = checkPost.memory :=
-    (Ninst.Hinv.inv (f := Devm.memory) dupSource).trans
+    (Ninst.Hinv.inv (f := Devm.memory) dupRun).trans
       (Line.of_inv Devm.memory (by unfold checkNonAddress; line_inv) checkRun)
   have checkState : checkPre.state = checkPost.state :=
-    (Ninst.Hinv.inv (f := Devm.state) dupSource).trans
+    (Ninst.Hinv.inv (f := Devm.state) dupRun).trans
       (Line.of_inv Devm.state (by unfold checkNonAddress; line_inv) checkRun)
   have checkLogs : checkPre.logs = checkPost.logs :=
-    (Ninst.Hinv.inv (f := Devm.logs) dupSource).trans
+    (Ninst.Hinv.inv (f := Devm.logs) dupRun).trans
       (Line.of_inv Devm.logs (by unfold checkNonAddress; line_inv) checkRun)
-  rcases runCompiledTo_branch_inv branchRun with zeroRoute | revertRoute
-  · rcases zeroRoute with ⟨zeroPre, flagStack, flagPop, zeroRun⟩
-    have zeroFlagPrefix : (0 : B256) :: [] <<+ checkPost.stack :=
-      ⟨zeroPre.stack, by simpa [Split] using flagStack⟩
+  rcases Func.WalkInv.branch branchRun with zeroRoute | revertRoute
+  · rcases zeroRoute with ⟨zeroPre, flagPop, zeroRun⟩
+    have zeroFlagPrefix : (0 : B256) :: [] <<+ checkPost.stack := by
+      have flagStack := flagPop.stack
+      simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at flagStack
+      exact ⟨zeroPre.stack, flagStack⟩
     have flagZero : flag = 0 := pref_head_unique flagPrefix zeroFlagPrefix
     have zeroPrefix : value :: tail <<+ zeroPre.stack :=
-      (popBurn_pref (Devm.PopBurn.of_popBurnBy flagPop) flagPrefix).2
+      (popBurn_pref flagPop flagPrefix).2
     have zeroWf : Mem.Wf zeroPre.memory := by
       rw [← flagPop.memory, ← checkMemory]
       exact checkWf
     have zeroReads : Mem.Reads zeroPre.memory image := by
       rw [← flagPop.memory, ← checkMemory]
       exact checkReads
-    obtain ⟨testPre, testRun, testBranchRun⟩ := runCompiledTo_next_inv zeroRun
-    have testSource := Ninst.Run.of_runCompiled testRun
-    have testPrefix := prefix_of_iszero testSource zeroPrefix
+    obtain ⟨testPre, testRun, testBranchRun⟩ := Func.WalkInv.next zeroRun
+    have testPrefix := prefix_of_iszero testRun zeroPrefix
     have testMemory : zeroPre.memory = testPre.memory :=
-      Ninst.Hinv.inv (f := Devm.memory) testSource
+      Ninst.Hinv.inv (f := Devm.memory) testRun
     have testState : zeroPre.state = testPre.state :=
-      Ninst.Hinv.inv (f := Devm.state) testSource
+      Ninst.Hinv.inv (f := Devm.state) testRun
     have testLogs : zeroPre.logs = testPre.logs :=
-      Ninst.Hinv.inv (f := Devm.logs) testSource
+      Ninst.Hinv.inv (f := Devm.logs) testRun
     have valueNonzero : value ≠ 0 := by
       intro valueZero
       have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
         simpa [B256.eqCheck, valueZero] using testPrefix
-      obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
-        Func.RunCompiledTo.succ_branch_of_prefix
+      obtain ⟨revertPre, -, revertRun, -⟩ :=
+        Func.WalkInv.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) onePrefix testBranchRun
-      obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-      cases impossible
+      exact absurd revertRun Func.WalkInv.noRevert
     have testZeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
       simpa [B256.eqCheck, valueNonzero] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-      Func.RunCompiledTo.zero_branch_of_prefix testZeroPrefix testBranchRun
+      Func.WalkInv.zero_branch_of_prefix testZeroPrefix testBranchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
       rw [← bodyPop.memory, ← testMemory]
       exact zeroWf
@@ -421,9 +421,8 @@ theorem canonicalNonzeroAddress_trace
     · exact valueLogs.trans
         (checkLogs.trans
           (flagPop.logs.trans (testLogs.trans bodyPop.logs)))
-  · rcases revertRoute with ⟨_, revertPre, -, -, -, revertRun⟩
-    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-    cases impossible
+  · rcases revertRoute with ⟨branchWord, armPre, armMid, -, -, -, revertRun⟩
+    exact absurd revertRun Func.WalkInv.noRevert
 
 /-! ## Local inbound guards -/
 
@@ -480,7 +479,7 @@ theorem inboundGuards_trace
   -- Reject a dirty or zero staged receiver.
   obtain ⟨bodyPre, receiverValid, receiverNonzero, bodyStack, bodyWf,
       bodyReads, addressState, addressLogs, bodyRun⟩ :=
-    canonicalNonzeroAddress_trace addressWf addressReads
+    canonicalNonzeroAddress_trace (R := Func.RunOk) addressWf addressReads
       (ProducesWord.loadWord receiverAtQuote) addressStack run
   refine ⟨bodyPre, callerNonzero, receiverValid, receiverNonzero, bodyStack,
     bodyWf, bodyReads, ?_, ?_, bodyRun⟩
@@ -586,6 +585,7 @@ def inboundCreditImage (image : Bytes) (balance credited : B256) : Bytes :=
 stages the credited sum, and rejects a wrapped total.  Persistent state and
 logs are still untouched: every write so far is memory-local. -/
 theorem inboundCredit_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {sharesWord receiver shares : B256}
     {body : Func} {tail : Stack}
@@ -597,12 +597,12 @@ theorem inboundCredit_trace
       (image.sliceD (sharesWord * 32).toNat 32 0) = shares)
     (sharesBelow : (sharesWord * 32).toNat + 32 ≤ (balanceWord * 32).toNat)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord receiverWord +++ sload ::: mstoreAt balanceWord +++
         loadWord sharesWord +++ loadWord balanceWord +++ add :::
         mstoreAt scratchWord +++
         loadWord balanceWord +++ loadWord scratchWord +++ lt :::
-        (Func.revert <?> body)) (.ok final)) :
+        (Func.revert <?> body)) final) :
     ∃ bodyPre balance,
       balance = Devm.getStorVal pre sevm.currentTarget receiver ∧
       balance.toNat + shares.toNat < wordModulusN ∧
@@ -612,17 +612,17 @@ theorem inboundCredit_trace
         (inboundCreditImage image balance (balance + shares)) ∧
       Devm.getStor pre = Devm.getStor bodyPre ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   -- Read the receiver's share row.
-  obtain ⟨sloadPre, receiverRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨sloadPre, receiverRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨receiverPrefix, sloadWf, sloadReads, receiverState⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads receiverAt receiverRun
   have receiverLogs : pre.logs = sloadPre.logs := by
     refine Line.of_inv Devm.logs ?_ receiverRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨balanceStorePre, sloadRun, run⟩ := runCompiledTo_next_inv run
-  have sloadSource := Ninst.Run.of_runCompiled sloadRun
+  obtain ⟨balanceStorePre, sloadRun, run⟩ := Func.WalkInv.next run
+  have sloadSource := sloadRun
   obtain ⟨balance, balancePrefix, balanceEq⟩ :=
     prefix_of_sload sloadSource receiverPrefix
   have sloadStorage : Devm.getStor sloadPre = Devm.getStor balanceStorePre :=
@@ -637,7 +637,7 @@ theorem inboundCredit_trace
     rw [← sloadMemory]; exact sloadReads
 
   -- Stage the balance.
-  obtain ⟨sharesPre, balanceStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨sharesPre, balanceStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨sharesStack, sharesWf, sharesReads, balanceStoreState⟩ :=
     of_run_mstoreAt_image balancePrefix balanceStoreWf balanceStoreReads
       balanceStoreRun
@@ -660,7 +660,7 @@ theorem inboundCredit_trace
     exact Bytes.readWord_writeAt_self _ _ _
 
   -- Stage the credited sum.
-  obtain ⟨balanceLoadPre, sharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨balanceLoadPre, sharesRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨sharesPrefix, balanceLoadWf, balanceLoadReads, sharesState⟩ :=
     of_run_loadWordAt_image sharesStack sharesWf sharesReads sharesAt1
       sharesRun
@@ -668,7 +668,7 @@ theorem inboundCredit_trace
     refine Line.of_inv Devm.logs ?_ sharesRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨addPre, balanceLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨addPre, balanceLoadRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨balanceLoadPrefix, addWf, addReads, balanceLoadState⟩ :=
     of_run_loadWordAt_image sharesPrefix balanceLoadWf balanceLoadReads
       balanceAt1 balanceLoadRun
@@ -676,8 +676,8 @@ theorem inboundCredit_trace
     refine Line.of_inv Devm.logs ?_ balanceLoadRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨creditStorePre, addRun, run⟩ := runCompiledTo_next_inv run
-  have addSource := Ninst.Run.of_runCompiled addRun
+  obtain ⟨creditStorePre, addRun, run⟩ := Func.WalkInv.next run
+  have addSource := addRun
   have creditPrefix : (balance + shares) :: tail <<+ creditStorePre.stack :=
     prefix_of_add addSource balanceLoadPrefix
   have addMemory : addPre.memory = creditStorePre.memory :=
@@ -691,7 +691,7 @@ theorem inboundCredit_trace
   have creditStoreReads : Mem.Reads creditStorePre.memory image1 := by
     rw [← addMemory]; exact addReads
   obtain ⟨guardBalancePre, creditStoreRun, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨guardStack, guardWf, guardReads, creditStoreState⟩ :=
     of_run_mstoreAt_image creditPrefix creditStoreWf creditStoreReads
       creditStoreRun
@@ -717,7 +717,7 @@ theorem inboundCredit_trace
 
   -- Reject a wrapped total.
   obtain ⟨guardCreditPre, guardBalanceRun, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨guardBalancePrefix, guardCreditWf, guardCreditReads,
       guardBalanceState⟩ :=
     of_run_loadWordAt_image guardStack guardWf guardReads guardBalanceAt
@@ -726,7 +726,7 @@ theorem inboundCredit_trace
     refine Line.of_inv Devm.logs ?_ guardBalanceRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨testPre, guardCreditRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨testPre, guardCreditRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨guardCreditPrefix, testWf, testReads, guardCreditState⟩ :=
     of_run_loadWordAt_image guardBalancePrefix guardCreditWf guardCreditReads
       guardCreditAt guardCreditRun
@@ -734,8 +734,8 @@ theorem inboundCredit_trace
     refine Line.of_inv Devm.logs ?_ guardCreditRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨branchPre, testRun, branchRun⟩ := runCompiledTo_next_inv run
-  have testSource := Ninst.Run.of_runCompiled testRun
+  obtain ⟨branchPre, testRun, branchRun⟩ := Func.WalkInv.next run
+  have testSource := testRun
   have testPrefix := prefix_of_lt testSource guardCreditPrefix
   have testMemory : testPre.memory = branchPre.memory :=
     Ninst.Hinv.inv (f := Devm.memory) testSource
@@ -747,15 +747,14 @@ theorem inboundCredit_trace
     intro wrapped
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.ltCheck, wrapped] using testPrefix
-    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨succArmPre, -, revertRun, -⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
-    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-    cases impossible
+    exact absurd revertRun Func.WalkInv.noRevert
   have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
     simpa [B256.ltCheck, noWrap] using testPrefix
   obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-    Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+    Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
   have bodyWf : Mem.Wf bodyPre.memory := by
     rw [← bodyPop.memory, ← testMemory]; exact testWf
   have bodyReads : Mem.Reads bodyPre.memory
@@ -1334,7 +1333,7 @@ theorem inboundTail_effect
     decide +kernel
   obtain ⟨settlePre, balance, balanceEq, noWrap, settleStack, settleWf,
       settleReads, creditStorage, creditLogs, settleRun⟩ :=
-    inboundCredit_trace memoryWf memoryReads receiverAt sharesAt sharesBelow
+    inboundCredit_trace (R := Func.RunOk) memoryWf memoryReads receiverAt sharesAt sharesBelow
       stack run
   -- Every operation word the settlement reads survives the two staging
   -- writes, which land at the balance and arithmetic scratch words.

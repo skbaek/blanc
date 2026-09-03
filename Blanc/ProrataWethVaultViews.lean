@@ -252,35 +252,38 @@ private theorem lift_bytes_view
 selected ABI word is address-shaped.  The proof stays on the compiled walk so
 downstream effects retain the exact vault auxiliary table. -/
 theorem canonicalAddressArg_body_of_ok
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {index : B256} {body : Func} {tail : Stack}
     (hp : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (canonicalAddressArg index body) (.ok post)) :
+    (run : R fs sevm pre
+      (canonicalAddressArg index body) post) :
     ∃ bodyPre,
       ValidAdr (Sevm.argWord sevm index) ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
+      R fs sevm bodyPre body post ∧
       tail <<+ bodyPre.stack ∧
       pre.state = bodyPre.state ∧
       pre.memory = bodyPre.memory ∧
       pre.logs = bodyPre.logs := by
   unfold canonicalAddressArg at run
   obtain ⟨afterArg, argLine, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨guardPost, guardLine, branchRun⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   have argPrefix : Sevm.argWord sevm index :: tail <<+ afterArg.stack :=
     prefix_of_arg hp argLine
   obtain ⟨guardWord, guardPrefix, guardValid⟩ :=
     of_check_non_address argPrefix guardLine
-  rcases runCompiledTo_branch_inv branchRun with bodyRoute | revertRoute
-  · rcases bodyRoute with ⟨bodyPre, guardStack, guardPop, bodyRun⟩
-    have zeroPrefix : (0 : B256) :: [] <<+ guardPost.stack :=
-      ⟨bodyPre.stack, by simpa [Split] using guardStack⟩
+  rcases Func.WalkInv.branch branchRun with bodyRoute | revertRoute
+  · rcases bodyRoute with ⟨bodyPre, guardPop, bodyRun⟩
+    have zeroPrefix : (0 : B256) :: [] <<+ guardPost.stack := by
+      have guardStack := guardPop.stack
+      simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at guardStack
+      exact ⟨bodyPre.stack, guardStack⟩
     have guardZero : guardWord = 0 :=
       pref_head_unique guardPrefix zeroPrefix
     have bodyPrefix : tail <<+ bodyPre.stack :=
-      (popBurn_pref (Devm.PopBurn.of_popBurnBy guardPop) guardPrefix).2
+      (popBurn_pref (guardPop) guardPrefix).2
     exact ⟨bodyPre, guardValid.mp guardZero, bodyRun, bodyPrefix,
       (Line.of_inv Devm.state (by line_inv) argLine).trans
         ((Line.of_inv Devm.state (by line_inv) guardLine).trans
@@ -291,9 +294,8 @@ theorem canonicalAddressArg_body_of_ok
       (Line.of_inv Devm.logs (by line_inv) argLine).trans
         ((Line.of_inv Devm.logs (by line_inv) guardLine).trans
           guardPop.logs)⟩
-  · rcases revertRoute with ⟨_, revertPre, -, -, -, revertRun⟩
-    rcases runCompiledTo_revert_inv revertRun with ⟨_, impossible, -⟩
-    cases impossible
+  · rcases revertRoute with ⟨armWord, armPre, armMid, -, -, -, revertRun⟩
+    exact absurd revertRun Func.WalkInv.noRevert
 
 /-- The vault's allowance guard retains the raw key below its collision flag.
 When that flag is zero, the key is neither address-shaped nor the reserved
@@ -365,39 +367,41 @@ guard.
 Family-visible rather than private: the outbound flows reach the same guard
 through `spendAllowance`, and the walk is proved once here. -/
 theorem allowanceCollisionGuard_body_of_ok
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {key : B256} {tail : Stack} {body : Func}
     (hp : key :: tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (checkAllowanceSlotCollision +++ (Func.revert <?> body)) (.ok post)) :
+    (run : R fs sevm pre
+      (checkAllowanceSlotCollision +++ (Func.revert <?> body)) post) :
     ∃ bodyPre,
       ¬ ValidAdr key ∧ key ≠ supplySlot ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
+      R fs sevm bodyPre body post ∧
       key :: tail <<+ bodyPre.stack ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
       pre.memory = bodyPre.memory := by
   obtain ⟨guardPost, guardLine, branchRun⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨flag, guardPrefix, safeOfZero⟩ :=
     of_checkAllowanceSlotCollision hp guardLine
-  rcases runCompiledTo_branch_inv branchRun with bodyRoute | revertRoute
-  · rcases bodyRoute with ⟨bodyPre, guardStack, guardPop, bodyRun⟩
-    have zeroPrefix : (0 : B256) :: [] <<+ guardPost.stack :=
-      ⟨bodyPre.stack, by simpa [Split] using guardStack⟩
+  rcases Func.WalkInv.branch branchRun with bodyRoute | revertRoute
+  · rcases bodyRoute with ⟨bodyPre, guardPop, bodyRun⟩
+    have zeroPrefix : (0 : B256) :: [] <<+ guardPost.stack := by
+      have guardStack := guardPop.stack
+      simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at guardStack
+      exact ⟨bodyPre.stack, guardStack⟩
     have flagZero : flag = 0 :=
       pref_head_unique guardPrefix zeroPrefix
     rcases safeOfZero flagZero with ⟨notAddress, notSupply⟩
     have bodyPrefix : key :: tail <<+ bodyPre.stack :=
-      (popBurn_pref (Devm.PopBurn.of_popBurnBy guardPop) guardPrefix).2
+      (popBurn_pref (guardPop) guardPrefix).2
     exact ⟨bodyPre, notAddress, notSupply, bodyRun, bodyPrefix,
       (Line.of_inv Devm.state (by line_inv) guardLine).trans guardPop.state,
       (Line.of_inv Devm.logs (by line_inv) guardLine).trans guardPop.logs,
       (Line.of_inv Devm.memory (by line_inv) guardLine).trans
         guardPop.memory⟩
-  · rcases revertRoute with ⟨_, revertPre, -, -, -, revertRun⟩
-    rcases runCompiledTo_revert_inv revertRun with ⟨_, impossible, -⟩
-    cases impossible
+  · rcases revertRoute with ⟨armWord, armPre, armMid, -, -, -, revertRun⟩
+    exact absurd revertRun Func.WalkInv.noRevert
 
 private theorem stackStorageWord_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
@@ -504,9 +508,9 @@ private theorem allowance_body_effect
           (allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)))
         pre post := by
   unfold allowance at run
-  rcases canonicalAddressArg_body_of_ok nil_pref run with
+  rcases canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref run with
     ⟨ownerPre, ownerValid, ownerRun, -, ownerState, ownerMemory, ownerLogs⟩
-  rcases canonicalAddressArg_body_of_ok nil_pref ownerRun with
+  rcases canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref ownerRun with
     ⟨bodyPre, spenderValid, bodyRun, -, spenderState, spenderMemory,
       spenderLogs⟩
   have bodyMemory : pre.memory = bodyPre.memory :=
@@ -572,7 +576,7 @@ private theorem allowance_body_effect
     rw [memoryWindow] at hashPrefix
     simpa only [allowanceKey] using hashPrefix
 
-  rcases allowanceCollisionGuard_body_of_ok keyPrefix collisionRun with
+  rcases allowanceCollisionGuard_body_of_ok (R := Func.RunOk) keyPrefix collisionRun with
     ⟨readPre, keyNotAddress, keyNotSupply, readRun, readPrefix,
       collisionState, collisionLogs, -⟩
   have readEffect := stackStorageWord_effect readPrefix readRun
@@ -716,7 +720,7 @@ theorem balanceOf_compiled_effect
     simp [vaultFuncs]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨guardPre, hvalue, -, entryState, -, entryLogs, -, guardRun⟩
-  rcases canonicalAddressArg_body_of_ok nil_pref guardRun with
+  rcases canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref guardRun with
     ⟨bodyPre, hvalid, bodyRun, -, guardState, -, guardLogs⟩
   exact ⟨hvalue, hvalid,
     lift_storage_word_view (entryState.trans guardState)
@@ -740,7 +744,7 @@ theorem maxRedeem_compiled_effect
     simp [vaultFuncs]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨guardPre, hvalue, -, entryState, -, entryLogs, -, guardRun⟩
-  rcases canonicalAddressArg_body_of_ok nil_pref guardRun with
+  rcases canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref guardRun with
     ⟨bodyPre, hvalid, bodyRun, -, guardState, -, guardLogs⟩
   exact ⟨hvalue, hvalid,
     lift_storage_word_view (entryState.trans guardState)

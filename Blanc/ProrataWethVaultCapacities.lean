@@ -168,7 +168,7 @@ theorem maxMint_arithmetic_trace
   have supplySlice :
       image.sliceD (supplyWord * 32).toNat 32 0 = supply.toBytes :=
     supplyWindow.slice_eq memoryReads
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -285,7 +285,7 @@ theorem maxDeposit_arithmetic_trace
             .capCeilPred returnWordSlot)) (.ok final)) :
     ReturnsWord
       (Nat.toB256 (maxDepositN assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -362,7 +362,7 @@ theorem maxWithdraw_arithmetic_trace
     ReturnsWord
       (Nat.toB256 (min maxWordN
         (maxWithdrawN amount.toNat assets.toNat supply.toNat))) final := by
-  rcases ProducesWord.isMax_arm_trace
+  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with

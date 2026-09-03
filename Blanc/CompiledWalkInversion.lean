@@ -53,8 +53,15 @@ class Func.WalkInv
   /-- No successful walk witnesses `Func.revert`. -/
   noRevert : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm},
     ¬ R fs sevm pre Func.revert post
+  /-- Every walk is in particular a source walk, so a generic trace can still
+  reach a lemma stated only at `Func.Run`.  This is the direction that costs
+  nothing: the compiled relation pins the gas the source relation only
+  bounds. -/
+  toRun : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func},
+    R fs sevm pre f post → Func.Run fs sevm pre f post
 
 instance : Func.WalkInv Func.Run where
+  toRun := id
   next := of_run_next
   branch := of_run_branch
   call := fun h => by
@@ -91,20 +98,40 @@ theorem Func.WalkInv.zero_branch_of_prefix
   · exact ⟨mid, hpop, harm, (popBurn_pref hpop hp).2⟩
   · exact absurd (popBurn_pref hpop hp).1 hw
 
-/-- The nonzero arm, selected the same way. -/
+/-- Composing the branch pop with the jumped arm's burn.  Both relations fix
+everything but gas and only relax it, so the composite is again a pop. -/
+theorem Devm.PopBurn.trans_burn {xs : List B256} {a b c : Devm}
+    (hp : Devm.PopBurn xs a b) (hb : Devm.Burn b c) : Devm.PopBurn xs a c :=
+  { stack := by rw [← hb.stack]; exact hp.stack
+    memory := hp.memory.trans hb.memory,
+    gasLeft := le_trans hb.gasLeft hp.gasLeft,
+    logs := hp.logs.trans hb.logs,
+    refundCounter := hp.refundCounter.trans hb.refundCounter,
+    output := hp.output.trans hb.output,
+    accountsToDelete := hp.accountsToDelete.trans hb.accountsToDelete,
+    returnData := hp.returnData.trans hb.returnData,
+    error := hp.error.trans hb.error,
+    accessedAddresses := hp.accessedAddresses.trans hb.accessedAddresses,
+    accessedStorageKeys := hp.accessedStorageKeys.trans hb.accessedStorageKeys,
+    state := hp.state.trans hb.state,
+    createdAccounts := hp.createdAccounts.trans hb.createdAccounts,
+    transientStorage := hp.transientStorage.trans hb.transientStorage }
+
+/-- The nonzero arm, selected the same way.  The jumped arm's extra burn is
+folded into the pop, so this has the same four-part shape as the zero arm. -/
 theorem Func.WalkInv.succ_branch_of_prefix
     {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {left right : Func}
     {w : B256} {xs : Stack}
     (hw : w ≠ 0) (hp : w :: xs <<+ pre.stack)
     (run : R fs sevm pre (Func.branch left right) post) :
-    ∃ armPre armMid, Devm.PopBurn [w] pre armPre ∧ Devm.Burn armPre armMid ∧
-      R fs sevm armMid right post ∧ xs <<+ armMid.stack := by
+    ∃ armPre, Devm.PopBurn [w] pre armPre ∧ R fs sevm armPre right post ∧
+      xs <<+ armPre.stack := by
   rcases Func.WalkInv.branch run with
     ⟨mid, hpop, -⟩ | ⟨w', mid, mid', hw', hpop, hburn, harm⟩
   · exact absurd (popBurn_pref hpop hp).1.symm hw
   · obtain rfl : w' = w := (popBurn_pref hpop hp).1
-    refine ⟨mid, mid', hpop, hburn, harm, ?_⟩
+    refine ⟨mid', hpop.trans_burn hburn, harm, ?_⟩
     rw [← hburn.stack]
     exact (popBurn_pref hpop hp).2
 
@@ -403,6 +430,7 @@ instance : Func.WalkInv Func.RunOk where
   noRevert h := by
     obtain ⟨_, hex, -⟩ := runCompiledTo_revert_inv h
     exact absurd hex (by simp)
+  toRun h := Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok h)
 
 /-- A compiled walk of `nonpayable body` at nonzero call value takes the
 empty-revert arm. No premise about `body` is admitted, so the compiler guard
@@ -973,6 +1001,16 @@ theorem Devm.QuietFrame.ofPopBurnBy {xs : List B256} {cost : Nat}
 
 theorem Devm.QuietFrame.ofBurnBy {cost : Nat} {a b : Devm}
     (burn : Devm.BurnBy cost a b) : Devm.QuietFrame a b :=
+  ⟨burn.state, burn.logs⟩
+
+/-- The gas-forgetting counterparts, for a walk inverted through
+`Func.WalkInv`. -/
+theorem Devm.QuietFrame.ofPopBurn {xs : List B256} {a b : Devm}
+    (pop : Devm.PopBurn xs a b) : Devm.QuietFrame a b :=
+  ⟨pop.state, pop.logs⟩
+
+theorem Devm.QuietFrame.ofBurn {a b : Devm}
+    (burn : Devm.Burn a b) : Devm.QuietFrame a b :=
   ⟨burn.state, burn.logs⟩
 
 /-- **Dispatch exhaustiveness.**  A compiled walk through `dispatchWith` that

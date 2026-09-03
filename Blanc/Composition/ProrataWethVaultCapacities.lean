@@ -193,7 +193,7 @@ theorem maxMint_body_effect
       stableCapacityBody, maxMintReadBody] using run
   obtain ⟨receiverPre, receiverValid, receiverRun, receiverStack,
       entryState, entryMemory, entryLogs⟩ :=
-    canonicalAddressArg_body_of_ok nil_pref routedRun
+    canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref routedRun
   have receiverWf : Mem.Wf receiverPre.memory := by
     rw [← entryMemory]
     exact memoryWf
@@ -346,7 +346,7 @@ theorem maxDeposit_body_effect
       stableCapacityBody, maxDepositReadBody] using run
   obtain ⟨receiverPre, receiverValid, receiverRun, receiverStack,
       entryState, entryMemory, entryLogs⟩ :=
-    canonicalAddressArg_body_of_ok nil_pref routedRun
+    canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref routedRun
   have receiverWf : Mem.Wf receiverPre.memory := by
     rw [← entryMemory]
     exact memoryWf
@@ -505,7 +505,7 @@ theorem maxWithdraw_body_effect
       maxWithdrawReadBody] using run
   obtain ⟨ownerPre, ownerValid, ownerRun, ownerStack, entryState,
       entryMemory, entryLogs⟩ :=
-    canonicalAddressArg_body_of_ok nil_pref routedRun
+    canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref routedRun
   have ownerWf : Mem.Wf ownerPre.memory := by
     rw [← entryMemory]
     exact memoryWf
