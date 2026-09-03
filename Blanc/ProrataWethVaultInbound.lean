@@ -277,18 +277,75 @@ theorem mintQuote_arithmetic_trace
     · simpa [previewMintN, stagedDenominator_toNat stable,
         stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
 
-/-- A successful staged-address guard proves the selected operation word is a
-canonical nonzero address and leaves memory, state, and logs untouched. -/
-theorem nonzeroStagedAddress_trace
+/-- A successful zero-caller guard proves the executing frame's caller is
+nonzero and leaves memory, state, and logs untouched. -/
+theorem nonzeroCaller_trace
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
-    {image : Bytes} {word value : B256} {body : Func} {tail : Stack}
-    (memoryWf : Mem.Wf pre.memory)
-    (memoryReads : Mem.Reads pre.memory image)
-    (valueAt : Bytes.toB256
-      (image.sliceD (word * 32).toNat 32 0) = value)
+    {body : Func} {tail : Stack}
     (stack : tail <<+ pre.stack)
     (run : Func.RunCompiledTo fs sevm pre
-      (nonzeroStagedAddress word body) (.ok final)) :
+      (nonzeroCaller body) (.ok final)) :
+    ∃ bodyPre,
+      sevm.caller.toB256 ≠ 0 ∧
+      tail <<+ bodyPre.stack ∧
+      pre.memory = bodyPre.memory ∧
+      pre.state = bodyPre.state ∧
+      pre.logs = bodyPre.logs ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  unfold nonzeroCaller at run
+  obtain ⟨callerTest, callerRun, run⟩ := runCompiledTo_next_inv run
+  have callerSource := Ninst.Run.of_runCompiled callerRun
+  have callerPush := of_run_caller callerSource
+  have callerPrefix : sevm.caller.toB256 :: tail <<+ callerTest.stack :=
+    prefix_of_push callerPush stack
+  obtain ⟨zeroTest, callerZeroRun, callerBranchRun⟩ :=
+    runCompiledTo_next_inv run
+  have callerZeroSource := Ninst.Run.of_runCompiled callerZeroRun
+  have zeroTestPrefix := prefix_of_iszero callerZeroSource callerPrefix
+  have callerMemory : pre.memory = zeroTest.memory :=
+    callerPush.memory.trans
+      (Ninst.Hinv.inv (f := Devm.memory) callerZeroSource)
+  have callerState : pre.state = zeroTest.state :=
+    callerPush.state.trans
+      (Ninst.Hinv.inv (f := Devm.state) callerZeroSource)
+  have callerLogs : pre.logs = zeroTest.logs :=
+    callerPush.logs.trans
+      (Ninst.Hinv.inv (f := Devm.logs) callerZeroSource)
+  have callerNonzero : sevm.caller.toB256 ≠ 0 := by
+    intro callerZero
+    have onePrefix : (1 : B256) :: tail <<+ zeroTest.stack := by
+      simpa [B256.eqCheck, callerZero] using zeroTestPrefix
+    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
+      Func.RunCompiledTo.succ_branch_of_prefix
+        (by decide : (1 : B256) ≠ 0) onePrefix callerBranchRun
+    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
+    cases impossible
+  have callerZeroPrefix : (0 : B256) :: tail <<+ zeroTest.stack := by
+    simpa [B256.eqCheck, callerNonzero] using zeroTestPrefix
+  obtain ⟨bodyPre, callerPop, bodyRun, bodyStack⟩ :=
+    Func.RunCompiledTo.zero_branch_of_prefix callerZeroPrefix callerBranchRun
+  exact ⟨bodyPre, callerNonzero, bodyStack,
+    callerMemory.trans callerPop.memory,
+    callerState.trans callerPop.state,
+    callerLogs.trans callerPop.logs, bodyRun⟩
+
+/-- A successful canonical-address guard proves the produced word is a
+canonical nonzero address and leaves memory, state, and logs untouched.
+
+Stated over the guard's raw shape and over an arbitrary word producer, so the
+staged-word guard `nonzeroStagedAddress` and the ABI-argument guard
+`nonzeroAddressArg` are both instances of it. -/
+theorem canonicalNonzeroAddress_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {line : Line} {value : B256} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (produces : ProducesWord sevm line image value)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (line +++ dup 0 ::: checkNonAddress +++
+        (Func.revert <?>
+          (iszero ::: (Func.revert <?> body)))) (.ok final)) :
     ∃ bodyPre,
       ValidAdr value ∧
       value ≠ 0 ∧
@@ -298,13 +355,12 @@ theorem nonzeroStagedAddress_trace
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  unfold nonzeroStagedAddress at run
+
   obtain ⟨checkPre, valueRun, run⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨valuePrefix, checkWf, checkReads, valueState⟩ :=
-    of_run_loadWordAt_image stack memoryWf memoryReads valueAt valueRun
-  have valueLogs : pre.logs = checkPre.logs :=
-    Line.of_inv Devm.logs (by unfold ProrataWethVault.loadWord; line_inv)
-      valueRun
+  obtain ⟨valuePrefix, checkWf, checkReads, valueQuiet⟩ :=
+    produces memoryWf memoryReads stack valueRun
+  have valueState : pre.state = checkPre.state := valueQuiet.1
+  have valueLogs : pre.logs = checkPre.logs := valueQuiet.2
   obtain ⟨dupPre, dupRun, run⟩ := runCompiledTo_next_inv run
   have dupSource := Ninst.Run.of_runCompiled dupRun
   have dupPrefix : value :: value :: tail <<+ dupPre.stack :=
@@ -416,56 +472,24 @@ theorem inboundGuards_trace
       decide +kernel
 
   -- Reject the zero caller.
-  unfold nonzeroCaller at run
-  obtain ⟨callerTest, callerRun, run⟩ := runCompiledTo_next_inv run
-  have callerSource := Ninst.Run.of_runCompiled callerRun
-  have callerPrefix : sevm.caller.toB256 :: tail <<+ callerTest.stack :=
-    prefix_of_push (of_run_caller callerSource) callerStack
-  obtain ⟨zeroTest, callerZeroRun, callerBranchRun⟩ :=
-    runCompiledTo_next_inv run
-  have callerZeroSource := Ninst.Run.of_runCompiled callerZeroRun
-  have zeroTestPrefix := prefix_of_iszero callerZeroSource callerPrefix
-  have callerPush := of_run_caller callerSource
-  have callerMemory : callerPre.memory = zeroTest.memory :=
-    callerPush.memory.trans
-      (Ninst.Hinv.inv (f := Devm.memory) callerZeroSource)
-  have callerState : callerPre.state = zeroTest.state :=
-    callerPush.state.trans
-      (Ninst.Hinv.inv (f := Devm.state) callerZeroSource)
-  have callerLogs : callerPre.logs = zeroTest.logs :=
-    callerPush.logs.trans
-      (Ninst.Hinv.inv (f := Devm.logs) callerZeroSource)
-  have callerNonzero : sevm.caller.toB256 ≠ 0 := by
-    intro callerZero
-    have onePrefix : (1 : B256) :: tail <<+ zeroTest.stack := by
-      simpa [B256.eqCheck, callerZero] using zeroTestPrefix
-    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
-        (by decide : (1 : B256) ≠ 0) onePrefix callerBranchRun
-    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-    cases impossible
-  have callerZeroPrefix : (0 : B256) :: tail <<+ zeroTest.stack := by
-    simpa [B256.eqCheck, callerNonzero] using zeroTestPrefix
-  obtain ⟨addressPre, callerPop, run, addressStack⟩ :=
-    Func.RunCompiledTo.zero_branch_of_prefix callerZeroPrefix callerBranchRun
+  obtain ⟨addressPre, callerNonzero, addressStack, callerMemory, callerState,
+      callerLogs, run⟩ := nonzeroCaller_trace callerStack run
   have addressWf : Mem.Wf addressPre.memory := by
-    rw [← callerPop.memory, ← callerMemory]
+    rw [← callerMemory]
     exact callerWf
   have addressReads : Mem.Reads addressPre.memory quoteImage := by
-    rw [← callerPop.memory, ← callerMemory]
+    rw [← callerMemory]
     exact callerReads
 
   -- Reject a dirty or zero staged receiver.
   obtain ⟨bodyPre, receiverValid, receiverNonzero, bodyStack, bodyWf,
       bodyReads, addressState, addressLogs, bodyRun⟩ :=
-    nonzeroStagedAddress_trace addressWf addressReads receiverAtQuote
-      addressStack run
+    canonicalNonzeroAddress_trace addressWf addressReads
+      (ProducesWord.loadWord receiverAtQuote) addressStack run
   refine ⟨bodyPre, callerNonzero, receiverValid, receiverNonzero, bodyStack,
     bodyWf, bodyReads, ?_, ?_, bodyRun⟩
-  · exact quoteState.trans
-      (callerState.trans (callerPop.state.trans addressState))
-  · exact quoteLogs.trans
-      (callerLogs.trans (callerPop.logs.trans addressLogs))
+  · exact quoteState.trans (callerState.trans addressState)
+  · exact quoteLogs.trans (callerLogs.trans addressLogs)
 
 /-! ## Supply-room guard -/
 

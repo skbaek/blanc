@@ -4503,6 +4503,19 @@ theorem ProducesWord.loadWord
   exact ⟨valuePrefix, valueWf, valueReads,
     Devm.QuietFrame.mk' valueState (of_run_loadWordAt_logs run)⟩
 
+/-- `CALLER` produces the executing frame's caller word and touches nothing
+else.  The share ledger hashes it as the spender half of an allowance key. -/
+theorem ProducesWord.caller {sevm : Sevm} {image : Bytes} :
+    ProducesWord sevm [Ninst.caller] image sevm.caller.toB256 := by
+  intro pre post tail memoryWf memoryReads stack run
+  rcases Line.of_run_cons run with ⟨_, callerRun, callerNil⟩
+  cases callerNil
+  have push := of_run_caller callerRun
+  refine ⟨prefix_of_push push stack, ?_, ?_,
+    Devm.QuietFrame.mk' push.state push.logs⟩
+  · rw [← push.memory]; exact memoryWf
+  · rw [← push.memory]; exact memoryReads
+
 theorem ProducesWord.arg
     (sevm : Sevm) (image : Bytes) (index : B256) :
     ProducesWord sevm (Blanc.arg index) image

@@ -395,8 +395,8 @@ theorem outboundGuards_trace
       decide +kernel
   obtain ⟨bodyPre, ownerValid, ownerNonzero, bodyStack, bodyWf,
       bodyReads, bodyState, bodyLogs, bodyRun⟩ :=
-    nonzeroStagedAddress_trace ownerWf ownerReads ownerAtQuote ownerStack
-      ownerRun
+    canonicalNonzeroAddress_trace ownerWf ownerReads
+      (ProducesWord.loadWord ownerAtQuote) ownerStack ownerRun
   exact ⟨bodyPre, callerNonzero, receiverValid, receiverNonzero, ownerValid,
     ownerNonzero, bodyStack, bodyWf, bodyReads,
     ownerState.trans bodyState, ownerLogs.trans bodyLogs, bodyRun⟩
@@ -577,21 +577,23 @@ reserved supply word.  Both hashed words land in the low scratch region, so
 every long-lived operation word survives. -/
 theorem allowanceKey_trace
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
-    {image : Bytes} {owner : B256} {body : Func} {tail : Stack}
+    {image : Bytes} {ownerLine spenderLine : Line} {owner spender : B256}
+    {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
     (memoryReads : Mem.Reads pre.memory image)
-    (ownerAt : Bytes.toB256
-      (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
+    (ownerProduces : ProducesWord sevm ownerLine image owner)
+    (spenderProduces : ProducesWord sevm spenderLine
+      (Bytes.writeAt image ((0 : B256) * 32).toNat owner.toBytes) spender)
     (stack : tail <<+ pre.stack)
     (run : Func.RunCompiledTo fs sevm pre
-      (guardedAllowanceKey (loadWord ownerWord) [caller] body) (.ok final)) :
+      (guardedAllowanceKey ownerLine spenderLine body) (.ok final)) :
     ∃ bodyPre,
-      ¬ ValidAdr (allowanceKey owner sevm.caller.toB256) ∧
-      allowanceKey owner sevm.caller.toB256 ≠ supplySlot ∧
-      allowanceKey owner sevm.caller.toB256 :: tail <<+ bodyPre.stack ∧
+      ¬ ValidAdr (allowanceKey owner spender) ∧
+      allowanceKey owner spender ≠ supplySlot ∧
+      allowanceKey owner spender :: tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory
-        (allowanceKeyImage image owner sevm.caller.toB256) ∧
+        (allowanceKeyImage image owner spender) ∧
       Devm.getStor pre = Devm.getStor bodyPre ∧
       Devm.getCode pre = Devm.getCode bodyPre ∧
       pre.logs = bodyPre.logs ∧
@@ -600,12 +602,10 @@ theorem allowanceKey_trace
 
   -- Stage the owner into scratch word zero.
   obtain ⟨ownerStorePre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨ownerPrefix, ownerStoreWf, ownerStoreReads, ownerState⟩ :=
-    of_run_loadWordAt_image stack memoryWf memoryReads ownerAt ownerRun
-  have ownerLogs : pre.logs = ownerStorePre.logs := by
-    refine Line.of_inv Devm.logs ?_ ownerRun
-    unfold ProrataWethVault.loadWord
-    line_inv
+  obtain ⟨ownerPrefix, ownerStoreWf, ownerStoreReads, ownerQuiet⟩ :=
+    ownerProduces memoryWf memoryReads stack ownerRun
+  have ownerState : pre.state = ownerStorePre.state := ownerQuiet.1
+  have ownerLogs : pre.logs = ownerStorePre.logs := ownerQuiet.2
   obtain ⟨spenderPre, ownerStoreRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨spenderStack, spenderWf, spenderReads, ownerStoreState⟩ :=
     of_run_mstoreAt_image ownerPrefix ownerStoreWf ownerStoreReads
@@ -615,18 +615,10 @@ theorem allowanceKey_trace
     unfold mstoreAt
     line_inv
 
-  -- Stage the frame caller into scratch word one.
+  -- Stage the spender into scratch word one.
   obtain ⟨spenderStorePre, spenderRun, run⟩ := runCompiledTo_prepend_inv run
-  rcases Line.of_run_cons spenderRun with ⟨_, callerRun, callerNil⟩
-  cases callerNil
-  have callerPush := of_run_caller callerRun
-  have spenderPrefix : sevm.caller.toB256 :: tail <<+ spenderStorePre.stack :=
-    prefix_of_push callerPush spenderStack
-  have spenderStoreWf : Mem.Wf spenderStorePre.memory := by
-    rw [← callerPush.memory]; exact spenderWf
-  have spenderStoreReads : Mem.Reads spenderStorePre.memory
-      (Bytes.writeAt image ((0 : B256) * 32).toNat owner.toBytes) := by
-    rw [← callerPush.memory]; exact spenderReads
+  obtain ⟨spenderPrefix, spenderStoreWf, spenderStoreReads, spenderQuiet⟩ :=
+    spenderProduces spenderWf spenderReads spenderStack spenderRun
   obtain ⟨windowPre, spenderStoreRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨windowStack, windowWf, windowReads, spenderStoreState⟩ :=
     of_run_mstoreAt_image spenderPrefix spenderStoreWf spenderStoreReads
@@ -636,7 +628,7 @@ theorem allowanceKey_trace
     unfold mstoreAt
     line_inv
   have windowImage : Mem.Reads windowPre.memory
-      (allowanceKeyImage image owner sevm.caller.toB256) := by
+      (allowanceKeyImage image owner spender) := by
     simpa only [allowanceKeyImage,
       show ((0 : B256) * 32).toNat = 0 by decide +kernel,
       show ((1 : B256) * 32).toNat = 32 by decide +kernel] using windowReads
@@ -655,7 +647,7 @@ theorem allowanceKey_trace
   have keccakWf : Mem.Wf keccakPre.memory := by
     rw [← push0.memory, ← push64.memory]; exact windowWf
   have keccakReads : Mem.Reads keccakPre.memory
-      (allowanceKeyImage image owner sevm.caller.toB256) := by
+      (allowanceKeyImage image owner spender) := by
     rw [← push0.memory, ← push64.memory]; exact windowImage
   obtain ⟨collisionPre, keccakRun, run⟩ := runCompiledTo_next_inv run
   have keccakSource := Ninst.Run.of_runCompiled keccakRun
@@ -663,13 +655,13 @@ theorem allowanceKey_trace
     prefix_of_keccak256_val keccakSource windowPrefix
   have windowRead :
       (keccakPre.memory.read (0 : B256).toNat (64 : B256).toNat).1 =
-        owner.toBytes ++ sevm.caller.toB256.toBytes := by
+        owner.toBytes ++ spender.toBytes := by
     rw [show ((0 : B256)).toNat = 0 by decide +kernel,
       show ((64 : B256)).toNat = 64 by decide +kernel,
       Mem.Reads.read keccakReads]
     simpa only [allowanceKeyImage] using
-      Bytes.read_two_word_writes_at image 0 owner sevm.caller.toB256
-  have keyPrefix : allowanceKey owner sevm.caller.toB256 :: tail <<+
+      Bytes.read_two_word_writes_at image 0 owner spender
+  have keyPrefix : allowanceKey owner spender :: tail <<+
       collisionPre.stack := by
     rw [windowRead] at hashPrefix
     simpa only [allowanceKey] using hashPrefix
@@ -677,7 +669,7 @@ theorem allowanceKey_trace
     rw [keccakMemory]
     exact keccakWf.extend _ _
   have collisionReads : Mem.Reads collisionPre.memory
-      (allowanceKeyImage image owner sevm.caller.toB256) := by
+      (allowanceKeyImage image owner spender) := by
     rw [keccakMemory]
     exact Mem.Reads.extend keccakReads _ _
 
@@ -686,13 +678,11 @@ theorem allowanceKey_trace
       collisionState, collisionLogs, bodyMemory⟩ :=
     allowanceCollisionGuard_body_of_ok keyPrefix run
   have codeFrame : Devm.getCode pre = Devm.getCode bodyPre :=
-    (Line.of_inv Devm.getCode (by
-        unfold ProrataWethVault.loadWord
-        line_inv) ownerRun).trans <|
+    (funext (getCode_eq_of_state_eq ownerQuiet.1)).trans <|
       (Line.of_inv Devm.getCode (by
           unfold mstoreAt
           line_inv) ownerStoreRun).trans <|
-        (funext (getCode_eq_of_state_eq callerPush.state)).trans <|
+        (funext (getCode_eq_of_state_eq spenderQuiet.1)).trans <|
           (Line.of_inv Devm.getCode (by
               unfold mstoreAt
               line_inv) spenderStoreRun).trans <|
@@ -707,7 +697,7 @@ theorem allowanceKey_trace
   · rw [← bodyMemory]; exact collisionReads
   · exact (funext (getStor_eq_of_state_eq ownerState)).trans
       ((funext (getStor_eq_of_state_eq ownerStoreState)).trans
-        ((funext (getStor_eq_of_state_eq callerPush.state)).trans
+        ((funext (getStor_eq_of_state_eq spenderQuiet.1)).trans
           ((funext (getStor_eq_of_state_eq spenderStoreState)).trans
             ((Line.of_inv Devm.getStor (by
                 simp only [pushList, List.map]
@@ -715,7 +705,7 @@ theorem allowanceKey_trace
               ((Ninst.Hinv.inv (f := Devm.getStor) keccakSource).trans
                 (funext (getStor_eq_of_state_eq collisionState)))))))
   · exact ownerLogs.trans (ownerStoreLogs.trans
-      (callerPush.logs.trans (spenderStoreLogs.trans
+      (spenderQuiet.2.trans (spenderStoreLogs.trans
         ((Line.of_inv Devm.logs (by
             simp only [pushList, List.map]
             line_inv) pushWindowLine).trans
@@ -783,7 +773,8 @@ theorem spendAllowance_trace
   -- Hash and guard the allowance key.
   obtain ⟨scratchStorePre, keyNotAddress, keyNotSupply, keyPrefix, keyWf,
       keyReads, keyState, keyCode, keyLogs, run⟩ :=
-    allowanceKey_trace memoryWf memoryReads ownerAt stack run
+    allowanceKey_trace memoryWf memoryReads (ProducesWord.loadWord ownerAt)
+      ProducesWord.caller stack run
   set key := allowanceKey owner sevm.caller.toB256 with keyDef
 
   -- Stage the key.
