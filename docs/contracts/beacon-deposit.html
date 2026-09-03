@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BeaconDeposit — a Blanc port of the eth2 deposit contract</title>
+<meta name="description" content="Blanc’s BeaconDeposit: a 2,891-byte port of the eth2 deposit contract — the incremental Merkle accumulator proved from a hash-parametric model down to the exact compiled bytes across twelve SHA-256 precompile crossings, a derived Prague deployment root, an open-history theorem giving the exact count and mixed root at every admitted future, a 44-row / 69-transaction differential beside the deployed runtime with no dearer path, and a 30-declaration assurance register.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#results">Results</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">ports</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>BeaconDeposit.</h1>
+        <p class="lede" style="margin-top:20px">
+          The port of the
+          <a href="https://etherscan.io/address/0x00000000219ab540356cBB839Cbe05303d7705Fa#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">deposit contract</a>
+          at <span class="mono">0x0000…05Fa</span> — immutable, permissionless, the contract every
+          validator’s stake passes through: a 32-deep incremental Merkle accumulator whose root the
+          consensus layer reads. Blanc’s port proves that accumulator from a hash-parametric model
+          down to the exact compiled bytes — through twelve SHA-256 precompile calls, a
+          storage-writing loop, and dynamic-<span class="mono">bytes</span> calldata — roots it in a
+          derived deployment, and carries the exact count and mixed root to every admitted future.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          A port never claims byte identity —
+          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
+          governs what is claimed and what never is. What makes this port distinctive is that it is
+          the first in the portfolio whose proofs cross a precompile, and that its
+          <a href="https://github.com/skbaek/blanc/blob/main/BEACON_DEPOSIT_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>
+          gives every one of its eleven rows a differential channel — or says, in so many words,
+          that the row is proof-only and has none.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-beacon-deposit-differential.sh
+<span class="ok">OK — beacon-deposit differential: 44/44 rows, 69 runtime transactions, 2 creation executions, 4/4 selectors + no-match, 8/8 guards, 463 oracle SHA STATICCALLs …</span>
+<span class="p">$</span> scripts/check-beacon-deposit-assurance.sh
+<span class="ok">OK — beacon-deposit-assurance: 11 protected rows across 3 pillars; 30 fully qualified declarations with exact axiom/gate ownership; 8 non-claim pins; 2 mutation controls</span></div>
+        <p class="cap"><b>Fig. 1</b> — two BeaconDeposit gates, verbatim (exact-candidate run 2026-09-03 UTC), ellipses
+          marking elision: the differential matrix beside the vendored deployed runtime in a pinned
+          Prague oracle, and the register verifier that fails if any cited declaration, axiom set,
+          or non-claim phrase drifts from the tree. The differential line continues “… 6
+          comparison-channel falsifiers and 16 manifest ownership falsifiers live; gas recorded on
+          every runtime path (0 positive Blanc deltas require registry evidence); constructor 31/31
+          SHA calls per side and Blanc-minus-reference total/execution gas -719572/-26172.”</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>2,891 B runtime — vs 6,358 deployed</span>
+          <span class="pill"><span class="d"></span>30-declaration assurance register</span>
+          <span class="pill"><span class="d"></span>0 dearer paths in 69 transactions</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the port proves</p>
+    <h2 style="max-width:30ch">The accumulator, from the model to every admitted future.</h2>
+    <p class="lede" style="margin-top:18px">
+      The deposit contract does one thing: append a leaf to an incremental Merkle tree, and expose
+      the root. The port proves that in three layers that hand off to each other. A
+      hash-parametric model — the accumulator over an arbitrary <span class="mono">H</span> — is
+      proved to compute the mixed root of exactly the history it has absorbed. A storage
+      abstraction, <span class="mono">ArtifactInv</span>, ties the concrete branch, count, and
+      zero-hash words of the compiled artifact to that model with <span class="mono">H</span>
+      instantiated at Jaune’s <span class="mono">Bytes.sha256</span>. And a deployment root plus an
+      open-history theorem carry the abstraction from one derived Prague creation block to every
+      admitted future — where the exact count and mixed root can simply be read off.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">pragueOnly_history_extends</span>, Blanc/BeaconDepositHistoryChain.lean).</div>
+      <p class="stmt">From a checkpoint holding the exact compiled runtime at <span class="mono">ca</span>
+        and the storage abstraction for some history <span class="mono">baseline</span>, every state
+        reachable along the Prague-only schedule — under the one admission below — still carries the
+        abstraction, for the same baseline extended by some suffix.</p>
+<pre><span class="k">theorem</span> <span class="d">pragueOnly_history_extends</span>
+    (chainId : <span class="t">UInt64</span>) {baseline : <span class="t">List</span> <span class="t">B256</span>}
+    {checkpoint future : <span class="t">BlockChain</span>} {ca : <span class="t">Adr</span>}
+    (reach : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId)
+      checkpoint future)
+    (native : <span class="t">ReachNativeShaAdmitted</span> reach ca)
+    (installed :
+      some (checkpoint.state.getCode ca).toList = <span class="t">Prog</span>.compile runtime)
+    (artifact : <span class="t">ArtifactInv</span> (checkpoint.state.getStor ca) baseline) :
+    ∃ suffix,
+      <span class="t">ArtifactInv</span> (future.state.getStor ca) (baseline ++ suffix)</pre>
+    </div>
+    <p class="cap"><b>Read the quantifiers</b> — <span class="mono">ReachUsing</span> is Jaune’s
+      configured-chain reachability: whole valid blocks, every transaction anyone sent, arbitrary
+      contracts doing arbitrary things. <span class="mono">native</span> is the one admission, and
+      it is entry evidence about actual frames, never a poststate or a result: a retained history
+      trace whose frames at <span class="mono">ca</span> enter fresh and find native SHA-256 at
+      address <span class="mono">0x2</span>. From the deployment root,
+      <span class="mono">DeploymentRoot.future_history_extends</span> supplies the installed code
+      and the empty baseline, and <span class="mono">DeploymentRoot.future_count_root</span> reads
+      the consequences off one suffix: the concrete count equals
+      <span class="mono">baseline.length + suffix.length</span>, it grew strictly if and only if the
+      suffix is nonempty, and the concrete root equals
+      <span class="mono">mixedRootOf Bytes.sha256 (baseline ++ suffix)</span>. The suffix is
+      existential — not unique, not transaction-indexed — and nothing here says a deposit occurs.</p>
+
+    <div class="listing tight" style="margin:26px 0 0">
+      <div class="bar"><span>Blanc/BeaconDeposit*.lean</span><span class="tag">the substantive stack</span></div>
+<pre>root_correct                          <span class="c">-- model: the root of any invariant state is</span>
+                                      <span class="c">   mixedRootOf H of its leaf list, for any H</span>
+deposit_inv                           <span class="c">-- model: success appends exactly the reconstructed</span>
+                                      <span class="c">   deposit-data node, and keeps the invariant</span>
+deposit_ne_assert_false               <span class="c">-- the source's terminal assert(false) is unreachable</span>
+deposit_success_settled_effects       <span class="c">-- compiled: model-linked storage, the byte-exact</span>
+                                      <span class="c">   576-byte event, clean message settlement</span>
+deposit_error_runCompiledTo           <span class="c">-- all eight guards, source-exact Error(string),</span>
+                                      <span class="c">   no raw SSTORE on the way out</span>
+ArtifactInv.root_eq_mixedRootOf       <span class="c">-- concrete words project the model root</span>
+canonicalDeploymentStep_
+  establishes_root                    <span class="c">-- one strict Prague CREATE block → DeploymentRoot,</span>
+                                      <span class="c">   installed bytes, empty history</span>
+historySpec_preserves                 <span class="c">-- open frame: the four-selector dispatcher preserves</span>
+                                      <span class="c">   the baseline-relative witness</span>
+DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness ⇔ nonempty suffix, mixed root</span></pre>
+    </div>
+
+    <div class="grid3" style="margin-top:26px">
+      <div class="panel">
+        <span class="tick">twelve precompile crossings</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          Every hash in the contract is a <span class="mono">STATICCALL</span> to address
+          <span class="mono">0x2</span> with a 64-byte input and a 32-byte window — twelve
+          source-shaped sites, all retained. The proofs name the fork’s precompile selection and
+          the absence of a delegation designator at <span class="mono">0x2</span>, prove the
+          64-byte child input, and instantiate the answer as exactly
+          <span class="mono">Bytes.sha256 input</span>: environment facts, not a hash axiom. A
+          failed call bubbles the child’s returndata byte for byte; a short success
+          empty-reverts — both arms as the pinned <span class="mono">solc</span> wrapper does. The
+          SHA-256 named here is Jaune’s, itself proved equal to a FIPS 180-4 transcription in the
+          sibling — a strengthening no beacon statement depends on.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">a loop, not an unroll</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          Three bounded walks — the 32-step root fold, the at-most-32-step insertion, the
+          constructor’s 31 zero-hash writes — compile to tail-recursive auxiliary slots at
+          constant stack height. The alternative was measured before it could become architecture:
+          179 bytes for the first slice against 4,195 unrolled, at indistinguishable elaboration
+          cost, so no unrolled carrier and no resource ceiling was admitted. Every same-frame
+          <span class="mono">SSTORE</span> site is classified: a successful deposit commits the
+          count first, then exactly one live branch cell, and construction performs exactly 31
+          writes.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">dynamic bytes, decoded first</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The decoder is a separate phase before any source guard: the 132-byte head, then, for
+          each of the three tails, an offset and a length below 2<sup>32</sup> and a padded tail
+          that fits in calldata. Reordered and overlapping tails are allowed; padding contents and
+          trailing calldata are ignored; every structural failure empty-reverts. Canonical
+          encodings are proved decodable, and the eight guards run in source order — lengths
+          48/32/96, three value checks, the reconstructed root, the cap — each with the
+          reference’s exact <span class="mono">Error(string)</span>.
+        </p>
+      </div>
+    </div>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>So this re-proves what Runtime Verification proved?</h3><span class="devtag">pushback</span></div>
+      <p>No — and the register forbids that sentence. Runtime Verification’s KEVM campaign
+        verified the r1 Solidity artifact in K; Blanc’s theorems are about Blanc’s own 2,891-byte
+        artifact under Jaune’s semantics. These are different artifacts and independent proof
+        developments. Blanc does not reproduce, audit, criticize, or supersede that campaign, and
+        it does not verify the deployed r2 bytecode. What may be said is narrower and still worth
+        saying: the same property family — the incremental-Merkle invariant, root correctness,
+        count monotonicity — is now carried to compiled code, with a proof object a third party’s
+        kernel re-checks under three axioms.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>“Every admitted future” — what does the admission cost?</h3><span class="devtag">pushback</span></div>
+      <p>It is the price of a true theorem. Unconditional preservation is <em>false</em>: a
+        type-4 (EIP-7702) authorization can place delegated ordinary code at address
+        <span class="mono">0x2</span>, so a frame that “calls SHA-256” may be calling anything.
+        Rather than assume the callee away, the theorem admits frames positively — fresh entry and
+        native SHA at the actual admitted roots of the retained history — and the closure goal was
+        re-priced to that boundary explicitly rather than silently weakened. The admission is
+        entry evidence about the frames that actually ran; it is not a poststate premise, not a
+        result-equivalent premise, and no blanket callback axiom is anywhere in the family.
+        Nothing quantifies over delegated address-2 code.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Does the root say anything about inclusion, or about the beacon chain?</h3><span class="devtag">pushback</span></div>
+      <p>No. The root equation is relative to <span class="mono">Bytes.sha256</span> and the
+        witnessed list: no collision resistance, no unique-history commitment, no inclusion proof,
+        no consensus-layer claim of any kind. Strictness is an equivalence about the witnessed
+        suffix, not liveness — nothing promises a deposit, or that the count ever increases. And
+        the deployment root is one exact shape: a direct, zero-endowment, singleton type-2 Prague
+        block, under the Prague-only schedule; no CREATE2, factory, or co-block path, and no claim
+        about the historical mainnet creation.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      The 11-row assurance register maps OPEN-1 and P1–P8 onto 30 fully qualified declarations
+      in seven frozen fields — declarations, premises, axioms, owning gates, differential channel,
+      non-claims, source. Its eight load-bearing non-claim phrases are pinned by the gate that
+      verifies it, and that gate runs two mutants on every invocation — a misspelled declaration
+      and a wrong axiom set must both be rejected — so a green run is never a run that checked
+      nothing.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it is the deposit contract</p>
+    <h2 style="max-width:30ch">Two oracle lanes, one control, and a register that names its gaps.</h2>
+    <p class="lede" style="margin-top:18px">
+      The vendored deployed runtime is the reference, never the subject. Two finite lanes run it
+      beside Blanc’s exact artifact — historical Prague for breadth, the current BPO2 mainnet
+      target for the fork that is live — a separate control executes what the deployment theorem
+      then quantifies, and every register row says which lane corroborates it, or that none does.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the Prague lane</span><span class="foldsub">44 rows · 69 runtime transactions · 463 oracle SHA calls · six channels</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-beacon-deposit-differential.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-beacon-deposit-differential.sh</span></a>
+          executes the exact compiler-owned Blanc runtime and creation artifacts in a clean pinned
+          EELS Prague interpreter beside the vendored deployed runtime, agreeing on success or
+          revert, exact returndata, projected logical storage, ETH, ordered logs, and the retained
+          SHA-256 <span class="mono">STATICCALL</span> traces. The rows cover every selector and
+          the no-match route, all eight guards in source order and their precedence, the
+          malformed-ABI families — reordered and overlapping tails, dirty padding, trailing data,
+          truncation, out-of-bounds offsets — chained deposits one through eight, child failure
+          and short-return responses, and bounded out-of-gas cases.
+        </p>
+        <p class="dim">
+          Gas is recorded on every path, and any positive Blanc delta is refused without explicit
+          registry evidence — there is none to cite. A separate fresh-state creation measurement
+          checks each side’s own returned and installed runtime, the exact logical constructor
+          state, and the 31-call SHA chain, and decomposes direct-message gas into constructor
+          execution and code deposit so that the smaller runtime cannot hide a worse constructor.
+          Live falsifiers protect the artifact, comparison, manifest, warmth, trace,
+          gas-decomposition, and dominance channels: 6 comparison-channel, 16 manifest-ownership,
+          4 static.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          Beneath it sits the model oracle:
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-beacon-deposit-model.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-beacon-deposit-model.sh</span></a>
+          compares 476 lines of the hash-parametric model against independently generated vectors
+          under both a Keccak and a SHA-256 instantiation, and its four falsifier mutants — swapped
+          hash-argument order, a dropped count mix-in, a cap off-by-one, a regime substitution —
+          are required to keep every proof elaborating and to be caught by the vectors anyway.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Current mainnet — the BPO2 lane</span><span class="foldsub">2 fresh creations · 7 runtime rows · exact raw event bytes</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-beacon-deposit-current-mainnet.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-beacon-deposit-current-mainnet.sh</span></a>
+          consumes the contract-neutral current-mainnet target at its literal BPO2 pin: two fresh
+          top-level <span class="mono">CREATE</span> transactions and the same ordered
+          seven-transition runtime state chain per side, each transition carrying the exact prior
+          poststate forward. It checks strict runtime and creation size dominance, the EIP-170,
+          EIP-3860, and EIP-7825 limits, exact side-owned installed runtime and storage, canonical
+          receipt status and gas on every row, and the exact raw
+          <span class="mono">DepositEvent</span> bytes on the deposit row.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          Constructor gas is split into intrinsic, code deposit, and the receipt-charged remainder
+          after any refund — the target does not expose a refund counter, so this lane makes no
+          zero-refund claim — and both the total and the net deltas must be non-positive. Exact
+          returndata and the broad malformed, precompile-response, and out-of-gas matrix stay in
+          the Prague lane, deliberately; this one exists so that the current fork has executable
+          evidence of its own.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The deployment control — feasibility, kept out of the proof</span><span class="foldsub">15 projections · 31 reconstructed words · 3 mutants that must fail</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-beacon-deposit-deployment.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-beacon-deposit-deployment.sh</span></a>
+          keeps finite execution evidence separate from the Lean root. A Lean evaluator emits the
+          production artifacts and constants but no theorem and no golden; Python independently
+          pins both artifact digests, reconstructs all 31 zero-hash storage words with its own
+          SHA-256, derives the sender and <span class="mono">CREATE</span> address, authors one
+          exact-gas singleton zero-value type-2 Prague block, and executes it in clean pinned EELS.
+          Fifteen projections check the strict envelope, successful receipt, nonces and balances,
+          the installed runtime, complete constructor storage, empty logs and requests; Jaune
+          replays the temporary block; and wrong-target, wrong-runtime, and wrong-storage mutants
+          must each fail at their intended boundary before the unchanged projection returns
+          green. Generated output is never committed and never admitted as a Lean premise.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">OPEN-1 · P1–P8 · 89 audited theorems</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          Where the lanes sample, the theorems quantify — always about the exact compiled bytes:
+          <span class="mono">code_compile</span> and
+          <span class="mono">constructorInitPrefix_compile</span> pin the 2,891-byte runtime and
+          the 3,037-byte creation artifact, with the EIP-170 and EIP-3860 ceilings proved. Above
+          them, P2 through P6 cover the compiled success path with its byte-exact event, the total
+          decoded-error partition and structural-failure routes, the views and ERC-165, complete
+          write-site classification, and the storage abstraction; P7 and P8 are the deployment root
+          and open-history family stated in full in the
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          The port’s 89 audited theorems sit in the repository-wide axiom audit, and
+          <span class="mono">check-claims.sh</span> pins the exact <em>statements</em> of the
+          compiled P1–P6 boundaries and the P7/P8 deployment, frame, history, and count-root
+          headlines. Two register rows are deliberately proof-only — the open-frame theorem and
+          the history extension — and the register says so in their channel field rather than
+          inventing an observation that does not exist.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:28ch">Five rows, and no accepted behavioral deviation.</h2>
+    <p class="lede" style="margin-top:18px">
+      <a href="https://github.com/skbaek/blanc/blob/main/BEACON_DEPOSIT_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">BEACON_DEPOSIT_DEVIATIONS.md</a>
+      holds five rows, and none of them accepts a difference on the canonical surface: two are
+      implementation freedoms, two are rulings that agreement is <em>required</em> and then
+      measured, and one is a proved-dead arm removed. Its interface agreements — nonpayable views
+      and ERC-165, guard order and reason strings, event timing, SHA-response handling, the
+      selector census — are recorded as agreements precisely so that none can later be mislabelled
+      a low-level freedom.
+    </p>
+
+    <div class="dev">
+      <div class="devhead"><h3>Raw storage layout</h3><span class="devtag">BD-1 — orthogonal</span></div>
+      <p>Solidity’s layout for <span class="mono">branch[32]</span>,
+        <span class="mono">deposit_count</span>, and <span class="mono">zero_hashes[32]</span> is
+        replaced by three compact disjoint regions — <span class="mono">0x100 + h</span>,
+        <span class="mono">0x200</span>, <span class="mono">0x300 + h</span> — so logical
+        deposits, roots, and counts agree while raw slots and storage proofs do not.</p>
+      <p><b>The argument:</b> a proof-oriented, structurally disjoint layout is an implementation
+        freedom under PORTING.md; no raw-layout compatibility is claimed, and the seeded
+        cap-boundary row seeds each side through its own declared layout.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Canonical and malformed dynamic calldata</h3><span class="devtag">BD-2, BD-3 — agreement required, then measured</span></div>
+      <p>On canonical decoded calls no difference is accepted: decoding, guard precedence, and
+        revert reasons are caller-visible interface. For malformed and noncanonical shapes the
+        two-phase decoder reproduces the pinned <span class="mono">solc</span> decoder on the
+        declared matrix — reordered, overlapping, dirty-padded, trailing, truncated, out-of-bounds
+        — as finite agreement.</p>
+      <p><b>The argument:</b> the algorithmic ruling is frozen and every mandatory malformed row is
+        green; it is evidence on those rows, not a universal decoder theorem, and any later
+        measured mismatch is registry-bearing rather than excusable.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>The terminal <span class="mono">assert(false)</span></h3><span class="devtag">BD-4 — a proved-dead arm</span></div>
+      <p>The source keeps a defensive unreachable panic after its insertion loop. Blanc’s loop
+        omits it and exits by construction.</p>
+      <p><b>The argument:</b> the omission is licensed only by
+        <span class="mono">deposit_ne_assert_false</span> — under the cap guard the walk always
+        finds a live slot — and by the compiled commit theorem that executes the complete concrete
+        commit through the unique first-live slot. No informal cap argument substitutes for the
+        theorem, and no equivalence is claimed outside its premises.</p>
+    </div>
+
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">gas rows — measured, and empty of positives</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          Exact gas identity is not claimed, but gas is observable, so the registry carries seven
+          gas-row families over the committed matrix: deposit success and chained depths,
+          rejection at each of the eight guards, the read-only selectors, dispatch and ABI
+          rejection, precompile resource edges, construction, and the BPO2 lane. Every row is
+          non-positive for Blanc, which is why no <span class="mono">BD-GAS</span> deviation row
+          exists — the empty list is measured, not inferred from an aggregate.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">the boundary’s third register</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          Declared exclusions, load-bearing: no verification of the deployed reference, which is
+          executed only as the finite oracle; no universal equivalence, gas parity, or liveness;
+          no raw identity of source, dispatcher, bytes, code hash, slots, or storage root. The
+          deployment root and open history are proved for one direct singleton shape and the
+          Prague-only schedule, under the admission the results section states — nothing wider.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:26ch">Half the bytes, and cheaper on every measured path.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">measured — committed manifests, pinned oracles</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size</td><td class="num">2,891 B</td><td class="dim">vs 6,358 deployed — 54.5% smaller, compiler-derived, digest-pinned</td></tr>
+            <tr><td>creation artifact</td><td class="num">3,037 B</td><td class="dim">vs 6,633 — 54.2% smaller; 146-byte constructor prefix</td></tr>
+            <tr><td>Prague runtime matrix</td><td class="num">67 / 2 / 0</td><td class="dim">strictly cheaper / equal (shared OOG thresholds) / dearer, over 69 transactions</td></tr>
+            <tr><td>canonical first deposit</td><td class="num">55,249</td><td class="dim">vs 62,050; the matrix’s median delta is −1,131, its largest saving 18,090</td></tr>
+            <tr><td>root read</td><td class="num">84,032</td><td class="dim">vs 102,095 — 18,063 cheaper on the empty-state read</td></tr>
+            <tr><td>constructor, direct creation message</td><td class="num">1,274,272</td><td class="dim">vs 1,993,844; execution alone 696,072 vs 722,244</td></tr>
+            <tr><td>BPO2 creation transaction</td><td class="num">1,368,074</td><td class="dim">vs 2,146,896 — measured against the current-mainnet target</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <span class="tick">what is deliberately not claimed</span>
+        <p class="dim" style="font-size:.94rem">
+          The constructor’s win is required to hold with the code deposit removed, so that a
+          smaller deposited runtime cannot mask a dearer constructor — and it does, by 26,172 gas
+          in both lanes. What is committed is the finite vector above, every boundary digest-pinned
+          with falsifiers that must keep failing. Universal gas dominance is not claimed; exact
+          parity with the deployed original is a declared freedom, not a goal.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          These are measurements against the pinned Prague EELS and the pinned BPO2 target, and the
+          page labels them as such rather than promoting them. Nothing here implies deployability
+          or cost on any other fork, and nothing here is a statement about the artifact at
+          <span class="mono">0x0000…05Fa</span>.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the build taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">measure the shape before you prove it</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The port’s first decision was made with a stopwatch. Two prototypes of the root fold —
+          one tail-recursive loop slot with a shared continuation, one 32-way source-generated
+          unroll — were compiled by the real compiler under an exclusive host hold: 179 bytes
+          against 4,195, at indistinguishable wall time and memory. An unrolled artifact would
+          have needed a carrier abstraction from the very first proof so that concrete internals
+          never rode through a 32-copy walk; the loop needed one invariant and one reusable
+          SHA-call boundary. The record is committed as
+          <a href="https://github.com/skbaek/blanc/blob/main/docs/BEACON_DEPOSIT_COST.md" style="text-decoration:underline;text-underline-offset:3px">BEACON_DEPOSIT_COST.md</a>,
+          and later proof work may split invariants but may not quietly replace the loops.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">the premise that had to be paid, out loud</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The open-history theorem was contracted as unconditional preservation and turned out to
+          be false in that form — type-4 delegation at address <span class="mono">0x2</span> is
+          real EVM. The repair was not a quieter statement but a louder one: contract-neutral
+          trace admission over actual executions and retained frames, with fresh entry and native
+          SHA as positive evidence at the admitted roots, re-priced with the user rather than
+          slipped in. The same machinery is now shared, and static-child storage preservation is
+          proved generically. A premise a theorem cannot do without should be visible in its
+          statement, its register row, and the page that quotes it.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Boundary, restated: nothing on this page verifies the Solidity artifact deployed at
+      <span class="mono">0x0000…05Fa</span> — its address is a provenance identifier only, and
+      Runtime Verification’s campaign on the r1 artifact is neither reproduced nor judged. The
+      count and root results are partial correctness for Blanc’s own compiled artifact under the
+      stated admission, the Prague-only schedule, and Jaune reachability’s own world bound; the
+      suffix is existential; and no collision resistance, historical inclusion, or liveness is
+      claimed. The full boundary — eight pinned non-claim phrases — lives in the
+      <a href="https://github.com/skbaek/blanc/blob/main/BEACON_DEPOSIT_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>,
+      in the honest register.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— BeaconDeposit, the deposit-contract port</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, registry rows, gate summaries, and the
+        assurance register; where evidence ends, the page says so.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="lido-circuit-breaker.html">the CircuitBreaker port →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/BEACON_DEPOSIT_ASSURANCE.md" target="_blank" rel="noopener">assurance register →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/BEACON_DEPOSIT_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/BEACON_DEPOSIT_PORT_DESIGN.md" target="_blank" rel="noopener">frozen design →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OssifiableProxy — a Blanc port of Lido’s upgradeable proxy</title>
+<meta name="description" content="Blanc’s port of Lido’s OssifiableProxy: a 2,188-byte ERC-1967 proxy with delegatecall ownership made a first-class verified capability — an arbitrary-child forwarding envelope, all seven control entries with ossification proved irreversible, whole-CREATE rollback, 85/85 differential rows and 25/25 strict gas wins beside the locked Solidity reference, one accepted deviation, and an upgrade whose migration is proved to be realized by the exact compiled proxy.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#results">Results</a>
+      <a href="#upgrade">Upgrade</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">ports</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>OssifiableProxy.</h1>
+        <p class="lede" style="margin-top:20px">
+          The port of Lido’s
+          <a href="https://etherscan.io/address/0x889edC2eDab5f40e902b864aD4d7AdE8E412F9B1#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">OssifiableProxy</a>
+          — the ERC-1967 proxy in front of Lido’s withdrawal queue at
+          <span class="mono">0x889e…F9B1</span>, taken from its canonical deployment at block
+          17,172,547: seven named control entries, a payable fallback and receive that delegate
+          everything else, and an admin that can renounce itself forever. Before this port, every
+          Blanc theorem treated delegation as an exclusion. Delegatecall — code address and
+          storage owner pulled apart — is now a verified capability, and the proxy is the contract
+          that exercises it.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          A port never claims byte identity —
+          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
+          governs what is claimed and what never is. What makes this port distinctive: its
+          forwarding envelope quantifies over an arbitrary certified child; its efficiency
+          campaign was pre-registered — 25 cells, a 13-win threshold — and won all 25; and on top
+          of the port sits an <a href="#upgrade" style="text-decoration:underline;text-underline-offset:3px">upgrade theorem</a>:
+          the exact compiled proxy’s <span class="mono">upgradeToAndCall</span> proved to realize
+          a named migration, with behavior through the proxy proved to refine before and after.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-lido-ossifiable-proxy-differential.sh
+<span class="ok">OK — OssifiableProxy differential result: 85/85 rows match; zero skipped; manifest 509ff7b8…; result 420f88a5…</span>
+<span class="p">$</span> scripts/check-proxy-pair-upgrade.sh
+<span class="ok">OK — proxy-pair-upgrade: 10 headlines, 3 assurance theorems, 3 generic definitions, 13 axiom pins, 12 exact witness rows</span></div>
+        <p class="cap"><b>Fig. 1</b> — two gates, verbatim (exact-candidate run 2026-09-03 UTC), digests
+          elided: the differential matrix beside the locked Solidity reference in a pinned Prague
+          oracle, and the upgrade gate that pins the headline theorems, their axiom sets, and the
+          twelve executable witness rows byte for byte — and whose self-test runs 23 disposable
+          mutations that must each fail at the intended channel.</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>2,188 B runtime — vs 2,497 deployed</span>
+          <span class="pill"><span class="d"></span>25/25 strict gas wins</span>
+          <span class="pill"><span class="d"></span>1 accepted deviation</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the port proves</p>
+    <h2 style="max-width:30ch">Forwarding for any child, and control that ends where it says.</h2>
+    <p class="lede" style="margin-top:18px">
+      A proxy is two contracts pretending to be one: the code runs at the implementation’s
+      address while the storage stays the proxy’s. The port’s central theorem states the wrapper
+      exactly — for an arbitrary delegated child, supplied as a certificate, the outer message
+      settles to what the child did — and leaves the harder question visible rather than assumed:
+      what a direct call to the implementation has in common with the child a proxy spawns is a
+      separate obligation, <span class="mono">DirectTargetTransport</span>, because the two differ
+      in gas, depth, access sets, transfer flag, code address, target, and storage owner.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">processMessage_forwardingEnvelope</span>, Blanc/ProxyPairOssifiableForwarding.lean).</div>
+      <p class="stmt">For the complete runtime, an exact delegated child execution — arbitrary code,
+        supplied as a certificate — determines the wrapper’s settled result: the outer message
+        settles to the child’s status, output, and proxy-owned storage effects, with gas and warm
+        sets deliberately absent from the observation.</p>
+<pre><span class="k">theorem</span> <span class="d">processMessage_forwardingEnvelope</span>
+    (outer : <span class="t">Msg</span>) (afterTransfer : <span class="t">Benv</span>)
+    (callPre : <span class="t">Devm</span>)
+    (d : <span class="t">DelegatecallSpawnDescriptor</span>
+      (initSevm (outer.withBenv afterTransfer)) callPre)
+    (route : <span class="t">OssifiableForwardingRoute</span> outer afterTransfer callPre d)
+    (childOut : <span class="t">MessageResult</span>)
+    (tail : <span class="k">match</span> childOut <span class="k">with</span>
+      | .ok child => <span class="t">ForwardingTailBudget</span> d child
+      | .error _ => <span class="t">PUnit</span>)
+    (certificate : <span class="t">DelegatedChildCertificate</span> d.child childOut) :
+    ∃ wrapperOut,
+      processMessage outer = wrapperOut ∧
+        <span class="t">ChildToWrapperSettledAt</span> outer.currentTarget childOut wrapperOut</pre>
+    </div>
+    <p class="cap"><b>Read the shape</b> — the child is an input certificate and the outer result is
+      existential, derived from compiled execution and message settlement rather than asserted.
+      <span class="mono">ForwardingTailBudget</span> is the one thing asked of the parent after the
+      child returns — enough gas to run its own return tail — and it is what the registry’s G-5
+      row is about: Blanc’s shorter schedule before <span class="mono">DELEGATECALL</span> can
+      hand a child a different EIP-150 budget than the reference would. The route carries the
+      exact context — current target and storage owner, code address, the gas word and its 63/64
+      split, depth decrement, warm sets, no value transfer — so that a property of the direct
+      target crosses to the delegated child only through an explicit transport proof.</p>
+
+    <div class="listing tight" style="margin:26px 0 0">
+      <div class="bar"><span>Blanc/ProxyPairOssifiable*.lean · Blanc/ProxyPairUpgrade*.lean</span><span class="tag">the substantive stack</span></div>
+<pre>processMessage_forwardingEnvelope        <span class="c">-- the theorem above</span>
+ossifyMutation_success_irreversible      <span class="c">-- after a successful ossify, every control entry is</span>
+                                         <span class="c">   ossified — forever, through the control surface</span>
+upgradeToAndCall_message_atomicRollback  <span class="c">-- a failed setup restores state and transient storage</span>
+                                         <span class="c">   to what the message entered with</span>
+migration_sound                          <span class="c">-- the named S1→S2 migration establishes the v2 domain</span>
+                                         <span class="c">   and the relation R2, independent of any transaction</span>
+upgradeToAndCall_primary_realizes_migration <span class="c">-- the exact compiled proxy performs that migration</span>
+throughProxy_primary_refinement          <span class="c">-- calls through the proxy agree, before and after</span></pre>
+    </div>
+
+    <div class="grid3" style="margin-top:26px">
+      <div class="panel">
+        <span class="tick">seven entries, one precedence</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          <span class="mono">getAdmin</span>, <span class="mono">getImplementation</span>,
+          <span class="mono">getIsOssified</span>, <span class="mono">ossify</span>,
+          <span class="mono">changeAdmin</span>, <span class="mono">upgradeTo</span>,
+          <span class="mono">upgradeToAndCall</span> — all seven reject nonzero value in the
+          compiler wrapper before any decoding; an admin of zero yields
+          <span class="mono">ProxyIsOssified()</span> before the caller is compared; same-value
+          admin and implementation writes still perform the store and emit their events; and
+          ossification writes zero and emits <span class="mono">AdminChanged(previous, 0)</span>
+          then <span class="mono">ProxyOssified()</span>. Reference quirks matched on purpose,
+          each proved as the frozen boundary states them.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">a constructor that owns storage</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          <span class="mono">constructor(address, address, bytes)</span> is decoded strictly, then
+          runs in source order: <span class="mono">Upgraded</span>, optional setup,
+          <span class="mono">AdminChanged</span>. The setup child owns proxy storage and may
+          alter either ERC-1967 slot — so <span class="mono">AdminChanged</span> reads the
+          post-setup admin, and the final write preserves that raw word’s upper 96 bits. Both-slot
+          mutation, the exact returned runtime, direct-<span class="mono">CREATE</span>
+          settlement, and whole-<span class="mono">CREATE</span> rollback on a failed setup are
+          proved, not sampled.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">delegation, made a capability</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The proxy sits on a foundation the thread built first: a uniform four-member role
+          separation across the shared call machinery — zero-value call, nonzero call, static
+          call, delegatecall — and a Jaune pin bump that binds the EIP-7702-resolved code address
+          in every call opcode, so the semantics itself keeps code address and storage owner
+          apart. The bump’s measured wave was 44 files and 129 declarations repaired across nine
+          layers, paid once by the goal that wanted the capability.
+        </p>
+      </div>
+    </div>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>85/85 — so a GAS-sensitive implementation behaves the same behind the Blanc proxy?</h3><span class="devtag">pushback</span></div>
+      <p>No, and that is the one accepted deviation. The rows compare status, exact returndata,
+        projected storage, ETH, ordered logs, target disposition, and the frozen
+        <span class="mono">DELEGATECALL</span> projection — caller, code address, input, storage
+        owner, value, and child outcome — but not child gas. Blanc executes a shorter schedule
+        before it reads <span class="mono">GAS</span>, so EIP-150 can hand the delegated child a
+        different budget than the reference would, even when both outer calls have ample gas; a
+        child that branches on <span class="mono">gasleft()</span> can therefore differ in status,
+        output, logs, or proxy-owned storage. Registry row G-5 prices that: deployers whose
+        implementation depends on exact gas must discharge a budget-sensitive argument or choose
+        a fixed-gas wrapper. Nothing here claims cross-artifact equivalence for such children.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>What about CREATE2, beacons, UUPS — or Lido’s actual admin?</h3><span class="devtag">pushback</span></div>
+      <p>Out of scope, and listed as such in the registry’s exclusions: no arbitrary-block
+        deployment root or historical <span class="mono">CREATE</span> address derivation, no
+        current mainnet admin or implementation state, no CREATE2 or factory deployment, no UUPS,
+        beacon, or transparent-proxy behavior, no delegatecall-as-library use of the runtime, and
+        no named control selector beyond the frozen seven — unmatched selectors and calldata of
+        zero to three bytes stay fallback, as the reference’s do. The canonical deployment at
+        block 17,172,547 is an oracle and provenance anchor; nothing verifies the Solidity at
+        <span class="mono">0x889e…F9B1</span>.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      The family’s 85 audited theorems sit in the repository-wide axiom audit, and the
+      constructor, direct-<span class="mono">CREATE</span>, and closed-fixture boundaries — the
+      nonempty setup chronology, the exact both-slot setup child, and the failed
+      whole-<span class="mono">CREATE</span> rollback among them — are pinned by
+      <span class="mono">check-claims.sh</span>. Fixed Keccak decisions for the ERC-1967 slot
+      words use the existing kernel route; nothing joins the trusted base.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ UPGRADE ═══════════ -->
+<section id="upgrade">
+  <div class="wrap">
+    <p class="eyebrow">The upgrade — a proxy and two implementations at once</p>
+    <h2 style="max-width:30ch">An upgrade that is proved to be a migration.</h2>
+    <p class="lede" style="margin-top:18px">
+      Upgrade equivalence is the recurring ask of everyone who runs a proxy, and it is usually
+      answered by inspection. Blanc answers it with five explicit objects — the proxy program, v1,
+      v2, a migration, and a relation — and two conclusions kept deliberately apart: that the
+      migration is <em>sound</em> for the relation, and that later calls through the proxy
+      <em>refine</em> one another. Neither is evidence for the other, and neither contains an
+      opaque certificate that assumes the postcondition it is meant to prove.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">upgradeToAndCall_primary_realizes_migration</span>, Blanc/ProxyPairUpgradeExecution.lean).</div>
+      <p class="stmt">One authorized execution of the exact compiled proxy’s
+        <span class="mono">upgradeToAndCall(v2, initializeV2(), false)</span>, from the named v1
+        installation, commits v2, runs the initializer child that this very execution spawns
+        over proxy-owned storage, copies the protected word from slot 7 to slot 8, writes the
+        marker at slot 9, emits exactly the <span class="mono">Upgraded</span> log — and
+        establishes both the initialized v2 domain and the relation R2.</p>
+<pre><span class="k">theorem</span> <span class="d">upgradeToAndCall_primary_realizes_migration</span>
+    (proxyProg : <span class="t">Prog</span>) (hproxy : proxyProg = runtimeBaseline)
+    {sevm : <span class="t">Sevm</span>} {entry post : <span class="t">Devm</span>} {entryImage : <span class="t">Bytes</span>}
+    (houter : <span class="t">Prog</span>.<span class="t">RunCompiledTo</span> sevm entry proxyProg (.ok post))
+    … <span class="c">-- exact caller, calldata, live admin, v1 installed, v2 code present,</span>
+    … <span class="c">-- the raw implementation commit, a well-formed entry image, and</span>
+    (hchild : <span class="t">PrimaryChildExecution</span> sevm post) :
+    <span class="t">Devm</span>.getStor post upgradeProxy =
+        ((((<span class="t">Devm</span>.getStor entry upgradeProxy).set implementationSlotLit
+          v2Implementation.toB256).set v2ValueSlot
+            (<span class="t">Devm</span>.getStorVal entry upgradeProxy v1ValueSlot)).set
+              migrationMarkerSlot migrationMarkerValue) ∧
+      … ∧ initializedDomain upgradeProxy post.state ∧
+      upgradeRelation upgradeProxy entry.state post.state ∧
+      post.logs = entry.logs ++
+        [rawUpgradedLog upgradeProxy v2Implementation.toB256]</pre>
+    </div>
+    <p class="cap"><b>Read the shape</b> — the proxy program is an explicit argument required equal
+      to the exact <span class="mono">runtimeBaseline</span>, never hidden in a constant.
+      <span class="mono">PrimaryChildExecution</span> universally consumes the call states the
+      outer boundary selects and supplies only the descriptor-selected child’s compiled run; its
+      output and storage effects are <em>derived</em> from that run, not stored as certificate
+      fields — an independent review blocked an earlier version on exactly that point. The
+      identity routes are proved beside it: exact <span class="mono">upgradeTo</span> and the
+      skipped empty <span class="mono">upgradeToAndCall</span> change only the implementation
+      word, and they preserve R2 only under an explicit admissibility premise the ordinary
+      witness is proved <em>not</em> to satisfy — so “upgrade without migrating” is a biting
+      control, not a route.</p>
+
+    <div class="grid2" style="margin-top:26px;align-items:start">
+      <div class="panel">
+        <span class="tick">the witnesses, and what they leave outside</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          v1 and v2 are goal-local Blanc implementations of 74 and 141 bytes, proved distinct: v1
+          keeps <span class="mono">value()</span> and <span class="mono">setValue</span> at slot 7,
+          v2 at slot 8, plus an initializer and a marker getter. The relation is R2 — equality of
+          the protected logical word on the shared selectors — not full-surface R1, since v2’s
+          marker and the stale v1 word are outside the projection, and not invariant-only R3.
+          Through-proxy refinement retains both exact forwarding routes, their context, and the
+          G-5 tail budgets; a closed <span class="mono">value()</span> package inhabits the entire
+          premise set, so no premise is satisfiable only in principle.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">twelve rows the gate pins byte for byte</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          An evaluator executes the exact artifacts under Prague: the primary upgrade succeeds
+          with implementation v2 and slots 42/42/1 at 4,941,998 gas; <span class="mono">upgradeTo</span>
+          and the skipped-empty route succeed while leaving slot 8 and the marker untouched; an
+          unauthorized caller, an ossified proxy, absent v2 code, and a reverting setup each fail
+          and restore v1 and 42/0/0; and four rows re-enter the upgraded proxy to read 42, write
+          73, read 73, and read the v2-only marker. The relation row confirms the primary
+          poststate is R2-related, the ordinary state is not identity-admissible, and a
+          poststate with slot 8 at 41 violates R2.
+        </p>
+      </div>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      What this is not: a theorem about arbitrary proxies, implementations, migrations, or
+      relations; a claim about any Lido upgrade or about deployed Solidity; a forced-empty or
+      redeploy-and-migrate route; a selection of a one-proxy, many-implementations architecture;
+      or a universal liveness or gas claim. Scalar slots are checked against the three named
+      ERC-1967 slots only — no global collision theorem and no hash assumption.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it is the proxy</p>
+    <h2 style="max-width:30ch">A locked reference, a corpus, and a bet placed before the race.</h2>
+    <p class="lede" style="margin-top:18px">
+      “Right” was written down before it was argued:
+      <a href="https://github.com/skbaek/blanc/blob/main/OSSIFIABLE_PROXY_COMPATIBILITY.md" style="text-decoration:underline;text-underline-offset:3px">OSSIFIABLE_PROXY_COMPATIBILITY.md</a>
+      freezes the constructor, the seven entries, fallback and receive, and thirteen cross-cutting
+      boundaries — nonpayability, dispatch, ABI edges, authorization precedence, setup reverts,
+      events, errors, the functional ERC-1967 words, constructor order, delegated returndata —
+      and names the proof family and differential rows that own each. Three layers discharge it.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The reference lock — which contract, exactly</span><span class="foldsub">7-source closure · byte-for-byte recompilation · two archival captures · 36 falsifier cases</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-lido-ossifiable-proxy-reference.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-lido-ossifiable-proxy-reference.sh</span></a>
+          reconstructs Lido core v4.0.0 at its pinned commit with OpenZeppelin 4.4.1 and
+          <span class="mono">solc 0.8.9</span> offline, recompiling the seven-source closure byte
+          for byte and deriving the constructor, seven named entries, fallback and receive, the
+          events and errors, and the exact ERC-1967 words; the source-and-compiler route and the
+          transaction-and-deployed-runtime route reproduce the same 2,497-byte runtime, and two
+          archival RPC captures are reconciled. Thirty-six live falsifier cases — deletion, type,
+          digest, compiler, ABI, provider, coherent-input — keep the evidence-filled compatibility
+          contract synchronized with the lock rather than with anyone’s memory of it.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">85 rows · seven falsifier families · a typo the red run caught</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-lido-ossifiable-proxy-differential.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-lido-ossifiable-proxy-differential.sh</span></a>
+          executes the exact locked Solidity and Blanc complete <span class="mono">CREATE</span>
+          inputs in fresh symmetric pinned-EELS Prague worlds: 18 constructor cases, 7 getters, 16
+          control entries, 20 upgrade-and-call arms, 17 fallback and receive cases, and 7
+          named-value rejections, compared on status, exact returndata, projected storage, ETH,
+          ordered logs, target disposition, and every ordered <span class="mono">DELEGATECALL</span>
+          field, with no skip and no allowlist. Seven independent falsifier families — reference
+          substitution, selector routing, event and error bytes, state projection, rollback,
+          child-call observation, corpus and result mutation — must keep biting.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          The first complete run was red, and the red result is preserved: three expected
+          fixtures spelled a revert payload <span class="mono">implentation</span>, and both
+          artifacts correctly returned <span class="mono">implementation</span>. The successor
+          corpus changed only those expected bytes — a defect in the test, caught by the two
+          things it was testing, and recorded rather than tidied away.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The efficiency campaign — pre-registered</span><span class="foldsub">25 cells · threshold 13 strict wins · 25 won · BPO2 replay 21/21</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          The immutable campaign contract fixed two size cells, 23 direct Prague gas cells, a
+          denominator of 25, and a threshold of at least 13 strict Blanc wins before any
+          measurement ran, and every cell is scoreable only after semantic agreement. One
+          optimization was admitted, and only after a frozen baseline and a written prediction:
+          ten product-private address reads changed from
+          <span class="mono">PUSH0 NOT PUSH1 0xa0 SHL NOT AND</span> to
+          <span class="mono">PUSH0 NOT PUSH1 0x60 SHR AND</span>, predicted at −9 and −10 bytes and
+          −1,803 deployment gas, and measured exactly so. Code sharing was rejected because its
+          trigger did not fire. The final ledger is 25 agreements and 25 strict wins, with zero
+          ties, losses, or incomparables.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          A report-only replay under the current-mainnet BPO2 target represents 21 transaction
+          scenarios with 21 semantic agreements, 19 lower Blanc receipt-gas rows, and two ties —
+          run 2026-09-02 and credited by content identity. The two size cells are not
+          transactions, and two forwarding cells need pre-warmed message state the singleton
+          transaction interface cannot express; neither alters the primary score.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">forwarding · control · constructor · the upgrade</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          Where the corpus samples, the theorems quantify — always about the exact compiled
+          bytes: a generator-owned module ties the 1,249-byte constructor prefix, the 2,188-byte
+          runtime, and the 3,437-byte creation template to explicit byte literals with compiler
+          witnesses and kernel-checked SHA-256 and Keccak-256 identities, and a network-free gate
+          rejects a laundered literal. The forwarding envelope and the upgrade family are stated
+          in full above; between them sit the control effects for all seven entries, the strict
+          constructor decoder and both-slot deployment family, and the whole-<span class="mono">CREATE</span>
+          rollback — each a theorem hypothesising those bytes in so many words.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:28ch">One accepted — and four boundaries priced beside it.</h2>
+    <p class="lede" style="margin-top:18px">
+      <a href="https://github.com/skbaek/blanc/blob/main/OSSIFIABLE_PROXY_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">OSSIFIABLE_PROXY_DEVIATIONS.md</a>
+      accepts exactly one ordinary-behavior deviation and declares it before anyone asks. Beside
+      it stand three measured semantic-preserving implementation choices whose observability is
+      gas and out-of-gas boundaries, and one boundary clarification that is intrinsic to
+      delegation itself. Any later mismatch must be repaired or dispositioned there before the
+      port claim can move.
+    </p>
+
+    <div class="dev">
+      <div class="devhead"><h3>The forwarded child budget</h3><span class="devtag">G-5 — accepted, priced</span></div>
+      <p>Blanc reads <span class="mono">GAS</span> after a shorter schedule than the Solidity
+        wrapper — it omits a redundant code check and discards successful setup returndata
+        earlier — so the EIP-150 child budget can differ, and a GAS-sensitive implementation or
+        setup child can branch differently even when both outer calls have ample gas.</p>
+      <p><b>The argument:</b> the priced consequence of a measured smaller and cheaper wrapper.
+        The 85 rows agree on their published projection, which excludes child gas; no
+        cross-artifact universal equivalence is claimed, and a deployer whose implementation
+        depends on exact <span class="mono">gasleft()</span> owes a budget-sensitive argument.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Three schedules that cost less</h3><span class="devtag">G-1, G-2, G-3 — measured, semantic-preserving</span></div>
+      <p>The constructor copies its dynamic setup payload incrementally into a fixed scratch
+        region rather than replaying solc’s decoder schedule; the upgrade path checks the new
+        implementation’s code once, where OpenZeppelin checks twice; successful setup returndata
+        is discarded as soon as the child reports success.</p>
+      <p><b>The argument:</b> every applicable differential row agrees, and the affected cells
+        are strict wins in the frozen matrix. What can differ is the exact gas point at which a
+        malformed or underfunded creation halts — outside semantic equivalence, and measured
+        separately. No intervening execution can remove code between the reference’s two
+        checks.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Direct target versus delegated child</h3><span class="devtag">G-4 — boundary clarification</span></div>
+      <p>A direct call to the implementation and the proxy’s delegated child enter with
+        different gas, depth, access sets, transfer flag, code address, current target, and
+        storage owner. Blanc states those differences and does not assert whole-message
+        equivalence for arbitrary code.</p>
+      <p><b>The argument:</b> not a port deviation but the nature of delegation, exposed rather
+        than normalized away. A property of the target that is sensitive to any of those seven
+        carries over only through <span class="mono">DirectTargetTransport</span>, which the
+        upgrade family discharges for the scalar input word and no more.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:26ch">Twenty-five cells, pre-registered — and all twenty-five won.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">measured — frozen campaign, pinned oracle</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>cell</th><th class="num">Blanc</th><th class="num">reference</th></tr></thead>
+          <tbody>
+            <tr><td>A1 · runtime size</td><td class="num">2,188 B</td><td class="num">2,497 B</td></tr>
+            <tr><td>A2 · creation template</td><td class="num">3,437 B</td><td class="num">4,207 B</td></tr>
+            <tr><td>A3 · deployment, empty setup</td><td class="num">487,814</td><td class="num">550,980</td></tr>
+            <tr><td>A4 · deployment, with setup</td><td class="num">510,079</td><td class="num">573,987</td></tr>
+            <tr><td>F1 · delegated forward</td><td class="num">4,958</td><td class="num">5,099</td></tr>
+            <tr><td>C7 · <span class="mono">upgradeToAndCall</span></td><td class="num">33,705</td><td class="num">34,973</td></tr>
+            <tr><td>N5 · setup revert, bubbled</td><td class="num">11,643</td><td class="num">12,874</td></tr>
+            <tr><td>all 25 cells</td><td class="num">25 wins</td><td class="num">0 ties · 0 losses</td></tr>
+          </tbody>
+        </table></div>
+        <p class="cap" style="margin-top:12px">Seven representative cells of the frozen
+          A1–A4 / F1–F7 / C1–C9 / N1–N5 vector; the committed ledger holds all twenty-five, each
+          scored only after semantic agreement.</p>
+      </div>
+      <div class="panel">
+        <span class="tick">what is deliberately not claimed</span>
+        <p class="dim" style="font-size:.94rem">
+          Universal gas dominance and global optimality are not claimed: the campaign is a
+          finite, pre-registered vector, and its threshold was a bet the port could have lost.
+          Child gas is not compared anywhere, which is what G-5 records. The direct-versus-delegated
+          gas, depth, and access differences are stated, not equalized.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The primary campaign is under the pinned Prague EELS; the BPO2 replay is report-only and
+          does not alter or double-count that score. These are measurements, and the page labels
+          them as such rather than promoting them into a property.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the build taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">certificates are not conclusions</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The upgrade family’s first candidate carried the shared child’s output and storage as
+          structure fields and consumed them as certificates; its initializer child was
+          existentially independent of the outer setup boundary; and its complete through-proxy
+          premise set had no inhabitant. An independent reviewer blocked completion on all three.
+          The repairs are the theorems the page now quotes: effects derived from compiled child
+          runs, a child universally bound to the states the outer walk selects, and a closed
+          package that satisfies every premise at once. A certificate that assumes the desired
+          postcondition proves nothing; the gate’s self-test now mutates for exactly that.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">bet before you measure</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The efficiency campaign froze its 25 cells, its 13-win threshold, and its symmetric
+          worlds in an immutable manifest that a static gate validates without running anything,
+          rejecting manifest, result, classification, score, lineage, and threshold corruption in
+          58 hostile static cases. Only then was one optimization proposed, with its prediction
+          written down, and only after the measurement matched the prediction was it admitted. A
+          number that could not have come out the other way is not a result, and the campaign was
+          built so that it could have.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Boundary, restated: nothing on this page verifies the Solidity deployed at
+      <span class="mono">0x889e…F9B1</span> — the canonical deployment is an oracle and provenance
+      anchor. The forwarding envelope excludes gas and warm sets from its observation; the
+      upgrade result is R2 on one goal-local witness pair; the direct-versus-delegated boundary is
+      stated, not closed; and the declared destination — Lido’s gateway behind this very proxy —
+      is a successor that must discharge exact transport, G-5 included, and is neither launched
+      nor implied. The full list lives in the deviation registry’s exclusions, in the honest
+      register.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— OssifiableProxy, the Lido port</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, registry rows, the frozen campaign
+        ledgers, and gate summaries; where evidence ends, the page says so.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="lido-triggerable-withdrawals-gateway.html">the gateway port →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/OSSIFIABLE_PROXY.md" target="_blank" rel="noopener">evidence map →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/PROXY_PAIR_UPGRADE.md" target="_blank" rel="noopener">the upgrade boundary →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/OSSIFIABLE_PROXY_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>

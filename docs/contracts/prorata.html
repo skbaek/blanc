@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRORATA — a Blanc étude in pro-rata pricing</title>
+<meta name="description" content="Blanc’s PRORATA: a 343-byte ETH-native share ledger built as the second étude — exact-rounding pricing behind a virtual offset, price monotonicity and zero-tolerance preview/actual consistency proved on the compiled bytes, cumulative rounding dust conserved along every configured chain history, and inflation-attack impossibility proved with no honesty premise on any callee; 14 BPO2 fixtures, an exhaustive exact-integer oracle, and a compiler-shadow gas benchmark.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#results">Results</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">études</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>PRORATA.</h1>
+        <p class="lede" style="margin-top:20px">
+          The second étude, and the first of the arithmetic série: an ETH-native, non-transferable
+          share ledger pared down to the one hard thing ratio pricing adds. The price is a ratio,
+          so every deposit and every withdrawal rounds — and both the rounding and the ratio itself
+          are attacker-influenceable, because anyone can move the numerator by sending ether. Its
+          headline: with the virtual offset in place, no coalition of attackers can take out more
+          than it put in, at any reachable state, with <em>no honesty premise on any callee</em>.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          It models no deployed contract and claims no token standard — no events, no
+          transferability, no ERC-4626 conformance. Four endpoints —
+          <span class="mono">deposit</span>, <span class="mono">withdraw</span>, and the two
+          conversion views — plus plain ether receipt, which mints nothing: the donation lever. Its
+          arithmetic was brute-forced by an independent exact-integer oracle before it was proved,
+          and a control shows the offset is load-bearing.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-prorata.sh --no-build
+<span class="ok">OK — prorata fixtures: 14/14 PASS, manifest/vector/runtime checks clean</span>
+<span class="p">$</span> scripts/check-prorata-current-mainnet.sh --composed-prerequisites
+<span class="ok">OK — prorata current-mainnet: 14 fixtures and 10-case three-runtime benchmark reproduce</span></div>
+        <p class="cap"><b>Fig. 1</b> — the PRORATA gates, verbatim: the committed BPO2 fixture replay through
+          Jaune’s runner, with every fixture’s pre-state code byte-checked against the committed
+          literal (exact-candidate run 2026-09-03 UTC), and the current-mainnet lane that
+          regenerates those fixtures and the three-runtime gas benchmark against the pinned BPO2
+          target, byte for byte (last green run 2026-09-02, credited by content identity).</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>343 B runtime</span>
+          <span class="pill"><span class="d"></span>no profit vs any coalition</span>
+          <span class="pill"><span class="d"></span>14 fixtures / 131 assertions</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the étude proves</p>
+    <h2 style="max-width:30ch">Rounding as an adversarial surface, closed.</h2>
+    <p class="lede" style="margin-top:18px">
+      Every deployed contract that prices anything computes <span class="mono">a·b/d</span>, every
+      such computation rounds, and rounding is where value leaks. The étude proves the exact,
+      zero-tolerance, adversary-quantified versions of the properties the industrial tier
+      approximates — a four-rung ladder in ascending order of what nobody else states: rounding
+      direction; preview/actual consistency with no tolerance parameter anywhere; cumulative dust
+      conservation along arbitrary operation sequences; and the étude’s burden, the
+      strategy-quantified impossibility of the inflation attack.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">attacker_no_profit</span>, Blanc/ProrataAttackTrace.lean).</div>
+      <p class="stmt">Over any closed attack trace realized along a configured chain from PRORATA’s
+        deployment root — a coalition’s deposits, withdrawals, and donations interleaved around a
+        victim’s deposit, with arbitrary callee code inside the quantifier — the coalition’s
+        settled take is bounded by its own settled input.</p>
+<pre><span class="k">theorem</span> <span class="d">attacker_no_profit</span> {cfg : <span class="t">ChainConfig</span>} {deployed future : <span class="t">BlockChain</span>}
+    {ca : <span class="t">Adr</span>} {root : <span class="t">DeploymentRoot</span> cfg deployed ca}
+    {coalition : <span class="t">Finset</span> <span class="t">Adr</span>} {victim : <span class="t">Adr</span>}
+    {steps : <span class="t">List</span> (<span class="t">ProrataAccountingStep</span> offset.toNat)}
+    (trace : <span class="t">ProrataAttackTrace</span> root coalition victim steps future) :
+    outA victim coalitionCharge steps ≤ inA victim coalitionCharge steps</pre>
+    </div>
+    <p class="cap"><b>Read what is absent</b> — no honesty, cooperation, or no-donation premise on
+      any callee, and no premise on callee code of any kind: reentrancy after the pre-<span class="mono">CALL</span>
+      settlement, receive-path donations, forced and native credit, and every ordering the
+      realized carrier admits all sit inside the quantifier. The <span class="mono">2 ≤ O</span> the
+      pure result needs is discharged from the compiled offset <span class="mono">O = 1000</span>,
+      not carried as a side condition. Beside it stand
+      <span class="mono">attacker_open_context</span> — the same bound with an explicit
+      <span class="mono">outsideSubsidy</span> term, for diagnosis over an open trace — and
+      <span class="mono">victim_loss_bound</span>: a victim who deposited
+      <span class="mono">v</span> against pre-credit state <span class="mono">(S, B)</span> and later
+      exits its unchanged shares for <span class="mono">p</span> loses at most
+      <span class="mono">(B + 1) / (S + O) + 1</span> — one virtual-asset quantum above the price
+      ratio, a bound the oracle found tight.</p>
+
+    <div class="listing tight" style="margin:26px 0 0">
+      <div class="bar"><span>Blanc/Prorata*.lean</span><span class="tag">the ladder</span></div>
+<pre>mintN_never_overmints · payN_never_overpays        <span class="c">-- P1: every conversion rounds in the ledger's favour</span>
+deposit_price_nondecreasing · withdraw_price_…    <span class="c">-- P1: the share price never falls</span>
+prorata_convertToShares_eq_deposit_mint            <span class="c">-- P2: preview = actual, exactly, on the compiled bytes</span>
+prorata_convertToAssets_eq_withdraw_pay            <span class="c">-- P2: …and on the withdraw side</span>
+prorata_realized_dust_trace_exact                  <span class="c">-- P3: the rounding residue telescopes exactly along</span>
+                                                   <span class="c">   real configured histories</span>
+DeploymentRoot.reachable_accountingInvariant       <span class="c">-- P3: Σ ledger = supply, supply ≤ cap, S ≤ O·B,</span>
+                                                   <span class="c">   at every reachable state from the root</span>
+attacker_no_profit · attacker_open_context         <span class="c">-- P4: the theorem above, and its open-context form</span>
+victim_loss_bound                                  <span class="c">-- P4: one quantum above the price ratio</span></pre>
+    </div>
+
+    <div class="grid3" style="margin-top:26px">
+      <div class="panel">
+        <span class="tick">the virtual offset, priced</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          Mint and burn price at <span class="mono">(B + 1) / (S + O)</span>: one virtual asset
+          beside <span class="mono">O</span> virtual shares, in the OpenZeppelin decimal-offset
+          shape. The price starts at <span class="mono">1/O</span> and — the ledger’s core
+          invariant — never decreases. The oracle found the edge before any proof did: at
+          <span class="mono">O = 1</span> a five-step transcript skims one wei of a victim’s
+          rounded-away value, so <span class="mono">2 ≤ O</span> is load-bearing and is the
+          theorem’s hypothesis, discharged by the compiled <span class="mono">1000</span>.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">checks, effects, then the adversary</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          <span class="mono">withdraw</span> burns, updates the supply, and only then sends ether
+          to the caller with all remaining gas — FMINT’s mid-flight hand-off to untrusted code,
+          reused. The payout satisfies <span class="mono">p ≤ B</span> structurally, so the send
+          cannot fail for want of balance; a rejected payout reverts the whole call, and a
+          reentrant receiver is both a committed fixture and a case inside the theorems’
+          quantifier.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">eleven rungs to the chain</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The pure accounting is carried to real executions by a realized-execution ladder: one
+          message call, a transaction, a transaction list, system messages, request calls, direct
+          withdrawals, a block body, a configured block, a configured history, the frozen
+          interface, and the realized P3 endpoint. Nine of the eleven rungs added no hypothesis
+          at all; the two that did are discharged by the block carrier itself, so the endpoint
+          rests on the deployment root and the chain reach alone.
+        </p>
+      </div>
+    </div>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>“No attacker profit” — proved over executions?</h3><span class="devtag">pushback</span></div>
+      <p>Over classifications consistent with real storage movement, and the distinction is
+        stated rather than smoothed over. The realized carrier does not restate intra-block
+        order in its type: every trace the construction produces <em>is</em> in that order, and
+        every step is pinned to actual storage movement, but the honest reading of P4’s domain is
+        “classifications consistent with the chain” rather than “executions”. P3 is untouched by
+        this — strengthened, in fact, since it is universally quantified over realizing step
+        lists and <span class="mono">prorataTraceRealizes_exists_of_reachUsing</span> guarantees
+        every real reach has one. And there is no existence theorem for the attack trace:
+        anti-vacuity for P4 rests on the committed fixture controls, as the frozen statement
+        assigns.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Where do third-party donations go in the books?</h3><span class="devtag">pushback</span></div>
+      <p>To the coalition, in the closed form — which is why the open form exists. Forced and
+        native credits — direct block withdrawals, coinbase and fee credits, foreign frames —
+        record no actor, and the closed trace charges all of them to coalition input by frozen
+        designation. That means <span class="mono">attacker_no_profit</span> can count third-party
+        principal as coalition input; <span class="mono">attacker_open_context</span> charges it
+        to <span class="mono">outsideSubsidy</span> instead, with a reference trace on record
+        showing the subsidy term is necessary: a third-party donation of 1,000,000 wei lets a
+        one-wei coalition take out 500,125.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Is this a vault?</h3><span class="devtag">pushback</span></div>
+      <p>No, and the étude says so at every altitude: no ERC-4626 claim — that needs an ERC-20
+        asset — no transferability, no economic viability, and no liveness. A donation that pushes
+        the balance above <span class="mono">2<sup>126</sup> − 1</span> wei halts withdrawals
+        until the balance falls, and the source comment says so rather than promising an exit. The
+        claim class is the étude’s: composed from scratch, with the adversarial part proved. The
+        port that buys the 4626 claim back — the same ledger over Blanc’s exact WETH, with a joint
+        two-contract invariant — is a declared successor, not a claim.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      Claim class, stated: P1 through P4 each hold within <span class="mono">propext</span>,
+      <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span>; P2 and
+      P3 are exact, with no tolerance parameter anywhere; every statement is tied to the exact 343
+      bytes by the compile witness; and the étude’s 50 audited theorems sit in the repository-wide
+      axiom audit, with the P3 and P4 headline statements pinned character for character. The
+      statement-freeze memo and the module docstrings are the authority on which claim is which.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it does what it claims</p>
+    <h2 style="max-width:28ch">An oracle, a control, and a compiler shadow.</h2>
+    <p class="lede" style="margin-top:18px">
+      An étude has no deployed original to run beside, so the evidence had to be built to
+      falsify the statements themselves: an exact-integer oracle that searched for
+      counterexamples before a proof was attempted, fixtures replayed through Jaune, and — for the
+      efficiency question — an exact-surface shadow written twice in Solidity, so that “smaller
+      and cheaper” has a referent that is fair.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The oracle — brute force before proof</span><span class="foldsub">290 s battery · 230 million P4 search nodes · zero P1–P3 violations</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          An independent Python model with exact integers and no floats re-implements the ledger
+          and checks every property at every transition: exhaustive reachable-state sweeps at
+          offsets 1, 2, 3, and 10 to depth five and six — up to 151,631 unique states and 3.3
+          million transitions per configuration — and 320,000 randomized operations at
+          2<sup>96</sup> magnitudes. P1, P2, and P3 recorded zero violations. For P4 an exhaustive
+          search over every interleaving of coalition deposits, withdrawals, and donations around a
+          victim’s deposit explored 230,010,464 nodes and returned the theorem-deciding answer:
+          profit is exactly zero for every offset of two or more, and <em>positive</em> — one wei —
+          at offset one, with a fidelity-confirmed witness.
+        </p>
+        <p class="dim">
+          Two controls bracket the result. With the offset disabled, the classic first-depositor
+          attack drains the victim entirely — one wei in, zero shares minted, the whole deposit
+          lost — so the vulnerability is real when the defense is removed. On the real contract at
+          <span class="mono">O = 1000</span> the same shape costs the attacker 499,876 wei and the
+          victim 249 of 1,000,000, inside every candidate bound; that transcript is now fixture
+          <span class="mono">09-g6-real-offset-attack</span>. The victim bound the theorems carry
+          was the tightest of three candidates and is achieved with zero slack, so its
+          <span class="mono">+ 1</span> is necessary.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          The oracle also flagged, rather than smoothed, a margin: the withdraw product
+          <span class="mono">MAXS · (MAXB + 1)</span> is a 252-bit value against a 256-bit word.
+          Safe at the compiled caps, with four bits to spare and no room to widen either.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Fixture evidence — the sanity layer</span><span class="foldsub">14 BPO2 blocks · 131 assertions · byte-checked runtime</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-prorata.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-prorata.sh</span></a>
+          replays fourteen committed blocks through Jaune’s runner at <span class="mono">BPO2</span>,
+          each generated through the pinned current-mainnet target with its outer receipt status,
+          scenario-specific post-state facts, and absence of logs asserted before writing: a
+          genesis deposit, a donation that shifts the price, full and partial exits, the views,
+          every arithmetic guard, all three nonpayable wrappers, an unknown selector, a reentrant
+          receiver after checks-and-effects, a rejected payout with full rollback, and the frozen
+          offset-attack transcript. The harness checks the manifest in both directions,
+          byte-compares every pre-state PRORATA runtime against the committed
+          <span class="mono">prorataCode</span> literal, regenerates the canonical arithmetic
+          vectors, and carries two self-test falsifiers that must fail in isolated copies.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">P1–P4 · eleven rungs · twelve shared modules</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          The four rungs are stated in full in the
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>.
+          Beneath them, each endpoint has an effect theorem at body altitude and again at
+          compiled-bytes altitude — <span class="mono">prorata_deposit_exec_effect</span>,
+          <span class="mono">prorata_withdraw_exec_effect</span>, and their view counterparts —
+          and the completion report audits every clause of the frozen statement against a named
+          declaration, saying plainly where a clause is a composition of three theorems rather
+          than one, and where one clause is not separately stated because it is arithmetic
+          rearrangement of another.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          What the étude left behind is as large as what it proved: twelve contract-neutral
+          <span class="mono">Execution*</span> modules — retained trace carriers from messages
+          through configured histories, ordered state replays, and effect transports — built to
+          carry PRORATA’s accounting and hoisted to the shared layer, where the later contracts
+          consume them whole. The arithmetic itself rests on Jaune’s
+          <span class="mono">MulDiv</span> layer, landed additively for this étude, and the one
+          generic fact the étude had to prove privately was queued as a hoist and has since
+          landed upstream.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:28ch">No reference, so no registry — and a frozen statement instead.</h2>
+    <p class="lede" style="margin-top:18px">
+      PRORATA is referenced against nothing deployed and nothing vendored; its authority is its
+      own statement-freeze memo, approved before implementation, and the arithmetic série map. What
+      stands where a registry would: the completion report’s ledger of deviations from that frozen
+      statement, and its list of what is <em>not</em> pinned down — published so that a reader
+      citing P4 knows exactly what P4 quantifies over.
+    </p>
+
+    <div class="dev">
+      <div class="devhead"><h3>A hypothesis dropped, not added</h3><span class="devtag">deviation from the freeze — a strengthening</span></div>
+      <p>The frozen statement carried <span class="mono">2 ≤ O</span> on the no-profit headline.
+        The theorem as landed carries none: the compiled offset discharges it, and the parametric
+        premise survives only on the pure <span class="mono">attacker_no_profit_of_attackPath</span>.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>One carrier became two</h3><span class="devtag">deviation from the freeze — arity</span></div>
+      <p>The freeze named a single attack carrier. Stating the open-context bound needs something
+        to carry the coalition/outside split, so the general carrier is the open trace with a
+        per-step charge, and the closed trace is its abbreviation at the coalition charge — the
+        frozen arity exactly, with <span class="mono">outsideSubsidy</span> definitionally zero.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Indexed by storage and balance, not by state</h3><span class="devtag">deviation from the freeze — representation</span></div>
+      <p>The realized carrier cannot be indexed by a world state, because a deposit’s pricing
+        sees the balance immediately <em>before</em> its own incoming credit — a boundary that is
+        no world state’s balance. That is the freeze’s own rule for which
+        <span class="mono">(S, B)</span> a deposit observes, and the carrier follows it rather than
+        the memo’s spelling.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:26ch">Against a shadow, not an original.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">measured — committed benchmark, pinned compiler and target</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size, selected</td><td class="num">343 B</td><td class="dim">committed literal, byte-checked by every fixture</td></tr>
+            <tr><td>exact-surface shadow, strict Yul</td><td class="num">356 B</td><td class="dim">solc 0.8.36 via-IR, pinned; +13 B / +2,600 code-deposit gas</td></tr>
+            <tr><td>exact-surface shadow, Solidity legacy</td><td class="num">440 B</td><td class="dim">same compiler, legacy pipeline; +97 B / +19,400</td></tr>
+            <tr><td>BPO2 receipt gas vs the Yul shadow</td><td class="num">9 / 10</td><td class="dim">cases where Blanc is cheaper; net 162 gas over the suite; Yul wins the unknown-selector revert by 15</td></tr>
+            <tr><td>BPO2 receipt gas vs the legacy shadow</td><td class="num">10 / 10</td><td class="dim">aggregate 502 gas over ten one-transaction blocks</td></tr>
+          </tbody>
+        </table></div>
+        <p class="cap" style="margin-top:12px">Each benchmark row is one signed transaction in an
+          independent BPO2 block through the pinned current-mainnet target, with identical
+          envelopes across the three runtimes and zero semantic mismatch in receipts and projected
+          state.</p>
+      </div>
+      <div class="panel">
+        <span class="tick">what an étude forgoes, and what it declines</span>
+        <p class="dim" style="font-size:.94rem">
+          There is no deployed original, so there is no delta against one. The shadows exist as
+          compiler baselines — the same four endpoints, ledger, guards, and rounding, once in
+          legacy Solidity and once in strict Yul — never as specifications; PRORATA’s frozen
+          statement, proofs, oracle, and fixtures remain the authority.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          Global optimality is not claimed: a 333-byte variant was assembled and tested, and
+          rejected because its ten bytes would have made the recognized nonpayable routes dearer
+          and every affected body proof longer. Aggregate gas totals are descriptive, not workload
+          weights. And these are Jaune and pinned-target costs, not deployed gas.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the étude taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">falsify the statement before you spend the proof</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The étude’s decisive finding cost 290 seconds of Python and no Lean at all. “Attacker
+          profit is never positive” was the expected airtight headline; exhaustive search showed
+          it false at offset one and true from two upward, stable across depth. The hypothesis
+          went into the theorem before the first proof line was written, and the compiled offset
+          later discharged it. The série makes this the standing order: every quantitative
+          statement is brute-forced independently, with attained-tightness witnesses recorded,
+          before proof trust is extended to it.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">what the étude paid forward</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The étude’s burden was arithmetic; its dividend was machinery. The realized-execution
+          ladder and the twelve shared carrier, chronology, and effect modules were built here
+          because nothing carried an accounting invariant from a message call to a configured
+          history, and every contract since — the deposit contract’s open history among them —
+          inherits them whole. The étude also priced its own upstream: the one generic
+          floor-division fact it had to prove privately was recorded as a hoist candidate and
+          landed in Jaune with the série’s next arithmetic layer.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Honesty budget, restated: P4 quantifies over classifications consistent with the chain, and
+      no existence theorem for the attack trace is claimed; two rounding-direction clauses are
+      three-theorem compositions and one is not separately stated; forced and native credits are
+      charged to the coalition in the closed form; no liveness, token standard, transferability,
+      or economic claim is made; and the compiler shadows are baselines, not specifications. The
+      completion report’s evidence table, not this page, is the authority on each.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— PRORATA, the pro-rata pricing étude</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, fixtures, the oracle findings, and gate
+        summaries; where evidence ends, the page says so.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="fmint.html">FMINT, the first étude →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Prorata.lean" target="_blank" rel="noopener">the source →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/scripts/prorata-oracle-findings.md" target="_blank" rel="noopener">oracle findings →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/scripts/fixtures/prorata/README.md" target="_blank" rel="noopener">fixtures →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>
