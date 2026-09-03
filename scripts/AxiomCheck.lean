@@ -80,6 +80,7 @@ import Blanc.ProrataAttackTrace
 import Blanc.Composition.ProrataWethVaultCapacities
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
+import Blanc.ProrataWethVaultShares
 import Blanc.BeaconDepositCorrectness
 import Blanc.BeaconDepositConstructorEffects
 import Blanc.BeaconDepositBridgeCompiled
@@ -1049,6 +1050,9 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.Composition.ProrataWethVault.mint_compiled_effect
 #print axioms Blanc.Composition.ProrataWethVault.withdraw_compiled_effect
 #print axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect
+#print axioms Blanc.ProrataWethVault.approve_compiled_effect
+#print axioms Blanc.ProrataWethVault.transfer_compiled_effect
+#print axioms Blanc.ProrataWethVault.transferFrom_compiled_effect
 #print axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
 #print axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
 #print axioms Blanc.Func.localExecFree_iff

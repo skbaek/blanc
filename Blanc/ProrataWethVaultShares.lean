@@ -1056,6 +1056,209 @@ theorem transferFrom_body_effect
       ← congrFun preToSpend account]
   · rw [settleLogged, ← spendLogs, ← preToSpendLogs]
 
+theorem transferStaged_lookup :
+    (vault.main :: vault.aux)[transferFromAfterAllowanceSlot]? =
+      some transferStaged := by
+  simp [vault, vaultAux, transferFromAfterAllowanceSlot]
+
+/-! ## Public compiled share operations
+
+None of the three touches WETH, so each lifts through the vault dispatch
+without a composition premise. -/
+
+/-- Public compiled `approve(spender, amount)`. -/
+theorem approve_compiled_effect
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "approve" [.address, .uint256]) :
+    sevm.value = 0 ∧
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      ¬ ValidAdr (allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0)) ∧
+      allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0) ≠ supplySlot ∧
+      AbiReturnsTrue post ∧
+      Devm.getStor post sevm.currentTarget =
+        (Devm.getStor pre sevm.currentTarget).set
+          (allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0))
+          (Sevm.argWord sevm 1) ∧
+      (∀ account, sevm.currentTarget ≠ account →
+        Devm.getStor post account = Devm.getStor pre account) ∧
+      post.logs = pre.logs ++
+        [approvalLogEntry sevm (Sevm.argWord sevm 0)
+          (Sevm.argWord sevm 1)] := by
+  have member :
+      (selector "approve" [.address, .uint256], routed 2 approve) ∈
+        vaultFuncs := by
+    simp [vaultFuncs]
+  rcases runCompiled_enters_body_compiled_logs run selectorEq member with
+    ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  obtain ⟨callerNonzero, spenderValid, spenderNonzero, keyNotAddress,
+      keyNotSupply, returnsTrue, allowanceSet, foreign, logged⟩ :=
+    approve_body_effect bodyWf nil_pref bodyRun
+  have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  refine ⟨valueZero, callerNonzero, spenderValid, spenderNonzero,
+    keyNotAddress, keyNotSupply, returnsTrue, ?_, ?_, ?_⟩
+  · rw [allowanceSet, ← congrFun storEq sevm.currentTarget]
+  · intro account accountNe
+    rw [foreign account accountNe, ← congrFun storEq account]
+  · rw [logged, ← entryLogs]
+
+/-- Public compiled `transfer(receiver, amount)`. -/
+theorem transfer_compiled_effect
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "transfer" [.address, .uint256]) :
+    sevm.value = 0 ∧
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      AbiReturnsTrue post ∧
+      Devm.getStorVal post sevm.currentTarget supplySlot =
+        Devm.getStorVal pre sevm.currentTarget supplySlot ∧
+      ∃ ownerBalance receiverBalance,
+        ownerBalance =
+          Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 ∧
+        (Sevm.argWord sevm 1).toNat ≤ ownerBalance.toNat ∧
+        receiverBalance =
+          ((Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+            (ownerBalance - Sevm.argWord sevm 1)).get
+              (Sevm.argWord sevm 0) ∧
+        receiverBalance.toNat + (Sevm.argWord sevm 1).toNat < wordModulusN ∧
+        Devm.getStor post sevm.currentTarget =
+          ((Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+            (ownerBalance - Sevm.argWord sevm 1)).set (Sevm.argWord sevm 0)
+              (receiverBalance + Sevm.argWord sevm 1) ∧
+        (∀ account, sevm.currentTarget ≠ account →
+          Devm.getStor post account = Devm.getStor pre account) ∧
+        post.logs = pre.logs ++
+          [transferLogEntry sevm sevm.caller.toB256 (Sevm.argWord sevm 0)
+            (Sevm.argWord sevm 1)] := by
+  have member :
+      (selector "transfer" [.address, .uint256], routed 2 transfer) ∈
+        vaultFuncs := by
+    simp [vaultFuncs]
+  rcases runCompiled_enters_body_compiled_logs run selectorEq member with
+    ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  obtain ⟨callerNonzero, receiverValid, receiverNonzero, returnsTrue,
+      supplyKept, ownerBalance, receiverBalance, ownerBalanceEq, covered,
+      receiverBalanceEq, noWrap, settleStorage, foreign, logged⟩ :=
+    transfer_body_effect bodyWf transferStaged_lookup nil_pref bodyRun
+  have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  have storVal : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
+      Devm.getStorVal bodyPre sevm.currentTarget k := by
+    intro k
+    change (Devm.getStor pre sevm.currentTarget).get k =
+      (Devm.getStor bodyPre sevm.currentTarget).get k
+    rw [congrFun storEq sevm.currentTarget]
+  refine ⟨valueZero, callerNonzero, receiverValid, receiverNonzero,
+    returnsTrue, ?_, ownerBalance, receiverBalance,
+    ownerBalanceEq.trans (storVal _).symm, covered, ?_, noWrap, ?_, ?_, ?_⟩
+  · rw [storVal supplySlot]
+    exact supplyKept
+  · rw [receiverBalanceEq, ← congrFun storEq sevm.currentTarget]
+  · rw [settleStorage, ← congrFun storEq sevm.currentTarget]
+  · intro account accountNe
+    rw [foreign account accountNe, ← congrFun storEq account]
+  · rw [logged, ← entryLogs]
+
+/-- Public compiled `transferFrom(owner, receiver, amount)`. -/
+theorem transferFrom_compiled_effect
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256]) :
+    sevm.value = 0 ∧
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 1) ∧
+      Sevm.argWord sevm 1 ≠ 0 ∧
+      AbiReturnsTrue post ∧
+      ¬ ValidAdr (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256) ∧
+      allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256 ≠ supplySlot ∧
+      Devm.getStorVal post sevm.currentTarget supplySlot =
+        Devm.getStorVal pre sevm.currentTarget supplySlot ∧
+      ∃ allowance afterAllowance ownerBalance receiverBalance,
+        allowance = Devm.getStorVal pre sevm.currentTarget
+          (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256) ∧
+        (Sevm.argWord sevm 2).toNat ≤ allowance.toNat ∧
+        ((allowance = B256.max ∧
+            afterAllowance = Devm.getStor pre sevm.currentTarget) ∨
+          afterAllowance = (Devm.getStor pre sevm.currentTarget).set
+            (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256)
+            (allowance - Sevm.argWord sevm 2)) ∧
+        ownerBalance = afterAllowance.get (Sevm.argWord sevm 0) ∧
+        (Sevm.argWord sevm 2).toNat ≤ ownerBalance.toNat ∧
+        receiverBalance =
+          (afterAllowance.set (Sevm.argWord sevm 0)
+            (ownerBalance - Sevm.argWord sevm 2)).get
+              (Sevm.argWord sevm 1) ∧
+        receiverBalance.toNat + (Sevm.argWord sevm 2).toNat < wordModulusN ∧
+        Devm.getStor post sevm.currentTarget =
+          ((afterAllowance.set (Sevm.argWord sevm 0)
+            (ownerBalance - Sevm.argWord sevm 2)).set (Sevm.argWord sevm 1)
+              (receiverBalance + Sevm.argWord sevm 2)) ∧
+        (∀ account, sevm.currentTarget ≠ account →
+          Devm.getStor post account = Devm.getStor pre account) ∧
+        post.logs = pre.logs ++
+          [transferLogEntry sevm (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)
+            (Sevm.argWord sevm 2)] := by
+  have member :
+      (selector "transferFrom" [.address, .address, .uint256],
+        routed 3 transferFrom) ∈ vaultFuncs := by
+    simp [vaultFuncs]
+  rcases runCompiled_enters_body_compiled_logs run selectorEq member with
+    ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  obtain ⟨callerNonzero, ownerValid, ownerNonzero, receiverValid,
+      receiverNonzero, returnsTrue, keyNotAddress, keyNotSupply, supplyKept,
+      allowance, afterAllowance, ownerBalance, receiverBalance, allowanceEq,
+      amountFits, route, ownerBalanceEq, covered, receiverBalanceEq, noWrap,
+      settleStorage, foreign, logged⟩ :=
+    transferFrom_body_effect bodyWf transferStaged_lookup nil_pref bodyRun
+  have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  have storVal : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
+      Devm.getStorVal bodyPre sevm.currentTarget k := by
+    intro k
+    change (Devm.getStor pre sevm.currentTarget).get k =
+      (Devm.getStor bodyPre sevm.currentTarget).get k
+    rw [congrFun storEq sevm.currentTarget]
+  refine ⟨valueZero, callerNonzero, ownerValid, ownerNonzero, receiverValid,
+    receiverNonzero, returnsTrue, keyNotAddress, keyNotSupply, ?_,
+    allowance, afterAllowance, ownerBalance, receiverBalance,
+    allowanceEq.trans (storVal _).symm, amountFits, ?_, ownerBalanceEq,
+    covered, receiverBalanceEq, noWrap, settleStorage, ?_, ?_⟩
+  · rw [storVal supplySlot]
+    exact supplyKept
+  · rcases route with ⟨isMax, unchanged⟩ | decremented
+    · exact Or.inl ⟨isMax,
+        unchanged.trans (congrFun storEq sevm.currentTarget).symm⟩
+    · exact Or.inr (decremented.trans
+        (congrArg (fun storage : Stor => storage.set
+          (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256)
+          (allowance - Sevm.argWord sevm 2))
+          (congrFun storEq sevm.currentTarget).symm))
+  · intro account accountNe
+    rw [foreign account accountNe, ← congrFun storEq account]
+  · rw [logged, ← entryLogs]
+
 end ProrataWethVault
 
 end Blanc
