@@ -756,16 +756,18 @@ theorem spendAllowance_trace
     (run : Func.RunCompiledTo fs sevm pre
       (spendAllowance (loadWord ownerWord) [caller] (loadWord amountSel)
         continuation) (.ok final)) :
-    ∃ bodyPre key allowance,
-      ¬ ValidAdr key ∧
-      key ≠ supplySlot ∧
-      allowance = Devm.getStorVal pre sevm.currentTarget key ∧
-      (Devm.getStor bodyPre sevm.currentTarget =
-          Devm.getStor pre sevm.currentTarget ∨
-        (amount.toNat ≤ allowance.toNat ∧
+    ∃ bodyPre allowance,
+      ¬ ValidAdr (allowanceKey owner sevm.caller.toB256) ∧
+      allowanceKey owner sevm.caller.toB256 ≠ supplySlot ∧
+      allowance = Devm.getStorVal pre sevm.currentTarget
+        (allowanceKey owner sevm.caller.toB256) ∧
+      amount.toNat ≤ allowance.toNat ∧
+      ((allowance = B256.max ∧
           Devm.getStor bodyPre sevm.currentTarget =
-            (Devm.getStor pre sevm.currentTarget).set key
-              (allowance - amount))) ∧
+            Devm.getStor pre sevm.currentTarget) ∨
+        Devm.getStor bodyPre sevm.currentTarget =
+          (Devm.getStor pre sevm.currentTarget).set
+            (allowanceKey owner sevm.caller.toB256) (allowance - amount)) ∧
       (∀ account, sevm.currentTarget ≠ account →
         Devm.getStor bodyPre account = Devm.getStor pre account) ∧
       pre.logs = bodyPre.logs ∧
@@ -773,8 +775,8 @@ theorem spendAllowance_trace
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory
-        (allowanceStagingImage image owner sevm.caller.toB256 key
-          allowance) ∧
+        (allowanceStagingImage image owner sevm.caller.toB256
+          (allowanceKey owner sevm.caller.toB256) allowance) ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   simp only [spendAllowance] at run
 
@@ -892,11 +894,16 @@ theorem spendAllowance_trace
   -- Infinite or finite allowance.
   rcases ProducesWord.isMax_arm_trace (ProducesWord.loadWord allowanceAt)
       branchWf branchReads branchStack run with maxArm | ordinaryArm
-  · obtain ⟨-, callPre, callStack, callWf, callReads, callQuiet, callRun⟩ :=
-      maxArm
+  · obtain ⟨allowanceMax, callPre, callStack, callWf, callReads, callQuiet,
+      callRun⟩ := maxArm
     obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv lookup callRun
-    refine ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply,
-      allowanceValue, Or.inl ?_, ?_, ?_,
+    have amountFits : amount.toNat ≤ allowance.toNat := by
+      rw [allowanceMax, maxWord_toNat]
+      have bound := B256.toNat_lt amount
+      simp only [maxWordN, wordModulusN] at *
+      omega
+    refine ⟨bodyPre, allowance, keyNotAddress, keyNotSupply,
+      allowanceValue, amountFits, Or.inl ⟨allowanceMax, ?_⟩, ?_, ?_,
       branchCode.trans ((funext (getCode_eq_of_state_eq callQuiet.1)).trans
         (funext (getCode_eq_of_state_eq burn.state))),
       ?_, ?_, ?_, bodyRun⟩
@@ -1066,11 +1073,12 @@ theorem spendAllowance_trace
                             line_inv) keyLoadRun).trans <|
                           (register_getCode storeSource).symm.trans
                             (funext (getCode_eq_of_state_eq burn.state))
-    refine ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply,
-      allowanceValue, Or.inr ⟨?_, ?_⟩, ?_, ?_, spendCode, ?_, ?_, ?_,
-      bodyRun⟩
-    · by_contra amountLarge
+    have amountFits : amount.toNat ≤ allowance.toNat := by
+      by_contra amountLarge
       exact covered (B256.lt_of_toNat_lt_toNat (by omega))
+    refine ⟨bodyPre, allowance, keyNotAddress, keyNotSupply,
+      allowanceValue, amountFits, Or.inr ?_, ?_, ?_, spendCode, ?_, ?_, ?_,
+      bodyRun⟩
     · rw [← congrFun (funext (getStor_eq_of_state_eq burn.state))
           sevm.currentTarget, storeSet, ← congrFun preStore sevm.currentTarget]
     · intro account accountNe
@@ -1083,6 +1091,41 @@ theorem spendAllowance_trace
       exact storeWf
     · rw [← burn.memory, ← Ninst.Hinv.inv (f := Devm.memory) storeSource]
       exact storeReads
+
+/-- What an outbound flow did to the caller's allowance over the owner.
+
+Either the caller owns the shares, in which case no allowance is consulted and
+none is claimed about, or the caller is a third party, the hashed allowance key
+aliases neither a share row nor the supply, the allowance covers the burn, and
+it is either infinite and left alone or decremented by exactly the burn.
+
+The owner branch deliberately says nothing about any allowance slot.  The
+collision guard runs only on the third-party route, so on the owner route the
+vault has no proof that the hashed key is distinct from the share rows the same
+walk writes -- and it does not need one, because it never reads or writes an
+allowance there.
+
+This is stated pointwise at the allowance slot rather than as a whole-`Stor`
+equation because the same walk also moves the owner's share row and the
+supply. -/
+def AllowanceSpent (sevm : Sevm) (owner shares : B256) (pre post : Devm) :
+    Prop :=
+  sevm.caller.toB256 = owner ∨
+    (sevm.caller.toB256 ≠ owner ∧
+      ¬ ValidAdr (allowanceKey owner sevm.caller.toB256) ∧
+      allowanceKey owner sevm.caller.toB256 ≠ supplySlot ∧
+      shares.toNat ≤ (Devm.getStorVal pre sevm.currentTarget
+        (allowanceKey owner sevm.caller.toB256)).toNat ∧
+      ((Devm.getStorVal pre sevm.currentTarget
+              (allowanceKey owner sevm.caller.toB256) = B256.max ∧
+            Devm.getStorVal post sevm.currentTarget
+                (allowanceKey owner sevm.caller.toB256) =
+              Devm.getStorVal pre sevm.currentTarget
+                (allowanceKey owner sevm.caller.toB256)) ∨
+        Devm.getStorVal post sevm.currentTarget
+            (allowanceKey owner sevm.caller.toB256) =
+          Devm.getStorVal pre sevm.currentTarget
+              (allowanceKey owner sevm.caller.toB256) - shares))
 
 /-- The image the authorization step hands to the burn tail. -/
 def outboundStagedImage
@@ -1148,6 +1191,7 @@ theorem outboundAuthorization_trace
         Devm.getStor bodyPre account = Devm.getStor pre account) ∧
       pre.logs = bodyPre.logs ∧
       Devm.getCode pre = Devm.getCode bodyPre ∧
+      AllowanceSpent sevm owner amount pre bodyPre ∧
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory bodyImage ∧
@@ -1203,7 +1247,7 @@ theorem outboundAuthorization_trace
     refine ⟨bodyPre, image, ?_, ?_, ?_,
       branchCode.trans ((funext (getCode_eq_of_state_eq callPop.state)).trans
         (funext (getCode_eq_of_state_eq burn.state))),
-      ?_, ?_, ?_, Or.inl rfl, bodyRun⟩
+      Or.inl ownerIsCaller, ?_, ?_, ?_, Or.inl rfl, bodyRun⟩
     · intro key _
       change
         (Devm.getStor bodyPre sevm.currentTarget).get key =
@@ -1229,25 +1273,36 @@ theorem outboundAuthorization_trace
       rw [← spendPop.memory]; exact branchReads
     have spendOwnerAt : Bytes.toB256
         (image.sliceD (ownerWord * 32).toNat 32 0) = owner := ownerAt
-    obtain ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply, -,
-        allowanceRoute, foreign, logs, spendCode, bodyStack, bodyWf,
-        bodyReads, bodyRun⟩ :=
+    obtain ⟨bodyPre, allowance, keyNotAddress, keyNotSupply, allowanceValue,
+        amountFits, allowanceRoute, foreign, logs, spendCode, bodyStack,
+        bodyWf, bodyReads, bodyRun⟩ :=
       spendAllowance_trace spendWf spendReads spendOwnerAt amountAt
         amountAboveKeyWords amountAboveScratch amountBelowAllowance
         spendStack lookup spendRun
     have spendStorage : Devm.getStor pre = Devm.getStor spendPre :=
       branchStorage.trans (funext (getStor_eq_of_state_eq spendPop.state))
+    have keyValue : Devm.getStorVal pre sevm.currentTarget
+        (allowanceKey owner sevm.caller.toB256) = allowance := by
+      rw [allowanceValue]
+      change
+        (Devm.getStor pre sevm.currentTarget).get
+            (allowanceKey owner sevm.caller.toB256) =
+          (Devm.getStor spendPre sevm.currentTarget).get
+            (allowanceKey owner sevm.caller.toB256)
+      rw [spendStorage]
     refine ⟨bodyPre, _, ?_, ?_, ?_,
       branchCode.trans ((funext (getCode_eq_of_state_eq spendPop.state)).trans
         spendCode),
+      Or.inr ⟨ownerIsCaller, keyNotAddress, keyNotSupply, ?_, ?_⟩,
       bodyStack, bodyWf, bodyReads,
-      Or.inr ⟨key, allowance, rfl⟩, bodyRun⟩
+      Or.inr ⟨allowanceKey owner sevm.caller.toB256, allowance, rfl⟩,
+      bodyRun⟩
     · intro slot slotShape
       change
         (Devm.getStor bodyPre sevm.currentTarget).get slot =
           (Devm.getStor pre sevm.currentTarget).get slot
       rw [congrFun spendStorage sevm.currentTarget]
-      rcases allowanceRoute with unchanged | ⟨-, decremented⟩
+      rcases allowanceRoute with ⟨-, unchanged⟩ | decremented
       · rw [unchanged]
       · rw [decremented, Stor.get_set_ne]
         intro slotIsKey
@@ -1257,6 +1312,24 @@ theorem outboundAuthorization_trace
     · intro account accountNe
       rw [foreign account accountNe, ← congrFun spendStorage account]
     · exact branchLogs.trans (spendPop.logs.trans logs)
+    · rw [keyValue]
+      exact amountFits
+    · rcases allowanceRoute with ⟨allowanceMax, unchanged⟩ | decremented
+      · refine Or.inl ⟨keyValue.trans allowanceMax, ?_⟩
+        change
+          (Devm.getStor bodyPre sevm.currentTarget).get
+              (allowanceKey owner sevm.caller.toB256) =
+            (Devm.getStor pre sevm.currentTarget).get
+              (allowanceKey owner sevm.caller.toB256)
+        rw [unchanged, congrFun spendStorage sevm.currentTarget]
+      · refine Or.inr ?_
+        change
+          (Devm.getStor bodyPre sevm.currentTarget).get
+              (allowanceKey owner sevm.caller.toB256) =
+            (Devm.getStor pre sevm.currentTarget).get
+                (allowanceKey owner sevm.caller.toB256) - amount
+        rw [decremented, Stor.get_set_self]
+        exact congrArg (· - amount) keyValue.symm
 
 /-! ## Burn and supply settlement -/
 
