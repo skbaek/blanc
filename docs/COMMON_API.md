@@ -786,7 +786,10 @@ repeat their byte-slice normalization in a contract family.
   instead of exposing the whole byte image. `MemWordAt.writeMiss`,
   `.writeMissBytes`, `.extendsWrite`, `.acrossLine`, `.acrossLoadWord`, and
   `.acrossMstoreAt` are the basic frame transports (including CALL-family
-  resume memory); `Bytes.WordFrameFrom` composes the untouched suffix of exact
+  resume memory); `.acrossStaticcall` and `.acrossSuccessfulCall` cross an
+  external call whose selected word lies at or above the end of its output
+  window, the latter under an explicit status-one premise that rules out the
+  failing branch; `Bytes.WordFrameFrom` composes the untouched suffix of exact
   trace images, `.slice_eq`, `.of_preserved_memImage`, and `.of_wordFrame`
   bridge those images, and `prefix_of_loadWord_window` reads the selected word
   back.

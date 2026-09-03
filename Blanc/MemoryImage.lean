@@ -210,6 +210,44 @@ theorem MemWordAt.acrossStaticcall
       List.length_take_le _ _
     omega
 
+/-- Cross a value-carrying `CALL` whose status word is one.  A successful call
+extends memory for its input and output windows and then writes the copied
+return data into the output window, so a selected word at or above the end of
+that window survives.  The status premise is what rules out the failing
+branch, whose memory effect this statement does not describe. -/
+theorem MemWordAt.acrossSuccessfulCall
+    {sevm : Sevm} {pre post : Devm} {offset : Nat} {w : B256}
+    {g target value inputOffset inputSize outputOffset outputSize : B256}
+    {tail : Stack}
+    (afterOutput : outputOffset.toNat + outputSize.toNat ≤ offset)
+    (stack :
+      g :: target :: value :: inputOffset :: inputSize :: outputOffset ::
+        outputSize :: tail <<+ pre.stack)
+    (run : Ninst.Run sevm pre Ninst.call post)
+    (status : ∃ rest, post.stack = (1 : B256) :: rest)
+    (window : MemWordAt pre offset w) : MemWordAt post offset w := by
+  rcases of_run_call_val_with_depth stack run with failure | success
+  · obtain ⟨zeroPrefix, -⟩ := failure
+    obtain ⟨rest, oneStack⟩ := status
+    have onePrefix : (1 : B256) :: [] <<+ post.stack := by
+      rw [oneStack]
+      exact pref_append [1] rest
+    exact absurd (pref_head_unique zeroPrefix onePrefix) (by decide)
+  · rcases success with
+      ⟨parent, child, _, _, _, _, _, -, -, -, parentMemory, -, -, -, -,
+        -, -, -, finalMemory, -⟩
+    have memoryShape : post.memory =
+        (pre.memory.extends
+          [(inputOffset.toNat, inputSize.toNat),
+            (outputOffset.toNat, outputSize.toNat)]).write
+          outputOffset.toNat (child.output.take outputSize.toNat) := by
+      rw [finalMemory, parentMemory]
+    refine window.extendsWrite memoryShape (Or.inr ?_)
+    have copiedLe :
+        (child.output.take outputSize.toNat).length ≤ outputSize.toNat :=
+      List.length_take_le _ _
+    omega
+
 /-- A whole-word write that lands entirely before or after the selected
 window leaves it unchanged. -/
 theorem MemWordAt.writeMiss {a b : Devm} {offset : Nat} {w v : B256}

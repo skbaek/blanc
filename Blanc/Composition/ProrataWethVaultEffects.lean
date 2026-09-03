@@ -1095,6 +1095,82 @@ theorem SuccessfulWethProgramRun.transfer_effect
 
 /-! ## Delegated transfer effect -/
 
+/-- The exact `Transfer(owner, receiver, assets)` entry the configured WETH
+program appends on a successful delegated transfer. -/
+def wethTransferLog (owner receiver : Adr) (assets : B256) : Log :=
+  ⟨wethAccount, [Blanc.transferEvent, owner.toB256, receiver.toB256],
+    assets.toBytes⟩
+
+/-- World-strength delegated transfer: the exact successful WETH child for
+`transferFrom(owner,vault,assets)` moves precisely that balance row, leaves
+every account other than the WETH contract with its exact storage — the
+calling vault's own ledger included — appends exactly one `Transfer` entry,
+and returns canonical true.  None of the four is a caller premise. -/
+theorem SuccessfulWethWorldProgramRun.transferFrom_effect
+    {vault owner : Adr} {assets : B256} {output : Bytes}
+    {initial final : Adr → Stor} {initialLogs finalLogs : List Log}
+    (run : SuccessfulWethWorldProgramRun vault
+      (transferFromCalldata owner vault assets) output initial final
+      initialLogs finalLogs) :
+    Transfer (Stor.rest (initial wethAccount)) owner assets vault
+        (Stor.rest (final wethAccount)) ∧
+      (∀ account, wethAccount ≠ account → final account = initial account) ∧
+      finalLogs = initialLogs ++ [wethTransferLog owner vault assets] ∧
+      output = (1 : B256).toBytes := by
+  rcases run with ⟨childSevm, childPre, rawPost,
+    currentTarget, codeAddress, caller, valueZero, dataEq, stackEmpty,
+    memoryEmpty, childLogs, initialEq, compiled, rawError, finalEq,
+    finalLogsEq, outputEq⟩
+  obtain ⟨selectorEq, ownerArg, vaultArg, assetsArg⟩ :=
+    transferFromCalldata_facts dataEq
+  have ownerWord : Sevm.argWord childSevm 0 = owner.toB256 := by
+    unfold Sevm.argWord
+    rw [show (32 * (0 : B256) + 4) = (4 : B256) by decide +kernel]
+    exact ownerArg
+  have vaultWord : Sevm.argWord childSevm 1 = vault.toB256 := by
+    unfold Sevm.argWord
+    rw [show (32 * (1 : B256) + 4) = (36 : B256) by decide +kernel]
+    exact vaultArg
+  have assetsWord : Sevm.argWord childSevm 2 = assets := by
+    unfold Sevm.argWord
+    rw [show (32 * (2 : B256) + 4) = (68 : B256) by decide +kernel]
+    exact assetsArg
+  have member :
+      (selector "transferFrom" [.address, .address, .uint256],
+        nonpayable transferFrom) ∈ Blanc.wethFuncs := by
+    simp [Blanc.wethFuncs]
+  obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
+      entryOutput, bodyRun⟩ :=
+    runCompiled_enters_wethNonpayable compiled selectorEq member
+  obtain ⟨movement, bodyForeign, bodyEmitted, bodyOutput⟩ :=
+    transferFromBody_exactEffect bodyRun
+  have entryStorage : Devm.getStor childPre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  have bodyInitial : Devm.getStor bodyPre wethAccount = initial wethAccount :=
+    (congrFun entryStorage wethAccount).symm.trans
+      (congrFun initialEq wethAccount)
+  have bodyFinal : Devm.getStor rawPost wethAccount = final wethAccount :=
+    (congrFun finalEq wethAccount).symm
+  rw [currentTarget, ownerWord, vaultWord, assetsWord, bodyInitial,
+    bodyFinal] at movement
+  have foreign : ∀ account, wethAccount ≠ account →
+      final account = initial account := by
+    intro account accountNe
+    rw [congrFun finalEq account]
+    rw [bodyForeign account (by rw [currentTarget]; exact accountNe),
+      ← congrFun entryStorage account, congrFun initialEq account]
+  have entryEq : transferLogEntry childSevm (Sevm.argWord childSevm 0)
+      (Sevm.argWord childSevm 1) (Sevm.argWord childSevm 2) =
+      wethTransferLog owner vault assets := by
+    unfold transferLogEntry wethTransferLog
+    rw [currentTarget, ownerWord, vaultWord, assetsWord]
+  have logged : finalLogs = initialLogs ++
+      [wethTransferLog owner vault assets] := by
+    rw [finalLogsEq, bodyEmitted, ← entryLogs, childLogs, List.nil_append,
+      entryEq]
+  exact ⟨by simpa only [toAdr_toB256] using movement, foreign, logged,
+    outputEq.symm.trans bodyOutput⟩
+
 /-- An exact successful WETH `transferFrom(owner,vault,assets)` child moves
 precisely that balance-row amount and returns canonical true.  The selected
 WETH frame caller is the vault, which is the spender used by the allowance
