@@ -71,7 +71,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "MemoryImage", "Ladder", "Upgrade",
-          "BalanceAlgebra", "LedgerConservation", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
+          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance",
           "NonpayableInversion",
@@ -217,6 +217,7 @@ CONTRACTS = {
                             "ProrataWethVaultOutbound",
                             "ProrataWethVaultShares",
                             "ProrataWethVaultFunctional",
+                            "ProrataWethVaultLedgerSpec",
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
