@@ -169,6 +169,7 @@ CACHE_REPOSITORY_FILES = (
     "scripts/current-mainnet-target.json",
     "scripts/current-mainnet-runtime-lock.json",
     "scripts/current_mainnet.py",
+    "scripts/eels_semantic_closure.py",
     "scripts/gen-current-mainnet-runtime-lock.py",
     "scripts/gen-beacon-deposit-current-mainnet.py",
     "scripts/check-beacon-deposit-current-mainnet.sh",

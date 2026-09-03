@@ -139,7 +139,7 @@
       },
       {
         "modules": [
-          "_cffi_backend.cpython-311-darwin.so",
+          "_cffi_backend",
           "cffi"
         ],
         "name": "cffi",

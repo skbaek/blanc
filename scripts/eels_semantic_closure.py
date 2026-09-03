@@ -250,7 +250,13 @@ def hit_distributions(files):
             relative = Path(path).relative_to(site_packages).parts[0]
         except ValueError:
             relative = Path(path).name
-        hits.setdefault(owner, set()).add(relative.removesuffix(".py"))
+        # Report the importable name, not the file.  A compiled extension is
+        # installed as `_cffi_backend.cpython-311-darwin.so` here and
+        # `_cffi_backend.cpython-311-x86_64-linux-gnu.so` elsewhere, and this
+        # list is pinned in the platform-*independent* half of the document,
+        # where a per-platform filename would redden the other platform for a
+        # reason that has nothing to do with the pin.
+        hits.setdefault(owner, set()).add(relative.split(".")[0])
     return hits
 
 

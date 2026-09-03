@@ -36,12 +36,13 @@
   "cacheInputs": {
     "repositoryFiles": {
       "BEACON_DEPOSIT_DEVIATIONS.md": "13643d8c2f33188cbd3a2f80a740c24d2b2caba0b2d753caace895fb7c65cb45",
-      "scripts/check-beacon-deposit-current-mainnet.sh": "af0af3e0a404d67a26ef536d7b0bf336281dbb3411296cbacd51f94ce6b3db36",
-      "scripts/current-mainnet-runtime-lock.json": "5bb601aadee5b44774694483c9a141c7158de4d2157a64acd27311dd5186e62d",
+      "scripts/check-beacon-deposit-current-mainnet.sh": "5020c54c465a25c96af1b163d1976a8f0a4b86c83155b5af615027a4388965aa",
+      "scripts/current-mainnet-runtime-lock.json": "b69a9b2d40238850f2f70fb5aea07979fcdd19bd087c770262142eb82f85eb82",
       "scripts/current-mainnet-target.json": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
       "scripts/current_mainnet.py": "f8f1fc8e67eec4db5efccb0af17997675e2f0b645fe16037a19285e3e43f59ed",
+      "scripts/eels_semantic_closure.py": "9c0be5b40902f6854fac25b876ab419f623893ac325a84fd6a554df060ea1e68",
       "scripts/eval-beacon-deposit-differential-code.lean": "72794ddd1d076c6e0551169f4ef4df791ebdcb2521ad024147422136328da103",
-      "scripts/gen-beacon-deposit-current-mainnet.py": "3d2ce1e5e1aaf608eec3ab4fa825fd0ecaa0b4fa2cf32d7201381d5c05f168e8",
+      "scripts/gen-beacon-deposit-current-mainnet.py": "5ce5112531619cfbf3f9699393d34557da6c2cc0d83126279c140621a4b68594",
       "scripts/gen-current-mainnet-runtime-lock.py": "74aa826232ede5d9a0cca4102bd806d52431de9475b172e74d558e9c45281c90",
       "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex": "867e261f9811c5227ff0e2ec5d7803156f1af3428e49d6ffc041102da3050432",
       "scripts/reference/beacon-deposit/inputs/deposit_contract.json": "fbb573648e4fe96a6b731768cbf5165f5037d7bd29f43359c5316eeb9edc78e6",
@@ -53,7 +54,7 @@
         "linux-x86_64"
       ],
       "relativePath": "scripts/current-mainnet-runtime-lock.json",
-      "sha256": "5bb601aadee5b44774694483c9a141c7158de4d2157a64acd27311dd5186e62d"
+      "sha256": "b69a9b2d40238850f2f70fb5aea07979fcdd19bd087c770262142eb82f85eb82"
     },
     "sharedGateOwnership": "the shared runtime lock owns the reference environment's semantic closure: exact versions on every platform and exact installed bytes on each platform whose row has been generated there; the gate registry additionally fingerprints the selected exact checkout, site-packages population, and CPython 3.11.9 standard library"
   },
