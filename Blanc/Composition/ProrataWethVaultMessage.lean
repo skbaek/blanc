@@ -2,6 +2,7 @@
 
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
+import Blanc.Composition.ProrataWethVaultBacking
 import Blanc.ProrataWethVaultLedgerSpec
 
 /-!
@@ -255,5 +256,107 @@ theorem vault_nonflow_message_preserves_conserved
       (body := Blanc.ProrataWethVault.previewDeposit) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+
+
+/-! ## The configured two-runtime root
+
+The state a configured history starts from: both runtimes installed at their
+own accounts, distinct and non-precompile, and the vault's storage empty.  The
+joint invariant holds there for the reason genesis always does — an empty
+ledger is conserved and cannot exceed any bound — and the point of naming it is
+that everything above this rung may then reason forward from it rather than
+assuming an invariant out of the air. -/
+
+/-- Both runtimes installed, the asset pinned, and the vault untouched. -/
+structure ConfiguredRoot (vault : Adr) (sevm : Sevm) (pre : Devm) : Prop where
+  /-- The asset account holds the exact WETH runtime, is distinct from the
+  vault and is not a precompile. -/
+  configured : DirectWethConfiguration vault sevm pre
+  /-- The vault account holds the exact vault runtime. -/
+  installed : some (pre.getCode vault).toList =
+    Prog.compile Blanc.ProrataWethVault.vault
+  /-- The vault's storage reads zero everywhere: no shares, no supply, no
+  allowances. -/
+  untouched : ∀ key, (Devm.getStor pre vault).get key = 0
+
+/-- The root conserves the share ledger. -/
+theorem ConfiguredRoot.conserved {vault : Adr} {sevm : Sevm} {pre : Devm}
+    (root : ConfiguredRoot vault sevm pre) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre vault) :=
+  LedgerConserved.of_get_eq_zero root.untouched
+
+/-- The root satisfies the joint two-contract invariant, at any WETH row. -/
+theorem ConfiguredRoot.backed {vault : Adr} {sevm : Sevm} {pre : Devm}
+    (root : ConfiguredRoot vault sevm pre) :
+    PairBacked vault (Devm.getStor pre vault)
+      (Devm.getStor pre wethAccount) :=
+  PairBacked.of_vault_empty root.untouched
+
+/-- The vault's own code at the root is the compiled program, in the form the
+frame-level obligations consume. -/
+theorem ConfiguredRoot.vaultInstalled {vault : Adr} {sevm : Sevm} {pre : Devm}
+    (root : ConfiguredRoot vault sevm pre) :
+    ProgramInstalledAt pre.state vault Blanc.ProrataWethVault.vault := by
+  unfold ProgramInstalledAt
+  exact root.installed
+
+
+
+/-! ## Chained messages
+
+Conservation from a configured root across any number of vault messages.
+
+**What this is and is not.** It is the ladder's history rung restricted to the
+vault's *own* messages: each step is a message at the vault, and the invariant
+survives all of them. It is not yet a block or chain history, because it does
+not say that a message to some *other* account leaves the vault's storage
+alone. That claim needs the other account's code, and the generic
+`ContractSpec` ladder — which supplies exactly that reasoning through
+`Exec.InvDepth` — cannot carry this vault's flows, for the reason recorded in
+`Blanc/ProrataWethVaultLedgerSpec.lean`. Naming the restriction here is the
+point: an unqualified "history" claim would be broader than the evidence. -/
+
+/-- A sequence of vault messages, each configured and resourced at its own
+entry state. -/
+inductive ConfiguredMessages (vault : Adr) : Devm → Devm → Prop
+  | refl (s : Devm) : ConfiguredMessages vault s s
+  | step {s t u : Devm} {sevm : Sevm} :
+      ConfiguredMessages vault s t →
+      sevm.currentTarget = vault →
+      DirectWethConfiguration vault sevm t →
+      Mem.Wf t.memory →
+      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord →
+      InboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord →
+      OutboundCompiledResources sevm Blanc.ProrataWethVault.amountWord →
+      OutboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord →
+      Prog.RunCompiled sevm t Blanc.ProrataWethVault.vault u →
+      ConfiguredMessages vault s u
+
+/-- **Chained preservation.**  Every message in the chain preserves the ledger,
+so the chain does. -/
+theorem ConfiguredMessages.preserves_conserved {vault : Adr} {s t : Devm}
+    (chain : ConfiguredMessages vault s t)
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor s vault)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor t vault) := by
+  induction chain with
+  | refl => exact conserved
+  | step _ target config memoryWf depositR mintR withdrawR redeemR run ih =>
+      subst target
+      exact vault_message_preserves_conserved config memoryWf depositR mintR
+        withdrawR redeemR run ih
+
+/-- **From the root.**  A configured two-runtime root conserves the ledger, and
+every reachable state along a chain of vault messages still does. -/
+theorem ConfiguredRoot.chain_conserved {vault : Adr} {sevm : Sevm}
+    {pre post : Devm}
+    (root : ConfiguredRoot vault sevm pre)
+    (chain : ConfiguredMessages vault pre post) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post vault) :=
+  chain.preserves_conserved root.conserved
+
 
 end Blanc.Composition.ProrataWethVault

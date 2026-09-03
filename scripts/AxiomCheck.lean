@@ -1056,6 +1056,10 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.ProrataWethVault.transferFrom_compiled_effect
 #print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
 #print axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved
+#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.conserved
+#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.backed
+#print axioms Blanc.Composition.ProrataWethVault.ConfiguredMessages.preserves_conserved
+#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.chain_conserved
 #print axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
 #print axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
 #print axioms Blanc.Func.localExecFree_iff
