@@ -266,119 +266,6 @@ private theorem transferTestLt_exact
   · rw [← balanceEq, B256.ltCheck,
       Ne.ite_eq_right_iff B256.zero_ne_one.symm, B256.not_lt]
 
-/-- Exact storage effect of the inherited WETH `transfer` body.  The debit is
-from the actual frame caller, the amount is ABI word one, and the credit is to
-ABI word zero. -/
-private theorem transferBody_exactEffect
-    {fs : List Func} {sevm : Sevm} {s r : Devm}
-    (run : Func.Run fs sevm s transfer r) :
-    Transfer (Stor.rest (Devm.getStor s sevm.currentTarget)) sevm.caller
-        (Sevm.argWord sevm 1) (Sevm.argWord sevm 0).toAdr
-        (Stor.rest (Devm.getStor r sevm.currentTarget)) ∧
-      Stor.AgreeOffAdr (Devm.getStor s sevm.currentTarget)
-        (Devm.getStor r sevm.currentTarget) ∧
-      AbiReturnsTrue r := by
-  simp only [transfer] at run
-  rcases of_run_prepend transferTestDst _ run with ⟨s1, h1, run⟩
-  rcases transferTestDst_exact h1 with ⟨invalid, hp1, valid⟩
-  have storage1 : Devm.getStor s = Devm.getStor s1 :=
-    Line.of_inv Devm.getStor (by line_inv) h1
-  clear h1
-  rcases of_run_branch_revert run with ⟨s2, pop2, run⟩
-  have popStack2 := pop2.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack2
-  rw [popStack2] at hp1
-  have dstValid : ValidAdr (Sevm.argWord sevm 0) :=
-    valid.mp (pref_head_unique hp1 (pref_append [0] s2.stack))
-  rw [pref_head_unique hp1 (pref_append [0] s2.stack)] at hp1
-  have hp2 : [Sevm.argWord sevm 0] <<+ s2.stack :=
-    cons_pref_cons_inv hp1
-  have storage2 : Devm.getStor s = Devm.getStor s2 :=
-    storage1.trans (funext (fun a => (Devm.PopBurn.getStor pop2 a).symm))
-  clear hp1 popStack2 pop2 valid
-  rcases of_run_prepend transferTestLt _ run with ⟨s3, h3, run⟩
-  rcases transferTestLt_exact hp2 h3 with ⟨less, hp3, covered⟩
-  have storage3 : Devm.getStor s = Devm.getStor s3 :=
-    storage2.trans (Line.of_inv Devm.getStor (by line_inv) h3)
-  clear h3 hp2
-  rcases of_run_branch_revert run with ⟨s4, pop4, run⟩
-  have popStack4 := pop4.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack4
-  rw [popStack4] at hp3
-  have lessZero : less = 0 :=
-    pref_head_unique hp3 (pref_append [0] s4.stack)
-  have amountCovered : Sevm.argWord sevm 1 ≤
-      Devm.getStorVal s3 sevm.currentTarget sevm.caller.toB256 :=
-    covered.mp lessZero
-  rw [lessZero] at hp3
-  have hp4 : [sevm.caller.toB256,
-      Devm.getStorVal s3 sevm.currentTarget sevm.caller.toB256 -
-        Sevm.argWord sevm 1,
-      Sevm.argWord sevm 1, Sevm.argWord sevm 0] <<+ s4.stack :=
-    cons_pref_cons_inv hp3
-  have storage4 : Devm.getStor s = Devm.getStor s4 :=
-    storage3.trans (funext (fun a => (Devm.PopBurn.getStor pop4 a).symm))
-  clear hp3 popStack4 pop4 covered lessZero
-  simp only [transferCore] at run
-  rcases of_run_next run with ⟨s5, store5, run⟩
-  have callerSet : Devm.getStor s5 sevm.currentTarget =
-      (Devm.getStor s4 sevm.currentTarget).set sevm.caller.toB256
-        (Devm.getStorVal s3 sevm.currentTarget sevm.caller.toB256 -
-          Sevm.argWord sevm 1) :=
-    sstore_getStor_set store5 hp4
-  have hp5 : [Sevm.argWord sevm 1, Sevm.argWord sevm 0] <<+ s5.stack :=
-    prefix_of_sstore store5 hp4
-  clear hp4
-  rcases of_run_prepend incrWbal _ run with ⟨s6, h6, run⟩
-  rcases incrAt_of_incrWbal dstValid h6 hp5 with
-    ⟨destinationIncrease, offAddress6⟩
-  obtain ⟨_, _, trueRun⟩ := of_run_prepend logTransfer returnTrue run
-  have outputTrue := returnTrue_output trueRun
-  have tailStorage : Devm.getStor s6 sevm.currentTarget =
-      Devm.getStor r sevm.currentTarget :=
-    congrFun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run)
-      sevm.currentTarget
-  have exactTransfer :
-      Transfer (Stor.rest (Devm.getStor s sevm.currentTarget))
-        sevm.caller.toB256.toAdr (Sevm.argWord sevm 1)
-        (Sevm.argWord sevm 0).toAdr
-        (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
-    refine ⟨?_, Stor.rest (Devm.getStor s5 sevm.currentTarget), ?_, ?_⟩
-    · show Sevm.argWord sevm 1 ≤
-          (Stor.rest (Devm.getStor s sevm.currentTarget))
-            sevm.caller.toB256.toAdr
-      simp only [Stor.rest, Function.comp_apply]
-      rw [toB256_toAdr (validAdr_toB256 sevm.caller),
-        congrFun storage3 sevm.currentTarget]
-      exact amountCovered
-    · intro a
-      constructor
-      · intro same
-        subst same
-        simp only [Stor.rest, Function.comp_apply]
-        rw [toB256_toAdr (validAdr_toB256 sevm.caller), callerSet,
-          Stor.get_set_self, congrFun storage3 sevm.currentTarget]
-        rfl
-      · intro different
-        simp only [Stor.rest, Function.comp_apply]
-        rw [callerSet]
-        have keyDifferent : a.toB256 ≠ sevm.caller.toB256 := by
-          intro same
-          apply different
-          rw [← toAdr_toB256 a, same]
-        rw [Stor.get_set_ne _ keyDifferent.symm,
-          congrFun storage4 sevm.currentTarget]
-    · rw [← tailStorage]
-      exact destinationIncrease
-  refine ⟨?_, ?_, outputTrue⟩
-  · simpa only [toAdr_toB256] using exactTransfer
-  · refine Stor.AgreeOffAdr.trans
-      (Stor.AgreeOffAdr.of_eq (congrFun storage4 sevm.currentTarget)) ?_
-    refine Stor.AgreeOffAdr.trans ?_
-      (offAddress6.trans (Stor.AgreeOffAdr.of_eq tailStorage))
-    rw [callerSet]
-    exact Stor.AgreeOffAdr.set (validAdr_toB256 sevm.caller)
-
 /-! ## Foreign-account storage frame
 
 The vault's own share ledger must survive its WETH child.  The inherited
@@ -527,6 +414,145 @@ private theorem updateAllowance_foreignStorage
         ← congrFun entryStorage account]
   · rw [returnTrueStorage callerReturn, Devm.Burn.getStor callerBurn account,
       Devm.PopBurn.getStor pop2 account, ← congrFun prefixStorage account]
+
+/-- Exact storage effect of the inherited WETH `transfer` body.  The debit is
+from the actual frame caller, the amount is ABI word one, and the credit is to
+ABI word zero. -/
+private theorem transferBody_exactEffect
+    {fs : List Func} {sevm : Sevm} {s r : Devm}
+    (run : Func.Run fs sevm s transfer r) :
+    Transfer (Stor.rest (Devm.getStor s sevm.currentTarget)) sevm.caller
+        (Sevm.argWord sevm 1) (Sevm.argWord sevm 0).toAdr
+        (Stor.rest (Devm.getStor r sevm.currentTarget)) ∧
+      Stor.AgreeOffAdr (Devm.getStor s sevm.currentTarget)
+        (Devm.getStor r sevm.currentTarget) ∧
+      (∀ account, sevm.currentTarget ≠ account →
+        Devm.getStor r account = Devm.getStor s account) ∧
+      r.logs = s.logs ++
+        [transferLogEntry sevm sevm.caller.toB256 (Sevm.argWord sevm 0)
+          (Sevm.argWord sevm 1)] ∧
+      AbiReturnsTrue r := by
+  simp only [transfer] at run
+  rcases of_run_prepend transferTestDst _ run with ⟨s1, h1, run⟩
+  rcases transferTestDst_exact h1 with ⟨invalid, hp1, valid⟩
+  have storage1 : Devm.getStor s = Devm.getStor s1 :=
+    Line.of_inv Devm.getStor (by line_inv) h1
+  have logs1 : s.logs = s1.logs :=
+    Line.of_inv Devm.logs (by line_inv) h1
+  clear h1
+  rcases of_run_branch_revert run with ⟨s2, pop2, run⟩
+  have popStack2 := pop2.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack2
+  rw [popStack2] at hp1
+  have dstValid : ValidAdr (Sevm.argWord sevm 0) :=
+    valid.mp (pref_head_unique hp1 (pref_append [0] s2.stack))
+  rw [pref_head_unique hp1 (pref_append [0] s2.stack)] at hp1
+  have hp2 : [Sevm.argWord sevm 0] <<+ s2.stack :=
+    cons_pref_cons_inv hp1
+  have storage2 : Devm.getStor s = Devm.getStor s2 :=
+    storage1.trans (funext (fun a => (Devm.PopBurn.getStor pop2 a).symm))
+  have logs2 : s.logs = s2.logs := logs1.trans pop2.logs
+  clear hp1 popStack2 pop2 valid
+  rcases of_run_prepend transferTestLt _ run with ⟨s3, h3, run⟩
+  rcases transferTestLt_exact hp2 h3 with ⟨less, hp3, covered⟩
+  have storage3 : Devm.getStor s = Devm.getStor s3 :=
+    storage2.trans (Line.of_inv Devm.getStor (by line_inv) h3)
+  have logs3 : s.logs = s3.logs :=
+    logs2.trans (Line.of_inv Devm.logs (by line_inv) h3)
+  clear h3 hp2
+  rcases of_run_branch_revert run with ⟨s4, pop4, run⟩
+  have popStack4 := pop4.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at popStack4
+  rw [popStack4] at hp3
+  have lessZero : less = 0 :=
+    pref_head_unique hp3 (pref_append [0] s4.stack)
+  have amountCovered : Sevm.argWord sevm 1 ≤
+      Devm.getStorVal s3 sevm.currentTarget sevm.caller.toB256 :=
+    covered.mp lessZero
+  rw [lessZero] at hp3
+  have hp4 : [sevm.caller.toB256,
+      Devm.getStorVal s3 sevm.currentTarget sevm.caller.toB256 -
+        Sevm.argWord sevm 1,
+      Sevm.argWord sevm 1, Sevm.argWord sevm 0] <<+ s4.stack :=
+    cons_pref_cons_inv hp3
+  have storage4 : Devm.getStor s = Devm.getStor s4 :=
+    storage3.trans (funext (fun a => (Devm.PopBurn.getStor pop4 a).symm))
+  have logs4 : s.logs = s4.logs := logs3.trans pop4.logs
+  clear hp3 popStack4 pop4 covered lessZero
+  simp only [transferCore] at run
+  rcases of_run_next run with ⟨s5, store5, run⟩
+  have callerSet : Devm.getStor s5 sevm.currentTarget =
+      (Devm.getStor s4 sevm.currentTarget).set sevm.caller.toB256
+        (Devm.getStorVal s3 sevm.currentTarget sevm.caller.toB256 -
+          Sevm.argWord sevm 1) :=
+    sstore_getStor_set store5 hp4
+  have hp5 : [Sevm.argWord sevm 1, Sevm.argWord sevm 0] <<+ s5.stack :=
+    prefix_of_sstore store5 hp4
+  clear hp4
+  rcases of_run_prepend incrWbal _ run with ⟨s6, h6, run⟩
+  rcases incrAt_of_incrWbal dstValid h6 hp5 with
+    ⟨destinationIncrease, offAddress6⟩
+  have logs5 : s4.logs = s5.logs := Ninst.Hinv.inv (f := Devm.logs) store5
+  have logs6 : s5.logs = s6.logs :=
+    Line.of_inv Devm.logs (by line_inv) h6
+  obtain ⟨s7, h7, trueRun⟩ := of_run_prepend logTransfer returnTrue run
+  obtain ⟨-, emitted⟩ := logTransfer_effect nil_pref h7
+  have tailLogs : s7.logs = r.logs := by
+    refine Func.of_inv Devm.logs Devm.logs ?_ trueRun
+    unfold returnTrue
+    func_inv
+  have tailStorageFull : Devm.getStor s6 = Devm.getStor r :=
+    Func.of_inv Devm.getStor Devm.getStor (by func_inv) run
+  have outputTrue := returnTrue_output trueRun
+  have tailStorage : Devm.getStor s6 sevm.currentTarget =
+      Devm.getStor r sevm.currentTarget :=
+    congrFun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run)
+      sevm.currentTarget
+  have exactTransfer :
+      Transfer (Stor.rest (Devm.getStor s sevm.currentTarget))
+        sevm.caller.toB256.toAdr (Sevm.argWord sevm 1)
+        (Sevm.argWord sevm 0).toAdr
+        (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
+    refine ⟨?_, Stor.rest (Devm.getStor s5 sevm.currentTarget), ?_, ?_⟩
+    · show Sevm.argWord sevm 1 ≤
+          (Stor.rest (Devm.getStor s sevm.currentTarget))
+            sevm.caller.toB256.toAdr
+      simp only [Stor.rest, Function.comp_apply]
+      rw [toB256_toAdr (validAdr_toB256 sevm.caller),
+        congrFun storage3 sevm.currentTarget]
+      exact amountCovered
+    · intro a
+      constructor
+      · intro same
+        subst same
+        simp only [Stor.rest, Function.comp_apply]
+        rw [toB256_toAdr (validAdr_toB256 sevm.caller), callerSet,
+          Stor.get_set_self, congrFun storage3 sevm.currentTarget]
+        rfl
+      · intro different
+        simp only [Stor.rest, Function.comp_apply]
+        rw [callerSet]
+        have keyDifferent : a.toB256 ≠ sevm.caller.toB256 := by
+          intro same
+          apply different
+          rw [← toAdr_toB256 a, same]
+        rw [Stor.get_set_ne _ keyDifferent.symm,
+          congrFun storage4 sevm.currentTarget]
+    · rw [← tailStorage]
+      exact destinationIncrease
+  refine ⟨?_, ?_, ?_, ?_, outputTrue⟩
+  · simpa only [toAdr_toB256] using exactTransfer
+  · refine Stor.AgreeOffAdr.trans
+      (Stor.AgreeOffAdr.of_eq (congrFun storage4 sevm.currentTarget)) ?_
+    refine Stor.AgreeOffAdr.trans ?_
+      (offAddress6.trans (Stor.AgreeOffAdr.of_eq tailStorage))
+    rw [callerSet]
+    exact Stor.AgreeOffAdr.set (validAdr_toB256 sevm.caller)
+  · intro account accountNe
+    rw [← congrFun tailStorageFull account,
+      incrWbal_foreignStorage h6 accountNe,
+      sstore_foreignStorage store5 accountNe, ← congrFun storage4 account]
+  · rw [← tailLogs, emitted, ← logs6, ← logs5, ← logs4]
 
 /-- Exact balance-row movement of the inherited WETH `transferFrom` body.
 Unlike the older existential projection, the source, destination, and amount
@@ -1044,6 +1070,12 @@ theorem SuccessfulWethProgramRun.balanceOf_effect
   rw [currentTarget, vaultArg, bodyInitial] at bodyOutput
   exact ⟨finalInitial, outputEq.symm.trans bodyOutput⟩
 
+/-- The exact `Transfer(owner, receiver, assets)` entry the configured WETH
+program appends on a successful transfer, delegated or direct. -/
+def wethTransferLog (owner receiver : Adr) (assets : B256) : Log :=
+  ⟨wethAccount, [Blanc.transferEvent, owner.toB256, receiver.toB256],
+    assets.toBytes⟩
+
 /-! ## Outbound transfer effect -/
 
 /-- An exact successful WETH `transfer(receiver,assets)` child debits the vault
@@ -1078,7 +1110,7 @@ theorem SuccessfulWethProgramRun.transfer_effect
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member
-  obtain ⟨movement, offAddress, bodyOutput⟩ :=
+  obtain ⟨movement, offAddress, -, -, bodyOutput⟩ :=
     transferBody_exactEffect bodyRun
   have entryStor : Devm.getStor childPre wethAccount =
       Devm.getStor bodyPre wethAccount :=
@@ -1093,13 +1125,79 @@ theorem SuccessfulWethProgramRun.transfer_effect
   exact ⟨by simpa only [toAdr_toB256] using movement, offAddress,
     outputEq.symm.trans bodyOutput⟩
 
-/-! ## Delegated transfer effect -/
+/-- World-strength outbound transfer: the exact successful WETH child for
+`transfer(receiver,assets)` moves precisely that balance row out of the calling
+vault, leaves every account other than the WETH contract with its exact
+storage — the calling vault's own share ledger included — appends exactly one
+`Transfer` entry, and returns canonical true.  None of the four is a caller
+premise; each is read off the selected WETH body.
 
-/-- The exact `Transfer(owner, receiver, assets)` entry the configured WETH
-program appends on a successful delegated transfer. -/
-def wethTransferLog (owner receiver : Adr) (assets : B256) : Log :=
-  ⟨wethAccount, [Blanc.transferEvent, owner.toB256, receiver.toB256],
-    assets.toBytes⟩
+This is the mirror of `SuccessfulWethWorldProgramRun.transferFrom_effect`.  The
+inbound direction takes its source from an ABI word, while here the debited
+account is the executing frame's own caller, so the emitted entry names the
+vault without any calldata round trip. -/
+theorem SuccessfulWethWorldProgramRun.transfer_effect
+    {vault receiver : Adr} {assets : B256} {output : Bytes}
+    {initial final : Adr → Stor} {initialLogs finalLogs : List Log}
+    (run : SuccessfulWethWorldProgramRun vault
+      (transferCalldata receiver assets) output initial final
+      initialLogs finalLogs) :
+    Transfer (Stor.rest (initial wethAccount)) vault assets receiver
+        (Stor.rest (final wethAccount)) ∧
+      (∀ account, wethAccount ≠ account → final account = initial account) ∧
+      finalLogs = initialLogs ++ [wethTransferLog vault receiver assets] ∧
+      output = (1 : B256).toBytes := by
+  rcases run with ⟨childSevm, childPre, rawPost,
+    currentTarget, codeAddress, caller, valueZero, dataEq, stackEmpty,
+    memoryEmpty, childLogs, initialEq, compiled, rawError, finalEq,
+    finalLogsEq, outputEq⟩
+  obtain ⟨selectorEq, receiverArg, assetsArg⟩ :=
+    transferCalldata_facts dataEq
+  have receiverWord : Sevm.argWord childSevm 0 = receiver.toB256 := by
+    unfold Sevm.argWord
+    rw [show (32 * (0 : B256) + 4) = (4 : B256) by decide +kernel]
+    exact receiverArg
+  have assetsWord : Sevm.argWord childSevm 1 = assets := by
+    unfold Sevm.argWord
+    rw [show (32 * (1 : B256) + 4) = (36 : B256) by decide +kernel]
+    exact assetsArg
+  have member :
+      (selector "transfer" [.address, .uint256], nonpayable transfer) ∈
+        Blanc.wethFuncs := by
+    simp [Blanc.wethFuncs]
+  obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
+      entryOutput, bodyRun⟩ :=
+    runCompiled_enters_wethNonpayable compiled selectorEq member
+  obtain ⟨movement, -, bodyForeign, bodyEmitted, bodyOutput⟩ :=
+    transferBody_exactEffect bodyRun
+  have entryStorage : Devm.getStor childPre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  have bodyInitial : Devm.getStor bodyPre wethAccount = initial wethAccount :=
+    (congrFun entryStorage wethAccount).symm.trans
+      (congrFun initialEq wethAccount)
+  have bodyFinal : Devm.getStor rawPost wethAccount = final wethAccount :=
+    (congrFun finalEq wethAccount).symm
+  rw [currentTarget, caller, receiverWord, assetsWord, bodyInitial,
+    bodyFinal] at movement
+  have foreign : ∀ account, wethAccount ≠ account →
+      final account = initial account := by
+    intro account accountNe
+    rw [congrFun finalEq account]
+    rw [bodyForeign account (by rw [currentTarget]; exact accountNe),
+      ← congrFun entryStorage account, congrFun initialEq account]
+  have entryEq : transferLogEntry childSevm childSevm.caller.toB256
+      (Sevm.argWord childSevm 0) (Sevm.argWord childSevm 1) =
+      wethTransferLog vault receiver assets := by
+    unfold transferLogEntry wethTransferLog
+    rw [currentTarget, caller, receiverWord, assetsWord]
+  have logged : finalLogs = initialLogs ++
+      [wethTransferLog vault receiver assets] := by
+    rw [finalLogsEq, bodyEmitted, ← entryLogs, childLogs, List.nil_append,
+      entryEq]
+  exact ⟨by simpa only [toAdr_toB256] using movement, foreign, logged,
+    outputEq.symm.trans bodyOutput⟩
+
+/-! ## Delegated transfer effect -/
 
 /-- World-strength delegated transfer: the exact successful WETH child for
 `transferFrom(owner,vault,assets)` moves precisely that balance row, leaves

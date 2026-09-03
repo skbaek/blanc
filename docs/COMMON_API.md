@@ -846,6 +846,17 @@ replaying the LOG walk.  WETH10's `emitTransfer_effect_frame` states the same
 fact under its own qualified name and is a candidate for folding into this one;
 that fold belongs to the WETH10 family rather than to a consumer.
 
+`logTransfer_effect` is its sibling for the *direct* `transfer(dst, wad)` tail
+reached through `transferCore`.  The two fragments differ in where the event's
+three components come from: `transferFromLog` takes its source from the stack
+and its data word from a stack word, while `logTransfer` takes its source from
+the executing frame's caller and copies its data word straight out of calldata.
+It returns the surviving stack prefix — the fragment is stack-neutral, so any
+prefix, `nil_pref` included, passes through — and the exact appended
+`transferLogEntry` naming the caller, ABI word zero and ABI word one.  WETH10's
+`of_run_argCopy011` covers the calldata-copy step alone and is likewise a
+candidate for folding into this walk, again as WETH10 family work.
+
 ## T — settlement
 
 ### T1. I have `exec (initEvm msg)` and need `processMessage msg`

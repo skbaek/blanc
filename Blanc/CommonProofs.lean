@@ -11683,6 +11683,91 @@ theorem transferFromLog_effect
   rw [hlogs, hdata, ← hlogs_s_s4]
   rfl
 
+/-- Exact effect of the shared `logTransfer` fragment.
+
+This is the ERC-20 event tail of `transfer(dst, wad)`, the sibling of
+`transferFromLog`: the source is the executing frame's caller rather than a
+stack word, and the data word is copied straight out of calldata instead of
+being taken from the stack.  It is contract-neutral -- WETH, WETH10 and the
+PRORATA WETH vault's asset child all reach it through `transferCore` -- so the
+walk is proved once here.
+
+The fragment consumes and produces nothing on the stack, so any prefix
+survives it. -/
+theorem logTransfer_effect
+    {e : Sevm} {s r : Devm} {xs : Stack}
+    (hp : xs <<+ s.stack)
+    (run : Line.Run e s logTransfer r) :
+    xs <<+ r.stack ∧
+      r.logs = s.logs ++
+        [transferLogEntry e e.caller.toB256 (Sevm.argWord e 0)
+          (Sevm.argWord e 1)] := by
+  simp only [logTransfer, argCopy, cdc] at run
+  rcases Line.of_run_cons run with ⟨c1, hsize, run1⟩
+  have hsizeB := of_run_pushB256 hsize
+  have hc1 : (32 : B256) :: xs <<+ c1.stack := by
+    rw [show (1 * 32 : B256) = 32 by decide +kernel] at hsizeB
+    exact prefix_of_push hsizeB hp
+  rcases Line.of_run_cons run1 with ⟨c2, hsrc, run2⟩
+  have hsrcB := of_run_pushB256 hsrc
+  have hc2 : (36 : B256) :: 32 :: xs <<+ c2.stack := by
+    rw [show (1 * 32 + 4 : B256) = 36 by decide +kernel] at hsrcB
+    exact prefix_of_push hsrcB hc1
+  rcases Line.of_run_cons run2 with ⟨c3, hdst, run3⟩
+  have hdstB := of_run_pushB256 hdst
+  have hc3 : (0 : B256) :: 36 :: 32 :: xs <<+ c3.stack := by
+    rw [show (0 * 32 : B256) = 0 by decide +kernel] at hdstB
+    exact prefix_of_push hdstB hc2
+  rcases Line.of_run_cons run3 with ⟨c4, hcopy, run4⟩
+  rcases prefix_of_calldatacopy_val hcopy hc3 with ⟨hc4, hcopyMem⟩
+  have copyMemory : c4.memory = s.memory.write 0 (e.data.sliceD 36 32 0) := by
+    rw [hcopyMem, ← hdstB.memory, ← hsrcB.memory, ← hsizeB.memory]
+    rfl
+  have copyLogs : s.logs = c4.logs :=
+    hsizeB.logs.trans (hsrcB.logs.trans
+      (hdstB.logs.trans (Ninst.Hinv.inv (f := Devm.logs) hcopy)))
+  rcases of_run_append (arg 0) run4 with ⟨c5, hargRun, run5⟩
+  have hc5 : Sevm.argWord e 0 :: xs <<+ c5.stack := prefix_of_arg hc4 hargRun
+  have argMemory : c4.memory = c5.memory :=
+    Line.of_inv Devm.memory (by line_inv) hargRun
+  have argLogs : c4.logs = c5.logs :=
+    Line.of_inv Devm.logs (by line_inv) hargRun
+  rcases Line.of_run_cons run5 with ⟨c6, hcaller, run6⟩
+  have hcallerB := of_run_caller hcaller
+  have hc6 : e.caller.toB256 :: Sevm.argWord e 0 :: xs <<+ c6.stack :=
+    prefix_of_push hcallerB hc5
+  rcases Line.of_run_cons run6 with ⟨c7, hevent, run7⟩
+  have heventB := of_run_pushB256 hevent
+  have hc7 : transferEvent :: e.caller.toB256 :: Sevm.argWord e 0 :: xs <<+
+      c7.stack := prefix_of_push heventB hc6
+  rcases of_logWith201_val hc7 run7 with ⟨hc8, hlogs⟩
+  have sliceLength : (e.data.sliceD 36 32 0).length = 32 :=
+    List.takeD_length _ _ _
+  have sliceNonempty : e.data.sliceD 36 32 0 ≠ [] := by
+    intro empty
+    rw [empty] at sliceLength
+    exact absurd sliceLength (by decide)
+  have eventMemory : c7.memory = s.memory.write 0 (e.data.sliceD 36 32 0) := by
+    rw [← heventB.memory, ← hcallerB.memory, ← argMemory, copyMemory]
+  have readBack :
+      ((s.memory.write 0 (e.data.sliceD 36 32 0)).read 0 32).1 =
+        e.data.sliceD 36 32 0 := by
+    have raw := Mem.read_write_zero s.memory sliceNonempty
+    rwa [sliceLength] at raw
+  have hdata : (c7.memory.read 0 32).1 = (Sevm.argWord e 1).toBytes := by
+    rw [eventMemory, readBack]
+    show e.data.sliceD 36 32 0 = (Sevm.dataWord e ((32 * 1) + 4)).toBytes
+    rw [show ((32 : B256) * 1 + 4) = 36 by decide +kernel]
+    unfold Sevm.dataWord
+    rw [show ((36 : B256)).toNat = 36 by decide +kernel]
+    exact (Bytes.toBytes_toB256_of_length sliceLength).symm
+  have eventLogs : s.logs = c7.logs :=
+    copyLogs.trans (argLogs.trans
+      (hcallerB.logs.trans heventB.logs))
+  refine ⟨hc8, ?_⟩
+  rw [hlogs, hdata, ← eventLogs]
+  rfl
+
 end TransferLogFrame
 
 /-- `MLOAD` pushes *the word at the offset it popped*, and only extends
