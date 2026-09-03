@@ -833,6 +833,16 @@ proof-carrying `Mem.Reads` image across that same fixed fragment.
 `of_logWith201_val` remains the convenient specialized form for the common
 ERC-20 three-topic, one-word event.
 
+One rung above those, `transferFromLog_effect_frame` proves the complete effect
+of the shared `transferFromLog` fragment — the ERC-20 `Transfer` tail that
+WETH, WETH10, and the PRORATA WETH vault's asset child all reach.  It returns
+the residual stack prefix, the exact appended `transferLogEntry`, storage,
+balance, code and output preservation, and the concrete post-log memory image,
+so a following fragment can reuse the word written for the event data without
+replaying the LOG walk.  WETH10's `emitTransfer_effect_frame` states the same
+fact under its own qualified name and is a candidate for folding into this one;
+that fold belongs to the WETH10 family rather than to a consumer.
+
 ## T — settlement
 
 ### T1. I have `exec (initEvm msg)` and need `processMessage msg`

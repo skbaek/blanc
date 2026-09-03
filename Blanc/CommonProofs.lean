@@ -11547,6 +11547,144 @@ lemma of_logWith201_mem {e : Sevm} {s s' : Devm}
   rw [hmemory, ← hb0.memory, ← hb32.memory]
   rfl
 
+section TransferLogFrame
+
+open scoped LogOutputHinv
+
+/-- The canonical ERC-20 `Transfer(src, dst, amount)` entry emitted by the
+shared `transferFromLog` fragment. -/
+def transferLogEntry (e : Sevm) (src dst amount : B256) : Log :=
+  ⟨e.currentTarget, [transferEvent, src, dst], amount.toBytes⟩
+
+/-- Exact effect of the shared `transferFromLog` fragment, retaining the
+concrete post-log memory image.
+
+This is contract-neutral: `transferFromLog` is the ERC-20 event tail that WETH,
+WETH10, and the PRORATA WETH vault's asset child all reach, so the walk is
+proved once here rather than once per family.  Keeping the resulting image lets
+a following fragment reuse the word written for the event data without
+replaying the LOG walk. -/
+theorem transferFromLog_effect_frame
+    {e : Sevm} {s r : Devm} {src dst amount : B256}
+    {xs : Stack} {img : Bytes}
+    (hp : dst :: amount :: src :: xs <<+ s.stack)
+    (h_wf : Mem.Wf s.memory)
+    (h_reads : Mem.Reads s.memory img)
+    (run : Line.Run e s transferFromLog r) :
+    amount :: src :: xs <<+ r.stack ∧
+      r.logs = s.logs ++ [transferLogEntry e src dst amount] ∧
+      Devm.getStor r = Devm.getStor s ∧
+      Devm.getBal r = Devm.getBal s ∧
+      Devm.getCode r = Devm.getCode s ∧
+      r.output = s.output ∧
+      Mem.Wf r.memory ∧
+      Mem.Reads r.memory (Bytes.writeAt img 0 amount.toBytes) := by
+  simp only [transferFromLog] at run
+  rcases Line.of_run_cons run with ⟨s1, hdupSrc, run1⟩
+  have hp1 : src :: dst :: amount :: src :: xs <<+ s1.stack :=
+    prefix_of_dup_val hdupSrc (by show_nth) hp
+  rcases Line.of_run_cons run1 with ⟨s2, hevent, run2⟩
+  have hbevent := of_run_pushB256 hevent
+  have hp2 : transferEvent :: src :: dst :: amount :: src :: xs <<+
+      s2.stack := prefix_of_push hbevent hp1
+  rcases Line.of_run_cons run2 with ⟨s3, hdupAmount, run3⟩
+  have hp3 : amount :: transferEvent :: src :: dst :: amount :: src :: xs <<+
+      s3.stack := prefix_of_dup_val hdupAmount (by show_nth) hp2
+  rcases of_run_append (mstoreAt 0) run3 with ⟨s4, hstore, hlog⟩
+  rcases of_run_mstoreAt_val hstore hp3 with ⟨hp4, hm4⟩
+  have hm4' : s4.memory = s3.memory.write 0 amount.toBytes := by
+    simpa only [show (0 * 32 : B256).toNat = 0 by decide +kernel]
+      using hm4
+  rcases of_logWith201_val hp4 hlog with ⟨hp5, hlogs⟩
+  have hlogMem := of_logWith201_mem hp4 hlog
+  have hmem_s_s3 : s.memory = s3.memory := by
+    calc
+      s.memory = s1.memory := Ninst.Hinv.inv (f := Devm.memory) hdupSrc
+      _ = s2.memory := hbevent.memory
+      _ = s3.memory := Ninst.Hinv.inv (f := Devm.memory) hdupAmount
+  let img1 := Bytes.writeAt img 0 amount.toBytes
+  have hwf4 : Mem.Wf s4.memory := by
+    rw [hm4', ← hmem_s_s3]
+    exact h_wf.write 0 amount.toBytes
+  have hreads4 : Mem.Reads s4.memory img1 := by
+    rw [hm4', ← hmem_s_s3]
+    exact Mem.Reads.write h_wf h_reads 0 amount.toBytes
+  have hdata : (s4.memory.read 0 32).1 = amount.toBytes := by
+    rw [Mem.Reads.read hreads4 0 32,
+      show 32 = amount.toBytes.length by rw [B256.length_toBytes],
+      Bytes.sliceD_writeAt]
+  have hlogs_s_s4 : s.logs = s4.logs := by
+    calc
+      s.logs = s1.logs := Ninst.Hinv.inv (f := Devm.logs) hdupSrc
+      _ = s2.logs := hbevent.logs
+      _ = s3.logs := Ninst.Hinv.inv (f := Devm.logs) hdupAmount
+      _ = s4.logs := Line.of_inv Devm.logs (by
+        unfold mstoreAt
+        line_inv) hstore
+  have hwfR : Mem.Wf r.memory := by
+    rw [hlogMem]
+    exact hwf4.extend 0 32
+  have hreadsR : Mem.Reads r.memory img1 := by
+    rw [hlogMem]
+    exact Mem.Reads.extend hreads4 0 32
+  refine ⟨hp5, ?_, ?_, ?_, ?_, ?_, hwfR, hreadsR⟩
+  · rw [hlogs, hdata, ← hlogs_s_s4]
+    rfl
+  · exact (Line.of_inv Devm.getStor (by line_inv) run).symm
+  · exact (Line.of_inv Devm.getBal (by line_inv) run).symm
+  · exact (Line.of_inv Devm.getCode (by line_inv) run).symm
+  · exact (Line.of_inv Devm.output (by line_inv) run).symm
+
+/-- Memory-premise-free form of the shared `transferFromLog` effect.  The
+event data is read straight back out of the write that produced it, so no
+`Mem.Wf` or proof-carrying image is needed.  Use this inside a contract body
+walk that does not otherwise track memory. -/
+theorem transferFromLog_effect
+    {e : Sevm} {s r : Devm} {src dst amount : B256} {xs : Stack}
+    (hp : dst :: amount :: src :: xs <<+ s.stack)
+    (run : Line.Run e s transferFromLog r) :
+    amount :: src :: xs <<+ r.stack ∧
+      r.logs = s.logs ++ [transferLogEntry e src dst amount] := by
+  simp only [transferFromLog] at run
+  rcases Line.of_run_cons run with ⟨s1, hdupSrc, run1⟩
+  have hp1 : src :: dst :: amount :: src :: xs <<+ s1.stack :=
+    prefix_of_dup_val hdupSrc (by show_nth) hp
+  rcases Line.of_run_cons run1 with ⟨s2, hevent, run2⟩
+  have hbevent := of_run_pushB256 hevent
+  have hp2 : transferEvent :: src :: dst :: amount :: src :: xs <<+
+      s2.stack := prefix_of_push hbevent hp1
+  rcases Line.of_run_cons run2 with ⟨s3, hdupAmount, run3⟩
+  have hp3 : amount :: transferEvent :: src :: dst :: amount :: src :: xs <<+
+      s3.stack := prefix_of_dup_val hdupAmount (by show_nth) hp2
+  rcases of_run_append (mstoreAt 0) run3 with ⟨s4, hstore, hlog⟩
+  rcases of_run_mstoreAt_val hstore hp3 with ⟨hp4, hm4⟩
+  have hm4' : s4.memory = s3.memory.write 0 amount.toBytes := by
+    simpa only [show (0 * 32 : B256).toNat = 0 by decide +kernel]
+      using hm4
+  rcases of_logWith201_val hp4 hlog with ⟨hp5, hlogs⟩
+  have amountNonempty : amount.toBytes ≠ [] := by
+    intro empty
+    have lengthEq : amount.toBytes.length = 32 := B256.length_toBytes amount
+    rw [empty] at lengthEq
+    exact absurd lengthEq (by decide)
+  have hdata : (s4.memory.read 0 32).1 = amount.toBytes := by
+    rw [hm4', show (32 : Nat) = amount.toBytes.length from
+      (B256.length_toBytes amount).symm]
+    exact Mem.read_write_zero s3.memory amountNonempty
+  have hlogs_s_s4 : s.logs = s4.logs := by
+    calc
+      s.logs = s1.logs := Ninst.Hinv.inv (f := Devm.logs) hdupSrc
+      _ = s2.logs := hbevent.logs
+      _ = s3.logs := Ninst.Hinv.inv (f := Devm.logs) hdupAmount
+      _ = s4.logs := Line.of_inv Devm.logs (by
+        unfold mstoreAt
+        line_inv) hstore
+  refine ⟨hp5, ?_⟩
+  rw [hlogs, hdata, ← hlogs_s_s4]
+  rfl
+
+end TransferLogFrame
+
 /-- `MLOAD` pushes *the word at the offset it popped*, and only extends
 memory.  The value-carrying companion of `of_run_mload`. -/
 lemma of_run_mload_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mload s') :
