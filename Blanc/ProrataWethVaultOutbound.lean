@@ -1158,6 +1158,580 @@ theorem outboundAuthorization_trace
       rw [foreign account accountNe, ← congrFun spendStorage account]
     · exact branchLogs.trans (spendPop.logs.trans logs)
 
+/-! ## Burn and supply settlement -/
+
+/-- The share `Transfer(owner, 0, shares)` entry the vault emits when it burns.
+The inbound mint's `mintTransferLog` is its mirror, with the roles swapped. -/
+def burnTransferLog (sevm : Sevm) (owner shares : B256) : Log :=
+  ⟨sevm.currentTarget, [transferEvent, owner, 0], shares.toBytes⟩
+
+/-- The ERC-4626 `Withdraw(caller, receiver, owner, assets, shares)` entry. -/
+def withdrawLogEntry
+    (sevm : Sevm) (receiver owner assets shares : B256) : Log :=
+  ⟨sevm.currentTarget,
+    [withdrawEvent, sevm.caller.toB256, receiver, owner],
+    assets.toBytes ++ shares.toBytes⟩
+
+/-- The outbound burn debits the owner's staged share row, requires the burn to
+fit the staged supply, decreases the supply by exactly it, and emits the burn
+`Transfer` -- all before the WETH child runs.  No other account's storage
+moves.
+
+This is the inbound settlement read in reverse order as well as in reverse
+direction: `finishInbound` credits *after* its child, while `finishOutbound`
+burns *before* its child, which is what puts the share `Transfer` first in the
+outbound log order. -/
+theorem outboundBurn_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {sharesSel owner balance supply shares : B256}
+    {tailFunc : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (sharesAt : Bytes.toB256
+      (image.sliceD (sharesSel * 32).toNat 32 0) = shares)
+    (ownerAt : Bytes.toB256
+      (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
+    (balanceAt : Bytes.toB256
+      (image.sliceD (balanceWord * 32).toNat 32 0) = balance)
+    (supplyAt : Bytes.toB256
+      (image.sliceD (supplyWord * 32).toNat 32 0) = supply)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (loadWord sharesSel +++ loadWord balanceWord +++ sub :::
+        loadWord ownerWord +++ sstore :::
+        loadWord sharesSel +++ loadWord supplyWord +++ lt :::
+        (Func.revert <?>
+          (loadWord sharesSel +++ loadWord supplyWord +++ sub :::
+            pushSupplySlot +++ sstore :::
+            logBurnTransfer (loadWord sharesSel) +++ tailFunc)))
+      (.ok final)) :
+    ∃ bodyPre,
+      shares.toNat ≤ supply.toNat ∧
+      Devm.getStor bodyPre sevm.currentTarget =
+        ((Devm.getStor pre sevm.currentTarget).set owner
+          (balance - shares)).set supplySlot (supply - shares) ∧
+      (∀ account, sevm.currentTarget ≠ account →
+        Devm.getStor bodyPre account = Devm.getStor pre account) ∧
+      bodyPre.logs = pre.logs ++ [burnTransferLog sevm owner shares] ∧
+      tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory (Bytes.writeAt image 0 shares.toBytes) ∧
+      Func.RunCompiledTo fs sevm bodyPre tailFunc (.ok final) := by
+  -- Debit the owner's staged share row.
+  obtain ⟨balanceLoadPre, sharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨sharesPrefix, balanceLoadWf, balanceLoadReads, sharesState⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads sharesAt sharesRun
+  have sharesLogs : pre.logs = balanceLoadPre.logs :=
+    of_run_loadWordAt_logs sharesRun
+  obtain ⟨subPre, balanceLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨balanceLoadPrefix, subWf, subReads, balanceLoadState⟩ :=
+    of_run_loadWordAt_image sharesPrefix balanceLoadWf balanceLoadReads
+      balanceAt balanceLoadRun
+  have balanceLoadLogs : balanceLoadPre.logs = subPre.logs :=
+    of_run_loadWordAt_logs balanceLoadRun
+  obtain ⟨ownerLoadPre, subRun, run⟩ := runCompiledTo_next_inv run
+  have subSource := Ninst.Run.of_runCompiled subRun
+  have subPrefix : (balance - shares) :: tail <<+ ownerLoadPre.stack :=
+    prefix_of_sub subSource balanceLoadPrefix
+  have subMemory : subPre.memory = ownerLoadPre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) subSource
+  have subStorage : Devm.getStor subPre = Devm.getStor ownerLoadPre :=
+    Ninst.Hinv.inv (f := Devm.getStor) subSource
+  have subLogs : subPre.logs = ownerLoadPre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) subSource
+  have ownerLoadWf : Mem.Wf ownerLoadPre.memory := by
+    rw [← subMemory]; exact subWf
+  have ownerLoadReads : Mem.Reads ownerLoadPre.memory image := by
+    rw [← subMemory]; exact subReads
+  obtain ⟨balanceStorePre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨ownerPrefix, balanceStoreWf, balanceStoreReads, ownerState⟩ :=
+    of_run_loadWordAt_image subPrefix ownerLoadWf ownerLoadReads ownerAt
+      ownerRun
+  have ownerLogs : ownerLoadPre.logs = balanceStorePre.logs :=
+    of_run_loadWordAt_logs ownerRun
+  obtain ⟨supplyTestPre, balanceStoreRun, run⟩ := runCompiledTo_next_inv run
+  have balanceStoreSource := Ninst.Run.of_runCompiled balanceStoreRun
+  have balanceSet : Devm.getStor supplyTestPre sevm.currentTarget =
+      (Devm.getStor balanceStorePre sevm.currentTarget).set owner
+        (balance - shares) :=
+    sstore_getStor_set balanceStoreSource ownerPrefix
+  have balanceForeign : ∀ account, sevm.currentTarget ≠ account →
+      Devm.getStor supplyTestPre account =
+        Devm.getStor balanceStorePre account :=
+    fun _ ne => sstore_getStor_of_ne balanceStoreSource ne
+  have balanceStoreStack : tail <<+ supplyTestPre.stack :=
+    prefix_of_sstore balanceStoreSource ownerPrefix
+  have balanceStoreMemory : balanceStorePre.memory = supplyTestPre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) balanceStoreSource
+  have balanceStoreLogs : balanceStorePre.logs = supplyTestPre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) balanceStoreSource
+  have supplyTestWf : Mem.Wf supplyTestPre.memory := by
+    rw [← balanceStoreMemory]; exact balanceStoreWf
+  have supplyTestReads : Mem.Reads supplyTestPre.memory image := by
+    rw [← balanceStoreMemory]; exact balanceStoreReads
+
+  -- Require the burn to fit the staged supply.
+  obtain ⟨supplyLoadPre, roomSharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨roomSharesPrefix, supplyLoadWf, supplyLoadReads, roomSharesState⟩ :=
+    of_run_loadWordAt_image balanceStoreStack supplyTestWf supplyTestReads
+      sharesAt roomSharesRun
+  have roomSharesLogs : supplyTestPre.logs = supplyLoadPre.logs :=
+    of_run_loadWordAt_logs roomSharesRun
+  obtain ⟨roomTestPre, supplyLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨supplyLoadPrefix, roomTestWf, roomTestReads, supplyLoadState⟩ :=
+    of_run_loadWordAt_image roomSharesPrefix supplyLoadWf supplyLoadReads
+      supplyAt supplyLoadRun
+  have supplyLoadLogs : supplyLoadPre.logs = roomTestPre.logs :=
+    of_run_loadWordAt_logs supplyLoadRun
+  obtain ⟨roomBranchPre, roomTestRun, roomBranchRun⟩ :=
+    runCompiledTo_next_inv run
+  have roomTestSource := Ninst.Run.of_runCompiled roomTestRun
+  have roomTestPrefix := prefix_of_lt roomTestSource supplyLoadPrefix
+  have roomTestMemory : roomTestPre.memory = roomBranchPre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) roomTestSource
+  have roomTestStorage :
+      Devm.getStor roomTestPre = Devm.getStor roomBranchPre :=
+    Ninst.Hinv.inv (f := Devm.getStor) roomTestSource
+  have roomTestLogs : roomTestPre.logs = roomBranchPre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) roomTestSource
+  have supplyLarge : ¬ supply < shares := by
+    intro supplyLt
+    have onePrefix : (1 : B256) :: tail <<+ roomBranchPre.stack := by
+      simpa [B256.ltCheck, supplyLt] using roomTestPrefix
+    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
+      Func.RunCompiledTo.succ_branch_of_prefix
+        (by decide : (1 : B256) ≠ 0) onePrefix roomBranchRun
+    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
+    cases impossible
+  have roomZeroPrefix : (0 : B256) :: tail <<+ roomBranchPre.stack := by
+    simpa [B256.ltCheck, supplyLarge] using roomTestPrefix
+  obtain ⟨decrPre, roomPop, run, decrStack⟩ :=
+    Func.RunCompiledTo.zero_branch_of_prefix roomZeroPrefix roomBranchRun
+  have decrWf : Mem.Wf decrPre.memory := by
+    rw [← roomPop.memory, ← roomTestMemory]; exact roomTestWf
+  have decrReads : Mem.Reads decrPre.memory image := by
+    rw [← roomPop.memory, ← roomTestMemory]; exact roomTestReads
+
+  -- Decrease the supply by exactly the burn.
+  obtain ⟨decrSupplyPre, decrSharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨decrSharesPrefix, decrSupplyWf, decrSupplyReads, decrSharesState⟩ :=
+    of_run_loadWordAt_image decrStack decrWf decrReads sharesAt decrSharesRun
+  have decrSharesLogs : decrPre.logs = decrSupplyPre.logs :=
+    of_run_loadWordAt_logs decrSharesRun
+  obtain ⟨decrSubPre, decrSupplyRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨decrSupplyPrefix, decrSubWf, decrSubReads, decrSupplyState⟩ :=
+    of_run_loadWordAt_image decrSharesPrefix decrSupplyWf decrSupplyReads
+      supplyAt decrSupplyRun
+  have decrSupplyLogs : decrSupplyPre.logs = decrSubPre.logs :=
+    of_run_loadWordAt_logs decrSupplyRun
+  obtain ⟨slotPushPre, decrSubRun, run⟩ := runCompiledTo_next_inv run
+  have decrSubSource := Ninst.Run.of_runCompiled decrSubRun
+  have decrSubPrefix : (supply - shares) :: tail <<+ slotPushPre.stack :=
+    prefix_of_sub decrSubSource decrSupplyPrefix
+  have decrSubMemory : decrSubPre.memory = slotPushPre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) decrSubSource
+  have decrSubStorage : Devm.getStor decrSubPre = Devm.getStor slotPushPre :=
+    Ninst.Hinv.inv (f := Devm.getStor) decrSubSource
+  have decrSubLogs : decrSubPre.logs = slotPushPre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) decrSubSource
+  obtain ⟨supplyStorePre, slotPushRun, run⟩ := runCompiledTo_prepend_inv run
+  simp only [pushSupplySlot] at slotPushRun
+  rcases Line.of_run_cons slotPushRun with ⟨zeroPost, zeroRun, slotTailRun⟩
+  rcases Line.of_run_cons slotTailRun with ⟨_, notRun, slotNil⟩
+  cases slotNil
+  have zeroPush := of_run_pushB256 zeroRun
+  have pushedZero : (0 : B256) :: (supply - shares) :: tail <<+
+      zeroPost.stack := prefix_of_push zeroPush decrSubPrefix
+  have slotPrefix : supplySlot :: (supply - shares) :: tail <<+
+      supplyStorePre.stack := by
+    have notZero : (~~~(0 : B256)) = supplySlot := by decide +kernel
+    rw [← notZero]
+    exact prefix_of_not notRun pushedZero
+  obtain ⟨logPre, supplyStoreRun, run⟩ := runCompiledTo_next_inv run
+  have supplyStoreSource := Ninst.Run.of_runCompiled supplyStoreRun
+  have supplySet : Devm.getStor logPre sevm.currentTarget =
+      (Devm.getStor supplyStorePre sevm.currentTarget).set supplySlot
+        (supply - shares) :=
+    sstore_getStor_set supplyStoreSource slotPrefix
+  have supplyForeign : ∀ account, sevm.currentTarget ≠ account →
+      Devm.getStor logPre account = Devm.getStor supplyStorePre account :=
+    fun _ ne => sstore_getStor_of_ne supplyStoreSource ne
+  have supplyStoreStack : tail <<+ logPre.stack :=
+    prefix_of_sstore supplyStoreSource slotPrefix
+  have supplyStoreLogs : supplyStorePre.logs = logPre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) supplyStoreSource
+  have slotMemory : decrSubPre.memory = logPre.memory :=
+    decrSubMemory.trans (zeroPush.memory.trans
+      ((Ninst.Hinv.inv (f := Devm.memory) notRun).trans
+        (Ninst.Hinv.inv (f := Devm.memory) supplyStoreSource)))
+  have logWf : Mem.Wf logPre.memory := by
+    rw [← slotMemory]; exact decrSubWf
+  have logReads : Mem.Reads logPre.memory image := by
+    rw [← slotMemory]; exact decrSubReads
+
+  -- Emit the burn transfer.
+  obtain ⟨bodyPre, logRun, bodyRun⟩ := runCompiledTo_prepend_inv run
+  have logLineRun := logRun
+  have logStorage : Devm.getStor logPre = Devm.getStor bodyPre := by
+    refine Line.of_inv Devm.getStor ?_ logLineRun
+    unfold logBurnTransfer ProrataWethVault.loadWord mstoreAt logWith
+    line_inv
+  simp only [logBurnTransfer, List.append_assoc] at logRun
+  obtain ⟨e1, logSharesRun, logRun⟩ :=
+    of_run_append (loadWord sharesSel) logRun
+  obtain ⟨logSharesPrefix, e1Wf, e1Reads, -⟩ :=
+    of_run_loadWordAt_image supplyStoreStack logWf logReads sharesAt
+      logSharesRun
+  obtain ⟨e2, logStoreRun, logRun⟩ := of_run_append (mstoreAt 0) logRun
+  obtain ⟨e2Stack, e2Wf, e2Reads, -⟩ :=
+    of_run_mstoreAt_image logSharesPrefix e1Wf e1Reads logStoreRun
+  obtain ⟨e3, zeroTopicRun, logRun⟩ := of_run_append [pushB256 0] logRun
+  rcases Line.of_run_cons zeroTopicRun with ⟨_, zeroTopic, zeroTopicNil⟩
+  cases zeroTopicNil
+  have zeroTopicPush := of_run_pushB256 zeroTopic
+  have e3Prefix : (0 : B256) :: tail <<+ e3.stack :=
+    prefix_of_push zeroTopicPush e2Stack
+  have e3Wf : Mem.Wf e3.memory := by rw [← zeroTopicPush.memory]; exact e2Wf
+  have e3Reads : Mem.Reads e3.memory
+      (Bytes.writeAt image ((0 : B256) * 32).toNat shares.toBytes) := by
+    rw [← zeroTopicPush.memory]; exact e2Reads
+  have ownerAtLogged : Bytes.toB256
+      ((Bytes.writeAt image ((0 : B256) * 32).toNat shares.toBytes).sliceD
+        (ownerWord * 32).toNat 32 0) = owner := by
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact ownerAt
+    · right
+      decide +kernel
+  obtain ⟨e4, logOwnerRun, logRun⟩ :=
+    of_run_append (loadWord ownerWord) logRun
+  obtain ⟨e4Prefix, e4Wf, e4Reads, -⟩ :=
+    of_run_loadWordAt_image e3Prefix e3Wf e3Reads ownerAtLogged logOwnerRun
+  obtain ⟨e5, eventRun, logRun⟩ :=
+    of_run_append [pushB256 transferEvent] logRun
+  rcases Line.of_run_cons eventRun with ⟨_, eventPushRun, eventNil⟩
+  cases eventNil
+  have eventPush := of_run_pushB256 eventPushRun
+  have e5Prefix : transferEvent :: owner :: 0 :: tail <<+ e5.stack :=
+    prefix_of_push eventPush e4Prefix
+  have e5Wf : Mem.Wf e5.memory := by rw [← eventPush.memory]; exact e4Wf
+  have e5Reads : Mem.Reads e5.memory
+      (Bytes.writeAt image ((0 : B256) * 32).toNat shares.toBytes) := by
+    rw [← eventPush.memory]; exact e4Reads
+  obtain ⟨bodyStack, emitted⟩ :=
+    of_logWith_val (topics := [transferEvent, owner, 0]) (by simp)
+      (by simpa using e5Prefix) logRun
+  obtain ⟨bodyWf, bodyReads⟩ := of_logWith_image e5Wf e5Reads logRun
+  have logWindow : (e5.memory.read ((0 : B256) * 32).toNat
+      ((1 : B256) * 32).toNat).1 = shares.toBytes := by
+    have zeroOffset : ((0 : B256) * 32).toNat = 0 := by decide +kernel
+    have sizeWord : ((1 : B256) * 32).toNat = 32 := by decide +kernel
+    rw [zeroOffset, sizeWord, Mem.Reads.read e5Reads, zeroOffset,
+      show (32 : Nat) = shares.toBytes.length from
+        (B256.length_toBytes shares).symm]
+    exact Bytes.sliceD_writeAt image shares.toBytes 0
+  have logPrefixLogs : logPre.logs = e5.logs :=
+    (of_run_loadWordAt_logs logSharesRun).trans
+      ((Line.of_inv Devm.logs (by
+          unfold mstoreAt
+          line_inv) logStoreRun).trans
+        (zeroTopicPush.logs.trans
+          ((of_run_loadWordAt_logs logOwnerRun).trans eventPush.logs)))
+
+  -- Assemble the two storage writes and the single emitted entry.
+  have preToBalanceStore : Devm.getStor pre = Devm.getStor balanceStorePre :=
+    (funext (getStor_eq_of_state_eq sharesState)).trans
+      ((funext (getStor_eq_of_state_eq balanceLoadState)).trans
+        (subStorage.trans (funext (getStor_eq_of_state_eq ownerState))))
+  have supplyTestToSupplyStore :
+      Devm.getStor supplyTestPre = Devm.getStor supplyStorePre :=
+    (funext (getStor_eq_of_state_eq roomSharesState)).trans
+      ((funext (getStor_eq_of_state_eq supplyLoadState)).trans
+        (roomTestStorage.trans
+          ((funext (getStor_eq_of_state_eq roomPop.state)).trans
+            ((funext (getStor_eq_of_state_eq decrSharesState)).trans
+              ((funext (getStor_eq_of_state_eq decrSupplyState)).trans
+                (decrSubStorage.trans
+                  ((funext (getStor_eq_of_state_eq zeroPush.state)).trans
+                    (Ninst.Hinv.inv (f := Devm.getStor) notRun))))))))
+  have preToLogPre : pre.logs = logPre.logs :=
+    sharesLogs.trans <| balanceLoadLogs.trans <| subLogs.trans <|
+      ownerLogs.trans <| balanceStoreLogs.trans <| roomSharesLogs.trans <|
+        supplyLoadLogs.trans <| roomTestLogs.trans <| roomPop.logs.trans <|
+          decrSharesLogs.trans <| decrSupplyLogs.trans <| decrSubLogs.trans <|
+            zeroPush.logs.trans <|
+              (Ninst.Hinv.inv (f := Devm.logs) notRun).trans supplyStoreLogs
+  refine ⟨bodyPre, ?_, ?_, ?_, ?_, bodyStack, bodyWf, ?_, bodyRun⟩
+  · by_contra sharesLarge
+    exact supplyLarge (B256.lt_of_toNat_lt_toNat (by omega))
+  · rw [← congrFun logStorage sevm.currentTarget, supplySet,
+      ← congrFun supplyTestToSupplyStore sevm.currentTarget, balanceSet,
+      ← congrFun preToBalanceStore sevm.currentTarget]
+  · intro account accountNe
+    rw [← congrFun logStorage account, supplyForeign account accountNe,
+      ← congrFun supplyTestToSupplyStore account,
+      balanceForeign account accountNe,
+      ← congrFun preToBalanceStore account]
+  · rw [emitted, logWindow, ← logPrefixLogs, ← preToLogPre]
+    rfl
+  · have zeroOffset : ((0 : B256) * 32).toNat = 0 := by decide +kernel
+    rw [← zeroOffset]
+    exact bodyReads
+
+/-- Memory image after the two `Withdraw` data words are staged. -/
+def outboundSettleImage (image : Bytes) (assets shares : B256) : Bytes :=
+  Bytes.writeAt (Bytes.writeAt image 0 assets.toBytes) 32 shares.toBytes
+
+/-- The outbound settlement runs *after* the WETH child: it emits the exact
+ERC-4626 `Withdraw` entry and returns the quoted word, writing no storage. -/
+theorem outboundSettle_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {assetsSel sharesSel returnedSel : B256}
+    {assets shares owner receiver returned : B256} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (assetsAt : Bytes.toB256
+      (image.sliceD (assetsSel * 32).toNat 32 0) = assets)
+    (sharesAt : Bytes.toB256
+      (image.sliceD (sharesSel * 32).toNat 32 0) = shares)
+    (ownerAt : Bytes.toB256
+      (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
+    (receiverAt : Bytes.toB256
+      (image.sliceD (receiverWord * 32).toNat 32 0) = receiver)
+    (returnedAt : Bytes.toB256
+      (image.sliceD (returnedSel * 32).toNat 32 0) = returned)
+    (sharesAboveWords : 64 ≤ (sharesSel * 32).toNat)
+    (returnedAboveWords : 64 ≤ (returnedSel * 32).toNat)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (logWithdraw (loadWord assetsSel) (loadWord sharesSel) +++
+        loadWord returnedSel +++ returnWord) (.ok final)) :
+    ReturnsWord returned final ∧
+      Devm.getStor final = Devm.getStor pre ∧
+      final.logs = pre.logs ++
+        [withdrawLogEntry sevm receiver owner assets shares] := by
+  obtain ⟨returnLoadPre, logRun, run⟩ := runCompiledTo_prepend_inv run
+  have logLineRun := logRun
+  have logStorage : Devm.getStor pre = Devm.getStor returnLoadPre := by
+    refine Line.of_inv Devm.getStor ?_ logLineRun
+    unfold logWithdraw ProrataWethVault.loadWord mstoreAt logWith
+    line_inv
+  simp only [logWithdraw, List.append_assoc] at logRun
+
+  -- Stage the two data words.
+  obtain ⟨w1, assetsRun, logRun⟩ := of_run_append (loadWord assetsSel) logRun
+  obtain ⟨assetsPrefix, w1Wf, w1Reads, -⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads assetsAt assetsRun
+  obtain ⟨w2, assetsStoreRun, logRun⟩ := of_run_append (mstoreAt 0) logRun
+  obtain ⟨w2Stack, w2Wf, w2Reads, -⟩ :=
+    of_run_mstoreAt_image assetsPrefix w1Wf w1Reads assetsStoreRun
+  have zeroOffset : ((0 : B256) * 32).toNat = 0 := by decide +kernel
+  have oneOffset : ((1 : B256) * 32).toNat = 32 := by decide +kernel
+  rw [zeroOffset] at w2Reads
+  have sharesAtStaged : Bytes.toB256
+      ((Bytes.writeAt image 0 assets.toBytes).sliceD
+        (sharesSel * 32).toNat 32 0) = shares := by
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact sharesAt
+    · right
+      omega
+  obtain ⟨w3, sharesRun, logRun⟩ := of_run_append (loadWord sharesSel) logRun
+  obtain ⟨sharesPrefix, w3Wf, w3Reads, -⟩ :=
+    of_run_loadWordAt_image w2Stack w2Wf w2Reads sharesAtStaged sharesRun
+  obtain ⟨w4, sharesStoreRun, logRun⟩ := of_run_append (mstoreAt 1) logRun
+  obtain ⟨w4Stack, w4Wf, w4Reads, -⟩ :=
+    of_run_mstoreAt_image sharesPrefix w3Wf w3Reads sharesStoreRun
+  rw [oneOffset] at w4Reads
+  have stagedReads : Mem.Reads w4.memory
+      (outboundSettleImage image assets shares) := w4Reads
+  have ownerAtStaged : Bytes.toB256
+      ((outboundSettleImage image assets shares).sliceD
+        (ownerWord * 32).toNat 32 0) = owner := by
+    unfold outboundSettleImage
+    rw [Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint]
+    · exact ownerAt
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+  have receiverAtStaged : Bytes.toB256
+      ((outboundSettleImage image assets shares).sliceD
+        (receiverWord * 32).toNat 32 0) = receiver := by
+    unfold outboundSettleImage
+    rw [Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint]
+    · exact receiverAt
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+
+  -- Push the three indexed topics and the event signature.
+  obtain ⟨w5, ownerRun, logRun⟩ := of_run_append (loadWord ownerWord) logRun
+  obtain ⟨ownerPrefix, w5Wf, w5Reads, -⟩ :=
+    of_run_loadWordAt_image w4Stack w4Wf stagedReads ownerAtStaged ownerRun
+  obtain ⟨w6, receiverRun, logRun⟩ :=
+    of_run_append (loadWord receiverWord) logRun
+  obtain ⟨receiverPrefix, w6Wf, w6Reads, -⟩ :=
+    of_run_loadWordAt_image ownerPrefix w5Wf w5Reads receiverAtStaged
+      receiverRun
+  obtain ⟨w7, headRun, logRun⟩ :=
+    of_run_append [caller, pushB256 withdrawEvent] logRun
+  rcases Line.of_run_cons headRun with ⟨w6b, callerRun, headTailRun⟩
+  rcases Line.of_run_cons headTailRun with ⟨_, eventRun, headNil⟩
+  cases headNil
+  have callerPush := of_run_caller callerRun
+  have eventPush := of_run_pushB256 eventRun
+  have topicPrefix : withdrawEvent :: sevm.caller.toB256 :: receiver ::
+      owner :: tail <<+ w7.stack :=
+    prefix_of_push eventPush (prefix_of_push callerPush receiverPrefix)
+  have w7Wf : Mem.Wf w7.memory := by
+    rw [← eventPush.memory, ← callerPush.memory]; exact w6Wf
+  have w7Reads : Mem.Reads w7.memory
+      (outboundSettleImage image assets shares) := by
+    rw [← eventPush.memory, ← callerPush.memory]; exact w6Reads
+  obtain ⟨returnLoadStack, emitted⟩ :=
+    of_logWith_val
+      (topics := [withdrawEvent, sevm.caller.toB256, receiver, owner])
+      (by simp) (by simpa using topicPrefix) logRun
+  obtain ⟨returnLoadWf, returnLoadReads⟩ := of_logWith_image w7Wf w7Reads logRun
+  have dataWindow : (w7.memory.read ((0 : B256) * 32).toNat
+      ((2 : B256) * 32).toNat).1 = assets.toBytes ++ shares.toBytes := by
+    have twoOffset : ((2 : B256) * 32).toNat = 64 := by decide +kernel
+    rw [zeroOffset, twoOffset, Mem.Reads.read w7Reads]
+    simpa only [outboundSettleImage] using
+      Bytes.read_two_word_writes_at image 0 assets shares
+  have logLogs : pre.logs = w7.logs :=
+    (of_run_loadWordAt_logs assetsRun).trans <|
+      (Line.of_inv Devm.logs (by unfold mstoreAt; line_inv)
+          assetsStoreRun).trans <|
+        (of_run_loadWordAt_logs sharesRun).trans <|
+          (Line.of_inv Devm.logs (by unfold mstoreAt; line_inv)
+              sharesStoreRun).trans <|
+            (of_run_loadWordAt_logs ownerRun).trans <|
+              (of_run_loadWordAt_logs receiverRun).trans <|
+                callerPush.logs.trans eventPush.logs
+
+  -- Return the quoted word.
+  have returnedAtStaged : Bytes.toB256
+      ((outboundSettleImage image assets shares).sliceD
+        (returnedSel * 32).toNat 32 0) = returned := by
+    unfold outboundSettleImage
+    rw [Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint]
+    · exact returnedAt
+    · right
+      omega
+    · right
+      omega
+  obtain ⟨returnPre, returnedRun, returnRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨returnedPrefix, -, -, -⟩ :=
+    of_run_loadWordAt_image returnLoadStack returnLoadWf returnLoadReads
+      returnedAtStaged returnedRun
+  have returnedLogs : returnLoadPre.logs = returnPre.logs :=
+    of_run_loadWordAt_logs returnedRun
+  have returnedStorage :
+      Devm.getStor returnLoadPre = Devm.getStor returnPre := by
+    refine Line.of_inv Devm.getStor ?_ returnedRun
+    unfold ProrataWethVault.loadWord
+    line_inv
+  have returnStorage : Devm.getStor returnPre = Devm.getStor final := by
+    refine (show Func.CompiledInv fs Devm.getStor Devm.getStor returnWord from
+      ?_) returnRun
+    unfold returnWord
+    compiled_inv
+  have returnLogs : returnPre.logs = final.logs := by
+    refine (show Func.CompiledInv fs Devm.logs Devm.logs returnWord from
+      ?_) returnRun
+    unfold returnWord
+    compiled_inv
+  refine ⟨returnWord_trace returnedPrefix returnRun, ?_, ?_⟩
+  · rw [← returnStorage, ← returnedStorage, ← logStorage]
+  · rw [← returnLogs, ← returnedLogs, emitted, dataWindow, ← logLogs]
+    rfl
+
+/-! ## Shape pins
+
+Each `rfl` ties an inlined fragment above to the actual vault definition, so a
+change to the source that the walks no longer describe fails here rather than
+silently proving something about a fragment the contract no longer contains. -/
+
+theorem withdrawAfterQuote_shape :
+    withdrawAfterQuote =
+      mstoreAt quoteWord +++
+        nonzeroCaller (nonzeroStagedAddress receiverWord
+          (nonzeroStagedAddress ownerWord
+            (ownerHasShares (loadWord quoteWord)
+              (loadWord ownerWord +++ caller ::: eq :::
+                (.call withdrawBurnSlot <?>
+                  spendAllowance (loadWord ownerWord) [caller]
+                    (loadWord quoteWord) withdrawBurnSlot))))) := rfl
+
+theorem redeemAfterQuote_shape :
+    redeemAfterQuote =
+      mstoreAt quoteWord +++
+        nonzeroCaller (nonzeroStagedAddress receiverWord
+          (nonzeroStagedAddress ownerWord
+            (ownerHasShares (loadWord amountWord)
+              (loadWord ownerWord +++ caller ::: eq :::
+                (.call redeemBurnSlot <?>
+                  spendAllowance (loadWord ownerWord) [caller]
+                    (loadWord amountWord) redeemBurnSlot))))) := rfl
+
+theorem finishOutbound_shape (sharesSel assetsSel returnedSel : B256) :
+    finishOutbound (loadWord sharesSel) (loadWord assetsSel)
+        (loadWord returnedSel) =
+      (loadWord sharesSel +++ loadWord balanceWord +++ sub :::
+        loadWord ownerWord +++ sstore :::
+        loadWord sharesSel +++ loadWord supplyWord +++ lt :::
+        (Func.revert <?>
+          (loadWord sharesSel +++ loadWord supplyWord +++ sub :::
+            pushSupplySlot +++ sstore :::
+            logBurnTransfer (loadWord sharesSel) +++
+            callWethTransfer (loadWord receiverWord) (loadWord assetsSel)
+              (logWithdraw (loadWord assetsSel) (loadWord sharesSel) +++
+                loadWord returnedSel +++ returnWord)))) := rfl
+
+theorem withdrawBurn_shape :
+    withdrawBurn =
+      finishOutbound (loadWord quoteWord) (loadWord amountWord)
+        (loadWord quoteWord) := rfl
+
+theorem redeemBurn_shape :
+    redeemBurn =
+      finishOutbound (loadWord amountWord) (loadWord quoteWord)
+        (loadWord quoteWord) := rfl
+
+theorem withdraw_shape :
+    withdraw =
+      arg 0 +++ mstoreAt amountWord +++
+        arg 1 +++ mstoreAt receiverWord +++
+        arg 2 +++ mstoreAt ownerWord +++
+        (readTotalAssets <|
+          mstoreAt assetsWord +++
+          pushSupplySlot +++ sload ::: mstoreAt supplyWord +++
+          guardStableSupply
+            (loadWord assetsWord +++ isMax +++
+              (productOverTwoPow256 (loadWord amountWord) stagedDenominator
+                  .up withdrawAfterQuoteSlot <?>
+                mulDiv (loadWord amountWord) stagedDenominator
+                  stagedAssetFactor .up withdrawAfterQuoteSlot))) := rfl
+
+theorem redeem_shape :
+    redeem =
+      arg 0 +++ mstoreAt amountWord +++
+        arg 1 +++ mstoreAt receiverWord +++
+        arg 2 +++ mstoreAt ownerWord +++
+        (readTotalAssets <|
+          mstoreAt assetsWord +++
+          pushSupplySlot +++ sload ::: mstoreAt supplyWord +++
+          guardStableSupply
+            (loadWord assetsWord +++ isMax +++
+              (shiftedDiv (loadWord amountWord) stagedDenominator .down
+                  redeemAfterQuoteSlot <?>
+                mulDiv (loadWord amountWord) stagedAssetFactor
+                  stagedDenominator .down redeemAfterQuoteSlot))) := rfl
+
 end ProrataWethVault
 
 end Blanc

@@ -785,7 +785,11 @@ def depositLogEntry (sevm : Sevm) (receiver assets shares : B256) : Log :=
   ⟨sevm.currentTarget, [depositEvent, sevm.caller.toB256, receiver],
     assets.toBytes ++ shares.toBytes⟩
 
-private theorem sstore_getStor_of_ne
+/-- An `SSTORE` moves no account's storage but the executing frame's own.
+
+Family-visible rather than private: both the inbound credit and the outbound
+burn reach it. -/
+theorem sstore_getStor_of_ne
     {sevm : Sevm} {s s' : Devm} {account : Adr}
     (run : Ninst.Run sevm s Ninst.sstore s')
     (ne : sevm.currentTarget ≠ account) :
