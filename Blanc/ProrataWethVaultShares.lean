@@ -715,6 +715,347 @@ theorem approve_body_effect
   · rw [← trueLogs, emitted, logWindow, ← logPrefixLogs, ← preToLog]
     rfl
 
+/-! ## Share transfers -/
+
+/-- The supply slot is not address-shaped, so it can never alias a share row.
+This is what makes a share transfer unable to change the total supply. -/
+theorem supplySlot_not_validAdr' :
+    ¬ ValidAdr supplySlot := by
+  rw [validAdr_iff]
+  decide +kernel
+
+/-- `transfer(receiver, amount)` moves the caller's own shares. -/
+theorem transfer_body_effect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (lookup : fs[transferFromAfterAllowanceSlot]? = some transferStaged)
+    (stack : [] <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre transfer (.ok post)) :
+    sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      AbiReturnsTrue post ∧
+      Devm.getStorVal post sevm.currentTarget supplySlot =
+        Devm.getStorVal pre sevm.currentTarget supplySlot ∧
+      ∃ ownerBalance receiverBalance,
+        ownerBalance =
+          Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 ∧
+        (Sevm.argWord sevm 1).toNat ≤ ownerBalance.toNat ∧
+        receiverBalance =
+          ((Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+            (ownerBalance - Sevm.argWord sevm 1)).get
+              (Sevm.argWord sevm 0) ∧
+        receiverBalance.toNat + (Sevm.argWord sevm 1).toNat < wordModulusN ∧
+        Devm.getStor post sevm.currentTarget =
+          ((Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+            (ownerBalance - Sevm.argWord sevm 1)).set (Sevm.argWord sevm 0)
+              (receiverBalance + Sevm.argWord sevm 1) ∧
+        (∀ account, sevm.currentTarget ≠ account →
+          Devm.getStor post account = Devm.getStor pre account) ∧
+        post.logs = pre.logs ++
+          [transferLogEntry sevm sevm.caller.toB256 (Sevm.argWord sevm 0)
+            (Sevm.argWord sevm 1)] := by
+  unfold transfer at run
+  have entryReads : Mem.Reads pre.memory pre.memory.data.toList := by
+    intro index
+    simp
+  obtain ⟨receiverPre, callerNonzero, receiverStack, callerMemory,
+      callerState, callerLogs, run⟩ := nonzeroCaller_trace stack run
+  have receiverWf : Mem.Wf receiverPre.memory := by
+    rw [← callerMemory]; exact memoryWf
+  have receiverReads :
+      Mem.Reads receiverPre.memory pre.memory.data.toList := by
+    rw [← callerMemory]; exact entryReads
+  obtain ⟨stagePre, receiverValid, receiverNonzero, stageStack, stageWf,
+      stageReads, receiverState, receiverLogs, run⟩ :=
+    canonicalNonzeroAddress_trace receiverWf receiverReads
+      (ProducesWord.arg sevm _ 0) receiverStack run
+  obtain ⟨callPre, callStack, callWf, callReads, stageState, stageLogs,
+      callRun⟩ :=
+    shareArgs_trace stageWf stageReads ProducesWord.caller
+      (ProducesWord.arg sevm _ 0) (ProducesWord.arg sevm _ 1) stageStack run
+  obtain ⟨settlePre, burn, settleRun⟩ := runCompiledTo_call_inv lookup callRun
+  have settleWf : Mem.Wf settlePre.memory := by
+    rw [← burn.memory]; exact callWf
+  have settleReads : Mem.Reads settlePre.memory
+      (shareArgImage pre.memory.data.toList sevm.caller.toB256
+        (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)) := by
+    rw [← burn.memory]; exact callReads
+  have settleStack : [] <<+ settlePre.stack := by
+    rw [← burn.stack]; exact callStack
+  set argImage := shareArgImage pre.memory.data.toList sevm.caller.toB256
+    (Sevm.argWord sevm 0) (Sevm.argWord sevm 1) with argImageDef
+  change Mem.Reads settlePre.memory argImage at settleReads
+  have ownerAtArgs : Bytes.toB256
+      (argImage.sliceD (ownerWord * 32).toNat 32 0) =
+      sevm.caller.toB256 := by
+    rw [argImageDef, shareArgImage, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+  have receiverAtArgs : Bytes.toB256
+      (argImage.sliceD (receiverWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 0 := by
+    rw [argImageDef, shareArgImage, Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · right
+      decide +kernel
+  have amountAtArgs : Bytes.toB256
+      (argImage.sliceD (amountWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 1 := by
+    rw [argImageDef, shareArgImage]
+    exact Bytes.readWord_writeAt_self _ _ _
+  obtain ⟨ownerBalance, receiverBalance, ownerBalanceEq, covered,
+      receiverBalanceEq, noWrap, returnsTrue, settleStorage, settleForeign,
+      settleLogged⟩ :=
+    transferStaged_trace settleWf settleReads ownerAtArgs receiverAtArgs
+      amountAtArgs settleStack settleRun
+  have preToSettle : Devm.getStor pre = Devm.getStor settlePre :=
+    (funext (getStor_eq_of_state_eq callerState)).trans
+      ((funext (getStor_eq_of_state_eq receiverState)).trans
+        ((funext (getStor_eq_of_state_eq stageState)).trans
+          (funext (getStor_eq_of_state_eq burn.state))))
+  have preToSettleLogs : pre.logs = settlePre.logs :=
+    callerLogs.trans (receiverLogs.trans (stageLogs.trans burn.logs))
+  have storVal : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
+      Devm.getStorVal settlePre sevm.currentTarget k := by
+    intro k
+    change (Devm.getStor pre sevm.currentTarget).get k =
+      (Devm.getStor settlePre sevm.currentTarget).get k
+    rw [congrFun preToSettle sevm.currentTarget]
+  have callerValid : ValidAdr sevm.caller.toB256 :=
+    ⟨sevm.caller, rfl⟩
+  have supplyNotOwner : supplySlot ≠ sevm.caller.toB256 := by
+    intro slotEq
+    exact supplySlot_not_validAdr' (slotEq ▸ callerValid)
+  have supplyNotReceiver : supplySlot ≠ Sevm.argWord sevm 0 := by
+    intro slotEq
+    exact supplySlot_not_validAdr' (slotEq ▸ receiverValid)
+  refine ⟨callerNonzero, receiverValid, receiverNonzero, returnsTrue, ?_,
+    ownerBalance, receiverBalance, ownerBalanceEq.trans (storVal _).symm,
+    covered,
+    ?_, noWrap, ?_, ?_, ?_⟩
+  · change (Devm.getStor post sevm.currentTarget).get supplySlot =
+      (Devm.getStor pre sevm.currentTarget).get supplySlot
+    rw [settleStorage, Stor.get_set_ne _ (Ne.symm supplyNotReceiver),
+      Stor.get_set_ne _ (Ne.symm supplyNotOwner),
+      ← congrFun preToSettle sevm.currentTarget]
+  · rw [receiverBalanceEq, ← congrFun preToSettle sevm.currentTarget]
+  · rw [settleStorage, ← congrFun preToSettle sevm.currentTarget]
+  · intro account accountNe
+    rw [settleForeign account accountNe, ← congrFun preToSettle account]
+  · rw [settleLogged, ← preToSettleLogs]
+
+/-- `transferFrom(owner, receiver, amount)` moves a third party's shares and
+always consults the allowance.
+
+Unlike the outbound redemptions there is no owner-is-caller shortcut in the
+source: `transferFrom` reaches `spendAllowance` unconditionally, so the
+allowance is always read, always proved to cover the amount, and either
+infinite or decremented by exactly it.  `afterAllowance` names the share ledger
+between the allowance write and the transfer, which is what lets the settlement
+be stated as one exact equation without hiding the allowance step. -/
+theorem transferFrom_body_effect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (lookup : fs[transferFromAfterAllowanceSlot]? = some transferStaged)
+    (stack : [] <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre transferFrom (.ok post)) :
+    sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 1) ∧
+      Sevm.argWord sevm 1 ≠ 0 ∧
+      AbiReturnsTrue post ∧
+      ¬ ValidAdr (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256) ∧
+      allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256 ≠ supplySlot ∧
+      Devm.getStorVal post sevm.currentTarget supplySlot =
+        Devm.getStorVal pre sevm.currentTarget supplySlot ∧
+      ∃ allowance afterAllowance ownerBalance receiverBalance,
+        allowance = Devm.getStorVal pre sevm.currentTarget
+          (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256) ∧
+        (Sevm.argWord sevm 2).toNat ≤ allowance.toNat ∧
+        ((allowance = B256.max ∧
+            afterAllowance = Devm.getStor pre sevm.currentTarget) ∨
+          afterAllowance = (Devm.getStor pre sevm.currentTarget).set
+            (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256)
+            (allowance - Sevm.argWord sevm 2)) ∧
+        ownerBalance = afterAllowance.get (Sevm.argWord sevm 0) ∧
+        (Sevm.argWord sevm 2).toNat ≤ ownerBalance.toNat ∧
+        receiverBalance =
+          (afterAllowance.set (Sevm.argWord sevm 0)
+            (ownerBalance - Sevm.argWord sevm 2)).get
+              (Sevm.argWord sevm 1) ∧
+        receiverBalance.toNat + (Sevm.argWord sevm 2).toNat < wordModulusN ∧
+        Devm.getStor post sevm.currentTarget =
+          ((afterAllowance.set (Sevm.argWord sevm 0)
+            (ownerBalance - Sevm.argWord sevm 2)).set (Sevm.argWord sevm 1)
+              (receiverBalance + Sevm.argWord sevm 2)) ∧
+        (∀ account, sevm.currentTarget ≠ account →
+          Devm.getStor post account = Devm.getStor pre account) ∧
+        post.logs = pre.logs ++
+          [transferLogEntry sevm (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)
+            (Sevm.argWord sevm 2)] := by
+  unfold transferFrom at run
+  have entryReads : Mem.Reads pre.memory pre.memory.data.toList := by
+    intro index
+    simp
+  obtain ⟨ownerPre, callerNonzero, ownerStack, callerMemory, callerState,
+      callerLogs, run⟩ := nonzeroCaller_trace stack run
+  have ownerWf : Mem.Wf ownerPre.memory := by
+    rw [← callerMemory]; exact memoryWf
+  have ownerReads : Mem.Reads ownerPre.memory pre.memory.data.toList := by
+    rw [← callerMemory]; exact entryReads
+  obtain ⟨receiverPre, ownerValid, ownerNonzero, receiverStack, receiverWf,
+      receiverReads, ownerState, ownerLogs, run⟩ :=
+    canonicalNonzeroAddress_trace ownerWf ownerReads
+      (ProducesWord.arg sevm _ 0) ownerStack run
+  obtain ⟨stagePre, receiverValid, receiverNonzero, stageStack, stageWf,
+      stageReads, receiverState, receiverLogs, run⟩ :=
+    canonicalNonzeroAddress_trace receiverWf receiverReads
+      (ProducesWord.arg sevm _ 1) receiverStack run
+  obtain ⟨spendPre, spendStack, spendWf, spendReads, stageState, stageLogs,
+      spendRun⟩ :=
+    shareArgs_trace stageWf stageReads (ProducesWord.arg sevm _ 0)
+      (ProducesWord.arg sevm _ 1) (ProducesWord.arg sevm _ 2) stageStack run
+  set argImage := shareArgImage pre.memory.data.toList (Sevm.argWord sevm 0)
+    (Sevm.argWord sevm 1) (Sevm.argWord sevm 2) with argImageDef
+  change Mem.Reads spendPre.memory argImage at spendReads
+  have ownerAtArgs : Bytes.toB256
+      (argImage.sliceD (ownerWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 0 := by
+    rw [argImageDef, shareArgImage, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+  have amountAtArgs : Bytes.toB256
+      (argImage.sliceD (amountWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 2 := by
+    rw [argImageDef, shareArgImage]
+    exact Bytes.readWord_writeAt_self _ _ _
+
+  -- Spend the allowance.
+  obtain ⟨callPre, allowance, keyNotAddress, keyNotSupply, allowanceValue,
+      amountFits, allowanceRoute, spendForeign, spendLogs, spendCode,
+      callStack, callWf, callReads, callRun⟩ :=
+    spendAllowance_trace spendWf spendReads ownerAtArgs amountAtArgs
+      (by decide +kernel) (by decide +kernel) (by decide +kernel)
+      spendStack lookup spendRun
+  set aKey := allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256
+    with aKeyDef
+  set spentImage := allowanceStagingImage argImage (Sevm.argWord sevm 0)
+    sevm.caller.toB256 aKey allowance with spentImageDef
+  change Mem.Reads callPre.memory spentImage at callReads
+  have settleWf : Mem.Wf callPre.memory := callWf
+  have settleReads : Mem.Reads callPre.memory spentImage := callReads
+  have settleStack : [] <<+ callPre.stack := callStack
+  have settleRun := callRun
+  have ownerAtSpent : Bytes.toB256
+      (spentImage.sliceD (ownerWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 0 := by
+    rw [spentImageDef, allowanceStagingImage, allowanceKeyImage,
+      Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint]
+    · exact ownerAtArgs
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+    · left
+      decide +kernel
+  have receiverAtSpent : Bytes.toB256
+      (spentImage.sliceD (receiverWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 1 := by
+    rw [spentImageDef, allowanceStagingImage, allowanceKeyImage,
+      Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint,
+      argImageDef, shareArgImage, Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+    · left
+      decide +kernel
+  have amountAtSpent : Bytes.toB256
+      (spentImage.sliceD (amountWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 2 := by
+    rw [spentImageDef, allowanceStagingImage, allowanceKeyImage,
+      Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint]
+    · exact amountAtArgs
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+    · left
+      decide +kernel
+  obtain ⟨ownerBalance, receiverBalance, ownerBalanceEq, covered,
+      receiverBalanceEq, noWrap, returnsTrue, settleStorage, settleForeign,
+      settleLogged⟩ :=
+    transferStaged_trace settleWf settleReads ownerAtSpent receiverAtSpent
+      amountAtSpent settleStack settleRun
+
+  -- Assemble against the endpoint entry.
+  have preToSpend : Devm.getStor pre = Devm.getStor spendPre :=
+    (funext (getStor_eq_of_state_eq callerState)).trans
+      ((funext (getStor_eq_of_state_eq ownerState)).trans
+        ((funext (getStor_eq_of_state_eq receiverState)).trans
+          (funext (getStor_eq_of_state_eq stageState))))
+  have preToSpendLogs : pre.logs = spendPre.logs :=
+    callerLogs.trans (ownerLogs.trans (receiverLogs.trans stageLogs))
+  have storVal : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
+      Devm.getStorVal spendPre sevm.currentTarget k := by
+    intro k
+    change (Devm.getStor pre sevm.currentTarget).get k =
+      (Devm.getStor spendPre sevm.currentTarget).get k
+    rw [congrFun preToSpend sevm.currentTarget]
+  have supplyNotOwner : supplySlot ≠ Sevm.argWord sevm 0 := by
+    intro slotEq
+    exact supplySlot_not_validAdr' (slotEq ▸ ownerValid)
+  have supplyNotReceiver : supplySlot ≠ Sevm.argWord sevm 1 := by
+    intro slotEq
+    exact supplySlot_not_validAdr' (slotEq ▸ receiverValid)
+  refine ⟨callerNonzero, ownerValid, ownerNonzero, receiverValid,
+    receiverNonzero, returnsTrue, keyNotAddress, keyNotSupply, ?_,
+    allowance, Devm.getStor callPre sevm.currentTarget, ownerBalance,
+    receiverBalance, allowanceValue.trans (storVal _).symm, amountFits, ?_,
+    ownerBalanceEq, covered, receiverBalanceEq, noWrap, settleStorage, ?_,
+    ?_⟩
+  · change (Devm.getStor post sevm.currentTarget).get supplySlot =
+      (Devm.getStor pre sevm.currentTarget).get supplySlot
+    rw [settleStorage, Stor.get_set_ne _ (Ne.symm supplyNotReceiver),
+      Stor.get_set_ne _ (Ne.symm supplyNotOwner)]
+    rcases allowanceRoute with ⟨-, unchanged⟩ | decremented
+    · rw [unchanged, ← congrFun preToSpend sevm.currentTarget]
+    · rw [decremented, Stor.get_set_ne _ keyNotSupply,
+        ← congrFun preToSpend sevm.currentTarget]
+  · rcases allowanceRoute with ⟨isMax, unchanged⟩ | decremented
+    · exact Or.inl ⟨isMax,
+        unchanged.trans (congrFun preToSpend sevm.currentTarget).symm⟩
+    · exact Or.inr (decremented.trans
+        (congrArg (fun storage : Stor => storage.set aKey
+          (allowance - Sevm.argWord sevm 2))
+          (congrFun preToSpend sevm.currentTarget).symm))
+  · intro account accountNe
+    rw [settleForeign account accountNe, spendForeign account accountNe,
+      ← congrFun preToSpend account]
+  · rw [settleLogged, ← spendLogs, ← preToSpendLogs]
+
 end ProrataWethVault
 
 end Blanc
