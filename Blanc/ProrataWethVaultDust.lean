@@ -25,11 +25,15 @@ increases the share price, so a whole path does, and that is what discharges
 the price premise of the attack bound for an arbitrary history rather than for
 a hand-picked pair.
 
-What the carrier does *not* yet do is tie a vault EVM operation to the step it
-induces. These results therefore quantify over accounting histories the pricing
-admits, not yet over histories the compiled vault can produce. Closing that gap
-is the remaining attack work, and the compiled effects already give the exact
-supply and asset transitions it needs.
+Each class the vault can produce is exhibited below as the accounting step it
+induces, so a sequence of vault operations builds a path and the history-level
+results apply to it.
+
+What is still missing is the *coalition* accounting: pricing every share and
+asset movement into or out of an attacker coalition, so that an unaccounted
+gift cannot be counted as attack profit. Until that lands, the bounds here are
+about a single victim's round trip across a history, not about a coalition's
+net position.
 -/
 
 namespace Blanc
@@ -122,6 +126,52 @@ theorem dust_trace_exact
               (∏ j ∈ Finset.Icc (i + 2) n, path.DAt j) :=
   Blanc.Prorata.ProrataAccountingPath.prorata_dust_trace_exact
     offsetN_ne_zero path
+
+
+
+/-! ## Vault operations are accounting steps
+
+The three classes the vault can produce, each exhibited as the accounting step
+it induces at `offsetN`.  With these, a sequence of vault operations builds a
+`ProrataAccountingPath`, and the history-level results above apply to it.
+
+The compiled effect theorems already state the vault's supply and asset
+transitions in exactly these terms — `deposit_compiled_effect` concludes with
+`convertToSharesN`, and the outbound pair with `convertToAssetsN` — so the
+bridges are the constructors applied to the pricing equalities, with no
+arithmetic of their own. -/
+
+/-- A deposit or mint is a `deposit` step: supply and assets each rise by the
+quoted amount. -/
+theorem depositStep (amount assets supply : Nat) :
+    Blanc.Prorata.ProrataAccountingEffect offsetN
+      ⟨supply, assets⟩
+      (.deposit amount (convertToSharesN amount assets supply))
+      ⟨supply + convertToSharesN amount assets supply, assets + amount⟩ :=
+  Blanc.Prorata.ProrataAccountingEffect.deposit supply assets amount _
+    (convertToSharesN_eq_mintN amount assets supply)
+
+/-- A redemption is a `withdraw` step, for a holder whose shares are part of the
+accounted supply. -/
+theorem redeemStep {shares : Nat} (assets supply : Nat)
+    (hshares : shares ≤ supply) :
+    Blanc.Prorata.ProrataAccountingEffect offsetN
+      ⟨supply, assets⟩
+      (.withdraw shares (convertToAssetsN shares assets supply))
+      ⟨supply - shares, assets - convertToAssetsN shares assets supply⟩ :=
+  Blanc.Prorata.ProrataAccountingEffect.withdraw supply assets shares _ hshares
+    (convertToAssetsN_eq_payN shares assets supply)
+
+/-- A third-party WETH transfer to the vault is an `externalCredit` step: the
+assets rise and no share is minted.  This is the donation classification, in
+the carrier's own vocabulary. -/
+theorem donationStep {amount : Nat} (assets supply : Nat)
+    (hpositive : 0 < amount) :
+    Blanc.Prorata.ProrataAccountingEffect offsetN
+      ⟨supply, assets⟩ (.externalCredit amount)
+      ⟨supply, assets + amount⟩ :=
+  Blanc.Prorata.ProrataAccountingEffect.externalCredit supply assets amount
+    hpositive
 
 end ProrataWethVault
 
