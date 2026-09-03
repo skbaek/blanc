@@ -847,4 +847,50 @@ theorem mint_compiled_effect
   · rw [← entryState] at effect
     exact inboundEffect_lift entryState entryLogs effect
 
+
+/-! ## Conservation at the public inbound endpoints
+
+Each is `inboundEffect_preserves_conserved` after the compiled effect.  The
+`DirectWethConfiguration` premise is not incidental: the flow snapshots the
+supply before the WETH child and writes it after, so conservation across the
+frame depends on that child not re-entering the vault, which is exactly what
+pinning the asset's code buys.  See `Blanc/ProrataWethVaultLedgerSpec.lean`. -/
+
+theorem deposit_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources :
+      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "deposit" [.uint256, .address])
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
+      effect⟩ :=
+    deposit_compiled_effect config memoryWf resources run selectorEq
+  exact inboundEffect_preserves_conserved receiverValid supplyEq stable
+    roomFits effect conserved
+
+theorem mint_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources :
+      InboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "mint" [.uint256, .address])
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
+      effect⟩ :=
+    mint_compiled_effect config memoryWf resources run selectorEq
+  exact inboundEffect_preserves_conserved receiverValid supplyEq stable
+    roomFits effect conserved
 end Blanc.Composition.ProrataWethVault
