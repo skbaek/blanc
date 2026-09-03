@@ -65,13 +65,25 @@ import sys
 import tempfile
 from pathlib import Path
 
-LITERALS = ("pragueOnly", "pragueRules", "osakaRules", "bpo1Rules", "bpo2Rules")
+# The detected population is every identifier whose name *begins* with a fork
+# this repository can name. The configured-deployment-spine goal enumerated five
+# spellings -- `pragueOnly`, `pragueRules`, `osakaRules`, `bpo1Rules`,
+# `bpo2Rules` -- and a gate that detected only those was measurably too narrow:
+# Prague is equally reachable through `pragueCodeLimits`, `praguePrecompiles`,
+# `pragueOpcodeRules`, `pragueTransactionLimits`, `pragueBlobSchedule`,
+# `pragueBlockLimits`, `pragueModexpRules`, and their `osaka*`/`bpo*` siblings.
+# Two generic modules were already using `pragueCodeLimits` under a BPO2 lane
+# assertion when this population was widened, which is exactly the drift the
+# gate exists to catch.
+FORK_PREFIXES = ("prague", "osaka", "bpo1", "bpo2", "bpo3", "bpo4", "bpo5")
 
-# An occurrence is one of the five names starting at an identifier boundary.
-# A namespace dot may precede it (`ChainConfig.pragueOnly`), and a suffix may
-# follow it (`pragueOnly_rulesAt`, `pragueRules_redemptionRuntimeCeiling_gasCap`):
-# a Prague-specific lemma name is a named-fork reference too.
-OCCURRENCE = re.compile(r"(?<![A-Za-z0-9_])(" + "|".join(LITERALS) + r")")
+# An occurrence is any identifier starting with one of those prefixes at an
+# identifier boundary. A namespace dot may precede it
+# (`ChainConfig.pragueOnly`); a suffix may follow it (`pragueOnly_rulesAt`,
+# `pragueCodeLimits`), because a fork-specific name is a named-fork reference
+# whatever it is attached to.
+OCCURRENCE = re.compile(
+    r"(?<![A-Za-z0-9_])(" + "|".join(FORK_PREFIXES) + r")[A-Za-z0-9_]*")
 
 DECL_KEYWORDS = (
     "theorem", "lemma", "def", "abbrev", "structure", "inductive", "instance",
@@ -90,7 +102,7 @@ NAME_TOKEN = re.compile(r"[^\s({\[⦃:]+")
 
 MODULE_ALLOWANCE: dict[str, tuple[str, int]] = {
     "Blanc/Weth10Mainnet.lean": (
-        "specialization: WETH10's only mainnet module", 22),
+        "specialization: WETH10's only mainnet module", 24),
     "Blanc/Weth10PragueCompat.lean": (
         "compatibility: WETH10's retained fixed-Prague API", 49),
     "Blanc/BeaconDepositPragueCompat.lean": (
@@ -133,6 +145,25 @@ DECLARATION_ALLOWANCE: dict[tuple[str, str], tuple[str, int]] = {
     ("Blanc/BeaconDepositHistoryChain.lean",
      "Blanc.BeaconDeposit.pragueOnly_history_extends"): (
         "compatibility: the retained fixed-Prague history headline", 2),
+    # Recorded debt, not a blessing. These two constants bind EIP-170 and
+    # EIP-3860 limits to `pragueCodeLimits` inside otherwise-generic modules,
+    # and `check-beacon-deposit-current-mainnet.sh` asserts both by name at
+    # BPO2 -- so a BPO2 assertion is checked against a Prague-named constant.
+    # It is sound today only by coincidence: all four mainnet rule records
+    # share `code := pragueCodeLimits`, so the values are right while the names
+    # assert a fork the values do not. Nothing enforces that coincidence.
+    # Restating them against the block's selected `rules` changes `code_eip170`
+    # and `creationCode_eip3860`, which the assurance register cites and the
+    # BPO2 lane asserts, so it belongs to the contract's own successor goal
+    # rather than to the goal that built this gate. The entries are
+    # declaration-scoped precisely so the surrounding modules stay generic and
+    # every other declaration in them stays covered.
+    ("Blanc/BeaconDepositCode.lean",
+     "Blanc.BeaconDeposit.eip170RuntimeLimit"): (
+        "debt: EIP-170 limit bound to a Prague-named record; successor work", 1),
+    ("Blanc/BeaconDepositDeploy.lean",
+     "Blanc.BeaconDeposit.eip3860InitcodeLimit"): (
+        "debt: EIP-3860 limit bound to a Prague-named record; successor work", 1),
 }
 
 # Anti-vacuity floors.  A rewritten tree that stops producing declarations, or
