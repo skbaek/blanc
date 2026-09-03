@@ -760,4 +760,21 @@ theorem Func.RunCompiledTo.not_ok_call_revertData
   obtain ⟨_, -, bodyRun⟩ := runCompiledTo_call_inv hget run
   exact Func.RunCompiledTo.not_ok_revertData bodyRun
 
+/-- One compiled instruction, including a CALL-family crossing that retains a
+whole sub-execution, leaves already-installed code where it is.  `CREATE` is
+the only opcode that installs code, and it installs it at a fresh account, so
+an account whose code is already non-empty keeps exactly that code. -/
+lemma Ninst.runCompiled_preserves_getCode
+    {sevm : Sevm} {pre post : Devm} {n : Ninst} {owner : Adr}
+    (run : Ninst.RunCompiled sevm pre n post)
+    (nonempty : (pre.getCode owner).toList ≠ []) :
+    post.getCode owner = pre.getCode owner := by
+  rcases run with ⟨xl, filled, steps⟩
+  have slotCode : Xlot.Rel Devm.CodePreserve xl := by
+    rcases xl with _ | ⟨evm, raw⟩
+    · trivial
+    · rcases filled with ⟨childRun⟩
+      cases raw <;> exact Exec.preserves_getCode childRun
+  exact Ninst.codePreserve_effectRec n slotCode (steps 0) owner nonempty
+
 end Blanc

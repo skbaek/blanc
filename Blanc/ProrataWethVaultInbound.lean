@@ -72,19 +72,68 @@ theorem inboundArgs_trace
         (inboundArgImage image (Sevm.argWord sevm 0)
           (Sevm.argWord sevm 1)) ∧
       pre.state = bodyPre.state ∧
+      pre.logs = bodyPre.logs ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨receiverPre, receiverStack, receiverWf, receiverReads,
-      amountState, run⟩ :=
-    ProducesWord.store_trace (ProducesWord.arg sevm image 0) memoryWf
-      memoryReads stack run
-  obtain ⟨bodyPre, bodyStack, bodyWf, bodyReads, receiverState, bodyRun⟩ :=
-    ProducesWord.store_trace
-      (ProducesWord.arg sevm
-        (Bytes.writeAt image (amountWord * 32).toNat
-          (Sevm.argWord sevm 0).toBytes) 1)
-      receiverWf receiverReads receiverStack run
+  obtain ⟨amountStorePre, amountRun, run⟩ := runCompiledTo_prepend_inv run
+  have amountPrefix := prefix_of_arg stack amountRun
+  have amountMemory : pre.memory = amountStorePre.memory := by
+    refine Line.of_inv Devm.memory ?_ amountRun
+    unfold Blanc.arg cdl
+    line_inv
+  have amountState : pre.state = amountStorePre.state := by
+    refine Line.of_inv Devm.state ?_ amountRun
+    unfold Blanc.arg cdl
+    line_inv
+  have amountLogs : pre.logs = amountStorePre.logs := by
+    refine Line.of_inv Devm.logs ?_ amountRun
+    unfold Blanc.arg cdl
+    line_inv
+  have amountStoreWf : Mem.Wf amountStorePre.memory := by
+    rw [← amountMemory]; exact memoryWf
+  have amountStoreReads : Mem.Reads amountStorePre.memory image := by
+    rw [← amountMemory]; exact memoryReads
+  obtain ⟨receiverPre, amountStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverStack, receiverWf, receiverReads, amountStoreState⟩ :=
+    of_run_mstoreAt_image amountPrefix amountStoreWf amountStoreReads
+      amountStoreRun
+  have amountStoreLogs : amountStorePre.logs = receiverPre.logs := by
+    refine Line.of_inv Devm.logs ?_ amountStoreRun
+    unfold mstoreAt
+    line_inv
+  obtain ⟨receiverStorePre, receiverRun, run⟩ := runCompiledTo_prepend_inv run
+  have receiverPrefix := prefix_of_arg receiverStack receiverRun
+  have receiverMemory : receiverPre.memory = receiverStorePre.memory := by
+    refine Line.of_inv Devm.memory ?_ receiverRun
+    unfold Blanc.arg cdl
+    line_inv
+  have receiverState : receiverPre.state = receiverStorePre.state := by
+    refine Line.of_inv Devm.state ?_ receiverRun
+    unfold Blanc.arg cdl
+    line_inv
+  have receiverLogs : receiverPre.logs = receiverStorePre.logs := by
+    refine Line.of_inv Devm.logs ?_ receiverRun
+    unfold Blanc.arg cdl
+    line_inv
+  have receiverStoreWf : Mem.Wf receiverStorePre.memory := by
+    rw [← receiverMemory]; exact receiverWf
+  have receiverStoreReads : Mem.Reads receiverStorePre.memory
+      (Bytes.writeAt image (amountWord * 32).toNat
+        (Sevm.argWord sevm 0).toBytes) := by
+    rw [← receiverMemory]; exact receiverReads
+  obtain ⟨bodyPre, receiverStoreRun, bodyRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bodyStack, bodyWf, bodyReads, receiverStoreState⟩ :=
+    of_run_mstoreAt_image receiverPrefix receiverStoreWf receiverStoreReads
+      receiverStoreRun
+  have receiverStoreLogs : receiverStorePre.logs = bodyPre.logs := by
+    refine Line.of_inv Devm.logs ?_ receiverStoreRun
+    unfold mstoreAt
+    line_inv
   exact ⟨bodyPre, bodyStack, bodyWf, bodyReads,
-    amountState.trans receiverState, bodyRun⟩
+    amountState.trans (amountStoreState.trans
+      (receiverState.trans receiverStoreState)),
+    amountLogs.trans (amountStoreLogs.trans
+      (receiverLogs.trans receiverStoreLogs)),
+    bodyRun⟩
 
 /-! ## Exact inbound quotes reaching the auxiliary continuation -/
 

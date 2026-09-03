@@ -323,7 +323,7 @@ theorem ExactWethChildOccurrence.rollback_of_post
   have rollback := ProcessMessage.rollback_of_error process childError
   exact postState.trans (rollback.1.trans childWorld)
 
-private theorem wethCode_nonempty : Blanc.wethCode ≠ [] := by
+theorem wethCode_nonempty : Blanc.wethCode ≠ [] := by
   decide +kernel
 
 /-- An actual non-precompile spawn from the configured account carries a

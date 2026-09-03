@@ -123,6 +123,7 @@ theorem guardStableSupply_trace
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory image ∧
       pre.state = bodyPre.state ∧
+      pre.logs = bodyPre.logs ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   unfold guardStableSupply at run
   obtain ⟨supplyPre, supplyRun, run⟩ :=
@@ -141,6 +142,13 @@ theorem guardStableSupply_trace
   have suffixMemory : supplyPre.memory = testPre.memory :=
     (Ninst.Hinv.inv (f := Devm.memory) maxSource).trans
       (Ninst.Hinv.inv (f := Devm.memory) testSource)
+  have suffixLogs : supplyPre.logs = testPre.logs :=
+    (Ninst.Hinv.inv (f := Devm.logs) maxSource).trans
+      (Ninst.Hinv.inv (f := Devm.logs) testSource)
+  have entryLogs : pre.logs = supplyPre.logs := by
+    refine Line.of_inv Devm.logs ?_ supplyRun
+    unfold ProrataWethVault.loadWord
+    line_inv
   have testWf : Mem.Wf testPre.memory := by
     rw [← suffixMemory]
     exact supplyWf
@@ -172,7 +180,8 @@ theorem guardStableSupply_trace
       rw [← bodyPop.memory]
       exact testReads
     exact ⟨bodyPre, stable, bodyPrefix, bodyWf, bodyReads,
-      supplyState.trans (suffixState.trans bodyPop.state), bodyRun⟩
+      supplyState.trans (suffixState.trans bodyPop.state),
+      entryLogs.trans (suffixLogs.trans bodyPop.logs), bodyRun⟩
 
 /-! ## Shared post-`totalAssets` staging -/
 
@@ -222,6 +231,8 @@ theorem conversionStaging_trace
       Mem.Reads bodyPre.memory
         (conversionStagingImage image assets supply) ∧
       Devm.getStor pre = Devm.getStor bodyPre ∧
+      Devm.getCode pre = Devm.getCode bodyPre ∧
+      pre.logs = bodyPre.logs ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨slotPre, assetsStoreRun, run⟩ :=
     runCompiledTo_prepend_inv run
@@ -289,7 +300,7 @@ theorem conversionStaging_trace
     unfold image2
     exact Bytes.readWord_writeAt_self _ _ _
   obtain ⟨bodyPre, stable, bodyPrefix, bodyWf, bodyReads,
-      guardState, bodyRun⟩ :=
+      guardState, guardLogs, bodyRun⟩ :=
     guardStableSupply_trace guardWf guardReads supplyAt guardPrefix guardRun
 
   have supplyAtEntry :
@@ -301,14 +312,36 @@ theorem conversionStaging_trace
     have storage : Devm.getStor pre = Devm.getStor sloadPre :=
       funext (getStor_eq_of_state_eq (assetsState.trans slotState))
     rw [storage]
+  have sloadCode : Devm.getCode sloadPre = Devm.getCode supplyStorePre :=
+    Ninst.Hinv.inv (f := Devm.getCode) sloadSource
+  have sloadLogs : sloadPre.logs = supplyStorePre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) sloadSource
+  have assetsLogs : pre.logs = slotPre.logs := by
+    refine Line.of_inv Devm.logs ?_ assetsStoreRun
+    unfold mstoreAt
+    line_inv
+  have slotLogs : slotPre.logs = sloadPre.logs :=
+    Line.of_inv Devm.logs (by line_inv)
+      (Line.Run.cons zeroRun (Line.Run.cons notRun Line.Run.nil))
+  have supplyStoreLogs : supplyStorePre.logs = guardPre.logs := by
+    refine Line.of_inv Devm.logs ?_ supplyStoreRun
+    unfold mstoreAt
+    line_inv
   refine ⟨supply, bodyPre, supplyAtEntry, stable, bodyPrefix, bodyWf, ?_,
-    ?_, bodyRun⟩
+    ?_, ?_, ?_, bodyRun⟩
   · simpa [conversionStagingImage, image2, image1] using bodyReads
   · exact (funext (getStor_eq_of_state_eq assetsState)).trans
       ((funext (getStor_eq_of_state_eq slotState)).trans
         (sloadStorage.trans
           ((funext (getStor_eq_of_state_eq supplyStoreState)).trans
             (funext (getStor_eq_of_state_eq guardState)))))
+  · exact (funext (getCode_eq_of_state_eq assetsState)).trans
+      ((funext (getCode_eq_of_state_eq slotState)).trans
+        (sloadCode.trans
+          ((funext (getCode_eq_of_state_eq supplyStoreState)).trans
+            (funext (getCode_eq_of_state_eq guardState)))))
+  · exact assetsLogs.trans
+      (slotLogs.trans (sloadLogs.trans (supplyStoreLogs.trans guardLogs)))
 
 /-! ## Exact ABI-word return -/
 
@@ -736,7 +769,7 @@ theorem stagedConversion_body_effect
       calculate supply < wordModulusN ∧
       WordViewEffect (Nat.toB256 (calculate supply)) pre post := by
   obtain ⟨supply, bodyPre, supplyEq, stable, bodyStack, bodyWf,
-      bodyReads, -, bodyRun⟩ :=
+      bodyReads, -, -, -, bodyRun⟩ :=
     conversionStaging_trace memoryWf memoryReads stack run
   obtain ⟨resultFits, returned⟩ :=
     arithmeticEffect stable bodyWf bodyReads bodyStack bodyRun

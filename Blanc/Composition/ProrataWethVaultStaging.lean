@@ -1501,6 +1501,7 @@ theorem readTotalAssets_exactEffect
             sevm.currentTarget.toB256).toBytes ∧
       word :: [] <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
+      bodyPre.getCode wethAccount = callPre.getCode wethAccount ∧
       (∀ {offset : Nat} {w : B256}, 64 ≤ offset →
         MemWordAt entry offset w → MemWordAt bodyPre offset w) ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
@@ -1552,6 +1553,12 @@ theorem readTotalAssets_exactEffect
       callPostWf suffix
   have bodyStorage : Devm.getStor bodyPre = Devm.getStor callPre :=
     (funext (getStor_eq_of_state_eq bodyState)).trans storage
+  have wethNonempty : (callPre.getCode wethAccount).toList ≠ [] := by
+    rw [config.code]
+    exact wethCode_nonempty
+  have bodyCode : bodyPre.getCode wethAccount = callPre.getCode wethAccount :=
+    (getCode_eq_of_state_eq bodyState wethAccount).trans
+      (Ninst.runCompiled_preserves_getCode crossing wethNonempty)
   have bodyLogs : bodyPre.logs = callPre.logs :=
     checkedLogs.trans logs
   have preservesWindow : ∀ {offset : Nat} {w : B256}, 64 ≤ offset →
@@ -1570,8 +1577,8 @@ theorem readTotalAssets_exactEffect
       operandPrefix (Ninst.Run.of_runCompiled crossing)
     exact checkedPreservesWindow callPostWindow
   exact ⟨word, bodyPre, storage, logs, bodyStorage, bodyLogs,
-    returnedWord.symm.trans output, wordPrefix, bodyWf, preservesWindow,
-    bodyRun⟩
+    returnedWord.symm.trans output, wordPrefix, bodyWf, bodyCode,
+    preservesWindow, bodyRun⟩
 
 /-- World-strength source-level delegated transfer.  Besides the exact WETH
 balance-row movement and canonical-true return, the vault continuation is
