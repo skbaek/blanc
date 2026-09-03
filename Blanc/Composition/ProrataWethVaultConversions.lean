@@ -109,7 +109,7 @@ theorem readTotalAssets_conversion_body_effect
     rw [← congrFun stagingCode wethAccount]
     exact config.code
   obtain ⟨word, bodyPre, -, -, bodyStorage, bodyLogs,
-      returnedWord, wordPrefix, bodyWf, -, bodyRun⟩ :=
+      returnedWord, wordPrefix, bodyWf, -, -, bodyRun⟩ :=
     readTotalAssets_exactEffect callConfig memory staging resources.1
       (resources.2 callPre staging) crossing suffix
   have bodyReads :

@@ -300,6 +300,7 @@ import Blanc.Composition.ProrataWethVaultStaging
 import Blanc.Composition.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultConversions
 import Blanc.Composition.ProrataWethVaultCapacities
+import Blanc.Composition.ProrataWethVaultInbound
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
