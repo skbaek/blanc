@@ -78,6 +78,8 @@ import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
 import Blanc.LidoTriggerableWithdrawalsGatewayDeploy
 import Blanc.ProrataAttackTrace
 import Blanc.Composition.ProrataWethVaultCapacities
+import Blanc.Composition.ProrataWethVaultInbound
+import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.BeaconDepositCorrectness
 import Blanc.BeaconDepositConstructorEffects
 import Blanc.BeaconDepositBridgeCompiled
@@ -1043,6 +1045,10 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect_stable
 #print axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect_stable
 #print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect_exact
+#print axioms Blanc.Composition.ProrataWethVault.deposit_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.mint_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.withdraw_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect
 #print axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
 #print axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
 #print axioms Blanc.Func.localExecFree_iff
