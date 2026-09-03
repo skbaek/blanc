@@ -147,4 +147,113 @@ theorem vault_message_preserves_conserved
       (body := Blanc.ProrataWethVault.previewDeposit) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+
+/-- **The unconditional part.**  Every target except the four ERC-4626 flows
+preserves the ledger with no premise about the asset at all — no configuration,
+no child-call resources.  Those twenty-one are exactly the targets that make no
+external call, and stating them separately marks where the configuration
+genuinely enters rather than leaving it bundled with everything else. -/
+theorem vault_nonflow_message_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (notDeposit :
+      Sevm.selector sevm ≠ selector "deposit" [.uint256, .address])
+    (notMint : Sevm.selector sevm ≠ selector "mint" [.uint256, .address])
+    (notWithdraw : Sevm.selector sevm ≠
+      selector "withdraw" [.uint256, .address, .address])
+    (notRedeem : Sevm.selector sevm ≠
+      selector "redeem" [.uint256, .address, .address])
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨body, member⟩ :=
+    Blanc.ProrataWethVault.selector_mem_vaultFuncs_of_ok run
+  simp only [Blanc.ProrataWethVault.vaultFuncs, List.mem_cons,
+    List.not_mem_nil, or_false, Prod.mk.injEq] at member
+  rcases member with ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩
+  · exact readOnly_message (words := 0)
+      (body := Blanc.ProrataWethVault.totalAssets) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 0)
+      (body := Blanc.ProrataWethVault.name) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.convertToAssets) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact Blanc.ProrataWethVault.approve_preserves_conserved memoryWf run sel
+      conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.previewWithdraw) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 0)
+      (body := Blanc.ProrataWethVault.totalSupply) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact Blanc.ProrataWethVault.transferFrom_preserves_conserved memoryWf run sel
+      conserved
+  · exact readOnly_message (words := 0)
+      (body := Blanc.ProrataWethVault.decimals) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 0)
+      (body := Blanc.ProrataWethVault.asset) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.maxDeposit) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.previewRedeem) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact absurd sel notDeposit
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.balanceOf) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact absurd sel notMint
+  · exact readOnly_message (words := 0)
+      (body := Blanc.ProrataWethVault.symbol) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact Blanc.ProrataWethVault.transfer_preserves_conserved memoryWf run sel
+      conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.previewMint) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact absurd sel notWithdraw
+  · exact absurd sel notRedeem
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.maxMint) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.convertToShares) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.maxWithdraw) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.maxRedeem) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 2)
+      (body := Blanc.ProrataWethVault.allowance) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+  · exact readOnly_message (words := 1)
+      (body := Blanc.ProrataWethVault.previewDeposit) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
+
 end Blanc.Composition.ProrataWethVault
