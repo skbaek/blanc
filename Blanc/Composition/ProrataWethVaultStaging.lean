@@ -2,6 +2,7 @@ import Blanc.CompiledWalkInversion
 import Blanc.CompiledFixedInvariance
 import Blanc.MemoryImage
 import Blanc.Composition.ProrataWethVaultEffects
+import Blanc.ProrataWethVaultConversions
 import Blanc.Ladder
 
 /-!
@@ -24,6 +25,24 @@ namespace Blanc.Composition.ProrataWethVault
 open Jaune
 open Jaune.Ninst Ninst
 open scoped LogOutputHinv
+
+/-! ## Image-word codec
+
+Both composed flows carry operation words as `Bytes.toB256` reads and hand
+them to child seams that want the raw 32-byte slice.  These two turn one form
+into the other; they are stated here rather than in either flow so the two
+composition owners share them. -/
+
+theorem sliceBytes_of_toB256 {image : Bytes} {offset : Nat} {w : B256}
+    (value : Bytes.toB256 (image.sliceD offset 32 0) = w) :
+    image.sliceD offset 32 0 = w.toBytes := by
+  rw [← value]
+  exact (Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)).symm
+
+theorem toB256_of_sliceBytes {image : Bytes} {offset : Nat} {w : B256}
+    (value : image.sliceD offset 32 0 = w.toBytes) :
+    Bytes.toB256 (image.sliceD offset 32 0) = w := by
+  rw [value, B256.toB256_toBytes]
 
 namespace Source
 
@@ -2019,24 +2038,142 @@ theorem transferStaging_rollback
       receiverAboveSelector assetsAboveReceiver staging depth dynamic
       gasAvailable crossing) failureFlag
 
+/-! ## Shared quote snapshot
+
+Both directions price their quote the same way: one exact `balanceOf(vault)`
+read, then the share supply staged and the stable-supply guard discharged.
+Only the argument staging in front of it differs, so the snapshot is proved
+once here and both flows' staging effects call it. -/
+
+/-- Resources required by the exact WETH asset query that prices a quote.  The
+gas obligation is tied to the fixed staging line that produces the call state,
+not asserted universally. -/
+def QuoteReadResources (sevm : Sevm) : Prop :=
+  sevm.depth ≠ 0 ∧
+    ∀ stagingEntry callPre,
+      Line.Run sevm stagingEntry balanceOfStaging callPre →
+      StaticGasAvailable callPre 36
+
+/-- The shared snapshot: price the quote from the booked WETH balance, stage
+the exact share supply, and discharge the stable-supply guard.  Every operation
+word below the staged supply survives the read, so each flow's own arguments
+reach its arithmetic unchanged. -/
+theorem quoteSnapshot_effect
+    {fs : List Func} {sevm : Sevm} {readPre post : Devm} {readImage : Bytes}
+    {arithmetic : Func}
+    (config : DirectWethConfiguration sevm.currentTarget sevm readPre)
+    (memoryWf : Mem.Wf readPre.memory)
+    (memoryReads : Mem.Reads readPre.memory readImage)
+    (resources : QuoteReadResources sevm)
+    (run : Func.RunCompiledTo fs sevm readPre
+      (Blanc.ProrataWethVault.snapshotQuoteState arithmetic) (.ok post)) :
+    ∃ quotePre image supply,
+      supply = Devm.getStorVal readPre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot ∧
+      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+      Mem.Wf quotePre.memory ∧
+      Mem.Reads quotePre.memory image ∧
+      (∀ {w v : B256}, 64 ≤ (w * 32).toNat →
+        (w * 32).toNat + 32 ≤
+          (Blanc.ProrataWethVault.supplyWord * 32).toNat →
+        Bytes.toB256 (readImage.sliceD (w * 32).toNat 32 0) = v →
+        Bytes.toB256 (image.sliceD (w * 32).toNat 32 0) = v) ∧
+      Bytes.toB256
+        (image.sliceD
+          (Blanc.ProrataWethVault.assetsWord * 32).toNat 32 0) =
+        (readPre.state.getStor wethAccount).get sevm.currentTarget.toB256 ∧
+      Bytes.toB256
+        (image.sliceD
+          (Blanc.ProrataWethVault.supplyWord * 32).toNat 32 0) = supply ∧
+      [] <<+ quotePre.stack ∧
+      Devm.getStor readPre = Devm.getStor quotePre ∧
+      readPre.logs = quotePre.logs ∧
+      quotePre.getCode wethAccount = readPre.getCode wethAccount ∧
+      Func.RunCompiledTo fs sevm quotePre arithmetic (.ok post) := by
+  obtain ⟨depth, gasAvailable⟩ := resources
+  unfold Blanc.ProrataWethVault.snapshotQuoteState at run
+  obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
+    readTotalAssets_trace run
+  have stagingCode : Devm.getCode readPre = Devm.getCode callPre :=
+    Line.of_inv Devm.getCode (by
+      unfold balanceOfStaging mstoreAt pushList
+      simp only [List.map, List.cons_append, List.nil_append]
+      line_inv) staging
+  have callConfig :
+      DirectWethConfiguration sevm.currentTarget sevm callPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← congrFun stagingCode wethAccount]
+    exact config.code
+  obtain ⟨assets, stagePre, -, -, stageStorage, stageLogs, returnedWord,
+      assetsPrefix, stageWf, stageCode, stageWindow, stageRun⟩ :=
+    readTotalAssets_exactEffect callConfig ⟨memoryWf, memoryReads⟩ staging
+      depth (gasAvailable readPre callPre staging) crossing suffix
+  have stagingStorage : Devm.getStor readPre = Devm.getStor callPre :=
+    Line.of_inv Devm.getStor (by line_inv) staging
+  have stagingLogs : readPre.logs = callPre.logs :=
+    Line.of_inv Devm.logs (by line_inv) staging
+  have stageReads : Mem.Reads stagePre.memory stagePre.memory.data.toList := by
+    intro index
+    simp
+  obtain ⟨supply, quotePre, supplyEq, stable, quoteStack, quoteWf,
+      quoteReads, quoteStorage, quoteCode, quoteLogs, quoteRun⟩ :=
+    Blanc.ProrataWethVault.conversionStaging_trace stageWf stageReads
+      assetsPrefix stageRun
+  have entryStorage : Devm.getStor readPre = Devm.getStor quotePre :=
+    stagingStorage.trans (stageStorage.symm.trans quoteStorage)
+  have entryLogsAll : readPre.logs = quotePre.logs :=
+    stagingLogs.trans (stageLogs.symm.trans quoteLogs)
+  have entryCode :
+      quotePre.getCode wethAccount = readPre.getCode wethAccount := by
+    rw [← congrFun quoteCode wethAccount, stageCode,
+      ← congrFun stagingCode wethAccount]
+  have assetsEq : assets =
+      (readPre.state.getStor wethAccount).get sevm.currentTarget.toB256 := by
+    have bytes := congrArg Bytes.toB256 returnedWord
+    simp only [B256.toB256_toBytes] at bytes
+    rw [bytes]
+    exact (congrArg
+      (fun storage : Stor => storage.get sevm.currentTarget.toB256)
+      (congrFun stagingStorage wethAccount)).symm
+  refine ⟨quotePre,
+    Blanc.ProrataWethVault.conversionStagingImage
+      stagePre.memory.data.toList assets supply,
+    supply, ?_, stable, quoteWf, quoteReads, ?_, ?_, ?_, quoteStack,
+    entryStorage, entryLogsAll, entryCode, quoteRun⟩
+  · rw [supplyEq]
+    change (Devm.getStor stagePre sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot =
+      (Devm.getStor readPre sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot
+    rw [stagingStorage, ← stageStorage]
+  · intro w v above below value
+    unfold Blanc.ProrataWethVault.conversionStagingImage
+    rw [Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint]
+    · have readWindow : MemWordAt readPre (w * 32).toNat v :=
+        MemWordAt.of_memImage ⟨memoryWf, memoryReads⟩
+          (sliceBytes_of_toB256 value)
+      exact toB256_of_sliceBytes
+        ((stageWindow above readWindow).slice_eq stageReads)
+    · left
+      have assetsOffset :
+          (Blanc.ProrataWethVault.assetsWord * 32).toNat = 1184 := by
+        decide +kernel
+      have supplyOffset :
+          (Blanc.ProrataWethVault.supplyWord * 32).toNat = 1152 := by
+        decide +kernel
+      omega
+    · left
+      exact below
+  · rw [← assetsEq]
+    unfold Blanc.ProrataWethVault.conversionStagingImage
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _)
+    · right
+      decide +kernel
+  · unfold Blanc.ProrataWethVault.conversionStagingImage
+    exact toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _)
+
 end Source
-
-/-! ## Image-word codec
-
-Both composed flows carry operation words as `Bytes.toB256` reads and hand
-them to child seams that want the raw 32-byte slice.  These two turn one form
-into the other; they are stated here rather than in either flow so the two
-composition owners share them. -/
-
-theorem sliceBytes_of_toB256 {image : Bytes} {offset : Nat} {w : B256}
-    (value : Bytes.toB256 (image.sliceD offset 32 0) = w) :
-    image.sliceD offset 32 0 = w.toBytes := by
-  rw [← value]
-  exact (Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)).symm
-
-theorem toB256_of_sliceBytes {image : Bytes} {offset : Nat} {w : B256}
-    (value : image.sliceD offset 32 0 = w.toBytes) :
-    Bytes.toB256 (image.sliceD offset 32 0) = w := by
-  rw [value, B256.toB256_toBytes]
 
 end Blanc.Composition.ProrataWethVault
