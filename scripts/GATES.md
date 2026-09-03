@@ -27,6 +27,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | a Lean source while iterating inside a goal | the narrowest Lake consumer target that reaches the change | `lake build` at the next checkpoint, then the change-specific row below |
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
 | the PRORATA WETH vault's frozen arithmetic, capacity policy, or the independent oracle | `scripts/check-prorata-weth-vault-oracle.sh` | `lake build && scripts/check.sh --no-build` |
+| the PRORATA WETH vault's committed runtime, its oracle, or the vault's frozen behaviour | `scripts/check-prorata-weth-vault-differential.sh` | `lake build && scripts/check.sh --no-build` |
 | the proof-recipe registry, generator, generated documentation/Lean lookup, recipe tactic, or changed proof declarations | `scripts/check-proof-recipes.sh --base main` | the **full set**, in the order below |
 | a `maxHeartbeats` or `maxRecDepth` scope, its debt baseline, or a bounded debt exception | `scripts/check-proof-debt.sh` | the **full set**, in the order below |
 | a production Lean module, its size baseline, or a bounded module-size exception | `scripts/check-proof-module-size.sh` | the **full set**, in the order below |
@@ -120,6 +121,7 @@ scripts/check-lido-twg-reference.sh
 scripts/check-lido-ossifiable-proxy-reference.sh
 scripts/check-lido-ossifiable-proxy-performance.sh
 scripts/check-prorata-weth-vault-oracle.sh
+scripts/check-prorata-weth-vault-differential.sh
 lake build
 scripts/check-lido-ossifiable-proxy-artifacts.sh
 scripts/check-lido-circuit-breaker-artifact-profile.sh
