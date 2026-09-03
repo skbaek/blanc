@@ -1272,6 +1272,9 @@ Blanc.ProrataWethVault.redemption_le_assets|propext, Quot.sound
 Blanc.ProrataWethVault.victim_loss_le|$STANDARD
 Blanc.ProrataWethVault.victim_loss_le_over_history|$STANDARD
 Blanc.ProrataWethVault.dust_trace_exact|$STANDARD
+Blanc.ProrataWethVault.depositStep|
+Blanc.ProrataWethVault.redeemStep|
+Blanc.ProrataWethVault.donationStep|
 Blanc.Prorata.ProrataAccountingPath.priceLe_first_last|propext, Quot.sound
 Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved|$STANDARD
 Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved|$STANDARD
