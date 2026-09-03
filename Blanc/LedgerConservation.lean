@@ -167,6 +167,44 @@ theorem burn {s s' : Stor} {a : Adr} {v : B256}
   rw [h_sup, B256.toNat_sub_eq_of_le _ _ h_le_sup, h]
   exact sum_sub_assoc h_dec h_le
 
+/-- **The mint pair, in the exact `set` form a walked pair of `SSTORE`s
+delivers**: a credit at an address-shaped key, then a supply write.  The supply
+value may be read either before or after the credit — the credit is invisible
+to the supply slot — so only the supply-side overflow bound is owed. -/
+theorem mint_set {s : Stor} {a : Adr} {v : B256}
+    (slotNotAdr : ¬ ValidAdr slot)
+    (h : LedgerConserved slot s)
+    (h_nof : B256.Nof (s.get slot) v) :
+    LedgerConserved slot
+      ((s.set a.toB256 (Stor.rest s a + v)).set slot (s.get slot + v)) := by
+  refine h.mint (a := a) (v := v) ?_ h_nof ?_
+  · intro b
+    refine ⟨?_, ?_⟩
+    · intro same
+      subst same
+      rw [rest_set_slot slotNotAdr, Stor.rest_set_self]
+    · intro different
+      rw [rest_set_slot slotNotAdr, Stor.rest_set_ne _ (Ne.symm different)]
+  · exact Stor.get_set_self _ _ _
+
+/-- **The burn pair, in the same `set` form**: a debit at an address-shaped
+key, then a supply write.  The caller owes only `v ≤ balance`. -/
+theorem burn_set {s : Stor} {a : Adr} {v : B256}
+    (slotNotAdr : ¬ ValidAdr slot)
+    (h : LedgerConserved slot s)
+    (h_le : v ≤ Stor.rest s a) :
+    LedgerConserved slot
+      ((s.set a.toB256 (Stor.rest s a - v)).set slot (s.get slot - v)) := by
+  refine h.burn (a := a) (v := v) ?_ h_le ?_
+  · intro b
+    refine ⟨?_, ?_⟩
+    · intro same
+      subst same
+      rw [rest_set_slot slotNotAdr, Stor.rest_set_self]
+    · intro different
+      rw [rest_set_slot slotNotAdr, Stor.rest_set_ne _ (Ne.symm different)]
+  · exact Stor.get_set_self _ _ _
+
 end LedgerConserved
 
 

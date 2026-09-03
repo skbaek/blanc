@@ -1,6 +1,7 @@
 import Blanc.ProrataWethVaultOutbound
 import Blanc.CompiledFixedInvariance
 import Blanc.Composition.ProrataWethVaultStaging
+import Blanc.LedgerConservation
 
 /-!
 # WETH-backed compiled outbound flows
@@ -73,13 +74,6 @@ def OutboundEffect
         wethTransferLog sevm.currentTarget receiver.toAdr assets,
         Blanc.ProrataWethVault.withdrawLogEntry sevm receiver owner assets
           shares]
-
-/-- The reserved supply word is not address-shaped, so it can never collide
-with an owner's share row. -/
-theorem supplySlot_not_validAdr :
-    ¬ ValidAdr Blanc.ProrataWethVault.supplySlot := by
-  rw [validAdr_iff]
-  decide +kernel
 
 /-- Exact effect of an outbound flow from its auxiliary continuation onward.
 
@@ -393,7 +387,7 @@ theorem outboundAfterQuote_effect
       line_inv) staging
   have ownerNotSupply : owner ≠ Blanc.ProrataWethVault.supplySlot := by
     intro slotEq
-    exact supplySlot_not_validAdr (slotEq ▸ ownerValid)
+    exact Blanc.ProrataWethVault.supplySlot_not_validAdr (slotEq ▸ ownerValid)
   have preToAuth : Devm.getStor entry = Devm.getStor authPre :=
     guardStorage.trans balanceStorage
   have vaultAfter : Devm.getStor post sevm.currentTarget =
@@ -432,7 +426,7 @@ theorem outboundAfterQuote_effect
   · intro slot slotValid slotNotOwner
     have slotNotSupply : slot ≠ Blanc.ProrataWethVault.supplySlot := by
       intro slotEq
-      exact supplySlot_not_validAdr (slotEq ▸ slotValid)
+      exact Blanc.ProrataWethVault.supplySlot_not_validAdr (slotEq ▸ slotValid)
     change (Devm.getStor post sevm.currentTarget).get slot =
       (Devm.getStor entry sevm.currentTarget).get slot
     rw [vaultAfter, burnSet, Stor.get_set_ne _ (Ne.symm slotNotSupply),
@@ -578,6 +572,40 @@ theorem outboundQuoteStaging_effect
       (Devm.getStor quotePre sevm.currentTarget).get
         Blanc.ProrataWethVault.supplySlot
     rw [entryStorage]
+
+/-- An outbound flow preserves ledger conservation: it is a paired burn, one
+share row and the supply falling by exactly the same quoted amount.
+
+No supply-underflow premise is owed.  The vault checks the burn against the
+owner's own balance, and the invariant's bound corollary turns that into
+`shares ≤ supply`, which is why the contract carries no separate supply
+check. -/
+theorem outboundEffect_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    {receiver owner assets shares returned : B256}
+    (ownerValid : ValidAdr owner)
+    (covered : shares.toNat ≤
+      (Devm.getStorVal pre sevm.currentTarget owner).toNat)
+    (effect :
+      OutboundEffect sevm receiver owner assets shares returned pre post)
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, -, ownerRow, supplyRow, otherRows, -, -, -⟩ := effect
+  obtain ⟨ownerAdr, ownerAdrEq⟩ := ownerValid
+  subst ownerAdrEq
+  refine conserved.burn (a := ownerAdr) (v := shares) ?_ ?_ supplyRow
+  · intro b
+    refine ⟨?_, ?_⟩
+    · intro same
+      subst same
+      exact ownerRow.symm
+    · intro different
+      refine (otherRows b.toB256 ⟨b, rfl⟩ ?_).symm
+      intro keyEq
+      exact different (Adr.toB256_inj keyEq).symm
+  · exact B256.le_of_toNat_le_toNat covered
 
 /-- Storage and log equality is enough to move a whole outbound observation
 back to an earlier state. -/
