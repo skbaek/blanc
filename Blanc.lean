@@ -300,6 +300,7 @@ import Blanc.ProrataWethVaultArithmetic
 import Blanc.ProrataWethVaultArithmeticExec
 import Blanc.ProrataWethVaultConversions
 import Blanc.ProrataWethVaultCapacities
+import Blanc.ProrataWethVaultInbound
 import Blanc.ProrataWethVaultFunctional
 import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary
