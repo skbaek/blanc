@@ -61,17 +61,6 @@ def InboundEffect (sevm : Sevm) (receiver assets shares returned : B256)
         Blanc.ProrataWethVault.mintTransferLog sevm receiver shares,
         Blanc.ProrataWethVault.depositLogEntry sevm receiver assets shares]
 
-private theorem sliceBytes_of_toB256 {image : Bytes} {offset : Nat} {w : B256}
-    (value : Bytes.toB256 (image.sliceD offset 32 0) = w) :
-    image.sliceD offset 32 0 = w.toBytes := by
-  rw [← value]
-  exact (Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)).symm
-
-private theorem toB256_of_sliceBytes {image : Bytes} {offset : Nat} {w : B256}
-    (value : image.sliceD offset 32 0 = w.toBytes) :
-    Bytes.toB256 (image.sliceD offset 32 0) = w := by
-  rw [value, B256.toB256_toBytes]
-
 /-- Exact effect of an inbound flow from its auxiliary continuation onward.
 
 The two word parameters are the operation words each flow settles with:

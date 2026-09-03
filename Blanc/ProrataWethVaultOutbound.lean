@@ -29,6 +29,19 @@ someone other than the caller, which adds an allowance path with no inbound
 counterpart.
 -/
 
+/-! ## Code frame
+
+The outbound flows write storage *before* their WETH child, so a configuration
+premise about the WETH program cannot ride on state equality the way the
+inbound ones do.  It rides on this instead: no register instruction installs
+code, so every seam below can carry the installed-code world forward. -/
+
+theorem register_getCode {sevm : Sevm} {s s' : Devm} {r : Rinst}
+    (run : Ninst.Run sevm s (Ninst.reg r) s') :
+    Devm.getCode s' = Devm.getCode s := by
+  obtain ⟨pc, registerRun⟩ := of_run_reg run
+  exact funext (Rinst.preserves_getCode registerRun)
+
 /-! ## Outbound argument staging -/
 
 /-- Memory image after the three outbound ABI arguments are staged. -/
@@ -420,6 +433,7 @@ theorem ownerHasShares_trace
       Mem.Reads bodyPre.memory
         (Bytes.writeAt image (balanceWord * 32).toNat balance.toBytes) ∧
       Devm.getStor pre = Devm.getStor bodyPre ∧
+      Devm.getCode pre = Devm.getCode bodyPre ∧
       pre.logs = bodyPre.logs ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   simp only [ownerHasShares] at run
@@ -515,8 +529,24 @@ theorem ownerHasShares_trace
   have bodyReads : Mem.Reads bodyPre.memory image1 := by
     rw [← bodyPop.memory, ← testMemory]
     exact testReads
-  refine ⟨bodyPre, balance, ?_, ?_, bodyPrefix, bodyWf, bodyReads, ?_, ?_,
-    bodyRun⟩
+  have codeFrame : Devm.getCode pre = Devm.getCode bodyPre :=
+    (Line.of_inv Devm.getCode (by
+        unfold ProrataWethVault.loadWord
+        line_inv) ownerRun).trans <|
+      (register_getCode sloadSource).symm.trans <|
+        (Line.of_inv Devm.getCode (by
+            unfold mstoreAt
+            line_inv) balanceStoreRun).trans <|
+          (Line.of_inv Devm.getCode (by
+              unfold ProrataWethVault.loadWord
+              line_inv) sharesRun).trans <|
+            (Line.of_inv Devm.getCode (by
+                unfold ProrataWethVault.loadWord
+                line_inv) balanceLoadRun).trans <|
+              (register_getCode testSource).symm.trans
+                (funext (getCode_eq_of_state_eq bodyPop.state))
+  refine ⟨bodyPre, balance, ?_, ?_, bodyPrefix, bodyWf, bodyReads, ?_,
+    codeFrame, ?_, bodyRun⟩
   · rw [balanceEq]
     change
       (Devm.getStor sloadPre sevm.currentTarget).get owner =
@@ -563,6 +593,7 @@ theorem allowanceKey_trace
       Mem.Reads bodyPre.memory
         (allowanceKeyImage image owner sevm.caller.toB256) ∧
       Devm.getStor pre = Devm.getStor bodyPre ∧
+      Devm.getCode pre = Devm.getCode bodyPre ∧
       pre.logs = bodyPre.logs ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   simp only [guardedAllowanceKey] at run
@@ -654,8 +685,24 @@ theorem allowanceKey_trace
   obtain ⟨bodyPre, keyNotAddress, keyNotSupply, bodyRun, bodyPrefix,
       collisionState, collisionLogs, bodyMemory⟩ :=
     allowanceCollisionGuard_body_of_ok keyPrefix run
-  refine ⟨bodyPre, keyNotAddress, keyNotSupply, bodyPrefix, ?_, ?_, ?_, ?_,
-    bodyRun⟩
+  have codeFrame : Devm.getCode pre = Devm.getCode bodyPre :=
+    (Line.of_inv Devm.getCode (by
+        unfold ProrataWethVault.loadWord
+        line_inv) ownerRun).trans <|
+      (Line.of_inv Devm.getCode (by
+          unfold mstoreAt
+          line_inv) ownerStoreRun).trans <|
+        (funext (getCode_eq_of_state_eq callerPush.state)).trans <|
+          (Line.of_inv Devm.getCode (by
+              unfold mstoreAt
+              line_inv) spenderStoreRun).trans <|
+            (Line.of_inv Devm.getCode (by
+                simp only [pushList, List.map]
+                line_inv) pushWindowLine).trans <|
+              (register_getCode keccakSource).symm.trans
+                (funext (getCode_eq_of_state_eq collisionState))
+  refine ⟨bodyPre, keyNotAddress, keyNotSupply, bodyPrefix, ?_, ?_, ?_,
+    codeFrame, ?_, bodyRun⟩
   · rw [← bodyMemory]; exact collisionWf
   · rw [← bodyMemory]; exact collisionReads
   · exact (funext (getStor_eq_of_state_eq ownerState)).trans
@@ -722,6 +769,7 @@ theorem spendAllowance_trace
       (∀ account, sevm.currentTarget ≠ account →
         Devm.getStor bodyPre account = Devm.getStor pre account) ∧
       pre.logs = bodyPre.logs ∧
+      Devm.getCode pre = Devm.getCode bodyPre ∧
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory
@@ -732,7 +780,7 @@ theorem spendAllowance_trace
 
   -- Hash and guard the allowance key.
   obtain ⟨scratchStorePre, keyNotAddress, keyNotSupply, keyPrefix, keyWf,
-      keyReads, keyState, keyLogs, run⟩ :=
+      keyReads, keyState, keyCode, keyLogs, run⟩ :=
     allowanceKey_trace memoryWf memoryReads ownerAt stack run
   set key := allowanceKey owner sevm.caller.toB256 with keyDef
 
@@ -821,6 +869,18 @@ theorem spendAllowance_trace
   have branchLogs : pre.logs = branchPre.logs :=
     keyLogs.trans (scratchStoreLogs.trans (scratchLoadLogs.trans
       (sloadLogs.trans allowanceStoreLogs)))
+  have branchCode : Devm.getCode pre = Devm.getCode branchPre :=
+    keyCode.trans <|
+      (Line.of_inv Devm.getCode (by
+          unfold mstoreAt
+          line_inv) scratchStoreRun).trans <|
+        (Line.of_inv Devm.getCode (by
+            unfold ProrataWethVault.loadWord
+            line_inv) scratchLoadRun).trans <|
+          (register_getCode sloadSource).symm.trans
+            (Line.of_inv Devm.getCode (by
+              unfold mstoreAt
+              line_inv) allowanceStoreRun)
   have allowanceValue : allowance = Devm.getStorVal pre sevm.currentTarget
       key := by
     rw [allowanceEq]
@@ -836,7 +896,10 @@ theorem spendAllowance_trace
       maxArm
     obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv lookup callRun
     refine ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply,
-      allowanceValue, Or.inl ?_, ?_, ?_, ?_, ?_, ?_, bodyRun⟩
+      allowanceValue, Or.inl ?_, ?_, ?_,
+      branchCode.trans ((funext (getCode_eq_of_state_eq callQuiet.1)).trans
+        (funext (getCode_eq_of_state_eq burn.state))),
+      ?_, ?_, ?_, bodyRun⟩
     · rw [← congrFun (funext (getStor_eq_of_state_eq burn.state))
           sevm.currentTarget,
         ← congrFun (funext (getStor_eq_of_state_eq callQuiet.1))
@@ -980,8 +1043,32 @@ theorem spendAllowance_trace
         (coverLoadLogs.trans (coverTestLogs.trans (coverPop.logs.trans
           (spendAmountLogs.trans (spendLoadLogs.trans
             (subLogs.trans keyLoadLogs))))))))
+    have spendCode : Devm.getCode pre = Devm.getCode bodyPre :=
+      branchCode.trans <|
+        (funext (getCode_eq_of_state_eq testQuiet.1)).trans <|
+          (Line.of_inv Devm.getCode (by
+              unfold ProrataWethVault.loadWord
+              line_inv) coverAmountRun).trans <|
+            (Line.of_inv Devm.getCode (by
+                unfold ProrataWethVault.loadWord
+                line_inv) coverLoadRun).trans <|
+              (register_getCode coverTestSource).symm.trans <|
+                (funext (getCode_eq_of_state_eq coverPop.state)).trans <|
+                  (Line.of_inv Devm.getCode (by
+                      unfold ProrataWethVault.loadWord
+                      line_inv) spendAmountRun).trans <|
+                    (Line.of_inv Devm.getCode (by
+                        unfold ProrataWethVault.loadWord
+                        line_inv) spendLoadRun).trans <|
+                      (register_getCode subSource).symm.trans <|
+                        (Line.of_inv Devm.getCode (by
+                            unfold ProrataWethVault.loadWord
+                            line_inv) keyLoadRun).trans <|
+                          (register_getCode storeSource).symm.trans
+                            (funext (getCode_eq_of_state_eq burn.state))
     refine ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply,
-      allowanceValue, Or.inr ⟨?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, bodyRun⟩
+      allowanceValue, Or.inr ⟨?_, ?_⟩, ?_, ?_, spendCode, ?_, ?_, ?_,
+      bodyRun⟩
     · by_contra amountLarge
       exact covered (B256.lt_of_toNat_lt_toNat (by omega))
     · rw [← congrFun (funext (getStor_eq_of_state_eq burn.state))
@@ -1060,6 +1147,7 @@ theorem outboundAuthorization_trace
       (∀ account, sevm.currentTarget ≠ account →
         Devm.getStor bodyPre account = Devm.getStor pre account) ∧
       pre.logs = bodyPre.logs ∧
+      Devm.getCode pre = Devm.getCode bodyPre ∧
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory bodyImage ∧
@@ -1094,6 +1182,12 @@ theorem outboundAuthorization_trace
   have branchLogs : pre.logs = branchPre.logs :=
     ownerLogs.trans (callerPush.logs.trans
       (Ninst.Hinv.inv (f := Devm.logs) testSource))
+  have branchCode : Devm.getCode pre = Devm.getCode branchPre :=
+    (Line.of_inv Devm.getCode (by
+        unfold ProrataWethVault.loadWord
+        line_inv) ownerRun).trans
+      ((funext (getCode_eq_of_state_eq callerPush.state)).trans
+        (register_getCode testSource).symm)
   by_cases ownerIsCaller : sevm.caller.toB256 = owner
   · -- The caller owns the shares: tail-call the burn directly.
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
@@ -1106,7 +1200,10 @@ theorem outboundAuthorization_trace
       branchStorage.trans
         ((funext (getStor_eq_of_state_eq callPop.state)).trans
           (funext (getStor_eq_of_state_eq burn.state)))
-    refine ⟨bodyPre, image, ?_, ?_, ?_, ?_, ?_, ?_, Or.inl rfl, bodyRun⟩
+    refine ⟨bodyPre, image, ?_, ?_, ?_,
+      branchCode.trans ((funext (getCode_eq_of_state_eq callPop.state)).trans
+        (funext (getCode_eq_of_state_eq burn.state))),
+      ?_, ?_, ?_, Or.inl rfl, bodyRun⟩
     · intro key _
       change
         (Devm.getStor bodyPre sevm.currentTarget).get key =
@@ -1133,14 +1230,17 @@ theorem outboundAuthorization_trace
     have spendOwnerAt : Bytes.toB256
         (image.sliceD (ownerWord * 32).toNat 32 0) = owner := ownerAt
     obtain ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply, -,
-        allowanceRoute, foreign, logs, bodyStack, bodyWf, bodyReads,
-        bodyRun⟩ :=
+        allowanceRoute, foreign, logs, spendCode, bodyStack, bodyWf,
+        bodyReads, bodyRun⟩ :=
       spendAllowance_trace spendWf spendReads spendOwnerAt amountAt
         amountAboveKeyWords amountAboveScratch amountBelowAllowance
         spendStack lookup spendRun
     have spendStorage : Devm.getStor pre = Devm.getStor spendPre :=
       branchStorage.trans (funext (getStor_eq_of_state_eq spendPop.state))
-    refine ⟨bodyPre, _, ?_, ?_, ?_, bodyStack, bodyWf, bodyReads,
+    refine ⟨bodyPre, _, ?_, ?_, ?_,
+      branchCode.trans ((funext (getCode_eq_of_state_eq spendPop.state)).trans
+        spendCode),
+      bodyStack, bodyWf, bodyReads,
       Or.inr ⟨key, allowance, rfl⟩, bodyRun⟩
     · intro slot slotShape
       change
@@ -1213,6 +1313,7 @@ theorem outboundBurn_trace
       (∀ account, sevm.currentTarget ≠ account →
         Devm.getStor bodyPre account = Devm.getStor pre account) ∧
       bodyPre.logs = pre.logs ++ [burnTransferLog sevm owner shares] ∧
+      Devm.getCode pre = Devm.getCode bodyPre ∧
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory (Bytes.writeAt image 0 shares.toBytes) ∧
@@ -1460,7 +1561,45 @@ theorem outboundBurn_trace
           decrSharesLogs.trans <| decrSupplyLogs.trans <| decrSubLogs.trans <|
             zeroPush.logs.trans <|
               (Ninst.Hinv.inv (f := Devm.logs) notRun).trans supplyStoreLogs
-  refine ⟨bodyPre, ?_, ?_, ?_, ?_, bodyStack, bodyWf, ?_, bodyRun⟩
+  have codeFrame : Devm.getCode pre = Devm.getCode bodyPre :=
+    (Line.of_inv Devm.getCode (by
+        unfold ProrataWethVault.loadWord
+        line_inv) sharesRun).trans <|
+      (Line.of_inv Devm.getCode (by
+          unfold ProrataWethVault.loadWord
+          line_inv) balanceLoadRun).trans <|
+        (register_getCode subSource).symm.trans <|
+          (Line.of_inv Devm.getCode (by
+              unfold ProrataWethVault.loadWord
+              line_inv) ownerRun).trans <|
+            (register_getCode balanceStoreSource).symm.trans <|
+              (Line.of_inv Devm.getCode (by
+                  unfold ProrataWethVault.loadWord
+                  line_inv) roomSharesRun).trans <|
+                (Line.of_inv Devm.getCode (by
+                    unfold ProrataWethVault.loadWord
+                    line_inv) supplyLoadRun).trans <|
+                  (register_getCode roomTestSource).symm.trans <|
+                    (funext (getCode_eq_of_state_eq roomPop.state)).trans <|
+                      (Line.of_inv Devm.getCode (by
+                          unfold ProrataWethVault.loadWord
+                          line_inv) decrSharesRun).trans <|
+                        (Line.of_inv Devm.getCode (by
+                            unfold ProrataWethVault.loadWord
+                            line_inv) decrSupplyRun).trans <|
+                          (register_getCode decrSubSource).symm.trans <|
+                            (funext
+                                (getCode_eq_of_state_eq zeroPush.state)).trans <|
+                              (register_getCode notRun).symm.trans <|
+                                (register_getCode
+                                    supplyStoreSource).symm.trans
+                                  (Line.of_inv Devm.getCode (by
+                                    unfold logBurnTransfer
+                                      ProrataWethVault.loadWord mstoreAt
+                                      logWith
+                                    line_inv) logLineRun)
+  refine ⟨bodyPre, ?_, ?_, ?_, ?_, codeFrame, bodyStack, bodyWf, ?_,
+    bodyRun⟩
   · by_contra sharesLarge
     exact supplyLarge (B256.lt_of_toNat_lt_toNat (by omega))
   · rw [← congrFun logStorage sevm.currentTarget, supplySet,

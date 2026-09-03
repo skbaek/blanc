@@ -311,6 +311,7 @@ import Blanc.Composition.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultConversions
 import Blanc.Composition.ProrataWethVaultCapacities
 import Blanc.Composition.ProrataWethVaultInbound
+import Blanc.Composition.ProrataWethVaultOutbound
 
 import Blanc.DripStackSafetyCertificate
 
