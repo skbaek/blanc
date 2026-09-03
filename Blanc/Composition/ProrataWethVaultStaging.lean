@@ -2021,4 +2021,22 @@ theorem transferStaging_rollback
 
 end Source
 
+/-! ## Image-word codec
+
+Both composed flows carry operation words as `Bytes.toB256` reads and hand
+them to child seams that want the raw 32-byte slice.  These two turn one form
+into the other; they are stated here rather than in either flow so the two
+composition owners share them. -/
+
+theorem sliceBytes_of_toB256 {image : Bytes} {offset : Nat} {w : B256}
+    (value : Bytes.toB256 (image.sliceD offset 32 0) = w) :
+    image.sliceD offset 32 0 = w.toBytes := by
+  rw [← value]
+  exact (Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)).symm
+
+theorem toB256_of_sliceBytes {image : Bytes} {offset : Nat} {w : B256}
+    (value : image.sliceD offset 32 0 = w.toBytes) :
+    Bytes.toB256 (image.sliceD offset 32 0) = w := by
+  rw [value, B256.toB256_toBytes]
+
 end Blanc.Composition.ProrataWethVault
