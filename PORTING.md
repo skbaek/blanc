@@ -208,24 +208,28 @@ compatibility contract with differential evidence
 
 WETH10's deployment root follows the same boundary. Its theorem establishes
 the freshly generated Blanc runtime and `Weth10.Stable` after one strict,
-collision-free singleton type-2 deployment through the configured Prague
-transition, under its explicit valid-context, funding, gas, arithmetic, and
-system-predeploy premises. It does not establish the deployed Solidity
-artifact, construct or custody a signing key, guarantee propagation or block
-inclusion, or cover arbitrary co-block, factory, CREATE2, endowment, or fork
-shapes. The executable deployment fixture witnesses one concrete transaction
-and receipt; it does not enlarge the theorem or the port-conformance claim.
+collision-free singleton type-2 deployment through the transition its chain
+configuration selects, under its explicit valid-context, funding, gas,
+arithmetic, and system-predeploy premises. The public instance fixes that
+configuration to Ethereum mainnet's `mainnetChainConfig` and its deployment
+block to the BPO2 era; the Prague-only form is a retained corollary. It does
+not establish the deployed Solidity artifact, construct or custody a signing
+key, guarantee propagation or block inclusion, or cover arbitrary co-block,
+factory, CREATE2, endowment, or fork shapes. The executable deployment fixture
+witnesses one concrete transaction and receipt; it does not enlarge the theorem
+or the port-conformance claim.
 
 WETH10's committed holder-flow family has an equally exact Blanc-only
-boundary. From a stable checkpoint, its proof-carrying Prague-only
-`AccountedHistory` retains every applied block, the configured transition and
-`applyBody` result, `BlockOutput`, ordinary transaction roots, and all four
-system-message roots (beacon, history, withdrawal request, and consolidation
-request). Its public fold discards failed or reverted effects at their actual
-settlement boundary, including failed nested, outer, and top-level execution;
-only committed effects enter the ledger. Every ordinary Prague-only reach from
-the checkpoint admits such a history, and the history projects back to that
-ordinary reach.
+boundary. From a stable checkpoint, its proof-carrying `AccountedHistory cfg`
+retains every applied block, the rules `cfg` selects at that block, the
+configured transition and `applyBody` result, `BlockOutput`, ordinary
+transaction roots, and all four system-message roots (beacon, history,
+withdrawal request, and consolidation request). Its public fold discards failed
+or reverted effects at their actual settlement boundary, including failed
+nested, outer, and top-level execution;
+only committed effects enter the ledger. Every ordinary `ReachUsing cfg` reach
+from the checkpoint admits such a history, and the history projects back to
+that ordinary reach.
 
 For natural-number checkpoint and later booked balances `B0` and `Bt`, that
 family first proves that committed balance credits do not wrap, then proves
