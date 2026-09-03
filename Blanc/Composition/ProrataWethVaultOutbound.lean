@@ -65,6 +65,7 @@ def OutboundEffect
     (∀ key, ValidAdr key → key ≠ owner →
       Devm.getStorVal post sevm.currentTarget key =
         Devm.getStorVal pre sevm.currentTarget key) ∧
+    Blanc.ProrataWethVault.AllowanceSpent sevm owner shares pre post ∧
     (∀ account, wethAccount ≠ account → sevm.currentTarget ≠ account →
       Devm.getStor post account = Devm.getStor pre account) ∧
     post.logs = pre.logs ++
@@ -235,7 +236,7 @@ theorem outboundAfterQuote_effect
     · left
       exact sharesBelow
   obtain ⟨burnPre, burnImage, ledger, authForeign, authLogs, authCode,
-      burnStack, burnWf, burnReads, staged, burnRun⟩ :=
+      allowanceSpent, burnStack, burnWf, burnReads, staged, burnRun⟩ :=
     Blanc.ProrataWethVault.outboundAuthorization_trace authWf authReads
       ownerAtBalance sharesAtBalance (by omega) (by omega) (by omega)
       authStack lookup authRun
@@ -409,7 +410,7 @@ theorem outboundAfterQuote_effect
     rw [← congrFun guardStorage sevm.currentTarget]
   refine ⟨callerNonzero, ⟨receiverAdr, receiverAdrEq⟩, receiverNonzero,
     ownerValid, ownerNonzero, balanceEntry ▸ covered, roomFits,
-    returns, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    returns, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have wethAfter : Devm.getStor post wethAccount =
         Devm.getStor tailPre wethAccount :=
       congrFun settleStorage wethAccount
@@ -441,6 +442,33 @@ theorem outboundAfterQuote_effect
       (Devm.getStor burnPre sevm.currentTarget).get slot =
         (Devm.getStor authPre sevm.currentTarget).get slot at burnRow
     rw [burnRow, ← congrFun preToAuth sevm.currentTarget]
+  · rcases allowanceSpent with ownerRoute | ⟨notOwner, keyNotAddr,
+      keyNotSupplySlot, covers, route⟩
+    · exact Or.inl ownerRoute
+    · set aKey := Blanc.ProrataWethVault.allowanceKey owner sevm.caller.toB256
+        with aKeyDef
+      have authKey : Devm.getStorVal entry sevm.currentTarget aKey =
+          Devm.getStorVal authPre sevm.currentTarget aKey :=
+        congrArg (fun storage : Stor => storage.get aKey)
+          (congrFun preToAuth sevm.currentTarget)
+      have keyNotOwner : aKey ≠ owner := by
+        intro keyEq
+        exact keyNotAddr (keyEq ▸ ownerValid)
+      have survives : Devm.getStorVal post sevm.currentTarget aKey =
+          Devm.getStorVal burnPre sevm.currentTarget aKey := by
+        have step := congrArg (fun storage : Stor => storage.get aKey)
+          (vaultAfter.trans burnSet)
+        simp only [Stor.get_set_ne _ (Ne.symm keyNotSupplySlot),
+          Stor.get_set_ne _ (Ne.symm keyNotOwner)] at step
+        exact step
+      refine Or.inr ⟨notOwner, keyNotAddr, keyNotSupplySlot, ?_, ?_⟩
+      · rw [authKey]
+        exact covers
+      · rcases route with ⟨isMax, unchanged⟩ | decremented
+        · exact Or.inl ⟨authKey.trans isMax,
+            survives.trans (unchanged.trans authKey.symm)⟩
+        · exact Or.inr (survives.trans (decremented.trans
+            (congrArg (· - shares) authKey.symm)))
   · intro account wethNe targetNe
     rw [congrFun settleStorage account, childForeign account wethNe,
       ← congrFun stagingStorage account, burnForeign account targetNe,
@@ -560,15 +588,15 @@ private theorem outboundEffect_lift {sevm : Sevm} {pre bodyPre post : Devm}
     (effect :
       OutboundEffect sevm receiver owner assets shares returned bodyPre post) :
     OutboundEffect sevm receiver owner assets shares returned pre post := by
-  obtain ⟨returns, movement, ownerRow, supplyRow, otherRows, foreign,
-    logged⟩ := effect
+  obtain ⟨returns, movement, ownerRow, supplyRow, otherRows, allowance,
+    foreign, logged⟩ := effect
   have storVal : ∀ k, Devm.getStorVal pre sevm.currentTarget k =
       Devm.getStorVal bodyPre sevm.currentTarget k := by
     intro k
     change (Devm.getStor pre sevm.currentTarget).get k =
       (Devm.getStor bodyPre sevm.currentTarget).get k
     rw [congrFun storage sevm.currentTarget]
-  refine ⟨returns, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨returns, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [congrFun storage wethAccount]
     exact movement
   · rw [storVal owner]
@@ -578,6 +606,18 @@ private theorem outboundEffect_lift {sevm : Sevm} {pre bodyPre post : Devm}
   · intro key keyValid keyNotOwner
     rw [storVal key]
     exact otherRows key keyValid keyNotOwner
+  · rcases allowance with ownerRoute | ⟨notOwner, keyNotAddr, keyNotSupplySlot,
+      covers, route⟩
+    · exact Or.inl ownerRoute
+    · refine Or.inr ⟨notOwner, keyNotAddr, keyNotSupplySlot, ?_, ?_⟩
+      · rw [storVal (Blanc.ProrataWethVault.allowanceKey owner
+          sevm.caller.toB256)]
+        exact covers
+      · rcases route with ⟨isMax, unchanged⟩ | decremented
+        · exact Or.inl ⟨(storVal _).trans isMax,
+            unchanged.trans (storVal _).symm⟩
+        · exact Or.inr (decremented.trans
+            (congrArg (· - shares) (storVal _).symm))
   · intro account wethNe targetNe
     rw [foreign account wethNe targetNe, ← congrFun storage account]
   · rw [logged, ← logs]
