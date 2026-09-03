@@ -333,6 +333,388 @@ theorem transferStaged_trace
   · rw [← trueLogs, emitted, logWindow, ← logPrefixLogs, ← preToLog]
     rfl
 
+/-! ## Shared three-word staging
+
+`approve`, `transfer` and `transferFrom` all stage an owner, a receiver and an
+amount into the same three operation words.  They differ only in where those
+words come from: `transfer` takes its owner from the frame caller and the other
+two from ABI arguments zero and one, while `transferFrom` takes all three from
+arguments zero, one and two. -/
+
+/-- Memory image after the three share-operation words are staged. -/
+def shareArgImage (image : Bytes) (owner receiver amount : B256) : Bytes :=
+  Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt image (ownerWord * 32).toNat owner.toBytes)
+      (receiverWord * 32).toNat receiver.toBytes)
+    (amountWord * 32).toNat amount.toBytes
+
+theorem shareArgs_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {ownerLine receiverLine amountLine : Line}
+    {owner receiver amount : B256} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (ownerProduces : ProducesWord sevm ownerLine image owner)
+    (receiverProduces : ProducesWord sevm receiverLine
+      (Bytes.writeAt image (ownerWord * 32).toNat owner.toBytes) receiver)
+    (amountProduces : ProducesWord sevm amountLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (ownerWord * 32).toNat owner.toBytes)
+        (receiverWord * 32).toNat receiver.toBytes) amount)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (ownerLine +++ mstoreAt ownerWord +++
+        receiverLine +++ mstoreAt receiverWord +++
+        amountLine +++ mstoreAt amountWord +++ body) (.ok final)) :
+    ∃ bodyPre,
+      tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory (shareArgImage image owner receiver amount) ∧
+      pre.state = bodyPre.state ∧
+      pre.logs = bodyPre.logs ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨ownerStorePre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨ownerPrefix, ownerStoreWf, ownerStoreReads, ownerQuiet⟩ :=
+    ownerProduces memoryWf memoryReads stack ownerRun
+  obtain ⟨receiverPre, ownerStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverStack, receiverWf, receiverReads, ownerStoreState⟩ :=
+    of_run_mstoreAt_image ownerPrefix ownerStoreWf ownerStoreReads
+      ownerStoreRun
+  have ownerStoreLogs : ownerStorePre.logs = receiverPre.logs := by
+    refine Line.of_inv Devm.logs ?_ ownerStoreRun
+    unfold mstoreAt
+    line_inv
+  obtain ⟨receiverStorePre, receiverRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverPrefix, receiverStoreWf, receiverStoreReads,
+      receiverQuiet⟩ :=
+    receiverProduces receiverWf receiverReads receiverStack receiverRun
+  obtain ⟨amountPre, receiverStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨amountStack, amountWf, amountReads, receiverStoreState⟩ :=
+    of_run_mstoreAt_image receiverPrefix receiverStoreWf receiverStoreReads
+      receiverStoreRun
+  have receiverStoreLogs : receiverStorePre.logs = amountPre.logs := by
+    refine Line.of_inv Devm.logs ?_ receiverStoreRun
+    unfold mstoreAt
+    line_inv
+  obtain ⟨amountStorePre, amountRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨amountPrefix, amountStoreWf, amountStoreReads, amountQuiet⟩ :=
+    amountProduces amountWf amountReads amountStack amountRun
+  obtain ⟨bodyPre, amountStoreRun, bodyRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bodyStack, bodyWf, bodyReads, amountStoreState⟩ :=
+    of_run_mstoreAt_image amountPrefix amountStoreWf amountStoreReads
+      amountStoreRun
+  have amountStoreLogs : amountStorePre.logs = bodyPre.logs := by
+    refine Line.of_inv Devm.logs ?_ amountStoreRun
+    unfold mstoreAt
+    line_inv
+  exact ⟨bodyPre, bodyStack, bodyWf, bodyReads,
+    ownerQuiet.1.trans (ownerStoreState.trans
+      (receiverQuiet.1.trans (receiverStoreState.trans
+        (amountQuiet.1.trans amountStoreState)))),
+    ownerQuiet.2.trans (ownerStoreLogs.trans
+      (receiverQuiet.2.trans (receiverStoreLogs.trans
+        (amountQuiet.2.trans amountStoreLogs)))),
+    bodyRun⟩
+
+/-! ## Approval -/
+
+/-- The ERC-20 `Approval(owner, spender, amount)` entry the vault emits. -/
+def approvalLogEntry (sevm : Sevm) (spender amount : B256) : Log :=
+  ⟨sevm.currentTarget, [approvalEvent, sevm.caller.toB256, spender],
+    amount.toBytes⟩
+
+/-- `approve(spender, amount)` writes exactly the caller's allowance for the
+spender and nothing else.
+
+The written slot is the guarded hash, which the collision guard has proved is
+neither address-shaped nor the reserved supply word.  That is what makes an
+approval unable to move any economic quantity: it cannot alias a share row and
+it cannot alias the supply. -/
+theorem approve_body_effect
+    {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (stack : [] <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre approve (.ok post)) :
+    sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      ¬ ValidAdr (allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0)) ∧
+      allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0) ≠ supplySlot ∧
+      AbiReturnsTrue post ∧
+      Devm.getStor post sevm.currentTarget =
+        (Devm.getStor pre sevm.currentTarget).set
+          (allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0))
+          (Sevm.argWord sevm 1) ∧
+      (∀ account, sevm.currentTarget ≠ account →
+        Devm.getStor post account = Devm.getStor pre account) ∧
+      post.logs = pre.logs ++
+        [approvalLogEntry sevm (Sevm.argWord sevm 0)
+          (Sevm.argWord sevm 1)] := by
+  unfold approve at run
+  have entryReads : Mem.Reads pre.memory pre.memory.data.toList := by
+    intro index
+    simp
+  obtain ⟨spenderPre, callerNonzero, spenderStack, callerMemory, callerState,
+      callerLogs, run⟩ := nonzeroCaller_trace stack run
+  have spenderWf : Mem.Wf spenderPre.memory := by
+    rw [← callerMemory]; exact memoryWf
+  have spenderReads :
+      Mem.Reads spenderPre.memory pre.memory.data.toList := by
+    rw [← callerMemory]; exact entryReads
+  obtain ⟨stagePre, spenderValid, spenderNonzero, stageStack, stageWf,
+      stageReads, spenderState, spenderLogs, run⟩ :=
+    canonicalNonzeroAddress_trace spenderWf spenderReads
+      (ProducesWord.arg sevm _ 0) spenderStack run
+
+  -- Stage the caller, the spender and the amount.
+  obtain ⟨ownerStorePre, ownerRun, run⟩ := runCompiledTo_next_inv run
+  have ownerSource := Ninst.Run.of_runCompiled ownerRun
+  have ownerPush := of_run_caller ownerSource
+  have ownerPrefix : sevm.caller.toB256 :: [] <<+ ownerStorePre.stack :=
+    prefix_of_push ownerPush stageStack
+  have ownerStoreWf : Mem.Wf ownerStorePre.memory := by
+    rw [← ownerPush.memory]; exact stageWf
+  have ownerStoreReads :
+      Mem.Reads ownerStorePre.memory pre.memory.data.toList := by
+    rw [← ownerPush.memory]; exact stageReads
+  obtain ⟨spenderArgPre, ownerStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨spenderArgStack, spenderArgWf, spenderArgReads, ownerStoreState⟩ :=
+    of_run_mstoreAt_image ownerPrefix ownerStoreWf ownerStoreReads
+      ownerStoreRun
+  obtain ⟨spenderStorePre, spenderArgRun, run⟩ := runCompiledTo_prepend_inv run
+  have spenderArgPrefix := prefix_of_arg spenderArgStack spenderArgRun
+  have spenderArgQuiet :=
+    ProducesWord.arg sevm
+      (Bytes.writeAt pre.memory.data.toList (ownerWord * 32).toNat
+        sevm.caller.toB256.toBytes) 0 spenderArgWf spenderArgReads
+      spenderArgStack spenderArgRun
+  obtain ⟨-, spenderStoreWf, spenderStoreReads, spenderArgFrame⟩ :=
+    spenderArgQuiet
+  obtain ⟨amountArgPre, spenderStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨amountArgStack, amountArgWf, amountArgReads, spenderStoreState⟩ :=
+    of_run_mstoreAt_image spenderArgPrefix spenderStoreWf spenderStoreReads
+      spenderStoreRun
+  obtain ⟨amountStorePre, amountArgRun, run⟩ := runCompiledTo_prepend_inv run
+  have amountArgPrefix := prefix_of_arg amountArgStack amountArgRun
+  obtain ⟨-, amountStoreWf, amountStoreReads, amountArgFrame⟩ :=
+    ProducesWord.arg sevm _ 1 amountArgWf amountArgReads amountArgStack
+      amountArgRun
+  obtain ⟨keyPre, amountStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨keyStack, keyWf, keyReads, amountStoreState⟩ :=
+    of_run_mstoreAt_image amountArgPrefix amountStoreWf amountStoreReads
+      amountStoreRun
+  set stagedImage := Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt pre.memory.data.toList (ownerWord * 32).toNat
+        sevm.caller.toB256.toBytes)
+      (receiverWord * 32).toNat (Sevm.argWord sevm 0).toBytes)
+    (amountWord * 32).toNat (Sevm.argWord sevm 1).toBytes with stagedImageDef
+  change Mem.Reads keyPre.memory stagedImage at keyReads
+  have ownerAtStaged : Bytes.toB256
+      (stagedImage.sliceD (ownerWord * 32).toNat 32 0) =
+      sevm.caller.toB256 := by
+    rw [stagedImageDef, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+  have receiverAtStaged : Bytes.toB256
+      ((Bytes.writeAt stagedImage ((0 : B256) * 32).toNat
+        sevm.caller.toB256.toBytes).sliceD
+          (receiverWord * 32).toNat 32 0) = Sevm.argWord sevm 0 := by
+    rw [Bytes.readWord_writeAt_of_disjoint, stagedImageDef,
+      Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+
+  -- Hash and guard the allowance key.
+  obtain ⟨storePre, keyNotAddress, keyNotSupply, keyPrefix, storeWf,
+      storeReads, keyStorage, keyCode, keyLogs, run⟩ :=
+    allowanceKey_trace keyWf keyReads (ProducesWord.loadWord ownerAtStaged)
+      (ProducesWord.loadWord receiverAtStaged) keyStack run
+  set aKey := allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0)
+    with aKeyDef
+  set keyImage := allowanceKeyImage stagedImage sevm.caller.toB256
+    (Sevm.argWord sevm 0) with keyImageDef
+  change Mem.Reads storePre.memory keyImage at storeReads
+  have amountAtKey : Bytes.toB256
+      (keyImage.sliceD (amountWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 1 := by
+    rw [keyImageDef, allowanceKeyImage, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint, stagedImageDef]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+  have receiverAtKey : Bytes.toB256
+      (keyImage.sliceD (receiverWord * 32).toNat 32 0) =
+      Sevm.argWord sevm 0 := by
+    rw [keyImageDef, allowanceKeyImage, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint, stagedImageDef,
+      Bytes.readWord_writeAt_of_disjoint]
+    · exact Bytes.readWord_writeAt_self _ _ _
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+    · right
+      decide +kernel
+
+  -- Write the allowance.
+  obtain ⟨swapPre, amountRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨amountPrefix, swapWf, swapReads, amountState⟩ :=
+    of_run_loadWordAt_image keyPrefix storeWf storeReads amountAtKey amountRun
+  obtain ⟨sstorePre, swapRun, run⟩ := runCompiledTo_next_inv run
+  have swapSource := Ninst.Run.of_runCompiled swapRun
+  have swapShape : Stack.Swap (0 : Fin 16).val
+      [Sevm.argWord sevm 1, aKey] [aKey, Sevm.argWord sevm 1] :=
+    Stack.swapCore_zero
+  have sstorePrefix : aKey :: Sevm.argWord sevm 1 :: [] <<+ sstorePre.stack :=
+    Stack.prefix_of_swap swapShape (of_run_swap swapSource) amountPrefix
+  have swapMemory : swapPre.memory = sstorePre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) swapSource
+  have sstoreWf : Mem.Wf sstorePre.memory := by
+    rw [← swapMemory]; exact swapWf
+  have sstoreReads : Mem.Reads sstorePre.memory keyImage := by
+    rw [← swapMemory]; exact swapReads
+  obtain ⟨logPre, sstoreRun, run⟩ := runCompiledTo_next_inv run
+  have sstoreSource := Ninst.Run.of_runCompiled sstoreRun
+  have allowanceSet : Devm.getStor logPre sevm.currentTarget =
+      (Devm.getStor sstorePre sevm.currentTarget).set aKey
+        (Sevm.argWord sevm 1) :=
+    sstore_getStor_set sstoreSource sstorePrefix
+  have allowanceForeign : ∀ account, sevm.currentTarget ≠ account →
+      Devm.getStor logPre account = Devm.getStor sstorePre account :=
+    fun _ ne => sstore_getStor_of_ne sstoreSource ne
+  have logStack : [] <<+ logPre.stack :=
+    prefix_of_sstore sstoreSource sstorePrefix
+  have sstoreMemory : sstorePre.memory = logPre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) sstoreSource
+  have logWf : Mem.Wf logPre.memory := by
+    rw [← sstoreMemory]; exact sstoreWf
+  have logReads : Mem.Reads logPre.memory keyImage := by
+    rw [← sstoreMemory]; exact sstoreReads
+
+  -- Emit the approval and return canonical true.
+  obtain ⟨truePre, logRun, trueRun⟩ := runCompiledTo_prepend_inv run
+  have logLineRun := logRun
+  have logStorage : Devm.getStor logPre = Devm.getStor truePre := by
+    refine Line.of_inv Devm.getStor ?_ logLineRun
+    unfold logApproval ProrataWethVault.loadWord mstoreAt logWith
+    line_inv
+  simp only [logApproval, List.append_assoc] at logRun
+  obtain ⟨e1, logAmountRun, logRun⟩ := of_run_append (loadWord amountWord) logRun
+  obtain ⟨logAmountPrefix, e1Wf, e1Reads, -⟩ :=
+    of_run_loadWordAt_image logStack logWf logReads amountAtKey logAmountRun
+  obtain ⟨e2, logStoreRun, logRun⟩ := of_run_append (mstoreAt 0) logRun
+  obtain ⟨e2Stack, e2Wf, e2Reads, -⟩ :=
+    of_run_mstoreAt_image logAmountPrefix e1Wf e1Reads logStoreRun
+  have zeroOffset : ((0 : B256) * 32).toNat = 0 := by decide +kernel
+  rw [zeroOffset] at e2Reads
+  have receiverAtLogged : Bytes.toB256
+      ((Bytes.writeAt keyImage 0 (Sevm.argWord sevm 1).toBytes).sliceD
+        (receiverWord * 32).toNat 32 0) = Sevm.argWord sevm 0 := by
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact receiverAtKey
+    · right
+      decide +kernel
+  obtain ⟨e3, logReceiverRun, logRun⟩ :=
+    of_run_append (loadWord receiverWord) logRun
+  obtain ⟨e3Prefix, e3Wf, e3Reads, -⟩ :=
+    of_run_loadWordAt_image e2Stack e2Wf e2Reads receiverAtLogged
+      logReceiverRun
+  obtain ⟨e4, headRun, logRun⟩ :=
+    of_run_append [caller, pushB256 approvalEvent] logRun
+  rcases Line.of_run_cons headRun with ⟨e3b, logCallerRun, headTailRun⟩
+  rcases Line.of_run_cons headTailRun with ⟨_, eventRun, headNil⟩
+  cases headNil
+  have logCallerPush := of_run_caller logCallerRun
+  have eventPush := of_run_pushB256 eventRun
+  have e4Prefix : approvalEvent :: sevm.caller.toB256 ::
+      Sevm.argWord sevm 0 :: [] <<+ e4.stack :=
+    prefix_of_push eventPush (prefix_of_push logCallerPush e3Prefix)
+  have e4Wf : Mem.Wf e4.memory := by
+    rw [← eventPush.memory, ← logCallerPush.memory]; exact e3Wf
+  have e4Reads : Mem.Reads e4.memory
+      (Bytes.writeAt keyImage 0 (Sevm.argWord sevm 1).toBytes) := by
+    rw [← eventPush.memory, ← logCallerPush.memory]; exact e3Reads
+  obtain ⟨trueStack, emitted⟩ :=
+    of_logWith_val
+      (topics := [approvalEvent, sevm.caller.toB256, Sevm.argWord sevm 0])
+      (by simp) (by simpa using e4Prefix) logRun
+  obtain ⟨trueWf, trueReads⟩ := of_logWith_image e4Wf e4Reads logRun
+  have logWindow : (e4.memory.read ((0 : B256) * 32).toNat
+      ((1 : B256) * 32).toNat).1 = (Sevm.argWord sevm 1).toBytes := by
+    have sizeWord : ((1 : B256) * 32).toNat = 32 := by decide +kernel
+    rw [zeroOffset, sizeWord, Mem.Reads.read e4Reads,
+      show (32 : Nat) = (Sevm.argWord sevm 1).toBytes.length from
+        (B256.length_toBytes (Sevm.argWord sevm 1)).symm]
+    exact Bytes.sliceD_writeAt keyImage (Sevm.argWord sevm 1).toBytes 0
+  have logPrefixLogs : logPre.logs = e4.logs :=
+    (of_run_loadWordAt_logs logAmountRun).trans <|
+      (Line.of_inv Devm.logs (by unfold mstoreAt; line_inv)
+          logStoreRun).trans <|
+        (of_run_loadWordAt_logs logReceiverRun).trans <|
+          logCallerPush.logs.trans eventPush.logs
+  have trueSourceRun : Func.Run fs sevm truePre returnTrue post :=
+    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok trueRun)
+  obtain ⟨returnsTrue, -⟩ :=
+    of_returnTrue_shared trueStack trueWf trueReads trueSourceRun
+  have trueStorage : Devm.getStor truePre = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by
+      unfold returnTrue
+      func_inv) trueSourceRun
+  have trueLogs : truePre.logs = post.logs :=
+    Func.of_inv Devm.logs Devm.logs (by
+      unfold returnTrue
+      func_inv) trueSourceRun
+
+  -- Assemble the exact approval.
+  have preToSstore : Devm.getStor pre = Devm.getStor sstorePre :=
+    (funext (getStor_eq_of_state_eq callerState)).trans <|
+      (funext (getStor_eq_of_state_eq spenderState)).trans <|
+        (funext (getStor_eq_of_state_eq ownerPush.state)).trans <|
+          (funext (getStor_eq_of_state_eq ownerStoreState)).trans <|
+            (funext (getStor_eq_of_state_eq spenderArgFrame.1)).trans <|
+              (funext (getStor_eq_of_state_eq spenderStoreState)).trans <|
+                (funext (getStor_eq_of_state_eq amountArgFrame.1)).trans <|
+                  (funext (getStor_eq_of_state_eq amountStoreState)).trans <|
+                    keyStorage.trans <|
+                      (funext (getStor_eq_of_state_eq amountState)).trans
+                        (Ninst.Hinv.inv (f := Devm.getStor) swapSource)
+  have preToLog : pre.logs = logPre.logs :=
+    callerLogs.trans <|
+      spenderLogs.trans <|
+        ownerPush.logs.trans <|
+          (Line.of_inv Devm.logs (by unfold mstoreAt; line_inv)
+              ownerStoreRun).trans <|
+            spenderArgFrame.2.trans <|
+              (Line.of_inv Devm.logs (by unfold mstoreAt; line_inv)
+                  spenderStoreRun).trans <|
+                amountArgFrame.2.trans <|
+                  (Line.of_inv Devm.logs (by unfold mstoreAt; line_inv)
+                      amountStoreRun).trans <|
+                    keyLogs.trans <|
+                      (of_run_loadWordAt_logs amountRun).trans <|
+                        (Ninst.Hinv.inv (f := Devm.logs) swapSource).trans
+                          (Ninst.Hinv.inv (f := Devm.logs) sstoreSource)
+  refine ⟨callerNonzero, spenderValid, spenderNonzero, keyNotAddress,
+    keyNotSupply, returnsTrue, ?_, ?_, ?_⟩
+  · rw [← congrFun (logStorage.trans trueStorage) sevm.currentTarget,
+      allowanceSet, ← congrFun preToSstore sevm.currentTarget]
+  · intro account accountNe
+    rw [← congrFun (logStorage.trans trueStorage) account,
+      allowanceForeign account accountNe, ← congrFun preToSstore account]
+  · rw [← trueLogs, emitted, logWindow, ← logPrefixLogs, ← preToLog]
+    rfl
+
 end ProrataWethVault
 
 end Blanc
