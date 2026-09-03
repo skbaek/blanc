@@ -340,6 +340,85 @@ CHECKS = [
 ]
 
 
+
+# --- self-test: the batteries must be able to fail ---
+
+def self_test() -> int:
+    """Perturb the oracle and require the batteries to notice.
+
+    Each perturbation targets a specific battery, so a battery that has quietly
+    stopped exercising anything is caught here rather than passing forever.
+    """
+    import os
+    import shutil
+    import subprocess
+
+    model = Path(__file__).resolve().parent / "prorata_weth_vault_oracle.py"
+    original = model.read_text()
+    probes = [
+        ("maxDeposit loses its tightness",
+         "    return min(U, ceil_div((share_room(supply) + 1) * numerator(assets),\n"
+         "                           denominator(supply)) - 1)",
+         "    return min(U, ceil_div((share_room(supply) + 1) * numerator(assets),\n"
+         "                           denominator(supply)) - 2)"),
+        ("maxMint ignores the supply room",
+         "    return min(share_room(supply),\n"
+         "               floor_div(U * denominator(supply), numerator(assets)))",
+         "    return floor_div(U * denominator(supply), numerator(assets))"),
+        ("the zero receiver is advertised capacity",
+         "def max_mint(receiver: int, assets: int, supply: int) -> int:",
+         "def max_mint(receiver: int, assets: int, supply: int) -> int:\n"
+         "    receiver = receiver or 1"),
+        ("a mint forgets to raise the supply",
+         "        self._credit(receiver, shares)\n        self.supply += shares",
+         "        self._credit(receiver, shares)"),
+        ("a donation mints shares",
+         "    def donate(self, giver: int, amount: int) -> None:\n"
+         '        """A third-party WETH transfer to the vault.  No share is minted."""\n'
+         "        self._weth_move(giver, self.vault_address, amount)",
+         "    def donate(self, giver: int, amount: int) -> None:\n"
+         '        """A third-party WETH transfer to the vault.  No share is minted."""\n'
+         "        self._weth_move(giver, self.vault_address, amount)\n"
+         "        self._credit(giver, 1)"),
+        ("a conversion rounds the wrong way",
+         "def convert_to_shares(a: int, assets: int, supply: int) -> int:\n"
+         '    """`a * D / X`, rounded down."""\n'
+         "    return representable(floor_div(a * denominator(supply), numerator(assets)))",
+         "def convert_to_shares(a: int, assets: int, supply: int) -> int:\n"
+         '    """`a * D / X`, rounded down."""\n'
+         "    return representable(ceil_div(a * denominator(supply), numerator(assets)))"),
+    ]
+    missed = []
+    try:
+        for label, old, new in probes:
+            if original.count(old) != 1:
+                missed.append(f"{label}: the perturbation no longer applies "
+                              f"cleanly; this self-test has rotted and must be "
+                              f"repaired, not skipped")
+                continue
+            model.write_text(original.replace(old, new, 1))
+            # Python's bytecode cache keys on mtime at one-second granularity,
+            # so a second write inside the same second can leave a stale .pyc
+            # looking fresh and the child would import the *unperturbed* model
+            # and pass. Drop the cache and forbid writing a new one.
+            shutil.rmtree(model.parent / "__pycache__", ignore_errors=True)
+            result = subprocess.run([sys.executable, "-B", __file__],
+                                    capture_output=True, text=True,
+                                    env={**os.environ,
+                                         "PYTHONDONTWRITEBYTECODE": "1"})
+            if result.returncode == 0:
+                missed.append(f"{label}: perturbed, and the batteries still passed")
+    finally:
+        model.write_text(original)
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — vault oracle self-test: {message}")
+        return 1
+    print(f"OK — vault oracle self-test: {len(probes)} perturbations of the "
+          f"model are all caught")
+    return 0
+
+
 def main() -> int:
     for check in CHECKS:
         check()
@@ -354,4 +433,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if "--self-test" in sys.argv[1:]:
+        raise SystemExit(self_test())
     raise SystemExit(main())

@@ -123,6 +123,8 @@ scripts/check-lido-ossifiable-proxy-reference.sh
 scripts/check-lido-ossifiable-proxy-performance.sh
 scripts/check-prorata-weth-vault-oracle.sh
 scripts/check-prorata-weth-vault-differential.sh
+scripts/check-prorata-weth-vault-oracle.sh --self-test
+scripts/check-prorata-weth-vault-differential.sh --self-test
 lake build
 scripts/check-lido-ossifiable-proxy-artifacts.sh
 scripts/check-lido-circuit-breaker-artifact-profile.sh
