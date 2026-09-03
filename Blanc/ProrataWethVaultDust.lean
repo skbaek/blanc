@@ -18,12 +18,18 @@ WETH-denominated notation would have produced a second copy of an argument the
 tree already carries, which is exactly what the proof-duplication ratchet
 exists to prevent, and it would have left two places to be wrong.
 
-**What these are about.** They are statements about the pricing arithmetic at a
-pair of accounting snapshots. They are not yet statements about reachable vault
-histories: nothing here says that a particular snapshot pair is reachable by
-vault operations. Connecting them to a reachable carrier is the rest of the
-attack workstream, and until that lands these bound what the arithmetic can do
-rather than what an attacker can arrange.
+**The carrier.** `ProrataAccountingPath offsetN` is the reachable carrier: a
+connected sequence of classified steps — deposits, withdrawals, third-party
+donations, and no-ops — each carrying an exact effect. Every such step weakly
+increases the share price, so a whole path does, and that is what discharges
+the price premise of the attack bound for an arbitrary history rather than for
+a hand-picked pair.
+
+What the carrier does *not* yet do is tie a vault EVM operation to the step it
+induces. These results therefore quantify over accounting histories the pricing
+admits, not yet over histories the compiled vault can produce. Closing that gap
+is the remaining attack work, and the compiled effects already give the exact
+supply and asset transitions it needs.
 -/
 
 namespace Blanc
@@ -71,6 +77,51 @@ theorem victim_loss_le
     victim - paid ≤
       Nat.div (initialAssets + 1) (initialSupply + offsetN) + 1 :=
   Blanc.Prorata.victim_loss_le_div_add_one offsetN_ne_zero hminted hprice hpaid
+
+
+
+/-- **The attack bound over a whole history.**  Take any history the pricing
+admits — any sequence of deposits, withdrawals, third-party donations and
+no-ops — beginning immediately after a victim's deposit.  However the attacker
+arranges it, the victim's shortfall on exiting at the end is at most the
+pre-deposit price plus one.
+
+The price premise is discharged by the carrier rather than assumed: every
+classified step weakly increases the price, so the path does. -/
+theorem victim_loss_le_over_history
+    {initialSupply initialAssets victim minted paid : Nat}
+    (path : Blanc.Prorata.ProrataAccountingPath offsetN)
+    (hminted : minted = convertToSharesN victim initialAssets initialSupply)
+    (hstart : path.first =
+      ⟨initialSupply + minted, initialAssets + victim⟩)
+    (hpaid : paid =
+      convertToAssetsN minted path.last.balance path.last.supply) :
+    victim - paid ≤
+      Nat.div (initialAssets + 1) (initialSupply + offsetN) + 1 := by
+  refine victim_loss_le hminted ?_ hpaid
+  rw [← hstart]
+  exact Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
+    offsetN_ne_zero path
+
+/-- **Cumulative rounding residue over a whole history, exactly.**
+
+Not a bound: an equality.  The numerator at the end of a history, scaled by the
+product of the denominators along it, is the initial numerator scaled the same
+way plus the exact sum of the per-step residues, each weighted by the
+denominators on either side of it.  This is the port's dust accounting, and it
+is the ETH-denominated statement at `offsetN` because the arithmetic is the
+same. -/
+theorem dust_trace_exact
+    (path : Blanc.Prorata.ProrataAccountingPath offsetN) :
+    let n := path.steps.length
+    path.XAt n * (∏ j ∈ Finset.range n, path.DAt j) =
+      path.XAt 0 * (∏ j ∈ Finset.Icc 1 n, path.DAt j) +
+        ∑ i ∈ Finset.range n,
+          (path.rhoAt i + path.kappaAt i) *
+            (∏ j ∈ Finset.range i, path.DAt j) *
+              (∏ j ∈ Finset.Icc (i + 2) n, path.DAt j) :=
+  Blanc.Prorata.ProrataAccountingPath.prorata_dust_trace_exact
+    offsetN_ne_zero path
 
 end ProrataWethVault
 
