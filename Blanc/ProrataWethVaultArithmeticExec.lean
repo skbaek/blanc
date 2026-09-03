@@ -5396,6 +5396,55 @@ theorem shiftedDiv_down_trace
   · simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using
       quotientPrefix
 
+/-- Framed floor shifted division: the continuation receives the exact floor
+quotient of `high * 2^256` together with an image agreeing with the entry image
+above the arithmetic scratch region.  The mirror of
+`shiftedDiv_up_image_trace`, which `redeem` needs where `mint` needs the
+ceiling. -/
+theorem shiftedDiv_down_image_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {high denominator : B256}
+    {highLine denominatorLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (highProduces : ProducesWord sevm highLine image high)
+    (denominatorProduces : ProducesWord sevm denominatorLine
+      (Bytes.writeAt
+        (Bytes.writeAt image (highWord * 32).toNat high.toBytes)
+        (lowWord * 32).toNat (0 : B256).toBytes) denominator)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (shiftedDiv highLine denominatorLine .down continuation) (.ok final)) :
+    high.toNat * wordModulusN / denominator.toNat < wordModulusN ∧
+      ∃ bodyPre bodyImage,
+        Nat.toB256
+            (high.toNat * wordModulusN / denominator.toNat) :: tail <<+
+          bodyPre.stack ∧
+        MemImage bodyPre bodyImage ∧
+        Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
+        Devm.QuietFrame pre bodyPre ∧
+        Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨dividePre, dividePrefix, divideWf, divideReads, divideState,
+      divideRun⟩ :=
+    shiftedDiv_staging_trace memoryWf memoryReads highProduces
+      denominatorProduces stack run
+  obtain ⟨quotientFits, bodyPre, bodyImage, quotientPrefix, bodyMemImage,
+      divideFrame, bodyState, bodyRun⟩ :=
+    divide512_down_image_trace divideWf divideReads
+      (shiftedDivTraceImage_denominator image high denominator)
+      (shiftedDivTraceImage_high image high denominator)
+      (shiftedDivTraceImage_low image high denominator)
+      dividePrefix lookup divideRun
+  refine ⟨?_, bodyPre, bodyImage, ?_, bodyMemImage,
+    (shiftedDivTraceImage_wordFrame image high denominator).trans divideFrame,
+    divideState.trans bodyState, bodyRun⟩
+  · simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using
+      quotientFits
+  · simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using
+      quotientPrefix
+
 theorem shiftedDiv_up_trace
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {high denominator : B256}
@@ -5723,7 +5772,11 @@ theorem productOverTwoPow256_down_trace
       yProduces stack lookup run
   exact ⟨fits, bodyPre, quotientPrefix, bodyRun⟩
 
-theorem productOverTwoPow256_up_trace
+/-- Framed ceiling product-over-`2^256`: the continuation receives the exact
+ceiling quotient together with the concrete post-arithmetic image.  The mirror
+of `productOverTwoPow256_down_image_trace`, which `withdraw` needs where
+`deposit` needs the floor. -/
+theorem productOverTwoPow256_up_image_trace
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {x y : B256} {xLine yLine : Line}
     {continuation : Nat} {body : Func} {tail : Stack}
@@ -5740,12 +5793,16 @@ theorem productOverTwoPow256_up_trace
       ∃ bodyPre,
         Nat.toB256 (ceilDiv (x.toNat * y.toNat) wordModulusN) :: tail <<+
           bodyPre.stack ∧
+        MemImage bodyPre (productOverTwoPow256TraceImage image x y) ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨finishPre, finishPrefix, finishWf, finishReads, -, finishRun⟩ :=
+  obtain ⟨finishPre, finishPrefix, finishWf, finishReads, finishState,
+      finishRun⟩ :=
     productOverTwoPow256_staging_trace memoryWf memoryReads xProduces
       yProduces stack run
-  obtain ⟨roundingSafe, bodyPre, quotientPrefix, bodyRun⟩ :=
-    finishQuotient_up_trace finishWf finishReads
+  obtain ⟨roundingSafe, bodyPre, quotientPrefix, bodyImage, bodyState,
+      bodyRun⟩ :=
+    finishQuotient_up_image_trace finishWf finishReads
       (productOverTwoPow256TraceImage_quotient image x y)
       (productOverTwoPow256TraceImage_remainder image x y)
       finishPrefix lookup finishRun
@@ -5767,9 +5824,33 @@ theorem productOverTwoPow256_up_trace
   have ceilingFits :
       ceilDiv (x.toNat * y.toNat) wordModulusN < wordModulusN :=
     ceilDiv_lt_wordModulusN_of_floor_lt floorFits roundingFits
-  refine ⟨ceilingFits, bodyPre, ?_, bodyRun⟩
+  refine ⟨ceilingFits, bodyPre, ?_, bodyImage,
+    finishState.trans bodyState, bodyRun⟩
   simpa only [roundedProductHighWord_eq_toB256_ceilDiv] using
     quotientPrefix
+
+theorem productOverTwoPow256_up_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {x y : B256} {xLine yLine : Line}
+    {continuation : Nat} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (xProduces : ProducesWord sevm xLine image x)
+    (yProduces : ProducesWord sevm yLine
+      (Bytes.writeAt image (xWord * 32).toNat x.toBytes) y)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (productOverTwoPow256 xLine yLine .up continuation) (.ok final)) :
+    ceilDiv (x.toNat * y.toNat) wordModulusN < wordModulusN ∧
+      ∃ bodyPre,
+        Nat.toB256 (ceilDiv (x.toNat * y.toNat) wordModulusN) :: tail <<+
+          bodyPre.stack ∧
+        Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨fits, bodyPre, quotientPrefix, -, -, bodyRun⟩ :=
+    productOverTwoPow256_up_image_trace memoryWf memoryReads xProduces
+      yProduces stack lookup run
+  exact ⟨fits, bodyPre, quotientPrefix, bodyRun⟩
 
 /-- Framed capped-floor product-over-`2^256`. -/
 theorem productOverTwoPow256_capDown_image_trace
