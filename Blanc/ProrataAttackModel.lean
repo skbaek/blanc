@@ -825,6 +825,76 @@ theorem victim_loss_le_div_add_one
     exact hdiv.trans (Nat.le_add_right _ 1)
   · exact Nat.add_le_add_right hdiv 1
 
+
+namespace ProrataAccountingPath
+
+/-- Every boundary of a connected path is at least as expensive as the first.
+
+The induction is on the boundary index rather than on the path, because a
+`ProrataAccountingPath` carries its snapshots as a function and is not
+syntactically a `cons`.  Past the last step `snapshotAt` clamps, so the
+successor case splits on whether index `i` names a real step. -/
+theorem priceLe_snapshotAt {o : Nat} (ho : o ≠ 0)
+    (path : ProrataAccountingPath o) :
+    ∀ i : Nat, PriceLe o (path.snapshotAt 0) (path.snapshotAt i) := by
+  intro i
+  induction i with
+  | zero => exact PriceLe.refl o _
+  | succ i ih =>
+    by_cases hlt : i < path.steps.length
+    · -- Index `i` names a real step, so the two boundaries around it are that
+      -- step's `pre` and `post`.  The index equalities go through `congrArg`
+      -- rather than `rw`, because rewriting under `Fin`'s proof field leaves
+      -- the motive ill-typed.
+      have hpre : path.snapshotAt i = (path.steps.get ⟨i, hlt⟩).pre := by
+        have hidx : (⟨min i path.steps.length,
+            Nat.lt_succ_of_le (Nat.min_le_right i path.steps.length)⟩ :
+              Fin (path.steps.length + 1))
+            = (⟨i, hlt⟩ : Fin path.steps.length).castSucc :=
+          Fin.ext (by simp [Nat.min_eq_left (Nat.le_of_lt hlt)])
+        exact (congrArg path.snapshot hidx).trans (path.pre_eq ⟨i, hlt⟩)
+      have hpost : path.snapshotAt (i + 1) = (path.steps.get ⟨i, hlt⟩).post := by
+        have hidx : (⟨min (i + 1) path.steps.length,
+            Nat.lt_succ_of_le (Nat.min_le_right (i + 1) path.steps.length)⟩ :
+              Fin (path.steps.length + 1))
+            = (⟨i, hlt⟩ : Fin path.steps.length).succ :=
+          Fin.ext (by simp [Nat.min_eq_left hlt])
+        exact (congrArg path.snapshot hidx).trans (path.post_eq ⟨i, hlt⟩)
+      refine PriceLe.trans ho ih ?_
+      rw [hpre, hpost]
+      exact ProrataAccountingEffect.priceLe ho (path.steps.get ⟨i, hlt⟩).effect
+    · -- Past the last step `snapshotAt` clamps, so the boundary does not move.
+      have hstay : path.snapshotAt (i + 1) = path.snapshotAt i := by
+        have hidx : (⟨min (i + 1) path.steps.length,
+            Nat.lt_succ_of_le (Nat.min_le_right (i + 1) path.steps.length)⟩ :
+              Fin (path.steps.length + 1))
+            = ⟨min i path.steps.length,
+              Nat.lt_succ_of_le (Nat.min_le_right i path.steps.length)⟩ :=
+          Fin.ext (by
+            have hle : path.steps.length ≤ i := Nat.le_of_not_lt hlt
+            simp [Nat.min_eq_right hle,
+              Nat.min_eq_right (Nat.le_succ_of_le hle)])
+        exact congrArg path.snapshot hidx
+      rw [hstay]
+      exact ih
+
+/-- **Price monotonicity over a whole history.**  Whatever sequence of
+deposits, withdrawals, donations and no-ops a path records, the share price at
+its end is at least the price at its start. -/
+theorem priceLe_first_last {o : Nat} (ho : o ≠ 0)
+    (path : ProrataAccountingPath o) :
+    PriceLe o path.first path.last := by
+  have h := priceLe_snapshotAt ho path path.steps.length
+  have hfirst : path.snapshotAt 0 = path.first := by
+    unfold ProrataAccountingPath.snapshotAt ProrataAccountingPath.first
+    simp
+  have hlast : path.snapshotAt path.steps.length = path.last := by
+    unfold ProrataAccountingPath.snapshotAt ProrataAccountingPath.last
+    simp
+  rwa [hfirst, hlast] at h
+
+end ProrataAccountingPath
+
 end Prorata
 
 end Blanc
