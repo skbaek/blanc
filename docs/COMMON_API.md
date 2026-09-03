@@ -50,6 +50,13 @@ registry has identified the likely vocabulary.
   input state and carries unchanged memory across address warming.
 - The common `fsig +++ dispatch` entry preserves logs and output by
   `fsig_logs` and `fsig_output` in `Blanc/CommonProofs.lean`.
+- Recover a known selected body from a sorted tree dispatcher with
+  `reach_of_dispatch` for the inline-revert form or `reach_of_dispatchWith`
+  for the indexed-fallback form in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean). Both consume the
+  exact selector/list membership and return the selected body with the
+  selector removed while preserving world state and memory; neither asserts
+  that an execution exists.
 - Ordinary compiled success walk (`Func.RunCompiled`): `func_run` and the
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
